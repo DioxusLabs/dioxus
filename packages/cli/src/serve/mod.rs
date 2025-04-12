@@ -212,7 +212,7 @@ pub(crate) async fn serve_all(args: ServeArgs) -> Result<()> {
         }
     };
 
-    _ = builder.cleanup().await;
+    _ = builder.cleanup_all().await;
     _ = devserver.shutdown().await;
     _ = screen.shutdown();
 

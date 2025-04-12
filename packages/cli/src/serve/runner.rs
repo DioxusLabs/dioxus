@@ -27,6 +27,7 @@ use std::{
     collections::{HashMap, HashSet},
     net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener},
     path::PathBuf,
+    process::Stdio,
     str::FromStr,
     sync::Arc,
     time::Duration,
@@ -138,13 +139,15 @@ impl AppRunner {
         // This involves modifying the BuildRequest to add the client features and server features
         // only if we can properly detect that it's a fullstack build. Careful with this, since
         // we didn't build BuildRequest to be generally mutable.
-        let mut client = BuildRequest::new(&args.build_arguments).await?;
+        let client = BuildRequest::new(&args.build_arguments).await?;
         let mut server = None;
 
         // Now we need to resolve the client features
         let fullstack = client.fullstack_feature_enabled() || args.fullstack.unwrap_or(false);
         if fullstack {
-            let _server = BuildRequest::new(&args.build_arguments).await?;
+            let mut build_args = args.build_arguments.clone();
+            build_args.platform = Some(Platform::Server);
+            let _server = BuildRequest::new(&build_args).await?;
             // ... todo: add the server features to the server build
             // ... todo: add the client features to the client build
             // // Make sure we have a server feature if we're building a fullstack app
@@ -155,7 +158,9 @@ impl AppRunner {
             // // Make sure we set the fullstack platform so we actually build the fullstack variant
             // // Users need to enable "fullstack" in their default feature set.
             // // todo(jon): fullstack *could* be a feature of the app, but right now we're assuming it's always enabled
-            // let fullstack = args.fullstack || krate.has_dioxus_feature("fullstack");
+            // let fullstack = args.fullstack.unwrap_or_default()
+            //     || client.workspace.has_dioxus_feature("fullstack");
+
             server = Some(_server);
         }
 
@@ -174,6 +179,8 @@ impl AppRunner {
 
         let client = AppBuilder::start(&client).unwrap();
         let server = server.map(|server| AppBuilder::start(&server).unwrap());
+
+        tracing::debug!("Proxied port: {:?}", proxied_port);
 
         // Create the runner
         let mut runner = Self {
@@ -216,8 +223,10 @@ impl AppRunner {
 
     pub(crate) async fn wait(&mut self) -> ServeUpdate {
         let client = &mut self.client;
+        let server = self.server.as_mut();
 
         let client_wait = client.wait();
+        let server_wait = OptionFuture::from(server.map(|s| s.wait()));
         let watcher_wait = self.watcher_rx.next();
 
         // // If there are no running apps, we can just return pending to avoid deadlocking
@@ -231,6 +240,13 @@ impl AppRunner {
                 ServeUpdate::BuilderUpdate {
                     id: BuildId(0),
                     update: client_update,
+                }
+            }
+
+            Some(server_update) = server_wait => {
+                ServeUpdate::BuilderUpdate {
+                    id: BuildId(1),
+                    update: server_update,
                 }
             }
 
@@ -276,6 +292,7 @@ impl AppRunner {
 
                 ServeUpdate::FilesChanged { files }
             }
+
         }
     }
 
@@ -321,10 +338,9 @@ impl AppRunner {
                 };
 
                 // We assume we can parse the old file and the new file, ignoring untracked rust files
-                let (Ok(old_file), Ok(new_file)) = (
-                    syn::parse_file(&cached_file.contents),
-                    syn::parse_file(&new_contents),
-                ) else {
+                let old_syn = syn::parse_file(&cached_file.contents);
+                let new_syn = syn::parse_file(&new_contents);
+                let (Ok(old_file), Ok(new_file)) = (old_syn, new_syn) else {
                     tracing::debug!("Diff rsx returned not parseable");
                     continue;
                 };
@@ -395,7 +411,7 @@ impl AppRunner {
         }
 
         // For now, always run a patch instead of rsx hot-reload
-        if needs_full_rebuild {
+        if needs_full_rebuild || true {
             self.client.patch_rebuild(files.to_vec());
 
             self.clear_hot_reload_changes();
@@ -416,6 +432,8 @@ impl AppRunner {
 
             // Only send a hotreload message for templates and assets - otherwise we'll just get a full rebuild
             //
+            // todo: move the android file uploading out of hotreload_bundled_asset and
+            //
             // Also make sure the builder isn't busy since that might cause issues with hotreloads
             // https://github.com/DioxusLabs/dioxus/issues/3361
             if !msg.is_empty() && self.client.can_receive_hotreloads() {
@@ -425,19 +443,11 @@ impl AppRunner {
                 tracing::debug!(dx_src = ?TraceSrc::Dev, "Ignoring file change: {}", file);
             }
         }
-
-        // // Strip the prefix before sending it to the filemap
-        // if path.strip_prefix(self.krate.workspace_dir()).is_err() {
-        //     tracing::error!(
-        //         "Hotreloading file outside of the crate directory: {:?}",
-        //         path
-        //     );
-        //     continue;
-        // };
     }
 
     pub(crate) fn rebuild_all(&mut self) {
-        self.client.fat_rebuild()
+        self.client.fat_rebuild();
+        self.server.as_mut().map(|s| s.fat_rebuild());
     }
 
     /// Finally "bundle" this app and return a handle to it
@@ -447,10 +457,6 @@ impl AppRunner {
         devserver_ip: SocketAddr,
         fullstack_address: Option<SocketAddr>,
     ) -> Result<()> {
-        // Drop the old handle
-        // This is a more forceful kill than soft_kill since the app entropy will be wiped
-        self.cleanup().await;
-
         // Add some cute logging
         let time_taken = app.time_end.duration_since(app.time_start).unwrap();
         if self.builds_opened == 0 {
@@ -462,16 +468,40 @@ impl AppRunner {
             tracing::info!("Build completed in {:?}ms", time_taken.as_millis());
         }
 
-        // Start the new app before we kill the old one to give it a little bit of time
-        let open_browser = self.builds_opened == 0 && self.open_browser;
-        let always_on_top = self.always_on_top;
-        self.client
-            .open(devserver_ip, fullstack_address, open_browser, always_on_top)
-            .await?;
-        self.builds_opened += 1;
+        // The builds are different and need to be cleaned up independently.
+        match app.platform {
+            Platform::Server => {
+                tracing::debug!("Opening server build");
+                if let Some(server) = self.server.as_mut() {
+                    server.cleanup().await;
 
-        // Save the artifacts and clear the patches(?)
-        self.client.artifacts = Some(app);
+                    server
+                        .open(devserver_ip, fullstack_address, false, false)
+                        .await?;
+
+                    // Save the artifacts and clear the patches(?)
+                    server.artifacts = Some(app);
+                }
+            }
+            _ => {
+                tracing::debug!("Opening client build");
+
+                self.client.cleanup().await;
+
+                // Start the new app before we kill the old one to give it a little bit of time
+                let open_browser = self.builds_opened == 0 && self.open_browser;
+                let always_on_top = self.always_on_top;
+
+                self.client
+                    .open(devserver_ip, fullstack_address, open_browser, always_on_top)
+                    .await?;
+
+                self.builds_opened += 1;
+
+                // Save the artifacts and clear the patches(?)
+                self.client.artifacts = Some(app);
+            }
+        }
 
         Ok(())
     }
@@ -492,7 +522,7 @@ impl AppRunner {
     }
 
     /// Shutdown all the running processes
-    pub(crate) async fn cleanup(&mut self) {
+    pub(crate) async fn cleanup_all(&mut self) {
         self.client.cleanup().await;
 
         if let Some(server) = self.server.as_mut() {
@@ -502,14 +532,12 @@ impl AppRunner {
         // If the client is running on Android, we need to remove the port forwarding
         // todo: use the android tools "adb"
         if matches!(self.client.build.platform, Platform::Android) {
-            use std::process::{Command, Stdio};
             if let Err(err) = Command::new("adb")
                 .arg("reverse")
                 .arg("--remove")
                 .arg(format!("tcp:{}", self.devserver_port))
-                .stderr(Stdio::piped())
-                .stdout(Stdio::piped())
                 .output()
+                .await
             {
                 tracing::error!(
                     "failed to remove forwarded port {}: {err}",
@@ -637,16 +665,16 @@ impl AppRunner {
             let path = entry.path();
             if path.extension().and_then(|s| s.to_str()) == Some("rs") {
                 if let Ok(contents) = std::fs::read_to_string(&path) {
-                    if let Ok(path) = path.strip_prefix(self.workspace.workspace_dir()) {
-                        self.file_map.insert(
-                            path.to_path_buf(),
-                            CachedFile {
-                                contents,
-                                most_recent: None,
-                                templates: Default::default(),
-                            },
-                        );
-                    }
+                    // if let Ok(path) = path.strip_prefix(self.workspace.workspace_dir()) {
+                    self.file_map.insert(
+                        path.to_path_buf(),
+                        CachedFile {
+                            contents,
+                            most_recent: None,
+                            templates: Default::default(),
+                        },
+                    );
+                    // }
                 }
             }
         }

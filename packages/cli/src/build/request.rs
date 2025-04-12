@@ -227,7 +227,7 @@
 //! ## Extra links
 //! - xbuild: https://github.com/rust-mobile/xbuild/blob/master/xbuild/src/command/build.rs
 
-use super::{AndroidTools, BuildContext};
+use super::{AndroidTools, BuildContext, BuildId};
 use crate::{
     wasm_bindgen::WasmBindgen, BuildArgs, DioxusConfig, Error, LinkAction, Platform, ProgressTx,
     Result, TraceSrc, WasmOptConfig, Workspace,
@@ -348,6 +348,7 @@ pub enum BuildMode {
 /// Contains the final asset manifest, the executable, and metadata about the build.
 /// Note that the `exe` might be stale and/or overwritten by the time you read it!
 pub struct BuildArtifacts {
+    pub(crate) platform: Platform,
     pub(crate) exe: PathBuf,
     pub(crate) direct_rustc: Vec<String>,
     pub(crate) time_start: SystemTime,
@@ -721,6 +722,7 @@ impl BuildRequest {
         tracing::debug!("Build completed successfully - output location: {:?}", exe);
 
         Ok(BuildArtifacts {
+            platform: self.platform,
             exe,
             direct_rustc,
             time_start,
@@ -881,7 +883,6 @@ impl BuildRequest {
             })
         }
 
-        tracing::debug!("Removing old assets");
         tracing::trace!(
             "Keeping bundled output paths: {:#?}",
             keep_bundled_output_paths
@@ -906,14 +907,6 @@ impl BuildRequest {
 
             tracing::debug!("Copying asset {from_:?} to {to_:?}");
             assets_to_transfer.push((from, to, *bundled.options()));
-        }
-
-        // And then queue the legacy assets
-        // ideally, one day, we can just check the rsx!{} calls for references to assets
-        for from in self.legacy_asset_dir_files() {
-            let to = asset_dir.join(from.file_name().unwrap());
-            tracing::debug!("Copying legacy asset {from:?} to {to:?}");
-            assets_to_transfer.push((from, to, AssetOptions::Unknown));
         }
 
         let asset_count = assets_to_transfer.len();

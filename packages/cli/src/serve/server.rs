@@ -64,9 +64,10 @@ pub(crate) struct WebServer {
     new_build_status_sockets: UnboundedReceiver<WebSocket>,
     build_status: SharedStatus,
     application_name: String,
+    platform: Platform,
 }
 
-pub const SELF_IP: IpAddr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+pub const SELF_IP: IpAddr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
 
 impl WebServer {
     /// Start the development server.
@@ -91,13 +92,14 @@ impl WebServer {
             )
         })?;
 
-        // If the IP is 0.0.0.0, we need to get the actual IP of the machine
-        // This will let ios/android/network clients connect to the devserver
-        let devserver_exposed_ip = if devserver_bind_ip == SELF_IP {
-            local_ip_address::local_ip().unwrap_or(devserver_bind_ip)
-        } else {
-            devserver_bind_ip
-        };
+        // // If the IP is 0.0.0.0, we need to get the actual IP of the machine
+        // // This will let ios/android/network clients connect to the devserver
+        // let devserver_exposed_ip = if devserver_bind_ip == SELF_IP {
+        //     local_ip_address::local_ip().unwrap_or(devserver_bind_ip)
+        // } else {
+        //     devserver_bind_ip
+        // };
+        let devserver_exposed_ip = devserver_bind_ip;
 
         let proxied_address = proxied_port.map(|port| SocketAddr::new(devserver_exposed_ip, port));
 
@@ -129,6 +131,7 @@ impl WebServer {
             new_hot_reload_sockets: hot_reload_sockets_rx,
             new_build_status_sockets: build_status_sockets_rx,
             application_name: runner.app_name().to_string(),
+            platform: runner.client.build.platform,
         })
     }
 
@@ -158,8 +161,7 @@ impl WebServer {
                     drop(new_message);
 
                     // Update the socket with project info and current build status
-                    let project_info = SharedStatus::new(Status::ClientInit { application_name: self.application_name.clone() });
-                    // let project_info = SharedStatus::new(Status::ClientInit { application_name: self.application_name.clone(), platform: self.platform });
+                    let project_info = SharedStatus::new(Status::ClientInit { application_name: self.application_name.clone(), platform: self.platform });
                     if project_info.send_to(&mut new_socket).await.is_ok() {
                         _ = self.build_status.send_to(&mut new_socket).await;
                         self.build_status_sockets.push(new_socket);
@@ -293,22 +295,22 @@ impl WebServer {
     }
 
     pub(crate) async fn send_patch(&mut self, jump_table: JumpTable) {
-        self.send_devserver_message(DevserverMsg::HotReload(HotReloadMsg {
+        let msg = DevserverMsg::HotReload(HotReloadMsg {
             jump_table: Some(jump_table),
             ..Default::default()
-        }))
-        .await;
+        });
+        self.send_devserver_message_to_all(msg).await;
     }
 
     /// Tells all clients that a full rebuild has started.
     pub(crate) async fn send_reload_start(&mut self) {
-        self.send_devserver_message(DevserverMsg::FullReloadStart)
+        self.send_devserver_message_to_all(DevserverMsg::FullReloadStart)
             .await;
     }
 
     /// Tells all clients that a full rebuild has failed.
     pub(crate) async fn send_reload_failed(&mut self) {
-        self.send_devserver_message(DevserverMsg::FullReloadFailed)
+        self.send_devserver_message_to_all(DevserverMsg::FullReloadFailed)
             .await;
     }
 
@@ -320,17 +322,18 @@ impl WebServer {
 
         self.build_status.set(Status::Ready);
         self.send_build_status().await;
-        self.send_devserver_message(DevserverMsg::FullReloadCommand)
+        self.send_devserver_message_to_all(DevserverMsg::FullReloadCommand)
             .await;
     }
 
     /// Send a shutdown message to all connected clients.
     pub(crate) async fn send_shutdown(&mut self) {
-        self.send_devserver_message(DevserverMsg::Shutdown).await;
+        self.send_devserver_message_to_all(DevserverMsg::Shutdown)
+            .await;
     }
 
     /// Sends a devserver message to all connected clients.
-    async fn send_devserver_message(&mut self, msg: DevserverMsg) {
+    async fn send_devserver_message_to_all(&mut self, msg: DevserverMsg) {
         for socket in self.hot_reload_sockets.iter_mut() {
             _ = socket
                 .send(Message::Text(serde_json::to_string(&msg).unwrap()))
@@ -350,12 +353,10 @@ impl WebServer {
     }
 
     pub fn server_address(&self) -> Option<SocketAddr> {
-        // tracing::error!("todo: server_address is not implemented");
-        None
-        // match self.platform {
-        //     Platform::Web | Platform::Server => Some(self.devserver_address()),
-        //     _ => self.proxied_server_address(),
-        // }
+        match self.platform {
+            Platform::Web | Platform::Server => Some(self.devserver_address()),
+            _ => self.proxied_server_address(),
+        }
     }
 
     /// Get the address the server is running - showing 127.0.0.1 if the devserver is bound to 0.0.0.0
@@ -422,11 +423,10 @@ fn build_devserver_router(
         router = super::proxy::add_proxy(router, proxy_config)?;
     }
 
+    // For fullstack, liveview, and server, forward all requests to the inner server
     if runner.proxied_port.is_some() {
-        // if runner.args.should_proxy_build() {
-        // For fullstack, liveview, and server, forward all requests to the inner server
+        tracing::debug!("Proxying requests to fullstack server at {fullstack_address:?}");
         let address = fullstack_address.unwrap();
-        tracing::debug!("Proxying requests to fullstack server at {address}");
         router = router.nest_service("/",super::proxy::proxy_to(
             format!("http://{address}").parse().unwrap(),
             true,
@@ -522,8 +522,8 @@ fn build_serve_dir(runner: &AppRunner) -> axum::routing::MethodRouter {
         false => CORS_UNSAFE.clone(),
     };
 
-    let app = runner.client();
-    let cfg = &runner.client().build.config;
+    let app = &runner.client;
+    let cfg = &runner.client.build.config;
 
     let out_dir = app
         .build
@@ -701,8 +701,7 @@ struct SharedStatus(Arc<RwLock<Status>>);
 enum Status {
     ClientInit {
         application_name: String,
-        // platform: Platform,
-        // platform: Platform,
+        platform: Platform,
     },
     Building {
         progress: f64,

@@ -390,7 +390,6 @@ impl AppBuilder {
                 dioxus_cli_config::APP_TITLE_ENV,
                 krate.config.web.app.title.clone(),
             ),
-            ("RUST_BACKTRACE", "1".to_string()),
             (
                 dioxus_cli_config::DEVSERVER_IP_ENV,
                 devserver_ip.ip().to_string(),
@@ -399,13 +398,14 @@ impl AppBuilder {
                 dioxus_cli_config::DEVSERVER_PORT_ENV,
                 devserver_ip.port().to_string(),
             ),
-            // unset the cargo dirs in the event we're running `dx` locally
-            // since the child process will inherit the env vars, we don't want to confuse the downstream process
-            ("CARGO_MANIFEST_DIR", "".to_string()),
             (
                 dioxus_cli_config::SESSION_CACHE_DIR,
                 self.build.session_cache_dir().display().to_string(),
             ),
+            // unset the cargo dirs in the event we're running `dx` locally
+            // since the child process will inherit the env vars, we don't want to confuse the downstream process
+            ("CARGO_MANIFEST_DIR", "".to_string()),
+            ("RUST_BACKTRACE", "1".to_string()),
         ];
 
         if let Some(base_path) = &krate.config.web.app.base_path {
@@ -418,6 +418,8 @@ impl AppBuilder {
             envs.push((dioxus_cli_config::SERVER_IP_ENV, addr.ip().to_string()));
             envs.push((dioxus_cli_config::SERVER_PORT_ENV, addr.port().to_string()));
         }
+
+        tracing::debug!("Opening app with envs: {envs:#?}");
 
         // We try to use stdin/stdout to communicate with the app
         let running_process = match self.build.platform {
@@ -526,8 +528,6 @@ impl AppBuilder {
     /// them know what to reload. It's not super important that this is robust since most clients will
     /// kick all stylsheets without necessarily checking the name.
     pub(crate) async fn hotreload_bundled_asset(&self, changed_file: &PathBuf) -> Option<PathBuf> {
-        let mut bundled_name = None;
-
         let Some(artifacts) = self.artifacts.as_ref() else {
             return None;
         };
@@ -541,52 +541,36 @@ impl AppBuilder {
 
         tracing::debug!("Hotreloading asset {changed_file:?} in target {asset_dir:?}");
 
-        // If the asset shares the same name in the bundle, reload that
-        if let Some(legacy_asset_dir) = self.build.legacy_asset_dir() {
-            if changed_file.starts_with(&legacy_asset_dir) {
-                tracing::debug!("Hotreloading legacy asset {changed_file:?}");
-                let trimmed = changed_file.strip_prefix(legacy_asset_dir).unwrap();
-                let res = std::fs::copy(changed_file, asset_dir.join(trimmed));
-                bundled_name = Some(trimmed.to_path_buf());
-                if let Err(e) = res {
-                    tracing::debug!("Failed to hotreload legacy asset {e}");
-                }
-            }
-        }
-
         // Canonicalize the path as Windows may use long-form paths "\\\\?\\C:\\".
         let changed_file = dunce::canonicalize(changed_file)
             .inspect_err(|e| tracing::debug!("Failed to canonicalize hotreloaded asset: {e}"))
             .ok()?;
 
         // The asset might've been renamed thanks to the manifest, let's attempt to reload that too
-        if let Some(resource) = artifacts.assets.assets.get(&changed_file).as_ref() {
-            let output_path = asset_dir.join(resource.bundled_path());
-            // Remove the old asset if it exists
-            _ = std::fs::remove_file(&output_path);
+        let resource = artifacts.assets.assets.get(&changed_file)?;
+        let output_path = asset_dir.join(resource.bundled_path());
 
-            // And then process the asset with the options into the **old** asset location. If we recompiled,
-            // the asset would be in a new location because the contents and hash have changed. Since we are
-            // hotreloading, we need to use the old asset location it was originally written to.
-            let options = *resource.options();
-            let res = process_file_to(&options, &changed_file, &output_path);
-            bundled_name = Some(PathBuf::from(resource.bundled_path()));
-            if let Err(e) = res {
-                tracing::debug!("Failed to hotreload asset {e}");
-            }
+        // Remove the old asset if it exists
+        _ = std::fs::remove_file(&output_path);
+
+        // And then process the asset with the options into the **old** asset location. If we recompiled,
+        // the asset would be in a new location because the contents and hash have changed. Since we are
+        // hotreloading, we need to use the old asset location it was originally written to.
+        let options = *resource.options();
+        let res = process_file_to(&options, &changed_file, &output_path);
+        let bundled_name = PathBuf::from(resource.bundled_path());
+        if let Err(e) = res {
+            tracing::debug!("Failed to hotreload asset {e}");
         }
 
         // If the emulator is android, we need to copy the asset to the device with `adb push asset /data/local/tmp/dx/assets/filename.ext`
         if self.build.platform == Platform::Android {
-            if let Some(bundled_name) = bundled_name.as_ref() {
-                _ = self
-                    .copy_file_to_android_tmp(&changed_file, &bundled_name)
-                    .await;
-            }
+            _ = self
+                .copy_file_to_android_tmp(&changed_file, &bundled_name)
+                .await;
         }
 
-        // Now we can return the bundled asset name to send to the hotreload engine
-        bundled_name
+        Some(bundled_name)
     }
 
     /// Copy this file to the tmp folder on the android device, returning the path to the copied file
@@ -624,8 +608,10 @@ impl AppBuilder {
     ///
     /// Server/liveview/desktop are all basically the same, though
     fn open_with_main_exe(&mut self, envs: Vec<(&str, String)>) -> Result<Child> {
-        // Create a new entropy app exe if we need to
         let main_exe = self.app_exe();
+
+        tracing::debug!("Opening app with main exe: {main_exe:?}");
+
         let child = Command::new(main_exe)
             .envs(envs)
             .stderr(Stdio::piped())
@@ -1141,16 +1127,16 @@ We checked the folder: {}
             Platform::Liveview => true,
         };
 
-        if requires_entropy || std::env::var("DIOXUS_ENTROPY").is_ok() {
-            // If we already have an entropy app exe, return it - this is useful for re-opening the same app
-            if let Some(existing_app_exe) = self.entropy_app_exe.clone() {
-                return existing_app_exe;
-            }
+        // if requires_entropy || std::env::var("DIOXUS_ENTROPY").is_ok() {
+        //     // If we already have an entropy app exe, return it - this is useful for re-opening the same app
+        //     if let Some(existing_app_exe) = self.entropy_app_exe.clone() {
+        //         return existing_app_exe;
+        //     }
 
-            let entropy_app_exe = Self::make_entropy_path(&main_exe);
-            self.entropy_app_exe = Some(entropy_app_exe.clone());
-            main_exe = entropy_app_exe;
-        }
+        //     let entropy_app_exe = Self::make_entropy_path(&main_exe);
+        //     self.entropy_app_exe = Some(entropy_app_exe.clone());
+        //     main_exe = entropy_app_exe;
+        // }
 
         main_exe
     }
