@@ -384,14 +384,6 @@ impl AppBuilder {
         let mut envs = vec![
             (dioxus_cli_config::CLI_ENABLED_ENV, "true".to_string()),
             (
-                dioxus_cli_config::ALWAYS_ON_TOP_ENV,
-                always_on_top.to_string(),
-            ),
-            (
-                dioxus_cli_config::APP_TITLE_ENV,
-                krate.config.web.app.title.clone(),
-            ),
-            (
                 dioxus_cli_config::DEVSERVER_IP_ENV,
                 devserver_ip.ip().to_string(),
             ),
@@ -473,10 +465,10 @@ impl AppBuilder {
         // Soft-kill the process by sending a sigkill, allowing the process to clean up
         self.soft_kill().await;
 
-        // Wipe out the entropy executables if they exist
-        if let Some(entropy_app_exe) = self.entropy_app_exe.take() {
-            _ = std::fs::remove_file(entropy_app_exe);
-        }
+        // // Wipe out the entropy executables if they exist
+        // if let Some(entropy_app_exe) = self.entropy_app_exe.take() {
+        //     _ = std::fs::remove_file(entropy_app_exe);
+        // }
     }
 
     /// Kill the app and server exes
