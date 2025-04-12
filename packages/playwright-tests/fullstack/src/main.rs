@@ -41,6 +41,7 @@ fn app() -> Element {
             Errors {}
         }
         OnMounted {}
+        DefaultServerFnCodec {}
         DocumentElements {}
     }
 }
@@ -57,6 +58,15 @@ fn OnMounted() -> Element {
             "onmounted was called {mounted_triggered_count} times"
         }
     }
+}
+
+#[component]
+fn DefaultServerFnCodec() -> Element {
+    let resource = use_server_future(|| get_server_data_empty_vec(Vec::new()))?;
+    let empty_vec = resource.unwrap().unwrap();
+    assert!(empty_vec.is_empty());
+
+    rsx! {}
 }
 
 #[cfg(feature = "server")]
@@ -79,6 +89,15 @@ async fn get_server_data() -> Result<String, ServerFnError> {
     Ok("Hello from the server!".to_string())
 }
 
+// Make sure the default codec work with empty data structures
+// Regression test for https://github.com/DioxusLabs/dioxus/issues/2628
+#[server]
+async fn get_server_data_empty_vec(empty_vec: Vec<String>) -> Result<Vec<String>, ServerFnError> {
+    assert_server_context_provided().await;
+    assert!(empty_vec.is_empty());
+    Ok(Vec::new())
+}
+
 #[server]
 async fn server_error() -> Result<String, ServerFnError> {
     assert_server_context_provided().await;
@@ -88,6 +107,9 @@ async fn server_error() -> Result<String, ServerFnError> {
 
 #[component]
 fn Errors() -> Element {
+    // Make the suspense boundary below happen during streaming
+    use_hook(commit_initial_chunk);
+
     rsx! {
         // This is a tricky case for suspense https://github.com/DioxusLabs/dioxus/issues/2570
         // Root suspense boundary is already resolved when the inner suspense boundary throws an error.
@@ -113,7 +135,7 @@ fn Errors() -> Element {
 pub fn ThrowsError() -> Element {
     use_server_future(server_error)?
         .unwrap()
-        .map_err(|err| RenderError::Aborted(CapturedError::from_display(err)))?;
+        .map_err(CapturedError::from_display)?;
     rsx! {
         "success"
     }

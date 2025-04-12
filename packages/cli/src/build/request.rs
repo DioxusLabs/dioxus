@@ -1355,6 +1355,40 @@ impl BuildRequest {
             }
         }
 
+        // pub(crate) fn build_arguments(&self) -> Vec<String> {
+        //     let mut cargo_args = Vec::new();
+
+        //     // Set the target, profile and features that vary between the app and server builds
+        //     if self.build.platform() == Platform::Server {
+        //         cargo_args.push("--profile".to_string());
+        //         match self.build.release {
+        //             true => cargo_args.push("release".to_string()),
+        //             false => cargo_args.push(self.build.server_profile.to_string()),
+        //         };
+
+        //         // If the user provided a server target, use it, otherwise use the default host target.
+        //         if let Some(target) = self.build.target_args.server_target.as_deref() {
+        //             cargo_args.push("--target".to_string());
+        //             cargo_args.push(target.to_string());
+        //         }
+        // } else {
+        //     // Add required profile flags. --release overrides any custom profiles.
+        //     let custom_profile = &self.build.profile.as_ref();
+        //     if custom_profile.is_some() || self.build.release {
+        //         cargo_args.push("--profile".to_string());
+        //         match self.build.release {
+        //             true => cargo_args.push("release".to_string()),
+        //             false => {
+        //                 cargo_args.push(
+        //                     custom_profile
+        //                         .expect("custom_profile should have been checked by is_some")
+        //                         .to_string(),
+        //                 );
+        //             }
+        //         };
+        //     }
+        // }
+
         tracing::debug!(dx_src = ?TraceSrc::Build, "cargo args: {:?}", cargo_args);
 
         cargo_args

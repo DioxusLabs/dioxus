@@ -510,6 +510,20 @@ impl AppRunner {
     pub(crate) async fn open_existing(&mut self, devserver: &WebServer) -> Result<()> {
         let fullstack_address = devserver.proxied_server_address();
 
+        // let fullstack_address = devserver.proxied_server_address();
+
+        // if let Some(runner) = self.running.as_mut() {
+        //     runner.soft_kill().await;
+        //     runner
+        //         .open(
+        //             devserver.devserver_address(),
+        //             devserver.displayed_address(),
+        //             fullstack_address,
+        //             true,
+        //         )
+        //         .await?;
+        // }
+
         todo!();
         // if let Some(runner) = self.running.as_mut() {
         //     runner.soft_kill().await;

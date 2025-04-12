@@ -9,7 +9,7 @@
 ))]
 pub use global_hotkey::{
     hotkey::{Code, HotKey},
-    Error as HotkeyError, GlobalHotKeyEvent, GlobalHotKeyManager,
+    Error as HotkeyError, GlobalHotKeyEvent, GlobalHotKeyManager, HotKeyState,
 };
 
 #[cfg(any(target_os = "ios", target_os = "android"))]
@@ -53,7 +53,7 @@ pub(crate) struct ShortcutRegistry {
 struct ShortcutInner {
     #[allow(unused)]
     shortcut: HotKey,
-    callbacks: Slab<Box<dyn FnMut()>>,
+    callbacks: Slab<Box<dyn FnMut(HotKeyState)>>,
 }
 
 impl ShortcutRegistry {
@@ -68,7 +68,7 @@ impl ShortcutRegistry {
     pub(crate) fn call_handlers(&self, id: GlobalHotKeyEvent) {
         if let Some(ShortcutInner { callbacks, .. }) = self.shortcuts.borrow_mut().get_mut(&id.id) {
             for (_, callback) in callbacks.iter_mut() {
-                (callback)();
+                (callback)(id.state);
             }
         }
     }
@@ -76,7 +76,7 @@ impl ShortcutRegistry {
     pub(crate) fn add_shortcut(
         &self,
         hotkey: HotKey,
-        callback: Box<dyn FnMut()>,
+        callback: Box<dyn FnMut(HotKeyState)>,
     ) -> Result<ShortcutHandle, ShortcutRegistryError> {
         let accelerator_id = hotkey.clone().id();
 

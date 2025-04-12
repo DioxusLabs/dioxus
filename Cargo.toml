@@ -38,6 +38,8 @@ members = [
     "packages/document",
     "packages/extension",
     "packages/fullstack",
+    "packages/fullstack-hooks",
+    "packages/fullstack-protocol",
     "packages/generational-box",
     "packages/history",
     "packages/hooks",
@@ -67,6 +69,15 @@ members = [
     "packages/logger",
     "packages/config-macros",
     "packages/depinfo",
+    "packages/native",
+    "packages/asset-resolver",
+
+    # Playwright tests
+    "packages/playwright-tests/liveview",
+    "packages/playwright-tests/web",
+    "packages/playwright-tests/fullstack",
+    "packages/playwright-tests/suspense-carousel",
+    "packages/playwright-tests/nested-suspense",
 
     # manganis
     "packages/manganis/manganis",
@@ -107,10 +118,13 @@ members = [
     "packages/playwright-tests/web",
     "packages/playwright-tests/fullstack",
     "packages/playwright-tests/fullstack-mounted",
+    "packages/playwright-tests/fullstack-routing",
     "packages/playwright-tests/suspense-carousel",
     "packages/playwright-tests/nested-suspense",
     "packages/playwright-tests/cli-optimization",
     "packages/playwright-tests/wasm-split-harness",
+    "packages/playwright-tests/wasm-split-harness",
+    "packages/playwright-tests/default-features-disabled"
 ]
 
 [workspace.package]
@@ -149,9 +163,13 @@ dioxus-cli-opt = { path = "packages/cli-opt", version = "0.6.2" }
 dioxus-devtools = { path = "packages/devtools", version = "0.6.2" }
 dioxus-devtools-types = { path = "packages/devtools-types", version = "0.6.2" }
 dioxus-fullstack = { path = "packages/fullstack", version = "0.6.2" }
+dioxus-fullstack-hooks = { path = "packages/fullstack-hooks", version = "0.6.3" }
+dioxus-fullstack-protocol = { path = "packages/fullstack-protocol", version = "0.6.3" }
 dioxus_server_macro = { path = "packages/server-macro", version = "0.6.2", default-features = false }
 dioxus-dx-wire-format = { path = "packages/dx-wire-format", version = "0.6.2" }
 dioxus-logger = { path = "packages/logger", version = "0.6.2" }
+dioxus-native = { path = "packages/native", version = "0.6.2" }
+dioxus-asset-resolver = { path = "packages/asset-resolver", version = "0.6.2" }
 dioxus-config-macros = { path = "packages/config-macros", version = "0.6.3" }
 const-serialize = { path = "packages/const-serialize", version = "0.6.2" }
 const-serialize-macro = { path = "packages/const-serialize-macro", version = "0.6.2" }
@@ -203,11 +221,11 @@ thiserror = "1.0.40"
 prettyplease = { version = "0.2.20", features = ["verbatim"] }
 const_format = "0.2.32"
 cargo_toml = { version = "0.20.3" }
-tauri-utils = { version = "=2.0.2" }
-tauri-bundler = { version = "=2.0.4" }
+tauri-utils = { version = "=2.1.1" }
+tauri-bundler = { version = "=2.2.3" }
 lru = "0.12.2"
 async-trait = "0.1.77"
-axum = "0.7.0"
+axum = { version = "0.7.0", default-features = false }
 axum-server = { version = "0.7.1", default-features = false }
 tower = "0.4.13"
 http = "1.0.0"
@@ -264,9 +282,12 @@ wasmparser = "0.225.0"
 itertools = "0.14.0"
 object = { version = "0.36.0" }
 bincode = "1.3.3"
+macro-string = "0.1.3"
+walkdir = "2.5.0"
+url = "2.3.1"
 
 # desktop
-wry = { version = "0.45.0", default-features = false }
+wry = { version = "0.50.1", default-features = false }
 tao = { version = "0.30.8", features = ["rwh_05"] }
 webbrowser = "1.0.1"
 infer = "0.16.0"
@@ -274,7 +295,7 @@ dunce = "1.0.5"
 urlencoding = "2.1.2"
 global-hotkey = "0.6.0"
 rfd = { version = "0.14", default-features = false }
-muda = "0.14.0"
+muda = "0.15.3"
 cocoa = "0.26"
 core-foundation = "0.10.0"
 objc = { version = "0.2.7", features = ["exception"] }
@@ -289,6 +310,14 @@ crossterm = { version = "0.28.0" }
 ratatui = { version = "0.28.0" }
 shell-words = "1.1.0"
 color-eyre = "0.6.3"
+# native
+keyboard-types = "0.7"
+winit = { version = "0.30.2", features = ["rwh_06"] }
+
+# disable debug symbols in dev builds - shouldn't matter for downstream crates but makes our binaries (examples, cli, etc) build faster
+[profile.dev]
+debug = 1
+strip = "debuginfo"
 
 # our release profile should be fast to compile and fast to run
 # when we ship our CI builds, we turn on LTO which improves perf leftover by turning on incremental
@@ -302,11 +331,6 @@ inherits = "release"
 opt-level = 'z'
 lto = true
 debug=true
-
-# when dev-ing on dioxus you need to opt into more debug info
-[profile.dev]
-debug = 1
-strip = "debuginfo"
 
 [profile.subsecond-dev]
 inherits = "dev"
@@ -380,6 +404,7 @@ rand = { workspace = true, features = ["small_rng"] }
 form_urlencoded = "1.2.0"
 async-std = "1.12.0"
 web-time = "1.1.0"
+axum = { workspace = true, default-features = true }
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 getrandom = { version = "0.2.12", features = ["js"] }
@@ -548,7 +573,7 @@ required-features = ["desktop"]
 doc-scrape-examples = true
 
 [[example]]
-name = "wgpu"
+name = "wgpu_child_window"
 required-features = ["desktop", "gpu"]
 
 [[example]]

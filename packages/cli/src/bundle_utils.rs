@@ -58,6 +58,7 @@ impl From<DebianSettings> for tauri_bundler::DebianSettings {
             post_install_script: val.post_install_script,
             pre_remove_script: val.pre_remove_script,
             post_remove_script: val.post_remove_script,
+            recommends: val.recommends,
         }
     }
 }

@@ -20,6 +20,7 @@ dioxus-document = { workspace = true }
 dioxus-signals = { workspace = true, optional = true }
 dioxus-interpreter-js = { workspace = true, features = ["binary-protocol", "serialize"] }
 dioxus-cli-config = { workspace = true }
+dioxus-asset-resolver = { workspace = true }
 generational-box = { workspace = true }
 # hotreload only works on desktop platforms.... mobile is still wip
 dioxus-devtools = { workspace = true, optional = true }
@@ -44,13 +45,13 @@ tokio = { workspace = true, features = [
     "io-util",
 ], optional = true }
 webbrowser = "0.8.0"
-infer = "0.11.0"
+infer = { workspace = true }
 dunce = { workspace = true }
 slab = { workspace = true }
 rustc-hash = { workspace = true }
 dioxus-hooks = { workspace = true }
 futures-util = { workspace = true }
-urlencoding = "2.1.2"
+urlencoding = { workspace = true }
 async-trait = "0.1.68"
 tao = { workspace = true, features = ["rwh_05"] }
 once_cell = { workspace = true }
@@ -72,7 +73,7 @@ wry = { workspace = true, features = [
 [target.'cfg(any(target_os = "windows",target_os = "macos",target_os = "linux",target_os = "dragonfly", target_os = "freebsd", target_os = "netbsd", target_os = "openbsd"))'.dependencies]
 global-hotkey = "0.5.0"
 rfd = { version = "0.14", default-features = false, features = ["xdg-portal", "tokio"] }
-muda = "0.11.3"
+muda = { workspace = true }
 
 [target.'cfg(any(target_os = "windows",target_os = "macos",target_os = "linux"))'.dependencies]
 tray-icon = { workspace = true }
@@ -102,11 +103,10 @@ objc = "0.2.7"
 lazy-js-bundle = { workspace = true }
 
 [features]
-default = ["tokio_runtime", "exception", "transparent", "devtools"]
+default = ["tokio_runtime", "transparent", "devtools"]
 tokio_runtime = ["dep:tokio"]
 fullscreen = ["wry/fullscreen"]
 devtools = ["wry/devtools", "dep:dioxus-devtools", "dioxus-signals"]
-exception = ["wry/objc-exception"]
 transparent = ["wry/transparent"]
 gnu = []
 

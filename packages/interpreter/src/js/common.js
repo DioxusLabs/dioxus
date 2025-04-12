@@ -29,50 +29,58 @@ function setAttributeInner(node, field, value, ns) {
     case "dangerous_inner_html":
       node.innerHTML = value;
       break;
-    default:
-      if (!truthy(value) && isBoolAttr(field)) node.removeAttribute(field);
-      else node.setAttribute(field, value);
-  }
-}
-function truthy(val) {
-  return val === "true" || val === !0;
-}
-function isBoolAttr(field) {
-  switch (field) {
-    case "allowfullscreen":
-    case "allowpaymentrequest":
-    case "async":
-    case "autofocus":
-    case "autoplay":
-    case "checked":
-    case "controls":
-    case "default":
-    case "defer":
-    case "disabled":
-    case "formnovalidate":
-    case "hidden":
-    case "ismap":
-    case "itemscope":
-    case "loop":
     case "multiple":
-    case "muted":
-    case "nomodule":
-    case "novalidate":
-    case "open":
-    case "playsinline":
-    case "readonly":
-    case "required":
-    case "reversed":
-    case "selected":
-    case "truespeed":
-    case "webkitdirectory":
-      return !0;
+      setAttributeDefault(node, field, value);
+      let options = node.options;
+      for (let option of options) option.selected = option.defaultSelected;
+      break;
     default:
-      return !1;
+      setAttributeDefault(node, field, value);
   }
 }
+var setAttributeDefault = function (node, field, value) {
+    if (!truthy(value) && isBoolAttr(field)) node.removeAttribute(field);
+    else node.setAttribute(field, value);
+  },
+  truthy = function (val) {
+    return val === "true" || val === !0;
+  },
+  isBoolAttr = function (field) {
+    switch (field) {
+      case "allowfullscreen":
+      case "allowpaymentrequest":
+      case "async":
+      case "autofocus":
+      case "autoplay":
+      case "checked":
+      case "controls":
+      case "default":
+      case "defer":
+      case "disabled":
+      case "formnovalidate":
+      case "hidden":
+      case "ismap":
+      case "itemscope":
+      case "loop":
+      case "multiple":
+      case "muted":
+      case "nomodule":
+      case "novalidate":
+      case "open":
+      case "playsinline":
+      case "readonly":
+      case "required":
+      case "reversed":
+      case "selected":
+      case "truespeed":
+      case "webkitdirectory":
+        return !0;
+      default:
+        return !1;
+    }
+  };
 function retrieveFormValues(form) {
-  let formData = new FormData(form),
+  const formData = new FormData(form),
     contents = {};
   return (
     formData.forEach((value, key) => {

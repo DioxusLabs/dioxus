@@ -35,7 +35,7 @@ mod desktop_platforms {
     #[allow(unused)]
     pub fn init_menu_bar(menu: &Menu, window: &Window) {
         #[cfg(target_os = "windows")]
-        {
+        unsafe {
             use tao::platform::windows::WindowExtWindows;
             menu.init_for_hwnd(window.hwnd());
         }

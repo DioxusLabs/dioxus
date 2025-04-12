@@ -29,48 +29,56 @@ function setAttributeInner(node, field, value, ns) {
     case "dangerous_inner_html":
       node.innerHTML = value;
       break;
-    default:
-      if (!truthy(value) && isBoolAttr(field)) node.removeAttribute(field);
-      else node.setAttribute(field, value);
-  }
-}
-function truthy(val) {
-  return val === "true" || val === !0;
-}
-function isBoolAttr(field) {
-  switch (field) {
-    case "allowfullscreen":
-    case "allowpaymentrequest":
-    case "async":
-    case "autofocus":
-    case "autoplay":
-    case "checked":
-    case "controls":
-    case "default":
-    case "defer":
-    case "disabled":
-    case "formnovalidate":
-    case "hidden":
-    case "ismap":
-    case "itemscope":
-    case "loop":
     case "multiple":
-    case "muted":
-    case "nomodule":
-    case "novalidate":
-    case "open":
-    case "playsinline":
-    case "readonly":
-    case "required":
-    case "reversed":
-    case "selected":
-    case "truespeed":
-    case "webkitdirectory":
-      return !0;
+      setAttributeDefault(node, field, value);
+      let options = node.options;
+      for (let option of options) option.selected = option.defaultSelected;
+      break;
     default:
-      return !1;
+      setAttributeDefault(node, field, value);
   }
 }
+var setAttributeDefault = function (node, field, value) {
+    if (!truthy(value) && isBoolAttr(field)) node.removeAttribute(field);
+    else node.setAttribute(field, value);
+  },
+  truthy = function (val) {
+    return val === "true" || val === !0;
+  },
+  isBoolAttr = function (field) {
+    switch (field) {
+      case "allowfullscreen":
+      case "allowpaymentrequest":
+      case "async":
+      case "autofocus":
+      case "autoplay":
+      case "checked":
+      case "controls":
+      case "default":
+      case "defer":
+      case "disabled":
+      case "formnovalidate":
+      case "hidden":
+      case "ismap":
+      case "itemscope":
+      case "loop":
+      case "multiple":
+      case "muted":
+      case "nomodule":
+      case "novalidate":
+      case "open":
+      case "playsinline":
+      case "readonly":
+      case "required":
+      case "reversed":
+      case "selected":
+      case "truespeed":
+      case "webkitdirectory":
+        return !0;
+      default:
+        return !1;
+    }
+  };
 class BaseInterpreter {
   global;
   local;
@@ -94,8 +102,8 @@ class BaseInterpreter {
       root.setAttribute("data-dioxus-id", "0");
   }
   handleResizeEvent(entry) {
-    let target = entry.target,
-      event = new CustomEvent("resize", { bubbles: !1, detail: entry });
+    const target = entry.target;
+    let event = new CustomEvent("resize", { bubbles: !1, detail: entry });
     target.dispatchEvent(event);
   }
   createResizeObserver(element) {
@@ -109,8 +117,8 @@ class BaseInterpreter {
     if (this.resizeObserver) this.resizeObserver.unobserve(element);
   }
   handleIntersectionEvent(entry) {
-    let target = entry.target,
-      event = new CustomEvent("visible", { bubbles: !1, detail: entry });
+    const target = entry.target;
+    let event = new CustomEvent("visible", { bubbles: !1, detail: entry });
     target.dispatchEvent(event);
   }
   createIntersectionObserver(element) {
@@ -132,7 +140,7 @@ class BaseInterpreter {
           this.root.addEventListener(event_name, this.handler);
       else this.global[event_name].active++;
     else {
-      let id = element.getAttribute("data-dioxus-id");
+      const id = element.getAttribute("data-dioxus-id");
       if (!this.local[id]) this.local[id] = {};
       element.addEventListener(event_name, this.handler);
     }
@@ -154,7 +162,7 @@ class BaseInterpreter {
         delete this.global[event_name];
   }
   removeNonBubblingListener(element, event_name) {
-    let id = element.getAttribute("data-dioxus-id");
+    const id = element.getAttribute("data-dioxus-id");
     if (
       (delete this.local[id][event_name],
       Object.keys(this.local[id]).length === 0)
@@ -163,7 +171,7 @@ class BaseInterpreter {
     element.removeEventListener(event_name, this.handler);
   }
   removeAllNonBubblingListeners(element) {
-    let id = element.getAttribute("data-dioxus-id");
+    const id = element.getAttribute("data-dioxus-id");
     delete this.local[id];
   }
   getNode(id) {
@@ -173,7 +181,7 @@ class BaseInterpreter {
     this.stack.push(node);
   }
   appendChildren(id, many) {
-    let root = this.nodes[id],
+    const root = this.nodes[id],
       els = this.stack.splice(this.stack.length - many);
     for (let k = 0; k < many; k++) root.appendChild(els[k]);
   }
@@ -190,13 +198,13 @@ class BaseInterpreter {
     this.templates[tmpl_id] = nodes;
   }
   hydrate_node(hydrateNode, ids) {
-    let split = hydrateNode.getAttribute("data-node-hydration").split(","),
+    const split = hydrateNode.getAttribute("data-node-hydration").split(","),
       id = ids[parseInt(split[0])];
     if (((this.nodes[id] = hydrateNode), split.length > 1)) {
       (hydrateNode.listening = split.length - 1),
         hydrateNode.setAttribute("data-dioxus-id", id.toString());
       for (let j = 1; j < split.length; j++) {
-        let split2 = split[j].split(":"),
+        const split2 = split[j].split(":"),
           event_name = split2[0],
           bubbles = split2[1] === "1";
         this.createListener(event_name, hydrateNode, bubbles);
@@ -205,27 +213,27 @@ class BaseInterpreter {
   }
   hydrate(ids, underNodes) {
     for (let i = 0; i < underNodes.length; i++) {
-      let under = underNodes[i];
+      const under = underNodes[i];
       if (under instanceof HTMLElement) {
         if (under.getAttribute("data-node-hydration"))
           this.hydrate_node(under, ids);
-        let hydrateNodes = under.querySelectorAll("[data-node-hydration]");
+        const hydrateNodes = under.querySelectorAll("[data-node-hydration]");
         for (let i2 = 0; i2 < hydrateNodes.length; i2++)
           this.hydrate_node(hydrateNodes[i2], ids);
       }
-      let treeWalker = document.createTreeWalker(
-          under,
-          NodeFilter.SHOW_COMMENT
-        ),
-        nextSibling = under.nextSibling,
+      const treeWalker = document.createTreeWalker(
+        under,
+        NodeFilter.SHOW_COMMENT
+      );
+      let nextSibling = under.nextSibling,
         continueToNextNode = () => {
           if (!treeWalker.nextNode()) return !1;
           return treeWalker.currentNode !== nextSibling;
         };
       while (treeWalker.currentNode) {
-        let currentNode = treeWalker.currentNode;
+        const currentNode = treeWalker.currentNode;
         if (currentNode.nodeType === Node.COMMENT_NODE) {
-          let id = currentNode.textContent,
+          const id = currentNode.textContent,
             placeholderSplit = id.split("placeholder");
           if (placeholderSplit.length > 1) {
             if (
@@ -235,13 +243,13 @@ class BaseInterpreter {
               break;
             continue;
           }
-          let textNodeSplit = id.split("node-id");
+          const textNodeSplit = id.split("node-id");
           if (textNodeSplit.length > 1) {
             let next = currentNode.nextSibling;
             currentNode.remove();
             let commentAfterText, textNode;
             if (next.nodeType === Node.COMMENT_NODE) {
-              let newText = next.parentElement.insertBefore(
+              const newText = next.parentElement.insertBefore(
                 document.createTextNode(""),
                 next
               );

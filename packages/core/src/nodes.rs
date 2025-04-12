@@ -378,6 +378,7 @@ pub struct Template {
 
 // Are identical static items merged in the current build. Rust doesn't have a cfg(merge_statics) attribute
 // so we have to check this manually
+#[allow(unpredictable_function_pointer_comparisons)]
 fn static_items_merged() -> bool {
     fn a() {}
     fn b() {}

@@ -20,6 +20,7 @@ impl RunArgs {
 
         let devserver_ip = "127.0.0.1:8081".parse().unwrap();
         let fullstack_ip = "127.0.0.1:8080".parse().unwrap();
+        let mut open_address = None;
 
         todo!();
         // if build.platform == Platform::Web || build.fullstack {

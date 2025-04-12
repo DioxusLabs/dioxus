@@ -23,6 +23,8 @@ pub(crate) struct DebianSettings {
     // OS-specific settings:
     /// the list of debian dependencies.
     pub depends: Option<Vec<String>>,
+    /// the list of recommended debian dependencies.
+    pub recommends: Option<Vec<String>>,
     /// the list of dependencies the package provides.
     pub provides: Option<Vec<String>>,
     /// the list of package conflicts.

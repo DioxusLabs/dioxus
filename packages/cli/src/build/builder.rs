@@ -204,7 +204,7 @@ impl AppBuilder {
                         BuildStage::Starting { crate_count, .. } => {
                             self.expected_crates = *crate_count;
                         }
-                        BuildStage::InstallingTooling {} => {}
+                        BuildStage::InstallingTooling => {}
                         BuildStage::Compiling { current, total, .. } => {
                             self.compiled_crates = *current;
                             self.expected_crates = *total;
@@ -213,12 +213,12 @@ impl AppBuilder {
                                 self.compile_start = Some(Instant::now());
                             }
                         }
-                        BuildStage::Bundling {} => {
+                        BuildStage::Bundling => {
                             self.complete_compile();
                             self.bundling_progress = 0.0;
                             self.bundle_start = Some(Instant::now());
                         }
-                        BuildStage::OptimizingWasm {} => {}
+                        BuildStage::OptimizingWasm => {}
                         BuildStage::CopyingAssets { current, total, .. } => {
                             self.bundling_progress = *current as f64 / *total as f64;
                         }
@@ -236,7 +236,7 @@ impl AppBuilder {
                             self.expected_crates = 1;
                             self.bundling_progress = 0.0;
                         }
-                        BuildStage::RunningBindgen {} => {}
+                        BuildStage::RunningBindgen => {}
                         _ => {}
                     }
                 }
@@ -372,6 +372,7 @@ impl AppBuilder {
     pub(crate) async fn open(
         &mut self,
         devserver_ip: SocketAddr,
+        open_address: Option<SocketAddr>,
         start_fullstack_on_address: Option<SocketAddr>,
         open_browser: bool,
         always_on_top: bool,
@@ -429,7 +430,7 @@ impl AppBuilder {
             Platform::Web => {
                 // Only the first build we open the web app, after that the user knows it's running
                 if open_browser {
-                    self.open_web(devserver_ip);
+                    self.open_web(open_address.unwrap_or(devserver_ip));
                 }
 
                 None
@@ -633,7 +634,7 @@ impl AppBuilder {
             Some(base_path) => format!("/{}", base_path.trim_matches('/')),
             None => "".to_owned(),
         };
-        _ = open::that(format!("{protocol}://{address}{base_path}"));
+        _ = open::that_detached(format!("{protocol}://{address}{base_path}"));
     }
 
     /// Use `xcrun` to install the app to the simulator
