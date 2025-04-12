@@ -5,6 +5,7 @@ mod detect;
 mod handle;
 mod output;
 mod proxy;
+mod proxy_ws;
 mod runner;
 mod server;
 mod update;
