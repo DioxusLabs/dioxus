@@ -1,4 +1,4 @@
-use crate::{BuildId, BuilderUpdate, Platform, TraceMsg};
+use crate::{BuildId, BuildUpdate, Platform, TraceMsg};
 use axum::extract::ws::Message as WsMessage;
 use std::{path::PathBuf, process::ExitStatus};
 
@@ -13,7 +13,7 @@ pub(crate) enum ServeUpdate {
     /// An update regarding the state of the build and running app from an AppBuilder
     BuilderUpdate {
         id: BuildId,
-        update: BuilderUpdate,
+        update: BuildUpdate,
     },
 
     FilesChanged {

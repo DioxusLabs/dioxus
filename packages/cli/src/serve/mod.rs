@@ -1,5 +1,5 @@
 use crate::{
-    AppBuilder, BuildMode, BuildRequest, BuilderUpdate, Error, Platform, Result, ServeArgs,
+    AppBuilder, BuildMode, BuildRequest, BuildUpdate, Error, Platform, Result, ServeArgs,
     TraceController, TraceSrc,
 };
 
@@ -126,14 +126,14 @@ pub(crate) async fn serve_all(args: ServeArgs) -> Result<()> {
                 // todo: there might be more things to do here that require coordination with other pieces of the CLI
                 // todo: maybe we want to shuffle the runner around to send an "open" command instead of doing that
                 match update {
-                    BuilderUpdate::Progress { .. } => {}
-                    BuilderUpdate::CompilerMessage { message } => {
+                    BuildUpdate::Progress { .. } => {}
+                    BuildUpdate::CompilerMessage { message } => {
                         screen.push_cargo_log(message);
                     }
-                    BuilderUpdate::BuildFailed { err } => {
+                    BuildUpdate::BuildFailed { err } => {
                         tracing::error!("Build failed: {:?}", err);
                     }
-                    BuilderUpdate::BuildReady { bundle } => {
+                    BuildUpdate::BuildReady { bundle } => {
                         match bundle.mode {
                             BuildMode::Thin { .. } => {
                                 // We need to patch the app with the new bundle
@@ -160,13 +160,13 @@ pub(crate) async fn serve_all(args: ServeArgs) -> Result<()> {
                             }
                         }
                     }
-                    BuilderUpdate::StdoutReceived { msg } => {
+                    BuildUpdate::StdoutReceived { msg } => {
                         screen.push_stdio(platform, msg, tracing::Level::INFO);
                     }
-                    BuilderUpdate::StderrReceived { msg } => {
+                    BuildUpdate::StderrReceived { msg } => {
                         screen.push_stdio(platform, msg, tracing::Level::ERROR);
                     }
-                    BuilderUpdate::ProcessExited { status } => {
+                    BuildUpdate::ProcessExited { status } => {
                         if status.success() {
                             tracing::info!(
                                 r#"Application [{platform}] exited gracefully.

@@ -1,5 +1,5 @@
 use crate::{
-    BuildArgs, BuildArtifacts, BuildRequest, BuildStage, BuilderUpdate, Platform, ProgressRx,
+    BuildArgs, BuildArtifacts, BuildRequest, BuildStage, BuildUpdate, Platform, ProgressRx,
     ProgressTx, Result, StructuredOutput,
 };
 use anyhow::Context;
@@ -153,9 +153,9 @@ impl AppBuilder {
     }
 
     /// Wait for any new updates to the builder - either it completed or gave us a message etc
-    pub(crate) async fn wait(&mut self) -> BuilderUpdate {
+    pub(crate) async fn wait(&mut self) -> BuildUpdate {
         use futures_util::StreamExt;
-        use BuilderUpdate::*;
+        use BuildUpdate::*;
 
         // Wait for the build to finish or for it to emit a status message
         let update = tokio::select! {
@@ -164,9 +164,9 @@ impl AppBuilder {
                 // Replace the build with an infinitely pending task so we can select it again without worrying about deadlocks/spins
                 self.build_task = tokio::task::spawn(std::future::pending());
                 match bundle {
-                    Ok(Ok(bundle)) => BuilderUpdate::BuildReady { bundle },
-                    Ok(Err(err)) => BuilderUpdate::BuildFailed { err },
-                    Err(err) => BuilderUpdate::BuildFailed { err: crate::Error::Runtime(format!("Build panicked! {:?}", err)) },
+                    Ok(Ok(bundle)) => BuildUpdate::BuildReady { bundle },
+                    Ok(Err(err)) => BuildUpdate::BuildFailed { err },
+                    Err(err) => BuildUpdate::BuildFailed { err: crate::Error::Runtime(format!("Build panicked! {:?}", err)) },
                 }
             },
             Some(Ok(Some(msg))) = OptionFuture::from(self.stdout.as_mut().map(|f| f.next_line())) => {
@@ -191,7 +191,7 @@ impl AppBuilder {
         // doing so will cause the changes to be lost since this wait call is called under a cancellable task
         // todo - move this handling to a separate function that won't be cancelled
         match &update {
-            BuilderUpdate::Progress { stage } => {
+            BuildUpdate::Progress { stage } => {
                 // Prevent updates from flowing in after the build has already finished
                 if !self.is_finished() {
                     self.stage = stage.clone();
@@ -241,8 +241,8 @@ impl AppBuilder {
                     }
                 }
             }
-            BuilderUpdate::CompilerMessage { .. } => {}
-            BuilderUpdate::BuildReady { .. } => {
+            BuildUpdate::CompilerMessage { .. } => {}
+            BuildUpdate::BuildReady { .. } => {
                 self.compiled_crates = self.expected_crates;
                 self.bundling_progress = 1.0;
                 self.stage = BuildStage::Success;
@@ -250,7 +250,7 @@ impl AppBuilder {
                 self.complete_compile();
                 self.bundle_end = Some(Instant::now());
             }
-            BuilderUpdate::BuildFailed { .. } => {
+            BuildUpdate::BuildFailed { .. } => {
                 tracing::debug!("Setting builder to failed state");
                 self.stage = BuildStage::Failed;
             }
@@ -318,7 +318,7 @@ impl AppBuilder {
     pub(crate) async fn finish_build(&mut self) -> Result<BuildArtifacts> {
         loop {
             match self.wait().await {
-                BuilderUpdate::Progress { stage } => {
+                BuildUpdate::Progress { stage } => {
                     match &stage {
                         BuildStage::Compiling {
                             current,
@@ -342,19 +342,19 @@ impl AppBuilder {
 
                     tracing::info!(json = ?StructuredOutput::BuildUpdate { stage: stage.clone() });
                 }
-                BuilderUpdate::CompilerMessage { message } => {
+                BuildUpdate::CompilerMessage { message } => {
                     tracing::info!(json = ?StructuredOutput::CargoOutput { message: message.clone() }, %message);
                 }
-                BuilderUpdate::BuildReady { bundle } => {
+                BuildUpdate::BuildReady { bundle } => {
                     tracing::debug!(json = ?StructuredOutput::BuildFinished {
                         path: self.build.root_dir(),
                     });
                     return Ok(bundle);
                 }
-                BuilderUpdate::BuildFailed { err } => {
+                BuildUpdate::BuildFailed { err } => {
                     // Flush remaining compiler messages
                     while let Ok(Some(msg)) = self.rx.try_next() {
-                        if let BuilderUpdate::CompilerMessage { message } = msg {
+                        if let BuildUpdate::CompilerMessage { message } = msg {
                             tracing::info!(json = ?StructuredOutput::CargoOutput { message: message.clone() }, %message);
                         }
                     }
@@ -362,9 +362,9 @@ impl AppBuilder {
                     tracing::error!(?err, json = ?StructuredOutput::Error { message: err.to_string() });
                     return Err(err);
                 }
-                BuilderUpdate::StdoutReceived { msg } => {}
-                BuilderUpdate::StderrReceived { msg } => {}
-                BuilderUpdate::ProcessExited { status } => {}
+                BuildUpdate::StdoutReceived { msg } => {}
+                BuildUpdate::StderrReceived { msg } => {}
+                BuildUpdate::ProcessExited { status } => {}
             }
         }
     }

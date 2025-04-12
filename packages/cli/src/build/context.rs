@@ -15,14 +15,14 @@ pub struct BuildContext {
     pub mode: BuildMode,
 }
 
-pub(crate) type ProgressTx = UnboundedSender<BuilderUpdate>;
-pub(crate) type ProgressRx = UnboundedReceiver<BuilderUpdate>;
+pub(crate) type ProgressTx = UnboundedSender<BuildUpdate>;
+pub(crate) type ProgressRx = UnboundedReceiver<BuildUpdate>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BuildId(pub usize);
 
 #[allow(clippy::large_enum_variant)]
-pub(crate) enum BuilderUpdate {
+pub(crate) enum BuildUpdate {
     Progress {
         stage: BuildStage,
     },
@@ -62,26 +62,26 @@ pub(crate) enum BuilderUpdate {
 
 impl BuildContext {
     pub(crate) fn status_wasm_bindgen_start(&self) {
-        _ = self.tx.unbounded_send(BuilderUpdate::Progress {
+        _ = self.tx.unbounded_send(BuildUpdate::Progress {
             stage: BuildStage::RunningBindgen {},
         });
     }
 
     pub(crate) fn status_splitting_bundle(&self) {
-        _ = self.tx.unbounded_send(BuilderUpdate::Progress {
+        _ = self.tx.unbounded_send(BuildUpdate::Progress {
             stage: BuildStage::SplittingBundle,
         });
     }
 
     pub(crate) fn status_start_bundle(&self) {
         tracing::debug!("Assembling app bundle");
-        _ = self.tx.unbounded_send(BuilderUpdate::Progress {
+        _ = self.tx.unbounded_send(BuildUpdate::Progress {
             stage: BuildStage::Bundling {},
         });
     }
 
     pub(crate) fn status_running_gradle(&self) {
-        _ = self.tx.unbounded_send(BuilderUpdate::Progress {
+        _ = self.tx.unbounded_send(BuildUpdate::Progress {
             stage: BuildStage::RunningGradle,
         })
     }
@@ -89,7 +89,7 @@ impl BuildContext {
     pub(crate) fn status_build_diagnostic(&self, message: CompilerMessage) {
         _ = self
             .tx
-            .unbounded_send(BuilderUpdate::CompilerMessage { message });
+            .unbounded_send(BuildUpdate::CompilerMessage { message });
     }
 
     pub(crate) fn status_build_error(&self, line: String) {
@@ -101,7 +101,7 @@ impl BuildContext {
     }
 
     pub(crate) fn status_build_progress(&self, count: usize, total: usize, name: String) {
-        _ = self.tx.unbounded_send(BuilderUpdate::Progress {
+        _ = self.tx.unbounded_send(BuildUpdate::Progress {
             stage: BuildStage::Compiling {
                 current: count,
                 total,
@@ -111,7 +111,7 @@ impl BuildContext {
     }
 
     pub(crate) fn status_starting_build(&self, crate_count: usize) {
-        _ = self.tx.unbounded_send(BuilderUpdate::Progress {
+        _ = self.tx.unbounded_send(BuildUpdate::Progress {
             stage: BuildStage::Starting {
                 patch: matches!(self.mode, BuildMode::Thin { .. }),
                 crate_count,
@@ -120,12 +120,12 @@ impl BuildContext {
     }
 
     pub(crate) fn status_copied_asset(
-        progress: &UnboundedSender<BuilderUpdate>,
+        progress: &UnboundedSender<BuildUpdate>,
         current: usize,
         total: usize,
         path: PathBuf,
     ) {
-        _ = progress.unbounded_send(BuilderUpdate::Progress {
+        _ = progress.unbounded_send(BuildUpdate::Progress {
             stage: BuildStage::CopyingAssets {
                 current,
                 total,
@@ -135,19 +135,19 @@ impl BuildContext {
     }
 
     pub(crate) fn status_optimizing_wasm(&self) {
-        _ = self.tx.unbounded_send(BuilderUpdate::Progress {
+        _ = self.tx.unbounded_send(BuildUpdate::Progress {
             stage: BuildStage::OptimizingWasm {},
         });
     }
 
     pub(crate) fn status_installing_tooling(&self) {
-        _ = self.tx.unbounded_send(BuilderUpdate::Progress {
+        _ = self.tx.unbounded_send(BuildUpdate::Progress {
             stage: BuildStage::InstallingTooling {},
         });
     }
 
     pub(crate) fn status_compressing_assets(&self) {
-        _ = self.tx.unbounded_send(BuilderUpdate::Progress {
+        _ = self.tx.unbounded_send(BuildUpdate::Progress {
             stage: BuildStage::CompressingAssets,
         });
     }
