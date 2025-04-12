@@ -1,21 +1,76 @@
+use std::{cell::RefCell, ops::Deref, rc::Rc, sync::Arc};
+
+use blitz_renderer_vello::BlitzVelloRenderer;
 use blitz_shell::BlitzShellEvent;
+use blitz_traits::BlitzWindowHandle;
 use dioxus_document::{Document, NoOpDocument};
-use winit::{event_loop::EventLoopProxy, window::WindowId};
+use peniko::Blob;
+use winit::{
+    event_loop::EventLoopProxy,
+    window::{Window, WindowId},
+};
 
-use crate::DioxusNativeEvent;
+use crate::{DioxusNativeEvent, ReservedNativeTexture, SharedNativeTexture};
 
-pub struct DioxusNativeDocument {
+pub struct NativeDocument {
     pub(crate) proxy: EventLoopProxy<BlitzShellEvent>,
-    pub(crate) window: WindowId,
+    pub(crate) renderer: Rc<RefCell<BlitzVelloRenderer>>,
+    pub(crate) window_id: WindowId,
 }
 
-impl DioxusNativeDocument {
-    pub(crate) fn new(proxy: EventLoopProxy<BlitzShellEvent>, window: WindowId) -> Self {
-        Self { proxy, window }
+impl NativeDocument {
+    pub(crate) fn new(
+        proxy: EventLoopProxy<BlitzShellEvent>,
+        window: WindowId,
+        renderer: Rc<RefCell<BlitzVelloRenderer>>,
+    ) -> Self {
+        Self {
+            proxy,
+            renderer,
+            window_id: window,
+        }
+    }
+
+    pub fn window_handle(&self) -> Arc<dyn BlitzWindowHandle> {
+        self.renderer.borrow().window_handle.clone()
+    }
+
+    pub fn set_custom_texture(&self, node_id: &str, texture: SharedNativeTexture) {
+        let mut renderer = self.renderer.borrow_mut();
+
+        if let Some(image) = renderer.custom_textures.get(node_id).cloned() {
+            let blitz_renderer_vello::RenderState::Active(state) = &mut renderer.render_state
+            else {
+                return;
+            };
+
+            state
+                .renderer
+                .override_image(&image, Some(texture.inner.clone()));
+        }
+
+        // if let Some(node_id) = window.doc.inner.nodes_to_id.get(node_id).cloned() {
+        //     match &window.doc.inner.nodes[node_id].data {
+        //         blitz_dom::NodeData::Element(data) => match &data.node_specific_data {
+        //             blitz_dom::node::NodeSpecificData::Image(image_data) => {
+        //                 match image_data.as_ref() {
+        //                     blitz_dom::node::ImageData::CustomTexture(image) => {
+        //                         state
+        //                             .renderer
+        //                             .override_image(&image, Some(texture.inner.clone()));
+        //                     }
+        //                     _ => {}
+        //                 }
+        //             }
+        //             _ => {}
+        //         },
+        //         _ => {}
+        //     }
+        // }
     }
 }
 
-impl Document for DioxusNativeDocument {
+impl Document for NativeDocument {
     fn eval(&self, _js: String) -> dioxus_document::Eval {
         NoOpDocument.eval(_js)
     }
@@ -26,7 +81,7 @@ impl Document for DioxusNativeDocument {
         attributes: &[(&str, String)],
         contents: Option<String>,
     ) {
-        let window = self.window;
+        let window = self.window_id;
         _ = self.proxy.send_event(BlitzShellEvent::embedder_event(
             DioxusNativeEvent::CreateHeadElement {
                 name: name.to_string(),

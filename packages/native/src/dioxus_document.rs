@@ -15,8 +15,11 @@ use dioxus_html::{set_event_converter, FormValue, PlatformEventData};
 use futures_util::{pin_mut, FutureExt};
 
 use super::event_handler::{BlitzKeyboardData, NativeClickData, NativeConverter, NativeFormData};
-use crate::mutation_writer::{DioxusState, MutationWriter};
 use crate::NodeId;
+use crate::{
+    mutation_writer::{DioxusState, MutationWriter},
+    ReservedNativeTexture, SharedNativeTexture,
+};
 
 pub(crate) fn qual_name(local_name: &str, namespace: Option<&str>) -> QualName {
     QualName {
@@ -42,7 +45,6 @@ pub struct DioxusDocument {
 }
 
 // Implement DocumentLike and required traits for DioxusDocument
-
 impl AsRef<BaseDocument> for DioxusDocument {
     fn as_ref(&self) -> &BaseDocument {
         &self.inner
