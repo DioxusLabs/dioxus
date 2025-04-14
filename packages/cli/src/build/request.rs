@@ -463,7 +463,6 @@ impl BuildRequest {
     ///
     /// There's a chance that's not actually true, so this function is kept around in case we do
     /// need to revert to "deep extraction".
-    #[allow(unused)]
     async fn deep_linker_asset_extract(&self) -> Result<AssetManifest> {
         // Create a temp file to put the output of the args
         // We need to do this since rustc won't actually print the link args to stdout, so we need to
@@ -749,11 +748,6 @@ impl BuildRequest {
             | Platform::Server
             | Platform::Liveview => self.root_dir().join("assets"),
         }
-    }
-
-    /// Get the path to the asset optimizer version file
-    pub fn asset_optimizer_version_file(&self) -> PathBuf {
-        self.platform_dir().join(".cli-version")
     }
 
     pub fn platform_exe_name(&self) -> String {

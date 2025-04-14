@@ -3,9 +3,8 @@ use super::templates::InfoPlistData;
 use crate::{BuildRequest, Platform, WasmOptConfig};
 use crate::{Result, TraceSrc};
 use anyhow::Context;
-use dioxus_cli_opt::{process_file_to, AssetManifest};
+use dioxus_cli_opt::{optimize_all_assets, AssetManifest};
 use manganis::{AssetOptions, JsAssetOptions};
-use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
@@ -354,38 +353,19 @@ impl AppBundle {
         Ok(())
     }
 
-    /// Copy the assets out of the manifest and into the target location
-    ///
-    /// Should be the same on all platforms - just copy over the assets from the manifest into the output directory
-    async fn write_assets(&self) -> Result<()> {
-        // Server doesn't need assets - web will provide them
-        if self.build.build.platform() == Platform::Server {
-            return Ok(());
-        }
-
+    /// Clean up any assets that no longer exist in the manifest
+    async fn clear_old_assets(&self) -> Result<()> {
         let asset_dir = self.build.asset_dir();
 
         // First, clear the asset dir of any files that don't exist in the new manifest
         _ = tokio::fs::create_dir_all(&asset_dir).await;
         // Create a set of all the paths that new files will be bundled to
-        let mut keep_bundled_output_paths: HashSet<_> = self
+        let keep_bundled_output_paths: HashSet<_> = self
             .app
             .assets
-            .assets
-            .values()
+            .assets()
             .map(|a| asset_dir.join(a.bundled_path()))
             .collect();
-        // The CLI creates a .version file in the asset dir to keep track of what version of the optimizer
-        // the asset was processed. If that version doesn't match the CLI version, we need to re-optimize
-        // all assets.
-        let version_file = self.build.asset_optimizer_version_file();
-        let clear_cache = std::fs::read_to_string(&version_file)
-            .ok()
-            .filter(|s| s == crate::VERSION.as_str())
-            .is_none();
-        if clear_cache {
-            keep_bundled_output_paths.clear();
-        }
 
         // one possible implementation of walking a directory only visiting files
         fn remove_old_assets<'a>(
@@ -425,24 +405,40 @@ impl AppBundle {
         );
         remove_old_assets(&asset_dir, &keep_bundled_output_paths).await?;
 
+        Ok(())
+    }
+
+    /// Copy the assets out of the manifest and into the target location
+    ///
+    /// Should be the same on all platforms - just copy over the assets from the manifest into the output directory
+    async fn write_assets(&self) -> Result<()> {
+        // Server doesn't need assets - web will provide them
+        if self.build.build.platform() == Platform::Server {
+            return Ok(());
+        }
+
+        self.clear_old_assets();
+
+        let asset_dir = self.build.asset_dir();
+
         // todo(jon): we also want to eventually include options for each asset's optimization and compression, which we currently aren't
         let mut assets_to_transfer = vec![];
 
         // Queue the bundled assets
-        for (asset, bundled) in &self.app.assets.assets {
-            let from = asset.clone();
-            let to = asset_dir.join(bundled.bundled_path());
+        for asset in self.app.assets.assets() {
+            let from = PathBuf::from(asset.absolute_source_path());
+            let to = asset_dir.join(asset.bundled_path());
 
             // prefer to log using a shorter path relative to the workspace dir by trimming the workspace dir
             let from_ = from
                 .strip_prefix(self.build.krate.workspace_dir())
                 .unwrap_or(from.as_path());
-            let to_ = from
+            let to_ = to
                 .strip_prefix(self.build.krate.workspace_dir())
                 .unwrap_or(to.as_path());
 
             tracing::debug!("Copying asset {from_:?} to {to_:?}");
-            assets_to_transfer.push((from, to, *bundled.options()));
+            assets_to_transfer.push((from, to, *asset.options()));
         }
 
         // And then queue the legacy assets
@@ -462,20 +458,16 @@ impl AppBundle {
         let ws_dir = self.build.krate.workspace_dir();
         // Optimizing assets is expensive and blocking, so we do it in a tokio spawn blocking task
         tokio::task::spawn_blocking(move || {
-            assets_to_transfer
-                .par_iter()
-                .try_for_each(|(from, to, options)| {
+            optimize_all_assets(
+                assets_to_transfer,
+                |from, _, _| {
                     let processing = started_processing.fetch_add(1, Ordering::SeqCst);
                     let from_ = from.strip_prefix(&ws_dir).unwrap_or(from);
                     tracing::trace!(
                         "Starting asset copy {processing}/{asset_count} from {from_:?}"
                     );
-
-                    let res = process_file_to(options, from, to);
-                    if let Err(err) = res.as_ref() {
-                        tracing::error!("Failed to copy asset {from:?}: {err}");
-                    }
-
+                },
+                |from, _, _| {
                     let finished = copied.fetch_add(1, Ordering::SeqCst);
                     BuildRequest::status_copied_asset(
                         &progress,
@@ -483,21 +475,11 @@ impl AppBundle {
                         asset_count,
                         from.to_path_buf(),
                     );
-
-                    res.map(|_| ())
-                })
+                },
+            )
         })
         .await
         .map_err(|e| anyhow::anyhow!("A task failed while trying to copy assets: {e}"))??;
-
-        // // Remove the wasm bindgen output directory if it exists
-        // _ = std::fs::remove_dir_all(self.build.wasm_bindgen_out_dir());
-
-        // Write the version file so we know what version of the optimizer we used
-        std::fs::write(
-            self.build.asset_optimizer_version_file(),
-            crate::VERSION.as_str(),
-        )?;
 
         Ok(())
     }

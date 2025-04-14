@@ -9,6 +9,7 @@ use std::path::PathBuf;
 /// to use.
 #[derive(
     Debug,
+    Eq,
     PartialEq,
     PartialOrd,
     Clone,

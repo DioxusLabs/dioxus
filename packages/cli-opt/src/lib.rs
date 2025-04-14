@@ -1,10 +1,13 @@
 use anyhow::Context;
+use manganis::AssetOptions;
 use manganis_core::linker::LinkSection;
 use manganis_core::BundledAsset;
 use object::{read::archive::ArchiveFile, File as ObjectFile, Object, ObjectSection};
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
-use std::path::Path;
-use std::{collections::HashMap, path::PathBuf};
+use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, RwLock};
 
 mod css;
 mod file;
@@ -21,7 +24,7 @@ pub use file::process_file_to;
 #[derive(Debug, PartialEq, Default, Clone, Serialize, Deserialize)]
 pub struct AssetManifest {
     /// Map of bundled asset name to the asset itself
-    pub assets: HashMap<PathBuf, BundledAsset>,
+    assets: HashMap<PathBuf, HashSet<BundledAsset>>,
 }
 
 impl AssetManifest {
@@ -31,19 +34,28 @@ impl AssetManifest {
         asset_path: &Path,
         options: manganis::AssetOptions,
     ) -> anyhow::Result<BundledAsset> {
-        let hash = manganis_core::hash::AssetHash::hash_file_contents(asset_path)
-            .context("Failed to hash file")?;
-
         let output_path_str = asset_path.to_str().ok_or(anyhow::anyhow!(
             "Failed to convert wasm bindgen output path to string"
         ))?;
 
-        let bundled_asset =
-            manganis::macro_helpers::create_bundled_asset(output_path_str, hash.bytes(), options);
+        let bundled_asset = manganis::macro_helpers::create_bundled_asset(output_path_str, options);
 
-        self.assets.insert(asset_path.into(), bundled_asset);
+        self.assets
+            .entry(asset_path.to_path_buf())
+            .or_default()
+            .insert(bundled_asset);
 
         Ok(bundled_asset)
+    }
+
+    /// Get any assets that are tied to a specific source file
+    pub fn get_assets_for_source(&self, path: &Path) -> Option<&HashSet<BundledAsset>> {
+        self.assets.get(path)
+    }
+
+    /// Iterate over all the assets in the manifest
+    pub fn assets(&self) -> impl Iterator<Item = &BundledAsset> {
+        self.assets.values().flat_map(|assets| assets.iter())
     }
 
     #[allow(dead_code)]
@@ -120,11 +132,43 @@ impl AssetManifest {
                 const_serialize::deserialize_const!(BundledAsset, buffer)
             {
                 self.assets
-                    .insert(asset.absolute_source_path().into(), asset);
+                    .entry(PathBuf::from(asset.absolute_source_path()))
+                    .or_default()
+                    .insert(asset);
                 buffer = remaining_buffer;
             }
         }
 
         Ok(())
     }
+}
+
+/// Optimize a list of assets in parallel
+pub fn optimize_all_assets(
+    assets_to_transfer: Vec<(PathBuf, PathBuf, AssetOptions)>,
+    on_optimization_start: impl FnMut(&Path, &Path, &AssetOptions) + Sync + Send,
+    on_optimization_end: impl FnMut(&Path, &Path, &AssetOptions) + Sync + Send,
+) -> anyhow::Result<()> {
+    let on_optimization_start = Arc::new(RwLock::new(on_optimization_start));
+    let on_optimization_end = Arc::new(RwLock::new(on_optimization_end));
+    assets_to_transfer
+        .par_iter()
+        .try_for_each(|(from, to, options)| {
+            {
+                let mut on_optimization_start = on_optimization_start.write().unwrap();
+                on_optimization_start(from, to, options);
+            }
+
+            let res = process_file_to(options, from, to);
+            if let Err(err) = res.as_ref() {
+                tracing::error!("Failed to copy asset {from:?}: {err}");
+            }
+
+            {
+                let mut on_optimization_end = on_optimization_end.write().unwrap();
+                on_optimization_end(from, to, options);
+            }
+
+            res.map(|_| ())
+        })
 }

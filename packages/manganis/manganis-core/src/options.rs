@@ -5,6 +5,7 @@ use crate::{CssAssetOptions, FolderAssetOptions, ImageAssetOptions, JsAssetOptio
 /// Settings for a generic asset
 #[derive(
     Debug,
+    Eq,
     PartialEq,
     PartialOrd,
     Clone,

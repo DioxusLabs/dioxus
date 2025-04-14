@@ -1,5 +1,4 @@
 use macro_string::MacroString;
-use manganis_core::hash::AssetHash;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, ToTokens, TokenStreamExt};
 use std::{iter, path::PathBuf};
@@ -141,17 +140,6 @@ impl ToTokens for AssetParser {
         let mut asset_str = proc_macro2::Literal::string(&asset_str);
         asset_str.set_span(self.path_expr.span());
 
-        let hash = match AssetHash::hash_file_contents(asset) {
-            Ok(hash) => hash,
-            Err(err) => {
-                let err = err.to_string();
-                tokens.append_all(quote! { compile_error!(#err) });
-                return;
-            }
-        };
-
-        let hash = hash.bytes();
-
         // Generate the link section for the asset
         // The link section includes the source path and the output path of the asset
         let link_section = crate::generate_link_section(quote!(__ASSET));
@@ -171,8 +159,6 @@ impl ToTokens for AssetParser {
 
         tokens.extend(quote! {
             {
-                // We keep a hash of the contents of the asset for cache busting
-                const __ASSET_HASH: &[u8] = &[#(#hash),*];
                 // The source is used by the CLI to copy the asset
                 const __ASSET_SOURCE_PATH: &'static str = #asset_str;
                 // The options give the CLI info about how to process the asset
@@ -181,7 +167,7 @@ impl ToTokens for AssetParser {
                 const __ASSET_OPTIONS: manganis::AssetOptions = #options.into_asset_options();
                 // Create the asset that the crate will use. This is used both in the return value and
                 // added to the linker for the bundler to copy later
-                const __ASSET: manganis::BundledAsset = manganis::macro_helpers::#constructor(__ASSET_SOURCE_PATH, __ASSET_HASH, __ASSET_OPTIONS);
+                const __ASSET: manganis::BundledAsset = manganis::macro_helpers::#constructor(__ASSET_SOURCE_PATH, __ASSET_OPTIONS);
 
                 #link_section
 
