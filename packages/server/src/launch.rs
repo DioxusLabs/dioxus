@@ -1,27 +1,42 @@
 //! A launch function that creates an axum router for the LaunchBuilder
 
-use std::any::Any;
+use std::{any::Any, net::SocketAddr};
 
 use axum::{
     body::Body,
     extract::{Request, State},
     response::IntoResponse,
+    routing::IntoMakeService,
+    serve::IncomingStream,
 };
 use dioxus_cli_config::base_path;
+use dioxus_devtools::DevserverMsg;
 use dioxus_lib::prelude::*;
+use futures_util::{stream::FusedStream, StreamExt};
+use hyper::body::Incoming;
+use hyper_util::server::conn::auto::Builder as HyperBuilder;
+use hyper_util::{
+    rt::{TokioExecutor, TokioIo},
+    service::TowerToHyperService,
+};
+use tokio::net::TcpStream;
+use tokio_util::task::LocalPoolHandle;
+use tower::Service;
+use tower::ServiceExt as _;
+// use tower::{Service, ServiceExt};
 
 use crate::{
     render_handler, rt::DioxusRouterExt, RenderHandleState, SSRState, ServeConfig,
     ServeConfigBuilder,
 };
 
+type ContextList = Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync>>;
+
+type BaseComp = fn() -> Element;
+
 /// Launch a fullstack app with the given root component, contexts, and config.
 #[allow(unused)]
-pub fn launch(
-    root: fn() -> Element,
-    contexts: Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync>>,
-    platform_config: Vec<Box<dyn Any>>,
-) -> ! {
+pub fn launch(root: BaseComp, contexts: ContextList, platform_config: Vec<Box<dyn Any>>) -> ! {
     #[cfg(not(target_arch = "wasm32"))]
     tokio::runtime::Runtime::new()
         .unwrap()
@@ -37,6 +52,14 @@ async fn serve_server(
     contexts: Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync>>,
     platform_config: Vec<Box<dyn Any>>,
 ) {
+    let (devtools_tx, mut devtools_rx) = futures_channel::mpsc::unbounded();
+
+    if let Some(endpoint) = dioxus_cli_config::devserver_ws_endpoint() {
+        dioxus_devtools::connect(endpoint, move |msg| {
+            _ = devtools_tx.unbounded_send(msg);
+        })
+    }
+
     let platform_config = platform_config
         .into_iter()
         .find_map(|cfg| {
@@ -68,6 +91,125 @@ async fn serve_server(
     // and we use the generated address the CLI gives us
     let address = dioxus_cli_config::fullstack_address_or_localhost();
 
+    let config = platform_config.as_ref().ok().cloned();
+
+    let router = build_router(root, platform_config);
+    let task_pool = LocalPoolHandle::new(5);
+    let make_service = router.into_make_service();
+
+    let listener = tokio::net::TcpListener::bind(address).await.unwrap();
+
+    tracing::info!("Listening on {address} with listener {listener:?}");
+
+    enum Msg {
+        TcpStream(std::io::Result<(TcpStream, SocketAddr)>),
+        Devtools(DevserverMsg),
+    }
+
+    // axum::serve()
+
+    // Manually loop on accepting connections so we can also respond to devtools messages
+    loop {
+        let res = tokio::select! {
+            res = listener.accept() => Msg::TcpStream(res),
+            msg = devtools_rx.next(), if !devtools_rx.is_terminated() => {
+                if let Some(msg) = msg {
+                    Msg::Devtools(msg)
+                } else {
+                    continue;
+                }
+            }
+        };
+
+        match res {
+            // We need to delete our old router and build a new one
+            //
+            // one challenge is that the server functions are sitting in the dlopened lib and no longer
+            // accessible by us (the original process)
+            //
+            // We need to somehow get them out... ?
+            //
+            // for now we just support editing existing server functions
+            Msg::Devtools(devserver_msg) => match devserver_msg {
+                DevserverMsg::HotReload(hot_reload_msg) => {
+                    if let Some(table) = hot_reload_msg.jump_table {
+                        dioxus_devtools::apply_patch(table);
+                    }
+                }
+                DevserverMsg::FullReloadStart => {}
+                DevserverMsg::FullReloadFailed => {}
+                DevserverMsg::FullReloadCommand => {}
+                DevserverMsg::Shutdown => {}
+            },
+            Msg::TcpStream(Err(_)) => {}
+            Msg::TcpStream(Ok((tcp_stream, remote_addr))) => {
+                let mut make_service = make_service.clone();
+                task_pool.spawn_pinned(move || async move {
+                    let tcp_stream = TokioIo::new(tcp_stream);
+
+                    std::future::poll_fn(|cx| {
+                        <IntoMakeService<axum::Router> as tower::Service<Request>>::poll_ready(
+                            &mut make_service,
+                            cx,
+                        )
+                    })
+                    .await
+                    .unwrap_or_else(|err| match err {});
+
+                    // todo - this was taken from axum::serve but it seems like IncomingStream serves no purpose?
+                    #[derive(Debug)]
+                    pub struct IncomingStream_<'a> {
+                        tcp_stream: &'a TokioIo<TcpStream>,
+                        remote_addr: SocketAddr,
+                    }
+
+                    let tower_service = make_service
+                        .call(IncomingStream_ {
+                            tcp_stream: &tcp_stream,
+                            remote_addr,
+                        })
+                        .await
+                        .unwrap_or_else(|err| match err {})
+                        .map_request(|req: Request<Incoming>| {
+                            let req = req.map(Body::new);
+
+                            tracing::info!("Handling request: {:?}", req);
+
+                            req
+                        });
+
+                    // upgrades needed for websockets
+                    let ret = HyperBuilder::new(TokioExecutor::new())
+                        .serve_connection_with_upgrades(
+                            tcp_stream,
+                            TowerToHyperService::new(tower_service),
+                        )
+                        .await;
+
+                    if let Err(err) = ret {
+                        // This error only appears when the client doesn't send a request and
+                        // terminate the connection.
+                        //
+                        // If client sends one request then terminate connection whenever, it doesn't
+                        // appear.
+                    }
+                });
+            }
+        }
+    }
+}
+
+fn build_router(
+    root: fn() -> Result<VNode, RenderError>,
+    platform_config: Result<ServeConfig, crate::UnableToLoadIndex>,
+) -> axum::Router {
+    let mut base_path = base_path();
+
+    let dioxus_router =
+        axum::Router::new().serve_dioxus_application(TryIntoResult(platform_config), root);
+
+    let router = dioxus_router;
+
     struct TryIntoResult(Result<ServeConfig, crate::UnableToLoadIndex>);
 
     impl TryInto<ServeConfig> for TryIntoResult {
@@ -77,12 +219,6 @@ async fn serve_server(
             self.0
         }
     }
-
-    let mut base_path = base_path();
-    let config = platform_config.as_ref().ok().cloned();
-    let dioxus_router =
-        axum::Router::new().serve_dioxus_application(TryIntoResult(platform_config), root);
-    let router = dioxus_router;
 
     // let mut router;
     // match base_path.as_deref() {
@@ -111,11 +247,5 @@ async fn serve_server(
     //     }
     //     None => router = dioxus_router,
     // }
-
-    let router = router.into_make_service();
-    let listener = tokio::net::TcpListener::bind(address).await.unwrap();
-
-    tracing::info!("Listening on {address} with listener {listener:?}");
-
-    axum::serve(listener, router).await.unwrap();
+    router
 }

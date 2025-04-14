@@ -417,8 +417,12 @@ impl AppRunner {
         if needs_full_rebuild || true {
             self.client.patch_rebuild(files.to_vec());
 
+            if let Some(server) = self.server.as_mut() {
+                server.patch_rebuild(files.to_vec());
+            }
+
             self.clear_hot_reload_changes();
-            self.clear_cached_rsx();
+            // self.clear_cached_rsx();
             server.start_patch().await
         } else {
             let msg = HotReloadMsg {
@@ -475,21 +479,29 @@ impl AppRunner {
             tracing::info!("Build completed in {:?}ms", time_taken.as_millis());
         }
 
-        // We can't open the server until the client is ready.
-        // This comes in two cases - we receive the client or the server first.
-        if artifacts.platform == Platform::Server && self.client.stage == BuildStage::Success {
-            self.open_server(
-                artifacts,
-                devserver_ip,
-                fullstack_address,
-                displayed_address,
-            )
-            .await?;
-        } else
-        // Handle the client
-        if artifacts.platform != Platform::Server {
-            tracing::debug!("Opening client build");
-            // self.client.soft_kill().await;
+        // Make sure to save artifacts...
+        match artifacts.platform {
+            Platform::Server => {
+                if let Some(server) = self.server.as_mut() {
+                    server.artifacts = Some(artifacts.clone());
+                } else {
+                    tracing::warn!("Server build completed but no server runner was created");
+                }
+            }
+            _ => {
+                self.client.artifacts = Some(artifacts.clone());
+            }
+        }
+
+        let should_open = self.client.stage == BuildStage::Success
+            && (self.server.as_ref().map(|s| s.stage == BuildStage::Success)).unwrap_or(true);
+
+        if should_open {
+            // Always open the server first after the client has been built
+            if let Some(server) = self.server.as_ref() {
+                self.open_server(devserver_ip, fullstack_address, displayed_address)
+                    .await?;
+            }
 
             // Start the new app before we kill the old one to give it a little bit of time
             let open_browser = self.builds_opened == 0 && self.open_browser;
@@ -506,21 +518,6 @@ impl AppRunner {
                 .await?;
 
             self.builds_opened += 1;
-
-            // Save the artifacts and clear the patches(?)
-            self.client.artifacts = Some(artifacts);
-
-            if let Some(server) = self.server.as_ref() {
-                if server.stage == BuildStage::Success {
-                    self.open_server(
-                        server.artifacts.clone().unwrap(),
-                        devserver_ip,
-                        fullstack_address,
-                        displayed_address,
-                    )
-                    .await?;
-                }
-            }
         }
 
         Ok(())
@@ -729,7 +726,11 @@ impl AppRunner {
     }
 
     pub(crate) async fn patch(&mut self, res: &BuildArtifacts) -> Result<JumpTable> {
-        let client = &self.client;
+        let client = match res.platform {
+            Platform::Server => &self.server.as_ref().unwrap(),
+            _ => &self.client,
+        };
+
         let original = client.build.main_exe();
         let new = client.build.patch_exe(res.time_start);
         let triple = client.build.triple.clone();
@@ -780,8 +781,8 @@ impl AppRunner {
                 .as_millis()
         );
 
-        // Save this patch
-        self.client.patches.push(jump_table.clone());
+        // // Save this patch
+        // self.client.patches.push(jump_table.clone());
 
         Ok(jump_table)
     }
@@ -800,9 +801,21 @@ impl AppRunner {
             .context("client message not proper encoding")?;
 
         match serde_json::from_str::<ClientMsg>(as_text) {
-            Ok(ClientMsg::Initialize { aslr_reference }) => {
+            Ok(ClientMsg::Initialize {
+                aslr_reference,
+                build_id,
+            }) => {
                 tracing::debug!("Setting aslr_reference: {aslr_reference}");
-                self.client.aslr_reference = Some(aslr_reference);
+                match build_id {
+                    0 => {
+                        self.client.aslr_reference = Some(aslr_reference);
+                    }
+                    _ => {
+                        if let Some(server) = self.server.as_mut() {
+                            server.aslr_reference = Some(aslr_reference);
+                        }
+                    }
+                }
             }
             Ok(_client) => {}
             Err(err) => {
@@ -963,7 +976,6 @@ impl AppRunner {
 
     async fn open_server(
         &mut self,
-        artifacts: BuildArtifacts,
         devserver_ip: SocketAddr,
         fullstack_address: Option<SocketAddr>,
         displayed_address: Option<SocketAddr>,
@@ -981,9 +993,6 @@ impl AppRunner {
                     false,
                 )
                 .await?;
-
-            // Save the artifacts and clear the patches(?)
-            server.artifacts = Some(artifacts);
         }
 
         Ok(())

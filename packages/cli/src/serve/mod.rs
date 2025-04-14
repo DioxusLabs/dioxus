@@ -105,7 +105,7 @@ pub(crate) async fn serve_all(args: ServeArgs) -> Result<()> {
 
             // Received a message from the devtools server - currently we only use this for
             // logging, so we just forward it the tui
-            ServeUpdate::WsMessage(msg) => {
+            ServeUpdate::WsMessage { msg, platform } => {
                 screen.push_ws_message(Platform::Web, &msg);
                 _ = builder.handle_ws_message(&msg).await;
             }

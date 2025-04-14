@@ -68,6 +68,7 @@ pub(crate) use document::*;
 pub(crate) use launch::*;
 pub(crate) use render::*;
 pub(crate) use router::*;
+pub(crate) use rt::*;
 pub(crate) use serve_config::*;
 pub(crate) use server_context::*;
 pub(crate) use streaming::*;

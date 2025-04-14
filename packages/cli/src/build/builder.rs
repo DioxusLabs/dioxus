@@ -412,8 +412,6 @@ impl AppBuilder {
             envs.push((dioxus_cli_config::SERVER_PORT_ENV, addr.port().to_string()));
         }
 
-        tracing::debug!("Opening app with envs: {envs:#?}");
-
         // We try to use stdin/stdout to communicate with the app
         let running_process = match self.build.platform {
             // Unfortunately web won't let us get a proc handle to it (to read its stdout/stderr) so instead
@@ -445,7 +443,6 @@ impl AppBuilder {
 
         // If we have a running process, we need to attach to it and wait for its outputs
         if let Some(mut child) = running_process {
-            tracing::debug!("setting up child process: {:#?}", child);
             let stdout = BufReader::new(child.stdout.take().unwrap());
             let stderr = BufReader::new(child.stderr.take().unwrap());
             self.stdout = Some(stdout.lines());

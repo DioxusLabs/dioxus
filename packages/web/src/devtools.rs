@@ -167,6 +167,7 @@ fn make_ws(
             } else {
                 ws_tx.send_with_str(
                     &serde_json::to_string(&ClientMsg::Initialize {
+                        build_id: dioxus_devtools::build_id(),
                         aslr_reference: subsecond::aslr_reference() as _,
                     })
                     .unwrap(),

@@ -94,10 +94,10 @@ pub fn create_jump_table(
     }
 
     let aslr_reference = old_name_to_addr
-        .get("aslr_reference")
+        .get("_aslr_reference")
         .unwrap_or_else(|| {
             old_name_to_addr
-                .get("_aslr_reference")
+                .get("aslr_reference")
                 .expect("failed to find aslr_reference")
         })
         .clone();
@@ -306,7 +306,7 @@ pub fn resolve_undefined(
 
         let abs_addr = sym.address() + aslr_offset;
 
-        tracing::debug!("Defining: {:?}", name);
+        tracing::trace!("Defining: {:?} -> {:?}", name, sym.kind());
 
         if sym.kind() == SymbolKind::Text {
             let jump_code = match triple.architecture {
@@ -362,16 +362,30 @@ pub fn resolve_undefined(
                 flags: object::SymbolFlags::None,
             });
         } else {
-            obj.add_symbol(Symbol {
-                name: name.as_bytes()[name_offset..].to_vec(),
-                value: abs_addr,
-                size: 0,
-                scope: SymbolScope::Linkage,
-                kind: sym.kind(),
-                weak: sym.is_weak(),
-                section: SymbolSection::Absolute,
-                flags: object::SymbolFlags::None,
-            });
+            // It's likely a static
+            if sym.kind() == SymbolKind::Unknown {
+                obj.add_symbol(Symbol {
+                    name: name.as_bytes()[name_offset..].to_vec(),
+                    value: abs_addr,
+                    size: 0,
+                    scope: SymbolScope::Dynamic,
+                    kind: SymbolKind::Data,
+                    weak: false,
+                    section: SymbolSection::Absolute,
+                    flags: object::SymbolFlags::None,
+                });
+            } else {
+                obj.add_symbol(Symbol {
+                    name: name.as_bytes()[name_offset..].to_vec(),
+                    value: abs_addr,
+                    size: 0,
+                    scope: SymbolScope::Linkage,
+                    kind: sym.kind(),
+                    weak: sym.is_weak(),
+                    section: SymbolSection::Absolute,
+                    flags: object::SymbolFlags::None,
+                });
+            }
         }
     }
 

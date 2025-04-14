@@ -1,11 +1,10 @@
-use std::{any::TypeId, cell::Cell, ffi::CString, path::PathBuf, rc::Rc};
-
 use dioxus_core::{
     prelude::{consume_context, try_consume_context},
     Element, ScopeId, VirtualDom,
 };
 pub use dioxus_devtools_types::*;
 use dioxus_signals::{GlobalKey, Writable};
+use std::{any::TypeId, cell::Cell, ffi::CString, path::PathBuf, rc::Rc};
 use subsecond::JumpTable;
 use warnings::Warning;
 
@@ -57,6 +56,10 @@ pub fn apply_changes(dom: &VirtualDom, msg: &HotReloadMsg) {
     });
 }
 
+pub fn apply_patch(table: JumpTable) {
+    unsafe { subsecond::apply_patch(table) };
+}
+
 /// Connect to the devserver and handle its messages with a callback.
 ///
 /// This doesn't use any form of security or protocol, so it's not safe to expose to the internet.
@@ -68,9 +71,10 @@ pub fn connect(endpoint: String, mut callback: impl FnMut(DevserverMsg) + Send +
             Err(_) => return,
         };
 
-        websocket.send(tungstenite::Message::Text(
+        _ = websocket.send(tungstenite::Message::Text(
             serde_json::to_string(&ClientMsg::Initialize {
                 aslr_reference: subsecond::aslr_reference() as _,
+                build_id: build_id(),
             })
             .unwrap(),
         ));
@@ -83,4 +87,16 @@ pub fn connect(endpoint: String, mut callback: impl FnMut(DevserverMsg) + Send +
             }
         }
     });
+}
+
+pub fn build_id() -> u64 {
+    #[cfg(target_arch = "wasm32")]
+    {
+        0
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        1
+    }
 }

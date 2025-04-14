@@ -575,7 +575,7 @@ impl BuildRequest {
         // Write the build artifacts to the bundle on the disk
         match ctx.mode {
             BuildMode::Thin { aslr_reference, .. } => {
-                self.write_patch(aslr_reference, artifacts.time_start)
+                self.write_patch(ctx, aslr_reference, artifacts.time_start)
                     .await?;
             }
 
@@ -978,7 +978,12 @@ impl BuildRequest {
     }
 
     /// Run our custom linker setup to generate a patch file in the right location
-    async fn write_patch(&self, aslr_reference: u64, time_start: SystemTime) -> Result<()> {
+    async fn write_patch(
+        &self,
+        ctx: &BuildContext,
+        aslr_reference: u64,
+        time_start: SystemTime,
+    ) -> Result<()> {
         tracing::debug!("Patching existing bundle");
 
         let raw_args = std::fs::read_to_string(&self.link_args_file())
@@ -1083,7 +1088,7 @@ impl BuildRequest {
         let triple = self.triple.clone();
         let mut args = vec![];
 
-        tracing::debug!("original args:\n{}", original_args.join(" "));
+        tracing::trace!("original args:\n{}", original_args.join(" "));
 
         match triple.operating_system {
             // wasm32-unknown-unknown
@@ -1205,22 +1210,32 @@ impl BuildRequest {
     )]
     fn build_command(&self, ctx: &BuildContext) -> Result<Command> {
         // Prefer using the direct rustc if we have it
-        if let BuildMode::Thin { direct_rustc, .. } = &ctx.mode {
-            tracing::debug!("Using direct rustc: {:?}", direct_rustc);
-            if !direct_rustc.is_empty() {
-                let mut cmd = Command::new(direct_rustc[0].clone());
-                cmd.args(direct_rustc[1..].iter());
-                cmd.envs(self.env_vars(ctx)?);
-                cmd.current_dir(self.workspace_dir());
-                cmd.arg(format!(
-                    "-Clinker={}",
-                    dunce::canonicalize(std::env::current_exe().unwrap())
-                        .unwrap()
-                        .display()
-                ));
-                return Ok(cmd);
-            }
-        }
+        // if let BuildMode::Thin { direct_rustc, .. } = &ctx.mode {
+        //     tracing::debug!("Using direct rustc: {:?}", direct_rustc);
+        //     if !direct_rustc.is_empty() {
+        //         let mut cmd = Command::new("cargo");
+        //         cmd.args(["rustc"]);
+        //         cmd.envs(self.env_vars(ctx)?);
+        //         cmd.current_dir(self.workspace_dir());
+        //         cmd.arg(format!(
+        //             "-Clinker={}",
+        //             dunce::canonicalize(std::env::current_exe().unwrap())
+        //                 .unwrap()
+        //                 .display()
+        //         ));
+        //         // let mut cmd = Command::new(direct_rustc[0].clone());
+        //         // cmd.args(direct_rustc[1..].iter());
+        //         // cmd.envs(self.env_vars(ctx)?);
+        //         // cmd.current_dir(self.workspace_dir());
+        //         // cmd.arg(format!(
+        //         //     "-Clinker={}",
+        //         //     dunce::canonicalize(std::env::current_exe().unwrap())
+        //         //         .unwrap()
+        //         //         .display()
+        //         // ));
+        //         return Ok(cmd);
+        //     }
+        // }
 
         // Otherwise build up the command using cargo rustc
         let mut cmd = Command::new("cargo");
@@ -1294,8 +1309,7 @@ impl BuildRequest {
 
         match ctx.mode {
             BuildMode::Base => {}
-            BuildMode::Thin { .. } => {}
-            BuildMode::Fat => {
+            BuildMode::Thin { .. } | BuildMode::Fat => {
                 // This prevents rust from passing -dead_strip to the linker
                 // todo: don't save temps here unless we become the linker for the base app
                 cargo_args.extend_from_slice(&[

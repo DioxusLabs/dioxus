@@ -366,6 +366,17 @@ pub fn register_handler(handler: Arc<dyn Fn() + Send + Sync + 'static>) {
 /// This function will load the library and thus allocates. In cannot be used when the program is
 /// stopped (ie in a signal handler).
 pub unsafe fn apply_patch(mut table: JumpTable) {
+    // As a form of integrity checking, we use the ASLR reference from the incoming jump table to assert that it is intended to patch us
+    // #[cfg(any(unix, windows))]
+    // if table.aslr_reference != aslr_reference() as u64 {
+    //     println!(
+    //         "ASLR reference mismatch: {} != {}",
+    //         table.aslr_reference,
+    //         aslr_reference()
+    //     );
+    //     return;
+    // }
+
     // On non-wasm platforms we can just use libloading and the known aslr offsets to load the library
     #[cfg(any(unix, windows))]
     {
@@ -374,7 +385,18 @@ pub unsafe fn apply_patch(mut table: JumpTable) {
         let lib = Box::leak(Box::new(android_memmap_dlopen(&table.lib)));
 
         #[cfg(not(target_os = "android"))]
-        let lib = Box::leak(Box::new(libloading::Library::new(&table.lib).unwrap()));
+        let lib = Box::leak(Box::new({
+            match libloading::Library::new(&table.lib) {
+                Ok(lib) => {
+                    println!("Loaded library success!: {:?}", &table.lib);
+                    lib
+                }
+                err => {
+                    eprintln!("Failed to load library: {:?}", err);
+                    return;
+                }
+            }
+        }));
 
         // Use the `aslr_offset` symbol as a sentinel for the current executable. This is basically a
         // cross-platform version of `__mh_execute_header` on macOS that sets a reference point for the
@@ -409,7 +431,7 @@ pub unsafe fn apply_patch(mut table: JumpTable) {
             })
             .collect();
 
-        // commit_patch(table);
+        commit_patch(table);
     };
 
     // On wasm, we need to download the module, compile it, and then run it.

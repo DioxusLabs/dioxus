@@ -43,7 +43,7 @@ tokio-stream = "0.1.15"
 chrono = "0.4.19"
 anyhow = { workspace = true }
 hyper = { workspace = true }
-hyper-util = "0.1.3"
+hyper-util = { workspace = true }
 hyper-rustls = { workspace = true }
 rustls = { workspace = true }
 rayon = "1.8.0"

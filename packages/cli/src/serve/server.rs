@@ -174,7 +174,7 @@ impl WebServer {
             }
             Some((idx, message)) = new_message.next() => {
                 match message {
-                    Some(Ok(message)) => return ServeUpdate::WsMessage(message),
+                    Some(Ok(msg)) => return ServeUpdate::WsMessage { msg, platform: Platform::Web },
                     _ => {
                         drop(new_message);
                         _ = self.hot_reload_sockets.remove(idx);

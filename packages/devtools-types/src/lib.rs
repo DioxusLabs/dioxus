@@ -32,6 +32,7 @@ pub enum DevserverMsg {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub enum ClientMsg {
     Initialize {
+        build_id: u64,
         aslr_reference: u64,
     },
     Log {
