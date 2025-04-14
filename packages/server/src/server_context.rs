@@ -275,7 +275,7 @@ mod server_fn_impl {
         }
 
         /// Copy the response parts to a response and mark this server context as sent
-        #[cfg(feature = "axum")]
+        // #[cfg(feature = "axum")]
         pub(crate) fn send_response<B>(&self, response: &mut http::response::Response<B>) {
             self.response_sent
                 .store(true, std::sync::atomic::Ordering::Relaxed);

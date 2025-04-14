@@ -28,6 +28,7 @@ dioxus-isrg = { workspace = true }
 dioxus-router = { workspace = true, features = ["streaming"] }
 dioxus-fullstack-hooks = { workspace = true }
 dioxus-fullstack-protocol = { workspace = true }
+dioxus-interpreter-js = { workspace = true, optional = true}
 hyper = { workspace = true }
 http = { workspace = true }
 
@@ -70,9 +71,10 @@ tokio = { workspace = true, features = ["rt", "sync", "rt-multi-thread"] }
 dioxus = { workspace = true, features = ["fullstack"] }
 
 [features]
-default = ["devtools"]
+default = ["devtools", "document", "server_fn/axum", "server_fn/ssr", "dep:tower-http"]
 # default = ["devtools", "document", "file_engine", "mounted"]
 devtools = ["dep:dioxus-devtools"]
+document = ["dep:dioxus-interpreter-js"]
 # desktop = ["dep:dioxus-desktop", "server_fn/reqwest", "dioxus_server_macro/reqwest"]
 # mobile = ["dep:dioxus-mobile", "server_fn/reqwest", "dioxus_server_macro/reqwest"]
 default-tls = ["server_fn/default-tls"]
