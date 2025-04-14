@@ -229,8 +229,8 @@
 
 use super::{AndroidTools, BuildContext, BuildId};
 use crate::{
-    wasm_bindgen::WasmBindgen, BuildArgs, DioxusConfig, Error, LinkAction, Platform, ProgressTx,
-    Result, TraceSrc, WasmOptConfig, Workspace,
+    rustcwrapper::RustcArgs, wasm_bindgen::WasmBindgen, BuildArgs, DioxusConfig, Error, LinkAction,
+    Platform, ProgressTx, Result, TraceSrc, WasmOptConfig, Workspace,
 };
 use anyhow::Context;
 use dioxus_cli_config::{APP_TITLE_ENV, ASSET_ROOT_ENV};
@@ -247,6 +247,7 @@ use std::{
     path::{Path, PathBuf},
     pin::Pin,
     process::Stdio,
+    str::FromStr,
     sync::{
         atomic::{AtomicUsize, Ordering},
         Arc,
@@ -337,7 +338,7 @@ pub enum BuildMode {
 
     /// A "thin" build generated with `rustc` directly and dx as a custom linker
     Thin {
-        direct_rustc: Vec<String>,
+        direct_rustc: RustcArgs,
         changed_files: Vec<PathBuf>,
         aslr_reference: u64,
     },
@@ -351,7 +352,7 @@ pub enum BuildMode {
 pub struct BuildArtifacts {
     pub(crate) platform: Platform,
     pub(crate) exe: PathBuf,
-    pub(crate) direct_rustc: Vec<String>,
+    pub(crate) direct_rustc: RustcArgs,
     pub(crate) time_start: SystemTime,
     pub(crate) time_end: SystemTime,
     pub(crate) assets: AssetManifest,
@@ -632,7 +633,6 @@ impl BuildRequest {
         let mut stderr = stderr.lines();
         let mut units_compiled = 0;
         let mut emitting_error = false;
-        let mut direct_rustc = Vec::new();
 
         loop {
             use cargo_metadata::Message;
@@ -650,17 +650,17 @@ impl BuildRequest {
             match message {
                 Message::BuildScriptExecuted(_) => units_compiled += 1,
                 Message::TextLine(line) => {
-                    // Try to extract the direct rustc args from the output
-                    if line.trim().starts_with("Running ") {
-                        // trim everyting but the contents between the quotes
-                        let args = line
-                            .trim()
-                            .trim_start_matches("Running `")
-                            .trim_end_matches('`');
+                    // // Try to extract the direct rustc args from the output
+                    // if line.trim().starts_with("Running ") {
+                    //     // trim everyting but the contents between the quotes
+                    //     let args = line
+                    //         .trim()
+                    //         .trim_start_matches("Running `")
+                    //         .trim_end_matches('`');
 
-                        // Parse these as shell words so we can get the direct rustc args
-                        direct_rustc = shell_words::split(args).unwrap();
-                    }
+                    //     // Parse these as shell words so we can get the direct rustc args
+                    //     direct_rustc = shell_words::split(args).unwrap();
+                    // }
 
                     #[derive(Deserialize)]
                     struct RustcArtifact {
@@ -722,6 +722,13 @@ impl BuildRequest {
         let mode = ctx.mode.clone();
         tracing::debug!("Build completed successfully - output location: {:?}", exe);
 
+        let mut direct_rustc = RustcArgs::default();
+
+        if let Ok(res) = std::fs::read_to_string(self.rustc_wrapper_args_file()) {
+            let res: crate::rustcwrapper::RustcArgs = serde_json::from_str(&res).unwrap();
+            direct_rustc = res;
+        }
+
         Ok(BuildArtifacts {
             platform: self.platform,
             exe,
@@ -731,6 +738,13 @@ impl BuildRequest {
             assets,
             mode,
         })
+    }
+
+    fn rustc_wrapper_args_file(&self) -> PathBuf {
+        // self.platform_dir()
+        PathBuf::from_str("/Users/jonkelley/Development/dioxus/packages/subsecond/data/")
+            .unwrap()
+            .join(format!("rustc_args-{}.json", self.triple))
     }
 
     /// Traverse the target directory and collect all assets from the incremental cache
@@ -1209,44 +1223,61 @@ impl BuildRequest {
         fields(dx_src = ?TraceSrc::Build)
     )]
     fn build_command(&self, ctx: &BuildContext) -> Result<Command> {
-        // Prefer using the direct rustc if we have it
-        // if let BuildMode::Thin { direct_rustc, .. } = &ctx.mode {
-        //     tracing::debug!("Using direct rustc: {:?}", direct_rustc);
-        //     if !direct_rustc.is_empty() {
-        //         let mut cmd = Command::new("cargo");
-        //         cmd.args(["rustc"]);
-        //         cmd.envs(self.env_vars(ctx)?);
-        //         cmd.current_dir(self.workspace_dir());
-        //         cmd.arg(format!(
-        //             "-Clinker={}",
-        //             dunce::canonicalize(std::env::current_exe().unwrap())
-        //                 .unwrap()
-        //                 .display()
-        //         ));
-        //         // let mut cmd = Command::new(direct_rustc[0].clone());
-        //         // cmd.args(direct_rustc[1..].iter());
-        //         // cmd.envs(self.env_vars(ctx)?);
-        //         // cmd.current_dir(self.workspace_dir());
-        //         // cmd.arg(format!(
-        //         //     "-Clinker={}",
-        //         //     dunce::canonicalize(std::env::current_exe().unwrap())
-        //         //         .unwrap()
-        //         //         .display()
-        //         // ));
-        //         return Ok(cmd);
-        //     }
-        // }
+        match &ctx.mode {
+            BuildMode::Thin { direct_rustc, .. } => {
+                let mut cmd = Command::new("rustc");
+                cmd.env_clear();
+                // let mut cmd = Command::new(direct_rustc.args[0].clone());
+                cmd.args(direct_rustc.args[1..].iter());
+                cmd.envs(direct_rustc.envs.iter());
+                // cmd.envs(direct_rustc.envs.iter().filter(|(k, v)| {
+                // // (k.as_str() != "_")
+                // (k.as_str() != "RUSTC_WORKSPACE_WRAPPER")
+                //     || (k.as_str() != "RUSTC_WRAPPER")
+                // || (k.as_str() != "DX_RUSTC")
+                // }));
+                cmd.env_remove("RUSTC_WORKSPACE_WRAPPER");
+                cmd.env_remove("RUSTC_WRAPPER");
+                cmd.env_remove("DX_RUSTC");
+                cmd.current_dir(self.workspace_dir());
+                cmd.arg(format!(
+                    "-Clinker={}",
+                    dunce::canonicalize(std::env::current_exe().unwrap())
+                        .unwrap()
+                        .display()
+                ));
+                cmd.envs(self.env_vars(ctx)?);
+                tracing::debug!("Using rustc wrapper args: {:#?}", cmd);
+                Ok(cmd)
+            }
 
-        // Otherwise build up the command using cargo rustc
-        let mut cmd = Command::new("cargo");
-        cmd.arg("rustc")
-            .current_dir(self.crate_dir())
-            .arg("--message-format")
-            .arg("json-diagnostic-rendered-ansi")
-            .args(self.build_arguments(ctx))
-            .envs(self.env_vars(ctx)?);
+            // Out of caution, use cargo rustc instead of dx as a fallback
+            _ => {
+                let mut cmd = Command::new("cargo");
+                cmd.arg("rustc")
+                    .current_dir(self.crate_dir())
+                    .arg("--message-format")
+                    .arg("json-diagnostic-rendered-ansi")
+                    .args(self.build_arguments(ctx))
+                    .envs(self.env_vars(ctx)?);
 
-        Ok(cmd)
+                if ctx.mode == BuildMode::Fat {
+                    cmd.env(
+                        crate::rustcwrapper::RUSTC_WRAPPER_ENV_VAR,
+                        self.rustc_wrapper_args_file(),
+                    );
+                    cmd.env(
+                        "RUSTC_WRAPPER",
+                        dunce::canonicalize(std::env::current_exe().unwrap())
+                            .unwrap()
+                            .display()
+                            .to_string(),
+                    );
+                }
+
+                Ok(cmd)
+            }
+        }
     }
 
     /// Create a list of arguments for cargo builds
@@ -1403,8 +1434,6 @@ impl BuildRequest {
         //         };
         //     }
         // }
-
-        tracing::debug!(dx_src = ?TraceSrc::Build, "cargo args: {:?}", cargo_args);
 
         cargo_args
     }
@@ -2512,10 +2541,10 @@ impl BuildRequest {
 
         // Lift the internal functions to exports
         if ctx.mode == BuildMode::Fat {
-            let unprocessed = std::fs::read(prebindgen)?;
+            let unprocessed = std::fs::read(&prebindgen)?;
             let all_exported_bytes =
                 subsecond_cli_support::prepare_wasm_base_module(&unprocessed).unwrap();
-            std::fs::write(&prebindgen, all_exported_bytes)?;
+            std::fs::write(&rustc_exe, all_exported_bytes)?;
         }
 
         // Prepare our configuration
@@ -2658,10 +2687,10 @@ impl BuildRequest {
         }
 
         // Make sure to optimize the main wasm file if requested or if bundle splitting
-        if should_bundle_split || self.release {
-            ctx.status_optimizing_wasm();
-            wasm_opt::optimize(&post_bindgen_wasm, &post_bindgen_wasm, &wasm_opt_options).await?;
-        }
+        // if should_bundle_split || self.release {
+        //     ctx.status_optimizing_wasm();
+        //     wasm_opt::optimize(&post_bindgen_wasm, &post_bindgen_wasm, &wasm_opt_options).await?;
+        // }
 
         // Make sure to register the main wasm file with the asset system
         assets.register_asset(&post_bindgen_wasm, AssetOptions::Unknown)?;

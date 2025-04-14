@@ -451,10 +451,13 @@ pub unsafe fn apply_patch(mut table: JumpTable) {
         let exports: Object = wasm_bindgen::exports().unchecked_into();
         let buffer: ArrayBuffer = memory.buffer().unchecked_into();
 
+        let path = table.lib.to_str().unwrap();
+        if !path.ends_with(".wasm") {
+            return;
+        }
+
         // Start the fetch of the module
-        let response = web_sys::window()
-            .unwrap_throw()
-            .fetch_with_str(&table.lib.to_str().unwrap());
+        let response = web_sys::window().unwrap_throw().fetch_with_str(&path);
 
         // Wait for the fetch to complete - we need the wasm module size in bytes to reserve in the memory
         let response: web_sys::Response = JsFuture::from(response).await.unwrap().unchecked_into();

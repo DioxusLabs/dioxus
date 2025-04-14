@@ -18,7 +18,9 @@ tungstenite = { version = "0.23.0" }
 tokio = { workspace = true, features = ["full"] }
 
 [features]
-default = [ ]
+default = []
+fullstack = [ "dioxus/fullstack"]
 desktop = [ "dioxus/desktop" ]
 mobile = [ "dioxus/mobile" ]
 web = [ "dioxus/web" ]
+server = ["dioxus/server"]
