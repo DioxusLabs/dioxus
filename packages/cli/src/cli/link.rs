@@ -1,6 +1,8 @@
 use const_serialize::{deserialize_const, ConstVec};
+use dioxus_cli_opt::AssetManifest;
 use manganis::BundledAsset;
 use object::{Object, ObjectSection, ReadCache};
+use rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::fmt::Debug;
@@ -67,7 +69,7 @@ impl LinkAction {
             LinkAction::BuildAssetManifest { destination: dest } => {
                 let args: Vec<_> = std::env::args().collect();
                 let mut obj_args = args.clone();
-                let mut manifest = AssetReferences::default();
+                let mut references = AssetReferences::default();
 
                 // Handle command files, usually a windows thing.
                 if let Some(command) = args.iter().find(|arg| arg.starts_with('@')).cloned() {
@@ -102,12 +104,75 @@ impl LinkAction {
                 for item in obj_args {
                     let path_to_item = PathBuf::from(item);
                     if let Ok(path) = path_to_item.canonicalize() {
-                        _ = manifest.add_from_object_path(&path);
+                        _ = references.add_from_object_path(&path);
                     }
                 }
 
-                // let contents = serde_json::to_string(&manifest).expect("Failed to write manifest");
-                // std::fs::write(dest, contents).expect("Failed to write output file");
+                // Hash each file in parallel
+                references.assets.par_iter_mut().for_each(|asset| {
+                    match dioxus_cli_opt::AssetHash::hash_file_contents(
+                        asset.bundled_asset.options(),
+                        &asset.file,
+                    ) {
+                        Ok(hash) => {
+                            let source = asset.bundled_asset.absolute_source_path();
+                            let options = asset.bundled_asset.options().clone();
+
+                            // Set the bundled path to the source path with the hash appended before the extension
+                            let source_path = PathBuf::from(source);
+                            let Some(file_name) = source_path.file_name() else {
+                                tracing::error!("Failed to get file name from path: {source}");
+                                return;
+                            };
+                            // The output extension path is the extension set by the options
+                            // or the extension of the source file if we don't recognize the file
+                            let ext = asset
+                                .bundled_asset
+                                .options()
+                                .extension()
+                                .map(Into::into)
+                                .or_else(|| {
+                                    source_path
+                                        .extension()
+                                        .map(|ext| ext.to_string_lossy().to_string())
+                                });
+
+                            let hash = hash.bytes();
+                            let hash = hash
+                                .iter()
+                                .map(|byte| format!("{byte:x}"))
+                                .collect::<String>();
+                            let mut bundled_path =
+                                PathBuf::from(format!("/{}-{hash}", file_name.to_string_lossy()));
+
+                            if let Some(ext) = ext {
+                                bundled_path.set_extension(ext);
+                            }
+
+                            let bundled_path = bundled_path.to_string_lossy().to_string();
+
+                            asset.bundled_asset = BundledAsset::new(source, &bundled_path, options);
+
+                            // Write the contents back to the object file
+                            if let Err(err) = asset.write() {
+                                tracing::error!("Failed to write asset back to object file: {err}");
+                            }
+                        }
+                        Err(err) => {
+                            tracing::error!("Failed to hash asset: {err}");
+                        }
+                    }
+                });
+
+                // Extract the manifest from the hashed assets
+                let mut manifest = AssetManifest::default();
+                for asset in references.assets.iter() {
+                    // Add the asset to the manifest
+                    manifest.insert_asset(asset.bundled_asset);
+                }
+
+                let contents = serde_json::to_string(&manifest).expect("Failed to write manifest");
+                std::fs::write(dest, contents).expect("Failed to write output file");
 
                 // forward the modified object files to the real linker
                 let err_file = std::fs::File::options()
@@ -143,14 +208,17 @@ struct AssetReference {
 }
 
 impl AssetReference {
-    fn write(&self, new_data: &[u8]) -> std::io::Result<()> {
+    fn write(&self) -> std::io::Result<()> {
+        let new_data = ConstVec::new();
+        let new_data = const_serialize::serialize_const(&self.bundled_asset, new_data);
+
         let mut binary_data = fs::File::options()
             .write(true)
             .read(true)
             .open(&self.file)?;
         binary_data.seek(std::io::SeekFrom::Start(self.byte_span.start as u64))?;
         // Write the modified binary data back to the file
-        binary_data.write_all(&new_data)?;
+        binary_data.write_all(new_data.as_ref())?;
         binary_data.sync_all()
     }
 }
@@ -161,10 +229,6 @@ struct AssetReferences {
 }
 
 impl AssetReferences {
-    fn new() -> Self {
-        Self { assets: Vec::new() }
-    }
-
     fn add_from_object_path(&mut self, path: &PathBuf) -> Result<(), Box<dyn Error>> {
         let mut binary_data = fs::File::options().read(true).open(path)?;
         let mut range = None;

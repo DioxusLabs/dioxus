@@ -1,8 +1,6 @@
 use anyhow::Context;
 use manganis::AssetOptions;
-use manganis_core::linker::LinkSection;
 use manganis_core::BundledAsset;
-use object::{read::archive::ArchiveFile, File as ObjectFile, Object, ObjectSection};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -12,11 +10,13 @@ use std::sync::{Arc, RwLock};
 mod css;
 mod file;
 mod folder;
+mod hash;
 mod image;
 mod js;
 mod json;
 
 pub use file::process_file_to;
+pub use hash::AssetHash;
 
 /// A manifest of all assets collected from dependencies
 ///
@@ -48,6 +48,15 @@ impl AssetManifest {
         Ok(bundled_asset)
     }
 
+    /// Insert an existing bundled asset to the manifest
+    pub fn insert_asset(&mut self, asset: BundledAsset) {
+        let asset_path = asset.absolute_source_path();
+        self.assets
+            .entry(asset_path.into())
+            .or_default()
+            .insert(asset);
+    }
+
     /// Get any assets that are tied to a specific source file
     pub fn get_assets_for_source(&self, path: &Path) -> Option<&HashSet<BundledAsset>> {
         self.assets.get(path)
@@ -64,82 +73,6 @@ impl AssetManifest {
 
         serde_json::from_str(&src)
             .with_context(|| format!("Failed to parse asset manifest from {path:?}\n{src}"))
-    }
-
-    /// Fill this manifest with a file object/rlib files, typically extracted from the linker intercepted
-    pub fn add_from_object_path(&mut self, path: &Path) -> anyhow::Result<()> {
-        let data = std::fs::read(path)?;
-
-        match path.extension().and_then(|ext| ext.to_str()) {
-            // Parse an rlib as a collection of objects
-            Some("rlib") => {
-                if let Ok(archive) = object::read::archive::ArchiveFile::parse(&*data) {
-                    self.add_from_archive_file(&archive, &data)?;
-                }
-            }
-            _ => {
-                if let Ok(object) = object::File::parse(&*data) {
-                    self.add_from_object_file(&object)?;
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    /// Fill this manifest from an rlib / ar file that contains many object files and their entries
-    fn add_from_archive_file(&mut self, archive: &ArchiveFile, data: &[u8]) -> object::Result<()> {
-        // Look through each archive member for object files.
-        // Read the archive member's binary data (we know it's an object file)
-        // And parse it with the normal `object::File::parse` to find the manganis string.
-        for member in archive.members() {
-            let member = member?;
-            let name = String::from_utf8_lossy(member.name()).to_string();
-
-            // Check if the archive member is an object file and parse it.
-            if name.ends_with(".o") {
-                let data = member.data(data)?;
-                let object = object::File::parse(data)?;
-                _ = self.add_from_object_file(&object);
-            }
-        }
-
-        Ok(())
-    }
-
-    /// Fill this manifest with whatever tables might come from the object file
-    fn add_from_object_file(&mut self, obj: &ObjectFile) -> anyhow::Result<()> {
-        for section in obj.sections() {
-            let Ok(section_name) = section.name() else {
-                continue;
-            };
-
-            // Check if the link section matches the asset section for one of the platforms we support. This may not be the current platform if the user is cross compiling
-            let matches = LinkSection::ALL
-                .iter()
-                .any(|x| x.link_section == section_name);
-
-            if !matches {
-                continue;
-            }
-
-            let bytes = section
-                .uncompressed_data()
-                .context("Could not read uncompressed data from object file")?;
-
-            let mut buffer = const_serialize::ConstReadBuffer::new(&bytes);
-            while let Some((remaining_buffer, asset)) =
-                const_serialize::deserialize_const!(BundledAsset, buffer)
-            {
-                self.assets
-                    .entry(PathBuf::from(asset.absolute_source_path()))
-                    .or_default()
-                    .insert(asset);
-                buffer = remaining_buffer;
-            }
-        }
-
-        Ok(())
     }
 }
 

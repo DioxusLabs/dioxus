@@ -33,8 +33,8 @@ impl BundledAsset {
     /// This should only be called from the macro
     /// Create a new asset
     pub const fn new(
-        absolute_source_path: &'static str,
-        bundled_path: &'static str,
+        absolute_source_path: &str,
+        bundled_path: &str,
         options: AssetOptions,
     ) -> Self {
         Self {

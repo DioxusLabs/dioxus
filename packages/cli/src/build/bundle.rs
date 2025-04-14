@@ -417,7 +417,7 @@ impl AppBundle {
             return Ok(());
         }
 
-        self.clear_old_assets();
+        self.clear_old_assets().await?;
 
         let asset_dir = self.build.asset_dir();
 

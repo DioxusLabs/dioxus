@@ -6,11 +6,7 @@ use anyhow::Context;
 use dioxus_cli_config::{APP_TITLE_ENV, ASSET_ROOT_ENV};
 use dioxus_cli_opt::AssetManifest;
 use serde::Deserialize;
-use std::{
-    path::{Path, PathBuf},
-    process::Stdio,
-    time::Instant,
-};
+use std::{path::PathBuf, process::Stdio, time::Instant};
 use tokio::{io::AsyncBufReadExt, process::Command};
 
 #[derive(Clone, Debug)]
@@ -80,7 +76,7 @@ impl BuildRequest {
         let start = Instant::now();
         self.prepare_build_dir()?;
         let exe = self.build_cargo().await?;
-        let assets = self.collect_assets(&exe).await?;
+        let assets = self.collect_assets().await?;
 
         Ok(BuildArtifacts {
             exe,
@@ -237,26 +233,14 @@ impl BuildRequest {
     ///
     /// This uses "known paths" that have stayed relatively stable during cargo's lifetime.
     /// One day this system might break and we might need to go back to using the linker approach.
-    pub(crate) async fn collect_assets(&self, exe: &Path) -> Result<AssetManifest> {
+    pub(crate) async fn collect_assets(&self) -> Result<AssetManifest> {
         tracing::debug!("Collecting assets ...");
 
         if self.build.skip_assets {
             return Ok(AssetManifest::default());
-        }
+        };
 
-        // Experimental feature for testing - if the env var is set, we'll use the deeplinker
-        if std::env::var("DEEPLINK").is_ok() {
-            tracing::debug!("Using deeplinker instead of incremental cache");
-            return self.deep_linker_asset_extract().await;
-        }
-
-        // walk every file in the incremental cache dir, reading and inserting items into the manifest.
-        let mut manifest = AssetManifest::default();
-
-        // And then add from the exe directly, just in case it's LTO compiled and has no incremental cache
-        _ = manifest.add_from_object_path(exe);
-
-        Ok(manifest)
+        self.deep_linker_asset_extract().await
     }
 
     /// Create a list of arguments for cargo builds
