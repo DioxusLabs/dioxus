@@ -1,6 +1,9 @@
 //! A shared pool of renderers for efficient server side rendering.
-use crate::document::ServerDocument;
-use crate::streaming::{Mount, StreamingRenderer};
+use crate::{document::ServerDocument, ProvideServerContext, ServeConfig};
+use crate::{
+    streaming::{Mount, StreamingRenderer},
+    DioxusServerContext,
+};
 use dioxus_cli_config::base_path;
 use dioxus_fullstack_hooks::{StreamingContext, StreamingStatus};
 use dioxus_fullstack_protocol::{HydrationContext, SerializedHydrationData};
@@ -19,7 +22,7 @@ use std::sync::RwLock;
 use std::{collections::HashMap, future::Future};
 use tokio::task::JoinHandle;
 
-use crate::{prelude::*, StreamingMode};
+use crate::StreamingMode;
 use dioxus_lib::prelude::*;
 
 /// A suspense boundary that is pending with a placeholder in the client
@@ -188,7 +191,7 @@ impl SsrRendererPool {
 
         let create_render_future = move || async move {
             let mut virtual_dom = virtual_dom_factory();
-            let document = std::rc::Rc::new(crate::document::server::ServerDocument::default());
+            let document = std::rc::Rc::new(crate::document::ServerDocument::default());
             virtual_dom.provide_root_context(document.clone());
             // If there is a base path, trim the base path from the route and add the base path formatting to the
             // history provider

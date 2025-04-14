@@ -6,72 +6,69 @@
 
 pub use once_cell;
 
-#[cfg(feature = "server")]
-pub mod server;
 use dioxus_fullstack_protocol::SerializeContextEntry;
-#[cfg(feature = "server")]
-pub use server::ServerDocument;
 
 #[cfg(all(feature = "web", feature = "document"))]
 pub mod web;
 
-#[allow(unused)]
-pub(crate) fn head_element_hydration_entry() -> SerializeContextEntry<bool> {
-    dioxus_fullstack_protocol::serialize_context().create_entry()
-}
+// #[cfg(feature = "server")]
+// pub mod server;
 
-#[cfg(feature = "axum")]
-#[cfg_attr(docsrs, doc(cfg(feature = "axum")))]
-pub mod server;
+// #[cfg(feature = "server")]
+// pub use server::ServerDocument;
 
-#[cfg(feature = "axum_core")]
-#[cfg_attr(docsrs, doc(cfg(feature = "axum_core")))]
-pub mod axum_core;
+// #[cfg(feature = "axum")]
+// #[cfg_attr(docsrs, doc(cfg(feature = "axum")))]
+// pub mod server;
 
-pub mod document;
-#[cfg(feature = "server")]
-mod render;
-#[cfg(feature = "server")]
-mod streaming;
+// #[cfg(feature = "axum_core")]
+// #[cfg_attr(docsrs, doc(cfg(feature = "axum_core")))]
+// pub mod axum_core;
 
-#[cfg(feature = "server")]
-mod serve_config;
+// pub mod document;
+// #[cfg(feature = "server")]
+// mod render;
+// #[cfg(feature = "server")]
+// mod streaming;
 
-#[cfg(feature = "server")]
-pub use serve_config::*;
+// #[cfg(feature = "server")]
+// mod serve_config;
 
-#[cfg(feature = "server")]
-mod server_context;
+// #[cfg(feature = "server")]
+// pub use serve_config::*;
+
+// #[cfg(feature = "server")]
+// mod server_context;
+
+// #[cfg(feature = "axum")]
+// #[cfg_attr(docsrs, doc(cfg(feature = "axum")))]
+// pub use crate::server::*;
+
+// #[cfg(feature = "axum_core")]
+// pub use crate::axum_core::*;
+
+// #[cfg(feature = "server")]
+// #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
+// pub use crate::render::{FullstackHTMLTemplate, SSRState};
+
+// #[cfg(feature = "server")]
+// #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
+// pub use crate::serve_config::{ServeConfig, ServeConfigBuilder};
+
+// #[cfg(feature = "axum")]
+// #[cfg_attr(docsrs, doc(cfg(feature = "axum")))]
+// pub use crate::server_context::Axum;
+
+// #[cfg(feature = "server")]
+// #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
+// pub use crate::server_context::{
+//     extract, server_context, with_server_context, DioxusServerContext, FromContext,
+//     FromServerContext, ProvideServerContext,
+// };
 
 /// A prelude of commonly used items in dioxus-fullstack.
 pub mod prelude {
     pub use dioxus_fullstack_hooks::*;
-
-    #[cfg(feature = "axum")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "axum")))]
-    pub use crate::server::*;
-
-    #[cfg(feature = "axum_core")]
-    pub use crate::axum_core::*;
-
-    #[cfg(feature = "server")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
-    pub use crate::render::{FullstackHTMLTemplate, SSRState};
-
-    #[cfg(feature = "server")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
-    pub use crate::serve_config::{ServeConfig, ServeConfigBuilder};
-
-    #[cfg(feature = "axum")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "axum")))]
-    pub use crate::server_context::Axum;
-
-    #[cfg(feature = "server")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
-    pub use crate::server_context::{
-        extract, server_context, with_server_context, DioxusServerContext, FromContext,
-        FromServerContext, ProvideServerContext,
-    };
 
     #[cfg(feature = "server")]
     #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
