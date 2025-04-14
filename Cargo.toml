@@ -71,6 +71,7 @@ members = [
     "packages/depinfo",
     "packages/native",
     "packages/asset-resolver",
+    "packages/server",
 
     # Playwright tests
     "packages/playwright-tests/liveview",
@@ -125,7 +126,7 @@ members = [
     "packages/playwright-tests/wasm-split-harness",
     "packages/playwright-tests/wasm-split-harness",
     "packages/playwright-tests/default-features-disabled"
-, "packages/server"]
+]
 
 [workspace.package]
 version = "0.6.3"
@@ -162,6 +163,7 @@ dioxus-cli-config = { path = "packages/cli-config", version = "0.6.2" }
 dioxus-cli-opt = { path = "packages/cli-opt", version = "0.6.2" }
 dioxus-devtools = { path = "packages/devtools", version = "0.6.2" }
 dioxus-devtools-types = { path = "packages/devtools-types", version = "0.6.2" }
+dioxus-server = { path = "packages/server", version = "0.6.2" }
 dioxus-fullstack = { path = "packages/fullstack", version = "0.6.2" }
 dioxus-fullstack-hooks = { path = "packages/fullstack-hooks", version = "0.6.3" }
 dioxus-fullstack-protocol = { path = "packages/fullstack-protocol", version = "0.6.3" }

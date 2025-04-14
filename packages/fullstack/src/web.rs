@@ -1,7 +1,7 @@
 // #![allow(unused)]
 //! On the client, we use the [`WebDocument`] implementation to render the head for any elements that were not rendered on the server.
 
-use dioxus_lib::{document::*, prelude::queue_effect};
+use dioxus_lib::document::*;
 use dioxus_web::WebDocument;
 
 /// A document provider for fullstack web clients

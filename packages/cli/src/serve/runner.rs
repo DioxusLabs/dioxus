@@ -11,6 +11,7 @@ use dioxus_core::internal::{
 use dioxus_core_types::HotReloadingContext;
 use dioxus_devtools_types::ClientMsg;
 use dioxus_devtools_types::HotReloadMsg;
+use dioxus_dx_wire_format::BuildStage;
 use dioxus_html::HtmlCtx;
 use dioxus_rsx::CallBody;
 use dioxus_rsx_hotreload::{ChangedRsx, HotReloadResult};
@@ -147,7 +148,9 @@ impl AppRunner {
         if fullstack {
             let mut build_args = args.build_arguments.clone();
             build_args.platform = Some(Platform::Server);
+
             let _server = BuildRequest::new(&build_args).await?;
+
             // ... todo: add the server features to the server build
             // ... todo: add the client features to the client build
             // // Make sure we have a server feature if we're building a fullstack app
@@ -453,13 +456,16 @@ impl AppRunner {
     /// Finally "bundle" this app and return a handle to it
     pub(crate) async fn open(
         &mut self,
-        app: BuildArtifacts,
+        artifacts: BuildArtifacts,
         devserver_ip: SocketAddr,
         fullstack_address: Option<SocketAddr>,
         displayed_address: Option<SocketAddr>,
     ) -> Result<()> {
         // Add some cute logging
-        let time_taken = app.time_end.duration_since(app.time_start).unwrap();
+        let time_taken = artifacts
+            .time_end
+            .duration_since(artifacts.time_start)
+            .unwrap();
         if self.builds_opened == 0 {
             tracing::info!(
                 "Build completed successfully in {:?}ms, launching app! 💫",
@@ -469,50 +475,51 @@ impl AppRunner {
             tracing::info!("Build completed in {:?}ms", time_taken.as_millis());
         }
 
-        // The builds are different and need to be cleaned up independently.
-        match app.platform {
-            Platform::Server => {
-                tracing::debug!("Opening server build");
-                if let Some(server) = self.server.as_mut() {
-                    // server.cleanup().await;
+        // We can't open the server until the client is ready.
+        // This comes in two cases - we receive the client or the server first.
+        if artifacts.platform == Platform::Server && self.client.stage == BuildStage::Success {
+            self.open_server(
+                artifacts,
+                devserver_ip,
+                fullstack_address,
+                displayed_address,
+            )
+            .await?;
+        } else
+        // Handle the client
+        if artifacts.platform != Platform::Server {
+            tracing::debug!("Opening client build");
+            // self.client.soft_kill().await;
 
-                    server
-                        .open(
-                            devserver_ip,
-                            displayed_address,
-                            fullstack_address,
-                            false,
-                            false,
-                        )
-                        .await?;
+            // Start the new app before we kill the old one to give it a little bit of time
+            let open_browser = self.builds_opened == 0 && self.open_browser;
+            let always_on_top = self.always_on_top;
 
-                    // Save the artifacts and clear the patches(?)
-                    server.artifacts = Some(app);
+            self.client
+                .open(
+                    devserver_ip,
+                    displayed_address,
+                    fullstack_address,
+                    open_browser,
+                    always_on_top,
+                )
+                .await?;
+
+            self.builds_opened += 1;
+
+            // Save the artifacts and clear the patches(?)
+            self.client.artifacts = Some(artifacts);
+
+            if let Some(server) = self.server.as_ref() {
+                if server.stage == BuildStage::Success {
+                    self.open_server(
+                        server.artifacts.clone().unwrap(),
+                        devserver_ip,
+                        fullstack_address,
+                        displayed_address,
+                    )
+                    .await?;
                 }
-            }
-            _ => {
-                tracing::debug!("Opening client build");
-
-                // self.client.cleanup().await;
-
-                // // Start the new app before we kill the old one to give it a little bit of time
-                // let open_browser = self.builds_opened == 0 && self.open_browser;
-                // let always_on_top = self.always_on_top;
-
-                // self.client
-                //     .open(
-                //         devserver_ip,
-                //         displayed_address,
-                //         fullstack_address,
-                //         open_browser,
-                //         always_on_top,
-                //     )
-                //     .await?;
-
-                // self.builds_opened += 1;
-
-                // // Save the artifacts and clear the patches(?)
-                // self.client.artifacts = Some(app);
             }
         }
 
@@ -952,6 +959,34 @@ impl AppRunner {
         self.rebuild_all();
         self.clear_hot_reload_changes();
         self.clear_cached_rsx();
+    }
+
+    async fn open_server(
+        &mut self,
+        artifacts: BuildArtifacts,
+        devserver_ip: SocketAddr,
+        fullstack_address: Option<SocketAddr>,
+        displayed_address: Option<SocketAddr>,
+    ) -> Result<()> {
+        tracing::debug!("Opening server build");
+        if let Some(server) = self.server.as_mut() {
+            // server.cleanup().await;
+
+            server
+                .open(
+                    devserver_ip,
+                    displayed_address,
+                    fullstack_address,
+                    false,
+                    false,
+                )
+                .await?;
+
+            // Save the artifacts and clear the patches(?)
+            server.artifacts = Some(artifacts);
+        }
+
+        Ok(())
     }
 }
 

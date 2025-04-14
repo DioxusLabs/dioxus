@@ -22,8 +22,6 @@ pub fn launch(
     contexts: Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync>>,
     platform_config: Vec<Box<dyn Any>>,
 ) -> ! {
-    use crate::{ServeConfig, ServeConfigBuilder};
-
     #[cfg(not(target_arch = "wasm32"))]
     tokio::runtime::Runtime::new()
         .unwrap()

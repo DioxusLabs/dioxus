@@ -347,6 +347,7 @@ pub enum BuildMode {
 ///
 /// Contains the final asset manifest, the executable, and metadata about the build.
 /// Note that the `exe` might be stale and/or overwritten by the time you read it!
+#[derive(Clone, Debug)]
 pub struct BuildArtifacts {
     pub(crate) platform: Platform,
     pub(crate) exe: PathBuf,

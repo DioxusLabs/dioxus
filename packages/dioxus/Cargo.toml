@@ -26,6 +26,7 @@ dioxus-mobile = { workspace = true, optional = true }
 dioxus-desktop = { workspace = true, default-features = true, optional = true }
 dioxus-fullstack = { workspace = true, default-features = true, optional = true }
 dioxus-liveview = { workspace = true, optional = true }
+dioxus-server = { workspace = true, optional = true }
 dioxus-ssr = { workspace = true, optional = true }
 dioxus-native = { workspace = true, optional = true }
 manganis = { workspace = true, features = ["dioxus"], optional = true }
@@ -64,7 +65,7 @@ mobile = ["dep:dioxus-mobile", "dioxus-fullstack?/mobile", "dioxus-config-macro/
 web = ["dep:dioxus-web", "dioxus-fullstack?/web", "dioxus-config-macro/web", "dep:dioxus-cli-config", "dioxus-cli-config?/web"]
 ssr = ["dep:dioxus-ssr", "dioxus-config-macro/ssr"]
 liveview = ["dep:dioxus-liveview", "dioxus-config-macro/liveview"]
-server = ["dioxus-fullstack?/axum", "dioxus-fullstack?/server", "ssr", "dioxus-liveview?/axum"]
+server = ["dep:dioxus-server", "ssr", "dioxus-liveview?/axum"]
 native = ["dep:dioxus-native"] # todo(jon): decompose the desktop crate such that "webview" is the default and native is opt-in
 
 # This feature just disables the no-renderer-enabled warning
@@ -73,7 +74,7 @@ third-party-renderer = []
 [dev-dependencies]
 futures-util = { workspace = true }
 tracing = { workspace = true }
-rand = { version = "0.8.4", features = ["small_rng"] }
+rand = { workspace = true, features = ["small_rng"] }
 criterion = { workspace = true }
 thiserror = { workspace = true }
 env_logger = "0.10.0"
