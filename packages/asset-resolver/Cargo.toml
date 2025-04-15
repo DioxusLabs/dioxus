@@ -1,0 +1,24 @@
+[package]
+name = "dioxus-asset-resolver"
+edition = "2021"
+version.workspace = true
+authors = ["Jonathan Kelley", "Dioxus Labs"]
+description = "Cross-platform asset resolver for manganis and dioxus"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/DioxusLabs/dioxus/"
+homepage = "https://dioxuslabs.com"
+keywords = ["web", "desktop", "mobile", "gui", "wasm"]
+rust-version = "1.79.0"
+
+[dependencies]
+http = { workspace = true }
+urlencoding = { workspace = true }
+infer = { workspace = true }
+thiserror = { workspace = true }
+dioxus-cli-config = { workspace = true }
+
+[target.'cfg(target_os = "android")'.dependencies]
+jni = "0.21.1"
+ndk = { version = "0.9.0" }
+ndk-sys = { version = "0.6.0" }
+ndk-context = { version = "0.1.1" }

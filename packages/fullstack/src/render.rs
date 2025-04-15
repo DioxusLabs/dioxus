@@ -1,11 +1,14 @@
 //! A shared pool of renderers for efficient server side rendering.
 use crate::document::ServerDocument;
-use crate::html_storage::serialize::SerializedHydrationData;
 use crate::streaming::{Mount, StreamingRenderer};
 use dioxus_cli_config::base_path;
+use dioxus_fullstack_hooks::{StreamingContext, StreamingStatus};
+use dioxus_fullstack_protocol::{HydrationContext, SerializedHydrationData};
 use dioxus_interpreter_js::INITIALIZE_STREAMING_JS;
 use dioxus_isrg::{CachedRender, IncrementalRendererError, RenderFreshness};
 use dioxus_lib::document::Document;
+use dioxus_lib::prelude::dioxus_core::DynamicNode;
+use dioxus_router::prelude::ParseRouteError;
 use dioxus_ssr::Renderer;
 use futures_channel::mpsc::Sender;
 use futures_util::{Stream, StreamExt};
@@ -48,6 +51,18 @@ where
     {
         tokio::task::spawn_local(f())
     }
+}
+
+fn in_root_scope<T>(virtual_dom: &VirtualDom, f: impl FnOnce() -> T) -> T {
+    virtual_dom.in_runtime(|| ScopeId::ROOT.in_runtime(f))
+}
+
+/// Errors that can occur during server side rendering before the initial chunk is sent down
+pub enum SSRError {
+    /// An error from the incremental renderer. This should result in a 500 code
+    Incremental(IncrementalRendererError),
+    /// An error from the dioxus router. This should result in a 404 code
+    Routing(ParseRouteError),
 }
 
 struct SsrRendererPool {
@@ -112,7 +127,7 @@ impl SsrRendererPool {
             RenderFreshness,
             impl Stream<Item = Result<String, dioxus_isrg::IncrementalRendererError>>,
         ),
-        dioxus_isrg::IncrementalRendererError,
+        SSRError,
     > {
         struct ReceiverWithDrop {
             receiver: futures_channel::mpsc::Receiver<
@@ -145,6 +160,8 @@ impl SsrRendererPool {
             Result<String, dioxus_isrg::IncrementalRendererError>,
         >(1000);
 
+        let (initial_result_tx, initial_result_rx) = futures_channel::oneshot::channel();
+
         // before we even spawn anything, we can check synchronously if we have the route cached
         if let Some(freshness) = self.check_cached_route(&route, &mut into) {
             return Ok((
@@ -169,7 +186,7 @@ impl SsrRendererPool {
         let myself = self.clone();
         let streaming_mode = cfg.streaming_mode;
 
-        let join_handle = spawn_platform(move || async move {
+        let create_render_future = move || async move {
             let mut virtual_dom = virtual_dom_factory();
             let document = std::rc::Rc::new(crate::document::server::ServerDocument::default());
             virtual_dom.provide_root_context(document.clone());
@@ -185,17 +202,72 @@ impl SsrRendererPool {
             } else {
                 history = dioxus_history::MemoryHistory::with_initial_path(&route);
             }
+            let streaming_context = in_root_scope(&virtual_dom, StreamingContext::new);
             virtual_dom.provide_root_context(Rc::new(history) as Rc<dyn dioxus_history::History>);
             virtual_dom.provide_root_context(document.clone() as std::rc::Rc<dyn Document>);
+            virtual_dom.provide_root_context(streaming_context);
 
-            // poll the future, which may call server_context()
-            with_server_context(server_context.clone(), || virtual_dom.rebuild_in_place());
+            // rebuild the virtual dom
+            virtual_dom.rebuild_in_place();
 
             // If streaming is disabled, wait for the virtual dom to finish all suspense work
             // before rendering anything
             if streaming_mode == StreamingMode::Disabled {
-                ProvideServerContext::new(virtual_dom.wait_for_suspense(), server_context.clone())
-                    .await
+                virtual_dom.wait_for_suspense().await;
+            }
+            // Otherwise, just wait for the streaming context to signal the initial chunk is ready
+            else {
+                loop {
+                    // Check if the router has finished and set the streaming context to finished
+                    let streaming_context_finished =
+                        in_root_scope(&virtual_dom, || streaming_context.current_status())
+                            == StreamingStatus::InitialChunkCommitted;
+                    // Or if this app isn't using the router and has finished suspense
+                    let suspense_finished = !virtual_dom.suspended_tasks_remaining();
+                    if streaming_context_finished || suspense_finished {
+                        break;
+                    }
+
+                    // Wait for new async work that runs during suspense (mainly use_server_futures)
+                    virtual_dom.wait_for_suspense_work().await;
+
+                    // Do that async work
+                    virtual_dom.render_suspense_immediate().await;
+                }
+            }
+
+            // check if there are any errors
+            let errors = virtual_dom.in_runtime(|| {
+                let error_context: ErrorContext = ScopeId::APP
+                    .consume_context()
+                    .expect("The root should be under an error boundary");
+                let errors = error_context.errors();
+                errors.to_vec()
+            });
+            if errors.is_empty() {
+                // If routing was successful, we can return a 200 status and render into the stream
+                _ = initial_result_tx.send(Ok(()));
+            } else {
+                // If there was an error while routing, return the error with a 400 status
+                // Return a routing error if any of the errors were a routing error
+                let routing_error = errors.iter().find_map(|err| err.downcast().cloned());
+                if let Some(routing_error) = routing_error {
+                    _ = initial_result_tx.send(Err(SSRError::Routing(routing_error)));
+                    return;
+                }
+                #[derive(thiserror::Error, Debug)]
+                #[error("{0}")]
+                pub struct ErrorWhileRendering(String);
+                let mut all_errors = String::new();
+                for error in errors {
+                    all_errors += &error.to_string();
+                    all_errors += "\n"
+                }
+                let error = ErrorWhileRendering(all_errors);
+                _ = initial_result_tx.send(Err(SSRError::Incremental(
+                    IncrementalRendererError::Other(Box::new(error)),
+                )));
+                return;
             }
 
             let mut pre_body = String::new();
@@ -236,16 +308,8 @@ impl SsrRendererPool {
 
             // After the initial render, we need to resolve suspense
             while virtual_dom.suspended_tasks_remaining() {
-                ProvideServerContext::new(
-                    virtual_dom.wait_for_suspense_work(),
-                    server_context.clone(),
-                )
-                .await;
-                let resolved_suspense_nodes = ProvideServerContext::new(
-                    virtual_dom.render_suspense_immediate(),
-                    server_context.clone(),
-                )
-                .await;
+                virtual_dom.wait_for_suspense_work().await;
+                let resolved_suspense_nodes = virtual_dom.render_suspense_immediate().await;
 
                 // Just rerender the resolved nodes
                 for scope in resolved_suspense_nodes {
@@ -323,7 +387,16 @@ impl SsrRendererPool {
 
             renderer.reset_render_components();
             myself.renderers.write().unwrap().push(renderer);
+        };
+
+        let join_handle = spawn_platform(move || {
+            ProvideServerContext::new(create_render_future(), server_context)
         });
+
+        // Wait for the initial result which determines the status code
+        initial_result_rx.await.map_err(|err| {
+            SSRError::Incremental(IncrementalRendererError::Other(Box::new(err)))
+        })??;
 
         Ok((
             RenderFreshness::now(None),
@@ -413,11 +486,81 @@ fn start_capturing_errors(suspense_scope: ScopeId) {
 fn serialize_server_data(virtual_dom: &VirtualDom, scope: ScopeId) -> SerializedHydrationData {
     // After we replace the placeholder in the dom with javascript, we need to send down the resolved data so that the client can hydrate the node
     // Extract any data we serialized for hydration (from server futures)
-    let html_data =
-        crate::html_storage::HTMLData::extract_from_suspense_boundary(virtual_dom, scope);
+    let html_data = extract_from_suspense_boundary(virtual_dom, scope);
 
     // serialize the server state into a base64 string
     html_data.serialized()
+}
+
+/// Walks through the suspense boundary in a depth first order and extracts the data from the context API.
+/// We use depth first order instead of relying on the order the hooks are called in because during suspense on the server, the order that futures are run in may be non deterministic.
+pub(crate) fn extract_from_suspense_boundary(
+    vdom: &VirtualDom,
+    scope: ScopeId,
+) -> HydrationContext {
+    let data = HydrationContext::default();
+    serialize_errors(&data, vdom, scope);
+    take_from_scope(&data, vdom, scope);
+    data
+}
+
+/// Get the errors from the suspense boundary
+fn serialize_errors(context: &HydrationContext, vdom: &VirtualDom, scope: ScopeId) {
+    // If there is an error boundary on the suspense boundary, grab the error from the context API
+    // and throw it on the client so that it bubbles up to the nearest error boundary
+    let error = vdom.in_runtime(|| {
+        scope
+            .consume_context::<ErrorContext>()
+            .and_then(|error_context| error_context.errors().first().cloned())
+    });
+    context
+        .error_entry()
+        .insert(&error, std::panic::Location::caller());
+}
+
+fn take_from_scope(context: &HydrationContext, vdom: &VirtualDom, scope: ScopeId) {
+    vdom.in_runtime(|| {
+        scope.in_runtime(|| {
+            // Grab any serializable server context from this scope
+            let other: Option<HydrationContext> = has_context();
+            if let Some(other) = other {
+                context.extend(&other);
+            }
+        });
+    });
+
+    // then continue to any children
+    if let Some(scope) = vdom.get_scope(scope) {
+        // If this is a suspense boundary, move into the children first (even if they are suspended) because that will be run first on the client
+        if let Some(suspense_boundary) =
+            SuspenseContext::downcast_suspense_boundary_from_scope(&vdom.runtime(), scope.id())
+        {
+            if let Some(node) = suspense_boundary.suspended_nodes() {
+                take_from_vnode(context, vdom, &node);
+            }
+        }
+        if let Some(node) = scope.try_root_node() {
+            take_from_vnode(context, vdom, node);
+        }
+    }
+}
+
+fn take_from_vnode(context: &HydrationContext, vdom: &VirtualDom, vnode: &VNode) {
+    for (dynamic_node_index, dyn_node) in vnode.dynamic_nodes.iter().enumerate() {
+        match dyn_node {
+            DynamicNode::Component(comp) => {
+                if let Some(scope) = comp.mounted_scope(dynamic_node_index, vnode, vdom) {
+                    take_from_scope(context, vdom, scope.id());
+                }
+            }
+            DynamicNode::Fragment(nodes) => {
+                for node in nodes {
+                    take_from_vnode(context, vdom, node);
+                }
+            }
+            _ => {}
+        }
+    }
 }
 
 /// State used in server side rendering. This utilizes a pool of [`dioxus_ssr::Renderer`]s to cache static templates between renders.
@@ -447,7 +590,7 @@ impl SSRState {
             RenderFreshness,
             impl Stream<Item = Result<String, dioxus_isrg::IncrementalRendererError>>,
         ),
-        dioxus_isrg::IncrementalRendererError,
+        SSRError,
     > {
         self.renderers
             .clone()
