@@ -15,7 +15,10 @@ categories = ["development-tools::debugging"]
 [dependencies]
 dioxus-cli-config = { workspace = true }
 tracing = { workspace = true }
-tracing-subscriber = { workspace = true, features = ["registry", "std"] }
+tracing-subscriber = { workspace = true, features = ["registry", "std", "env-filter"] }
+
+[features]
+default = []
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 tracing-wasm = { workspace = true }
