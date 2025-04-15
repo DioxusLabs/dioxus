@@ -44,11 +44,11 @@ dioxus-mobile = { workspace = true, optional = true }
 tracing = { workspace = true }
 tracing-futures = { workspace = true, optional = true }
 once_cell = { workspace = true }
-tokio-util = { version = "0.7.8", features = ["rt"], optional = true }
-async-trait = { version = "0.1.58", optional = true }
+tokio-util = { workspace = true, features = ["rt"], optional = true }
+async-trait = { workspace = true, optional = true }
 
-serde = "1.0.159"
-tokio-stream = { version = "0.1.12", features = ["sync"], optional = true }
+serde = { workspace = true }
+tokio-stream = { workspace = true, features = ["sync"], optional = true }
 futures-util = { workspace = true }
 futures-channel = { workspace = true }
 ciborium = { workspace = true }
@@ -56,19 +56,26 @@ base64 = { workspace = true }
 rustls = { workspace = true, optional = true }
 hyper-rustls = { workspace = true, optional = true }
 
-pin-project = { version = "1.1.2", optional = true }
+pin-project = { version = "1.1.10", optional = true }
 thiserror = { workspace = true, optional = true }
-bytes = "1.4.0"
+bytes = "1.10.0"
 tower = { workspace = true, features = ["util"], optional = true }
-tower-layer = { version = "0.3.2", optional = true }
+tower-layer = { version = "0.3.3", optional = true }
 parking_lot = { workspace = true, features = ["send_guard"], optional = true }
-web-sys = { version = "0.3.61", optional = true, features = ["Window", "Document", "Element", "HtmlDocument", "Storage", "console"] }
+web-sys = { version = "0.3.77", optional = true, features = [
+  "Window",
+  "Document",
+  "Element",
+  "HtmlDocument",
+  "Storage",
+  "console",
+] }
 
 dioxus-cli-config = { workspace = true, optional = true }
 
 dioxus-devtools = { workspace = true, optional = true }
-aws-lc-rs = { version = "1.8.1", optional = true }
-dioxus-history.workspace = true
+aws-lc-rs = { version = "1.12.5", optional = true }
+dioxus-history = { workspace = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 tokio = { workspace = true, features = ["rt", "sync"], optional = true }
