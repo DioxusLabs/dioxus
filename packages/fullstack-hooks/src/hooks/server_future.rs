@@ -1,4 +1,6 @@
-use dioxus_lib::prelude::*;
+use dioxus_core::prelude::{suspend, use_hook, RenderError};
+use dioxus_hooks::*;
+use dioxus_signals::Readable;
 use serde::{de::DeserializeOwned, Serialize};
 use std::future::Future;
 
@@ -64,27 +66,24 @@ where
     T: Serialize + DeserializeOwned + 'static,
     F: Future<Output = T> + 'static,
 {
-    #[cfg(feature = "server")]
-    let serialize_context = crate::html_storage::use_serialize_context();
+    let serialize_context = use_hook(dioxus_fullstack_protocol::serialize_context);
 
     // We always create a storage entry, even if the data isn't ready yet to make it possible to deserialize pending server futures on the client
-    #[cfg(feature = "server")]
-    let server_storage_entry = use_hook(|| serialize_context.create_entry());
+    #[allow(unused)]
+    let storage_entry: dioxus_fullstack_protocol::SerializeContextEntry<T> =
+        use_hook(|| serialize_context.create_entry());
 
     #[cfg(feature = "server")]
     let caller = std::panic::Location::caller();
 
     // If this is the first run and we are on the web client, the data might be cached
     #[cfg(feature = "web")]
-    let initial_web_result = use_hook(|| {
-        std::rc::Rc::new(std::cell::RefCell::new(Some(
-            dioxus_web::take_server_data::<T>(),
-        )))
-    });
+    let initial_web_result =
+        use_hook(|| std::rc::Rc::new(std::cell::RefCell::new(Some(storage_entry.get()))));
 
     let resource = use_resource(move || {
         #[cfg(feature = "server")]
-        let serialize_context = serialize_context.clone();
+        let storage_entry = storage_entry.clone();
 
         let user_fut = future();
 
@@ -97,10 +96,12 @@ where
             #[cfg(feature = "web")]
             match initial_web_result.take() {
                 // The data was deserialized successfully from the server
-                Some(Ok(Some(o))) => return o,
+                Some(Ok(o)) => return o,
 
                 // The data is still pending from the server. Don't try to resolve it on the client
-                Some(Ok(None)) => std::future::pending::<()>().await,
+                Some(Err(dioxus_fullstack_protocol::TakeDataError::DataPending)) => {
+                    std::future::pending::<()>().await
+                }
 
                 // The data was not available on the server, rerun the future
                 Some(Err(_)) => {}
@@ -114,7 +115,7 @@ where
 
             // If this is the first run and we are on the server, cache the data in the slot we reserved for it
             #[cfg(feature = "server")]
-            serialize_context.insert(server_storage_entry, &out, caller);
+            storage_entry.insert(&out, caller);
 
             out
         }

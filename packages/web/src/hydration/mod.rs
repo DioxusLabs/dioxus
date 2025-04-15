@@ -1,10 +1,6 @@
 #[cfg(feature = "hydrate")]
-mod deserialize;
-#[cfg(feature = "hydrate")]
 mod hydrate;
 
-#[cfg(feature = "hydrate")]
-pub use deserialize::*;
 #[cfg(feature = "hydrate")]
 #[allow(unused)]
 pub use hydrate::*;

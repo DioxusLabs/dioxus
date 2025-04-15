@@ -104,7 +104,7 @@ impl ServeArgs {
         match self.build_arguments.platform() {
             Platform::Server => true,
             // During SSG, just serve the static files instead of running the server
-            _ => self.build_arguments.fullstack && !self.build_arguments.ssg,
+            _ => self.build_arguments.fullstack() && !self.build_arguments.ssg,
         }
     }
 }

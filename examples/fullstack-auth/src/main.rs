@@ -49,7 +49,7 @@ fn main() {
                         axum_session_auth::AuthSessionLayer::<
                             crate::auth::User,
                             i64,
-                            axum_session_sqlx::SessionSqlitePool,
+                            SessionSqlitePool,
                             sqlx::SqlitePool,
                         >::new(Some(pool))
                         .with_config(auth_config),

@@ -99,6 +99,7 @@ pub(crate) struct WixSettings {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub(crate) struct MacOsSettings {
+    pub(crate) bundle_version: Option<String>,
     pub(crate) frameworks: Option<Vec<String>>,
     pub(crate) minimum_system_version: Option<String>,
     pub(crate) license: Option<String>,

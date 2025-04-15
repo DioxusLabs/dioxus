@@ -15,15 +15,15 @@ dioxus-cli-config = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
 tokio = { workspace = true, features = ["full"], optional = true }
 tower-http = { workspace = true, features = ["auth"], optional = true }
-async-trait = { version = "0.1.87", optional = true }
-sqlx = { version = "0.8.3", features = [
-  "macros",
-  "migrate",
-  "postgres",
-  "sqlite",
-  "_unstable-all-types",
-  "tls-native-tls",
-  "runtime-tokio",
+async-trait = { version = "0.1.71", optional = true }
+sqlx = { version = "0.8.2", features = [
+    "macros",
+    "migrate",
+    "postgres",
+    "sqlite",
+    "_unstable-all-types",
+    "tls-native-tls",
+    "runtime-tokio",
 ], optional = true }
 http = { workspace = true, optional = true }
 tower = { workspace = true, optional = true }
@@ -57,6 +57,7 @@ server = [
   "sqlx",
   "axum_session",
   "axum_session_auth",
+  "axum_session_sqlx",
   "http",
   "tower",
 ]

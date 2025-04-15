@@ -23,9 +23,10 @@ type SendSyncAnyMap = std::collections::HashMap<std::any::TypeId, ContextType>;
 /// ```
 #[derive(Clone)]
 pub struct DioxusServerContext {
-    shared_context: std::sync::Arc<RwLock<SendSyncAnyMap>>,
-    response_parts: std::sync::Arc<RwLock<http::response::Parts>>,
+    shared_context: Arc<RwLock<SendSyncAnyMap>>,
+    response_parts: Arc<RwLock<http::response::Parts>>,
     pub(crate) parts: Arc<RwLock<http::request::Parts>>,
+    response_sent: Arc<std::sync::atomic::AtomicBool>,
 }
 
 enum ContextType {
@@ -46,11 +47,12 @@ impl ContextType {
 impl Default for DioxusServerContext {
     fn default() -> Self {
         Self {
-            shared_context: std::sync::Arc::new(RwLock::new(HashMap::new())),
-            response_parts: std::sync::Arc::new(RwLock::new(
+            shared_context: Arc::new(RwLock::new(HashMap::new())),
+            response_parts: Arc::new(RwLock::new(
                 http::response::Response::new(()).into_parts().0,
             )),
-            parts: std::sync::Arc::new(RwLock::new(http::request::Request::new(()).into_parts().0)),
+            parts: Arc::new(RwLock::new(http::request::Request::new(()).into_parts().0)),
+            response_sent: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         }
     }
 }
@@ -69,6 +71,7 @@ mod server_fn_impl {
                 response_parts: std::sync::Arc::new(RwLock::new(
                     http::response::Response::new(()).into_parts().0,
                 )),
+                response_sent: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             }
         }
 
@@ -81,6 +84,7 @@ mod server_fn_impl {
                 response_parts: std::sync::Arc::new(RwLock::new(
                     http::response::Response::new(()).into_parts().0,
                 )),
+                response_sent: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             }
         }
 
@@ -192,6 +196,14 @@ mod server_fn_impl {
         /// }
         /// ```
         pub fn response_parts_mut(&self) -> RwLockWriteGuard<'_, http::response::Parts> {
+            if self
+                .response_sent
+                .load(std::sync::atomic::Ordering::Relaxed)
+            {
+                tracing::error!("Attempted to modify the request after the first frame of the response has already been sent. \
+                You can read the response, but modifying the response will not change the response that the client has already received. \
+                Try modifying the response before the suspense boundary above the router is resolved.");
+            }
             self.response_parts.write()
         }
 
@@ -260,6 +272,22 @@ mod server_fn_impl {
         /// ```
         pub async fn extract<M, T: FromServerContext<M>>(&self) -> Result<T, T::Rejection> {
             T::from_request(self).await
+        }
+
+        /// Copy the response parts to a response and mark this server context as sent
+        #[cfg(feature = "axum")]
+        pub(crate) fn send_response<B>(&self, response: &mut http::response::Response<B>) {
+            self.response_sent
+                .store(true, std::sync::atomic::Ordering::Relaxed);
+            let parts = self.response_parts.read();
+
+            let mut_headers = response.headers_mut();
+            for (key, value) in parts.headers.iter() {
+                mut_headers.insert(key, value.clone());
+            }
+            *response.status_mut() = parts.status;
+            *response.version_mut() = parts.version;
+            response.extensions_mut().extend(parts.extensions.clone());
         }
     }
 }

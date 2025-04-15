@@ -43,7 +43,6 @@ impl<R> Default for RouterConfig<R> {
 impl<R> RouterConfig<R>
 where
     R: Routable,
-    <R as std::str::FromStr>::Err: std::fmt::Display,
 {
     /// A function to be called whenever the routing is updated.
     ///

@@ -38,6 +38,8 @@ members = [
   "packages/document",
   "packages/extension",
   "packages/fullstack",
+  "packages/fullstack-hooks",
+  "packages/fullstack-protocol",
   "packages/generational-box",
   "packages/history",
   "packages/hooks",
@@ -66,6 +68,15 @@ members = [
   "packages/dx-wire-format",
   "packages/logger",
   "packages/config-macros",
+  "packages/native",
+  "packages/asset-resolver",
+
+  # Playwright tests
+  "packages/playwright-tests/liveview",
+  "packages/playwright-tests/web",
+  "packages/playwright-tests/fullstack",
+  "packages/playwright-tests/suspense-carousel",
+  "packages/playwright-tests/nested-suspense",
 
   # manganis
   "packages/manganis/manganis",
@@ -98,10 +109,12 @@ members = [
   "packages/playwright-tests/web",
   "packages/playwright-tests/fullstack",
   "packages/playwright-tests/fullstack-mounted",
+  "packages/playwright-tests/fullstack-routing",
   "packages/playwright-tests/suspense-carousel",
   "packages/playwright-tests/nested-suspense",
   "packages/playwright-tests/cli-optimization",
   "packages/playwright-tests/wasm-split-harness",
+  "packages/playwright-tests/default-features-disabled"
 ]
 
 [workspace.package]
@@ -140,9 +153,13 @@ dioxus-cli-opt = { path = "packages/cli-opt", version = "0.6.2" }
 dioxus-devtools = { path = "packages/devtools", version = "0.6.2" }
 dioxus-devtools-types = { path = "packages/devtools-types", version = "0.6.2" }
 dioxus-fullstack = { path = "packages/fullstack", version = "0.6.2" }
+dioxus-fullstack-hooks = { path = "packages/fullstack-hooks", version = "0.6.3" }
+dioxus-fullstack-protocol = { path = "packages/fullstack-protocol", version = "0.6.3" }
 dioxus_server_macro = { path = "packages/server-macro", version = "0.6.2", default-features = false }
 dioxus-dx-wire-format = { path = "packages/dx-wire-format", version = "0.6.2" }
 dioxus-logger = { path = "packages/logger", version = "0.6.2" }
+dioxus-native = { path = "packages/native", version = "0.6.2" }
+dioxus-asset-resolver = { path = "packages/asset-resolver", version = "0.6.2" }
 dioxus-config-macros = { path = "packages/config-macros", version = "0.6.3" }
 const-serialize = { path = "packages/const-serialize", version = "0.6.2" }
 const-serialize-macro = { path = "packages/const-serialize-macro", version = "0.6.2" }
@@ -254,6 +271,8 @@ rayon = "1.10.0"
 wasmparser = "0.226.0"
 itertools = "0.14.0"
 macro-string = "0.1.4"
+walkdir = "2.5.0"
+url = "2.3.1"
 
 # desktop
 wry = { version = "0.50.3", default-features = false }
@@ -270,6 +289,10 @@ core-foundation = "0.10.0"
 objc = { version = "0.2.7", features = ["exception"] }
 objc_id = "0.1.1"
 tray-icon = "0.20.0"
+
+# native
+keyboard-types = "0.7"
+winit = { version = "0.30.2", features = ["rwh_06"] }
 
 # disable debug symbols in dev builds - shouldn't matter for downstream crates but makes our binaries (examples, cli, etc) build faster
 [profile.dev]
@@ -354,6 +377,7 @@ rand = { version = "0.8", features = ["small_rng"] }
 form_urlencoded = "1.2.1"
 async-std = "1.13.0"
 web-time = "1.1.0"
+axum = { workspace = true, default-features = true }
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 getrandom = { version = "0.3.1" }
@@ -516,7 +540,7 @@ required-features = ["desktop"]
 doc-scrape-examples = true
 
 [[example]]
-name = "wgpu"
+name = "wgpu_child_window"
 required-features = ["desktop", "gpu"]
 
 [[example]]
