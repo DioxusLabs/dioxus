@@ -301,6 +301,10 @@ async fn fast_build(
             std::env::current_exe().unwrap().display()
         ))
         .env("HOTRELOAD_LINK", "patch")
+        .env(
+            "CARGO_MANIFEST_DIR",
+            workspace_dir().join("packages/subsecond/subsecond-harness"),
+        )
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .current_dir(workspace_dir())
@@ -364,6 +368,8 @@ async fn fast_build(
                 .arg("-Wl,-dylib")
                 .arg("-arch")
                 .arg("arm64")
+                .arg("-Wl,-all_load")
+                // .arg("-Wl,-exported_symbol,__SECTION_START_MANGANIS")
                 .arg("-o")
                 .arg(&output_location)
                 .stdout(Stdio::piped())

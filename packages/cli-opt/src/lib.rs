@@ -102,7 +102,8 @@ impl AssetManifest {
                 continue;
             };
 
-            // Check if the link section matches the asset section for one of the platforms we support. This may not be the current platform if the user is cross compiling
+            // Check if the link section matches the asset section for one of the platforms we support.
+            // This may not be the current platform if the user is cross compiling
             let matches = LinkSection::ALL
                 .iter()
                 .any(|x| x.link_section == section_name);

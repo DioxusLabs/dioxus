@@ -4,7 +4,7 @@ use memmap::{Mmap, MmapOptions};
 use object::{
     macho::{self, ARM64_RELOC_UNSIGNED, MH_TWOLEVEL},
     read::File,
-    write::{MachOBuildVersion, Relocation, StandardSection, Symbol, SymbolSection},
+    write::{MachOBuildVersion, Relocation, SectionId, StandardSection, Symbol, SymbolSection},
     Architecture, BinaryFormat, Endianness, Object, ObjectSection, ObjectSymbol, ObjectSymbolTable,
     RelocationFlags, RelocationTarget, SectionIndex, SectionKind, SymbolFlags, SymbolKind,
     SymbolScope,
@@ -368,7 +368,7 @@ pub fn resolve_undefined(
                     name: name.as_bytes()[name_offset..].to_vec(),
                     value: abs_addr,
                     size: 0,
-                    scope: SymbolScope::Dynamic,
+                    scope: SymbolScope::Linkage,
                     kind: SymbolKind::Data,
                     weak: false,
                     section: SymbolSection::Absolute,
@@ -388,6 +388,120 @@ pub fn resolve_undefined(
             }
         }
     }
+
+    // The loader host might want to know the address of various sections
+    // Let's add some symbols in the form of __SECTION_START_{SECTION_NAME} and __SECTION_END_{SECTION_NAME}
+    //  such that dlsym can be used to find them.
+    //
+    // This will also be used by the program loader to identify the ASLR slide
+    for in_section in source.sections() {
+        // tracing::info!("Defining section header: {:?}", section);
+        // let sym = obj.section_symbol(section_id);
+
+        let Ok(name) = in_section.name_bytes() else {
+            tracing::error!("Section has no name: {:?}", in_section);
+            continue;
+        };
+
+        if name != b"manganis" {
+            continue;
+        }
+
+        let mut start = None;
+        for s in source.symbols() {
+            if s.section_index() == Some(in_section.index()) {
+                tracing::info!("Reading symbol header: {:?}", s);
+                if start.is_none() {
+                    start = Some(s);
+                }
+            }
+        }
+
+        // if let Some(s) = start {
+        //     // import the symbol
+        //     let id = obj.add_symbol(Symbol {
+        //         name: format!("__SECTION_START_{}", s.name().unwrap())
+        //             .as_bytes()
+        //             .to_vec(),
+        //         value: 0,
+        //         size: 0,
+        //         kind: s.kind(),
+        //         scope: SymbolScope::Dynamic,
+        //         weak: false,
+        //         section: SymbolSection::Section(in_section.index()),
+        //         flags: object::SymbolFlags::None,
+        //     });
+
+        //     // Define a new symbol
+
+        //     // obj.add_symbol(Symbol {
+        //     //     name: format!("__SECTION_START_{}", s.name().unwrap_or_default())
+        //     //         .as_bytes()
+        //     //         .to_vec(),
+        //     //     value: 0,
+        //     //     size: 0,
+        //     //     kind: (),
+        //     //     scope: (),
+        //     //     weak: (),
+        //     //     section: (),
+        //     //     flags: (),
+        //     // });
+        // }
+
+        let kind = if in_section.kind() == SectionKind::Unknown {
+            SectionKind::Data
+        } else {
+            in_section.kind()
+        };
+
+        let section_id = obj.add_section(
+            in_section
+                .segment_name()
+                .unwrap()
+                .unwrap_or("")
+                .as_bytes()
+                .to_vec(),
+            name.to_vec(),
+            kind,
+        );
+        let out_section = obj.section_mut(section_id);
+        out_section.flags = in_section.flags();
+
+        if out_section.is_bss() {
+        } else {
+            //     obj.set_section_data(section_id, &[0_u8, 1, 2, 3, 4, 5, 6, 7], 4);
+            tracing::info!("Defining section header: {:?}", in_section);
+            let sym = obj.add_symbol(Symbol {
+                name: format!("__SECTION_START_{}", in_section.name().unwrap_or_default())
+                    .as_bytes()
+                    .to_vec(),
+                value: 0,
+                size: 0,
+                kind: SymbolKind::Text,
+                scope: SymbolScope::Dynamic,
+                weak: false,
+                section: SymbolSection::Section(section_id),
+                flags: object::SymbolFlags::None,
+            });
+        }
+    }
+
+    // // "__DATA,manganis,regular,no_dead_strip".as_bytes().to_vec(),
+    // let sect = obj.add_section(
+    //     "__DATA".as_bytes().to_vec(),
+    //     "manganis".as_bytes().to_vec(),
+    //     SectionKind::Data,
+    // );
+    // let sym = obj.add_symbol(Symbol {
+    //     name: format!("__SECTION_START_MANGANIS").as_bytes().to_vec(),
+    //     value: 0,
+    //     size: 0,
+    //     kind: SymbolKind::Data,
+    //     scope: SymbolScope::Dynamic,
+    //     weak: false,
+    //     section: SymbolSection::Section(sect),
+    //     flags: object::SymbolFlags::None,
+    // });
 
     // Write the object to a file
     let bytes = obj.write()?;

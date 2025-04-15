@@ -4,6 +4,54 @@ pub fn launch() {
     dioxus::launch(app);
 }
 
+static CSS1: Asset = asset!("/assets/test.css");
+static CSS2: Asset = asset!("/assets/test.css");
+static CSS3: Asset = asset!("/assets/test.css");
+
+fn app() -> Element {
+    let mut items: Signal<Vec<String>> = use_signal(|| vec![]);
+
+    rsx! {
+        div {
+            link { href: CSS1, rel: "stylesheet" }
+            link { href: CSS2, rel: "stylesheet" }
+            link { href: CSS3, rel: "stylesheet" }
+            h1 { "Build a todo list!" }
+            h1 { "Build a todo list!" }
+            h1 { "Build a todo list!" }
+            h1 { "Build a todo list!" }
+            button {
+                onclick: move |_| async move {
+                    // let res = request_item(123).await.unwrap();
+                    let res = "Item".to_string();
+                    items.write().push(res);
+                },
+                "Add Item"
+            }
+
+
+            button {
+                onclick: move |_| {
+                    items.write().clear();
+                },
+                "Clear Items"
+            }
+
+
+            for item in items.iter() {
+                li { "{item}" }
+            }
+        }
+    }
+}
+
+// #[server(endpoint = "request_item")]
+// pub async fn request_item(val: i32) -> Result<String, ServerFnError> {
+//     dioxus::subsecond::call(|| {
+//         Ok("hotpatchy frontend frontend frontend frontend frontend!!!".to_string())
+//     })
+// }
+
 // fn app() -> Element {
 //     let mut count = use_signal(|| 0);
 
@@ -126,42 +174,4 @@ pub fn launch() {
 //             }
 //         }
 //     }
-// }
-
-fn app() -> Element {
-    let mut items: Signal<Vec<String>> = use_signal(|| vec![]);
-
-    rsx! {
-        div {
-            h1 { "Build a todo list!" }
-            button {
-                onclick: move |_| async move {
-                    // let res = request_item(123).await.unwrap();
-                    let res = "Item".to_string();
-                    items.write().push(res);
-                },
-                "Add Item"
-            }
-
-
-            button {
-                onclick: move |_| {
-                    items.write().clear();
-                },
-                "Clear Items"
-            }
-
-
-            for item in items.iter() {
-                li { "{item}" }
-            }
-        }
-    }
-}
-
-// #[server(endpoint = "request_item")]
-// pub async fn request_item(val: i32) -> Result<String, ServerFnError> {
-//     dioxus::subsecond::call(|| {
-//         Ok("hotpatchy frontend frontend frontend frontend frontend!!!".to_string())
-//     })
 // }
