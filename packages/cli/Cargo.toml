@@ -107,9 +107,9 @@ manganis = { workspace = true }
 manganis-core = { workspace = true }
 
 # Extracting data from an executable
-tokio-util = { workspace = true, features = ["full"] }
 object = { version = "0.36.7", features = ["wasm"] }
-itertools = "0.14.0"
+tokio-util = { workspace = true, features = ["full"] }
+itertools = { workspace = true }
 throbber-widgets-tui = "0.8.0"
 unicode-segmentation = "1.12.0"
 handlebars = "6.3.1"
