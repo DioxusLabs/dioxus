@@ -208,7 +208,7 @@ tauri-utils = { version = "=2.1.1" }
 tauri-bundler = { version = "=2.2.3" }
 lru = "0.12.2"
 async-trait = "0.1.77"
-axum = { version = "0.7.0", default-features = false }
+axum = "0.8.1"
 axum-server = { version = "0.7.1", default-features = false }
 tower = "0.4.13"
 http = "1.0.0"
@@ -222,8 +222,9 @@ serde = "1.0.61"
 syn = "2.0"
 quote = "1.0"
 proc-macro2 = "1.0"
-axum_session = "0.12.1"
-axum_session_auth = "0.12.1"
+axum_session = "0.16.0"
+axum_session_auth = "0.16.0"
+axum_session_sqlx = "0.5.0"
 axum-extra = "0.9.2"
 reqwest = "0.12.5"
 owo-colors = "4.0.0"

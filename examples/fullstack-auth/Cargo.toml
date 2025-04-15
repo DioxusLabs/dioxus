@@ -16,7 +16,7 @@ axum = { workspace = true, optional = true }
 tokio = { workspace = true, features = ["full"], optional = true }
 tower-http = { workspace = true, features = ["auth"], optional = true }
 async-trait = { version = "0.1.71", optional = true }
-sqlx = { version = "0.7.0", features = [
+sqlx = { version = "0.8.2", features = [
     "macros",
     "migrate",
     "postgres",
@@ -34,12 +34,15 @@ anyhow = { workspace = true }
 
 [dependencies.axum_session]
 workspace = true
-features = ["sqlite-rustls"]
 optional = true
 
 [dependencies.axum_session_auth]
 workspace = true
-features = ["sqlite-rustls"]
+optional = true
+
+[dependencies.axum_session_sqlx]
+workspace = true
+features = ["sqlite"]
 optional = true
 
 [features]
@@ -54,6 +57,7 @@ server = [
     "sqlx",
     "axum_session",
     "axum_session_auth",
+    "axum_session_sqlx",
     "http",
     "tower",
 ]
