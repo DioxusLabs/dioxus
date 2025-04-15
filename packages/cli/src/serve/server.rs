@@ -252,7 +252,7 @@ impl WebServer {
                     BuildStage::Failed => self.send_reload_failed().await,
                     BuildStage::Restarting => self.send_reload_start().await,
                     BuildStage::Initializing => {}
-                    BuildStage::InstallingTooling {} => {}
+                    BuildStage::InstallingTooling => {}
                     BuildStage::Compiling {
                         current,
                         total,
@@ -267,7 +267,7 @@ impl WebServer {
                             self.send_build_status().await;
                         }
                     }
-                    BuildStage::OptimizingWasm {} => {}
+                    BuildStage::OptimizingWasm => {}
                     BuildStage::Aborted => {}
                     BuildStage::CopyingAssets { .. } => {}
                     _ => {}

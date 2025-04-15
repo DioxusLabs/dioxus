@@ -21,7 +21,7 @@ tracing = { workspace = true }
 slab = { workspace = true }
 futures-util = { workspace = true}
 generational-box.workspace = true
-rustversion = "1.0.17"
+rustversion = { workspace = true }
 warnings = { workspace = true }
 
 [dev-dependencies]

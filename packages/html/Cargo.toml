@@ -28,7 +28,7 @@ tokio = { workspace = true, features = ["fs", "io-util"], optional = true }
 futures-channel = { workspace = true }
 serde_json = { version = "1", optional = true }
 tracing.workspace = true
-rustversion = "1.0.17"
+rustversion = { workspace = true }
 
 [build-dependencies]
 lazy-js-bundle = { workspace = true }
