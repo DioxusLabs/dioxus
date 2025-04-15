@@ -1,6 +1,6 @@
 //! A launch function that creates an axum router for the LaunchBuilder
 
-use std::{any::Any, net::SocketAddr};
+use std::{any::Any, collections::HashMap, net::SocketAddr};
 
 use axum::{
     body::Body,
@@ -9,16 +9,18 @@ use axum::{
     routing::IntoMakeService,
     serve::IncomingStream,
 };
+use dashmap::DashMap;
 use dioxus_cli_config::base_path;
 use dioxus_devtools::DevserverMsg;
 use dioxus_lib::prelude::*;
-use futures_util::{stream::FusedStream, StreamExt};
+use futures_util::{pin_mut, stream::FusedStream, StreamExt};
 use hyper::body::Incoming;
 use hyper_util::server::conn::auto::Builder as HyperBuilder;
 use hyper_util::{
     rt::{TokioExecutor, TokioIo},
     service::TowerToHyperService,
 };
+use server_fn::ServerFnTraitObj;
 use tokio::net::TcpStream;
 use tokio_util::task::LocalPoolHandle;
 use tower::Service;
@@ -26,8 +28,8 @@ use tower::ServiceExt as _;
 // use tower::{Service, ServiceExt};
 
 use crate::{
-    render_handler, rt::DioxusRouterExt, RenderHandleState, SSRState, ServeConfig,
-    ServeConfigBuilder,
+    register_server_fn_on_router, render_handler, rt::DioxusRouterExt, RenderHandleState, SSRState,
+    ServeConfig, ServeConfigBuilder,
 };
 
 type ContextList = Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync>>;
@@ -74,28 +76,29 @@ async fn serve_server(
         .unwrap_or_else(ServeConfig::new);
 
     // Extend the config's context providers with the context providers from the launch builder
-    let platform_config = platform_config.map(|mut cfg| {
-        let mut contexts = contexts;
-        let cfg_context_providers = cfg.context_providers.clone();
-        for i in 0..cfg_context_providers.len() {
-            contexts.push(Box::new({
-                let cfg_context_providers = cfg_context_providers.clone();
-                move || (cfg_context_providers[i])()
-            }));
-        }
-        cfg.context_providers = std::sync::Arc::new(contexts);
-        cfg
-    });
+    let cfg = platform_config
+        .map(|mut cfg| {
+            let mut contexts = contexts;
+            let cfg_context_providers = cfg.context_providers.clone();
+            for i in 0..cfg_context_providers.len() {
+                contexts.push(Box::new({
+                    let cfg_context_providers = cfg_context_providers.clone();
+                    move || (cfg_context_providers[i])()
+                }));
+            }
+            cfg.context_providers = std::sync::Arc::new(contexts);
+            cfg
+        })
+        .unwrap();
 
     // Get the address the server should run on. If the CLI is running, the CLI proxies fullstack into the main address
     // and we use the generated address the CLI gives us
     let address = dioxus_cli_config::fullstack_address_or_localhost();
 
-    let config = platform_config.as_ref().ok().cloned();
+    let router = axum::Router::new().serve_dioxus_application(cfg.clone(), root);
 
-    let router = build_router(root, platform_config);
     let task_pool = LocalPoolHandle::new(5);
-    let make_service = router.into_make_service();
+    let mut make_service = router.into_make_service();
 
     let listener = tokio::net::TcpListener::bind(address).await.unwrap();
 
@@ -106,7 +109,8 @@ async fn serve_server(
         Devtools(DevserverMsg),
     }
 
-    // axum::serve()
+    let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(0);
+    let mut hr_idx = 0;
 
     // Manually loop on accepting connections so we can also respond to devtools messages
     loop {
@@ -130,20 +134,69 @@ async fn serve_server(
             // We need to somehow get them out... ?
             //
             // for now we just support editing existing server functions
-            Msg::Devtools(devserver_msg) => match devserver_msg {
-                DevserverMsg::HotReload(hot_reload_msg) => {
-                    if let Some(table) = hot_reload_msg.jump_table {
-                        dioxus_devtools::apply_patch(table);
+            Msg::Devtools(devserver_msg) => {
+                match devserver_msg {
+                    DevserverMsg::HotReload(hot_reload_msg) => {
+                        if let Some(table) = hot_reload_msg.jump_table {
+                            use axum::body::Body;
+                            use http::{Method, Request, Response, StatusCode};
+
+                            if let Ok(_) = dioxus_devtools::apply_patch(table) {
+                                let mut new_router = axum::Router::new().serve_static_assets();
+
+                                let server_fn_iter = collect_raw_server_fns();
+
+                                // de-duplicate iteratively by prefering the most recent (first, since it's linked)
+                                let mut server_fn_map: HashMap<_, _> = HashMap::new();
+                                for f in server_fn_iter.into_iter().rev() {
+                                    server_fn_map.insert(f.path(), f);
+                                }
+
+                                for (_, f) in server_fn_map {
+                                    tracing::info!(
+                                        "Registering server function: {:?} {:?}",
+                                        f.path(),
+                                        f.method()
+                                    );
+                                    new_router = crate::register_server_fn_on_router(
+                                        f,
+                                        new_router,
+                                        cfg.context_providers.clone(),
+                                    );
+                                }
+
+                                let ssr_state = SSRState::new(&cfg);
+
+                                make_service = new_router
+                                    .fallback(
+                                        axum::routing::get(render_handler).with_state(
+                                            RenderHandleState::new(cfg.clone(), root)
+                                                .with_ssr_state(ssr_state),
+                                        ),
+                                    )
+                                    .into_make_service();
+
+                                tracing::info!("Shutting down connections...");
+                                _ = shutdown_tx.send_modify(|i| {
+                                    *i += 1;
+                                    hr_idx += 1;
+                                });
+                            }
+                        }
                     }
+                    DevserverMsg::FullReloadStart => {}
+                    DevserverMsg::FullReloadFailed => {}
+                    DevserverMsg::FullReloadCommand => {}
+                    DevserverMsg::Shutdown => {}
                 }
-                DevserverMsg::FullReloadStart => {}
-                DevserverMsg::FullReloadFailed => {}
-                DevserverMsg::FullReloadCommand => {}
-                DevserverMsg::Shutdown => {}
-            },
+            }
             Msg::TcpStream(Err(_)) => {}
             Msg::TcpStream(Ok((tcp_stream, remote_addr))) => {
+                tracing::debug!("Accepted connection from {remote_addr}");
+
                 let mut make_service = make_service.clone();
+                let mut shutdown_rx = shutdown_rx.clone();
+                let mut hr_idx = hr_idx.clone();
                 task_pool.spawn_pinned(move || async move {
                     let tcp_stream = TokioIo::new(tcp_stream);
 
@@ -179,24 +232,37 @@ async fn serve_server(
                         });
 
                     // upgrades needed for websockets
-                    let ret = HyperBuilder::new(TokioExecutor::new())
-                        .serve_connection_with_upgrades(
-                            tcp_stream,
-                            TowerToHyperService::new(tower_service),
-                        )
-                        .await;
+                    let builder = HyperBuilder::new(TokioExecutor::new());
+                    let connection = builder.serve_connection_with_upgrades(
+                        tcp_stream,
+                        TowerToHyperService::new(tower_service),
+                    );
 
-                    if let Err(err) = ret {
-                        // This error only appears when the client doesn't send a request and
-                        // terminate the connection.
-                        //
-                        // If client sends one request then terminate connection whenever, it doesn't
-                        // appear.
+                    tokio::select! {
+                        res = connection => {
+                            if let Err(err) = res {
+                                // This error only appears when the client doesn't send a request and
+                                // terminate the connection.
+                                //
+                                // If client sends one request then terminate connection whenever, it doesn't
+                                // appear.
+                            }
+                        }
+                        res = shutdown_rx.wait_for(|i| *i == hr_idx + 1) => {
+                            tracing::info!("Shutting down connection server: {res:?}");
+                            return;
+                        }
                     }
                 });
             }
         }
     }
+}
+
+pub type AxumServerFn = ServerFnTraitObj<http::Request<Body>, http::Response<Body>>;
+
+pub fn collect_raw_server_fns() -> Vec<&'static AxumServerFn> {
+    inventory::iter::<AxumServerFn>().into_iter().collect()
 }
 
 fn build_router(
@@ -206,19 +272,9 @@ fn build_router(
     let mut base_path = base_path();
 
     let dioxus_router =
-        axum::Router::new().serve_dioxus_application(TryIntoResult(platform_config), root);
+        axum::Router::new().serve_dioxus_application(platform_config.unwrap(), root);
 
     let router = dioxus_router;
-
-    struct TryIntoResult(Result<ServeConfig, crate::UnableToLoadIndex>);
-
-    impl TryInto<ServeConfig> for TryIntoResult {
-        type Error = crate::UnableToLoadIndex;
-
-        fn try_into(self) -> Result<ServeConfig, Self::Error> {
-            self.0
-        }
-    }
 
     // let mut router;
     // match base_path.as_deref() {

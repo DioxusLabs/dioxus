@@ -56,8 +56,8 @@ pub fn apply_changes(dom: &VirtualDom, msg: &HotReloadMsg) {
     });
 }
 
-pub fn apply_patch(table: JumpTable) {
-    unsafe { subsecond::apply_patch(table) };
+pub fn apply_patch(table: JumpTable) -> Result<(), subsecond::PatchError> {
+    unsafe { subsecond::apply_patch(table) }
 }
 
 /// Connect to the devserver and handle its messages with a callback.

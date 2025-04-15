@@ -396,7 +396,7 @@ pub(crate) fn public_path() -> PathBuf {
 }
 
 /// An error that can occur when loading the index.html file
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct UnableToLoadIndex(PathBuf);
 
 impl std::fmt::Display for UnableToLoadIndex {

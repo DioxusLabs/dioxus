@@ -4,9 +4,12 @@
 //! dx serve --platform web
 //! ```
 
-#![allow(non_snake_case, unused)]
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
+
+fn main() {
+    dioxus::launch(app);
+}
 
 fn app() -> Element {
     let mut count = use_signal(|| 0);
@@ -25,16 +28,32 @@ fn app() -> Element {
                     text.set(data.clone());
                     post_server_data(data).await.unwrap();
                 }
+
             },
             "Run a server function!"
+        }
+        button {
+            onclick: move |_| async move {
+                if let Ok(data) = say_hi().await {
+                    text.set(data.clone());
+                } else {
+                    text.set("Error".to_string());
+                }
+            },
+            "Say hi!"
         }
         "Server said: {text}"
     }
 }
 
 #[server]
+async fn say_hi() -> Result<String, ServerFnError> {
+    Ok("hello 123".to_string())
+}
+
+#[server]
 async fn post_server_data(data: String) -> Result<(), ServerFnError> {
-    println!("Server received: {}", data);
+    println!("Server recesdasdasdasdasasdaasdsdasdisdasdvedasd: {}", data);
 
     Ok(())
 }
@@ -42,8 +61,4 @@ async fn post_server_data(data: String) -> Result<(), ServerFnError> {
 #[server]
 async fn get_server_data() -> Result<String, ServerFnError> {
     Ok(reqwest::get("https://httpbin.org/ip").await?.text().await?)
-}
-
-fn main() {
-    dioxus::launch(app);
 }

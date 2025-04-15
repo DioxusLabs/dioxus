@@ -1,4 +1,7 @@
-use crate::{render::SSRError, with_server_context, DioxusServerContext, SSRState, ServeConfig};
+use crate::{
+    collect_raw_server_fns, render::SSRError, with_server_context, AxumServerFn,
+    DioxusServerContext, SSRState, ServeConfig,
+};
 use crate::{ContextProviders, ProvideServerContext};
 use axum::body;
 use axum::extract::State;
@@ -10,6 +13,7 @@ use axum::{
 };
 use dioxus_lib::prelude::{Element, VirtualDom};
 use http::header::*;
+use server_fn::middleware::BoxedService;
 use std::sync::Arc;
 
 /// A extension trait with utilities for integrating Dioxus with your Axum router.
@@ -61,10 +65,8 @@ pub trait DioxusRouterExt<S>: DioxusRouterFnExt<S> {
     ///     rsx! { "Hello World" }
     /// }
     /// ```
-    fn serve_dioxus_application<Cfg, Error>(self, cfg: Cfg, app: fn() -> Element) -> Self
+    fn serve_dioxus_application(self, cfg: ServeConfig, app: fn() -> Element) -> Self
     where
-        Cfg: TryInto<ServeConfig, Error = Error>,
-        Error: std::error::Error,
         Self: Sized;
 }
 
@@ -116,35 +118,18 @@ where
         self
     }
 
-    fn serve_dioxus_application<Cfg, Error>(self, cfg: Cfg, app: fn() -> Element) -> Self
-    where
-        Cfg: TryInto<ServeConfig, Error = Error>,
-        Error: std::error::Error,
-    {
-        let cfg = cfg.try_into();
-        let context_providers = cfg
-            .as_ref()
-            .map(|cfg| cfg.context_providers.clone())
-            .unwrap_or_default();
-
+    fn serve_dioxus_application(self, cfg: ServeConfig, app: fn() -> Element) -> Self {
         // Add server functions and render index.html
         let server = self
             .serve_static_assets()
-            .register_server_functions_with_context(context_providers);
+            .register_server_functions_with_context(cfg.context_providers.clone());
 
-        match cfg {
-            Ok(cfg) => {
-                let ssr_state = SSRState::new(&cfg);
-                server.fallback(
-                    get(render_handler)
-                        .with_state(RenderHandleState::new(cfg, app).with_ssr_state(ssr_state)),
-                )
-            }
-            Err(err) => {
-                tracing::trace!("Failed to create render handler. This is expected if you are only using fullstack for desktop/mobile server functions: {}", err);
-                server
-            }
-        }
+        let ssr_state = SSRState::new(&cfg);
+
+        server.fallback(
+            get(render_handler)
+                .with_state(RenderHandleState::new(cfg, app).with_ssr_state(ssr_state)),
+        )
     }
 }
 
@@ -204,61 +189,56 @@ where
         mut self,
         context_providers: ContextProviders,
     ) -> Self {
-        use http::method::Method;
-
         tracing::info!("Registering server functions...");
 
-        for (path, method) in server_fn::axum::server_fn_paths() {
-            tracing::info!("Registering server function: {} {}", method, path);
-            let context_providers = context_providers.clone();
-            let handler = move |req| handle_server_fns_inner(path, context_providers, req);
-            self = match method {
-                Method::GET => self.route(path, get(handler)),
-                Method::POST => self.route(path, post(handler)),
-                Method::PUT => self.route(path, put(handler)),
-                _ => unimplemented!("Unsupported server function method: {}", method),
-            };
+        for f in collect_raw_server_fns() {
+            self = register_server_fn_on_router(f, self, context_providers.clone());
         }
+        // for (path, method) in server_fn::axum::server_fn_paths() {
+        //     if let Some(service) = server_fn::axum::get_server_fn_service(&path, method.clone()) {
+        //     }
+        // }
 
         self
     }
 }
 
+pub fn register_server_fn_on_router<S>(
+    f: &'static AxumServerFn,
+    router: Router<S>,
+    context_providers: ContextProviders,
+) -> Router<S>
+where
+    S: Send + Sync + Clone + 'static,
+{
+    use http::method::Method;
+    let path = f.path();
+    let method = f.method();
+
+    tracing::info!("Registering server function: {} {}", method, path);
+    let handler = move |req| handle_server_fns_inner(f, context_providers, req);
+    match method {
+        Method::GET => router.route(path, get(handler)),
+        Method::POST => router.route(path, post(handler)),
+        Method::PUT => router.route(path, put(handler)),
+        _ => unimplemented!("Unsupported server function method: {}", method),
+    }
+}
+
 /// A handler for Dioxus server functions. This will run the server function and return the result.
 async fn handle_server_fns_inner(
-    path: &str,
+    f: &AxumServerFn,
     additional_context: ContextProviders,
     req: Request<Body>,
 ) -> Response<axum::body::Body> {
     use server_fn::middleware::Service;
 
-    let path_string = path.to_string();
-
     let (parts, body) = req.into_parts();
     let req = Request::from_parts(parts.clone(), body);
-    let method = req.method().clone();
-
-    let Some(mut service) = server_fn::axum::get_server_fn_service(&path_string, method) else {
-        return Response::builder().status(StatusCode::BAD_REQUEST).body(
-            {
-                #[cfg(target_family = "wasm")]
-                {
-                    Body::from(format!(
-                        "No server function found for path: {path_string}\nYou may need to explicitly register the server function with `register_explicit`, rebuild your wasm binary to update a server function link or make sure the prefix your server and client use for server functions match.",
-                    ))
-                }
-                #[cfg(not(target_family = "wasm"))]
-                {
-                    Body::from(format!(
-                        "No server function found for path: {path_string}\nYou may need to rebuild your wasm binary to update a server function link or make sure the prefix your server and client use for server functions match.",
-                    ))
-                }
-            }
-        ).unwrap();
-    };
 
     // Create the server context with info from the request
     let server_context = DioxusServerContext::new(parts);
+
     // Provide additional context from the render state
     add_server_context(&server_context, &additional_context);
 
@@ -270,6 +250,18 @@ async fn handle_server_fns_inner(
         .map(|v| v.contains("text/html"))
         .unwrap_or(false);
     let referrer = req.headers().get(REFERER).cloned();
+
+    // this is taken from server_fn source...
+    //
+    // server_fn::axum::get_server_fn_service
+    let mut service = {
+        let middleware = f.middleware();
+        let mut service = BoxedService::new(f.clone());
+        for middleware in middleware {
+            service = middleware.layer(service);
+        }
+        service
+    };
 
     // actually run the server fn (which may use the server context)
     let fut = with_server_context(server_context.clone(), || service.run(req));

@@ -365,7 +365,7 @@ pub fn register_handler(handler: Arc<dyn Fn() + Send + Sync + 'static>) {
 ///
 /// This function will load the library and thus allocates. In cannot be used when the program is
 /// stopped (ie in a signal handler).
-pub unsafe fn apply_patch(mut table: JumpTable) {
+pub unsafe fn apply_patch(mut table: JumpTable) -> Result<(), PatchError> {
     // As a form of integrity checking, we use the ASLR reference from the incoming jump table to assert that it is intended to patch us
     // #[cfg(any(unix, windows))]
     // if table.aslr_reference != aslr_reference() as u64 {
@@ -387,13 +387,10 @@ pub unsafe fn apply_patch(mut table: JumpTable) {
         #[cfg(not(target_os = "android"))]
         let lib = Box::leak(Box::new({
             match libloading::Library::new(&table.lib) {
-                Ok(lib) => {
-                    println!("Loaded library success!: {:?}", &table.lib);
-                    lib
-                }
+                Ok(lib) => lib,
                 err => {
                     eprintln!("Failed to load library: {:?}", err);
-                    return;
+                    return Err(PatchError::CantLoadPatch);
                 }
             }
         }));
@@ -547,6 +544,13 @@ pub unsafe fn apply_patch(mut table: JumpTable) {
 
         unsafe { commit_patch(table) };
     });
+
+    Ok(())
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum PatchError {
+    CantLoadPatch,
 }
 
 unsafe fn commit_patch(table: JumpTable) {

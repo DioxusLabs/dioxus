@@ -1247,7 +1247,7 @@ impl BuildRequest {
                         .display()
                 ));
                 cmd.envs(self.env_vars(ctx)?);
-                tracing::debug!("Using rustc wrapper args: {:#?}", cmd);
+                tracing::trace!("Using rustc wrapper args: {:#?}", cmd);
                 Ok(cmd)
             }
 
