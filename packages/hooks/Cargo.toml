@@ -20,7 +20,7 @@ futures-channel = { workspace = true }
 tracing = { workspace = true }
 slab = { workspace = true }
 futures-util = { workspace = true}
-generational-box.workspace = true
+generational-box = { workspace = true }
 rustversion = { workspace = true }
 warnings = { workspace = true }
 

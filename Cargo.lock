@@ -16076,7 +16076,6 @@ checksum = "dd7cf3379ca1aac9eea11fba24fd7e315d621f8dfe35c8d7d2be8b793726e07d"
 name = "wifi-scanner"
 version = "0.1.1"
 dependencies = [
- "anyhow",
  "dioxus",
  "futures",
  "futures-channel",
