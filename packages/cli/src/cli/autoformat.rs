@@ -24,7 +24,7 @@ pub(crate) struct Autoformat {
     #[clap(short, long)]
     pub(crate) raw: Option<String>,
 
-    /// Input file
+    /// Input file at path (set to "-" to read file from stdin, and output formatted file to stdout)
     #[clap(short, long)]
     pub(crate) file: Option<String>,
 
