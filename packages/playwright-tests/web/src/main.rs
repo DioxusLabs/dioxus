@@ -25,6 +25,13 @@ fn app() -> Element {
         button {
             class: "eval-button",
             onclick: move |_| async move {
+                // Make sure normal return values work. Regression test for https://github.com/DioxusLabs/dioxus/issues/3655
+                let eval = document::eval(r#"return "hello world";"#);
+
+                let result = eval.await.unwrap();
+                assert_eq!(result, "hello world");
+
+                // Make sure dioxus.send/dioxus.recv works
                 let mut eval = document::eval(
                     r#"
                         window.document.title = 'Hello from Dioxus Eval!';
@@ -55,6 +62,8 @@ fn app() -> Element {
         PreventDefault {}
         OnMounted {}
         WebSysClosure {}
+        DocumentElements {}
+        SelectMultiple {}
     }
 }
 
@@ -127,6 +136,45 @@ fn WebSysClosure() -> Element {
             if TRIGGERED() {
                 "the keydown event was triggered"
             }
+        }
+    }
+}
+
+/// This component tests the document::* elements
+#[component]
+fn DocumentElements() -> Element {
+    rsx! {
+        document::Meta { id: "meta-head", name: "testing", data: "dioxus-meta-element" }
+        document::Link {
+            id: "link-head",
+            rel: "stylesheet",
+            href: "https://fonts.googleapis.com/css?family=Roboto+Mono"
+        }
+        document::Stylesheet { id: "stylesheet-head", href: "https://fonts.googleapis.com/css?family=Roboto:300,300italic,700,700italic" }
+        document::Script { id: "script-head", async: true, "console.log('hello world');" }
+        document::Style { id: "style-head", "body {{ font-family: 'Roboto'; }}" }
+    }
+}
+
+// Select elements have odd default behavior when you set the multiple attribute after mounting the element
+// Regression test for https://github.com/DioxusLabs/dioxus/issues/3185
+#[component]
+fn SelectMultiple() -> Element {
+    rsx! {
+        select {
+            id: "static-multiple-select",
+            // This is static and will be set in the template
+            multiple: "true",
+            option { label: "Value1", value: "1" }
+            option { label: "Value2", value: "2" }
+        }
+
+        select {
+            id: "dynamic-multiple-select",
+            // This is dynamic and will be set after it is mounted
+            multiple: true,
+            option { label: "Value1", value: "1" }
+            option { label: "Value2", value: "2" }
         }
     }
 }

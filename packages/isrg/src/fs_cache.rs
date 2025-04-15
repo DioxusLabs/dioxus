@@ -55,8 +55,26 @@ impl FileSystemCache {
     }
 
     pub fn clear(&mut self) {
-        // clear the static directory
-        let _ = std::fs::remove_dir_all(&self.static_dir);
+        // clear the static directory of index.html files contained within folders
+        for entry in std::fs::read_dir(&self.static_dir)
+            .into_iter()
+            .flatten()
+            .flatten()
+        {
+            if entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false) {
+                for entry in walkdir::WalkDir::new(entry.path()).into_iter().flatten() {
+                    if entry.file_type().is_file() {
+                        if let Some(fnmae) = entry.file_name().to_str() {
+                            if fnmae.ends_with(".html") {
+                                if let Err(err) = std::fs::remove_file(entry.path()) {
+                                    tracing::error!("Failed to remove file: {}", err);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     pub fn invalidate(&mut self, route: &str) {

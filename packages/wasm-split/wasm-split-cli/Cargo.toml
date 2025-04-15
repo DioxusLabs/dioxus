@@ -1,0 +1,16 @@
+[package]
+name = "wasm-split-cli"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow =  { workspace = true }
+itertools = { workspace = true }
+walrus = { workspace = true, features = ["parallel"]}
+wasmparser = { workspace = true }
+id-arena = { workspace = true }
+rayon = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["env-filter", "fmt"] }
+tracing = { workspace = true }
+clap = { workspace = true, features = ["derive"] }
+wasm-used = { path = "../wasm-used" }

@@ -4,7 +4,7 @@ use crate::{
     file_upload::NativeFileHover,
     ipc::UserWindowEvent,
     query::QueryEngine,
-    shortcut::{HotKey, ShortcutHandle, ShortcutRegistryError},
+    shortcut::{HotKey, HotKeyState, ShortcutHandle, ShortcutRegistryError},
     webview::WebviewInstance,
     AssetRequest, Config, WryEventHandler,
 };
@@ -34,6 +34,11 @@ pub fn window() -> DesktopContext {
 
 /// A handle to the [`DesktopService`] that can be passed around.
 pub type DesktopContext = Rc<DesktopService>;
+
+/// A weak handle to the [`DesktopService`] to ensure safe passing.
+/// The problem without this is that the tao window is never dropped and therefore cannot be closed.
+/// This was due to the Rc that had still references because of multiple copies when creating a webview.
+pub type WeakDesktopContext = Weak<DesktopService>;
 
 /// An imperative interface to the current window.
 ///
@@ -101,7 +106,7 @@ impl DesktopService {
     /// You can use this to control other windows from the current window.
     ///
     /// Be careful to not create a cycle of windows, or you might leak memory.
-    pub fn new_window(&self, dom: VirtualDom, cfg: Config) -> Weak<DesktopService> {
+    pub fn new_window(&self, dom: VirtualDom, cfg: Config) -> WeakDesktopContext {
         let window = WebviewInstance::new(cfg, dom, self.shared.clone());
 
         let cx = window.dom.in_runtime(|| {
@@ -209,7 +214,7 @@ impl DesktopService {
     pub fn create_shortcut(
         &self,
         hotkey: HotKey,
-        callback: impl FnMut() + 'static,
+        callback: impl FnMut(HotKeyState) + 'static,
     ) -> Result<ShortcutHandle, ShortcutRegistryError> {
         self.shared
             .shortcut_manager

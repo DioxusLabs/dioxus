@@ -124,3 +124,52 @@ test("web-sys closure", async ({ page }) => {
   await page.keyboard.press("Enter");
   await expect(scrollDiv).toHaveText("the keydown event was triggered");
 });
+
+test("document elements", async ({ page }) => {
+  await page.goto("http://localhost:9999");
+  // wait until the meta element is mounted
+  const meta = page.locator("meta#meta-head[name='testing']");
+  await meta.waitFor({ state: "attached" });
+  await expect(meta).toHaveAttribute("data", "dioxus-meta-element");
+
+  const link = page.locator("link#link-head[rel='stylesheet']");
+  await link.waitFor({ state: "attached" });
+  await expect(link).toHaveAttribute(
+    "href",
+    "https://fonts.googleapis.com/css?family=Roboto+Mono"
+  );
+
+  const stylesheet = page.locator("link#stylesheet-head[rel='stylesheet']");
+  await stylesheet.waitFor({ state: "attached" });
+  await expect(stylesheet).toHaveAttribute(
+    "href",
+    "https://fonts.googleapis.com/css?family=Roboto:300,300italic,700,700italic"
+  );
+
+  const script = page.locator("script#script-head");
+  await script.waitFor({ state: "attached" });
+  await expect(script).toHaveAttribute("async", "true");
+
+  const style = page.locator("style#style-head");
+  await style.waitFor({ state: "attached" });
+  const main = page.locator("#main");
+  await expect(main).toHaveCSS("font-family", "Roboto");
+});
+
+test("select multiple", async ({ page }) => {
+  await page.goto("http://localhost:9999");
+  // wait until the select element is mounted
+  const staticSelect = page.locator("select#static-multiple-select");
+  await staticSelect.waitFor({ state: "attached" });
+  await expect(staticSelect).toHaveValues([]);
+  // Make sure the multiple attribute is actually set
+  await staticSelect.selectOption(["1", "2"]);
+  await expect(staticSelect).toHaveValues(["1", "2"]);
+
+  // The dynamic select element should act exactly the same
+  const dynamicSelect = page.locator("select#dynamic-multiple-select");
+  await dynamicSelect.waitFor({ state: "attached" });
+  await expect(dynamicSelect).toHaveValues([]);
+  await dynamicSelect.selectOption(["1", "2"]);
+  await expect(dynamicSelect).toHaveValues(["1", "2"]);
+});

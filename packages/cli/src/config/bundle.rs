@@ -23,6 +23,9 @@ pub(crate) struct DebianSettings {
     // OS-specific settings:
     /// the list of debian dependencies.
     pub depends: Option<Vec<String>>,
+    /// the list of recommended debian dependencies.
+    #[serde(default)]
+    pub recommends: Option<Vec<String>>,
     /// the list of dependencies the package provides.
     pub provides: Option<Vec<String>>,
     /// the list of package conflicts.
@@ -96,6 +99,7 @@ pub(crate) struct WixSettings {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub(crate) struct MacOsSettings {
+    pub(crate) bundle_version: Option<String>,
     pub(crate) frameworks: Option<Vec<String>>,
     pub(crate) minimum_system_version: Option<String>,
     pub(crate) license: Option<String>,
@@ -191,16 +195,42 @@ pub struct CustomSignCommandSettings {
     pub args: Vec<String>,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, clap::ValueEnum)]
 pub(crate) enum PackageType {
+    /// The macOS application bundle (.app).
+    #[clap(name = "macos")]
     MacOsBundle,
+
+    /// The iOS app bundle.
+    #[clap(name = "ios")]
     IosBundle,
+
+    /// The Windows bundle (.msi).
+    #[clap(name = "msi")]
     WindowsMsi,
+
+    /// The NSIS bundle (.exe).
+    #[clap(name = "nsis")]
     Nsis,
+
+    /// The Linux Debian package bundle (.deb).
+    #[clap(name = "deb")]
     Deb,
+
+    /// The Linux RPM bundle (.rpm).
+    #[clap(name = "rpm")]
     Rpm,
+
+    /// The Linux AppImage bundle (.AppImage).
+    #[clap(name = "appimage")]
     AppImage,
+
+    /// The macOS DMG bundle (.dmg).
+    #[clap(name = "dmg")]
     Dmg,
+
+    /// The Updater bundle (a patch of an existing app)
+    #[clap(name = "updater")]
     Updater,
 }
 

@@ -9,8 +9,8 @@ publish = false
 [dependencies]
 dioxus = { workspace = true, features = ["fullstack", "router"] }
 axum = { workspace = true, optional = true }
-tokio = {workspace = true, features = ["full"], optional = true }
-serde = { version = "1.0.159", features = ["derive"] }
+tokio = { workspace = true, features = ["full"], optional = true }
+serde = { workspace = true, features = ["derive"] }
 
 [features]
 default = []

@@ -63,18 +63,19 @@ pub struct Config {
     pub(crate) background_color: Option<(u8, u8, u8, u8)>,
     pub(crate) last_window_close_behavior: WindowCloseBehaviour,
     pub(crate) custom_event_handler: Option<CustomEventHandler>,
+    pub(crate) disable_file_drop_handler: bool,
 }
 
 impl LaunchConfig for Config {}
 
 pub(crate) type WryProtocol = (
     String,
-    Box<dyn Fn(HttpRequest<Vec<u8>>) -> HttpResponse<Cow<'static, [u8]>> + 'static>,
+    Box<dyn Fn(&str, HttpRequest<Vec<u8>>) -> HttpResponse<Cow<'static, [u8]>> + 'static>,
 );
 
 pub(crate) type AsyncWryProtocol = (
     String,
-    Box<dyn Fn(HttpRequest<Vec<u8>>, RequestAsyncResponder) + 'static>,
+    Box<dyn Fn(&str, HttpRequest<Vec<u8>>, RequestAsyncResponder) + 'static>,
 );
 
 impl Config {
@@ -108,6 +109,7 @@ impl Config {
             background_color: None,
             last_window_close_behavior: WindowCloseBehaviour::LastWindowExitsApp,
             custom_event_handler: None,
+            disable_file_drop_handler: false,
         }
     }
 
@@ -128,6 +130,13 @@ impl Config {
     /// Set whether or not the right-click context menu should be disabled.
     pub fn with_disable_context_menu(mut self, disable: bool) -> Self {
         self.disable_context_menu = disable;
+        self
+    }
+
+    /// Set whether or not the file drop handler should be disabled.
+    /// On Windows the drop handler must be disabled for HTML drag and drop APIs to work.
+    pub fn with_disable_drag_drop_handler(mut self, disable: bool) -> Self {
+        self.disable_file_drop_handler = disable;
         self
     }
 
@@ -179,7 +188,7 @@ impl Config {
     /// Set a custom protocol
     pub fn with_custom_protocol<F>(mut self, name: impl ToString, handler: F) -> Self
     where
-        F: Fn(HttpRequest<Vec<u8>>) -> HttpResponse<Cow<'static, [u8]>> + 'static,
+        F: Fn(&str, HttpRequest<Vec<u8>>) -> HttpResponse<Cow<'static, [u8]>> + 'static,
     {
         self.protocols.push((name.to_string(), Box::new(handler)));
         self
@@ -195,7 +204,7 @@ impl Config {
     /// #
     /// # fn main() {
     /// let cfg = Config::new()
-    ///     .with_asynchronous_custom_protocol("asset", |request, responder| {
+    ///     .with_asynchronous_custom_protocol("asset", |_webview_id, request, responder| {
     ///         tokio::spawn(async move {
     ///             responder.respond(
     ///                 HTTPResponse::builder()
@@ -213,7 +222,7 @@ impl Config {
     /// See [`wry`](wry::WebViewBuilder::with_asynchronous_custom_protocol) for more details on implementation
     pub fn with_asynchronous_custom_protocol<F>(mut self, name: impl ToString, handler: F) -> Self
     where
-        F: Fn(HttpRequest<Vec<u8>>, RequestAsyncResponder) + 'static,
+        F: Fn(&str, HttpRequest<Vec<u8>>, RequestAsyncResponder) + 'static,
     {
         self.asynchronous_protocols
             .push((name.to_string(), Box::new(handler)));

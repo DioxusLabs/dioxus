@@ -1,7 +1,9 @@
 use crate::{AppBundle, BuildArgs, Builder, DioxusCrate, Platform};
-use anyhow::Context;
+use anyhow::{anyhow, Context};
+use path_absolutize::Absolutize;
 use std::collections::HashMap;
 use tauri_bundler::{BundleBinary, BundleSettings, PackageSettings, SettingsBuilder};
+use walkdir::WalkDir;
 
 use super::*;
 
@@ -9,28 +11,18 @@ use super::*;
 #[derive(Clone, Debug, Parser)]
 pub struct Bundle {
     /// The package types to bundle
-    ///
-    /// Any of:
-    /// - macos: The macOS application bundle (.app).
-    /// - ios: The iOS app bundle.
-    /// - msi: The Windows bundle (.msi).
-    /// - nsis: The NSIS bundle (.exe).
-    /// - deb: The Linux Debian package bundle (.deb).
-    /// - rpm: The Linux RPM bundle (.rpm).
-    /// - appimage: The Linux AppImage bundle (.AppImage).
-    /// - dmg: The macOS DMG bundle (.dmg).
-    /// - updater: The Updater bundle.
     #[clap(long)]
     pub package_types: Option<Vec<crate::PackageType>>,
 
     /// The directory in which the final bundle will be placed.
     ///
-    /// Relative paths will be placed relative to the current working directory.
+    /// Relative paths will be placed relative to the current working directory if specified.
+    /// Otherwise, the out_dir path specified in Dioxus.toml will be used (relative to the crate root).
     ///
     /// We will flatten the artifacts into this directory - there will be no differentiation between
     /// artifacts produced by different platforms.
     #[clap(long)]
-    pub outdir: Option<PathBuf>,
+    pub out_dir: Option<PathBuf>,
 
     /// The arguments for the dioxus build
     #[clap(flatten)]
@@ -54,86 +46,94 @@ impl Bundle {
             .finish()
             .await?;
 
-        tracing::info!("Copying app to output directory...");
-
         // If we're building for iOS, we need to bundle the iOS bundle
         if self.build_arguments.platform() == Platform::Ios && self.package_types.is_none() {
             self.package_types = Some(vec![crate::PackageType::IosBundle]);
         }
 
-        let mut cmd_result = StructuredOutput::Success;
+        let mut bundles = vec![];
 
+        // Copy the server over if it exists
+        if bundle.build.build.fullstack() {
+            bundles.push(bundle.server_exe().unwrap());
+        }
+
+        // Create a list of bundles that we might need to copy
         match self.build_arguments.platform() {
             // By default, mac/win/linux work with tauri bundle
             Platform::MacOS | Platform::Linux | Platform::Windows => {
-                let bundles = self.bundle_desktop(krate, bundle)?;
-
-                tracing::info!("Bundled app successfully!");
-                tracing::info!("App produced {} outputs:", bundles.len());
-                tracing::debug!("Bundling produced bundles: {:#?}", bundles);
-
-                // Copy the bundles to the output directory and log their locations
-                let mut bundle_paths = vec![];
-                for bundle in bundles {
-                    for src in bundle.bundle_paths {
-                        let src = if let Some(outdir) = &self.outdir {
-                            let dest = outdir.join(src.file_name().expect("Filename to exist"));
-                            crate::fastfs::copy_asset(&src, &dest)
-                                .context("Failed to copy or compress optimized asset")?;
-                            dest
-                        } else {
-                            src.clone()
-                        };
-
-                        tracing::info!(
-                            "{} - [{}]",
-                            bundle.package_type.short_name(),
-                            src.display()
-                        );
-
-                        bundle_paths.push(src);
-                    }
+                tracing::info!("Running desktop bundler...");
+                for bundle in self.bundle_desktop(&krate, &bundle)? {
+                    bundles.extend(bundle.bundle_paths);
                 }
-
-                cmd_result = StructuredOutput::BundleOutput {
-                    bundles: bundle_paths,
-                };
             }
 
-            Platform::Web => {
-                tracing::info!("App available at: {}", bundle.build.root_dir().display());
-            }
-
+            // Web/ios can just use their root_dir
+            Platform::Web => bundles.push(bundle.build.root_dir()),
             Platform::Ios => {
-                tracing::warn!("Signed iOS bundles are not yet supported");
-                tracing::info!(
-                    "The bundle is available at: {}",
-                    bundle.build.root_dir().display()
-                );
+                tracing::warn!("iOS bundles are not currently codesigned! You will need to codesign the app before distributing.");
+                bundles.push(bundle.build.root_dir())
             }
-
-            Platform::Server => {
-                tracing::info!("Server available at: {}", bundle.build.root_dir().display())
-            }
-            Platform::Liveview => tracing::info!(
-                "Liveview server available at: {}",
-                bundle.build.root_dir().display()
-            ),
+            Platform::Server => bundles.push(bundle.build.root_dir()),
+            Platform::Liveview => bundles.push(bundle.build.root_dir()),
 
             Platform::Android => {
-                return Err(Error::UnsupportedFeature(
-                    "Android bundles are not yet supported".into(),
-                ));
+                let aab = bundle
+                    .android_gradle_bundle()
+                    .await
+                    .context("Failed to run gradle bundleRelease")?;
+                bundles.push(aab);
             }
         };
 
-        Ok(cmd_result)
+        // Copy the bundles to the output directory if one was specified
+        let crate_outdir = bundle.build.krate.crate_out_dir();
+        if let Some(outdir) = self.out_dir.clone().or(crate_outdir) {
+            let outdir = outdir
+                .absolutize()
+                .context("Failed to absolutize output directory")?;
+
+            tracing::info!("Copying bundles to output directory: {}", outdir.display());
+
+            std::fs::create_dir_all(&outdir)?;
+
+            for bundle_path in bundles.iter_mut() {
+                let destination = outdir.join(bundle_path.file_name().unwrap());
+
+                tracing::debug!(
+                    "Copying from {} to {}",
+                    bundle_path.display(),
+                    destination.display()
+                );
+
+                if bundle_path.is_dir() {
+                    dircpy::CopyBuilder::new(&bundle_path, &destination)
+                        .overwrite(true)
+                        .run_par()
+                        .context("Failed to copy the app to output directory")?;
+                } else {
+                    std::fs::copy(&bundle_path, &destination)
+                        .context("Failed to copy the app to output directory")?;
+                }
+
+                *bundle_path = destination;
+            }
+        }
+
+        for bundle_path in bundles.iter() {
+            tracing::info!(
+                "Bundled app at: {}",
+                bundle_path.absolutize().unwrap().display()
+            );
+        }
+
+        Ok(StructuredOutput::BundleOutput { bundles })
     }
 
     fn bundle_desktop(
         &self,
-        krate: DioxusCrate,
-        bundle: AppBundle,
+        krate: &DioxusCrate,
+        bundle: &AppBundle,
     ) -> Result<Vec<tauri_bundler::Bundle>, Error> {
         _ = std::fs::remove_dir_all(krate.bundle_dir(self.build_arguments.platform()));
 
@@ -154,11 +154,19 @@ impl Bundle {
 
         let binaries = vec![
             // We use the name of the exe but it has to be in the same directory
-            BundleBinary::new(name.display().to_string(), true)
+            BundleBinary::new(krate.executable_name().to_string(), true)
                 .set_src_path(Some(bundle.app.exe.display().to_string())),
         ];
 
         let mut bundle_settings: BundleSettings = krate.config.bundle.clone().into();
+
+        // Check if required fields are provided instead of failing silently.
+        if bundle_settings.identifier.is_none() {
+            return Err(anyhow!("\n\nBundle identifier was not provided in `Dioxus.toml`. Add it as:\n\n[bundle]\nidentifier = \"com.mycompany\"\n\n").into());
+        }
+        if bundle_settings.publisher.is_none() {
+            return Err(anyhow!("\n\nBundle publisher was not provided in `Dioxus.toml`. Add it as:\n\n[bundle]\npublisher = \"MyCompany\"\n\n").into());
+        }
 
         if cfg!(windows) {
             let windows_icon_override = krate.config.bundle.windows.as_ref().map(|w| &w.icon_path);
@@ -179,21 +187,26 @@ impl Bundle {
         }
 
         let asset_dir = bundle.build.asset_dir();
-        let asset_dir_entries = std::fs::read_dir(&asset_dir)
-            .with_context(|| format!("failed to read asset directory {:?}", asset_dir))?;
-        for entry in asset_dir_entries.flatten() {
-            let old = entry
-                .path()
-                .canonicalize()
-                .with_context(|| format!("Failed to canonicalize {entry:?}"))?;
-            let new = PathBuf::from("assets").join(old.file_name().expect("Filename to exist"));
-            tracing::debug!("Bundled asset: {old:?} -> {new:?}");
+        if asset_dir.exists() {
+            for entry in WalkDir::new(&asset_dir) {
+                let entry = entry.unwrap();
+                let path = entry.path();
 
-            bundle_settings
-                .resources_map
-                .as_mut()
-                .expect("to be set")
-                .insert(old.display().to_string(), new.display().to_string());
+                if path.is_file() {
+                    let old = path
+                        .canonicalize()
+                        .with_context(|| format!("Failed to canonicalize {entry:?}"))?;
+                    let new =
+                        PathBuf::from("assets").join(path.strip_prefix(&asset_dir).unwrap_or(path));
+
+                    tracing::debug!("Bundled asset: {old:?} -> {new:?}");
+                    bundle_settings
+                        .resources_map
+                        .as_mut()
+                        .expect("to be set")
+                        .insert(old.display().to_string(), new.display().to_string());
+                }
+            }
         }
 
         for resource_path in bundle_settings.resources.take().into_iter().flatten() {

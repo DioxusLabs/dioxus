@@ -6,8 +6,8 @@
 //! See the [server_fn_macro] crate for more information.
 
 use proc_macro::TokenStream;
-use server_fn_macro::server_macro_impl;
-use syn::__private::ToTokens;
+use server_fn_macro::ServerFnCall;
+use syn::{__private::ToTokens, parse_quote};
 
 /// Declares that a function is a [server function](https://docs.rs/server_fn/).
 /// This means that its body will only run on the server, i.e., when the `ssr`
@@ -33,7 +33,7 @@ use syn::__private::ToTokens;
 ///
 /// You can any combination of the following named arguments:
 /// - `name`: sets the identifier for the server function’s type, which is a struct created
-///    to hold the arguments (defaults to the function identifier in PascalCase)
+///   to hold the arguments (defaults to the function identifier in PascalCase)
 /// - `prefix`: a prefix at which the server function handler will be mounted (defaults to `/api`)
 /// - `endpoint`: specifies the exact path at which the server function handler will be mounted,
 ///   relative to the prefix (defaults to the function name followed by unique hash)
@@ -142,16 +142,17 @@ use syn::__private::ToTokens;
 /// }
 /// ```
 #[proc_macro_attribute]
-pub fn server(args: proc_macro::TokenStream, s: TokenStream) -> TokenStream {
-    match server_macro_impl(
-        args.into(),
-        s.into(),
-        Some(syn::parse_quote!(server_fn)),
-        "/api",
-        None,
-        None,
-    ) {
-        Err(e) => e.to_compile_error().into(),
-        Ok(s) => s.to_token_stream().into(),
-    }
+pub fn server(args: proc_macro::TokenStream, body: TokenStream) -> TokenStream {
+    // If there is no input codec, use json as the default
+    let parsed = match ServerFnCall::parse("/api", args.into(), body.into()) {
+        Ok(parsed) => parsed,
+        Err(e) => return e.to_compile_error().into(),
+    };
+
+    parsed
+        .default_input_encoding(Some(parse_quote!(server_fn::codec::Json)))
+        .default_output_encoding(Some(parse_quote!(server_fn::codec::Json)))
+        .default_server_fn_path(Some(parse_quote!(server_fn)))
+        .to_token_stream()
+        .into()
 }

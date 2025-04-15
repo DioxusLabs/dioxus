@@ -56,7 +56,9 @@ pub enum BuildStage {
         krate: String,
     },
     RunningBindgen,
+    SplittingBundle,
     OptimizingWasm,
+    PrerenderingRoutes,
     CopyingAssets {
         current: usize,
         total: usize,
@@ -68,4 +70,5 @@ pub enum BuildStage {
     Failed,
     Aborted,
     Restarting,
+    CompressingAssets,
 }

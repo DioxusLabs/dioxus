@@ -25,6 +25,7 @@ impl ScriptProps {
     /// Get all the attributes for the script tag
     pub fn attributes(&self) -> Vec<(&'static str, String)> {
         let mut attributes = Vec::new();
+        extend_attributes(&mut attributes, &self.additional_attributes);
         if let Some(defer) = &self.defer {
             attributes.push(("defer", defer.to_string()));
         }

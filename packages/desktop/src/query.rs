@@ -1,4 +1,4 @@
-use crate::DesktopContext;
+use crate::{DesktopContext, WeakDesktopContext};
 use futures_util::{FutureExt, StreamExt};
 use generational_box::Owner;
 use serde::{de::DeserializeOwned, Deserialize};
@@ -80,6 +80,7 @@ impl QueryEngine {
                     let promise = (new AsyncFunction("dioxus", {script:?}))(dioxus);
                     promise
                         .then((result)=>{{
+                            dioxus.close();
                             let returned_value = {{
                                 "method": "query",
                                 "params": {{
@@ -96,6 +97,7 @@ impl QueryEngine {
                         }})
                         .catch(err => post_error(`Error running JS: ${{err}}`));
                 }} catch (error) {{
+                    dioxus.close();
                     post_error(`Invalid JS: ${{error}}`);
                 }}
             }})();"#
@@ -107,7 +109,7 @@ impl QueryEngine {
             id: request_id,
             receiver: rx,
             return_receiver: Some(return_rx),
-            desktop: context,
+            desktop: Rc::downgrade(&context),
             phantom: std::marker::PhantomData,
         }
     }
@@ -140,7 +142,7 @@ impl QueryEngine {
 }
 
 pub(crate) struct Query<V: DeserializeOwned> {
-    desktop: DesktopContext,
+    desktop: WeakDesktopContext,
     receiver: futures_channel::mpsc::UnboundedReceiver<Value>,
     return_receiver: Option<futures_channel::oneshot::Receiver<Result<Value, String>>>,
     pub id: usize,
@@ -161,7 +163,8 @@ impl<V: DeserializeOwned> Query<V> {
         let data = message.to_string();
         let script = format!(r#"window.getQuery({queue_id}).rustSend({data});"#);
 
-        self.desktop
+        let desktop = self.desktop.upgrade().ok_or(QueryError::Finished)?;
+        desktop
             .webview
             .evaluate_script(&script)
             .map_err(|e| QueryError::Send(e.to_string()))?;

@@ -92,7 +92,7 @@ impl BuildRequest {
     pub(crate) async fn build_server(&self) -> Result<Option<BuildArtifacts>> {
         tracing::debug!("Building server...");
 
-        if !self.build.fullstack {
+        if !self.build.fullstack() {
             return Ok(None);
         }
 
@@ -270,6 +270,12 @@ impl BuildRequest {
                 true => cargo_args.push("release".to_string()),
                 false => cargo_args.push(self.build.server_profile.to_string()),
             };
+
+            // If the user provided a server target, use it, otherwise use the default host target.
+            if let Some(target) = self.build.target_args.server_target.as_deref() {
+                cargo_args.push("--target".to_string());
+                cargo_args.push(target.to_string());
+            }
         } else {
             // Add required profile flags. --release overrides any custom profiles.
             let custom_profile = &self.build.profile.as_ref();
@@ -339,6 +345,14 @@ impl BuildRequest {
         };
 
         cargo_args.push(self.krate.executable_name().to_string());
+
+        // the bundle splitter needs relocation data
+        // we'll trim these out if we don't need them during the bundling process
+        // todo(jon): for wasm binary patching we might want to leave these on all the time.
+        if self.build.platform() == Platform::Web && self.build.experimental_wasm_split {
+            cargo_args.push("--".to_string());
+            cargo_args.push("-Clink-args=--emit-relocs".to_string());
+        }
 
         tracing::debug!(dx_src = ?TraceSrc::Build, "cargo args: {:?}", cargo_args);
 
@@ -656,6 +670,25 @@ impl BuildRequest {
         }
     }
 
+    /// Get the path to the wasm bindgen temporary output folder
+    pub fn wasm_bindgen_out_dir(&self) -> PathBuf {
+        self.root_dir().join("wasm")
+    }
+
+    /// Get the path to the wasm bindgen javascript output file
+    pub fn wasm_bindgen_js_output_file(&self) -> PathBuf {
+        self.wasm_bindgen_out_dir()
+            .join(self.krate.executable_name())
+            .with_extension("js")
+    }
+
+    /// Get the path to the wasm bindgen wasm output file
+    pub fn wasm_bindgen_wasm_output_file(&self) -> PathBuf {
+        self.wasm_bindgen_out_dir()
+            .join(format!("{}_bg", self.krate.executable_name()))
+            .with_extension("wasm")
+    }
+
     /// returns the path to root build folder. This will be our working directory for the build.
     ///
     /// we only add an extension to the folders where it sorta matters that it's named with the extension.
@@ -716,6 +749,11 @@ impl BuildRequest {
             | Platform::Server
             | Platform::Liveview => self.root_dir().join("assets"),
         }
+    }
+
+    /// Get the path to the asset optimizer version file
+    pub fn asset_optimizer_version_file(&self) -> PathBuf {
+        self.platform_dir().join(".cli-version")
     }
 
     pub fn platform_exe_name(&self) -> String {

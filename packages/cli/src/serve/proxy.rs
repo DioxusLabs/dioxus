@@ -73,7 +73,7 @@ pub(crate) fn add_proxy(mut router: Router, proxy: &WebProxyConfig) -> Result<Ro
 
     // api/*path
     router = router.route(
-        &format!("/{}/*path", trimmed_path.trim_end_matches('/')),
+        &format!("/{}/{{*path}}", trimmed_path.trim_end_matches('/')),
         method_router.clone(),
     );
 
@@ -153,7 +153,6 @@ pub(crate) fn proxy_to(
                 if uri.path().starts_with("/assets")
                     || uri.path().starts_with("/_dioxus")
                     || uri.path().starts_with("/public")
-                    || uri.path().starts_with("/wasm")
                 {
                     tracing::trace!(dx_src = ?TraceSrc::Dev, "[{}] {}", res.status().as_u16(), uri);
                 } else {
@@ -191,7 +190,7 @@ mod test {
     async fn setup_servers(mut config: WebProxyConfig) -> String {
         let backend_router =
             Router::new().route(
-                "/*path",
+                "/{*path}",
                 any(|request: axum::extract::Request| async move {
                     format!("backend: {}", request.uri())
                 }),

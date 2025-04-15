@@ -5,8 +5,9 @@ use axum::{
     routing::get,
     Router,
 };
-use axum_session::{SessionConfig, SessionLayer, SessionSqlitePool, SessionStore};
+use axum_session::{SessionConfig, SessionLayer, SessionStore};
 use axum_session_auth::*;
+use axum_session_sqlx::SessionSqlitePool;
 use core::pin::Pin;
 use dioxus_fullstack::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -192,71 +193,11 @@ pub async fn connect_to_database() -> SqlitePool {
         .unwrap()
 }
 
-pub struct Session(
-    pub  axum_session_auth::AuthSession<
-        crate::auth::User,
-        i64,
-        axum_session_auth::SessionSqlitePool,
-        sqlx::SqlitePool,
-    >,
-);
+pub type Session =
+    axum_session_auth::AuthSession<crate::auth::User, i64, SessionSqlitePool, sqlx::SqlitePool>;
 
-impl std::ops::Deref for Session {
-    type Target = axum_session_auth::AuthSession<
-        crate::auth::User,
-        i64,
-        axum_session_auth::SessionSqlitePool,
-        sqlx::SqlitePool,
-    >;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl std::ops::DerefMut for Session {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-#[derive(Debug)]
-pub struct AuthSessionLayerNotFound;
-
-impl std::fmt::Display for AuthSessionLayerNotFound {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "AuthSessionLayer was not found")
-    }
-}
-
-impl std::error::Error for AuthSessionLayerNotFound {}
-
-impl IntoResponse for AuthSessionLayerNotFound {
-    fn into_response(self) -> Response {
-        (
-            http::status::StatusCode::INTERNAL_SERVER_ERROR,
-            "AuthSessionLayer was not found",
-        )
-            .into_response()
-    }
-}
-
-#[async_trait]
-impl<S: std::marker::Sync + std::marker::Send> axum::extract::FromRequestParts<S> for Session {
-    type Rejection = AuthSessionLayerNotFound;
-
-    async fn from_request_parts(
-        parts: &mut http::request::Parts,
-        state: &S,
-    ) -> Result<Self, Self::Rejection> {
-        axum_session_auth::AuthSession::<
-            crate::auth::User,
-            i64,
-            axum_session_auth::SessionSqlitePool,
-            sqlx::SqlitePool,
-        >::from_request_parts(parts, state)
+pub async fn get_session() -> Result<Session, ServerFnError> {
+    extract::<Session, _>()
         .await
-        .map(Session)
-        .map_err(|_| AuthSessionLayerNotFound)
-    }
+        .map_err(|_| ServerFnError::new("AuthSessionLayer was not found"))
 }

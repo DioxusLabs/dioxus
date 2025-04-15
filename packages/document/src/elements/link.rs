@@ -4,6 +4,14 @@ use dioxus_html as dioxus_elements;
 
 #[non_exhaustive]
 #[derive(Clone, Props, PartialEq)]
+pub struct OtherLinkProps {
+    pub rel: String,
+    #[props(extends = link, extends = GlobalAttributes)]
+    pub additional_attributes: Vec<Attribute>,
+}
+
+#[non_exhaustive]
+#[derive(Clone, Props, PartialEq)]
 pub struct LinkProps {
     pub rel: Option<String>,
     pub media: Option<String>,
@@ -28,6 +36,7 @@ impl LinkProps {
     /// Get all the attributes for the link tag
     pub fn attributes(&self) -> Vec<(&'static str, String)> {
         let mut attributes = Vec::new();
+        extend_attributes(&mut attributes, &self.additional_attributes);
         if let Some(rel) = &self.rel {
             attributes.push(("rel", rel.clone()));
         }

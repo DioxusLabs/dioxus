@@ -25,14 +25,16 @@ impl RunArgs {
 
         let devserver_ip = "127.0.0.1:8081".parse().unwrap();
         let fullstack_ip = "127.0.0.1:8080".parse().unwrap();
+        let mut open_address = None;
 
-        if self.build_args.platform() == Platform::Web || self.build_args.fullstack {
+        if self.build_args.platform() == Platform::Web || self.build_args.fullstack() {
+            open_address = Some(fullstack_ip);
             tracing::info!("Serving at: {}", fullstack_ip);
         }
 
         let mut runner = crate::serve::AppRunner::start(&krate);
         runner
-            .open(bundle, devserver_ip, Some(fullstack_ip), true)
+            .open(bundle, devserver_ip, open_address, Some(fullstack_ip), true)
             .await?;
 
         // Run the app, but mostly ignore all the other messages
@@ -46,7 +48,7 @@ impl RunArgs {
                     tracing::info!("[{platform}]: {msg}")
                 }
                 ServeUpdate::ProcessExited { platform, status } => {
-                    runner.kill(platform);
+                    runner.cleanup().await;
                     tracing::info!("[{platform}]: process exited with status: {status:?}");
                     break;
                 }

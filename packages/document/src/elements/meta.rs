@@ -19,6 +19,7 @@ impl MetaProps {
     /// Get all the attributes for the meta tag
     pub fn attributes(&self) -> Vec<(&'static str, String)> {
         let mut attributes = Vec::new();
+        extend_attributes(&mut attributes, &self.additional_attributes);
         if let Some(property) = &self.property {
             attributes.push(("property", property.clone()));
         }
@@ -68,6 +69,12 @@ pub fn Meta(props: MetaProps) -> Element {
 
     use_hook(|| {
         let document = document();
+        let insert_link = document.create_head_component();
+
+        if !insert_link {
+            return;
+        }
+
         document.create_meta(props);
     });
 

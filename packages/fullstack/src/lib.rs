@@ -6,13 +6,13 @@
 
 pub use once_cell;
 
-mod html_storage;
-
 #[cfg(feature = "axum")]
 #[cfg_attr(docsrs, doc(cfg(feature = "axum")))]
 pub mod server;
 
-mod hooks;
+#[cfg(feature = "axum_core")]
+#[cfg_attr(docsrs, doc(cfg(feature = "axum_core")))]
+pub mod axum_core;
 
 pub mod document;
 #[cfg(feature = "server")]
@@ -22,6 +22,7 @@ mod streaming;
 
 #[cfg(feature = "server")]
 mod serve_config;
+
 #[cfg(feature = "server")]
 pub use serve_config::*;
 
@@ -30,12 +31,14 @@ mod server_context;
 
 /// A prelude of commonly used items in dioxus-fullstack.
 pub mod prelude {
-    use crate::hooks;
-    pub use hooks::{server_cached::use_server_cached, server_future::use_server_future};
+    pub use dioxus_fullstack_hooks::*;
 
     #[cfg(feature = "axum")]
     #[cfg_attr(docsrs, doc(cfg(feature = "axum")))]
     pub use crate::server::*;
+
+    #[cfg(feature = "axum_core")]
+    pub use crate::axum_core::*;
 
     #[cfg(feature = "server")]
     #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
@@ -45,8 +48,8 @@ pub mod prelude {
     #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
     pub use crate::serve_config::{ServeConfig, ServeConfigBuilder};
 
-    #[cfg(all(feature = "server", feature = "axum"))]
-    #[cfg_attr(docsrs, doc(cfg(all(feature = "server", feature = "axum"))))]
+    #[cfg(feature = "axum")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "axum")))]
     pub use crate::server_context::Axum;
 
     #[cfg(feature = "server")]
