@@ -85,7 +85,7 @@ impl AppBundle {
         }
 
         // Inject any resources from manganis into the head
-        for asset in self.app.assets.assets.values() {
+        for asset in self.app.assets.assets() {
             let asset_path = asset.bundled_path();
             match asset.options() {
                 AssetOptions::Css(css_options) => {
@@ -117,9 +117,11 @@ impl AppBundle {
         let wasm_path = self
             .app
             .assets
-            .assets
-            .get(&wasm_source_path)
+            .get_assets_for_source(&wasm_source_path)
             .expect("WASM asset should exist in web bundles")
+            .iter()
+            .next()
+            .expect("Should only be one wasm asset")
             .bundled_path();
         head_resources.push_str(&format!(
             "<link rel=\"preload\" as=\"fetch\" type=\"application/wasm\" href=\"/{{base_path}}/assets/{wasm_path}\" crossorigin>"
@@ -177,18 +179,22 @@ r#" <script>
         let wasm_path = self
             .app
             .assets
-            .assets
-            .get(&wasm_source_path)
+            .get_assets_for_source(&wasm_source_path)
             .expect("WASM asset should exist in web bundles")
+            .iter()
+            .next()
+            .expect("Should only be one wasm asset")
             .bundled_path();
         let wasm_path = format!("assets/{wasm_path}");
         let js_source_path = self.build.wasm_bindgen_js_output_file();
         let js_path = self
             .app
             .assets
-            .assets
-            .get(&js_source_path)
+            .get_assets_for_source(&js_source_path)
             .expect("JS asset should exist in web bundles")
+            .iter()
+            .next()
+            .expect("Should only be one js asset")
             .bundled_path();
         let js_path = format!("assets/{js_path}");
 

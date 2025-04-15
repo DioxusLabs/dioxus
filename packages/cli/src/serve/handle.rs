@@ -279,18 +279,20 @@ impl AppHandle {
             .ok()?;
 
         // The asset might've been renamed thanks to the manifest, let's attempt to reload that too
-        if let Some(resource) = self.app.app.assets.assets.get(&changed_file).as_ref() {
-            let output_path = asset_dir.join(resource.bundled_path());
-            // Remove the old asset if it exists
-            _ = std::fs::remove_file(&output_path);
-            // And then process the asset with the options into the **old** asset location. If we recompiled,
-            // the asset would be in a new location because the contents and hash have changed. Since we are
-            // hotreloading, we need to use the old asset location it was originally written to.
-            let options = *resource.options();
-            let res = process_file_to(&options, &changed_file, &output_path);
-            bundled_name = Some(PathBuf::from(resource.bundled_path()));
-            if let Err(e) = res {
-                tracing::debug!("Failed to hotreload asset {e}");
+        if let Some(resources) = self.app.app.assets.get_assets_for_source(&changed_file) {
+            for resource in resources {
+                let output_path = asset_dir.join(resource.bundled_path());
+                // Remove the old asset if it exists
+                _ = std::fs::remove_file(&output_path);
+                // And then process the asset with the options into the **old** asset location. If we recompiled,
+                // the asset would be in a new location because the contents and hash have changed. Since we are
+                // hotreloading, we need to use the old asset location it was originally written to.
+                let options = *resource.options();
+                let res = process_file_to(&options, &changed_file, &output_path);
+                bundled_name = Some(PathBuf::from(resource.bundled_path()));
+                if let Err(e) = res {
+                    tracing::debug!("Failed to hotreload asset {e}");
+                }
             }
         }
 

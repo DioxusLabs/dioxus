@@ -5,6 +5,7 @@ use crate::AssetOptions;
 /// Options for a css asset
 #[derive(
     Debug,
+    Eq,
     PartialEq,
     PartialOrd,
     Clone,

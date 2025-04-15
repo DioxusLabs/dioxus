@@ -5,6 +5,7 @@ use crate::AssetOptions;
 /// The builder for [`FolderAsset`]
 #[derive(
     Debug,
+    Eq,
     PartialEq,
     PartialOrd,
     Clone,

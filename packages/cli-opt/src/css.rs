@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::{hash::Hasher, path::Path};
 
 use anyhow::Context;
 use codemap::SpanLoc;
@@ -78,12 +78,11 @@ pub(crate) fn minify_css(css: &str) -> anyhow::Result<String> {
     Ok(res.code)
 }
 
-/// Process an scss/sass file into css.
-pub(crate) fn process_scss(
+/// Compile scss with grass
+pub(crate) fn compile_scss(
     scss_options: &CssAssetOptions,
     source: &Path,
-    output_path: &Path,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<String> {
     let style = match scss_options.minified() {
         true => OutputStyle::Compressed,
         false => OutputStyle::Expanded,
@@ -94,7 +93,18 @@ pub(crate) fn process_scss(
         .quiet(false)
         .logger(&ScssLogger {});
 
-    let css = grass::from_path(source, &options)?;
+    let css = grass::from_path(source, &options)
+        .with_context(|| format!("Failed to compile scss file: {}", source.display()))?;
+    Ok(css)
+}
+
+/// Process an scss/sass file into css.
+pub(crate) fn process_scss(
+    scss_options: &CssAssetOptions,
+    source: &Path,
+    output_path: &Path,
+) -> anyhow::Result<()> {
+    let css = compile_scss(scss_options, source)?;
     let minified = minify_css(&css)?;
 
     std::fs::write(output_path, minified).with_context(|| {
@@ -130,4 +140,20 @@ impl grass::Logger for ScssLogger {
             location.begin.column + 1
         );
     }
+}
+
+/// Hash the inputs to the scss file
+pub(crate) fn hash_scss(
+    scss_options: &CssAssetOptions,
+    source: &Path,
+    hasher: &mut impl Hasher,
+) -> anyhow::Result<()> {
+    // Grass doesn't expose the ast for us to traverse the imports in the file. Instead of parsing scss ourselves
+    // we just hash the expanded version of the file for now
+    let css = compile_scss(scss_options, source)?;
+
+    // Hash the compiled css
+    hasher.write(css.as_bytes());
+
+    Ok(())
 }
