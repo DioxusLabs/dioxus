@@ -124,6 +124,7 @@ const fn generate_unique_path_with_byte_hash(
     macro_output_path
 }
 
+/// Construct the hash used by manganis and cli-opt to uniquely identify a asset based on its contents
 pub const fn hash_asset(asset_config: &AssetOptions, content_hash: u64) -> ConstStr {
     let mut string = ConstStr::new("");
 
