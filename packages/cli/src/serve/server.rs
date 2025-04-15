@@ -392,6 +392,9 @@ async fn devserver_mainloop(
     listener: TcpListener,
     router: Router,
 ) -> Result<()> {
+    // We have a native listener that we're going to give to tokio, so we need to make it non-blocking
+    let _ = listener.set_nonblocking(true);
+
     // If we're not using rustls, just use regular axum
     if https_cfg.enabled != Some(true) {
         axum::serve(
@@ -435,11 +438,11 @@ fn build_devserver_router(
         router = super::proxy::add_proxy(router, proxy_config)?;
     }
 
-    router = if args.should_proxy_build() {
+    if args.should_proxy_build() {
         // For fullstack, liveview, and server, forward all requests to the inner server
         let address = fullstack_address.unwrap();
         tracing::debug!("Proxying requests to fullstack server at {address}");
-        router.fallback_service(super::proxy::proxy_to(
+        router = router.fallback_service(super::proxy::proxy_to(
             format!("http://{address}").parse().unwrap(),
             true,
             |error| {
@@ -451,7 +454,7 @@ fn build_devserver_router(
                     )))
                     .unwrap()
             },
-        ))
+        ));
     } else {
         // Otherwise, just serve the dir ourselves
         // Route file service to output the .wasm and assets if this is a web build
@@ -466,13 +469,12 @@ fn build_devserver_router(
                 .unwrap_or_default()
                 .trim_matches('/')
         );
-
         if base_path == "/" {
-            router.fallback_service(build_serve_dir(args, krate))
+            router = router.fallback_service(build_serve_dir(args, krate));
         } else {
-            router.nest_service(&base_path, build_serve_dir(args, krate))
+            router = router.nest_service(&base_path, build_serve_dir(args, krate));
         }
-    };
+    }
 
     // Setup middleware to intercept html requests if the build status is "Building"
     router = router.layer(middleware::from_fn_with_state(

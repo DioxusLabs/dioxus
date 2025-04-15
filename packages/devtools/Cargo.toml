@@ -21,11 +21,11 @@ tracing = { workspace = true }
 warnings.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-tungstenite = { version = "0.26.2" }
+tungstenite = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full"] }
-serde_json = "1.0.140"
+serde_json = { workspace = true }
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]

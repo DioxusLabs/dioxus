@@ -17,9 +17,9 @@ dioxus-rsx = { workspace = true, optional = true }
 dioxus-html-internal-macro = { workspace = true }
 dioxus-hooks = { workspace = true }
 generational-box = { workspace = true }
-serde = { version = "1", features = ["derive"], optional = true }
+serde = { workspace = true, features = ["derive"], optional = true }
 serde_repr = { version = "0.1", optional = true }
-js-sys = { version = "0.3.77", optional = true }
+js-sys = { workspace = true, optional = true }
 euclid = "0.22.11"
 enumset = "1.1.5"
 keyboard-types = { version = "0.7", default-features = false }

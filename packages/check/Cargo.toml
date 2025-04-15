@@ -17,4 +17,4 @@ owo-colors = { workspace = true, features = ["supports-colors"] }
 
 [dev-dependencies]
 indoc = "2.0.6"
-pretty_assertions = "1.4.1"
+pretty_assertions = { workspace = true }

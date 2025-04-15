@@ -239,6 +239,7 @@ base64 = "0.22.1"
 once_cell = "1.20.3"
 uuid = "1.15.1"
 convert_case = "0.8.0"
+tungstenite = { version = "0.26.2" }
 tokio-tungstenite = { version = "0.26.2" }
 gloo-timers = "0.3.0"
 fluent-uri = { version = "0.3.2", features = ["serde"] }
@@ -274,6 +275,7 @@ macro-string = "0.1.4"
 walkdir = "2.5.0"
 url = "2.3.1"
 separator = "0.4.1"
+pretty_assertions = "1.4.0"
 
 # desktop
 wry = { version = "0.50.3", default-features = false }
@@ -291,6 +293,9 @@ objc = { version = "0.2.7", features = ["exception"] }
 objc_id = "0.1.1"
 tray-icon = "0.20.0"
 open = "5.1.2"
+
+# web
+gloo-dialogs = "0.2.0"
 
 # native
 keyboard-types = "0.7"

@@ -34,7 +34,7 @@ rand = { workspace = true }
 reqwest = { workspace = true }
 tracing-subscriber = { workspace = true, default-features = true }
 tracing-fluent-assertions = "0.3.0"
-pretty_assertions = "1.4.1"
+pretty_assertions = { workspace = true }
 sysinfo = "0.33.1"
 
 [dev-dependencies.web-sys]

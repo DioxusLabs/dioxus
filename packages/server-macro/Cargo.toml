@@ -10,8 +10,8 @@ license = "MIT OR Apache-2.0"
 description = "Server function macros for Dioxus"
 
 [dependencies]
-proc-macro2 = "^1.0.94"
-quote = "^1.0.39"
+proc-macro2 = { workspace = true }
+quote = { workspace = true }
 syn = { workspace = true, features = ["full"] }
 server_fn_macro = "0.8.0-rc1"
 
