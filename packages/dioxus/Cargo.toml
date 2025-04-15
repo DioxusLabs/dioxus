@@ -8,7 +8,7 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com"
 keywords = ["web", "desktop", "mobile", "gui", "wasm"]
-rust-version = "1.76.0"
+rust-version = "1.80.0"
 
 [dependencies]
 dioxus-core = { workspace = true }
@@ -98,7 +98,7 @@ third-party-renderer = []
 [dev-dependencies]
 futures-util = { workspace = true }
 tracing = { workspace = true }
-rand = { version = "0.9.0", features = ["small_rng"] }
+rand = { workspace = true, features = ["small_rng"] }
 criterion = { workspace = true }
 thiserror = { workspace = true }
 env_logger = { workspace = true }

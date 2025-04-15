@@ -36,29 +36,29 @@ anyhow = { workspace = true }
 workspace = true
 optional = true
 
+[dependencies.axum_session_auth]
+workspace = true
+optional = true
+
 [dependencies.axum_session_sqlx]
 workspace = true
 features = ["sqlite"]
 optional = true
 
-[dependencies.axum_session_auth]
-workspace = true
-optional = true
-
 [features]
 default = []
 server = [
-  "dioxus-cli-config",
-  "axum",
-  "tokio",
-  "dioxus-fullstack/axum",
-  "tower-http",
-  "async-trait",
-  "sqlx",
-  "axum_session",
-  "axum_session_auth",
-  "axum_session_sqlx",
-  "http",
-  "tower",
+    "dioxus-cli-config",
+    "axum",
+    "tokio",
+    "dioxus-fullstack/axum",
+    "tower-http",
+    "async-trait",
+    "sqlx",
+    "axum_session",
+    "axum_session_auth",
+    "axum_session_sqlx",
+    "http",
+    "tower",
 ]
 web = ["dioxus/web", "dioxus-web"]

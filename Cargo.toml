@@ -273,6 +273,7 @@ itertools = "0.14.0"
 macro-string = "0.1.4"
 walkdir = "2.5.0"
 url = "2.3.1"
+separator = "0.4.1"
 
 # desktop
 wry = { version = "0.50.3", default-features = false }
@@ -289,6 +290,7 @@ core-foundation = "0.10.0"
 objc = { version = "0.2.7", features = ["exception"] }
 objc_id = "0.1.1"
 tray-icon = "0.20.0"
+open = "5.1.2"
 
 # native
 keyboard-types = "0.7"
@@ -354,6 +356,7 @@ repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com"
 documentation = "https://dioxuslabs.com"
 keywords = ["dom", "ui", "gui", "react", "wasm"]
+rust-version = "1.80.0"
 publish = false
 version = "0.6.3"
 
@@ -369,18 +372,18 @@ wasm-split = { workspace = true }
 [dev-dependencies]
 dioxus = { workspace = true, features = ["router"] }
 dioxus-ssr = { workspace = true }
-futures-util = "0.3.31"
-separator = "0.4.1"
-serde = { version = "1.0.218", features = ["derive"] }
-serde_json = "1.0.140"
-rand = { version = "0.8", features = ["small_rng"] }
+futures-util = { workspace = true }
+separator = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+rand = { workspace = true, features = ["small_rng"] }
 form_urlencoded = "1.2.1"
 async-std = "1.13.0"
 web-time = "1.1.0"
 axum = { workspace = true, default-features = true }
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
-getrandom = { version = "0.3.1" }
+getrandom = { workspace = true }
 tokio = { version = "1.43", default-features = false, features = ["sync", "macros", "io-util", "rt", "time"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
