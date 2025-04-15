@@ -48,6 +48,9 @@ impl BundledAsset {
     /// Create a new asset but with a relative path
     ///
     /// This method is deprecated and will be removed in a future release.
+   #[deprecated(
+        note = "Relative asset!() paths are not supported. Use a path like `/assets/myfile.png` instead of `./assets/myfile.png`"
+    )]
     pub const fn new_relative(
         absolute_source_path: &'static str,
         bundled_path: &'static str,
