@@ -188,6 +188,8 @@ tracing-futures = "0.2.5"
 tracing-subscriber = { version = "0.3.19", default-features = false }
 toml = "0.8"
 tokio = "1.43"
+tokio-util = { version = "0.7.13" }
+tokio-stream = { version = "0.1.17" }
 slab = "0.4.9"
 slotmap = { version = "1.0.7", features = ["serde"] }
 futures = "0.3.31"
@@ -276,6 +278,8 @@ walkdir = "2.5.0"
 url = "2.3.1"
 separator = "0.4.1"
 pretty_assertions = "1.4.0"
+serde_repr = "0.1"
+
 
 # desktop
 wry = { version = "0.50.3", default-features = false }
@@ -298,7 +302,7 @@ open = "5.1.2"
 gloo-dialogs = "0.2.0"
 
 # native
-keyboard-types = "0.7"
+keyboard-types = { version = "0.7", default-features = false }
 winit = { version = "0.30.2", features = ["rwh_06"] }
 
 # disable debug symbols in dev builds - shouldn't matter for downstream crates but makes our binaries (examples, cli, etc) build faster

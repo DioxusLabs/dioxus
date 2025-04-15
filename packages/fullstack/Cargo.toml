@@ -44,11 +44,11 @@ dioxus-mobile = { workspace = true, optional = true }
 tracing = { workspace = true }
 tracing-futures = { workspace = true, optional = true }
 once_cell = { workspace = true }
-tokio-util = { version = "0.7.13", features = ["rt"], optional = true }
-async-trait = { version = "0.1.87", optional = true }
+tokio-util = { workspace = true, features = ["rt"], optional = true }
+async-trait = { workspace = true, optional = true }
 
-serde = "1.0.218"
-tokio-stream = { version = "0.1.17", features = ["sync"], optional = true }
+serde = { workspace = true }
+tokio-stream = { workspace = true, features = ["sync"], optional = true }
 futures-util = { workspace = true }
 futures-channel = { workspace = true }
 ciborium = { workspace = true }
