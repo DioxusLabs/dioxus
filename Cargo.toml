@@ -177,7 +177,6 @@ lazy-js-bundle = { path = "packages/lazy-js-bundle", version = "0.6.2" }
 # subsecond
 subsecond-cli-support = { path = "packages/subsecond/subsecond-cli-support", version = "0.6.3" }
 subsecond-types = { path = "packages/subsecond/subsecond-types", version = "0.6.3" }
-subsecond-macro = { path = "packages/subsecond/subsecond-macro", version = "0.6.3" }
 subsecond = { path = "packages/subsecond/subsecond", version = "0.6.3" }
 
 # manganis

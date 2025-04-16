@@ -5,7 +5,6 @@ version.workspace = true
 
 [dependencies]
 serde = { version = "1.0.203", features = ["derive"] }
-subsecond-macro = { workspace = true }
 subsecond-types = { workspace = true }
 
 thiserror = { workspace = true }
