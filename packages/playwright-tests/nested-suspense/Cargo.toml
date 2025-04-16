@@ -13,7 +13,7 @@ tokio = { workspace = true, features = ["full"], optional = true }
 
 [features]
 default = []
-server = ["dioxus/server", "dep:tokio"]
+server = ["dioxus/server", "tokio"]
 web = ["dioxus/web"]
 
 # We need a separate bin for the SSG build to avoid conflicting server caches
