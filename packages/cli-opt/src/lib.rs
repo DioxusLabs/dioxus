@@ -67,7 +67,6 @@ impl AssetManifest {
         self.assets.values().flat_map(|assets| assets.iter())
     }
 
-    #[allow(dead_code)]
     pub fn load_from_file(path: &Path) -> anyhow::Result<Self> {
         let src = std::fs::read_to_string(path)?;
 

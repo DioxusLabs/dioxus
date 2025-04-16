@@ -75,8 +75,7 @@ impl BuildRequest {
 
         let start = Instant::now();
         self.prepare_build_dir()?;
-        let exe = self.build_cargo().await?;
-        let assets = self.collect_assets().await?;
+        let (exe, assets) = self.build_cargo().await?;
 
         Ok(BuildArtifacts {
             exe,
@@ -100,7 +99,7 @@ impl BuildRequest {
     /// Run `cargo`, returning the location of the final executable
     ///
     /// todo: add some stats here, like timing reports, crate-graph optimizations, etc
-    pub(crate) async fn build_cargo(&self) -> Result<PathBuf> {
+    pub(crate) async fn build_cargo(&self) -> Result<(PathBuf, AssetManifest)> {
         tracing::debug!("Executing cargo...");
 
         // Extract the unit count of the crate graph so build_cargo has more accurate data
@@ -111,12 +110,27 @@ impl BuildRequest {
 
         let mut cmd = Command::new("cargo");
 
+        // Create a temp file to put the output of the args
+        // We need to do this since rustc won't actually print the link args to stdout, so we need to
+        // give `dx` a file to dump its env::args into
+        let out_file = self.root_dir().join("linker_args.json");
+
+        // Run rustc with a custom linker (dx) and an env var to force `dx` to act as a linker
+        //
+        // This will force `dx` to look through the incremental cache and find the assets from the previous build
         cmd.arg("rustc")
             .current_dir(self.krate.crate_dir())
             .arg("--message-format")
             .arg("json-diagnostic-rendered-ansi")
             .args(self.build_arguments())
-            .envs(self.env_vars()?);
+            .envs(self.env_vars()?)
+            .env(
+                LinkAction::ENV_VAR_NAME,
+                LinkAction::BuildAssetManifest {
+                    destination: out_file.clone(),
+                }
+                .to_json(),
+            );
 
         if let Some(target_dir) = self.custom_target_dir.as_ref() {
             cmd.env("CARGO_TARGET_DIR", target_dir);
@@ -226,21 +240,10 @@ impl BuildRequest {
             out_location
         );
 
-        Ok(out_location)
-    }
+        // The linker wrote the manifest to the temp file, let's load it!
+        let manifest = AssetManifest::load_from_file(&out_file)?;
 
-    /// Traverse the target directory and collect all assets from the incremental cache
-    ///
-    /// This uses "known paths" that have stayed relatively stable during cargo's lifetime.
-    /// One day this system might break and we might need to go back to using the linker approach.
-    pub(crate) async fn collect_assets(&self) -> Result<AssetManifest> {
-        tracing::debug!("Collecting assets ...");
-
-        if self.build.skip_assets {
-            return Ok(AssetManifest::default());
-        };
-
-        self.deep_linker_asset_extract().await
+        Ok((out_location, manifest))
     }
 
     /// Create a list of arguments for cargo builds
@@ -330,11 +333,21 @@ impl BuildRequest {
 
         cargo_args.push(self.krate.executable_name().to_string());
 
+        cargo_args.push("--".to_string());
+
+        cargo_args.push(format!(
+            "-Clinker={}",
+            std::env::current_exe()
+                .unwrap()
+                .canonicalize()
+                .unwrap()
+                .display()
+        ));
+
         // the bundle splitter needs relocation data
         // we'll trim these out if we don't need them during the bundling process
         // todo(jon): for wasm binary patching we might want to leave these on all the time.
         if self.build.platform() == Platform::Web && self.build.experimental_wasm_split {
-            cargo_args.push("--".to_string());
             cargo_args.push("-Clink-args=--emit-relocs".to_string());
         }
 
@@ -343,7 +356,6 @@ impl BuildRequest {
         cargo_args
     }
 
-    #[allow(dead_code)]
     pub(crate) fn android_rust_flags(&self) -> String {
         let mut rust_flags = std::env::var("RUSTFLAGS").unwrap_or_default();
 
@@ -439,58 +451,6 @@ impl BuildRequest {
                 .sum::<usize>() as f64
                 / 3.5) as usize
         })
-    }
-
-    /// We used to require traversing incremental artifacts for assets that were included but not
-    /// directly exposed to the final binary. Now, however, we force APIs to carry items created
-    /// from asset calls into top-level items such that they *do* get included in the final binary.
-    ///
-    /// There's a chance that's not actually true, so this function is kept around in case we do
-    /// need to revert to "deep extraction".
-    async fn deep_linker_asset_extract(&self) -> Result<AssetManifest> {
-        // Create a temp file to put the output of the args
-        // We need to do this since rustc won't actually print the link args to stdout, so we need to
-        // give `dx` a file to dump its env::args into
-        let tmp_file = tempfile::NamedTempFile::new()?;
-
-        // Run `cargo rustc` again, but this time with a custom linker (dx) and an env var to force
-        // `dx` to act as a linker
-        //
-        // This will force `dx` to look through the incremental cache and find the assets from the previous build
-        Command::new("cargo")
-            .arg("rustc")
-            .args(self.build_arguments())
-            .envs(self.env_vars()?)
-            .arg("--offline") /* don't use the network, should already be resolved */
-            .arg("--")
-            .arg(format!(
-                "-Clinker={}",
-                std::env::current_exe()
-                    .unwrap()
-                    .canonicalize()
-                    .unwrap()
-                    .display()
-            ))
-            .env(
-                LinkAction::ENV_VAR_NAME,
-                LinkAction::BuildAssetManifest {
-                    destination: tmp_file.path().to_path_buf().clone(),
-                }
-                .to_json(),
-            )
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .output()
-            .await?;
-
-        // The linker wrote the manifest to the temp file, let's load it!
-        let manifest = AssetManifest::load_from_file(tmp_file.path())?;
-
-        if let Ok(path) = std::env::var("DEEPLINK").map(|s| s.parse::<PathBuf>().unwrap()) {
-            _ = tmp_file.persist(path);
-        }
-
-        Ok(manifest)
     }
 
     fn env_vars(&self) -> Result<Vec<(&str, String)>> {

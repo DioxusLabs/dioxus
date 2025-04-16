@@ -1,4 +1,4 @@
-use const_serialize::{deserialize_const, ConstVec};
+use const_serialize::ConstVec;
 use dioxus_cli_opt::AssetManifest;
 use manganis::BundledAsset;
 use object::{Object, ObjectSection, ReadCache};
@@ -50,6 +50,18 @@ impl LinkAction {
     /// hmmmmmmmm tbh I'd rather just pass the object files back and do the parsing here, but the interface
     /// is nicer to just bounce back the args and let the host do the parsing/canonicalization
     pub(crate) fn run(self) {
+        let log_file = std::fs::File::options()
+            .append(true)
+            .create(true)
+            .open("/Users/evanalmloff/Desktop/Github/dioxus-test/linker_logs.txt")
+            .unwrap();
+        tracing_subscriber::fmt()
+            .with_writer(log_file)
+            .with_max_level(tracing::Level::DEBUG)
+            .compact()
+            .with_ansi(false)
+            .init();
+
         match self {
             // Literally just run the android linker :)
             LinkAction::LinkAndroid {
@@ -172,6 +184,7 @@ impl LinkAction {
                 }
 
                 let contents = serde_json::to_string(&manifest).expect("Failed to write manifest");
+                tracing::info!("Writing asset manifest to {}", dest.display());
                 std::fs::write(dest, contents).expect("Failed to write output file");
 
                 // forward the modified object files to the real linker
@@ -253,18 +266,22 @@ impl AssetReferences {
             binary_data.seek(std::io::SeekFrom::Start(range.start as u64))?;
             let mut data_in_range = vec![0; range.len()];
             binary_data.read_exact(&mut data_in_range)?;
-            for offset in (0..data_in_range.len()).step_by(std::mem::size_of::<BundledAsset>()) {
-                let range = (range.start + offset)
-                    ..(range.start + offset + std::mem::size_of::<BundledAsset>());
-                let const_vec = ConstVec::new().extend(&data_in_range[range.clone()]);
-                if let Some((_, bundled_asset)) = deserialize_const!(BundledAsset, const_vec.read())
-                {
-                    self.assets.push(AssetReference {
-                        file: path.clone(),
-                        byte_span: range,
-                        bundled_asset,
-                    });
-                }
+            let mut offset = 0;
+            tracing::info!("Found {} bytes of data in range", data_in_range.len());
+            let mut buffer = const_serialize::ConstReadBuffer::new(&data_in_range);
+
+            while let Some((remaining_buffer, bundled_asset)) =
+                const_serialize::deserialize_const!(BundledAsset, buffer)
+            {
+                let end = data_in_range.len() - remaining_buffer.as_ref().len();
+                let range = (range.start + offset)..(range.start + end);
+                self.assets.push(AssetReference {
+                    file: path.clone(),
+                    byte_span: range,
+                    bundled_asset,
+                });
+                offset = end;
+                buffer = remaining_buffer;
             }
         }
         Ok(())
