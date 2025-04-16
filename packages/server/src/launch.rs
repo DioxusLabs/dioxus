@@ -28,8 +28,8 @@ use tower::ServiceExt as _;
 // use tower::{Service, ServiceExt};
 
 use crate::{
-    register_server_fn_on_router, render_handler, rt::DioxusRouterExt, RenderHandleState, SSRState,
-    ServeConfig, ServeConfigBuilder,
+    collect_raw_server_fns, register_server_fn_on_router, render_handler, rt::DioxusRouterExt,
+    RenderHandleState, SSRState, ServeConfig, ServeConfigBuilder,
 };
 
 type ContextList = Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync>>;
@@ -153,7 +153,7 @@ async fn serve_server(
                                 }
 
                                 for (_, f) in server_fn_map {
-                                    tracing::info!(
+                                    tracing::debug!(
                                         "Registering server function: {:?} {:?}",
                                         f.path(),
                                         f.method()
@@ -258,12 +258,6 @@ async fn serve_server(
             }
         }
     }
-}
-
-pub type AxumServerFn = ServerFnTraitObj<http::Request<Body>, http::Response<Body>>;
-
-pub fn collect_raw_server_fns() -> Vec<&'static AxumServerFn> {
-    inventory::iter::<AxumServerFn>().into_iter().collect()
 }
 
 fn build_router(

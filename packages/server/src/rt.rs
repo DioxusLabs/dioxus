@@ -1,7 +1,4 @@
-use crate::{
-    collect_raw_server_fns, render::SSRError, with_server_context, AxumServerFn,
-    DioxusServerContext, SSRState, ServeConfig,
-};
+use crate::{render::SSRError, with_server_context, DioxusServerContext, SSRState, ServeConfig};
 use crate::{ContextProviders, ProvideServerContext};
 use axum::body;
 use axum::extract::State;
@@ -13,7 +10,7 @@ use axum::{
 };
 use dioxus_lib::prelude::{Element, VirtualDom};
 use http::header::*;
-use server_fn::middleware::BoxedService;
+use server_fn::{middleware::BoxedService, ServerFnTraitObj};
 use std::sync::Arc;
 
 /// A extension trait with utilities for integrating Dioxus with your Axum router.
@@ -194,10 +191,6 @@ where
         for f in collect_raw_server_fns() {
             self = register_server_fn_on_router(f, self, context_providers.clone());
         }
-        // for (path, method) in server_fn::axum::server_fn_paths() {
-        //     if let Some(service) = server_fn::axum::get_server_fn_service(&path, method.clone()) {
-        //     }
-        // }
 
         self
     }
@@ -215,7 +208,7 @@ where
     let path = f.path();
     let method = f.method();
 
-    tracing::info!("Registering server function: {} {}", method, path);
+    tracing::debug!("Registering server function: {} {}", method, path);
     let handler = move |req| handle_server_fns_inner(f, context_providers, req);
     match method {
         Method::GET => router.route(path, get(handler)),
@@ -223,6 +216,12 @@ where
         Method::PUT => router.route(path, put(handler)),
         _ => unimplemented!("Unsupported server function method: {}", method),
     }
+}
+
+pub type AxumServerFn = ServerFnTraitObj<http::Request<Body>, http::Response<Body>>;
+
+pub fn collect_raw_server_fns() -> Vec<&'static AxumServerFn> {
+    inventory::iter::<AxumServerFn>().into_iter().collect()
 }
 
 /// A handler for Dioxus server functions. This will run the server function and return the result.

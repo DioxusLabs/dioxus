@@ -27,5 +27,20 @@ fn app() -> Element {
 
 #[server]
 async fn say_hi() -> Result<String, ServerFnError> {
-    Ok("DUAL PATCHING ACHIEVED!".to_string())
+    Ok("DUAL asdasd ACHIEVED?????!".to_string())
+}
+
+#[server]
+async fn say_bye() -> Result<String, ServerFnError> {
+    Ok("goodbye!".to_string())
+}
+
+#[server]
+async fn say_bye2() -> Result<String, ServerFnError> {
+    Ok("goodbye1!".to_string())
+}
+
+#[server]
+async fn say_bye3() -> Result<String, ServerFnError> {
+    Ok("goodbye2!".to_string())
 }

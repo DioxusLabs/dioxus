@@ -4,7 +4,6 @@ use tracing::{
 };
 
 pub use tracing;
-pub use tracing::{debug, error, info, trace, warn};
 
 /// Attempt to initialize the subscriber if it doesn't already exist, with default settings.
 ///

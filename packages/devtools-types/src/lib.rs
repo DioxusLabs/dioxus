@@ -45,10 +45,10 @@ pub enum ClientMsg {
 
 #[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq)]
 pub struct HotReloadMsg {
-    pub jump_table: Option<JumpTable>,
     pub templates: Vec<HotReloadTemplateWithLocation>,
     pub assets: Vec<PathBuf>,
     pub ms_elapsed: u64,
+    pub jump_table: Option<JumpTable>,
 }
 
 impl HotReloadMsg {
