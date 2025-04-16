@@ -6,6 +6,9 @@
   "[handlebars]": {
     "editor.formatOnSave": false
   },
+  "[javascript]": {
+    "editor.formatOnSave": false
+  },
   // "rust-analyzer.check.workspace": true,
   // "rust-analyzer.check.workspace": false,
   // "rust-analyzer.check.features": "all",
