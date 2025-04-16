@@ -34,13 +34,13 @@ pub(crate) use workspace::*;
 #[tokio::main]
 async fn main() {
     // The CLI uses dx as a rustcwrapper in some instances (like binary patching)
-    if rustcwrapper::is_rustc() {
+    if rustcwrapper::is_wrapping_rustc() {
         return rustcwrapper::run_rustc().await;
     }
 
     // If we're being ran as a linker (likely from ourselves), we want to act as a linker instead.
-    if let Some(link_action) = link::LinkAction::from_env() {
-        return link_action.run().await.unwrap();
+    if let Some(link_args) = link::LinkAction::from_env() {
+        return link_args.run().await.unwrap();
     }
 
     let args = TraceController::initialize();

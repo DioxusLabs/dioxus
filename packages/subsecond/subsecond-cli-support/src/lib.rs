@@ -1349,28 +1349,3 @@ fn make_stub_file(
     )
     .unwrap()
 }
-
-// /// Move all previous object files to "incremental-old" and all new object files to "incremental-new"
-// fn cache_incrementals(object_files: &[&String]) {
-//     let old = subsecond_folder().join("data").join("incremental-old");
-//     let new = subsecond_folder().join("data").join("incremental-new");
-
-//     // Remove the old incremental-old directory if it exists
-//     _ = std::fs::remove_dir_all(&old);
-
-//     // Rename incremental-new to incremental-old if it exists. Faster than moving all the files
-//     _ = std::fs::rename(&new, &old);
-
-//     // Create the new incremental-new directory to place the outputs in
-//     std::fs::create_dir_all(&new).unwrap();
-
-//     // Now drop in all the new object files
-//     for o in object_files.iter() {
-//         if !o.ends_with(".rcgu.o") {
-//             continue;
-//         }
-
-//         let path = PathBuf::from(o);
-//         std::fs::copy(&path, new.join(path.file_name().unwrap())).unwrap();
-//     }
-// }

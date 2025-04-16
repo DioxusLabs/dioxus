@@ -116,7 +116,7 @@ impl AppBuilder {
     ///   updates (e.g., `wait`, `finish_build`).
     /// - The build process is designed to be cancellable and restartable using methods like `abort_all`
     ///   or `rebuild`.
-    pub(crate) fn start(request: &BuildRequest) -> Result<Self> {
+    pub(crate) fn start(request: &BuildRequest, mode: BuildMode) -> Result<Self> {
         let (tx, rx) = futures_channel::mpsc::unbounded();
 
         Ok(Self {
@@ -127,8 +127,8 @@ impl AppBuilder {
                 let tx = tx.clone();
                 async move {
                     let ctx = BuildContext {
+                        mode,
                         tx: tx.clone(),
-                        mode: BuildMode::Fat,
                     };
                     request.verify_tooling(&ctx).await?;
                     request.prepare_build_dir()?;
@@ -274,7 +274,7 @@ impl AppBuilder {
                 tx: self.tx.clone(),
                 mode: BuildMode::Thin {
                     changed_files,
-                    direct_rustc: self.artifacts.as_ref().unwrap().direct_rustc.clone(),
+                    rustc_args: self.artifacts.as_ref().unwrap().direct_rustc.clone(),
                     aslr_reference: self.aslr_reference,
                 },
             };

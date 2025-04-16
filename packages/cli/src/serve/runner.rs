@@ -180,8 +180,13 @@ impl AppRunner {
             .then(|| get_available_port(devserver_bind_ip, None))
             .flatten();
 
-        let client = AppBuilder::start(&client).unwrap();
-        let server = server.map(|server| AppBuilder::start(&server).unwrap());
+        let build_mode = match args.hot_patch {
+            true => BuildMode::Fat,
+            false => BuildMode::Base,
+        };
+
+        let client = AppBuilder::start(&client, build_mode.clone()).unwrap();
+        let server = server.map(|server| AppBuilder::start(&server, build_mode).unwrap());
 
         tracing::debug!("Proxied port: {:?}", proxied_port);
 
@@ -465,41 +470,39 @@ impl AppRunner {
         devserver_ip: SocketAddr,
         fullstack_address: Option<SocketAddr>,
         displayed_address: Option<SocketAddr>,
+        devserver: &mut WebServer,
     ) -> Result<()> {
         // Add some cute logging
         let time_taken = artifacts
             .time_end
             .duration_since(artifacts.time_start)
             .unwrap();
-        if self.builds_opened == 0 {
-            tracing::info!(
-                "Build completed successfully in {:?}ms, launching app! 💫",
-                time_taken.as_millis()
-            );
-        } else {
-            tracing::info!("Build completed in {:?}ms", time_taken.as_millis());
-        }
 
         // Make sure to save artifacts...
         match artifacts.platform {
             Platform::Server => {
                 if let Some(server) = self.server.as_mut() {
                     server.artifacts = Some(artifacts.clone());
-                } else {
-                    tracing::warn!("Server build completed but no server runner was created");
                 }
             }
-            _ => {
-                self.client.artifacts = Some(artifacts.clone());
-            }
+            _ => self.client.artifacts = Some(artifacts.clone()),
         }
 
         let should_open = self.client.stage == BuildStage::Success
             && (self.server.as_ref().map(|s| s.stage == BuildStage::Success)).unwrap_or(true);
 
         if should_open {
+            if self.builds_opened == 0 {
+                tracing::info!(
+                    "Build completed successfully in {:?}ms, launching app! 💫",
+                    time_taken.as_millis()
+                );
+            } else {
+                tracing::info!("Build completed in {:?}ms", time_taken.as_millis());
+            }
+
             // Always open the server first after the client has been built
-            if let Some(server) = self.server.as_ref() {
+            if let Some(_server) = self.server.as_ref() {
                 self.open_server(devserver_ip, fullstack_address, displayed_address)
                     .await?;
             }
@@ -519,6 +522,12 @@ impl AppRunner {
                 .await?;
 
             self.builds_opened += 1;
+
+            // Give a second for the server to boot
+            tokio::time::sleep(Duration::from_millis(300)).await;
+
+            // Update the screen + devserver with the new handle info
+            devserver.send_reload_command().await
         }
 
         Ok(())

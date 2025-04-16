@@ -102,7 +102,7 @@ async fn serve_server(
 
     let listener = tokio::net::TcpListener::bind(address).await.unwrap();
 
-    tracing::info!("Listening on {address} with listener {listener:?}");
+    tracing::debug!("Listening on {address}");
 
     enum Msg {
         TcpStream(std::io::Result<(TcpStream, SocketAddr)>),
@@ -210,27 +210,11 @@ async fn serve_server(
                     .await
                     .unwrap_or_else(|err| match err {});
 
-                    // todo - this was taken from axum::serve but it seems like IncomingStream serves no purpose?
-                    #[derive(Debug)]
-                    pub struct IncomingStream_<'a> {
-                        tcp_stream: &'a TokioIo<TcpStream>,
-                        remote_addr: SocketAddr,
-                    }
-
                     let tower_service = make_service
-                        .call(IncomingStream_ {
-                            tcp_stream: &tcp_stream,
-                            remote_addr,
-                        })
+                        .call(())
                         .await
                         .unwrap_or_else(|err| match err {})
-                        .map_request(|req: Request<Incoming>| {
-                            let req = req.map(Body::new);
-
-                            tracing::info!("Handling request: {:?}", req);
-
-                            req
-                        });
+                        .map_request(|req: Request<Incoming>| req.map(Body::new));
 
                     // upgrades needed for websockets
                     let builder = HyperBuilder::new(TokioExecutor::new());

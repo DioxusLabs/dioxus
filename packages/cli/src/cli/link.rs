@@ -1,19 +1,36 @@
-use crate::{Platform, Result};
+use crate::Result;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use target_lexicon::Triple;
-use tokio::process::Command;
 
+/// `dx` can act as a linker in a few scenarios. Note that we don't *actually* implement the linker logic,
+/// instead just proxying to a specified linker (or not linking at all!).
+///
+/// This comes in two flavors:
+/// --------------------------
+/// - `BaseLink`: We are linking dependencies and want to dynamically select the linker from the environment.
+///               This is mostly implemented for Android where the linker is selected in part by the
+///               device connected over ADB which can not be determined by .cargo/Config.toml.
+///               We implemented this because previous setups like cargo mobile required a hard-coded
+///               linker path in your project which does not work in team-based setups.
+///
+/// - `NoLink`: We are not linking at all, and instead deferring our linking to the driving process,
+///             usually being `dx` itself. In this case, we are just writing the linker args to a file
+///             and then outputting a dummy object file to satisfy the linker. This is generally used
+///             by the binary patching engine since we need to actually do "real linker logic" like
+///             traversing object files and satisifying missing symbols. That process is *much* easier
+///             to do in the driving host procss when we have all the information available. Unfortuantely,
+///             rustc doesn't provide a "real" way of granularly stepping through the compile process
+///             so this is basically a hack.
+///
+/// We use "BaseLink" when a linker is specified, and "NoLink" when it is not. Both generate a resulting
+/// object file.
 #[derive(Debug, Serialize, Deserialize)]
-pub enum LinkAction {
-    BaseLink {
-        linker: PathBuf,
-        extra_flags: Vec<String>,
-    },
-    ThinLink {
-        save_link_args: PathBuf,
-        triple: Triple,
-    },
+pub struct LinkAction {
+    pub linker: Option<PathBuf>,
+    pub triple: Triple,
+    pub link_args_file: PathBuf,
+    pub link_err_file: PathBuf,
 }
 
 impl LinkAction {
@@ -39,117 +56,82 @@ impl LinkAction {
     pub(crate) async fn run(self) -> Result<()> {
         let args = std::env::args().collect::<Vec<String>>();
 
-        match self {
-            // Run the system linker but (maybe) keep any unused sections.
-            LinkAction::BaseLink {
-                linker,
-                extra_flags,
-            } => {
-                let mut cmd = std::process::Command::new(linker);
-                cmd.args(args.iter().skip(1));
-                cmd.args(extra_flags);
-                let res = cmd.output().expect("Failed to run android linker");
+        // Write the linker args to a file for the main process to read
+        // todo: we might need to encode these as escaped shell words in case newlines are passed
+        std::fs::write(self.link_args_file, args.join("\n"))?;
 
-                let err = String::from_utf8_lossy(&res.stderr);
-                std::fs::write(
-                    "/Users/jonkelley/Development/dioxus/packages/subsecond/data/link-err.txt",
-                    format!("err: {err}"),
-                )
-                .unwrap();
+        // If there's a linker specified, we use that. Otherwise, we write a dummy object file to satisfy
+        // any post-processing steps that rustc does.
+        match self.linker {
+            Some(linker) => {
+                let res = std::process::Command::new(linker)
+                    .args(args.iter().skip(1))
+                    .output()
+                    .expect("Failed to run android linker");
 
-                // Make sure we *don't* dead-strip the binary so every library symbol still exists.
-                //  This is required for thin linking to work correctly.
-                // let args = args.into_iter().skip(1).collect::<Vec<String>>();
-                // let res = Command::new(linker).args(args).output().await?;
-                // let err = String::from_utf8_lossy(&res.stderr);
-
-                // .filter(|arg| arg != "-Wl,-dead_strip" && !strip)
-
-                // this is ld64 only, we need --whole-archive for gnu/ld
-                // args.push("-Wl,-all_load".to_string());
-
-                // // Persist the cache of incremental files
-                // cache_incrementals(
-                //     &incremental_dir.join("old"),
-                //     &incremental_dir.join("new"),
-                //     args.iter()
-                //         .filter(|arg| arg.ends_with(".o"))
-                //         .collect::<Vec<&String>>()
-                //         .as_ref(),
-                // );
-
-                // Run ld with the args
+                if !res.stderr.is_empty() {
+                    _ = std::fs::write(
+                        self.link_err_file,
+                        String::from_utf8_lossy(&res.stderr).as_bytes(),
+                    )
+                    .unwrap();
+                }
             }
-
-            // Run the linker but without rlibs
-            LinkAction::ThinLink {
-                save_link_args,
-                triple,
-            } => {
-                // Write the linker args to a file for the main process to read
-                std::fs::write(save_link_args, args.join("\n"))?;
-
-                // Extract the out
+            None => {
+                // Extract the out path - we're going to write a dummy object file to satisfy the linker
                 let out = args.iter().position(|arg| arg == "-o").unwrap();
                 let out_file: PathBuf = args[out + 1].clone().into();
+
+                // This creates an object file that satisfies rust's use of llvm-objcopy
+                //
+                // I'd rather we *not* do this and instead generate a truly linked file (and then delete it) but
+                // this at least lets us delay linking until the host compiler is ready.
+                //
+                // This is because our host compiler is a stateful server and not a stateless linker.
+                //
+                // todo(jon): do we use Triple::host or the target triple? I think I ran into issues
+                // using the target triple, hence the use of "host" but it might not even matter?
+                let triple = Triple::host();
+                let format = match triple.binary_format {
+                    target_lexicon::BinaryFormat::Elf => object::BinaryFormat::Elf,
+                    target_lexicon::BinaryFormat::Coff => object::BinaryFormat::Coff,
+                    target_lexicon::BinaryFormat::Macho => object::BinaryFormat::MachO,
+                    target_lexicon::BinaryFormat::Wasm => object::BinaryFormat::Wasm,
+                    target_lexicon::BinaryFormat::Xcoff => object::BinaryFormat::Xcoff,
+                    target_lexicon::BinaryFormat::Unknown => todo!(),
+                    _ => todo!("Binary format not supported"),
+                };
+
+                let arch = match triple.architecture {
+                    target_lexicon::Architecture::Wasm32 => object::Architecture::Wasm32,
+                    target_lexicon::Architecture::Wasm64 => object::Architecture::Wasm64,
+                    target_lexicon::Architecture::X86_64 => object::Architecture::X86_64,
+                    target_lexicon::Architecture::Arm(_) => object::Architecture::Arm,
+                    target_lexicon::Architecture::Aarch64(_) => object::Architecture::Aarch64,
+                    target_lexicon::Architecture::LoongArch64 => object::Architecture::LoongArch64,
+                    target_lexicon::Architecture::Unknown => object::Architecture::Unknown,
+                    _ => todo!("Architecture not supported"),
+                };
+
+                let endian = match triple.endianness() {
+                    Ok(target_lexicon::Endianness::Little) => object::Endianness::Little,
+                    Ok(target_lexicon::Endianness::Big) => object::Endianness::Big,
+                    Err(_) => todo!("Endianness not supported"),
+                };
+
+                let bytes = object::write::Object::new(format, arch, endian)
+                    .write()
+                    .unwrap();
 
                 // Write a dummy object file to satisfy rust/linker since it'll run llvm-objcopy
                 // ... I wish it *didn't* do that but I can't tell how to disable the linker without
                 // using --emit=obj which is not exactly what we want since that will still pull in
                 // the dependencies.
                 std::fs::create_dir_all(out_file.parent().unwrap())?;
-                std::fs::write(out_file, make_dummy_object_file(triple))?;
+                std::fs::write(out_file, bytes)?;
             }
         }
 
         Ok(())
     }
-}
-
-/// This creates an object file that satisfies rust's use of llvm-objcopy
-///
-/// I'd rather we *not* do this and instead generate a truly linked file (and then delete it) but
-/// this at least lets us delay linking until the host compiler is ready.
-///
-/// This is because our host compiler is a stateful server and not a stateless linker.
-fn make_dummy_object_file(triple: Triple) -> Vec<u8> {
-    let triple = Triple::host();
-
-    let format = match triple.binary_format {
-        target_lexicon::BinaryFormat::Elf => object::BinaryFormat::Elf,
-        target_lexicon::BinaryFormat::Coff => object::BinaryFormat::Coff,
-        target_lexicon::BinaryFormat::Macho => object::BinaryFormat::MachO,
-        target_lexicon::BinaryFormat::Wasm => object::BinaryFormat::Wasm,
-        target_lexicon::BinaryFormat::Xcoff => object::BinaryFormat::Xcoff,
-        target_lexicon::BinaryFormat::Unknown => todo!(),
-        _ => todo!("Binary format not supported"),
-    };
-
-    let arch = match triple.architecture {
-        target_lexicon::Architecture::Wasm32 => object::Architecture::Wasm32,
-        target_lexicon::Architecture::Wasm64 => object::Architecture::Wasm64,
-        target_lexicon::Architecture::X86_64 => object::Architecture::X86_64,
-        target_lexicon::Architecture::Arm(_) => object::Architecture::Arm,
-        target_lexicon::Architecture::Aarch64(_) => object::Architecture::Aarch64,
-        target_lexicon::Architecture::LoongArch64 => object::Architecture::LoongArch64,
-        target_lexicon::Architecture::Unknown => object::Architecture::Unknown,
-        _ => todo!("Architecture not supported"),
-    };
-
-    let endian = match triple.endianness() {
-        Ok(target_lexicon::Endianness::Little) => object::Endianness::Little,
-        Ok(target_lexicon::Endianness::Big) => object::Endianness::Big,
-        Err(_) => todo!("Endianness not supported"),
-    };
-
-    object::write::Object::new(format, arch, endian)
-        .write()
-        .unwrap()
-}
-
-#[test]
-fn test_make_dummy_object_file() {
-    let triple: Triple = "wasm32-unknown-unknown".parse().unwrap();
-    let obj = make_dummy_object_file(triple);
-    assert!(!obj.is_empty());
 }

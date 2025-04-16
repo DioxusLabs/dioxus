@@ -145,20 +145,16 @@ pub(crate) async fn serve_all(args: ServeArgs) -> Result<()> {
                                 }
                             }
                             BuildMode::Base | BuildMode::Fat => {
-                                let handle = builder
+                                builder
                                     .open(
                                         bundle,
                                         devserver.devserver_address(),
                                         devserver.proxied_server_address(),
                                         devserver.displayed_address(),
+                                        &mut devserver,
                                     )
                                     .await
                                     .inspect_err(|e| tracing::error!("Failed to open app: {}", e));
-
-                                // Update the screen + devserver with the new handle info
-                                if handle.is_ok() {
-                                    devserver.send_reload_command().await
-                                }
                             }
                         }
                     }

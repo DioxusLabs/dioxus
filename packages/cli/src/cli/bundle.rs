@@ -1,4 +1,4 @@
-use crate::{AppBuilder, BuildArgs, BuildRequest, Platform};
+use crate::{AppBuilder, BuildArgs, BuildMode, BuildRequest, Platform};
 use anyhow::{anyhow, Context};
 use dioxus_cli_config::{server_ip, server_port};
 use futures_util::stream::FuturesUnordered;
@@ -78,7 +78,9 @@ impl Bundle {
 
         tracing::info!("Building app...");
 
-        let bundle = AppBuilder::start(&build)?.finish_build().await?;
+        let bundle = AppBuilder::start(&build, BuildMode::Base)?
+            .finish_build()
+            .await?;
 
         // If we're building for iOS, we need to bundle the iOS bundle
         if build.platform == Platform::Ios && self.package_types.is_none() {

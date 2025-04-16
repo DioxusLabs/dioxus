@@ -186,7 +186,7 @@ where
         mut self,
         context_providers: ContextProviders,
     ) -> Self {
-        tracing::info!("Registering server functions...");
+        tracing::trace!("Registering server functions...");
 
         for f in collect_raw_server_fns() {
             self = register_server_fn_on_router(f, self, context_providers.clone());

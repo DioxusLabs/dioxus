@@ -209,7 +209,6 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-pub use subsecond_macro::hot;
 pub use subsecond_types::JumpTable;
 
 // todo: if there's a reference held while we run our patch, this gets invalidated. should probably

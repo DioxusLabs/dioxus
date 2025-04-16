@@ -1,5 +1,5 @@
 use super::*;
-use crate::{AppBuilder, BuildArgs, BuildRequest, Platform, Result};
+use crate::{AppBuilder, BuildArgs, BuildMode, BuildRequest, Platform, Result};
 
 /// Run the project with the given arguments
 #[derive(Clone, Debug, Parser)]
@@ -15,7 +15,7 @@ impl RunArgs {
             .await
             .context("error building project")?;
 
-        let mut builder = AppBuilder::start(&build)?;
+        let mut builder = AppBuilder::start(&build, BuildMode::Base)?;
         let artifacts = builder.finish_build().await?;
 
         let devserver_ip = "127.0.0.1:8081".parse().unwrap();
