@@ -12,7 +12,7 @@ resolver = "2"
 
 [dependencies]
 # server functions
-server_fn = { version = "0.7.3", features = ["json", "url", "browser"], default-features = false }
+server_fn = { version = "0.8.0-rc1", features = ["browser"], default-features = false }
 dioxus_server_macro = { workspace = true }
 
 # axum

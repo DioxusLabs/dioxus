@@ -405,6 +405,10 @@ impl AppBuilder {
         //     envs.push((dioxus_cli_config::ASSET_ROOT_ENV, base_path.clone()));
         // }
 
+        if let Some(env_filter) = env::var_os("RUST_LOG").and_then(|e| e.into_string().ok()) {
+            envs.push(("RUST_LOG", env_filter));
+        }
+
         // Launch the server if we were given an address to start it on, and the build includes a server. After we
         // start the server, consume its stdout/stderr.
         if let Some(addr) = start_fullstack_on_address {

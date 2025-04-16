@@ -78,7 +78,8 @@ pub fn connect(endpoint: String, mut callback: impl FnMut(DevserverMsg) + Send +
                 aslr_reference: subsecond::aslr_reference() as _,
                 build_id: build_id(),
             })
-            .unwrap(),
+            .unwrap()
+            .into(),
         ));
 
         while let Ok(msg) = websocket.read() {

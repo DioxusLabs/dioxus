@@ -352,6 +352,7 @@ impl App {
             DevserverMsg::Shutdown => {
                 self.control_flow = ControlFlow::Exit;
             }
+            _ => {}
         }
     }
 

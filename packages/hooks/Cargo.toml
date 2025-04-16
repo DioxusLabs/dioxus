@@ -20,7 +20,7 @@ futures-channel = { workspace = true }
 tracing = { workspace = true }
 slab = { workspace = true }
 futures-util = { workspace = true}
-generational-box.workspace = true
+generational-box = { workspace = true }
 rustversion = { workspace = true }
 warnings = { workspace = true }
 
@@ -28,7 +28,7 @@ warnings = { workspace = true }
 futures-util = { workspace = true, default-features = false }
 dioxus-core = { workspace = true }
 dioxus = { workspace = true }
-web-sys = { version = "0.3.64", features = ["Document", "Window", "Element"] }
+web-sys = { workspace = true, features = ["Document", "Window", "Element"] }
 tokio = { workspace = true, features = ["full"] }
 reqwest = { workspace = true }
 

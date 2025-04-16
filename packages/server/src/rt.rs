@@ -230,8 +230,6 @@ async fn handle_server_fns_inner(
     additional_context: ContextProviders,
     req: Request<Body>,
 ) -> Response<axum::body::Body> {
-    use server_fn::middleware::Service;
-
     let (parts, body) = req.into_parts();
     let req = Request::from_parts(parts.clone(), body);
 
@@ -252,10 +250,10 @@ async fn handle_server_fns_inner(
 
     // this is taken from server_fn source...
     //
-    // server_fn::axum::get_server_fn_service
+    // [`server_fn::axum::get_server_fn_service`]
     let mut service = {
         let middleware = f.middleware();
-        let mut service = BoxedService::new(f.clone());
+        let mut service = f.clone().boxed();
         for middleware in middleware {
             service = middleware.layer(service);
         }
