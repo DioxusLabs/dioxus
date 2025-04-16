@@ -310,7 +310,10 @@ pub(crate) struct BuildRequest {
     pub(crate) features: Vec<String>,
 
     /// Extra arguments to pass to cargo
-    pub(crate) cargo_args: Vec<String>,
+    pub(crate) extra_cargo_args: Vec<String>,
+
+    /// Extra arguments to pass to rustc
+    pub(crate) extra_rustc_args: Vec<String>,
 
     /// Don't include the default features in the build
     pub(crate) no_default_features: bool,
@@ -572,7 +575,7 @@ impl BuildRequest {
             None
         };
 
-        // Set up some tempfiles so we can do some IPC between us and the linker (which is occasionally us!)
+        // Set up some tempfiles so we can do some IPC between us and the linker/rustc wrapper (which is occasionally us!)
         let link_args_file = Arc::new(
             NamedTempFile::new().context("Failed to create temporary file for linker args")?,
         );
@@ -600,7 +603,8 @@ impl BuildRequest {
             link_args_file,
             link_err_file,
             rustc_wrapper_args_file,
-            cargo_args: args.cargo_args.clone(),
+            extra_rustc_args: args.rustc_args.clone(),
+            extra_cargo_args: args.cargo_args.clone(),
             nightly: args.nightly,
             cargo_package: package,
             release: args.release,
@@ -623,7 +627,7 @@ impl BuildRequest {
         // Write the build artifacts to the bundle on the disk
         match ctx.mode {
             BuildMode::Thin { aslr_reference, .. } => {
-                self.write_patch(ctx, aslr_reference, artifacts.time_start)
+                self.write_patch(ctx, aslr_reference, &mut artifacts)
                     .await?;
             }
 
@@ -649,6 +653,10 @@ impl BuildRequest {
         Ok(artifacts)
     }
 
+    /// Run the cargo build by assembling the build command and executing it.
+    ///
+    /// This method needs to be very careful with processing output since errors being swallowed will
+    /// be very confusing to the user.
     async fn cargo_build(&self, ctx: &BuildContext) -> Result<BuildArtifacts> {
         let time_start = SystemTime::now();
 
@@ -696,13 +704,22 @@ impl BuildRequest {
 
             match message {
                 Message::BuildScriptExecuted(_) => units_compiled += 1,
+                Message::CompilerMessage(msg) => ctx.status_build_diagnostic(msg),
                 Message::TextLine(line) => {
+                    // Handle the case where we're getting lines directly from rustc.
+                    // These are in a different format than the normal cargo output, though I imagine
+                    // this parsing code is quite fragile/sensitive to changes in cargo, cargo_metadta, rustc, etc.
                     #[derive(Deserialize)]
                     struct RustcArtifact {
                         artifact: PathBuf,
                         emit: String,
                     }
 
+                    // These outputs look something like:
+                    //
+                    // { "artifact":"target/debug/deps/libdioxus_core-4f2a0b3c1e5f8b7c.rlib", "emit":"link" }
+                    //
+                    // There are other outputs like depinfo that we might be interested in in the future.
                     if let Ok(artifact) = serde_json::from_str::<RustcArtifact>(&line) {
                         if artifact.emit == "link" {
                             output_location = Some(artifact.artifact);
@@ -713,17 +730,21 @@ impl BuildRequest {
                     // instead of an "error" message. However, the following messages *also* tend to
                     // be the error message, and don't start with "error:". So we'll check if we've already
                     // emitted an error message and if so, we'll emit all following messages as errors too.
+                    //
+                    // todo: This can lead to some really ugly output though, so we might want to look
+                    // into a more reliable way to detect errors propagating out of the compiler. If
+                    // we always wrapped rustc, then we could store this data somewhere in a much more
+                    // reliable format.
                     if line.trim_start().starts_with("error:") {
                         emitting_error = true;
                     }
 
-                    if emitting_error {
-                        ctx.status_build_error(line);
-                    } else {
-                        ctx.status_build_message(line)
+                    // Note that previous text lines might have set emitting_error to true
+                    match emitting_error {
+                        true => ctx.status_build_error(line),
+                        false => ctx.status_build_message(line),
                     }
                 }
-                Message::CompilerMessage(msg) => ctx.status_build_diagnostic(msg),
                 Message::CompilerArtifact(artifact) => {
                     units_compiled += 1;
                     match artifact.executable {
@@ -735,6 +756,8 @@ impl BuildRequest {
                         ),
                     }
                 }
+                // todo: this can occasionally swallow errors, so we should figure out what exactly is going wrong
+                //       since that is a really bad user experience.
                 Message::BuildFinished(finished) => {
                     if !finished.success {
                         return Err(anyhow::anyhow!(
@@ -755,6 +778,7 @@ impl BuildRequest {
         let assets = self.collect_assets(&exe)?;
         let time_end = SystemTime::now();
         let mode = ctx.mode.clone();
+        let platform = self.platform;
         tracing::debug!("Build completed successfully - output location: {:?}", exe);
 
         // Accumulate the rustc args from the wrapper, if they exist and can be parsed.
@@ -766,7 +790,7 @@ impl BuildRequest {
         }
 
         Ok(BuildArtifacts {
-            platform: self.platform,
+            platform,
             exe,
             direct_rustc,
             time_start,
@@ -781,17 +805,15 @@ impl BuildRequest {
     /// This uses "known paths" that have stayed relatively stable during cargo's lifetime.
     /// One day this system might break and we might need to go back to using the linker approach.
     fn collect_assets(&self, exe: &Path) -> Result<AssetManifest> {
-        tracing::debug!("Collecting assets ...");
-
-        if self.skip_assets {
-            return Ok(AssetManifest::default());
-        }
+        tracing::debug!("Collecting assets from exe at {} ...", exe.display());
 
         // walk every file in the incremental cache dir, reading and inserting items into the manifest.
         let mut manifest = AssetManifest::default();
 
         // And then add from the exe directly, just in case it's LTO compiled and has no incremental cache
-        _ = manifest.add_from_object_path(exe);
+        if !self.skip_assets {
+            _ = manifest.add_from_object_path(exe);
+        }
 
         Ok(manifest)
     }
@@ -999,10 +1021,22 @@ impl BuildRequest {
         Ok(())
     }
 
-    /// libpatch-{time}.(so/dll/dylib) (next to the main exe)
+    /// Patches are stored in the same directory as the main executable, but with a name based on the
+    /// time the patch started compiling.
+    ///
+    /// - lib{name}-patch-{time}.(so/dll/dylib) (next to the main exe)
+    ///
+    /// Note that weirdly enough, the name of dylibs can actually matter. In some environments, libs
+    /// can override each other with symbol interposition.
+    ///
+    /// Also, on Android - and some Linux, we *need* to start the lib name with `lib` for the dynamic
+    /// loader to consider it a shared library.
+    ///
+    /// todo: the time format might actually be problematic if two platforms share the same build folder.
     pub(crate) fn patch_exe(&self, time_start: SystemTime) -> PathBuf {
         let path = self.main_exe().with_file_name(format!(
-            "libpatch-{}",
+            "lib{}-patch-{}",
+            self.executable_name(),
             time_start.duration_since(UNIX_EPOCH).unwrap().as_millis(),
         ));
 
@@ -1010,10 +1044,10 @@ impl BuildRequest {
             OperatingSystem::Darwin(_) => "dylib",
             OperatingSystem::MacOSX(_) => "dylib",
             OperatingSystem::IOS(_) => "dylib",
-            OperatingSystem::Unknown if self.platform == Platform::Web => "wasm",
             OperatingSystem::Windows => "dll",
             OperatingSystem::Linux => "so",
             OperatingSystem::Wasi => "wasm",
+            OperatingSystem::Unknown if self.platform == Platform::Web => "wasm",
             _ => "",
         };
 
@@ -1021,22 +1055,72 @@ impl BuildRequest {
     }
 
     /// Run our custom linker setup to generate a patch file in the right location
+    ///
+    /// This should be the only case where the cargo output is a "dummy" file and requires us to
+    /// manually do any linking.
+    ///
+    /// We also run some post processing steps here, like extracting out any new assets.
     async fn write_patch(
         &self,
         _ctx: &BuildContext,
         aslr_reference: Option<u64>,
-        time_start: SystemTime,
+        artifacts: &mut BuildArtifacts,
     ) -> Result<()> {
         tracing::debug!("Patching existing bundle");
 
+        let time_start = artifacts.time_start;
         let raw_args = std::fs::read_to_string(&self.link_args_file())
             .context("Failed to read link args from file")?;
-
         let args = raw_args.lines().collect::<Vec<_>>();
-
         let orig_exe = self.main_exe();
-        tracing::debug!("writing patch - orig_exe: {:?}", orig_exe);
 
+        // Extract out the incremental object files.
+        //
+        // This is sadly somewhat of a hack, but it might be a moderately reliable hack.
+        //
+        // When rustc links your project, it passes the args as how a linker would expect, but with
+        // a somehwat reliable ordering. These are all internal details to cargo/rustc, so we can't
+        // rely on them *too* much, but the *are* fundamental to how rust compiles your projects, and
+        // linker interfaces probably won't change drastically for another 40 years.
+        //
+        // We need to tear apart this command andonly pass the args that are relevant to our thin link.
+        // Mainly, we don't want any rlibs to be linked. Occasionally some libraries like objc_exception
+        // export a folder with their artifacts - unsure if we actually need to include them. Generally
+        // you can err on the side that most *libraries* don't need to be linked here since dlopen
+        // satisfies those symbols anyways.
+        //
+        // Many args are passed twice, too, which can be confusing, but generally don't have any real
+        // effect. Note that on macos/ios, there's a special macho header that *needs* to be set.
+        //
+        // ```
+        // cc
+        //     /dioxus/target/debug/subsecond-cli
+        //     /var/folders/zs/gvrfkj8x33d39cvw2p06yc700000gn/T/rustcAqQ4p2/symbols.o
+        //     /dioxus/target/subsecond-dev/deps/subsecond_harness-acfb69cb29ffb8fa.05stnb4bovskp7a00wyyf7l9s.rcgu.o
+        //     /dioxus/target/subsecond-dev/deps/subsecond_harness-acfb69cb29ffb8fa.08rgcutgrtj2mxoogjg3ufs0g.rcgu.o
+        //     /dioxus/target/subsecond-dev/deps/subsecond_harness-acfb69cb29ffb8fa.0941bd8fa2bydcv9hfmgzzne9.rcgu.o
+        //     /dioxus/target/subsecond-dev/deps/libbincode-c215feeb7886f81b.rlib
+        //     /dioxus/target/subsecond-dev/deps/libanyhow-e69ac15c094daba6.rlib
+        //     /dioxus/target/subsecond-dev/deps/libratatui-c3364579b86a1dfc.rlib
+        //     /.rustup/toolchains/stable-aarch64-apple-darwin/lib/rustlib/aarch64-apple-darwin/lib/libstd-019f0f6ae6e6562b.rlib
+        //     /.rustup/toolchains/stable-aarch64-apple-darwin/lib/rustlib/aarch64-apple-darwin/lib/libpanic_unwind-7387d38173a2eb37.rlib
+        //     /.rustup/toolchains/stable-aarch64-apple-darwin/lib/rustlib/aarch64-apple-darwin/lib/libobject-2b03cf6ece171d21.rlib
+        //     -framework AppKit
+        //     -lc
+        //     -framework Foundation
+        //     -framework Carbon
+        //     -lSystem
+        //     -framework CoreFoundation
+        //     -lobjc
+        //     -liconv
+        //     -lm
+        //     -arch arm64
+        //     -mmacosx-version-min=11.0.0
+        //     -L /dioxus/target/subsecond-dev/build/objc_exception-dc226cad0480ea65/out
+        //     -o /dioxus/target/subsecond-dev/deps/subsecond_harness-acfb69cb29ffb8fa
+        //     -nodefaultlibs
+        //     -Wl,-all_load
+        // ```
         let mut object_files = args
             .iter()
             .filter(|arg| arg.ends_with(".rcgu.o"))
@@ -1047,26 +1131,35 @@ impl BuildRequest {
         // Our wasm approach is quite specific to wasm. We don't need to resolve any missing symbols
         // there since wasm is relocatable, but there is considerable pre and post processing work to get it
         // working.
+        //
+        // On non-wasm platforms, we generate a special shim object file which converts symbols from
+        // fat binary into direct addresses from the running process.
+        //
+        // todo: don't require the aslr reference and just patch the got when loading.
+        //
+        // Requiring the ASLR offset here is necessary but unfortunately might be flakey in practice.
+        // Android apps can take a long time to open, and a hot patch might've been issued in the interim,
+        // making this hotpatch a failure.
         if self.platform != Platform::Web {
-            let resolved_patch_bytes = subsecond_cli_support::resolve_undefined(
+            let stub_bytes = subsecond_cli_support::resolve_undefined(
                 &orig_exe,
                 &object_files,
                 &self.triple,
                 aslr_reference.context("ASLR reference not found - is the client connected?")?,
             )
             .expect("failed to resolve patch symbols");
-            let patch_file = self.main_exe().with_file_name("patch-syms.o");
-            std::fs::write(&patch_file, resolved_patch_bytes)?;
+
+            // Currently we're dropping stub.o in the exe dir, but should probably just move to a tempfile?
+            let patch_file = self.main_exe().with_file_name("stub.o");
+            std::fs::write(&patch_file, stub_bytes)?;
             object_files.push(patch_file);
         }
 
         let linker = match self.platform {
             Platform::Web => self.workspace.wasm_ld(),
-            Platform::Android => {
-                let tools =
-                    crate::build::android_tools().context("Could not determine android tools")?;
-                tools.android_cc(&self.triple)
-            }
+            Platform::Android => android_tools()
+                .context("Could not determine android tools")?
+                .android_cc(&self.triple),
 
             // Note that I think rust uses rust-lld now, so we need to respect its argument profile
             // https://blog.rust-lang.org/2024/05/17/enabling-rust-lld-on-linux.html
@@ -1074,10 +1167,8 @@ impl BuildRequest {
             | Platform::Ios
             | Platform::Linux
             | Platform::Server
-            | Platform::Liveview => PathBuf::from("cc"),
-
-            // I think this is right?? does windows use cc?
-            Platform::Windows => PathBuf::from("cc"),
+            | Platform::Liveview
+            | Platform::Windows => PathBuf::from("cc"),
         };
 
         let thin_args = self.thin_link_args(&args)?;
@@ -1263,7 +1354,7 @@ impl BuildRequest {
                 cmd.env_remove("RUSTC_WORKSPACE_WRAPPER");
                 cmd.env_remove("RUSTC_WRAPPER");
                 cmd.env_remove(DX_RUSTC_WRAPPER_ENV_VAR);
-                cmd.envs(self.env_vars(ctx)?);
+                cmd.envs(self.cargo_build_env_vars(ctx)?);
                 cmd.arg(format!(
                     "-Clinker={}",
                     dunce::canonicalize(std::env::current_exe().unwrap())
@@ -1290,8 +1381,8 @@ impl BuildRequest {
                     .current_dir(self.crate_dir())
                     .arg("--message-format")
                     .arg("json-diagnostic-rendered-ansi")
-                    .args(self.build_arguments(ctx))
-                    .envs(self.env_vars(ctx)?);
+                    .args(self.cargo_build_arguments(ctx))
+                    .envs(self.cargo_build_env_vars(ctx)?);
 
                 if ctx.mode == BuildMode::Fat {
                     cmd.env(
@@ -1316,7 +1407,10 @@ impl BuildRequest {
     }
 
     /// Create a list of arguments for cargo builds
-    fn build_arguments(&self, ctx: &BuildContext) -> Vec<String> {
+    ///
+    /// We always use `cargo rustc` *or* `rustc` directly. This means we can pass extra flags like
+    /// `-C` arguments directly to the compiler.a
+    fn cargo_build_arguments(&self, ctx: &BuildContext) -> Vec<String> {
         let mut cargo_args = Vec::new();
 
         // Add required profile flags. --release overrides any custom profiles.
@@ -1343,28 +1437,28 @@ impl BuildRequest {
         cargo_args.push(String::from("-p"));
         cargo_args.push(self.cargo_package.clone());
 
+        // Set the executable
         match self.executable_type() {
             TargetKind::Bin => cargo_args.push("--bin".to_string()),
             TargetKind::Lib => cargo_args.push("--lib".to_string()),
             TargetKind::Example => cargo_args.push("--example".to_string()),
             _ => {}
         };
-
         cargo_args.push(self.executable_name().to_string());
 
-        cargo_args.extend(self.cargo_args.clone());
-
+        // Merge in extra args. Order shouldn't really matter.
+        cargo_args.extend(self.extra_cargo_args.clone());
         cargo_args.push("--".to_string());
+        cargo_args.extend(self.extra_rustc_args.clone());
 
-        // the bundle splitter needs relocation data
-        // we'll trim these out if we don't need them during the bundling process
-        // todo(jon): for wasm binary patching we might want to leave these on all the time.
+        // The bundle splitter needs relocation data to create a call-graph.
+        // This will automatically be erased by wasm-opt during the optimization step.
         if self.platform == Platform::Web && self.wasm_split {
             cargo_args.push("-Clink-args=--emit-relocs".to_string());
         }
 
         // dx *always* links android and thin builds
-        if self.platform == Platform::Android || matches!(ctx.mode, BuildMode::Thin { .. }) {
+        if self.custom_linker.is_some() || matches!(ctx.mode, BuildMode::Thin { .. }) {
             cargo_args.push(format!(
                 "-Clinker={}",
                 dunce::canonicalize(std::env::current_exe().unwrap())
@@ -1373,65 +1467,91 @@ impl BuildRequest {
             ));
         }
 
-        match ctx.mode {
-            BuildMode::Base => {}
-            BuildMode::Thin { .. } | BuildMode::Fat => {
-                // This prevents rust from passing -dead_strip to the linker
-                // todo: don't save temps here unless we become the linker for the base app
-                cargo_args.extend_from_slice(&[
-                    "-Csave-temps=true".to_string(),
-                    "-Clink-dead-code".to_string(),
-                ]);
+        // Our fancy hot-patching engine needs a lot of customization to work properly.
+        //
+        // These args are mostly intended to be passed when *fat* linking but are generally fine to
+        // pass for both fat and thin linking.
+        //
+        // We need save-temps and no-dead-strip in both cases though. When we run `cargo rustc` with
+        // these args, they will be captured and re-ran for the fast compiles in the future, so whatever
+        // we set here will be set for all future hot patches too.
+        if matches!(ctx.mode, BuildMode::Thin { .. } | BuildMode::Fat) {
+            // rustc gives us some portable flags required:
+            // - link-dead-code: prevents rust from passing -dead_strip to the linker since that's the default.
+            // - save-temps=true: keeps the incremental object files around, which we need for manually linking.
+            cargo_args.extend_from_slice(&[
+                "-Csave-temps=true".to_string(),
+                "-Clink-dead-code".to_string(),
+            ]);
 
-                match self.platform {
-                    // if macos/ios, -Wl,-all_load is required for the linker to work correctly
-                    // macos uses ld64 but through the `cc` interface.a
-                    Platform::MacOS | Platform::Ios => {
-                        cargo_args.push("-Clink-args=-Wl,-all_load".to_string());
-                    }
+            // We need to set some extra args that ensure all symbols make it into the final output
+            // and that the linker doesn't strip them out.
+            //
+            // This basically amounts of -all_load or --whole-archive, depending on the linker.
+            // We just assume an ld-like interface on macos and a gnu-ld interface elsewhere.
+            match self.triple.operating_system {
+                // macOS/iOS use ld64 but through the `cc` interface.
+                OperatingSystem::Darwin(_) | OperatingSystem::MacOSX(_) => {
+                    cargo_args.push("-Clink-args=-Wl,-all_load".to_string());
+                }
 
-                    Platform::Android => {
-                        cargo_args.push("-Clink-args=-Wl,--whole-archive".to_string());
-                    }
+                // Linux and Android fit under this umbrella, both with the same clang-like entrypoint
+                // and the gnu-ld interface.
+                OperatingSystem::Linux => {
+                    cargo_args.push("-Clink-args=-Wl,--whole-archive".to_string());
+                }
 
-                    // if linux -Wl,--whole-archive is required for the linker to work correctly
-                    Platform::Linux => {
-                        cargo_args.push("-Clink-args=-Wl,--whole-archive".to_string());
-                    }
+                // If windows -Wl,--whole-archive is required since it follows gnu-ld convention.
+                // There might be other flags on windows - we haven't tested windows thoroughly.
+                //
+                // https://learn.microsoft.com/en-us/cpp/build/reference/wholearchive-include-all-library-object-files?view=msvc-170
+                OperatingSystem::Windows => {
+                    cargo_args.push("-Clink-args=-Wl,--whole-archive".to_string());
+                }
 
-                    // if windows -Wl,--whole-archive is required for the linker to work correctly
-                    // https://learn.microsoft.com/en-us/cpp/build/reference/wholearchive-include-all-library-object-files?view=msvc-170
-                    Platform::Windows => {
-                        cargo_args.push("-Clink-args=-Wl,--whole-archive".to_string());
-                    }
+                // if web, -Wl,--whole-archive is required since it follows gnu-ld convention.
+                //
+                // We also use --no-gc-sections and --export-table and --export-memory  to push
+                // said symbols into the export table.
+                //
+                // We use --emit-relocs to build up a solid call graph.
+                //
+                // rust uses its own wasm-ld linker which can be found here (it's just gcc-ld with a `-target wasm` flag):
+                // - ~/.rustup/toolchains/stable-aarch64-apple-darwin/lib/rustlib/aarch64-apple-darwin/bin/gcc-ld
+                // - ~/.rustup/toolchains/stable-aarch64-apple-darwin/lib/rustlib/aarch64-apple-darwin/bin/gcc-ld/wasm-ld
+                //
+                // Note that we can't use --export-all, unfortunately, since some symbols are internal
+                // to wasm-bindgen and exporting them causes the JS generation to fail.
+                //
+                // We are basically replicating what emscripten does here with its dynamic linking
+                // approach where the MAIN_MODULE is very "fat" and exports the necessary arguments
+                // for the side modules to be linked in. This guide is really helpful:
+                //
+                // https://github.com/WebAssembly/tool-conventions/blob/main/DynamicLinking.md
+                //
+                // The trickiest one here is -Crelocation-model=pic, which forces data symbols
+                // into a GOT, making it possible to import them from the main module.
+                //
+                // I think we can make relocation-model=pic work for non-wasm platforms, enabling
+                // fully relocatable modules with no host coordination in lieu of sending out
+                // the aslr slide at runtime.
+                OperatingSystem::Wasi | OperatingSystem::Unknown
+                    if self.platform == Platform::Web =>
+                {
+                    cargo_args.push("-Clink-arg=--no-gc-sections".into());
+                    cargo_args.push("-Clink-arg=--growable-table".into());
+                    cargo_args.push("-Clink-arg=--whole-archive".into());
+                    cargo_args.push("-Clink-arg=--export-table".into());
+                    cargo_args.push("-Clink-arg=--export-memory".into());
+                    cargo_args.push("-Clink-arg=--emit-relocs".into());
+                    cargo_args.push("-Clink-arg=--export=__stack_pointer".into());
+                    cargo_args.push("-Clink-arg=--export=__heap_base".into());
+                    cargo_args.push("-Clink-arg=--export=__data_end".into());
+                    cargo_args.push("-Crelocation-model=pic".into());
+                }
 
-                    // if web, -Wl,--whole-archive is required for the linker to work correctly.
-                    // We also use --no-gc-sections and --export-table and --export-memory  to push
-                    // said symbols into the export table.
-                    //
-                    // We use --emit-relocs but scrub those before they make it into the final output.
-                    // This is designed for us to build a solid call graph.
-                    //
-                    // rust uses its own wasm-ld linker which can be found here (it's just gcc-ld with a -target):
-                    // /Users/jonkelley/.rustup/toolchains/stable-aarch64-apple-darwin/lib/rustlib/aarch64-apple-darwin/bin/gcc-ld
-                    // /Users/jonkelley/.rustup/toolchains/stable-aarch64-apple-darwin/lib/rustlib/aarch64-apple-darwin/bin/gcc-ld/wasm-ld
-                    //
-                    // export all should place things like env.memory into the export table so we can access them
-                    // when loading the patches
-                    Platform::Web => {
-                        cargo_args.push("-Clink-arg=--no-gc-sections".into());
-                        cargo_args.push("-Clink-arg=--growable-table".into());
-                        cargo_args.push("-Clink-arg=--whole-archive".into());
-                        cargo_args.push("-Clink-arg=--export-table".into());
-                        cargo_args.push("-Clink-arg=--export-memory".into());
-                        cargo_args.push("-Clink-arg=--emit-relocs".into());
-                        cargo_args.push("-Clink-arg=--export=__stack_pointer".into());
-                        cargo_args.push("-Clink-arg=--export=__heap_base".into());
-                        cargo_args.push("-Clink-arg=--export=__data_end".into());
-                        cargo_args.push("-Crelocation-model=pic".into());
-                    }
-
-                    _ => {}
+                _ => {
+                    tracing::error!("Thin linking is not supported on this platform - hot patching might not work properly.");
                 }
             }
         }
@@ -1439,56 +1559,7 @@ impl BuildRequest {
         cargo_args
     }
 
-    /// Try to get the unit graph for the crate. This is a nightly only feature which may not be available with the current version of rustc the user has installed.
-    async fn get_unit_count(&self, ctx: &BuildContext) -> crate::Result<usize> {
-        #[derive(Debug, Deserialize)]
-        struct UnitGraph {
-            units: Vec<serde_json::Value>,
-        }
-
-        let output = tokio::process::Command::new("cargo")
-            .arg("+nightly")
-            .arg("build")
-            .arg("--unit-graph")
-            .arg("-Z")
-            .arg("unstable-options")
-            .args(self.build_arguments(ctx))
-            .envs(self.env_vars(ctx)?)
-            .output()
-            .await?;
-
-        if !output.status.success() {
-            return Err(anyhow::anyhow!("Failed to get unit count").into());
-        }
-
-        let output_text = String::from_utf8(output.stdout).context("Failed to get unit count")?;
-        let graph: UnitGraph =
-            serde_json::from_str(&output_text).context("Failed to get unit count")?;
-
-        Ok(graph.units.len())
-    }
-
-    /// Get an estimate of the number of units in the crate. If nightly rustc is not available, this will return an estimate of the number of units in the crate based on cargo metadata.
-    /// TODO: always use https://doc.rust-lang.org/nightly/cargo/reference/unstable.html#unit-graph once it is stable
-    async fn get_unit_count_estimate(&self, ctx: &BuildContext) -> usize {
-        // Try to get it from nightly
-        if let Ok(count) = self.get_unit_count(ctx).await {
-            return count;
-        }
-
-        // Otherwise, use cargo metadata
-        let units = self
-            .workspace
-            .krates
-            .krates_filtered(krates::DepKind::Dev)
-            .iter()
-            .map(|k| k.targets.len())
-            .sum::<usize>();
-
-        (units as f64 / 3.5) as usize
-    }
-
-    fn env_vars(&self, ctx: &BuildContext) -> Result<Vec<(&str, String)>> {
+    fn cargo_build_env_vars(&self, ctx: &BuildContext) -> Result<Vec<(&str, String)>> {
         let mut env_vars = vec![];
 
         // Make sure to set all the crazy android flags. Cross-compiling is hard, man.
@@ -1497,9 +1568,7 @@ impl BuildRequest {
         };
 
         // If we're either zero-linking or using a custom linker, make `dx` itself do the linking.
-        if matches!(ctx.mode, BuildMode::Fat | BuildMode::Thin { .. })
-            | self.custom_linker.is_some()
-        {
+        if self.custom_linker.is_some() || matches!(ctx.mode, BuildMode::Thin { .. }) {
             env_vars.push((
                 LinkAction::ENV_VAR_NAME,
                 LinkAction {
@@ -1533,7 +1602,7 @@ impl BuildRequest {
         env_vars: &mut Vec<(&str, String)>,
         rustf_flags: bool,
     ) -> Result<()> {
-        let tools = crate::build::android_tools().context("Could not determine android tools")?;
+        let tools = android_tools().context("Could not determine android tools")?;
         let linker = tools.android_cc(&self.triple);
         let min_sdk_version = tools.min_sdk_version();
         let ar_path = tools.ar_path();
@@ -1608,6 +1677,60 @@ impl BuildRequest {
         // env_vars.push(("PATH", extended_path));
 
         Ok(())
+    }
+
+    /// Get an estimate of the number of units in the crate. If nightly rustc is not available, this
+    /// will return an estimate of the number of units in the crate based on cargo metadata.
+    ///
+    /// TODO: always use https://doc.rust-lang.org/nightly/cargo/reference/unstable.html#unit-graph once it is stable
+    async fn get_unit_count_estimate(&self, ctx: &BuildContext) -> usize {
+        // Try to get it from nightly
+        if let Ok(count) = self.get_unit_count(ctx).await {
+            return count;
+        }
+
+        // Otherwise, use cargo metadata
+        let units = self
+            .workspace
+            .krates
+            .krates_filtered(krates::DepKind::Dev)
+            .iter()
+            .map(|k| k.targets.len())
+            .sum::<usize>();
+
+        (units as f64 / 3.5) as usize
+    }
+
+    /// Try to get the unit graph for the crate. This is a nightly only feature which may not be
+    /// available with the current version of rustc the user has installed.
+    ///
+    /// It also might not be super reliable - I think in practice it occasionally returns 2x the units.
+    async fn get_unit_count(&self, ctx: &BuildContext) -> crate::Result<usize> {
+        #[derive(Debug, Deserialize)]
+        struct UnitGraph {
+            units: Vec<serde_json::Value>,
+        }
+
+        let output = tokio::process::Command::new("cargo")
+            .arg("+nightly")
+            .arg("build")
+            .arg("--unit-graph")
+            .arg("-Z")
+            .arg("unstable-options")
+            .args(self.cargo_build_arguments(ctx))
+            .envs(self.cargo_build_env_vars(ctx)?)
+            .output()
+            .await?;
+
+        if !output.status.success() {
+            return Err(anyhow::anyhow!("Failed to get unit count").into());
+        }
+
+        let output_text = String::from_utf8(output.stdout).context("Failed to get unit count")?;
+        let graph: UnitGraph =
+            serde_json::from_str(&output_text).context("Failed to get unit count")?;
+
+        Ok(graph.units.len())
     }
 
     pub(crate) fn all_target_features(&self) -> Vec<String> {
@@ -2988,7 +3111,7 @@ impl BuildRequest {
     /// will do its best to fill in the missing bits by exploring the sdk structure
     /// IE will attempt to use the Java installed from android studio if possible.
     async fn verify_android_tooling(&self) -> Result<()> {
-        let android = crate::build::android_tools().context("Android not installed properly. Please set the `ANDROID_NDK_HOME` environment variable to the root of your NDK installation.")?;
+        let android = android_tools().context("Android not installed properly. Please set the `ANDROID_NDK_HOME` environment variable to the root of your NDK installation.")?;
 
         let linker = android.android_cc(&self.triple);
 

@@ -1,5 +1,5 @@
 //! Report progress about the build to the user. We use channels to report progress back to the CLI.
-use crate::{BuildArtifacts, BuildRequest, BuildStage, Error, Platform, TraceSrc};
+use crate::{BuildArtifacts, BuildStage, Error, TraceSrc};
 use cargo_metadata::CompilerMessage;
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use std::{path::PathBuf, process::ExitStatus};
@@ -9,20 +9,22 @@ use super::BuildMode;
 /// The context of the build process. While the BuildRequest is a "plan" for the build, the BuildContext
 /// provides some dynamic configuration that is only known at runtime. For example, the Progress channel
 /// and the BuildMode can change while serving.
+///
+/// The structure of this is roughly taken from cargo itself which uses a similar pattern.
 #[derive(Debug, Clone)]
 pub struct BuildContext {
     pub tx: ProgressTx,
     pub mode: BuildMode,
 }
 
-pub(crate) type ProgressTx = UnboundedSender<BuildUpdate>;
-pub(crate) type ProgressRx = UnboundedReceiver<BuildUpdate>;
+pub type ProgressTx = UnboundedSender<BuildUpdate>;
+pub type ProgressRx = UnboundedReceiver<BuildUpdate>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BuildId(pub usize);
 
 #[allow(clippy::large_enum_variant)]
-pub(crate) enum BuildUpdate {
+pub enum BuildUpdate {
     Progress {
         stage: BuildStage,
     },
@@ -74,7 +76,6 @@ impl BuildContext {
     }
 
     pub(crate) fn status_start_bundle(&self) {
-        tracing::debug!("Assembling app bundle");
         _ = self.tx.unbounded_send(BuildUpdate::Progress {
             stage: BuildStage::Bundling {},
         });

@@ -56,12 +56,24 @@ pub(crate) struct BuildArgs {
     #[clap(long)]
     pub(crate) target: Option<Triple>,
 
-    // todo -- make a subcommand called "--" that takes all the remaining args
-    /// Extra arguments passed to `rustc`
+    /// Extra arguments passed to `cargo`
     ///
-    /// cargo rustc -- -Clinker
+    /// To see a list of args, run `cargo rustc --help`
+    ///
+    /// This can include stuff like, "--locked", "--frozen", etc. Note that `dx` sets many of these
+    /// args directly from other args in this command.
     #[clap(value_delimiter = ',')]
     pub(crate) cargo_args: Vec<String>,
+
+    /// Extra arguments passed to `rustc`. This can be used to customize the linker, or other flags.
+    ///
+    /// For example, specifign `dx build --rustc-args "-Clink-arg=-Wl,-blah"` will pass "-Clink-arg=-Wl,-blah"
+    /// to the underlying the `cargo rustc` command:
+    ///
+    /// cargo rustc -- -Clink-arg=-Wl,-blah
+    ///
+    #[clap(value_delimiter = ' ')]
+    pub(crate) rustc_args: Vec<String>,
 
     /// This flag only applies to fullstack builds. By default fullstack builds will run the server and client builds in parallel. This flag will force the build to run the server build first, then the client build. [default: false]
     #[clap(long)]
