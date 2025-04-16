@@ -1,8 +1,9 @@
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, path::PathBuf};
-
-mod nohasher;
-pub use nohasher::AddressMap;
+use std::{
+    collections::HashMap,
+    hash::{BuildHasherDefault, Hasher},
+    path::PathBuf,
+};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct JumpTable {
@@ -43,4 +44,49 @@ pub struct JumpTable {
     /// The amount of ifuncs this will register. This is used by WASM to know how much space to allocate
     /// for the ifuncs in the ifunc table
     pub ifunc_count: u64,
+}
+
+/// An address to address hashmap that does not hash addresses since addresses are by definition unique.
+pub type AddressMap = HashMap<u64, u64, BuildAddressHasher>;
+pub type BuildAddressHasher = BuildHasherDefault<AddressHasher>;
+
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct AddressHasher(u64);
+impl Hasher for AddressHasher {
+    fn write(&mut self, _: &[u8]) {
+        panic!("Invalid use of NoHashHasher")
+    }
+    fn write_u8(&mut self, n: u8) {
+        self.0 = u64::from(n)
+    }
+    fn write_u16(&mut self, n: u16) {
+        self.0 = u64::from(n)
+    }
+    fn write_u32(&mut self, n: u32) {
+        self.0 = u64::from(n)
+    }
+    fn write_u64(&mut self, n: u64) {
+        self.0 = n
+    }
+    fn write_usize(&mut self, n: usize) {
+        self.0 = n as u64
+    }
+    fn write_i8(&mut self, n: i8) {
+        self.0 = n as u64
+    }
+    fn write_i16(&mut self, n: i16) {
+        self.0 = n as u64
+    }
+    fn write_i32(&mut self, n: i32) {
+        self.0 = n as u64
+    }
+    fn write_i64(&mut self, n: i64) {
+        self.0 = n as u64
+    }
+    fn write_isize(&mut self, n: isize) {
+        self.0 = n as u64
+    }
+    fn finish(&self) -> u64 {
+        self.0
+    }
 }
