@@ -11,6 +11,9 @@ pub enum DevserverMsg {
     /// This includes all the templates/literals/assets/binary patches that have changed in one shot
     HotReload(HotReloadMsg),
 
+    /// Starting a hotpatch
+    HotPatchStart,
+
     /// The devserver is starting a full rebuild.
     FullReloadStart,
 

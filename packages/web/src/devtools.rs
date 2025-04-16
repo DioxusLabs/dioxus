@@ -83,16 +83,24 @@ fn make_ws(
 
                 // The devserver is telling us that it started a full rebuild. This does not mean that it is ready.
                 Ok(DevserverMsg::FullReloadStart) => show_toast(
-                    runtime_.clone(),
                     "Your app is being rebuilt.",
                     "A non-hot-reloadable change occurred and we must rebuild.",
                     ToastLevel::Info,
                     TOAST_TIMEOUT_LONG,
                     false,
                 ),
+
+                // The devserver is telling us that it started a full rebuild. This does not mean that it is ready.
+                Ok(DevserverMsg::HotPatchStart) => show_toast(
+                    "Hot-patching app...",
+                    "Rust code changed and we are hot-patching.",
+                    ToastLevel::Info,
+                    TOAST_TIMEOUT_LONG,
+                    false,
+                ),
+
                 // The devserver is telling us that the full rebuild failed.
                 Ok(DevserverMsg::FullReloadFailed) => show_toast(
-                    runtime_.clone(),
                     "Oops! The build failed.",
                     "We tried to rebuild your app, but something went wrong.",
                     ToastLevel::Error,
@@ -103,7 +111,6 @@ fn make_ws(
                 // The devserver is telling us to reload the whole page
                 Ok(DevserverMsg::FullReloadCommand) => {
                     show_toast(
-                        runtime_.clone(),
                         "Successfully rebuilt.",
                         "Your app was rebuilt successfully and without error.",
                         ToastLevel::Success,
@@ -116,6 +123,8 @@ fn make_ws(
                 Err(e) => web_sys::console::error_1(
                     &format!("Error parsing devserver message: {}", e).into(),
                 ),
+
+                _ => {}
             }
         })
         .into_js_value()
@@ -192,7 +201,7 @@ fn make_ws(
 }
 
 /// Represents what color the toast should have.
-enum ToastLevel {
+pub enum ToastLevel {
     /// Green
     Success,
     /// Blue
@@ -211,9 +220,18 @@ impl Display for ToastLevel {
     }
 }
 
+pub fn close_toast() {
+    js_sys::eval(
+        r#"
+            if (typeof closeDXToast !== "undefined") {
+                window.closeDXToast();
+            }
+        "#,
+    );
+}
+
 /// Displays a toast to the developer.
-fn show_toast(
-    runtime: Rc<Runtime>,
+pub fn show_toast(
     header_text: &str,
     message: &str,
     level: ToastLevel,
@@ -227,22 +245,15 @@ fn show_toast(
         false => "showDXToast",
     };
 
-    // #[wasm_bindgen::prelude::wasm_bindgen(inline_js = r#"
-    //     console.log("hello");
-    // "#)]
-    // pub fn show_test() {}
-
     // Create the guard before running eval which uses the global runtime context
-    let _guard = RuntimeGuard::new(runtime);
-    ScopeId::ROOT.in_runtime(|| {
-        eval(&format!(
-            r#"
+
+    js_sys::eval(&format!(
+        r#"
             if (typeof {js_fn_name} !== "undefined") {{
-                {js_fn_name}("{header_text}", "{message}", "{level}", {as_ms});
+                window.{js_fn_name}("{header_text}", "{message}", "{level}", {as_ms});
             }}
             "#,
-        ));
-    });
+    ));
 }
 
 /// Force a hotreload of the assets on this page by walking them and changing their URLs to include

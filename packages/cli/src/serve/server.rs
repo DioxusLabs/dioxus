@@ -303,6 +303,12 @@ impl WebServer {
         self.send_devserver_message_to_all(msg).await;
     }
 
+    /// Tells all clients that a hot patch has started.
+    pub(crate) async fn send_patch_start(&mut self) {
+        self.send_devserver_message_to_all(DevserverMsg::HotPatchStart)
+            .await;
+    }
+
     /// Tells all clients that a full rebuild has started.
     pub(crate) async fn send_reload_start(&mut self) {
         self.send_devserver_message_to_all(DevserverMsg::FullReloadStart)

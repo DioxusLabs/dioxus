@@ -206,6 +206,8 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
             if !hr_msg.assets.is_empty() {
                 crate::devtools::invalidate_browser_asset_cache();
             }
+
+            devtools::close_toast();
         }
 
         #[cfg(feature = "hydrate")]

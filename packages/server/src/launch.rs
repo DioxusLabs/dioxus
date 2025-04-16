@@ -188,6 +188,7 @@ async fn serve_server(
                     DevserverMsg::FullReloadFailed => {}
                     DevserverMsg::FullReloadCommand => {}
                     DevserverMsg::Shutdown => {}
+                    _ => {}
                 }
             }
             Msg::TcpStream(Err(_)) => {}

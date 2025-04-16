@@ -340,7 +340,7 @@ pub enum BuildMode {
     Thin {
         direct_rustc: RustcArgs,
         changed_files: Vec<PathBuf>,
-        aslr_reference: u64,
+        aslr_reference: Option<u64>,
     },
 }
 
@@ -995,7 +995,7 @@ impl BuildRequest {
     async fn write_patch(
         &self,
         ctx: &BuildContext,
-        aslr_reference: u64,
+        aslr_reference: Option<u64>,
         time_start: SystemTime,
     ) -> Result<()> {
         tracing::debug!("Patching existing bundle");
@@ -1020,7 +1020,7 @@ impl BuildRequest {
                 &orig_exe,
                 &object_files,
                 &self.triple,
-                aslr_reference,
+                aslr_reference.context("ASLR reference not found - is the client connected?")?,
             )
             .expect("failed to resolve patch symbols");
             let patch_file = self.main_exe().with_file_name("patch-syms.o");
@@ -1048,7 +1048,7 @@ impl BuildRequest {
             Platform::Windows => PathBuf::from("cc"),
         };
 
-        let thin_args = self.thin_link_args(&args, aslr_reference)?;
+        let thin_args = self.thin_link_args(&args)?;
 
         // let mut env_vars = vec![];
         // self.build_android_env(&mut env_vars, false)?;
@@ -1096,7 +1096,7 @@ impl BuildRequest {
         Ok(())
     }
 
-    fn thin_link_args(&self, original_args: &[&str], aslr_reference: u64) -> Result<Vec<String>> {
+    fn thin_link_args(&self, original_args: &[&str]) -> Result<Vec<String>> {
         use target_lexicon::OperatingSystem;
 
         let triple = self.triple.clone();

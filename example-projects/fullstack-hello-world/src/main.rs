@@ -15,6 +15,8 @@ fn app() -> Element {
 
     rsx! {
         h1 { "Hot patch serverfns!" }
+        h1 { "Hot patch serverfns!" }
+        h1 { "Hot patch serverfns!" }
         button {
             onclick: move |_| async move {
                 text.set(say_hi().await.unwrap());

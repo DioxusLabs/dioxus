@@ -272,7 +272,7 @@ impl AppBuilder {
                 mode: BuildMode::Thin {
                     changed_files,
                     direct_rustc: self.artifacts.as_ref().unwrap().direct_rustc.clone(),
-                    aslr_reference: self.aslr_reference.unwrap(),
+                    aslr_reference: self.aslr_reference,
                 },
             };
             async move { request.build(&ctx).await }

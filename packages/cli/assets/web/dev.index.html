@@ -139,7 +139,7 @@
 
                 // Clone template and add unique id.
                 let toastTemplate = document.getElementById("dx-toast-template");
-                let cloned = toastTemplate.cloneNode(true);
+                let cloned = toastTemplate.content.cloneNode(true).children[0];
                 let toastId = `dx-toast`;
                 cloned.id = toastId;
                 currentToast = cloned;
@@ -190,7 +190,7 @@
             // Close the current toast.
             function closeDXToast() {
                 if (currentToast) {
-                currentToast.remove();
+                    currentToast.remove();
                 }
                 clearTimeout(currentTimeout);
             }
@@ -202,6 +202,10 @@
                 let data = JSON.parse(potentialData);
                 showDXToast(data.headerText, data.message, data.level, data.durationMs);
             }
+
+            window.scheduleDXToast = scheduleDXToast;
+            window.showDXToast = showDXToast;
+            window.closeDXToast = closeDXToast;
         </script>
     </head>
     <body>
