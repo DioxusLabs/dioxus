@@ -7,6 +7,7 @@ import {
 window.__nextChannelId = 0;
 window.__channels = [];
 
+export { WeakDioxusChannel };
 export class WebDioxusChannel extends DioxusChannel {
   js_to_rust: Channel;
   rust_to_js: Channel;
