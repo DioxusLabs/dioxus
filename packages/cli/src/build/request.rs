@@ -1,8 +1,92 @@
-//! ## Web:
+//! # BuildRequest - the core of the build process
+//!
+//! The BuildRequest object is the core of the build process. It contains all the resolved arguments
+//! flowing in from the CLI, dioxus.toml, env vars, and the workspace.
+//!
+//! Every BuildRequest is tied to a given workspace and BuildArgs. For simplicity's sake, the BuildArgs
+//! struct is used to represent the CLI arguments and all other configuration is basically just
+//! extra CLI arguments, but in a configuration format.
+//!
+//! When [`BuildRequest::build`] is called, it will prepare its work directory in the target folder
+//! and then start running the build process. A [`BuildContext`] is required to customize this
+//! build process, containing a channel for progress updates and the build mode.
+//!
+//! The [`BuildMode`] is extremely important since it influences how the build is performed. Most
+//! "normal" builds just use [`BuildMode::Base`], but we also support [`BuildMode::Fat`] and
+//! [`BuildMode::Thin`]. These builds are used together to power the hot-patching and fast-linking
+//! engine.
+//!
+//! The BuildRequest is also responsible for writing the final build artifacts to disk. This includes
+//!
+//! - Writing the executable
+//! - Processing assets from the artifact
+//! - Writing any metadata or configuration files (Info.plist, AndroidManifest.xml)
+//! - Bundle splitting (for wasm) and wasm-bindgen
+//!
+//! In some cases, the BuildRequest also handles the linking of the final executable. Specifically,
+//! - For Android, we use `dx` as an opaque linker to dynamically find the true android linker
+//! - For hotpatching, the CLI manually links the final executable with a stub file
+//!
+//! ## Build formats:
+//!
+//! We support building for the most popular platforms:
+//! - Web via wasm-bindgen
+//! - macOS via app-bundle
+//! - iOS via app-bundle
+//! - Android via gradle
+//! - Linux via app-image
+//! - Windows via exe, msi/msix
+//!
+//! Note that we are missing some setups that we *should* support:
+//! - PWAs, WebWorkers, ServiceWorkers
+//! - Web Extensions
+//! - Linux via flatpak/snap
+//!
+//! There are some less popular formats that we might want to support eventually:
+//! - TVOS, watchOS
+//! - OpenHarmony
+//!
+//! Also, some deploy platforms have their own bespoke formats:
+//! - Cloudflare workers
+//! - AWS Lambda
+//!
+//! Currently, we defer most of our deploy-based bundling to Tauri bundle, though we should migrate
+//! to just bundling everything ourselves. This would require us to implement code-signing which
+//! is a bit of a pain, but fortunately a solved process (https://github.com/rust-mobile/xbuild).
+//!
+//! ## Build Structure
+//!
+//! Builds generally follow the same structure everywhere:
+//! - A main executable
+//! - Sidecars (alternate entrypoints, framewrok plugins, etc)
+//! - Assets (images, fonts, etc)
+//! - Metadata (Info.plist, AndroidManifest.xml)
+//! - Glue code (java, kotlin, javascript etc)
+//! - Entitlements for code-signing and verification
+//!
+//! We need to be careful to not try and put a "round peg in a square hole," but most platforms follow
+//! the same pattern.
+//!
+//! As such, we try to assemble a build directory that's somewhat sensible:
+//! - A main "staging" dir for a given app
+//! - Per-profile dirs (debug/release)
+//! - A platform dir (ie web/desktop/android/ios)
+//! - The "bundle" dir which is basically the `.app` format or `wwww` dir.
+//! - The "executable" dir where the main exe is housed
+//! - The "assets" dir where the assets are housed
+//! - The "meta" dir where stuff like Info.plist, AndroidManifest.xml, etc are housed
+//!
+//! There's also some "quirky" folders that need to be stable between builds but don't influence the
+//! bundle itself:
+//! - session_cache_dir which stores stuff like window position
+//!
+//! ### Web:
+//!
 //! Create a folder that is somewhat similar to an app-image (exe + asset)
 //! The server is dropped into the `web` folder, even if there's no `public` folder.
 //! If there's no server (SPA), we still use the `web` folder, but it only contains the
 //! public folder.
+//!
 //! ```
 //! web/
 //!     server
@@ -18,7 +102,8 @@
 //!            logo.png
 //! ```
 //!
-//! ## Linux:
+//! ### Linux:
+//!
 //! https://docs.appimage.org/reference/appdir.html#ref-appdir
 //! current_exe.join("Assets")
 //! ```
@@ -30,7 +115,8 @@
 //!         logo.png
 //! ```
 //!
-//! ## Macos
+//! ### Macos
+//!
 //! We simply use the macos format where binaries are in `Contents/MacOS` and assets are in `Contents/Resources`
 //! We put assets in an assets dir such that it generally matches every other platform and we can
 //! output `/assets/blah` from manganis.
@@ -48,7 +134,8 @@
 //!         _CodeSignature/
 //! ```
 //!
-//! ## iOS
+//! ### iOS
+//!
 //! Not the same as mac! ios apps are a bit "flattened" in comparison. simpler format, presumably
 //! since most ios apps don't ship frameworks/plugins and such.
 //!
@@ -59,7 +146,7 @@
 //!     assets/
 //! ```
 //!
-//! ## Android:
+//! ### Android:
 //!
 //! Currently we need to generate a `src` type structure, not a pre-packaged apk structure, since
 //! we need to compile kotlin and java. This pushes us into using gradle and following a structure
@@ -115,7 +202,7 @@
 //! ```
 //! Notice that we *could* feasibly build this ourselves :)
 //!
-//! ## Windows:
+//! ### Windows:
 //! https://superuser.com/questions/749447/creating-a-single-file-executable-from-a-directory-in-windows
 //! Windows does not provide an AppImage format, so instead we're going build the same folder
 //! structure as an AppImage, but when distributing, we'll create a .exe that embeds the resources
@@ -156,7 +243,6 @@
 //!     web -> /assets/
 //! root().join(bundled)
 //! ```
-//!
 //!
 //! Every dioxus app can have an optional server executable which will influence the final bundle.
 //! This is built in parallel with the app executable during the `build` phase and the progres/status
@@ -219,7 +305,6 @@
 //!
 //! The idea here is that we can run any of the programs in the same way that they're deployed.
 //!
-//!
 //! ## Bundle structure links
 //! - apple: https://developer.apple.com/documentation/bundleresources/placing_content_in_a_bundle
 //! - appimage: https://docs.appimage.org/packaging-guide/manual.html#ref-manual
@@ -241,7 +326,7 @@ use itertools::Itertools;
 use krates::{cm::TargetKind, KrateDetails, Krates, NodeId, Utf8PathBuf};
 use manganis::{AssetOptions, JsAssetOptions};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::{
     collections::HashSet,
     future::Future,
@@ -408,9 +493,7 @@ impl BuildRequest {
     ///
     /// Note: Build requests are typically created only when the CLI is invoked or when significant
     /// changes are detected in the `Cargo.toml` (e.g., features added or removed).
-    pub(crate) async fn new(args: &BuildArgs) -> Result<Self> {
-        let workspace = Workspace::current().await?;
-
+    pub(crate) async fn new(args: &BuildArgs, workspace: Arc<Workspace>) -> Result<Self> {
         let crate_package = workspace.find_main_package(args.package.clone())?;
 
         let config = workspace
@@ -518,7 +601,7 @@ impl BuildRequest {
         };
 
         // Determine the --package we'll pass to cargo.
-        // todo: I think this might be wrong - we don't want to use main_package necessarily...a
+        // todo: I think this might be wrong - we don't want to use main_package necessarily...
         let package = args
             .package
             .clone()
@@ -842,6 +925,7 @@ impl BuildRequest {
             //         web/
             //             bundle/
             //             build/
+            //                 server.exe
             //                 public/
             //                     index.html
             //                     wasm/
@@ -876,6 +960,7 @@ impl BuildRequest {
             | Platform::Ios
             | Platform::Liveview
             | Platform::Server => {
+                // We wipe away the dir completely, which is not great behavior :/
                 _ = std::fs::remove_dir_all(self.exe_dir());
                 std::fs::create_dir_all(self.exe_dir())?;
                 std::fs::copy(&exe, self.main_exe())?;
@@ -982,6 +1067,7 @@ impl BuildRequest {
         // Parallel Copy over the assets and keep track of progress with an atomic counter
         let progress = ctx.tx.clone();
         let ws_dir = self.workspace_dir();
+
         // Optimizing assets is expensive and blocking, so we do it in a tokio spawn blocking task
         tokio::task::spawn_blocking(move || {
             assets_to_transfer
@@ -1062,17 +1148,16 @@ impl BuildRequest {
     /// We also run some post processing steps here, like extracting out any new assets.
     async fn write_patch(
         &self,
-        _ctx: &BuildContext,
+        ctx: &BuildContext,
         aslr_reference: Option<u64>,
         artifacts: &mut BuildArtifacts,
     ) -> Result<()> {
         tracing::debug!("Patching existing bundle");
+        ctx.status_hotpatching();
 
-        let time_start = artifacts.time_start;
         let raw_args = std::fs::read_to_string(&self.link_args_file())
             .context("Failed to read link args from file")?;
         let args = raw_args.lines().collect::<Vec<_>>();
-        let orig_exe = self.main_exe();
 
         // Extract out the incremental object files.
         //
@@ -1091,6 +1176,9 @@ impl BuildRequest {
         //
         // Many args are passed twice, too, which can be confusing, but generally don't have any real
         // effect. Note that on macos/ios, there's a special macho header that *needs* to be set.
+        //
+        // Also, some flags in darwin land might become deprecated, need to be super conservative:
+        // - https://developer.apple.com/forums/thread/773907
         //
         // ```
         // cc
@@ -1128,13 +1216,14 @@ impl BuildRequest {
             .map(|arg| PathBuf::from(arg))
             .collect::<Vec<_>>();
 
-        // Our wasm approach is quite specific to wasm. We don't need to resolve any missing symbols
-        // there since wasm is relocatable, but there is considerable pre and post processing work to get it
-        // working.
-        //
         // On non-wasm platforms, we generate a special shim object file which converts symbols from
         // fat binary into direct addresses from the running process.
         //
+        // Our wasm approach is quite specific to wasm. We don't need to resolve any missing symbols
+        // there since wasm is relocatable, but there is considerable pre and post processing work to
+        // satisfy undefined symbols that we do by munging the binary directly.
+        //
+        // todo: can we adjust our wasm approach to also use a similar system?
         // todo: don't require the aslr reference and just patch the got when loading.
         //
         // Requiring the ASLR offset here is necessary but unfortunately might be flakey in practice.
@@ -1142,7 +1231,7 @@ impl BuildRequest {
         // making this hotpatch a failure.
         if self.platform != Platform::Web {
             let stub_bytes = subsecond_cli_support::resolve_undefined(
-                &orig_exe,
+                &self.main_exe(),
                 &object_files,
                 &self.triple,
                 aslr_reference.context("ASLR reference not found - is the client connected?")?,
@@ -1155,14 +1244,29 @@ impl BuildRequest {
             object_files.push(patch_file);
         }
 
-        let linker = match self.platform {
+        let cc = match self.platform {
+            // todo: we're using wasm-ld directly, but I think we can drive it with rust-lld and -flavor wasm
             Platform::Web => self.workspace.wasm_ld(),
+
+            // The android clang linker is *special* and has some android-specific flags that we need
+            //
+            // Note that this is *clang*, not `lld`.
             Platform::Android => android_tools()
                 .context("Could not determine android tools")?
                 .android_cc(&self.triple),
 
-            // Note that I think rust uses rust-lld now, so we need to respect its argument profile
+            // The rest of the platforms use `cc` as the linker which should be available in your path,
+            // provided you have build-tools setup. On mac/linux this is the default, but on Windows
+            // it requires msvc or gnu downloaded, which is a requirement to use rust anyways.
+            //
+            // The default linker might actually be slow though, so we could consider using lld or rust-lld
+            // since those are shipping by default on linux as of 1.86. Window's linker is the really slow one.
+            //
             // https://blog.rust-lang.org/2024/05/17/enabling-rust-lld-on-linux.html
+            //
+            // Note that "cc" is *not* a linker. It's a compiler! The arguments we pass need to be in
+            // the form of `-Wl,<args>` for them to make it to the linker. This matches how rust does it
+            // which is confusing.
             Platform::MacOS
             | Platform::Ios
             | Platform::Linux
@@ -1171,61 +1275,65 @@ impl BuildRequest {
             | Platform::Windows => PathBuf::from("cc"),
         };
 
-        let thin_args = self.thin_link_args(&args)?;
-
-        // todo: we should throw out symbols that we don't need and/or assemble them manually
-        // also we should make sure to propagate the right arguments (target, sysroot, etc)
+        // Run the linker directly!
         //
-        // also, https://developer.apple.com/forums/thread/773907
-        //       -undefined,dynamic_lookup is deprecated for ios but supposedly cpython is using it
-        //       we might need to link a new patch file that implements the lookups
-        let res = Command::new(linker)
+        // We dump its output directly into the patch exe location which is different than how rustc
+        // does it since it uses llvm-objcopy into the `target/debug/` folder.
+        let res = Command::new(cc)
             .args(object_files.iter())
-            .args(thin_args)
+            .args(self.thin_link_args(&args)?)
             .arg("-o")
-            .arg(&self.patch_exe(time_start))
+            .arg(&self.patch_exe(artifacts.time_start))
             .output()
             .await?;
 
         if !res.stderr.is_empty() {
             let errs = String::from_utf8_lossy(&res.stderr);
-            if !self.patch_exe(time_start).exists() {
+            if !self.patch_exe(artifacts.time_start).exists() {
                 tracing::error!("Failed to generate patch: {}", errs.trim());
             } else {
                 tracing::debug!("Warnings during thin linking: {}", errs.trim());
             }
         }
 
+        // For some really weird reason that I think is because of dlopen caching, future loads of the
+        // jump library will fail if we don't remove the original fat file. I think this could be
+        // because of library versioning and namespaces, but really unsure.
+        //
+        // The errors if you forget to do this are *extremely* cryptic - missing symbols that never existed.
+        //
+        // Fortunately, this binary exists in two places - the deps dir and the target out dir. We
+        // can just remove the one in the deps dir and the problem goes away.
+        if let Some(idx) = args.iter().position(|arg| *arg == "-o") {
+            _ = std::fs::remove_file(&PathBuf::from(args[idx + 1]));
+        }
+
+        // Also clean up the temp artifacts
         // // Clean up the temps manually
         // // todo: we might want to keep them around for debugging purposes
         // for file in object_files {
         //     _ = std::fs::remove_file(file);
         // }
 
-        // Also clean up the original fat file since that's causing issues with rtld_global
-        // todo: this might not be platform portable
-        let link_orig = args
-            .iter()
-            .position(|arg| *arg == "-o")
-            .expect("failed to find -o");
-        let link_file: PathBuf = args[link_orig + 1].into();
-        _ = std::fs::remove_file(&link_file);
-
         Ok(())
     }
 
+    /// Take the original args passed to the "fat" build and then create the "thin" variant.
+    ///
+    /// This is basically just stripping away the rlibs and other libraries that will be satisfied
+    /// by our stub step.
     fn thin_link_args(&self, original_args: &[&str]) -> Result<Vec<String>> {
         use target_lexicon::OperatingSystem;
 
         let triple = self.triple.clone();
-        let mut args = vec![];
+        let mut out_args = vec![];
 
         tracing::trace!("original args:\n{}", original_args.join(" "));
 
         match triple.operating_system {
             // wasm32-unknown-unknown -> use wasm-ld (gnu-lld)
             OperatingSystem::Unknown if self.platform == Platform::Web => {
-                args.extend([
+                out_args.extend([
                     "--import-memory".to_string(),
                     "--import-table".to_string(),
                     "--growable-table".to_string(),
@@ -1241,28 +1349,28 @@ impl BuildRequest {
             }
 
             // this uses "cc" and these args need to be ld compatible
+            //
             // aarch64-apple-ios
             // aarch64-apple-darwin
             OperatingSystem::IOS(_) | OperatingSystem::MacOSX(_) | OperatingSystem::Darwin(_) => {
-                args.extend(["-Wl,-dylib".to_string()]);
+                out_args.extend(["-Wl,-dylib".to_string()]);
 
                 match triple.architecture {
                     target_lexicon::Architecture::Aarch64(_) => {
-                        args.push("-arch".to_string());
-                        args.push("arm64".to_string());
+                        out_args.push("-arch".to_string());
+                        out_args.push("arm64".to_string());
                     }
                     target_lexicon::Architecture::X86_64 => {
-                        args.push("-arch".to_string());
-                        args.push("x86_64".to_string());
+                        out_args.push("-arch".to_string());
+                        out_args.push("x86_64".to_string());
                     }
                     _ => {}
                 }
             }
 
-            // android/linux
-            // need to be compatible with lld
+            // android/linux need to be compatible with lld
             OperatingSystem::Linux if triple.environment == Environment::Android => {
-                args.extend(
+                out_args.extend(
                     [
                         "-shared".to_string(),
                         "-Wl,--eh-frame-hdr".to_string(),
@@ -1298,7 +1406,7 @@ impl BuildRequest {
             }
 
             OperatingSystem::Linux => {
-                args.extend([
+                out_args.extend([
                     "-Wl,--eh-frame-hdr".to_string(),
                     "-Wl,-z,noexecstack".to_string(),
                     "-Wl,-z,relro,-z,now".to_string(),
@@ -1320,18 +1428,25 @@ impl BuildRequest {
         };
 
         if let Some(vale) = extract_value("-target") {
-            args.push("-target".to_string());
-            args.push(vale);
+            out_args.push("-target".to_string());
+            out_args.push(vale);
         }
 
         if let Some(vale) = extract_value("-isysroot") {
-            args.push("-isysroot".to_string());
-            args.push(vale);
+            out_args.push("-isysroot".to_string());
+            out_args.push(vale);
         }
 
-        Ok(args)
+        Ok(out_args)
     }
 
+    /// Assemble the `cargo rustc` / `rustc` command
+    ///
+    /// When building fat/base binaries, we use `cargo rustc`.
+    /// When building thin binaries, we use `rustc` directly.
+    ///
+    /// When processing the output of this command, you need to make sure to handle both cases which
+    /// both have different formats (but with json output for both).
     fn build_command(&self, ctx: &BuildContext) -> Result<Command> {
         match &ctx.mode {
             // We're assembling rustc directly, so we need to be *very* careful. Cargo sets rustc's
@@ -1409,7 +1524,7 @@ impl BuildRequest {
     /// Create a list of arguments for cargo builds
     ///
     /// We always use `cargo rustc` *or* `rustc` directly. This means we can pass extra flags like
-    /// `-C` arguments directly to the compiler.a
+    /// `-C` arguments directly to the compiler.
     fn cargo_build_arguments(&self, ctx: &BuildContext) -> Vec<String> {
         let mut cargo_args = Vec::new();
 
@@ -1559,12 +1674,12 @@ impl BuildRequest {
         cargo_args
     }
 
-    fn cargo_build_env_vars(&self, ctx: &BuildContext) -> Result<Vec<(&str, String)>> {
+    fn cargo_build_env_vars(&self, ctx: &BuildContext) -> Result<Vec<(&'static str, String)>> {
         let mut env_vars = vec![];
 
         // Make sure to set all the crazy android flags. Cross-compiling is hard, man.
         if self.platform == Platform::Android {
-            self.build_android_env(&mut env_vars, true)?;
+            env_vars.extend(self.android_env_vars()?);
         };
 
         // If we're either zero-linking or using a custom linker, make `dx` itself do the linking.
@@ -1597,11 +1712,9 @@ impl BuildRequest {
         Ok(env_vars)
     }
 
-    fn build_android_env(
-        &self,
-        env_vars: &mut Vec<(&str, String)>,
-        rustf_flags: bool,
-    ) -> Result<()> {
+    fn android_env_vars(&self) -> Result<Vec<(&'static str, String)>> {
+        let mut env_vars = vec![];
+
         let tools = android_tools().context("Could not determine android tools")?;
         let linker = tools.android_cc(&self.triple);
         let min_sdk_version = tools.min_sdk_version();
@@ -1625,10 +1738,14 @@ impl BuildRequest {
         env_vars.push(("TARGET_CC", target_cc.display().to_string()));
         env_vars.push(("TARGET_CXX", target_cxx.display().to_string()));
         env_vars.push(("ANDROID_NDK_ROOT", ndk.display().to_string()));
+
         if let Some(java_home) = java_home {
             tracing::debug!("Setting JAVA_HOME to {java_home:?}");
             env_vars.push(("JAVA_HOME", java_home.display().to_string()));
         }
+
+        // Set the wry env vars - this is where wry will dump its kotlin files.
+        // Their setup is really annyoing and requires us to hardcode `dx` to specific versions of tao/wry.
         env_vars.push(("WRY_ANDROID_PACKAGE", "dev.dioxus.main".to_string()));
         env_vars.push(("WRY_ANDROID_LIBRARY", "dioxusmain".to_string()));
         env_vars.push((
@@ -1638,23 +1755,17 @@ impl BuildRequest {
                 .to_string(),
         ));
 
-        if rustf_flags {
-            env_vars.push(("RUSTFLAGS", {
-                let mut rust_flags = std::env::var("RUSTFLAGS").unwrap_or_default();
-
-                // todo(jon): maybe we can make the symbol aliasing logic here instead of using llvm-objcopy
-                if self.platform == Platform::Android {
-                    let cur_exe = std::env::current_exe().unwrap();
-                    rust_flags.push_str(format!(" -Clinker={}", cur_exe.display()).as_str());
-                    rust_flags.push_str(" -Clink-arg=-landroid");
-                    rust_flags.push_str(" -Clink-arg=-llog");
-                    rust_flags.push_str(" -Clink-arg=-lOpenSLES");
-                    rust_flags.push_str(" -Clink-arg=-Wl,--export-dynamic");
-                }
-
-                rust_flags
-            }));
-        }
+        // Set the rust flags for android which get passed to *every* crate in the graph.
+        // todo: I don't think we should be passing --export-dynamic here, but it works.
+        //       At least for production, we shouldn't.
+        env_vars.push(("RUSTFLAGS", {
+            let mut rust_flags = std::env::var("RUSTFLAGS").unwrap_or_default();
+            rust_flags.push_str(" -Clink-arg=-landroid");
+            rust_flags.push_str(" -Clink-arg=-llog");
+            rust_flags.push_str(" -Clink-arg=-lOpenSLES");
+            rust_flags.push_str(" -Clink-arg=-Wl,--export-dynamic");
+            rust_flags
+        }));
 
         // todo(jon): the guide for openssl recommends extending the path to include the tools dir
         //            in practice I couldn't get this to work, but this might eventually become useful.
@@ -1676,7 +1787,7 @@ impl BuildRequest {
         // );
         // env_vars.push(("PATH", extended_path));
 
-        Ok(())
+        Ok(env_vars)
     }
 
     /// Get an estimate of the number of units in the crate. If nightly rustc is not available, this
@@ -1797,16 +1908,22 @@ impl BuildRequest {
             Platform::Windows => format!("{}.exe", self.executable_name()),
 
             // from the apk spec, the root exe is a shared library
-            // we include the user's rust code as a shared library with a fixed namespacea
+            // we include the user's rust code as a shared library with a fixed namespace
             Platform::Android => "libdioxusmain.so".to_string(),
 
-            Platform::Web => format!("{}_bg.wasm", self.executable_name()), // this will be wrong, I think, but not important?
+            // this will be wrong, I think, but not important?
+            Platform::Web => format!("{}_bg.wasm", self.executable_name()),
 
             // todo: maybe this should be called AppRun?
             Platform::Linux => self.executable_name().to_string(),
         }
     }
 
+    /// Assemble the android app dir.
+    ///
+    /// This is a bit of a mess since we need to create a lot of directories and files. Other approaches
+    /// would be to unpack some zip folder or something stored via `include_dir!()`. However, we do
+    /// need to customize the whole setup a bit, so it's just simpler (though messier) to do it this way.
     fn build_android_app_dir(&self) -> Result<()> {
         use std::fs::{create_dir_all, write};
         let root = self.root_dir();
@@ -1814,7 +1931,6 @@ impl BuildRequest {
         // gradle
         let wrapper = root.join("gradle").join("wrapper");
         create_dir_all(&wrapper)?;
-        tracing::debug!("Initialized Gradle wrapper: {:?}", wrapper);
 
         // app
         let app = root.join("app");
@@ -1829,20 +1945,26 @@ impl BuildRequest {
         create_dir_all(&app_jnilibs)?;
         create_dir_all(&app_assets)?;
         create_dir_all(&app_kotlin_out)?;
-        tracing::debug!("Initialized app: {:?}", app);
-        tracing::debug!("Initialized app/src: {:?}", app_main);
-        tracing::debug!("Initialized app/src/kotlin: {:?}", app_kotlin);
-        tracing::debug!("Initialized app/src/jniLibs: {:?}", app_jnilibs);
-        tracing::debug!("Initialized app/src/assets: {:?}", app_assets);
-        tracing::debug!("Initialized app/src/kotlin/main: {:?}", app_kotlin_out);
+
+        tracing::debug!(
+            r#"Initialized android dirs:
+- gradle:              {wrapper:?}
+- app/                 {app:?}
+- app/src:             {app_main:?}
+- app/src/kotlin:      {app_kotlin:?}
+- app/src/jniLibs:     {app_jnilibs:?}
+- app/src/assets:      {app_assets:?}
+- app/src/kotlin/main: {app_kotlin_out:?}
+"#
+        );
 
         // handlebars
-        #[derive(serde::Serialize)]
-        struct HbsTypes {
+        #[derive(Serialize)]
+        struct AndroidHandlebarsObjects {
             application_id: String,
             app_name: String,
         }
-        let hbs_data = HbsTypes {
+        let hbs_data = AndroidHandlebarsObjects {
             application_id: self.full_mobile_app_name(),
             app_name: self.bundled_app_name(),
         };
@@ -1910,7 +2032,7 @@ impl BuildRequest {
             )?,
         )?;
 
-        // Write the res folder
+        // Write the res folder, containing stuff like default icons, colors, and menubars.
         let res = app_main.join("res");
         create_dir_all(&res)?;
         create_dir_all(res.join("values"))?;
@@ -1990,7 +2112,7 @@ impl BuildRequest {
         Ok(())
     }
 
-    pub(crate) fn wry_android_kotlin_files_out_dir(&self) -> PathBuf {
+    fn wry_android_kotlin_files_out_dir(&self) -> PathBuf {
         let mut kotlin_dir = self
             .root_dir()
             .join("app")
@@ -2002,20 +2124,8 @@ impl BuildRequest {
             kotlin_dir = kotlin_dir.join(segment);
         }
 
-        tracing::debug!("app_kotlin_out: {:?}", kotlin_dir);
-
         kotlin_dir
     }
-
-    // pub(crate) async fn new(args: &TargetArgs) -> Result<Self> {
-
-    //     Ok(Self {
-    //         workspace: workspace.clone(),
-    //         package,
-    //         config: dioxus_config,
-    //         target: Arc::new(target),
-    //     })
-    // }
 
     /// The asset dir we used to support before manganis became the default.
     /// This generally was just a folder in your Dioxus.toml called "assets" or "public" where users
@@ -2282,7 +2392,7 @@ impl BuildRequest {
     }
 
     /// Return the version of the wasm-bindgen crate if it exists
-    pub(crate) fn wasm_bindgen_version(&self) -> Option<String> {
+    fn wasm_bindgen_version(&self) -> Option<String> {
         self.workspace
             .krates
             .krates_by_name("wasm-bindgen")
@@ -2755,7 +2865,7 @@ impl BuildRequest {
     }
 
     fn info_plist_contents(&self, platform: Platform) -> Result<String> {
-        #[derive(serde::Serialize)]
+        #[derive(Serialize)]
         pub struct InfoPlistData {
             pub display_name: String,
             pub bundle_name: String,

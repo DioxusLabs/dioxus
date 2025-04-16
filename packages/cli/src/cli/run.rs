@@ -1,5 +1,5 @@
 use super::*;
-use crate::{AppBuilder, BuildArgs, BuildMode, BuildRequest, Platform, Result};
+use crate::{AppBuilder, BuildArgs, BuildMode, BuildRequest, Platform, Result, Workspace};
 
 /// Run the project with the given arguments
 #[derive(Clone, Debug, Parser)]
@@ -11,7 +11,9 @@ pub(crate) struct RunArgs {
 
 impl RunArgs {
     pub(crate) async fn run(self) -> Result<StructuredOutput> {
-        let build = BuildRequest::new(&self.build_args)
+        let workspace = Workspace::current().await?;
+
+        let build = BuildRequest::new(&self.build_args, workspace)
             .await
             .context("error building project")?;
 

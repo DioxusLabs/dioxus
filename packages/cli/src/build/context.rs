@@ -65,7 +65,7 @@ pub enum BuildUpdate {
 impl BuildContext {
     pub(crate) fn status_wasm_bindgen_start(&self) {
         _ = self.tx.unbounded_send(BuildUpdate::Progress {
-            stage: BuildStage::RunningBindgen {},
+            stage: BuildStage::RunningBindgen,
         });
     }
 
@@ -77,7 +77,7 @@ impl BuildContext {
 
     pub(crate) fn status_start_bundle(&self) {
         _ = self.tx.unbounded_send(BuildUpdate::Progress {
-            stage: BuildStage::Bundling {},
+            stage: BuildStage::Bundling,
         });
     }
 
@@ -137,13 +137,19 @@ impl BuildContext {
 
     pub(crate) fn status_optimizing_wasm(&self) {
         _ = self.tx.unbounded_send(BuildUpdate::Progress {
-            stage: BuildStage::OptimizingWasm {},
+            stage: BuildStage::OptimizingWasm,
+        });
+    }
+
+    pub(crate) fn status_hotpatching(&self) {
+        _ = self.tx.unbounded_send(BuildUpdate::Progress {
+            stage: BuildStage::Hotpatching,
         });
     }
 
     pub(crate) fn status_installing_tooling(&self) {
         _ = self.tx.unbounded_send(BuildUpdate::Progress {
-            stage: BuildStage::InstallingTooling {},
+            stage: BuildStage::InstallingTooling,
         });
     }
 

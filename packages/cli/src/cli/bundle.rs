@@ -1,4 +1,4 @@
-use crate::{AppBuilder, BuildArgs, BuildMode, BuildRequest, Platform};
+use crate::{AppBuilder, BuildArgs, BuildMode, BuildRequest, Platform, Workspace};
 use anyhow::{anyhow, Context};
 use dioxus_cli_config::{server_ip, server_port};
 use futures_util::stream::FuturesUnordered;
@@ -72,7 +72,9 @@ impl Bundle {
         // todo - maybe not? what if you want a devmode bundle?
         self.args.release = true;
 
-        let build = BuildRequest::new(&self.args)
+        let workspace = Workspace::current().await?;
+
+        let build = BuildRequest::new(&self.args, workspace)
             .await
             .context("Failed to load Dioxus workspace")?;
 

@@ -140,7 +140,7 @@ impl AppRunner {
         // This involves modifying the BuildRequest to add the client features and server features
         // only if we can properly detect that it's a fullstack build. Careful with this, since
         // we didn't build BuildRequest to be generally mutable.
-        let client = BuildRequest::new(&args.build_arguments).await?;
+        let client = BuildRequest::new(&args.build_arguments, workspace.clone()).await?;
         let mut server = None;
 
         // Now we need to resolve the client features
@@ -149,7 +149,7 @@ impl AppRunner {
             let mut build_args = args.build_arguments.clone();
             build_args.platform = Some(Platform::Server);
 
-            let _server = BuildRequest::new(&build_args).await?;
+            let _server = BuildRequest::new(&build_args, workspace.clone()).await?;
 
             // ... todo: add the server features to the server build
             // ... todo: add the client features to the client build
