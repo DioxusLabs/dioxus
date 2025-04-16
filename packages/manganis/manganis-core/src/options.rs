@@ -19,16 +19,12 @@ use crate::{CssAssetOptions, FolderAssetOptions, ImageAssetOptions, JsAssetOptio
 pub enum AssetOptions {
     /// An image asset
     Image(ImageAssetOptions),
-
     /// A folder asset
     Folder(FolderAssetOptions),
-
     /// A css asset
     Css(CssAssetOptions),
-
     /// A javascript asset
     Js(JsAssetOptions),
-
     /// An unknown asset
     Unknown,
 }

@@ -148,7 +148,7 @@ use syn::{
 #[proc_macro_attribute]
 pub fn server(args: proc_macro::TokenStream, s: TokenStream) -> TokenStream {
     // If there is no input codec, use json as the default
-    // let args = default_json_codec(args);
+    let args = default_json_codec(args);
 
     match server_macro_impl(
         args.into(),
