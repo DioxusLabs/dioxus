@@ -189,7 +189,6 @@ impl LinkAction {
                 }
 
                 let contents = serde_json::to_string(&manifest).expect("Failed to write manifest");
-                tracing::info!("Writing asset manifest to {}", dest.display());
                 std::fs::write(dest, contents).expect("Failed to write output file");
 
                 // forward the modified object files to the real linker
@@ -229,13 +228,6 @@ impl AssetReference {
     fn write(&self) -> std::io::Result<()> {
         let new_data = ConstVec::new();
         let new_data = const_serialize::serialize_const(&self.bundled_asset, new_data);
-        tracing::info!(
-            "Writing {} bytes to {} at offset {}",
-            new_data.len(),
-            self.file.display(),
-            self.offset
-        );
-        tracing::info!("data {:?}", self.bundled_asset);
 
         let mut binary_data = fs::File::options()
             .write(true)
@@ -286,7 +278,6 @@ impl AssetReferences {
             let mut data_in_range = vec![0; range.len()];
             binary_data.read_exact(&mut data_in_range)?;
             let mut offset = 0;
-            tracing::info!("Found {} bytes of data in range", data_in_range.len());
             let mut buffer = const_serialize::ConstReadBuffer::new(&data_in_range);
 
             while let Some((remaining_buffer, bundled_asset)) =
