@@ -55,7 +55,7 @@ pub fn launch_virtual_dom_blocking(virtual_dom: VirtualDom, mut desktop_config: 
                 UserWindowEvent::TrayIconEvent(evnt) => app.handle_tray_icon_event(evnt),
 
                 #[cfg(all(feature = "devtools", debug_assertions))]
-                UserWindowEvent::DevServerEvent(msg) => app.handle_hot_reload_msg(msg),
+                UserWindowEvent::DevtoolsMsg(msg) => app.handle_hot_reload_msg(msg),
 
                 // Windows-only drag-n-drop fix events. We need to call the interpreter drag-n-drop code.
                 UserWindowEvent::WindowsDragDrop(id) => {

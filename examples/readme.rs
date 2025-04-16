@@ -14,29 +14,9 @@ fn main() {
 fn app() -> Element {
     let mut count = use_signal(|| 0);
 
-    does_thing();
-    match DOES_THING_META {
-        Entry::ServerFn { f } => f(),
-        Entry::Asset => {}
-    }
-
     rsx! {
         h1 { "High-Five counter: {count}" }
         button { onclick: move |_| count += 1, "Up high!" }
         button { onclick: move |_| count -= 1, "Down low!" }
     }
-}
-
-#[link_section = concat!("__TEXT,__manganis")]
-pub fn does_thing() {
-    println!("Hello from the dioxus example!");
-}
-
-#[link_section = concat!("__DATA,__manganis")]
-pub static DOES_THING_META: Entry = Entry::ServerFn { f: does_thing };
-
-#[repr(C, u8)]
-enum Entry {
-    ServerFn { f: fn() },
-    Asset,
 }

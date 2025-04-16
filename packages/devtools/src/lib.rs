@@ -8,6 +8,8 @@ use std::{any::TypeId, cell::Cell, ffi::CString, path::PathBuf, rc::Rc};
 use subsecond::JumpTable;
 use warnings::Warning;
 
+pub use subsecond;
+
 pub struct Devtools {
     main_fn: Cell<fn() -> Element>,
 }

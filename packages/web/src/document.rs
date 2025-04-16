@@ -31,6 +31,7 @@ impl JSOwner {
         }
     }
 }
+
 #[wasm_bindgen::prelude::wasm_bindgen(module = "/src/js/eval.js")]
 extern "C" {
     pub type WeakDioxusChannel;

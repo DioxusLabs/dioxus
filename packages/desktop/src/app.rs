@@ -171,7 +171,7 @@ impl App {
         if let Some(endpoint) = dioxus_cli_config::devserver_ws_endpoint() {
             let proxy = self.shared.proxy.clone();
             dioxus_devtools::connect(endpoint, move |msg| {
-                _ = proxy.send_event(UserWindowEvent::DevServerEvent(msg));
+                _ = proxy.send_event(UserWindowEvent::DevtoolsMsg(msg));
             })
         }
     }

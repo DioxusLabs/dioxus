@@ -4,17 +4,13 @@
 //! We also set up a little recursive timer that will attempt to reconnect if the connection is lost.
 
 use std::fmt::Display;
-use std::rc::Rc;
 use std::time::Duration;
 
-use dioxus_core::prelude::RuntimeGuard;
-use dioxus_core::{Runtime, ScopeId};
 use dioxus_devtools::{ClientMsg, DevserverMsg, HotReloadMsg};
-use dioxus_document::eval;
 use futures_channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
 use js_sys::JsString;
+use wasm_bindgen::JsCast;
 use wasm_bindgen::{closure::Closure, JsValue};
-use wasm_bindgen::{prelude::wasm_bindgen, JsCast};
 use web_sys::{window, CloseEvent, MessageEvent, WebSocket};
 
 const POLL_INTERVAL_MIN: i32 = 250;
@@ -170,7 +166,7 @@ fn make_ws(tx: UnboundedSender<HotReloadMsg>, poll_interval: i32, reload: bool) 
                 ws_tx.send_with_str(
                     &serde_json::to_string(&ClientMsg::Initialize {
                         build_id: dioxus_devtools::build_id(),
-                        aslr_reference: subsecond::aslr_reference() as _,
+                        aslr_reference: dioxus_devtools::subsecond::aslr_reference() as _,
                     })
                     .unwrap(),
                 );
@@ -194,7 +190,7 @@ fn make_ws(tx: UnboundedSender<HotReloadMsg>, poll_interval: i32, reload: bool) 
 }
 
 /// Represents what color the toast should have.
-pub enum ToastLevel {
+pub(crate) enum ToastLevel {
     /// Green
     Success,
     /// Blue
@@ -213,7 +209,7 @@ impl Display for ToastLevel {
     }
 }
 
-pub fn close_toast() {
+pub(crate) fn close_toast() {
     js_sys::eval(
         r#"
             if (typeof closeDXToast !== "undefined") {
@@ -224,7 +220,7 @@ pub fn close_toast() {
 }
 
 /// Displays a toast to the developer.
-pub fn show_toast(
+pub(crate) fn show_toast(
     header_text: &str,
     message: &str,
     level: ToastLevel,
