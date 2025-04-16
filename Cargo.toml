@@ -324,7 +324,7 @@ open = "5.1.2"
 gloo-dialogs = "0.2.0"
 
 # tui stuff
-ansi-to-tui = "6.0"
+ansi-to-tui = "7.0"
 ansi-to-html = "0.2.1"
 path-absolutize = "3.1"
 crossterm = { version = "0.29.0" }

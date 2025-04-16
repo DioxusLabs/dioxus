@@ -25,23 +25,19 @@ const POLL_INTERVAL_SCALE_FACTOR: i32 = 2;
 const TOAST_TIMEOUT: Duration = Duration::from_secs(5);
 const TOAST_TIMEOUT_LONG: Duration = Duration::from_secs(3600); // Duration::MAX is too long for JS.
 
-pub(crate) fn init(runtime: Rc<Runtime>) -> UnboundedReceiver<HotReloadMsg> {
+pub(crate) fn init() -> UnboundedReceiver<HotReloadMsg> {
     // Create the tx/rx pair that we'll use for the top-level future in the dioxus loop
     let (tx, rx) = unbounded();
 
     // Wire up the websocket to the devserver
-    make_ws(runtime, tx.clone(), POLL_INTERVAL_MIN, false);
+    make_ws(tx.clone(), POLL_INTERVAL_MIN, false);
+
     playground(tx);
 
     rx
 }
 
-fn make_ws(
-    runtime: Rc<Runtime>,
-    tx: UnboundedSender<HotReloadMsg>,
-    poll_interval: i32,
-    reload: bool,
-) {
+fn make_ws(tx: UnboundedSender<HotReloadMsg>, poll_interval: i32, reload: bool) {
     // Get the location of the devserver, using the current location plus the /_dioxus path
     // The idea here being that the devserver is always located on the /_dioxus behind a proxy
     let location = web_sys::window().unwrap().location();
@@ -58,7 +54,6 @@ fn make_ws(
 
     // Set the onmessage handler to bounce messages off to the main dioxus loop
     let tx_ = tx.clone();
-    let runtime_ = runtime.clone();
     let ws_tx = ws.clone();
     ws.set_onmessage(Some(
         Closure::<dyn FnMut(MessageEvent)>::new(move |e: MessageEvent| {
@@ -93,7 +88,7 @@ fn make_ws(
                 // The devserver is telling us that it started a full rebuild. This does not mean that it is ready.
                 Ok(DevserverMsg::HotPatchStart) => show_toast(
                     "Hot-patching app...",
-                    "Rust code changed and we are hot-patching.",
+                    "Hot-patching modified Rust code.",
                     ToastLevel::Info,
                     TOAST_TIMEOUT_LONG,
                     false,
@@ -144,13 +139,11 @@ fn make_ws(
 
             // set timeout to reload the page in timeout_ms
             let tx = tx.clone();
-            let runtime = runtime.clone();
             web_sys::window()
                 .unwrap()
                 .set_timeout_with_callback_and_timeout_and_arguments_0(
                     Closure::<dyn FnMut()>::new(move || {
                         make_ws(
-                            runtime.clone(),
                             tx.clone(),
                             POLL_INTERVAL_MAX.min(poll_interval * POLL_INTERVAL_SCALE_FACTOR),
                             true,
@@ -244,8 +237,6 @@ pub fn show_toast(
         true => "scheduleDXToast",
         false => "showDXToast",
     };
-
-    // Create the guard before running eval which uses the global runtime context
 
     js_sys::eval(&format!(
         r#"

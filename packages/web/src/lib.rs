@@ -2,23 +2,7 @@
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![deny(missing_docs)]
 
-//! Dioxus WebSys
-//!
-//! ## Overview
-//! ------------
-//! This crate implements a renderer of the Dioxus Virtual DOM for the web browser using WebSys. This web render for
-//! Dioxus is one of the more advanced renderers, supporting:
-//! - idle work
-//! - animations
-//! - jank-free rendering
-//! - controlled components
-//! - hydration
-//! - and more.
-//!
-//! The actual implementation is farily thin, with the heavy lifting happening inside the Dioxus Core crate.
-//!
-//! To purview the examples, check of the root Dioxus crate - the examples in this crate are mostly meant to provide
-//! validation of websys-specific features and not the general use of Dioxus.
+//! # Dioxus Web
 
 use std::time::Duration;
 
@@ -71,7 +55,7 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
     let runtime = virtual_dom.runtime();
 
     #[cfg(all(feature = "devtools", debug_assertions))]
-    let mut hotreload_rx = devtools::init(runtime.clone());
+    let mut hotreload_rx = devtools::init();
 
     let should_hydrate = web_config.hydrate;
 
@@ -212,7 +196,7 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
                     "Hot-patch success!",
                     &format!("App successfully patched in {} ms", hr_msg.ms_elapsed),
                     devtools::ToastLevel::Success,
-                    Duration::from_millis(500),
+                    Duration::from_millis(1000),
                     false,
                 );
             }

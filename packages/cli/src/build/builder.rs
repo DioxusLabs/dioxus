@@ -5,7 +5,10 @@ use crate::{
 use anyhow::Context;
 use dioxus_cli_opt::process_file_to;
 use futures_util::future::OptionFuture;
-use std::time::{Duration, Instant};
+use std::{
+    env,
+    time::{Duration, Instant},
+};
 use std::{
     net::SocketAddr,
     path::{Path, PathBuf},

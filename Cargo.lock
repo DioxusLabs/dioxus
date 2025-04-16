@@ -312,12 +312,12 @@ dependencies = [
 
 [[package]]
 name = "ansi-to-tui"
-version = "6.0.1"
+version = "7.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cd01ee70df708c9ecb68705af08cee6fe85493992a7e205c52ddbe569314ba47"
+checksum = "67555e1f1ece39d737e28c8a017721287753af3f93225e4a445b29ccb0f5912c"
 dependencies = [
  "nom",
- "ratatui 0.28.1",
+ "ratatui",
  "simdutf8",
  "smallvec",
  "thiserror 1.0.69",
@@ -3737,7 +3737,7 @@ dependencies = [
  "plist",
  "prettyplease",
  "proc-macro2",
- "ratatui 0.29.0",
+ "ratatui",
  "rayon",
  "regex",
  "reqwest 0.12.15",
@@ -11169,26 +11169,6 @@ dependencies = [
 
 [[package]]
 name = "ratatui"
-version = "0.28.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fdef7f9be5c0122f890d58bdf4d964349ba6a6161f705907526d891efabba57d"
-dependencies = [
- "bitflags 2.9.0",
- "cassowary",
- "compact_str",
- "instability",
- "itertools 0.13.0",
- "lru 0.12.5",
- "paste",
- "strum 0.26.3",
- "strum_macros 0.26.4",
- "unicode-segmentation",
- "unicode-truncate",
- "unicode-width 0.1.14",
-]
-
-[[package]]
-name = "ratatui"
 version = "0.29.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eabd94c2f37801c20583fc49dd5cd6b0ba68c716787c2dd6ed18571e1e63117b"
@@ -13530,7 +13510,7 @@ dependencies = [
  "color-eyre",
  "dioxus",
  "rand 0.8.5",
- "ratatui 0.29.0",
+ "ratatui",
  "serde_json",
  "subsecond",
  "tokio",
@@ -14557,7 +14537,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1d36b5738d666a2b4c91b7c24998a8588db724b3107258343ebf8824bf55b06d"
 dependencies = [
  "rand 0.8.5",
- "ratatui 0.29.0",
+ "ratatui",
 ]
 
 [[package]]
