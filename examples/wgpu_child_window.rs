@@ -60,7 +60,7 @@ fn app() -> Element {
                     srcs.surface.configure(&srcs.device, &cfg);
                 });
             }
-            
+
             window().window.request_redraw();
         }
     });
