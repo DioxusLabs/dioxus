@@ -68,9 +68,9 @@ members = [
     "packages/dx-wire-format",
     "packages/logger",
     "packages/config-macros",
-    "packages/depinfo",
     "packages/native",
     "packages/asset-resolver",
+    "packages/depinfo",
     "packages/server",
 
     # Playwright tests
@@ -93,11 +93,8 @@ members = [
 
     # subsecond
     "packages/subsecond/subsecond",
-    "packages/subsecond/subsecond-macro",
     "packages/subsecond/subsecond-cli-support",
     "packages/subsecond/subsecond-types",
-    "packages/subsecond/subsecond-cli",
-    "packages/subsecond/subsecond-harness",
 
     # Full project examples
     "example-projects/fullstack-hackernews",
@@ -106,13 +103,13 @@ members = [
     "example-projects/file-explorer",
 
     # Simple examples that require a crate
-    "example-projects/tailwind",
-    "example-projects/pwa",
-    "example-projects/fullstack-hello-world",
-    "example-projects/fullstack-router",
-    "example-projects/fullstack-streaming",
-    "example-projects/fullstack-desktop",
-    "example-projects/fullstack-auth",
+    "examples/tailwind",
+    "examples/pwa",
+    "examples/fullstack-hello-world",
+    "examples/fullstack-router",
+    "examples/fullstack-streaming",
+    "examples/fullstack-desktop",
+    "examples/fullstack-auth",
 
     # Playwright tests
     "packages/playwright-tests/liveview",
@@ -294,10 +291,10 @@ wasmparser = "0.226.0"
 itertools = "0.14.0"
 object = { version = "0.36.0" }
 bincode = "1.3.3"
-url = "2.3.1"
 inventory = { version = "0.3.5" }
 macro-string = "0.1.4"
 walkdir = "2.5.0"
+url = "2.3.1"
 separator = "0.4.1"
 pretty_assertions = "1.4.0"
 serde_repr = "0.1"
@@ -331,6 +328,7 @@ crossterm = { version = "0.29.0" }
 ratatui = { version = "0.29.0" }
 shell-words = "1.1.0"
 color-eyre = "0.6.3"
+
 # native
 keyboard-types = { version = "0.7", default-features = false }
 winit = { version = "0.30.2", features = ["rwh_06"] }
