@@ -1,18 +1,15 @@
 use crate::config::DioxusConfig;
 use crate::CliSettings;
-use crate::{Platform, Result};
+use crate::Result;
 use anyhow::Context;
 use ignore::gitignore::Gitignore;
-use itertools::Itertools;
-use krates::{cm::Target, KrateDetails};
-use krates::{cm::TargetKind, Cmd, Krates, NodeId};
-use once_cell::sync::OnceCell;
-use std::path::Path;
+use krates::KrateDetails;
+use krates::{Cmd, Krates, NodeId};
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::{path::Path, sync::Mutex};
 use target_lexicon::Triple;
 use tokio::process::Command;
-use toml_edit::Item;
 
 pub struct Workspace {
     pub(crate) krates: Krates,
@@ -23,11 +20,18 @@ pub struct Workspace {
     pub(crate) ignore: Gitignore,
 }
 
-static WS: OnceCell<Arc<Workspace>> = OnceCell::new();
-
 impl Workspace {
     pub async fn current() -> Result<Arc<Workspace>> {
-        tracing::debug!("Loading workspace");
+        static WS: Mutex<Option<Arc<Workspace>>> = Mutex::new(None);
+
+        // Lock the workspace to prevent multiple threads from loading it at the same time
+        // If loading the workspace failed the first time, it won't be set and therefore permeate an error.
+        let mut lock = WS.lock().ok().context("Workspace lock is poisoned!")?;
+        if let Some(ws) = lock.as_ref() {
+            return Ok(ws.clone());
+        }
+
+        tracing::debug!("Loading workspace!");
 
         let cmd = Cmd::new();
         let builder = krates::Builder::new();
@@ -54,14 +58,18 @@ impl Workspace {
 
         let ignore = Self::workspace_gitignore(krates.workspace_root().as_std_path());
 
-        Ok(Arc::new(Self {
+        let workspace = Arc::new(Self {
             krates,
             settings,
             wasm_opt,
             sysroot: sysroot.trim().into(),
             rustc_version: rustc_version.trim().into(),
             ignore,
-        }))
+        });
+
+        lock.replace(workspace.clone());
+
+        Ok(workspace)
     }
 
     pub fn wasm_ld(&self) -> PathBuf {
@@ -80,7 +88,7 @@ impl Workspace {
             .exists()
     }
 
-    /// Find the main package in the workspace
+    /// Find the "main" package in the workspace. There might not be one!
     pub fn find_main_package(&self, package: Option<String>) -> Result<NodeId> {
         if let Some(package) = package {
             let mut workspace_members = self.krates.workspace_members();
@@ -251,8 +259,41 @@ impl Workspace {
         })
     }
 
-    pub fn workspace_dir(&self) -> PathBuf {
-        self.krates.workspace_root().as_std_path().to_path_buf()
+    /// Returns the root of the crate that the command is run from, without calling `cargo metadata`
+    ///
+    /// If the command is run from the workspace root, this will return the top-level Cargo.toml
+    pub(crate) fn crate_root_from_path() -> Result<PathBuf> {
+        /// How many parent folders are searched for a `Cargo.toml`
+        const MAX_ANCESTORS: u32 = 10;
+
+        /// Checks if the directory contains `Cargo.toml`
+        fn contains_manifest(path: &Path) -> bool {
+            std::fs::read_dir(path)
+                .map(|entries| {
+                    entries
+                        .filter_map(Result::ok)
+                        .any(|ent| &ent.file_name() == "Cargo.toml")
+                })
+                .unwrap_or(false)
+        }
+
+        // From the current directory we work our way up, looking for `Cargo.toml`
+        std::env::current_dir()
+            .ok()
+            .and_then(|mut wd| {
+                for _ in 0..MAX_ANCESTORS {
+                    if contains_manifest(&wd) {
+                        return Some(wd);
+                    }
+                    if !wd.pop() {
+                        break;
+                    }
+                }
+                None
+            })
+            .ok_or_else(|| {
+                crate::Error::Cargo("Failed to find directory containing Cargo.toml".to_string())
+            })
     }
 }
 

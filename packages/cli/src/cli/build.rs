@@ -72,8 +72,8 @@ pub(crate) struct BuildArgs {
     ///
     /// cargo rustc -- -Clink-arg=-Wl,-blah
     ///
-    #[clap(value_delimiter = ' ')]
-    pub(crate) rustc_args: Vec<String>,
+    #[clap(long)]
+    pub(crate) rustc_args: Option<String>,
 
     /// This flag only applies to fullstack builds. By default fullstack builds will run the server and client builds in parallel. This flag will force the build to run the server build first, then the client build. [default: false]
     #[clap(long)]

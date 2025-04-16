@@ -45,7 +45,7 @@ use tokio::process::Command;
 ///
 /// It also holds the watcher which is used to watch for changes in the filesystem and trigger rebuilds,
 /// hotreloads, asset updates, etc.
-pub(crate) struct AppRunner {
+pub(crate) struct AppServer {
     /// the platform of the "primary" crate (ie the first)
     pub(crate) workspace: Arc<Workspace>,
 
@@ -85,7 +85,7 @@ pub(crate) struct CachedFile {
     templates: HashMap<TemplateGlobalKey, HotReloadedTemplate>,
 }
 
-impl AppRunner {
+impl AppServer {
     /// Create the AppRunner and then initialize the filemap with the crate directory.
     pub(crate) async fn start(args: ServeArgs) -> Result<Self> {
         let workspace = Workspace::current().await?;

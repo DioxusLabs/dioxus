@@ -1,5 +1,5 @@
 use crate::{
-    BuildArgs, BuildArtifacts, BuildRequest, BuildStage, BuildUpdate, Platform, ProgressRx,
+    BuildArgs, BuildArtifacts, BuildRequest, BuildStage, BuilderUpdate, Platform, ProgressRx,
     ProgressTx, Result, StructuredOutput,
 };
 use anyhow::Context;
@@ -156,9 +156,9 @@ impl AppBuilder {
     }
 
     /// Wait for any new updates to the builder - either it completed or gave us a message etc
-    pub(crate) async fn wait(&mut self) -> BuildUpdate {
+    pub(crate) async fn wait(&mut self) -> BuilderUpdate {
         use futures_util::StreamExt;
-        use BuildUpdate::*;
+        use BuilderUpdate::*;
 
         // Wait for the build to finish or for it to emit a status message
         let update = tokio::select! {
@@ -167,9 +167,9 @@ impl AppBuilder {
                 // Replace the build with an infinitely pending task so we can select it again without worrying about deadlocks/spins
                 self.build_task = tokio::task::spawn(std::future::pending());
                 match bundle {
-                    Ok(Ok(bundle)) => BuildUpdate::BuildReady { bundle },
-                    Ok(Err(err)) => BuildUpdate::BuildFailed { err },
-                    Err(err) => BuildUpdate::BuildFailed { err: crate::Error::Runtime(format!("Build panicked! {:?}", err)) },
+                    Ok(Ok(bundle)) => BuilderUpdate::BuildReady { bundle },
+                    Ok(Err(err)) => BuilderUpdate::BuildFailed { err },
+                    Err(err) => BuilderUpdate::BuildFailed { err: crate::Error::Runtime(format!("Build panicked! {:?}", err)) },
                 }
             },
             Some(Ok(Some(msg))) = OptionFuture::from(self.stdout.as_mut().map(|f| f.next_line())) => {
@@ -194,7 +194,7 @@ impl AppBuilder {
         // doing so will cause the changes to be lost since this wait call is called under a cancellable task
         // todo - move this handling to a separate function that won't be cancelled
         match &update {
-            BuildUpdate::Progress { stage } => {
+            BuilderUpdate::Progress { stage } => {
                 // Prevent updates from flowing in after the build has already finished
                 if !self.is_finished() {
                     self.stage = stage.clone();
@@ -244,8 +244,8 @@ impl AppBuilder {
                     }
                 }
             }
-            BuildUpdate::CompilerMessage { .. } => {}
-            BuildUpdate::BuildReady { .. } => {
+            BuilderUpdate::CompilerMessage { .. } => {}
+            BuilderUpdate::BuildReady { .. } => {
                 self.compiled_crates = self.expected_crates;
                 self.bundling_progress = 1.0;
                 self.stage = BuildStage::Success;
@@ -253,7 +253,7 @@ impl AppBuilder {
                 self.complete_compile();
                 self.bundle_end = Some(Instant::now());
             }
-            BuildUpdate::BuildFailed { .. } => {
+            BuilderUpdate::BuildFailed { .. } => {
                 tracing::debug!("Setting builder to failed state");
                 self.stage = BuildStage::Failed;
             }
@@ -321,7 +321,7 @@ impl AppBuilder {
     pub(crate) async fn finish_build(&mut self) -> Result<BuildArtifacts> {
         loop {
             match self.wait().await {
-                BuildUpdate::Progress { stage } => {
+                BuilderUpdate::Progress { stage } => {
                     match &stage {
                         BuildStage::Compiling {
                             current,
@@ -345,19 +345,19 @@ impl AppBuilder {
 
                     tracing::info!(json = ?StructuredOutput::BuildUpdate { stage: stage.clone() });
                 }
-                BuildUpdate::CompilerMessage { message } => {
+                BuilderUpdate::CompilerMessage { message } => {
                     tracing::info!(json = ?StructuredOutput::CargoOutput { message: message.clone() }, %message);
                 }
-                BuildUpdate::BuildReady { bundle } => {
+                BuilderUpdate::BuildReady { bundle } => {
                     tracing::debug!(json = ?StructuredOutput::BuildFinished {
                         path: self.build.root_dir(),
                     });
                     return Ok(bundle);
                 }
-                BuildUpdate::BuildFailed { err } => {
+                BuilderUpdate::BuildFailed { err } => {
                     // Flush remaining compiler messages
                     while let Ok(Some(msg)) = self.rx.try_next() {
-                        if let BuildUpdate::CompilerMessage { message } = msg {
+                        if let BuilderUpdate::CompilerMessage { message } = msg {
                             tracing::info!(json = ?StructuredOutput::CargoOutput { message: message.clone() }, %message);
                         }
                     }
@@ -365,9 +365,9 @@ impl AppBuilder {
                     tracing::error!(?err, json = ?StructuredOutput::Error { message: err.to_string() });
                     return Err(err);
                 }
-                BuildUpdate::StdoutReceived { msg } => {}
-                BuildUpdate::StderrReceived { msg } => {}
-                BuildUpdate::ProcessExited { status } => {}
+                BuilderUpdate::StdoutReceived { msg } => {}
+                BuilderUpdate::StderrReceived { msg } => {}
+                BuilderUpdate::ProcessExited { status } => {}
             }
         }
     }
@@ -461,7 +461,6 @@ impl AppBuilder {
     }
 
     /// Gracefully kill the process and all of its children
-
     ///
     /// Uses the `SIGTERM` signal on unix and `taskkill` on windows.
     /// This complex logic is necessary for things like window state preservation to work properly.
@@ -578,7 +577,8 @@ impl AppBuilder {
     ) -> Result<PathBuf> {
         let target = dioxus_cli_config::android_session_cache_dir().join(bundled_name);
         tracing::debug!("Pushing asset to device: {target:?}");
-        let res = tokio::process::Command::new(crate::build::android_tools().unwrap().adb)
+
+        let res = tokio::process::Command::new(&crate::build::android_tools().unwrap().adb)
             .arg("push")
             .arg(&changed_file)
             .arg(&target)
@@ -1014,7 +1014,7 @@ We checked the folder: {}
 
         // Start backgrounded since .open() is called while in the arm of the top-level match
         tokio::task::spawn(async move {
-            let adb = crate::build::android_tools().unwrap().adb;
+            let adb = &crate::build::android_tools().unwrap().adb;
 
             // call `adb root` so we can push patches to the device
             if root {

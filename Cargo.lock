@@ -3646,7 +3646,6 @@ dependencies = [
  "ansi-to-html",
  "ansi-to-tui",
  "anyhow",
- "async-once-cell",
  "axum 0.8.3",
  "axum-extra",
  "axum-server",

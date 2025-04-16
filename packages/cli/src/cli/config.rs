@@ -1,6 +1,5 @@
 use super::*;
-use crate::TraceSrc;
-use crate::{metadata::crate_root, CliSettings};
+use crate::{CliSettings, TraceSrc, Workspace};
 
 /// Dioxus config file controls
 #[derive(Clone, Debug, Deserialize, Subcommand)]
@@ -72,7 +71,7 @@ impl From<BoolValue> for bool {
 
 impl Config {
     pub(crate) async fn config(self) -> Result<StructuredOutput> {
-        let crate_root = crate_root()?;
+        let crate_root = Workspace::crate_root_from_path()?;
         match self {
             Config::Init { name, force } => {
                 let conf_path = crate_root.join("Dioxus.toml");

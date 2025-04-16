@@ -1,5 +1,5 @@
 use crate::{
-    AppBuilder, BuildMode, BuildRequest, BuildUpdate, Error, Platform, Result, ServeArgs,
+    AppBuilder, BuildMode, BuildRequest, BuilderUpdate, Error, Platform, Result, ServeArgs,
     TraceController, TraceSrc,
 };
 
@@ -41,7 +41,7 @@ pub(crate) async fn serve_all(args: ServeArgs) -> Result<()> {
 
     // Load the args into a plan, resolving all tooling, build dirs, arguments, decoding the multi-target, etc
     let mut screen = Output::start(args.is_interactive_tty()).await?;
-    let mut builder = AppRunner::start(args).await?;
+    let mut builder = AppServer::start(args).await?;
     let mut devserver = WebServer::start(&builder)?;
 
     // This is our default splash screen. We might want to make this a fancier splash screen in the future
@@ -126,14 +126,14 @@ pub(crate) async fn serve_all(args: ServeArgs) -> Result<()> {
                 // todo: there might be more things to do here that require coordination with other pieces of the CLI
                 // todo: maybe we want to shuffle the runner around to send an "open" command instead of doing that
                 match update {
-                    BuildUpdate::Progress { .. } => {}
-                    BuildUpdate::CompilerMessage { message } => {
+                    BuilderUpdate::Progress { .. } => {}
+                    BuilderUpdate::CompilerMessage { message } => {
                         screen.push_cargo_log(message);
                     }
-                    BuildUpdate::BuildFailed { err } => {
+                    BuilderUpdate::BuildFailed { err } => {
                         tracing::error!("Build failed: {:?}", err);
                     }
-                    BuildUpdate::BuildReady { bundle } => {
+                    BuilderUpdate::BuildReady { bundle } => {
                         match bundle.mode {
                             BuildMode::Thin { .. } => {
                                 // We need to patch the app with the new bundle
@@ -158,13 +158,13 @@ pub(crate) async fn serve_all(args: ServeArgs) -> Result<()> {
                             }
                         }
                     }
-                    BuildUpdate::StdoutReceived { msg } => {
+                    BuilderUpdate::StdoutReceived { msg } => {
                         screen.push_stdio(platform, msg, tracing::Level::INFO);
                     }
-                    BuildUpdate::StderrReceived { msg } => {
+                    BuilderUpdate::StderrReceived { msg } => {
                         screen.push_stdio(platform, msg, tracing::Level::ERROR);
                     }
-                    BuildUpdate::ProcessExited { status } => {
+                    BuilderUpdate::ProcessExited { status } => {
                         if status.success() {
                             tracing::info!(
                                 r#"Application [{platform}] exited gracefully.

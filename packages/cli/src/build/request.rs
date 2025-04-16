@@ -645,7 +645,7 @@ impl BuildRequest {
                 Platform::Android => {
                     super::android_tools()
                         .unwrap()
-                        .autodetect_android_triple()
+                        .autodetect_android_device_triple()
                         .await
                 }
             },
@@ -670,6 +670,9 @@ impl BuildRequest {
                 .context("Failed to create temporary file for rustc wrapper args")?,
         );
 
+        let extra_rustc_args = shell_words::split(&args.rustc_args.clone().unwrap_or_default())
+            .context("Failed to parse rustc args")?;
+
         Ok(Self {
             platform,
             features,
@@ -686,7 +689,7 @@ impl BuildRequest {
             link_args_file,
             link_err_file,
             rustc_wrapper_args_file,
-            extra_rustc_args: args.rustc_args.clone(),
+            extra_rustc_args,
             extra_cargo_args: args.cargo_args.clone(),
             nightly: args.nightly,
             cargo_package: package,
@@ -1155,7 +1158,7 @@ impl BuildRequest {
         tracing::debug!("Patching existing bundle");
         ctx.status_hotpatching();
 
-        let raw_args = std::fs::read_to_string(&self.link_args_file())
+        let raw_args = std::fs::read_to_string(&self.link_args_file.path())
             .context("Failed to read link args from file")?;
         let args = raw_args.lines().collect::<Vec<_>>();
 
@@ -1168,20 +1171,22 @@ impl BuildRequest {
         // rely on them *too* much, but the *are* fundamental to how rust compiles your projects, and
         // linker interfaces probably won't change drastically for another 40 years.
         //
-        // We need to tear apart this command andonly pass the args that are relevant to our thin link.
+        // We need to tear apart this command and only pass the args that are relevant to our thin link.
         // Mainly, we don't want any rlibs to be linked. Occasionally some libraries like objc_exception
         // export a folder with their artifacts - unsure if we actually need to include them. Generally
         // you can err on the side that most *libraries* don't need to be linked here since dlopen
-        // satisfies those symbols anyways.
+        // satisfies those symbols anyways when the binary is loaded.
         //
         // Many args are passed twice, too, which can be confusing, but generally don't have any real
-        // effect. Note that on macos/ios, there's a special macho header that *needs* to be set.
+        // effect. Note that on macos/ios, there's a special macho header that needs to be set, otherwise
+        // dyld will complain.a
         //
         // Also, some flags in darwin land might become deprecated, need to be super conservative:
         // - https://developer.apple.com/forums/thread/773907
         //
+        // The format of this command roughly follows:
         // ```
-        // cc
+        // clang
         //     /dioxus/target/debug/subsecond-cli
         //     /var/folders/zs/gvrfkj8x33d39cvw2p06yc700000gn/T/rustcAqQ4p2/symbols.o
         //     /dioxus/target/subsecond-dev/deps/subsecond_harness-acfb69cb29ffb8fa.05stnb4bovskp7a00wyyf7l9s.rcgu.o
@@ -1332,13 +1337,19 @@ impl BuildRequest {
 
         match triple.operating_system {
             // wasm32-unknown-unknown -> use wasm-ld (gnu-lld)
+            //
+            // We need to import a few things - namely the memory and ifunc table.
+            //
+            // We can safely export everything, I believe, though that led to issues with the "fat"
+            // binaries that also might lead to issues here too. wasm-bindgen chokes on some symbols
+            // and the resulting JS has issues.
+            //
+            // We turn on both --pie and --experimental-pic but I think we only need --pie.
             OperatingSystem::Unknown if self.platform == Platform::Web => {
                 out_args.extend([
                     "--import-memory".to_string(),
                     "--import-table".to_string(),
                     "--growable-table".to_string(),
-                    "--export".to_string(),
-                    "main".to_string(),
                     "--export-all".to_string(),
                     "--allow-undefined".to_string(),
                     "--no-demangle".to_string(),
@@ -1348,10 +1359,10 @@ impl BuildRequest {
                 ]);
             }
 
-            // this uses "cc" and these args need to be ld compatible
+            // This uses "cc" and these args need to be ld compatible
             //
-            // aarch64-apple-ios
-            // aarch64-apple-darwin
+            // Most importantly, we want to pass `-dylib` to both CC and the linker to indicate that
+            // we want to generate the shared library instead of an executable.
             OperatingSystem::IOS(_) | OperatingSystem::MacOSX(_) | OperatingSystem::Darwin(_) => {
                 out_args.extend(["-Wl,-dylib".to_string()]);
 
@@ -1369,6 +1380,8 @@ impl BuildRequest {
             }
 
             // android/linux need to be compatible with lld
+            //
+            // android currently drags along its own libraries and other zany flags
             OperatingSystem::Linux if triple.environment == Environment::Android => {
                 out_args.extend(
                     [
@@ -1899,7 +1912,6 @@ impl BuildRequest {
     }
 
     fn platform_exe_name(&self) -> String {
-        use convert_case::{Case, Casing};
         match self.platform {
             Platform::MacOS => self.executable_name().to_string(),
             Platform::Ios => self.executable_name().to_string(),
@@ -2841,10 +2853,10 @@ impl BuildRequest {
         }
 
         // Make sure to optimize the main wasm file if requested or if bundle splitting
-        // if should_bundle_split || self.release {
-        //     ctx.status_optimizing_wasm();
-        //     wasm_opt::optimize(&post_bindgen_wasm, &post_bindgen_wasm, &wasm_opt_options).await?;
-        // }
+        if should_bundle_split || self.release {
+            ctx.status_optimizing_wasm();
+            wasm_opt::optimize(&post_bindgen_wasm, &post_bindgen_wasm, &wasm_opt_options).await?;
+        }
 
         // Make sure to register the main wasm file with the asset system
         assets.register_asset(&post_bindgen_wasm, AssetOptions::Unknown)?;
@@ -3116,10 +3128,6 @@ impl BuildRequest {
 
     pub(crate) fn incremental_cache_dir(&self) -> PathBuf {
         self.platform_dir().join("incremental-cache")
-    }
-
-    pub(crate) fn link_args_file(&self) -> PathBuf {
-        self.incremental_cache_dir().join("link_args.txt")
     }
 
     /// Check for tooling that might be required for this build.

@@ -1,6 +1,6 @@
 use crate::{
     serve::{ansi_buffer::AnsiStringLine, ServeUpdate, WebServer},
-    BuildStage, BuildUpdate, Platform, TraceContent, TraceMsg, TraceSrc,
+    BuildStage, BuilderUpdate, Platform, TraceContent, TraceMsg, TraceSrc,
 };
 use crossterm::{
     cursor::{Hide, Show},
@@ -25,7 +25,7 @@ use std::{
 };
 use tracing::Level;
 
-use super::AppRunner;
+use super::AppServer;
 
 const TICK_RATE_MS: u64 = 100;
 const VIEWPORT_MAX_WIDTH: u16 = 100;
@@ -69,7 +69,7 @@ pub struct Output {
 #[allow(unused)]
 #[derive(Clone, Copy)]
 struct RenderState<'a> {
-    runner: &'a AppRunner,
+    runner: &'a AppServer,
     server: &'a WebServer,
 }
 
@@ -370,19 +370,19 @@ impl Output {
     /// approach, but then we'd need to do that *everywhere* instead of simply performing a react-like
     /// re-render when external state changes. Ratatui will diff the intermediate buffer, so we at least
     /// we won't be drawing it.
-    pub(crate) fn new_build_update(&mut self, update: &BuildUpdate) {
+    pub(crate) fn new_build_update(&mut self, update: &BuilderUpdate) {
         match update {
-            BuildUpdate::Progress {
+            BuilderUpdate::Progress {
                 stage: BuildStage::Starting { .. },
             } => self.tick_animation = true,
-            BuildUpdate::BuildReady { .. } => self.tick_animation = false,
-            BuildUpdate::BuildFailed { .. } => self.tick_animation = false,
+            BuilderUpdate::BuildReady { .. } => self.tick_animation = false,
+            BuilderUpdate::BuildFailed { .. } => self.tick_animation = false,
             _ => {}
         }
     }
 
     /// Render the current state of everything to the console screen
-    pub fn render(&mut self, runner: &AppRunner, server: &WebServer) {
+    pub fn render(&mut self, runner: &AppServer, server: &WebServer) {
         if !self.interactive {
             return;
         }

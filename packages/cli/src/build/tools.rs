@@ -1,10 +1,8 @@
-use crate::Result;
-use anyhow::Context;
 use itertools::Itertools;
 use std::{path::PathBuf, sync::Arc};
 use target_lexicon::{
-    Aarch64Architecture, Architecture, ArmArchitecture, BinaryFormat, Environment, OperatingSystem,
-    Triple, Vendor, X86_32Architecture,
+    Aarch64Architecture, Architecture, ArmArchitecture, Environment, OperatingSystem, Triple,
+    X86_32Architecture,
 };
 use tokio::process::Command;
 
@@ -19,7 +17,7 @@ pub(crate) struct AndroidTools {
 }
 
 #[memoize::memoize]
-pub fn android_tools() -> Option<AndroidTools> {
+pub fn android_tools() -> Option<Arc<AndroidTools>> {
     // We check for SDK first since users might install Android Studio and then install the SDK
     // After that they might install the NDK, so the SDK drives the source of truth.
     let sdk = var_or_debug("ANDROID_SDK_ROOT")
@@ -113,11 +111,11 @@ pub fn android_tools() -> Option<AndroidTools> {
             None
         });
 
-    Some(AndroidTools {
+    Some(Arc::new(AndroidTools {
         ndk,
         adb,
         java_home,
-    })
+    }))
 }
 
 impl AndroidTools {
@@ -147,8 +145,16 @@ impl AndroidTools {
             .path()
     }
 
+    /// Return the location of the clang toolchain for the given target triple.
+    ///
+    /// Note that we use clang:
+    /// "~/Library/Android/sdk/ndk/25.2.9519653/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android24-clang"
+    ///
+    /// But if we needed the linker, we would use:
+    /// "~/Library/Android/sdk/ndk/25.2.9519653/toolchains/llvm/prebuilt/darwin-x86_64/bin/ld"
+    ///
+    /// However, for our purposes, we only go through the cc driver and not the linker directly.
     pub(crate) fn android_cc(&self, triple: &Triple) -> PathBuf {
-        // "/Users/jonkelley/Library/Android/sdk/ndk/25.2.9519653/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android24-clang"
         let suffix = if cfg!(target_os = "windows") {
             ".cmd"
         } else {
@@ -157,22 +163,6 @@ impl AndroidTools {
 
         self.android_tools_dir().join(format!(
             "{}{}-clang{}",
-            triple,
-            self.min_sdk_version(),
-            suffix
-        ))
-    }
-
-    pub(crate) fn android_ld(&self, triple: &Triple) -> PathBuf {
-        // "/Users/jonkelley/Library/Android/sdk/ndk/25.2.9519653/toolchains/llvm/prebuilt/darwin-x86_64/bin/ld"
-        let suffix = if cfg!(target_os = "windows") {
-            ".cmd"
-        } else {
-            ""
-        };
-
-        self.android_tools_dir().join(format!(
-            "{}{}-clang++{}",
             triple,
             self.min_sdk_version(),
             suffix
@@ -198,13 +188,6 @@ impl AndroidTools {
 
     pub(crate) fn java_home(&self) -> Option<PathBuf> {
         self.java_home.clone()
-        // copilot suggested this??
-        // self.ndk.join("platforms").join("android-24").join("arch-arm64").join("usr").join("lib")
-        //     .join("jvm")
-        //     .join("default")
-        //     .join("lib")
-        //     .join("server")
-        //     .join("libjvm.so")
     }
 
     pub(crate) fn android_jnilib(triple: &Triple) -> &'static str {
@@ -218,26 +201,7 @@ impl AndroidTools {
         }
     }
 
-    // todo: the new Triple type might be able to handle the different arm flavors
-    // ie armv7 vs armv7a
-    pub(crate) fn android_clang_triplet(triple: &Triple) -> String {
-        use target_lexicon::Architecture;
-        match triple.architecture {
-            Architecture::Arm(_) => "armv7a-linux-androideabi".to_string(),
-            _ => triple.to_string(),
-        }
-    }
-
-    // pub(crate) fn android_target_triplet(&self) -> &'static str {
-    //     match self {
-    //         Arch::Arm => "armv7-linux-androideabi",
-    //         Arch::Arm64 => "aarch64-linux-android",
-    //         Arch::X86 => "i686-linux-android",
-    //         Arch::X64 => "x86_64-linux-android",
-    //     }
-    // }
-
-    pub async fn autodetect_android_triple(&self) -> Triple {
+    pub(crate) async fn autodetect_android_device_triple(&self) -> Triple {
         // Use the host's triple and then convert field by field
         // ie, the "best" emulator for an m1 mac would be: "aarch64-linux-android"
         //  - We assume android is always "linux"

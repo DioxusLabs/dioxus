@@ -1,10 +1,10 @@
 //! Report progress about the build to the user. We use channels to report progress back to the CLI.
+
+use super::BuildMode;
 use crate::{BuildArtifacts, BuildStage, Error, TraceSrc};
 use cargo_metadata::CompilerMessage;
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use std::{path::PathBuf, process::ExitStatus};
-
-use super::BuildMode;
 
 /// The context of the build process. While the BuildRequest is a "plan" for the build, the BuildContext
 /// provides some dynamic configuration that is only known at runtime. For example, the Progress channel
@@ -17,14 +17,14 @@ pub struct BuildContext {
     pub mode: BuildMode,
 }
 
-pub type ProgressTx = UnboundedSender<BuildUpdate>;
-pub type ProgressRx = UnboundedReceiver<BuildUpdate>;
+pub type ProgressTx = UnboundedSender<BuilderUpdate>;
+pub type ProgressRx = UnboundedReceiver<BuilderUpdate>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BuildId(pub usize);
 
 #[allow(clippy::large_enum_variant)]
-pub enum BuildUpdate {
+pub enum BuilderUpdate {
     Progress {
         stage: BuildStage,
     },
@@ -64,25 +64,25 @@ pub enum BuildUpdate {
 
 impl BuildContext {
     pub(crate) fn status_wasm_bindgen_start(&self) {
-        _ = self.tx.unbounded_send(BuildUpdate::Progress {
+        _ = self.tx.unbounded_send(BuilderUpdate::Progress {
             stage: BuildStage::RunningBindgen,
         });
     }
 
     pub(crate) fn status_splitting_bundle(&self) {
-        _ = self.tx.unbounded_send(BuildUpdate::Progress {
+        _ = self.tx.unbounded_send(BuilderUpdate::Progress {
             stage: BuildStage::SplittingBundle,
         });
     }
 
     pub(crate) fn status_start_bundle(&self) {
-        _ = self.tx.unbounded_send(BuildUpdate::Progress {
+        _ = self.tx.unbounded_send(BuilderUpdate::Progress {
             stage: BuildStage::Bundling,
         });
     }
 
     pub(crate) fn status_running_gradle(&self) {
-        _ = self.tx.unbounded_send(BuildUpdate::Progress {
+        _ = self.tx.unbounded_send(BuilderUpdate::Progress {
             stage: BuildStage::RunningGradle,
         })
     }
@@ -90,7 +90,7 @@ impl BuildContext {
     pub(crate) fn status_build_diagnostic(&self, message: CompilerMessage) {
         _ = self
             .tx
-            .unbounded_send(BuildUpdate::CompilerMessage { message });
+            .unbounded_send(BuilderUpdate::CompilerMessage { message });
     }
 
     pub(crate) fn status_build_error(&self, line: String) {
@@ -102,7 +102,7 @@ impl BuildContext {
     }
 
     pub(crate) fn status_build_progress(&self, count: usize, total: usize, name: String) {
-        _ = self.tx.unbounded_send(BuildUpdate::Progress {
+        _ = self.tx.unbounded_send(BuilderUpdate::Progress {
             stage: BuildStage::Compiling {
                 current: count,
                 total,
@@ -112,7 +112,7 @@ impl BuildContext {
     }
 
     pub(crate) fn status_starting_build(&self, crate_count: usize) {
-        _ = self.tx.unbounded_send(BuildUpdate::Progress {
+        _ = self.tx.unbounded_send(BuilderUpdate::Progress {
             stage: BuildStage::Starting {
                 patch: matches!(self.mode, BuildMode::Thin { .. }),
                 crate_count,
@@ -121,12 +121,12 @@ impl BuildContext {
     }
 
     pub(crate) fn status_copied_asset(
-        progress: &UnboundedSender<BuildUpdate>,
+        progress: &UnboundedSender<BuilderUpdate>,
         current: usize,
         total: usize,
         path: PathBuf,
     ) {
-        _ = progress.unbounded_send(BuildUpdate::Progress {
+        _ = progress.unbounded_send(BuilderUpdate::Progress {
             stage: BuildStage::CopyingAssets {
                 current,
                 total,
@@ -136,25 +136,25 @@ impl BuildContext {
     }
 
     pub(crate) fn status_optimizing_wasm(&self) {
-        _ = self.tx.unbounded_send(BuildUpdate::Progress {
+        _ = self.tx.unbounded_send(BuilderUpdate::Progress {
             stage: BuildStage::OptimizingWasm,
         });
     }
 
     pub(crate) fn status_hotpatching(&self) {
-        _ = self.tx.unbounded_send(BuildUpdate::Progress {
+        _ = self.tx.unbounded_send(BuilderUpdate::Progress {
             stage: BuildStage::Hotpatching,
         });
     }
 
     pub(crate) fn status_installing_tooling(&self) {
-        _ = self.tx.unbounded_send(BuildUpdate::Progress {
+        _ = self.tx.unbounded_send(BuilderUpdate::Progress {
             stage: BuildStage::InstallingTooling,
         });
     }
 
     pub(crate) fn status_compressing_assets(&self) {
-        _ = self.tx.unbounded_send(BuildUpdate::Progress {
+        _ = self.tx.unbounded_send(BuilderUpdate::Progress {
             stage: BuildStage::CompressingAssets,
         });
     }

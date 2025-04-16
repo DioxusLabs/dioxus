@@ -1,7 +1,7 @@
 use crate::{
     config::WebHttpsConfig,
     serve::{ServeArgs, ServeUpdate},
-    BuildRequest, BuildStage, BuildUpdate, Platform, Result, TraceSrc,
+    BuildRequest, BuildStage, BuilderUpdate, Platform, Result, TraceSrc,
 };
 use anyhow::Context;
 use axum::{
@@ -46,7 +46,7 @@ use tower_http::{
     ServiceBuilderExt,
 };
 
-use super::{AppBuilder, AppRunner};
+use super::{AppBuilder, AppServer};
 
 /// The webserver that serves statics assets (if fullstack isn't already doing that) and the websocket
 /// communication layer that we use to send status updates and hotreloads to the client.
@@ -77,7 +77,7 @@ impl WebServer {
     ///
     /// This will also start the websocket server that powers the devtools. If you want to communicate
     /// with connected devtools clients, this is the place to do it.
-    pub(crate) fn start(runner: &AppRunner) -> Result<Self> {
+    pub(crate) fn start(runner: &AppServer) -> Result<Self> {
         let (hot_reload_sockets_tx, hot_reload_sockets_rx) = futures_channel::mpsc::unbounded();
         let (build_status_sockets_tx, build_status_sockets_rx) = futures_channel::mpsc::unbounded();
 
@@ -226,9 +226,9 @@ impl WebServer {
     }
 
     /// Sends an updated build status to all clients.
-    pub(crate) async fn new_build_update(&mut self, update: &BuildUpdate) {
+    pub(crate) async fn new_build_update(&mut self, update: &BuilderUpdate) {
         match update {
-            BuildUpdate::Progress { stage } => {
+            BuilderUpdate::Progress { stage } => {
                 // Todo(miles): wire up more messages into the splash screen UI
                 match stage {
                     BuildStage::Success => {}
@@ -256,9 +256,9 @@ impl WebServer {
                     _ => {}
                 }
             }
-            BuildUpdate::CompilerMessage { .. } => {}
-            BuildUpdate::BuildReady { .. } => {}
-            BuildUpdate::BuildFailed { err } => {
+            BuilderUpdate::CompilerMessage { .. } => {}
+            BuilderUpdate::BuildReady { .. } => {}
+            BuilderUpdate::BuildFailed { err } => {
                 let error = err.to_string();
                 self.build_status.set(Status::BuildError {
                     error: ansi_to_html::convert(&error).unwrap_or(error),
@@ -266,9 +266,9 @@ impl WebServer {
                 self.send_reload_failed().await;
                 self.send_build_status().await;
             }
-            BuildUpdate::StdoutReceived { msg } => {}
-            BuildUpdate::StderrReceived { msg } => {}
-            BuildUpdate::ProcessExited { status } => {}
+            BuilderUpdate::StdoutReceived { msg } => {}
+            BuilderUpdate::StderrReceived { msg } => {}
+            BuilderUpdate::ProcessExited { status } => {}
         }
     }
 
@@ -426,7 +426,7 @@ async fn devserver_mainloop(
 /// - Setting up the file serve service
 /// - Setting up the websocket endpoint for devtools
 fn build_devserver_router(
-    runner: &AppRunner,
+    runner: &AppServer,
     hot_reload_sockets: UnboundedSender<WebSocket>,
     build_status_sockets: UnboundedSender<WebSocket>,
     fullstack_address: Option<SocketAddr>,
@@ -525,7 +525,7 @@ fn build_devserver_router(
     Ok(router)
 }
 
-fn build_serve_dir(runner: &AppRunner) -> axum::routing::MethodRouter {
+fn build_serve_dir(runner: &AppServer) -> axum::routing::MethodRouter {
     use tower::ServiceBuilder;
 
     static CORS_UNSAFE: (HeaderValue, HeaderValue) = (

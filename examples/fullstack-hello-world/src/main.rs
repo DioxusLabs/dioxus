@@ -27,7 +27,7 @@ fn app() -> Element {
 
 #[server]
 async fn say_hi() -> Result<String, ServerFnError> {
-    Ok("DUAL asdasd ACHIEVED?????!".to_string())
+    Ok("DUAL asdasd ACHIEVED?asdasdads????!".to_string())
 }
 
 #[server]

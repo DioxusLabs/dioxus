@@ -29,7 +29,7 @@ use std::{
     fs::File,
     io::{Read, Write},
     path::PathBuf,
-    process::{Command, Stdio},
+    process::Command,
 };
 
 /// Build, Bundle & Ship Dioxus Apps.

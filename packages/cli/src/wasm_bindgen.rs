@@ -1,8 +1,7 @@
 use crate::{CliSettings, Result};
 use anyhow::{anyhow, Context};
 use flate2::read::GzDecoder;
-use std::path::PathBuf;
-use std::{path::Path, process::Stdio};
+use std::path::{Path, PathBuf};
 use tar::Archive;
 use tempfile::TempDir;
 use tokio::{fs, process::Command};

@@ -128,7 +128,6 @@ dircpy = "0.3.19"
 plist = "1.7.0"
 memoize = "0.5.1"
 
-async-once-cell = { workspace = true }
 depinfo = { workspace = true }
 
 [build-dependencies]
