@@ -1,0 +1,3 @@
+[application]
+[web.app]
+base_path = "base-path"
