@@ -34,7 +34,7 @@ pub(crate) fn process_file_to_with_options(
     }
     if let Some(parent) = output_path.parent() {
         if !parent.exists() {
-            std::fs::create_dir_all(parent)?;
+            std::fs::create_dir_all(parent).context("Failed to create directory")?;
         }
     }
 
@@ -84,7 +84,7 @@ pub(crate) fn process_file_to_with_options(
     }
 
     // If everything was successful, rename the temp file to the final output path
-    std::fs::rename(temp_path, output_path)?;
+    std::fs::rename(temp_path, output_path).context("Failed to rename output file")?;
 
     Ok(())
 }

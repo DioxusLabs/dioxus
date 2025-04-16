@@ -138,7 +138,7 @@ impl LinkAction {
                             };
                             // The output extension path is the extension set by the options
                             // or the extension of the source file if we don't recognize the file
-                            let ext = asset
+                            let mut ext = asset
                                 .bundled_asset
                                 .options()
                                 .extension()
@@ -149,13 +149,18 @@ impl LinkAction {
                                         .map(|ext| ext.to_string_lossy().to_string())
                                 });
 
+                            // Rewrite scss as css
+                            if let Some("scss" | "sass") = ext.as_deref() {
+                                ext = Some("css".to_string());
+                            }
+
                             let hash = hash.bytes();
                             let hash = hash
                                 .iter()
                                 .map(|byte| format!("{byte:x}"))
                                 .collect::<String>();
                             let mut bundled_path =
-                                PathBuf::from(format!("/{}-{hash}", file_name.to_string_lossy()));
+                                PathBuf::from(format!("{}-{hash}", file_name.to_string_lossy()));
 
                             if let Some(ext) = ext {
                                 bundled_path.set_extension(ext);
