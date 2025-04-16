@@ -240,7 +240,27 @@ impl Bundle {
         }
 
         if self.build_arguments.platform() == Platform::Ios {
-            settings = settings.target("aarch64-apple-ios".to_string());
+            // For iOS bundles, use the same target that was used for building
+            // This will respect the architecture detection or explicit target setting
+            if let Some(target) = self.build_arguments.target_args.target.as_ref() {
+                settings = settings.target(target.to_string());
+            } else if self.build_arguments.target_args.device == Some(true) {
+                // For device builds, always use aarch64-apple-ios
+                settings = settings.target("aarch64-apple-ios".to_string());
+            } else {
+                // For simulator builds, detect the host architecture
+                match DioxusCrate::detect_host_arch() {
+                    Some(arch) if arch == "x86_64" => {
+                        tracing::info!("Bundle: Detected Intel Mac, using x86_64-apple-ios target");
+                        settings = settings.target("x86_64-apple-ios".to_string());
+                    }
+                    _ => {
+                        tracing::info!("Bundle: Default to aarch64-apple-ios-sim for Apple Silicon or unknown architectures");
+                        // Default to aarch64-apple-ios-sim for Apple Silicon or unknown architectures
+                        settings = settings.target("aarch64-apple-ios-sim".to_string());
+                    }
+                }
+            }
         }
 
         let settings = settings
