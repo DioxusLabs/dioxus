@@ -1,12 +1,10 @@
 use dioxus_core::internal::HotReloadTemplateWithLocation;
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::{HashMap, HashSet},
-    path::PathBuf,
-};
+use std::path::PathBuf;
 use subsecond_types::JumpTable;
 
 /// A message the hot reloading server sends to the client
+#[non_exhaustive]
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub enum DevserverMsg {
     /// Attempt a hotreload
@@ -29,6 +27,7 @@ pub enum DevserverMsg {
 /// A message the client sends from the frontend to the devserver
 ///
 /// This is used to communicate with the devserver
+#[non_exhaustive]
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub enum ClientMsg {
     Initialize {

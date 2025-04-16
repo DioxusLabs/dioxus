@@ -366,17 +366,6 @@ pub fn register_handler(handler: Arc<dyn Fn() + Send + Sync + 'static>) {
 /// This function will load the library and thus allocates. In cannot be used when the program is
 /// stopped (ie in a signal handler).
 pub unsafe fn apply_patch(mut table: JumpTable) -> Result<(), PatchError> {
-    // As a form of integrity checking, we use the ASLR reference from the incoming jump table to assert that it is intended to patch us
-    // #[cfg(any(unix, windows))]
-    // if table.aslr_reference != aslr_reference() as u64 {
-    //     println!(
-    //         "ASLR reference mismatch: {} != {}",
-    //         table.aslr_reference,
-    //         aslr_reference()
-    //     );
-    //     return;
-    // }
-
     // On non-wasm platforms we can just use libloading and the known aslr offsets to load the library
     #[cfg(any(unix, windows))]
     {

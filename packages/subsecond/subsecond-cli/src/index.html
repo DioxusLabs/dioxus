@@ -5,74 +5,6 @@
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Subsecond</title>
         <script>
-            /**
-             * @typedef {object} JumpTable
-             * @property {string} lib - The URL of the WebAssembly module to fetch and instantiate.
-             * @property {{[key: number]: number}} map - The exports of the WebAssembly module to patch.
-             */
-            /**
-             * Loads a WebAssembly module from a given URL, instantiates it, and applies a patch
-             * to the provided base object using the module's exported functions.
-             *
-             * @param {JumpTable} jump - The jump table to be patched with the WebAssembly module's exports.
-             * @param {WebAssembly.Exports} base - The base object to be patched with the WebAssembly module's exports.
-             * @returns {void} This function does not return a value.
-             */
-            function loadAndPatch(jump, base) {
-                window.jump = jump;
-                fetch(jump.lib)
-                    .then((response) => response.arrayBuffer())
-                    .then((bytes) => {
-                        // Expand the memory and table size to accommodate the new data and functions
-                        //
-                        // Normally we wouldn't be able to trust that we are allocating *enough* memory
-                        // for BSS segments, but ld emits them in the binary when using import-memory.
-                        //
-                        // Make sure we align the memory base to the page size
-                        const pageSize = 64 * 1024;
-                        const memory_base = Math.ceil((base.memory.buffer.byteLength / pageSize) + 1 ) * pageSize;
-                        base.memory.grow(bytes.byteLength / pageSize);
-
-                        // We grow the ifunc table to accommodate the new functions
-                        // In theory we could just put all the ifuncs in the jump map and use that for our count,
-                        // but there's no guarantee from the jump table that it references "itself"
-                        // We might need a sentinel value for each ifunc in the jump map to indicate that it is
-                        const table_base = base.__indirect_function_table.grow(jump.ifunc_count);
-
-                        console.log("Memory base:", memory_base);
-                        console.log("Table base:", table_base);
-
-                        for (let key of Object.keys(jump.map)) {
-                            let entry = jump.map[key];
-                            if (entry !== undefined) {
-                                jump.map[key] = entry + table_base;
-                            }
-                        }
-
-                        let imports = {
-                            env: {
-                                __memory_base: memory_base,
-                                __table_base: table_base,
-                                __indirect_function_table: base.__indirect_function_table,
-                                __stack_pointer: base.__stack_pointer,
-                                __tls_base: base.__tls_base,
-                                memory: base.memory,
-                            },
-                        };
-
-                        for (const key of Object.keys(base)) {
-                            imports.env[key] = base[key];
-                        }
-
-
-                        return WebAssembly.instantiate(bytes, imports);
-                    }).then((patch) => {
-                        patch.instance.exports["__wasm_apply_data_relocs"]();
-                        base["__subsecond_wasm_patch"](jump);
-                    });
-            }
-
-
             function main() {
                 const socket = new WebSocket("ws://localhost:9393");
 
@@ -84,7 +16,6 @@
                             jump.lib = jump.lib.split('/').pop();
                             console.log("Patching jump table with:", jump);
                             window.wasmExports["__subsecond_wasm_patch"](jump);
-                            // loadAndPatch(jump, window.wasmExports);
                         } else {
                             console.error("wasmExports is not initialized yet.");
                         }
