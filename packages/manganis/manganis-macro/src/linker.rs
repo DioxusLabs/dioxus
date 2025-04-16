@@ -23,11 +23,6 @@ pub fn generate_link_section(asset: impl ToTokens) -> TokenStream2 {
 
         // Now that we have the size of the asset, copy the bytes into a static array
         #[link_section = #section_name]
-        #[used]
         static __LINK_SECTION: [u8; __LEN] = manganis::macro_helpers::copy_bytes(__BYTES);
-
-        fn __keep_link_section() -> u8 {
-            unsafe { std::ptr::read_volatile(__LINK_SECTION.as_ptr()) }
-        }
     }
 }

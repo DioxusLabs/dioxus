@@ -171,7 +171,9 @@ impl ToTokens for AssetParser {
 
                 #link_section
 
-                manganis::Asset::new(__ASSET, __keep_link_section)
+                manganis::Asset::new(
+                    manganis::macro_helpers::deserialize_asset(&__LINK_SECTION)
+                )
             }
         })
     }

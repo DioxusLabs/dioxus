@@ -106,19 +106,14 @@ impl BundledAsset {
 pub struct Asset {
     /// The bundled asset
     bundled: BundledAsset,
-    /// The link section for the asset
-    keep_link_section: fn() -> u8,
 }
 
 impl Asset {
     #[doc(hidden)]
     /// This should only be called from the macro
     /// Create a new asset from the bundled form of the asset and the link section
-    pub const fn new(bundled: BundledAsset, keep_link_section: fn() -> u8) -> Self {
-        Self {
-            bundled,
-            keep_link_section,
-        }
+    pub const fn new(bundled: BundledAsset) -> Self {
+        Self { bundled }
     }
 
     /// Get the bundled asset
@@ -131,9 +126,6 @@ impl Asset {
     /// Attempts to resolve it against an `assets` folder in the current directory.
     /// If that doesn't exist, it will resolve against the cargo manifest dir
     pub fn resolve(&self) -> PathBuf {
-        // Force a volatile read of the asset link section to ensure the symbol makes it into the binary
-        (self.keep_link_section)();
-
         #[cfg(feature = "dioxus")]
         // If the asset is relative, we resolve the asset at the current directory
         if !dioxus_core_types::is_bundled_app() {

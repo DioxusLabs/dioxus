@@ -29,6 +29,15 @@ pub const fn serialize_asset(asset: &BundledAsset) -> ConstVec<u8> {
     serialize_const(asset, write)
 }
 
+/// Deserialize a const buffer into a BundledAsset
+pub const fn deserialize_asset(bytes: &[u8]) -> BundledAsset {
+    let bytes = ConstVec::new().extend(bytes);
+    match const_serialize::deserialize_const!(BundledAsset, bytes.read()) {
+        Some((_, asset)) => asset,
+        None => panic!("Failed to deserialize asset. This may be caused by a mismatch between your dioxus and dioxus-cli versions"),
+    }
+}
+
 /// Copy a slice into a constant sized buffer at compile time
 pub const fn copy_bytes<const N: usize>(bytes: &[u8]) -> [u8; N] {
     let mut out = [0; N];

@@ -8,7 +8,6 @@ use std::error::Error;
 use std::fmt::Debug;
 use std::fs;
 use std::io::{Read, Seek, Write};
-use std::ops::Range;
 use std::path::PathBuf;
 use std::process::Command;
 use target_lexicon::Triple;
@@ -159,8 +158,9 @@ impl LinkAction {
                                 .iter()
                                 .map(|byte| format!("{byte:x}"))
                                 .collect::<String>();
+                            let file_stem = source_path.file_stem().unwrap_or(file_name);
                             let mut bundled_path =
-                                PathBuf::from(format!("{}-{hash}", file_name.to_string_lossy()));
+                                PathBuf::from(format!("{}-{hash}", file_stem.to_string_lossy()));
 
                             if let Some(ext) = ext {
                                 bundled_path.set_extension(ext);
@@ -221,7 +221,7 @@ impl LinkAction {
 
 struct AssetReference {
     file: PathBuf,
-    byte_span: Range<usize>,
+    offset: usize,
     bundled_asset: BundledAsset,
 }
 
@@ -229,15 +229,24 @@ impl AssetReference {
     fn write(&self) -> std::io::Result<()> {
         let new_data = ConstVec::new();
         let new_data = const_serialize::serialize_const(&self.bundled_asset, new_data);
+        tracing::info!(
+            "Writing {} bytes to {} at offset {}",
+            new_data.len(),
+            self.file.display(),
+            self.offset
+        );
+        tracing::info!("data {:?}", self.bundled_asset);
 
         let mut binary_data = fs::File::options()
             .write(true)
             .read(true)
             .open(&self.file)?;
-        binary_data.seek(std::io::SeekFrom::Start(self.byte_span.start as u64))?;
+        binary_data.seek(std::io::SeekFrom::Start(self.offset as u64))?;
         // Write the modified binary data back to the file
         binary_data.write_all(new_data.as_ref())?;
-        binary_data.sync_all()
+        binary_data.sync_all()?;
+
+        Ok(())
     }
 }
 
@@ -278,14 +287,13 @@ impl AssetReferences {
             while let Some((remaining_buffer, bundled_asset)) =
                 const_serialize::deserialize_const!(BundledAsset, buffer)
             {
-                let end = data_in_range.len() - remaining_buffer.as_ref().len();
-                let range = (range.start + offset)..(range.start + end);
+                let len = (data_in_range.len() - remaining_buffer.remaining().len()) - offset;
                 self.assets.push(AssetReference {
                     file: path.clone(),
-                    byte_span: range,
+                    offset: range.start + offset,
                     bundled_asset,
                 });
-                offset = end;
+                offset += len;
                 buffer = remaining_buffer;
             }
         }
