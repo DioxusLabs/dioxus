@@ -171,8 +171,10 @@ impl ToTokens for AssetParser {
 
                 #link_section
 
+                static __REFERENCE_TO_LINK_SECTION: &'static [u8] = &__LINK_SECTION;
+
                 manganis::Asset::new(
-                    manganis::macro_helpers::deserialize_asset(&__LINK_SECTION)
+                    __REFERENCE_TO_LINK_SECTION as *const [u8]
                 )
             }
         })

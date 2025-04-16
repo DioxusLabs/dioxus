@@ -1,5 +1,5 @@
 use crate::AssetOptions;
-use const_serialize::{ConstStr, SerializeConst};
+use const_serialize::{deserialize_const, ConstStr, ConstVec, SerializeConst};
 use std::path::PathBuf;
 
 /// An asset that should be copied by the bundler with some options. This type will be
@@ -104,21 +104,32 @@ impl BundledAsset {
 /// ```
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub struct Asset {
-    /// The bundled asset
-    bundled: BundledAsset,
+    /// A pointer to the bundled asset. This will be resolved after the linker has run and
+    /// put into the lazy asset
+    bundled: *const [u8],
 }
+
+unsafe impl Send for Asset {}
+unsafe impl Sync for Asset {}
 
 impl Asset {
     #[doc(hidden)]
     /// This should only be called from the macro
     /// Create a new asset from the bundled form of the asset and the link section
-    pub const fn new(bundled: BundledAsset) -> Self {
+    pub const fn new(bundled: *const [u8]) -> Self {
         Self { bundled }
     }
 
     /// Get the bundled asset
-    pub const fn bundled(&self) -> &BundledAsset {
-        &self.bundled
+    pub fn bundled(&self) -> BundledAsset {
+        let len = self.bundled.len();
+        let ptr = self.bundled as *const u8;
+        let mut bytes = ConstVec::new();
+        for byte in 0..len {
+            bytes = bytes.push(unsafe { std::ptr::read_volatile(ptr.add(byte)) });
+        }
+        let read = bytes.read();
+        deserialize_const!(BundledAsset, read).unwrap().1
     }
 
     /// Return a canonicalized path to the asset
@@ -129,7 +140,7 @@ impl Asset {
         #[cfg(feature = "dioxus")]
         // If the asset is relative, we resolve the asset at the current directory
         if !dioxus_core_types::is_bundled_app() {
-            return PathBuf::from(self.bundled.absolute_source_path.as_str());
+            return PathBuf::from(self.bundled().absolute_source_path.as_str());
         }
 
         #[cfg(feature = "dioxus")]
@@ -149,7 +160,7 @@ impl Asset {
 
         // Otherwise presumably we're bundled and we can use the bundled path
         bundle_root.join(PathBuf::from(
-            self.bundled.bundled_path.as_str().trim_start_matches('/'),
+            self.bundled().bundled_path.as_str().trim_start_matches('/'),
         ))
     }
 }

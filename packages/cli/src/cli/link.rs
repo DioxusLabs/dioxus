@@ -263,16 +263,21 @@ impl AssetReferences {
             let read_cache = ReadCache::new(&mut binary_data);
             let file = object::File::parse(&read_cache)?;
             for section in file.sections() {
-                if section.name()? == "manganis" && section.segment_name()? == Some("__DATA") {
-                    if file.format() == object::BinaryFormat::Wasm {
-                        // In wasm this is actually the start and end
-                        let (start, end) = section.file_range().unwrap();
-                        range = Some(start as usize..end as usize);
-                    } else {
-                        let (offset, len) = section.file_range().unwrap();
-                        range = Some(offset as usize..(offset + len) as usize);
+                if let Ok(name) = section.name() {
+                    if manganis_core::linker::LinkSection::ALL
+                        .iter()
+                        .any(|section| section.name == name)
+                    {
+                        if file.format() == object::BinaryFormat::Wasm {
+                            // In wasm this is actually the start and end
+                            let (start, end) = section.file_range().unwrap();
+                            range = Some(start as usize..end as usize);
+                        } else {
+                            let (offset, len) = section.file_range().unwrap();
+                            range = Some(offset as usize..(offset + len) as usize);
+                        }
+                        break;
                     }
-                    break;
                 }
             }
         }
