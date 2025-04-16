@@ -20,6 +20,8 @@
 //! To purview the examples, check of the root Dioxus crate - the examples in this crate are mostly meant to provide
 //! validation of websys-specific features and not the general use of Dioxus.
 
+use std::time::Duration;
+
 pub use crate::cfg::Config;
 use crate::hydration::SuspenseMessage;
 use dioxus_core::VirtualDom;
@@ -201,13 +203,19 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
         #[cfg(all(feature = "devtools", debug_assertions))]
         if let Some(hr_msg) = hotreload_msg {
             // Replace all templates
-            dioxus_devtools::apply_changes(&virtual_dom, &hr_msg);
+            if dioxus_devtools::apply_changes(&virtual_dom, &hr_msg).is_ok() {
+                if !hr_msg.assets.is_empty() {
+                    crate::devtools::invalidate_browser_asset_cache();
+                }
 
-            if !hr_msg.assets.is_empty() {
-                crate::devtools::invalidate_browser_asset_cache();
+                devtools::show_toast(
+                    "Hot-patch success!",
+                    &format!("App successfully patched in {} ms", hr_msg.ms_elapsed),
+                    devtools::ToastLevel::Success,
+                    Duration::from_millis(500),
+                    false,
+                );
             }
-
-            devtools::close_toast();
         }
 
         #[cfg(feature = "hydrate")]

@@ -165,13 +165,18 @@
                 currentToast.addEventListener("click", closeDXToast);
 
                 // Wait a bit of time so animation plays correctly.
-                setTimeout(() => {
-                innerElem.style.right = "0";
-
-                currentTimeout = setTimeout(() => {
-                    closeDXToast();
-                }, durationMs);
-                }, 100);
+                setTimeout(
+                    () => {
+                        let ourToast = currentToast;
+                        innerElem.style.right = "0";
+                        currentTimeout = setTimeout(() => {
+                            if (ourToast == currentToast) {
+                                closeDXToast();
+                            }
+                        }, durationMs);
+                    },
+                    100
+                );
             }
 
             // Schedule a toast to be displayed after reload.

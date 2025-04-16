@@ -27,7 +27,7 @@ impl Devtools {
 /// Applies template and literal changes to the VirtualDom
 ///
 /// Assets need to be handled by the renderer.
-pub fn apply_changes(dom: &VirtualDom, msg: &HotReloadMsg) {
+pub fn apply_changes(dom: &VirtualDom, msg: &HotReloadMsg) -> Result<(), subsecond::PatchError> {
     dom.runtime().on_scope(ScopeId::ROOT, || {
         // 1. Update signals...
         let ctx = dioxus_signals::get_global_context();
@@ -50,10 +50,12 @@ pub fn apply_changes(dom: &VirtualDom, msg: &HotReloadMsg) {
 
         // 2. Attempt to hotpatch
         if let Some(jump_table) = msg.jump_table.as_ref().cloned() {
-            unsafe { subsecond::apply_patch(jump_table) };
+            unsafe { subsecond::apply_patch(jump_table) }?;
             dioxus_core::prelude::force_all_dirty();
         }
-    });
+
+        Ok(())
+    })
 }
 
 pub fn apply_patch(table: JumpTable) -> Result<(), subsecond::PatchError> {

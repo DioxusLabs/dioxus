@@ -36,6 +36,7 @@ use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener},
     path::{Path, PathBuf},
     sync::{Arc, RwLock},
+    time::Duration,
 };
 use subsecond_cli_support::JumpTable;
 use tokio::process::Command;
@@ -295,9 +296,10 @@ impl WebServer {
         }
     }
 
-    pub(crate) async fn send_patch(&mut self, jump_table: JumpTable) {
+    pub(crate) async fn send_patch(&mut self, jump_table: JumpTable, time_taken: Duration) {
         let msg = DevserverMsg::HotReload(HotReloadMsg {
             jump_table: Some(jump_table),
+            ms_elapsed: time_taken.as_millis() as u64,
             ..Default::default()
         });
         self.send_devserver_message_to_all(msg).await;

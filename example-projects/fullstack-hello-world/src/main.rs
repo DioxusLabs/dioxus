@@ -15,8 +15,6 @@ fn app() -> Element {
 
     rsx! {
         h1 { "Hot patch serverfns!" }
-        h1 { "Hot patch serverfns!" }
-        h1 { "Hot patch serverfns!" }
         button {
             onclick: move |_| async move {
                 text.set(say_hi().await.unwrap());
@@ -29,5 +27,5 @@ fn app() -> Element {
 
 #[server]
 async fn say_hi() -> Result<String, ServerFnError> {
-    Ok("Hello from the server!".to_string())
+    Ok("DUAL PATCHING ACHIEVED!".to_string())
 }

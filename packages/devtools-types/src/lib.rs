@@ -48,6 +48,7 @@ pub struct HotReloadMsg {
     pub jump_table: Option<JumpTable>,
     pub templates: Vec<HotReloadTemplateWithLocation>,
     pub assets: Vec<PathBuf>,
+    pub ms_elapsed: u64,
 }
 
 impl HotReloadMsg {

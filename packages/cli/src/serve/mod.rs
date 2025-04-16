@@ -137,8 +137,10 @@ pub(crate) async fn serve_all(args: ServeArgs) -> Result<()> {
                         match bundle.mode {
                             BuildMode::Thin { .. } => {
                                 // We need to patch the app with the new bundle
+                                let elapsed =
+                                    bundle.time_end.duration_since(bundle.time_start).unwrap();
                                 match builder.patch(&bundle).await {
-                                    Ok(jumptable) => devserver.send_patch(jumptable).await,
+                                    Ok(jumptable) => devserver.send_patch(jumptable, elapsed).await,
                                     Err(_) => {}
                                 }
                             }
