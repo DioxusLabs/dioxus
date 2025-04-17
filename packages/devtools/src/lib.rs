@@ -1,26 +1,9 @@
-use dioxus_core::{Element, ScopeId, VirtualDom};
-pub use dioxus_devtools_types::*;
+use dioxus_core::{ScopeId, VirtualDom};
 use dioxus_signals::{GlobalKey, Writable};
-use std::cell::Cell;
-pub use subsecond;
-use subsecond::JumpTable;
 use warnings::Warning;
 
-pub struct Devtools {
-    main_fn: Cell<fn() -> Element>,
-}
-
-impl Devtools {
-    pub fn new(entry: fn() -> Element) -> Self {
-        Self {
-            main_fn: Cell::new(entry),
-        }
-    }
-
-    pub fn main_fn(&self) -> fn() -> Element {
-        self.main_fn.get()
-    }
-}
+pub use dioxus_devtools_types::*;
+pub use subsecond;
 
 /// Applies template and literal changes to the VirtualDom
 ///
@@ -56,10 +39,6 @@ pub fn apply_changes(dom: &VirtualDom, msg: &HotReloadMsg) -> Result<(), subseco
     })
 }
 
-pub fn apply_patch(table: JumpTable) -> Result<(), subsecond::PatchError> {
-    unsafe { subsecond::apply_patch(table) }
-}
-
 /// Connect to the devserver and handle its messages with a callback.
 ///
 /// This doesn't use any form of security or protocol, so it's not safe to expose to the internet.
@@ -74,7 +53,7 @@ pub fn connect(endpoint: String, mut callback: impl FnMut(DevserverMsg) + Send +
         _ = websocket.send(tungstenite::Message::Text(
             serde_json::to_string(&ClientMsg::Initialize {
                 aslr_reference: subsecond::aslr_reference() as _,
-                build_id: build_id(),
+                build_id: dioxus_cli_config::build_id(),
             })
             .unwrap()
             .into(),
@@ -88,16 +67,4 @@ pub fn connect(endpoint: String, mut callback: impl FnMut(DevserverMsg) + Send +
             }
         }
     });
-}
-
-pub fn build_id() -> u64 {
-    #[cfg(target_arch = "wasm32")]
-    {
-        0
-    }
-
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        1
-    }
 }

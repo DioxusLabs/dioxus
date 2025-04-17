@@ -165,7 +165,7 @@ fn make_ws(tx: UnboundedSender<HotReloadMsg>, poll_interval: i32, reload: bool) 
             } else {
                 ws_tx.send_with_str(
                     &serde_json::to_string(&ClientMsg::Initialize {
-                        build_id: dioxus_devtools::build_id(),
+                        build_id: dioxus_cli_config::build_id(),
                         aslr_reference: dioxus_devtools::subsecond::aslr_reference() as _,
                     })
                     .unwrap(),

@@ -3931,6 +3931,7 @@ dependencies = [
 name = "dioxus-devtools"
 version = "0.6.3"
 dependencies = [
+ "dioxus-cli-config",
  "dioxus-core",
  "dioxus-devtools-types",
  "dioxus-signals",

@@ -141,7 +141,8 @@ async fn serve_server(
                             use axum::body::Body;
                             use http::{Method, Request, Response, StatusCode};
 
-                            if let Ok(_) = dioxus_devtools::apply_patch(table) {
+                            if let Ok(_) = unsafe { dioxus_devtools::subsecond::apply_patch(table) }
+                            {
                                 let mut new_router = axum::Router::new().serve_static_assets();
 
                                 let server_fn_iter = collect_raw_server_fns();
