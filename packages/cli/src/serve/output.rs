@@ -470,7 +470,6 @@ impl Output {
         .areas(gauge_area);
 
         let client = &state.runner.client();
-
         self.render_single_gauge(
             frame,
             app_progress,
@@ -564,9 +563,7 @@ impl Output {
         state: RenderState,
         time_taken: Option<Duration>,
     ) {
-        let client = &state.runner.client();
-
-        let failed = client.stage == BuildStage::Failed;
+        let failed = state.runner.client.stage == BuildStage::Failed;
         let value = if failed { 1.0 } else { value.clamp(0.0, 1.0) };
 
         let [gauge_row, _, icon] = Layout::horizontal([
@@ -638,7 +635,6 @@ impl Output {
         .areas(area);
 
         let client = &state.runner.client();
-
         frame.render_widget(
             Paragraph::new(Line::from(vec![
                 "Platform: ".gray(),

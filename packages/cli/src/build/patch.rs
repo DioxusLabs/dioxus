@@ -39,6 +39,7 @@ pub fn create_jump_table(
     patch: &Path,
     triple: &Triple,
 ) -> anyhow::Result<JumpTable> {
+    // WASM needs its own path since the object crate leaves quite a few of the methods unimplemented
     if triple.architecture == target_lexicon::Architecture::Wasm32 {
         return create_wasm_jump_table(original, patch);
     }
@@ -160,7 +161,6 @@ fn collect_func_ifuncs(m: &Module) -> HashMap<&str, i32> {
             // Globals are usually imports and thus don't add a specific offset
             // ie the ifunc table is offset by a global, so we don't need to push the offset out
             walrus::ConstExpr::Global(_) => 0,
-
             walrus::ConstExpr::RefNull(_) => continue,
             walrus::ConstExpr::RefFunc(_) => continue,
         };

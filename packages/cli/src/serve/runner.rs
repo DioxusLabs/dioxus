@@ -237,10 +237,6 @@ impl AppServer {
         let server_wait = OptionFuture::from(server.map(|s| s.wait()));
         let watcher_wait = self.watcher_rx.next();
 
-        // // If there are no running apps, we can just return pending to avoid deadlocking
-        // let Some(handle) = self.running.as_mut() else {
-        //     return futures_util::future::pending().await;
-        // };
 
         tokio::select! {
             // Wait for the client to finish
@@ -760,14 +756,18 @@ impl AppServer {
         if triple.architecture == target_lexicon::Architecture::Wasm32 {
             let old_bytes = std::fs::read(&original).unwrap();
             let new_bytes = std::fs::read(&jump_table.lib).unwrap();
-            let res_ = crate::build::satisfy_got_imports(&old_bytes, &new_bytes).unwrap();
-            std::fs::write(&jump_table.lib, res_).unwrap();
+            let res = crate::build::satisfy_got_imports(&old_bytes, &new_bytes).context(
+                "Couldn't satisfy GOT imports for WASM - are debug symbols being stripped?",
+            )?;
+            std::fs::write(&jump_table.lib, res).unwrap();
 
-            // make sure we use the dir relative to the public dir
-            let public_dir = client.build.root_dir();
+            // Make sure we use the dir relative to the public dir, so the web can load it as a proper URL
+            //
+            // ie we would've shipped `/Users/foo/Projects/dioxus/target/dx/project/debug/web/public/wasm/lib.wasm`
+            //    but we want to ship `/wasm/lib.wasm`
             jump_table.lib = jump_table
                 .lib
-                .strip_prefix(&public_dir)
+                .strip_prefix(&client.build.root_dir())
                 .unwrap()
                 .to_path_buf();
         }
@@ -790,8 +790,8 @@ impl AppServer {
                 .as_millis()
         );
 
-        // // Save this patch
-        // self.client.patches.push(jump_table.clone());
+        // Save this patch
+        self.client.patches.push(jump_table.clone());
 
         Ok(jump_table)
     }

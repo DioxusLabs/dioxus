@@ -75,41 +75,11 @@ pub(crate) use streaming::*;
 
 pub use launch::launch;
 
-// #[cfg(feature = "server")]
-// pub mod server;
-
-// #[cfg(feature = "server")]
-// pub use server::ServerDocument;
-
-// #[cfg(feature = "axum")]
-// #[cfg_attr(docsrs, doc(cfg(feature = "axum")))]
-// pub mod server;
-
-// #[cfg(feature = "axum_core")]
-// #[cfg_attr(docsrs, doc(cfg(feature = "axum_core")))]
-// pub mod axum_core;
-
 // pub mod document;
-// #[cfg(feature = "server")]
-// mod render;
-// #[cfg(feature = "server")]
-// mod streaming;
-
-// #[cfg(feature = "server")]
-// mod serve_config;
-
-// #[cfg(feature = "server")]
-// pub use serve_config::*;
-
-// #[cfg(feature = "server")]
-// mod server_context;
 
 // #[cfg(feature = "axum")]
 // #[cfg_attr(docsrs, doc(cfg(feature = "axum")))]
 // pub use crate::server::*;
-
-// #[cfg(feature = "axum_core")]
-// pub use crate::axum_core::*;
 
 // #[cfg(feature = "server")]
 // #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
@@ -123,9 +93,9 @@ pub use launch::launch;
 // #[cfg_attr(docsrs, doc(cfg(feature = "axum")))]
 // pub use crate::server_context::Axum;
 
-// #[cfg(feature = "server")]
-// #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
-// pub use crate::server_context::{
-//     extract, server_context, with_server_context, DioxusServerContext, FromContext,
-//     FromServerContext, ProvideServerContext,
-// };
+pub use document::ServerDocument;
+pub use serve_config::*;
+pub use server_context::{
+    extract, server_context, with_server_context, DioxusServerContext, FromContext,
+    FromServerContext, ProvideServerContext,
+};

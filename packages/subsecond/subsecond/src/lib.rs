@@ -197,15 +197,9 @@
 //! apps with Dioxus Deploy (currently under construction).
 
 use std::{
-    any::TypeId,
     backtrace,
-    collections::HashMap,
-    ffi::CStr,
     mem::transmute,
-    ops::Deref,
-    os::raw::c_void,
     panic::{panic_any, AssertUnwindSafe, UnwindSafe},
-    path::{Path, PathBuf},
     sync::{Arc, Mutex},
 };
 
@@ -569,7 +563,7 @@ pub extern "C" fn aslr_reference() -> usize {
 /// I haven't tested it on device yet, so if if it doesn't work, then we can simply revert to using
 /// "adb root" and then pushing the library to the /data/data folder instead of the tmp folder.
 #[cfg(target_os = "android")]
-unsafe fn android_memmap_dlopen(file: &Path) -> libloading::Library {
+unsafe fn android_memmap_dlopen(file: &std::path::Path) -> libloading::Library {
     use std::ffi::{c_void, CStr, CString};
     use std::os::fd::{AsRawFd, BorrowedFd};
     use std::ptr;
@@ -677,15 +671,14 @@ pub async unsafe fn __subsecond_wasm_patch(table: wasm_bindgen::JsValue) {
         }
     }
 
-    let table: JumpTable = JumpTable {
+    apply_patch(JumpTable {
         map,
         ifunc_count,
         lib: lib_url.into(),
         aslr_reference: 0,
         new_base_address: 0,
-    };
-
-    apply_patch(table);
+    })
+    .expect("Failed to apply patch");
 }
 
 /// A trait that enables types to be hot-patched.
