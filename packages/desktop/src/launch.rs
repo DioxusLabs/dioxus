@@ -103,6 +103,9 @@ pub fn launch_virtual_dom_blocking(virtual_dom: VirtualDom, mut desktop_config: 
                     IpcMethod::BrowserOpen => app.handle_browser_open(msg),
                     IpcMethod::Other(_) => {}
                 },
+                UserWindowEvent::CloseBehaviour(window_id, window_close_behaviour) => {
+                    app.change_window_close_behaviour(window_id, window_close_behaviour)
+                }
             },
             _ => {}
         }
