@@ -1351,6 +1351,8 @@ impl BuildRequest {
                     "--import-table".to_string(),
                     "--growable-table".to_string(),
                     "--export-all".to_string(),
+                    "--export".to_string(),
+                    "main".to_string(),
                     "--allow-undefined".to_string(),
                     "--no-demangle".to_string(),
                     "--no-entry".to_string(),
@@ -2851,11 +2853,11 @@ impl BuildRequest {
             std::fs::write(&post_bindgen_wasm, modules.main.bytes)?;
         }
 
-        // Make sure to optimize the main wasm file if requested or if bundle splitting
-        if should_bundle_split || self.release {
-            ctx.status_optimizing_wasm();
-            wasm_opt::optimize(&post_bindgen_wasm, &post_bindgen_wasm, &wasm_opt_options).await?;
-        }
+        // // Make sure to optimize the main wasm file if requested or if bundle splitting
+        // if should_bundle_split || self.release {
+        //     ctx.status_optimizing_wasm();
+        //     wasm_opt::optimize(&post_bindgen_wasm, &post_bindgen_wasm, &wasm_opt_options).await?;
+        // }
 
         // Make sure to register the main wasm file with the asset system
         assets.register_asset(&post_bindgen_wasm, AssetOptions::Unknown)?;

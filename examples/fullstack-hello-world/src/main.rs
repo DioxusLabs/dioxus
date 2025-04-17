@@ -22,8 +22,22 @@ fn app() -> Element {
             "Say hi!"
         }
         "Server said: {text}"
+        Child {}
+        // Child2 { i: 123 }
     }
 }
+
+fn Child() -> Element {
+    rsx! {
+        div { "Hello from the child component!" }
+    }
+}
+// #[component]
+// fn Child2(i: i32) -> Element {
+//     rsx! {
+//         div { "Hello from the child component!" }
+//     }
+// }
 
 #[server]
 async fn say_hi() -> Result<String, ServerFnError> {

@@ -332,8 +332,8 @@ winit = { version = "0.30.2", features = ["rwh_06"] }
 
 # disable debug symbols in dev builds - shouldn't matter for downstream crates but makes our binaries (examples, cli, etc) build faster
 [profile.dev]
-debug = 1
-strip = "debuginfo"
+# debug = 1
+# strip = "debuginfo"
 
 # our release profile should be fast to compile and fast to run
 # when we ship our CI builds, we turn on LTO which improves perf leftover by turning on incremental
@@ -341,7 +341,7 @@ strip = "debuginfo"
 incremental = true
 
 # crank up the opt level for wasm-split-cli in dev mode
-# important here that lto is on and the debug symbols are presenta (since they're used by wasm-opt)a
+# important here that lto is on and the debug symbols are present (since they're used by wasm-opt)a
 [profile.wasm-split-release]
 inherits = "release"
 opt-level = 'z'
@@ -350,8 +350,8 @@ debug = true
 
 [profile.subsecond-dev]
 inherits = "dev"
-debug = 0
-strip = "debuginfo"
+# debug = 0
+# strip = "debuginfo"
 
 # a profile for running the CLI that's also incremental
 [profile.cli-release-dev]
@@ -376,8 +376,8 @@ incremental = true
 
 [profile.wasm-dev]
 inherits = "dev"
-debug = 0
-strip = "debuginfo"
+# debug = 0
+# strip = "debuginfo"
 
 [profile.server-dev]
 inherits = "dev"

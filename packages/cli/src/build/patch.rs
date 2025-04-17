@@ -12,7 +12,7 @@ use object::{
     RelocationFlags, RelocationTarget, SectionIndex, SectionKind, SymbolFlags, SymbolKind,
     SymbolScope,
 };
-use std::{cmp::Ordering, ffi::OsStr, fs, ops::Deref, path::PathBuf};
+use std::{cmp::Ordering, ffi::OsStr, fs, ops::Deref, panic, path::PathBuf};
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     path::Path,
@@ -628,7 +628,12 @@ pub fn satisfy_got_imports(old_bytes: &[u8], new_bytes: &[u8]) -> Result<Vec<u8>
     // Collect the GOT func/mem entries
     for t in new.imports.iter() {
         match t.module.as_str() {
-            "GOT.func" => funcs.push((t.id(), *ifunc_map.get(t.name.as_str()).unwrap())),
+            "GOT.func" => funcs.push((
+                t.id(),
+                *ifunc_map
+                    .get(t.name.as_str())
+                    .unwrap_or_else(|| panic!("failed to find GOT.func: {}", t.name.as_str())),
+            )),
             "GOT.mem" => mems.push(t.id()),
             _ => {}
         }
