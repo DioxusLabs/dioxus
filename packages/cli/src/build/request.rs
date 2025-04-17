@@ -810,10 +810,12 @@ impl BuildRequest {
         struct HbsTypes {
             application_id: String,
             app_name: String,
+            android_bundle: Option<crate::AndroidSettings>,
         }
         let hbs_data = HbsTypes {
             application_id: self.krate.full_mobile_app_name(),
             app_name: self.krate.bundled_app_name(),
+            android_bundle: self.krate.config.bundle.android.clone(),
         };
 
         // Top-level gradle config
