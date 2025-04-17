@@ -54,7 +54,35 @@ impl LinkAction {
     /// The file will be given by the dx-magic-link-arg env var itself, so we use
     /// it both for determining if we should act as a linker and the for the file name itself.
     pub(crate) async fn run(self) -> Result<()> {
-        let args = std::env::args().collect::<Vec<String>>();
+        let mut args: Vec<_> = std::env::args().collect();
+
+        // Handle command files, usually a windows thing.
+        if let Some(command) = args.iter().find(|arg| arg.starts_with('@')).cloned() {
+            let path = command.trim().trim_start_matches('@');
+            let file_binary = std::fs::read(path).unwrap();
+
+            // This may be a utf-16le file. Let's try utf-8 first.
+            let content = String::from_utf8(file_binary.clone()).unwrap_or_else(|_| {
+                // Convert Vec<u8> to Vec<u16> to convert into a String
+                let binary_u16le: Vec<u16> = file_binary
+                    .chunks_exact(2)
+                    .map(|a| u16::from_le_bytes([a[0], a[1]]))
+                    .collect();
+
+                String::from_utf16_lossy(&binary_u16le)
+            });
+
+            // Gather linker args, and reset the args to be just the linker args
+            args = content
+                .lines()
+                .map(|line| {
+                    let line_parsed = line.to_string();
+                    let line_parsed = line_parsed.trim_end_matches('"').to_string();
+                    let line_parsed = line_parsed.trim_start_matches('"').to_string();
+                    line_parsed
+                })
+                .collect();
+        }
 
         // Write the linker args to a file for the main process to read
         // todo: we might need to encode these as escaped shell words in case newlines are passed
