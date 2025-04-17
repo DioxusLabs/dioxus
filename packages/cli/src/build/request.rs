@@ -749,7 +749,7 @@ impl BuildRequest {
         let mut cmd = self.build_command(ctx)?;
 
         tracing::debug!("Executing cargo...");
-        tracing::trace!(dx_src = ?TraceSrc::Build, "Rust cargo args: {:#?}", cmd);
+        // tracing::trace!(dx_src = ?TraceSrc::Build, "Rust cargo args: {:#?}", cmd);
 
         // Extract the unit count of the crate graph so build_cargo has more accurate data
         // "Thin" builds only build the final exe, so we only need to build one crate
@@ -1357,6 +1357,8 @@ impl BuildRequest {
                     "--no-demangle".to_string(),
                     "--no-entry".to_string(),
                     "--pie".to_string(),
+                    "--whole-archive".to_string(),
+                    "--no-gc-sections".to_string(),
                     "--experimental-pic".to_string(),
                 ]);
             }

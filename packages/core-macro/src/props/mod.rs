@@ -1408,7 +1408,7 @@ Finally, call `.build()` to create the instance of `{name}`.
             let assignments = self.fields.iter().map(|field| {
                 let name = &field.name;
                 if let Some(extends_vec) = field.extends_vec_ident() {
-                    quote!{
+                    quote! {
                         let mut #name = #helper_trait_name::into_value(#name, || ::core::default::Default::default());
                         #name.extend(self.#extends_vec);
                     }
@@ -1416,13 +1416,13 @@ Finally, call `.build()` to create the instance of `{name}`.
                     // If field has `into`, apply it to the default value.
                     // Ignore any blank defaults as it causes type inference errors.
                     let is_default = *default == parse_quote!(::core::default::Default::default());
-                    let mut into = quote!{};
+                    let mut into = quote! {};
 
                     if !is_default {
                         if field.builder_attr.auto_into {
-                            into = quote!{ .into() }
+                            into = quote! { .into() }
                         } else if field.builder_attr.auto_to_string {
-                            into = quote!{ .to_string() }
+                            into = quote! { .to_string() }
                         }
                     }
 

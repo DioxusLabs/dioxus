@@ -21,23 +21,24 @@ fn app() -> Element {
             },
             "Say hi!"
         }
+        button {
+            onclick: move |_| async move {
+                text.set(say_hi().await.unwrap());
+                text.set(say_hi().await.unwrap());
+            },
+            "Say hi!"
+        }
         "Server said: {text}"
-        Child {}
-        // Child2 { i: 123 }
+        Child2 { i: 123 }
     }
 }
 
-fn Child() -> Element {
+#[component]
+fn Child2(i: i32) -> Element {
     rsx! {
         div { "Hello from the child component!" }
     }
 }
-// #[component]
-// fn Child2(i: i32) -> Element {
-//     rsx! {
-//         div { "Hello from the child component!" }
-//     }
-// }
 
 #[server]
 async fn say_hi() -> Result<String, ServerFnError> {

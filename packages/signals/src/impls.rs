@@ -110,7 +110,7 @@ macro_rules! read_impls {
                 ),+
         )?
     ) => {
-        $crate::fmt_impls!{
+        $crate::fmt_impls! {
             $ty<
                 T
                 $(
@@ -123,7 +123,7 @@ macro_rules! read_impls {
                     $($extra_bound_ty: $extra_bound),*
             )?
         }
-        $crate::eq_impls!{
+        $crate::eq_impls! {
             $ty<
                 T
                 $(

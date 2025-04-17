@@ -123,8 +123,11 @@ fn create_wasm_jump_table(original: &Path, patch: &Path) -> anyhow::Result<JumpT
     let old = walrus::Module::from_buffer(&obj1_bytes)?;
     let new = walrus::Module::from_buffer(&obj2_bytes)?;
 
-    let name_to_ifunc_old = collect_func_ifuncs(&old);
-    let name_to_ifunc_new = collect_func_ifuncs(&new);
+    let old_raw_data = parse_bytes_to_data_segment(&obj1_bytes)?;
+    let new_raw_data = parse_bytes_to_data_segment(&obj2_bytes)?;
+
+    let name_to_ifunc_old = collect_func_ifuncs(&old, &old_raw_data);
+    let name_to_ifunc_new = collect_func_ifuncs(&new, &new_raw_data);
 
     let mut map = AddressMap::default();
     for (name, idx) in name_to_ifunc_new.iter() {
@@ -142,11 +145,26 @@ fn create_wasm_jump_table(original: &Path, patch: &Path) -> anyhow::Result<JumpT
     })
 }
 
-fn collect_func_ifuncs(m: &Module) -> HashMap<&str, i32> {
+fn collect_func_ifuncs<'a>(m: &'a Module, syms: &'a [SymbolInfo<'a>]) -> HashMap<&'a str, i32> {
     let mut name_to_ifunc_index = HashMap::new();
+
+    // name -> index
+    // we want to export *all* these functions
+    let all_funcs = syms
+        .iter()
+        .flat_map(|sym| match sym {
+            SymbolInfo::Func { index, name, .. } => Some((name.unwrap(), *index)),
+            _ => None,
+        })
+        .collect::<HashMap<_, _>>();
+
+    let mut ref_funcs = HashMap::new();
+
+    let mut offsets = HashMap::new();
 
     for el in m.elements.iter() {
         let ElementKind::Active { offset, .. } = &el.kind else {
+            tracing::info!("Skipping section: {:?} -> {:?}", el.name, el.kind);
             continue;
         };
 
@@ -155,23 +173,69 @@ fn collect_func_ifuncs(m: &Module) -> HashMap<&str, i32> {
             walrus::ConstExpr::Value(value) => match value {
                 walrus::ir::Value::I32(idx) => *idx,
                 walrus::ir::Value::I64(idx) => *idx as i32,
-                _ => continue,
+                _ => panic!(),
             },
 
             // Globals are usually imports and thus don't add a specific offset
             // ie the ifunc table is offset by a global, so we don't need to push the offset out
             walrus::ConstExpr::Global(_) => 0,
-            walrus::ConstExpr::RefNull(_) => continue,
-            walrus::ConstExpr::RefFunc(_) => continue,
+            walrus::ConstExpr::RefNull(_) => panic!(),
+            walrus::ConstExpr::RefFunc(_) => panic!(),
         };
 
-        if let ElementItems::Functions(ids) = &el.items {
-            for (idx, id) in ids.iter().enumerate() {
-                let name = m.funcs.get(*id).name.as_ref().unwrap();
-                name_to_ifunc_index.insert(name.as_str(), offset + idx as i32);
+        match &el.items {
+            ElementItems::Functions(ids) => {
+                for (idx, id) in ids.iter().enumerate() {
+                    offsets.insert(id.index(), offset + idx as i32);
+                }
+            }
+            ElementItems::Expressions(ref_type, const_exprs) => {
+                for e in const_exprs {
+                    match e {
+                        walrus::ConstExpr::Value(value) => panic!(),
+                        walrus::ConstExpr::Global(id) => panic!(),
+                        walrus::ConstExpr::RefNull(ref_type) => panic!(),
+                        walrus::ConstExpr::RefFunc(id) => {
+                            let f = m.funcs.get(*id);
+                            ref_funcs.insert(id.index(), f.name.clone());
+                            tracing::warn!("Ref func name: {:?} {:?}", *id, f.name);
+                        }
+                    }
+                }
+                // tracing::info!("Indirect function table is not a function table: {const_exprs:?}");
+                // let last = const_exprs.last().clone().unwrap();
+                // for (name, i) in make_indirect {
+                //     ids.push(idxs_to_ids[*i as usize]);
+                // }
             }
         }
     }
+
+    let mut missing = vec![];
+    for (name, index) in all_funcs.iter() {
+        if let Some(offset) = offsets.get(&(*index as _)) {
+            name_to_ifunc_index.insert(*name, *offset);
+        } else {
+            missing.push((name, index));
+            if let Some(shim) = ref_funcs.get(&(*index as _)) {
+                tracing::error!(
+                    "Ref func was transformed! {:?} -> {:?} -> {:?}",
+                    index,
+                    shim,
+                    all_funcs.iter().find(|(k, v)| **v == *index)
+                );
+            }
+        }
+        // let offset = offsets.get(&(index as _)).unwrap();
+    }
+
+    tracing::info!("There are {} missing ifuncs", missing.len());
+    tracing::info!("some are: {:#?}", &missing[0..missing.len().min(10)]);
+
+    // name_to_ifunc_index.insert(
+    //     m.funcs.get(*id).name.as_ref().unwrap().as_str(),
+    //     offset + idx as i32,
+    // );
 
     name_to_ifunc_index
 }
@@ -389,138 +453,26 @@ pub fn resolve_undefined(
         }
     }
 
-    // The loader host might want to know the address of various sections
-    // Let's add some symbols in the form of __SECTION_START_{SECTION_NAME} and __SECTION_END_{SECTION_NAME}
-    //  such that dlsym can be used to find them.
-    //
-    // This will also be used by the program loader to identify the ASLR slide
-    for in_section in source.sections() {
-        // tracing::info!("Defining section header: {:?}", section);
-        // let sym = obj.section_symbol(section_id);
-
-        let Ok(name) = in_section.name_bytes() else {
-            tracing::error!("Section has no name: {:?}", in_section);
-            continue;
-        };
-
-        if name != b"manganis" {
-            continue;
-        }
-
-        let mut start = None;
-        for s in source.symbols() {
-            if s.section_index() == Some(in_section.index()) {
-                tracing::info!("Reading symbol header: {:?}", s);
-                if start.is_none() {
-                    start = Some(s);
-                }
-            }
-        }
-
-        // if let Some(s) = start {
-        //     // import the symbol
-        //     let id = obj.add_symbol(Symbol {
-        //         name: format!("__SECTION_START_{}", s.name().unwrap())
-        //             .as_bytes()
-        //             .to_vec(),
-        //         value: 0,
-        //         size: 0,
-        //         kind: s.kind(),
-        //         scope: SymbolScope::Dynamic,
-        //         weak: false,
-        //         section: SymbolSection::Section(in_section.index()),
-        //         flags: object::SymbolFlags::None,
-        //     });
-
-        //     // Define a new symbol
-
-        //     // obj.add_symbol(Symbol {
-        //     //     name: format!("__SECTION_START_{}", s.name().unwrap_or_default())
-        //     //         .as_bytes()
-        //     //         .to_vec(),
-        //     //     value: 0,
-        //     //     size: 0,
-        //     //     kind: (),
-        //     //     scope: (),
-        //     //     weak: (),
-        //     //     section: (),
-        //     //     flags: (),
-        //     // });
-        // }
-
-        let kind = if in_section.kind() == SectionKind::Unknown {
-            SectionKind::Data
-        } else {
-            in_section.kind()
-        };
-
-        let section_id = obj.add_section(
-            in_section
-                .segment_name()
-                .unwrap()
-                .unwrap_or("")
-                .as_bytes()
-                .to_vec(),
-            name.to_vec(),
-            kind,
-        );
-        let out_section = obj.section_mut(section_id);
-        out_section.flags = in_section.flags();
-
-        if out_section.is_bss() {
-        } else {
-            //     obj.set_section_data(section_id, &[0_u8, 1, 2, 3, 4, 5, 6, 7], 4);
-            tracing::info!("Defining section header: {:?}", in_section);
-            let sym = obj.add_symbol(Symbol {
-                name: format!("__SECTION_START_{}", in_section.name().unwrap_or_default())
-                    .as_bytes()
-                    .to_vec(),
-                value: 0,
-                size: 0,
-                kind: SymbolKind::Text,
-                scope: SymbolScope::Dynamic,
-                weak: false,
-                section: SymbolSection::Section(section_id),
-                flags: object::SymbolFlags::None,
-            });
-        }
-    }
-
-    // // "__DATA,manganis,regular,no_dead_strip".as_bytes().to_vec(),
-    // let sect = obj.add_section(
-    //     "__DATA".as_bytes().to_vec(),
-    //     "manganis".as_bytes().to_vec(),
-    //     SectionKind::Data,
-    // );
-    // let sym = obj.add_symbol(Symbol {
-    //     name: format!("__SECTION_START_MANGANIS").as_bytes().to_vec(),
-    //     value: 0,
-    //     size: 0,
-    //     kind: SymbolKind::Data,
-    //     scope: SymbolScope::Dynamic,
-    //     weak: false,
-    //     section: SymbolSection::Section(sect),
-    //     flags: object::SymbolFlags::None,
-    // });
-
-    // Write the object to a file
-    let bytes = obj.write()?;
-    Ok(bytes)
+    Ok(obj.write()?)
 }
 
 /// Prepares the base module before running wasm-bindgen.
 ///
 /// This tries to work around how wasm-bindgen works by intelligently promoting non-wasm-bindgen functions
 /// to the export table.
+///
+/// It also moves all functions and memories to be callable indirectly.
 pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
-    let mut pre_bindgen = walrus::Module::from_buffer(bytes)?;
+    let mut module = walrus::Module::from_buffer(bytes)?;
 
-    let bindgen_funcs = collect_all_wasm_bindgen_funcs(&pre_bindgen);
+    let bindgen_funcs = collect_all_wasm_bindgen_funcs(&module);
 
     // Due to monomorphizations, functions will get merged and multiple names will point to the same function.
     // Walrus loses this information, so we need to manually parse the names table to get the indices
     // and names of these functions.
     let raw_data = parse_bytes_to_data_segment(bytes)?;
+    let ifunc_map = collect_func_ifuncs(&module, &raw_data);
+    let ifunc_table_initialzer = module.elements.iter().last().unwrap().id();
 
     // name -> index
     // we want to export *all* these functions
@@ -532,34 +484,52 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
         })
         .collect::<HashMap<_, _>>();
 
-    let index_to_func = pre_bindgen
-        .funcs
-        .iter()
-        .enumerate()
-        .collect::<HashMap<_, _>>();
+    let index_to_func = module.funcs.iter().enumerate().collect::<HashMap<_, _>>();
 
-    let mut already_exported = pre_bindgen
+    let mut already_exported = module
         .exports
         .iter()
         .map(|exp| exp.name.clone())
         .chain(
             bindgen_funcs
                 .iter()
-                .map(|id| pre_bindgen.funcs.get(*id).name.as_ref().unwrap().clone()),
+                .map(|id| module.funcs.get(*id).name.as_ref().unwrap().clone()),
         )
         .collect::<HashSet<_>>();
 
-    for (name, index) in all_funcs {
+    let make_indirect: Vec<_> = all_funcs
+        .iter()
+        .filter(|(name, id)| !ifunc_map.contains_key(*name))
+        .collect();
+
+    for (&name, &index) in all_funcs.iter() {
         let func = index_to_func.get(&(index as usize)).unwrap();
         if let FunctionKind::Local(_local) = &func.kind {
             if !already_exported.contains(name) {
-                pre_bindgen.exports.add(&name, func.id());
+                module.exports.add(&name, func.id());
                 already_exported.insert(name.to_string());
             }
         }
     }
 
-    Ok(pre_bindgen.emit_wasm())
+    let idxs_to_ids = module.funcs.iter().map(|f| f.id()).collect::<Vec<_>>();
+    tracing::info!("Hoisting {} functions", make_indirect.len());
+    match &mut module.elements.get_mut(ifunc_table_initialzer).items {
+        ElementItems::Functions(ids) => {
+            for (name, i) in make_indirect {
+                ids.push(idxs_to_ids[*i as usize]);
+            }
+        }
+        ElementItems::Expressions(ref_type, const_exprs) => {
+            panic!("Indirect function table is not a function table: {const_exprs:?}");
+            // let last = const_exprs.last().clone().unwrap();
+            // for (name, i) in make_indirect {
+            //     ids.push(idxs_to_ids[*i as usize]);
+            // }
+        }
+    }
+
+    Ok(module.emit_wasm())
 }
 
 /// Collect all the wasm-bindgen functions in the module. We are going to make *everything* exported
@@ -619,7 +589,8 @@ pub fn satisfy_got_imports(old_bytes: &[u8], new_bytes: &[u8]) -> Result<Vec<u8>
     let old: walrus::Module = walrus::Module::from_buffer(old_bytes)?;
     let mut new: walrus::Module = walrus::Module::from_buffer(new_bytes)?;
 
-    let ifunc_map = collect_func_ifuncs(&old);
+    let raw_data = parse_bytes_to_data_segment(&old_bytes)?;
+    let ifunc_map = collect_func_ifuncs(&old, &raw_data);
     let global_map = collect_global_map(&old);
 
     let mut mems = vec![];
@@ -628,24 +599,38 @@ pub fn satisfy_got_imports(old_bytes: &[u8], new_bytes: &[u8]) -> Result<Vec<u8>
     // Collect the GOT func/mem entries
     for t in new.imports.iter() {
         match t.module.as_str() {
-            "GOT.func" => funcs.push((
-                t.id(),
-                *ifunc_map
-                    .get(t.name.as_str())
-                    .unwrap_or_else(|| panic!("failed to find GOT.func: {}", t.name.as_str())),
-            )),
+            "GOT.func" => {
+                // funcs.push((t.id(), t.name.as_str()));
+
+                funcs.push((
+                    t.id(),
+                    *ifunc_map.get(t.name.as_str()).unwrap_or_else(|| {
+                        // let exists = old
+                        //     .funcs
+                        //     .iter()
+                        //     .find(|f| f.name.as_deref().unwrap_or_default() == t.name)
+                        //     .map(|f| f.id());
+                        let exists = old.exports.get_func(t.name.as_str());
+                        panic!("failed to find GOT.func: {} -> {exists:?}", t.name.as_str())
+                    }),
+                ));
+            }
             "GOT.mem" => mems.push(t.id()),
             _ => {}
         }
     }
 
-    // Satisfies the GOT.func imports
+    // Satisfies the GOT.func imports. They exist as regular imports, but we need to make the indirect call
     for (imp_id, val) in funcs {
+        // for (import_id, name) in funcs {
         let imp = new.imports.get(imp_id);
         let global_id = match imp.kind {
             ImportKind::Global(id) => id,
             _ => todo!(),
         };
+        // new.globals.get_mut(global_id).kind =
+        //     walrus::GlobalKind::Local(walrus::ConstExpr::Value(walrus::ir::Value::I32(val as i32)));
+        //     new.imports.delete(imp_id);
         new.globals.get_mut(global_id).kind =
             walrus::GlobalKind::Local(walrus::ConstExpr::Value(walrus::ir::Value::I32(val as i32)));
         new.imports.delete(imp_id);
@@ -656,7 +641,13 @@ pub fn satisfy_got_imports(old_bytes: &[u8], new_bytes: &[u8]) -> Result<Vec<u8>
     for mem in mems {
         let imp = new.imports.get(mem);
         let name = format!("GOT.data.internal.{}", imp.name);
-        let val = global_map.get(name.as_str()).unwrap();
+        let val = global_map.get(name.as_str()).unwrap_or_else(|| {
+            let non_got = global_map.get(name.as_str());
+            panic!(
+                "failed to find GOT.mem: {} -> non got: {non_got:?}",
+                name.as_str()
+            )
+        });
         let global_id = match imp.kind {
             ImportKind::Global(id) => id,
             _ => todo!(),
@@ -713,6 +704,15 @@ fn parse_bytes_to_data_segment(bytes: &[u8]) -> Result<Vec<SymbolInfo>> {
     }
 
     Ok(symbols)
+}
+
+struct SymbolMap<'a> {
+    symbols: Vec<SymbolInfo<'a>>,
+}
+
+enum Node {
+    Function(FunctionId),
+    Data(usize),
 }
 
 async fn attempt_partial_link(proc_main_addr: u64, patch_target: PathBuf, out_path: PathBuf) {
