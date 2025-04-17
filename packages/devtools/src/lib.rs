@@ -1,14 +1,10 @@
-use dioxus_core::{
-    prelude::{consume_context, try_consume_context},
-    Element, ScopeId, VirtualDom,
-};
+use dioxus_core::{Element, ScopeId, VirtualDom};
 pub use dioxus_devtools_types::*;
 use dioxus_signals::{GlobalKey, Writable};
-use std::{any::TypeId, cell::Cell, ffi::CString, path::PathBuf, rc::Rc};
+use std::cell::Cell;
+pub use subsecond;
 use subsecond::JumpTable;
 use warnings::Warning;
-
-pub use subsecond;
 
 pub struct Devtools {
     main_fn: Cell<fn() -> Element>,
