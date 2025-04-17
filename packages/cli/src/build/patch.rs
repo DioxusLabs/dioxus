@@ -18,8 +18,7 @@ use std::{
     path::Path,
 };
 use std::{io::Write, os::raw::c_void};
-pub use subsecond_types::*;
-pub use subsecond_types::*;
+use subsecond_types::*;
 use target_lexicon::{OperatingSystem, Triple};
 use tokio::process::Command;
 use walkdir::WalkDir;

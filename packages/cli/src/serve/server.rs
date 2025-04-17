@@ -38,7 +38,7 @@ use std::{
     sync::{Arc, RwLock},
     time::Duration,
 };
-use subsecond_cli_support::JumpTable;
+use subsecond_types::JumpTable;
 use tokio::process::Command;
 use tower_http::{
     cors::Any,

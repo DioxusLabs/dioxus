@@ -1235,7 +1235,7 @@ impl BuildRequest {
         // Android apps can take a long time to open, and a hot patch might've been issued in the interim,
         // making this hotpatch a failure.
         if self.platform != Platform::Web {
-            let stub_bytes = subsecond_cli_support::resolve_undefined(
+            let stub_bytes = crate::build::resolve_undefined(
                 &self.main_exe(),
                 &object_files,
                 &self.triple,
@@ -2708,8 +2708,7 @@ impl BuildRequest {
         // Lift the internal functions to exports
         if ctx.mode == BuildMode::Fat {
             let unprocessed = std::fs::read(&prebindgen)?;
-            let all_exported_bytes =
-                subsecond_cli_support::prepare_wasm_base_module(&unprocessed).unwrap();
+            let all_exported_bytes = crate::build::prepare_wasm_base_module(&unprocessed).unwrap();
             std::fs::write(&rustc_exe, all_exported_bytes)?;
         }
 

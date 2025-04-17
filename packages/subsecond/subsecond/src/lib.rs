@@ -125,7 +125,7 @@
 //!
 //! If you're using Subsecond in your own application that doesn't have a runtime integration, you can
 //! build an integration using the [`apply_patch`] function. This function takes a `JumpTable` which
-//! the subsecond-cli-support crate can generate.
+//! the dioxus-cli crate can generate.
 //!
 //! To add support for the Dioxus Devtools protocol to your app, you can use the [dioxus-devtools](https://crates.io/crates/dioxus-devtools)
 //! crate which provides a `connect` method that will automatically apply patches to your application.

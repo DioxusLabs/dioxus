@@ -34,7 +34,7 @@ use std::{
     time::Duration,
 };
 use std::{path::Path, time::SystemTime};
-use subsecond_cli_support::JumpTable;
+use subsecond_types::JumpTable;
 use syn::spanned::Spanned;
 use target_lexicon::Triple;
 use tokio::process::Command;
@@ -747,8 +747,7 @@ impl AppServer {
 
         tracing::debug!("Patching {} -> {}", original.display(), new.display());
 
-        let mut jump_table =
-            subsecond_cli_support::create_jump_table(&original, &new, &triple).unwrap();
+        let mut jump_table = crate::build::create_jump_table(&original, &new, &triple).unwrap();
 
         // If it's android, we need to copy the assets to the device and then change the location of the patch
         if client.build.platform == Platform::Android {
@@ -761,7 +760,7 @@ impl AppServer {
         if triple.architecture == target_lexicon::Architecture::Wasm32 {
             let old_bytes = std::fs::read(&original).unwrap();
             let new_bytes = std::fs::read(&jump_table.lib).unwrap();
-            let res_ = subsecond_cli_support::satisfy_got_imports(&old_bytes, &new_bytes).unwrap();
+            let res_ = crate::build::satisfy_got_imports(&old_bytes, &new_bytes).unwrap();
             std::fs::write(&jump_table.lib, res_).unwrap();
 
             // make sure we use the dir relative to the public dir

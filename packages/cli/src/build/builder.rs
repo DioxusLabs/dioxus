@@ -14,7 +14,7 @@ use std::{
     path::{Path, PathBuf},
     process::{ExitStatus, Stdio},
 };
-use subsecond_cli_support::JumpTable;
+use subsecond_types::JumpTable;
 use tokio::{
     io::{AsyncBufReadExt, BufReader, Lines},
     process::{Child, ChildStderr, ChildStdout, Command},

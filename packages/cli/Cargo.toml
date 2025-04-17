@@ -23,8 +23,9 @@ dioxus-cli-config = { workspace = true }
 dioxus-cli-opt = { workspace = true }
 dioxus-fullstack = { workspace = true }
 dioxus-dx-wire-format = { workspace = true }
-subsecond-cli-support = { workspace = true }
 wasm-split-cli = { workspace = true }
+depinfo = { workspace = true }
+subsecond-types = { workspace = true }
 
 clap = { workspace = true, features = ["derive", "cargo"] }
 convert_case = { workspace = true }
@@ -117,6 +118,9 @@ throbber-widgets-tui = "0.8.0"
 unicode-segmentation = "1.12.0"
 handlebars = "6.3.1"
 strum = { version = "0.27.1", features = ["derive"] }
+memmap = "0.7.0"
+walrus = { workspace = true, features = ["parallel"]}
+wasmparser = { workspace = true }
 
 tauri-utils = { workspace = true }
 tauri-bundler = { workspace = true }
@@ -127,8 +131,8 @@ local-ip-address = "0.6.3"
 dircpy = "0.3.19"
 plist = "1.7.0"
 memoize = "0.5.1"
+wasm-encoder = "0.228.0"
 
-depinfo = { workspace = true }
 
 [build-dependencies]
 built = { version = "0.7.5", features = ["git2"] }

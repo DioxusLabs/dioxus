@@ -93,7 +93,6 @@ members = [
 
     # subsecond
     "packages/subsecond/subsecond",
-    "packages/subsecond/subsecond-cli-support",
     "packages/subsecond/subsecond-types",
 
     # Full project examples
@@ -175,7 +174,6 @@ generational-box = { path = "packages/generational-box", version = "0.6.2" }
 lazy-js-bundle = { path = "packages/lazy-js-bundle", version = "0.6.2" }
 
 # subsecond
-subsecond-cli-support = { path = "packages/subsecond/subsecond-cli-support", version = "0.6.3" }
 subsecond-types = { path = "packages/subsecond/subsecond-types", version = "0.6.3" }
 subsecond = { path = "packages/subsecond/subsecond", version = "0.6.3" }
 

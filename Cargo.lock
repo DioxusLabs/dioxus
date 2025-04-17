@@ -1421,15 +1421,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bincode"
-version = "1.3.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b1f45e9417d87227c7a56d22e471c6206462cba514c7590c09aff4cf6d1ddcad"
-dependencies = [
- "serde",
-]
-
-[[package]]
 name = "bindgen"
 version = "0.69.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3699,6 +3690,7 @@ dependencies = [
  "log",
  "manganis",
  "manganis-core",
+ "memmap",
  "memoize",
  "notify",
  "object 0.36.7",
@@ -3717,7 +3709,7 @@ dependencies = [
  "serde_json",
  "shell-words",
  "strum 0.27.1",
- "subsecond-cli-support",
+ "subsecond-types",
  "syn 2.0.100",
  "tar",
  "target-lexicon 0.13.2",
@@ -3738,8 +3730,11 @@ dependencies = [
  "unicode-segmentation",
  "uuid",
  "walkdir",
+ "walrus",
+ "wasm-encoder 0.228.0",
  "wasm-opt",
  "wasm-split-cli",
+ "wasmparser 0.226.0",
  "which 7.0.3",
 ]
 
@@ -10548,12 +10543,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pretty-hex"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bbc83ee4a840062f368f9096d80077a9841ec117e17e7f700df81958f1451254"
-
-[[package]]
 name = "pretty_assertions"
 version = "1.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -13309,34 +13298,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "subsecond-cli-support"
-version = "0.6.3"
-dependencies = [
- "anyhow",
- "bincode",
- "clap",
- "id-arena",
- "itertools 0.14.0",
- "libc",
- "memmap",
- "object 0.36.7",
- "pretty-hex",
- "pretty_assertions",
- "rayon",
- "rustc-demangle",
- "serde",
- "subsecond-types",
- "target-lexicon 0.13.2",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "walkdir",
- "walrus",
- "wasm-encoder 0.227.1",
- "wasmparser 0.226.0",
-]
-
-[[package]]
 name = "subsecond-types"
 version = "0.6.3"
 dependencies = [
@@ -15669,12 +15630,12 @@ dependencies = [
 
 [[package]]
 name = "wasm-encoder"
-version = "0.227.1"
+version = "0.228.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "80bb72f02e7fbf07183443b27b0f3d4144abf8c114189f2e088ed95b696a7822"
+checksum = "05d30290541f2d4242a162bbda76b8f2d8b1ac59eab3568ed6f2327d52c9b2c4"
 dependencies = [
  "leb128fmt",
- "wasmparser 0.227.1",
+ "wasmparser 0.228.0",
 ]
 
 [[package]]
@@ -15831,9 +15792,9 @@ dependencies = [
 
 [[package]]
 name = "wasmparser"
-version = "0.227.1"
+version = "0.228.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0f51cad774fb3c9461ab9bccc9c62dfb7388397b5deda31bf40e8108ccd678b2"
+checksum = "4abf1132c1fdf747d56bbc1bb52152400c70f336870f968b85e89ea422198ae3"
 dependencies = [
  "bitflags 2.9.0",
  "indexmap 2.9.0",
