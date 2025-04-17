@@ -101,7 +101,7 @@ pub fn product_page(product_id: ReadOnlySignal<usize>) -> Element {
                                             onclick: move |_| quantity += 1,
                                             icons::icon_2 {}
                                         }
-                                        input { class: "w-12 m-0 px-2 py-4 text-center md:text-right border-0 focus:ring-transparent focus:outline-none rounded-md",
+                                        input { class: "w-12 m-0 px-2 py-4 text-center md:text-right border-0 focus:ring-transparent focus:outline-hidden rounded-md",
                                             placeholder: "1",
                                             r#type: "number",
                                             value: "{quantity}",
