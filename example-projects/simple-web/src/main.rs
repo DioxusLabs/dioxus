@@ -12,14 +12,20 @@ fn main() {
 
 fn app() -> Element {
     let mut t = use_signal(|| 0);
+
     rsx! {
-        h1 { "Hot patch serverfns!" }
+        h1 { "Hot patch serverfns!!!!!" }
+        EvalIt {}
+    }
+}
+
+fn EvalIt() -> Element {
+    rsx! {
         button {
             onclick: move |_| {
-                t += 1;
+                _ = dioxus::document::eval("window.document.body.style.backgroundColor = 'green';");
             },
-            "Say hi!"
+            "eval!"
         }
-        "{t}"
     }
 }

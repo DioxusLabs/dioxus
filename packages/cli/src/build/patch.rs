@@ -488,9 +488,9 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
     //
     //
     for (name, index) in raw_data.code_symbol_map.iter() {
-        if name.contains("ZN11dioxus_html6events137_$LT$impl$u20$core..convert..From$LT$$RF$dioxus_html..events..PlatformEventData$GT$$u20$for$u20$dioxus_html..events..mouse..MouseData$GT$4from17heffc5924f07140a2E") {
-            panic!("Found a core::any::Any symbol: {name} in {index:?}");
-        }
+        // if name.contains("ZN11dioxus_html6events137_$LT$impl$u20$core..convert..From$LT$$RF$dioxus_html..events..PlatformEventData$GT$$u20$for$u20$dioxus_html..events..mouse..MouseData$GT$4from17heffc5924f07140a2E") {
+        //     panic!("Found a core::any::Any symbol: {name} in {index:?}");
+        // }
 
         let f = ids[*index as usize];
         if bindgen_funcs.contains(&f) {

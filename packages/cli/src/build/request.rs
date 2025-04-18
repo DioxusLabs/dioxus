@@ -1601,22 +1601,34 @@ impl BuildRequest {
         // We also need to insert the -force_load flag to force the linker to load the archive
         let mut args = args.iter().map(|s| s.to_string()).collect::<Vec<_>>();
         if let Some(first_rlib) = args.iter().position(|arg| arg.ends_with(".rlib")) {
-            args[first_rlib] = match self.platform {
+            match self.platform {
                 // On wasm, we need to use the --whole-archive flag
-                Platform::Web => format!("--whole-archive"),
+                Platform::Web => {
+                    args[first_rlib] = format!("--whole-archive");
+                    args.insert(first_rlib + 1, out_ar_path.display().to_string());
+                    args.insert(first_rlib + 2, "--no-whole-archive".to_string());
+                    args.retain(|arg| !arg.ends_with(".rlib"));
+
+                    // add back the compiler rlibs
+                    for rlib in compiler_rlibs.iter().rev() {
+                        args.insert(first_rlib + 3, rlib.display().to_string());
+                    }
+                }
 
                 // On all other platforms, we need to use -force_load
-                _ => format!("-Wl,-all_load"),
+                // todo: this only supports macos for now
                 // _ => format!("-Wl,-force_load={}", out_ar_path.display()),
-            };
-            args.insert(first_rlib + 1, out_ar_path.display().to_string());
-            args.insert(first_rlib + 2, "--no-whole-archive".to_string());
-            args.retain(|arg| !arg.ends_with(".rlib"));
+                _ => {
+                    args[first_rlib] = format!("-Wl,-all_load");
+                    args.insert(first_rlib + 1, out_ar_path.display().to_string());
+                    args.retain(|arg| !arg.ends_with(".rlib"));
 
-            // add back the compiler rlibs
-            for rlib in compiler_rlibs.iter().rev() {
-                args.insert(first_rlib + 3, rlib.display().to_string());
-            }
+                    // add back the compiler rlibs
+                    for rlib in compiler_rlibs.iter().rev() {
+                        args.insert(first_rlib + 2, rlib.display().to_string());
+                    }
+                }
+            };
         }
 
         // We also need to remove the `-o` flag since we want the linker output to end up in the
