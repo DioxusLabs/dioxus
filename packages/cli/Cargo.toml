@@ -51,7 +51,7 @@ rayon = { workspace = true }
 futures-channel = { workspace = true }
 target-lexicon = { version = "0.13.2", features = ["serde", "serde_support"] }
 cargo-config2 = { workspace = true, optional = true }
-krates = { version = "0.17.5" }
+krates = { workspace = true }
 regex = "1.11.1"
 console = "0.15.11"
 ctrlc = "3.4.5"
@@ -132,6 +132,7 @@ dircpy = "0.3.19"
 plist = "1.7.0"
 memoize = "0.5.1"
 wasm-encoder = "0.228.0"
+backtrace = "0.3.74"
 
 
 [build-dependencies]

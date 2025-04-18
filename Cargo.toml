@@ -296,6 +296,7 @@ separator = "0.4.1"
 pretty_assertions = "1.4.0"
 serde_repr = "0.1"
 hyper-util = "0.1.10"
+krates = { version = "0.19.0" }
 
 # desktop
 wry = { version = "0.50.3", default-features = false }
