@@ -1492,6 +1492,10 @@ impl BuildRequest {
     ///
     /// https://github.com/llvm/llvm-project/issues/55786
     ///
+    /// Also, crates might not drag in all their dependent code. The monorphizer won't lift trait-based generics:
+    ///
+    /// https://github.com/rust-lang/rust/blob/191df20fcad9331d3a948aa8e8556775ec3fe69d/compiler/rustc_monomorphize/src/collector.rs
+    ///
     /// When Rust normally handles this, it uses the +whole-archive directive which adjusts how the rlib
     /// is written to disk.
     ///
@@ -1555,7 +1559,6 @@ impl BuildRequest {
                 // https://github.com/rust-lang/rust/issues/94232#issuecomment-1048342201
                 //
                 // if the rlib is not in the target directory, we skip it.
-                //
                 if !rlib.starts_with(self.workspace_dir()) {
                     compiler_rlibs.push(rlib.clone());
                     tracing::debug!("Skipping rlib {:?} since it's not in the target dir", rlib);
@@ -1565,24 +1568,12 @@ impl BuildRequest {
                 let rlib_contents = std::fs::read(rlib)?;
                 let mut reader = ar::Archive::new(std::io::Cursor::new(rlib_contents));
                 while let Some(Ok(object_file)) = reader.next_entry() {
-                    let identifier = object_file.header().identifier();
-                    let maybe_str = std::str::from_utf8(identifier).unwrap();
-
-                    if identifier.ends_with(b".rmeta") {
-                        // tracing::debug!("Skipping rmeta file {:?} from archive", maybe_str);
+                    let name = std::str::from_utf8(object_file.header().identifier()).unwrap();
+                    if name.ends_with(".rmeta") {
                         continue;
                     }
 
-                    if !maybe_str.ends_with(".o") {
-                        tracing::debug!("Weird non-object file {:?} from archive", maybe_str);
-                    }
-
-                    // if identifier.contains(b".rustup" as &[u8]) {
-                    //     tracing::debug!("Skipping rustup file {:?} from archive", maybe_str);
-                    //     continue;
-                    // }
-
-                    tracing::trace!("Adding object file {:?} to archive", maybe_str);
+                    tracing::trace!("Adding object file {:?} to archive", name);
 
                     out_ar
                         .append(&object_file.header().clone(), object_file)

@@ -438,7 +438,6 @@ pub fn resolve_undefined(
 /// It also moves all functions and memories to be callable indirectly.
 pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
     let (mut module, ids, fns_to_ids) = parse_module_with_ids(bytes)?;
-    // let mut module = walrus::Module::from_buffer(bytes)?;
 
     let bindgen_funcs = collect_all_wasm_bindgen_funcs(&module);
 
@@ -457,16 +456,6 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
         .collect::<HashSet<_>>();
     let ifunc_table_initialzer = module.elements.iter().last().unwrap().id();
 
-    // let all_funcs = fn_name_map(&raw_data.symbols);
-    // let wrong_to_right = module
-    //     .funcs
-    //     .iter()
-    //     .filter_map(|f| {
-    //         let name = f.name.as_deref().unwrap();
-    //         Some((all_funcs.get(name)?.clone(), f.id()))
-    //     })
-    //     .collect::<HashMap<_, _>>();
-
     let mut already_exported = module
         .exports
         .iter()
@@ -480,18 +469,7 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
 
     let mut make_indirect = vec![];
 
-    // for (name, wrong_idx) in all_funcs.iter() {
-
-    // Not all monos make it in! We are relying on this with our event converter bs
-    //
-    // https://github.com/rust-lang/rust/blob/master/compiler/rustc_monomorphize/src/collector.rs
-    //
-    //
     for (name, index) in raw_data.code_symbol_map.iter() {
-        // if name.contains("ZN11dioxus_html6events137_$LT$impl$u20$core..convert..From$LT$$RF$dioxus_html..events..PlatformEventData$GT$$u20$for$u20$dioxus_html..events..mouse..MouseData$GT$4from17heffc5924f07140a2E") {
-        //     panic!("Found a core::any::Any symbol: {name} in {index:?}");
-        // }
-
         let f = ids[*index as usize];
         if bindgen_funcs.contains(&f) {
             continue;
