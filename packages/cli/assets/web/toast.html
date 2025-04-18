@@ -94,7 +94,7 @@
   }
 </style>
 
-<div id="dx-toast-template" class="dx-toast">
+<div id="dx-toast-template" class="dx-toast" hidden>
   <div class="dx-toast-inner" style="right:-300px;">
     <!-- Level/Color decor -->
     <div class="dx-toast-level-bar-container">
@@ -158,6 +158,7 @@
     let messageElem = innerElem.querySelector(".dx-toast-inner .dx-toast-msg");
     messageElem.innerText = message;
 
+    currentToast.removeAttribute("hidden");
     document.body.appendChild(currentToast);
 
     // Add listener to close toasts when clicked.
