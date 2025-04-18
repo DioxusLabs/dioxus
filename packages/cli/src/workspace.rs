@@ -73,6 +73,15 @@ impl Workspace {
         Ok(workspace)
     }
 
+    pub fn rust_lld(&self) -> PathBuf {
+        self.sysroot
+            .join("lib")
+            .join("rustlib")
+            .join(Triple::host().to_string())
+            .join("bin")
+            .join("rust-lld")
+    }
+
     pub fn wasm_ld(&self) -> PathBuf {
         self.sysroot
             .join("lib")

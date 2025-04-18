@@ -15,6 +15,9 @@
 //! "normal" builds just use [`BuildMode::Base`], but we also support [`BuildMode::Fat`] and
 //! [`BuildMode::Thin`]. These builds are used together to power the hot-patching and fast-linking
 //! engine.
+//! - BuildMode::Base: A normal build generated using `cargo rustc`
+//! - BuildMode::Fat: A "fat" build where all dependency rlibs are merged into a static library
+//! - BuildMode::Thin: A "thin" build that dynamically links against the artifacts produced by the "fat" build
 //!
 //! The BuildRequest is also responsible for writing the final build artifacts to disk. This includes
 //!
@@ -330,7 +333,7 @@ use serde::{Deserialize, Serialize};
 use std::{
     collections::HashSet,
     future::Future,
-    io::Write,
+    io::{Read, Write},
     path::{Path, PathBuf},
     pin::Pin,
     process::Stdio,
@@ -709,6 +712,10 @@ impl BuildRequest {
 
         // Run the cargo build to produce our artifacts
         let mut artifacts = self.cargo_build(&ctx).await?;
+
+        if matches!(ctx.mode, BuildMode::Fat) {
+            self.perform_fat_link(ctx, &artifacts).await?;
+        }
 
         // Write the build artifacts to the bundle on the disk
         match ctx.mode {
@@ -1117,39 +1124,6 @@ impl BuildRequest {
         Ok(())
     }
 
-    /// Patches are stored in the same directory as the main executable, but with a name based on the
-    /// time the patch started compiling.
-    ///
-    /// - lib{name}-patch-{time}.(so/dll/dylib) (next to the main exe)
-    ///
-    /// Note that weirdly enough, the name of dylibs can actually matter. In some environments, libs
-    /// can override each other with symbol interposition.
-    ///
-    /// Also, on Android - and some Linux, we *need* to start the lib name with `lib` for the dynamic
-    /// loader to consider it a shared library.
-    ///
-    /// todo: the time format might actually be problematic if two platforms share the same build folder.
-    pub(crate) fn patch_exe(&self, time_start: SystemTime) -> PathBuf {
-        let path = self.main_exe().with_file_name(format!(
-            "lib{}-patch-{}",
-            self.executable_name(),
-            time_start.duration_since(UNIX_EPOCH).unwrap().as_millis(),
-        ));
-
-        let extension = match self.triple.operating_system {
-            OperatingSystem::Darwin(_) => "dylib",
-            OperatingSystem::MacOSX(_) => "dylib",
-            OperatingSystem::IOS(_) => "dylib",
-            OperatingSystem::Windows => "dll",
-            OperatingSystem::Linux => "so",
-            OperatingSystem::Wasi => "wasm",
-            OperatingSystem::Unknown if self.platform == Platform::Web => "wasm",
-            _ => "",
-        };
-
-        path.with_extension(extension)
-    }
-
     /// Run our custom linker setup to generate a patch file in the right location
     ///
     /// This should be the only case where the cargo output is a "dummy" file and requires us to
@@ -1471,6 +1445,254 @@ impl BuildRequest {
         Ok(out_args)
     }
 
+    /// Patches are stored in the same directory as the main executable, but with a name based on the
+    /// time the patch started compiling.
+    ///
+    /// - lib{name}-patch-{time}.(so/dll/dylib) (next to the main exe)
+    ///
+    /// Note that weirdly enough, the name of dylibs can actually matter. In some environments, libs
+    /// can override each other with symbol interposition.
+    ///
+    /// Also, on Android - and some Linux, we *need* to start the lib name with `lib` for the dynamic
+    /// loader to consider it a shared library.
+    ///
+    /// todo: the time format might actually be problematic if two platforms share the same build folder.
+    pub(crate) fn patch_exe(&self, time_start: SystemTime) -> PathBuf {
+        let path = self.main_exe().with_file_name(format!(
+            "lib{}-patch-{}",
+            self.executable_name(),
+            time_start.duration_since(UNIX_EPOCH).unwrap().as_millis(),
+        ));
+
+        let extension = match self.triple.operating_system {
+            OperatingSystem::Darwin(_) => "dylib",
+            OperatingSystem::MacOSX(_) => "dylib",
+            OperatingSystem::IOS(_) => "dylib",
+            OperatingSystem::Windows => "dll",
+            OperatingSystem::Linux => "so",
+            OperatingSystem::Wasi => "wasm",
+            OperatingSystem::Unknown if self.platform == Platform::Web => "wasm",
+            _ => "",
+        };
+
+        path.with_extension(extension)
+    }
+
+    /// When we link together the fat binary, we need to make sure every `.o` file in *every* rlib
+    /// is taken into account. This is the same work that the rust compiler does when assembling
+    /// staticlibs.
+    ///
+    /// https://github.com/rust-lang/rust/blob/191df20fcad9331d3a948aa8e8556775ec3fe69d/compiler/rustc_codegen_ssa/src/back/link.rs#L448
+    ///
+    /// Since we're going to be passing these to the linker, we need to make sure and not provide any
+    /// weird files (like the rmeta) file that rustc generates.
+    ///
+    /// We discovered the need for this after running into issues with wasm-ld not being able to
+    /// handle the rmeta file.
+    ///
+    /// https://github.com/llvm/llvm-project/issues/55786
+    ///
+    /// When Rust normally handles this, it uses the +whole-archive directive which adjusts how the rlib
+    /// is written to disk.
+    ///
+    /// Since creating this object file can be a lot of work, we cache it in the target dir by hashing
+    /// the names of the rlibs in the command and storing it in the target dir. That way, when we run
+    /// this command again, we can just used the cached object file.
+    ///
+    /// In theory, we only need to do this for every crate accessible by the current crate, but that's
+    /// hard acquire without knowing the exported symbols from each crate.
+    ///
+    /// todo: I think we can traverse our immediate dependencies and inspect their symbols, unless they `pub use` a crate
+    /// todo: we should try and make this faster with memmapping
+    pub(crate) async fn perform_fat_link(
+        &self,
+        ctx: &BuildContext,
+        artifacts: &BuildArtifacts,
+    ) -> Result<()> {
+        let raw_args = std::fs::read_to_string(&self.link_args_file.path())
+            .context("Failed to read link args from file")?;
+        let args = raw_args.lines().collect::<Vec<_>>();
+
+        tracing::debug!("Linking with args: {:?}", args);
+
+        // Filter out the rlib files from the arguments
+        let rlibs = args
+            .iter()
+            .filter(|arg| arg.ends_with(".rlib"))
+            .map(|arg| PathBuf::from(arg))
+            .collect::<Vec<_>>();
+
+        // Acquire a hash from the rlib names
+        let hash_id = Uuid::new_v5(
+            &Uuid::NAMESPACE_OID,
+            &rlibs
+                .iter()
+                .map(|p| p.file_name().unwrap().to_string_lossy())
+                .collect::<String>()
+                .as_bytes(),
+        );
+
+        // Check if we already have a cached object file
+        let out_ar_path = artifacts
+            .exe
+            .with_file_name(format!("libfatdependencies-{hash_id}.a"));
+
+        let mut compiler_rlibs = vec![];
+
+        // Create it by dumping all the rlibs into it
+        // This will include the std rlibs too, which can severely bloat the size of the archive
+        //
+        // The nature of this process involves making extremely fat archives, so we should try and
+        // speed up the future linking process by caching the archive.
+        if !out_ar_path.exists() || true {
+            let mut bytes = vec![];
+            let mut out_ar = ar::Builder::new(&mut bytes);
+            for rlib in &rlibs {
+                tracing::debug!("Adding rlib {:?} to archive", rlib);
+
+                // Skip compiler rlibs since they're missing bitcode
+                //
+                // https://github.com/rust-lang/rust/issues/94232#issuecomment-1048342201
+                //
+                // if the rlib is not in the target directory, we skip it.
+                //
+                if !rlib.starts_with(self.workspace_dir()) {
+                    compiler_rlibs.push(rlib.clone());
+                    tracing::debug!("Skipping rlib {:?} since it's not in the target dir", rlib);
+                    continue;
+                }
+
+                let rlib_contents = std::fs::read(rlib)?;
+                let mut reader = ar::Archive::new(std::io::Cursor::new(rlib_contents));
+                while let Some(Ok(object_file)) = reader.next_entry() {
+                    let identifier = object_file.header().identifier();
+                    let maybe_str = std::str::from_utf8(identifier).unwrap();
+
+                    if identifier.ends_with(b".rmeta") {
+                        // tracing::debug!("Skipping rmeta file {:?} from archive", maybe_str);
+                        continue;
+                    }
+
+                    if !maybe_str.ends_with(".o") {
+                        tracing::debug!("Weird non-object file {:?} from archive", maybe_str);
+                    }
+
+                    // if identifier.contains(b".rustup" as &[u8]) {
+                    //     tracing::debug!("Skipping rustup file {:?} from archive", maybe_str);
+                    //     continue;
+                    // }
+
+                    tracing::trace!("Adding object file {:?} to archive", maybe_str);
+
+                    out_ar
+                        .append(&object_file.header().clone(), object_file)
+                        .context("Failed to add object file to archive")?;
+                }
+            }
+
+            let bytes = out_ar.into_inner().context("Failed to finalize archive")?;
+            std::fs::write(&out_ar_path, bytes).context("Failed to write archive")?;
+            tracing::debug!("Wrote fat archive to {:?}", out_ar_path);
+        }
+
+        // We're going to replace the first rlib in the args with our fat archive
+        // And then remove the rest of the rlibs
+        //
+        // We also need to insert the -force_load flag to force the linker to load the archive
+        let mut args = args.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        if let Some(first_rlib) = args.iter().position(|arg| arg.ends_with(".rlib")) {
+            args[first_rlib] = match self.platform {
+                // On wasm, we need to use the --whole-archive flag
+                Platform::Web => format!("--whole-archive"),
+
+                // On all other platforms, we need to use -force_load
+                _ => format!("-Wl,-all_load"),
+                // _ => format!("-Wl,-force_load={}", out_ar_path.display()),
+            };
+            args.insert(first_rlib + 1, out_ar_path.display().to_string());
+            args.insert(first_rlib + 2, "--no-whole-archive".to_string());
+            args.retain(|arg| !arg.ends_with(".rlib"));
+
+            // add back the compiler rlibs
+            for rlib in compiler_rlibs.iter().rev() {
+                args.insert(first_rlib + 3, rlib.display().to_string());
+            }
+        }
+
+        // We also need to remove the `-o` flag since we want the linker output to end up in the
+        // rust exe location, not in the deps dir as it normally would.
+        if let Some(idx) = args.iter().position(|arg| *arg == "-o") {
+            args.remove(idx + 1);
+            args.remove(idx);
+        }
+
+        // We want to go through wasm-ld directly, so we need to remove the -flavor flag
+        if self.platform == Platform::Web {
+            let flavor_idx = args.iter().position(|arg| *arg == "-flavor").unwrap();
+            args.remove(flavor_idx + 1);
+            args.remove(flavor_idx);
+        }
+
+        // And now we can run the linker with our new args
+        let cc = match self.platform {
+            // todo: we're using wasm-ld directly, but I think we can drive it with rust-lld and -flavor wasm
+            Platform::Web => self.workspace.wasm_ld(),
+            // Platform::Web => self.workspace.rust_lld(),
+
+            // The android clang linker is *special* and has some android-specific flags that we need
+            //
+            // Note that this is *clang*, not `lld`.
+            Platform::Android => android_tools()
+                .context("Could not determine android tools")?
+                .android_cc(&self.triple),
+
+            // The rest of the platforms use `cc` as the linker which should be available in your path,
+            // provided you have build-tools setup. On mac/linux this is the default, but on Windows
+            // it requires msvc or gnu downloaded, which is a requirement to use rust anyways.
+            //
+            // The default linker might actually be slow though, so we could consider using lld or rust-lld
+            // since those are shipping by default on linux as of 1.86. Window's linker is the really slow one.
+            //
+            // https://blog.rust-lang.org/2024/05/17/enabling-rust-lld-on-linux.html
+            //
+            // Note that "cc" is *not* a linker. It's a compiler! The arguments we pass need to be in
+            // the form of `-Wl,<args>` for them to make it to the linker. This matches how rust does it
+            // which is confusing.
+            Platform::MacOS
+            | Platform::Ios
+            | Platform::Linux
+            | Platform::Server
+            | Platform::Liveview
+            | Platform::Windows => PathBuf::from("cc"),
+        };
+
+        tracing::debug!("Final linker args: {:#?}", args);
+
+        // Run the linker directly!
+        let res = Command::new(cc)
+            .args(args.iter().skip(1))
+            .arg("-o")
+            .arg(&artifacts.exe)
+            .output()
+            .await?;
+
+        if !res.stderr.is_empty() {
+            let errs = String::from_utf8_lossy(&res.stderr);
+            if !res.status.success() {
+                tracing::error!("Failed to generate fat binary: {}", errs.trim());
+            } else {
+                tracing::debug!("Warnings during fat linking: {}", errs.trim());
+            }
+        }
+
+        if !res.stdout.is_empty() {
+            let out = String::from_utf8_lossy(&res.stdout);
+            tracing::debug!("Output from fat linking: {}", out.trim());
+        }
+
+        Ok(())
+    }
+
     /// Assemble the `cargo rustc` / `rustc` command
     ///
     /// When building fat/base binaries, we use `cargo rustc`.
@@ -1607,7 +1829,9 @@ impl BuildRequest {
         }
 
         // dx *always* links android and thin builds
-        if self.custom_linker.is_some() || matches!(ctx.mode, BuildMode::Thin { .. }) {
+        if self.custom_linker.is_some()
+            || matches!(ctx.mode, BuildMode::Thin { .. } | BuildMode::Fat)
+        {
             cargo_args.push(format!(
                 "-Clinker={}",
                 dunce::canonicalize(std::env::current_exe().unwrap())
@@ -1641,13 +1865,13 @@ impl BuildRequest {
             match self.triple.operating_system {
                 // macOS/iOS use ld64 but through the `cc` interface.
                 OperatingSystem::Darwin(_) | OperatingSystem::MacOSX(_) => {
-                    cargo_args.push("-Clink-args=-Wl,-all_load".to_string());
+                    // cargo_args.push("-Clink-args=-Wl,-all_load".to_string());
                 }
 
                 // Linux and Android fit under this umbrella, both with the same clang-like entrypoint
                 // and the gnu-ld interface.
                 OperatingSystem::Linux => {
-                    cargo_args.push("-Clink-args=-Wl,--whole-archive".to_string());
+                    // cargo_args.push("-Clink-args=-Wl,--whole-archive".to_string());
                 }
 
                 // If windows -Wl,--whole-archive is required since it follows gnu-ld convention.
@@ -1655,7 +1879,7 @@ impl BuildRequest {
                 //
                 // https://learn.microsoft.com/en-us/cpp/build/reference/wholearchive-include-all-library-object-files?view=msvc-170
                 OperatingSystem::Windows => {
-                    cargo_args.push("-Clink-args=-Wl,--whole-archive".to_string());
+                    // cargo_args.push("-Clink-args=-Wl,--whole-archive".to_string());
                 }
 
                 // if web, -Wl,--whole-archive is required since it follows gnu-ld convention.
@@ -1717,7 +1941,9 @@ impl BuildRequest {
         };
 
         // If we're either zero-linking or using a custom linker, make `dx` itself do the linking.
-        if self.custom_linker.is_some() || matches!(ctx.mode, BuildMode::Thin { .. }) {
+        if self.custom_linker.is_some()
+            || matches!(ctx.mode, BuildMode::Thin { .. } | BuildMode::Fat)
+        {
             env_vars.push((
                 LinkAction::ENV_VAR_NAME,
                 LinkAction {
@@ -2857,7 +3083,7 @@ impl BuildRequest {
 
             // Make sure to write some entropy to the main.js file so it gets a new hash
             // If we don't do this, the main.js file will be cached and never pick up the chunk names
-            let uuid = uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_URL, glue.as_bytes());
+            let uuid = Uuid::new_v5(&Uuid::NAMESPACE_URL, glue.as_bytes());
             std::fs::OpenOptions::new()
                 .append(true)
                 .open(self.wasm_bindgen_js_output_file())

@@ -128,7 +128,7 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &mut TraceController) -> 
                         screen.push_cargo_log(message);
                     }
                     BuilderUpdate::BuildFailed { err } => {
-                        tracing::error!("Build failed: {:?}", err);
+                        tracing::error!("Build failed: {:#?}", err);
                     }
                     BuilderUpdate::BuildReady { bundle } => {
                         match bundle.mode {

@@ -133,6 +133,7 @@ plist = "1.7.0"
 memoize = "0.5.1"
 wasm-encoder = "0.228.0"
 backtrace = "0.3.74"
+ar = "0.9.0"
 
 
 [build-dependencies]

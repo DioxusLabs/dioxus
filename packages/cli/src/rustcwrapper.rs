@@ -32,6 +32,20 @@ pub struct RustcArgs {
 ///
 /// https://doc.rust-lang.org/cargo/reference/config.html#buildrustc
 pub async fn run_rustc() {
+    // if we happen to be both a rustc wrapper and a linker, we want to run the linker if the arguments seem linker-y
+    // this is a stupid hack
+    if std::env::args()
+        .take(5)
+        .any(|arg| arg.ends_with(".o") || arg == "-flavor")
+    {
+        crate::link::LinkAction::from_env()
+            .expect("Linker action not found")
+            .run()
+            .await
+            .expect("Failed to run linker");
+        return;
+    }
+
     let var_file: PathBuf = std::env::var(DX_RUSTC_WRAPPER_ENV_VAR)
         .expect("DX_RUSTC not set")
         .into();
