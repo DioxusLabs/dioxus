@@ -1,7 +1,7 @@
 use crate::{
     config::WebHttpsConfig,
     serve::{ServeArgs, ServeUpdate},
-    BuildStage, BuildUpdate, DioxusCrate, Platform, Result, TraceSrc,
+    BuildRequest, BuildStage, BuilderUpdate, Platform, Result, TraceSrc,
 };
 use anyhow::Context;
 use axum::{
@@ -19,6 +19,7 @@ use axum::{
     routing::{get, get_service},
     Extension, Router,
 };
+use axum_server::tls_rustls::RustlsConfig;
 use dioxus_devtools_types::{DevserverMsg, HotReloadMsg};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::{
@@ -29,17 +30,23 @@ use futures_util::{
 use hyper::HeaderMap;
 use serde::{Deserialize, Serialize};
 use std::{
+    collections::HashMap,
     convert::Infallible,
     fs, io,
     net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener},
-    path::Path,
+    path::{Path, PathBuf},
     sync::{Arc, RwLock},
+    time::Duration,
 };
+use subsecond_types::JumpTable;
+use tokio::process::Command;
 use tower_http::{
     cors::Any,
     services::fs::{ServeDir, ServeFileSystemResponseBody},
     ServiceBuilderExt,
 };
+
+use super::{AppBuilder, AppServer};
 
 /// The webserver that serves statics assets (if fullstack isn't already doing that) and the websocket
 /// communication layer that we use to send status updates and hotreloads to the client.
@@ -61,37 +68,25 @@ pub(crate) struct WebServer {
     platform: Platform,
 }
 
+pub const SELF_IP: IpAddr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+// pub const SELF_IP: IpAddr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
+
 impl WebServer {
     /// Start the development server.
     /// This will set up the default http server if there's no server specified (usually via fullstack).
     ///
     /// This will also start the websocket server that powers the devtools. If you want to communicate
     /// with connected devtools clients, this is the place to do it.
-    pub(crate) fn start(krate: &DioxusCrate, args: &ServeArgs) -> Result<Self> {
+    pub(crate) fn start(runner: &AppServer) -> Result<Self> {
         let (hot_reload_sockets_tx, hot_reload_sockets_rx) = futures_channel::mpsc::unbounded();
         let (build_status_sockets_tx, build_status_sockets_rx) = futures_channel::mpsc::unbounded();
 
-        const SELF_IP: IpAddr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
-
-        // Use 0.0.0.0 as the default address if none is specified - this will let us expose the
-        // devserver to the network (for other devices like phones/embedded)
-        let devserver_bind_ip = args.address.addr.unwrap_or(SELF_IP);
-
-        // If the user specified a port, use that, otherwise use any available port, preferring 8080
-        let devserver_port = args
-            .address
-            .port
-            .unwrap_or_else(|| get_available_port(devserver_bind_ip, Some(8080)).unwrap_or(8080));
-
-        // All servers will end up behind us (the devserver) but on a different port
-        // This is so we can serve a loading screen as well as devtools without anything particularly fancy
-        let proxied_port = args
-            .should_proxy_build()
-            .then(|| get_available_port(devserver_bind_ip, None))
-            .flatten();
-
         // Create the listener that we'll pass into the devserver, but save its IP here so
         // we can display it to the user in the tui
+        let devserver_bind_ip = runner.devserver_bind_ip;
+        let devserver_port = runner.devserver_port;
+        let proxied_port = runner.proxied_port;
+
         let devserver_bind_address = SocketAddr::new(devserver_bind_ip, devserver_port);
         let listener = std::net::TcpListener::bind(devserver_bind_address).with_context(|| {
             anyhow::anyhow!(
@@ -99,21 +94,21 @@ impl WebServer {
             )
         })?;
 
-        // If the IP is 0.0.0.0, we need to get the actual IP of the machine
-        // This will let ios/android/network clients connect to the devserver
-        let devserver_exposed_ip = if devserver_bind_ip == SELF_IP {
-            local_ip_address::local_ip().unwrap_or(devserver_bind_ip)
-        } else {
-            devserver_bind_ip
-        };
+        // // If the IP is 0.0.0.0, we need to get the actual IP of the machine
+        // // This will let ios/android/network clients connect to the devserver
+        // let devserver_exposed_ip = if devserver_bind_ip == SELF_IP {
+        //     local_ip_address::local_ip().unwrap_or(devserver_bind_ip)
+        // } else {
+        //     devserver_bind_ip
+        // };
+        let devserver_exposed_ip = devserver_bind_ip;
 
         let proxied_address = proxied_port.map(|port| SocketAddr::new(devserver_exposed_ip, port));
 
         // Set up the router with some shared state that we'll update later to reflect the current state of the build
         let build_status = SharedStatus::new_with_starting_build();
         let router = build_devserver_router(
-            args,
-            krate,
+            &runner,
             hot_reload_sockets_tx,
             build_status_sockets_tx,
             proxied_address,
@@ -122,7 +117,7 @@ impl WebServer {
 
         // And finally, start the server mainloop
         tokio::spawn(devserver_mainloop(
-            krate.config.web.https.clone(),
+            runner.client().build.config.web.https.clone(),
             listener,
             router,
         ));
@@ -137,8 +132,8 @@ impl WebServer {
             build_status_sockets: Default::default(),
             new_hot_reload_sockets: hot_reload_sockets_rx,
             new_build_status_sockets: build_status_sockets_rx,
-            application_name: krate.executable_name().to_string(),
-            platform: args.build_arguments.platform(),
+            application_name: runner.app_name().to_string(),
+            platform: runner.client.build.platform,
         })
     }
 
@@ -180,7 +175,7 @@ impl WebServer {
             }
             Some((idx, message)) = new_message.next() => {
                 match message {
-                    Some(Ok(message)) => return ServeUpdate::WsMessage(message),
+                    Some(Ok(msg)) => return ServeUpdate::WsMessage { msg, platform: Platform::Web },
                     _ => {
                         drop(new_message);
                         _ = self.hot_reload_sockets.remove(idx);
@@ -193,23 +188,6 @@ impl WebServer {
     }
 
     pub(crate) async fn shutdown(&mut self) {
-        if matches!(self.platform, Platform::Android) {
-            use std::process::{Command, Stdio};
-            if let Err(err) = Command::new("adb")
-                .arg("reverse")
-                .arg("--remove")
-                .arg(format!("tcp:{}", self.devserver_port))
-                .stderr(Stdio::piped())
-                .stdout(Stdio::piped())
-                .output()
-            {
-                tracing::error!(
-                    "failed to remove forwarded port {}: {err}",
-                    self.devserver_port
-                );
-            }
-        }
-
         self.send_shutdown().await;
         for mut socket in self.hot_reload_sockets.drain(..) {
             _ = socket.send(Message::Close(None)).await;
@@ -238,14 +216,19 @@ impl WebServer {
         self.send_build_status().await;
     }
 
+    /// Sends a start build message to all clients.
+    pub(crate) async fn start_patch(&mut self) {
+        self.build_status.set(Status::Building {
+            progress: 0.0,
+            build_message: "Starting the patch...".to_string(),
+        });
+        self.send_build_status().await;
+    }
+
     /// Sends an updated build status to all clients.
-    pub(crate) async fn new_build_update(
-        &mut self,
-        update: &BuildUpdate,
-        builder: &super::Builder,
-    ) {
+    pub(crate) async fn new_build_update(&mut self, update: &BuilderUpdate) {
         match update {
-            BuildUpdate::Progress { stage } => {
+            BuilderUpdate::Progress { stage } => {
                 // Todo(miles): wire up more messages into the splash screen UI
                 match stage {
                     BuildStage::Success => {}
@@ -259,13 +242,13 @@ impl WebServer {
                         krate,
                         ..
                     } => {
-                        if !builder.is_finished() {
-                            self.build_status.set(Status::Building {
-                                progress: (*current as f64 / *total as f64).clamp(0.0, 1.0),
-                                build_message: format!("{krate} compiling"),
-                            });
-                            self.send_build_status().await;
-                        }
+                        // if !builder.is_finished() {
+                        self.build_status.set(Status::Building {
+                            progress: (*current as f64 / *total as f64).clamp(0.0, 1.0),
+                            build_message: format!("{krate} compiling"),
+                        });
+                        self.send_build_status().await;
+                        // }
                     }
                     BuildStage::OptimizingWasm => {}
                     BuildStage::Aborted => {}
@@ -273,9 +256,9 @@ impl WebServer {
                     _ => {}
                 }
             }
-            BuildUpdate::CompilerMessage { .. } => {}
-            BuildUpdate::BuildReady { .. } => {}
-            BuildUpdate::BuildFailed { err } => {
+            BuilderUpdate::CompilerMessage { .. } => {}
+            BuilderUpdate::BuildReady { .. } => {}
+            BuilderUpdate::BuildFailed { err } => {
                 let error = err.to_string();
                 self.build_status.set(Status::BuildError {
                     error: ansi_to_html::convert(&error).unwrap_or(error),
@@ -283,6 +266,9 @@ impl WebServer {
                 self.send_reload_failed().await;
                 self.send_build_status().await;
             }
+            BuilderUpdate::StdoutReceived { msg } => {}
+            BuilderUpdate::StderrReceived { msg } => {}
+            BuilderUpdate::ProcessExited { status } => {}
         }
     }
 
@@ -314,15 +300,30 @@ impl WebServer {
         }
     }
 
+    pub(crate) async fn send_patch(&mut self, jump_table: JumpTable, time_taken: Duration) {
+        let msg = DevserverMsg::HotReload(HotReloadMsg {
+            jump_table: Some(jump_table),
+            ms_elapsed: time_taken.as_millis() as u64,
+            ..Default::default()
+        });
+        self.send_devserver_message_to_all(msg).await;
+    }
+
+    /// Tells all clients that a hot patch has started.
+    pub(crate) async fn send_patch_start(&mut self) {
+        self.send_devserver_message_to_all(DevserverMsg::HotPatchStart)
+            .await;
+    }
+
     /// Tells all clients that a full rebuild has started.
     pub(crate) async fn send_reload_start(&mut self) {
-        self.send_devserver_message(DevserverMsg::FullReloadStart)
+        self.send_devserver_message_to_all(DevserverMsg::FullReloadStart)
             .await;
     }
 
     /// Tells all clients that a full rebuild has failed.
     pub(crate) async fn send_reload_failed(&mut self) {
-        self.send_devserver_message(DevserverMsg::FullReloadFailed)
+        self.send_devserver_message_to_all(DevserverMsg::FullReloadFailed)
             .await;
     }
 
@@ -334,17 +335,18 @@ impl WebServer {
 
         self.build_status.set(Status::Ready);
         self.send_build_status().await;
-        self.send_devserver_message(DevserverMsg::FullReloadCommand)
+        self.send_devserver_message_to_all(DevserverMsg::FullReloadCommand)
             .await;
     }
 
     /// Send a shutdown message to all connected clients.
     pub(crate) async fn send_shutdown(&mut self) {
-        self.send_devserver_message(DevserverMsg::Shutdown).await;
+        self.send_devserver_message_to_all(DevserverMsg::Shutdown)
+            .await;
     }
 
     /// Sends a devserver message to all connected clients.
-    async fn send_devserver_message(&mut self, msg: DevserverMsg) {
+    async fn send_devserver_message_to_all(&mut self, msg: DevserverMsg) {
         for socket in self.hot_reload_sockets.iter_mut() {
             _ = socket
                 .send(Message::Text(serde_json::to_string(&msg).unwrap().into()))
@@ -424,22 +426,23 @@ async fn devserver_mainloop(
 /// - Setting up the file serve service
 /// - Setting up the websocket endpoint for devtools
 fn build_devserver_router(
-    args: &ServeArgs,
-    krate: &DioxusCrate,
+    runner: &AppServer,
     hot_reload_sockets: UnboundedSender<WebSocket>,
     build_status_sockets: UnboundedSender<WebSocket>,
     fullstack_address: Option<SocketAddr>,
     build_status: SharedStatus,
 ) -> Result<Router> {
     let mut router = Router::new();
+    let build = runner.client();
 
     // Setup proxy for the endpoint specified in the config
-    for proxy_config in krate.config.web.proxy.iter() {
+    for proxy_config in build.build.config.web.proxy.iter() {
         router = super::proxy::add_proxy(router, proxy_config)?;
     }
 
-    if args.should_proxy_build() {
-        // For fullstack, liveview, and server, forward all requests to the inner server
+    // For fullstack, liveview, and server, forward all requests to the inner server
+    if runner.proxied_port.is_some() {
+        tracing::debug!("Proxying requests to fullstack server at {fullstack_address:?}");
         let address = fullstack_address.unwrap();
         tracing::debug!("Proxying requests to fullstack server at {address}");
         router = router.fallback_service(super::proxy::proxy_to(
@@ -460,7 +463,9 @@ fn build_devserver_router(
         // Route file service to output the .wasm and assets if this is a web build
         let base_path = format!(
             "/{}",
-            krate
+            runner
+                .client()
+                .build
                 .config
                 .web
                 .app
@@ -470,9 +475,9 @@ fn build_devserver_router(
                 .trim_matches('/')
         );
         if base_path == "/" {
-            router = router.fallback_service(build_serve_dir(args, krate));
+            router = router.fallback_service(build_serve_dir(runner));
         } else {
-            router = router.nest_service(&base_path, build_serve_dir(args, krate));
+            router = router.nest_service(&base_path, build_serve_dir(runner));
         }
     }
 
@@ -520,7 +525,7 @@ fn build_devserver_router(
     Ok(router)
 }
 
-fn build_serve_dir(args: &ServeArgs, cfg: &DioxusCrate) -> axum::routing::MethodRouter {
+fn build_serve_dir(runner: &AppServer) -> axum::routing::MethodRouter {
     use tower::ServiceBuilder;
 
     static CORS_UNSAFE: (HeaderValue, HeaderValue) = (
@@ -533,15 +538,19 @@ fn build_serve_dir(args: &ServeArgs, cfg: &DioxusCrate) -> axum::routing::Method
         HeaderValue::from_static("same-origin"),
     );
 
-    let (coep, coop) = match args.cross_origin_policy {
+    let (coep, coop) = match runner.cross_origin_policy {
         true => CORS_REQUIRE.clone(),
         false => CORS_UNSAFE.clone(),
     };
 
-    let out_dir = cfg
-        .build_dir(Platform::Web, args.build_arguments.release)
+    let app = &runner.client;
+    let cfg = &runner.client.build.config;
+
+    let out_dir = app
+        .build
+        .build_dir(Platform::Web, app.build.release)
         .join("public");
-    let index_on_404 = cfg.config.web.watcher.index_on_404;
+    let index_on_404: bool = cfg.web.watcher.index_on_404;
 
     get_service(
         ServiceBuilder::new()
@@ -641,7 +650,7 @@ async fn get_rustls(web_config: &WebHttpsConfig) -> Result<(String, String)> {
         _ = fs::create_dir("ssl");
     }
 
-    let cmd = tokio::process::Command::new("mkcert")
+    let cmd = Command::new("mkcert")
         .args([
             "-install",
             "-key-file",
@@ -673,25 +682,6 @@ async fn get_rustls(web_config: &WebHttpsConfig) -> Result<(String, String)> {
 
     Ok((cert_path, key_path))
 }
-/// Bind a listener to any point and return it
-/// When the listener is dropped, the socket will be closed, but we'll still have a port that we
-/// can bind our proxy to.
-///
-/// Todo: we might want to do this on every new build in case the OS tries to bind things to this port
-/// and we don't already have something bound to it. There's no great way of "reserving" a port.
-fn get_available_port(address: IpAddr, prefer: Option<u16>) -> Option<u16> {
-    // First, try to bind to the preferred port
-    if let Some(port) = prefer {
-        if let Ok(_listener) = TcpListener::bind((address, port)) {
-            return Some(port);
-        }
-    }
-
-    // Otherwise, try to bind to any port and return the first one we can
-    TcpListener::bind((address, 0))
-        .map(|listener| listener.local_addr().unwrap().port())
-        .ok()
-}
 
 /// Middleware that intercepts html requests if the status is "Building" and returns a loading page instead
 async fn build_status_middleware(
@@ -708,7 +698,7 @@ async fn build_status_middleware(
     if let Some(true) = accepts_html {
         let status = state.get();
         if status != Status::Ready {
-            let html = include_str!("../../assets/web/loading.html");
+            let html = include_str!("../../assets/web/dev.loading.html");
             return axum::response::Response::builder()
                 .status(StatusCode::OK)
                 // Load the html loader then keep loading forever

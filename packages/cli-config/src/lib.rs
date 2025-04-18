@@ -306,3 +306,17 @@ pub fn session_cache_dir() -> Option<PathBuf> {
 pub fn android_session_cache_dir() -> PathBuf {
     PathBuf::from("/data/local/tmp/dx/")
 }
+
+/// The unique build id for this application, used to disambiguate between different builds of the same
+/// application.
+pub fn build_id() -> u64 {
+    #[cfg(target_arch = "wasm32")]
+    {
+        0
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        1
+    }
+}

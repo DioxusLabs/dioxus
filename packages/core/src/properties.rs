@@ -116,7 +116,10 @@ where
 
 /// A warning that will trigger if a component is called as a function
 #[warnings::warning]
-pub(crate) fn component_called_as_function<C: ComponentFunction<P, M>, P, M>(_: C) {
+pub(crate) fn component_called_as_function<C: ComponentFunction<P, M>, P, M>(_: C)
+where
+    P: 'static,
+{
     // We trim WithOwner from the end of the type name for component with a builder that include a special owner which may not match the function name directly
     let type_name = std::any::type_name::<C>();
     let component_name = Runtime::with(|rt| {
@@ -139,7 +142,10 @@ pub(crate) fn component_called_as_function<C: ComponentFunction<P, M>, P, M>(_: 
 /// Make sure that this component is currently running as a component, not a function call
 #[doc(hidden)]
 #[allow(clippy::no_effect)]
-pub fn verify_component_called_as_component<C: ComponentFunction<P, M>, P, M>(component: C) {
+pub fn verify_component_called_as_component<C: ComponentFunction<P, M>, P, M>(component: C)
+where
+    P: 'static,
+{
     component_called_as_function(component);
 }
 
@@ -166,10 +172,14 @@ pub fn verify_component_called_as_component<C: ComponentFunction<P, M>, P, M>(co
         note = "You may have forgotten to add `#[component]` to your function to automatically implement the `ComponentFunction` trait."
     )
 )]
-pub trait ComponentFunction<Props, Marker = ()>: Clone + 'static {
+pub trait ComponentFunction<Props, Marker = ()>: Clone + 'static
+where
+    Props: 'static,
+{
     /// Get the type id of the component.
     fn id(&self) -> TypeId {
-        TypeId::of::<Self>()
+        // TypeId::of::<Self>()
+        TypeId::of::<Props>()
     }
 
     /// Convert the component to a function that takes props and returns an element.
@@ -177,17 +187,24 @@ pub trait ComponentFunction<Props, Marker = ()>: Clone + 'static {
 }
 
 /// Accept any callbacks that take props
-impl<F: Fn(P) -> Element + Clone + 'static, P> ComponentFunction<P> for F {
+impl<F, P> ComponentFunction<P> for F
+where
+    P: 'static,
+    F: Fn(P) -> Element + Clone + 'static,
+{
     fn rebuild(&self, props: P) -> Element {
-        self(props)
+        subsecond::HotFn::current(self.clone()).call((props,))
     }
 }
 
 /// Accept any callbacks that take no props
 pub struct EmptyMarker;
-impl<F: Fn() -> Element + Clone + 'static> ComponentFunction<(), EmptyMarker> for F {
-    fn rebuild(&self, _: ()) -> Element {
-        self()
+impl<F> ComponentFunction<(), EmptyMarker> for F
+where
+    F: Fn() -> Element + Clone + 'static,
+{
+    fn rebuild(&self, props: ()) -> Element {
+        subsecond::HotFn::current(self.clone()).call(props)
     }
 }
 

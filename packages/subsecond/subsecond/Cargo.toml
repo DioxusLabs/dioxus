@@ -1,0 +1,27 @@
+[package]
+name = "subsecond"
+edition = "2021"
+version.workspace = true
+
+[dependencies]
+serde = { version = "1.0.203", features = ["derive"] }
+subsecond-types = { workspace = true }
+
+thiserror = { workspace = true }
+wasm-bindgen = { workspace = true }
+wasm-bindgen-futures = { workspace = true }
+js-sys = { workspace = true}
+serde-wasm-bindgen = { version = "*"}
+web-sys = { version = "*", features = ["FetchEvent", "Request", "Window", "Response", "ResponseType", "console"] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+libloading = "0.8.6"
+libc = "0.2.170"
+memmap2 = "0.9.5"
+dbg_breakpoint = "0.1.1"
+
+[target.'cfg(target_os = "android")'.dependencies]
+memfd = { version = "0.6.4" }

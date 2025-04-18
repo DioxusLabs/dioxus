@@ -6,6 +6,9 @@
   "[handlebars]": {
     "editor.formatOnSave": false
   },
+  "[javascript]": {
+    "editor.formatOnSave": false
+  },
   // "rust-analyzer.check.workspace": true,
   // "rust-analyzer.check.workspace": false,
   // "rust-analyzer.check.features": "all",
@@ -13,7 +16,13 @@
   // "rust-analyzer.check.workspace": false,
   "rust-analyzer.cargo.features": "all",
   "rust-analyzer.check.features": "all",
+  "rust-analyzer.cargo.extraArgs": [
+    "--tests"
+  ],
   // "rust-analyzer.check.allTargets": true,
   // we don't want the formatter to kick in while we're working on dioxus itself
   "dioxus.formatOnSave": "disabled",
+  "cSpell.words": [
+    "subsecond"
+  ],
 }

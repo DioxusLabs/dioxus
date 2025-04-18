@@ -1,8 +1,7 @@
 use crate::{CliSettings, Result};
 use anyhow::{anyhow, Context};
 use flate2::read::GzDecoder;
-use std::path::PathBuf;
-use std::{path::Path, process::Stdio};
+use std::path::{Path, PathBuf};
 use tar::Archive;
 use tempfile::TempDir;
 use tokio::{fs, process::Command};
@@ -160,12 +159,7 @@ impl WasmBindgen {
         tracing::debug!("wasm-bindgen args: {:#?}", args);
 
         // Run bindgen
-        Command::new(binary)
-            .args(args)
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .output()
-            .await?;
+        Command::new(binary).args(args).output().await?;
 
         Ok(())
     }
@@ -288,8 +282,6 @@ impl WasmBindgen {
                 "--install-path",
             ])
             .arg(tempdir.path())
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::piped())
             .output()
             .await?;
 
@@ -322,8 +314,6 @@ impl WasmBindgen {
                 "--root",
             ])
             .arg(tempdir.path())
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::piped())
             .output()
             .await
             .context("failed to install wasm-bindgen-cli from cargo-install")?;

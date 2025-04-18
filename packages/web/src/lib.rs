@@ -2,23 +2,9 @@
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![deny(missing_docs)]
 
-//! Dioxus WebSys
-//!
-//! ## Overview
-//! ------------
-//! This crate implements a renderer of the Dioxus Virtual DOM for the web browser using WebSys. This web render for
-//! Dioxus is one of the more advanced renderers, supporting:
-//! - idle work
-//! - animations
-//! - jank-free rendering
-//! - controlled components
-//! - hydration
-//! - and more.
-//!
-//! The actual implementation is farily thin, with the heavy lifting happening inside the Dioxus Core crate.
-//!
-//! To purview the examples, check of the root Dioxus crate - the examples in this crate are mostly meant to provide
-//! validation of websys-specific features and not the general use of Dioxus.
+//! # Dioxus Web
+
+use std::time::Duration;
 
 pub use crate::cfg::Config;
 use crate::hydration::SuspenseMessage;
@@ -69,7 +55,7 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
     let runtime = virtual_dom.runtime();
 
     #[cfg(all(feature = "devtools", debug_assertions))]
-    let mut hotreload_rx = devtools::init(runtime.clone());
+    let mut hotreload_rx = devtools::init();
 
     let should_hydrate = web_config.hydrate;
 
@@ -148,7 +134,8 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
         // if virtual dom has nothing, wait for it to have something before requesting idle time
         // if there is work then this future resolves immediately.
         #[cfg(all(feature = "devtools", debug_assertions))]
-        let template;
+        let hotreload_msg;
+
         #[allow(unused)]
         let mut hydration_work: Option<SuspenseMessage> = None;
 
@@ -167,13 +154,13 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
                 let mut devtools_next = hotreload_rx.select_next_some();
                 select! {
                     _ = work => {
-                        template = None;
+                        hotreload_msg = None;
                     },
                     new_template = devtools_next => {
-                        template = Some(new_template);
+                        hotreload_msg = Some(new_template);
                     },
                     hydration_data = rx_hydration => {
-                        template = None;
+                        hotreload_msg = None;
                         #[cfg(feature = "hydrate")]
                         {
                             hydration_work = Some(hydration_data);
@@ -198,12 +185,20 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
         }
 
         #[cfg(all(feature = "devtools", debug_assertions))]
-        if let Some(hr_msg) = template {
+        if let Some(hr_msg) = hotreload_msg {
             // Replace all templates
-            dioxus_devtools::apply_changes(&virtual_dom, &hr_msg);
+            if dioxus_devtools::apply_changes(&virtual_dom, &hr_msg).is_ok() {
+                if !hr_msg.assets.is_empty() {
+                    crate::devtools::invalidate_browser_asset_cache();
+                }
 
-            if !hr_msg.assets.is_empty() {
-                crate::devtools::invalidate_browser_asset_cache();
+                devtools::show_toast(
+                    "Hot-patch success!",
+                    &format!("App successfully patched in {} ms", hr_msg.ms_elapsed),
+                    devtools::ToastLevel::Success,
+                    Duration::from_millis(1000),
+                    false,
+                );
             }
         }
 

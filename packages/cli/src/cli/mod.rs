@@ -2,6 +2,7 @@ pub(crate) mod autoformat;
 pub(crate) mod build;
 pub(crate) mod build_assets;
 pub(crate) mod bundle;
+pub(crate) mod chained;
 pub(crate) mod check;
 pub(crate) mod clean;
 pub(crate) mod config;
@@ -10,13 +11,11 @@ pub(crate) mod init;
 pub(crate) mod link;
 pub(crate) mod run;
 pub(crate) mod serve;
-pub(crate) mod target;
 pub(crate) mod translate;
 pub(crate) mod verbosity;
 
 pub(crate) use build::*;
 pub(crate) use serve::*;
-pub(crate) use target::*;
 pub(crate) use verbosity::*;
 
 use crate::{error::Result, Error, StructuredOutput};
@@ -30,7 +29,7 @@ use std::{
     fs::File,
     io::{Read, Write},
     path::PathBuf,
-    process::{Command, Stdio},
+    process::Command,
 };
 
 /// Build, Bundle & Ship Dioxus Apps.

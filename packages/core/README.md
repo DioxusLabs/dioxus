@@ -65,7 +65,7 @@ use dioxus::prelude::*;
 
 // First, declare a root component
 fn app() -> Element {
-    rsx!{
+    rsx! {
         div { "hello world" }
     }
 }

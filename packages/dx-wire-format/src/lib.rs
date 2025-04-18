@@ -46,11 +46,10 @@ pub enum BuildStage {
     Initializing,
     Starting {
         crate_count: usize,
-        is_server: bool,
+        patch: bool,
     },
     InstallingTooling,
     Compiling {
-        is_server: bool,
         current: usize,
         total: usize,
         krate: String,
@@ -58,7 +57,7 @@ pub enum BuildStage {
     RunningBindgen,
     SplittingBundle,
     OptimizingWasm,
-    PrerenderingRoutes,
+    Hotpatching,
     CopyingAssets {
         current: usize,
         total: usize,

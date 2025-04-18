@@ -78,6 +78,8 @@ pub use dioxus_cli_config as cli_config;
 #[cfg_attr(docsrs, doc(cfg(feature = "wasm-split")))]
 pub use wasm_split;
 
+pub use subsecond;
+
 pub mod prelude {
     #[cfg(feature = "document")]
     #[cfg_attr(docsrs, doc(cfg(feature = "document")))]
@@ -118,10 +120,7 @@ pub mod prelude {
     #[cfg_attr(docsrs, doc(cfg(feature = "html")))]
     pub use dioxus_elements::{global_attributes, prelude::*, svg_attributes};
 
-    #[cfg(all(
-        not(any(target_arch = "wasm32", target_os = "ios", target_os = "android")),
-        feature = "devtools"
-    ))]
+    #[cfg(feature = "devtools")]
     #[cfg_attr(docsrs, doc(cfg(feature = "devtools")))]
     pub use dioxus_devtools;
 

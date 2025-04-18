@@ -1,5 +1,5 @@
 use super::*;
-use crate::{serve::ServeUpdate, BuildArgs, Builder, DioxusCrate, Platform, Result};
+use crate::{AppBuilder, BuildArgs, BuildMode, BuildRequest, Platform, Result, Workspace};
 
 /// Run the project with the given arguments
 #[derive(Clone, Debug, Parser)]
@@ -10,60 +10,47 @@ pub(crate) struct RunArgs {
 }
 
 impl RunArgs {
-    pub(crate) async fn run(mut self) -> Result<StructuredOutput> {
-        let krate = DioxusCrate::new(&self.build_args.target_args)
-            .context("Failed to load Dioxus workspace")?;
+    pub(crate) async fn run(self) -> Result<StructuredOutput> {
+        let workspace = Workspace::current().await?;
 
-        self.build_args.resolve(&krate).await?;
+        let build = BuildRequest::new(&self.build_args, workspace)
+            .await
+            .context("error building project")?;
 
-        tracing::trace!("Building crate krate data: {:#?}", krate);
-        tracing::trace!("Build args: {:#?}", self.build_args);
-
-        let bundle = Builder::start(&krate, self.build_args.clone())?
-            .finish()
-            .await?;
+        let mut builder = AppBuilder::start(&build, BuildMode::Base)?;
+        let artifacts = builder.finish_build().await?;
 
         let devserver_ip = "127.0.0.1:8081".parse().unwrap();
         let fullstack_ip = "127.0.0.1:8080".parse().unwrap();
         let mut open_address = None;
 
-        if self.build_args.platform() == Platform::Web || self.build_args.fullstack() {
-            open_address = Some(fullstack_ip);
-            tracing::info!("Serving at: {}", fullstack_ip);
-        }
+        todo!();
+        // if build.platform == Platform::Web || build.fullstack {
+        //     tracing::info!("Serving at: {}", fullstack_ip);
+        // }
 
-        let mut runner = crate::serve::AppRunner::start(&krate);
-        runner
-            .open(bundle, devserver_ip, open_address, Some(fullstack_ip), true)
+        builder
+            .open(devserver_ip, open_address, Some(fullstack_ip), true, false)
             .await?;
 
-        // Run the app, but mostly ignore all the other messages
-        // They won't generally be emitted
-        loop {
-            match runner.wait().await {
-                ServeUpdate::StderrReceived { platform, msg } => {
-                    tracing::info!("[{platform}]: {msg}")
-                }
-                ServeUpdate::StdoutReceived { platform, msg } => {
-                    tracing::info!("[{platform}]: {msg}")
-                }
-                ServeUpdate::ProcessExited { platform, status } => {
-                    runner.cleanup().await;
-                    tracing::info!("[{platform}]: process exited with status: {status:?}");
-                    break;
-                }
-                ServeUpdate::BuildUpdate { .. } => {}
-                ServeUpdate::TracingLog { .. } => {}
-                ServeUpdate::Exit { .. } => break,
-                ServeUpdate::NewConnection => {}
-                ServeUpdate::WsMessage(_) => {}
-                ServeUpdate::FilesChanged { .. } => {}
-                ServeUpdate::RequestRebuild => {}
-                ServeUpdate::Redraw => {}
-                ServeUpdate::OpenApp => {}
-                ServeUpdate::ToggleShouldRebuild => {}
-            }
-        }
+        todo!();
+        // // Run the app, but mostly ignore all the other messages
+        // // They won't generally be emitted
+        // loop {
+        //     match builder.wait().await {
+        //         HandleUpdate::StderrReceived { platform, msg } => {
+        //             tracing::info!("[{platform}]: {msg}")
+        //         }
+        //         HandleUpdate::StdoutReceived { platform, msg } => {
+        //             tracing::info!("[{platform}]: {msg}")
+        //         }
+        //         HandleUpdate::ProcessExited { platform, status } => {
+        //             builder.cleanup().await;
+        //             tracing::info!("[{platform}]: process exited with status: {status:?}");
+        //             break;
+        //         }
+        //     }
+        // }
 
         Ok(StructuredOutput::Success)
     }

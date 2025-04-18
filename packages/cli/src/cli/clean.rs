@@ -12,8 +12,6 @@ impl Clean {
     pub(crate) async fn clean(self) -> Result<StructuredOutput> {
         let output = tokio::process::Command::new("cargo")
             .arg("clean")
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
             .output()
             .await?;
 

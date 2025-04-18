@@ -12,3 +12,4 @@ keywords = ["dom", "ui", "gui", "react", ]
 [dependencies]
 serde = { workspace = true, features = ["derive"] }
 dioxus-core = { workspace = true, features = ["serialize"] }
+subsecond-types = { workspace = true }

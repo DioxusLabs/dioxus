@@ -15,8 +15,8 @@ use crate::{
 use crate::{Task, VComponent};
 use futures_util::StreamExt;
 use slab::Slab;
-use std::collections::BTreeSet;
 use std::{any::Any, rc::Rc};
+use std::{collections::BTreeSet, sync::Arc};
 use tracing::instrument;
 
 /// A virtual node system that progresses user events and diffs UI trees.
@@ -323,13 +323,17 @@ impl VirtualDom {
             resolved_scopes: Default::default(),
         };
 
-        let root = VProps::new(
-            RootScopeWrapper,
-            |_, _| true,
-            RootProps(root),
-            "RootWrapper",
+        dom.new_scope(
+            Box::new(VProps::new(
+                RootScopeWrapper,
+                |_, _| true,
+                RootProps(root),
+                "RootWrapper",
+            )),
+            "app",
         );
-        dom.new_scope(Box::new(root), "app");
+
+        dom.register_subsecond_handler();
 
         dom
     }
@@ -373,6 +377,19 @@ impl VirtualDom {
     /// This method is useful for when you want to provide a context in your app without knowing its type
     pub fn insert_any_root_context(&mut self, context: Box<dyn Any>) {
         self.base_scope().state().provide_any_context(context);
+    }
+
+    /// Mark all scopes as dirty. Each scope will be re-rendered.
+    pub fn mark_all_dirty(&mut self) {
+        let mut orders = vec![];
+
+        for (_idx, scope) in self.scopes.iter() {
+            orders.push(ScopeOrder::new(scope.state().height(), scope.id()));
+        }
+
+        for order in orders {
+            self.queue_scope(order);
+        }
     }
 
     /// Manually mark a scope as requiring a re-render
@@ -458,6 +475,7 @@ impl VirtualDom {
                 self.mark_task_dirty(Task::from_id(id));
             }
             SchedulerMsg::EffectQueued => {}
+            SchedulerMsg::AllDirty => self.mark_all_dirty(),
         };
     }
 
@@ -469,6 +487,7 @@ impl VirtualDom {
                 SchedulerMsg::Immediate(id) => self.mark_dirty(id),
                 SchedulerMsg::TaskNotified(task) => self.mark_task_dirty(Task::from_id(task)),
                 SchedulerMsg::EffectQueued => {}
+                SchedulerMsg::AllDirty => self.mark_all_dirty(),
             }
         }
     }
@@ -744,6 +763,13 @@ impl VirtualDom {
         let event = crate::Event::new(event, bubbling);
         self.runtime().handle_event(name, event, element);
     }
+
+    fn register_subsecond_handler(&self) {
+        let sender = self.runtime().sender.clone();
+        subsecond::register_handler(Arc::new(move || {
+            _ = sender.unbounded_send(SchedulerMsg::AllDirty);
+        }));
+    }
 }
 
 impl Drop for VirtualDom {
@@ -759,6 +785,28 @@ impl Drop for VirtualDom {
 
 /// Yield control back to the async scheduler. This is used to give the scheduler a chance to run other pending work. Or cancel the task if the client has disconnected.
 async fn yield_now() {
+    let abc = 123;
+    let abc = 123;
+    let abc = 123;
+    let abc = 123;
+    let abc = 123;
+    let abc = 123;
+    let abc = 123;
+    let abc = 123;
+    let abc = 123;
+    let abc = 123;
+    let abc = 123;
+    let abc = 123;
+    let abc = 123;
+    let abc = 123;
+    let abc = 123;
+    let abc = 123;
+    let abc = 123;
+    let abc = 123;
+    let abc = 123;
+    let abc = 123;
+    let abc = 123;
+
     let mut yielded = false;
     std::future::poll_fn::<(), _>(move |cx| {
         if !yielded {

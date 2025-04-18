@@ -215,7 +215,7 @@ pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), Li
 
             Some(msg) = hot_reload_wait => {
                 #[cfg(all(feature = "devtools", debug_assertions))]
-                match msg{
+                match msg {
                     dioxus_devtools::DevserverMsg::HotReload(msg)=> {
                         dioxus_devtools::apply_changes(&vdom, &msg);
                     }
@@ -228,6 +228,7 @@ pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), Li
                         // usually only web gets this message - what are we supposed to do?
                         // Maybe we could just binary patch ourselves in place without losing window state?
                     },
+                    _ => {}
                 }
                 #[cfg(not(all(feature = "devtools", debug_assertions)))]
                 let () = msg;

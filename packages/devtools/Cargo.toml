@@ -13,14 +13,19 @@ keywords = ["dom", "ui", "gui", "react", "hot-reloading"]
 dioxus-signals = { workspace = true }
 dioxus-core = { workspace = true, features = ["serialize"] }
 dioxus-devtools-types = { workspace = true }
+dioxus-cli-config = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
+subsecond = { workspace = true }
+libloading = "0.8.3"
+libc = "0.2.155"
 
 # hot reloading serve
 tracing = { workspace = true }
 warnings = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+memmap2 = { version = "0.9.5" }
 tungstenite = { workspace = true }
 
 [dev-dependencies]

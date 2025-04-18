@@ -1,15 +1,17 @@
 use dioxus_core::{ScopeId, VirtualDom};
-pub use dioxus_devtools_types::*;
 use dioxus_signals::{GlobalKey, Writable};
 use warnings::Warning;
+
+pub use dioxus_devtools_types::*;
+pub use subsecond;
 
 /// Applies template and literal changes to the VirtualDom
 ///
 /// Assets need to be handled by the renderer.
-pub fn apply_changes(dom: &VirtualDom, msg: &HotReloadMsg) {
+pub fn apply_changes(dom: &VirtualDom, msg: &HotReloadMsg) -> Result<(), subsecond::PatchError> {
     dom.runtime().on_scope(ScopeId::ROOT, || {
+        // 1. Update signals...
         let ctx = dioxus_signals::get_global_context();
-
         for template in &msg.templates {
             let value = template.template.clone();
             let key = GlobalKey::File {
@@ -26,7 +28,15 @@ pub fn apply_changes(dom: &VirtualDom, msg: &HotReloadMsg) {
                 });
             }
         }
-    });
+
+        // 2. Attempt to hotpatch
+        if let Some(jump_table) = msg.jump_table.as_ref().cloned() {
+            unsafe { subsecond::apply_patch(jump_table) }?;
+            dioxus_core::prelude::force_all_dirty();
+        }
+
+        Ok(())
+    })
 }
 
 /// Connect to the devserver and handle its messages with a callback.
@@ -39,6 +49,15 @@ pub fn connect(endpoint: String, mut callback: impl FnMut(DevserverMsg) + Send +
             Ok((websocket, req)) => (websocket, req),
             Err(_) => return,
         };
+
+        _ = websocket.send(tungstenite::Message::Text(
+            serde_json::to_string(&ClientMsg::Initialize {
+                aslr_reference: subsecond::aslr_reference() as _,
+                build_id: dioxus_cli_config::build_id(),
+            })
+            .unwrap()
+            .into(),
+        ));
 
         while let Ok(msg) = websocket.read() {
             if let tungstenite::Message::Text(text) = msg {

@@ -70,6 +70,8 @@ members = [
     "packages/config-macros",
     "packages/native",
     "packages/asset-resolver",
+    "packages/depinfo",
+    "packages/server",
 
     # Playwright tests
     "packages/playwright-tests/liveview",
@@ -89,11 +91,16 @@ members = [
     "packages/wasm-split/wasm-split-cli",
     "packages/wasm-split/wasm-used",
 
+    # subsecond
+    "packages/subsecond/subsecond",
+    "packages/subsecond/subsecond-types",
+
     # Full project examples
     "example-projects/fullstack-hackernews",
     "example-projects/ecommerce-site",
     "example-projects/wifi-scanner",
     "example-projects/file-explorer",
+    "example-projects/simple-web",
 
     # Simple examples that require a crate
     "examples/tailwind",
@@ -152,6 +159,7 @@ dioxus-cli-config = { path = "packages/cli-config", version = "0.6.2" }
 dioxus-cli-opt = { path = "packages/cli-opt", version = "0.6.2" }
 dioxus-devtools = { path = "packages/devtools", version = "0.6.2" }
 dioxus-devtools-types = { path = "packages/devtools-types", version = "0.6.2" }
+dioxus-server = { path = "packages/server", version = "0.6.2" }
 dioxus-fullstack = { path = "packages/fullstack", version = "0.6.2" }
 dioxus-fullstack-hooks = { path = "packages/fullstack-hooks", version = "0.6.3" }
 dioxus-fullstack-protocol = { path = "packages/fullstack-protocol", version = "0.6.3" }
@@ -166,16 +174,22 @@ const-serialize-macro = { path = "packages/const-serialize-macro", version = "0.
 generational-box = { path = "packages/generational-box", version = "0.6.2" }
 lazy-js-bundle = { path = "packages/lazy-js-bundle", version = "0.6.2" }
 
+# subsecond
+subsecond-types = { path = "packages/subsecond/subsecond-types", version = "0.6.3" }
+subsecond = { path = "packages/subsecond/subsecond", version = "0.6.3" }
 
+# manganis
 manganis = { path = "packages/manganis/manganis", version = "0.6.2" }
 manganis-core = { path = "packages/manganis/manganis-core", version = "0.6.2" }
 manganis-macro = { path = "packages/manganis/manganis-macro", version = "0.6.2" }
 
+# wasm-split
 wasm-split = { path = "packages/wasm-split/wasm-split", version = "0.1.0" }
 wasm-split-macro = { path = "packages/wasm-split/wasm-split-macro", version = "0.1.0" }
 wasm-split-cli = { path = "packages/wasm-split/wasm-split-cli", version = "0.1.0" }
 wasm-split-harness = { path = "packages/playwright-tests/wasm-split-harness", version = "0.1.0" }
 
+depinfo = { path = "packages/depinfo", version = "0.1.0" }
 warnings = { version = "0.2.1" }
 
 # a fork of pretty please for tests - let's get off of this if we can!
@@ -273,6 +287,9 @@ async-once-cell = { version = "0.5.4" }
 rayon = "1.10.0"
 wasmparser = "0.226.0"
 itertools = "0.14.0"
+object = { version = "0.36.0" }
+bincode = "1.3.3"
+inventory = { version = "0.3.5" }
 macro-string = "0.1.4"
 walkdir = "2.5.0"
 url = "2.3.1"
@@ -280,6 +297,7 @@ separator = "0.4.1"
 pretty_assertions = "1.4.0"
 serde_repr = "0.1"
 hyper-util = "0.1.10"
+krates = { version = "0.19.0" }
 
 # desktop
 wry = { version = "0.50.3", default-features = false }
@@ -301,13 +319,23 @@ open = "5.1.2"
 # web
 gloo-dialogs = "0.2.0"
 
+# tui stuff
+ansi-to-tui = "7.0"
+ansi-to-html = "0.2.1"
+path-absolutize = "3.1"
+crossterm = { version = "0.29.0" }
+ratatui = { version = "0.29.0" }
+shell-words = "1.1.0"
+color-eyre = "0.6.3"
+
 # native
 keyboard-types = { version = "0.7", default-features = false }
 winit = { version = "0.30.2", features = ["rwh_06"] }
 
 # disable debug symbols in dev builds - shouldn't matter for downstream crates but makes our binaries (examples, cli, etc) build faster
 [profile.dev]
-debug = 0
+# debug = 1
+# strip = "debuginfo"
 
 # our release profile should be fast to compile and fast to run
 # when we ship our CI builds, we turn on LTO which improves perf leftover by turning on incremental
@@ -315,12 +343,17 @@ debug = 0
 incremental = true
 
 # crank up the opt level for wasm-split-cli in dev mode
-# important here that lto is on and the debug symbols are presenta (since they're used by wasm-opt)a
+# important here that lto is on and the debug symbols are present (since they're used by wasm-opt)a
 [profile.wasm-split-release]
 inherits = "release"
 opt-level = 'z'
 lto = true
 debug = true
+
+[profile.subsecond-dev]
+inherits = "dev"
+# debug = 0
+# strip = "debuginfo"
 
 # a profile for running the CLI that's also incremental
 [profile.cli-release-dev]
@@ -345,7 +378,8 @@ incremental = true
 
 [profile.wasm-dev]
 inherits = "dev"
-opt-level = 1
+# debug = 0
+# strip = "debuginfo"
 
 [profile.server-dev]
 inherits = "dev"
@@ -382,12 +416,12 @@ wasm-split = { workspace = true }
 dioxus = { workspace = true, features = ["router"] }
 dioxus-ssr = { workspace = true }
 futures-util = { workspace = true }
-separator = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 rand = { workspace = true, features = ["small_rng"] }
-form_urlencoded = "1.2.1"
-async-std = "1.13.0"
+form_urlencoded = "1.2.0"
+async-std = "1.12.0"
+separator = { workspace = true }
 web-time = "1.1.0"
 axum = { workspace = true, default-features = true }
 

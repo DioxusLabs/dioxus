@@ -28,3 +28,6 @@ node_modules/
 # ignore the output of tmps
 tmp/
 bundle/
+
+# in debugging we frequently dump wasm to wat with `wasm-tools print`
+*.wat
