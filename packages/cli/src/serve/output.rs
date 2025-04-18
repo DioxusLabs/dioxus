@@ -853,8 +853,8 @@ impl Output {
             .iter()
             .map(|line| {
                 // Very important to strip ansi codes before counting graphemes - the ansi codes count as multiple graphemes!
-                let grapheme_count = console::strip_ansi_codes(line).graphemes(true).count() as u16;
-                grapheme_count.max(1).div_ceil(term_size.width)
+                let grapheme_count = console::strip_ansi_codes(line).graphemes(true).count();
+                grapheme_count.max(1).div_ceil(term_size.width as usize) as u16
             })
             .sum::<u16>();
 
@@ -989,7 +989,11 @@ impl Output {
 
                 // Create the ansi -> raw string line with a width of either the viewport width or the max width
                 let line_length = line.styled_graphemes(Style::default()).count();
-                lines.push(AnsiStringLine::new(line_length as _).render(&line));
+                if line_length < u16::MAX as usize {
+                    lines.push(AnsiStringLine::new(line_length as _).render(&line));
+                } else {
+                    lines.push(line.to_string())
+                }
             }
         }
 
