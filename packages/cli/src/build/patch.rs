@@ -136,6 +136,8 @@ fn create_wasm_jump_table(original: &Path, patch: &Path) -> anyhow::Result<JumpT
         }
     }
 
+    tracing::trace!("Jump table: {:#?}", map);
+
     Ok(JumpTable {
         map,
         lib: patch.to_path_buf(),
@@ -146,19 +148,13 @@ fn create_wasm_jump_table(original: &Path, patch: &Path) -> anyhow::Result<JumpT
 }
 
 fn collect_func_ifuncs<'a>(m: &'a Module, syms: &'a [SymbolInfo<'a>]) -> HashMap<&'a str, i32> {
-    let mut name_to_ifunc_index = HashMap::new();
-
     // name -> index
     // we want to export *all* these functions
-    let all_funcs = syms
-        .iter()
-        .flat_map(|sym| match sym {
-            SymbolInfo::Func { index, name, .. } => Some((name.unwrap(), *index)),
-            _ => None,
-        })
-        .collect::<HashMap<_, _>>();
-
-    let mut ref_funcs = HashMap::new();
+    let namemap = fn_name_map(syms);
+    let mut indexes_to_names = HashMap::<WrongFnIndex, Vec<&str>>::new();
+    for (n, i) in namemap.iter() {
+        indexes_to_names.entry(*i).or_default().push(*n);
+    }
 
     let mut offsets = HashMap::new();
 
@@ -186,58 +182,28 @@ fn collect_func_ifuncs<'a>(m: &'a Module, syms: &'a [SymbolInfo<'a>]) -> HashMap
         match &el.items {
             ElementItems::Functions(ids) => {
                 for (idx, id) in ids.iter().enumerate() {
-                    offsets.insert(id.index(), offset + idx as i32);
+                    let f = m.funcs.get(*id);
+                    offsets.insert(f.name.as_deref().unwrap(), offset + idx as i32);
                 }
             }
-            ElementItems::Expressions(ref_type, const_exprs) => {
-                for e in const_exprs {
-                    match e {
-                        walrus::ConstExpr::Value(value) => panic!(),
-                        walrus::ConstExpr::Global(id) => panic!(),
-                        walrus::ConstExpr::RefNull(ref_type) => panic!(),
-                        walrus::ConstExpr::RefFunc(id) => {
-                            let f = m.funcs.get(*id);
-                            ref_funcs.insert(id.index(), f.name.clone());
-                            tracing::warn!("Ref func name: {:?} {:?}", *id, f.name);
-                        }
-                    }
-                }
-                // tracing::info!("Indirect function table is not a function table: {const_exprs:?}");
-                // let last = const_exprs.last().clone().unwrap();
-                // for (name, i) in make_indirect {
-                //     ids.push(idxs_to_ids[*i as usize]);
-                // }
-            }
+            ElementItems::Expressions(ref_type, const_exprs) => {}
         }
     }
 
-    let mut missing = vec![];
-    for (name, index) in all_funcs.iter() {
-        if let Some(offset) = offsets.get(&(*index as _)) {
-            name_to_ifunc_index.insert(*name, *offset);
-        } else {
-            missing.push((name, index));
-            if let Some(shim) = ref_funcs.get(&(*index as _)) {
-                tracing::error!(
-                    "Ref func was transformed! {:?} -> {:?} -> {:?}",
-                    index,
-                    shim,
-                    all_funcs.iter().find(|(k, v)| **v == *index)
-                );
-            }
-        }
-        // let offset = offsets.get(&(index as _)).unwrap();
-    }
+    offsets
+}
 
-    tracing::info!("There are {} missing ifuncs", missing.len());
-    tracing::info!("some are: {:#?}", &missing[0..missing.len().min(10)]);
-
-    // name_to_ifunc_index.insert(
-    //     m.funcs.get(*id).name.as_ref().unwrap().as_str(),
-    //     offset + idx as i32,
-    // );
-
-    name_to_ifunc_index
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+struct WrongFnIndex(u32);
+fn fn_name_map<'a>(syms: &[SymbolInfo<'a>]) -> HashMap<&'a str, WrongFnIndex> {
+    let all_funcs = syms
+        .iter()
+        .flat_map(|sym| match sym {
+            SymbolInfo::Func { index, name, .. } => Some((name.unwrap(), WrongFnIndex(*index))),
+            _ => None,
+        })
+        .collect::<HashMap<_, _>>();
+    all_funcs
 }
 
 /// Resolve the undefined symbols in the incrementals against the original binary, returning an object
@@ -470,21 +436,27 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
     // Due to monomorphizations, functions will get merged and multiple names will point to the same function.
     // Walrus loses this information, so we need to manually parse the names table to get the indices
     // and names of these functions.
+    //
+    // Unfortunately, the indicies it gives us ARE NOT VALID.
+    // We need to work around it by using the FunctionId from the module as a link between the merged function names.
     let raw_data = parse_bytes_to_data_segment(bytes)?;
     let ifunc_map = collect_func_ifuncs(&module, &raw_data);
+    let ifuncs = module
+        .funcs
+        .iter()
+        .filter_map(|f| ifunc_map.get(f.name.as_deref()?).map(|_| f.id()))
+        .collect::<HashSet<_>>();
     let ifunc_table_initialzer = module.elements.iter().last().unwrap().id();
 
-    // name -> index
-    // we want to export *all* these functions
-    let all_funcs = raw_data
+    let all_funcs = fn_name_map(&raw_data);
+    let wrong_to_right = module
+        .funcs
         .iter()
-        .flat_map(|sym| match sym {
-            SymbolInfo::Func { index, name, .. } => Some((name.unwrap(), *index)),
-            _ => None,
+        .filter_map(|f| {
+            let name = f.name.as_deref().unwrap();
+            Some((all_funcs.get(name)?.clone(), f.id()))
         })
         .collect::<HashMap<_, _>>();
-
-    let index_to_func = module.funcs.iter().enumerate().collect::<HashMap<_, _>>();
 
     let mut already_exported = module
         .exports
@@ -497,36 +469,49 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
         )
         .collect::<HashSet<_>>();
 
-    let make_indirect: Vec<_> = all_funcs
-        .iter()
-        .filter(|(name, id)| !ifunc_map.contains_key(*name))
-        .collect();
+    let mut make_indirect = vec![];
 
-    for (&name, &index) in all_funcs.iter() {
-        let func = index_to_func.get(&(index as usize)).unwrap();
+    for (name, wrong_idx) in all_funcs.iter() {
+        let f = wrong_to_right.get(wrong_idx).unwrap().clone();
+        if bindgen_funcs.contains(&f) {
+            continue;
+        }
+        let func = module.funcs.get(f);
         if let FunctionKind::Local(_local) = &func.kind {
-            if !already_exported.contains(name) {
-                module.exports.add(&name, func.id());
+            if !already_exported.contains(*name) {
+                module.exports.add(*name, func.id());
                 already_exported.insert(name.to_string());
+            }
+
+            if !ifuncs.contains(&f) {
+                make_indirect.push(func.id());
             }
         }
     }
 
-    let idxs_to_ids = module.funcs.iter().map(|f| f.id()).collect::<Vec<_>>();
-    tracing::info!("Hoisting {} functions", make_indirect.len());
-    match &mut module.elements.get_mut(ifunc_table_initialzer).items {
+    tracing::trace!("Hoisting {} functions", make_indirect.len());
+    let seg = module.elements.get_mut(ifunc_table_initialzer);
+    let make_indirect_count = make_indirect.len() as u64;
+    match &mut seg.items {
         ElementItems::Functions(ids) => {
-            for (name, i) in make_indirect {
-                ids.push(idxs_to_ids[*i as usize]);
+            for func in make_indirect {
+                ids.push(func);
             }
         }
         ElementItems::Expressions(ref_type, const_exprs) => {
-            panic!("Indirect function table is not a function table: {const_exprs:?}");
-            // let last = const_exprs.last().clone().unwrap();
-            // for (name, i) in make_indirect {
-            //     ids.push(idxs_to_ids[*i as usize]);
-            // }
+            panic!("Indirect function table is not a function table: {const_exprs:?}")
         }
+    };
+
+    let table = match seg.kind {
+        ElementKind::Active { table, offset } => table,
+        _ => todo!(),
+    };
+
+    let table = module.tables.get_mut(table);
+    table.initial += make_indirect_count;
+    if let Some(max) = table.maximum {
+        table.maximum = Some(max + make_indirect_count);
     }
 
     Ok(module.emit_wasm())
@@ -600,16 +585,9 @@ pub fn satisfy_got_imports(old_bytes: &[u8], new_bytes: &[u8]) -> Result<Vec<u8>
     for t in new.imports.iter() {
         match t.module.as_str() {
             "GOT.func" => {
-                // funcs.push((t.id(), t.name.as_str()));
-
                 funcs.push((
                     t.id(),
                     *ifunc_map.get(t.name.as_str()).unwrap_or_else(|| {
-                        // let exists = old
-                        //     .funcs
-                        //     .iter()
-                        //     .find(|f| f.name.as_deref().unwrap_or_default() == t.name)
-                        //     .map(|f| f.id());
                         let exists = old.exports.get_func(t.name.as_str());
                         panic!("failed to find GOT.func: {} -> {exists:?}", t.name.as_str())
                     }),
@@ -1352,4 +1330,135 @@ fn make_stub_file(
         addressed,
     )
     .unwrap()
+}
+
+#[test]
+fn parse_wasm_and_print_globals() {
+    // let bytes = include_bytes!("/Users/jonkelley/Development/dioxus/target/dx/fullstack-hello-world-example/debug/web/public/wasm/libfullstack-hello-world-example-patch-1744937420042.wasm");
+    // let module = walrus::Module::from_buffer(bytes).unwrap();
+    // let globals = module.globals.iter().collect::<Vec<_>>();
+    // for g in globals {
+    //     println!("{:?}: {:?}", g.name, g.kind);
+    // }
+}
+
+const BADNAME: &str = "_ZN4core3ptr68drop_in_place$LT$alloc..boxed..Box$LT$dyn$u20$core..any..Any$GT$$GT$17hcd167959be12f848E";
+
+#[test]
+fn parse_wasm_and_print_globals2() {
+    let bytes = &[];
+    // let bytes = include_bytes!("/Users/jonkelley/Development/dioxus/target/dx/fullstack-hello-world-example/debug/web/public/wasm/fullstack-hello-world-example_bg.wasm");
+    let module = walrus::Module::from_buffer(bytes).unwrap();
+    let func = module.funcs.by_name(BADNAME).unwrap();
+
+    let data = parse_bytes_to_data_segment(bytes).unwrap();
+    let ifuncs = collect_func_ifuncs(&module, &data);
+
+    // 55874
+    println!("there are {} ifuncs", ifuncs.len());
+
+    let ifunc = ifuncs.get(BADNAME).unwrap();
+
+    println!("ifunc entry: {:?}", ifunc);
+}
+
+#[test]
+fn hoists() {
+    let bytes = include_bytes!("/Users/jonkelley/Development/dioxus/target/wasm32-unknown-unknown/wasm-dev/fullstack-hello-world-example.wasm");
+    let out_bytes = prepare_wasm_base_module(bytes).unwrap();
+
+    let out = walrus::Module::from_buffer(&out_bytes).unwrap();
+    let syms = parse_bytes_to_data_segment(&out_bytes).unwrap();
+    let ifuncs = collect_func_ifuncs(&out, &syms);
+
+    // 57001
+    println!("there are {} ifuncs", ifuncs.len());
+
+    let ifunc = ifuncs.get(BADNAME).unwrap();
+    println!("ifunc entry: {:?}", ifunc);
+}
+
+#[test]
+fn delta() {
+    let pre_bytes = include_bytes!("/Users/jonkelley/Development/dioxus/target/wasm32-unknown-unknown/wasm-dev/fullstack-hello-world-example.wasm");
+    // let prepared_out_bytes = prepare_wasm_base_module(pre_bytes).unwrap();
+
+    let prepared_out_bytes = pre_bytes;
+
+    let pre_module = walrus::Module::from_buffer(prepared_out_bytes).unwrap();
+    // let pre_module = walrus::Module::from_buffer(&prepared_out_bytes).unwrap();
+    let pre_syms = parse_bytes_to_data_segment(prepared_out_bytes).unwrap();
+    let pre_ifuncs = collect_func_ifuncs(&pre_module, &pre_syms);
+    let pre_name_map = fn_name_map(&pre_syms);
+
+    // let bg_bytes = include_bytes!("/Users/jonkelley/Development/dioxus/target/dx/fullstack-hello-world-example/debug/web/public/wasm/fullstack-hello-world-example_bg.wasm");
+    let bg_bytes = &[];
+    let bg_module = walrus::Module::from_buffer(bg_bytes).unwrap();
+    let bg_syms = parse_bytes_to_data_segment(bg_bytes).unwrap();
+    let bg_ifuncs = collect_func_ifuncs(&bg_module, &bg_syms);
+    let bg_name_map = fn_name_map(&bg_syms);
+
+    let pre_funcs = pre_module
+        .funcs
+        .iter()
+        .map(|f| (f.id().index(), f))
+        .collect::<HashMap<_, _>>();
+
+    let bg_funcs = bg_module
+        .funcs
+        .iter()
+        .map(|f| (f.id().index(), f))
+        .collect::<HashMap<_, _>>();
+
+    // for p in pre_ifuncs.iter() {
+    //     if !bg_ifuncs.contains_key(*p.0) {
+    //         println!("pre->: {:?}", p);
+
+    //         // let f = pre_funcs[&(*p.1 as usize)];
+    //         // println!("pre func: {:?}", f.name);
+    //     }
+    // }
+
+    let mut bad = 0;
+    for p in pre_name_map.iter() {
+        // if !bg_name_map.contains_key(*p.0) {
+        //     println!("pre->: {:?}", p);
+        // }
+
+        let pre = pre_funcs.get(&(p.1 .0 as usize)).unwrap();
+        if pre.name.as_deref() != Some(*p.0) {
+            // println!("pre->: {:?} -> {:?}", pre.name, p.0);
+            bad += 1;
+        }
+    }
+    println!("bad: {bad}");
+    println!("total: {}", bg_name_map.len());
+
+    let mut bad = 0;
+    for p in bg_name_map.iter() {
+        // if !bg_name_map.contains_key(*p.0) {
+        //     println!("pre->: {:?}", p);
+        // }
+
+        let bg = bg_funcs.get(&(p.1 .0 as usize)).unwrap();
+        if bg.name.as_deref() != Some(*p.0) {
+            // println!("pre->: {:?} -> {:?}", pre.name, p.0);
+            bad += 1;
+        }
+    }
+
+    println!("bad: {bad}");
+    println!("total: {}", bg_name_map.len());
+
+    // for p in bg_ifuncs {
+    //     if !pre_ifuncs.contains_key(p.0) {
+    //         println!("bg->: {:?}", p);
+    //     }
+    // }
+
+    // // 57001
+    // println!("there are {} ifuncs", ifuncs.len());
+
+    // let ifunc = ifuncs.get(BADNAME).unwrap();
+    // println!("ifunc entry: {:?}", ifunc);
 }

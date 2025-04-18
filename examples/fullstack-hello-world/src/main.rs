@@ -23,26 +23,34 @@ fn app() -> Element {
         }
         button {
             onclick: move |_| async move {
-                text.set(say_hi().await.unwrap());
-                text.set(say_hi().await.unwrap());
+                text.set("fuuuuuuuu yasdasdasdes it works".to_string());
             },
             "Say hi!"
         }
         "Server said: {text}"
         Child2 { i: 123 }
+        Child3 { i: "gahahsdhasdhahsd" }
     }
 }
 
 #[component]
 fn Child2(i: i32) -> Element {
+    let abc = 123;
     rsx! {
         div { "Hello from the child component!" }
     }
 }
 
+#[component]
+fn Child3(i: String) -> Element {
+    rsx! {
+        div { "Hello from the child component {i}!" }
+    }
+}
+
 #[server]
 async fn say_hi() -> Result<String, ServerFnError> {
-    Ok("DUAL asdasd ACHIEVED?asdasdads????!".to_string())
+    Ok("DUAL asdasd ACHIEVEDACHIEVEDACHIEVEDACHIEVEDACHIEVED?asdasdads????!".to_string())
 }
 
 #[server]
