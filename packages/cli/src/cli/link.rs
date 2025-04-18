@@ -97,10 +97,15 @@ impl LinkAction {
                     .output()
                     .expect("Failed to run android linker");
 
-                if !res.stderr.is_empty() {
+                if !res.stderr.is_empty() || !res.stdout.is_empty() {
+                    _ = std::fs::create_dir_all(self.link_err_file.parent().unwrap());
                     _ = std::fs::write(
                         self.link_err_file,
-                        String::from_utf8_lossy(&res.stderr).as_bytes(),
+                        format!(
+                            "Linker error: {}\n{}",
+                            String::from_utf8_lossy(&res.stdout),
+                            String::from_utf8_lossy(&res.stderr)
+                        ),
                     )
                     .unwrap();
                 }

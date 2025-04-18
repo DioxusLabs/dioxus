@@ -12,7 +12,15 @@ use object::{
     RelocationFlags, RelocationTarget, SectionIndex, SectionKind, SymbolFlags, SymbolKind,
     SymbolScope,
 };
-use std::{cmp::Ordering, ffi::OsStr, fs, ops::Deref, panic, path::PathBuf};
+use std::{
+    cmp::Ordering,
+    ffi::OsStr,
+    fs,
+    ops::{Deref, Range},
+    panic,
+    path::PathBuf,
+    sync::{Arc, RwLock},
+};
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     path::Path,
@@ -126,8 +134,8 @@ fn create_wasm_jump_table(original: &Path, patch: &Path) -> anyhow::Result<JumpT
     let old_raw_data = parse_bytes_to_data_segment(&obj1_bytes)?;
     let new_raw_data = parse_bytes_to_data_segment(&obj2_bytes)?;
 
-    let name_to_ifunc_old = collect_func_ifuncs(&old, &old_raw_data);
-    let name_to_ifunc_new = collect_func_ifuncs(&new, &new_raw_data);
+    let name_to_ifunc_old = collect_func_ifuncs(&old, &old_raw_data.symbols);
+    let name_to_ifunc_new = collect_func_ifuncs(&new, &new_raw_data.symbols);
 
     let mut map = AddressMap::default();
     for (name, idx) in name_to_ifunc_new.iter() {
@@ -429,7 +437,8 @@ pub fn resolve_undefined(
 ///
 /// It also moves all functions and memories to be callable indirectly.
 pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
-    let mut module = walrus::Module::from_buffer(bytes)?;
+    let (mut module, ids, fns_to_ids) = parse_module_with_ids(bytes)?;
+    // let mut module = walrus::Module::from_buffer(bytes)?;
 
     let bindgen_funcs = collect_all_wasm_bindgen_funcs(&module);
 
@@ -440,7 +449,7 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
     // Unfortunately, the indicies it gives us ARE NOT VALID.
     // We need to work around it by using the FunctionId from the module as a link between the merged function names.
     let raw_data = parse_bytes_to_data_segment(bytes)?;
-    let ifunc_map = collect_func_ifuncs(&module, &raw_data);
+    let ifunc_map = collect_func_ifuncs(&module, &raw_data.symbols);
     let ifuncs = module
         .funcs
         .iter()
@@ -448,15 +457,15 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
         .collect::<HashSet<_>>();
     let ifunc_table_initialzer = module.elements.iter().last().unwrap().id();
 
-    let all_funcs = fn_name_map(&raw_data);
-    let wrong_to_right = module
-        .funcs
-        .iter()
-        .filter_map(|f| {
-            let name = f.name.as_deref().unwrap();
-            Some((all_funcs.get(name)?.clone(), f.id()))
-        })
-        .collect::<HashMap<_, _>>();
+    // let all_funcs = fn_name_map(&raw_data.symbols);
+    // let wrong_to_right = module
+    //     .funcs
+    //     .iter()
+    //     .filter_map(|f| {
+    //         let name = f.name.as_deref().unwrap();
+    //         Some((all_funcs.get(name)?.clone(), f.id()))
+    //     })
+    //     .collect::<HashMap<_, _>>();
 
     let mut already_exported = module
         .exports
@@ -471,8 +480,19 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
 
     let mut make_indirect = vec![];
 
-    for (name, wrong_idx) in all_funcs.iter() {
-        let f = wrong_to_right.get(wrong_idx).unwrap().clone();
+    // for (name, wrong_idx) in all_funcs.iter() {
+
+    // Not all monos make it in! We are relying on this with our event converter bs
+    //
+    // https://github.com/rust-lang/rust/blob/master/compiler/rustc_monomorphize/src/collector.rs
+    //
+    //
+    for (name, index) in raw_data.code_symbol_map.iter() {
+        if name.contains("ZN11dioxus_html6events137_$LT$impl$u20$core..convert..From$LT$$RF$dioxus_html..events..PlatformEventData$GT$$u20$for$u20$dioxus_html..events..mouse..MouseData$GT$4from17heffc5924f07140a2E") {
+            panic!("Found a core::any::Any symbol: {name} in {index:?}");
+        }
+
+        let f = ids[*index as usize];
         if bindgen_funcs.contains(&f) {
             continue;
         }
@@ -575,7 +595,7 @@ pub fn satisfy_got_imports(old_bytes: &[u8], new_bytes: &[u8]) -> Result<Vec<u8>
     let mut new: walrus::Module = walrus::Module::from_buffer(new_bytes)?;
 
     let raw_data = parse_bytes_to_data_segment(&old_bytes)?;
-    let ifunc_map = collect_func_ifuncs(&old, &raw_data);
+    let ifunc_map = collect_func_ifuncs(&old, &raw_data.symbols);
     let global_map = collect_global_map(&old);
 
     let mut mems = vec![];
@@ -600,15 +620,12 @@ pub fn satisfy_got_imports(old_bytes: &[u8], new_bytes: &[u8]) -> Result<Vec<u8>
 
     // Satisfies the GOT.func imports. They exist as regular imports, but we need to make the indirect call
     for (imp_id, val) in funcs {
-        // for (import_id, name) in funcs {
         let imp = new.imports.get(imp_id);
         let global_id = match imp.kind {
             ImportKind::Global(id) => id,
             _ => todo!(),
         };
-        // new.globals.get_mut(global_id).kind =
-        //     walrus::GlobalKind::Local(walrus::ConstExpr::Value(walrus::ir::Value::I32(val as i32)));
-        //     new.imports.delete(imp_id);
+        tracing::info!("Importing GOT.func: {} -> real: {:?}", imp.name, val);
         new.globals.get_mut(global_id).kind =
             walrus::GlobalKind::Local(walrus::ConstExpr::Value(walrus::ir::Value::I32(val as i32)));
         new.imports.delete(imp_id);
@@ -618,20 +635,46 @@ pub fn satisfy_got_imports(old_bytes: &[u8], new_bytes: &[u8]) -> Result<Vec<u8>
     // remove the "GOT.data.internal" name
     for mem in mems {
         let imp = new.imports.get(mem);
+        let data_symbol_idx = *raw_data.data_symbol_map.get(imp.name.as_str()).unwrap();
+        let data_symbol = raw_data.data_symbols.get(&data_symbol_idx).unwrap();
         let name = format!("GOT.data.internal.{}", imp.name);
-        let val = global_map.get(name.as_str()).unwrap_or_else(|| {
-            let non_got = global_map.get(name.as_str());
-            panic!(
-                "failed to find GOT.mem: {} -> non got: {non_got:?}",
-                name.as_str()
-            )
-        });
+        let val_from_got = global_map.get(name.as_str());
+        // let val_from_got = global_map.get(name.as_str()).unwrap_or_else(|| {
+        //     let non_got = global_map.get(name.as_str());
+        //     panic!(
+        //         "failed to find GOT.mem: {} -> non got: {non_got:?}",
+        //         name.as_str()
+        //     )
+        // });
+        // let offset = data_symbol.segment_offset as i32;
+        let data = old.data.iter().nth(data_symbol.which_data_segment).unwrap();
+        let offset = match data.kind {
+            walrus::DataKind::Active { offset, .. } => match offset {
+                walrus::ConstExpr::Value(walrus::ir::Value::I32(idx)) => idx,
+                walrus::ConstExpr::Value(walrus::ir::Value::I64(idx)) => idx as i32,
+                _ => panic!(),
+            },
+            _ => todo!(),
+        };
+
         let global_id = match imp.kind {
             ImportKind::Global(id) => id,
             _ => todo!(),
         };
-        new.globals.get_mut(global_id).kind =
-            walrus::GlobalKind::Local(walrus::ConstExpr::Value(walrus::ir::Value::I32(*val)));
+        let data_offset = offset + data_symbol.segment_offset as i32;
+
+        tracing::info!(
+            "GOT.mem: {} -> real: {:?} seg_offset: {} data_offset: {}\n({:?})",
+            name,
+            val_from_got,
+            data_symbol.segment_offset,
+            data_offset,
+            data_symbol
+        );
+
+        new.globals.get_mut(global_id).kind = walrus::GlobalKind::Local(walrus::ConstExpr::Value(
+            walrus::ir::Value::I32(data_offset),
+        ));
         new.imports.delete(mem);
     }
 
@@ -660,14 +703,20 @@ fn collect_global_map(old: &Module) -> HashMap<&str, i32> {
 /// We need to do this for data symbols because walrus doesn't provide the right range and offset
 /// information for data segments. Fortunately, it provides it for code sections, so we only need to
 /// do a small amount extra of parsing here.
-fn parse_bytes_to_data_segment(bytes: &[u8]) -> Result<Vec<SymbolInfo>> {
+fn parse_bytes_to_data_segment(bytes: &[u8]) -> Result<RawDataSection> {
     let parser = wasmparser::Parser::new(0);
     let mut parser = parser.parse_all(bytes);
+    let mut segments = vec![];
+    let mut data_range = 0..0;
     let mut symbols = vec![];
 
     // Process the payloads in the raw wasm file so we can extract the specific sections we need
     while let Some(Ok(payload)) = parser.next() {
         match payload {
+            Payload::DataSection(section) => {
+                data_range = section.range();
+                segments = section.into_iter().collect::<Result<Vec<_>, _>>()?
+            }
             Payload::CustomSection(section) if section.name() == "linking" => {
                 let reader = BinaryReader::new(section.data(), 0);
                 let reader = LinkingSectionReader::new(reader)?;
@@ -681,7 +730,79 @@ fn parse_bytes_to_data_segment(bytes: &[u8]) -> Result<Vec<SymbolInfo>> {
         }
     }
 
-    Ok(symbols)
+    // Accumulate the data symbols into a btreemap for later use
+    let mut data_symbols = BTreeMap::new();
+    let mut data_symbol_map = HashMap::new();
+    let mut code_symbol_map = BTreeMap::new();
+    for (index, symbol) in symbols.iter().enumerate() {
+        let name = match symbol {
+            SymbolInfo::Func { flags, index, name } => *name,
+            SymbolInfo::Data {
+                flags,
+                name,
+                symbol,
+            } => Some(*name),
+            SymbolInfo::Global { flags, index, name } => *name,
+            SymbolInfo::Section { flags, section } => None,
+            SymbolInfo::Event { flags, index, name } => *name,
+            SymbolInfo::Table { flags, index, name } => *name,
+        };
+
+        if let Some(name) = name {
+            // ZN59_$LT$dyn$u20$core..any..Any$u20$as$u20$core..fmt..Debug$GT$3fmt17h8ab3728dab9d43e8
+            // if name.contains("core..any..Any$u20$as$u20$core..fmt..Debug$GT") {
+            //     panic!("Found a core::any::Any symbol: {name} in {symbol:?}");
+            // }
+        }
+
+        if let SymbolInfo::Func { name, index, .. } = symbol {
+            if let Some(name) = name {
+                code_symbol_map.insert(*name, *index as usize);
+            }
+            continue;
+        }
+
+        let SymbolInfo::Data {
+            symbol: Some(symbol),
+            name,
+            ..
+        } = symbol
+        else {
+            continue;
+        };
+
+        data_symbol_map.insert(*name, index);
+
+        if symbol.size == 0 {
+            continue;
+        }
+
+        let data_segment = segments
+            .get(symbol.index as usize)
+            .context("Failed to find data segment")?;
+        let offset: usize =
+            data_segment.range.end - data_segment.data.len() + (symbol.offset as usize);
+        let range = offset..(offset + symbol.size as usize);
+
+        data_symbols.insert(
+            index,
+            DataSymbol {
+                index,
+                range,
+                segment_offset: symbol.offset as usize,
+                symbol_size: symbol.size as usize,
+                which_data_segment: symbol.index as usize,
+            },
+        );
+    }
+
+    Ok(RawDataSection {
+        data_range,
+        symbols,
+        data_symbols,
+        data_symbol_map,
+        code_symbol_map,
+    })
 }
 
 struct SymbolMap<'a> {
@@ -1352,7 +1473,7 @@ fn parse_wasm_and_print_globals2() {
     let func = module.funcs.by_name(BADNAME).unwrap();
 
     let data = parse_bytes_to_data_segment(bytes).unwrap();
-    let ifuncs = collect_func_ifuncs(&module, &data);
+    let ifuncs = collect_func_ifuncs(&module, &data.symbols);
 
     // 55874
     println!("there are {} ifuncs", ifuncs.len());
@@ -1369,7 +1490,7 @@ fn hoists() {
 
     let out = walrus::Module::from_buffer(&out_bytes).unwrap();
     let syms = parse_bytes_to_data_segment(&out_bytes).unwrap();
-    let ifuncs = collect_func_ifuncs(&out, &syms);
+    let ifuncs = collect_func_ifuncs(&out, &syms.symbols);
 
     // 57001
     println!("there are {} ifuncs", ifuncs.len());
@@ -1388,15 +1509,15 @@ fn delta() {
     let pre_module = walrus::Module::from_buffer(prepared_out_bytes).unwrap();
     // let pre_module = walrus::Module::from_buffer(&prepared_out_bytes).unwrap();
     let pre_syms = parse_bytes_to_data_segment(prepared_out_bytes).unwrap();
-    let pre_ifuncs = collect_func_ifuncs(&pre_module, &pre_syms);
-    let pre_name_map = fn_name_map(&pre_syms);
+    let pre_ifuncs = collect_func_ifuncs(&pre_module, &pre_syms.symbols);
+    let pre_name_map = fn_name_map(&pre_syms.symbols);
 
     // let bg_bytes = include_bytes!("/Users/jonkelley/Development/dioxus/target/dx/fullstack-hello-world-example/debug/web/public/wasm/fullstack-hello-world-example_bg.wasm");
     let bg_bytes = &[];
     let bg_module = walrus::Module::from_buffer(bg_bytes).unwrap();
     let bg_syms = parse_bytes_to_data_segment(bg_bytes).unwrap();
-    let bg_ifuncs = collect_func_ifuncs(&bg_module, &bg_syms);
-    let bg_name_map = fn_name_map(&bg_syms);
+    let bg_ifuncs = collect_func_ifuncs(&bg_module, &bg_syms.symbols);
+    let bg_name_map = fn_name_map(&bg_syms.symbols);
 
     let pre_funcs = pre_module
         .funcs
@@ -1461,4 +1582,53 @@ fn delta() {
 
     // let ifunc = ifuncs.get(BADNAME).unwrap();
     // println!("ifunc entry: {:?}", ifunc);
+}
+
+struct RawDataSection<'a> {
+    data_range: Range<usize>,
+    symbols: Vec<SymbolInfo<'a>>,
+    code_symbol_map: BTreeMap<&'a str, usize>,
+    data_symbols: BTreeMap<usize, DataSymbol>,
+    data_symbol_map: HashMap<&'a str, usize>,
+}
+
+#[derive(Debug)]
+struct DataSymbol {
+    index: usize,
+    range: Range<usize>,
+    segment_offset: usize,
+    symbol_size: usize,
+    which_data_segment: usize,
+}
+
+/// Parse a module and return the mapping of index to FunctionID.
+/// We'll use this mapping to remap ModuleIDs
+fn parse_module_with_ids(
+    bindgened: &[u8],
+) -> Result<(Module, Vec<FunctionId>, HashMap<FunctionId, usize>)> {
+    let ids = Arc::new(RwLock::new(Vec::new()));
+    let ids_ = ids.clone();
+    let module = Module::from_buffer_with_config(
+        bindgened,
+        ModuleConfig::new().on_parse(move |_m, our_ids| {
+            let mut ids = ids_.write().expect("No shared writers");
+            let mut idx = 0;
+            while let Ok(entry) = our_ids.get_func(idx) {
+                ids.push(entry);
+                idx += 1;
+            }
+
+            Ok(())
+        }),
+    )?;
+    let mut ids_ = ids.write().expect("No shared writers");
+    let mut ids = vec![];
+    std::mem::swap(&mut ids, &mut *ids_);
+
+    let mut fns_to_ids = HashMap::new();
+    for (idx, id) in ids.iter().enumerate() {
+        fns_to_ids.insert(*id, idx);
+    }
+
+    Ok((module, ids, fns_to_ids))
 }

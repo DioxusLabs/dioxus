@@ -875,6 +875,13 @@ impl BuildRequest {
             }
         }
 
+        // If there's any warnings from the linker, we should print them out
+        if let Ok(linker_warnings) = std::fs::read_to_string(self.link_err_file.path()) {
+            if !linker_warnings.is_empty() {
+                tracing::warn!("Linker warnings: {}", linker_warnings);
+            }
+        }
+
         Ok(BuildArtifacts {
             platform,
             exe,
@@ -1301,6 +1308,11 @@ impl BuildRequest {
             }
         }
 
+        if !res.stdout.is_empty() {
+            let out = String::from_utf8_lossy(&res.stdout);
+            tracing::debug!("Output from thin linking: {}", out.trim());
+        }
+
         // For some really weird reason that I think is because of dlopen caching, future loads of the
         // jump library will fail if we don't remove the original fat file. I think this could be
         // because of library versioning and namespaces, but really unsure.
@@ -1347,6 +1359,8 @@ impl BuildRequest {
             // We turn on both --pie and --experimental-pic but I think we only need --pie.
             OperatingSystem::Unknown if self.platform == Platform::Web => {
                 out_args.extend([
+                    "--fatal-warnings".to_string(),
+                    "--verbose".to_string(),
                     "--import-memory".to_string(),
                     "--import-table".to_string(),
                     "--growable-table".to_string(),
@@ -1493,6 +1507,9 @@ impl BuildRequest {
                         .unwrap()
                         .display()
                 ));
+
+                tracing::debug!("Running rustc command: {:#?}", rustc_args.args);
+
                 Ok(cmd)
             }
 
