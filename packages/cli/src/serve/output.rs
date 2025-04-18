@@ -106,15 +106,6 @@ impl Output {
     /// This is meant to be paired with "shutdown" to restore the terminal to its original state.
     fn startup(&mut self) -> io::Result<()> {
         if self.interactive {
-            // set the panic hook to fix the terminal in the event of a panic
-            // The terminal might be left in a wonky state if a panic occurs, and we don't want it to be completely broken
-            let original_hook = std::panic::take_hook();
-            std::panic::set_hook(Box::new(move |info| {
-                _ = disable_raw_mode();
-                _ = stdout().execute(Show);
-                original_hook(info);
-            }));
-
             // Check if writing the terminal is going to block infinitely.
             // If it does, we should disable interactive mode. This ensures we work with programs like `bg`
             // which suspend the process and cause us to block when writing output.
@@ -176,7 +167,12 @@ impl Output {
     /// Call the shutdown functions that might mess with the terminal settings - see the related code
     /// in "startup" for more details about what we need to unset
     pub(crate) fn shutdown(&self) -> io::Result<()> {
-        if self.interactive {
+        Self::remote_shutdown(self.interactive)?;
+        Ok(())
+    }
+
+    pub(crate) fn remote_shutdown(interactive: bool) -> io::Result<()> {
+        if interactive {
             stdout()
                 .execute(Show)?
                 .execute(DisableFocusChange)?

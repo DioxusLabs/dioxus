@@ -1,3 +1,4 @@
+use std::fmt::Debug;
 use thiserror::Error as ThisError;
 
 pub(crate) type Result<T, E = Error> = std::result::Result<T, E>;
@@ -35,6 +36,9 @@ pub(crate) enum Error {
     #[allow(unused)]
     #[error("Unsupported feature: {0}")]
     UnsupportedFeature(String),
+
+    #[error("{0}")]
+    CapturedPanic(String),
 
     #[error("Failed to render template: {0}")]
     TemplateParse(#[from] handlebars::RenderError),

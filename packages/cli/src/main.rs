@@ -68,8 +68,9 @@ async fn main() {
             tracing::debug!(json = ?output);
         }
         Err(err) => {
+            eprintln!("{err}");
+
             tracing::error!(
-                ?err,
                 json = ?StructuredOutput::Error {
                     message: format!("{err:?}"),
                 },
