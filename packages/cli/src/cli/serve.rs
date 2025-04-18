@@ -1,5 +1,9 @@
+use std::{backtrace::Backtrace, panic::AssertUnwindSafe};
+
 use super::{chained::ChainedCommand, *};
-use crate::{AddressArguments, BuildArgs, PROFILE_SERVER};
+use crate::{AddressArguments, BuildArgs, TraceController, PROFILE_SERVER};
+use futures_util::FutureExt;
+use once_cell::sync::OnceCell;
 use target_lexicon::Triple;
 
 /// Serve the project
@@ -136,9 +140,93 @@ impl ServeArgs {
     ///
     /// Make sure not to do any intermediate logging since our tracing infra has now enabled much
     /// higher log levels
+    ///
+    /// We also set up proper panic handling since the TUI has a tendency to corrupt the terminal.
     pub(crate) async fn serve(self) -> Result<StructuredOutput> {
-        crate::serve::serve_all(self).await?;
-        Ok(StructuredOutput::Success)
+        if std::env::var("RUST_BACKTRACE").is_err() {
+            std::env::set_var("RUST_BACKTRACE", "1");
+        }
+
+        struct SavedLocation {
+            file: String,
+            line: u32,
+            column: u32,
+        }
+        static BACKTRACE: OnceCell<(Backtrace, Option<SavedLocation>)> = OnceCell::new();
+
+        // We *don't* want printing here, since it'll break the tui and log ordering.
+        //
+        // We *will* re-emit the panic after we've drained the tracer, so our panic hook will simply capture the panic
+        // and save it.
+        std::panic::set_hook(Box::new(move |panic_info| {
+            _ = BACKTRACE.set((
+                Backtrace::capture(),
+                panic_info.location().map(|l| SavedLocation {
+                    file: l.file().to_string(),
+                    line: l.line(),
+                    column: l.column(),
+                }),
+            ));
+        }));
+
+        let interactive = self.is_interactive_tty();
+
+        // Redirect all logging the cli logger - if there's any pending after a panic, we flush it
+        let mut tracer = TraceController::redirect(interactive);
+
+        let res = AssertUnwindSafe(crate::serve::serve_all(self, &mut tracer))
+            .catch_unwind()
+            .await;
+
+        // Kill the screen so we don't ruin the terminal
+        _ = crate::serve::Output::remote_shutdown(interactive);
+
+        // And drain the tracer as regular messages. All messages will be logged (including traces)
+        // and then we can print the panic message
+        if !matches!(res, Ok(Ok(_))) {
+            tracer.shutdown_panic();
+        }
+
+        match res {
+            Ok(Ok(_res)) => Ok(StructuredOutput::Success),
+            Ok(Err(e)) => Err(e),
+            Err(panic_err) => {
+                // And then print the panic itself.
+                let as_str = if let Some(p) = panic_err.downcast_ref::<String>() {
+                    p.as_ref()
+                } else if let Some(p) = panic_err.downcast_ref::<&str>() {
+                    p.as_ref()
+                } else {
+                    "<unknown panic>"
+                };
+
+                // Attempt to emulate the default panic hook
+                let message = BACKTRACE
+                    .get()
+                    .map(|(back, location)| {
+                        let location_display = location
+                            .as_ref()
+                            .map(|l| format!("{}:{}:{}", l.file, l.line, l.column))
+                            .unwrap_or_else(|| "<unknown>".to_string());
+
+                        let mut backtrace_display = back.to_string();
+
+                        // split at the line that ends with ___rust_try for short backtraces
+                        if std::env::var("RUST_BACKTRACE") == Ok("1".to_string()) {
+                            backtrace_display = backtrace_display
+                                .split(" ___rust_try\n")
+                                .next()
+                                .map(|f| format!("{f} ___rust_try"))
+                                .unwrap_or_default();
+                        }
+
+                        format!("dx serve panicked at {location_display}\n{as_str}\n{backtrace_display} ___rust_try")
+                    })
+                    .unwrap_or_else(|| format!("dx serve panicked: {as_str}"));
+
+                Err(crate::error::Error::CapturedPanic(message))
+            }
+        }
     }
 
     /// Check if the server is running in interactive mode. This involves checking the terminal as well

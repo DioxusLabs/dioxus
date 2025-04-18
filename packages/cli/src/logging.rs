@@ -154,19 +154,23 @@ impl TraceController {
 
         ServeUpdate::TracingLog { log }
     }
-}
 
-impl Drop for TraceController {
-    fn drop(&mut self) {
+    pub(crate) fn shutdown_panic(&mut self) {
         TUI_ACTIVE.store(false, Ordering::Relaxed);
 
         // re-emit any remaining messages
         while let Ok(Some(msg)) = self.tui_rx.try_next() {
-            let contents = match msg.content {
+            let content = match msg.content {
                 TraceContent::Text(text) => text,
                 TraceContent::Cargo(msg) => msg.message.to_string(),
             };
-            tracing::error!("{}", contents);
+            match msg.level {
+                Level::ERROR => tracing::error!("{content}"),
+                Level::WARN => tracing::warn!("{content}"),
+                Level::INFO => tracing::info!("{content}"),
+                Level::DEBUG => tracing::debug!("{content}"),
+                Level::TRACE => tracing::trace!("{content}"),
+            }
         }
     }
 }
