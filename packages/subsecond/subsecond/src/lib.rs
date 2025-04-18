@@ -523,6 +523,10 @@ pub unsafe fn apply_patch(mut table: JumpTable) -> Result<(), PatchError> {
             .unwrap()
             .unchecked_into::<js_sys::Function>();
         func.call0(&JsValue::undefined()).unwrap();
+        let func = Reflect::get(&exports, &"__wasm_apply_global_relocs".into())
+            .unwrap()
+            .unchecked_into::<js_sys::Function>();
+        func.call0(&JsValue::undefined()).unwrap();
 
         unsafe { commit_patch(table) };
     });

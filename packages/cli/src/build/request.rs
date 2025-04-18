@@ -2698,10 +2698,8 @@ impl BuildRequest {
         // Locate the output of the build files and the bindgen output
         // We'll fill these in a second if they don't already exist
         let bindgen_outdir = self.wasm_bindgen_out_dir();
-        let prebindgen = exe;
         let post_bindgen_wasm = self.wasm_bindgen_wasm_output_file();
         let should_bundle_split: bool = self.wasm_split;
-        let rustc_exe = exe.with_extension("wasm");
         let bindgen_version = self
             .wasm_bindgen_version()
             .expect("this should have been checked by tool verification");
@@ -2711,9 +2709,9 @@ impl BuildRequest {
 
         // Lift the internal functions to exports
         if ctx.mode == BuildMode::Fat {
-            let unprocessed = std::fs::read(&prebindgen)?;
+            let unprocessed = std::fs::read(&exe)?;
             let all_exported_bytes = crate::build::prepare_wasm_base_module(&unprocessed).unwrap();
-            std::fs::write(&rustc_exe, all_exported_bytes)?;
+            std::fs::write(&exe, all_exported_bytes)?;
         }
 
         // Prepare our configuration
@@ -2747,7 +2745,7 @@ impl BuildRequest {
         tracing::debug!(dx_src = ?TraceSrc::Bundle, "Running wasm-bindgen");
         let start = std::time::Instant::now();
         WasmBindgen::new(&bindgen_version)
-            .input_path(&rustc_exe)
+            .input_path(&exe)
             .target("web")
             .debug(keep_debug)
             .demangle(demangle)
@@ -2777,7 +2775,7 @@ impl BuildRequest {
 
             // Load the contents of these binaries since we need both of them
             // We're going to use the default makeLoad glue from wasm-split
-            let original = std::fs::read(&prebindgen)?;
+            let original = std::fs::read(&exe)?;
             let bindgened = std::fs::read(&post_bindgen_wasm)?;
             let mut glue = wasm_split_cli::MAKE_LOAD_JS.to_string();
 
