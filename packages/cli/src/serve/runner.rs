@@ -768,7 +768,7 @@ impl AppServer {
 
         let changed_file = changed_files.first().unwrap();
         tracing::info!(
-            "Hot-patching: {} in {:?}ms",
+            "Hot-patching: {} took {:?}ms",
             changed_file
                 .strip_prefix(std::env::current_dir().unwrap())
                 .unwrap_or_else(|_| changed_file.as_path())
@@ -798,6 +798,10 @@ impl AppServer {
             .to_text()
             .context("client message not proper encoding")?;
 
+        if as_text.is_empty() {
+            return Ok(());
+        }
+
         match serde_json::from_str::<ClientMsg>(as_text) {
             Ok(ClientMsg::Initialize {
                 aslr_reference,
@@ -819,7 +823,7 @@ impl AppServer {
             }
             Ok(_client) => {}
             Err(err) => {
-                tracing::error!(dx_src = ?TraceSrc::Dev, "Error parsing message from {}: {}", Platform::Web, err);
+                tracing::error!(dx_src = ?TraceSrc::Dev, "Error parsing message from {}: {} -> {}", Platform::Web, err, as_text);
             }
         };
 

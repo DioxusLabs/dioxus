@@ -333,7 +333,7 @@ impl Output {
         let msg = match res {
             Ok(msg) => msg,
             Err(err) => {
-                tracing::error!(dx_src = ?TraceSrc::Dev, "Error parsing message from {}: {}", platform, err);
+                tracing::error!(dx_src = ?TraceSrc::Dev, "Error parsing message from {}: {} -> {:?}", platform, err, text.as_str());
                 return;
             }
         };
