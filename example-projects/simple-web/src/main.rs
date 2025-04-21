@@ -15,17 +15,29 @@ fn app() -> Element {
 
     rsx! {
         h1 { "Hot patch serverfns!!!!!" }
-        EvalIt {}
+        h3 { "Set your favorite color" }
+        button { onclick: move |_| t += 1, "Click me: {t}" }
+        div {
+            EvalIt { color: "white" }
+            EvalIt { color: "red" }
+            EvalIt { color: "blue" }
+            EvalIt { color: "green" }
+            EvalIt { color: "magenta" }
+            EvalIt { color: "orange" }
+        }
     }
 }
 
-fn EvalIt() -> Element {
+#[component]
+fn EvalIt(color: String) -> Element {
     rsx! {
-        button {
-            onclick: move |_| {
-                _ = dioxus::document::eval("window.document.body.style.backgroundColor = 'green';");
-            },
-            "eval!"
+        div {
+            button {
+                onclick: move |_| {
+                    _ = dioxus::document::eval(&format!("window.document.body.style.backgroundColor = '{color}';"));
+                },
+                "eval -> {color}"
+            }
         }
     }
 }

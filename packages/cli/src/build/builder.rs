@@ -78,6 +78,7 @@ pub(crate) struct AppBuilder {
     /// The executables but with some extra entropy in their name so we can run two instances of the
     /// same app without causing collisions on the filesystem.
     pub entropy_app_exe: Option<PathBuf>,
+    pub builds_opened: usize,
 
     // Metadata about the build that needs to be managed by watching build updates
     // used to render the TUI
@@ -141,6 +142,7 @@ impl AppBuilder {
             compiled_crates: 0,
             expected_crates: 1,
             bundling_progress: 0.0,
+            builds_opened: 0,
             compile_start: Some(Instant::now()),
             aslr_reference: None,
             compile_end: None,
@@ -283,7 +285,7 @@ impl AppBuilder {
     }
 
     /// Restart this builder with new build arguments.
-    pub(crate) fn fat_rebuild(&mut self) {
+    pub(crate) fn start_rebuild(&mut self, mode: BuildMode) {
         // Abort all the ongoing builds, cleaning up any loose artifacts and waiting to cleanly exit
         // And then start a new build, resetting our progress/stage to the beginning and replacing the old tokio task
         self.abort_all(BuildStage::Restarting);
@@ -292,7 +294,7 @@ impl AppBuilder {
             let request = self.build.clone();
             let ctx = BuildContext {
                 tx: self.tx.clone(),
-                mode: BuildMode::Fat,
+                mode,
             };
             async move { request.build(&ctx).await }
         });
@@ -458,6 +460,8 @@ impl AppBuilder {
             self.stderr = Some(stderr.lines());
             self.child = Some(child);
         }
+
+        self.builds_opened += 1;
 
         Ok(())
     }

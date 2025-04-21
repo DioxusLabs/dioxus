@@ -12,7 +12,7 @@ use dioxus_core_types::HotReloadingContext;
 use dioxus_devtools_types::ClientMsg;
 use dioxus_devtools_types::HotReloadMsg;
 use dioxus_dx_wire_format::BuildStage;
-use dioxus_html::HtmlCtx;
+use dioxus_html::{r#use, HtmlCtx};
 use dioxus_rsx::CallBody;
 use dioxus_rsx_hotreload::{ChangedRsx, HotReloadResult};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
@@ -59,10 +59,10 @@ pub(crate) struct AppServer {
 
     // Tracked state related to open builds and hot reloading
     pub(crate) applied_hot_reload_message: HotReloadMsg,
-    pub(crate) builds_opened: usize,
     pub(crate) file_map: HashMap<PathBuf, CachedFile>,
 
     // Resolved args related to how we go about processing the rebuilds and logging
+    pub(crate) use_hotpatch_engine: bool,
     pub(crate) automatic_rebuilds: bool,
     pub(crate) interactive: bool,
     pub(crate) force_sequential: bool,
@@ -194,8 +194,8 @@ impl AppServer {
         let mut runner = Self {
             file_map: Default::default(),
             applied_hot_reload_message: Default::default(),
-            builds_opened: 0,
             automatic_rebuilds: true,
+            use_hotpatch_engine: args.hot_patch,
             client,
             server,
             hot_reload,
@@ -413,8 +413,11 @@ impl AppServer {
             }
         }
 
-        // For now, always run a patch instead of rsx hot-reload
-        if needs_full_rebuild || true {
+        // We decided to make the hotpatch engine drive *all* hotreloads, even if they are just RSX
+        // hot-reloads. This is a temporary measure to thoroughly test the hotpatch engine until
+        // we're comfortable with both co-existing. Keeping both would lead to two potential sources
+        // of errors, and we want to avoid that for now.
+        if needs_full_rebuild || self.use_hotpatch_engine {
             self.client.patch_rebuild(files.to_vec());
 
             if let Some(server) = self.server.as_mut() {
@@ -422,7 +425,7 @@ impl AppServer {
             }
 
             self.clear_hot_reload_changes();
-            // self.clear_cached_rsx();
+            self.clear_cached_rsx();
             server.start_patch().await;
             server.send_patch_start().await;
         } else {
@@ -451,11 +454,6 @@ impl AppServer {
                 tracing::debug!(dx_src = ?TraceSrc::Dev, "Ignoring file change: {}", file);
             }
         }
-    }
-
-    pub(crate) fn rebuild_all(&mut self) {
-        self.client.fat_rebuild();
-        self.server.as_mut().map(|s| s.fat_rebuild());
     }
 
     /// Finally "bundle" this app and return a handle to it
@@ -487,7 +485,7 @@ impl AppServer {
             && (self.server.as_ref().map(|s| s.stage == BuildStage::Success)).unwrap_or(true);
 
         if should_open {
-            if self.builds_opened == 0 {
+            if self.client.builds_opened == 0 {
                 tracing::info!(
                     "Build completed successfully in {:?}ms, launching app! 💫",
                     time_taken.as_millis()
@@ -503,7 +501,7 @@ impl AppServer {
             }
 
             // Start the new app before we kill the old one to give it a little bit of time
-            let open_browser = self.builds_opened == 0 && self.open_browser;
+            let open_browser = self.client.builds_opened == 0 && self.open_browser;
             let always_on_top = self.always_on_top;
 
             self.client
@@ -516,8 +514,6 @@ impl AppServer {
                     BuildId(0),
                 )
                 .await?;
-
-            self.builds_opened += 1;
 
             // Give a second for the server to boot
             tokio::time::sleep(Duration::from_millis(300)).await;
@@ -754,13 +750,6 @@ impl AppServer {
 
         // Rebase the wasm binary to be relocatable once the jump table is generated
         if triple.architecture == target_lexicon::Architecture::Wasm32 {
-            let old_bytes = std::fs::read(&original).unwrap();
-            let new_bytes = std::fs::read(&jump_table.lib).unwrap();
-            let res = crate::build::satisfy_got_imports(&old_bytes, &new_bytes).context(
-                "Couldn't satisfy GOT imports for WASM - are debug symbols being stripped?",
-            )?;
-            std::fs::write(&jump_table.lib, res).unwrap();
-
             // Make sure we use the dir relative to the public dir, so the web can load it as a proper URL
             //
             // ie we would've shipped `/Users/foo/Projects/dioxus/target/dx/project/debug/web/public/wasm/lib.wasm`
@@ -979,8 +968,21 @@ impl AppServer {
         server.compiled_crates as f64 / server.expected_crates as f64
     }
 
+    /// Perform a full rebuild of the app, equivalent to `cargo rustc` from scratch with no incremental
+    /// hot-patch engine integration.
     pub(crate) async fn full_rebuild(&mut self) {
-        self.rebuild_all();
+        if self.use_hotpatch_engine {
+            self.client.start_rebuild(BuildMode::Fat);
+            self.server
+                .as_mut()
+                .map(|s| s.start_rebuild(BuildMode::Fat));
+        } else {
+            self.client.start_rebuild(BuildMode::Base);
+            self.server
+                .as_mut()
+                .map(|s| s.start_rebuild(BuildMode::Base));
+        }
+
         self.clear_hot_reload_changes();
         self.clear_cached_rsx();
     }
@@ -994,7 +996,6 @@ impl AppServer {
         tracing::debug!("Opening server build");
         if let Some(server) = self.server.as_mut() {
             // server.cleanup().await;
-
             server
                 .open(
                     devserver_ip,

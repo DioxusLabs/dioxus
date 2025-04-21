@@ -1225,7 +1225,7 @@ impl BuildRequest {
         // Android apps can take a long time to open, and a hot patch might've been issued in the interim,
         // making this hotpatch a failure.
         if self.platform != Platform::Web {
-            let stub_bytes = crate::build::resolve_undefined(
+            let stub_bytes = crate::build::create_undefined_symbol_stub(
                 &self.main_exe(),
                 &object_files,
                 &self.triple,

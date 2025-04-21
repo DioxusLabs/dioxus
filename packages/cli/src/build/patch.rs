@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use itertools::Itertools;
 use memmap::{Mmap, MmapOptions};
 use object::{
@@ -38,8 +38,8 @@ use wasmparser::{
 
 use walrus::{
     ir::{dfs_in_order, Visitor},
-    ElementItems, ElementKind, FunctionId, FunctionKind, IdsToIndices, ImportKind, Module,
-    ModuleConfig, RawCustomSection, ValType,
+    ConstExpr, ElementItems, ElementKind, FunctionId, FunctionKind, IdsToIndices, ImportKind,
+    Module, ModuleConfig, RawCustomSection, ValType,
 };
 
 pub fn create_jump_table(
@@ -123,20 +123,162 @@ pub fn create_jump_table(
 /// In the web, our patchable functions are actually ifuncs
 ///
 /// We need to line up the ifuncs from the main module to the ifuncs in the patch.
+///
+/// According to the dylink spec, there will be two sets of entries:
+///
+/// - got.func: functions in the indirect function table
+/// - got.mem: data objects in the data segments
+///
+/// It doesn't seem like we can compile the base module to export these, sadly, so we're going
+/// to manually satisfy them here, removing their need to be imported.
+///
+/// https://github.com/WebAssembly/tool-conventions/blob/main/DynamicLinking.md
 fn create_wasm_jump_table(original: &Path, patch: &Path) -> anyhow::Result<JumpTable> {
-    tracing::info!("jumping {} to {}", original.display(), patch.display());
-    let obj1_bytes = fs::read(original).context("Could not read original file")?;
-    let obj2_bytes = fs::read(patch).context("Could not read patch file")?;
+    let old_bytes = fs::read(original).context("Could not read original file")?;
+    let new_bytes = fs::read(patch).context("Could not read patch file")?;
 
-    let old = walrus::Module::from_buffer(&obj1_bytes)?;
-    let new = walrus::Module::from_buffer(&obj2_bytes)?;
+    let old = walrus::Module::from_buffer(&old_bytes)?;
+    let mut new = walrus::Module::from_buffer(&new_bytes)?;
 
-    let old_raw_data = parse_bytes_to_data_segment(&obj1_bytes)?;
-    let new_raw_data = parse_bytes_to_data_segment(&obj2_bytes)?;
-
+    let old_raw_data = parse_bytes_to_data_segment(&old_bytes)?;
     let name_to_ifunc_old = collect_func_ifuncs(&old, &old_raw_data.symbols);
-    let name_to_ifunc_new = collect_func_ifuncs(&new, &new_raw_data.symbols);
 
+    let mut mems = vec![];
+    let mut funcs = vec![];
+
+    // Collect all the GOT entries from the new module.
+    for t in new.imports.iter() {
+        match t.module.as_str() {
+            "GOT.func" => {
+                let Some(entry) = name_to_ifunc_old.get(t.name.as_str()).cloned() else {
+                    let exists = old.exports.get_func(t.name.as_str());
+                    bail!("Expected to find GOT.func entry in ifunc table but it was missing: {} -> {exists:?}\nDid all symbols make it into the static lib?", t.name.as_str())
+                };
+                funcs.push((t.id(), entry));
+            }
+            "GOT.mem" => mems.push(t.id()),
+            _ => {}
+        }
+    }
+
+    // We need to satisfy the GOT.func imports of this side module. The GOT imports come from the wasm-ld
+    // implementation of the dynamic linking spec
+    //
+    // https://github.com/WebAssembly/tool-conventions/blob/main/DynamicLinking.md#imports
+    //
+    // Most importantly, these functions are functions meant to be called indirectly. In normal wasm
+    // code generation, only functions that Rust code references via pointers are given a slot in
+    // the indirection function table. The optimization here traditionally meaning that if a function
+    // can be called directly, then it doesn't need to be referenced indirectly and potentially inlined
+    // or dissolved during LTO.
+    //
+    // In our "fat build" setup, we aggregated all symbols from dependencies into a `dependencies.ar` file.
+    // By promoting these functions to the dynamic scope, we also prevent their inlining because the
+    // linker can still expect some form of interposition to happen, requiring the symbol *actually*
+    // exists.
+    //
+    // Our technique here takes advantage of that and the [`prepare_wasm_base_module`] function promotes
+    // every possible function to the indirect function table. This means that the GOT imports that
+    // `relocation-model=pic` synthesizes can reference the functions via the indirect function table
+    // even if they are not normally synthesized in regular wasm code generation.
+    //
+    // Normally, the dynaic linker setup would resolve GOT.func against the same GOT.func export in
+    // the main module, but we don't have that. Instead, we simply re-parse the main module, aggregate
+    // its ifunc table, and then resolve directly to the index in that table.
+    for (import_id, ifunc_index) in funcs {
+        let imp = new.imports.get(import_id);
+        let ImportKind::Global(id) = new.imports.get(import_id).kind else {
+            bail!("Expected GOT.func import to be a global");
+        };
+
+        tracing::debug!(
+            "Importing GOT.func: {} -> real: {:?}",
+            imp.name,
+            ifunc_index
+        );
+
+        // "satisfying" the import means removing it from the import table and replacing its target
+        // value with a local global.
+        new.imports.delete(import_id);
+        new.globals.get_mut(id).kind =
+            walrus::GlobalKind::Local(ConstExpr::Value(walrus::ir::Value::I32(ifunc_index as i32)));
+    }
+
+    // We need to satisfy the GOT.mem imports of this side module. The GOT.mem imports come from the wasm-ld
+    // implementation of the dynamic linking spec
+    //
+    // https://github.com/WebAssembly/tool-conventions/blob/main/DynamicLinking.md#imports
+    //
+    // Unlike the ifunc table, the GOT.mem imports do not need any additional post-processing of the
+    // base module to satisfy. Since our patching approach works but leveraging the experimental dynamic
+    // PIC support in rustc[wasm] and wasm-ld, we are using the GOT.mem imports as a way of identifying
+    // data segments that are present in the base module.
+    //
+    // Normally, the dynamic linker would synthesize corresponding GOT.mem exports in the main module,
+    // but since we're patching on-the-fly, this table will always be out-of-date.
+    //
+    // Instead, we use the symbol table from the base module to find the corresponding data symbols
+    // and then resolve the offset of the data segment in the main module. Using the symbol table
+    // can be somewhat finicky if the user compiled the code with a high-enough opt level that nukes
+    // the names of the data segments, but otherwise this system works well.
+    //
+    // We simply use the name of the import as a key into the symbol table and then its offset into
+    // its data segment as the value within the global.
+    for mem in mems {
+        let import = new.imports.get(mem);
+        let data_symbol_idx = *old_raw_data
+            .data_symbol_map
+            .get(import.name.as_str())
+            .with_context(|| {
+                format!("Failed to find GOT.mem import by its name: {}", import.name)
+            })?;
+        let data_symbol = old_raw_data
+            .data_symbols
+            .get(&data_symbol_idx)
+            .context("Failed to find data symbol by its index")?;
+        let data = old
+            .data
+            .iter()
+            .nth(data_symbol.which_data_segment)
+            .context("Missing data segment in the main module")?;
+
+        let offset = match data.kind {
+            walrus::DataKind::Active {
+                offset: ConstExpr::Value(walrus::ir::Value::I32(idx)),
+                ..
+            } => idx,
+            walrus::DataKind::Active {
+                offset: ConstExpr::Value(walrus::ir::Value::I64(idx)),
+                ..
+            } => idx as i32,
+            _ => {
+                bail!("Data segment of invalid table: {:?}", data.kind);
+            }
+        };
+
+        let ImportKind::Global(global_id) = import.kind else {
+            bail!("Expected GOT.mem import to be a global");
+        };
+
+        // "satisfying" the import means removing it from the import table and replacing its target
+        // value with a local global.
+        new.imports.delete(mem);
+        new.globals.get_mut(global_id).kind = walrus::GlobalKind::Local(ConstExpr::Value(
+            walrus::ir::Value::I32(offset + data_symbol.segment_offset as i32),
+        ));
+    }
+
+    // Update the wasm module on the fileystem to use the newly lifted version
+    let lib = patch.to_path_buf();
+    std::fs::write(&lib, new.emit_wasm()).unwrap();
+
+    // And now assemble the jump table by mapping the old ifunc table to the new one, by name
+    //
+    // The ifunc_count will be passed to the dynamic loader so it can allocate the right amount of space
+    // in the indirect function table when loading the patch.
+    let new_raw_data = parse_bytes_to_data_segment(&new_bytes)?;
+    let name_to_ifunc_new = collect_func_ifuncs(&new, &new_raw_data.symbols);
+    let ifunc_count = name_to_ifunc_new.len() as u64;
     let mut map = AddressMap::default();
     for (name, idx) in name_to_ifunc_new.iter() {
         if let Some(old_idx) = name_to_ifunc_old.get(name) {
@@ -148,10 +290,10 @@ fn create_wasm_jump_table(original: &Path, patch: &Path) -> anyhow::Result<JumpT
 
     Ok(JumpTable {
         map,
-        lib: patch.to_path_buf(),
+        lib,
         aslr_reference: 0,
         new_base_address: 0,
-        ifunc_count: name_to_ifunc_new.len() as u64,
+        ifunc_count,
     })
 }
 
@@ -174,7 +316,7 @@ fn collect_func_ifuncs<'a>(m: &'a Module, syms: &'a [SymbolInfo<'a>]) -> HashMap
 
         let offset = match offset {
             // Handle explicit offsets
-            walrus::ConstExpr::Value(value) => match value {
+            ConstExpr::Value(value) => match value {
                 walrus::ir::Value::I32(idx) => *idx,
                 walrus::ir::Value::I64(idx) => *idx as i32,
                 _ => panic!(),
@@ -182,9 +324,9 @@ fn collect_func_ifuncs<'a>(m: &'a Module, syms: &'a [SymbolInfo<'a>]) -> HashMap
 
             // Globals are usually imports and thus don't add a specific offset
             // ie the ifunc table is offset by a global, so we don't need to push the offset out
-            walrus::ConstExpr::Global(_) => 0,
-            walrus::ConstExpr::RefNull(_) => panic!(),
-            walrus::ConstExpr::RefFunc(_) => panic!(),
+            ConstExpr::Global(_) => 0,
+            ConstExpr::RefNull(_) => panic!(),
+            ConstExpr::RefFunc(_) => panic!(),
         };
 
         match &el.items {
@@ -221,7 +363,7 @@ fn fn_name_map<'a>(syms: &[SymbolInfo<'a>]) -> HashMap<&'a str, WrongFnIndex> {
 /// bypassing the dynamic linker.
 ///
 /// This is very similar to malware :) but it's not!
-pub fn resolve_undefined(
+pub fn create_undefined_symbol_stub(
     source_path: &Path,
     incrementals: &[PathBuf],
     triple: &Triple,
@@ -560,122 +702,6 @@ fn collect_all_wasm_bindgen_funcs(module: &Module) -> HashSet<FunctionId> {
     acc.funcs
 }
 
-/// According to the dylink spec, there will be two sets of entries:
-/// - got.func: functions in the indirect function table
-/// - got.mem: data objects in the data segments
-///
-/// It doesn't seem like we can compile the base module to export these, sadly, so we're going
-/// to manually satisfy them here, removing their need to be imported.
-///
-/// https://github.com/WebAssembly/tool-conventions/blob/main/DynamicLinking.md
-pub fn satisfy_got_imports(old_bytes: &[u8], new_bytes: &[u8]) -> Result<Vec<u8>> {
-    let old: walrus::Module = walrus::Module::from_buffer(old_bytes)?;
-    let mut new: walrus::Module = walrus::Module::from_buffer(new_bytes)?;
-
-    let raw_data = parse_bytes_to_data_segment(&old_bytes)?;
-    let ifunc_map = collect_func_ifuncs(&old, &raw_data.symbols);
-    let global_map = collect_global_map(&old);
-
-    let mut mems = vec![];
-    let mut funcs = vec![];
-
-    // Collect the GOT func/mem entries
-    for t in new.imports.iter() {
-        match t.module.as_str() {
-            "GOT.func" => {
-                funcs.push((
-                    t.id(),
-                    *ifunc_map.get(t.name.as_str()).unwrap_or_else(|| {
-                        let exists = old.exports.get_func(t.name.as_str());
-                        panic!("failed to find GOT.func: {} -> {exists:?}", t.name.as_str())
-                    }),
-                ));
-            }
-            "GOT.mem" => mems.push(t.id()),
-            _ => {}
-        }
-    }
-
-    // Satisfies the GOT.func imports. They exist as regular imports, but we need to make the indirect call
-    for (imp_id, val) in funcs {
-        let imp = new.imports.get(imp_id);
-        let global_id = match imp.kind {
-            ImportKind::Global(id) => id,
-            _ => todo!(),
-        };
-        tracing::info!("Importing GOT.func: {} -> real: {:?}", imp.name, val);
-        new.globals.get_mut(global_id).kind =
-            walrus::GlobalKind::Local(walrus::ConstExpr::Value(walrus::ir::Value::I32(val as i32)));
-        new.imports.delete(imp_id);
-    }
-
-    // The got mem entries exist, but are hidden. we need to bind to their address directly, and
-    // remove the "GOT.data.internal" name
-    for mem in mems {
-        let imp = new.imports.get(mem);
-        let data_symbol_idx = *raw_data.data_symbol_map.get(imp.name.as_str()).unwrap();
-        let data_symbol = raw_data.data_symbols.get(&data_symbol_idx).unwrap();
-        let name = format!("GOT.data.internal.{}", imp.name);
-        let val_from_got = global_map.get(name.as_str());
-        // let val_from_got = global_map.get(name.as_str()).unwrap_or_else(|| {
-        //     let non_got = global_map.get(name.as_str());
-        //     panic!(
-        //         "failed to find GOT.mem: {} -> non got: {non_got:?}",
-        //         name.as_str()
-        //     )
-        // });
-        // let offset = data_symbol.segment_offset as i32;
-        let data = old.data.iter().nth(data_symbol.which_data_segment).unwrap();
-        let offset = match data.kind {
-            walrus::DataKind::Active { offset, .. } => match offset {
-                walrus::ConstExpr::Value(walrus::ir::Value::I32(idx)) => idx,
-                walrus::ConstExpr::Value(walrus::ir::Value::I64(idx)) => idx as i32,
-                _ => panic!(),
-            },
-            _ => todo!(),
-        };
-
-        let global_id = match imp.kind {
-            ImportKind::Global(id) => id,
-            _ => todo!(),
-        };
-        let data_offset = offset + data_symbol.segment_offset as i32;
-
-        tracing::info!(
-            "GOT.mem: {} -> real: {:?} seg_offset: {} data_offset: {}\n({:?})",
-            name,
-            val_from_got,
-            data_symbol.segment_offset,
-            data_offset,
-            data_symbol
-        );
-
-        new.globals.get_mut(global_id).kind = walrus::GlobalKind::Local(walrus::ConstExpr::Value(
-            walrus::ir::Value::I32(data_offset),
-        ));
-        new.imports.delete(mem);
-    }
-
-    Ok(new.emit_wasm())
-}
-
-fn collect_global_map(old: &Module) -> HashMap<&str, i32> {
-    let mut global_map = HashMap::new();
-
-    for global in old.globals.iter() {
-        if let Some(name) = &global.name {
-            if let walrus::GlobalKind::Local(walrus::ConstExpr::Value(walrus::ir::Value::I32(
-                value,
-            ))) = global.kind
-            {
-                global_map.insert(name.as_str(), value);
-            }
-        }
-    }
-
-    global_map
-}
-
 /// Manually parse the data section from a wasm module
 ///
 /// We need to do this for data symbols because walrus doesn't provide the right range and offset
@@ -713,26 +739,6 @@ fn parse_bytes_to_data_segment(bytes: &[u8]) -> Result<RawDataSection> {
     let mut data_symbol_map = HashMap::new();
     let mut code_symbol_map = BTreeMap::new();
     for (index, symbol) in symbols.iter().enumerate() {
-        let name = match symbol {
-            SymbolInfo::Func { flags, index, name } => *name,
-            SymbolInfo::Data {
-                flags,
-                name,
-                symbol,
-            } => Some(*name),
-            SymbolInfo::Global { flags, index, name } => *name,
-            SymbolInfo::Section { flags, section } => None,
-            SymbolInfo::Event { flags, index, name } => *name,
-            SymbolInfo::Table { flags, index, name } => *name,
-        };
-
-        if let Some(name) = name {
-            // ZN59_$LT$dyn$u20$core..any..Any$u20$as$u20$core..fmt..Debug$GT$3fmt17h8ab3728dab9d43e8
-            // if name.contains("core..any..Any$u20$as$u20$core..fmt..Debug$GT") {
-            //     panic!("Found a core::any::Any symbol: {name} in {symbol:?}");
-            // }
-        }
-
         if let SymbolInfo::Func { name, index, .. } = symbol {
             if let Some(name) = name {
                 code_symbol_map.insert(*name, *index as usize);
