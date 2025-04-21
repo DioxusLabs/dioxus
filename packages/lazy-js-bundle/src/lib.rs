@@ -173,9 +173,9 @@ fn gen_bindings(input_path: &Path, output_path: &Path, minify_level: MinifyLevel
         .arg(output_path)
         .args(minify_level.as_args())
         .status()
-        .unwrap();
+        .ok();
 
-    if !status.success() {
+    if !status.is_some_and(|status| status.success()) {
         panic!(
             "Failed to generate bindings for {:?}. Make sure you have bun installed",
             input_path
