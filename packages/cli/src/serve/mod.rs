@@ -173,7 +173,7 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &mut TraceController) -> 
             }
 
             ServeUpdate::OpenApp => {
-                if let Err(err) = builder.open_existing(&devserver).await {
+                if let Err(err) = builder.open_all(&devserver, true).await {
                     tracing::error!("Failed to open app: {err}")
                 }
             }

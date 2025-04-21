@@ -83,6 +83,8 @@ impl Workspace {
     }
 
     pub fn wasm_ld(&self) -> PathBuf {
+        // wasm-ld: ./rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/wasm-ld
+        // rust-lld: ./rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/rust-lld
         self.sysroot
             .join("lib")
             .join("rustlib")

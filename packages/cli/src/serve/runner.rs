@@ -490,7 +490,8 @@ impl AppServer {
                 tracing::info!("Build completed in {:?}ms", time_taken.as_millis());
             }
 
-            self.open_existing(devserver).await?;
+            let open_browser = self.client.builds_opened == 0 && self.open_browser;
+            self.open_all(devserver, open_browser).await?;
 
             // Give a second for the server to boot
             tokio::time::sleep(Duration::from_millis(300)).await;
@@ -503,7 +504,11 @@ impl AppServer {
     }
 
     /// Open an existing app bundle, if it exists
-    pub(crate) async fn open_existing(&mut self, devserver: &WebServer) -> Result<()> {
+    pub(crate) async fn open_all(
+        &mut self,
+        devserver: &WebServer,
+        open_browser: bool,
+    ) -> Result<()> {
         let devserver_ip = devserver.devserver_address();
         let fullstack_address = devserver.proxied_server_address();
         let displayed_address = devserver.displayed_address();
@@ -525,7 +530,6 @@ impl AppServer {
         }
 
         // Start the new app before we kill the old one to give it a little bit of time
-        let open_browser = self.client.builds_opened == 0 && self.open_browser;
         let always_on_top = self.always_on_top;
         self.client.soft_kill().await;
         self.client
