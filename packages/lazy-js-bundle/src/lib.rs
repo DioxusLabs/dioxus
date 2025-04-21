@@ -177,7 +177,7 @@ fn gen_bindings(input_path: &Path, output_path: &Path, minify_level: MinifyLevel
     let status = match status {
         Ok(status) => status,
         Err(error) => {
-            if let Ok(_) = Command::new("bun").status() {
+            if Command::new("bun").status().is_ok() {
                 panic!(
                     "Bun failed to generated bindings for {:?}. Error:\n{:?}",
                     input_path, error
