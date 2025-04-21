@@ -12,7 +12,7 @@ use dioxus_core_types::HotReloadingContext;
 use dioxus_devtools_types::ClientMsg;
 use dioxus_devtools_types::HotReloadMsg;
 use dioxus_dx_wire_format::BuildStage;
-use dioxus_html::{r#use, HtmlCtx};
+use dioxus_html::HtmlCtx;
 use dioxus_rsx::CallBody;
 use dioxus_rsx_hotreload::{ChangedRsx, HotReloadResult};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
@@ -963,17 +963,13 @@ impl AppServer {
     /// Perform a full rebuild of the app, equivalent to `cargo rustc` from scratch with no incremental
     /// hot-patch engine integration.
     pub(crate) async fn full_rebuild(&mut self) {
-        if self.use_hotpatch_engine {
-            self.client.start_rebuild(BuildMode::Fat);
-            self.server
-                .as_mut()
-                .map(|s| s.start_rebuild(BuildMode::Fat));
-        } else {
-            self.client.start_rebuild(BuildMode::Base);
-            self.server
-                .as_mut()
-                .map(|s| s.start_rebuild(BuildMode::Base));
-        }
+        let build_mode = match self.use_hotpatch_engine {
+            true => BuildMode::Fat,
+            false => BuildMode::Base,
+        };
+
+        self.client.start_rebuild(build_mode.clone());
+        self.server.as_mut().map(|s| s.start_rebuild(build_mode));
 
         self.clear_hot_reload_changes();
         self.clear_cached_rsx();

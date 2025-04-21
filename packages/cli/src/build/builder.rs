@@ -181,13 +181,12 @@ impl AppBuilder {
                 StderrReceived {  msg }
             },
             Some(status) = OptionFuture::from(self.child.as_mut().map(|f| f.wait())) => {
-                match status {
-                    Ok(status) => {
-                        self.child = None;
-                        ProcessExited { status }
-                    },
-                    Err(_err) => todo!("handle error in process joining?"),
-                }
+                // Panicking here is on purpose. If the task crashes due to a JoinError (a panic),
+                // we want to propagate that panic up to the serve controller.
+                let status = status.unwrap();
+                self.child = None;
+
+                ProcessExited { status }
             }
         };
 

@@ -1,4 +1,5 @@
 use super::*;
+use crate::Workspace;
 use anyhow::Context;
 use dioxus_autofmt::{IndentOptions, IndentType};
 use rayon::prelude::*;
@@ -61,16 +62,16 @@ impl Autoformat {
         } else {
             // Default to formatting the project.
             let crate_dir = if let Some(package) = self.package {
-                todo!()
-                // let target_args = TargetArgs {
-                //     package: Some(package),
-                //     ..Default::default()
-                // };
-                // let dx_crate = DioxusCrate::new(&target_args)
-                //     .await
-                //     .context("failed to parse crate graph")?;
-
-                // Cow::Owned(dx_crate.crate_dir())
+                let workspace = Workspace::current().await?;
+                let dx_crate = workspace
+                    .find_main_package(Some(package))
+                    .context("Failed to find package")?;
+                workspace.krates[dx_crate]
+                    .manifest_path
+                    .parent()
+                    .unwrap()
+                    .to_path_buf()
+                    .into()
             } else {
                 Cow::Borrowed(Path::new("."))
             };

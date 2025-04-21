@@ -4,9 +4,11 @@
 //! https://github.com/rust-lang/rustfmt/blob/master/src/bin/main.rs
 
 use super::*;
+use crate::Workspace;
 use anyhow::Context;
 use futures_util::{stream::FuturesUnordered, StreamExt};
 use std::path::Path;
+use walkdir::WalkDir;
 
 /// Check the Rust files in the project for issues.
 #[derive(Clone, Debug, Parser)]
@@ -51,10 +53,15 @@ async fn check_file_and_report(path: PathBuf) -> Result<()> {
 ///
 /// Doesn't do mod-descending, so it will still try to check unreachable files. TODO.
 async fn check_project_and_report(krate: &BuildArgs) -> Result<()> {
-    todo!("check_project_and_report");
-    // let mut files_to_check = vec![dioxus_crate.main_source_file()];
-    // collect_rs_files(&dioxus_crate.crate_dir(), &mut files_to_check);
-    // check_files_and_report(files_to_check).await
+    let workspace = Workspace::current().await?;
+    let dioxus_crate = workspace.find_main_package(krate.package.clone())?;
+    let dioxus_crate = &workspace.krates[dioxus_crate];
+    let mut files_to_check = vec![];
+    collect_rs_files(
+        dioxus_crate.manifest_path.parent().unwrap().as_std_path(),
+        &mut files_to_check,
+    );
+    check_files_and_report(files_to_check).await
 }
 
 /// Check a list of files and report the issues.
@@ -107,26 +114,10 @@ async fn check_files_and_report(files_to_check: Vec<PathBuf>) -> Result<()> {
 }
 
 fn collect_rs_files(folder: &Path, files: &mut Vec<PathBuf>) {
-    let Ok(folder) = folder.read_dir() else {
-        return;
-    };
-
-    // load the gitignore
-    for entry in folder {
-        let Ok(entry) = entry else {
-            continue;
-        };
-
-        let path = entry.path();
-
-        if path.is_dir() {
-            collect_rs_files(&path, files);
-        }
-
-        if let Some(ext) = path.extension() {
-            if ext == "rs" {
-                files.push(path);
-            }
+    let dir = WalkDir::new(folder).follow_links(true).into_iter();
+    for entry in dir.flatten() {
+        if entry.path().extension() == Some("rs".as_ref()) {
+            files.push(entry.path().to_path_buf());
         }
     }
 }

@@ -1,46 +1,49 @@
 use super::*;
-use crate::{AppBuilder, BuildArgs, BuildId, BuildMode, BuildRequest, Platform, Result, Workspace};
+use crate::{
+    serve::serve_all, AppBuilder, BuildArgs, BuildId, BuildMode, BuildRequest, Platform, Result,
+    Workspace,
+};
 
 /// Run the project with the given arguments
 #[derive(Clone, Debug, Parser)]
 pub(crate) struct RunArgs {
     /// Information about the target to build
     #[clap(flatten)]
-    pub(crate) build_args: BuildArgs,
+    pub(crate) build_args: ServeArgs,
 }
 
 impl RunArgs {
     pub(crate) async fn run(self) -> Result<StructuredOutput> {
         let workspace = Workspace::current().await?;
 
-        let build = BuildRequest::new(&self.build_args, workspace)
-            .await
-            .context("error building project")?;
+        // let build = BuildRequest::new(&self.build_args, workspace)
+        //     .await
+        //     .context("error building project")?;
 
-        let mut builder = AppBuilder::start(&build, BuildMode::Base)?;
-        let artifacts = builder.finish_build().await?;
+        // let mut builder = AppBuilder::start(&build, BuildMode::Base)?;
+        // let artifacts = builder.finish_build().await?;
 
-        let devserver_ip = "127.0.0.1:8081".parse().unwrap();
-        let fullstack_ip = "127.0.0.1:8080".parse().unwrap();
-        let mut open_address = None;
+        // let devserver_ip = "127.0.0.1:8081".parse().unwrap();
+        // let fullstack_ip = "127.0.0.1:8080".parse().unwrap();
+        // let mut open_address = None;
 
-        todo!();
-        // if build.platform == Platform::Web || build.fullstack {
-        //     tracing::info!("Serving at: {}", fullstack_ip);
-        // }
+        // todo!();
+        // // if build.platform == Platform::Web || build.fullstack {
+        // //     tracing::info!("Serving at: {}", fullstack_ip);
+        // // }
 
-        builder
-            .open(
-                devserver_ip,
-                open_address,
-                Some(fullstack_ip),
-                true,
-                false,
-                BuildId(0),
-            )
-            .await?;
+        // builder
+        //     .open(
+        //         devserver_ip,
+        //         open_address,
+        //         Some(fullstack_ip),
+        //         true,
+        //         false,
+        //         BuildId(0),
+        //     )
+        //     .await?;
 
-        todo!();
+        // todo!();
         // // Run the app, but mostly ignore all the other messages
         // // They won't generally be emitted
         // loop {
