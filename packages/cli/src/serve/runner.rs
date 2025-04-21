@@ -460,18 +460,9 @@ impl AppServer {
     pub(crate) async fn open(
         &mut self,
         artifacts: BuildArtifacts,
-        devserver_ip: SocketAddr,
-        fullstack_address: Option<SocketAddr>,
-        displayed_address: Option<SocketAddr>,
         devserver: &mut WebServer,
     ) -> Result<()> {
-        // Add some cute logging
-        let time_taken = artifacts
-            .time_end
-            .duration_since(artifacts.time_start)
-            .unwrap();
-
-        // Make sure to save artifacts...
+        // Make sure to save artifacts regardless of if we're opening the app or not
         match artifacts.platform {
             Platform::Server => {
                 if let Some(server) = self.server.as_mut() {
@@ -485,6 +476,11 @@ impl AppServer {
             && (self.server.as_ref().map(|s| s.stage == BuildStage::Success)).unwrap_or(true);
 
         if should_open {
+            let time_taken = artifacts
+                .time_end
+                .duration_since(artifacts.time_start)
+                .unwrap();
+
             if self.client.builds_opened == 0 {
                 tracing::info!(
                     "Build completed successfully in {:?}ms, launching app! 💫",
@@ -494,26 +490,7 @@ impl AppServer {
                 tracing::info!("Build completed in {:?}ms", time_taken.as_millis());
             }
 
-            // Always open the server first after the client has been built
-            if let Some(_server) = self.server.as_ref() {
-                self.open_server(devserver_ip, fullstack_address, displayed_address)
-                    .await?;
-            }
-
-            // Start the new app before we kill the old one to give it a little bit of time
-            let open_browser = self.client.builds_opened == 0 && self.open_browser;
-            let always_on_top = self.always_on_top;
-
-            self.client
-                .open(
-                    devserver_ip,
-                    displayed_address,
-                    fullstack_address,
-                    open_browser,
-                    always_on_top,
-                    BuildId(0),
-                )
-                .await?;
+            self.open_existing(devserver).await?;
 
             // Give a second for the server to boot
             tokio::time::sleep(Duration::from_millis(300)).await;
@@ -527,29 +504,40 @@ impl AppServer {
 
     /// Open an existing app bundle, if it exists
     pub(crate) async fn open_existing(&mut self, devserver: &WebServer) -> Result<()> {
+        let devserver_ip = devserver.devserver_address();
         let fullstack_address = devserver.proxied_server_address();
+        let displayed_address = devserver.displayed_address();
 
-        // let fullstack_address = devserver.proxied_server_address();
+        // Always open the server first after the client has been built
+        if let Some(server) = self.server.as_mut() {
+            tracing::debug!("Opening server build");
+            server.soft_kill().await;
+            server
+                .open(
+                    devserver_ip,
+                    displayed_address,
+                    fullstack_address,
+                    false,
+                    false,
+                    BuildId(1),
+                )
+                .await?;
+        }
 
-        // if let Some(runner) = self.running.as_mut() {
-        //     runner.soft_kill().await;
-        //     runner
-        //         .open(
-        //             devserver.devserver_address(),
-        //             devserver.displayed_address(),
-        //             fullstack_address,
-        //             true,
-        //         )
-        //         .await?;
-        // }
-
-        todo!();
-        // if let Some(runner) = self.running.as_mut() {
-        //     runner.soft_kill().await;
-        //     runner
-        //         .open(devserver.devserver_address(), fullstack_address, true)
-        //         .await?;
-        // }
+        // Start the new app before we kill the old one to give it a little bit of time
+        let open_browser = self.client.builds_opened == 0 && self.open_browser;
+        let always_on_top = self.always_on_top;
+        self.client.soft_kill().await;
+        self.client
+            .open(
+                devserver_ip,
+                displayed_address,
+                fullstack_address,
+                open_browser,
+                always_on_top,
+                BuildId(0),
+            )
+            .await?;
 
         Ok(())
     }
@@ -989,30 +977,6 @@ impl AppServer {
 
         self.clear_hot_reload_changes();
         self.clear_cached_rsx();
-    }
-
-    async fn open_server(
-        &mut self,
-        devserver_ip: SocketAddr,
-        fullstack_address: Option<SocketAddr>,
-        displayed_address: Option<SocketAddr>,
-    ) -> Result<()> {
-        tracing::debug!("Opening server build");
-        if let Some(server) = self.server.as_mut() {
-            // server.cleanup().await;
-            server
-                .open(
-                    devserver_ip,
-                    displayed_address,
-                    fullstack_address,
-                    false,
-                    false,
-                    BuildId(1),
-                )
-                .await?;
-        }
-
-        Ok(())
     }
 }
 

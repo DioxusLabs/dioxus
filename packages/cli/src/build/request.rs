@@ -460,7 +460,7 @@ pub enum BuildMode {
     Thin {
         rustc_args: RustcArgs,
         changed_files: Vec<PathBuf>,
-        aslr_reference: Option<u64>,
+        aslr_reference: u64,
     },
 }
 
@@ -1142,7 +1142,7 @@ impl BuildRequest {
     async fn write_patch(
         &self,
         ctx: &BuildContext,
-        aslr_reference: Option<u64>,
+        aslr_reference: u64,
         artifacts: &mut BuildArtifacts,
     ) -> Result<()> {
         tracing::debug!("Patching existing bundle");
@@ -1229,7 +1229,7 @@ impl BuildRequest {
                 &self.main_exe(),
                 &object_files,
                 &self.triple,
-                aslr_reference.context("ASLR reference not found - is the client connected?")?,
+                aslr_reference,
             )
             .expect("failed to resolve patch symbols");
 

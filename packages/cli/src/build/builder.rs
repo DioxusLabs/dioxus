@@ -268,6 +268,25 @@ impl AppBuilder {
     }
 
     pub(crate) fn patch_rebuild(&mut self, changed_files: Vec<PathBuf>) {
+        // We need the rustc args from the original build to pass to the new build
+        let Some(artifacts) = self.artifacts.as_ref().cloned() else {
+            tracing::warn!("Ignoring patch rebuild since there is no existing build.");
+            return;
+        };
+
+        // On web, our patches are fully relocatable, so we don't need to worry about ASLR, but
+        // for all other platforms, we need to use the ASLR reference to know where to insert the patch.
+        let aslr_reference = match self.aslr_reference {
+            Some(val) => val,
+            None if self.build.platform == Platform::Web => 0,
+            None => {
+                tracing::warn!(
+                    "Ignoring hotpatch since there is no ASLR reference. Is the client connected?"
+                );
+                return;
+            }
+        };
+
         // Abort all the ongoing builds, cleaning up any loose artifacts and waiting to cleanly exit
         self.abort_all(BuildStage::Restarting);
         self.build_task = tokio::spawn({
@@ -276,8 +295,8 @@ impl AppBuilder {
                 tx: self.tx.clone(),
                 mode: BuildMode::Thin {
                     changed_files,
-                    rustc_args: self.artifacts.as_ref().unwrap().direct_rustc.clone(),
-                    aslr_reference: self.aslr_reference,
+                    rustc_args: artifacts.direct_rustc,
+                    aslr_reference,
                 },
             };
             async move { request.build(&ctx).await }

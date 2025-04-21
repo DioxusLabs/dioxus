@@ -56,7 +56,7 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &mut TraceController) -> 
         builder.app_name()
     );
 
-    let err: Result<(), Error> = loop {
+    loop {
         // Draw the state of the server to the screen
         screen.render(&builder, &devserver);
 
@@ -130,31 +130,24 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &mut TraceController) -> 
                     BuilderUpdate::BuildFailed { err } => {
                         tracing::error!("Build failed: {:#?}", err);
                     }
-                    BuilderUpdate::BuildReady { bundle } => {
-                        match bundle.mode {
-                            BuildMode::Thin { .. } => {
-                                // We need to patch the app with the new bundle
-                                let elapsed =
-                                    bundle.time_end.duration_since(bundle.time_start).unwrap();
-                                match builder.patch(&bundle).await {
-                                    Ok(jumptable) => devserver.send_patch(jumptable, elapsed).await,
-                                    Err(_) => {}
+                    BuilderUpdate::BuildReady { bundle } => match bundle.mode {
+                        BuildMode::Thin { .. } => {
+                            let elapsed =
+                                bundle.time_end.duration_since(bundle.time_start).unwrap();
+                            match builder.patch(&bundle).await {
+                                Ok(jumptable) => devserver.send_patch(jumptable, elapsed).await,
+                                Err(err) => {
+                                    tracing::error!("Failed to patch app: {err}");
                                 }
                             }
-                            BuildMode::Base | BuildMode::Fat => {
-                                builder
-                                    .open(
-                                        bundle,
-                                        devserver.devserver_address(),
-                                        devserver.proxied_server_address(),
-                                        devserver.displayed_address(),
-                                        &mut devserver,
-                                    )
-                                    .await
-                                    .inspect_err(|e| tracing::error!("Failed to open app: {}", e));
-                            }
                         }
-                    }
+                        BuildMode::Base | BuildMode::Fat => {
+                            _ = builder
+                                .open(bundle, &mut devserver)
+                                .await
+                                .inspect_err(|e| tracing::error!("Failed to open app: {}", e));
+                        }
+                    },
                     BuilderUpdate::StdoutReceived { msg } => {
                         screen.push_stdio(platform, msg, tracing::Level::INFO);
                     }
@@ -201,20 +194,16 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &mut TraceController) -> 
                 )
             }
 
-            ServeUpdate::Exit { error } => match error {
-                Some(err) => break Err(anyhow::anyhow!("{}", err).into()),
-                None => break Ok(()),
-            },
+            ServeUpdate::Exit { error } => {
+                _ = builder.cleanup_all().await;
+                _ = devserver.shutdown().await;
+                _ = screen.shutdown();
+
+                match error {
+                    Some(err) => return Err(anyhow::anyhow!("{}", err).into()),
+                    None => return Ok(()),
+                }
+            }
         }
-    };
-
-    _ = builder.cleanup_all().await;
-    _ = devserver.shutdown().await;
-    _ = screen.shutdown();
-
-    if let Err(err) = err {
-        eprintln!("Exiting with error: {}", err);
     }
-
-    Ok(())
 }
