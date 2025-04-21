@@ -20,7 +20,7 @@ impl HasScrollData for Synthetic<Event> {
                 return element.scroll_top();
             }
         }
-        return 0;
+        0
     }
 
     fn scroll_left(&self) -> i32 {
@@ -34,7 +34,7 @@ impl HasScrollData for Synthetic<Event> {
                 return element.scroll_left();
             }
         }
-        return 0;
+        0
     }
 
     fn scroll_width(&self) -> i32 {
@@ -48,7 +48,7 @@ impl HasScrollData for Synthetic<Event> {
                 return element.scroll_width();
             }
         }
-        return 0;
+        0
     }
 
     fn scroll_height(&self) -> i32 {
@@ -62,7 +62,7 @@ impl HasScrollData for Synthetic<Event> {
                 return element.scroll_height();
             }
         }
-        return 0;
+        0
     }
 
     fn client_width(&self) -> i32 {
@@ -76,7 +76,7 @@ impl HasScrollData for Synthetic<Event> {
                 return element.client_width();
             }
         }
-        return 0;
+        0
     }
 
     fn client_height(&self) -> i32 {
@@ -90,7 +90,7 @@ impl HasScrollData for Synthetic<Event> {
                 return element.client_height();
             }
         }
-        return 0;
+        0
     }
 }
 
