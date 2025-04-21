@@ -2,6 +2,7 @@ use crate::{config::DioxusConfig, TargetArgs};
 use crate::{Arch, CliSettings};
 use crate::{Platform, Result};
 use anyhow::Context;
+use cargo_config2::cargo_home_with_cwd;
 use itertools::Itertools;
 use krates::{cm::Target, KrateDetails};
 use krates::{cm::TargetKind, Cmd, Krates, NodeId};
@@ -237,6 +238,19 @@ impl DioxusCrate {
             .to_path_buf()
     }
 
+    /// Get the directory where cargo stores its data
+    pub(crate) fn cargo_home(&self) -> Result<PathBuf> {
+        Ok(cargo_home_with_cwd(&self.workspace_dir())
+            .ok_or_else(|| anyhow::anyhow!("Failed to find cargo home. Please set CARGO_HOME."))?)
+    }
+
+    /// Get the path to the global cargo config
+    pub(crate) fn cargo_config(&self) -> Result<PathBuf> {
+        let cargo_home = self.cargo_home()?;
+        let config_path = cargo_home.join("config.toml");
+        Ok(config_path)
+    }
+
     /// Get the main source file of the target
     pub(crate) fn main_source_file(&self) -> PathBuf {
         self.target.src_path.as_std_path().to_path_buf()
@@ -397,7 +411,7 @@ impl DioxusCrate {
     // Find or create the client and server profiles in the top-level Cargo.toml file
     // todo(jon): we should/could make these optional by placing some defaults somewhere
     pub(crate) fn initialize_profiles(&self) -> crate::Result<()> {
-        let config_path = self.workspace_dir().join("Cargo.toml");
+        let config_path = self.cargo_config()?;
         let mut config = match std::fs::read_to_string(&config_path) {
             Ok(config) => config.parse::<toml_edit::DocumentMut>().map_err(|e| {
                 crate::Error::Other(anyhow::anyhow!("Failed to parse Cargo.toml: {}", e))
