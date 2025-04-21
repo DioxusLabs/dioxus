@@ -8,7 +8,9 @@ use std::io::Read;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use crate::ContextProviders;
+#[allow(unused)]
+pub(crate) type ContextProviders =
+    Arc<Vec<Box<dyn Fn() -> Box<dyn std::any::Any> + Send + Sync + 'static>>>;
 
 /// A ServeConfig is used to configure how to serve a Dioxus application. It contains information about how to serve static assets, and what content to render with [`dioxus-ssr`].
 #[derive(Clone, Default)]
@@ -385,6 +387,10 @@ impl TryInto<ServeConfig> for ServeConfigBuilder {
 
 /// Get the path to the public assets directory to serve static files from
 pub(crate) fn public_path() -> PathBuf {
+    if let Ok(path) = std::env::var("DIOXUS_PUBLIC_PATH") {
+        return PathBuf::from(path);
+    }
+
     // The CLI always bundles static assets into the exe/public directory
     std::env::current_exe()
         .expect("Failed to get current executable path")
@@ -486,6 +492,8 @@ pub enum StreamingMode {
 pub struct ServeConfig {
     pub(crate) index: IndexHtml,
     pub(crate) incremental: Option<dioxus_isrg::IncrementalRendererConfig>,
+    // This is used in the axum integration
+    #[allow(unused)]
     pub(crate) context_providers: ContextProviders,
     pub(crate) streaming_mode: StreamingMode,
 }

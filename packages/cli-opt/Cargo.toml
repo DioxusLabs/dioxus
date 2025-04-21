@@ -13,27 +13,27 @@ keywords = ["dom", "ui", "gui", "react"]
 anyhow = { workspace = true }
 manganis = { workspace = true }
 manganis-core = { workspace = true }
-object = {version="0.36.0", features=["wasm"]}
+object = {version="0.36.7", features=["wasm"]}
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 const-serialize = { workspace = true, features = ["serde"] }
 tracing = { workspace = true }
-rayon = "1.8.0"
+rayon = "1.10.0"
 
 # Image compression/conversion
 # - JPEG
-mozjpeg = { version = "0.10.7", default-features = false, features = [
+mozjpeg = { version = "0.10.13", default-features = false, features = [
     "parallel",
 ] }
 # - PNG
-imagequant = "4.2.0"
-png = "0.17.9"
+imagequant = "4.3.4"
+png = "0.17.16"
 
 # Image format/conversion
 image = { version = "0.25", features = ["avif"] }
 
 # CSS Minification
-lightningcss = { version = "1.0.0-alpha.60", features = ["browserslist", "into_owned"] }
+lightningcss = { version = "1.0.0-alpha.63", features = ["browserslist", "into_owned"] }
 
 # SCSS Processing
 grass = "0.13.4"

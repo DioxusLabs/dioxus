@@ -4,15 +4,7 @@
 #![deny(missing_docs)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
-use std::sync::Arc;
-
 pub use once_cell;
-
-mod html_storage;
-
-#[allow(unused)]
-pub(crate) type ContextProviders =
-    Arc<Vec<Box<dyn Fn() -> Box<dyn std::any::Any> + Send + Sync + 'static>>>;
 
 #[cfg(feature = "axum")]
 #[cfg_attr(docsrs, doc(cfg(feature = "axum")))]
@@ -21,8 +13,6 @@ pub mod server;
 #[cfg(feature = "axum_core")]
 #[cfg_attr(docsrs, doc(cfg(feature = "axum_core")))]
 pub mod axum_core;
-
-mod hooks;
 
 pub mod document;
 #[cfg(feature = "server")]
@@ -41,8 +31,7 @@ mod server_context;
 
 /// A prelude of commonly used items in dioxus-fullstack.
 pub mod prelude {
-    use crate::hooks;
-    pub use hooks::{server_cached::use_server_cached, server_future::use_server_future};
+    pub use dioxus_fullstack_hooks::*;
 
     #[cfg(feature = "axum")]
     #[cfg_attr(docsrs, doc(cfg(feature = "axum")))]

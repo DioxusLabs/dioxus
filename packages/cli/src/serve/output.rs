@@ -497,7 +497,7 @@ impl Output {
             state.build_engine.compile_duration(),
         );
 
-        if state.build_engine.request.build.fullstack {
+        if state.build_engine.request.build.fullstack() {
             self.render_single_gauge(
                 frame,
                 second_progress,
@@ -521,7 +521,7 @@ impl Output {
         match &state.build_engine.stage {
             BuildStage::Initializing => lines.push("Initializing".yellow()),
             BuildStage::Starting { .. } => lines.push("Starting build".yellow()),
-            BuildStage::InstallingTooling {} => lines.push("Installing tooling".yellow()),
+            BuildStage::InstallingTooling => lines.push("Installing tooling".yellow()),
             BuildStage::Compiling {
                 current,
                 total,
@@ -532,13 +532,13 @@ impl Output {
                 lines.push(format!("{current}/{total} ").gray());
                 lines.push(krate.as_str().dark_gray())
             }
-            BuildStage::OptimizingWasm {} => lines.push("Optimizing wasm".yellow()),
-            BuildStage::SplittingBundle {} => lines.push("Splitting bundle".yellow()),
+            BuildStage::OptimizingWasm => lines.push("Optimizing wasm".yellow()),
+            BuildStage::SplittingBundle => lines.push("Splitting bundle".yellow()),
             BuildStage::CompressingAssets => lines.push("Compressing assets".yellow()),
-            BuildStage::PrerenderingRoutes {} => lines.push("Prerendering static routes".yellow()),
-            BuildStage::RunningBindgen {} => lines.push("Running wasm-bindgen".yellow()),
-            BuildStage::RunningGradle {} => lines.push("Running gradle assemble".yellow()),
-            BuildStage::Bundling {} => lines.push("Bundling app".yellow()),
+            BuildStage::PrerenderingRoutes => lines.push("Prerendering static routes".yellow()),
+            BuildStage::RunningBindgen => lines.push("Running wasm-bindgen".yellow()),
+            BuildStage::RunningGradle => lines.push("Running gradle assemble".yellow()),
+            BuildStage::Bundling => lines.push("Bundling app".yellow()),
             BuildStage::CopyingAssets {
                 current,
                 total,
@@ -651,7 +651,7 @@ impl Output {
             Paragraph::new(Line::from(vec![
                 "Platform: ".gray(),
                 self.platform.expected_name().yellow(),
-                if state.opts.build_arguments.fullstack {
+                if state.opts.build_arguments.fullstack() {
                     " + fullstack".yellow()
                 } else {
                     " ".dark_gray()

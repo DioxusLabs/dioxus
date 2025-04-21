@@ -28,7 +28,7 @@ wasm-split-cli = { workspace = true }
 clap = { workspace = true, features = ["derive", "cargo"] }
 convert_case = { workspace = true }
 thiserror = { workspace = true }
-uuid = { version = "1.3.0", features = ["v4"] }
+uuid = { workspace = true, features = ["v4"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 toml = { workspace = true }
@@ -38,20 +38,20 @@ notify = { workspace = true, features = ["serde"] }
 html_parser = { workspace = true }
 cargo_metadata = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
-tokio-stream = "0.1.15"
-chrono = "0.4.19"
+tokio-stream = { workspace = true }
+chrono = { workspace = true }
 anyhow = { workspace = true }
 hyper = { workspace = true }
-hyper-util = "0.1.3"
+hyper-util = { workspace = true }
 hyper-rustls = { workspace = true }
 rustls = { workspace = true }
-rayon = "1.8.0"
-console = "0.15.8"
-ctrlc = "3.2.3"
+rayon = { workspace = true }
 futures-channel = { workspace = true }
-krates = { version = "0.17.0" }
 cargo-config2 = { workspace = true, optional = true }
-regex = "1.10.6"
+krates = { version = "0.17.5" }
+regex = "1.11.1"
+console = "0.15.11"
+ctrlc = "3.4.5"
 
 axum = { workspace = true, default-features = true, features = ["ws"] }
 axum-server = { workspace = true, features = ["tls-rustls"] }
@@ -66,71 +66,67 @@ dunce = { workspace = true }
 
 # tools download
 dirs = { workspace = true }
-reqwest = { workspace = true, features = [
-    "rustls-tls",
-    "trust-dns",
-    "json"
-] }
+reqwest = { workspace = true, features = ["rustls-tls", "trust-dns", "json"] }
 tower = { workspace = true }
-once_cell = "1.19.0"
+once_cell = { workspace = true }
 
 # path lookup
-which = { version = "7.0.1" }
+which = { version = "7.0.2" }
 
 # plugin packages
-open = "5.0.1"
-cargo-generate = "=0.21.3"
-toml_edit = "0.22.20"
+open = { workspace = true }
+cargo-generate = "0.22.1"
+toml_edit = "0.22.24"
 
 # formatting
 # syn = { workspace = true }
 prettyplease = { workspace = true }
 
 # Assets
-brotli = "6.0.0"
-ignore = "0.4.22"
+brotli = "7.0.0"
+ignore = "0.4.23"
 env_logger = { workspace = true }
 const-serialize = { workspace = true, features = ["serde"] }
 
-tracing-subscriber = { version = "0.3.18", features = ["std", "env-filter", "json", "registry", "fmt"] }
-console-subscriber = { version = "0.3.0", optional = true }
+tracing-subscriber = { version = "0.3.19", features = ["std", "env-filter", "json", "registry", "fmt"] }
+console-subscriber = { version = "0.4.1", optional = true }
 tracing = { workspace = true }
 wasm-opt = { version = "0.116.1", optional = true }
-crossterm = { version = "0.28.0", features = ["event-stream"] }
-ansi-to-tui = "6.0"
-ansi-to-html = "0.2.1"
+crossterm = { version = "0.28.1", features = ["event-stream"] }
+ansi-to-tui = "7.0.0"
+ansi-to-html = "0.2.2"
 path-absolutize = "3.1"
-ratatui = { version = "0.28.0", features = ["crossterm", "unstable"] }
+ratatui = { version = "0.29.0", features = ["crossterm", "unstable"] }
 
 # disable `log` entirely since `walrus` uses it and is *much* slower with it enableda
 log = { version = "0.4", features = ["max_level_off", "release_max_level_off"] }
 
 # link intercept
-tempfile = "3.3"
+tempfile = "3.13"
 manganis = { workspace = true }
 manganis-core = { workspace = true }
 
 # Extracting data from an executable
-object = {version="0.36.0", features=["wasm"]}
-tokio-util = { version = "0.7.11", features = ["full"] }
-itertools = "0.13.0"
-throbber-widgets-tui = "=0.7.0"
+object = { version = "0.36.7", features = ["wasm"] }
+tokio-util = { workspace = true, features = ["full"] }
+itertools = { workspace = true }
+throbber-widgets-tui = "0.8.0"
 unicode-segmentation = "1.12.0"
-handlebars = "6.1.0"
-strum = { version = "0.26.3", features = ["derive"] }
+handlebars = "6.3.1"
+strum = { version = "0.27.1", features = ["derive"] }
 
 tauri-utils = { workspace = true }
 tauri-bundler = { workspace = true }
 include_dir = "0.7.4"
-flate2 = "1.0.35"
-tar = "0.4.43"
+flate2 = "1.1.0"
+tar = "0.4.44"
 local-ip-address = "0.6.3"
 dircpy = "0.3.19"
 plist = "1.7.0"
 memoize = "0.5.1"
 
 [build-dependencies]
-built = { version = "=0.7.4", features = ["git2"] }
+built = { version = "0.7.5", features = ["git2"] }
 
 [features]
 default = []
@@ -162,5 +158,5 @@ pkg-fmt = "zip"
 
 [package.metadata.docs.rs]
 all-features = false
-rustc-args = [ "--cfg", "docsrs" ]
-rustdoc-args = [ "--cfg", "docsrs" ]
+rustc-args = ["--cfg", "docsrs"]
+rustdoc-args = ["--cfg", "docsrs"]

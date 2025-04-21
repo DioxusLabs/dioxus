@@ -37,7 +37,7 @@ impl IncrementalRendererConfig {
             static_dir: PathBuf::from("./static"),
             memory_cache_limit: 10000,
             invalidate_after: None,
-            clear_cache: true,
+            clear_cache: false,
             pre_render: false,
             #[cfg(not(target_arch = "wasm32"))]
             map_path: None,

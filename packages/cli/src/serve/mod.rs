@@ -23,11 +23,11 @@ pub(crate) use watcher::*;
 ///
 /// Platform specifics:
 /// -------------------
-/// - Web:         we need to attach a filesystem server to our devtools webserver to serve the project. We
-///                want to emulate GithubPages here since most folks are deploying there and expect things like
-///                basepath to match.
-/// - Desktop:     We spin up the dev server but without a filesystem server.
-/// - Mobile:      Basically the same as desktop.
+/// - Web: we need to attach a filesystem server to our devtools webserver to serve the project. We
+///   want to emulate GithubPages here since most folks are deploying there and expect things like
+///   basepath to match.
+/// - Desktop: We spin up the dev server but without a filesystem server.
+/// - Mobile: Basically the same as desktop.
 ///
 /// When fullstack is enabled, we'll also build for the `server` target and then hotreload the server.
 /// The "server" is special here since "fullstack" is functionally just an addition to the regular client
