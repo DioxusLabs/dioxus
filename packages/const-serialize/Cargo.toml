@@ -15,7 +15,7 @@ serde = { workspace = true, features = ["derive"], optional = true }
 
 [dev-dependencies]
 const-serialize = { path = "." }
-rand.workspace = true
+rand = { workspace = true }
 
 [features]
 test-big-endian = []

@@ -271,7 +271,9 @@ impl DioxusCrate {
             .iter()
             .flat_map(|feature| {
                 tracing::trace!("Autodetecting platform from feature {feature}");
-                Platform::autodetect_from_cargo_feature(feature).map(|f| (f, feature.to_string()))
+                Platform::autodetect_from_cargo_feature(feature)
+                    .filter(|platform| *platform != Platform::Server)
+                    .map(|f| (f, feature.to_string()))
             })
             .collect::<Vec<_>>();
 
@@ -476,8 +478,11 @@ impl DioxusCrate {
             .map(|krate| krate.krate.version.to_string())
     }
 
-    pub(crate) fn default_platform(&self) -> Option<Platform> {
-        let default = self.package().features.get("default")?;
+    pub(crate) fn default_platforms(&self) -> Vec<Platform> {
+        let Some(default) = self.package().features.get("default") else {
+            return Vec::new();
+        };
+        let mut platforms = vec![];
 
         // we only trace features 1 level deep..
         for feature in default.iter() {
@@ -485,8 +490,8 @@ impl DioxusCrate {
             if feature.starts_with("dioxus/") {
                 let dx_feature = feature.trim_start_matches("dioxus/");
                 let auto = Platform::autodetect_from_cargo_feature(dx_feature);
-                if auto.is_some() {
-                    return auto;
+                if let Some(auto) = auto {
+                    platforms.push(auto);
                 }
             }
 
@@ -497,15 +502,17 @@ impl DioxusCrate {
                     if feature.starts_with("dioxus/") {
                         let dx_feature = feature.trim_start_matches("dioxus/");
                         let auto = Platform::autodetect_from_cargo_feature(dx_feature);
-                        if auto.is_some() {
-                            return auto;
+                        if let Some(auto) = auto {
+                            platforms.push(auto);
                         }
                     }
                 }
             }
         }
 
-        None
+        platforms.sort();
+        platforms.dedup();
+        platforms
     }
 
     /// Gather the features that are enabled for the package
@@ -696,7 +703,7 @@ impl DioxusCrate {
                 .flatten()
                 .map(|dir| (dir.file_name(), dir.path()))
                 .sorted()
-                .last()
+                .next_back()
                 .map(|(_, path)| path.to_path_buf())
         });
 

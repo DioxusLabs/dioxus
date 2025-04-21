@@ -22,7 +22,7 @@ fn main() {
         use axum_session::SessionConfig;
         use axum_session::SessionStore;
         use axum_session_auth::AuthConfig;
-        use axum_session_auth::SessionSqlitePool;
+        use axum_session_sqlx::SessionSqlitePool;
         tokio::runtime::Runtime::new()
             .unwrap()
             .block_on(async move {
@@ -49,7 +49,7 @@ fn main() {
                         axum_session_auth::AuthSessionLayer::<
                             crate::auth::User,
                             i64,
-                            axum_session_auth::SessionSqlitePool,
+                            SessionSqlitePool,
                             sqlx::SqlitePool,
                         >::new(Some(pool))
                         .with_config(auth_config),

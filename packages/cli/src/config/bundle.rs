@@ -23,6 +23,9 @@ pub(crate) struct DebianSettings {
     // OS-specific settings:
     /// the list of debian dependencies.
     pub depends: Option<Vec<String>>,
+    /// the list of recommended debian dependencies.
+    #[serde(default)]
+    pub recommends: Option<Vec<String>>,
     /// the list of dependencies the package provides.
     pub provides: Option<Vec<String>>,
     /// the list of package conflicts.
@@ -96,6 +99,7 @@ pub(crate) struct WixSettings {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub(crate) struct MacOsSettings {
+    pub(crate) bundle_version: Option<String>,
     pub(crate) frameworks: Option<Vec<String>>,
     pub(crate) minimum_system_version: Option<String>,
     pub(crate) license: Option<String>,

@@ -27,7 +27,7 @@ impl RunArgs {
         let fullstack_ip = "127.0.0.1:8080".parse().unwrap();
         let mut open_address = None;
 
-        if self.build_args.platform() == Platform::Web || self.build_args.fullstack {
+        if self.build_args.platform() == Platform::Web || self.build_args.fullstack() {
             open_address = Some(fullstack_ip);
             tracing::info!("Serving at: {}", fullstack_ip);
         }

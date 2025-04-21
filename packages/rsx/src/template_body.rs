@@ -56,7 +56,7 @@
 use self::location::DynIdx;
 use crate::innerlude::Attribute;
 use crate::*;
-use proc_macro2::TokenStream as TokenStream2;
+use proc_macro2::{Span, TokenStream as TokenStream2};
 use proc_macro2_diagnostics::SpanDiagnosticExt;
 use syn::parse_quote;
 
@@ -236,10 +236,12 @@ impl TemplateBody {
 
         // Assign paths to all nodes in the template
         body.assign_paths_inner(&nodes);
-        body.validate_key();
 
         // And then save the roots
         body.roots = nodes;
+
+        // Finally, validate the key
+        body.validate_key();
 
         body
     }
@@ -384,6 +386,14 @@ impl TemplateBody {
                 vec![ #( #component_values ),* ],
                 __TEMPLATE_ROOTS,
             )
+        }
+    }
+
+    /// Get the span of the first root of this template
+    pub(crate) fn first_root_span(&self) -> Span {
+        match self.roots.first() {
+            Some(root) => root.span(),
+            _ => Span::call_site(),
         }
     }
 }
