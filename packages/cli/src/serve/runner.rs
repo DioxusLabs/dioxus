@@ -237,7 +237,6 @@ impl AppServer {
         let server_wait = OptionFuture::from(server.map(|s| s.wait()));
         let watcher_wait = self.watcher_rx.next();
 
-
         tokio::select! {
             // Wait for the client to finish
             client_update = client_wait => {
@@ -514,6 +513,7 @@ impl AppServer {
                     fullstack_address,
                     open_browser,
                     always_on_top,
+                    BuildId(0),
                 )
                 .await?;
 
@@ -814,7 +814,9 @@ impl AppServer {
                 aslr_reference,
                 build_id,
             }) => {
-                tracing::debug!("Setting aslr_reference: {aslr_reference}");
+                tracing::debug!(
+                    "Setting aslr_reference: {aslr_reference} for build_id: {build_id}"
+                );
                 match build_id {
                     0 => {
                         self.client.aslr_reference = Some(aslr_reference);
@@ -1000,6 +1002,7 @@ impl AppServer {
                     fullstack_address,
                     false,
                     false,
+                    BuildId(1),
                 )
                 .await?;
         }

@@ -3571,6 +3571,7 @@ dependencies = [
  "dioxus-signals",
  "dioxus-ssr",
  "dioxus-web",
+ "dioxus_server_macro",
  "env_logger 0.11.8",
  "futures-util",
  "manganis",

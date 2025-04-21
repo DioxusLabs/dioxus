@@ -62,7 +62,6 @@ impl Autoformat {
             // Default to formatting the project.
             let crate_dir = if let Some(package) = self.package {
                 todo!()
-                // // TODO (matt): Do we need to use the entire `DioxusCrate` here?
                 // let target_args = TargetArgs {
                 //     package: Some(package),
                 //     ..Default::default()

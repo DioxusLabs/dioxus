@@ -48,7 +48,7 @@ optional = true
 [features]
 default = []
 server = [
-    "dioxus-fullstack/axum",
+    "dioxus-fullstack/server",
     "dep:dioxus-cli-config",
     "dep:axum",
     "dep:tokio",

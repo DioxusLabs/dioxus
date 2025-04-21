@@ -69,6 +69,7 @@ pub const APP_TITLE_ENV: &str = "DIOXUS_APP_TITLE";
 #[doc(hidden)]
 pub const OUT_DIR: &str = "DIOXUS_OUT_DIR";
 pub const SESSION_CACHE_DIR: &str = "DIOXUS_SESSION_CACHE_DIR";
+pub const BUILD_ID: &str = "DIOXUS_BUILD_ID";
 
 /// Reads an environment variable at runtime in debug mode or at compile time in
 /// release mode. When bundling in release mode, we will not be running under the
@@ -317,6 +318,9 @@ pub fn build_id() -> u64 {
 
     #[cfg(not(target_arch = "wasm32"))]
     {
-        1
+        std::env::var(BUILD_ID)
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0)
     }
 }

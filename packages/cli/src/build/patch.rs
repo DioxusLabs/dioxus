@@ -1463,7 +1463,7 @@ fn parse_wasm_and_print_globals2() {
 
 #[test]
 fn hoists() {
-    let bytes = include_bytes!("/Users/jonkelley/Development/dioxus/target/wasm32-unknown-unknown/wasm-dev/fullstack-hello-world-example.wasm");
+    let bytes = include_bytes!("/Users/jonathankelley/Development/dioxus/target/wasm32-unknown-unknown/wasm-dev/fullstack-hello-world-example.wasm");
     let out_bytes = prepare_wasm_base_module(bytes).unwrap();
 
     let out = walrus::Module::from_buffer(&out_bytes).unwrap();
@@ -1479,7 +1479,7 @@ fn hoists() {
 
 #[test]
 fn delta() {
-    let pre_bytes = include_bytes!("/Users/jonkelley/Development/dioxus/target/wasm32-unknown-unknown/wasm-dev/fullstack-hello-world-example.wasm");
+    let pre_bytes = include_bytes!("/Users/jonathankelley/Development/dioxus/target/wasm32-unknown-unknown/wasm-dev/fullstack-hello-world-example.wasm");
     // let prepared_out_bytes = prepare_wasm_base_module(pre_bytes).unwrap();
 
     let prepared_out_bytes = pre_bytes;

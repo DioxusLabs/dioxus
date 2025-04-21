@@ -1,5 +1,5 @@
 use super::*;
-use crate::{AppBuilder, BuildArgs, BuildMode, BuildRequest, Platform, Result, Workspace};
+use crate::{AppBuilder, BuildArgs, BuildId, BuildMode, BuildRequest, Platform, Result, Workspace};
 
 /// Run the project with the given arguments
 #[derive(Clone, Debug, Parser)]
@@ -30,7 +30,14 @@ impl RunArgs {
         // }
 
         builder
-            .open(devserver_ip, open_address, Some(fullstack_ip), true, false)
+            .open(
+                devserver_ip,
+                open_address,
+                Some(fullstack_ip),
+                true,
+                false,
+                BuildId(0),
+            )
             .await?;
 
         todo!();

@@ -1,6 +1,6 @@
-//! # BuildRequest - the core of the build process
+//! # [`BuildRequest`] - the core of the build process
 //!
-//! The BuildRequest object is the core of the build process. It contains all the resolved arguments
+//! The [`BuildRequest`] object is the core of the build process. It contains all the resolved arguments
 //! flowing in from the CLI, dioxus.toml, env vars, and the workspace.
 //!
 //! Every BuildRequest is tied to a given workspace and BuildArgs. For simplicity's sake, the BuildArgs
@@ -348,7 +348,7 @@ use target_lexicon::{
     Aarch64Architecture, Architecture, ArmArchitecture, BinaryFormat, Environment, OperatingSystem,
     Triple, Vendor, X86_32Architecture,
 };
-use tempfile::NamedTempFile;
+use tempfile::{NamedTempFile, TempDir};
 use tokio::{io::AsyncBufReadExt, process::Command};
 use toml_edit::Item;
 use uuid::Uuid;
@@ -372,8 +372,11 @@ use uuid::Uuid;
 #[derive(Clone)]
 pub(crate) struct BuildRequest {
     pub(crate) workspace: Arc<Workspace>,
+
     pub(crate) config: DioxusConfig,
+
     pub(crate) crate_package: NodeId,
+
     pub(crate) crate_target: krates::cm::Target,
 
     pub(crate) profile: String,
@@ -420,6 +423,8 @@ pub(crate) struct BuildRequest {
     pub(crate) inject_loading_scripts: bool,
 
     pub(crate) custom_linker: Option<PathBuf>,
+
+    pub(crate) session_cache_dir: Arc<TempDir>,
 
     pub(crate) link_args_file: Arc<NamedTempFile>,
 
@@ -672,6 +677,9 @@ impl BuildRequest {
             NamedTempFile::new()
                 .context("Failed to create temporary file for rustc wrapper args")?,
         );
+        let session_cache_dir = Arc::new(
+            TempDir::new().context("Failed to create temporary directory for session cache")?,
+        );
 
         let extra_rustc_args = shell_words::split(&args.rustc_args.clone().unwrap_or_default())
             .context("Failed to parse rustc args")?;
@@ -691,6 +699,7 @@ impl BuildRequest {
             custom_linker,
             link_args_file,
             link_err_file,
+            session_cache_dir,
             rustc_wrapper_args_file,
             extra_rustc_args,
             extra_cargo_args: args.cargo_args.clone(),
@@ -1573,8 +1582,6 @@ impl BuildRequest {
                         continue;
                     }
 
-                    tracing::trace!("Adding object file {:?} to archive", name);
-
                     out_ar
                         .append(&object_file.header().clone(), object_file)
                         .context("Failed to add object file to archive")?;
@@ -1865,70 +1872,62 @@ impl BuildRequest {
             //
             // This basically amounts of -all_load or --whole-archive, depending on the linker.
             // We just assume an ld-like interface on macos and a gnu-ld interface elsewhere.
-            match self.triple.operating_system {
-                // macOS/iOS use ld64 but through the `cc` interface.
-                OperatingSystem::Darwin(_) | OperatingSystem::MacOSX(_) => {
-                    // cargo_args.push("-Clink-args=-Wl,-all_load".to_string());
-                }
-
-                // Linux and Android fit under this umbrella, both with the same clang-like entrypoint
-                // and the gnu-ld interface.
-                OperatingSystem::Linux => {
-                    // cargo_args.push("-Clink-args=-Wl,--whole-archive".to_string());
-                }
-
-                // If windows -Wl,--whole-archive is required since it follows gnu-ld convention.
-                // There might be other flags on windows - we haven't tested windows thoroughly.
-                //
-                // https://learn.microsoft.com/en-us/cpp/build/reference/wholearchive-include-all-library-object-files?view=msvc-170
-                OperatingSystem::Windows => {
-                    // cargo_args.push("-Clink-args=-Wl,--whole-archive".to_string());
-                }
-
-                // if web, -Wl,--whole-archive is required since it follows gnu-ld convention.
-                //
-                // We also use --no-gc-sections and --export-table and --export-memory  to push
-                // said symbols into the export table.
-                //
-                // We use --emit-relocs to build up a solid call graph.
-                //
-                // rust uses its own wasm-ld linker which can be found here (it's just gcc-ld with a `-target wasm` flag):
-                // - ~/.rustup/toolchains/stable-aarch64-apple-darwin/lib/rustlib/aarch64-apple-darwin/bin/gcc-ld
-                // - ~/.rustup/toolchains/stable-aarch64-apple-darwin/lib/rustlib/aarch64-apple-darwin/bin/gcc-ld/wasm-ld
-                //
-                // Note that we can't use --export-all, unfortunately, since some symbols are internal
-                // to wasm-bindgen and exporting them causes the JS generation to fail.
-                //
-                // We are basically replicating what emscripten does here with its dynamic linking
-                // approach where the MAIN_MODULE is very "fat" and exports the necessary arguments
-                // for the side modules to be linked in. This guide is really helpful:
-                //
-                // https://github.com/WebAssembly/tool-conventions/blob/main/DynamicLinking.md
-                //
-                // The trickiest one here is -Crelocation-model=pic, which forces data symbols
-                // into a GOT, making it possible to import them from the main module.
-                //
-                // I think we can make relocation-model=pic work for non-wasm platforms, enabling
-                // fully relocatable modules with no host coordination in lieu of sending out
-                // the aslr slide at runtime.
-                OperatingSystem::Wasi | OperatingSystem::Unknown
-                    if self.platform == Platform::Web =>
-                {
-                    cargo_args.push("-Clink-arg=--no-gc-sections".into());
-                    cargo_args.push("-Clink-arg=--growable-table".into());
-                    cargo_args.push("-Clink-arg=--whole-archive".into());
-                    cargo_args.push("-Clink-arg=--export-table".into());
-                    cargo_args.push("-Clink-arg=--export-memory".into());
-                    cargo_args.push("-Clink-arg=--emit-relocs".into());
-                    cargo_args.push("-Clink-arg=--export=__stack_pointer".into());
-                    cargo_args.push("-Clink-arg=--export=__heap_base".into());
-                    cargo_args.push("-Clink-arg=--export=__data_end".into());
-                    cargo_args.push("-Crelocation-model=pic".into());
-                }
-
-                _ => {
-                    tracing::error!("Thin linking is not supported on this platform - hot patching might not work properly.");
-                }
+            //
+            // macOS/iOS use ld64 but through the `cc` interface.
+            // cargo_args.push("-Clink-args=-Wl,-all_load".to_string());
+            //
+            // Linux and Android fit under this umbrella, both with the same clang-like entrypoint
+            // and the gnu-ld interface.
+            //
+            // cargo_args.push("-Clink-args=-Wl,--whole-archive".to_string());
+            //
+            // If windows -Wl,--whole-archive is required since it follows gnu-ld convention.
+            // There might be other flags on windows - we haven't tested windows thoroughly.
+            //
+            // cargo_args.push("-Clink-args=-Wl,--whole-archive".to_string());
+            // https://learn.microsoft.com/en-us/cpp/build/reference/wholearchive-include-all-library-object-files?view=msvc-170
+            //
+            // ------------------------------------------------------------
+            //
+            // if web, -Wl,--whole-archive is required since it follows gnu-ld convention.
+            //
+            // We also use --no-gc-sections and --export-table and --export-memory  to push
+            // said symbols into the export table.
+            //
+            // We use --emit-relocs to build up a solid call graph.
+            //
+            // rust uses its own wasm-ld linker which can be found here (it's just gcc-ld with a `-target wasm` flag):
+            // - ~/.rustup/toolchains/stable-aarch64-apple-darwin/lib/rustlib/aarch64-apple-darwin/bin/gcc-ld
+            // - ~/.rustup/toolchains/stable-aarch64-apple-darwin/lib/rustlib/aarch64-apple-darwin/bin/gcc-ld/wasm-ld
+            //
+            // Note that we can't use --export-all, unfortunately, since some symbols are internal
+            // to wasm-bindgen and exporting them causes the JS generation to fail.
+            //
+            // We are basically replicating what emscripten does here with its dynamic linking
+            // approach where the MAIN_MODULE is very "fat" and exports the necessary arguments
+            // for the side modules to be linked in. This guide is really helpful:
+            //
+            // https://github.com/WebAssembly/tool-conventions/blob/main/DynamicLinking.md
+            //
+            // The trickiest one here is -Crelocation-model=pic, which forces data symbols
+            // into a GOT, making it possible to import them from the main module.
+            //
+            // I think we can make relocation-model=pic work for non-wasm platforms, enabling
+            // fully relocatable modules with no host coordination in lieu of sending out
+            // the aslr slide at runtime.
+            if self.platform == Platform::Web
+                || self.triple.operating_system == OperatingSystem::Wasi
+            {
+                cargo_args.push("-Clink-arg=--no-gc-sections".into());
+                cargo_args.push("-Clink-arg=--growable-table".into());
+                cargo_args.push("-Clink-arg=--whole-archive".into());
+                cargo_args.push("-Clink-arg=--export-table".into());
+                cargo_args.push("-Clink-arg=--export-memory".into());
+                cargo_args.push("-Clink-arg=--emit-relocs".into());
+                cargo_args.push("-Clink-arg=--export=__stack_pointer".into());
+                cargo_args.push("-Clink-arg=--export=__heap_base".into());
+                cargo_args.push("-Clink-arg=--export=__data_end".into());
+                cargo_args.push("-Crelocation-model=pic".into());
             }
         }
 
@@ -2407,9 +2406,7 @@ impl BuildRequest {
     ///
     /// The directory is specific for this app and might be
     pub(crate) fn session_cache_dir(&self) -> PathBuf {
-        self.internal_out_dir()
-            .join(self.executable_name())
-            .join("session-cache")
+        self.session_cache_dir.path().to_path_buf()
     }
 
     /// Get the outdir specified by the Dioxus.toml, relative to the crate directory.
@@ -3099,11 +3096,11 @@ impl BuildRequest {
             std::fs::write(&post_bindgen_wasm, modules.main.bytes)?;
         }
 
-        // // Make sure to optimize the main wasm file if requested or if bundle splitting
-        // if should_bundle_split || self.release {
-        //     ctx.status_optimizing_wasm();
-        //     wasm_opt::optimize(&post_bindgen_wasm, &post_bindgen_wasm, &wasm_opt_options).await?;
-        // }
+        // Make sure to optimize the main wasm file if requested or if bundle splitting
+        if should_bundle_split || self.release {
+            ctx.status_optimizing_wasm();
+            wasm_opt::optimize(&post_bindgen_wasm, &post_bindgen_wasm, &wasm_opt_options).await?;
+        }
 
         // Make sure to register the main wasm file with the asset system
         assets.register_asset(&post_bindgen_wasm, AssetOptions::Unknown)?;
@@ -3371,10 +3368,6 @@ impl BuildRequest {
         let cache_dir = self.session_cache_dir();
         _ = std::fs::remove_dir_all(&cache_dir);
         _ = std::fs::create_dir_all(&cache_dir);
-    }
-
-    pub(crate) fn incremental_cache_dir(&self) -> PathBuf {
-        self.platform_dir().join("incremental-cache")
     }
 
     /// Check for tooling that might be required for this build.

@@ -21,7 +21,7 @@ use tokio::{
     task::JoinHandle,
 };
 
-use super::{BuildContext, BuildMode};
+use super::{BuildContext, BuildId, BuildMode};
 
 /// The component of the serve engine that watches ongoing builds and manages their state, open handle,
 /// and progress.
@@ -379,13 +379,14 @@ impl AppBuilder {
         start_fullstack_on_address: Option<SocketAddr>,
         open_browser: bool,
         always_on_top: bool,
+        build_id: BuildId,
     ) -> Result<()> {
         let krate = &self.build;
 
         // Set the env vars that the clients will expect
         // These need to be stable within a release version (ie 0.6.0)
         let mut envs = vec![
-            // (dioxus_cli_config::CLI_ENABLED_ENV, "true".to_string()),
+            (dioxus_cli_config::CLI_ENABLED_ENV, "true".to_string()),
             (
                 dioxus_cli_config::DEVSERVER_IP_ENV,
                 devserver_ip.ip().to_string(),
@@ -394,10 +395,11 @@ impl AppBuilder {
                 dioxus_cli_config::DEVSERVER_PORT_ENV,
                 devserver_ip.port().to_string(),
             ),
-            // (
-            //     dioxus_cli_config::SESSION_CACHE_DIR,
-            //     self.build.session_cache_dir().display().to_string(),
-            // ),
+            (
+                dioxus_cli_config::SESSION_CACHE_DIR,
+                self.build.session_cache_dir().display().to_string(),
+            ),
+            (dioxus_cli_config::BUILD_ID, build_id.0.to_string()),
             // unset the cargo dirs in the event we're running `dx` locally
             // since the child process will inherit the env vars, we don't want to confuse the downstream process
             ("CARGO_MANIFEST_DIR", "".to_string()),
