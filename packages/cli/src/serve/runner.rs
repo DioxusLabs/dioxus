@@ -460,7 +460,6 @@ impl AppServer {
 
             self.clear_hot_reload_changes();
             self.clear_cached_rsx();
-            server.start_patch().await;
             server.send_patch_start().await;
         } else {
             let msg = HotReloadMsg {
