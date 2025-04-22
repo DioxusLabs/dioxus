@@ -12,13 +12,11 @@ resolver = "2"
 
 [dependencies]
 # server functions
-server_fn = { version = "0.8.0-rc1", features = ["browser"], default-features = false }
-dioxus_server_macro = { workspace = true }
+server_fn = { workspace = true, default-features = false }
 
 # axum
 axum = { workspace = true }
-tower-http = { workspace = true, features = ["fs"], optional = true}
-
+tower-http = { workspace = true, features = ["fs"], optional = true }
 dioxus-lib = { workspace = true }
 generational-box = { workspace = true }
 
@@ -28,7 +26,7 @@ dioxus-isrg = { workspace = true }
 dioxus-router = { workspace = true, features = ["streaming"] }
 dioxus-fullstack-hooks = { workspace = true }
 dioxus-fullstack-protocol = { workspace = true }
-dioxus-interpreter-js = { workspace = true, optional = true}
+dioxus-interpreter-js = { workspace = true, optional = true }
 hyper = { workspace = true }
 http = { workspace = true }
 
@@ -44,7 +42,7 @@ futures-util = { workspace = true }
 futures-channel = { workspace = true }
 ciborium = { workspace = true }
 base64 = { workspace = true }
-rustls = { workspace = true, optional = true}
+rustls = { workspace = true, optional = true }
 hyper-rustls = { workspace = true, optional = true }
 
 pin-project = { version = "1.1.2" }
@@ -53,16 +51,22 @@ bytes = "1.4.0"
 tower = { workspace = true, features = ["util"] }
 tower-layer = { version = "0.3.2" }
 parking_lot = { workspace = true, features = ["send_guard"] }
-web-sys = { version = "0.3.61", features = ["Window", "Document", "Element", "HtmlDocument", "Storage", "console"] }
+web-sys = { version = "0.3.61", features = [
+    "Window",
+    "Document",
+    "Element",
+    "HtmlDocument",
+    "Storage",
+    "console",
+] }
 
 dioxus-cli-config = { workspace = true }
-
-dioxus-devtools = { workspace = true, optional = true}
-aws-lc-rs = { version = "1.8.1", optional = true}
+dioxus-devtools = { workspace = true, optional = true }
+aws-lc-rs = { version = "1.8.1", optional = true }
 dioxus-history = { workspace = true }
 hyper-util = { workspace = true, features = ["full"] }
 subsecond.workspace = true
-inventory = { workspace =  true }
+inventory = { workspace = true }
 dashmap = "6.1.0"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
@@ -75,14 +79,23 @@ tokio = { workspace = true, features = ["rt", "sync", "rt-multi-thread"] }
 dioxus = { workspace = true, features = ["fullstack"] }
 
 [features]
-default = ["devtools", "document", "server_fn/axum", "dioxus-fullstack-hooks/server", "server_fn/ssr", "dep:tower-http"]
-# default = ["devtools", "document", "file_engine", "mounted"]
+default = [
+    "devtools",
+    "document",
+    "dioxus-fullstack-hooks/server",
+    "server_fn/axum",
+    "server_fn/ssr",
+    "dep:tower-http",
+]
 devtools = ["dep:dioxus-devtools"]
 document = ["dep:dioxus-interpreter-js"]
-# desktop = ["dep:dioxus-desktop", "server_fn/reqwest", "dioxus_server_macro/reqwest"]
-# mobile = ["dep:dioxus-mobile", "server_fn/reqwest", "dioxus_server_macro/reqwest"]
 default-tls = ["server_fn/default-tls"]
 rustls = ["server_fn/rustls", "dep:rustls", "dep:hyper-rustls"]
+aws-lc-rs = ["dep:aws-lc-rs"]
+
+# default = ["devtools", "document", "file_engine", "mounted"]
+# desktop = ["dep:dioxus-desktop", "server_fn/reqwest", "dioxus_server_macro/reqwest"]
+# mobile = ["dep:dioxus-mobile", "server_fn/reqwest", "dioxus_server_macro/reqwest"]
 # document = ["d"]
 # axum_core = [
 #     "dep:axum",
@@ -118,7 +131,6 @@ rustls = ["server_fn/rustls", "dep:rustls", "dep:hyper-rustls"]
 #     "dep:parking_lot",
 #     "dioxus-interpreter-js",
 # ]
-aws-lc-rs = ["dep:aws-lc-rs"]
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]

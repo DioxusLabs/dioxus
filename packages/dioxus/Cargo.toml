@@ -95,11 +95,12 @@ server = [
   "dep:dioxus-server",
   "dep:dioxus_server_macro",
   "dioxus_server_macro/server",
+  "dioxus_server_macro/axum",
   "ssr",
   "dioxus-liveview?/axum",
-  "dioxus-fullstack/server",
-  "dep:dioxus-fullstack",
-  "fullstack"
+  "dioxus-fullstack?/server",
+  # "dep:dioxus-fullstack",
+  # "fullstack"
 ]
 
 # This feature just disables the no-renderer-enabled warning

@@ -19,6 +19,7 @@ serde_json = { workspace = true }
 subsecond = { workspace = true }
 libloading = "0.8.3"
 libc = "0.2.155"
+thiserror = { workspace = true }
 
 # hot reloading serve
 tracing = { workspace = true }

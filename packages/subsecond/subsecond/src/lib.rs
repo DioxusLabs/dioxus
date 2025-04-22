@@ -532,8 +532,9 @@ pub unsafe fn apply_patch(mut table: JumpTable) -> Result<(), PatchError> {
     Ok(())
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, thiserror::Error)]
 pub enum PatchError {
+    #[error("Failed to load the patch")]
     CantLoadPatch,
 }
 

@@ -1933,6 +1933,13 @@ impl BuildRequest {
             }
         }
 
+        tracing::debug!(
+            "cargo args for {} - {}: {:#?}",
+            self.platform,
+            self.triple,
+            cargo_args
+        );
+
         cargo_args
     }
 

@@ -426,12 +426,9 @@ impl<T: Send + Sync + Clone + 'static> FromServerContext for FromContext<T> {
     }
 }
 
-#[cfg(feature = "axum")]
-#[cfg_attr(docsrs, doc(cfg(feature = "axum")))]
 /// An adapter for axum extractors for the server context
 pub struct Axum;
 
-#[cfg(feature = "axum")]
 #[async_trait::async_trait]
 impl<I: axum::extract::FromRequestParts<()>> FromServerContext<Axum> for I {
     type Rejection = I::Rejection;

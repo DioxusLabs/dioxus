@@ -383,9 +383,7 @@ fn static_items_merged() -> bool {
     fn a() {}
     fn b() {}
 
-    // a as fn() == b as fn()
-    // false
-    true
+    a as fn() == b as fn()
 }
 
 impl std::hash::Hash for Template {

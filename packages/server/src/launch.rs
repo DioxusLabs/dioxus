@@ -1,36 +1,30 @@
 //! A launch function that creates an axum router for the LaunchBuilder
 
-use std::{any::Any, collections::HashMap, net::SocketAddr};
-
+use crate::{
+    collect_raw_server_fns, render_handler, rt::DioxusRouterExt, RenderHandleState, SSRState,
+    ServeConfig, ServeConfigBuilder,
+};
 use axum::{
     body::Body,
     extract::{Request, State},
     response::IntoResponse,
     routing::IntoMakeService,
-    serve::IncomingStream,
 };
-use dashmap::DashMap;
 use dioxus_cli_config::base_path;
 use dioxus_devtools::DevserverMsg;
 use dioxus_lib::prelude::*;
-use futures_util::{pin_mut, stream::FusedStream, StreamExt};
+use futures_util::{stream::FusedStream, StreamExt};
 use hyper::body::Incoming;
 use hyper_util::server::conn::auto::Builder as HyperBuilder;
 use hyper_util::{
     rt::{TokioExecutor, TokioIo},
     service::TowerToHyperService,
 };
-use server_fn::ServerFnTraitObj;
+use std::{any::Any, collections::HashMap, net::SocketAddr};
 use tokio::net::TcpStream;
 use tokio_util::task::LocalPoolHandle;
 use tower::Service;
 use tower::ServiceExt as _;
-// use tower::{Service, ServiceExt};
-
-use crate::{
-    collect_raw_server_fns, register_server_fn_on_router, render_handler, rt::DioxusRouterExt,
-    RenderHandleState, SSRState, ServeConfig, ServeConfigBuilder,
-};
 
 type ContextList = Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync>>;
 
@@ -95,7 +89,13 @@ async fn serve_server(
     // and we use the generated address the CLI gives us
     let address = dioxus_cli_config::fullstack_address_or_localhost();
 
-    let router = axum::Router::new().serve_dioxus_application(cfg.clone(), root);
+    // Create the router and register the server functions under the basepath.
+    let router = apply_base_path(
+        axum::Router::new().serve_dioxus_application(cfg.clone(), root),
+        root,
+        cfg.clone(),
+        base_path().map(|s| s.to_string()),
+    );
 
     let task_pool = LocalPoolHandle::new(5);
     let mut make_service = router.into_make_service();
@@ -138,9 +138,6 @@ async fn serve_server(
                 match devserver_msg {
                     DevserverMsg::HotReload(hot_reload_msg) => {
                         if let Some(table) = hot_reload_msg.jump_table {
-                            use axum::body::Body;
-                            use http::{Method, Request, Response, StatusCode};
-
                             if let Ok(_) = unsafe { dioxus_devtools::subsecond::apply_patch(table) }
                             {
                                 let mut new_router = axum::Router::new().serve_static_assets();
@@ -166,18 +163,20 @@ async fn serve_server(
                                     );
                                 }
 
-                                let ssr_state = SSRState::new(&cfg);
+                                let state = RenderHandleState::new(cfg.clone(), root)
+                                    .with_ssr_state(SSRState::new(&cfg));
 
-                                make_service = new_router
-                                    .fallback(
-                                        axum::routing::get(render_handler).with_state(
-                                            RenderHandleState::new(cfg.clone(), root)
-                                                .with_ssr_state(ssr_state),
-                                        ),
-                                    )
-                                    .into_make_service();
+                                let fallback_handler =
+                                    axum::routing::get(render_handler).with_state(state);
 
-                                tracing::info!("Shutting down connections...");
+                                make_service = apply_base_path(
+                                    new_router.fallback(fallback_handler),
+                                    root,
+                                    cfg.clone(),
+                                    base_path().map(|s| s.to_string()),
+                                )
+                                .into_make_service();
+
                                 _ = shutdown_tx.send_modify(|i| {
                                     *i += 1;
                                     hr_idx += 1;
@@ -198,7 +197,7 @@ async fn serve_server(
 
                 let mut make_service = make_service.clone();
                 let mut shutdown_rx = shutdown_rx.clone();
-                let mut hr_idx = hr_idx.clone();
+                let this_hr_index = hr_idx.clone();
                 task_pool.spawn_pinned(move || async move {
                     let tcp_stream = TokioIo::new(tcp_stream);
 
@@ -226,7 +225,7 @@ async fn serve_server(
 
                     tokio::select! {
                         res = connection => {
-                            if let Err(err) = res {
+                            if let Err(_err) = res {
                                 // This error only appears when the client doesn't send a request and
                                 // terminate the connection.
                                 //
@@ -234,7 +233,7 @@ async fn serve_server(
                                 // appear.
                             }
                         }
-                        res = shutdown_rx.wait_for(|i| *i == hr_idx + 1) => {
+                        res = shutdown_rx.wait_for(|i| *i == this_hr_index + 1) => {
                             tracing::info!("Shutting down connection server: {res:?}");
                             return;
                         }
@@ -245,43 +244,34 @@ async fn serve_server(
     }
 }
 
-fn build_router(
+fn apply_base_path(
+    mut router: axum::Router,
     root: fn() -> Result<VNode, RenderError>,
-    platform_config: Result<ServeConfig, crate::UnableToLoadIndex>,
+    cfg: ServeConfig,
+    base_path: Option<String>,
 ) -> axum::Router {
-    let mut base_path = base_path();
+    if let Some(base_path) = base_path {
+        let base_path = base_path.trim_matches('/');
+        // If there is a base path, nest the router under it and serve the root route manually
+        // Nesting a route in axum only serves /base_path or /base_path/ not both
+        router = axum::Router::new().nest(&format!("/{base_path}/"), router);
 
-    let dioxus_router =
-        axum::Router::new().serve_dioxus_application(platform_config.unwrap(), root);
+        async fn root_render_handler(
+            state: State<RenderHandleState>,
+            mut request: Request<Body>,
+        ) -> impl IntoResponse {
+            // The root of the base path always looks like the root from dioxus fullstack
+            *request.uri_mut() = "/".parse().unwrap();
+            render_handler(state, request).await
+        }
 
-    let router = dioxus_router;
+        let ssr_state = SSRState::new(&cfg);
+        router = router.route(
+            &format!("/{base_path}"),
+            axum::routing::method_routing::get(root_render_handler)
+                .with_state(RenderHandleState::new(cfg, root).with_ssr_state(ssr_state)),
+        )
+    }
 
-    // let mut router;
-    // match base_path.as_deref() {
-    //     Some(base_path) => {
-    //         let base_path = base_path.trim_matches('/');
-    //         // If there is a base path, nest the router under it and serve the root route manually
-    //         // Nesting a route in axum only serves /base_path or /base_path/ not both
-    //         router = axum::Router::new().nest(&format!("/{base_path}/"), dioxus_router);
-    //         async fn root_render_handler(
-    //             state: State<RenderHandleState>,
-    //             mut request: Request<Body>,
-    //         ) -> impl IntoResponse {
-    //             // The root of the base path always looks like the root from dioxus fullstack
-    //             *request.uri_mut() = "/".parse().unwrap();
-    //             render_handler(state, request).await
-    //         }
-    //         if let Some(cfg) = config {
-    //             let ssr_state = SSRState::new(&cfg);
-    //             router = router.route(
-    //                 &format!("/{base_path}"),
-    //                 axum::routing::method_routing::get(root_render_handler).with_state(
-    //                     RenderHandleState::new(cfg, root).with_ssr_state(ssr_state),
-    //                 ),
-    //             )
-    //         }
-    //     }
-    //     None => router = dioxus_router,
-    // }
     router
 }

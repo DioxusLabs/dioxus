@@ -13,7 +13,8 @@ description = "Server function macros for Dioxus"
 proc-macro2 = { workspace = true }
 quote = { workspace = true }
 syn = { workspace = true, features = ["full"] }
-server_fn_macro = "0.8.0-rc1"
+server_fn_macro = { workspace = true }
+
 
 [dev-dependencies]
 dioxus = { workspace = true, features = ["fullstack"] }
@@ -25,6 +26,7 @@ axum = { workspace = true }
 proc-macro = true
 
 [features]
+default = []
 axum = ["server_fn_macro/axum"]
 server = ["server_fn_macro/ssr"]
 reqwest = ["server_fn_macro/reqwest"]

@@ -64,36 +64,14 @@ mod serve_config;
 mod server_context;
 mod streaming;
 
-pub(crate) use document::*;
-pub(crate) use launch::*;
-pub(crate) use render::*;
-pub(crate) use router::*;
-pub(crate) use rt::*;
 pub(crate) use serve_config::*;
-pub(crate) use server_context::*;
-pub(crate) use streaming::*;
 
-pub use launch::launch;
-
-// pub mod document;
-
-// #[cfg(feature = "axum")]
-// #[cfg_attr(docsrs, doc(cfg(feature = "axum")))]
-// pub use crate::server::*;
-
-// #[cfg(feature = "server")]
-// #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
-// pub use crate::render::{FullstackHTMLTemplate, SSRState};
-
-// #[cfg(feature = "server")]
-// #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
-// pub use crate::serve_config::{ServeConfig, ServeConfigBuilder};
-
-// #[cfg(feature = "axum")]
-// #[cfg_attr(docsrs, doc(cfg(feature = "axum")))]
-// pub use crate::server_context::Axum;
-
+pub use crate::render::{FullstackHTMLTemplate, SSRState};
+pub use crate::rt::*;
+pub use crate::serve_config::{ServeConfig, ServeConfigBuilder};
+pub use crate::server_context::Axum;
 pub use document::ServerDocument;
+pub use launch::launch;
 pub use serve_config::*;
 pub use server_context::{
     extract, server_context, with_server_context, DioxusServerContext, FromContext,

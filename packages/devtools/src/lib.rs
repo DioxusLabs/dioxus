@@ -5,10 +5,16 @@ use warnings::Warning;
 pub use dioxus_devtools_types::*;
 pub use subsecond;
 
+#[derive(Debug, Clone, PartialEq, thiserror::Error)]
+pub enum DevtoolsError {
+    #[error("Failed to load the patch: {0}")]
+    PatchFailed(#[from] subsecond::PatchError),
+}
+
 /// Applies template and literal changes to the VirtualDom
 ///
 /// Assets need to be handled by the renderer.
-pub fn apply_changes(dom: &VirtualDom, msg: &HotReloadMsg) -> Result<(), subsecond::PatchError> {
+pub fn apply_changes(dom: &VirtualDom, msg: &HotReloadMsg) -> Result<(), DevtoolsError> {
     dom.runtime().on_scope(ScopeId::ROOT, || {
         // 1. Update signals...
         let ctx = dioxus_signals::get_global_context();

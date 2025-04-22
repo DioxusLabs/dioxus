@@ -10,7 +10,7 @@ use axum::{
 };
 use dioxus_lib::prelude::{Element, VirtualDom};
 use http::header::*;
-use server_fn::{middleware::BoxedService, ServerFnTraitObj};
+use server_fn::ServerFnTraitObj;
 use std::sync::Arc;
 
 /// A extension trait with utilities for integrating Dioxus with your Axum router.

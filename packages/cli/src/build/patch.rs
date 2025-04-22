@@ -768,15 +768,6 @@ fn parse_bytes_to_data_segment(bytes: &[u8]) -> Result<RawDataSection> {
     })
 }
 
-struct SymbolMap<'a> {
-    symbols: Vec<SymbolInfo<'a>>,
-}
-
-enum Node {
-    Function(FunctionId),
-    Data(usize),
-}
-
 async fn attempt_partial_link(proc_main_addr: u64, patch_target: PathBuf, out_path: PathBuf) {
     let mut object = ObjectDiff::new().unwrap();
     object.load().unwrap();

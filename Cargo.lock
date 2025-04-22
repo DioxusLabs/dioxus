@@ -2620,9 +2620,9 @@ dependencies = [
 
 [[package]]
 name = "const-str"
-version = "0.5.7"
+version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3618cccc083bb987a415d85c02ca6c9994ea5b44731ec28b9ecf09658655fba9"
+checksum = "9e991226a70654b49d34de5ed064885f0bef0348a8e70018b8ff1ac80aa984a2"
 
 [[package]]
 name = "const-str-proc-macro"
@@ -3938,6 +3938,7 @@ dependencies = [
  "serde",
  "serde_json",
  "subsecond",
+ "thiserror 2.0.12",
  "tokio",
  "tracing",
  "tungstenite 0.26.2",
@@ -4448,7 +4449,6 @@ dependencies = [
  "dioxus-lib",
  "dioxus-router",
  "dioxus-ssr",
- "dioxus_server_macro",
  "futures-channel",
  "futures-util",
  "generational-box",
@@ -12151,13 +12151,13 @@ dependencies = [
 
 [[package]]
 name = "serde_qs"
-version = "0.13.0"
+version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cd34f36fe4c5ba9654417139a9b3a20d2e1de6012ee678ad14d240c22c78d8d6"
+checksum = "8b417bedc008acbdf6d6b4bc482d29859924114bbe2650b7921fb68a261d0aa6"
 dependencies = [
  "percent-encoding",
  "serde",
- "thiserror 1.0.69",
+ "thiserror 2.0.12",
 ]
 
 [[package]]
@@ -12237,14 +12237,14 @@ dependencies = [
 
 [[package]]
 name = "server_fn"
-version = "0.8.0-rc1"
+version = "0.8.0-rc2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4b279618eba9bf2298336a6b5f72c84bee46a5a76ad048a5763b552d69393988"
+checksum = "382f52442c967ec604c643250dd64973036be257872b928127b444db4c7ff90c"
 dependencies = [
  "axum 0.8.3",
  "base64 0.22.1",
  "bytes",
- "const-str 0.5.7",
+ "const-str 0.6.2",
  "const_format",
  "dashmap 6.1.0",
  "futures",
@@ -12279,12 +12279,12 @@ dependencies = [
 
 [[package]]
 name = "server_fn_macro"
-version = "0.8.0-rc1"
+version = "0.8.0-rc2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "40c805d4055915c94d1b168bec37afc9fadcfd7c17798c63259e303667076a67"
+checksum = "e2b25202696036a77664e49420e189a96e5af3a8583b5b770debdc8c1dc73ac5"
 dependencies = [
  "const_format",
- "convert_case 0.6.0",
+ "convert_case 0.8.0",
  "proc-macro2",
  "quote",
  "rustc_version 0.4.1",
@@ -12294,9 +12294,9 @@ dependencies = [
 
 [[package]]
 name = "server_fn_macro_default"
-version = "0.8.0-rc1"
+version = "0.8.0-rc2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e63085deb77b447034fd865a7a054c0a234bd1ce93c9cf13dd02e0138773930f"
+checksum = "4753763e785a383bf0630d6e8694610545bb194c94d3c042c95fa6fc7be70dfb"
 dependencies = [
  "server_fn_macro",
  "syn 2.0.100",

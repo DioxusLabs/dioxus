@@ -163,7 +163,7 @@ fn make_ws(tx: UnboundedSender<HotReloadMsg>, poll_interval: i32, reload: bool) 
             if reload {
                 window().unwrap().location().reload().unwrap();
             } else {
-                ws_tx.send_with_str(
+                _ = ws_tx.send_with_str(
                     &serde_json::to_string(&ClientMsg::Initialize {
                         build_id: dioxus_cli_config::build_id(),
                         aslr_reference: dioxus_devtools::subsecond::aslr_reference() as _,
@@ -209,16 +209,6 @@ impl Display for ToastLevel {
     }
 }
 
-pub(crate) fn close_toast() {
-    js_sys::eval(
-        r#"
-            if (typeof closeDXToast !== "undefined") {
-                window.closeDXToast();
-            }
-        "#,
-    );
-}
-
 /// Displays a toast to the developer.
 pub(crate) fn show_toast(
     header_text: &str,
@@ -234,7 +224,7 @@ pub(crate) fn show_toast(
         false => "showDXToast",
     };
 
-    js_sys::eval(&format!(
+    _ = js_sys::eval(&format!(
         r#"
             if (typeof {js_fn_name} !== "undefined") {{
                 window.{js_fn_name}("{header_text}", "{message}", "{level}", {as_ms});
