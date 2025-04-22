@@ -34,16 +34,14 @@
 
                 display: grid;
                 grid-template-columns: auto auto;
-                min-width: 280px;
-                min-height: 92px;
-                width: min-content;
-                border-radius: 5px;
-
+                max-width: 300px;
+                min-height: 56px;
+                border-radius: 3px;
             }
 
-            .dx-toast:hover {
+            .dx-toast .dx-toast-inner {
                 cursor: pointer;
-                transform: translateX(-5px);
+                margin-right: 10px;
             }
 
             .dx-toast .dx-toast-level-bar-container {
@@ -58,7 +56,7 @@
             }
 
             .dx-toast .dx-toast-content {
-                padding: 13px;
+                padding: 8px;
             }
 
             .dx-toast .dx-toast-header {
@@ -66,7 +64,7 @@
                 flex-direction: row;
                 justify-content: start;
                 align-items: end;
-                margin-bottom: 13px;
+                margin-bottom: 10px;
             }
 
             .dx-toast .dx-toast-header>svg {
@@ -75,14 +73,14 @@
             }
 
             .dx-toast .dx-toast-header .dx-toast-header-text {
-                font-size: 16px;
+                font-size: 14px;
                 font-weight: 700;
                 padding: 0;
                 margin: 0;
             }
 
             .dx-toast .dx-toast-msg {
-                font-size: 14px;
+                font-size: 11px;
                 font-weight: 400;
                 padding: 0;
                 margin: 0;
