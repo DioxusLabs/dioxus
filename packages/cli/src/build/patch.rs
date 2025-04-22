@@ -298,14 +298,6 @@ fn create_wasm_jump_table(original: &Path, patch: &Path) -> anyhow::Result<JumpT
 }
 
 fn collect_func_ifuncs<'a>(m: &'a Module, syms: &'a [SymbolInfo<'a>]) -> HashMap<&'a str, i32> {
-    // name -> index
-    // we want to export *all* these functions
-    let namemap = fn_name_map(syms);
-    let mut indexes_to_names = HashMap::<WrongFnIndex, Vec<&str>>::new();
-    for (n, i) in namemap.iter() {
-        indexes_to_names.entry(*i).or_default().push(*n);
-    }
-
     let mut offsets = HashMap::new();
 
     for el in m.elements.iter() {
@@ -341,19 +333,6 @@ fn collect_func_ifuncs<'a>(m: &'a Module, syms: &'a [SymbolInfo<'a>]) -> HashMap
     }
 
     offsets
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-struct WrongFnIndex(u32);
-fn fn_name_map<'a>(syms: &[SymbolInfo<'a>]) -> HashMap<&'a str, WrongFnIndex> {
-    let all_funcs = syms
-        .iter()
-        .flat_map(|sym| match sym {
-            SymbolInfo::Func { index, name, .. } => Some((name.unwrap(), WrongFnIndex(*index))),
-            _ => None,
-        })
-        .collect::<HashMap<_, _>>();
-    all_funcs
 }
 
 /// Resolve the undefined symbols in the incrementals against the original binary, returning an object

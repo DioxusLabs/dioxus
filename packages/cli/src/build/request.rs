@@ -206,7 +206,7 @@
 //! Notice that we *could* feasibly build this ourselves :)
 //!
 //! ### Windows:
-//! https://superuser.com/questions/749447/creating-a-single-file-executable-from-a-directory-in-windows
+//! <https://superuser.com/questions/749447/creating-a-single-file-executable-from-a-directory-in-windows>
 //! Windows does not provide an AppImage format, so instead we're going build the same folder
 //! structure as an AppImage, but when distributing, we'll create a .exe that embeds the resources
 //! as an embedded .zip file. When the app runs, it will implicitly unzip its resources into the
@@ -309,11 +309,11 @@
 //! The idea here is that we can run any of the programs in the same way that they're deployed.
 //!
 //! ## Bundle structure links
-//! - apple: https://developer.apple.com/documentation/bundleresources/placing_content_in_a_bundle
-//! - appimage: https://docs.appimage.org/packaging-guide/manual.html#ref-manual
+//! - apple: <https>://developer.apple.com/documentation/bundleresources/placing_content_in_a_bundle>
+//! - appimage: <https>://docs.appimage.org/packaging-guide/manual.html#ref-manual>
 //!
 //! ## Extra links
-//! - xbuild: https://github.com/rust-mobile/xbuild/blob/master/xbuild/src/command/build.rs
+//! - xbuild: <https://github.com/rust-mobile/xbuild/blob/master/xbuild/src/command/build.rs>
 
 use super::{android_tools, AndroidTools, BuildContext, BuildId};
 use crate::{
@@ -1491,7 +1491,7 @@ impl BuildRequest {
     /// is taken into account. This is the same work that the rust compiler does when assembling
     /// staticlibs.
     ///
-    /// https://github.com/rust-lang/rust/blob/191df20fcad9331d3a948aa8e8556775ec3fe69d/compiler/rustc_codegen_ssa/src/back/link.rs#L448
+    /// <https://github.com/rust-lang/rust/blob/191df20fcad9331d3a948aa8e8556775ec3fe69d/compiler/rustc_codegen_ssa/src/back/link.rs#L448>
     ///
     /// Since we're going to be passing these to the linker, we need to make sure and not provide any
     /// weird files (like the rmeta) file that rustc generates.
@@ -1499,11 +1499,11 @@ impl BuildRequest {
     /// We discovered the need for this after running into issues with wasm-ld not being able to
     /// handle the rmeta file.
     ///
-    /// https://github.com/llvm/llvm-project/issues/55786
+    /// <https://github.com/llvm/llvm-project/issues/55786>
     ///
     /// Also, crates might not drag in all their dependent code. The monorphizer won't lift trait-based generics:
     ///
-    /// https://github.com/rust-lang/rust/blob/191df20fcad9331d3a948aa8e8556775ec3fe69d/compiler/rustc_monomorphize/src/collector.rs
+    /// <https://github.com/rust-lang/rust/blob/191df20fcad9331d3a948aa8e8556775ec3fe69d/compiler/rustc_monomorphize/src/collector.rs>
     ///
     /// When Rust normally handles this, it uses the +whole-archive directive which adjusts how the rlib
     /// is written to disk.
@@ -2057,7 +2057,7 @@ impl BuildRequest {
     /// Get an estimate of the number of units in the crate. If nightly rustc is not available, this
     /// will return an estimate of the number of units in the crate based on cargo metadata.
     ///
-    /// TODO: always use https://doc.rust-lang.org/nightly/cargo/reference/unstable.html#unit-graph once it is stable
+    /// TODO: always use <https://doc.rust-lang.org/nightly/cargo/reference/unstable.html#unit-graph> once it is stable
     async fn get_unit_count_estimate(&self, ctx: &BuildContext) -> usize {
         // Try to get it from nightly
         if let Ok(count) = self.get_unit_count(ctx).await {
@@ -3179,7 +3179,7 @@ impl BuildRequest {
 
     /// Run bundleRelease and return the path to the `.aab` file
     ///
-    /// https://stackoverflow.com/questions/57072558/whats-the-difference-between-gradlewassemblerelease-gradlewinstallrelease-and
+    /// <https://stackoverflow.com/questions/57072558/whats-the-difference-between-gradlewassemblerelease-gradlewinstallrelease-and>
     pub(crate) async fn android_gradle_bundle(&self) -> Result<PathBuf> {
         let output = Command::new(self.gradle_exe()?)
             .arg("bundleRelease")
@@ -3488,7 +3488,7 @@ impl BuildRequest {
     /// This varies by distro, so we just do nothing for now.
     ///
     /// Eventually, we want to check for the prereqs for wry/tao as outlined by tauri:
-    ///     https://tauri.app/start/prerequisites/
+    ///     <https://tauri.app/start/prerequisites/>
     async fn verify_linux_tooling(&self) -> Result<()> {
         Ok(())
     }

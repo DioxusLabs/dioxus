@@ -305,9 +305,10 @@ impl Bundle {
         Ok(bundles)
     }
 
-    // During SSG, just serve the static files instead of running the server
-    // _ => builds[0].fullstack && !self.build_arguments.ssg,
     pub(crate) async fn pre_render_static_routes(server_exe: &Path) -> anyhow::Result<()> {
+        // During SSG, just serve the static files instead of running the server
+        // _ => builds[0].fullstack && !self.build_arguments.ssg,
+
         // Use the address passed in through environment variables or default to localhost:9999. We need
         // to default to a value that is different than the CLI default address to avoid conflicts
         let ip = server_ip().unwrap_or_else(|| IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)));

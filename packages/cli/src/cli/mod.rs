@@ -92,7 +92,7 @@ pub(crate) enum Commands {
     Config(config::Config),
 
     /// Build the assets for a specific target.
-    #[clap(name = "build_assets")]
+    #[clap(name = "assets")]
     BuildAssets(build_assets::BuildAssets),
 }
 

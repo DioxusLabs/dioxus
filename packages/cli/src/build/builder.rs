@@ -416,19 +416,27 @@ impl AppBuilder {
                 devserver_ip.port().to_string(),
             ),
             (
+                dioxus_cli_config::APP_TITLE_ENV,
+                krate.config.web.app.title.clone(),
+            ),
+            (
                 dioxus_cli_config::SESSION_CACHE_DIR,
                 self.build.session_cache_dir().display().to_string(),
             ),
             (dioxus_cli_config::BUILD_ID, build_id.0.to_string()),
+            (
+                dioxus_cli_config::ALWAYS_ON_TOP_ENV,
+                always_on_top.to_string(),
+            ),
             // unset the cargo dirs in the event we're running `dx` locally
             // since the child process will inherit the env vars, we don't want to confuse the downstream process
             ("CARGO_MANIFEST_DIR", "".to_string()),
             ("RUST_BACKTRACE", "1".to_string()),
         ];
 
-        // if let Some(base_path) = &krate.config.web.app.base_path {
-        //     envs.push((dioxus_cli_config::ASSET_ROOT_ENV, base_path.clone()));
-        // }
+        if let Some(base_path) = &krate.config.web.app.base_path {
+            envs.push((dioxus_cli_config::ASSET_ROOT_ENV, base_path.clone()));
+        }
 
         if let Some(env_filter) = env::var_os("RUST_LOG").and_then(|e| e.into_string().ok()) {
             envs.push(("RUST_LOG", env_filter));

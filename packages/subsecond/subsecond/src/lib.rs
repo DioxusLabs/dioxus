@@ -199,7 +199,7 @@
 use std::{
     backtrace,
     mem::transmute,
-    panic::{panic_any, AssertUnwindSafe, UnwindSafe},
+    panic::AssertUnwindSafe,
     sync::{Arc, Mutex},
 };
 
@@ -339,9 +339,7 @@ impl<A, M, F: HotFunction<A, M>> HotFn<A, M, F> {
 }
 
 pub fn register_handler(handler: Arc<dyn Fn() + Send + Sync + 'static>) {
-    unsafe {
-        HOTRELOAD_HANDLERS.lock().unwrap().push(handler);
-    }
+    HOTRELOAD_HANDLERS.lock().unwrap().push(handler);
 }
 
 /// Apply the patch using a given jump table.
@@ -750,17 +748,17 @@ macro_rules! impl_hot_function {
                             // If we leave the tag, then indexing our jump table will fail and patching won't work (or crash!)
                             // This is only implemented on 64-bit platforms since pointer tagging is not available on 32-bit platforms
                             // In dev, Dioxus disables MTE to work around this issue, but we still handle it anyways.
-                            #[cfg(target_pointer_width = "64")] let nibble  = real as u64 & 0xFF00_0000_0000_0000;
+                            #[cfg(all(target_pointer_width = "64", target_os = "android"))] let nibble  = real as u64 & 0xFF00_0000_0000_0000;
                             #[cfg(target_pointer_width = "64")] let real    = real as u64 & 0x00FFF_FFF_FFFF_FFFF;
 
                             #[cfg(target_pointer_width = "64")] let real  = real as u64;
 
-                            // No nibble on 32-bit platforms, but we still need to assume u64 since the host always writes 64-bit pointers
+                            // No nibble on 32-bit platforms, but we still need to assume u64 since the host always writes 64-bit addresses
                             #[cfg(target_pointer_width = "32")] let real = real as u64;
 
                             if let Some(ptr) = jump_table.map.get(&real).cloned() {
                                 // Re-apply the nibble - though this might not be required (we aren't calling malloc for a new pointer)
-                                // #[cfg(target_pointer_width = "64")] let ptr: u64 = ptr | nibble;
+                                #[cfg(all(target_pointer_width = "64", target_os = "android"))] let ptr: u64 = ptr | nibble;
 
                                 #[cfg(target_pointer_width = "64")] let ptr: u64 = ptr;
                                 #[cfg(target_pointer_width = "32")] let ptr: u32 = ptr as u32;

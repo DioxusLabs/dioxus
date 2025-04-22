@@ -1,14 +1,13 @@
 use super::{AppBuilder, ServeUpdate, WebServer};
 use crate::{
-    chained::ChainedCommand, AddressArguments, BuildArgs, BuildArtifacts, BuildId, BuildMode,
-    BuildRequest, Platform, Result, ServeArgs, TargetCmd, TraceSrc, Workspace,
+    BuildArtifacts, BuildId, BuildMode, BuildRequest, Platform, Result, ServeArgs, TargetCmd,
+    TraceSrc, Workspace,
 };
 use anyhow::Context;
 use axum::extract::ws::Message as WsMessage;
 use dioxus_core::internal::{
     HotReloadTemplateWithLocation, HotReloadedTemplate, TemplateGlobalKey,
 };
-use dioxus_core_types::HotReloadingContext;
 use dioxus_devtools_types::ClientMsg;
 use dioxus_devtools_types::HotReloadMsg;
 use dioxus_dx_wire_format::BuildStage;
@@ -16,27 +15,23 @@ use dioxus_html::HtmlCtx;
 use dioxus_rsx::CallBody;
 use dioxus_rsx_hotreload::{ChangedRsx, HotReloadResult};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
+use futures_util::future::OptionFuture;
 use futures_util::StreamExt;
-use futures_util::{future::OptionFuture, pin_mut};
-use ignore::gitignore::Gitignore;
 use krates::NodeId;
 use notify::{
     event::{MetadataKind, ModifyKind},
     Config, EventKind, RecursiveMode, Watcher as NotifyWatcher,
 };
+use std::time::SystemTime;
 use std::{
     collections::{HashMap, HashSet},
-    net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener},
+    net::{IpAddr, TcpListener},
     path::PathBuf,
-    process::Stdio,
-    str::FromStr,
     sync::Arc,
     time::Duration,
 };
-use std::{path::Path, time::SystemTime};
 use subsecond_types::JumpTable;
 use syn::spanned::Spanned;
-use target_lexicon::Triple;
 use tokio::process::Command;
 
 /// This is the primary "state" object that holds the builds and handles for the running apps.
@@ -54,7 +49,7 @@ pub(crate) struct AppServer {
 
     // Related to to the filesystem watcher
     pub(crate) watcher: Box<dyn notify::Watcher>,
-    pub(crate) watcher_tx: UnboundedSender<notify::Event>,
+    pub(crate) _watcher_tx: UnboundedSender<notify::Event>,
     pub(crate) watcher_rx: UnboundedReceiver<notify::Event>,
 
     // Tracked state related to open builds and hot reloading
@@ -65,10 +60,10 @@ pub(crate) struct AppServer {
     pub(crate) use_hotpatch_engine: bool,
     pub(crate) automatic_rebuilds: bool,
     pub(crate) interactive: bool,
-    pub(crate) force_sequential: bool,
+    pub(crate) _force_sequential: bool,
     pub(crate) hot_reload: bool,
     pub(crate) open_browser: bool,
-    pub(crate) wsl_file_poll_interval: u16,
+    pub(crate) _wsl_file_poll_interval: u16,
     pub(crate) always_on_top: bool,
     pub(crate) fullstack: bool,
     pub(crate) watch_fs: bool,
@@ -238,7 +233,7 @@ impl AppServer {
             server,
             hot_reload,
             open_browser,
-            wsl_file_poll_interval,
+            _wsl_file_poll_interval: wsl_file_poll_interval,
             always_on_top,
             workspace,
             devserver_port,
@@ -246,9 +241,9 @@ impl AppServer {
             proxied_port,
             watcher,
             watcher_rx,
-            watcher_tx,
+            _watcher_tx: watcher_tx,
             interactive,
-            force_sequential,
+            _force_sequential: force_sequential,
             cross_origin_policy,
             fullstack,
         };
@@ -611,6 +606,124 @@ impl AppServer {
         }
     }
 
+    /// Perform a full rebuild of the app, equivalent to `cargo rustc` from scratch with no incremental
+    /// hot-patch engine integration.
+    pub(crate) async fn full_rebuild(&mut self) {
+        let build_mode = match self.use_hotpatch_engine {
+            true => BuildMode::Fat,
+            false => BuildMode::Base,
+        };
+
+        self.client.start_rebuild(build_mode.clone());
+        self.server.as_mut().map(|s| s.start_rebuild(build_mode));
+
+        self.clear_hot_reload_changes();
+        self.clear_cached_rsx();
+    }
+
+    pub(crate) async fn patch(&mut self, res: &BuildArtifacts) -> Result<JumpTable> {
+        let client = match res.platform {
+            Platform::Server => &self.server.as_ref().unwrap(),
+            _ => &self.client,
+        };
+
+        let original = client.build.main_exe();
+        let new = client.build.patch_exe(res.time_start);
+        let triple = client.build.triple.clone();
+
+        tracing::debug!("Patching {} -> {}", original.display(), new.display());
+
+        let mut jump_table = crate::build::create_jump_table(&original, &new, &triple).unwrap();
+
+        // If it's android, we need to copy the assets to the device and then change the location of the patch
+        if client.build.platform == Platform::Android {
+            jump_table.lib = client
+                .copy_file_to_android_tmp(&new, &(PathBuf::from(new.file_name().unwrap())))
+                .await?;
+        }
+
+        // Rebase the wasm binary to be relocatable once the jump table is generated
+        if triple.architecture == target_lexicon::Architecture::Wasm32 {
+            // Make sure we use the dir relative to the public dir, so the web can load it as a proper URL
+            //
+            // ie we would've shipped `/Users/foo/Projects/dioxus/target/dx/project/debug/web/public/wasm/lib.wasm`
+            //    but we want to ship `/wasm/lib.wasm`
+            jump_table.lib = jump_table
+                .lib
+                .strip_prefix(&client.build.root_dir())
+                .unwrap()
+                .to_path_buf();
+        }
+
+        let changed_files = match &res.mode {
+            BuildMode::Thin { changed_files, .. } => changed_files.clone(),
+            _ => vec![],
+        };
+
+        let changed_file = changed_files.first().unwrap();
+        tracing::info!(
+            "Hot-patching: {} took {:?}ms",
+            changed_file
+                .strip_prefix(std::env::current_dir().unwrap())
+                .unwrap_or_else(|_| changed_file.as_path())
+                .display(),
+            SystemTime::now()
+                .duration_since(res.time_start)
+                .unwrap()
+                .as_millis()
+        );
+
+        // Save this patch
+        self.client.patches.push(jump_table.clone());
+
+        Ok(jump_table)
+    }
+
+    /// Handles incoming WebSocket messages from the client.
+    ///
+    /// This function processes messages sent by the client over the WebSocket connection. We only
+    /// handle text messages, and we expect them to be in JSON format.
+    ///
+    /// Specifically, it handles the initialization message to set the Address Space Layout Randomization (ASLR) reference offset.
+    ///
+    /// For WebAssembly (Wasm) targets, ASLR is not used, so this value is ignored.
+    pub(crate) async fn handle_ws_message(&mut self, msg: &WsMessage) -> Result<()> {
+        let as_text = msg
+            .to_text()
+            .context("client message not proper encoding")?;
+
+        if as_text.is_empty() {
+            return Ok(());
+        }
+
+        match serde_json::from_str::<ClientMsg>(as_text) {
+            Ok(ClientMsg::Initialize {
+                aslr_reference,
+                build_id,
+            }) => {
+                tracing::debug!(
+                    "Setting aslr_reference: {aslr_reference} for build_id: {build_id}"
+                );
+                match build_id {
+                    0 => {
+                        self.client.aslr_reference = Some(aslr_reference);
+                    }
+                    _ => {
+                        if let Some(server) = self.server.as_mut() {
+                            server.aslr_reference = Some(aslr_reference);
+                        }
+                    }
+                }
+            }
+            Ok(_client) => {}
+            Err(err) => {
+                tracing::error!(dx_src = ?TraceSrc::Dev, "Error parsing message from {}: {} -> {}", Platform::Web, err, as_text);
+            }
+        };
+
+        Ok(())
+    }
+
     pub(crate) fn get_build(&self, id: BuildId) -> Option<&AppBuilder> {
         match id {
             BuildId::CLIENT => Some(&self.client),
@@ -729,7 +842,6 @@ impl AppServer {
             let path = entry.path();
             if path.extension().and_then(|s| s.to_str()) == Some("rs") {
                 if let Ok(contents) = std::fs::read_to_string(&path) {
-                    // if let Ok(path) = path.strip_prefix(self.workspace.workspace_dir()) {
                     self.file_map.insert(
                         path.to_path_buf(),
                         CachedFile {
@@ -738,7 +850,6 @@ impl AppServer {
                             templates: Default::default(),
                         },
                     );
-                    // }
                 }
             }
         }
@@ -749,116 +860,13 @@ impl AppServer {
     /// Removes any cached templates and replaces the contents of the files with the most recent
     ///
     /// todo: we should-reparse the contents so we never send a new version, ever
-    pub(crate) fn clear_cached_rsx(&mut self) {
+    fn clear_cached_rsx(&mut self) {
         for cached_file in self.file_map.values_mut() {
             if let Some(most_recent) = cached_file.most_recent.take() {
                 cached_file.contents = most_recent;
             }
             cached_file.templates.clear();
         }
-    }
-
-    pub(crate) async fn patch(&mut self, res: &BuildArtifacts) -> Result<JumpTable> {
-        let client = match res.platform {
-            Platform::Server => &self.server.as_ref().unwrap(),
-            _ => &self.client,
-        };
-
-        let original = client.build.main_exe();
-        let new = client.build.patch_exe(res.time_start);
-        let triple = client.build.triple.clone();
-
-        tracing::debug!("Patching {} -> {}", original.display(), new.display());
-
-        let mut jump_table = crate::build::create_jump_table(&original, &new, &triple).unwrap();
-
-        // If it's android, we need to copy the assets to the device and then change the location of the patch
-        if client.build.platform == Platform::Android {
-            jump_table.lib = client
-                .copy_file_to_android_tmp(&new, &(PathBuf::from(new.file_name().unwrap())))
-                .await?;
-        }
-
-        // Rebase the wasm binary to be relocatable once the jump table is generated
-        if triple.architecture == target_lexicon::Architecture::Wasm32 {
-            // Make sure we use the dir relative to the public dir, so the web can load it as a proper URL
-            //
-            // ie we would've shipped `/Users/foo/Projects/dioxus/target/dx/project/debug/web/public/wasm/lib.wasm`
-            //    but we want to ship `/wasm/lib.wasm`
-            jump_table.lib = jump_table
-                .lib
-                .strip_prefix(&client.build.root_dir())
-                .unwrap()
-                .to_path_buf();
-        }
-
-        let changed_files = match &res.mode {
-            BuildMode::Thin { changed_files, .. } => changed_files.clone(),
-            _ => vec![],
-        };
-
-        let changed_file = changed_files.first().unwrap();
-        tracing::info!(
-            "Hot-patching: {} took {:?}ms",
-            changed_file
-                .strip_prefix(std::env::current_dir().unwrap())
-                .unwrap_or_else(|_| changed_file.as_path())
-                .display(),
-            SystemTime::now()
-                .duration_since(res.time_start)
-                .unwrap()
-                .as_millis()
-        );
-
-        // Save this patch
-        self.client.patches.push(jump_table.clone());
-
-        Ok(jump_table)
-    }
-
-    /// Handles incoming WebSocket messages from the client.
-    ///
-    /// This function processes messages sent by the client over the WebSocket connection. We only
-    /// handle text messages, and we expect them to be in JSON format.
-    ///
-    /// Specifically, it handles the initialization message to set the Address Space Layout Randomization (ASLR) reference offset.
-    ///
-    /// For WebAssembly (Wasm) targets, ASLR is not used, so this value is ignored.
-    pub(crate) async fn handle_ws_message(&mut self, msg: &WsMessage) -> Result<()> {
-        let as_text = msg
-            .to_text()
-            .context("client message not proper encoding")?;
-
-        if as_text.is_empty() {
-            return Ok(());
-        }
-
-        match serde_json::from_str::<ClientMsg>(as_text) {
-            Ok(ClientMsg::Initialize {
-                aslr_reference,
-                build_id,
-            }) => {
-                tracing::debug!(
-                    "Setting aslr_reference: {aslr_reference} for build_id: {build_id}"
-                );
-                match build_id {
-                    0 => {
-                        self.client.aslr_reference = Some(aslr_reference);
-                    }
-                    _ => {
-                        if let Some(server) = self.server.as_mut() {
-                            server.aslr_reference = Some(aslr_reference);
-                        }
-                    }
-                }
-            }
-            Ok(_client) => {}
-            Err(err) => {
-                tracing::error!(dx_src = ?TraceSrc::Dev, "Error parsing message from {}: {} -> {}", Platform::Web, err, as_text);
-            }
-        };
-
-        Ok(())
     }
 
     fn watch_filesystem(&mut self) {
@@ -892,7 +900,7 @@ impl AppServer {
     }
 
     /// Return the list of paths that we should watch for changes.
-    pub(crate) fn watch_paths(&self, crate_dir: PathBuf, crate_package: NodeId) -> Vec<PathBuf> {
+    fn watch_paths(&self, crate_dir: PathBuf, crate_package: NodeId) -> Vec<PathBuf> {
         let mut watched_paths = vec![];
 
         // Get a list of *all* the crates with Rust code that we need to watch.
@@ -936,7 +944,7 @@ impl AppServer {
     /// - the assets directory - this is so we can hotreload CSS and other assets by default
     /// - the Cargo.toml file - this is so we can hotreload the project if the user changes dependencies
     /// - the Dioxus.toml file - this is so we can hotreload the project if the user changes the Dioxus config
-    pub(crate) fn local_dependencies(&self, crate_package: NodeId) -> Vec<PathBuf> {
+    fn local_dependencies(&self, crate_package: NodeId) -> Vec<PathBuf> {
         let mut paths = vec![];
 
         for (dependency, _edge) in self.workspace.krates.get_deps(crate_package) {
@@ -1001,21 +1009,6 @@ impl AppServer {
         };
 
         server.compiled_crates as f64 / server.expected_crates as f64
-    }
-
-    /// Perform a full rebuild of the app, equivalent to `cargo rustc` from scratch with no incremental
-    /// hot-patch engine integration.
-    pub(crate) async fn full_rebuild(&mut self) {
-        let build_mode = match self.use_hotpatch_engine {
-            true => BuildMode::Fat,
-            false => BuildMode::Base,
-        };
-
-        self.client.start_rebuild(build_mode.clone());
-        self.server.as_mut().map(|s| s.start_rebuild(build_mode));
-
-        self.clear_hot_reload_changes();
-        self.clear_cached_rsx();
     }
 }
 
