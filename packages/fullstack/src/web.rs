@@ -1,8 +1,14 @@
-// #![allow(unused)]
 //! On the client, we use the [`WebDocument`] implementation to render the head for any elements that were not rendered on the server.
 
 use dioxus_lib::document::*;
 use dioxus_web::WebDocument;
+
+fn head_element_written_on_server() -> bool {
+    dioxus_fullstack_protocol::head_element_hydration_entry()
+        .get()
+        .ok()
+        .unwrap_or_default()
+}
 
 /// A document provider for fullstack web clients
 #[derive(Clone)]
@@ -41,11 +47,4 @@ impl Document for FullstackWebDocument {
     fn create_head_component(&self) -> bool {
         !head_element_written_on_server()
     }
-}
-
-fn head_element_written_on_server() -> bool {
-    dioxus_fullstack_protocol::head_element_hydration_entry()
-        .get()
-        .ok()
-        .unwrap_or_default()
 }

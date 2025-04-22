@@ -453,7 +453,6 @@ pub fn create_undefined_symbol_stub(
         };
 
         if sym.is_undefined() {
-            tracing::debug!("Skipping undefined symbol {name}");
             continue;
         }
 

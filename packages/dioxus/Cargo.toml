@@ -99,8 +99,6 @@ server = [
   "ssr",
   "dioxus-liveview?/axum",
   "dioxus-fullstack?/server",
-  # "dep:dioxus-fullstack",
-  # "fullstack"
 ]
 
 # This feature just disables the no-renderer-enabled warning

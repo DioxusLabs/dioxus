@@ -315,39 +315,35 @@
 //! ## Extra links
 //! - xbuild: <https://github.com/rust-mobile/xbuild/blob/master/xbuild/src/command/build.rs>
 
-use super::{android_tools, AndroidTools, BuildContext, BuildId};
+use super::{android_tools, AndroidTools, BuildContext};
 use crate::{
     rustcwrapper::{RustcArgs, DX_RUSTC_WRAPPER_ENV_VAR},
     wasm_bindgen::WasmBindgen,
-    BuildArgs, DioxusConfig, Error, LinkAction, Platform, ProgressTx, Result, TraceSrc,
-    WasmOptConfig, Workspace,
+    BuildArgs, DioxusConfig, Error, LinkAction, Platform, Result, TraceSrc, WasmOptConfig,
+    Workspace,
 };
 use anyhow::Context;
 use dioxus_cli_config::{APP_TITLE_ENV, ASSET_ROOT_ENV};
 use dioxus_cli_opt::{process_file_to, AssetManifest};
 use itertools::Itertools;
-use krates::{cm::TargetKind, KrateDetails, Krates, NodeId, Utf8PathBuf};
+use krates::{cm::TargetKind, NodeId};
 use manganis::{AssetOptions, JsAssetOptions};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashSet,
     future::Future,
-    io::{Read, Write},
+    io::Write,
     path::{Path, PathBuf},
     pin::Pin,
     process::Stdio,
-    str::FromStr,
     sync::{
         atomic::{AtomicUsize, Ordering},
         Arc,
     },
-    time::{Instant, SystemTime, UNIX_EPOCH},
+    time::{SystemTime, UNIX_EPOCH},
 };
-use target_lexicon::{
-    Aarch64Architecture, Architecture, ArmArchitecture, BinaryFormat, Environment, OperatingSystem,
-    Triple, Vendor, X86_32Architecture,
-};
+use target_lexicon::{Environment, OperatingSystem, Triple};
 use tempfile::{NamedTempFile, TempDir};
 use tokio::{io::AsyncBufReadExt, process::Command};
 use toml_edit::Item;
@@ -762,11 +758,6 @@ impl BuildRequest {
     async fn cargo_build(&self, ctx: &BuildContext) -> Result<BuildArtifacts> {
         let time_start = SystemTime::now();
 
-        let mut cmd = self.build_command(ctx)?;
-
-        tracing::debug!("Executing cargo...");
-        // tracing::trace!(dx_src = ?TraceSrc::Build, "Rust cargo args: {:#?}", cmd);
-
         // Extract the unit count of the crate graph so build_cargo has more accurate data
         // "Thin" builds only build the final exe, so we only need to build one crate
         let crate_count = match ctx.mode {
@@ -776,6 +767,9 @@ impl BuildRequest {
 
         // Update the status to show that we're starting the build and how many crates we expect to build
         ctx.status_starting_build(crate_count);
+
+        let mut cmd = self.build_command(ctx)?;
+        tracing::debug!(dx_src = ?TraceSrc::Build, "Executing cargo for {} using {}: {:#?}", self.platform, self.triple, cmd);
 
         let mut child = cmd
             .stdout(Stdio::piped())
@@ -1284,16 +1278,11 @@ impl BuildRequest {
 
         if !res.stderr.is_empty() {
             let errs = String::from_utf8_lossy(&res.stderr);
-            if !self.patch_exe(artifacts.time_start).exists() {
+            if !self.patch_exe(artifacts.time_start).exists() || !res.status.success() {
                 tracing::error!("Failed to generate patch: {}", errs.trim());
             } else {
-                tracing::debug!("Warnings during thin linking: {}", errs.trim());
+                tracing::trace!("Linker output during thin linking: {}", errs.trim());
             }
-        }
-
-        if !res.stdout.is_empty() {
-            let out = String::from_utf8_lossy(&res.stdout);
-            tracing::debug!("Output from thin linking: {}", out.trim());
         }
 
         // For some really weird reason that I think is because of dlopen caching, future loads of the
@@ -1528,7 +1517,7 @@ impl BuildRequest {
             .context("Failed to read link args from file")?;
         let args = raw_args.lines().collect::<Vec<_>>();
 
-        tracing::debug!("Linking with args: {:?}", args);
+        // tracing::debug!("Linking with args: {:?}", args);
 
         // Filter out the rlib files from the arguments
         let rlibs = args
@@ -1932,13 +1921,6 @@ impl BuildRequest {
                 cargo_args.push("-Crelocation-model=pic".into());
             }
         }
-
-        tracing::debug!(
-            "cargo args for {} - {}: {:#?}",
-            self.platform,
-            self.triple,
-            cargo_args
-        );
 
         cargo_args
     }

@@ -20,8 +20,8 @@ pub fn launch_virtual_dom_blocking(virtual_dom: VirtualDom, mut desktop_config: 
         // Set the control flow and check if any events need to be handled in the app itself
         app.tick(&window_event);
 
-        if let Some(ref mut callback) = custom_event_handler {
-            callback(&window_event, event_loop)
+        if let Some(ref mut f) = custom_event_handler {
+            f(&window_event, event_loop)
         }
 
         match window_event {

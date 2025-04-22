@@ -1,6 +1,6 @@
 use crate::{
-    config::WebHttpsConfig, serve::ServeUpdate, BuildStage, BuilderUpdate, Platform, Result,
-    TraceSrc,
+    config::WebHttpsConfig, serve::ServeUpdate, BuildId, BuildStage, BuilderUpdate, Platform,
+    Result, TraceSrc,
 };
 use anyhow::Context;
 use axum::{
@@ -288,11 +288,18 @@ impl WebServer {
         }
     }
 
-    pub(crate) async fn send_patch(&mut self, jump_table: JumpTable, time_taken: Duration) {
+    pub(crate) async fn send_patch(
+        &mut self,
+        jump_table: JumpTable,
+        time_taken: Duration,
+        build: BuildId,
+    ) {
         let msg = DevserverMsg::HotReload(HotReloadMsg {
             jump_table: Some(jump_table),
             ms_elapsed: time_taken.as_millis() as u64,
-            ..Default::default()
+            templates: vec![],
+            assets: vec![],
+            for_build_id: Some(build.0 as _),
         });
         self.send_devserver_message_to_all(msg).await;
     }

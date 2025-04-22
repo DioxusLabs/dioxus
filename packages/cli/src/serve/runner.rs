@@ -466,7 +466,9 @@ impl AppServer {
             let msg = HotReloadMsg {
                 templates,
                 assets,
-                ..Default::default()
+                ms_elapsed: 0,
+                jump_table: Default::default(),
+                for_build_id: None,
             };
 
             self.add_hot_reload_message(&msg);

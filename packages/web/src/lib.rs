@@ -192,13 +192,15 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
                     crate::devtools::invalidate_browser_asset_cache();
                 }
 
-                devtools::show_toast(
-                    "Hot-patch success!",
-                    &format!("App successfully patched in {} ms", hr_msg.ms_elapsed),
-                    devtools::ToastLevel::Success,
-                    Duration::from_millis(1000),
-                    false,
-                );
+                if hr_msg.for_build_id == Some(dioxus_cli_config::build_id()) {
+                    devtools::show_toast(
+                        "Hot-patch success!",
+                        &format!("App successfully patched in {} ms", hr_msg.ms_elapsed),
+                        devtools::ToastLevel::Success,
+                        Duration::from_millis(2000),
+                        false,
+                    );
+                }
             }
         }
 

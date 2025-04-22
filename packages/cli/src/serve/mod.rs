@@ -130,7 +130,7 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &mut TraceController) -> 
                             let elapsed =
                                 bundle.time_end.duration_since(bundle.time_start).unwrap();
                             match builder.patch(&bundle).await {
-                                Ok(jumptable) => devserver.send_patch(jumptable, elapsed).await,
+                                Ok(jumptable) => devserver.send_patch(jumptable, elapsed, id).await,
                                 Err(err) => {
                                     tracing::error!("Failed to patch app: {err}");
                                 }

@@ -49,6 +49,7 @@ pub struct HotReloadMsg {
     pub assets: Vec<PathBuf>,
     pub ms_elapsed: u64,
     pub jump_table: Option<JumpTable>,
+    pub for_build_id: Option<u64>,
 }
 
 impl HotReloadMsg {
