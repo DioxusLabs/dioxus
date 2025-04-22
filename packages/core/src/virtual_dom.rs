@@ -785,28 +785,6 @@ impl Drop for VirtualDom {
 
 /// Yield control back to the async scheduler. This is used to give the scheduler a chance to run other pending work. Or cancel the task if the client has disconnected.
 async fn yield_now() {
-    let abc = 123;
-    let abc = 123;
-    let abc = 123;
-    let abc = 123;
-    let abc = 123;
-    let abc = 123;
-    let abc = 123;
-    let abc = 123;
-    let abc = 123;
-    let abc = 123;
-    let abc = 123;
-    let abc = 123;
-    let abc = 123;
-    let abc = 123;
-    let abc = 123;
-    let abc = 123;
-    let abc = 123;
-    let abc = 123;
-    let abc = 123;
-    let abc = 123;
-    let abc = 123;
-
     let mut yielded = false;
     std::future::poll_fn::<(), _>(move |cx| {
         if !yielded {

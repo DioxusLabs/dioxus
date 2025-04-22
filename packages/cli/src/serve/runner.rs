@@ -71,6 +71,7 @@ pub(crate) struct AppServer {
     pub(crate) wsl_file_poll_interval: u16,
     pub(crate) always_on_top: bool,
     pub(crate) fullstack: bool,
+    pub(crate) watch_fs: bool,
 
     // resolve args related to the webserver
     pub(crate) devserver_port: u16,
@@ -214,7 +215,9 @@ impl AppServer {
             .then(|| get_available_port(devserver_bind_ip, None))
             .flatten();
 
-        let build_mode = match args.hot_patch {
+        let watch_fs = args.watch.unwrap_or(true);
+        let use_hotpatch_engine = args.hot_patch.unwrap_or(false);
+        let build_mode = match use_hotpatch_engine {
             true => BuildMode::Fat,
             false => BuildMode::Base,
         };
@@ -229,7 +232,8 @@ impl AppServer {
             file_map: Default::default(),
             applied_hot_reload_message: Default::default(),
             automatic_rebuilds: true,
-            use_hotpatch_engine: args.hot_patch,
+            watch_fs,
+            use_hotpatch_engine,
             client,
             server,
             hot_reload,
@@ -249,16 +253,19 @@ impl AppServer {
             fullstack,
         };
 
-        // Spin up the notify watcher
-        // When builds load though, we're going to parse their depinfo and add the paths to the watcher
-        runner.watch_filesystem();
+        // Only register the hot-reload stuff if we're watching the filesystem
+        if runner.watch_fs {
+            // Spin up the notify watcher
+            // When builds load though, we're going to parse their depinfo and add the paths to the watcher
+            runner.watch_filesystem();
 
-        // todo(jon): this might take a while so we should try and background it, or make it lazy somehow
-        // we could spawn a thread to search the FS and then when it returns we can fill the filemap
-        // in testing, if this hits a massive directory, it might take several seconds with no feedback.
-        // really, we should be using depinfo to get the files that are actually used, but the depinfo file might not be around yet
-        // todo(jon): see if we can just guess the depinfo file before it generates. might be stale but at least it catches most of the files
-        runner.load_rsx_filemap();
+            // todo(jon): this might take a while so we should try and background it, or make it lazy somehow
+            // we could spawn a thread to search the FS and then when it returns we can fill the filemap
+            // in testing, if this hits a massive directory, it might take several seconds with no feedback.
+            // really, we should be using depinfo to get the files that are actually used, but the depinfo file might not be around yet
+            // todo(jon): see if we can just guess the depinfo file before it generates. might be stale but at least it catches most of the files
+            runner.load_rsx_filemap();
+        }
 
         Ok(runner)
     }
@@ -275,14 +282,14 @@ impl AppServer {
             // Wait for the client to finish
             client_update = client_wait => {
                 ServeUpdate::BuilderUpdate {
-                    id: BuildId(0),
+                    id: BuildId::CLIENT,
                     update: client_update,
                 }
             }
 
             Some(server_update) = server_wait => {
                 ServeUpdate::BuilderUpdate {
-                    id: BuildId(1),
+                    id: BuildId::SERVER,
                     update: server_update,
                 }
             }
@@ -556,7 +563,7 @@ impl AppServer {
                     fullstack_address,
                     false,
                     false,
-                    BuildId(1),
+                    BuildId::SERVER,
                 )
                 .await?;
         }
@@ -571,7 +578,7 @@ impl AppServer {
                 fullstack_address,
                 open_browser,
                 always_on_top,
-                BuildId(0),
+                BuildId::CLIENT,
             )
             .await?;
 
@@ -605,9 +612,9 @@ impl AppServer {
     }
 
     pub(crate) fn get_build(&self, id: BuildId) -> Option<&AppBuilder> {
-        match id.0 {
-            0 => Some(&self.client),
-            1 => self.server.as_ref(),
+        match id {
+            BuildId::CLIENT => Some(&self.client),
+            BuildId::SERVER => self.server.as_ref(),
             _ => None,
         }
     }

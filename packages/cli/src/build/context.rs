@@ -21,7 +21,11 @@ pub type ProgressTx = UnboundedSender<BuilderUpdate>;
 pub type ProgressRx = UnboundedReceiver<BuilderUpdate>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct BuildId(pub usize);
+pub struct BuildId(pub(crate) usize);
+impl BuildId {
+    pub const CLIENT: Self = Self(0);
+    pub const SERVER: Self = Self(1);
+}
 
 #[allow(clippy::large_enum_variant)]
 pub enum BuilderUpdate {

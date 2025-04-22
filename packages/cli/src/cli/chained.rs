@@ -1,5 +1,4 @@
-use clap::{ArgMatches, Args, FromArgMatches, Parser, Subcommand};
-use serde::{de::DeserializeOwned, Deserialize};
+use clap::{ArgMatches, Args, FromArgMatches, Subcommand};
 
 // https://github.com/clap-rs/clap/issues/2222#issuecomment-2524152894
 //

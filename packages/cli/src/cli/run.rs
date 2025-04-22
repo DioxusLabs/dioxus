@@ -1,66 +1,133 @@
 use super::*;
 use crate::{
-    serve::serve_all, AppBuilder, BuildArgs, BuildId, BuildMode, BuildRequest, Platform, Result,
-    Workspace,
+    serve::{AppServer, ServeUpdate, WebServer},
+    BuilderUpdate, Platform, Result,
 };
+use dioxus_dx_wire_format::BuildStage;
 
 /// Run the project with the given arguments
+///
+/// This is a shorthand for `dx serve` with interactive mode and hot-reload disabled.
 #[derive(Clone, Debug, Parser)]
 pub(crate) struct RunArgs {
     /// Information about the target to build
     #[clap(flatten)]
-    pub(crate) build_args: ServeArgs,
+    pub(crate) args: ServeArgs,
 }
 
 impl RunArgs {
-    pub(crate) async fn run(self) -> Result<StructuredOutput> {
-        let workspace = Workspace::current().await?;
+    pub(crate) async fn run(mut self) -> Result<StructuredOutput> {
+        // Override the build arguments, leveraging our serve infrastructure.
+        //
+        // We want to turn off the fancy stuff like the TUI, watcher, and hot-reload, but leave logging
+        // and other things like the devserver on.
+        self.args.hot_patch = Some(false);
+        self.args.interactive = Some(false);
+        self.args.hot_reload = Some(false);
+        self.args.watch = Some(false);
 
-        // let build = BuildRequest::new(&self.build_args, workspace)
-        //     .await
-        //     .context("error building project")?;
+        let mut builder = AppServer::start(self.args).await?;
+        let mut devserver = WebServer::start(&builder)?;
 
-        // let mut builder = AppBuilder::start(&build, BuildMode::Base)?;
-        // let artifacts = builder.finish_build().await?;
+        loop {
+            let msg = tokio::select! {
+                msg = builder.wait() => msg,
+                msg = devserver.wait() => msg,
+            };
 
-        // let devserver_ip = "127.0.0.1:8081".parse().unwrap();
-        // let fullstack_ip = "127.0.0.1:8080".parse().unwrap();
-        // let mut open_address = None;
+            match msg {
+                // Wait for logs from the build engine
+                // These will cause us to update the screen
+                // We also can check the status of the builds here in case we have multiple ongoing builds
+                ServeUpdate::BuilderUpdate { id, update } => {
+                    let platform = builder.get_build(id).unwrap().build.platform;
 
-        // todo!();
-        // // if build.platform == Platform::Web || build.fullstack {
-        // //     tracing::info!("Serving at: {}", fullstack_ip);
-        // // }
+                    // And then update the websocketed clients with the new build status in case they want it
+                    devserver.new_build_update(&update).await;
 
-        // builder
-        //     .open(
-        //         devserver_ip,
-        //         open_address,
-        //         Some(fullstack_ip),
-        //         true,
-        //         false,
-        //         BuildId(0),
-        //     )
-        //     .await?;
+                    // And then open the app if it's ready
+                    match update {
+                        BuilderUpdate::BuildReady { bundle } => {
+                            _ = builder
+                                .open(bundle, &mut devserver)
+                                .await
+                                .inspect_err(|e| tracing::error!("Failed to open app: {}", e));
 
-        // todo!();
-        // // Run the app, but mostly ignore all the other messages
-        // // They won't generally be emitted
-        // loop {
-        //     match builder.wait().await {
-        //         HandleUpdate::StderrReceived { platform, msg } => {
-        //             tracing::info!("[{platform}]: {msg}")
-        //         }
-        //         HandleUpdate::StdoutReceived { platform, msg } => {
-        //             tracing::info!("[{platform}]: {msg}")
-        //         }
-        //         HandleUpdate::ProcessExited { platform, status } => {
-        //             builder.cleanup().await;
-        //             tracing::info!("[{platform}]: process exited with status: {status:?}");
-        //             break;
-        //         }
-        //     }
-        // }
+                            if platform == Platform::Web {
+                                tracing::info!(
+                                    "Serving app at http://{}:{}",
+                                    builder.devserver_bind_ip,
+                                    builder.devserver_port
+                                );
+                            }
+                        }
+                        BuilderUpdate::Progress { stage } => match stage {
+                            BuildStage::Initializing => {
+                                tracing::info!("[{platform}] Initializing build")
+                            }
+                            BuildStage::Starting { .. } => {}
+                            BuildStage::InstallingTooling => {}
+                            BuildStage::Compiling {
+                                current,
+                                total,
+                                krate,
+                            } => {
+                                tracing::info!("[{platform}] Compiling {krate} ({current}/{total})",)
+                            }
+                            BuildStage::RunningBindgen => {
+                                tracing::info!("[{platform}] Running WASM bindgen")
+                            }
+                            BuildStage::SplittingBundle => {}
+                            BuildStage::OptimizingWasm => {
+                                tracing::info!("[{platform}] Optimizing WASM with `wasm-opt`")
+                            }
+                            BuildStage::Linking => tracing::info!("Linking app"),
+                            BuildStage::Hotpatching => todo!(),
+                            BuildStage::CopyingAssets {
+                                current,
+                                total,
+                                path,
+                            } => tracing::info!(
+                                "[{platform}] Copying asset {} ({current}/{total})",
+                                path.display(),
+                            ),
+                            BuildStage::Bundling => tracing::info!("[{platform}] Bundling app"),
+                            BuildStage::RunningGradle => {
+                                tracing::info!("[{platform}] Running Gradle")
+                            }
+                            BuildStage::Success => {}
+                            BuildStage::Failed => {}
+                            BuildStage::Aborted => {}
+                            BuildStage::Restarting => {}
+                            BuildStage::CompressingAssets => {}
+                            _ => {}
+                        },
+                        BuilderUpdate::CompilerMessage { message } => {
+                            print!("{}", message);
+                        }
+                        BuilderUpdate::BuildFailed { err } => {
+                            tracing::error!("Build failed: {:#?}", err);
+                        }
+                        BuilderUpdate::StdoutReceived { msg } => {
+                            tracing::info!("[{platform}] {msg}");
+                        }
+                        BuilderUpdate::StderrReceived { msg } => {
+                            tracing::error!("[{platform}] {msg}");
+                        }
+                        BuilderUpdate::ProcessExited { status } => {
+                            if !status.success() {
+                                tracing::error!(
+                                    "Application [{platform}] exited with error: {status}"
+                                );
+                            }
+
+                            break;
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
 
         Ok(StructuredOutput::Success)
     }

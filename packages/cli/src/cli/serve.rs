@@ -72,8 +72,12 @@ pub(crate) struct ServeArgs {
     /// Enable Rust hot-patching instead of full rebuilds [default: false]
     ///
     /// This is quite experimental and may lead to unexpected segfaults or crashes in development.
-    #[arg(long, default_value_t = true)]
-    pub(crate) hot_patch: bool,
+    #[arg(long, default_missing_value = "false")]
+    pub(crate) hot_patch: Option<bool>,
+
+    /// Watch the filesystem for changes and trigger a rebuild [default: true]
+    #[clap(long, default_missing_value = "true")]
+    pub(crate) watch: Option<bool>,
 
     /// This flag only applies to fullstack builds. By default fullstack builds will run the server and client builds in parallel. This flag will force the build to run the server build first, then the client build. [default: false]
     #[clap(long)]
