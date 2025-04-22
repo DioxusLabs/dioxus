@@ -305,6 +305,8 @@ impl Bundle {
         Ok(bundles)
     }
 
+    // During SSG, just serve the static files instead of running the server
+    // _ => builds[0].fullstack && !self.build_arguments.ssg,
     pub(crate) async fn pre_render_static_routes(server_exe: &Path) -> anyhow::Result<()> {
         // Use the address passed in through environment variables or default to localhost:9999. We need
         // to default to a value that is different than the CLI default address to avoid conflicts

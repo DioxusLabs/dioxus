@@ -120,6 +120,12 @@ impl BuildContext {
         });
     }
 
+    pub(crate) fn status_starting_link(&self) {
+        _ = self.tx.unbounded_send(BuilderUpdate::Progress {
+            stage: BuildStage::Linking,
+        });
+    }
+
     pub(crate) fn status_copied_asset(
         progress: &UnboundedSender<BuilderUpdate>,
         current: usize,

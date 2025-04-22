@@ -21,6 +21,7 @@ pub struct Workspace {
 }
 
 impl Workspace {
+    /// Load the workspace from the current directory. This is cached and will only be loaded once.
     pub async fn current() -> Result<Arc<Workspace>> {
         static WS: Mutex<Option<Arc<Workspace>>> = Mutex::new(None);
 
@@ -73,6 +74,7 @@ impl Workspace {
         Ok(workspace)
     }
 
+    #[allow(unused)]
     pub fn rust_lld(&self) -> PathBuf {
         self.sysroot
             .join("lib")

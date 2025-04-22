@@ -75,11 +75,6 @@ pub(crate) struct BuildArgs {
     #[clap(long)]
     pub(crate) rustc_args: Option<String>,
 
-    /// This flag only applies to fullstack builds. By default fullstack builds will run the server and client builds in parallel. This flag will force the build to run the server build first, then the client build. [default: false]
-    #[clap(long)]
-    #[serde(default)]
-    pub(crate) force_sequential: bool,
-
     /// Skip collecting assets from dependencies [default: false]
     #[clap(long)]
     #[serde(default)]

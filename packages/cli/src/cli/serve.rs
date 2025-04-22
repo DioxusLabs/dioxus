@@ -75,6 +75,10 @@ pub(crate) struct ServeArgs {
     #[arg(long, default_value_t = true)]
     pub(crate) hot_patch: bool,
 
+    /// This flag only applies to fullstack builds. By default fullstack builds will run the server and client builds in parallel. This flag will force the build to run the server build first, then the client build. [default: false]
+    #[clap(long)]
+    pub(crate) force_sequential: bool,
+
     /// Enable fullstack mode [default: false]
     ///
     /// This is automatically detected from `dx serve` if the "fullstack" feature is enabled by default.
@@ -119,20 +123,16 @@ pub(crate) struct ServeArgs {
 }
 
 /// Launch a specific target
-#[derive(Debug, Subcommand, Clone, Deserialize)]
+#[derive(Debug, Subcommand, Clone)]
 #[command(subcommand_precedence_over_arg = true)]
 pub(crate) enum TargetCmd {
     /// Specify the arguments for the client build
     #[clap(name = "client")]
-    Client(ChainedCommand<BuildArgs, Self>),
+    Client(ChainedCommand<BuildArgs, TargetCmd>),
 
     /// Specify the arguments for the server build
     #[clap(name = "server")]
-    Server(ChainedCommand<BuildArgs, Self>),
-
-    /// Specify the arguments for any number of additional targets
-    #[clap(name = "crate")]
-    Target(ChainedCommand<BuildArgs, Self>),
+    Server(ChainedCommand<BuildArgs, TargetCmd>),
 }
 
 impl ServeArgs {

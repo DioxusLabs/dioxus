@@ -20,6 +20,10 @@ fn app() -> Element {
         div {
             EvalIt { color: "white" }
             EvalIt { color: "red" }
+            EvalIt { color: "yellow" }
+            EvalIt { color: "cyan" }
+            EvalIt { color: "purple" }
+            EvalIt { color: "black" }
             EvalIt { color: "blue" }
             EvalIt { color: "green" }
             EvalIt { color: "magenta" }

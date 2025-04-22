@@ -1,7 +1,4 @@
-use crate::{
-    AppBuilder, BuildMode, BuildRequest, BuilderUpdate, Error, Platform, Result, ServeArgs,
-    TraceController, TraceSrc,
-};
+use crate::{AppBuilder, BuildMode, BuilderUpdate, Result, ServeArgs, TraceController};
 
 mod ansi_buffer;
 mod output;
@@ -120,8 +117,6 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &mut TraceController) -> 
                 devserver.new_build_update(&update).await;
 
                 // And then open the app if it's ready
-                // todo: there might be more things to do here that require coordination with other pieces of the CLI
-                // todo: maybe we want to shuffle the runner around to send an "open" command instead of doing that
                 match update {
                     BuilderUpdate::Progress { .. } => {}
                     BuilderUpdate::CompilerMessage { message } => {

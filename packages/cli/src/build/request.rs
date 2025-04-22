@@ -1522,6 +1522,8 @@ impl BuildRequest {
         ctx: &BuildContext,
         artifacts: &BuildArtifacts,
     ) -> Result<()> {
+        ctx.status_starting_link();
+
         let raw_args = std::fs::read_to_string(&self.link_args_file.path())
             .context("Failed to read link args from file")?;
         let args = raw_args.lines().collect::<Vec<_>>();
@@ -2847,9 +2849,7 @@ impl BuildRequest {
         }
 
         // Check if any of the features enables the "fullstack" feature
-        // todo!("check if any of the features enables the fullstack feature");
-
-        false
+        self.workspace.has_dioxus_feature("fullstack")
     }
 
     /// todo(jon): use handlebars templates instead of these prebaked templates

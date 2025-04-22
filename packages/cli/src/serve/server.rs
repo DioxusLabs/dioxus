@@ -1,7 +1,6 @@
 use crate::{
-    config::WebHttpsConfig,
-    serve::{ServeArgs, ServeUpdate},
-    BuildRequest, BuildStage, BuilderUpdate, Platform, Result, TraceSrc,
+    config::WebHttpsConfig, serve::ServeUpdate, BuildStage, BuilderUpdate, Platform, Result,
+    TraceSrc,
 };
 use anyhow::Context;
 use axum::{
@@ -19,7 +18,6 @@ use axum::{
     routing::{get, get_service},
     Extension, Router,
 };
-use axum_server::tls_rustls::RustlsConfig;
 use dioxus_devtools_types::{DevserverMsg, HotReloadMsg};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::{
@@ -30,11 +28,10 @@ use futures_util::{
 use hyper::HeaderMap;
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::HashMap,
     convert::Infallible,
     fs, io,
     net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener},
-    path::{Path, PathBuf},
+    path::Path,
     sync::{Arc, RwLock},
     time::Duration,
 };
@@ -46,7 +43,7 @@ use tower_http::{
     ServiceBuilderExt,
 };
 
-use super::{AppBuilder, AppServer};
+use super::AppServer;
 
 /// The webserver that serves statics assets (if fullstack isn't already doing that) and the websocket
 /// communication layer that we use to send status updates and hotreloads to the client.
@@ -68,10 +65,9 @@ pub(crate) struct WebServer {
     platform: Platform,
 }
 
-pub const SELF_IP: IpAddr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
-// pub const SELF_IP: IpAddr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
-
 impl WebServer {
+    pub const SELF_IP: IpAddr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
+
     /// Start the development server.
     /// This will set up the default http server if there's no server specified (usually via fullstack).
     ///
@@ -86,6 +82,7 @@ impl WebServer {
         let devserver_bind_ip = runner.devserver_bind_ip;
         let devserver_port = runner.devserver_port;
         let proxied_port = runner.proxied_port;
+        let devserver_exposed_ip = devserver_bind_ip;
 
         let devserver_bind_address = SocketAddr::new(devserver_bind_ip, devserver_port);
         let listener = std::net::TcpListener::bind(devserver_bind_address).with_context(|| {
@@ -93,15 +90,6 @@ impl WebServer {
                 "Failed to bind server to: {devserver_bind_address}, is there another devserver running?\nTo run multiple devservers, use the --port flag to specify a different port"
             )
         })?;
-
-        // // If the IP is 0.0.0.0, we need to get the actual IP of the machine
-        // // This will let ios/android/network clients connect to the devserver
-        // let devserver_exposed_ip = if devserver_bind_ip == SELF_IP {
-        //     local_ip_address::local_ip().unwrap_or(devserver_bind_ip)
-        // } else {
-        //     devserver_bind_ip
-        // };
-        let devserver_exposed_ip = devserver_bind_ip;
 
         let proxied_address = proxied_port.map(|port| SocketAddr::new(devserver_exposed_ip, port));
 
@@ -266,9 +254,9 @@ impl WebServer {
                 self.send_reload_failed().await;
                 self.send_build_status().await;
             }
-            BuilderUpdate::StdoutReceived { msg } => {}
-            BuilderUpdate::StderrReceived { msg } => {}
-            BuilderUpdate::ProcessExited { status } => {}
+            BuilderUpdate::StdoutReceived { .. } => {}
+            BuilderUpdate::StderrReceived { .. } => {}
+            BuilderUpdate::ProcessExited { .. } => {}
         }
     }
 

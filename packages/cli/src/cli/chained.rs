@@ -8,21 +8,10 @@ use serde::{de::DeserializeOwned, Deserialize};
 #[derive(Debug, Clone)]
 pub struct ChainedCommand<T, U> {
     /// Specific Variant.
-    inner: T,
+    pub inner: T,
 
     /// Enum containing `Self<T>` variants, in other words possible follow-up commands.
-    next: Option<Box<U>>,
-}
-
-impl<T, U> ChainedCommand<T, U>
-where
-    T: Args,
-    U: Subcommand,
-{
-    fn commands(self) -> Vec<Self> {
-        let mut commands = vec![];
-        commands
-    }
+    pub next: Option<Box<U>>,
 }
 
 impl<T, U> Args for ChainedCommand<T, U>
@@ -72,120 +61,3 @@ where
         unimplemented!()
     }
 }
-
-impl<'de, T: Deserialize<'de>, U: Deserialize<'de>> Deserialize<'de> for ChainedCommand<T, U> {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        todo!()
-    }
-}
-
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-
-//     #[derive(Debug, Parser)]
-//     struct TestCli {
-//         #[clap(long)]
-//         top: Option<String>,
-
-//         #[command(subcommand)]
-//         cmd: TopCmd,
-//     }
-
-//     /// Launch a specific target
-//     ///
-//     /// You can specify multiple targets using `@client --args` syntax.
-//     #[derive(Debug, Parser)]
-//     struct ServeCommand {
-//         #[clap(flatten)]
-//         args: Target,
-
-//         #[command(subcommand)]
-//         targets: TopCmd,
-//     }
-
-//     #[derive(Debug, Subcommand, Clone)]
-//     enum TopCmd {
-//         Serve {
-//             #[clap(subcommand)]
-//             cmd: Cmd,
-//         },
-//     }
-
-//     /// Launch a specific target
-//     #[derive(Debug, Subcommand, Clone)]
-//     #[command(subcommand_precedence_over_arg = true)]
-//     enum Cmd {
-//         /// Specify the arguments for the client build
-//         #[clap(name = "client")]
-//         Client(ReClap<Target, Self>),
-
-//         /// Specify the arguments for the server build
-//         #[clap(name = "server")]
-//         Server(ReClap<Target, Self>),
-
-//         /// Specify the arguments for any number of additional targets
-//         #[clap(name = "target")]
-//         Target(ReClap<Target, Self>),
-//     }
-
-//     #[derive(Clone, Args, Debug)]
-//     struct Target {
-//         #[arg(short, long)]
-//         profile: Option<String>,
-
-//         #[arg(short, long)]
-//         target: Option<String>,
-
-//         #[arg(short, long)]
-//         bin: Option<String>,
-//     }
-
-//     #[test]
-//     fn test_parse_args() {
-//         let args = r#"
-// dx serve
-//     @client --release
-//     @server --target wasm32
-//     @target --bin mybin
-//     @target --bin mybin
-//     @target --bin mybin
-//     @target --bin mybin
-// "#
-//         .trim()
-//         .split_ascii_whitespace();
-
-//         let cli = TestCli::parse_from(args);
-
-//         dbg!(&cli);
-
-//         match cli.cmd {
-//             TopCmd::Serve { cmd } => {
-//                 let mut next = Some(cmd);
-
-//                 // let mut next = cmd.cmd;
-//                 while let Some(cmd) = next {
-//                     // println!("{cmd:?}");
-//                     // could use enum_dispatch
-//                     next = match cmd {
-//                         Cmd::Client(rec) => {
-//                             //
-//                             (rec.next).map(|d| *d)
-//                         }
-//                         Cmd::Server(rec) => {
-//                             //
-//                             (rec.next).map(|d| *d)
-//                         }
-//                         Cmd::Target(rec) => {
-//                             //
-//                             (rec.next).map(|d| *d)
-//                         }
-//                     }
-//                 }
-//             }
-//         }
-//     }
-// }
