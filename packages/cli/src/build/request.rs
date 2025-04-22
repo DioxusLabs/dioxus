@@ -198,14 +198,8 @@ impl BuildRequest {
                 Message::CompilerMessage(msg) => self.status_build_diagnostic(msg),
                 Message::CompilerArtifact(artifact) => {
                     units_compiled += 1;
-                    match artifact.executable {
-                        Some(executable) => output_location = Some(executable.into()),
-                        None => self.status_build_progress(
-                            units_compiled,
-                            crate_count,
-                            artifact.target.name,
-                        ),
-                    }
+                    self.status_build_progress(units_compiled, crate_count, artifact.target.name);
+                    output_location = artifact.executable.map(Into::into);
                 }
                 Message::BuildFinished(finished) => {
                     if !finished.success {

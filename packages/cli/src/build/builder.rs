@@ -223,7 +223,7 @@ impl Builder {
                             krate,
                             ..
                         } => {
-                            tracing::info!("Compiling [{:>3}/{total}]: {krate}", current + 1);
+                            tracing::info!("Compiling [{current:>3}/{total}]: {krate}");
                         }
                         BuildStage::RunningBindgen => tracing::info!("Running wasm-bindgen..."),
                         BuildStage::CopyingAssets {
