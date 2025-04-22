@@ -437,6 +437,7 @@ openssl = { version = "0.10", features = ["vendored"] }
 [features]
 default = ["desktop"]
 desktop = ["dioxus/desktop"]
+native = ["dioxus/native"]
 liveview = ["dioxus/liveview"]
 fullstack = ["dioxus/fullstack"]
 server = ["dioxus/server"]
