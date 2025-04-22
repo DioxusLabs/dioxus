@@ -49,7 +49,7 @@ pub(crate) fn process_css_module(
     final_path: &Path,
     output_path: &Path,
 ) -> anyhow::Result<()> {
-    let mut css = std::fs::read_to_string(source)?;
+    let css = std::fs::read_to_string(source)?;
 
     // Collect the file hash name.
     let mut src_name = source
@@ -75,33 +75,48 @@ pub(crate) fn process_css_module(
 
     // Rewrite CSS idents with ident+hash.
     let (classes, ids) = manganis_core::collect_css_idents(&css);
+    let mut new_css = String::new();
 
-    for class in classes {
-        css = css.replace(&format!(".{class}"), &format!(".{class}{hash}"));
-    }
+    for line in css.lines() {
+        let mut line = line.to_string();
 
-    for id in ids {
-        css = css.replace(&format!("#{id}"), &format!("#{id}{hash}"));
+        for class in &classes {
+            let class = format!(".{class}");
+            if line.starts_with(&format!("{class} ")) || line.starts_with(&format!("{class}{{")) {
+                line = line.replacen(&class, &format!("{class}{hash}"), 1);
+                break;
+            }
+        }
+
+        for id in &ids {
+            let id = format!("#{id}");
+            if line.starts_with(&format!("{id} ")) || line.starts_with(&format!("{id}{{")) {
+                line = line.replacen(&id, &format!("{id}{hash}"), 1);
+                break;
+            }
+        }
+
+        new_css.push_str(&line);
     }
 
     // Minify CSS
-    let css = if css_options.minified() {
+    let new_css = if css_options.minified() {
         // Try to minify the css. If we fail, log the error and use the unminified css
-        match minify_css(&css) {
+        match minify_css(&new_css) {
             Ok(minified) => minified,
             Err(err) => {
                 tracing::error!(
                     "Failed to minify css module; Falling back to unminified css. Error: {}",
                     err
                 );
-                css
+                new_css
             }
         }
     } else {
-        css
+        new_css
     };
 
-    std::fs::write(output_path, css).with_context(|| {
+    std::fs::write(output_path, new_css).with_context(|| {
         format!(
             "Failed to write css module to output location: {}",
             output_path.display()
