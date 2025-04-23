@@ -71,6 +71,7 @@ fn complex_kitchen_sink() {
         // complex_carry
         button {
             class: "flex items-center pl-3 py-3 pr-2 text-gray-500 hover:bg-indigo-50 rounded",
+            width: {"100%"}.to_string(),
             onclick: move |evt| {
                 show_user_menu.set(!show_user_menu.get());
                 evt.cancel_bubble();

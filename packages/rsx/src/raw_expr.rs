@@ -1,4 +1,4 @@
-use proc_macro2::TokenStream as TokenStream2;
+use proc_macro2::{TokenStream as TokenStream2, TokenTree};
 use quote::ToTokens;
 use std::hash;
 use syn::{parse::Parse, spanned::Spanned, token::Brace, Expr};
@@ -15,8 +15,32 @@ pub struct PartialExpr {
 
 impl Parse for PartialExpr {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        // Parse as an expression if there is no brace
-        if !input.peek(syn::token::Brace) {
+        // Trying to find if input includes a method call
+        let has_method_call = input
+            .fork()
+            .step(|cursor| {
+                let mut rest = *cursor;
+                while let Some((tt, next)) = rest.token_tree() {
+                    if let TokenTree::Punct(punct) = &tt {
+                        if punct.as_char() == ',' {
+                            return Ok((false, next));
+                        }
+                    }
+                    if let TokenTree::Group(_) = &tt {
+                        if let Some((tt2, _)) = next.punct() {
+                            if tt2.as_char() == '.' {
+                                return Ok((true, next));
+                            }
+                        }
+                    }
+                    rest = next;
+                }
+                Ok((false, rest))
+            })
+            .unwrap_or(false);
+
+        // Parse as an expression if there is no brace or there is a method call
+        if !input.peek(syn::token::Brace) || has_method_call {
             let expr = input.parse::<syn::Expr>()?;
             return Ok(Self {
                 brace: None,
