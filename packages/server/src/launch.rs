@@ -153,7 +153,7 @@ async fn serve_server(
                                     }
 
                                     for (_, f) in server_fn_map {
-                                        tracing::debug!(
+                                        tracing::trace!(
                                             "Registering server function: {:?} {:?}",
                                             f.path(),
                                             f.method()

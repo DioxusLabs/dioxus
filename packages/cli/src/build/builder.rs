@@ -307,7 +307,6 @@ impl AppBuilder {
         // Abort all the ongoing builds, cleaning up any loose artifacts and waiting to cleanly exit
         // And then start a new build, resetting our progress/stage to the beginning and replacing the old tokio task
         self.abort_all(BuildStage::Restarting);
-
         self.build_task = tokio::spawn({
             let request = self.build.clone();
             let ctx = BuildContext {
@@ -322,7 +321,6 @@ impl AppBuilder {
     ///
     /// todo: might want to use a cancellation token here to allow cleaner shutdowns
     pub(crate) fn abort_all(&mut self, stage: BuildStage) {
-        self.build_task.abort();
         self.stage = stage;
         self.compiled_crates = 0;
         self.expected_crates = 1;
@@ -331,6 +329,7 @@ impl AppBuilder {
         self.bundle_start = None;
         self.bundle_end = None;
         self.compile_end = None;
+        self.build_task.abort();
     }
 
     /// Wait for the build to finish, returning the final bundle

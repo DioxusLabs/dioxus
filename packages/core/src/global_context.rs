@@ -488,7 +488,6 @@ pub fn force_all_dirty() {
     Runtime::with(|rt| {
         rt.scope_states.borrow_mut().iter().for_each(|state| {
             if let Some(scope) = state.as_ref() {
-                tracing::info!("Forcing scope {:?} to be dirty", scope.id.0);
                 scope.needs_update();
             }
         });

@@ -211,7 +211,7 @@ impl AppServer {
             .flatten();
 
         let watch_fs = args.watch.unwrap_or(true);
-        let use_hotpatch_engine = args.hot_patch.unwrap_or(false);
+        let use_hotpatch_engine = args.hot_patch;
         let build_mode = match use_hotpatch_engine {
             true => BuildMode::Fat,
             false => BuildMode::Base,
@@ -339,7 +339,11 @@ impl AppServer {
     /// This will also handle any assets that are linked in the files, and copy them to the bundle
     /// and send them to the client.
     pub(crate) async fn handle_file_change(&mut self, files: &[PathBuf], server: &mut WebServer) {
-        if !self.client.can_receive_hotreloads() {
+        // We can attempt to hotpatch if the build is in a bad state, since this patch might be a recovery.
+        if !matches!(
+            self.client.stage,
+            BuildStage::Failed | BuildStage::Aborted | BuildStage::Success
+        ) {
             tracing::debug!(
                 "Ignoring file change: client is not ready to receive hotreloads. Files: {:#?}",
                 files

@@ -334,6 +334,9 @@ impl VirtualDom {
             "app",
         );
 
+        #[cfg(debug_assertions)]
+        dom.register_subsecond_handler();
+
         dom
     }
 

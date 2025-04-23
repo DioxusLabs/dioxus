@@ -21,7 +21,7 @@ impl RunArgs {
         //
         // We want to turn off the fancy stuff like the TUI, watcher, and hot-reload, but leave logging
         // and other things like the devserver on.
-        self.args.hot_patch = Some(false);
+        self.args.hot_patch = false;
         self.args.interactive = Some(false);
         self.args.hot_reload = Some(false);
         self.args.watch = Some(false);

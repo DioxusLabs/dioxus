@@ -208,7 +208,7 @@ where
     let path = f.path();
     let method = f.method();
 
-    tracing::debug!("Registering server function: {} {}", method, path);
+    tracing::trace!("Registering server function: {} {}", method, path);
     let handler = move |req| handle_server_fns_inner(f, context_providers, req);
     match method {
         Method::GET => router.route(path, get(handler)),

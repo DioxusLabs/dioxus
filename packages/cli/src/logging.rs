@@ -73,7 +73,7 @@ impl TraceController {
             )
         } else {
             EnvFilter::new(format!(
-                "error,dx={our_level},dioxus_cli={our_level},manganis_cli_support={our_level},,wasm_split_cli={our_level},subsecond_cli_support={our_level}",
+                "error,dx={our_level},dioxus_cli={our_level},manganis_cli_support={our_level},wasm_split_cli={our_level},subsecond_cli_support={our_level}",
                 our_level = if args.verbosity.verbose {
                     "debug"
                 } else {

@@ -1550,7 +1550,7 @@ impl BuildRequest {
             let mut bytes = vec![];
             let mut out_ar = ar::Builder::new(&mut bytes);
             for rlib in &rlibs {
-                tracing::debug!("Adding rlib {:?} to archive", rlib);
+                tracing::trace!("Adding rlib {:?} to archive", rlib);
 
                 // Skip compiler rlibs since they're missing bitcode
                 //
@@ -1559,7 +1559,7 @@ impl BuildRequest {
                 // if the rlib is not in the target directory, we skip it.
                 if !rlib.starts_with(self.workspace_dir()) {
                     compiler_rlibs.push(rlib.clone());
-                    tracing::debug!("Skipping rlib {:?} since it's not in the target dir", rlib);
+                    tracing::trace!("Skipping rlib {:?} since it's not in the target dir", rlib);
                     continue;
                 }
 
@@ -1617,7 +1617,7 @@ impl BuildRequest {
                 // On all other platforms, we need to use -force_load
                 // todo: this only supports macos for now
                 // _ => format!("-Wl,-force_load={}", out_ar_path.display()),
-                Platform::MacOS | Platform::Ios => {
+                Platform::Server | Platform::MacOS | Platform::Ios => {
                     args[first_rlib] = format!("-Wl,-force_load");
                     args.insert(first_rlib + 1, out_ar_path.display().to_string());
                     args.retain(|arg| !arg.ends_with(".rlib"));
