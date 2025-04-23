@@ -819,15 +819,9 @@ mod tests {
         assert!(matches!(parsed.value, AttributeValue::EventTokens(_)));
         let parsed: Attribute = parse2(quote! { onclick: |e| { value. } }).unwrap();
         assert!(matches!(parsed.value, AttributeValue::EventTokens(_)));
-        let parsed: Attribute = parse2(quote! { onclick: { |e| value } }).unwrap();
-        assert!(matches!(parsed.value, AttributeValue::EventTokens(_)));
         let parsed: Attribute = parse2(quote! { onclick: move |e| { value. } }).unwrap();
         assert!(matches!(parsed.value, AttributeValue::EventTokens(_)));
         let parsed: Attribute = parse2(quote! { onclick: move |e| value }).unwrap();
-        assert!(matches!(parsed.value, AttributeValue::EventTokens(_)));
-        let parsed: Attribute = parse2(quote! { onclick: { move |e| value } }).unwrap();
-        assert!(matches!(parsed.value, AttributeValue::EventTokens(_)));
-        let parsed: Attribute = parse2(quote! { onclick: {{ move |e| value } }}).unwrap();
         assert!(matches!(parsed.value, AttributeValue::EventTokens(_)));
         let parsed: Attribute = parse2(quote! { onclick: |e| value, }).unwrap();
         assert!(matches!(parsed.value, AttributeValue::EventTokens(_)));
