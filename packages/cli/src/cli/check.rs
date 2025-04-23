@@ -4,7 +4,7 @@
 //! https://github.com/rust-lang/rustfmt/blob/master/src/bin/main.rs
 
 use super::*;
-use crate::Workspace;
+use crate::BuildRequest;
 use anyhow::Context;
 use futures_util::{stream::FuturesUnordered, StreamExt};
 use std::path::Path;
@@ -25,12 +25,22 @@ pub(crate) struct Check {
 impl Check {
     // Todo: check the entire crate
     pub(crate) async fn check(self) -> Result<StructuredOutput> {
+        let BuildTargets { client, server } = self.build_args.into_targets().await?;
+
         match self.file {
             // Default to checking the project
             None => {
-                check_project_and_report(&self.build_args)
+                check_project_and_report(&client)
                     .await
                     .context("error checking project")?;
+
+                if let Some(server) = server {
+                    if server.cargo_package != client.cargo_package {
+                        check_project_and_report(&server)
+                            .await
+                            .context("error checking project")?;
+                    }
+                }
             }
             Some(file) => {
                 check_file_and_report(file)
@@ -52,10 +62,11 @@ async fn check_file_and_report(path: PathBuf) -> Result<()> {
 /// Runs using Tokio for multithreading, so it should be really really fast
 ///
 /// Doesn't do mod-descending, so it will still try to check unreachable files. TODO.
-async fn check_project_and_report(krate: &BuildArgs) -> Result<()> {
-    let workspace = Workspace::current().await?;
-    let dioxus_crate = workspace.find_main_package(krate.package.clone())?;
-    let dioxus_crate = &workspace.krates[dioxus_crate];
+async fn check_project_and_report(build: &BuildRequest) -> Result<()> {
+    let dioxus_crate = build
+        .workspace
+        .find_main_package(Some(build.cargo_package.clone()))?;
+    let dioxus_crate = &build.workspace.krates[dioxus_crate];
     let mut files_to_check = vec![];
     collect_rs_files(
         dioxus_crate.manifest_path.parent().unwrap().as_std_path(),

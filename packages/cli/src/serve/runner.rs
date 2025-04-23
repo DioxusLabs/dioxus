@@ -1,7 +1,7 @@
 use super::{AppBuilder, ServeUpdate, WebServer};
 use crate::{
-    BuildArtifacts, BuildId, BuildMode, BuildRequest, Platform, Result, ServeArgs, TargetCmd,
-    TraceSrc, Workspace,
+    BuildArtifacts, BuildId, BuildMode, BuildRequest, BuildTargets, Platform, Result, ServeArgs,
+    TargetCmd, TraceSrc, Workspace,
 };
 use anyhow::Context;
 use axum::extract::ws::Message as WsMessage;
@@ -123,84 +123,11 @@ impl AppServer {
         let (watcher_tx, watcher_rx) = futures_channel::mpsc::unbounded();
         let watcher = create_notify_watcher(watcher_tx.clone(), wsl_file_poll_interval as u64);
 
-        let mut fullstack = false;
-        let mut server = None;
-        let client = match args.targets {
-            // A simple `dx serve` command with no explicit targets
-            None => {
-                // Now resolve the builds that we need to.
-                // These come from the args, but we'd like them to come from the `TargetCmd` chained object
-                //
-                // The process here is as follows:
-                //
-                // - Create the BuildRequest for the primary target
-                // - If that BuildRequest is "fullstack", then add the client features
-                // - If that BuildRequest is "fullstack", then also create a BuildRequest for the server
-                //   with the server features
-                //
-                // This involves modifying the BuildRequest to add the client features and server features
-                // only if we can properly detect that it's a fullstack build. Careful with this, since
-                // we didn't build BuildRequest to be generally mutable.
-                let client = BuildRequest::new(&args.build_arguments, workspace.clone()).await?;
-
-                // Make sure we set the fullstack platform so we actually build the fullstack variant
-                // Users need to enable "fullstack" in their default feature set.
-                // todo(jon): fullstack *could* be a feature of the app, but right now we're assuming it's always enabled
-                //
-                // Now we need to resolve the client features
-                fullstack = client.fullstack_feature_enabled() || args.fullstack.unwrap_or(false);
-                if fullstack {
-                    let mut build_args = args.build_arguments.clone();
-                    build_args.platform = Some(Platform::Server);
-
-                    let _server = BuildRequest::new(&build_args, workspace.clone()).await?;
-
-                    // ... todo: add the server features to the server build
-                    // ... todo: add the client features to the client build
-                    // // Make sure we have a server feature if we're building a fullstack app
-                    if args.fullstack.unwrap_or_default() && args.server_features.is_empty() {
-                        return Err(anyhow::anyhow!("Fullstack builds require a server feature on the target crate. Add a `server` feature to the crate and try again.").into());
-                    }
-
-                    server = Some(_server);
-                }
-
-                client
-            }
-
-            // A command in the form of:
-            // ```
-            // dx serve \
-            //     client --package frontend \
-            //     server --package backend
-            // ```
-            Some(cmd) => {
-                let mut client_args_ = None;
-                let mut server_args_ = None;
-                let mut cmd_outer = Some(Box::new(cmd));
-                while let Some(cmd) = cmd_outer.take() {
-                    match *cmd {
-                        TargetCmd::Client(cmd_) => {
-                            client_args_ = Some(cmd_.inner);
-                            cmd_outer = cmd_.next;
-                        }
-                        TargetCmd::Server(cmd) => {
-                            server_args_ = Some(cmd.inner);
-                            cmd_outer = cmd.next;
-                        }
-                    }
-                }
-
-                if let Some(server_ags) = server_args_ {
-                    server = Some(BuildRequest::new(&server_ags, workspace.clone()).await?);
-                }
-
-                BuildRequest::new(&client_args_.unwrap(), workspace.clone()).await?
-            }
-        };
+        let BuildTargets { client, server } = args.targets.into_targets().await?;
 
         // All servers will end up behind us (the devserver) but on a different port
         // This is so we can serve a loading screen as well as devtools without anything particularly fancy
+        let fullstack = server.is_some();
         let should_proxy_port = match client.platform {
             Platform::Server => true,
             _ => fullstack,

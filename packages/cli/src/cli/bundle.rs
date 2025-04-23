@@ -1,4 +1,4 @@
-use crate::{AppBuilder, BuildArgs, BuildMode, BuildRequest, Platform, Workspace};
+use crate::{AppBuilder, BuildArgs, BuildMode, BuildRequest, Platform};
 use anyhow::{anyhow, Context};
 use dioxus_cli_config::{server_ip, server_port};
 use futures_util::stream::FuturesUnordered;
@@ -17,19 +17,6 @@ use walkdir::WalkDir;
 use super::*;
 
 /// Bundle an app and its assets.
-///
-/// This only takes a single build into account. To build multiple targets, use multiple calls to bundle.
-///
-/// ```
-/// dioxus bundle --target <target>
-/// dioxus bundle --target <target>
-/// ```
-///
-/// Note that building the server will perform a client build as well:
-///
-/// ```
-/// dioxus bundle --platform server
-/// ```
 ///
 /// This will produce a client `public` folder and the associated server executable in the output folder.
 #[derive(Clone, Debug, Parser)]
@@ -68,55 +55,56 @@ impl Bundle {
     pub(crate) async fn bundle(mut self) -> Result<StructuredOutput> {
         tracing::info!("Bundling project...");
 
-        // We always use `release` mode for bundling
-        // todo - maybe not? what if you want a devmode bundle?
-        self.args.release = true;
+        let BuildTargets { client, server } = self.args.into_targets().await?;
 
-        let workspace = Workspace::current().await?;
-
-        let build = BuildRequest::new(&self.args, workspace)
-            .await
-            .context("Failed to load Dioxus workspace")?;
-
-        tracing::info!("Building app...");
-
-        let bundle = AppBuilder::start(&build, BuildMode::Base)?
+        AppBuilder::start(&client, BuildMode::Base)?
             .finish_build()
             .await?;
 
+        tracing::info!(path = ?client.root_dir(), "Client build completed successfully! 🚀");
+
+        if let Some(server) = server.as_ref() {
+            // If the server is present, we need to build it as well
+            AppBuilder::start(&server, BuildMode::Base)?
+                .finish_build()
+                .await?;
+
+            tracing::info!(path = ?client.root_dir(), "Server build completed successfully! 🚀");
+        }
+
         // If we're building for iOS, we need to bundle the iOS bundle
-        if build.platform == Platform::Ios && self.package_types.is_none() {
+        if client.platform == Platform::Ios && self.package_types.is_none() {
             self.package_types = Some(vec![crate::PackageType::IosBundle]);
         }
 
         let mut bundles = vec![];
 
-        // // Copy the server over if it exists
-        // if build.fullstack {
-        //     bundles.push(build.server_exe().unwrap());
-        // }
+        // Copy the server over if it exists
+        if let Some(server) = server.as_ref() {
+            bundles.push(server.main_exe());
+        }
 
         // Create a list of bundles that we might need to copy
-        match build.platform {
+        match client.platform {
             // By default, mac/win/linux work with tauri bundle
             Platform::MacOS | Platform::Linux | Platform::Windows => {
                 tracing::info!("Running desktop bundler...");
-                for bundle in Self::bundle_desktop(&build, &self.package_types)? {
+                for bundle in Self::bundle_desktop(&client, &self.package_types)? {
                     bundles.extend(bundle.bundle_paths);
                 }
             }
 
             // Web/ios can just use their root_dir
-            Platform::Web => bundles.push(build.root_dir()),
+            Platform::Web => bundles.push(client.root_dir()),
             Platform::Ios => {
                 tracing::warn!("iOS bundles are not currently codesigned! You will need to codesign the app before distributing.");
-                bundles.push(build.root_dir())
+                bundles.push(client.root_dir())
             }
-            Platform::Server => bundles.push(build.root_dir()),
-            Platform::Liveview => bundles.push(build.root_dir()),
+            Platform::Server => bundles.push(client.root_dir()),
+            Platform::Liveview => bundles.push(client.root_dir()),
 
             Platform::Android => {
-                let aab = build
+                let aab = client
                     .android_gradle_bundle()
                     .await
                     .context("Failed to run gradle bundleRelease")?;
@@ -125,7 +113,7 @@ impl Bundle {
         };
 
         // Copy the bundles to the output directory if one was specified
-        let crate_outdir = build.crate_out_dir();
+        let crate_outdir = client.crate_out_dir();
         if let Some(outdir) = self.out_dir.clone().or(crate_outdir) {
             let outdir = outdir
                 .absolutize()
@@ -165,20 +153,14 @@ impl Bundle {
             );
         }
 
-        // async fn pre_render_ssg_routes(&self) -> Result<()> {
-        //     // Run SSG and cache static routes
-        //     if !self.ssg {
-        //         return Ok(());
-        //     }
-        //     self.status_prerendering_routes();
-        //     pre_render_static_routes(
-        //         &self
-        //             .server_exe()
-        //             .context("Failed to find server executable")?,
-        //     )
-        //     .await?;
-        //     Ok(())
-        // }
+        // Run SSG and cache static routes
+        if self.ssg {
+            if let Some(server) = server.as_ref() {
+                tracing::info!("Running SSG for static routes...");
+                Self::pre_render_static_routes(&server.main_exe()).await?;
+                tracing::info!("SSG complete");
+            }
+        }
 
         Ok(StructuredOutput::BundleOutput { bundles })
     }
@@ -305,7 +287,8 @@ impl Bundle {
         Ok(bundles)
     }
 
-    pub(crate) async fn pre_render_static_routes(server_exe: &Path) -> anyhow::Result<()> {
+    /// Pre-render the static routes, performing static-site generation
+    async fn pre_render_static_routes(server_exe: &Path) -> anyhow::Result<()> {
         // During SSG, just serve the static files instead of running the server
         // _ => builds[0].fullstack && !self.build_arguments.ssg,
 

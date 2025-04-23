@@ -1,9 +1,8 @@
-use std::{backtrace::Backtrace, panic::AssertUnwindSafe};
-
-use super::{chained::ChainedCommand, *};
+use super::{target::TargetArgs, *};
 use crate::{AddressArguments, BuildArgs, TraceController, PROFILE_SERVER};
 use futures_util::FutureExt;
 use once_cell::sync::OnceCell;
+use std::{backtrace::Backtrace, panic::AssertUnwindSafe};
 use target_lexicon::Triple;
 
 /// Serve the project
@@ -83,60 +82,8 @@ pub(crate) struct ServeArgs {
     #[clap(long)]
     pub(crate) force_sequential: bool,
 
-    /// Enable fullstack mode [default: false]
-    ///
-    /// This is automatically detected from `dx serve` if the "fullstack" feature is enabled by default.
-    pub(crate) fullstack: Option<bool>,
-
-    /// The feature to use for the client in a fullstack app [default: "web"]
-    #[clap(long)]
-    pub(crate) client_features: Vec<String>,
-
-    /// The feature to use for the server in a fullstack app [default: "server"]
-    #[clap(long)]
-    pub(crate) server_features: Vec<String>,
-
-    /// Build with custom profile for the fullstack server
-    #[clap(long, default_value_t = PROFILE_SERVER.to_string())]
-    pub(crate) server_profile: String,
-
-    /// The target to build for the server.
-    ///
-    /// This can be different than the host allowing cross-compilation of the server. This is useful for
-    /// platforms like Cloudflare Workers where the server is compiled to wasm and then uploaded to the edge.
-    #[clap(long)]
-    pub(crate) server_target: Option<Triple>,
-
-    /// Arguments for the build itself
     #[clap(flatten)]
-    pub(crate) build_arguments: BuildArgs,
-
-    /// A list of additional targets to build.
-    ///
-    /// Server and Client are special targets that integrate with `dx serve`, while `crate` is a generic.
-    ///
-    /// ```
-    /// dx serve \
-    ///     client --target aarch64-apple-darwin \
-    ///     server --target wasm32-unknown-unknown \
-    ///     crate --target aarch64-unknown-linux-gnu --package foo \
-    ///     crate --target x86_64-unknown-linux-gnu --package bar
-    /// ```
-    #[command(subcommand)]
-    pub(crate) targets: Option<TargetCmd>,
-}
-
-/// Launch a specific target
-#[derive(Debug, Subcommand, Clone)]
-#[command(subcommand_precedence_over_arg = true)]
-pub(crate) enum TargetCmd {
-    /// Specify the arguments for the client build
-    #[clap(name = "client")]
-    Client(ChainedCommand<BuildArgs, TargetCmd>),
-
-    /// Specify the arguments for the server build
-    #[clap(name = "server")]
-    Server(ChainedCommand<BuildArgs, TargetCmd>),
+    pub(crate) targets: BuildArgs,
 }
 
 impl ServeArgs {

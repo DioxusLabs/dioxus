@@ -324,12 +324,6 @@ impl<A, M, F: HotFunction<A, M>> HotFn<A, M, F> {
     /// then this function will emit an [`HotFnPanic`] which can be unwrapped and handled by next [`call`]
     /// instance.
     pub fn try_call(&mut self, args: A) -> Result<F::Return, HotFnPanic> {
-        // If we need to unwind, then let's throw a panic
-        // This will occur when the pending patch is "over our head" and needs to be applied to a
-        // "resume point". We can eventually look into migrating the datastructures over but for now
-        // the resume point will force the struct to be re-built.
-        // panic_any()
-
         unsafe {
             // Try to handle known function pointers. This is *really really* unsafe, but due to how
             // rust trait objects work, it's impossible to make an arbitrary usize-sized type implement Fn()

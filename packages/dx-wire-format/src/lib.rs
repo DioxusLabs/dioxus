@@ -22,13 +22,29 @@ pub use cargo_metadata;
 #[non_exhaustive]
 #[derive(Serialize, Deserialize, Clone)]
 pub enum StructuredOutput {
-    BuildFinished { path: PathBuf },
-    BuildUpdate { stage: BuildStage },
-    CargoOutput { message: CompilerMessage },
-    BundleOutput { bundles: Vec<PathBuf> },
-    HtmlTranslate { html: String },
+    BuildsFinished {
+        client: PathBuf,
+        server: Option<PathBuf>,
+    },
+    BuildFinished {
+        path: PathBuf,
+    },
+    BuildUpdate {
+        stage: BuildStage,
+    },
+    CargoOutput {
+        message: CompilerMessage,
+    },
+    BundleOutput {
+        bundles: Vec<PathBuf>,
+    },
+    HtmlTranslate {
+        html: String,
+    },
     Success,
-    Error { message: String },
+    Error {
+        message: String,
+    },
 }
 
 impl std::fmt::Debug for StructuredOutput {

@@ -319,8 +319,8 @@ use super::{android_tools, AndroidTools, BuildContext};
 use crate::{
     rustcwrapper::{RustcArgs, DX_RUSTC_WRAPPER_ENV_VAR},
     wasm_bindgen::WasmBindgen,
-    BuildArgs, DioxusConfig, Error, LinkAction, Platform, Result, TraceSrc, WasmOptConfig,
-    Workspace,
+    BuildArgs, DioxusConfig, Error, LinkAction, Platform, Result, TargetArgs, TraceSrc,
+    WasmOptConfig, Workspace,
 };
 use anyhow::Context;
 use dioxus_cli_config::{APP_TITLE_ENV, ASSET_ROOT_ENV};
@@ -492,7 +492,7 @@ impl BuildRequest {
     ///
     /// Note: Build requests are typically created only when the CLI is invoked or when significant
     /// changes are detected in the `Cargo.toml` (e.g., features added or removed).
-    pub(crate) async fn new(args: &BuildArgs, workspace: Arc<Workspace>) -> Result<Self> {
+    pub(crate) async fn new(args: &TargetArgs, workspace: Arc<Workspace>) -> Result<Self> {
         let crate_package = workspace.find_main_package(args.package.clone())?;
 
         let config = workspace
