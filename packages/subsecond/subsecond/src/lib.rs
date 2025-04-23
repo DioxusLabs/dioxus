@@ -200,7 +200,7 @@ use std::{
     backtrace,
     mem::transmute,
     panic::AssertUnwindSafe,
-    sync::{Arc, Mutex},
+    sync::{atomic::AtomicPtr, Arc, Mutex},
 };
 
 pub use subsecond_types::JumpTable;
@@ -208,7 +208,6 @@ pub use subsecond_types::JumpTable;
 // todo: if there's a reference held while we run our patch, this gets invalidated. should probably
 // be a pointer to a jump table instead, behind a cell or something. I believe Atomic + relaxed is basically a no-op
 static HOTRELOAD_HANDLERS: Mutex<Vec<Arc<dyn Fn() + Send + Sync>>> = Mutex::new(Vec::new());
-static mut APP_JUMP_TABLE: Option<JumpTable> = None;
 static mut CHANGED: bool = false;
 static mut SUBSECOND_ENABLED: bool = false;
 
@@ -259,6 +258,26 @@ pub fn call<O>(f: impl FnMut() -> O) -> O {
     }
 }
 
+// We use an AtomicPtr with a leaked JumpTable and Relaxed ordering to give us a global jump table
+// with very very littel overhead. Reading this amounts of a Relaxed atomic load which basically
+// is 0 overhead. We might want to look into using a thread_local with a stop-the-world approach
+// just in case multiple threads try to call the jump table before synchronization with the runtime.
+static APP_JUMP_TABLE: AtomicPtr<JumpTable> = AtomicPtr::new(std::ptr::null_mut());
+fn set_new_jump_table(table: JumpTable) {
+    APP_JUMP_TABLE.store(
+        Box::into_raw(Box::new(table)),
+        std::sync::atomic::Ordering::Relaxed,
+    );
+}
+fn get_jump_table() -> Option<&'static JumpTable> {
+    let ptr = APP_JUMP_TABLE.load(std::sync::atomic::Ordering::Relaxed);
+    if ptr.is_null() {
+        return None;
+    }
+
+    Some(unsafe { &*ptr })
+}
+
 /// A panic issued by the [`call`] function if the caller would be stale if called. This causes
 /// an unwind to the next [`call`] instance that can properly handle the panic and retry the call.
 ///
@@ -307,11 +326,9 @@ impl<A, M, F: HotFunction<A, M>> HotFn<A, M, F> {
 
         let known_fn_ptr = <F as HotFunction<A, M>>::call_it as *const () as usize;
 
-        unsafe {
-            if let Some(jump_table) = APP_JUMP_TABLE.as_ref() {
-                if let Some(ptr) = jump_table.map.get(&(known_fn_ptr as u64)).cloned() {
-                    return ptr;
-                }
+        if let Some(jump_table) = get_jump_table() {
+            if let Some(ptr) = jump_table.map.get(&(known_fn_ptr as u64)).cloned() {
+                return ptr;
             }
         }
 
@@ -337,7 +354,7 @@ impl<A, M, F: HotFunction<A, M>> HotFn<A, M, F> {
             //
             // For non-zst (trait object) types, then there might be an issue. The real call function
             // will likely end up in the vtable and will never be hot-reloaded since signature takes self.
-            if let Some(jump_table) = APP_JUMP_TABLE.as_ref() {
+            if let Some(jump_table) = get_jump_table() {
                 let known_fn_ptr = <F as HotFunction<A, M>>::call_it as *const () as u64;
                 if let Some(ptr) = jump_table.map.get(&known_fn_ptr).cloned() {
                     // The type sig of the cast should match the call_it function
@@ -554,7 +571,7 @@ pub enum PatchError {
 
 unsafe fn commit_patch(table: JumpTable) {
     // Update runtime state
-    APP_JUMP_TABLE = Some(table);
+    set_new_jump_table(table);
     CHANGED = true;
     HOTRELOAD_HANDLERS
         .lock()
@@ -756,7 +773,7 @@ macro_rules! impl_hot_function {
 
                 unsafe fn call_as_ptr(&mut self, args: ($($arg,)*)) -> Self::Return {
                     unsafe {
-                        if let Some(jump_table) = APP_JUMP_TABLE.as_ref() {
+                        if let Some(jump_table) = get_jump_table() {
                             let real = std::mem::transmute_copy::<Self, Self::Real>(&self) as *const ();
 
                             // Android implements MTE / pointer tagging and we need to preserve the tag.
