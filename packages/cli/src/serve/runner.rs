@@ -339,6 +339,14 @@ impl AppServer {
     /// This will also handle any assets that are linked in the files, and copy them to the bundle
     /// and send them to the client.
     pub(crate) async fn handle_file_change(&mut self, files: &[PathBuf], server: &mut WebServer) {
+        if !self.client.can_receive_hotreloads() {
+            tracing::debug!(
+                "Ignoring file change: client is not ready to receive hotreloads. Files: {:#?}",
+                files
+            );
+            return;
+        }
+
         // If we have any changes to the rust files, we need to update the file map
         let mut templates = vec![];
 
@@ -592,7 +600,8 @@ impl AppServer {
         // If the client is running on Android, we need to remove the port forwarding
         // todo: use the android tools "adb"
         if matches!(self.client.build.platform, Platform::Android) {
-            if let Err(err) = Command::new("adb")
+            let tools = crate::build::android_tools().unwrap();
+            if let Err(err) = Command::new(&tools.adb)
                 .arg("reverse")
                 .arg("--remove")
                 .arg(format!("tcp:{}", self.devserver_port))

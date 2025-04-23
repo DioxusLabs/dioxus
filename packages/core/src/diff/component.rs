@@ -137,7 +137,7 @@ impl VNode {
         // Replace components that have different render fns - only in release mode
         // During development we might want to hot-reload components
         // #[cfg(not(debug_assertions))]
-        if old.render_fn != new.render_fn {
+        if old.render_fn != new.render_fn || old.entropy != new.entropy {
             return self.replace_vcomponent(mount, idx, new, parent, dom, to);
         }
 
@@ -150,7 +150,7 @@ impl VNode {
         // The target ScopeState still has the reference to the old props, so there's no need to update anything
         // This also implicitly drops the new props since they're not used
         if old_props.memoize(new_props.props()) {
-            tracing::trace!("Memoized props for component {:#?}", scope_id,);
+            tracing::trace!("Memoized props for component {:?}", scope_id,);
             return;
         }
 

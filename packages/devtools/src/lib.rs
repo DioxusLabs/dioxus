@@ -37,8 +37,10 @@ pub fn apply_changes(dom: &VirtualDom, msg: &HotReloadMsg) -> Result<(), Devtool
 
         // 2. Attempt to hotpatch
         if let Some(jump_table) = msg.jump_table.as_ref().cloned() {
-            unsafe { subsecond::apply_patch(jump_table) }?;
-            dioxus_core::prelude::force_all_dirty();
+            if msg.for_build_id == Some(dioxus_cli_config::build_id()) {
+                unsafe { subsecond::apply_patch(jump_table) }?;
+                dioxus_core::prelude::force_all_dirty();
+            }
         }
 
         Ok(())

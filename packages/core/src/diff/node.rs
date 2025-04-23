@@ -29,13 +29,11 @@ impl VNode {
         );
 
         // If the templates are different, we need to replace the entire template
-        // if cfg!(not(debug_assertions)) {
         if self.template != new.template {
             let mount_id = self.mount.get();
             let parent = dom.get_mounted_parent(mount_id);
             return self.replace(std::slice::from_ref(new), parent, dom, to);
         }
-        // }
 
         self.move_mount_to(new, dom);
 
@@ -104,16 +102,8 @@ impl VNode {
             ),
             (Component(old), Component(new)) => {
                 let scope_id = ScopeId(dom.get_mounted_dyn_node(mount, idx));
-                self.diff_vcomponent(
-                    mount,
-                    idx,
-                    new,
-                    old,
-                    scope_id,
-                    Some(self.reference_to_dynamic_node(mount, idx)),
-                    dom,
-                    to,
-                )
+                let parent = Some(self.reference_to_dynamic_node(mount, idx));
+                self.diff_vcomponent(mount, idx, new, old, scope_id, parent, dom, to)
             }
             (old, new) => {
                 // TODO: we should pass around the mount instead of the mount id

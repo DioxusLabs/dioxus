@@ -485,11 +485,13 @@ pub fn use_hook_with_cleanup<T: Clone + 'static>(
 /// This might need to change to a different flag in the event hooks order changes within components.
 /// What we really need is a way to mark components as needing a complete rebuild if they were hit by changes.
 pub fn force_all_dirty() {
-    _ = Runtime::with(|rt| {
+    Runtime::with(|rt| {
         rt.scope_states.borrow_mut().iter().for_each(|state| {
             if let Some(scope) = state.as_ref() {
+                tracing::info!("Forcing scope {:?} to be dirty", scope.id.0);
                 scope.needs_update();
             }
         });
-    });
+    })
+    .expect("Runtime to exist");
 }

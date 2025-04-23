@@ -34,7 +34,7 @@
 
                 display: grid;
                 grid-template-columns: auto auto;
-                max-width: 300px;
+                max-width: 400px;
                 min-height: 56px;
                 border-radius: 5px;
             }
@@ -144,7 +144,7 @@
 
             // Close the current toast.
             function closeDXToast() {
-                document.getElementById("__dx-toast-inner").style.right = "-300px";
+                document.getElementById("__dx-toast-inner").style.right = "-1000px";
                 clearTimeout(currentTimeout);
             }
 
@@ -164,7 +164,7 @@
     <body>
         <div id="main"></div>
         <div id="__dx-toast" class="dx-toast">
-            <div id="__dx-toast-inner" class="dx-toast-inner" style="right:-300px;">
+            <div id="__dx-toast-inner" class="dx-toast-inner" style="right:-1000px;">
                 <!-- Level/Color decor -->
                 <div class="dx-toast-level-bar-container">
                     <div id="__dx-toast-decor" class="dx-toast-level-bar __info"></div>

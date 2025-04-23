@@ -96,11 +96,7 @@ impl LaunchBuilder {
         )
     )]
     pub fn new() -> LaunchBuilder {
-        let platform = if cfg!(feature = "liveview") {
-            KnownPlatform::Liveview
-        } else if cfg!(feature = "server") {
-            KnownPlatform::Server
-        } else if cfg!(feature = "native") {
+        let platform = if cfg!(feature = "native") {
             KnownPlatform::Native
         } else if cfg!(feature = "desktop") {
             KnownPlatform::Desktop
@@ -108,6 +104,10 @@ impl LaunchBuilder {
             KnownPlatform::Mobile
         } else if cfg!(feature = "web") {
             KnownPlatform::Web
+        } else if cfg!(feature = "server") {
+            KnownPlatform::Server
+        } else if cfg!(feature = "liveview") {
+            KnownPlatform::Liveview
         } else {
             panic!("No platform feature enabled. Please enable one of the following features: liveview, desktop, mobile, web, tui, fullstack to use the launch API.")
         };

@@ -1517,8 +1517,6 @@ impl BuildRequest {
             .context("Failed to read link args from file")?;
         let args = raw_args.lines().collect::<Vec<_>>();
 
-        // tracing::debug!("Linking with args: {:?}", args);
-
         // Filter out the rlib files from the arguments
         let rlibs = args
             .iter()
@@ -1604,11 +1602,23 @@ impl BuildRequest {
                     }
                 }
 
+                Platform::Android => {
+                    args[first_rlib] = format!("-Wl,--whole-archive");
+                    args.insert(first_rlib + 1, out_ar_path.display().to_string());
+                    args.insert(first_rlib + 2, "-Wl,--no-whole-archive".to_string());
+                    args.retain(|arg| !arg.ends_with(".rlib"));
+
+                    // add back the compiler rlibs
+                    for rlib in compiler_rlibs.iter().rev() {
+                        args.insert(first_rlib + 3, rlib.display().to_string());
+                    }
+                }
+
                 // On all other platforms, we need to use -force_load
                 // todo: this only supports macos for now
                 // _ => format!("-Wl,-force_load={}", out_ar_path.display()),
-                _ => {
-                    args[first_rlib] = format!("-Wl,-all_load");
+                Platform::MacOS | Platform::Ios => {
+                    args[first_rlib] = format!("-Wl,-force_load");
                     args.insert(first_rlib + 1, out_ar_path.display().to_string());
                     args.retain(|arg| !arg.ends_with(".rlib"));
 
@@ -1617,6 +1627,8 @@ impl BuildRequest {
                         args.insert(first_rlib + 2, rlib.display().to_string());
                     }
                 }
+
+                _ => todo!(),
             };
         }
 
@@ -1638,7 +1650,6 @@ impl BuildRequest {
         let cc = match self.platform {
             // todo: we're using wasm-ld directly, but I think we can drive it with rust-lld and -flavor wasm
             Platform::Web => self.workspace.wasm_ld(),
-            // Platform::Web => self.workspace.rust_lld(),
 
             // The android clang linker is *special* and has some android-specific flags that we need
             //
@@ -2837,8 +2848,20 @@ impl BuildRequest {
             return true;
         }
 
-        // Check if any of the features enables the "fullstack" feature
-        self.workspace.has_dioxus_feature("fullstack")
+        // Check if any of the features in our feature list enables a feature that enables "fullstack"
+        let transitive = self
+            .package()
+            .features
+            .iter()
+            .filter(|(_name, list)| list.iter().any(|f| f == "dioxus/fullstack"));
+
+        for (name, _list) in transitive {
+            if self.features.contains(name) {
+                return true;
+            }
+        }
+
+        false
     }
 
     /// todo(jon): use handlebars templates instead of these prebaked templates

@@ -197,6 +197,7 @@
 //! apps with Dioxus Deploy (currently under construction).
 
 use std::{
+    any::TypeId,
     backtrace,
     mem::transmute,
     panic::AssertUnwindSafe,
@@ -272,11 +273,11 @@ pub struct HotFnPanic {
 ///
 /// To call this function, use the [`HotFn::call`] method. This will automatically use the latest
 /// version of the function from the JumpTable.
-pub struct HotFn<A, M, T>
+pub struct HotFn<A, M, F>
 where
-    T: HotFunction<A, M>,
+    F: HotFunction<A, M>,
 {
-    inner: T,
+    inner: F,
     _marker: std::marker::PhantomData<(A, M)>,
 }
 
@@ -296,6 +297,26 @@ impl<A, M, F: HotFunction<A, M>> HotFn<A, M, F> {
     /// This will attempt to
     pub fn call(&mut self, args: A) -> F::Return {
         self.try_call(args).unwrap()
+    }
+
+    /// Get the address of the function in memory, might be different than the original
+    pub fn ptr_address(&self) -> u64 {
+        if size_of::<F>() == size_of::<fn() -> ()>() {
+            let ptr: usize = unsafe { std::mem::transmute_copy(&self.inner) };
+            return ptr as u64;
+        }
+
+        let known_fn_ptr = <F as HotFunction<A, M>>::call_it as *const () as usize;
+
+        unsafe {
+            if let Some(jump_table) = APP_JUMP_TABLE.as_ref() {
+                if let Some(ptr) = jump_table.map.get(&(known_fn_ptr as u64)).cloned() {
+                    return ptr;
+                }
+            }
+        }
+
+        known_fn_ptr as u64
     }
 
     /// Attempt to call the function with the given arguments.

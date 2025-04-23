@@ -300,6 +300,7 @@ impl VirtualDom {
             name: "root",
             render_fn,
             props: Box::new(props),
+            entropy: 0,
         })
     }
 
@@ -332,8 +333,6 @@ impl VirtualDom {
             )),
             "app",
         );
-
-        dom.register_subsecond_handler();
 
         dom
     }

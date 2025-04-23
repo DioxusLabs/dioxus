@@ -383,7 +383,8 @@ fn static_items_merged() -> bool {
     fn a() {}
     fn b() {}
 
-    a as fn() == b as fn()
+    // a as fn() == b as fn()
+    false
 }
 
 impl std::hash::Hash for Template {
@@ -614,6 +615,9 @@ pub struct VComponent {
     /// It is possible that components get folded at compile time, so these shouldn't be really used as a key
     pub(crate) render_fn: TypeId,
 
+    /// Some additional cache-busting entropy fed by the subsecond engine
+    pub(crate) entropy: u64,
+
     /// The props for this component
     pub(crate) props: BoxedAnyProps,
 }
@@ -624,6 +628,7 @@ impl Clone for VComponent {
             name: self.name,
             render_fn: self.render_fn,
             props: self.props.duplicate(),
+            entropy: self.entropy,
         }
     }
 }
@@ -638,6 +643,7 @@ impl VComponent {
     where
         P: Properties + 'static,
     {
+        let entropy = component.raw_ptr() as u64;
         let render_fn = component.id();
         let props = Box::new(VProps::new(
             component,
@@ -647,6 +653,7 @@ impl VComponent {
         ));
 
         VComponent {
+            entropy,
             name: fn_name,
             props,
             render_fn,

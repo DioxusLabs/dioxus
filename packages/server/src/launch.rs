@@ -137,50 +137,53 @@ async fn serve_server(
             Msg::Devtools(devserver_msg) => {
                 match devserver_msg {
                     DevserverMsg::HotReload(hot_reload_msg) => {
-                        if let Some(table) = hot_reload_msg.jump_table {
-                            if let Ok(_) = unsafe { dioxus_devtools::subsecond::apply_patch(table) }
-                            {
-                                let mut new_router = axum::Router::new().serve_static_assets();
+                        if hot_reload_msg.for_build_id == Some(dioxus_cli_config::build_id()) {
+                            if let Some(table) = hot_reload_msg.jump_table {
+                                if let Ok(_) =
+                                    unsafe { dioxus_devtools::subsecond::apply_patch(table) }
+                                {
+                                    let mut new_router = axum::Router::new().serve_static_assets();
 
-                                let server_fn_iter = collect_raw_server_fns();
+                                    let server_fn_iter = collect_raw_server_fns();
 
-                                // de-duplicate iteratively by prefering the most recent (first, since it's linked)
-                                let mut server_fn_map: HashMap<_, _> = HashMap::new();
-                                for f in server_fn_iter.into_iter().rev() {
-                                    server_fn_map.insert(f.path(), f);
+                                    // de-duplicate iteratively by prefering the most recent (first, since it's linked)
+                                    let mut server_fn_map: HashMap<_, _> = HashMap::new();
+                                    for f in server_fn_iter.into_iter().rev() {
+                                        server_fn_map.insert(f.path(), f);
+                                    }
+
+                                    for (_, f) in server_fn_map {
+                                        tracing::debug!(
+                                            "Registering server function: {:?} {:?}",
+                                            f.path(),
+                                            f.method()
+                                        );
+                                        new_router = crate::register_server_fn_on_router(
+                                            f,
+                                            new_router,
+                                            cfg.context_providers.clone(),
+                                        );
+                                    }
+
+                                    let state = RenderHandleState::new(cfg.clone(), root)
+                                        .with_ssr_state(SSRState::new(&cfg));
+
+                                    let fallback_handler =
+                                        axum::routing::get(render_handler).with_state(state);
+
+                                    make_service = apply_base_path(
+                                        new_router.fallback(fallback_handler),
+                                        root,
+                                        cfg.clone(),
+                                        base_path().map(|s| s.to_string()),
+                                    )
+                                    .into_make_service();
+
+                                    _ = shutdown_tx.send_modify(|i| {
+                                        *i += 1;
+                                        hr_idx += 1;
+                                    });
                                 }
-
-                                for (_, f) in server_fn_map {
-                                    tracing::debug!(
-                                        "Registering server function: {:?} {:?}",
-                                        f.path(),
-                                        f.method()
-                                    );
-                                    new_router = crate::register_server_fn_on_router(
-                                        f,
-                                        new_router,
-                                        cfg.context_providers.clone(),
-                                    );
-                                }
-
-                                let state = RenderHandleState::new(cfg.clone(), root)
-                                    .with_ssr_state(SSRState::new(&cfg));
-
-                                let fallback_handler =
-                                    axum::routing::get(render_handler).with_state(state);
-
-                                make_service = apply_base_path(
-                                    new_router.fallback(fallback_handler),
-                                    root,
-                                    cfg.clone(),
-                                    base_path().map(|s| s.to_string()),
-                                )
-                                .into_make_service();
-
-                                _ = shutdown_tx.send_modify(|i| {
-                                    *i += 1;
-                                    hr_idx += 1;
-                                });
                             }
                         }
                     }

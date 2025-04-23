@@ -235,7 +235,8 @@ impl WebviewInstance {
                 asset_handlers,
                 edits
             ];
-            move |_id: wry::WebViewId, request, responder: RequestAsyncResponder| {
+            move |request, responder: RequestAsyncResponder| {
+                // move |_id: wry::WebViewId, request, responder: RequestAsyncResponder| {
                 protocol::desktop_handler(
                     request,
                     asset_handlers.clone(),
@@ -303,7 +304,21 @@ impl WebviewInstance {
             }
         };
 
-        let mut wv_builder = WebViewBuilder::with_web_context(&mut web_context)
+        #[cfg(any(
+            target_os = "windows",
+            target_os = "macos",
+            target_os = "ios",
+            target_os = "android"
+        ))]
+        let mut wv_builder = if cfg.as_child_window {
+            WebViewBuilder::new(&window)
+        } else {
+            WebViewBuilder::new_as_child(&window)
+        };
+
+        let mut wv_builder = wv_builder
+            .with_web_context(&mut web_context)
+            // let mut wv_builder = WebViewBuilder::with_web_context(&mut web_context)
             .with_bounds(wry::Rect {
                 position: wry::dpi::Position::Logical(wry::dpi::LogicalPosition::new(0.0, 0.0)),
                 size: wry::dpi::Size::Physical(wry::dpi::PhysicalSize::new(
@@ -371,19 +386,6 @@ impl WebviewInstance {
             wv_builder = wv_builder.with_devtools(true);
         }
 
-        #[cfg(any(
-            target_os = "windows",
-            target_os = "macos",
-            target_os = "ios",
-            target_os = "android"
-        ))]
-        let webview = if cfg.as_child_window {
-            wv_builder.build_as_child(&window)
-        } else {
-            wv_builder.build(&window)
-        }
-        .unwrap();
-
         #[cfg(not(any(
             target_os = "windows",
             target_os = "macos",
@@ -406,6 +408,8 @@ impl WebviewInstance {
         } else {
             None
         };
+
+        let webview = wv_builder.build().unwrap();
 
         let desktop_context = Rc::from(DesktopService::new(
             webview,

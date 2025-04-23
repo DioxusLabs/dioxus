@@ -141,7 +141,7 @@ fn create_wasm_jump_table(original: &Path, patch: &Path) -> anyhow::Result<JumpT
     let mut new = walrus::Module::from_buffer(&new_bytes)?;
 
     let old_raw_data = parse_bytes_to_data_segment(&old_bytes)?;
-    let name_to_ifunc_old = collect_func_ifuncs(&old, &old_raw_data.symbols);
+    let name_to_ifunc_old = collect_func_ifuncs(&old);
 
     let mut mems = vec![];
     let mut funcs = vec![];
@@ -186,16 +186,9 @@ fn create_wasm_jump_table(original: &Path, patch: &Path) -> anyhow::Result<JumpT
     // the main module, but we don't have that. Instead, we simply re-parse the main module, aggregate
     // its ifunc table, and then resolve directly to the index in that table.
     for (import_id, ifunc_index) in funcs {
-        let imp = new.imports.get(import_id);
         let ImportKind::Global(id) = new.imports.get(import_id).kind else {
             bail!("Expected GOT.func import to be a global");
         };
-
-        tracing::debug!(
-            "Importing GOT.func: {} -> real: {:?}",
-            imp.name,
-            ifunc_index
-        );
 
         // "satisfying" the import means removing it from the import table and replacing its target
         // value with a local global.
@@ -276,8 +269,7 @@ fn create_wasm_jump_table(original: &Path, patch: &Path) -> anyhow::Result<JumpT
     //
     // The ifunc_count will be passed to the dynamic loader so it can allocate the right amount of space
     // in the indirect function table when loading the patch.
-    let new_raw_data = parse_bytes_to_data_segment(&new_bytes)?;
-    let name_to_ifunc_new = collect_func_ifuncs(&new, &new_raw_data.symbols);
+    let name_to_ifunc_new = collect_func_ifuncs(&new);
     let ifunc_count = name_to_ifunc_new.len() as u64;
     let mut map = AddressMap::default();
     for (name, idx) in name_to_ifunc_new.iter() {
@@ -297,7 +289,7 @@ fn create_wasm_jump_table(original: &Path, patch: &Path) -> anyhow::Result<JumpT
     })
 }
 
-fn collect_func_ifuncs<'a>(m: &'a Module, syms: &'a [SymbolInfo<'a>]) -> HashMap<&'a str, i32> {
+fn collect_func_ifuncs<'a>(m: &'a Module) -> HashMap<&'a str, i32> {
     let mut offsets = HashMap::new();
 
     for el in m.elements.iter() {
@@ -568,7 +560,7 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
     // Unfortunately, the indicies it gives us ARE NOT VALID.
     // We need to work around it by using the FunctionId from the module as a link between the merged function names.
     let raw_data = parse_bytes_to_data_segment(bytes)?;
-    let ifunc_map = collect_func_ifuncs(&module, &raw_data.symbols);
+    let ifunc_map = collect_func_ifuncs(&module);
     let ifuncs = module
         .funcs
         .iter()

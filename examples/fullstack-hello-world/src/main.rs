@@ -19,9 +19,15 @@ fn app() -> Element {
             onclick: move |_| async move {
                 text.set(do_server_action().await.unwrap());
             },
-            "Request from the  server"
+            "Request from the server 1"
         }
-        div {
+        button {
+            onclick: move |_| async move {
+                text.set(do_server_action2().await.unwrap());
+            },
+            "Request from the server 2"
+        }
+        p {
             "server says: {text}"
         }
     }
@@ -29,5 +35,10 @@ fn app() -> Element {
 
 #[server]
 async fn do_server_action() -> Result<String, ServerFnError> {
-    Ok("hello from the server - hotpatched!!".to_string())
+    Ok("hello from the server - hotpatched!! server fn".to_string())
+}
+
+#[server]
+async fn do_server_action2() -> Result<String, ServerFnError> {
+    Ok("server action 2".to_string())
 }
