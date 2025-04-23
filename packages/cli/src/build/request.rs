@@ -315,12 +315,12 @@
 //! ## Extra links
 //! - xbuild: <https://github.com/rust-mobile/xbuild/blob/master/xbuild/src/command/build.rs>
 
-use super::{android_tools, AndroidTools, BuildContext};
 use crate::{
+    android_tools,
     rustcwrapper::{RustcArgs, DX_RUSTC_WRAPPER_ENV_VAR},
     wasm_bindgen::WasmBindgen,
-    BuildArgs, DioxusConfig, Error, LinkAction, Platform, Result, TargetArgs, TraceSrc,
-    WasmOptConfig, Workspace,
+    AndroidTools, BuildContext, DioxusConfig, Error, LinkAction, Platform, Result, TargetArgs,
+    TraceSrc, WasmOptConfig, Workspace,
 };
 use anyhow::Context;
 use dioxus_cli_config::{APP_TITLE_ENV, ASSET_ROOT_ENV};

@@ -1,5 +1,5 @@
-use crate::{cli::*, AppBuilder, BuildRequest, Workspace};
-use crate::{BuildMode, Platform};
+use crate::cli::*;
+use crate::Platform;
 use clap::{ArgMatches, Args, FromArgMatches, Subcommand};
 use target_lexicon::Triple;
 

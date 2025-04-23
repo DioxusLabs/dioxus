@@ -1,9 +1,8 @@
-use super::{target::TargetArgs, *};
-use crate::{AddressArguments, BuildArgs, TraceController, PROFILE_SERVER};
+use super::*;
+use crate::{AddressArguments, BuildArgs, TraceController};
 use futures_util::FutureExt;
 use once_cell::sync::OnceCell;
 use std::{backtrace::Backtrace, panic::AssertUnwindSafe};
-use target_lexicon::Triple;
 
 /// Serve the project
 ///
