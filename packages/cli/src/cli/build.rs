@@ -11,10 +11,6 @@ use target_lexicon::Triple;
 /// ```
 #[derive(Clone, Debug, Default, Deserialize, Parser)]
 pub(crate) struct BuildArgs {
-    /// Build for nightly [default: false]
-    #[clap(long)]
-    pub(crate) nightly: bool,
-
     /// Build platform: support Web & Desktop [default: "default_platform"]
     #[clap(long, value_enum)]
     pub(crate) platform: Option<Platform>,
@@ -94,12 +90,6 @@ pub(crate) struct BuildArgs {
     /// wasm binary
     #[clap(long, default_value_t = true)]
     pub(crate) debug_symbols: bool,
-
-    /// Use the cranelift backend to compile the app [default: false]
-    ///
-    /// This can speed up compile times by up to 100% but is experimental within the compiler.
-    #[clap(long)]
-    pub(crate) cranelift: bool,
 
     /// Are we building for a device or just the simulator.
     /// If device is false, then we'll build for the simulator

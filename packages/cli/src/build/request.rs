@@ -385,10 +385,7 @@ pub(crate) struct BuildRequest {
     ///
     pub(crate) triple: Triple,
 
-    pub(crate) device: bool,
-
-    /// Build for nightly [default: false]
-    pub(crate) nightly: bool,
+    pub(crate) _device: bool,
 
     /// The package to build
     pub(crate) cargo_package: String,
@@ -407,8 +404,6 @@ pub(crate) struct BuildRequest {
 
     /// The target directory for the build
     pub(crate) custom_target_dir: Option<PathBuf>,
-
-    pub(crate) cranelift: bool,
 
     pub(crate) skip_assets: bool,
 
@@ -688,7 +683,7 @@ impl BuildRequest {
             crate_target,
             profile,
             triple,
-            device,
+            _device: device,
             workspace,
             config,
             custom_target_dir: None,
@@ -699,11 +694,9 @@ impl BuildRequest {
             rustc_wrapper_args_file,
             extra_rustc_args,
             extra_cargo_args: args.cargo_args.clone(),
-            nightly: args.nightly,
             cargo_package: package,
             release: args.release,
             skip_assets: args.skip_assets,
-            cranelift: args.cranelift,
             wasm_split: args.wasm_split,
             debug_symbols: args.debug_symbols,
             inject_loading_scripts: args.inject_loading_scripts,
@@ -2388,19 +2381,6 @@ impl BuildRequest {
         }
 
         kotlin_dir
-    }
-
-    /// The asset dir we used to support before manganis became the default.
-    /// This generally was just a folder in your Dioxus.toml called "assets" or "public" where users
-    /// would store their assets.
-    ///
-    /// With manganis you now use `asset!()` and we pick it up automatically.
-    pub(crate) fn legacy_asset_dir(&self) -> Option<PathBuf> {
-        self.config
-            .application
-            .asset_dir
-            .clone()
-            .map(|dir| self.crate_dir().join(dir))
     }
 
     /// Get the directory where this app can write to for this session that's guaranteed to be stable

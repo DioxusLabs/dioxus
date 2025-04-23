@@ -263,16 +263,6 @@ impl Workspace {
         ]
     }
 
-    /// Check if dioxus is being built with a particular feature
-    pub(crate) fn has_dioxus_feature(&self, filter: &str) -> bool {
-        self.krates.krates_by_name("dioxus").any(|dioxus| {
-            self.krates
-                .get_enabled_features(dioxus.kid)
-                .map(|features| features.contains(filter))
-                .unwrap_or_default()
-        })
-    }
-
     /// Returns the root of the crate that the command is run from, without calling `cargo metadata`
     ///
     /// If the command is run from the workspace root, this will return the top-level Cargo.toml

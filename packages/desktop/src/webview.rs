@@ -310,7 +310,7 @@ impl WebviewInstance {
             target_os = "ios",
             target_os = "android"
         ))]
-        let mut wv_builder = if cfg.as_child_window {
+        let wv_builder = if cfg.as_child_window {
             WebViewBuilder::new(&window)
         } else {
             WebViewBuilder::new_as_child(&window)

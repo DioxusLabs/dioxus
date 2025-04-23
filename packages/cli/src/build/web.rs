@@ -28,7 +28,12 @@ impl BuildRequest {
     /// You also might different variants of these files (staging / prod) and different flavors (eu/us)
     ///
     /// web's index.html is weird since it's not just a bundle format but also a *content* format
-    pub(crate) fn prepare_html(&self, assets: &AssetManifest) -> Result<String> {
+    pub(crate) fn prepare_html(
+        &self,
+        assets: &AssetManifest,
+        // js_file: &str,
+        // bindgen_file: &str,
+    ) -> Result<String> {
         let mut html = {
             let crate_root: &Path = &self.crate_dir();
             let custom_html_file = crate_root.join("index.html");

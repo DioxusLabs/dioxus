@@ -197,7 +197,6 @@
 //! apps with Dioxus Deploy (currently under construction).
 
 use std::{
-    any::TypeId,
     backtrace,
     mem::transmute,
     panic::AssertUnwindSafe,

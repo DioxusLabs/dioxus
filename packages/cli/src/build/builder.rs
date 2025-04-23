@@ -1,6 +1,6 @@
 use crate::{
-    BuildArgs, BuildArtifacts, BuildRequest, BuildStage, BuilderUpdate, Platform, ProgressRx,
-    ProgressTx, Result, StructuredOutput,
+    BuildArtifacts, BuildRequest, BuildStage, BuilderUpdate, Platform, ProgressRx, ProgressTx,
+    Result, StructuredOutput,
 };
 use anyhow::Context;
 use dioxus_cli_opt::process_file_to;
@@ -12,7 +12,7 @@ use std::{
 use std::{
     net::SocketAddr,
     path::{Path, PathBuf},
-    process::{ExitStatus, Stdio},
+    process::Stdio,
 };
 use subsecond_types::JumpTable;
 use tokio::{
@@ -1151,16 +1151,16 @@ We checked the folder: {}
             Platform::Liveview => true,
         };
 
-        // if requires_entropy || std::env::var("DIOXUS_ENTROPY").is_ok() {
-        //     // If we already have an entropy app exe, return it - this is useful for re-opening the same app
-        //     if let Some(existing_app_exe) = self.entropy_app_exe.clone() {
-        //         return existing_app_exe;
-        //     }
+        if requires_entropy || std::env::var("DIOXUS_ENTROPY").is_ok() {
+            // If we already have an entropy app exe, return it - this is useful for re-opening the same app
+            if let Some(existing_app_exe) = self.entropy_app_exe.clone() {
+                return existing_app_exe;
+            }
 
-        //     let entropy_app_exe = Self::make_entropy_path(&main_exe);
-        //     self.entropy_app_exe = Some(entropy_app_exe.clone());
-        //     main_exe = entropy_app_exe;
-        // }
+            let entropy_app_exe = Self::make_entropy_path(&main_exe);
+            self.entropy_app_exe = Some(entropy_app_exe.clone());
+            main_exe = entropy_app_exe;
+        }
 
         main_exe
     }
