@@ -1,5 +1,5 @@
 use super::*;
-use crate::DioxusCrate;
+use crate::{metadata::collect_rs_files, DioxusCrate};
 use anyhow::Context;
 use dioxus_autofmt::{IndentOptions, IndentType};
 use rayon::prelude::*;
@@ -126,20 +126,6 @@ fn refactor_file(
     Ok(())
 }
 
-use std::ffi::OsStr;
-fn get_project_files(dir: impl AsRef<Path>) -> Vec<PathBuf> {
-    let mut files = Vec::new();
-    for result in ignore::Walk::new(dir) {
-        let path = result.unwrap().into_path();
-        if let Some(ext) = path.extension() {
-            if ext == OsStr::new("rs") {
-                files.push(path);
-            }
-        }
-    }
-    files
-}
-
 fn format_file(
     path: impl AsRef<Path>,
     indent: IndentOptions,
@@ -185,7 +171,7 @@ fn autoformat_project(
     format_rust_code: bool,
     dir: impl AsRef<Path>,
 ) -> Result<()> {
-    let files_to_format = get_project_files(dir);
+    let files_to_format = collect_rs_files(dir);
 
     if files_to_format.is_empty() {
         return Ok(());

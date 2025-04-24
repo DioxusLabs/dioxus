@@ -2,6 +2,7 @@
 use std::error::Error;
 use std::{
     env,
+    ffi::OsStr,
     fmt::{Display, Formatter},
     fs,
     path::{Path, PathBuf},
@@ -61,4 +62,18 @@ fn contains_manifest(path: &Path) -> bool {
                 .any(|ent| &ent.file_name() == "Cargo.toml")
         })
         .unwrap_or(false)
+}
+
+/// Collects all `.rs` files in the provided directory, respecting files to ignore (e.g. `.gitignore`)
+pub(crate) fn collect_rs_files(dir: impl AsRef<Path>) -> Vec<PathBuf> {
+    let mut files = Vec::new();
+    for result in ignore::Walk::new(dir) {
+        let path = result.unwrap().into_path();
+        if let Some(ext) = path.extension() {
+            if ext == OsStr::new("rs") {
+                files.push(path);
+            }
+        }
+    }
+    files
 }
