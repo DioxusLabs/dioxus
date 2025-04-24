@@ -316,11 +316,9 @@
 //! - xbuild: <https://github.com/rust-mobile/xbuild/blob/master/xbuild/src/command/build.rs>
 
 use crate::{
-    android_tools,
-    rustcwrapper::{RustcArgs, DX_RUSTC_WRAPPER_ENV_VAR},
-    wasm_bindgen::WasmBindgen,
-    AndroidTools, BuildContext, DioxusConfig, Error, LinkAction, Platform, Result, TargetArgs,
-    TraceSrc, WasmOptConfig, Workspace,
+    android_tools, AndroidTools, BuildContext, DioxusConfig, Error, LinkAction, Platform, Result,
+    RustcArgs, TargetArgs, TraceSrc, WasmBindgen, WasmOptConfig, Workspace,
+    DX_RUSTC_WRAPPER_ENV_VAR,
 };
 use anyhow::Context;
 use dioxus_cli_config::{APP_TITLE_ENV, ASSET_ROOT_ENV};
@@ -963,11 +961,11 @@ impl BuildRequest {
             //
             // https://github.com/rust-mobile/xbuild/blob/master/xbuild/template/lib.rs
             // https://github.com/rust-mobile/xbuild/blob/master/apk/src/lib.rs#L19
-            Platform::Android |
-
+            //
             // These are all super simple, just copy the exe into the folder
             // eventually, perhaps, maybe strip + encrypt the exe?
-            Platform::MacOS
+            Platform::Android
+            | Platform::MacOS
             | Platform::Windows
             | Platform::Linux
             | Platform::Ios
@@ -1671,7 +1669,7 @@ impl BuildRequest {
             | Platform::Windows => PathBuf::from("cc"),
         };
 
-        tracing::debug!("Final linker args: {:#?}", args);
+        tracing::trace!("Final linker args: {:#?}", args);
 
         // Run the linker directly!
         let res = Command::new(cc)
@@ -1686,13 +1684,13 @@ impl BuildRequest {
             if !res.status.success() {
                 tracing::error!("Failed to generate fat binary: {}", errs.trim());
             } else {
-                tracing::debug!("Warnings during fat linking: {}", errs.trim());
+                tracing::trace!("Warnings during fat linking: {}", errs.trim());
             }
         }
 
         if !res.stdout.is_empty() {
             let out = String::from_utf8_lossy(&res.stdout);
-            tracing::debug!("Output from fat linking: {}", out.trim());
+            tracing::trace!("Output from fat linking: {}", out.trim());
         }
 
         Ok(())

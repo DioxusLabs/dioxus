@@ -11,6 +11,11 @@ use parking_lot::RwLock;
 
 static RENDERER: Lazy<RwLock<Renderer>> = Lazy::new(|| RwLock::new(Renderer::new()));
 
+pub fn reset_renderer() {
+    RENDERER.write().render_components.take();
+    RENDERER.write().template_cache.clear();
+}
+
 #[derive(Default)]
 struct ServerDocumentInner {
     streaming: bool,

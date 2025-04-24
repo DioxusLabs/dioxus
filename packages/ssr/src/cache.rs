@@ -35,7 +35,7 @@ use std::{fmt::Write, ops::AddAssign};
 use crate::renderer::{str_truthy, BOOL_ATTRS};
 
 #[derive(Debug)]
-pub(crate) struct StringCache {
+pub struct StringCache {
     pub segments: Vec<Segment>,
 }
 

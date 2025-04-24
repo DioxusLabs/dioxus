@@ -54,6 +54,6 @@ pub struct HotReloadMsg {
 
 impl HotReloadMsg {
     pub fn is_empty(&self) -> bool {
-        self.templates.is_empty() && self.assets.is_empty()
+        self.templates.is_empty() && self.assets.is_empty() && self.jump_table.is_none()
     }
 }

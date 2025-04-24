@@ -560,6 +560,7 @@ impl AppServer {
 
         self.clear_hot_reload_changes();
         self.clear_cached_rsx();
+        self.clear_patches();
     }
 
     pub(crate) async fn patch(&mut self, res: &BuildArtifacts) -> Result<JumpTable> {
@@ -615,7 +616,17 @@ impl AppServer {
         );
 
         // Save this patch
-        self.client.patches.push(jump_table.clone());
+        match res.platform {
+            Platform::Server => {
+                if let Some(server) = self.server.as_mut() {
+                    server.patches.push(jump_table.clone());
+                }
+            }
+            _ => {
+                self.client.patches.push(jump_table.clone());
+                self.applied_hot_reload_message.jump_table = Some(jump_table.clone());
+            }
+        }
 
         Ok(jump_table)
     }
@@ -641,21 +652,28 @@ impl AppServer {
             Ok(ClientMsg::Initialize {
                 aslr_reference,
                 build_id,
-            }) => {
-                tracing::debug!(
-                    "Setting aslr_reference: {aslr_reference} for build_id: {build_id}"
-                );
-                match build_id {
-                    0 => {
+            }) => match build_id {
+                0 => {
+                    // multiple tabs on web can cause this to be called incorrectly, and it doesn't
+                    // make any sense anyways
+                    if self.client.build.platform != Platform::Web {
+                        tracing::debug!(
+                            "Setting aslr_reference: {aslr_reference} for build_id: {build_id}"
+                        );
                         self.client.aslr_reference = Some(aslr_reference);
                     }
-                    _ => {
-                        if let Some(server) = self.server.as_mut() {
-                            server.aslr_reference = Some(aslr_reference);
-                        }
+                }
+                1 => {
+                    if let Some(server) = self.server.as_mut() {
+                        server.aslr_reference = Some(aslr_reference);
                     }
                 }
-            }
+                _ => {
+                    tracing::debug!(
+                        "Invalid build_id: {build_id} for aslr_reference: {aslr_reference}"
+                    );
+                }
+            },
             Ok(_client) => {}
             Err(err) => {
                 tracing::error!(dx_src = ?TraceSrc::Dev, "Error parsing message from {}: {} -> {}", Platform::Web, err, as_text);
@@ -683,13 +701,37 @@ impl AppServer {
     }
 
     /// Get any hot reload changes that have been applied since the last full rebuild
-    pub(crate) fn applied_hot_reload_changes(&mut self) -> HotReloadMsg {
-        self.applied_hot_reload_message.clone()
+    pub(crate) fn applied_hot_reload_changes(&mut self, build: BuildId) -> HotReloadMsg {
+        let mut msg = self.applied_hot_reload_message.clone();
+
+        if build == BuildId::CLIENT {
+            msg.jump_table = self.client.patches.last().cloned();
+            msg.for_build_id = Some(BuildId::CLIENT.0 as _);
+            if let Some(lib) = msg.jump_table.as_mut() {
+                lib.lib = PathBuf::from("/").join(lib.lib.clone());
+            }
+        }
+
+        if build == BuildId::SERVER {
+            if let Some(server) = self.server.as_mut() {
+                msg.jump_table = server.patches.last().cloned();
+                msg.for_build_id = Some(BuildId::SERVER.0 as _);
+            }
+        }
+
+        msg
     }
 
     /// Clear the hot reload changes. This should be called any time a new build is starting
     pub(crate) fn clear_hot_reload_changes(&mut self) {
         self.applied_hot_reload_message = Default::default();
+    }
+
+    pub(crate) fn clear_patches(&mut self) {
+        self.client.patches.clear();
+        if let Some(server) = self.server.as_mut() {
+            server.patches.clear();
+        }
     }
 
     pub(crate) async fn client_connected(&mut self) {
@@ -735,6 +777,7 @@ impl AppServer {
         assets.extend(msg.assets.iter().cloned());
         applied.templates = templates.into_values().collect();
         applied.assets = assets.into_iter().collect();
+        applied.jump_table = self.client.patches.last().cloned();
     }
 
     /// Register the files from the workspace into our file watcher.

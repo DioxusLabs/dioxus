@@ -44,7 +44,7 @@ pub fn launch(root: BaseComp, contexts: ContextList, platform_config: Vec<Box<dy
 }
 
 async fn serve_server(
-    root: fn() -> Result<VNode, RenderError>,
+    original_root: fn() -> Result<VNode, RenderError>,
     contexts: Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync>>,
     platform_config: Vec<Box<dyn Any>>,
 ) {
@@ -91,8 +91,8 @@ async fn serve_server(
 
     // Create the router and register the server functions under the basepath.
     let router = apply_base_path(
-        axum::Router::new().serve_dioxus_application(cfg.clone(), root),
-        root,
+        axum::Router::new().serve_dioxus_application(cfg.clone(), original_root),
+        original_root,
         cfg.clone(),
         base_path().map(|s| s.to_string()),
     );
@@ -143,6 +143,7 @@ async fn serve_server(
                                     unsafe { dioxus_devtools::subsecond::apply_patch(table) }
                                 {
                                     let mut new_router = axum::Router::new().serve_static_assets();
+                                    let new_cfg = ServeConfig::new().unwrap();
 
                                     let server_fn_iter = collect_raw_server_fns();
 
@@ -152,29 +153,38 @@ async fn serve_server(
                                         server_fn_map.insert(f.path(), f);
                                     }
 
-                                    for (_, f) in server_fn_map {
+                                    for (_, fn_) in server_fn_map {
                                         tracing::trace!(
                                             "Registering server function: {:?} {:?}",
-                                            f.path(),
-                                            f.method()
+                                            fn_.path(),
+                                            fn_.method()
                                         );
                                         new_router = crate::register_server_fn_on_router(
-                                            f,
+                                            fn_,
                                             new_router,
-                                            cfg.context_providers.clone(),
+                                            new_cfg.context_providers.clone(),
                                         );
                                     }
 
-                                    let state = RenderHandleState::new(cfg.clone(), root)
-                                        .with_ssr_state(SSRState::new(&cfg));
+                                    let hot_root = subsecond::HotFn::current(original_root);
+                                    let new_root_addr =
+                                        hot_root.ptr_address() as usize as *const ();
+                                    let new_root = unsafe {
+                                        std::mem::transmute::<_, fn() -> Element>(new_root_addr)
+                                    };
+
+                                    crate::document::reset_renderer();
+
+                                    let state = RenderHandleState::new(new_cfg.clone(), new_root)
+                                        .with_ssr_state(SSRState::new(&new_cfg));
 
                                     let fallback_handler =
                                         axum::routing::get(render_handler).with_state(state);
 
                                     make_service = apply_base_path(
                                         new_router.fallback(fallback_handler),
-                                        root,
-                                        cfg.clone(),
+                                        new_root,
+                                        new_cfg.clone(),
                                         base_path().map(|s| s.to_string()),
                                     )
                                     .into_make_service();
@@ -196,7 +206,7 @@ async fn serve_server(
             }
             Msg::TcpStream(Err(_)) => {}
             Msg::TcpStream(Ok((tcp_stream, remote_addr))) => {
-                tracing::debug!("Accepted connection from {remote_addr}");
+                tracing::trace!("Accepted connection from {remote_addr}");
 
                 let mut make_service = make_service.clone();
                 let mut shutdown_rx = shutdown_rx.clone();
@@ -237,7 +247,6 @@ async fn serve_server(
                             }
                         }
                         res = shutdown_rx.wait_for(|i| *i == this_hr_index + 1) => {
-                            tracing::info!("Shutting down connection server: {res:?}");
                             return;
                         }
                     }

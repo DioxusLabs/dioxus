@@ -35,7 +35,7 @@ futures-channel = { workspace = true }
 serde_json = { version = "1.0", optional = true }
 serde = { version = "1.0", optional = true }
 serde-wasm-bindgen = { version = "0.6.5", optional = true }
-
+gloo-timers = { workspace = true, features = ["futures"] }
 ciborium = { workspace = true, optional = true }
 async-trait = { workspace = true, optional = true }
 
@@ -115,7 +115,6 @@ document = ["dep:serde-wasm-bindgen", "dep:serde_json", "dep:serde"]
 dioxus = { workspace = true, default-features = true }
 wasm-bindgen-test = "0.3.50"
 dioxus-ssr = { workspace = true, default-features = false }
-gloo-timers = { workspace = true }
 gloo-dialogs = { workspace = true }
 dioxus-web = { path = ".", features = ["hydrate"] }
 tracing-wasm = { workspace = true }

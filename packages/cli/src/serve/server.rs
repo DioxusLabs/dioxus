@@ -252,12 +252,12 @@ impl WebServer {
     }
 
     /// Sends hot reloadable changes to all clients.
-    pub(crate) async fn send_hotreload(&mut self, reload: HotReloadMsg) {
+    pub(crate) async fn send_hotreload(&mut self, mut reload: HotReloadMsg) {
         if reload.is_empty() {
+            tracing::trace!("No hotreload changes to send: {:#?}", reload);
             return;
         }
 
-        #[cfg(debug_assertions)]
         tracing::trace!("Sending hotreload to clients {:?}", reload);
 
         let msg = DevserverMsg::HotReload(reload);

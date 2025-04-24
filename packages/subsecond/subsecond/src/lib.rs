@@ -259,9 +259,11 @@ pub fn call<O>(f: impl FnMut() -> O) -> O {
 }
 
 // We use an AtomicPtr with a leaked JumpTable and Relaxed ordering to give us a global jump table
-// with very very littel overhead. Reading this amounts of a Relaxed atomic load which basically
-// is 0 overhead. We might want to look into using a thread_local with a stop-the-world approach
+// with very very little overhead. Reading this amounts of a Relaxed atomic load which basically
+// is no overhead. We might want to look into using a thread_local with a stop-the-world approach
 // just in case multiple threads try to call the jump table before synchronization with the runtime.
+// For Dioxus purposes, this is not a big deal, but for libraries like bevy which heavily rely on
+// multithreading, it might become an issue.
 static APP_JUMP_TABLE: AtomicPtr<JumpTable> = AtomicPtr::new(std::ptr::null_mut());
 fn set_new_jump_table(table: JumpTable) {
     APP_JUMP_TABLE.store(

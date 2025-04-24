@@ -27,7 +27,9 @@ pub(crate) use error::*;
 pub(crate) use link::*;
 pub(crate) use logging::*;
 pub(crate) use platform::*;
+pub(crate) use rustcwrapper::*;
 pub(crate) use settings::*;
+pub(crate) use wasm_bindgen::*;
 pub(crate) use workspace::*;
 
 #[tokio::main]

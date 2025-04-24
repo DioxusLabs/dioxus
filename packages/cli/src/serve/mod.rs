@@ -1,4 +1,4 @@
-use crate::{AppBuilder, BuildMode, BuilderUpdate, Result, ServeArgs, TraceController};
+use crate::{AppBuilder, BuildId, BuildMode, BuilderUpdate, Result, ServeArgs, TraceController};
 
 mod ansi_buffer;
 mod output;
@@ -90,9 +90,16 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &mut TraceController) -> 
             // Run the server in the background
             // Waiting for updates here lets us tap into when clients are added/removed
             ServeUpdate::NewConnection => {
+                // Send the client
                 devserver
-                    .send_hotreload(builder.applied_hot_reload_changes())
+                    .send_hotreload(builder.applied_hot_reload_changes(BuildId::CLIENT))
                     .await;
+
+                if builder.server.is_some() {
+                    devserver
+                        .send_hotreload(builder.applied_hot_reload_changes(BuildId::SERVER))
+                        .await;
+                }
 
                 builder.client_connected().await;
             }

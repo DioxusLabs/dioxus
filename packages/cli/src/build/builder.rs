@@ -532,10 +532,10 @@ impl AppBuilder {
             _ = tokio::time::sleep(std::time::Duration::from_millis(1000)).fuse() => {}
         };
 
-        // // Wipe out the entropy executables if they exist
-        // if let Some(entropy_app_exe) = self.entropy_app_exe.take() {
-        //     _ = std::fs::remove_file(entropy_app_exe);
-        // }
+        // Wipe out the entropy executables if they exist
+        if let Some(entropy_app_exe) = self.entropy_app_exe.take() {
+            _ = std::fs::remove_file(entropy_app_exe);
+        }
     }
 
     /// Hotreload an asset in the running app.
