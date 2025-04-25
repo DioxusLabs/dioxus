@@ -26,7 +26,6 @@ axum = { workspace = true }
 proc-macro = true
 
 [features]
-default = []
 axum = ["server_fn_macro/axum"]
 server = ["server_fn_macro/ssr"]
 reqwest = ["server_fn_macro/reqwest"]

@@ -615,7 +615,7 @@ pub struct VComponent {
     pub(crate) render_fn: TypeId,
 
     /// Some additional cache-busting entropy fed by the subsecond engine
-    pub(crate) entropy: u64,
+    pub(crate) render_fn_ptr: u64,
 
     /// The props for this component
     pub(crate) props: BoxedAnyProps,
@@ -627,7 +627,7 @@ impl Clone for VComponent {
             name: self.name,
             render_fn: self.render_fn,
             props: self.props.duplicate(),
-            entropy: self.entropy,
+            render_fn_ptr: self.render_fn_ptr,
         }
     }
 }
@@ -642,7 +642,7 @@ impl VComponent {
     where
         P: Properties + 'static,
     {
-        let entropy = component.raw_ptr() as u64;
+        let render_fn_ptr = component.raw_ptr() as u64;
         let render_fn = component.id();
         let props = Box::new(VProps::new(
             component,
@@ -652,7 +652,7 @@ impl VComponent {
         ));
 
         VComponent {
-            entropy,
+            render_fn_ptr,
             name: fn_name,
             props,
             render_fn,

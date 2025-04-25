@@ -102,7 +102,7 @@ use_future(move || async move {
     double_me_async(&mut write).await;
 });
 
-rsx! {
+rsx!{
     // This read may panic because the write is still active while the future is waiting for the async work to finish
     "{signal}"
 };

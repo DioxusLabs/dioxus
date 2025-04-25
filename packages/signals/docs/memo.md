@@ -74,7 +74,7 @@ let doubled = use_resource(move || async move {
     double_me_async(&halved).await
 });
 
-rsx! {
+rsx!{
     "{doubled:?}"
     button {
         onclick: move |_| {
@@ -104,7 +104,7 @@ let doubled = use_resource(move || async move {
     double_me_async(halved).await;
 });
 
-rsx! {
+rsx!{
     "{doubled:?}"
     button {
         onclick: move |_| {

@@ -330,10 +330,8 @@ use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashSet,
-    future::Future,
     io::Write,
     path::{Path, PathBuf},
-    pin::Pin,
     process::Stdio,
     sync::{
         atomic::{AtomicUsize, Ordering},
@@ -1276,12 +1274,11 @@ impl BuildRequest {
             .assets
             .add_from_object_path(&self.patch_exe(artifacts.time_start))?;
 
-        // Also clean up the temp artifacts
-        // // Clean up the temps manually
-        // // todo: we might want to keep them around for debugging purposes
-        // for file in object_files {
-        //     _ = std::fs::remove_file(file);
-        // }
+        // Clean up the temps manually
+        // todo: we might want to keep them around for debugging purposes
+        for file in object_files {
+            _ = std::fs::remove_file(file);
+        }
 
         Ok(())
     }
@@ -1685,6 +1682,11 @@ impl BuildRequest {
 
         // Now extract the assets from the fat binary
         artifacts.assets.add_from_object_path(&artifacts.exe)?;
+
+        // Clean up the temps manually
+        for f in args.iter().filter(|arg| arg.ends_with(".rcgu.o")) {
+            _ = std::fs::remove_file(f);
+        }
 
         Ok(())
     }

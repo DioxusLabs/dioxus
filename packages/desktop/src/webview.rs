@@ -236,7 +236,6 @@ impl WebviewInstance {
                 edits
             ];
             move |request, responder: RequestAsyncResponder| {
-                // move |_id: wry::WebViewId, request, responder: RequestAsyncResponder| {
                 protocol::desktop_handler(
                     request,
                     asset_handlers.clone(),
@@ -318,7 +317,6 @@ impl WebviewInstance {
 
         let mut wv_builder = wv_builder
             .with_web_context(&mut web_context)
-            // let mut wv_builder = WebViewBuilder::with_web_context(&mut web_context)
             .with_bounds(wry::Rect {
                 position: wry::dpi::Position::Logical(wry::dpi::LogicalPosition::new(0.0, 0.0)),
                 size: wry::dpi::Size::Physical(wry::dpi::PhysicalSize::new(

@@ -135,9 +135,7 @@ impl VNode {
         to: Option<&mut impl WriteMutations>,
     ) {
         // Replace components that have different render fns - only in release mode
-        // During development we might want to hot-reload components
-        // #[cfg(not(debug_assertions))]
-        if old.render_fn != new.render_fn || old.entropy != new.entropy {
+        if old.render_fn != new.render_fn || old.render_fn_ptr != new.render_fn_ptr {
             return self.replace_vcomponent(mount, idx, new, parent, dom, to);
         }
 

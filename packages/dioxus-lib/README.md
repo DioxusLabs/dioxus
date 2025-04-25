@@ -94,7 +94,7 @@ The `rsx!` macro is what generates the `Element` that our components return.
 ```rust, ignore
 #[component]
 fn Example() -> Element {
-    rsx! { "hello world" }
+    rsx!{ "hello world" }
 }
 ```
 

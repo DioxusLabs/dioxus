@@ -37,7 +37,6 @@ mod devtools;
 mod hydration;
 #[allow(unused)]
 pub use hydration::*;
-use web_sys::console;
 
 /// Runs the app as a future that can be scheduled around the main thread.
 ///
@@ -204,6 +203,24 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
                 }
             }
         }
+        #[cfg(all(feature = "devtools", debug_assertions))]
+        if let Some(hr_msg) = hotreload_msg {
+            if dioxus_devtools::apply_changes(&virtual_dom, &hr_msg).is_ok() {
+                if !hr_msg.assets.is_empty() {
+                    crate::devtools::invalidate_browser_asset_cache();
+                }
+
+                if hr_msg.for_build_id == Some(dioxus_cli_config::build_id()) {
+                    devtools::show_toast(
+                        "Hot-patch success!",
+                        &format!("App successfully patched in {} ms", hr_msg.ms_elapsed),
+                        devtools::ToastLevel::Success,
+                        Duration::from_millis(2000),
+                        false,
+                    );
+                }
+            }
+        }
 
         #[cfg(feature = "hydrate")]
         if let Some(hydration_data) = hydration_work {
@@ -228,27 +245,5 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
         // work_loop.wait_for_raf().await;
 
         websys_dom.flush_edits();
-
-        #[cfg(all(feature = "devtools", debug_assertions))]
-        if let Some(hr_msg) = hotreload_msg {
-            // Replace all templates
-            // console::log_1(&format!("Hotreload: {:#?}", hr_msg).into());
-
-            if dioxus_devtools::apply_changes(&virtual_dom, &hr_msg).is_ok() {
-                if !hr_msg.assets.is_empty() {
-                    crate::devtools::invalidate_browser_asset_cache();
-                }
-
-                if hr_msg.for_build_id == Some(dioxus_cli_config::build_id()) {
-                    devtools::show_toast(
-                        "Hot-patch success!",
-                        &format!("App successfully patched in {} ms", hr_msg.ms_elapsed),
-                        devtools::ToastLevel::Success,
-                        Duration::from_millis(2000),
-                        false,
-                    );
-                }
-            }
-        }
     }
 }

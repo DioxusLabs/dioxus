@@ -15,8 +15,8 @@ use crate::{
 use crate::{Task, VComponent};
 use futures_util::StreamExt;
 use slab::Slab;
-use std::{any::Any, rc::Rc};
-use std::{collections::BTreeSet, sync::Arc};
+use std::collections::BTreeSet;
+use std::{any::Any, rc::Rc, sync::Arc};
 use tracing::instrument;
 
 /// A virtual node system that progresses user events and diffs UI trees.
@@ -295,12 +295,13 @@ impl VirtualDom {
         root_props: P,
     ) -> Self {
         let render_fn = root.id();
+        let render_fn_ptr = root.raw_ptr() as u64;
         let props = VProps::new(root, |_, _| true, root_props, "Root");
         Self::new_with_component(VComponent {
             name: "root",
             render_fn,
             props: Box::new(props),
-            entropy: 0,
+            render_fn_ptr,
         })
     }
 
@@ -324,15 +325,13 @@ impl VirtualDom {
             resolved_scopes: Default::default(),
         };
 
-        dom.new_scope(
-            Box::new(VProps::new(
-                RootScopeWrapper,
-                |_, _| true,
-                RootProps(root),
-                "RootWrapper",
-            )),
-            "app",
+        let root = VProps::new(
+            RootScopeWrapper,
+            |_, _| true,
+            RootProps(root),
+            "RootWrapper",
         );
+        dom.new_scope(Box::new(root), "app");
 
         #[cfg(debug_assertions)]
         dom.register_subsecond_handler();

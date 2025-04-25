@@ -102,8 +102,16 @@ impl VNode {
             ),
             (Component(old), Component(new)) => {
                 let scope_id = ScopeId(dom.get_mounted_dyn_node(mount, idx));
-                let parent = Some(self.reference_to_dynamic_node(mount, idx));
-                self.diff_vcomponent(mount, idx, new, old, scope_id, parent, dom, to)
+                self.diff_vcomponent(
+                    mount,
+                    idx,
+                    new,
+                    old,
+                    scope_id,
+                    Some(self.reference_to_dynamic_node(mount, idx)),
+                    dom,
+                    to,
+                )
             }
             (old, new) => {
                 // TODO: we should pass around the mount instead of the mount id

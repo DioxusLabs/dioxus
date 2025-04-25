@@ -217,10 +217,7 @@ pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), Li
                 #[cfg(all(feature = "devtools", debug_assertions))]
                 match msg {
                     dioxus_devtools::DevserverMsg::HotReload(msg)=> {
-                        if dioxus_devtools::apply_changes(&vdom, &msg).is_err()
-                            {
-                            tracing::error!("Failed to hot patch! App might be unstable now.");
-                        }
+                        _ = dioxus_devtools::apply_changes(&vdom, &msg);
                     }
                     dioxus_devtools::DevserverMsg::Shutdown => {
                         std::process::exit(0);

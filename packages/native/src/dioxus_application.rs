@@ -48,11 +48,7 @@ impl DioxusNativeApplication {
             DioxusNativeEvent::DevserverEvent(event) => match event {
                 dioxus_devtools::DevserverMsg::HotReload(hotreload_message) => {
                     for window in self.inner.windows.values_mut() {
-                        if dioxus_devtools::apply_changes(&window.doc.vdom, hotreload_message)
-                            .is_err()
-                        {
-                            tracing::error!("Failed to hot patch! App might be unstable now.");
-                        }
+                        _ = dioxus_devtools::apply_changes(&window.doc.vdom, hotreload_message);
                         window.poll();
                     }
                 }
