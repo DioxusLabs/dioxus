@@ -1568,9 +1568,9 @@ session_cache_dir: {}"#,
         // We also need to insert the -force_load flag to force the linker to load the archive
         let mut args = args.iter().map(|s| s.to_string()).collect::<Vec<_>>();
         if let Some(first_rlib) = args.iter().position(|arg| arg.ends_with(".rlib")) {
-            match self.platform {
-                // On wasm, we need to use the --whole-archive flag
-                Platform::Web => {
+            match self.triple.operating_system {
+                OperatingSystem::Unknown if self.platform == Platform::Web => {
+                    // We need to use the --whole-archive flag for wasm
                     args[first_rlib] = format!("--whole-archive");
                     args.insert(first_rlib + 1, out_ar_path.display().to_string());
                     args.insert(first_rlib + 2, "--no-whole-archive".to_string());
@@ -1582,7 +1582,8 @@ session_cache_dir: {}"#,
                     }
                 }
 
-                Platform::Android => {
+                // Subtle difference - on linux and android we go through clang and thus pass `-Wl,` prefix
+                OperatingSystem::Linux => {
                     args[first_rlib] = format!("-Wl,--whole-archive");
                     args.insert(first_rlib + 1, out_ar_path.display().to_string());
                     args.insert(first_rlib + 2, "-Wl,--no-whole-archive".to_string());
@@ -1594,10 +1595,7 @@ session_cache_dir: {}"#,
                     }
                 }
 
-                // On all other platforms, we need to use -force_load
-                // todo: this only supports macos for now
-                // _ => format!("-Wl,-force_load={}", out_ar_path.display()),
-                Platform::Server | Platform::MacOS | Platform::Ios => {
+                OperatingSystem::Darwin(_) | OperatingSystem::IOS(_) => {
                     args[first_rlib] = format!("-Wl,-force_load");
                     args.insert(first_rlib + 1, out_ar_path.display().to_string());
                     args.retain(|arg| !arg.ends_with(".rlib"));
@@ -1608,7 +1606,11 @@ session_cache_dir: {}"#,
                     }
                 }
 
-                _ => todo!(),
+                OperatingSystem::Windows => {
+                    //
+                }
+
+                _ => {}
             };
         }
 

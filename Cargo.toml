@@ -284,7 +284,7 @@ sha2 = "0.10.8"
 walrus = { version = "0.23.3", features = ["parallel"] }
 id-arena = "2.2.1"
 async-compression = { version = "0.4.20", features = ["futures-io", "gzip", "brotli"] }
-getrandom = { version = "0.3.1" }
+getrandom = { version = "0.2.0" }
 async-once-cell = { version = "0.5.4" }
 rayon = "1.10.0"
 wasmparser = "0.226.0"
@@ -415,10 +415,9 @@ form_urlencoded = "1.2.0"
 async-std = "1.12.0"
 separator = { workspace = true }
 web-time = "1.1.0"
-axum = { workspace = true, default-features = true }
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
-getrandom = { workspace = true }
+getrandom = { workspace = true, features = ["js"] }
 tokio = { version = "1.43", default-features = false, features = ["sync", "macros", "io-util", "rt", "time"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
