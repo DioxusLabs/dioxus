@@ -34,7 +34,7 @@ uuid = { workspace = true, features = ["v4"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 toml = { workspace = true }
-cargo_toml = { workspace = true }
+cargo_toml = { workspace = true, features = ["features"] }
 futures-util = { workspace = true, features = ["async-await-macro"] }
 notify = { workspace = true, features = ["serde"] }
 html_parser = { workspace = true }
@@ -50,7 +50,6 @@ rustls = { workspace = true }
 rayon = { workspace = true }
 futures-channel = { workspace = true }
 target-lexicon = { version = "0.13.2", features = ["serde", "serde_support"] }
-cargo-config2 = { workspace = true, optional = true }
 krates = { workspace = true }
 regex = "1.11.1"
 console = "0.15.11"
