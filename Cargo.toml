@@ -334,10 +334,7 @@ color-eyre = "0.6.3"
 keyboard-types = { version = "0.7", default-features = false }
 winit = { version = "0.30.2", features = ["rwh_06"] }
 
-# disable debug symbols in dev builds - shouldn't matter for downstream crates but makes our binaries (examples, cli, etc) build faster
 [profile.dev]
-# debug = 1
-# strip = "debuginfo"
 
 # our release profile should be fast to compile and fast to run
 # when we ship our CI builds, we turn on LTO which improves perf leftover by turning on incremental
@@ -351,11 +348,6 @@ inherits = "release"
 opt-level = 'z'
 lto = true
 debug = true
-
-[profile.subsecond-dev]
-inherits = "dev"
-# debug = 0
-# strip = "debuginfo"
 
 # a profile for running the CLI that's also incremental
 [profile.cli-release-dev]
@@ -380,8 +372,6 @@ incremental = true
 
 [profile.wasm-dev]
 inherits = "dev"
-# debug = 0
-# strip = "debuginfo"
 
 [profile.server-dev]
 inherits = "dev"
