@@ -33,6 +33,9 @@ pub(crate) enum Error {
     #[error("Failed to bundle project: {0}")]
     BundleFailed(#[from] tauri_bundler::Error),
 
+    #[error("Failed to perform hotpatch: {0}")]
+    PatchingFailed(#[from] crate::build::PatchError),
+
     #[allow(unused)]
     #[error("Unsupported feature: {0}")]
     UnsupportedFeature(String),

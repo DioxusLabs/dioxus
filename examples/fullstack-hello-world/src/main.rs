@@ -10,30 +10,28 @@ fn main() {
     dioxus::launch(app);
 }
 
+static CSS: Asset = asset!("/assets/hello.css");
+
 fn app() -> Element {
     let mut text = use_signal(|| "make a request!".to_string());
 
     rsx! {
         h1 { "Hot patch serverfns!" }
+        link { rel: "stylesheet", href: CSS }
         button {
             onclick: move |_| async move {
                 text.set(do_server_action1().await.unwrap());
             },
             "Request from the server 1"
         }
+        button {
+            onclick: move |_| async move {
+                text.set(do_server_action2().await.unwrap());
+            },
+            "Request from the server 2"
+        }
         p { "server says: {text}" }
         Child { idx: 1 }
-        Child { idx: 2 }
-        Child { idx: 3 }
-        Child { idx: 4 }
-        Child { idx: 5 }
-        Child { idx: 6 }
-        Child { idx: 7 }
-        Child { idx: 8 }
-        Child { idx: 9 }
-        Child { idx: 10 }
-        Child { idx: 11 }
-        Child { idx: 12 }
     }
 }
 

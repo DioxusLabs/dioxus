@@ -1,4 +1,4 @@
-use anyhow::{bail, Context, Result};
+use anyhow::Context;
 use itertools::Itertools;
 use object::{
     macho::{self},
@@ -18,25 +18,47 @@ use std::{
 };
 use subsecond_types::*;
 use target_lexicon::{OperatingSystem, Triple};
+use thiserror::Error;
 use walrus::{
     ir::{dfs_in_order, Visitor},
     ConstExpr, ElementItems, ElementKind, FunctionId, FunctionKind, ImportKind, Module,
     ModuleConfig,
 };
-use wasmparser::{BinaryReader, Linking, LinkingSectionReader, Payload, SymbolInfo};
+use wasmparser::{
+    BinaryReader, BinaryReaderError, Linking, LinkingSectionReader, Payload, SymbolInfo,
+};
 
-pub fn create_jump_table(
-    original: &Path,
-    patch: &Path,
-    triple: &Triple,
-) -> anyhow::Result<JumpTable> {
+type Result<T, E = PatchError> = std::result::Result<T, E>;
+
+#[derive(Debug, Error)]
+pub enum PatchError {
+    #[error("Failed to read file: {0}")]
+    ReadFs(#[from] std::io::Error),
+
+    #[error("Failed to parse wasm section: {0}")]
+    ParseSection(#[from] wasmparser::BinaryReaderError),
+
+    #[error("Failed to parse object file, {0}")]
+    ParseObjectFile(#[from] object::read::Error),
+
+    #[error("Failed to write object file: {0}")]
+    WriteObjectFIle(#[from] object::write::Error),
+
+    #[error("Failed to emit module: {0}")]
+    RuntimeError(#[from] anyhow::Error),
+
+    #[error("{0}")]
+    InvalidModule(String),
+}
+
+pub fn create_jump_table(original: &Path, patch: &Path, triple: &Triple) -> Result<JumpTable> {
     // WASM needs its own path since the object crate leaves quite a few of the methods unimplemented
     if triple.architecture == target_lexicon::Architecture::Wasm32 {
         return create_wasm_jump_table(original, patch);
     }
 
-    let obj1_bytes = fs::read(original).context("Could not read original file")?;
-    let obj2_bytes = fs::read(patch).context("Could not read patch file")?;
+    let obj1_bytes = fs::read(original)?;
+    let obj2_bytes = fs::read(patch)?;
     let obj1 = File::parse(&obj1_bytes as &[u8]).unwrap();
     let obj2 = File::parse(&obj2_bytes as &[u8]).unwrap();
 
@@ -116,7 +138,7 @@ pub fn create_jump_table(
 /// to manually satisfy them here, removing their need to be imported.
 ///
 /// https://github.com/WebAssembly/tool-conventions/blob/main/DynamicLinking.md
-fn create_wasm_jump_table(original: &Path, patch: &Path) -> anyhow::Result<JumpTable> {
+fn create_wasm_jump_table(original: &Path, patch: &Path) -> Result<JumpTable> {
     let old_bytes = fs::read(original).context("Could not read original file")?;
     let new_bytes = fs::read(patch).context("Could not read patch file")?;
 
@@ -124,7 +146,12 @@ fn create_wasm_jump_table(original: &Path, patch: &Path) -> anyhow::Result<JumpT
     let mut new = walrus::Module::from_buffer(&new_bytes)?;
 
     let old_raw_data = parse_bytes_to_data_segment(&old_bytes)?;
+    let new_raw_data = parse_bytes_to_data_segment(&new_bytes)?;
     let name_to_ifunc_old = collect_func_ifuncs(&old);
+
+    // Do a quick scan to see if the symbols in the wasm-bindgen table have changed at all
+    // We currently don't support updating them since we'd somehow need to merge the glue code together
+    ensure_wasm_bindgen_unchanged(&old, &new, &old_raw_data, &new_raw_data)?;
 
     let mut mems = vec![];
     let mut funcs = vec![];
@@ -135,7 +162,7 @@ fn create_wasm_jump_table(original: &Path, patch: &Path) -> anyhow::Result<JumpT
             "GOT.func" => {
                 let Some(entry) = name_to_ifunc_old.get(t.name.as_str()).cloned() else {
                     let exists = old.exports.get_func(t.name.as_str());
-                    bail!("Expected to find GOT.func entry in ifunc table but it was missing: {} -> {exists:?}\nDid all symbols make it into the static lib?", t.name.as_str())
+                    return Err(PatchError::InvalidModule(format!("Expected to find GOT.func entry in ifunc table but it was missing: {} -> {exists:?}\nDid all symbols make it into the static lib?", t.name.as_str()).into()));
                 };
                 funcs.push((t.id(), entry));
             }
@@ -170,7 +197,9 @@ fn create_wasm_jump_table(original: &Path, patch: &Path) -> anyhow::Result<JumpT
     // its ifunc table, and then resolve directly to the index in that table.
     for (import_id, ifunc_index) in funcs {
         let ImportKind::Global(id) = new.imports.get(import_id).kind else {
-            bail!("Expected GOT.func import to be a global");
+            return Err(PatchError::InvalidModule(
+                "Expected GOT.func import to be a global".into(),
+            ));
         };
 
         // "satisfying" the import means removing it from the import table and replacing its target
@@ -228,12 +257,17 @@ fn create_wasm_jump_table(original: &Path, patch: &Path) -> anyhow::Result<JumpT
                 ..
             } => idx as i32,
             _ => {
-                bail!("Data segment of invalid table: {:?}", data.kind);
+                return Err(PatchError::InvalidModule(format!(
+                    "Data segment of invalid table: {:?}",
+                    data.kind
+                )));
             }
         };
 
         let ImportKind::Global(global_id) = import.kind else {
-            bail!("Expected GOT.mem import to be a global");
+            return Err(PatchError::InvalidModule(format!(
+                "Expected GOT.mem import to be a global"
+            )));
         };
 
         // "satisfying" the import means removing it from the import table and replacing its target
@@ -270,6 +304,27 @@ fn create_wasm_jump_table(original: &Path, patch: &Path) -> anyhow::Result<JumpT
         new_base_address: 0,
         ifunc_count,
     })
+}
+
+fn ensure_wasm_bindgen_unchanged(
+    old: &Module,
+    new: &Module,
+    old_symbols: &RawDataSection,
+    new_symbols: &RawDataSection,
+) -> Result<()> {
+    for sym in new_symbols.symbols.iter() {
+        match sym {
+            SymbolInfo::Func { flags, index, name } => {}
+            SymbolInfo::Data {
+                flags,
+                name,
+                symbol,
+            } => {}
+            _ => {}
+        }
+    }
+
+    Ok(())
 }
 
 fn collect_func_ifuncs<'a>(m: &'a Module) -> HashMap<&'a str, i32> {
@@ -401,7 +456,7 @@ pub fn create_undefined_symbol_stub(
     // Load the original binary
     let bytes =
         fs::read(&source_path).with_context(|| format!("failed to read {:?}", source_path))?;
-    let source = File::parse(bytes.deref() as &[u8])?;
+    let source = File::parse(bytes.deref() as &[u8]).context("Failed to parse")?;
     let symbol_table = source
         .symbols()
         .flat_map(|s| Some((s.name().ok()?, s)))
@@ -565,20 +620,19 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
         .collect::<HashSet<_>>();
 
     let mut make_indirect = vec![];
-
     for (name, index) in raw_data.code_symbol_map.iter() {
-        let f = ids[*index as usize];
-        if bindgen_funcs.contains(&f) {
+        let func = module.funcs.get(ids[*index as usize]);
+        if bindgen_funcs.contains(&func.id()) {
             continue;
         }
-        let func = module.funcs.get(f);
+
         if let FunctionKind::Local(_local) = &func.kind {
             if !already_exported.contains(*name) {
                 module.exports.add(*name, func.id());
                 already_exported.insert(name.to_string());
             }
 
-            if !ifuncs.contains(&f) {
+            if !ifuncs.contains(&func.id()) {
                 make_indirect.push(func.id());
             }
         }
@@ -587,26 +641,18 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
     tracing::trace!("Hoisting {} functions", make_indirect.len());
     let seg = module.elements.get_mut(ifunc_table_initialzer);
     let make_indirect_count = make_indirect.len() as u64;
-    match &mut seg.items {
-        ElementItems::Functions(ids) => {
-            for func in make_indirect {
-                ids.push(func);
-            }
-        }
-        ElementItems::Expressions(_ref_type, const_exprs) => {
-            panic!("Indirect function table is not a function table: {const_exprs:?}")
+    if let ElementItems::Functions(ids) = &mut seg.items {
+        for func in make_indirect {
+            ids.push(func);
         }
     };
 
-    let table = match seg.kind {
-        ElementKind::Active { table, .. } => table,
-        _ => bail!("Indirect function table is not active"),
-    };
-
-    let table = module.tables.get_mut(table);
-    table.initial += make_indirect_count;
-    if let Some(max) = table.maximum {
-        table.maximum = Some(max + make_indirect_count);
+    if let ElementKind::Active { table, .. } = seg.kind {
+        let table = module.tables.get_mut(table);
+        table.initial += make_indirect_count;
+        if let Some(max) = table.maximum {
+            table.maximum = Some(max + make_indirect_count);
+        }
     }
 
     Ok(module.emit_wasm())
@@ -636,13 +682,7 @@ fn collect_all_wasm_bindgen_funcs(module: &Module) -> HashSet<FunctionId> {
         let name = func.name.as_ref().unwrap();
 
         // Only deal with the __wbindgen_describe_ functions
-        if !(name.starts_with("__wbindgen_describe_")
-            || name.contains("wasm_bindgen..describe..WasmDescribe")
-            || name.contains("wasm_bindgen..closure..WasmClosure$GT$8describe")
-            || name.contains("wasm_bindgen7closure16Closure$LT$T$GT$4wrap8describe")
-            || name.contains("__wbindgen_describe_closure")
-            || name.contains("__wbindgen_externref_xform"))
-        {
+        if !name_is_bindgen_symbol(name) {
             continue;
         }
 
@@ -655,6 +695,15 @@ fn collect_all_wasm_bindgen_funcs(module: &Module) -> HashSet<FunctionId> {
     }
 
     acc.funcs
+}
+
+fn name_is_bindgen_symbol(name: &str) -> bool {
+    name.starts_with("__wbindgen_describe_")
+        || name.contains("wasm_bindgen..describe..WasmDescribe")
+        || name.contains("wasm_bindgen..closure..WasmClosure$GT$8describe")
+        || name.contains("wasm_bindgen7closure16Closure$LT$T$GT$4wrap8describe")
+        || name.contains("__wbindgen_describe_closure")
+        || name.contains("__wbindgen_externref_xform")
 }
 
 /// Manually parse the data section from a wasm module
@@ -674,7 +723,9 @@ fn parse_bytes_to_data_segment(bytes: &[u8]) -> Result<RawDataSection> {
         match payload {
             Payload::DataSection(section) => {
                 data_range = section.range();
-                segments = section.into_iter().collect::<Result<Vec<_>, _>>()?
+                segments = section
+                    .into_iter()
+                    .collect::<Result<Vec<_>, BinaryReaderError>>()?
             }
             Payload::CustomSection(section) if section.name() == "linking" => {
                 let reader = BinaryReader::new(section.data(), 0);
@@ -737,7 +788,7 @@ fn parse_bytes_to_data_segment(bytes: &[u8]) -> Result<RawDataSection> {
 
     Ok(RawDataSection {
         _data_range: data_range,
-        _symbols: symbols,
+        symbols,
         data_symbols,
         data_symbol_map,
         code_symbol_map,
@@ -746,7 +797,7 @@ fn parse_bytes_to_data_segment(bytes: &[u8]) -> Result<RawDataSection> {
 
 struct RawDataSection<'a> {
     _data_range: Range<usize>,
-    _symbols: Vec<SymbolInfo<'a>>,
+    symbols: Vec<SymbolInfo<'a>>,
     code_symbol_map: BTreeMap<&'a str, usize>,
     data_symbols: BTreeMap<usize, DataSymbol>,
     data_symbol_map: HashMap<&'a str, usize>,
@@ -791,4 +842,49 @@ fn parse_module_with_ids(
     }
 
     Ok((module, ids, fns_to_ids))
+}
+
+#[test]
+fn compare_bindgen_sections() {
+    let bytes = include_bytes!("/Users/jonathankelley/Development/dioxus/target/wasm32-unknown-unknown/wasm-dev/fullstack-hello-world-example.wasm");
+    let (module, ids, _fns_to_ids) = parse_module_with_ids(bytes).unwrap();
+    let (sect, section) = module
+        .customs
+        .iter()
+        .find(|(id, f)| f.name() == "__wasm_bindgen_unstable")
+        .unwrap();
+    let data = section.data(&Default::default());
+
+    let syms = parse_bytes_to_data_segment(bytes).unwrap();
+    for s in syms.symbols.iter() {
+        match s {
+            SymbolInfo::Func { flags, index, name } => {
+                if let Some(name) = name {
+                    if name_is_bindgen_symbol(name) {
+                        println!("func: {name:?} -> {index:?}");
+                    }
+                }
+            }
+            SymbolInfo::Data {
+                flags,
+                name,
+                symbol,
+            } => {
+                if name.contains("_GENERATED") {
+                    let offset = symbol.unwrap().offset;
+                    println!("[{offset}]   Name: {name:?} -> {symbol:?}");
+                }
+
+                // println!()
+            }
+            SymbolInfo::Global { flags, index, name } => {}
+            SymbolInfo::Section { flags, section } => {
+                println!("Section: {section:?} with flags {flags:?}");
+            }
+            SymbolInfo::Event { flags, index, name } => {}
+            SymbolInfo::Table { flags, index, name } => {}
+        }
+    }
+
+    // println!("Section: {sect:?} -> {data:?}");
 }

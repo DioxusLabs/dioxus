@@ -5,6 +5,7 @@ use crate::{
 };
 use anyhow::Context;
 use axum::extract::ws::Message as WsMessage;
+use dioxus_cli_opt::AssetManifest;
 use dioxus_core::internal::{
     HotReloadTemplateWithLocation, HotReloadedTemplate, TemplateGlobalKey,
 };
@@ -564,22 +565,51 @@ impl AppServer {
     }
 
     pub(crate) async fn patch(&mut self, res: &BuildArtifacts) -> Result<JumpTable> {
-        let client = match res.platform {
+        let app = match res.platform {
             Platform::Server => &self.server.as_ref().unwrap(),
             _ => &self.client,
         };
 
-        let original = client.build.main_exe();
-        let new = client.build.patch_exe(res.time_start);
-        let triple = client.build.triple.clone();
+        let original = app.build.main_exe();
+        let new = app.build.patch_exe(res.time_start);
+        let triple = app.build.triple.clone();
+        let original_artifacts = app.artifacts.as_ref().unwrap();
+        let asset_dir = app.build.asset_dir();
+
+        for (k, bundled) in res.assets.assets.iter() {
+            let k = dunce::canonicalize(k)?;
+            if original_artifacts.assets.assets.contains_key(k.as_path()) {
+                continue;
+            }
+
+            let from = k.clone();
+            let to = asset_dir.join(bundled.bundled_path());
+
+            tracing::debug!("Copying asset from patch: {}", k.display());
+            if let Err(e) = dioxus_cli_opt::process_file_to(bundled.options(), &from, &to) {
+                tracing::error!("Failed to copy asset: {e}");
+                continue;
+            }
+
+            // If the emulator is android, we need to copy the asset to the device with `adb push asset /data/local/tmp/dx/assets/filename.ext`
+            if app.build.platform == Platform::Android {
+                let changed_file = dunce::canonicalize(k).inspect_err(|e| {
+                    tracing::debug!("Failed to canonicalize hotreloaded asset: {e}")
+                })?;
+                let bundled_name = PathBuf::from(bundled.bundled_path());
+                _ = app
+                    .copy_file_to_android_tmp(&changed_file, &bundled_name)
+                    .await;
+            }
+        }
 
         tracing::debug!("Patching {} -> {}", original.display(), new.display());
 
-        let mut jump_table = crate::build::create_jump_table(&original, &new, &triple).unwrap();
+        let mut jump_table = crate::build::create_jump_table(&original, &new, &triple)?;
 
         // If it's android, we need to copy the assets to the device and then change the location of the patch
-        if client.build.platform == Platform::Android {
-            jump_table.lib = client
+        if app.build.platform == Platform::Android {
+            jump_table.lib = app
                 .copy_file_to_android_tmp(&new, &(PathBuf::from(new.file_name().unwrap())))
                 .await?;
         }
@@ -592,7 +622,7 @@ impl AppServer {
             //    but we want to ship `/wasm/lib.wasm`
             jump_table.lib = jump_table
                 .lib
-                .strip_prefix(&client.build.root_dir())
+                .strip_prefix(&app.build.root_dir())
                 .unwrap()
                 .to_path_buf();
         }

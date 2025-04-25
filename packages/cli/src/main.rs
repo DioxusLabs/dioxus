@@ -46,9 +46,6 @@ async fn main() {
 
     let args = TraceController::initialize();
 
-    #[cfg(debug_assertions)]
-    tracing::warn!("CLI was built with debug profile. Commands will run slower.");
-
     let result = match args.action {
         Commands::Translate(opts) => opts.translate(),
         Commands::New(opts) => opts.create(),

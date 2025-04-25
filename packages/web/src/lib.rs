@@ -73,7 +73,7 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
         futures_util::select! {
             msg = hotreload_rx.next() => {
                 if let Some(msg) = msg {
-                    console::log_1(&format!("Initial hot-reload: {:#?}", msg).into());
+                    // console::log_1(&format!("Initial hot-reload: {:#?}", msg).into());
                     if msg.for_build_id == Some(dioxus_cli_config::build_id()) {
                         dioxus_devtools::apply_changes(&virtual_dom, &msg).unwrap();
                     }
@@ -232,7 +232,7 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
         #[cfg(all(feature = "devtools", debug_assertions))]
         if let Some(hr_msg) = hotreload_msg {
             // Replace all templates
-            console::log_1(&format!("Hotreload: {:#?}", hr_msg).into());
+            // console::log_1(&format!("Hotreload: {:#?}", hr_msg).into());
 
             if dioxus_devtools::apply_changes(&virtual_dom, &hr_msg).is_ok() {
                 if !hr_msg.assets.is_empty() {

@@ -31,8 +31,8 @@ impl BuildRequest {
     pub(crate) fn prepare_html(
         &self,
         assets: &AssetManifest,
-        // js_file: &str,
-        // bindgen_file: &str,
+        wasm_path: &str,
+        js_path: &str,
     ) -> Result<String> {
         let mut html = {
             let crate_root: &Path = &self.crate_dir();
@@ -47,7 +47,7 @@ impl BuildRequest {
         self.inject_loading_scripts(&mut html);
 
         // Replace any special placeholders in the HTML with resolved values
-        self.replace_template_placeholders(&assets, &mut html);
+        self.replace_template_placeholders(&mut html, wasm_path, js_path);
 
         let title = self.config.web.app.title.clone();
         replace_or_insert_before("{app_title}", "</title", &title, &mut html);
@@ -126,18 +126,17 @@ impl BuildRequest {
                 _ => {}
             }
         }
+
         // Manually inject the wasm file for preloading. WASM currently doesn't support preloading in the manganis asset system
         let wasm_source_path = self.wasm_bindgen_wasm_output_file();
-        let wasm_path = assets
-            .assets
-            .get(&wasm_source_path)
-            .expect("WASM asset should exist in web bundles")
-            .bundled_path();
-        head_resources.push_str(&format!(
-            "<link rel=\"preload\" as=\"fetch\" type=\"application/wasm\" href=\"/{{base_path}}/assets/{wasm_path}\" crossorigin>"
-        ));
+        if let Some(wasm_path) = assets.assets.get(&wasm_source_path) {
+            let wasm_path = wasm_path.bundled_path();
+            head_resources.push_str(&format!(
+                    "<link rel=\"preload\" as=\"fetch\" type=\"application/wasm\" href=\"/{{base_path}}/assets/{wasm_path}\" crossorigin>"
+                ));
 
-        replace_or_insert_before("{style_include}", "</head", &head_resources, html);
+            replace_or_insert_before("{style_include}", "</head", &head_resources, html);
+        }
 
         Ok(())
     }
@@ -173,33 +172,21 @@ r#" <script>
     }
 
     /// Replace any special placeholders in the HTML with resolved values
-    fn replace_template_placeholders(&self, assets: &AssetManifest, html: &mut String) {
+    fn replace_template_placeholders(&self, html: &mut String, wasm_path: &str, js_path: &str) {
         let base_path = self.config.web.app.base_path();
         *html = html.replace("{base_path}", base_path);
 
         let app_name = &self.executable_name();
-        let wasm_source_path = self.wasm_bindgen_wasm_output_file();
-        let wasm_path = assets
-            .assets
-            .get(&wasm_source_path)
-            .expect("WASM asset should exist in web bundles")
-            .bundled_path();
-        let wasm_path = format!("assets/{wasm_path}");
-        let js_source_path = self.wasm_bindgen_js_output_file();
-        let js_path = assets
-            .assets
-            .get(&js_source_path)
-            .expect("JS asset should exist in web bundles")
-            .bundled_path();
-        let js_path = format!("assets/{js_path}");
 
         // If the html contains the old `{app_name}` placeholder, replace {app_name}_bg.wasm and {app_name}.js
         // with the new paths
         *html = html.replace("wasm/{app_name}_bg.wasm", &wasm_path);
         *html = html.replace("wasm/{app_name}.js", &js_path);
+
         // Otherwise replace the new placeholders
         *html = html.replace("{wasm_path}", &wasm_path);
         *html = html.replace("{js_path}", &js_path);
+
         // Replace the app_name if we find it anywhere standalone
         *html = html.replace("{app_name}", app_name);
     }

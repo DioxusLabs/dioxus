@@ -82,9 +82,8 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &mut TraceController) -> 
                 // `Hot-patching:` to keep the alignment during long edit sessions
                 tracing::info!("Full rebuild: triggered manually");
                 builder.full_rebuild().await;
-
                 devserver.send_reload_start().await;
-                devserver.start_build().await
+                devserver.start_build().await;
             }
 
             // Run the server in the background
@@ -139,7 +138,14 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &mut TraceController) -> 
                             match builder.patch(&bundle).await {
                                 Ok(jumptable) => devserver.send_patch(jumptable, elapsed, id).await,
                                 Err(err) => {
-                                    tracing::error!("Failed to patch app: {err}");
+                                    tracing::error!("Failed to hot-patch app: {err}");
+
+                                    if matches!(err, crate::Error::PatchingFailed(_)) {
+                                        tracing::info!("Starting full rebuild: {err}");
+                                        builder.full_rebuild().await;
+                                        devserver.send_reload_start().await;
+                                        devserver.start_build().await;
+                                    }
                                 }
                             }
                         }

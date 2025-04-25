@@ -346,6 +346,7 @@ use tempfile::{NamedTempFile, TempDir};
 use tokio::{io::AsyncBufReadExt, process::Command};
 use toml_edit::Item;
 use uuid::Uuid;
+use walkdir::WalkDir;
 
 /// This struct is used to plan the build process.
 ///
@@ -710,7 +711,7 @@ impl BuildRequest {
         let mut artifacts = self.cargo_build(&ctx).await?;
 
         if matches!(ctx.mode, BuildMode::Fat) {
-            self.perform_fat_link(ctx, &artifacts).await?;
+            self.perform_fat_link(ctx, &mut artifacts).await?;
         }
 
         // Write the build artifacts to the bundle on the disk
@@ -868,6 +869,8 @@ impl BuildRequest {
         let platform = self.platform;
         tracing::debug!("Build completed successfully - output location: {:?}", exe);
 
+        tracing::debug!("Asset extraction complete - assets: {:#?}", assets);
+
         // Accumulate the rustc args from the wrapper, if they exist and can be parsed.
         let mut direct_rustc = RustcArgs::default();
         if let Ok(res) = std::fs::read_to_string(self.rustc_wrapper_args_file.path()) {
@@ -993,7 +996,7 @@ impl BuildRequest {
         let asset_dir = self.asset_dir();
 
         // First, clear the asset dir of any files that don't exist in the new manifest
-        _ = tokio::fs::create_dir_all(&asset_dir).await;
+        _ = std::fs::create_dir_all(&asset_dir);
 
         // Create a set of all the paths that new files will be bundled to
         let mut keep_bundled_output_paths: HashSet<_> = assets
@@ -1014,42 +1017,22 @@ impl BuildRequest {
             keep_bundled_output_paths.clear();
         }
 
-        // one possible implementation of walking a directory only visiting files
-        fn remove_old_assets<'a>(
-            path: &'a Path,
-            keep_bundled_output_paths: &'a HashSet<PathBuf>,
-        ) -> Pin<Box<dyn Future<Output = std::io::Result<()>> + Send + 'a>> {
-            Box::pin(async move {
-                // If this asset is in the manifest, we don't need to remove it
-                let canon_path = dunce::canonicalize(path)?;
-                if keep_bundled_output_paths.contains(canon_path.as_path()) {
-                    return Ok(());
-                }
-
-                // Otherwise, if it is a directory, we need to walk it and remove child files
-                if path.is_dir() {
-                    for entry in std::fs::read_dir(path)?.flatten() {
-                        let path = entry.path();
-                        remove_old_assets(&path, keep_bundled_output_paths).await?;
-                    }
-                    if path.read_dir()?.next().is_none() {
-                        // If the directory is empty, remove it
-                        tokio::fs::remove_dir(path).await?;
-                    }
-                } else {
-                    // If it is a file, remove it
-                    tokio::fs::remove_file(path).await?;
-                }
-
-                Ok(())
-            })
-        }
-
         tracing::trace!(
             "Keeping bundled output paths: {:#?}",
             keep_bundled_output_paths
         );
-        remove_old_assets(&asset_dir, &keep_bundled_output_paths).await?;
+        for item in WalkDir::new(&asset_dir).into_iter().flatten() {
+            // If this asset is in the manifest, we don't need to remove it
+            let canonicalized = dunce::canonicalize(item.path())?;
+            if !keep_bundled_output_paths.contains(canonicalized.as_path()) {
+                // Remove empty dirs, remove files not in the manifest
+                if item.file_type().is_dir() && item.path().read_dir()?.next().is_none() {
+                    std::fs::remove_dir(item.path())?;
+                } else {
+                    std::fs::remove_file(item.path())?;
+                }
+            }
+        }
 
         // todo(jon): we also want to eventually include options for each asset's optimization and compression, which we currently aren't
         let mut assets_to_transfer = vec![];
@@ -1288,6 +1271,11 @@ impl BuildRequest {
             _ = std::fs::remove_file(&PathBuf::from(args[idx + 1]));
         }
 
+        // Now extract the assets from the fat binary
+        artifacts
+            .assets
+            .add_from_object_path(&self.patch_exe(artifacts.time_start))?;
+
         // Also clean up the temp artifacts
         // // Clean up the temps manually
         // // todo: we might want to keep them around for debugging purposes
@@ -1308,7 +1296,9 @@ impl BuildRequest {
         let triple = self.triple.clone();
         let mut out_args = vec![];
 
-        tracing::trace!("original args:\n{}", original_args.join(" "));
+        if self.platform != Platform::Web || std::env::var("__DX_LOG_WASM_LINK").is_ok() {
+            tracing::trace!("original args:\n{}", original_args.join(" "));
+        }
 
         match triple.operating_system {
             // wasm32-unknown-unknown -> use wasm-ld (gnu-lld)
@@ -1500,7 +1490,7 @@ impl BuildRequest {
     pub(crate) async fn perform_fat_link(
         &self,
         ctx: &BuildContext,
-        artifacts: &BuildArtifacts,
+        artifacts: &mut BuildArtifacts,
     ) -> Result<()> {
         ctx.status_starting_link();
 
@@ -1692,6 +1682,9 @@ impl BuildRequest {
             let out = String::from_utf8_lossy(&res.stdout);
             tracing::trace!("Output from fat linking: {}", out.trim());
         }
+
+        // Now extract the assets from the fat binary
+        artifacts.assets.add_from_object_path(&artifacts.exe)?;
 
         Ok(())
     }
@@ -3092,19 +3085,33 @@ impl BuildRequest {
             wasm_opt::optimize(&post_bindgen_wasm, &post_bindgen_wasm, &wasm_opt_options).await?;
         }
 
-        // Make sure to register the main wasm file with the asset system
-        assets.register_asset(&post_bindgen_wasm, AssetOptions::Unknown)?;
+        // In release mode, we make the wasm and bindgen files into assets so they get bundled with max
+        // optimizations.
+        let wasm_path = if self.release {
+            // Register the main.js with the asset system so it bundles in the snippets and optimizes
+            let name = assets.register_asset(
+                &self.wasm_bindgen_js_output_file(),
+                AssetOptions::Js(JsAssetOptions::new().with_minify(true).with_preload(true)),
+            )?;
+            format!("assets/{}", name.bundled_path())
+        } else {
+            let asset = self.wasm_bindgen_wasm_output_file();
+            format!("wasm/{}", asset.file_name().unwrap().to_str().unwrap())
+        };
 
-        // Register the main.js with the asset system so it bundles in the snippets and optimizes
-        assets.register_asset(
-            &self.wasm_bindgen_js_output_file(),
-            AssetOptions::Js(JsAssetOptions::new().with_minify(true).with_preload(true)),
-        )?;
+        let js_path = if self.release {
+            // Make sure to register the main wasm file with the asset system
+            let name = assets.register_asset(&post_bindgen_wasm, AssetOptions::Unknown)?;
+            format!("assets/{}", name.bundled_path())
+        } else {
+            let asset = self.wasm_bindgen_js_output_file();
+            format!("wasm/{}", asset.file_name().unwrap().to_str().unwrap())
+        };
 
         // Write the index.html file with the pre-configured contents we got from pre-rendering
         std::fs::write(
             self.root_dir().join("index.html"),
-            self.prepare_html(&assets)?,
+            self.prepare_html(&assets, &wasm_path, &js_path)?,
         )?;
 
         Ok(())
