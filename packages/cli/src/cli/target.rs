@@ -53,8 +53,8 @@ pub(crate) struct TargetArgs {
     ///
     /// This can include stuff like, "--locked", "--frozen", etc. Note that `dx` sets many of these
     /// args directly from other args in this command.
-    #[clap(value_delimiter = ',')]
-    pub(crate) cargo_args: Vec<String>,
+    #[clap(long)]
+    pub(crate) cargo_args: Option<String>,
 
     /// Extra arguments passed to `rustc`. This can be used to customize the linker, or other flags.
     ///

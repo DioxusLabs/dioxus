@@ -385,7 +385,7 @@ pub(crate) struct BuildRequest {
     pub(crate) _device: bool,
 
     /// The package to build
-    pub(crate) cargo_package: String,
+    pub(crate) package: String,
 
     /// Space separated list of features to activate
     pub(crate) features: Vec<String>,
@@ -596,6 +596,9 @@ impl BuildRequest {
             },
         };
 
+        // Determining release mode is based on the profile, actually, so we need to check that
+        let release = workspace.is_release_profile(&profile);
+
         // Determine the --package we'll pass to cargo.
         // todo: I think this might be wrong - we don't want to use main_package necessarily...
         let package = args
@@ -662,7 +665,7 @@ impl BuildRequest {
             NamedTempFile::new().context("Failed to create temporary file for linker args")?,
         );
         let rustc_wrapper_args_file = Arc::new(
-            NamedTempFile::new()
+            NamedTempFile::with_suffix(".json")
                 .context("Failed to create temporary file for rustc wrapper args")?,
         );
         let session_cache_dir = Arc::new(
@@ -671,6 +674,21 @@ impl BuildRequest {
 
         let extra_rustc_args = shell_words::split(&args.rustc_args.clone().unwrap_or_default())
             .context("Failed to parse rustc args")?;
+
+        let extra_cargo_args = shell_words::split(&args.cargo_args.clone().unwrap_or_default())
+            .context("Failed to parse cargo args")?;
+
+        tracing::debug!(
+            r#"Log Files:
+link_args_file: {},
+link_err_file: {},
+rustc_wrapper_args_file: {},
+session_cache_dir: {}"#,
+            link_args_file.path().display(),
+            link_err_file.path().display(),
+            rustc_wrapper_args_file.path().display(),
+            session_cache_dir.path().display(),
+        );
 
         Ok(Self {
             platform,
@@ -690,9 +708,9 @@ impl BuildRequest {
             session_cache_dir,
             rustc_wrapper_args_file,
             extra_rustc_args,
-            extra_cargo_args: args.cargo_args.clone(),
-            cargo_package: package,
-            release: args.release,
+            extra_cargo_args,
+            release,
+            package,
             skip_assets: args.skip_assets,
             wasm_split: args.wasm_split,
             debug_symbols: args.debug_symbols,
@@ -707,10 +725,6 @@ impl BuildRequest {
 
         // Run the cargo build to produce our artifacts
         let mut artifacts = self.cargo_build(&ctx).await?;
-
-        if matches!(ctx.mode, BuildMode::Fat) {
-            self.perform_fat_link(ctx, &mut artifacts).await?;
-        }
 
         // Write the build artifacts to the bundle on the disk
         match ctx.mode {
@@ -759,7 +773,7 @@ impl BuildRequest {
         ctx.status_starting_build(crate_count);
 
         let mut cmd = self.build_command(ctx)?;
-        tracing::debug!(dx_src = ?TraceSrc::Build, "Executing cargo for {} using {}: {:#?}", self.platform, self.triple, cmd);
+        tracing::debug!(dx_src = ?TraceSrc::Build, "Executing cargo for {} using {}", self.platform, self.triple);
 
         let mut child = cmd
             .stdout(Stdio::piped())
@@ -860,14 +874,7 @@ impl BuildRequest {
             tracing::error!("Cargo build failed - no output location. Toggle tracing mode (press `t`) for more information.");
         }
 
-        let exe = output_location.context("Build did not return an executable")?;
-        let assets = self.collect_assets(&exe)?;
-        let time_end = SystemTime::now();
-        let mode = ctx.mode.clone();
-        let platform = self.platform;
-        tracing::debug!("Build completed successfully - output location: {:?}", exe);
-
-        tracing::debug!("Asset extraction complete - assets: {:#?}", assets);
+        let exe = output_location.context("Build `did not return an executable")?;
 
         // Accumulate the rustc args from the wrapper, if they exist and can be parsed.
         let mut direct_rustc = RustcArgs::default();
@@ -884,12 +891,23 @@ impl BuildRequest {
             }
         }
 
+        // Fat builds need to be linked with the fat linker. Would also like to link here for thin builds
+        if matches!(ctx.mode, BuildMode::Fat) {
+            self.perform_fat_link(ctx, &exe).await?;
+        }
+
+        let assets = self.collect_assets(&exe)?;
+        let time_end = SystemTime::now();
+        let mode = ctx.mode.clone();
+        let platform = self.platform;
+        tracing::debug!("Build completed successfully - output location: {:?}", exe);
+
         Ok(BuildArtifacts {
+            time_end,
             platform,
             exe,
             direct_rustc,
             time_start,
-            time_end,
             assets,
             mode,
         })
@@ -1114,6 +1132,10 @@ impl BuildRequest {
         tracing::debug!("Patching existing bundle");
         ctx.status_hotpatching();
 
+        tracing::debug!(
+            "Original builds for patch: {}",
+            self.link_args_file.path().display()
+        );
         let raw_args = std::fs::read_to_string(&self.link_args_file.path())
             .context("Failed to read link args from file")?;
         let args = raw_args.lines().collect::<Vec<_>>();
@@ -1293,10 +1315,6 @@ impl BuildRequest {
         let triple = self.triple.clone();
         let mut out_args = vec![];
 
-        if self.platform != Platform::Web || std::env::var("__DX_LOG_WASM_LINK").is_ok() {
-            tracing::trace!("original args:\n{}", original_args.join(" "));
-        }
-
         match triple.operating_system {
             // wasm32-unknown-unknown -> use wasm-ld (gnu-lld)
             //
@@ -1307,6 +1325,9 @@ impl BuildRequest {
             // and the resulting JS has issues.
             //
             // We turn on both --pie and --experimental-pic but I think we only need --pie.
+            //
+            // We don't use *any* of the original linker args since they do lots of custom exports
+            // and other things that we don't need.
             OperatingSystem::Unknown if self.platform == Platform::Web => {
                 out_args.extend([
                     "--fatal-warnings".to_string(),
@@ -1321,7 +1342,6 @@ impl BuildRequest {
                     "--no-demangle".to_string(),
                     "--no-entry".to_string(),
                     "--pie".to_string(),
-                    "--whole-archive".to_string(),
                     "--no-gc-sections".to_string(),
                     "--experimental-pic".to_string(),
                 ]);
@@ -1334,66 +1354,54 @@ impl BuildRequest {
             OperatingSystem::IOS(_) | OperatingSystem::MacOSX(_) | OperatingSystem::Darwin(_) => {
                 out_args.extend(["-Wl,-dylib".to_string()]);
 
-                match triple.architecture {
-                    target_lexicon::Architecture::Aarch64(_) => {
-                        out_args.push("-arch".to_string());
-                        out_args.push("arm64".to_string());
+                // Preserve the original args. We only preserve:
+                // -framework
+                // -arch
+                // -lxyz
+                // There might be more, but some flags might break our setup.
+                for (idx, arg) in original_args.iter().enumerate() {
+                    if *arg == "-framework" || *arg == "-arch" || *arg == "-L" {
+                        out_args.push(arg.to_string());
+                        out_args.push(original_args[idx + 1].to_string());
                     }
-                    target_lexicon::Architecture::X86_64 => {
-                        out_args.push("-arch".to_string());
-                        out_args.push("x86_64".to_string());
+
+                    if arg.starts_with("-l") || arg.starts_with("-m") {
+                        out_args.push(arg.to_string());
                     }
-                    _ => {}
                 }
             }
 
             // android/linux need to be compatible with lld
             //
             // android currently drags along its own libraries and other zany flags
-            OperatingSystem::Linux if triple.environment == Environment::Android => {
-                out_args.extend(
-                    [
-                        "-shared".to_string(),
-                        "-Wl,--eh-frame-hdr".to_string(),
-                        "-Wl,-z,noexecstack".to_string(),
-                        "-landroid".to_string(),
-                        "-llog".to_string(),
-                        "-lOpenSLES".to_string(),
-                        "-landroid".to_string(),
-                        "-ldl".to_string(),
-                        "-ldl".to_string(),
-                        "-llog".to_string(),
-                        "-lunwind".to_string(),
-                        "-ldl".to_string(),
-                        "-lm".to_string(),
-                        "-lc".to_string(),
-                        "-Wl,-z,relro,-z,now".to_string(),
-                        "-nodefaultlibs".to_string(),
-                        "-Wl,-Bdynamic".to_string(),
-                    ]
-                    .iter()
-                    .map(|s| s.to_string()),
-                );
-
-                match triple.architecture {
-                    target_lexicon::Architecture::Aarch64(_) => {
-                        // args.push("-Wl,--target=aarch64-linux-android".to_string());
-                    }
-                    target_lexicon::Architecture::X86_64 => {
-                        // args.push("-Wl,--target=x86_64-linux-android".to_string());
-                    }
-                    _ => {}
-                }
-            }
-
             OperatingSystem::Linux => {
                 out_args.extend([
+                    "-shared".to_string(),
                     "-Wl,--eh-frame-hdr".to_string(),
                     "-Wl,-z,noexecstack".to_string(),
                     "-Wl,-z,relro,-z,now".to_string(),
                     "-nodefaultlibs".to_string(),
                     "-Wl,-Bdynamic".to_string(),
                 ]);
+
+                // Preserve the original args. We only preserve:
+                // -L <path>
+                // -arch
+                // -lxyz
+                // There might be more, but some flags might break our setup.
+                for (idx, arg) in original_args.iter().enumerate() {
+                    if *arg == "-L" {
+                        out_args.push(arg.to_string());
+                        out_args.push(original_args[idx + 1].to_string());
+                    }
+
+                    if arg.starts_with("-l")
+                        || arg.starts_with("-m")
+                        || arg.starts_with("-Wl,--target=")
+                    {
+                        out_args.push(arg.to_string());
+                    }
+                }
             }
 
             OperatingSystem::Windows => {}
@@ -1484,11 +1492,7 @@ impl BuildRequest {
     ///
     /// todo: I think we can traverse our immediate dependencies and inspect their symbols, unless they `pub use` a crate
     /// todo: we should try and make this faster with memmapping
-    pub(crate) async fn perform_fat_link(
-        &self,
-        ctx: &BuildContext,
-        artifacts: &mut BuildArtifacts,
-    ) -> Result<()> {
+    pub(crate) async fn perform_fat_link(&self, ctx: &BuildContext, exe: &Path) -> Result<()> {
         ctx.status_starting_link();
 
         let raw_args = std::fs::read_to_string(&self.link_args_file.path())
@@ -1513,9 +1517,7 @@ impl BuildRequest {
         );
 
         // Check if we already have a cached object file
-        let out_ar_path = artifacts
-            .exe
-            .with_file_name(format!("libfatdependencies-{hash_id}.a"));
+        let out_ar_path = exe.with_file_name(format!("libfatdependencies-{hash_id}.a"));
 
         let mut compiler_rlibs = vec![];
 
@@ -1662,7 +1664,7 @@ impl BuildRequest {
         let res = Command::new(cc)
             .args(args.iter().skip(1))
             .arg("-o")
-            .arg(&artifacts.exe)
+            .arg(&exe)
             .output()
             .await?;
 
@@ -1679,9 +1681,6 @@ impl BuildRequest {
             let out = String::from_utf8_lossy(&res.stdout);
             tracing::trace!("Output from fat linking: {}", out.trim());
         }
-
-        // Now extract the assets from the fat binary
-        artifacts.assets.add_from_object_path(&artifacts.exe)?;
 
         // Clean up the temps manually
         for f in args.iter().filter(|arg| arg.ends_with(".rcgu.o")) {
@@ -1728,7 +1727,7 @@ impl BuildRequest {
                         .display()
                 ));
 
-                tracing::debug!("Running rustc command: {:#?}", rustc_args.args);
+                tracing::trace!("Direct rustc command: {:#?}", rustc_args.args);
 
                 Ok(cmd)
             }
@@ -1752,6 +1751,8 @@ impl BuildRequest {
                     .arg("json-diagnostic-rendered-ansi")
                     .args(self.cargo_build_arguments(ctx))
                     .envs(self.cargo_build_env_vars(ctx)?);
+
+                tracing::trace!("Cargo command: {:#?}", cmd);
 
                 if ctx.mode == BuildMode::Fat {
                     cmd.env(
@@ -1804,7 +1805,7 @@ impl BuildRequest {
 
         // We *always* set the package since that's discovered from cargo metadata
         cargo_args.push(String::from("-p"));
-        cargo_args.push(self.cargo_package.clone());
+        cargo_args.push(self.package.clone());
 
         // Set the executable
         match self.executable_type() {
@@ -2006,8 +2007,6 @@ impl BuildRequest {
         ));
 
         // Set the rust flags for android which get passed to *every* crate in the graph.
-        // todo: I don't think we should be passing --export-dynamic here, but it works.
-        //       At least for production, we shouldn't.
         env_vars.push(("RUSTFLAGS", {
             let mut rust_flags = std::env::var("RUSTFLAGS").unwrap_or_default();
             rust_flags.push_str(" -Clink-arg=-landroid");
