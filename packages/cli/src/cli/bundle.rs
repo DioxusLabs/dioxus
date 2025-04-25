@@ -54,7 +54,7 @@ impl Bundle {
         let mut bundles = vec![];
 
         // Copy the server over if it exists
-        if bundle.build.build.fullstack {
+        if bundle.build.build.fullstack() {
             bundles.push(bundle.server_exe().unwrap());
         }
 

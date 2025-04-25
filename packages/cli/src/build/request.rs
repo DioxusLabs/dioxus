@@ -92,7 +92,7 @@ impl BuildRequest {
     pub(crate) async fn build_server(&self) -> Result<Option<BuildArtifacts>> {
         tracing::debug!("Building server...");
 
-        if !self.build.fullstack {
+        if !self.build.fullstack() {
             return Ok(None);
         }
 

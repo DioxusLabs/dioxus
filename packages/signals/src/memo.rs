@@ -1,4 +1,3 @@
-use crate::warnings::{signal_read_and_write_in_reactive_scope, signal_write_in_component_body};
 use crate::write::Writable;
 use crate::{read::Readable, ReadableRef, Signal};
 use crate::{read_impls, GlobalMemo};
@@ -12,7 +11,6 @@ use std::{
 use dioxus_core::prelude::*;
 use futures_util::StreamExt;
 use generational_box::{AnyStorage, BorrowResult, UnsyncStorage};
-use warnings::Warning;
 
 struct UpdateInformation<T> {
     dirty: Arc<AtomicBool>,
@@ -181,9 +179,7 @@ where
         let result = if needs_update {
             drop(read);
             // We shouldn't be subscribed to the value here so we don't trigger the scope we are currently in to rerun even though that scope got the latest value because we synchronously update the value: https://github.com/DioxusLabs/dioxus/issues/2416
-            signal_read_and_write_in_reactive_scope::allow(|| {
-                signal_write_in_component_body::allow(|| self.recompute())
-            });
+            self.recompute();
             self.inner.inner.try_read_unchecked()
         } else {
             Ok(read)

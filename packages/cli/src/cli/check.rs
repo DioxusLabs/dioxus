@@ -4,10 +4,9 @@
 //! https://github.com/rust-lang/rustfmt/blob/master/src/bin/main.rs
 
 use super::*;
-use crate::DioxusCrate;
+use crate::{metadata::collect_rs_files, DioxusCrate};
 use anyhow::Context;
 use futures_util::{stream::FuturesUnordered, StreamExt};
-use std::path::Path;
 
 /// Check the Rust files in the project for issues.
 #[derive(Clone, Debug, Parser)]
@@ -54,7 +53,7 @@ async fn check_file_and_report(path: PathBuf) -> Result<()> {
 /// Doesn't do mod-descending, so it will still try to check unreachable files. TODO.
 async fn check_project_and_report(dioxus_crate: DioxusCrate) -> Result<()> {
     let mut files_to_check = vec![dioxus_crate.main_source_file()];
-    collect_rs_files(&dioxus_crate.crate_dir(), &mut files_to_check);
+    files_to_check.extend(collect_rs_files(dioxus_crate.crate_dir()));
     check_files_and_report(files_to_check).await
 }
 
@@ -104,30 +103,5 @@ async fn check_files_and_report(files_to_check: Vec<PathBuf>) -> Result<()> {
         }
         1 => Err("1 issue found.".into()),
         _ => Err(format!("{} issues found.", total_issues).into()),
-    }
-}
-
-fn collect_rs_files(folder: &Path, files: &mut Vec<PathBuf>) {
-    let Ok(folder) = folder.read_dir() else {
-        return;
-    };
-
-    // load the gitignore
-    for entry in folder {
-        let Ok(entry) = entry else {
-            continue;
-        };
-
-        let path = entry.path();
-
-        if path.is_dir() {
-            collect_rs_files(&path, files);
-        }
-
-        if let Some(ext) = path.extension() {
-            if ext == "rs" {
-                files.push(path);
-            }
-        }
     }
 }
