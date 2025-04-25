@@ -18,6 +18,7 @@ pub struct Workspace {
     pub(crate) sysroot: PathBuf,
     pub(crate) rustc_version: String,
     pub(crate) ignore: Gitignore,
+    pub(crate) cargo_toml: cargo_toml::Manifest,
 }
 
 impl Workspace {
@@ -60,6 +61,10 @@ impl Workspace {
 
         let ignore = Self::workspace_gitignore(krates.workspace_root().as_std_path());
 
+        let cargo_toml =
+            cargo_toml::Manifest::from_path(krates.workspace_root().join("Cargo.toml"))
+                .context("Failed to load Cargo.toml")?;
+
         let workspace = Arc::new(Self {
             krates,
             settings,
@@ -67,11 +72,37 @@ impl Workspace {
             sysroot: sysroot.trim().into(),
             rustc_version: rustc_version.trim().into(),
             ignore,
+            cargo_toml,
         });
 
         lock.replace(workspace.clone());
 
         Ok(workspace)
+    }
+
+    pub fn is_release_profile(&self, profile: &str) -> bool {
+        // Check if the profile inherits from release by traversing the `inherits` chain
+        let mut current_profile_name = profile;
+
+        // Try to find the current profile in the custom profiles section
+        while let Some(profile_settings) = self.cargo_toml.profile.custom.get(current_profile_name)
+        {
+            if profile == "release" {
+                return true;
+            }
+
+            // Check what this profile inherits from
+            match &profile_settings.inherits {
+                // Otherwise, continue checking the profile it inherits from
+                Some(inherits_name) => current_profile_name = inherits_name,
+
+                // This profile doesn't explicitly inherit anything, so the chain ends here.
+                // Since it didn't lead to "release", return false.
+                None => break,
+            }
+        }
+
+        false
     }
 
     #[allow(unused)]
