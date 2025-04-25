@@ -13,6 +13,7 @@ pub struct BuildArgs {
     /// Enable fullstack mode [default: false]
     ///
     /// This is automatically detected from `dx serve` if the "fullstack" feature is enabled by default.
+    #[clap(long)]
     pub(crate) fullstack: Option<bool>,
 
     /// The feature to use for the client in a fullstack app [default: "web"]
@@ -113,8 +114,9 @@ impl BuildArgs {
                 // todo(jon): fullstack *could* be a feature of the app, but right now we're assuming it's always enabled
                 //
                 // Now we need to resolve the client features
-                let fullstack =
-                    client.fullstack_feature_enabled() || self.fullstack.unwrap_or(false);
+                let fullstack = (client.fullstack_feature_enabled()
+                    || self.fullstack.unwrap_or(false))
+                    && self.fullstack != Some(false);
                 if fullstack {
                     let mut build_args = self.build_arguments.clone();
                     build_args.platform = Some(Platform::Server);
