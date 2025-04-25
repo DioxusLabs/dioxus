@@ -35,7 +35,7 @@ impl Check {
                     .context("error checking project")?;
 
                 if let Some(server) = server {
-                    if server.cargo_package != client.cargo_package {
+                    if server.package != client.package {
                         check_project_and_report(&server)
                             .await
                             .context("error checking project")?;
@@ -65,7 +65,7 @@ async fn check_file_and_report(path: PathBuf) -> Result<()> {
 async fn check_project_and_report(build: &BuildRequest) -> Result<()> {
     let dioxus_crate = build
         .workspace
-        .find_main_package(Some(build.cargo_package.clone()))?;
+        .find_main_package(Some(build.package.clone()))?;
     let dioxus_crate = &build.workspace.krates[dioxus_crate];
     let mut files_to_check = vec![];
     collect_rs_files(

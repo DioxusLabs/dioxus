@@ -95,7 +95,7 @@ impl LinkAction {
                 let res = std::process::Command::new(linker)
                     .args(args.iter().skip(1))
                     .output()
-                    .expect("Failed to run android linker");
+                    .expect("Failed to run linker");
 
                 if !res.stderr.is_empty() || !res.stdout.is_empty() {
                     _ = std::fs::create_dir_all(self.link_err_file.parent().unwrap());
