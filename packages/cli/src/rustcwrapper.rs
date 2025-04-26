@@ -1,6 +1,5 @@
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::HashMap,
     env::{args, vars},
     path::PathBuf,
 };
@@ -25,7 +24,7 @@ pub fn is_wrapping_rustc() -> bool {
 #[derive(Default, Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct RustcArgs {
     pub args: Vec<String>,
-    pub envs: HashMap<String, String>,
+    pub envs: Vec<(String, String)>,
 }
 
 /// Run rustc directly, but output the result to a file.
@@ -50,7 +49,7 @@ pub async fn run_rustc() {
 
     let rustc_args = RustcArgs {
         args: args().skip(1).collect::<Vec<_>>(),
-        envs: vars().map(|(k, v)| (k, v)).collect::<HashMap<_, _>>(),
+        envs: vars().map(|(k, v)| (k, v)).collect::<_>(),
     };
 
     std::fs::create_dir_all(var_file.parent().expect("Failed to get parent dir"))

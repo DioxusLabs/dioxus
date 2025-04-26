@@ -231,13 +231,16 @@ impl WebServer {
                         krate,
                         ..
                     } => {
-                        // if !builder.is_finished() {
-                        self.build_status.set(Status::Building {
-                            progress: (*current as f64 / *total as f64).clamp(0.0, 1.0),
-                            build_message: format!("{krate} compiling"),
-                        });
-                        self.send_build_status().await;
-                        // }
+                        if !matches!(
+                            self.build_status.get(),
+                            Status::Ready | Status::BuildError { .. }
+                        ) {
+                            self.build_status.set(Status::Building {
+                                progress: (*current as f64 / *total as f64).clamp(0.0, 1.0),
+                                build_message: format!("{krate} compiling"),
+                            });
+                            self.send_build_status().await;
+                        }
                     }
                     BuildStage::OptimizingWasm => {}
                     BuildStage::Aborted => {}

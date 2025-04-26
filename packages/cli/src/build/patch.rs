@@ -21,7 +21,7 @@ use target_lexicon::{OperatingSystem, Triple};
 use thiserror::Error;
 use walrus::{
     ir::{dfs_in_order, Visitor},
-    ConstExpr, ElementItems, ElementKind, FunctionId, FunctionKind, ImportKind, Module,
+    ConstExpr, ElementItems, ElementKind, ExportItem, FunctionId, FunctionKind, ImportKind, Module,
     ModuleConfig,
 };
 use wasmparser::{
@@ -34,6 +34,9 @@ type Result<T, E = PatchError> = std::result::Result<T, E>;
 pub enum PatchError {
     #[error("Failed to read file: {0}")]
     ReadFs(#[from] std::io::Error),
+
+    #[error("Missing symbols in the object file {symbols:?}")]
+    MissingSymbols { symbols: Vec<String> },
 
     #[error("Failed to parse wasm section: {0}")]
     ParseSection(#[from] wasmparser::BinaryReaderError),
@@ -145,9 +148,17 @@ fn create_wasm_jump_table(original: &Path, patch: &Path) -> Result<JumpTable> {
     let old = walrus::Module::from_buffer(&old_bytes)?;
     let mut new = walrus::Module::from_buffer(&new_bytes)?;
 
-    let old_raw_data = parse_bytes_to_data_segment(&old_bytes)?;
-    let new_raw_data = parse_bytes_to_data_segment(&new_bytes)?;
+    let old_raw_data = parse_bytes_to_data_segment(&old_bytes)
+        .context("Failed to parse old bytes data segment")?;
+    let new_raw_data = parse_bytes_to_data_segment(&new_bytes)
+        .context("Failed to parse new bytes data segment")?;
+
     let name_to_ifunc_old = collect_func_ifuncs(&old);
+
+    if old_raw_data.symbols.is_empty() {
+        tracing::warn!("No debug symbols in the WASM output. Make sure to set `opt-level = 0` for hotpatching to work properly.");
+        return Err(PatchError::MissingSymbols { symbols: vec![] });
+    }
 
     // Do a quick scan to see if the symbols in the wasm-bindgen table have changed at all
     // We currently don't support updating them since we'd somehow need to merge the glue code together
@@ -592,8 +603,6 @@ pub fn create_undefined_symbol_stub(
 pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
     let (mut module, ids, _fns_to_ids) = parse_module_with_ids(bytes)?;
 
-    let bindgen_funcs = collect_all_wasm_bindgen_funcs(&module);
-
     // Due to monomorphizations, functions will get merged and multiple names will point to the same function.
     // Walrus loses this information, so we need to manually parse the names table to get the indices
     // and names of these functions.
@@ -618,28 +627,21 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
     let mut already_exported = module
         .exports
         .iter()
+        .filter(|f| matches!(f.item, ExportItem::Function(_)))
         .map(|exp| exp.name.clone())
-        .chain(
-            bindgen_funcs
-                .iter()
-                .flat_map(|id| module.funcs.get(*id).name.as_ref().cloned()),
-        )
         .collect::<HashSet<_>>();
 
     let mut make_indirect = vec![];
     for (name, index) in raw_data.code_symbol_map.iter() {
         let func = module.funcs.get(ids[*index as usize]);
-        if bindgen_funcs.contains(&func.id()) {
-            continue;
-        }
 
         if let FunctionKind::Local(_local) = &func.kind {
-            if !already_exported.contains(*name) {
+            if !already_exported.contains(*name) && !name_is_bindgen_symbol(name) {
                 module.exports.add(*name, func.id());
                 already_exported.insert(name.to_string());
             }
 
-            if !ifuncs.contains(&func.id()) {
+            if !ifuncs.contains(&func.id()) && !name_is_bindgen_symbol(name) {
                 make_indirect.push(func.id());
             }
         }
@@ -663,47 +665,6 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
     }
 
     Ok(module.emit_wasm())
-}
-
-/// Collect all the wasm-bindgen functions in the module. We are going to make *everything* exported
-/// but we don't want to make *these* exported.
-fn collect_all_wasm_bindgen_funcs(module: &Module) -> HashSet<FunctionId> {
-    /// The __wbindgen_describe_ functions also reference funcs like:
-    /// _ZN86_$LT$dioxus_web..document..JSOwner$u20$as$u20$wasm_bindgen..describe..WasmDescribe$GT$8describe17ha9b39368d518c1f9E
-    ///
-    /// These can be found by walking the instructions, so we build a Visitor
-    /// ... todo: we might not need to do this since it seems that it's not reliable enough
-    #[derive(Default)]
-    struct AccAllDescribes {
-        funcs: HashSet<FunctionId>,
-    }
-
-    impl<'a> Visitor<'a> for AccAllDescribes {
-        fn visit_function_id(&mut self, function: &walrus::FunctionId) {
-            self.funcs.insert(*function);
-        }
-    }
-
-    let mut acc = AccAllDescribes::default();
-    for func in module.funcs.iter() {
-        let Some(name) = func.name.as_ref() else {
-            continue;
-        };
-
-        // Only deal with the __wbindgen_describe_ functions
-        if !name_is_bindgen_symbol(name) {
-            continue;
-        }
-
-        // They call other functions, so we need to find those too and make sure not to mark them as exported
-        if let FunctionKind::Local(func) = &module.funcs.get(func.id()).kind {
-            dfs_in_order(&mut acc, &func, func.entry_block());
-        }
-
-        acc.funcs.insert(func.id());
-    }
-
-    acc.funcs
 }
 
 fn name_is_bindgen_symbol(name: &str) -> bool {
@@ -744,6 +705,9 @@ fn parse_bytes_to_data_segment(bytes: &[u8]) -> Result<RawDataSection> {
                         symbols = map.into_iter().collect::<Result<Vec<_>, _>>()?;
                     }
                 }
+            }
+            Payload::CustomSection(section) => {
+                tracing::trace!("Skipping Custom section: {:?}", section.name());
             }
             _ => {}
         }

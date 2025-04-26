@@ -6,7 +6,7 @@
 use std::fmt::Display;
 use std::time::Duration;
 
-use dioxus_devtools::{ClientMsg, DevserverMsg, HotReloadMsg};
+use dioxus_devtools::{DevserverMsg, HotReloadMsg};
 use futures_channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
 use js_sys::JsString;
 use wasm_bindgen::JsCast;
@@ -38,19 +38,20 @@ fn make_ws(tx: UnboundedSender<HotReloadMsg>, poll_interval: i32, reload: bool) 
     // The idea here being that the devserver is always located on the /_dioxus behind a proxy
     let location = web_sys::window().unwrap().location();
     let url = format!(
-        "{protocol}//{host}/_dioxus",
+        "{protocol}//{host}/_dioxus?aslr_reference={aslr_reference}&build_id={build_id}",
         protocol = match location.protocol().unwrap() {
             prot if prot == "https:" => "wss:",
             _ => "ws:",
         },
         host = location.host().unwrap(),
+        aslr_reference = 0,
+        build_id = dioxus_cli_config::build_id(),
     );
 
     let ws = WebSocket::new(&url).unwrap();
 
     // Set the onmessage handler to bounce messages off to the main dioxus loop
     let tx_ = tx.clone();
-    let ws_tx = ws.clone();
     ws.set_onmessage(Some(
         Closure::<dyn FnMut(MessageEvent)>::new(move |e: MessageEvent| {
             let Ok(text) = e.data().dyn_into::<JsString>() else {
@@ -162,14 +163,6 @@ fn make_ws(tx: UnboundedSender<HotReloadMsg>, poll_interval: i32, reload: bool) 
         Closure::<dyn FnMut(MessageEvent)>::new(move |_evt| {
             if reload {
                 window().unwrap().location().reload().unwrap();
-            } else {
-                _ = ws_tx.send_with_str(
-                    &serde_json::to_string(&ClientMsg::Initialize {
-                        build_id: dioxus_cli_config::build_id(),
-                        aslr_reference: dioxus_devtools::subsecond::aslr_reference() as _,
-                    })
-                    .unwrap(),
-                );
             }
         })
         .into_js_value()

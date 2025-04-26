@@ -1574,7 +1574,6 @@ session_cache_dir: {}"#,
         let linker = self.select_linker()?;
 
         // Run the linker directly!
-        tracing::trace!("Final linker args: {:#?}", args);
         let res = Command::new(linker)
             .args(args.iter().skip(1))
             .arg("-o")
@@ -1676,7 +1675,7 @@ session_cache_dir: {}"#,
                 cmd.current_dir(self.workspace_dir());
                 cmd.env_clear();
                 cmd.args(rustc_args.args[1..].iter());
-                cmd.envs(rustc_args.envs.iter());
+                cmd.envs(rustc_args.envs.iter().cloned());
                 cmd.env_remove("RUSTC_WORKSPACE_WRAPPER");
                 cmd.env_remove("RUSTC_WRAPPER");
                 cmd.env_remove(DX_RUSTC_WRAPPER_ENV_VAR);

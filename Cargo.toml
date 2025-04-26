@@ -375,6 +375,8 @@ incremental = true
 
 [profile.wasm-dev]
 inherits = "dev"
+opt-level = 1
+# debug = true
 
 [profile.server-dev]
 inherits = "dev"
