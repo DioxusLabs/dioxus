@@ -5,7 +5,6 @@ use crate::{
 };
 use anyhow::Context;
 use axum::extract::ws::Message as WsMessage;
-use dioxus_cli_opt::AssetManifest;
 use dioxus_core::internal::{
     HotReloadTemplateWithLocation, HotReloadedTemplate, TemplateGlobalKey,
 };
@@ -23,7 +22,6 @@ use notify::{
     event::{MetadataKind, ModifyKind},
     Config, EventKind, RecursiveMode, Watcher as NotifyWatcher,
 };
-use std::time::SystemTime;
 use std::{
     collections::{HashMap, HashSet},
     net::{IpAddr, TcpListener},
@@ -972,7 +970,7 @@ fn get_available_port(address: IpAddr, prefer: Option<u16>) -> Option<u16> {
 
     // Otherwise, try to bind to any port and return the first one we can
     TcpListener::bind((address, 0))
-        .map(|listener| listener.local_addr().unwrap().port())
+        .and_then(|listener| listener.local_addr().map(|f| f.port()))
         .ok()
 }
 

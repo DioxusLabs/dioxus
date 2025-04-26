@@ -428,7 +428,7 @@ fn build_devserver_router(
     // For fullstack, liveview, and server, forward all requests to the inner server
     if runner.proxied_port.is_some() {
         tracing::debug!("Proxying requests to fullstack server at {fullstack_address:?}");
-        let address = fullstack_address.unwrap();
+        let address = fullstack_address.context("No fullstack address specified")?;
         tracing::debug!("Proxying requests to fullstack server at {address}");
         router = router.fallback_service(super::proxy::proxy_to(
             format!("http://{address}").parse().unwrap(),
