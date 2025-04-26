@@ -159,6 +159,8 @@ impl Bundle {
                 tracing::info!("Running SSG for static routes...");
                 Self::pre_render_static_routes(&server.main_exe()).await?;
                 tracing::info!("SSG complete");
+            } else {
+                tracing::error!("SSG is only supported for fullstack apps. Ensure you have the server feature enabled and try again.");
             }
         }
 
@@ -289,9 +291,6 @@ impl Bundle {
 
     /// Pre-render the static routes, performing static-site generation
     async fn pre_render_static_routes(server_exe: &Path) -> anyhow::Result<()> {
-        // During SSG, just serve the static files instead of running the server
-        // _ => builds[0].fullstack && !self.build_arguments.ssg,
-
         // Use the address passed in through environment variables or default to localhost:9999. We need
         // to default to a value that is different than the CLI default address to avoid conflicts
         let ip = server_ip().unwrap_or_else(|| IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)));
@@ -299,6 +298,7 @@ impl Bundle {
         let fullstack_address = SocketAddr::new(ip, port);
         let address = fullstack_address.ip().to_string();
         let port = fullstack_address.port().to_string();
+
         // Borrow port and address so we can easily moe them into multiple tasks below
         let address = &address;
         let port = &port;

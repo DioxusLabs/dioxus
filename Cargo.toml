@@ -300,6 +300,9 @@ pretty_assertions = "1.4.0"
 serde_repr = "0.1"
 hyper-util = "0.1.10"
 krates = { version = "0.19.0" }
+libloading = "0.8.3"
+libc = "0.2.155"
+memmap2 = { version = "0.9.5" }
 
 # desktop
 wry = { version = "0.45.0", default-features = false }

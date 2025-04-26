@@ -364,59 +364,28 @@ use walkdir::WalkDir;
 #[derive(Clone)]
 pub(crate) struct BuildRequest {
     pub(crate) workspace: Arc<Workspace>,
-
     pub(crate) config: DioxusConfig,
-
     pub(crate) crate_package: NodeId,
-
     pub(crate) crate_target: krates::cm::Target,
-
     pub(crate) profile: String,
-
     pub(crate) release: bool,
-
-    ///
     pub(crate) platform: Platform,
-
-    ///
     pub(crate) triple: Triple,
-
     pub(crate) _device: bool,
-
-    /// The package to build
     pub(crate) package: String,
-
-    /// Space separated list of features to activate
     pub(crate) features: Vec<String>,
-
-    /// Extra arguments to pass to cargo
     pub(crate) extra_cargo_args: Vec<String>,
-
-    /// Extra arguments to pass to rustc
     pub(crate) extra_rustc_args: Vec<String>,
-
-    /// Don't include the default features in the build
     pub(crate) no_default_features: bool,
-
-    /// The target directory for the build
     pub(crate) custom_target_dir: Option<PathBuf>,
-
     pub(crate) skip_assets: bool,
-
     pub(crate) wasm_split: bool,
-
     pub(crate) debug_symbols: bool,
-
     pub(crate) inject_loading_scripts: bool,
-
     pub(crate) custom_linker: Option<PathBuf>,
-
     pub(crate) session_cache_dir: Arc<TempDir>,
-
     pub(crate) link_args_file: Arc<NamedTempFile>,
-
     pub(crate) link_err_file: Arc<NamedTempFile>,
-
     pub(crate) rustc_wrapper_args_file: Arc<NamedTempFile>,
 }
 

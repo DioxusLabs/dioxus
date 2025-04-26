@@ -408,7 +408,6 @@ impl WebviewInstance {
         };
 
         let webview = wv_builder.build().unwrap();
-
         let desktop_context = Rc::from(DesktopService::new(
             webview,
             window,

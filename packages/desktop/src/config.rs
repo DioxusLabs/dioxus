@@ -71,13 +71,11 @@ impl LaunchConfig for Config {}
 pub(crate) type WryProtocol = (
     String,
     Box<dyn Fn(HttpRequest<Vec<u8>>) -> HttpResponse<Cow<'static, [u8]>> + 'static>,
-    // Box<dyn Fn(&str, HttpRequest<Vec<u8>>) -> HttpResponse<Cow<'static, [u8]>> + 'static>,
 );
 
 pub(crate) type AsyncWryProtocol = (
     String,
     Box<dyn Fn(HttpRequest<Vec<u8>>, RequestAsyncResponder) + 'static>,
-    // Box<dyn Fn(&str, HttpRequest<Vec<u8>>, RequestAsyncResponder) + 'static>,
 );
 
 impl Config {
@@ -191,7 +189,6 @@ impl Config {
     pub fn with_custom_protocol<F>(mut self, name: impl ToString, handler: F) -> Self
     where
         F: Fn(HttpRequest<Vec<u8>>) -> HttpResponse<Cow<'static, [u8]>> + 'static,
-        // F: Fn(&str, HttpRequest<Vec<u8>>) -> HttpResponse<Cow<'static, [u8]>> + 'static,
     {
         self.protocols.push((name.to_string(), Box::new(handler)));
         self
@@ -226,7 +223,6 @@ impl Config {
     pub fn with_asynchronous_custom_protocol<F>(mut self, name: impl ToString, handler: F) -> Self
     where
         F: Fn(HttpRequest<Vec<u8>>, RequestAsyncResponder) + 'static,
-        // F: Fn(&str, HttpRequest<Vec<u8>>, RequestAsyncResponder) + 'static,
     {
         self.asynchronous_protocols
             .push((name.to_string(), Box::new(handler)));

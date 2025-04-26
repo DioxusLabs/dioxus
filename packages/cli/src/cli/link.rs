@@ -34,6 +34,19 @@ pub struct LinkAction {
     pub link_err_file: PathBuf,
 }
 
+/// The linker flavor to use. This influences the argument style that gets passed to the linker.
+/// We're imitating the rustc linker flavors here.
+///
+/// https://doc.rust-lang.org/beta/nightly-rustc/rustc_target/spec/enum.LinkerFlavor.html
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+pub enum LinkerFlavor {
+    Gnu,
+    Darwin,
+    WasmLld,
+    Unix,
+    Msvc,
+}
+
 impl LinkAction {
     pub(crate) const ENV_VAR_NAME: &'static str = "dx_magic_link_file";
 
