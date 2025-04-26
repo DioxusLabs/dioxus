@@ -1,4 +1,5 @@
 use crate::Result;
+use anyhow::Context;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use target_lexicon::Triple;
@@ -49,11 +50,23 @@ impl LinkAction {
         serde_json::to_string(self).unwrap()
     }
 
+    pub(crate) async fn run_link(self) {
+        let link_err_file = self.link_err_file.clone();
+        let res = self.run_link_inner().await;
+
+        if let Err(err) = res {
+            // If we failed to run the linker, we need to write the error to the file
+            // so that the main process can read it.
+            _ = std::fs::create_dir_all(link_err_file.parent().unwrap());
+            _ = std::fs::write(link_err_file, format!("Linker error: {err}"));
+        }
+    }
+
     /// Write the incoming linker args to a file
     ///
     /// The file will be given by the dx-magic-link-arg env var itself, so we use
     /// it both for determining if we should act as a linker and the for the file name itself.
-    pub(crate) async fn run(self) -> Result<()> {
+    async fn run_link_inner(self) -> Result<()> {
         let mut args: Vec<_> = std::env::args().collect();
 
         // Handle command files, usually a windows thing.
@@ -106,8 +119,7 @@ impl LinkAction {
                             String::from_utf8_lossy(&res.stdout),
                             String::from_utf8_lossy(&res.stderr)
                         ),
-                    )
-                    .unwrap();
+                    );
                 }
             }
             None => {
@@ -154,7 +166,7 @@ impl LinkAction {
 
                 let bytes = object::write::Object::new(format, arch, endian)
                     .write()
-                    .unwrap();
+                    .context("Failed to emit stub link file")?;
 
                 // Write a dummy object file to satisfy rust/linker since it'll run llvm-objcopy
                 // ... I wish it *didn't* do that but I can't tell how to disable the linker without

@@ -316,9 +316,8 @@
 //! - xbuild: <https://github.com/rust-mobile/xbuild/blob/master/xbuild/src/command/build.rs>
 
 use crate::{
-    android_tools, AndroidTools, BuildContext, DioxusConfig, Error, LinkAction, Platform, Result,
-    RustcArgs, TargetArgs, TraceSrc, WasmBindgen, WasmOptConfig, Workspace,
-    DX_RUSTC_WRAPPER_ENV_VAR,
+    AndroidTools, BuildContext, DioxusConfig, Error, LinkAction, Platform, Result, RustcArgs,
+    TargetArgs, TraceSrc, WasmBindgen, WasmOptConfig, Workspace, DX_RUSTC_WRAPPER_ENV_VAR,
 };
 use anyhow::Context;
 use dioxus_cli_config::{APP_TITLE_ENV, ASSET_ROOT_ENV};
@@ -339,7 +338,7 @@ use std::{
     },
     time::{SystemTime, UNIX_EPOCH},
 };
-use target_lexicon::{Environment, OperatingSystem, Triple};
+use target_lexicon::{OperatingSystem, Triple};
 use tempfile::{NamedTempFile, TempDir};
 use tokio::{io::AsyncBufReadExt, process::Command};
 use toml_edit::Item;
@@ -642,8 +641,8 @@ impl BuildRequest {
 
                 // Same idea with android but we figure out the connected device using adb
                 Platform::Android => {
-                    super::android_tools()
-                        .unwrap()
+                    workspace
+                        .android_tools()?
                         .autodetect_android_device_triple()
                         .await
                 }
@@ -651,8 +650,7 @@ impl BuildRequest {
         };
 
         let custom_linker = if platform == Platform::Android {
-            let tools = android_tools().context("Failed to find your Android NDK setup")?;
-            Some(tools.android_cc(&triple))
+            Some(workspace.android_tools()?.android_cc(&triple))
         } else {
             None
         };
@@ -1234,9 +1232,7 @@ session_cache_dir: {}"#,
             // The android clang linker is *special* and has some android-specific flags that we need
             //
             // Note that this is *clang*, not `lld`.
-            Platform::Android => android_tools()
-                .context("Could not determine android tools")?
-                .android_cc(&self.triple),
+            Platform::Android => self.workspace.android_tools()?.android_cc(&self.triple),
 
             // The rest of the platforms use `cc` as the linker which should be available in your path,
             // provided you have build-tools setup. On mac/linux this is the default, but on Windows
@@ -1445,7 +1441,10 @@ session_cache_dir: {}"#,
         let path = self.main_exe().with_file_name(format!(
             "lib{}-patch-{}",
             self.executable_name(),
-            time_start.duration_since(UNIX_EPOCH).unwrap().as_millis(),
+            time_start
+                .duration_since(UNIX_EPOCH)
+                .map(|f| f.as_millis())
+                .unwrap_or(0),
         ));
 
         let extension = match self.triple.operating_system {
@@ -1530,8 +1529,6 @@ session_cache_dir: {}"#,
             let mut bytes = vec![];
             let mut out_ar = ar::Builder::new(&mut bytes);
             for rlib in &rlibs {
-                tracing::trace!("Adding rlib {:?} to archive", rlib);
-
                 // Skip compiler rlibs since they're missing bitcode
                 //
                 // https://github.com/rust-lang/rust/issues/94232#issuecomment-1048342201
@@ -1539,9 +1536,11 @@ session_cache_dir: {}"#,
                 // if the rlib is not in the target directory, we skip it.
                 if !rlib.starts_with(self.workspace_dir()) {
                     compiler_rlibs.push(rlib.clone());
-                    tracing::trace!("Skipping rlib {:?} since it's not in the target dir", rlib);
+                    tracing::trace!("Skipping rlib: {:?}", rlib);
                     continue;
                 }
+
+                tracing::trace!("Adding rlib to staticlib: {:?}", rlib);
 
                 let rlib_contents = std::fs::read(rlib)?;
                 let mut reader = ar::Archive::new(std::io::Cursor::new(rlib_contents));
@@ -1636,9 +1635,7 @@ session_cache_dir: {}"#,
             // The android clang linker is *special* and has some android-specific flags that we need
             //
             // Note that this is *clang*, not `lld`.
-            Platform::Android => android_tools()
-                .context("Could not determine android tools")?
-                .android_cc(&self.triple),
+            Platform::Android => self.workspace.android_tools()?.android_cc(&self.triple),
 
             // The rest of the platforms use `cc` as the linker which should be available in your path,
             // provided you have build-tools setup. On mac/linux this is the default, but on Windows
@@ -1722,12 +1719,7 @@ session_cache_dir: {}"#,
                 cmd.env_remove("RUSTC_WRAPPER");
                 cmd.env_remove(DX_RUSTC_WRAPPER_ENV_VAR);
                 cmd.envs(self.cargo_build_env_vars(ctx)?);
-                cmd.arg(format!(
-                    "-Clinker={}",
-                    dunce::canonicalize(std::env::current_exe().unwrap())
-                        .unwrap()
-                        .display()
-                ));
+                cmd.arg(format!("-Clinker={}", Workspace::path_to_dx()?.display()));
 
                 tracing::trace!("Direct rustc command: {:#?}", rustc_args.args);
 
@@ -1766,10 +1758,7 @@ session_cache_dir: {}"#,
                     );
                     cmd.env(
                         "RUSTC_WRAPPER",
-                        dunce::canonicalize(std::env::current_exe().unwrap())
-                            .unwrap()
-                            .display()
-                            .to_string(),
+                        Workspace::path_to_dx()?.display().to_string(),
                     );
                 }
 
@@ -1835,9 +1824,7 @@ session_cache_dir: {}"#,
         {
             cargo_args.push(format!(
                 "-Clinker={}",
-                dunce::canonicalize(std::env::current_exe().unwrap())
-                    .unwrap()
-                    .display()
+                Workspace::path_to_dx().expect("can't find dx").display()
             ));
         }
 
@@ -1968,7 +1955,7 @@ session_cache_dir: {}"#,
     fn android_env_vars(&self) -> Result<Vec<(&'static str, String)>> {
         let mut env_vars = vec![];
 
-        let tools = android_tools().context("Could not determine android tools")?;
+        let tools = self.workspace.android_tools()?;
         let linker = tools.android_cc(&self.triple);
         let min_sdk_version = tools.min_sdk_version();
         let ar_path = tools.ar_path();
@@ -2939,7 +2926,7 @@ session_cache_dir: {}"#,
         // Lift the internal functions to exports
         if ctx.mode == BuildMode::Fat {
             let unprocessed = std::fs::read(&exe)?;
-            let all_exported_bytes = crate::build::prepare_wasm_base_module(&unprocessed).unwrap();
+            let all_exported_bytes = crate::build::prepare_wasm_base_module(&unprocessed)?;
             std::fs::write(&exe, all_exported_bytes)?;
         }
 
@@ -3039,7 +3026,10 @@ session_cache_dir: {}"#,
                 let path = bindgen_outdir.join(format!("module_{}_{}.wasm", idx, comp_name));
                 wasm_opt::write_wasm(&module.bytes, &path, &wasm_opt_options).await?;
 
-                let hash_id = module.hash_id.as_ref().unwrap();
+                let hash_id = module
+                    .hash_id
+                    .as_ref()
+                    .context("generated wasm-split bindgen module has no hash id?")?;
 
                 writeln!(
                     glue,
@@ -3469,9 +3459,7 @@ session_cache_dir: {}"#,
     /// will do its best to fill in the missing bits by exploring the sdk structure
     /// IE will attempt to use the Java installed from android studio if possible.
     async fn verify_android_tooling(&self) -> Result<()> {
-        let android = android_tools().context("Android not installed properly. Please set the `ANDROID_NDK_HOME` environment variable to the root of your NDK installation.")?;
-
-        let linker = android.android_cc(&self.triple);
+        let linker = self.workspace.android_tools()?.android_cc(&self.triple);
 
         tracing::debug!("Verifying android linker: {linker:?}");
 

@@ -16,8 +16,7 @@ pub(crate) struct AndroidTools {
     pub(crate) java_home: Option<PathBuf>,
 }
 
-#[memoize::memoize]
-pub fn android_tools() -> Option<Arc<AndroidTools>> {
+pub fn get_android_tools() -> Option<Arc<AndroidTools>> {
     // We check for SDK first since users might install Android Studio and then install the SDK
     // After that they might install the NDK, so the SDK drives the source of truth.
     let sdk = var_or_debug("ANDROID_SDK_ROOT")

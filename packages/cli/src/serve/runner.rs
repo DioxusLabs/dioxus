@@ -1,6 +1,6 @@
 use super::{AppBuilder, ServeUpdate, WebServer};
 use crate::{
-    BuildArtifacts, BuildId, BuildMode, BuildTargets, Platform, Result, ServeArgs, TraceSrc,
+    BuildArtifacts, BuildId, BuildMode, BuildTargets, Error, Platform, Result, ServeArgs, TraceSrc,
     Workspace,
 };
 use anyhow::Context;
@@ -145,8 +145,10 @@ impl AppServer {
             false => BuildMode::Base,
         };
 
-        let client = AppBuilder::start(&client, build_mode.clone()).unwrap();
-        let server = server.map(|server| AppBuilder::start(&server, build_mode).unwrap());
+        let client = AppBuilder::start(&client, build_mode.clone())?;
+        let server = server
+            .map(|server| AppBuilder::start(&server, build_mode))
+            .transpose()?;
 
         tracing::debug!("Proxied port: {:?}", proxied_port);
 
@@ -522,7 +524,7 @@ impl AppServer {
     }
 
     /// Shutdown all the running processes
-    pub(crate) async fn cleanup_all(&mut self) {
+    pub(crate) async fn cleanup_all(&mut self) -> Result<()> {
         self.client.soft_kill().await;
 
         if let Some(server) = self.server.as_mut() {
@@ -532,8 +534,7 @@ impl AppServer {
         // If the client is running on Android, we need to remove the port forwarding
         // todo: use the android tools "adb"
         if matches!(self.client.build.platform, Platform::Android) {
-            let tools = crate::build::android_tools().unwrap();
-            if let Err(err) = Command::new(&tools.adb)
+            if let Err(err) = Command::new(&self.workspace.android_tools()?.adb)
                 .arg("reverse")
                 .arg("--remove")
                 .arg(format!("tcp:{}", self.devserver_port))
@@ -546,6 +547,8 @@ impl AppServer {
                 );
             }
         }
+
+        Ok(())
     }
 
     /// Perform a full rebuild of the app, equivalent to `cargo rustc` from scratch with no incremental
@@ -564,98 +567,25 @@ impl AppServer {
         self.clear_patches();
     }
 
-    pub(crate) async fn patch(&mut self, res: &BuildArtifacts) -> Result<JumpTable> {
-        let app = match res.platform {
-            Platform::Server => &self.server.as_ref().unwrap(),
-            _ => &self.client,
-        };
-
-        let original = app.build.main_exe();
-        let new = app.build.patch_exe(res.time_start);
-        let triple = app.build.triple.clone();
-        let original_artifacts = app.artifacts.as_ref().unwrap();
-        let asset_dir = app.build.asset_dir();
-
-        for (k, bundled) in res.assets.assets.iter() {
-            let k = dunce::canonicalize(k)?;
-            if original_artifacts.assets.assets.contains_key(k.as_path()) {
-                continue;
+    pub(crate) async fn hotpatch(
+        &mut self,
+        res: &BuildArtifacts,
+        id: BuildId,
+    ) -> Result<JumpTable> {
+        let jump_table = match id {
+            BuildId::CLIENT => self.client.hotpatch(res).await,
+            BuildId::SERVER => {
+                self.server
+                    .as_mut()
+                    .context("Server not found")?
+                    .hotpatch(res)
+                    .await
             }
+            _ => return Err(Error::Runtime("Invalid build id".into())),
+        }?;
 
-            let from = k.clone();
-            let to = asset_dir.join(bundled.bundled_path());
-
-            tracing::debug!("Copying asset from patch: {}", k.display());
-            if let Err(e) = dioxus_cli_opt::process_file_to(bundled.options(), &from, &to) {
-                tracing::error!("Failed to copy asset: {e}");
-                continue;
-            }
-
-            // If the emulator is android, we need to copy the asset to the device with `adb push asset /data/local/tmp/dx/assets/filename.ext`
-            if app.build.platform == Platform::Android {
-                let changed_file = dunce::canonicalize(k).inspect_err(|e| {
-                    tracing::debug!("Failed to canonicalize hotreloaded asset: {e}")
-                })?;
-                let bundled_name = PathBuf::from(bundled.bundled_path());
-                _ = app
-                    .copy_file_to_android_tmp(&changed_file, &bundled_name)
-                    .await;
-            }
-        }
-
-        tracing::debug!("Patching {} -> {}", original.display(), new.display());
-
-        let mut jump_table = crate::build::create_jump_table(&original, &new, &triple)?;
-
-        // If it's android, we need to copy the assets to the device and then change the location of the patch
-        if app.build.platform == Platform::Android {
-            jump_table.lib = app
-                .copy_file_to_android_tmp(&new, &(PathBuf::from(new.file_name().unwrap())))
-                .await?;
-        }
-
-        // Rebase the wasm binary to be relocatable once the jump table is generated
-        if triple.architecture == target_lexicon::Architecture::Wasm32 {
-            // Make sure we use the dir relative to the public dir, so the web can load it as a proper URL
-            //
-            // ie we would've shipped `/Users/foo/Projects/dioxus/target/dx/project/debug/web/public/wasm/lib.wasm`
-            //    but we want to ship `/wasm/lib.wasm`
-            jump_table.lib = jump_table
-                .lib
-                .strip_prefix(&app.build.root_dir())
-                .unwrap()
-                .to_path_buf();
-        }
-
-        let changed_files = match &res.mode {
-            BuildMode::Thin { changed_files, .. } => changed_files.clone(),
-            _ => vec![],
-        };
-
-        let changed_file = changed_files.first().unwrap();
-        tracing::info!(
-            "Hot-patching: {} took {:?}ms",
-            changed_file
-                .strip_prefix(std::env::current_dir().unwrap())
-                .unwrap_or_else(|_| changed_file.as_path())
-                .display(),
-            SystemTime::now()
-                .duration_since(res.time_start)
-                .unwrap()
-                .as_millis()
-        );
-
-        // Save this patch
-        match res.platform {
-            Platform::Server => {
-                if let Some(server) = self.server.as_mut() {
-                    server.patches.push(jump_table.clone());
-                }
-            }
-            _ => {
-                self.client.patches.push(jump_table.clone());
-                self.applied_hot_reload_message.jump_table = Some(jump_table.clone());
-            }
+        if id == BuildId::CLIENT {
+            self.applied_hot_reload_message.jump_table = self.client.patches.last().cloned();
         }
 
         Ok(jump_table)
@@ -927,7 +857,7 @@ impl AppServer {
             // Build the ignore builder for this crate, but with our default ignore list as well
             let ignore = self.workspace.ignore_for_krate(&krate_root);
 
-            for entry in krate_root.read_dir().unwrap() {
+            for entry in krate_root.read_dir().into_iter().flatten() {
                 let Ok(entry) = entry else {
                     continue;
                 };

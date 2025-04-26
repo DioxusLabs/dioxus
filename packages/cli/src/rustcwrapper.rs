@@ -38,12 +38,10 @@ pub async fn run_rustc() {
         .take(5)
         .any(|arg| arg.ends_with(".o") || arg == "-flavor")
     {
-        crate::link::LinkAction::from_env()
+        return crate::link::LinkAction::from_env()
             .expect("Linker action not found")
-            .run()
-            .await
-            .expect("Failed to run linker");
-        return;
+            .run_link()
+            .await;
     }
 
     let var_file: PathBuf = std::env::var(DX_RUSTC_WRAPPER_ENV_VAR)

@@ -1,6 +1,6 @@
-use crate::config::DioxusConfig;
 use crate::CliSettings;
 use crate::Result;
+use crate::{config::DioxusConfig, AndroidTools};
 use anyhow::Context;
 use ignore::gitignore::Gitignore;
 use krates::KrateDetails;
@@ -19,6 +19,7 @@ pub struct Workspace {
     pub(crate) rustc_version: String,
     pub(crate) ignore: Gitignore,
     pub(crate) cargo_toml: cargo_toml::Manifest,
+    pub(crate) android_tools: Option<Arc<AndroidTools>>,
 }
 
 impl Workspace {
@@ -65,6 +66,8 @@ impl Workspace {
             cargo_toml::Manifest::from_path(krates.workspace_root().join("Cargo.toml"))
                 .context("Failed to load Cargo.toml")?;
 
+        let android_tools = crate::build::get_android_tools();
+
         let workspace = Arc::new(Self {
             krates,
             settings,
@@ -73,11 +76,19 @@ impl Workspace {
             rustc_version: rustc_version.trim().into(),
             ignore,
             cargo_toml,
+            android_tools,
         });
 
         lock.replace(workspace.clone());
 
         Ok(workspace)
+    }
+
+    pub fn android_tools(&self) -> Result<Arc<AndroidTools>> {
+        Ok(self
+            .android_tools
+            .clone()
+            .context("Android not installed properly. Please set the `ANDROID_NDK_HOME` environment variable to the root of your NDK installation.")?)
     }
 
     pub fn is_release_profile(&self, profile: &str) -> bool {
@@ -329,6 +340,14 @@ impl Workspace {
             .ok_or_else(|| {
                 crate::Error::Cargo("Failed to find directory containing Cargo.toml".to_string())
             })
+    }
+
+    /// Returns the properly canonicalized path to the dx executable, used for linking and wrapping rustc
+    pub(crate) fn path_to_dx() -> Result<PathBuf> {
+        Ok(
+            dunce::canonicalize(std::env::current_exe().context("Failed to find dx")?)
+                .context("Failed to find dx")?,
+        )
     }
 }
 

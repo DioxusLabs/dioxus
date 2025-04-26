@@ -59,8 +59,8 @@ pub fn create_jump_table(original: &Path, patch: &Path, triple: &Triple) -> Resu
 
     let obj1_bytes = fs::read(original)?;
     let obj2_bytes = fs::read(patch)?;
-    let obj1 = File::parse(&obj1_bytes as &[u8]).unwrap();
-    let obj2 = File::parse(&obj2_bytes as &[u8]).unwrap();
+    let obj1 = File::parse(&obj1_bytes as &[u8])?;
+    let obj2 = File::parse(&obj2_bytes as &[u8])?;
 
     let mut map = AddressMap::default();
 
@@ -280,7 +280,7 @@ fn create_wasm_jump_table(original: &Path, patch: &Path) -> Result<JumpTable> {
 
     // Update the wasm module on the fileystem to use the newly lifted version
     let lib = patch.to_path_buf();
-    std::fs::write(&lib, new.emit_wasm()).unwrap();
+    std::fs::write(&lib, new.emit_wasm())?;
 
     // And now assemble the jump table by mapping the old ifunc table to the new one, by name
     //
@@ -606,7 +606,13 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
         .iter()
         .filter_map(|f| ifunc_map.get(f.name.as_deref()?).map(|_| f.id()))
         .collect::<HashSet<_>>();
-    let ifunc_table_initialzer = module.elements.iter().last().unwrap().id();
+
+    let ifunc_table_initialzer = module
+        .elements
+        .iter()
+        .last()
+        .context("Missing ifunc table")?
+        .id();
 
     let mut already_exported = module
         .exports
@@ -615,7 +621,7 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
         .chain(
             bindgen_funcs
                 .iter()
-                .map(|id| module.funcs.get(*id).name.as_ref().unwrap().clone()),
+                .flat_map(|id| module.funcs.get(*id).name.as_ref().cloned()),
         )
         .collect::<HashSet<_>>();
 
@@ -679,7 +685,9 @@ fn collect_all_wasm_bindgen_funcs(module: &Module) -> HashSet<FunctionId> {
 
     let mut acc = AccAllDescribes::default();
     for func in module.funcs.iter() {
-        let name = func.name.as_ref().unwrap();
+        let Some(name) = func.name.as_ref() else {
+            continue;
+        };
 
         // Only deal with the __wbindgen_describe_ functions
         if !name_is_bindgen_symbol(name) {

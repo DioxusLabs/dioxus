@@ -7,7 +7,7 @@ use dioxus_cli_opt::process_file_to;
 use futures_util::future::OptionFuture;
 use std::{
     env,
-    time::{Duration, Instant},
+    time::{Duration, Instant, SystemTime},
 };
 use std::{
     net::SocketAddr,
@@ -465,7 +465,7 @@ impl AppBuilder {
             Platform::Ios => Some(self.open_ios_sim(envs).await?),
 
             Platform::Android => {
-                self.open_android_sim(false, devserver_ip, envs).await;
+                self.open_android_sim(false, devserver_ip, envs).await?;
                 None
             }
 
@@ -536,6 +536,87 @@ impl AppBuilder {
         if let Some(entropy_app_exe) = self.entropy_app_exe.take() {
             _ = std::fs::remove_file(entropy_app_exe);
         }
+    }
+
+    pub(crate) async fn hotpatch(&mut self, res: &BuildArtifacts) -> Result<JumpTable> {
+        let original = self.build.main_exe();
+        let new = self.build.patch_exe(res.time_start);
+        let triple = self.build.triple.clone();
+        let original_artifacts = self.artifacts.as_ref().unwrap();
+        let asset_dir = self.build.asset_dir();
+
+        for (k, bundled) in res.assets.assets.iter() {
+            let k = dunce::canonicalize(k)?;
+            if original_artifacts.assets.assets.contains_key(k.as_path()) {
+                continue;
+            }
+
+            let from = k.clone();
+            let to = asset_dir.join(bundled.bundled_path());
+
+            tracing::debug!("Copying asset from patch: {}", k.display());
+            if let Err(e) = dioxus_cli_opt::process_file_to(bundled.options(), &from, &to) {
+                tracing::error!("Failed to copy asset: {e}");
+                continue;
+            }
+
+            // If the emulator is android, we need to copy the asset to the device with `adb push asset /data/local/tmp/dx/assets/filename.ext`
+            if self.build.platform == Platform::Android {
+                let changed_file = dunce::canonicalize(k).inspect_err(|e| {
+                    tracing::debug!("Failed to canonicalize hotreloaded asset: {e}")
+                })?;
+                let bundled_name = PathBuf::from(bundled.bundled_path());
+                _ = self
+                    .copy_file_to_android_tmp(&changed_file, &bundled_name)
+                    .await;
+            }
+        }
+
+        tracing::debug!("Patching {} -> {}", original.display(), new.display());
+
+        let mut jump_table = crate::build::create_jump_table(&original, &new, &triple)?;
+
+        // If it's android, we need to copy the assets to the device and then change the location of the patch
+        if self.build.platform == Platform::Android {
+            jump_table.lib = self
+                .copy_file_to_android_tmp(&new, &(PathBuf::from(new.file_name().unwrap())))
+                .await?;
+        }
+
+        // Rebase the wasm binary to be relocatable once the jump table is generated
+        if triple.architecture == target_lexicon::Architecture::Wasm32 {
+            // Make sure we use the dir relative to the public dir, so the web can load it as a proper URL
+            //
+            // ie we would've shipped `/Users/foo/Projects/dioxus/target/dx/project/debug/web/public/wasm/lib.wasm`
+            //    but we want to ship `/wasm/lib.wasm`
+            jump_table.lib = jump_table
+                .lib
+                .strip_prefix(&self.build.root_dir())
+                .unwrap()
+                .to_path_buf();
+        }
+
+        let changed_files = match &res.mode {
+            BuildMode::Thin { changed_files, .. } => changed_files.clone(),
+            _ => vec![],
+        };
+
+        let changed_file = changed_files.first().unwrap();
+        tracing::info!(
+            "Hot-patching: {} took {:?}ms",
+            changed_file
+                .strip_prefix(std::env::current_dir().unwrap())
+                .unwrap_or_else(|_| changed_file.as_path())
+                .display(),
+            SystemTime::now()
+                .duration_since(res.time_start)
+                .unwrap()
+                .as_millis()
+        );
+
+        self.patches.push(jump_table.clone());
+
+        Ok(jump_table)
     }
 
     /// Hotreload an asset in the running app.
@@ -609,7 +690,7 @@ impl AppBuilder {
         let target = dioxus_cli_config::android_session_cache_dir().join(bundled_name);
         tracing::debug!("Pushing asset to device: {target:?}");
 
-        let res = tokio::process::Command::new(&crate::build::android_tools().unwrap().adb)
+        let res = tokio::process::Command::new(&self.build.workspace.android_tools()?.adb)
             .arg("push")
             .arg(&changed_file)
             .arg(&target)
@@ -1038,15 +1119,14 @@ We checked the folder: {}
         root: bool,
         devserver_socket: SocketAddr,
         envs: Vec<(&'static str, String)>,
-    ) {
+    ) -> Result<()> {
         let apk_path = self.build.debug_apk_path();
         let session_cache = self.build.session_cache_dir();
         let full_mobile_app_name = self.build.full_mobile_app_name();
+        let adb = self.build.workspace.android_tools()?.adb.clone();
 
         // Start backgrounded since .open() is called while in the arm of the top-level match
         tokio::task::spawn(async move {
-            let adb = &crate::build::android_tools().unwrap().adb;
-
             // call `adb root` so we can push patches to the device
             if root {
                 if let Err(e) = Command::new(&adb).arg("root").output().await {
@@ -1114,6 +1194,8 @@ We checked the folder: {}
                 tracing::error!("Failed to start app with `adb`: {e}");
             };
         });
+
+        Ok(())
     }
 
     fn make_entropy_path(exe: &PathBuf) -> PathBuf {
