@@ -589,58 +589,6 @@ impl AppServer {
         Ok(jump_table)
     }
 
-    /// Handles incoming WebSocket messages from the client.
-    ///
-    /// This function processes messages sent by the client over the WebSocket connection. We only
-    /// handle text messages, and we expect them to be in JSON format.
-    ///
-    /// Specifically, it handles the initialization message to set the Address Space Layout Randomization (ASLR) reference offset.
-    ///
-    /// For WebAssembly (Wasm) targets, ASLR is not used, so this value is ignored.
-    pub(crate) async fn handle_ws_message(&mut self, msg: &WsMessage) -> Result<()> {
-        let as_text = msg
-            .to_text()
-            .context("client message not proper encoding")?;
-
-        if as_text.is_empty() {
-            return Ok(());
-        }
-
-        match serde_json::from_str::<ClientMsg>(as_text) {
-            Ok(ClientMsg::Initialize {
-                aslr_reference,
-                build_id,
-            }) => match build_id {
-                0 => {
-                    // multiple tabs on web can cause this to be called incorrectly, and it doesn't
-                    // make any sense anyways
-                    if self.client.build.platform != Platform::Web {
-                        tracing::debug!(
-                            "Setting aslr_reference: {aslr_reference} for build_id: {build_id}"
-                        );
-                        self.client.aslr_reference = Some(aslr_reference);
-                    }
-                }
-                1 => {
-                    if let Some(server) = self.server.as_mut() {
-                        server.aslr_reference = Some(aslr_reference);
-                    }
-                }
-                _ => {
-                    tracing::debug!(
-                        "Invalid build_id: {build_id} for aslr_reference: {aslr_reference}"
-                    );
-                }
-            },
-            Ok(_client) => {}
-            Err(err) => {
-                tracing::error!(dx_src = ?TraceSrc::Dev, "Error parsing message from {}: {} -> {}", Platform::Web, err, as_text);
-            }
-        };
-
-        Ok(())
-    }
-
     pub(crate) fn get_build(&self, id: BuildId) -> Option<&AppBuilder> {
         match id {
             BuildId::CLIENT => Some(&self.client),
@@ -692,7 +640,27 @@ impl AppServer {
         }
     }
 
-    pub(crate) async fn client_connected(&mut self) {
+    pub(crate) async fn client_connected(
+        &mut self,
+        build_id: BuildId,
+        aslr_reference: Option<u64>,
+    ) {
+        match build_id {
+            BuildId::CLIENT => {
+                // multiple tabs on web can cause this to be called incorrectly, and it doesn't
+                // make any sense anyways
+                if self.client.build.platform != Platform::Web {
+                    self.client.aslr_reference = aslr_reference;
+                }
+            }
+            BuildId::SERVER => {
+                if let Some(server) = self.server.as_mut() {
+                    server.aslr_reference = aslr_reference;
+                }
+            }
+            _ => {}
+        }
+
         // Assign the runtime asset dir to the runner
         if self.client.build.platform == Platform::Ios {
             // xcrun simctl get_app_container booted com.dioxuslabs

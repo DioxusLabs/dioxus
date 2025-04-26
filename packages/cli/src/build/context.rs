@@ -4,6 +4,7 @@ use super::BuildMode;
 use crate::{BuildArtifacts, BuildStage, Error, TraceSrc};
 use cargo_metadata::CompilerMessage;
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
+use serde::{Deserialize, Serialize};
 use std::{path::PathBuf, process::ExitStatus};
 
 /// The context of the build process. While the BuildRequest is a "plan" for the build, the BuildContext
@@ -20,7 +21,7 @@ pub struct BuildContext {
 pub type ProgressTx = UnboundedSender<BuilderUpdate>;
 pub type ProgressRx = UnboundedReceiver<BuilderUpdate>;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 pub struct BuildId(pub(crate) usize);
 impl BuildId {
     pub const CLIENT: Self = Self(0);

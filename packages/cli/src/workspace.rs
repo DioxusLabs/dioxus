@@ -126,16 +126,32 @@ impl Workspace {
             .join("rust-lld")
     }
 
+    /// Return the path to the `cc` compiler
+    ///
+    /// This is used for the patching system to run the linker.
+    /// We could also just use lld given to us by rust itself.
+    pub fn cc(&self) -> PathBuf {
+        PathBuf::from("cc")
+    }
+
+    /// The windows linker
+    pub fn lld_link(&self) -> PathBuf {
+        self.gcc_ld_dir().join("lld-link")
+    }
+
     pub fn wasm_ld(&self) -> PathBuf {
-        // wasm-ld: ./rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/wasm-ld
-        // rust-lld: ./rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/rust-lld
+        self.gcc_ld_dir().join("wasm-ld")
+    }
+
+    // wasm-ld: ./rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/wasm-ld
+    // rust-lld: ./rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/rust-lld
+    fn gcc_ld_dir(&self) -> PathBuf {
         self.sysroot
             .join("lib")
             .join("rustlib")
             .join(Triple::host().to_string())
             .join("bin")
             .join("gcc-ld")
-            .join("wasm-ld")
     }
 
     pub fn has_wasm32_unknown_unknown(&self) -> bool {

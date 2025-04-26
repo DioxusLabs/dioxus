@@ -7,7 +7,10 @@ use std::path::PathBuf;
 /// Thanks to libraries like winit for the inspiration
 #[allow(clippy::large_enum_variant)]
 pub(crate) enum ServeUpdate {
-    NewConnection,
+    NewConnection {
+        id: BuildId,
+        aslr_reference: Option<u64>,
+    },
     WsMessage {
         platform: Platform,
         msg: WsMessage,

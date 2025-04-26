@@ -88,7 +88,7 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &mut TraceController) -> 
 
             // Run the server in the background
             // Waiting for updates here lets us tap into when clients are added/removed
-            ServeUpdate::NewConnection => {
+            ServeUpdate::NewConnection { id, aslr_reference } => {
                 // Send the client
                 devserver
                     .send_hotreload(builder.applied_hot_reload_changes(BuildId::CLIENT))
@@ -100,14 +100,13 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &mut TraceController) -> 
                         .await;
                 }
 
-                builder.client_connected().await;
+                builder.client_connected(id, aslr_reference).await;
             }
 
             // Received a message from the devtools server - currently we only use this for
             // logging, so we just forward it the tui
             ServeUpdate::WsMessage { msg, platform } => {
                 screen.push_ws_message(platform, &msg);
-                _ = builder.handle_ws_message(&msg).await;
             }
 
             // Wait for logs from the build engine

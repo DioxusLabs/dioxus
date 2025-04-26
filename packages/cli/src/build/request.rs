@@ -1194,40 +1194,14 @@ session_cache_dir: {}"#,
             object_files.push(patch_file);
         }
 
-        let cc = match self.platform {
-            // todo: we're using wasm-ld directly, but I think we can drive it with rust-lld and -flavor wasm
-            Platform::Web => self.workspace.wasm_ld(),
-
-            // The android clang linker is *special* and has some android-specific flags that we need
-            //
-            // Note that this is *clang*, not `lld`.
-            Platform::Android => self.workspace.android_tools()?.android_cc(&self.triple),
-
-            // The rest of the platforms use `cc` as the linker which should be available in your path,
-            // provided you have build-tools setup. On mac/linux this is the default, but on Windows
-            // it requires msvc or gnu downloaded, which is a requirement to use rust anyways.
-            //
-            // The default linker might actually be slow though, so we could consider using lld or rust-lld
-            // since those are shipping by default on linux as of 1.86. Window's linker is the really slow one.
-            //
-            // https://blog.rust-lang.org/2024/05/17/enabling-rust-lld-on-linux.html
-            //
-            // Note that "cc" is *not* a linker. It's a compiler! The arguments we pass need to be in
-            // the form of `-Wl,<args>` for them to make it to the linker. This matches how rust does it
-            // which is confusing.
-            Platform::MacOS
-            | Platform::Ios
-            | Platform::Linux
-            | Platform::Server
-            | Platform::Liveview
-            | Platform::Windows => PathBuf::from("cc"),
-        };
+        // And now we can run the linker with our new args
+        let linker = self.select_linker()?;
 
         // Run the linker directly!
         //
         // We dump its output directly into the patch exe location which is different than how rustc
         // does it since it uses llvm-objcopy into the `target/debug/` folder.
-        let res = Command::new(cc)
+        let res = Command::new(linker)
             .args(object_files.iter())
             .args(self.thin_link_args(&args)?)
             .arg("-o")
@@ -1575,7 +1549,7 @@ session_cache_dir: {}"#,
                 }
 
                 OperatingSystem::Windows => {
-                    //
+                    // args[first_rlib] = format!("-Wl,--whole-archive");
                 }
 
                 _ => {}
@@ -1597,39 +1571,11 @@ session_cache_dir: {}"#,
         }
 
         // And now we can run the linker with our new args
-        let cc = match self.platform {
-            // todo: we're using wasm-ld directly, but I think we can drive it with rust-lld and -flavor wasm
-            Platform::Web => self.workspace.wasm_ld(),
-
-            // The android clang linker is *special* and has some android-specific flags that we need
-            //
-            // Note that this is *clang*, not `lld`.
-            Platform::Android => self.workspace.android_tools()?.android_cc(&self.triple),
-
-            // The rest of the platforms use `cc` as the linker which should be available in your path,
-            // provided you have build-tools setup. On mac/linux this is the default, but on Windows
-            // it requires msvc or gnu downloaded, which is a requirement to use rust anyways.
-            //
-            // The default linker might actually be slow though, so we could consider using lld or rust-lld
-            // since those are shipping by default on linux as of 1.86. Window's linker is the really slow one.
-            //
-            // https://blog.rust-lang.org/2024/05/17/enabling-rust-lld-on-linux.html
-            //
-            // Note that "cc" is *not* a linker. It's a compiler! The arguments we pass need to be in
-            // the form of `-Wl,<args>` for them to make it to the linker. This matches how rust does it
-            // which is confusing.
-            Platform::MacOS
-            | Platform::Ios
-            | Platform::Linux
-            | Platform::Server
-            | Platform::Liveview
-            | Platform::Windows => PathBuf::from("cc"),
-        };
-
-        tracing::trace!("Final linker args: {:#?}", args);
+        let linker = self.select_linker()?;
 
         // Run the linker directly!
-        let res = Command::new(cc)
+        tracing::trace!("Final linker args: {:#?}", args);
+        let res = Command::new(linker)
             .args(args.iter().skip(1))
             .arg("-o")
             .arg(&exe)
@@ -1656,6 +1602,53 @@ session_cache_dir: {}"#,
         }
 
         Ok(())
+    }
+
+    /// Select the linker to use for this platform.
+    ///
+    /// We prefer to use the rust-lld linker when we can since it's usually there.
+    /// On macos, we use the system linker since macho files can be a bit finicky.
+    ///
+    /// This means we basically ignore the linker flavor that the user configured, which could
+    /// cause issues with a custom linker setup. In theory, rust translates most flags to the right
+    /// linker format.
+    fn select_linker(&self) -> Result<PathBuf, Error> {
+        let cc = match self.triple.operating_system {
+            OperatingSystem::Unknown if self.platform == Platform::Web => self.workspace.wasm_ld(),
+
+            // The android clang linker is *special* and has some android-specific flags that we need
+            //
+            // Note that this is *clang*, not `lld`.
+            OperatingSystem::Linux if self.platform == Platform::Android => {
+                self.workspace.android_tools()?.android_cc(&self.triple)
+            }
+
+            // On macOS, we use the system linker since it's usually there.
+            // We could also use `lld` here, but it might not be installed by default.
+            //
+            // Note that this is *clang*, not `lld`.
+            OperatingSystem::Darwin(_) | OperatingSystem::IOS(_) => self.workspace.cc(),
+
+            // On windows, instead of trying to find the system linker, we just go with the lld.link
+            // that rustup provides. It's faster and more stable then reyling on link.exe in path.
+            OperatingSystem::Windows => self.workspace.lld_link(),
+
+            // The rest of the platforms use `cc` as the linker which should be available in your path,
+            // provided you have build-tools setup. On mac/linux this is the default, but on Windows
+            // it requires msvc or gnu downloaded, which is a requirement to use rust anyways.
+            //
+            // The default linker might actually be slow though, so we could consider using lld or rust-lld
+            // since those are shipping by default on linux as of 1.86. Window's linker is the really slow one.
+            //
+            // https://blog.rust-lang.org/2024/05/17/enabling-rust-lld-on-linux.html
+            //
+            // Note that "cc" is *not* a linker. It's a compiler! The arguments we pass need to be in
+            // the form of `-Wl,<args>` for them to make it to the linker. This matches how rust does it
+            // which is confusing.
+            _ => self.workspace.cc(),
+        };
+
+        Ok(cc)
     }
 
     /// Assemble the `cargo rustc` / `rustc` command

@@ -53,19 +53,16 @@ pub fn apply_changes(dom: &VirtualDom, msg: &HotReloadMsg) -> Result<(), Devtool
 #[cfg(not(target_arch = "wasm32"))]
 pub fn connect(endpoint: String, mut callback: impl FnMut(DevserverMsg) + Send + 'static) {
     std::thread::spawn(move || {
-        let (mut websocket, _req) = match tungstenite::connect(endpoint.clone()) {
+        let uri = format!(
+            "{endpoint}?aslr_reference={}&build_id={}",
+            subsecond::aslr_reference(),
+            dioxus_cli_config::build_id()
+        );
+
+        let (mut websocket, _req) = match tungstenite::connect(uri) {
             Ok((websocket, req)) => (websocket, req),
             Err(_) => return,
         };
-
-        _ = websocket.send(tungstenite::Message::Text(
-            serde_json::to_string(&ClientMsg::Initialize {
-                aslr_reference: subsecond::aslr_reference() as _,
-                build_id: dioxus_cli_config::build_id(),
-            })
-            .unwrap()
-            .into(),
-        ));
 
         while let Ok(msg) = websocket.read() {
             if let tungstenite::Message::Text(text) = msg {

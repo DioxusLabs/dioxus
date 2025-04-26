@@ -7,7 +7,7 @@ use axum::{
     body::Body,
     extract::{
         ws::{Message, WebSocket},
-        Request, State, WebSocketUpgrade,
+        Query, Request, State, WebSocketUpgrade,
     },
     http::{
         header::{HeaderName, HeaderValue, CACHE_CONTROL, EXPIRES, PRAGMA},
@@ -56,13 +56,19 @@ pub(crate) struct WebServer {
     devserver_bind_ip: IpAddr,
     devserver_port: u16,
     proxied_port: Option<u16>,
-    hot_reload_sockets: Vec<WebSocket>,
-    build_status_sockets: Vec<WebSocket>,
-    new_hot_reload_sockets: UnboundedReceiver<WebSocket>,
-    new_build_status_sockets: UnboundedReceiver<WebSocket>,
+    hot_reload_sockets: Vec<ConnectedWsClient>,
+    build_status_sockets: Vec<ConnectedWsClient>,
+    new_hot_reload_sockets: UnboundedReceiver<ConnectedWsClient>,
+    new_build_status_sockets: UnboundedReceiver<ConnectedWsClient>,
     build_status: SharedStatus,
     application_name: String,
     platform: Platform,
+}
+
+pub(crate) struct ConnectedWsClient {
+    socket: WebSocket,
+    build_id: Option<BuildId>,
+    aslr_reference: Option<u64>,
 }
 
 impl WebServer {
@@ -133,15 +139,19 @@ impl WebServer {
             .hot_reload_sockets
             .iter_mut()
             .enumerate()
-            .map(|(idx, socket)| async move { (idx, socket.next().await) })
+            .map(|(idx, socket)| async move { (idx, socket.socket.next().await) })
             .collect::<FuturesUnordered<_>>();
 
         tokio::select! {
             new_hot_reload_socket = &mut new_hot_reload_socket => {
                 if let Some(new_socket) = new_hot_reload_socket {
+                    let aslr_reference = new_socket.aslr_reference;
+                    let id = new_socket.build_id.unwrap_or(BuildId::CLIENT);
+
                     drop(new_message);
                     self.hot_reload_sockets.push(new_socket);
-                    return ServeUpdate::NewConnection;
+
+                    return ServeUpdate::NewConnection { aslr_reference, id};
                 } else {
                     panic!("Could not receive a socket - the devtools could not boot - the port is likely already in use");
                 }
@@ -152,8 +162,8 @@ impl WebServer {
 
                     // Update the socket with project info and current build status
                     let project_info = SharedStatus::new(Status::ClientInit { application_name: self.application_name.clone(), platform: self.platform });
-                    if project_info.send_to(&mut new_socket).await.is_ok() {
-                        _ = self.build_status.send_to(&mut new_socket).await;
+                    if project_info.send_to(&mut new_socket.socket).await.is_ok() {
+                        _ = self.build_status.send_to(&mut new_socket.socket).await;
                         self.build_status_sockets.push(new_socket);
                     }
                     return future::pending::<ServeUpdate>().await;
@@ -178,7 +188,7 @@ impl WebServer {
     pub(crate) async fn shutdown(&mut self) {
         self.send_shutdown().await;
         for mut socket in self.hot_reload_sockets.drain(..) {
-            _ = socket.send(Message::Close(None)).await;
+            _ = socket.socket.send(Message::Close(None)).await;
         }
     }
 
@@ -187,7 +197,7 @@ impl WebServer {
         let mut i = 0;
         while i < self.build_status_sockets.len() {
             let socket = &mut self.build_status_sockets[i];
-            if self.build_status.send_to(socket).await.is_err() {
+            if self.build_status.send_to(&mut socket.socket).await.is_err() {
                 self.build_status_sockets.remove(i);
             } else {
                 i += 1;
@@ -267,6 +277,7 @@ impl WebServer {
         while i < self.hot_reload_sockets.len() {
             let socket = &mut self.hot_reload_sockets[i];
             if socket
+                .socket
                 .send(Message::Text(msg.clone().into()))
                 .await
                 .is_err()
@@ -334,6 +345,7 @@ impl WebServer {
     async fn send_devserver_message_to_all(&mut self, msg: DevserverMsg) {
         for socket in self.hot_reload_sockets.iter_mut() {
             _ = socket
+                .socket
                 .send(Message::Text(serde_json::to_string(&msg).unwrap().into()))
                 .await;
         }
@@ -412,8 +424,8 @@ async fn devserver_mainloop(
 /// - Setting up the websocket endpoint for devtools
 fn build_devserver_router(
     runner: &AppServer,
-    hot_reload_sockets: UnboundedSender<WebSocket>,
-    build_status_sockets: UnboundedSender<WebSocket>,
+    hot_reload_sockets: UnboundedSender<ConnectedWsClient>,
+    build_status_sockets: UnboundedSender<ConnectedWsClient>,
     fullstack_address: Option<SocketAddr>,
     build_status: SharedStatus,
 ) -> Result<Router> {
@@ -472,6 +484,12 @@ fn build_devserver_router(
         build_status_middleware,
     ));
 
+    #[derive(Deserialize, Debug)]
+    struct ConnectionQuery {
+        aslr_reference: Option<u64>,
+        build_id: Option<BuildId>,
+    }
+
     // Setup websocket endpoint - and pass in the extension layer immediately after
     router = router.nest(
         "/_dioxus",
@@ -479,9 +497,9 @@ fn build_devserver_router(
             .route(
                 "/",
                 get(
-                    |ws: WebSocketUpgrade, ext: Extension<UnboundedSender<WebSocket>>| async move {
+                    |ws: WebSocketUpgrade, ext: Extension<UnboundedSender<ConnectedWsClient>>, query: Query<ConnectionQuery>| async move {
                         tracing::debug!("New devtool websocket connection");
-                        ws.on_upgrade(move |socket| async move { _ = ext.0.unbounded_send(socket) })
+                        ws.on_upgrade(move |socket| async move { _ = ext.0.unbounded_send(ConnectedWsClient { socket, aslr_reference: query.aslr_reference, build_id: query.build_id }) })
                     },
                 ),
             )
@@ -489,8 +507,8 @@ fn build_devserver_router(
             .route(
                 "/build_status",
                 get(
-                    |ws: WebSocketUpgrade, ext: Extension<UnboundedSender<WebSocket>>| async move {
-                        ws.on_upgrade(move |socket| async move { _ = ext.0.unbounded_send(socket) })
+                    |ws: WebSocketUpgrade, ext: Extension<UnboundedSender<ConnectedWsClient>>| async move {
+                        ws.on_upgrade(move |socket| async move { _ = ext.0.unbounded_send(ConnectedWsClient { socket, aslr_reference: None, build_id: None }) })
                     },
                 ),
             )
