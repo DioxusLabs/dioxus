@@ -327,7 +327,7 @@ fn ensure_wasm_bindgen_unchanged(
     Ok(())
 }
 
-fn collect_func_ifuncs<'a>(m: &'a Module) -> HashMap<&'a str, i32> {
+fn collect_func_ifuncs(m: &Module) -> HashMap<&str, i32> {
     let mut offsets = HashMap::new();
 
     for el in m.elements.iter() {
@@ -341,21 +341,22 @@ fn collect_func_ifuncs<'a>(m: &'a Module) -> HashMap<&'a str, i32> {
             ConstExpr::Value(value) => match value {
                 walrus::ir::Value::I32(idx) => *idx,
                 walrus::ir::Value::I64(idx) => *idx as i32,
-                _ => panic!(),
+                _ => continue,
             },
 
             // Globals are usually imports and thus don't add a specific offset
             // ie the ifunc table is offset by a global, so we don't need to push the offset out
             ConstExpr::Global(_) => 0,
-            ConstExpr::RefNull(_) => panic!(),
-            ConstExpr::RefFunc(_) => panic!(),
+            _ => continue,
         };
 
         match &el.items {
             ElementItems::Functions(ids) => {
                 for (idx, id) in ids.iter().enumerate() {
-                    let f = m.funcs.get(*id);
-                    offsets.insert(f.name.as_deref().unwrap(), offset + idx as i32);
+                    let func = m.funcs.get(*id);
+                    if let Some(name) = func.name.as_deref() {
+                        offsets.insert(name, offset + idx as i32);
+                    }
                 }
             }
             ElementItems::Expressions(_ref_type, _const_exprs) => {
