@@ -25,16 +25,20 @@ impl HydrationContext {
     /// Create a new serialize context from the serialized data
     pub fn from_serialized(
         data: &[u8],
-        debug_types: Option<Vec<String>>,
-        debug_locations: Option<Vec<String>>,
+        #[cfg(debug_assertions)] debug_types: Option<Vec<String>>,
+        #[cfg(debug_assertions)] debug_locations: Option<Vec<String>>,
+        #[cfg(not(debug_assertions))] _debug_types: Option<Vec<String>>,
+        #[cfg(not(debug_assertions))] _debug_locations: Option<Vec<String>>,
     ) -> Self {
         Self {
             #[cfg(feature = "web")]
             suspense_finished: false,
             data: Rc::new(RefCell::new(HTMLData::from_serialized(
                 data,
-                debug_types,
-                debug_locations,
+                #[cfg(debug_assertions)] debug_types,
+                #[cfg(debug_assertions)] debug_locations,
+                #[cfg(not(debug_assertions))] _debug_types,
+                #[cfg(not(debug_assertions))] _debug_locations,
             ))),
         }
     }
@@ -88,7 +92,8 @@ impl HydrationContext {
         &self,
         id: usize,
         value: &T,
-        location: &'static std::panic::Location<'static>,
+        #[cfg(debug_assertions)] location: &'static std::panic::Location<'static>,
+        #[cfg(not(debug_assertions))] _location: &'static std::panic::Location<'static>,
     ) {
         self.data.borrow_mut().insert(id, value, location);
     }
@@ -132,6 +137,9 @@ impl<T> SerializeContextEntry<T> {
     where
         T: Serialize,
     {
+        #[cfg(debug_assertions)]
+        self.context.insert(self.index, value, location);
+        #[cfg(not(debug_assertions))]
         self.context.insert(self.index, value, location);
     }
 
@@ -199,8 +207,10 @@ impl Default for HTMLData {
 impl HTMLData {
     fn from_serialized(
         data: &[u8],
-        debug_types: Option<Vec<String>>,
-        debug_locations: Option<Vec<String>>,
+        #[cfg(debug_assertions)] debug_types: Option<Vec<String>>,
+        #[cfg(debug_assertions)] debug_locations: Option<Vec<String>>,
+        #[cfg(not(debug_assertions))] _debug_types: Option<Vec<String>>,
+        #[cfg(not(debug_assertions))] _debug_locations: Option<Vec<String>>,
     ) -> Self {
         let data = ciborium::from_reader(Cursor::new(data)).unwrap();
         Self {
@@ -245,7 +255,8 @@ impl HTMLData {
         &mut self,
         id: usize,
         value: &T,
-        location: &'static std::panic::Location<'static>,
+        #[cfg(debug_assertions)] location: &'static std::panic::Location<'static>,
+        #[cfg(not(debug_assertions))] _location: &'static std::panic::Location<'static>,
     ) {
         let mut serialized = Vec::new();
         ciborium::into_writer(value, &mut serialized).unwrap();
@@ -342,6 +353,7 @@ impl HTMLData {
 
         let data = base64::engine::general_purpose::STANDARD.encode(serialized);
 
+        #[cfg(debug_assertions)]
         let format_js_list_of_strings = |list: &[Option<String>]| {
             let body = list
                 .iter()
