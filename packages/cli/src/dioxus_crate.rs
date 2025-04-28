@@ -3,6 +3,7 @@ use crate::{Arch, CliSettings};
 use crate::{Platform, Result};
 use anyhow::Context;
 use itertools::Itertools;
+use krates::Node;
 use krates::{cm::Target, KrateDetails};
 use krates::{cm::TargetKind, Cmd, Krates, NodeId};
 use once_cell::sync::OnceCell;
@@ -315,13 +316,15 @@ impl DioxusCrate {
     }
 
     /// Check if dioxus is being built with a particular feature
-    pub(crate) fn has_dioxus_feature(&self, filter: &str) -> bool {
-        self.krates.krates_by_name("dioxus").any(|dioxus| {
-            self.krates
-                .get_enabled_features(dioxus.kid)
-                .map(|features| features.contains(filter))
-                .unwrap_or_default()
-        })
+    pub(crate) fn directly_depends_on_dioxus_feature(&self, filter: &str) -> bool {
+        self.krates
+            .get_deps(self.package)
+            .any(|(node, _)| match node {
+                Node::Feature { krate_index, name } => {
+                    name == filter && self.krates[*krate_index].name == "dioxus"
+                }
+                _ => false,
+            })
     }
 
     /// Get the features required to build for the given platform
