@@ -1,6 +1,7 @@
 use std::any::Any;
 use dyn_hash::DynHash;
 
+/// Type erased value that acts as a label for a hook
 pub trait HookLabel: DynEq + DynHash + Send + Sync{}
 impl<T: DynEq + DynHash + Send + Sync> HookLabel for T {}
 pub trait DynEq: Any {
