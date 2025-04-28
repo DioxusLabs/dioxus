@@ -411,7 +411,7 @@ pub unsafe fn apply_patch(mut table: JumpTable) -> Result<(), PatchError> {
         // jump table.
         let old_offset = aslr_reference() - table.aslr_reference as usize;
 
-        // Use the `__rust_alloc` symbol as a sentinel for the loaded library. Might want to move away
+        // Use the `main` symbol as a sentinel for the loaded library. Might want to move away
         // from this at some point, or make it configurable
         let new_offset = unsafe {
             // Leak the library. dlopen is basically a no-op on many platforms and if we even try to drop it,
@@ -419,7 +419,7 @@ pub unsafe fn apply_patch(mut table: JumpTable) -> Result<(), PatchError> {
             //
             // todo - we should define a symbol instead of __rust_alloc since it's going to be removed
             //      see https://github.com/rust-lang/rust/issues/139265
-            lib.get::<*const ()>(b"__rust_alloc")
+            lib.get::<*const ()>(b"main")
                 .ok()
                 .unwrap()
                 .try_as_raw_ptr()

@@ -96,7 +96,7 @@ pub fn create_jump_table(original: &Path, patch: &Path, triple: &Triple) -> Resu
         | OperatingSystem::MacOSX(_)
         | OperatingSystem::IOS(_)
         | OperatingSystem::Windows => {
-            let options = ["___rust_alloc", "__rust_alloc"];
+            let options = ["_main", "main"];
             for option in options {
                 if old_name_to_addr.contains_key(option) {
                     new_base_address = *new_name_to_addr.get(option).unwrap();
@@ -505,8 +505,6 @@ pub fn create_undefined_symbol_stub(
         };
 
         let abs_addr = sym.address() + aslr_offset;
-
-        tracing::trace!("Defining: {:?} -> {:?}", name, sym.kind());
 
         if sym.kind() == SymbolKind::Text {
             let jump_code = match triple.architecture {
