@@ -134,8 +134,8 @@ impl VNode {
         dom: &mut VirtualDom,
         to: Option<&mut impl WriteMutations>,
     ) {
-        // Replace components that have different render fns - only in release mode
-        if old.render_fn != new.render_fn || old.render_fn_ptr != new.render_fn_ptr {
+        // Replace components that have different render fns
+        if old.render_fn != new.render_fn {
             return self.replace_vcomponent(mount, idx, new, parent, dom, to);
         }
 

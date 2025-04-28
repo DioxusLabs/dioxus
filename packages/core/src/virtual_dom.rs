@@ -294,14 +294,12 @@ impl VirtualDom {
         root: impl ComponentFunction<P, M>,
         root_props: P,
     ) -> Self {
-        let render_fn = root.id();
-        let render_fn_ptr = root.raw_ptr() as u64;
+        let render_fn = root.fn_ptr();
         let props = VProps::new(root, |_, _| true, root_props, "Root");
         Self::new_with_component(VComponent {
             name: "root",
             render_fn,
             props: Box::new(props),
-            render_fn_ptr,
         })
     }
 

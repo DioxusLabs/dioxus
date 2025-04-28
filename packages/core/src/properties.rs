@@ -1,4 +1,4 @@
-use std::{any::TypeId, fmt::Arguments};
+use std::fmt::Arguments;
 
 use crate::innerlude::*;
 
@@ -167,13 +167,8 @@ pub fn verify_component_called_as_component<C: ComponentFunction<P, M>, P, M>(co
     )
 )]
 pub trait ComponentFunction<Props, Marker = ()>: Clone + 'static {
-    /// Get the type id of the component.
-    fn id(&self) -> TypeId {
-        TypeId::of::<Self>()
-    }
-
     /// Get the raw address of the component render function.
-    fn raw_ptr(&self) -> usize;
+    fn fn_ptr(&self) -> usize;
 
     /// Convert the component to a function that takes props and returns an element.
     fn rebuild(&self, props: Props) -> Element;
@@ -188,7 +183,7 @@ where
         subsecond::HotFn::current(self.clone()).call((props,))
     }
 
-    fn raw_ptr(&self) -> usize {
+    fn fn_ptr(&self) -> usize {
         subsecond::HotFn::current(self.clone()).ptr_address() as usize
     }
 }
@@ -203,7 +198,7 @@ where
         subsecond::HotFn::current(self.clone()).call(props)
     }
 
-    fn raw_ptr(&self) -> usize {
+    fn fn_ptr(&self) -> usize {
         subsecond::HotFn::current(self.clone()).ptr_address() as usize
     }
 }
