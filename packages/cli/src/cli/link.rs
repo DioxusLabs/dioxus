@@ -19,8 +19,8 @@ use target_lexicon::Triple;
 ///             usually being `dx` itself. In this case, we are just writing the linker args to a file
 ///             and then outputting a dummy object file to satisfy the linker. This is generally used
 ///             by the binary patching engine since we need to actually do "real linker logic" like
-///             traversing object files and satisifying missing symbols. That process is *much* easier
-///             to do in the driving host procss when we have all the information available. Unfortuantely,
+///             traversing object files and satisfying missing symbols. That process is *much* easier
+///             to do in the driving host process when we have all the information available. Unfortunately,
 ///             rustc doesn't provide a "real" way of granularly stepping through the compile process
 ///             so this is basically a hack.
 ///

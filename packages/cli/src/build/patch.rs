@@ -288,7 +288,7 @@ fn create_wasm_jump_table(original: &Path, patch: &Path) -> Result<JumpTable> {
         ));
     }
 
-    // Update the wasm module on the fileystem to use the newly lifted version
+    // Update the wasm module on the filesystem to use the newly lifted version
     let lib = patch.to_path_buf();
     std::fs::write(&lib, new.emit_wasm())?;
 
@@ -611,7 +611,7 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
     // Walrus loses this information, so we need to manually parse the names table to get the indices
     // and names of these functions.
     //
-    // Unfortunately, the indicies it gives us ARE NOT VALID.
+    // Unfortunately, the indices it gives us ARE NOT VALID.
     // We need to work around it by using the FunctionId from the module as a link between the merged function names.
     let raw_data = parse_bytes_to_data_segment(bytes)?;
     let ifunc_map = collect_func_ifuncs(&module);
@@ -621,7 +621,7 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
         .filter_map(|f| ifunc_map.get(f.name.as_deref()?).map(|_| f.id()))
         .collect::<HashSet<_>>();
 
-    let ifunc_table_initialzer = module
+    let ifunc_table_initializer = module
         .elements
         .iter()
         .last()
@@ -652,7 +652,7 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
     }
 
     tracing::trace!("Hoisting {} functions", make_indirect.len());
-    let seg = module.elements.get_mut(ifunc_table_initialzer);
+    let seg = module.elements.get_mut(ifunc_table_initializer);
     let make_indirect_count = make_indirect.len() as u64;
     if let ElementItems::Functions(ids) = &mut seg.items {
         for func in make_indirect {

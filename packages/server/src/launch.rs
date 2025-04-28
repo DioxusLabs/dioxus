@@ -147,7 +147,7 @@ async fn serve_server(
 
                                     let server_fn_iter = collect_raw_server_fns();
 
-                                    // de-duplicate iteratively by prefering the most recent (first, since it's linked)
+                                    // de-duplicate iteratively by preferring the most recent (first, since it's linked)
                                     let mut server_fn_map: HashMap<_, _> = HashMap::new();
                                     for f in server_fn_iter.into_iter().rev() {
                                         server_fn_map.insert(f.path(), f);

@@ -159,8 +159,8 @@ impl BuildArgs {
                     }
                 }
 
-                if let Some(server_ags) = server_args_ {
-                    server = Some(BuildRequest::new(&server_ags, workspace.clone()).await?);
+                if let Some(server_args) = server_args_ {
+                    server = Some(BuildRequest::new(&server_args, workspace.clone()).await?);
                 }
 
                 BuildRequest::new(&client_args_.unwrap(), workspace.clone()).await?

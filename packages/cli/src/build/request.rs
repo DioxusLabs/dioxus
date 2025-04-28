@@ -775,7 +775,7 @@ session_cache_dir: {}"#,
                 Message::TextLine(line) => {
                     // Handle the case where we're getting lines directly from rustc.
                     // These are in a different format than the normal cargo output, though I imagine
-                    // this parsing code is quite fragile/sensitive to changes in cargo, cargo_metadta, rustc, etc.
+                    // this parsing code is quite fragile/sensitive to changes in cargo, cargo_metadata, rustc, etc.
                     #[derive(Deserialize)]
                     struct RustcArtifact {
                         artifact: PathBuf,
@@ -1112,7 +1112,7 @@ session_cache_dir: {}"#,
         // This is sadly somewhat of a hack, but it might be a moderately reliable hack.
         //
         // When rustc links your project, it passes the args as how a linker would expect, but with
-        // a somehwat reliable ordering. These are all internal details to cargo/rustc, so we can't
+        // a somewhat reliable ordering. These are all internal details to cargo/rustc, so we can't
         // rely on them *too* much, but the *are* fundamental to how rust compiles your projects, and
         // linker interfaces probably won't change drastically for another 40 years.
         //
@@ -3450,7 +3450,7 @@ session_cache_dir: {}"#,
     /// This is sadly a hack. I think there might be other ways of busting the fingerprint (rustc wrapper?)
     /// but that would require relying on cargo internals.
     ///
-    /// This might stop working if/when cargo stabilizies contents-based fingerprinting.
+    /// This might stop working if/when cargo stabilizes contents-based fingerprinting.
     fn bust_fingerprint(&self, ctx: &BuildContext) -> Result<()> {
         if !matches!(ctx.mode, BuildMode::Thin { .. }) {
             std::fs::File::open(&self.crate_target.src_path)?.set_modified(SystemTime::now())?;

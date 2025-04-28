@@ -31,7 +31,7 @@ pub fn get_android_tools() -> Option<Arc<AndroidTools>> {
     let ndk = var_or_debug("NDK_HOME")
         .or_else(|| var_or_debug("ANDROID_NDK_HOME"))
         .or_else(|| {
-            // Look for the most recent NDK in the event the user has installed multiple NDKs
+            // Look for the most recent NDK in the event the user has installed multiple NDK
             // Eventually we might need to drive this from Dioxus.toml
             let sdk = sdk.as_ref()?;
             let ndk_dir = sdk.join("ndk").read_dir().ok()?;

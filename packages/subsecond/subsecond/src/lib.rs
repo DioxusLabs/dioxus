@@ -120,7 +120,7 @@
 //! ## Applying patches
 //!
 //! When running under the Dioxus CLI, the `dx serve` command will automatically apply patches when
-//! changes are detected. Patches are delievered over the [Dioxus Devtools](https://crates.io/crates/dioxus-devtools)
+//! changes are detected. Patches are delivered over the [Dioxus Devtools](https://crates.io/crates/dioxus-devtools)
 //! websocket protocol and received by corresponding websocket.
 //!
 //! If you're using Subsecond in your own application that doesn't have a runtime integration, you can
@@ -415,7 +415,7 @@ pub unsafe fn apply_patch(mut table: JumpTable) -> Result<(), PatchError> {
         // Use the `__rust_alloc` symbol as a sentinel for the loaded library. Might want to move away
         // from this at some point, or make it configurable
         let new_offset = unsafe {
-            // Leak the libary. dlopen is basically a no-op on many platforms and if we even try to drop it,
+            // Leak the library. dlopen is basically a no-op on many platforms and if we even try to drop it,
             // some code might be called (ie drop) that results in really bad crashes (restart your computer...)
             //
             // todo - we should define a symbol instead of __rust_alloc since it's going to be removed
@@ -520,7 +520,7 @@ pub unsafe fn apply_patch(mut table: JumpTable) -> Result<(), PatchError> {
         }
 
         // Set the memory and table in the imports
-        // Following this patern: Global.new({ value: "i32", mutable: false }, value)
+        // Following this pattern: Global.new({ value: "i32", mutable: false }, value)
         for (name, value) in [("__table_base", table_base), ("__memory_base", memory_base)] {
             let descriptor = Object::new();
             Reflect::set(&descriptor, &"value".into(), &"i32".into()).unwrap();
@@ -734,7 +734,7 @@ pub trait HotFunction<Args, Marker> {
     ///
     /// # Why
     ///
-    /// "rust-call" isn't stable, so we wrap the underyling call with our own, giving it a stable vtable entry.
+    /// "rust-call" isn't stable, so we wrap the underlying call with our own, giving it a stable vtable entry.
     /// This is more important than it seems since this function becomes "real" and can be hot-patched.
     fn call_it(&mut self, args: Args) -> Self::Return;
 
@@ -742,7 +742,7 @@ pub trait HotFunction<Args, Marker> {
     ///
     /// # Safety
     ///
-    /// This is only safe if the underyling type is a function (function pointer or virtual/fat pointer).
+    /// This is only safe if the underlying type is a function (function pointer or virtual/fat pointer).
     /// Using this will use the JumpTable to find the patched function and call it.
     unsafe fn call_as_ptr(&mut self, _args: Args) -> Self::Return;
 }

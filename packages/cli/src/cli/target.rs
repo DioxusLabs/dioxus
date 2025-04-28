@@ -124,7 +124,7 @@ where
     U: Subcommand,
 {
     fn augment_args(cmd: clap::Command) -> clap::Command {
-        // We use the special `defer` method whcih lets us recursively call `augment_args` on the inner command
+        // We use the special `defer` method which lets us recursively call `augment_args` on the inner command
         // and thus `from_arg_matches`
         T::augment_args(cmd).defer(|cmd| U::augment_subcommands(cmd.disable_help_subcommand(true)))
     }
@@ -151,7 +151,7 @@ where
             // Here, we might want to eventually enable arbitrary names of subcommands if they're prefixed
             // with a prefix like "@" ie `dx serve @dog-app/backend --args @dog-app/frontend --args`
             //
-            // we are done, since sub-sub commmands are matched in U::
+            // we are done, since sub-sub commands are matched in U::
             Some(_) => Some(Box::new(U::from_arg_matches(matches)?)),
 
             // no subcommand matched, we are done
