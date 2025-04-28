@@ -16,11 +16,14 @@ pub struct PartialExpr {
 impl Parse for PartialExpr {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         // Input is considered a braced expression if it's a braced group
-        // followed by a comma or the end of the stream
+        // followed by a comma, the end of the stream, or another braced expression
         let mut is_braced = false;
         if let Some((TokenTree::Group(group), next)) = input.fork().cursor().token_tree() {
             let next_char_is_a_comma = next.punct().is_some_and(|(tt, _)| tt.as_char() == ',');
-            if group.delimiter() == Delimiter::Brace && (next.eof() || next_char_is_a_comma) {
+            let next_is_a_braced_exp = next.group(Delimiter::Brace).is_some();
+            if group.delimiter() == Delimiter::Brace
+                && (next.eof() || next_char_is_a_comma || next_is_a_braced_exp)
+            {
                 is_braced = true
             }
         };
