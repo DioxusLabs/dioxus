@@ -4058,10 +4058,12 @@ dependencies = [
 name = "dioxus-fullstack-hooks"
 version = "0.6.3"
 dependencies = [
+ "dioxus",
  "dioxus-core",
  "dioxus-fullstack",
  "dioxus-fullstack-protocol",
  "dioxus-hooks",
+ "dioxus-lib",
  "dioxus-signals",
  "futures-channel",
  "serde",
