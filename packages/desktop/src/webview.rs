@@ -303,12 +303,6 @@ impl WebviewInstance {
             }
         };
 
-        #[cfg(any(
-            target_os = "windows",
-            target_os = "macos",
-            target_os = "ios",
-            target_os = "android"
-        ))]
         let wv_builder = if cfg.as_child_window {
             WebViewBuilder::new(&window)
         } else {
