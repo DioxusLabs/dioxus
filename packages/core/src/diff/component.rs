@@ -148,7 +148,7 @@ impl VNode {
         // The target ScopeState still has the reference to the old props, so there's no need to update anything
         // This also implicitly drops the new props since they're not used
         if old_props.memoize(new_props.props()) {
-            tracing::trace!("Memoized props for component {:?}", scope_id,);
+            tracing::trace!("Memoized props for component {:#?}", scope_id,);
             return;
         }
 
