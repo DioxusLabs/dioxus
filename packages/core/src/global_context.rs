@@ -311,6 +311,93 @@ pub fn use_hook<State: Clone + 'static>(initializer: impl FnOnce() -> State) -> 
 }
 
 // Does track_caller conflict with using hooks in loops?
+/// Store a value between renders. The foundational hook for all other hooks.
+///
+/// Accepts an `initializer` closure, which is run on the first use of the hook (typically the initial render),
+/// and a label used to retrieve the value on subsequent renders.
+/// `use_hook` will return a clone of the value on every render.
+///
+/// Unlike `use_hook`, this function can be called in non-uniform control flow, i.e. 
+/// in conditional statements and non-deterministic loops.
+/// 
+/// In order to clean up resources you would need to implement the [`Drop`] trait for an inner value stored in a RC or similar (Signals for instance),
+/// as these only drop their inner value once all references have been dropped, which only happens when the component is dropped.
+///
+/// <div class="warning">
+///
+/// `use_hook` is not reactive. It just returns the value on every render. If you need state that will track changes, use [`use_signal`](dioxus::prelude::use_signal) instead.
+///
+/// ❌ Don't use `use_hook` with `Rc<RefCell<T>>` for state. It will not update the UI and other hooks when the state changes.
+/// ```rust
+/// use dioxus::prelude::*;
+/// use std::rc::Rc;
+/// use std::cell::RefCell;
+///
+/// pub fn Comp() -> Element {
+///     let count = use_hook(|| Rc::new(RefCell::new(0)));
+///
+///     rsx! {
+///         button {
+///             onclick: move |_| *count.borrow_mut() += 1,
+///             "{count.borrow()}"
+///         }
+///     }
+/// }
+/// ```
+///
+/// ✅ Use `use_signal` instead.
+/// ```rust
+/// use dioxus::prelude::*;
+///
+/// pub fn Comp() -> Element {
+///     let mut count = use_signal(|| 0);
+///
+///     rsx! {
+///         button {
+///             onclick: move |_| count += 1,
+///             "{count}"
+///         }
+///     }
+/// }
+/// ```
+///
+/// </div>
+///
+/// # Example
+///
+/// ```rust, no_run
+/// use dioxus::prelude::*;
+///
+/// // prints a greeting on the initial render
+/// pub fn use_hello_world() {
+///     use_hook(|| println!("Hello, world!"));
+/// }
+/// ```
+///
+/// # Custom Hook Example
+///
+/// ```rust, no_run
+/// use dioxus::prelude::*;
+///
+/// pub struct InnerCustomState(usize);
+///
+/// impl Drop for InnerCustomState {
+///     fn drop(&mut self){
+///         println!("Component has been dropped.");
+///     }
+/// }
+///
+/// #[derive(Clone, Copy)]
+/// pub struct CustomState {
+///     inner: Signal<InnerCustomState>
+/// }
+///
+/// pub fn use_custom_state() -> CustomState {
+///     use_hook(|| CustomState {
+///         inner: Signal::new(InnerCustomState(0))
+///     })
+/// }
+/// ```
 #[track_caller]
 pub fn use_hook_with_label<Label: HookLabel, State: Clone + 'static>(label: Label, initializer: impl FnOnce() -> State) -> State {
     Runtime::with_current_scope(|cx| cx.use_hook_with_label(label, initializer)).unwrap()

@@ -98,7 +98,7 @@ pub fn use_signal_sync_with_label<Label: HookLabel, T: Send + Sync + 'static>(
 	label: Label, 
 	f: impl FnOnce() -> T
 ) -> Signal<T, SyncStorage> {
-    use_maybe_signal_sync(f)
+    use_maybe_signal_sync_with_label(label, f)
 }
 
 #[must_use]
