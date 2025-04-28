@@ -171,7 +171,7 @@ impl AppBuilder {
                 match bundle {
                     Ok(Ok(bundle)) => BuilderUpdate::BuildReady { bundle },
                     Ok(Err(err)) => BuilderUpdate::BuildFailed { err },
-                    Err(err) => BuilderUpdate::BuildFailed { err: crate::Error::Runtime(format!("Build panicked! {:?}", err)) },
+                    Err(err) => BuilderUpdate::BuildFailed { err: crate::Error::Runtime(format!("Build panicked! {:#?}", err)) },
                 }
             },
             Some(Ok(Some(msg))) = OptionFuture::from(self.stdout.as_mut().map(|f| f.next_line())) => {

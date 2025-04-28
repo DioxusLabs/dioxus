@@ -20,7 +20,6 @@ use subsecond_types::*;
 use target_lexicon::{OperatingSystem, Triple};
 use thiserror::Error;
 use walrus::{
-    ir::{dfs_in_order, Visitor},
     ConstExpr, ElementItems, ElementKind, ExportItem, FunctionId, FunctionKind, ImportKind, Module,
     ModuleConfig,
 };
@@ -483,6 +482,11 @@ pub fn create_undefined_symbol_stub(
                     .get("aslr_reference")
                     .expect("failed to find aslr_reference")
             });
+            tracing::debug!(
+                "ASLR reference a {:?} -> b: {:#?}",
+                aslr_reference,
+                aslr_ref.address()
+            );
             aslr_reference - aslr_ref.address()
         }
     };

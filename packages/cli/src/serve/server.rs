@@ -151,7 +151,7 @@ impl WebServer {
                     drop(new_message);
                     self.hot_reload_sockets.push(new_socket);
 
-                    return ServeUpdate::NewConnection { aslr_reference, id};
+                    return ServeUpdate::NewConnection { aslr_reference, id };
                 } else {
                     panic!("Could not receive a socket - the devtools could not boot - the port is likely already in use");
                 }
@@ -501,7 +501,7 @@ fn build_devserver_router(
                 "/",
                 get(
                     |ws: WebSocketUpgrade, ext: Extension<UnboundedSender<ConnectedWsClient>>, query: Query<ConnectionQuery>| async move {
-                        tracing::debug!("New devtool websocket connection");
+                        tracing::debug!("New devtool websocket connection: {:?}", query);
                         ws.on_upgrade(move |socket| async move { _ = ext.0.unbounded_send(ConnectedWsClient { socket, aslr_reference: query.aslr_reference, build_id: query.build_id }) })
                     },
                 ),

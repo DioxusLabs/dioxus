@@ -648,7 +648,9 @@ impl AppServer {
                 // multiple tabs on web can cause this to be called incorrectly, and it doesn't
                 // make any sense anyways
                 if self.client.build.platform != Platform::Web {
-                    self.client.aslr_reference = aslr_reference;
+                    if let Some(aslr_reference) = aslr_reference {
+                        self.client.aslr_reference = Some(aslr_reference);
+                    }
                 }
             }
             BuildId::SERVER => {
