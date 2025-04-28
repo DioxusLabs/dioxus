@@ -4027,6 +4027,7 @@ dependencies = [
  "dioxus-lib",
  "dioxus-mobile",
  "dioxus-router",
+ "dioxus-server",
  "dioxus-ssr",
  "dioxus-web",
  "dioxus_server_macro",

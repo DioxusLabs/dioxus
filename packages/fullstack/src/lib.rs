@@ -12,6 +12,9 @@ mod web;
 #[cfg(all(feature = "web", feature = "document"))]
 pub use web::FullstackWebDocument;
 
+#[cfg(feature = "server")]
+pub use dioxus_server::*;
+
 /// A prelude of commonly used items in dioxus-fullstack.
 pub mod prelude {
     pub use dioxus_fullstack_hooks::*;
@@ -22,4 +25,7 @@ pub mod prelude {
 
     pub use dioxus_server_macro::*;
     pub use server_fn::{self, ServerFn as _, ServerFnError};
+
+    #[cfg(feature = "server")]
+    pub use dioxus_server::prelude::*;
 }

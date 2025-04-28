@@ -55,25 +55,38 @@
 //! }
 //! ```
 
+pub mod config;
+pub mod context;
+
 mod document;
 mod launch;
 mod render;
 mod router;
-mod rt;
-mod serve_config;
-mod server_context;
+mod server;
 mod streaming;
 
-pub(crate) use serve_config::*;
+pub(crate) use config::*;
 
+pub use crate::config::{ServeConfig, ServeConfigBuilder};
+pub use crate::context::Axum;
 pub use crate::render::{FullstackHTMLTemplate, SSRState};
-pub use crate::rt::*;
-pub use crate::serve_config::{ServeConfig, ServeConfigBuilder};
-pub use crate::server_context::Axum;
-pub use document::ServerDocument;
-pub use launch::launch;
-pub use serve_config::*;
-pub use server_context::{
+pub use crate::server::*;
+pub use config::*;
+pub use context::{
     extract, server_context, with_server_context, DioxusServerContext, FromContext,
     FromServerContext, ProvideServerContext,
 };
+pub use document::ServerDocument;
+pub use launch::launch;
+
+/// Re-export commonly used items
+pub mod prelude {
+    pub use crate::config::{ServeConfig, ServeConfigBuilder};
+    pub use crate::context::Axum;
+    pub use crate::context::{
+        extract, server_context, with_server_context, DioxusServerContext, FromContext,
+        FromServerContext, ProvideServerContext,
+    };
+    pub use crate::render::{FullstackHTMLTemplate, SSRState};
+    pub use crate::server::*;
+}

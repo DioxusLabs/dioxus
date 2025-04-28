@@ -1,7 +1,7 @@
 //! A launch function that creates an axum router for the LaunchBuilder
 
 use crate::{
-    collect_raw_server_fns, render_handler, rt::DioxusRouterExt, RenderHandleState, SSRState,
+    collect_raw_server_fns, render_handler, server::DioxusRouterExt, RenderHandleState, SSRState,
     ServeConfig, ServeConfigBuilder,
 };
 use axum::{

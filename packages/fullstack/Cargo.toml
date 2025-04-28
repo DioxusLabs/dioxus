@@ -23,6 +23,7 @@ dioxus-lib = { workspace = true }
 generational-box = { workspace = true }
 
 # Dioxus + SSR
+dioxus-server = { workspace = true, optional = true}
 dioxus-ssr = { workspace = true, optional = true }
 dioxus-isrg = { workspace = true, optional = true }
 dioxus-router = { workspace = true, features = ["streaming"], optional = true }
@@ -115,6 +116,7 @@ server = [
     "dioxus_server_macro/axum",
     "server_fn/reqwest",
     "dioxus_server_macro/reqwest",
+    "dep:dioxus-server",
 
     "server_fn/ssr",
     "dioxus_server_macro/server",
