@@ -2,6 +2,7 @@
 #![doc(html_logo_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![cfg_attr(docsrs, feature(doc_cfg))]
+#![allow(clippy::doc_overindented_list_items)]
 
 mod build;
 mod bundle_utils;

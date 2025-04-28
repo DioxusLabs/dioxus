@@ -102,7 +102,7 @@ impl WebServer {
         // Set up the router with some shared state that we'll update later to reflect the current state of the build
         let build_status = SharedStatus::new_with_starting_build();
         let router = build_devserver_router(
-            &runner,
+            runner,
             hot_reload_sockets_tx,
             build_status_sockets_tx,
             proxied_address,

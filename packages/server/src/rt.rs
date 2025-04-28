@@ -221,7 +221,7 @@ where
 pub type AxumServerFn = ServerFnTraitObj<http::Request<Body>, http::Response<Body>>;
 
 pub fn collect_raw_server_fns() -> Vec<&'static AxumServerFn> {
-    inventory::iter::<AxumServerFn>().into_iter().collect()
+    inventory::iter::<AxumServerFn>().collect()
 }
 
 /// A handler for Dioxus server functions. This will run the server function and return the result.

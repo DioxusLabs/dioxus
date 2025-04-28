@@ -294,14 +294,14 @@ impl AppServer {
 
             // If it's an asset, we want to hotreload it
             // todo(jon): don't hardcode this here
-            if let Some(bundled_name) = self.client.hotreload_bundled_asset(&path).await {
+            if let Some(bundled_name) = self.client.hotreload_bundled_asset(path).await {
                 assets.push(PathBuf::from("/assets/").join(bundled_name));
             }
 
             // If it's a rust file, we want to hotreload it using the filemap
             if ext == "rs" {
                 // And grabout the contents
-                let Ok(new_contents) = std::fs::read_to_string(&path) else {
+                let Ok(new_contents) = std::fs::read_to_string(path) else {
                     tracing::debug!("Failed to read rust file while hotreloading: {:?}", path);
                     continue;
                 };
@@ -556,7 +556,9 @@ impl AppServer {
         };
 
         self.client.start_rebuild(build_mode.clone());
-        self.server.as_mut().map(|s| s.start_rebuild(build_mode));
+        if let Some(s) = self.server.as_mut() {
+            s.start_rebuild(build_mode)
+        }
 
         self.clear_hot_reload_changes();
         self.clear_cached_rsx();
@@ -743,7 +745,7 @@ impl AppServer {
             if self
                 .workspace
                 .ignore
-                .matched(&entry.path(), entry.file_type().is_dir())
+                .matched(entry.path(), entry.file_type().is_dir())
                 .is_ignore()
             {
                 continue;
@@ -751,7 +753,7 @@ impl AppServer {
 
             let path = entry.path();
             if path.extension().and_then(|s| s.to_str()) == Some("rs") {
-                if let Ok(contents) = std::fs::read_to_string(&path) {
+                if let Ok(contents) = std::fs::read_to_string(path) {
                     self.file_map.insert(
                         path.to_path_buf(),
                         CachedFile {
@@ -802,7 +804,7 @@ impl AppServer {
 
         // Also watch the workspace dir, non recursively, such that we can pick up new folders there too
         if let Err(err) = self.watcher.watch(
-            &self.workspace.krates.workspace_root().as_std_path(),
+            self.workspace.krates.workspace_root().as_std_path(),
             RecursiveMode::NonRecursive,
         ) {
             handle_notify_error(err);

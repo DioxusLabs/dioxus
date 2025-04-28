@@ -139,8 +139,7 @@ async fn serve_server(
                     DevserverMsg::HotReload(hot_reload_msg) => {
                         if hot_reload_msg.for_build_id == Some(dioxus_cli_config::build_id()) {
                             if let Some(table) = hot_reload_msg.jump_table {
-                                if let Ok(_) =
-                                    unsafe { dioxus_devtools::subsecond::apply_patch(table) }
+                                if unsafe { dioxus_devtools::subsecond::apply_patch(table) }.is_ok()
                                 {
                                     let mut new_router = axum::Router::new().serve_static_assets();
                                     let new_cfg = ServeConfig::new().unwrap();
@@ -170,7 +169,9 @@ async fn serve_server(
                                     let new_root_addr =
                                         hot_root.ptr_address() as usize as *const ();
                                     let new_root = unsafe {
-                                        std::mem::transmute::<_, fn() -> Element>(new_root_addr)
+                                        std::mem::transmute::<*const (), fn() -> Element>(
+                                            new_root_addr,
+                                        )
                                     };
 
                                     crate::document::reset_renderer();
@@ -189,7 +190,7 @@ async fn serve_server(
                                     )
                                     .into_make_service();
 
-                                    _ = shutdown_tx.send_modify(|i| {
+                                    shutdown_tx.send_modify(|i| {
                                         *i += 1;
                                         hr_idx += 1;
                                     });
@@ -208,9 +209,9 @@ async fn serve_server(
             Msg::TcpStream(Ok((tcp_stream, remote_addr))) => {
                 tracing::trace!("Accepted connection from {remote_addr}");
 
+                let this_hr_index = hr_idx;
                 let mut make_service = make_service.clone();
                 let mut shutdown_rx = shutdown_rx.clone();
-                let this_hr_index = hr_idx.clone();
                 task_pool.spawn_pinned(move || async move {
                     let tcp_stream = TokioIo::new(tcp_stream);
 
@@ -246,9 +247,7 @@ async fn serve_server(
                                 // appear.
                             }
                         }
-                        res = shutdown_rx.wait_for(|i| *i == this_hr_index + 1) => {
-                            return;
-                        }
+                        _res = shutdown_rx.wait_for(|i| *i == this_hr_index + 1) => {}
                     }
                 });
             }

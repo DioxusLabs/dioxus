@@ -73,7 +73,7 @@ impl BuildArgs {
 
         if let Some(server) = targets.server.as_ref() {
             // If the server is present, we need to build it as well
-            AppBuilder::start(&server, BuildMode::Base)?
+            AppBuilder::start(server, BuildMode::Base)?
                 .finish_build()
                 .await?;
 

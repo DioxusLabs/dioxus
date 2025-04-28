@@ -49,7 +49,7 @@ pub async fn run_rustc() {
 
     let rustc_args = RustcArgs {
         args: args().skip(1).collect::<Vec<_>>(),
-        envs: vars().map(|(k, v)| (k, v)).collect::<_>(),
+        envs: vars().collect::<_>(),
     };
 
     std::fs::create_dir_all(var_file.parent().expect("Failed to get parent dir"))

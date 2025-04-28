@@ -1,3 +1,4 @@
+#![allow(clippy::needless_doctest_main)]
 //! # Subsecond: Hot-patching for Rust
 //!
 //! Subsecond is a library that enables hot-patching for Rust applications. This allows you to change
@@ -15,12 +16,10 @@
 //! that call to the latest version of the function.
 //!
 //! ```rust
-//! fn main() {
-//!     for x in 0..5 {
-//!         subsecond::call(|| {
-//!             println!("Hello, world! {}", x);
-//!         });
-//!     }
+//! for x in 0..5 {
+//!     subsecond::call(|| {
+//!         println!("Hello, world! {}", x);
+//!     });
 //! }
 //! ```
 //!
@@ -668,54 +667,6 @@ unsafe fn android_memmap_dlopen(file: &std::path::Path) -> libloading::Library {
     lib
 }
 
-/// Apply the patch using a given jump table.
-///
-/// Used on WASM platforms where we need async integration to fetch the patch.
-#[cfg_attr(target_arch = "wasm32", wasm_bindgen::prelude::wasm_bindgen)]
-pub async unsafe fn __subsecond_wasm_patch(table: wasm_bindgen::JsValue) {
-    use js_sys::{Object, Reflect};
-    use subsecond_types::AddressMap;
-    use wasm_bindgen::prelude::*;
-
-    let as_obj: js_sys::Object = table.unchecked_into();
-    let ifunc_count = Reflect::get(&as_obj, &"ifunc_count".into())
-        .unwrap()
-        .as_f64()
-        .unwrap() as u64;
-    let lib_url = Reflect::get(&as_obj, &"lib".into())
-        .unwrap()
-        .as_string()
-        .unwrap();
-    let map_obj = Reflect::get(&as_obj, &"map".into())
-        .unwrap()
-        .unchecked_into::<js_sys::Object>();
-
-    let mut map = AddressMap::default();
-    for entry in Object::entries(&map_obj).iter() {
-        let entry = entry.unchecked_into::<js_sys::Array>();
-        let key = entry.get(0);
-        let value = entry.get(1);
-        let key = key.as_string();
-        let value = value.as_f64();
-        if let Some(value) = value {
-            if let Some(key) = key {
-                if let Ok(key) = key.parse::<u64>() {
-                    map.insert(key, value as u64);
-                }
-            }
-        }
-    }
-
-    apply_patch(JumpTable {
-        map,
-        ifunc_count,
-        lib: lib_url.into(),
-        aslr_reference: 0,
-        new_base_address: 0,
-    })
-    .expect("Failed to apply patch");
-}
-
 /// A trait that enables types to be hot-patched.
 ///
 /// This trait is only implemented for FnMut types which naturally includes function pointers and
@@ -775,6 +726,8 @@ macro_rules! impl_hot_function {
                 unsafe fn call_as_ptr(&mut self, args: ($($arg,)*)) -> Self::Return {
                     unsafe {
                         if let Some(jump_table) = get_jump_table() {
+
+
                             let real = std::mem::transmute_copy::<Self, Self::Real>(&self) as *const ();
 
                             // Android implements MTE / pointer tagging and we need to preserve the tag.
@@ -799,7 +752,14 @@ macro_rules! impl_hot_function {
                                 // Macro-rules requires unpacking the tuple before we call it
                                 #[allow(non_snake_case)]
                                 let ( $($arg,)* ) = args;
-                                return std::mem::transmute::<_, Self::Real>(ptr)($($arg),*);
+
+
+                                #[cfg(target_pointer_width = "64")]
+                                type PtrWidth = u64;
+                                #[cfg(target_pointer_width = "32")]
+                                type PtrWidth = u32;
+
+                                return std::mem::transmute::<PtrWidth, Self::Real>(ptr)($($arg),*);
                             }
                         }
 

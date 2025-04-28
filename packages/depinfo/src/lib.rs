@@ -71,10 +71,7 @@ impl RustcDepInfo {
                     while file.ends_with('\\') {
                         file.pop();
                         file.push(' ');
-                        file.push_str(
-                            deps.next()
-                                .ok_or_else(|| DepInfoParseError::MalformedInput)?,
-                        );
+                        file.push_str(deps.next().ok_or(DepInfoParseError::MalformedInput)?);
                     }
                     ret.files.push(file.into());
                 }

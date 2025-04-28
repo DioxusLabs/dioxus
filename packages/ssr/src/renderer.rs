@@ -17,13 +17,13 @@ pub struct Renderer {
     pub pre_render: bool,
 
     /// A callback used to render components. You can set this callback to control what components are rendered and add wrappers around components that are not present in CSR
-    pub render_components: Option<ComponentRenderCallback>,
+    pub(crate) render_components: Option<ComponentRenderCallback>,
 
     /// A cache of templates that have been rendered
-    pub template_cache: FxHashMap<Template, Arc<StringCache>>,
+    pub(crate) template_cache: FxHashMap<Template, Arc<StringCache>>,
 
     /// The current dynamic node id for hydration
-    pub dynamic_node_id: usize,
+    pub(crate) dynamic_node_id: usize,
 }
 
 impl Renderer {
@@ -40,6 +40,13 @@ impl Renderer {
             + 'static,
     ) {
         self.render_components = Some(Arc::new(callback));
+    }
+
+    /// Completely clear the renderer cache and reset the dynamic node id
+    pub fn clear(&mut self) {
+        self.template_cache.clear();
+        self.dynamic_node_id = 0;
+        self.render_components = None;
     }
 
     /// Reset the callback that the renderer uses to render components

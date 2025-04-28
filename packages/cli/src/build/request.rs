@@ -529,7 +529,7 @@ impl BuildRequest {
             })?
             .clone();
 
-        let default_platform = Self::default_platform(&main_package);
+        let default_platform = Self::default_platform(main_package);
         let mut features = vec![];
         let mut no_default_features = false;
 
@@ -537,18 +537,18 @@ impl BuildRequest {
         // We want to strip out the default platform and use the one they passed, setting no-default-features
         if args.platform.is_some() && default_platform.is_some() {
             no_default_features = true;
-            features.extend(Self::platformless_features(&main_package));
+            features.extend(Self::platformless_features(main_package));
         }
 
         // Inherit the platform from the args, or auto-detect it
         let platform = args
             .platform
-            .map(|p| Some(p))
-            .unwrap_or_else(|| Self::autodetect_platform(&workspace, &main_package).map(|a| a.0))
+            .map(Some)
+            .unwrap_or_else(|| Self::autodetect_platform(&workspace, main_package).map(|a| a.0))
             .context("No platform was specified and could not be auto-detected. Please specify a platform with `--platform <platform>` or set a default platform using a cargo feature.")?;
 
         // Add any features required to turn on the client
-        features.push(Self::feature_for_platform(&main_package, platform));
+        features.push(Self::feature_for_platform(main_package, platform));
 
         // Set the profile of the build if it's not already set
         // This is mostly used for isolation of builds (preventing thrashing) but also useful to have multiple performance profiles
@@ -688,10 +688,10 @@ session_cache_dir: {}"#,
     pub(crate) async fn build(&self, ctx: &BuildContext) -> Result<BuildArtifacts> {
         // If we forget to do this, then we won't get the linker args since rust skips the full build
         // We need to make sure to not react to this though, so the filemap must cache it
-        _ = self.bust_fingerprint(&ctx);
+        _ = self.bust_fingerprint(ctx);
 
         // Run the cargo build to produce our artifacts
-        let mut artifacts = self.cargo_build(&ctx).await?;
+        let mut artifacts = self.cargo_build(ctx).await?;
 
         // Write the build artifacts to the bundle on the disk
         match ctx.mode {
@@ -703,15 +703,15 @@ session_cache_dir: {}"#,
             BuildMode::Base | BuildMode::Fat => {
                 ctx.status_start_bundle();
 
-                self.write_executable(&ctx, &artifacts.exe, &mut artifacts.assets)
+                self.write_executable(ctx, &artifacts.exe, &mut artifacts.assets)
                     .await
                     .context("Failed to write main executable")?;
-                self.write_assets(&ctx, &artifacts.assets)
+                self.write_assets(ctx, &artifacts.assets)
                     .await
                     .context("Failed to write assets")?;
                 self.write_metadata().await?;
-                self.optimize(&ctx).await?;
-                self.assemble(&ctx)
+                self.optimize(ctx).await?;
+                self.assemble(ctx)
                     .await
                     .context("Failed to assemble app bundle")?;
 
@@ -960,7 +960,7 @@ session_cache_dir: {}"#,
                 // We wipe away the dir completely, which is not great behavior :/
                 _ = std::fs::remove_dir_all(self.exe_dir());
                 std::fs::create_dir_all(self.exe_dir())?;
-                std::fs::copy(&exe, self.main_exe())?;
+                std::fs::copy(exe, self.main_exe())?;
             }
         }
 
@@ -1103,7 +1103,7 @@ session_cache_dir: {}"#,
             "Original builds for patch: {}",
             self.link_args_file.path().display()
         );
-        let raw_args = std::fs::read_to_string(&self.link_args_file.path())
+        let raw_args = std::fs::read_to_string(self.link_args_file.path())
             .context("Failed to read link args from file")?;
         let args = raw_args.lines().collect::<Vec<_>>();
 
@@ -1163,7 +1163,7 @@ session_cache_dir: {}"#,
             .iter()
             .filter(|arg| arg.ends_with(".rcgu.o"))
             .sorted()
-            .map(|arg| PathBuf::from(arg))
+            .map(PathBuf::from)
             .collect::<Vec<_>>();
 
         // On non-wasm platforms, we generate a special shim object file which converts symbols from
@@ -1205,7 +1205,7 @@ session_cache_dir: {}"#,
             .args(object_files.iter())
             .args(self.thin_link_args(&args)?)
             .arg("-o")
-            .arg(&self.patch_exe(artifacts.time_start))
+            .arg(self.patch_exe(artifacts.time_start))
             .output()
             .await?;
 
@@ -1227,7 +1227,7 @@ session_cache_dir: {}"#,
         // Fortunately, this binary exists in two places - the deps dir and the target out dir. We
         // can just remove the one in the deps dir and the problem goes away.
         if let Some(idx) = args.iter().position(|arg| *arg == "-o") {
-            _ = std::fs::remove_file(&PathBuf::from(args[idx + 1]));
+            _ = std::fs::remove_file(PathBuf::from(args[idx + 1]));
         }
 
         // Now extract the assets from the fat binary
@@ -1437,7 +1437,7 @@ session_cache_dir: {}"#,
     pub(crate) async fn perform_fat_link(&self, ctx: &BuildContext, exe: &Path) -> Result<()> {
         ctx.status_starting_link();
 
-        let raw_args = std::fs::read_to_string(&self.link_args_file.path())
+        let raw_args = std::fs::read_to_string(self.link_args_file.path())
             .context("Failed to read link args from file")?;
         let args = raw_args.lines().collect::<Vec<_>>();
 
@@ -1445,13 +1445,13 @@ session_cache_dir: {}"#,
         let rlibs = args
             .iter()
             .filter(|arg| arg.ends_with(".rlib"))
-            .map(|arg| PathBuf::from(arg))
+            .map(PathBuf::from)
             .collect::<Vec<_>>();
 
         // Acquire a hash from the rlib names
         let hash_id = Uuid::new_v5(
             &Uuid::NAMESPACE_OID,
-            &rlibs
+            rlibs
                 .iter()
                 .map(|p| p.file_name().unwrap().to_string_lossy())
                 .collect::<String>()
@@ -1468,7 +1468,7 @@ session_cache_dir: {}"#,
         //
         // The nature of this process involves making extremely fat archives, so we should try and
         // speed up the future linking process by caching the archive.
-        if !out_ar_path.exists() || true {
+        if std::env::var("DX_CACHE_FAT_LIB").is_err() {
             let mut bytes = vec![];
             let mut out_ar = ar::Builder::new(&mut bytes);
             for rlib in &rlibs {
@@ -1513,7 +1513,7 @@ session_cache_dir: {}"#,
             match self.triple.operating_system {
                 OperatingSystem::Unknown if self.platform == Platform::Web => {
                     // We need to use the --whole-archive flag for wasm
-                    args[first_rlib] = format!("--whole-archive");
+                    args[first_rlib] = "--whole-archive".to_string();
                     args.insert(first_rlib + 1, out_ar_path.display().to_string());
                     args.insert(first_rlib + 2, "--no-whole-archive".to_string());
                     args.retain(|arg| !arg.ends_with(".rlib"));
@@ -1526,7 +1526,7 @@ session_cache_dir: {}"#,
 
                 // Subtle difference - on linux and android we go through clang and thus pass `-Wl,` prefix
                 OperatingSystem::Linux => {
-                    args[first_rlib] = format!("-Wl,--whole-archive");
+                    args[first_rlib] = "-Wl,--whole-archive".to_string();
                     args.insert(first_rlib + 1, out_ar_path.display().to_string());
                     args.insert(first_rlib + 2, "-Wl,--no-whole-archive".to_string());
                     args.retain(|arg| !arg.ends_with(".rlib"));
@@ -1538,7 +1538,7 @@ session_cache_dir: {}"#,
                 }
 
                 OperatingSystem::Darwin(_) | OperatingSystem::IOS(_) => {
-                    args[first_rlib] = format!("-Wl,-force_load");
+                    args[first_rlib] = "-Wl,-force_load".to_string();
                     args.insert(first_rlib + 1, out_ar_path.display().to_string());
                     args.retain(|arg| !arg.ends_with(".rlib"));
 
@@ -1577,7 +1577,7 @@ session_cache_dir: {}"#,
         let res = Command::new(linker)
             .args(args.iter().skip(1))
             .arg("-o")
-            .arg(&exe)
+            .arg(exe)
             .output()
             .await?;
 
@@ -1732,8 +1732,9 @@ session_cache_dir: {}"#,
     ///
     /// We always use `cargo rustc` *or* `rustc` directly. This means we can pass extra flags like
     /// `-C` arguments directly to the compiler.
+    #[allow(clippy::vec_init_then_push)]
     fn cargo_build_arguments(&self, ctx: &BuildContext) -> Vec<String> {
-        let mut cargo_args = Vec::new();
+        let mut cargo_args = Vec::with_capacity(4);
 
         // Add required profile flags. --release overrides any custom profiles.
         cargo_args.push("--profile".to_string());
@@ -2408,7 +2409,7 @@ session_cache_dir: {}"#,
 
     /// Get the type of executable we are compiling
     pub(crate) fn executable_type(&self) -> TargetKind {
-        self.crate_target.kind[0].clone()
+        self.crate_target.kind[0]
     }
 
     /// Try to autodetect the platform from the package by reading its features
@@ -2886,9 +2887,9 @@ session_cache_dir: {}"#,
 
         // Lift the internal functions to exports
         if ctx.mode == BuildMode::Fat {
-            let unprocessed = std::fs::read(&exe)?;
+            let unprocessed = std::fs::read(exe)?;
             let all_exported_bytes = crate::build::prepare_wasm_base_module(&unprocessed)?;
-            std::fs::write(&exe, all_exported_bytes)?;
+            std::fs::write(exe, all_exported_bytes)?;
         }
 
         // Prepare our configuration
@@ -2922,7 +2923,7 @@ session_cache_dir: {}"#,
         tracing::debug!(dx_src = ?TraceSrc::Bundle, "Running wasm-bindgen");
         let start = std::time::Instant::now();
         WasmBindgen::new(&bindgen_version)
-            .input_path(&exe)
+            .input_path(exe)
             .target("web")
             .debug(keep_debug)
             .demangle(demangle)
@@ -2952,7 +2953,7 @@ session_cache_dir: {}"#,
 
             // Load the contents of these binaries since we need both of them
             // We're going to use the default makeLoad glue from wasm-split
-            let original = std::fs::read(&exe)?;
+            let original = std::fs::read(exe)?;
             let bindgened = std::fs::read(&post_bindgen_wasm)?;
             let mut glue = wasm_split_cli::MAKE_LOAD_JS.to_string();
 
@@ -3065,7 +3066,7 @@ session_cache_dir: {}"#,
         // Write the index.html file with the pre-configured contents we got from pre-rendering
         std::fs::write(
             self.root_dir().join("index.html"),
-            self.prepare_html(&assets, &wasm_path, &js_path)?,
+            self.prepare_html(assets, &wasm_path, &js_path)?,
         )?;
 
         Ok(())

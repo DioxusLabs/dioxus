@@ -39,7 +39,7 @@ pub fn get_android_tools() -> Option<Arc<AndroidTools>> {
                 .flatten()
                 .map(|dir| (dir.file_name(), dir.path()))
                 .sorted()
-                .last()
+                .next_back()
                 .map(|(_, path)| path.to_path_buf())
         })?;
 

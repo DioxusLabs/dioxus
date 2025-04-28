@@ -41,7 +41,7 @@ impl BuildRequest {
         };
 
         // Inject any resources from the config into the html
-        self.inject_resources(&assets, &mut html)?;
+        self.inject_resources(assets, &mut html)?;
 
         // Inject loading scripts if they are not already present
         self.inject_loading_scripts(&mut html);
@@ -180,12 +180,12 @@ r#" <script>
 
         // If the html contains the old `{app_name}` placeholder, replace {app_name}_bg.wasm and {app_name}.js
         // with the new paths
-        *html = html.replace("wasm/{app_name}_bg.wasm", &wasm_path);
-        *html = html.replace("wasm/{app_name}.js", &js_path);
+        *html = html.replace("wasm/{app_name}_bg.wasm", wasm_path);
+        *html = html.replace("wasm/{app_name}.js", js_path);
 
         // Otherwise replace the new placeholders
-        *html = html.replace("{wasm_path}", &wasm_path);
-        *html = html.replace("{js_path}", &js_path);
+        *html = html.replace("{wasm_path}", wasm_path);
+        *html = html.replace("{js_path}", js_path);
 
         // Replace the app_name if we find it anywhere standalone
         *html = html.replace("{app_name}", app_name);

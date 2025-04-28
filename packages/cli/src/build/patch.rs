@@ -89,7 +89,6 @@ pub fn create_jump_table(original: &Path, patch: &Path, triple: &Triple) -> Resu
 
     // on windows there is no symbol so we leave the old address as 0
     // on wasm there is no ASLR so we leave the old address as 0
-    let mut _old_base_address = 0;
     let mut new_base_address = 0;
     match triple.operating_system {
         OperatingSystem::Darwin(_)
@@ -100,8 +99,7 @@ pub fn create_jump_table(original: &Path, patch: &Path, triple: &Triple) -> Resu
             let options = ["___rust_alloc", "__rust_alloc"];
             for option in options {
                 if old_name_to_addr.contains_key(option) {
-                    _old_base_address = old_name_to_addr.get(option).unwrap().clone();
-                    new_base_address = new_name_to_addr.get(option).unwrap().clone();
+                    new_base_address = *new_name_to_addr.get(option).unwrap();
                     break;
                 }
             }
@@ -109,14 +107,11 @@ pub fn create_jump_table(original: &Path, patch: &Path, triple: &Triple) -> Resu
         _ => {}
     }
 
-    let aslr_reference = old_name_to_addr
-        .get("_aslr_reference")
-        .unwrap_or_else(|| {
-            old_name_to_addr
-                .get("aslr_reference")
-                .expect("failed to find aslr_reference")
-        })
-        .clone();
+    let aslr_reference = *old_name_to_addr.get("_aslr_reference").unwrap_or_else(|| {
+        old_name_to_addr
+            .get("aslr_reference")
+            .expect("failed to find aslr_reference")
+    });
 
     Ok(JumpTable {
         lib: patch.to_path_buf(),
@@ -172,7 +167,7 @@ fn create_wasm_jump_table(original: &Path, patch: &Path) -> Result<JumpTable> {
             "GOT.func" => {
                 let Some(entry) = name_to_ifunc_old.get(t.name.as_str()).cloned() else {
                     let exists = old.exports.get_func(t.name.as_str());
-                    return Err(PatchError::InvalidModule(format!("Expected to find GOT.func entry in ifunc table but it was missing: {} -> {exists:?}\nDid all symbols make it into the static lib?", t.name.as_str()).into()));
+                    return Err(PatchError::InvalidModule(format!("Expected to find GOT.func entry in ifunc table but it was missing: {} -> {exists:?}\nDid all symbols make it into the static lib?", t.name.as_str())));
                 };
                 funcs.push((t.id(), entry));
             }
@@ -216,7 +211,7 @@ fn create_wasm_jump_table(original: &Path, patch: &Path) -> Result<JumpTable> {
         // value with a local global.
         new.imports.delete(import_id);
         new.globals.get_mut(id).kind =
-            walrus::GlobalKind::Local(ConstExpr::Value(walrus::ir::Value::I32(ifunc_index as i32)));
+            walrus::GlobalKind::Local(ConstExpr::Value(walrus::ir::Value::I32(ifunc_index)));
     }
 
     // We need to satisfy the GOT.mem imports of this side module. The GOT.mem imports come from the wasm-ld
@@ -275,9 +270,9 @@ fn create_wasm_jump_table(original: &Path, patch: &Path) -> Result<JumpTable> {
         };
 
         let ImportKind::Global(global_id) = import.kind else {
-            return Err(PatchError::InvalidModule(format!(
-                "Expected GOT.mem import to be a global"
-            )));
+            return Err(PatchError::InvalidModule(
+                "Expected GOT.mem import to be a global".to_string(),
+            ));
         };
 
         // "satisfying" the import means removing it from the import table and replacing its target
@@ -317,22 +312,23 @@ fn create_wasm_jump_table(original: &Path, patch: &Path) -> Result<JumpTable> {
 }
 
 fn ensure_wasm_bindgen_unchanged(
-    old: &Module,
-    new: &Module,
-    old_symbols: &RawDataSection,
-    new_symbols: &RawDataSection,
+    _old: &Module,
+    _new: &Module,
+    _old_symbols: &RawDataSection,
+    _new_symbols: &RawDataSection,
 ) -> Result<()> {
-    for sym in new_symbols.symbols.iter() {
-        match sym {
-            SymbolInfo::Func { flags, index, name } => {}
-            SymbolInfo::Data {
-                flags,
-                name,
-                symbol,
-            } => {}
-            _ => {}
-        }
-    }
+    // todo: implement diffing
+    // for sym in new_symbols.symbols.iter() {
+    //     match sym {
+    //         SymbolInfo::Func { flags, index, name } => {}
+    //         SymbolInfo::Data {
+    //             flags,
+    //             name,
+    //             symbol,
+    //         } => {}
+    //         _ => {}
+    //     }
+    // }
 
     Ok(())
 }
@@ -397,15 +393,13 @@ pub fn create_undefined_symbol_stub(
     let mut undefined_symbols = HashSet::new();
     let mut defined_symbols = HashSet::new();
     for path in sorted {
-        let bytes = fs::read(&path).with_context(|| format!("failed to read {:?}", path))?;
+        let bytes = fs::read(path).with_context(|| format!("failed to read {:?}", path))?;
         let file = File::parse(bytes.deref() as &[u8])?;
         for symbol in file.symbols() {
             if symbol.is_undefined() {
                 undefined_symbols.insert(symbol.name()?.to_string());
-            } else {
-                if symbol.is_global() {
-                    defined_symbols.insert(symbol.name()?.to_string());
-                }
+            } else if symbol.is_global() {
+                defined_symbols.insert(symbol.name()?.to_string());
             }
         }
     }
@@ -438,6 +432,7 @@ pub fn create_undefined_symbol_stub(
     );
 
     // Write the headers so we load properly in ios/macos
+    #[allow(clippy::identity_op)]
     match triple.operating_system {
         target_lexicon::OperatingSystem::Darwin(_) => {
             obj.set_macho_build_version({
@@ -465,8 +460,7 @@ pub fn create_undefined_symbol_stub(
     }
 
     // Load the original binary
-    let bytes =
-        fs::read(&source_path).with_context(|| format!("failed to read {:?}", source_path))?;
+    let bytes = fs::read(source_path)?;
     let source = File::parse(bytes.deref() as &[u8]).context("Failed to parse")?;
     let symbol_table = source
         .symbols()
@@ -637,11 +631,11 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
 
     let mut make_indirect = vec![];
     for (name, index) in raw_data.code_symbol_map.iter() {
-        let func = module.funcs.get(ids[*index as usize]);
+        let func = module.funcs.get(ids[*index]);
 
         if let FunctionKind::Local(_local) = &func.kind {
             if !already_exported.contains(*name) && !name_is_bindgen_symbol(name) {
-                module.exports.add(*name, func.id());
+                module.exports.add(name, func.id());
                 already_exported.insert(name.to_string());
             }
 
@@ -821,47 +815,47 @@ fn parse_module_with_ids(
     Ok((module, ids, fns_to_ids))
 }
 
-#[test]
-fn compare_bindgen_sections() {
-    let bytes = include_bytes!("/Users/jonathankelley/Development/dioxus/target/wasm32-unknown-unknown/wasm-dev/fullstack-hello-world-example.wasm");
-    let (module, ids, _fns_to_ids) = parse_module_with_ids(bytes).unwrap();
-    let (sect, section) = module
-        .customs
-        .iter()
-        .find(|(id, f)| f.name() == "__wasm_bindgen_unstable")
-        .unwrap();
-    let data = section.data(&Default::default());
+// #[test]
+// fn compare_bindgen_sections() {
+//     let bytes = include_bytes!("/Users/jonathankelley/Development/dioxus/target/wasm32-unknown-unknown/wasm-dev/fullstack-hello-world-example.wasm");
+//     let (module, ids, _fns_to_ids) = parse_module_with_ids(bytes).unwrap();
+//     let (sect, section) = module
+//         .customs
+//         .iter()
+//         .find(|(id, f)| f.name() == "__wasm_bindgen_unstable")
+//         .unwrap();
+//     let data = section.data(&Default::default());
 
-    let syms = parse_bytes_to_data_segment(bytes).unwrap();
-    for s in syms.symbols.iter() {
-        match s {
-            SymbolInfo::Func { flags, index, name } => {
-                if let Some(name) = name {
-                    if name_is_bindgen_symbol(name) {
-                        println!("func: {name:?} -> {index:?}");
-                    }
-                }
-            }
-            SymbolInfo::Data {
-                flags,
-                name,
-                symbol,
-            } => {
-                if name.contains("_GENERATED") {
-                    let offset = symbol.unwrap().offset;
-                    println!("[{offset}]   Name: {name:?} -> {symbol:?}");
-                }
+//     let syms = parse_bytes_to_data_segment(bytes).unwrap();
+//     for s in syms.symbols.iter() {
+//         match s {
+//             SymbolInfo::Func { flags, index, name } => {
+//                 if let Some(name) = name {
+//                     if name_is_bindgen_symbol(name) {
+//                         println!("func: {name:?} -> {index:?}");
+//                     }
+//                 }
+//             }
+//             SymbolInfo::Data {
+//                 flags,
+//                 name,
+//                 symbol,
+//             } => {
+//                 if name.contains("_GENERATED") {
+//                     let offset = symbol.unwrap().offset;
+//                     println!("[{offset}]   Name: {name:?} -> {symbol:?}");
+//                 }
 
-                // println!()
-            }
-            SymbolInfo::Global { flags, index, name } => {}
-            SymbolInfo::Section { flags, section } => {
-                println!("Section: {section:?} with flags {flags:?}");
-            }
-            SymbolInfo::Event { flags, index, name } => {}
-            SymbolInfo::Table { flags, index, name } => {}
-        }
-    }
+//                 // println!()
+//             }
+//             SymbolInfo::Global { flags, index, name } => {}
+//             SymbolInfo::Section { flags, section } => {
+//                 println!("Section: {section:?} with flags {flags:?}");
+//             }
+//             SymbolInfo::Event { flags, index, name } => {}
+//             SymbolInfo::Table { flags, index, name } => {}
+//         }
+//     }
 
-    // println!("Section: {sect:?} -> {data:?}");
-}
+//     // println!("Section: {sect:?} -> {data:?}");
+// }

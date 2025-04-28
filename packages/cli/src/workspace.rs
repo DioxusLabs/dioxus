@@ -5,9 +5,9 @@ use anyhow::Context;
 use ignore::gitignore::Gitignore;
 use krates::KrateDetails;
 use krates::{Cmd, Krates, NodeId};
+use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::{path::Path, sync::Mutex};
 use target_lexicon::Triple;
 use tokio::process::Command;
 
@@ -25,11 +25,11 @@ pub struct Workspace {
 impl Workspace {
     /// Load the workspace from the current directory. This is cached and will only be loaded once.
     pub async fn current() -> Result<Arc<Workspace>> {
-        static WS: Mutex<Option<Arc<Workspace>>> = Mutex::new(None);
+        static WS: tokio::sync::Mutex<Option<Arc<Workspace>>> = tokio::sync::Mutex::const_new(None);
 
         // Lock the workspace to prevent multiple threads from loading it at the same time
         // If loading the workspace failed the first time, it won't be set and therefore permeate an error.
-        let mut lock = WS.lock().ok().context("Workspace lock is poisoned!")?;
+        let mut lock = WS.lock().await;
         if let Some(ws) = lock.as_ref() {
             return Ok(ws.clone());
         }
@@ -280,7 +280,7 @@ impl Workspace {
     ///
     /// todo(jon): this is a bit expensive to build, so maybe we should cache it?
     pub fn workspace_gitignore(workspace_dir: &Path) -> Gitignore {
-        let mut ignore_builder = ignore::gitignore::GitignoreBuilder::new(&workspace_dir);
+        let mut ignore_builder = ignore::gitignore::GitignoreBuilder::new(workspace_dir);
         ignore_builder.add(workspace_dir.join(".gitignore"));
 
         // todo!()

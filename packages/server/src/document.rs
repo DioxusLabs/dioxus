@@ -11,9 +11,9 @@ use parking_lot::RwLock;
 
 static RENDERER: Lazy<RwLock<Renderer>> = Lazy::new(|| RwLock::new(Renderer::new()));
 
-pub fn reset_renderer() {
-    RENDERER.write().render_components.take();
-    RENDERER.write().template_cache.clear();
+/// Reset the static renderer to a fresh state, clearing its cache.
+pub(crate) fn reset_renderer() {
+    RENDERER.write().clear();
 }
 
 #[derive(Default)]

@@ -591,7 +591,7 @@ impl AppBuilder {
             //    but we want to ship `/wasm/lib.wasm`
             jump_table.lib = jump_table
                 .lib
-                .strip_prefix(&self.build.root_dir())
+                .strip_prefix(self.build.root_dir())
                 .unwrap()
                 .to_path_buf();
         }
@@ -606,7 +606,7 @@ impl AppBuilder {
             "Hot-patching: {} took {:?}ms",
             changed_file
                 .strip_prefix(std::env::current_dir().unwrap())
-                .unwrap_or_else(|_| changed_file.as_path())
+                .unwrap_or(changed_file.as_path())
                 .display(),
             SystemTime::now()
                 .duration_since(res.time_start)
@@ -632,9 +632,7 @@ impl AppBuilder {
     /// them know what to reload. It's not super important that this is robust since most clients will
     /// kick all stylsheets without necessarily checking the name.
     pub(crate) async fn hotreload_bundled_asset(&self, changed_file: &PathBuf) -> Option<PathBuf> {
-        let Some(artifacts) = self.artifacts.as_ref() else {
-            return None;
-        };
+        let artifacts = self.artifacts.as_ref()?;
 
         // Use the build dir if there's no runtime asset dir as the override. For the case of ios apps,
         // we won't actually be using the build dir.
@@ -692,7 +690,7 @@ impl AppBuilder {
 
         let res = tokio::process::Command::new(&self.build.workspace.android_tools()?.adb)
             .arg("push")
-            .arg(&changed_file)
+            .arg(changed_file)
             .arg(&target)
             .output()
             .await

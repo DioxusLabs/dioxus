@@ -145,7 +145,7 @@ impl ServeArgs {
                 let as_str = if let Some(p) = panic_err.downcast_ref::<String>() {
                     p.as_ref()
                 } else if let Some(p) = panic_err.downcast_ref::<&str>() {
-                    p.as_ref()
+                    p
                 } else {
                     "<unknown panic>"
                 };
