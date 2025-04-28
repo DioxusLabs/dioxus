@@ -40,6 +40,18 @@ pub fn use_signal<T: 'static>(f: impl FnOnce() -> T) -> Signal<T, UnsyncStorage>
     use_maybe_signal_sync(f)
 }
 
+#[doc = include_str!("../docs/rules_of_hooks.md")]
+#[doc = include_str!("../docs/moving_state_around.md")]
+#[doc(alias = "use_state")]
+#[track_caller]
+#[must_use]
+pub fn use_signal_with_label<Label: HookLabel, T: 'static>(
+	label: Label, 
+	f: impl FnOnce() -> T
+) -> Signal<T, UnsyncStorage> {
+    use_maybe_signal_sync_with_label(label, f)
+}
+
 /// Creates a new `Send + Sync`` Signal. Signals are a Copy state management solution with automatic dependency tracking.
 ///
 /// ```rust
@@ -79,6 +91,16 @@ pub fn use_signal_sync<T: Send + Sync + 'static>(f: impl FnOnce() -> T) -> Signa
     use_maybe_signal_sync(f)
 }
 
+#[doc(alias = "use_rw")]
+#[must_use]
+#[track_caller]
+pub fn use_signal_sync_with_label<Label: HookLabel, T: Send + Sync + 'static>(
+	label: Label, 
+	f: impl FnOnce() -> T
+) -> Signal<T, SyncStorage> {
+    use_maybe_signal_sync(f)
+}
+
 #[must_use]
 #[track_caller]
 fn use_maybe_signal_sync<T: 'static, U: Storage<SignalData<T>>>(
@@ -92,4 +114,20 @@ fn use_maybe_signal_sync<T: 'static, U: Storage<SignalData<T>>>(
     // use_before_render(move || signal.unsubscribe(current_scope_id().unwrap()));
 
     use_hook(|| Signal::new_with_caller(f(), caller))
+}
+
+#[must_use]
+#[track_caller]
+fn use_maybe_signal_sync_with_label<Label: HookLabel, T: 'static, U: Storage<SignalData<T>>>(
+	label: Label,
+    f: impl FnOnce() -> T,
+) -> Signal<T, U> {
+    let caller = std::panic::Location::caller();
+
+    // todo: (jon)
+    // By default, we want to unsubscribe the current component from the signal on every render
+    // any calls to .read() in the body will re-subscribe the component to the signal
+    // use_before_render(move || signal.unsubscribe(current_scope_id().unwrap()));
+
+    use_hook_with_label(label, || Signal::new_with_caller(f(), caller))
 }
