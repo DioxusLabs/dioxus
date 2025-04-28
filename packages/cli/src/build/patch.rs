@@ -87,25 +87,21 @@ pub fn create_jump_table(original: &Path, patch: &Path, triple: &Triple) -> Resu
         }
     }
 
-    // on windows there is no symbol so we leave the old address as 0
-    // on wasm there is no ASLR so we leave the old address as 0
-    let mut new_base_address = 0;
-    match triple.operating_system {
-        OperatingSystem::Darwin(_)
-        | OperatingSystem::Linux
-        | OperatingSystem::MacOSX(_)
-        | OperatingSystem::IOS(_)
-        | OperatingSystem::Windows => {
-            let options = ["_main", "main"];
-            for option in options {
-                if old_name_to_addr.contains_key(option) {
-                    new_base_address = *new_name_to_addr.get(option).unwrap();
-                    break;
-                }
-            }
+    let new_base_address = match triple.operating_system {
+        // The symbol in the symtab is called "_main" but in the dysymtab it is called "main"
+        OperatingSystem::MacOSX(_) | OperatingSystem::Darwin(_) | OperatingSystem::IOS(_) => {
+            *new_name_to_addr.get("_main").unwrap()
         }
-        _ => {}
-    }
+
+        // No distincation between the two on these platforms
+        OperatingSystem::Freebsd
+        | OperatingSystem::Openbsd
+        | OperatingSystem::Linux
+        | OperatingSystem::Windows => *new_name_to_addr.get("main").unwrap(),
+
+        // On wasm, it doesn't matter what the address is since we don't use ASLR
+        _ => 0,
+    };
 
     let aslr_reference = *old_name_to_addr.get("_aslr_reference").unwrap_or_else(|| {
         old_name_to_addr
