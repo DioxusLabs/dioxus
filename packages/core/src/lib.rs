@@ -105,7 +105,7 @@ pub mod prelude {
         OptionStringFromMarker, Properties, ReactiveContext, RenderError, Runtime, RuntimeGuard,
         ScopeId, ScopeState, SuperFrom, SuperInto, SuspendedFuture, SuspenseBoundary,
         SuspenseBoundaryProps, SuspenseContext, SuspenseExtension, Task, Template,
-        TemplateAttribute, TemplateNode, VNode, VNodeInner, VirtualDom,
+        TemplateAttribute, TemplateNode, VNode, VNodeInner, VirtualDom, HookLabel,
     };
 }
 
