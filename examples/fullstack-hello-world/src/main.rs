@@ -4,50 +4,46 @@
 //! dx serve --platform web
 //! ```
 
+#![allow(non_snake_case, unused)]
 use dioxus::prelude::*;
+use serde::{Deserialize, Serialize};
+
+fn app() -> Element {
+    let mut count = use_signal(|| 0);
+    let mut text = use_signal(|| "...".to_string());
+    let server_future = use_server_future(get_server_data)?;
+
+    rsx! {
+        document::Link { href: asset!("/assets/hello.css"), rel: "stylesheet" }
+        h1 { "High-Five counter: {count}" }
+        button { onclick: move |_| count += 1, "Up high!" }
+        button { onclick: move |_| count -= 1, "Down low!" }
+        button {
+            onclick: move |_| async move {
+                if let Ok(data) = get_server_data().await {
+                    println!("Client received: {}", data);
+                    text.set(data.clone());
+                    post_server_data(data).await.unwrap();
+                }
+            },
+            "Run a server function!"
+        }
+        "Server said: {text}"
+    }
+}
+
+#[server]
+async fn post_server_data(data: String) -> Result<(), ServerFnError> {
+    println!("Server received: {}", data);
+
+    Ok(())
+}
+
+#[server]
+async fn get_server_data() -> Result<String, ServerFnError> {
+    Ok(reqwest::get("https://httpbin.org/ip").await?.text().await?)
+}
 
 fn main() {
     dioxus::launch(app);
-}
-
-static CSS: Asset = asset!("/assets/hello.css");
-
-fn app() -> Element {
-    let mut text = use_signal(|| "make a request!".to_string());
-
-    rsx! {
-        h1 { "Hot patch serverfns!" }
-        link { rel: "stylesheet", href: CSS }
-        button {
-            onclick: move |_| async move {
-                text.set(do_server_action1().await.unwrap());
-            },
-            "Request from the server 1"
-        }
-        button {
-            onclick: move |_| async move {
-                text.set(do_server_action2().await.unwrap());
-            },
-            "Request from the server 2"
-        }
-        p { "server says: {text}" }
-        Child { idx: 1 }
-    }
-}
-
-#[component]
-fn Child(idx: i32) -> Element {
-    rsx! {
-        div { "hi -> {idx}" }
-    }
-}
-
-#[server]
-async fn do_server_action1() -> Result<String, ServerFnError> {
-    Ok("hello from the 123123123server!!".to_string())
-}
-
-#[server]
-async fn do_server_action2() -> Result<String, ServerFnError> {
-    Ok("server action 3123123".to_string())
 }

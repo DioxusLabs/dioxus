@@ -1,4 +1,6 @@
-//! Run with:
+//! Simple single-page-app setup.
+//!
+//!  Run with:
 //!
 //! ```sh
 //! dx serve --platform web
@@ -14,20 +16,12 @@ fn app() -> Element {
     let mut t = use_signal(|| 0);
 
     rsx! {
-        h1 { "Hot patch serverfns!!!!!" }
-        h3 { "Set your favorite color" }
+        h1 { "Set your favorite color" }
         button { onclick: move |_| t += 1, "Click me: {t}" }
         div {
             EvalIt { color: "white" }
             EvalIt { color: "red" }
             EvalIt { color: "yellow" }
-            EvalIt { color: "cyan" }
-            EvalIt { color: "purple" }
-            EvalIt { color: "black" }
-            EvalIt { color: "blue" }
-            EvalIt { color: "green" }
-            EvalIt { color: "magenta" }
-            EvalIt { color: "orange" }
         }
     }
 }
