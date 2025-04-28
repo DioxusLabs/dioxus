@@ -69,6 +69,7 @@ pub(crate) mod innerlude {
     pub use crate::suspense::*;
     pub use crate::tasks::*;
     pub use crate::virtual_dom::*;
+	pub use crate::label::*;
 
     /// An [`Element`] is a possibly-none [`VNode`] created by calling `render` on [`ScopeId`] or [`ScopeState`].
     ///
@@ -85,7 +86,7 @@ pub use crate::innerlude::{
     Element, ElementId, Event, Fragment, HasAttributes, IntoDynNode, LaunchConfig, MarkerWrapper,
     Mutation, Mutations, NoOpMutations, Ok, Properties, Result, Runtime, ScopeId, ScopeState,
     SpawnIfAsync, Task, Template, TemplateAttribute, TemplateNode, VComponent, VNode, VNodeInner,
-    VPlaceholder, VText, VirtualDom, WriteMutations,
+    VPlaceholder, VText, VirtualDom, WriteMutations, HookLabel,
 };
 
 /// The purpose of this module is to alleviate imports of many common types
