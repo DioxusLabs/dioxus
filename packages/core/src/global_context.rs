@@ -1,6 +1,6 @@
 use crate::prelude::SuspenseContext;
 use crate::runtime::RuntimeError;
-use crate::{innerlude::SuspendedFuture, runtime::Runtime, CapturedError, Element, ScopeId, Task};
+use crate::{innerlude::{SuspendedFuture, HookLabel}, runtime::Runtime, CapturedError, Element, ScopeId, Task};
 use std::future::Future;
 use std::sync::Arc;
 
@@ -308,6 +308,12 @@ pub fn remove_future(id: Task) {
 #[track_caller]
 pub fn use_hook<State: Clone + 'static>(initializer: impl FnOnce() -> State) -> State {
     Runtime::with_current_scope(|cx| cx.use_hook(initializer)).unwrap()
+}
+
+// Does track_caller conflict with using hooks in loops?
+#[track_caller]
+pub fn use_hook_with_label<Label: HookLabel, State: Clone + 'static>(label: Label, initializer: impl FnOnce() -> State) -> State {
+    Runtime::with_current_scope(|cx| cx.use_hook_with_label(label, initializer)).unwrap()
 }
 
 /// Get the current render since the inception of this component
