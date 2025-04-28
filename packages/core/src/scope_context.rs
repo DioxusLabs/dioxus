@@ -1,7 +1,7 @@
 use crate::runtime::RuntimeError;
 use crate::{innerlude::SchedulerMsg, Runtime, ScopeId, Task};
 use crate::{
-    innerlude::{throw_into, CapturedError},
+    innerlude::{throw_into, CapturedError, HookLabel},
     prelude::SuspenseContext,
 };
 use generational_box::{AnyStorage, Owner};
@@ -11,6 +11,7 @@ use std::{
     cell::{Cell, RefCell},
     future::Future,
     sync::Arc,
+	collections::HashMap,
 };
 
 pub(crate) enum ScopeStatus {
@@ -54,6 +55,8 @@ pub(crate) struct Scope {
     // Note: the order of the hook and context fields is important. The hooks field must be dropped before the contexts field in case a hook drop implementation tries to access a context.
     pub(crate) hooks: RefCell<Vec<Box<dyn Any>>>,
     pub(crate) hook_index: Cell<usize>,
+	/// Stores hooks by label
+	pub(crate) labelled_hooks: RefCell<HashMap<Box<dyn HookLabel>, Box<dyn Any>>>,
     pub(crate) shared_contexts: RefCell<Vec<Box<dyn Any>>>,
     pub(crate) spawned_tasks: RefCell<FxHashSet<Task>>,
     pub(crate) before_render: RefCell<Vec<Box<dyn FnMut()>>>,
@@ -83,6 +86,7 @@ impl Scope {
             spawned_tasks: RefCell::new(FxHashSet::default()),
             hooks: RefCell::new(vec![]),
             hook_index: Cell::new(0),
+			labelled_hooks: RefCell::new(HashMap::new()),
             before_render: RefCell::new(vec![]),
             after_render: RefCell::new(vec![]),
             status: RefCell::new(ScopeStatus::Unmounted {
@@ -456,6 +460,36 @@ impl Scope {
         }
 
         self.use_hook_inner::<State>(hooks, cur_hook)
+    }
+
+	// TODO: Copy docs from use_hook and also add examples with non-uniform control flow
+    pub fn use_hook_with_label<Label: HookLabel, State: Clone + 'static>(&self, label: Label, initializer: impl FnOnce() -> State) -> State {
+		let mut hooks = self.labelled_hooks.try_borrow_mut()
+			.expect("The hook list is already borrowed: This error is likely caused by trying to use a hook inside a hook which violates the rules of hooks.");
+
+		// TODO: use_hook uses Runtime::while_not_rendering to push onto list,
+		// Is this necessary here
+		if let Some(cur_hook) = hooks.get(&label as &dyn HookLabel) {
+			cur_hook.as_ref()
+				.downcast_ref::<State>().cloned()
+				.expect(
+					// TODO: Fix message 
+					r#"
+					Unable to retrieve the hook that was initialized at this index.
+					Consult the `rules of hooks` to understand how to use hooks properly.
+
+					The type of the hook stored with this label does not match the requested type.
+					You likely used the hook in a conditional. Ensure you always use the same type 
+					when using a hook with a particular label.
+
+					Help: Run `dx check` to look for check for some common hook errors.
+					"#,
+				)
+		} else {
+			let value = initializer();
+			hooks.insert(Box::new(label), Box::new(value.clone()));
+			value
+		}
     }
 
     // The interior version that gets monoorphized by the `State` type but not the `initializer` type.
