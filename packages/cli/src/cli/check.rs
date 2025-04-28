@@ -124,7 +124,7 @@ async fn check_files_and_report(files_to_check: Vec<PathBuf>) -> Result<()> {
     }
 }
 
-fn collect_rs_files(folder: &Path, files: &mut Vec<PathBuf>) {
+pub(crate) fn collect_rs_files(folder: &Path, files: &mut Vec<PathBuf>) {
     let dir = WalkDir::new(folder).follow_links(true).into_iter();
     for entry in dir.flatten() {
         if entry.path().extension() == Some("rs".as_ref()) {

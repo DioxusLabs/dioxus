@@ -1,5 +1,5 @@
-use super::*;
-use crate::{metadata::collect_rs_files, DioxusCrate, Workspace};
+use super::{check::collect_rs_files, *};
+use crate::Workspace;
 use anyhow::Context;
 use dioxus_autofmt::{IndentOptions, IndentType};
 use rayon::prelude::*;
@@ -172,7 +172,8 @@ fn autoformat_project(
     format_rust_code: bool,
     dir: impl AsRef<Path>,
 ) -> Result<()> {
-    let files_to_format = collect_rs_files(dir);
+    let mut files_to_format = vec![];
+    collect_rs_files(dir.as_ref(), &mut files_to_format);
 
     if files_to_format.is_empty() {
         return Ok(());
