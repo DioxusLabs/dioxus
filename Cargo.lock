@@ -3745,6 +3745,7 @@ dependencies = [
  "dioxus-core-types",
  "dioxus-html",
  "dioxus-ssr",
+ "dyn-hash",
  "futures-channel",
  "futures-util",
  "generational-box",
@@ -4623,6 +4624,12 @@ name = "dunce"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "92773504d58c093f6de2459af4af33faa518c13451eb8f2b5698ed3d36e7c813"
+
+[[package]]
+name = "dyn-hash"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "15401da73a9ed8c80e3b2d4dc05fe10e7b72d7243b9f614e516a44fa99986e88"
 
 [[package]]
 name = "eax"

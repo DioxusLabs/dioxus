@@ -29,6 +29,7 @@ mod tasks;
 mod virtual_dom;
 
 mod hotreload_utils;
+mod label;
 
 /// Items exported from this module are used in macros and should not be used directly.
 #[doc(hidden)]
