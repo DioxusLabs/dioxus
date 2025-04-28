@@ -86,7 +86,7 @@ pub use crate::innerlude::{
     Element, ElementId, Event, Fragment, HasAttributes, IntoDynNode, LaunchConfig, MarkerWrapper,
     Mutation, Mutations, NoOpMutations, Ok, Properties, Result, Runtime, ScopeId, ScopeState,
     SpawnIfAsync, Task, Template, TemplateAttribute, TemplateNode, VComponent, VNode, VNodeInner,
-    VPlaceholder, VText, VirtualDom, WriteMutations, HookLabel,
+    VPlaceholder, VText, VirtualDom, WriteMutations, HookLabel, use_hook_with_label,
 };
 
 /// The purpose of this module is to alleviate imports of many common types
@@ -99,7 +99,7 @@ pub mod prelude {
         provide_context, provide_error_boundary, provide_root_context, queue_effect, remove_future,
         schedule_update, schedule_update_any, spawn, spawn_forever, spawn_isomorphic, suspend,
         suspense_context, throw_error, try_consume_context, use_after_render, use_before_render,
-        use_drop, use_hook, use_hook_with_cleanup, with_owner, AnyValue, Attribute, Callback,
+        use_drop, use_hook, use_hook_with_label, use_hook_with_cleanup, with_owner, AnyValue, Attribute, Callback,
         Component, ComponentFunction, Context, Element, ErrorBoundary, ErrorContext, Event,
         EventHandler, Fragment, HasAttributes, IntoAttributeValue, IntoDynNode,
         OptionStringFromMarker, Properties, ReactiveContext, RenderError, Runtime, RuntimeGuard,
