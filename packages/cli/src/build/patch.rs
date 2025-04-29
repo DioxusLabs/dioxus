@@ -20,8 +20,8 @@ use subsecond_types::*;
 use target_lexicon::{OperatingSystem, Triple};
 use thiserror::Error;
 use walrus::{
-    ConstExpr, ElementItems, ElementKind, ExportItem, FunctionId, FunctionKind, ImportKind, Module,
-    ModuleConfig,
+    ir::Visitor, ConstExpr, ElementItems, ElementKind, ExportItem, FunctionId, FunctionKind,
+    ImportKind, Module, ModuleConfig,
 };
 use wasmparser::{
     BinaryReader, BinaryReaderError, Linking, LinkingSectionReader, Payload, SymbolInfo,
@@ -135,24 +135,29 @@ fn create_wasm_jump_table(original: &Path, patch: &Path) -> Result<JumpTable> {
     let old_bytes = fs::read(original).context("Could not read original file")?;
     let new_bytes = fs::read(patch).context("Could not read patch file")?;
 
-    let old = walrus::Module::from_buffer(&old_bytes)?;
-    let mut new = walrus::Module::from_buffer(&new_bytes)?;
+    let ParsedModule {
+        module: old,
+        ids: old_ids,
+        fns_to_ids: old_fns_to_ids,
+        symbols: old_raw_data,
+    } = parse_module_with_ids(&old_bytes)?;
+    let ParsedModule {
+        module: mut new,
+        ids: new_ids,
+        fns_to_ids: new_fns_to_ids,
+        symbols: new_raw_data,
+    } = parse_module_with_ids(&new_bytes)?;
 
-    let old_raw_data = parse_bytes_to_data_segment(&old_bytes)
-        .context("Failed to parse old bytes data segment")?;
-    let new_raw_data = parse_bytes_to_data_segment(&new_bytes)
-        .context("Failed to parse new bytes data segment")?;
-
-    let name_to_ifunc_old = collect_func_ifuncs(&old);
+    let name_to_ifunc_old = collect_func_ifuncs(&old, &old_raw_data, &old_ids);
 
     if old_raw_data.symbols.is_empty() {
         tracing::warn!("No debug symbols in the WASM output. Make sure to set `opt-level = 0` for hotpatching to work properly.");
         return Err(PatchError::MissingSymbols { symbols: vec![] });
     }
 
-    // Do a quick scan to see if the symbols in the wasm-bindgen table have changed at all
-    // We currently don't support updating them since we'd somehow need to merge the glue code together
-    ensure_wasm_bindgen_unchanged(&old, &new, &old_raw_data, &new_raw_data)?;
+    // // Do a quick scan to see if the symbols in the wasm-bindgen table have changed at all
+    // // We currently don't support updating them since we'd somehow need to merge the glue code together
+    // ensure_wasm_bindgen_unchanged(&old, &new, &old_raw_data, &new_raw_data)?;
 
     let mut mems = vec![];
     let mut funcs = vec![];
@@ -287,7 +292,7 @@ fn create_wasm_jump_table(original: &Path, patch: &Path) -> Result<JumpTable> {
     //
     // The ifunc_count will be passed to the dynamic loader so it can allocate the right amount of space
     // in the indirect function table when loading the patch.
-    let name_to_ifunc_new = collect_func_ifuncs(&new);
+    let name_to_ifunc_new = collect_func_ifuncs(&new, &new_raw_data, &new_ids);
     let ifunc_count = name_to_ifunc_new.len() as u64;
     let mut map = AddressMap::default();
     for (name, idx) in name_to_ifunc_new.iter() {
@@ -331,8 +336,8 @@ fn ensure_wasm_bindgen_unchanged(
 
 fn collect_func_ifuncs<'a>(
     m: &'a Module,
-    raw: &RawDataSection<'a>,
-    ids_to_fns: &Vec<FunctionId>,
+    raw: &'a RawDataSection<'a>,
+    ids_to_fns: &[FunctionId],
 ) -> HashMap<&'a str, i32> {
     let mut func_to_offset = HashMap::new();
 
@@ -367,18 +372,41 @@ fn collect_func_ifuncs<'a>(
         }
     }
 
-    let mut offsets = HashMap::new();
-
+    // The actual symbol table has multiple symbols mapping to the same function.
+    //
+    // When we read the "name" field of functions, that might not actually be all of the names it
+    // is known by. IE the GOT.func entries will use different names to reference the same actual function.
+    //
+    // We need to do some work to create a mapping between every function name and the real function
+    // it corresponds to.
+    let mut duplicated_to_real = HashMap::new();
     for sym in raw.symbols.iter() {
         if let SymbolInfo::Func { index, name, .. } = sym {
-            let id = ids_to_fns[*index as usize];
-            let Some(offset) = func_to_offset.get(&id) else {
-                continue;
-            };
-            let Some(name) = name else {
-                continue;
-            };
-            offsets.insert(*name, *offset as i32);
+            if let Some(real_name) = name.as_deref() {
+                if let Some(real) = ids_to_fns.get(*index as usize) {
+                    duplicated_to_real.insert(real_name, real);
+
+                    // Weirdly enough, the name of this func might
+                    let func = m.funcs.get(*real);
+                    if let Some(name) = func.name.as_deref() {
+                        if real_name != name {
+                            tracing::error!(
+                                "Duplicate name was incorrect found: {real_name} -> {name}"
+                            );
+                        }
+
+                        duplicated_to_real.insert(name, real);
+                    }
+                }
+            }
+        }
+    }
+
+    // Now, we need to go through all the symbols and find the real offset they have
+    let mut offsets = HashMap::new();
+    for (dupename, real_id) in duplicated_to_real {
+        if let Some(offset) = func_to_offset.get(real_id) {
+            offsets.insert(dupename, *offset as i32);
         }
     }
 
@@ -633,7 +661,7 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
     let mut already_exported = module
         .exports
         .iter()
-        .filter(|f| matches!(f.item, ExportItem::Function(_)))
+        // .filter(|f| matches!(f.item, ExportItem::Function(_)))
         .map(|exp| exp.name.clone())
         .collect::<HashSet<_>>();
 
@@ -641,13 +669,74 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
     for (name, index) in symbols.code_symbol_map.iter() {
         let func = module.funcs.get(ids[*index]);
 
+        if *name == "_ZN4core3fmt3num3imp54_$LT$impl$u20$core..fmt..Display$u20$for$u20$usize$GT$3fmt17h6d9dbc09b6dc47c8E" {
+        // if *name == "_ZN42_$LT$$RF$T$u20$as$u20$core..fmt..Debug$GT$3fmt17h8dcb6eecee078060E" {
+            // if name.contains("3fmt17h8dcb6eecee07806") {
+            tracing::debug!("Found a special function: {name}");
+            tracing::debug!("Kind: {:?}", func.kind);
+            tracing::debug!("already exported? {:?}", already_exported.contains(*name));
+            tracing::debug!("ifuncs contains it?: {:?}", ifuncs.get(&func.id()));
+        }
+
+        if name_is_bindgen_symbol(name) {
+            /// The __wbindgen_describe_ functions also reference funcs like:
+            /// _ZN86_$LT$dioxus_web..document..JSOwner$u20$as$u20$wasm_bindgen..describe..WasmDescribe$GT$8describe17ha9b39368d518c1f9E
+            ///
+            /// These can be found by walking the instructions, so we build a Visitor
+            /// ... todo: we might not need to do this since it seems that it's not reliable enough
+            #[derive(Default)]
+            struct AccAllDescribes {
+                funcs: HashSet<FunctionId>,
+            }
+
+            impl<'a> Visitor<'a> for AccAllDescribes {
+                fn visit_function_id(&mut self, function: &walrus::FunctionId) {
+                    self.funcs.insert(*function);
+                }
+            }
+
+            // let mut acc = AccAllDescribes::default();
+            // for func in module.funcs.iter() {
+            //     let Some(name) = func.name.as_ref() else {
+            //         continue;
+            //     };
+
+            //     // Only deal with the __wbindgen_describe_ functions
+            //     if !name_is_bindgen_symbol(name) {
+            //         continue;
+            //     }
+
+            //     // They call other functions, so we need to find those too and make sure not to mark them as exported
+            //     if let FunctionKind::Local(func) = &module.funcs.get(func.id()).kind {
+            //         walrus::ir::dfs_in_order(&mut acc, &func, func.entry_block());
+            //     }
+
+            //     acc.funcs.insert(func.id());
+            // }
+
+            if let FunctionKind::Local(local) = &func.kind {
+                let mut accer = AccAllDescribes::default();
+                walrus::ir::dfs_in_order(&mut accer, &local, local.entry_block());
+                for func in accer.funcs {
+                    if let Some(new_name) = module.funcs.get(func).name.as_deref() {
+                        if !name_is_bindgen_symbol(new_name) {
+                            tracing::warn!("references real {name} -> {new_name}");
+                            //     // make_indirect.push(func);
+                        }
+                    }
+                }
+            }
+
+            continue;
+        }
+
         if let FunctionKind::Local(_local) = &func.kind {
             if !already_exported.contains(*name) && !name_is_bindgen_symbol(name) {
                 module.exports.add(name, func.id());
                 already_exported.insert(name.to_string());
             }
 
-            if !ifuncs.contains(&func.id()) && !name_is_bindgen_symbol(name) {
+            if !ifuncs.contains(&func.id()) && !name_is_describe_symbol(name) {
                 make_indirect.push(func.id());
             }
         }
@@ -656,11 +745,18 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
     tracing::trace!("Hoisting {} functions", make_indirect.len());
     let seg = module.elements.get_mut(ifunc_table_initializer);
     let make_indirect_count = make_indirect.len() as u64;
-    if let ElementItems::Functions(ids) = &mut seg.items {
-        for func in make_indirect {
-            ids.push(func);
+    match &mut seg.items {
+        ElementItems::Functions(ids) => {
+            for func in make_indirect {
+                ids.push(func);
+            }
         }
-    };
+        _ => {
+            return Err(PatchError::InvalidModule(
+                "Expected ifunc table to be a function table".into(),
+            ));
+        }
+    }
 
     if let ElementKind::Active { table, .. } = seg.kind {
         let table = module.tables.get_mut(table);
@@ -673,13 +769,23 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
     Ok(module.emit_wasm())
 }
 
-fn name_is_bindgen_symbol(name: &str) -> bool {
-    name.starts_with("__wbindgen_describe_")
+fn name_is_describe_symbol(name: &str) -> bool {
+    name.contains("__wbindgen_describe")
         || name.contains("wasm_bindgen..describe..WasmDescribe")
         || name.contains("wasm_bindgen..closure..WasmClosure$GT$8describe")
         || name.contains("wasm_bindgen7closure16Closure$LT$T$GT$4wrap8describe")
         || name.contains("__wbindgen_describe_closure")
         || name.contains("__wbindgen_externref_xform")
+}
+
+fn name_is_bindgen_symbol(name: &str) -> bool {
+    name.contains("__wbindgen_describe")
+        || name.contains("wasm_bindgen..describe..WasmDescribe")
+        || name.contains("wasm_bindgen..closure..WasmClosure$GT$8describe")
+        || name.contains("wasm_bindgen7closure16Closure$LT$T$GT$4wrap8describe")
+        || name.contains("__wbindgen_describe_closure")
+        || name.contains("__wbindgen_externref_xform")
+        || name.contains("wasm_bindgen4__rt19link_mem_intrinsics")
 }
 
 /// Manually parse the data section from a wasm module
