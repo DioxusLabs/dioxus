@@ -376,7 +376,6 @@ incremental = true
 [profile.wasm-dev]
 inherits = "dev"
 opt-level = 1
-# debug = true
 
 [profile.server-dev]
 inherits = "dev"
@@ -413,12 +412,12 @@ wasm-split = { workspace = true }
 dioxus = { workspace = true, features = ["router"] }
 dioxus-ssr = { workspace = true }
 futures-util = { workspace = true }
+separator = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 rand = { workspace = true, features = ["small_rng"] }
 form_urlencoded = "1.2.0"
 async-std = "1.12.0"
-separator = { workspace = true }
 web-time = "1.1.0"
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]

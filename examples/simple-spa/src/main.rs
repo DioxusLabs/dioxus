@@ -22,6 +22,10 @@ fn app() -> Element {
             EvalIt { color: "white" }
             EvalIt { color: "red" }
             EvalIt { color: "yellow" }
+            EvalIt { color: "yellow" }
+            EvalIt { color: "yellow" }
+            EvalIt { color: "yellow" }
+            EvalIt { color: "yellow" }
         }
     }
 }

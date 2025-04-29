@@ -27,6 +27,10 @@ fn app() -> Element {
                 }
             },
             "Run a server function!"
+            "Run a server function!"
+            "Run a server function!"
+            "Run a server function!"
+            "Run a server function!"
         }
         "Server said: {text}"
     }

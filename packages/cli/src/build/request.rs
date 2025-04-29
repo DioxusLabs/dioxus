@@ -1004,18 +1004,18 @@ session_cache_dir: {}"#,
             "Keeping bundled output paths: {:#?}",
             keep_bundled_output_paths
         );
-        for item in WalkDir::new(&asset_dir).into_iter().flatten() {
-            // If this asset is in the manifest, we don't need to remove it
-            let canonicalized = dunce::canonicalize(item.path())?;
-            if !keep_bundled_output_paths.contains(canonicalized.as_path()) {
-                // Remove empty dirs, remove files not in the manifest
-                if item.file_type().is_dir() && item.path().read_dir()?.next().is_none() {
-                    std::fs::remove_dir(item.path())?;
-                } else {
-                    std::fs::remove_file(item.path())?;
-                }
-            }
-        }
+        // for item in WalkDir::new(&asset_dir).into_iter().flatten() {
+        //     // If this asset is in the manifest, we don't need to remove it
+        //     let canonicalized = dunce::canonicalize(item.path())?;
+        //     if !keep_bundled_output_paths.contains(canonicalized.as_path()) {
+        //         // Remove empty dirs, remove files not in the manifest
+        //         if item.file_type().is_dir() && item.path().read_dir()?.next().is_none() {
+        //             std::fs::remove_dir(item.path())?;
+        //         } else {
+        //             std::fs::remove_file(item.path())?;
+        //         }
+        //     }
+        // }
 
         // todo(jon): we also want to eventually include options for each asset's optimization and compression, which we currently aren't
         let mut assets_to_transfer = vec![];
