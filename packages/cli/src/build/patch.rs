@@ -329,12 +329,15 @@ fn ensure_wasm_bindgen_unchanged(
     Ok(())
 }
 
-fn collect_func_ifuncs(m: &Module) -> HashMap<&str, i32> {
-    let mut offsets = HashMap::new();
+fn collect_func_ifuncs<'a>(
+    m: &'a Module,
+    raw: &RawDataSection<'a>,
+    ids_to_fns: &Vec<FunctionId>,
+) -> HashMap<&'a str, i32> {
+    let mut func_to_offset = HashMap::new();
 
     for el in m.elements.iter() {
         let ElementKind::Active { offset, .. } = &el.kind else {
-            tracing::info!("Skipping section: {:?} -> {:?}", el.name, el.kind);
             continue;
         };
 
@@ -355,15 +358,27 @@ fn collect_func_ifuncs(m: &Module) -> HashMap<&str, i32> {
         match &el.items {
             ElementItems::Functions(ids) => {
                 for (idx, id) in ids.iter().enumerate() {
-                    let func = m.funcs.get(*id);
-                    if let Some(name) = func.name.as_deref() {
-                        offsets.insert(name, offset + idx as i32);
-                    }
+                    func_to_offset.insert(*id, offset + idx as i32);
                 }
             }
             ElementItems::Expressions(_ref_type, _const_exprs) => {
                 // todo - do we need to handle these?
             }
+        }
+    }
+
+    let mut offsets = HashMap::new();
+
+    for sym in raw.symbols.iter() {
+        if let SymbolInfo::Func { index, name, .. } = sym {
+            let id = ids_to_fns[*index as usize];
+            let Some(offset) = func_to_offset.get(&id) else {
+                continue;
+            };
+            let Some(name) = name else {
+                continue;
+            };
+            offsets.insert(*name, *offset as i32);
         }
     }
 
@@ -472,11 +487,6 @@ pub fn create_undefined_symbol_stub(
                     .get("aslr_reference")
                     .expect("failed to find aslr_reference")
             });
-            tracing::debug!(
-                "ASLR reference a {:?} -> b: {:#?}",
-                aslr_reference,
-                aslr_ref.address()
-            );
             aslr_reference - aslr_ref.address()
         }
     };
@@ -593,7 +603,12 @@ pub fn create_undefined_symbol_stub(
 ///
 /// It also moves all functions and memories to be callable indirectly.
 pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
-    let (mut module, ids, _fns_to_ids) = parse_module_with_ids(bytes)?;
+    let ParsedModule {
+        mut module,
+        ids,
+        symbols,
+        ..
+    } = parse_module_with_ids(bytes)?;
 
     // Due to monomorphizations, functions will get merged and multiple names will point to the same function.
     // Walrus loses this information, so we need to manually parse the names table to get the indices
@@ -601,8 +616,7 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
     //
     // Unfortunately, the indices it gives us ARE NOT VALID.
     // We need to work around it by using the FunctionId from the module as a link between the merged function names.
-    let raw_data = parse_bytes_to_data_segment(bytes)?;
-    let ifunc_map = collect_func_ifuncs(&module);
+    let ifunc_map = collect_func_ifuncs(&module, &symbols, &ids);
     let ifuncs = module
         .funcs
         .iter()
@@ -624,7 +638,7 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
         .collect::<HashSet<_>>();
 
     let mut make_indirect = vec![];
-    for (name, index) in raw_data.code_symbol_map.iter() {
+    for (name, index) in symbols.code_symbol_map.iter() {
         let func = module.funcs.get(ids[*index]);
 
         if let FunctionKind::Local(_local) = &func.kind {
@@ -777,11 +791,16 @@ struct DataSymbol {
     which_data_segment: usize,
 }
 
+struct ParsedModule<'a> {
+    module: Module,
+    ids: Vec<FunctionId>,
+    fns_to_ids: HashMap<FunctionId, usize>,
+    symbols: RawDataSection<'a>,
+}
+
 /// Parse a module and return the mapping of index to FunctionID.
 /// We'll use this mapping to remap ModuleIDs
-fn parse_module_with_ids(
-    bindgened: &[u8],
-) -> Result<(Module, Vec<FunctionId>, HashMap<FunctionId, usize>)> {
+fn parse_module_with_ids(bindgened: &[u8]) -> Result<ParsedModule> {
     let ids = Arc::new(RwLock::new(Vec::new()));
     let ids_ = ids.clone();
     let module = Module::from_buffer_with_config(
@@ -806,7 +825,14 @@ fn parse_module_with_ids(
         fns_to_ids.insert(*id, idx);
     }
 
-    Ok((module, ids, fns_to_ids))
+    let symbols = parse_bytes_to_data_segment(bindgened).context("Failed to parse data segment")?;
+
+    Ok(ParsedModule {
+        module,
+        ids,
+        fns_to_ids,
+        symbols,
+    })
 }
 
 // #[test]
