@@ -464,8 +464,10 @@ impl App {
             let Ok(position) = window.outer_position() else {
                 return;
             };
+            let position = position.to_logical(window.scale_factor());
 
             let size = window.outer_size();
+            let size = size.to_logical::<u32>(window.scale_factor());
 
             let x = position.x;
             let y = position.y;
@@ -475,7 +477,7 @@ impl App {
             //
             // https://github.com/tauri-apps/tao/issues/889
             let adjustment = match window.is_decorated() {
-                true if cfg!(target_os = "macos") => 56,
+                true if cfg!(target_os = "macos") => (56.0 / window.scale_factor()).round() as _,
                 _ => 0,
             };
 
@@ -523,14 +525,13 @@ impl App {
 
                 // Only set the outer position if it wasn't explicitly set
                 if explicit_window_position.is_none() {
-                    window.set_outer_position(tao::dpi::PhysicalPosition::new(
-                        position.0, position.1,
-                    ));
+                    window
+                        .set_outer_position(tao::dpi::LogicalPosition::new(position.0, position.1));
                 }
 
                 // Only set the inner size if it wasn't explicitly set
                 if explicit_inner_size.is_none() {
-                    window.set_inner_size(tao::dpi::PhysicalSize::new(size.0, size.1));
+                    window.set_inner_size(tao::dpi::LogicalSize::new(size.0, size.1));
                 }
             }
         }
