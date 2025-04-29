@@ -8,6 +8,7 @@ use std::io::Read;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+#[allow(unused)]
 pub(crate) type ContextProviders =
     Arc<Vec<Box<dyn Fn() -> Box<dyn std::any::Any> + Send + Sync + 'static>>>;
 
@@ -337,20 +338,24 @@ impl ServeConfigBuilder {
     }
 
     /// Build the ServeConfig. This may fail if the index.html file is not found.
+    ///
+    /// ## WASM compatibility
+    /// In the context of WASM the file system normally can't be read so this always requires
+    /// the `index_html` field to be set.
     pub fn build(self) -> Result<ServeConfig, UnableToLoadIndex> {
-        // The CLI always bundles static assets into the exe/public directory
-        let public_path = public_path();
-
-        let index_path = self
-            .index_path
-            .map(PathBuf::from)
-            .unwrap_or_else(|| public_path.join("index.html"));
-
         let root_id = self.root_id.unwrap_or("main");
 
         let index_html = match self.index_html {
             Some(index) => index,
-            None => load_index_path(index_path)?,
+            None => {
+                // The CLI always bundles static assets into the exe/public directory
+                let public_path = public_path();
+
+                let index_path = self
+                    .index_path
+                    .unwrap_or_else(|| public_path.join("index.html"));
+                load_index_path(index_path)?
+            }
         };
 
         let index = load_index_html(index_html, root_id);
@@ -382,6 +387,10 @@ impl TryInto<ServeConfig> for ServeConfigBuilder {
 
 /// Get the path to the public assets directory to serve static files from
 pub(crate) fn public_path() -> PathBuf {
+    if let Ok(path) = std::env::var("DIOXUS_PUBLIC_PATH") {
+        return PathBuf::from(path);
+    }
+
     // The CLI always bundles static assets into the exe/public directory
     std::env::current_exe()
         .expect("Failed to get current executable path")
@@ -483,6 +492,8 @@ pub enum StreamingMode {
 pub struct ServeConfig {
     pub(crate) index: IndexHtml,
     pub(crate) incremental: Option<dioxus_isrg::IncrementalRendererConfig>,
+    // This is used in the axum integration
+    #[allow(unused)]
     pub(crate) context_providers: ContextProviders,
     pub(crate) streaming_mode: StreamingMode,
 }
@@ -491,6 +502,7 @@ impl LaunchConfig for ServeConfig {}
 
 impl ServeConfig {
     /// Create a new ServeConfig
+    #[cfg(not(target_family = "wasm"))]
     pub fn new() -> Result<Self, UnableToLoadIndex> {
         ServeConfigBuilder::new().build()
     }

@@ -57,6 +57,7 @@ async fn main() {
         Commands::Serve(opts) => opts.serve().await,
         Commands::Bundle(opts) => opts.bundle().await,
         Commands::Run(opts) => opts.run().await,
+        Commands::BuildAssets(opts) => opts.run().await,
     };
 
     // Provide a structured output for third party tools that can consume the output of the CLI

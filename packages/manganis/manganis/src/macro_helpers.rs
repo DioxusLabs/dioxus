@@ -124,6 +124,38 @@ const fn generate_unique_path_with_byte_hash(
     macro_output_path
 }
 
+/// Construct the hash used by manganis and cli-opt to uniquely identify a asset based on its contents
+pub const fn hash_asset(asset_config: &AssetOptions, content_hash: u64) -> ConstStr {
+    let mut string = ConstStr::new("");
+
+    // Hash the contents along with the asset config to create a unique hash for the asset
+    // When this hash changes, the client needs to re-fetch the asset
+    let mut hasher = ConstHasher::new();
+    hasher = hasher.write(&content_hash.to_le_bytes());
+    hasher = hasher.hash_by_bytes(asset_config);
+    let hash = hasher.finish();
+
+    // Then add the hash in hex form
+    let hash_bytes = hash.to_le_bytes();
+    let mut i = 0;
+    while i < hash_bytes.len() {
+        let byte = hash_bytes[i];
+        let first = byte >> 4;
+        let second = byte & 0x0f;
+        const fn byte_to_char(byte: u8) -> char {
+            match char::from_digit(byte as u32, 16) {
+                Some(c) => c,
+                None => panic!("byte must be a valid digit"),
+            }
+        }
+        string = string.push(byte_to_char(first));
+        string = string.push(byte_to_char(second));
+        i += 1;
+    }
+
+    string
+}
+
 const fn bytes_equal(left: &[u8], right: &[u8]) -> bool {
     if left.len() != right.len() {
         return false;
@@ -171,7 +203,7 @@ fn test_unique_path() {
     let asset_config = AssetOptions::Unknown;
     let output_path =
         generate_unique_path(&input_path.to_string_lossy(), content_hash, &asset_config);
-    assert_eq!(output_path.as_str(), "test-c8c4cfad21cac262");
+    assert_eq!(output_path.as_str(), "test-8d6e32dc0b45f853");
 
     // Just changing the content hash should change the total hash
     let mut input_path = PathBuf::from("test");
@@ -181,7 +213,7 @@ fn test_unique_path() {
     let asset_config = AssetOptions::Unknown;
     let output_path =
         generate_unique_path(&input_path.to_string_lossy(), content_hash, &asset_config);
-    assert_eq!(output_path.as_str(), "test-7bced03789ff865c");
+    assert_eq!(output_path.as_str(), "test-40783366737abc4d");
 }
 
 /// Serialize an asset to a const buffer

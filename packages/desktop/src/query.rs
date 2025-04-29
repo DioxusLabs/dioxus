@@ -80,6 +80,7 @@ impl QueryEngine {
                     let promise = (new AsyncFunction("dioxus", {script:?}))(dioxus);
                     promise
                         .then((result)=>{{
+                            dioxus.close();
                             let returned_value = {{
                                 "method": "query",
                                 "params": {{
@@ -96,6 +97,7 @@ impl QueryEngine {
                         }})
                         .catch(err => post_error(`Error running JS: ${{err}}`));
                 }} catch (error) {{
+                    dioxus.close();
                     post_error(`Invalid JS: ${{error}}`);
                 }}
             }})();"#

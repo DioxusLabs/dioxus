@@ -11,7 +11,7 @@ keywords = ["web", "desktop", "mobile", "gui", "wasm"]
 
 [dependencies]
 dioxus-rsx = { workspace = true }
-proc-macro2 = { version = "1.0.6", features = ["span-locations"] }
+proc-macro2 = { workspace = true, features = ["span-locations"] }
 quote = { workspace = true }
 syn = { workspace = true, features = [
     "full",
@@ -19,11 +19,11 @@ syn = { workspace = true, features = [
     "visit",
     "visit-mut",
 ] }
-serde = { version = "1.0.136", features = ["derive"] }
+serde = { workspace = true, features = ["derive"] }
 prettyplease = { workspace = true }
 
 [dev-dependencies]
-pretty_assertions = "1.2.1"
+pretty_assertions = { workspace = true }
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]

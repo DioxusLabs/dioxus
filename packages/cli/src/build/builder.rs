@@ -108,7 +108,7 @@ impl Builder {
                                 self.expected_crates = *crate_count;
                             }
                         }
-                        BuildStage::InstallingTooling {} => {}
+                        BuildStage::InstallingTooling => {}
                         BuildStage::Compiling {
                             current,
                             total,
@@ -127,12 +127,12 @@ impl Builder {
                                 self.compile_start = Some(Instant::now());
                             }
                         }
-                        BuildStage::Bundling {} => {
+                        BuildStage::Bundling => {
                             self.complete_compile();
                             self.bundling_progress = 0.0;
                             self.bundle_start = Some(Instant::now());
                         }
-                        BuildStage::OptimizingWasm {} => {}
+                        BuildStage::OptimizingWasm => {}
                         BuildStage::CopyingAssets { current, total, .. } => {
                             self.bundling_progress = *current as f64 / *total as f64;
                         }
@@ -153,7 +153,7 @@ impl Builder {
                             self.expected_crates = 1;
                             self.bundling_progress = 0.0;
                         }
-                        BuildStage::RunningBindgen {} => {}
+                        BuildStage::RunningBindgen => {}
                         _ => {}
                     }
                 }

@@ -81,6 +81,8 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
     if should_hydrate {
         #[cfg(feature = "hydrate")]
         {
+            use dioxus_fullstack_protocol::HydrationContext;
+
             websys_dom.skip_mutations = true;
             // Get the initial hydration data from the client
             #[wasm_bindgen::prelude::wasm_bindgen(inline_js = r#"
@@ -113,12 +115,12 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
             let debug_locations = None;
 
             let server_data =
-                HTMLDataCursor::from_serialized(&hydration_data, debug_types, debug_locations);
+                HydrationContext::from_serialized(&hydration_data, debug_types, debug_locations);
             // If the server serialized an error into the root suspense boundary, throw it into the root scope
-            if let Some(error) = server_data.error() {
+            if let Some(error) = server_data.error_entry().get().ok().flatten() {
                 virtual_dom.in_runtime(|| dioxus_core::ScopeId::APP.throw_error(error));
             }
-            with_server_data(server_data, || {
+            server_data.in_context(|| {
                 virtual_dom.rebuild(&mut websys_dom);
             });
             websys_dom.skip_mutations = false;
