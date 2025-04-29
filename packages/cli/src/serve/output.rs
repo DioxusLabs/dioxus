@@ -14,7 +14,7 @@ use crossterm::{
 };
 use ratatui::{
     prelude::*,
-    widgets::{Block, BorderType, Borders, LineGauge, Paragraph, Wrap},
+    widgets::{Block, BorderType, Borders, LineGauge, Paragraph},
     TerminalOptions, Viewport,
 };
 use std::{
