@@ -1283,16 +1283,3 @@ fn parse_module_with_ids(bindgened: &[u8]) -> Result<ParsedModule> {
 // wbgxform.prepare(&mut new)?;
 // new.tables.get_mut(main_func_table_id).elem_segments = segs;
 // wbgxform.run(&mut new)?;
-
-#[test]
-fn print_target_features() {
-    let path = "/Users/jonathankelley/Development/dioxus/target/wasm32-unknown-unknown/wasm-dev/simple-web-example-fullstack.wasm";
-    let module = Module::from_file(path).unwrap();
-    for (id, custom) in module.customs.iter() {
-        if custom.name() == "target_features" {
-            let data = custom.data(&Default::default());
-            let text = String::from_utf8(data.to_vec());
-            println!("Target Features: {:?}", text);
-        }
-    }
-}
