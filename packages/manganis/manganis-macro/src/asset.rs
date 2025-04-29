@@ -1,7 +1,11 @@
 use macro_string::MacroString;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, ToTokens, TokenStreamExt};
-use std::{iter, path::PathBuf};
+use std::{
+    hash::{DefaultHasher, Hash, Hasher},
+    iter,
+    path::PathBuf,
+};
 use syn::{
     parse::{Parse, ParseStream},
     spanned::Spanned as _,
@@ -136,13 +140,18 @@ impl ToTokens for AssetParser {
                 return;
             }
         };
-        let asset_str = asset.to_string_lossy();
-        let mut asset_str = proc_macro2::Literal::string(&asset_str);
+        let asset_string = asset.to_string_lossy();
+        let mut asset_str = proc_macro2::Literal::string(&asset_string);
         asset_str.set_span(self.path_expr.span());
+
+        let mut hash = DefaultHasher::new();
+        format!("{:?}", self.options.span()).hash(&mut hash);
+        asset_string.hash(&mut hash);
+        let asset_hash = format!("__MANGANIS_ASSET_{:x}", hash.finish());
 
         // Generate the link section for the asset
         // The link section includes the source path and the output path of the asset
-        let link_section = crate::generate_link_section(quote!(__ASSET));
+        let link_section = crate::generate_link_section(quote!(__ASSET), &asset_hash);
 
         // generate the asset::new method to deprecate the `./assets/blah.css` syntax
         let constructor = if asset.is_relative() {
@@ -165,12 +174,17 @@ impl ToTokens for AssetParser {
                 // Note: into_asset_options is not a trait, so we cannot accept the options directly
                 // in the constructor. Stable rust doesn't have support for constant functions in traits
                 const __ASSET_OPTIONS: manganis::AssetOptions = #options.into_asset_options();
+                // The input token hash is used to uniquely identify the link section for this asset
+                const __ASSET_HASH: &'static str = #asset_hash;
                 // Create the asset that the crate will use. This is used both in the return value and
                 // added to the linker for the bundler to copy later
-                const __ASSET: manganis::BundledAsset = manganis::macro_helpers::#constructor(__ASSET_SOURCE_PATH, __ASSET_OPTIONS);
+                const __ASSET: manganis::BundledAsset = manganis::macro_helpers::#constructor(__ASSET_SOURCE_PATH, __ASSET_OPTIONS, __ASSET_HASH);
 
                 #link_section
 
+                #[cfg(target_arch = "wasm32")]
+                static __REFERENCE_TO_LINK_SECTION: &'static [u8] = unsafe { &__WASM_LINK_SECTION };
+                #[cfg(not(target_arch = "wasm32"))]
                 static __REFERENCE_TO_LINK_SECTION: &'static [u8] = &__LINK_SECTION;
 
                 manganis::Asset::new(

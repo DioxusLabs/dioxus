@@ -1,6 +1,6 @@
 use crate::AssetOptions;
 use const_serialize::{deserialize_const, ConstStr, ConstVec, SerializeConst};
-use std::path::PathBuf;
+use std::{fmt::Debug, path::PathBuf};
 
 /// An asset that should be copied by the bundler with some options. This type will be
 /// serialized into the binary and added to the link section [`LinkSection::CURRENT`](crate::linker::LinkSection::CURRENT).
@@ -26,6 +26,8 @@ pub struct BundledAsset {
     bundled_path: ConstStr,
     /// The options for the asset
     options: AssetOptions,
+    /// The link section the wasm asset is bundled at
+    link_section: ConstStr,
 }
 
 impl BundledAsset {
@@ -36,11 +38,13 @@ impl BundledAsset {
         absolute_source_path: &str,
         bundled_path: &str,
         options: AssetOptions,
+        link_section: &str,
     ) -> Self {
         Self {
             absolute_source_path: ConstStr::new(absolute_source_path),
             bundled_path: ConstStr::new(bundled_path),
             options,
+            link_section: ConstStr::new(link_section),
         }
     }
 
@@ -56,8 +60,9 @@ impl BundledAsset {
         absolute_source_path: &'static str,
         bundled_path: &'static str,
         options: AssetOptions,
+        link_section: &'static str,
     ) -> Self {
-        Self::new(absolute_source_path, bundled_path, options)
+        Self::new(absolute_source_path, bundled_path, options, link_section)
     }
 
     #[doc(hidden)]
@@ -67,11 +72,13 @@ impl BundledAsset {
         absolute_source_path: ConstStr,
         bundled_path: ConstStr,
         options: AssetOptions,
+        link_section: ConstStr,
     ) -> Self {
         Self {
             absolute_source_path,
             bundled_path,
             options,
+            link_section,
         }
     }
 
@@ -84,9 +91,15 @@ impl BundledAsset {
     pub fn absolute_source_path(&self) -> &str {
         self.absolute_source_path.as_str()
     }
+
     /// Get the options for the asset
     pub const fn options(&self) -> &AssetOptions {
         &self.options
+    }
+
+    /// Get the link section the asset is bundled at
+    pub fn link_section(&self) -> &str {
+        self.link_section.as_str()
     }
 }
 
@@ -102,11 +115,17 @@ impl BundledAsset {
 ///     img { src: ASSET }
 /// };
 /// ```
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(PartialEq, Clone, Copy)]
 pub struct Asset {
     /// A pointer to the bundled asset. This will be resolved after the linker has run and
     /// put into the lazy asset
     bundled: *const [u8],
+}
+
+impl Debug for Asset {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.resolve().fmt(f)
+    }
 }
 
 unsafe impl Send for Asset {}

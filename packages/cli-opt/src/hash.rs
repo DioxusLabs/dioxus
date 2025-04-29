@@ -1,17 +1,21 @@
 //! Utilities for creating hashed paths to assets in Manganis. This module defines [`AssetHash`] which is used to create a hashed path to an asset in both the CLI and the macro.
 
-use std::{hash::Hasher, io::Read, path::Path};
+use std::{
+    hash::Hasher,
+    io::Read,
+    path::{Path, PathBuf},
+};
 
 use crate::{
     css::hash_scss,
     file::{resolve_asset_options, ResolvedAssetType},
     js::hash_js,
 };
-use manganis::AssetOptions;
+use manganis::{AssetOptions, BundledAsset};
 
 /// The opaque hash type manganis uses to identify assets. Each time an asset or asset options change, this hash will
 /// change. This hash is included in the URL of the bundled asset for cache busting.
-pub struct AssetHash {
+struct AssetHash {
     /// We use a wrapper type here to hide the exact size of the hash so we can switch to a sha hash in a minor version bump
     hash: [u8; 8],
 }
@@ -32,9 +36,9 @@ impl AssetHash {
     /// Create a new asset hash for a file. The input file to this function should be fully resolved
     pub fn hash_file_contents(
         options: &AssetOptions,
-        file_path: &Path,
+        file_path: impl AsRef<Path>,
     ) -> anyhow::Result<AssetHash> {
-        hash_file(options, file_path)
+        hash_file(options, file_path.as_ref())
     }
 }
 
@@ -103,4 +107,52 @@ pub(crate) fn hash_file_contents(source: &Path, hasher: &mut impl Hasher) -> any
         hasher.write(&buffer[..read]);
     }
     Ok(())
+}
+
+/// Add a hash to the asset, or log an error if it fails
+pub fn add_hash_to_asset(asset: &mut BundledAsset) {
+    let source = asset.absolute_source_path();
+    match AssetHash::hash_file_contents(asset.options(), &source) {
+        Ok(hash) => {
+            let options = asset.options().clone();
+
+            // Set the bundled path to the source path with the hash appended before the extension
+            let source_path = PathBuf::from(source);
+            let Some(file_name) = source_path.file_name() else {
+                tracing::error!("Failed to get file name from path: {source}");
+                return;
+            };
+            // The output extension path is the extension set by the options
+            // or the extension of the source file if we don't recognize the file
+            let mut ext = asset.options().extension().map(Into::into).or_else(|| {
+                source_path
+                    .extension()
+                    .map(|ext| ext.to_string_lossy().to_string())
+            });
+
+            // Rewrite scss as css
+            if let Some("scss" | "sass") = ext.as_deref() {
+                ext = Some("css".to_string());
+            }
+
+            let hash = hash.bytes();
+            let hash = hash
+                .iter()
+                .map(|byte| format!("{byte:x}"))
+                .collect::<String>();
+            let file_stem = source_path.file_stem().unwrap_or(file_name);
+            let mut bundled_path = PathBuf::from(format!("{}-{hash}", file_stem.to_string_lossy()));
+
+            if let Some(ext) = ext {
+                bundled_path.set_extension(ext);
+            }
+
+            let bundled_path = bundled_path.to_string_lossy().to_string();
+
+            *asset = BundledAsset::new(source, &bundled_path, options, asset.link_section());
+        }
+        Err(err) => {
+            tracing::error!("Failed to hash asset: {err}");
+        }
+    }
 }

@@ -6,8 +6,17 @@ const PLACEHOLDER_HASH: ConstStr =
     ConstStr::new("this is a placeholder path which will be replaced by the linker");
 
 /// Create a bundled asset from the input path, the content hash, and the asset options
-pub const fn create_bundled_asset(input_path: &str, asset_config: AssetOptions) -> BundledAsset {
-    BundledAsset::new_from_const(ConstStr::new(input_path), PLACEHOLDER_HASH, asset_config)
+pub const fn create_bundled_asset(
+    input_path: &str,
+    asset_config: AssetOptions,
+    link_section: &str,
+) -> BundledAsset {
+    BundledAsset::new_from_const(
+        ConstStr::new(input_path),
+        PLACEHOLDER_HASH,
+        asset_config,
+        ConstStr::new(link_section),
+    )
 }
 
 /// Create a bundled asset from the input path, the content hash, and the asset options with a relative asset deprecation warning
@@ -19,8 +28,9 @@ pub const fn create_bundled_asset(input_path: &str, asset_config: AssetOptions) 
 pub const fn create_bundled_asset_relative(
     input_path: &str,
     asset_config: AssetOptions,
+    link_section: &str,
 ) -> BundledAsset {
-    create_bundled_asset(input_path, asset_config)
+    create_bundled_asset(input_path, asset_config, link_section)
 }
 
 /// Serialize an asset to a const buffer

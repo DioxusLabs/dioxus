@@ -117,6 +117,7 @@ tempfile = "3.3"
 manganis = { workspace = true }
 manganis-core = { workspace = true }
 target-lexicon = "0.13.2"
+wasm-encoder = "0.229.0"
 
 # Extracting data from an executable
 object = { version = "0.36.0", features = ["wasm"] }

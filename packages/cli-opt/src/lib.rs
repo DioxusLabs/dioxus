@@ -16,7 +16,7 @@ mod js;
 mod json;
 
 pub use file::process_file_to;
-pub use hash::AssetHash;
+pub use hash::add_hash_to_asset;
 
 /// A manifest of all assets collected from dependencies
 ///
@@ -38,7 +38,9 @@ impl AssetManifest {
             "Failed to convert wasm bindgen output path to string"
         ))?;
 
-        let bundled_asset = manganis::macro_helpers::create_bundled_asset(output_path_str, options);
+        let mut bundled_asset =
+            manganis::macro_helpers::create_bundled_asset(output_path_str, options, "");
+        add_hash_to_asset(&mut bundled_asset);
 
         self.assets
             .entry(asset_path.to_path_buf())

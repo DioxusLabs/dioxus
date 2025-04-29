@@ -11,6 +11,7 @@ use std::io::{Read, Seek, Write};
 use std::path::PathBuf;
 use std::process::Command;
 use target_lexicon::Triple;
+use tempfile::NamedTempFile;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum LinkAction {
@@ -79,9 +80,10 @@ impl LinkAction {
             // Assemble an asset manifest by walking the object files being passed to us
             LinkAction::BuildAssetManifest { destination: dest } => {
                 let args: Vec<_> = std::env::args().collect();
-                let mut obj_args = args.clone();
                 let mut references = AssetReferences::default();
 
+                let mut obj_args = args.clone();
+                references.assets.clear();
                 // Handle command files, usually a windows thing.
                 if let Some(command) = args.iter().find(|arg| arg.starts_with('@')).cloned() {
                     let path = command.trim().trim_start_matches('@');
@@ -121,65 +123,47 @@ impl LinkAction {
 
                 // Hash each file in parallel
                 references.assets.par_iter_mut().for_each(|asset| {
-                    match dioxus_cli_opt::AssetHash::hash_file_contents(
-                        asset.bundled_asset.options(),
-                        &asset.file,
-                    ) {
-                        Ok(hash) => {
-                            let source = asset.bundled_asset.absolute_source_path();
-                            let options = asset.bundled_asset.options().clone();
+                    dioxus_cli_opt::add_hash_to_asset(&mut asset.bundled_asset);
+                });
 
-                            // Set the bundled path to the source path with the hash appended before the extension
-                            let source_path = PathBuf::from(source);
-                            let Some(file_name) = source_path.file_name() else {
-                                tracing::error!("Failed to get file name from path: {source}");
-                                return;
-                            };
-                            // The output extension path is the extension set by the options
-                            // or the extension of the source file if we don't recognize the file
-                            let mut ext = asset
-                                .bundled_asset
-                                .options()
-                                .extension()
-                                .map(Into::into)
-                                .or_else(|| {
-                                    source_path
-                                        .extension()
-                                        .map(|ext| ext.to_string_lossy().to_string())
-                                });
+                let targeting_wasm = args.contains(&"wasm".to_string());
+                let mut linker_args = args.into_iter().skip(1).collect::<Vec<_>>();
+                let mut _tempfile_handle = None;
 
-                            // Rewrite scss as css
-                            if let Some("scss" | "sass") = ext.as_deref() {
-                                ext = Some("css".to_string());
-                            }
+                // If we are targeting wasm, create an object file to satisfy the imports
+                if targeting_wasm {
+                    let mut data_sections = Vec::new();
+                    for asset in references.assets.iter() {
+                        let name = asset.bundled_asset.link_section();
+                        let data =
+                            const_serialize::serialize_const(&asset.bundled_asset, ConstVec::new());
+                        const_serialize::deserialize_const!(BundledAsset, data.read()).unwrap();
+                        data_sections.push((name, data.as_ref().to_vec()));
+                    }
 
-                            let hash = hash.bytes();
-                            let hash = hash
-                                .iter()
-                                .map(|byte| format!("{byte:x}"))
-                                .collect::<String>();
-                            let file_stem = source_path.file_stem().unwrap_or(file_name);
-                            let mut bundled_path =
-                                PathBuf::from(format!("{}-{hash}", file_stem.to_string_lossy()));
-
-                            if let Some(ext) = ext {
-                                bundled_path.set_extension(ext);
-                            }
-
-                            let bundled_path = bundled_path.to_string_lossy().to_string();
-
-                            asset.bundled_asset = BundledAsset::new(source, &bundled_path, options);
-
-                            // Write the contents back to the object file
-                            if let Err(err) = asset.write() {
-                                tracing::error!("Failed to write asset back to object file: {err}");
-                            }
-                        }
-                        Err(err) => {
-                            tracing::error!("Failed to hash asset: {err}");
+                    // Create the object file
+                    let object_file = create_data_object_file(
+                        data_sections
+                            .iter()
+                            .map(|(name, data)| (*name, data.as_ref())),
+                    );
+                    let mut temp_file =
+                        NamedTempFile::new().expect("Failed to create temporary file");
+                    temp_file
+                        .write_all(&object_file)
+                        .expect("Failed to write object file");
+                    linker_args.push(temp_file.path().to_string_lossy().to_string());
+                    _tempfile_handle = Some(temp_file);
+                }
+                // Otherwise overwrite the object files
+                else {
+                    for asset in &references.assets {
+                        // Write the asset to the object file
+                        if let Err(err) = asset.write() {
+                            tracing::error!("Failed to write asset to object file: {err}");
                         }
                     }
-                });
+                }
 
                 // Extract the manifest from the hashed assets
                 let mut manifest = AssetManifest::default();
@@ -197,7 +181,7 @@ impl LinkAction {
                     .create(true)
                     .open("/Users/evanalmloff/Desktop/Github/dioxus-test/linker_err.txt")
                     .unwrap();
-                let toolchain = if args.contains(&"wasm".to_string()) {
+                let toolchain = if targeting_wasm {
                     "stable-wasm32-unknown-unknown".to_string()
                 } else {
                     std::env::var("RUSTUP_TOOLCHAIN").unwrap()
@@ -205,7 +189,7 @@ impl LinkAction {
 
                 let mut linker_command = find_linker(toolchain);
                 let status = linker_command
-                    .args(args.into_iter().skip(1))
+                    .args(linker_args)
                     .stderr(err_file)
                     .status()
                     .expect("Failed to spawn linker");
@@ -258,7 +242,7 @@ impl AssetReferences {
                 if let Ok(name) = section.name() {
                     if manganis_core::linker::LinkSection::ALL
                         .iter()
-                        .any(|section| section.name == name)
+                        .any(|link_section| link_section.link_section == name)
                     {
                         if file.format() == object::BinaryFormat::Wasm {
                             // In wasm this is actually the start and end
@@ -337,4 +321,47 @@ fn wasm_ld() -> PathBuf {
         .join("bin")
         .join("rust-lld");
     root
+}
+
+fn create_data_object_file<'a>(
+    data_sections: impl IntoIterator<Item = (&'a str, &'a [u8])>,
+) -> Vec<u8> {
+    use wasm_encoder::{
+        ConstExpr, DataSection, DataSymbolDefinition, LinkingSection, Module, SymbolTable,
+    };
+
+    let mut linking = LinkingSection::new();
+
+    let mut sym_tab = SymbolTable::new();
+
+    let mut data_section = DataSection::new();
+    let memory_index = 0;
+
+    let mut offset = 0;
+    for (symbol_name, data) in data_sections {
+        let flags = SymbolTable::WASM_SYM_EXPORTED;
+        let index = 0;
+        let size = data.len() as u32;
+        data_section.active(
+            memory_index,
+            &ConstExpr::i32_const(offset as i32),
+            data.iter().copied(),
+        );
+        sym_tab.data(
+            flags,
+            symbol_name,
+            Some(DataSymbolDefinition {
+                index,
+                offset,
+                size,
+            }),
+        );
+        linking.symbol_table(&sym_tab);
+        offset += size;
+    }
+
+    // Add the linking section to a new Wasm module and get the encoded bytes.
+    let mut module = Module::new();
+    module.section(&data_section).section(&linking);
+    module.finish()
 }
