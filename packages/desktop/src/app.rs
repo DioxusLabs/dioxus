@@ -464,21 +464,24 @@ impl App {
             let Ok(position) = window.outer_position() else {
                 return;
             };
-            let position = position.to_logical(window.scale_factor());
+            let (x, y) = if cfg!(target_os = "macos") {
+                let position = position.to_logical::<i32>(window.scale_factor());
+                (position.x, position.y)
+            } else {
+                (position.x, position.y)
+            };
 
             let size = window.outer_size();
-            let size = size.to_logical::<u32>(window.scale_factor());
-
-            let x = position.x;
-            let y = position.y;
-
-            // This is to work around a bug in how tao handles inner_size on macOS
-            // We *want* to use inner_size, but that's currently broken, so we use outer_size instead and then an adjustment
-            //
-            // https://github.com/tauri-apps/tao/issues/889
-            let adjustment = match window.is_decorated() {
-                true if cfg!(target_os = "macos") => (56.0 / window.scale_factor()).round() as _,
-                _ => 0,
+            let (width, height) = if cfg!(target_os = "macos") {
+                let size = size.to_logical::<u32>(window.scale_factor());
+                // This is to work around a bug in how tao handles inner_size on macOS
+                // We *want* to use inner_size, but that's currently broken, so we use outer_size instead and then an adjustment
+                //
+                // https://github.com/tauri-apps/tao/issues/889
+                let adjustment = (56.0 / window.scale_factor()).round() as u32;
+                (size.width, size.height.saturating_sub(adjustment))
+            } else {
+                (size.width, size.height)
             };
 
             let Some(monitor_name) = monitor.name() else {
@@ -488,8 +491,8 @@ impl App {
             let state = PreservedWindowState {
                 x,
                 y,
-                width: size.width.max(200),
-                height: size.height.saturating_sub(adjustment).max(200),
+                width: width.max(200),
+                height: height.max(200),
                 monitor: monitor_name.to_string(),
             };
 
@@ -525,13 +528,24 @@ impl App {
 
                 // Only set the outer position if it wasn't explicitly set
                 if explicit_window_position.is_none() {
-                    window
-                        .set_outer_position(tao::dpi::LogicalPosition::new(position.0, position.1));
+                    if cfg!(target_os = "macos") {
+                        window.set_outer_position(tao::dpi::LogicalPosition::new(
+                            position.0, position.1,
+                        ));
+                    } else {
+                        window.set_outer_position(tao::dpi::PhysicalPosition::new(
+                            position.0, position.1,
+                        ));
+                    }
                 }
 
                 // Only set the inner size if it wasn't explicitly set
                 if explicit_inner_size.is_none() {
-                    window.set_inner_size(tao::dpi::LogicalSize::new(size.0, size.1));
+                    if cfg!(target_os = "macos") {
+                        window.set_inner_size(tao::dpi::LogicalSize::new(size.0, size.1));
+                    } else {
+                        window.set_inner_size(tao::dpi::PhysicalSize::new(size.0, size.1));
+                    }
                 }
             }
         }
