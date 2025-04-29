@@ -148,7 +148,7 @@ r#" <script>
       window.__wasm_split_main_initSync = initSync;
 
       // Actually perform the load
-      init("/{base_path}/{wasm_path}").then((wasm) => {
+      init({module_or_path: "/{base_path}/{wasm_path}"}).then((wasm) => {
         if (wasm.__wbindgen_start == undefined) {
             wasm.main();
         }
