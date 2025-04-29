@@ -154,7 +154,7 @@ impl BuildRequest {
 r#" <script>
   // We can't use a module script here because we need to start the script immediately when streaming
   import("/{base_path}/{js_path}").then(
-    ({ default: init, initSync }) => {
+    ({ default: init, initSync, __wbg_get_imports }) => {
       // export initSync in case a split module needs to initialize
       window.__wasm_split_main_initSync = initSync;
 
@@ -163,6 +163,12 @@ r#" <script>
         if (wasm.__wbindgen_start == undefined) {
             wasm.main();
         }
+
+        // assign this module to be accessible globally
+        window.mainWasm = wasm;
+        window.mainInit = init;
+        window.mainInitSync = initSync;
+        window.__wbg_get_imports = __wbg_get_imports;
       });
     }
   );

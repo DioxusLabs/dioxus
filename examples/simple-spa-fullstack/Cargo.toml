@@ -1,5 +1,5 @@
 [package]
-name = "simple-web-example-fullstack"
+name = "simple-spa-example-fullstack"
 version = "0.1.0"
 edition = "2021"
 publish = false

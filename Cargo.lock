@@ -12422,7 +12422,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5dd19be0257552dd56d1bb6946f89f193c6e5b9f13cc9327c4bc84a357507c74"
 
 [[package]]
-name = "simple-web-example"
+name = "simple-spa-example-fullstack"
 version = "0.1.0"
 dependencies = [
  "dioxus",
@@ -12431,7 +12431,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "simple-web-example-fullstack"
+name = "simple-web-example"
 version = "0.1.0"
 dependencies = [
  "dioxus",

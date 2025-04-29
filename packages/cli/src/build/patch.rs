@@ -20,9 +20,9 @@ use subsecond_types::*;
 use target_lexicon::{OperatingSystem, Triple};
 use thiserror::Error;
 use walrus::{
-    ir::{self, Visitor},
+    ir::{self},
     ConstExpr, ElementItems, ElementKind, ExportItem, FunctionBuilder, FunctionId, FunctionKind,
-    ImportKind, Module, ModuleConfig,
+    ImportKind, Module, ModuleConfig, TableId,
 };
 use wasmparser::{
     BinaryReader, BinaryReaderError, Linking, LinkingSectionReader, Payload, SymbolInfo,
@@ -57,7 +57,7 @@ pub enum PatchError {
 pub fn create_jump_table(original: &Path, patch: &Path, triple: &Triple) -> Result<JumpTable> {
     // WASM needs its own path since the object crate leaves quite a few of the methods unimplemented
     if triple.architecture == target_lexicon::Architecture::Wasm32 {
-        return create_wasm_jump_table(original, patch);
+        return Ok(create_wasm_jump_table(original, patch).unwrap());
     }
 
     let obj1_bytes = fs::read(original)?;
@@ -139,14 +139,14 @@ fn create_wasm_jump_table(original: &Path, patch: &Path) -> Result<JumpTable> {
     let ParsedModule {
         module: old,
         ids: old_ids,
-        fns_to_ids: old_fns_to_ids,
         symbols: old_raw_data,
+        ..
     } = parse_module_with_ids(&old_bytes)?;
     let ParsedModule {
         module: mut new,
         ids: new_ids,
-        fns_to_ids: new_fns_to_ids,
         symbols: new_raw_data,
+        ..
     } = parse_module_with_ids(&new_bytes)?;
 
     let (name_to_ifunc_old, funcid_to_idx) = collect_func_ifuncs(&old, &old_raw_data, &old_ids);
@@ -172,6 +172,7 @@ fn create_wasm_jump_table(original: &Path, patch: &Path) -> Result<JumpTable> {
     let mut mems = vec![];
     let mut funcs = vec![];
     let mut to_ifuncs = vec![];
+    let mut wbg_funcs = vec![];
 
     // Collect all the GOT entries from the new module.
     for t in new.imports.iter() {
@@ -187,6 +188,9 @@ fn create_wasm_jump_table(original: &Path, patch: &Path) -> Result<JumpTable> {
             "env" => {
                 // tracing::debug!("Found env import: {t:?}");
                 to_ifuncs.push(t.id());
+            }
+            "__wbindgen_placeholder__" => {
+                wbg_funcs.push(t.id());
             }
             m => {
                 tracing::info!("Unknown import module: {m} -> {}", t.name);
@@ -322,53 +326,73 @@ fn create_wasm_jump_table(original: &Path, patch: &Path) -> Result<JumpTable> {
             continue;
         };
 
-        let corr_export = exports_to_funcids
-            .get(import.name.as_str())
-            .unwrap_or_else(|| {
-                panic!("Failed to find export for {}", import.name);
-            });
+        let Some(corr_export) = exports_to_funcids.get(import.name.as_str()) else {
+            tracing::error!("Failed to find export for {}", import.name);
+            continue;
+        };
 
         let Some(table_idx) = funcid_to_idx.get(corr_export).cloned() else {
             tracing::warn!("Failed to find ifunc table index for {}", import.name);
             continue;
         };
-        // tracing::info!("Found ifunc table index for {}: {}", import.name, table_idx);
-        // .unwrap_or_else(|| panic!("Failed to find ifunc table index for {}", import.name));
 
         // Delete the import - we'll satisfy this function locally
         new.imports.delete(t);
 
-        let func = new.funcs.get_mut(func_id);
-        let ty_id = func.ty();
+        convert_import_to_ifunc_call(&mut new, ifunc_table_initializer, func_id, table_idx);
+    }
 
-        // Convert the import function to a local function that calls the indirect function from the table
-        let ty = new.types.get(ty_id);
+    // There's a limited set of instrinsics that get transformed. Namely drop_ref and clone_ref
+    // We make special carve-outs for these since they refer to functions with a different name.
+    //
+    //  else if import.module == "__wbindgen_placeholder__" {
+    //     match import.name.as_str() {
+    //         "__wbindgen_object_drop_ref" => {
+    //             self.intrinsic_map.insert(f, Intrinsic::DropRef);
+    //         }
+    //         "__wbindgen_object_clone_ref" => {
+    //             self.intrinsic_map.insert(f, Intrinsic::CloneRef);
+    //         }
+    //         _ => continue,
+    //     }
+    // }
+    // these should get replaced in the original module with wbg imports
+    for t in wbg_funcs {
+        let import = new.imports.get_mut(t);
+        let exists_as_ifunc_maybe = name_to_ifunc_old.keys().find(|k| k.contains(&import.name));
 
-        let params = ty.params().to_vec();
-        let results = ty.results().to_vec();
-        let args: Vec<_> = params.iter().map(|ty| new.locals.add(*ty)).collect();
+        tracing::trace!(
+            "Converting placeholder to synthesized: {} ({exists_as_ifunc_maybe:?})",
+            import.name
+        );
 
-        // New function that calls the indirect function
-        let mut builder = FunctionBuilder::new(&mut new.types, &params, &results);
-        let mut body = builder.name("stub".into()).func_body();
+        import.module = "wbg".into();
 
-        // Push the params onto the stack
-        for arg in args.iter() {
-            body.local_get(*arg);
-        }
+        // De-alias the name to the correct one
+        let alias = match import.name.as_str() {
+            "__wbindgen_object_drop_ref" => "__externref_table_dealloc",
+            // -> do we need to do this for clone_ref and/or table_alloc too?
+            _ => continue,
+        };
 
-        // And then the address of the indirect function
-        body.instr(ir::Instr::Const(ir::Const {
-            value: ir::Value::I32(table_idx),
-        }));
+        // This becomes an internally synthesized drop function called "__externref_table_dealloc"
+        // however this might not be available to us via the exports.
+        let exists_as_ifunc = name_to_ifunc_old
+            .keys()
+            .find(|k| k.contains(alias))
+            .unwrap();
 
-        // And call it
-        body.instr(ir::Instr::CallIndirect(ir::CallIndirect {
-            ty: ty_id,
-            table: ifunc_table_initializer,
-        }));
+        let Some(ifunc) = name_to_ifunc_old.get(exists_as_ifunc) else {
+            tracing::error!("Failed to find ifunc for wbg import {}", import.name);
+            continue;
+        };
 
-        new.funcs.get_mut(func_id).kind = FunctionKind::Local(builder.local_func(args));
+        let ImportKind::Function(func_id) = import.kind else {
+            continue;
+        };
+
+        new.imports.delete(t);
+        convert_import_to_ifunc_call(&mut new, ifunc_table_initializer, func_id, *ifunc);
     }
 
     // Update the wasm module on the filesystem to use the newly lifted version
@@ -399,26 +423,43 @@ fn create_wasm_jump_table(original: &Path, patch: &Path) -> Result<JumpTable> {
     })
 }
 
-fn ensure_wasm_bindgen_unchanged(
-    _old: &Module,
-    _new: &Module,
-    _old_symbols: &RawDataSection,
-    _new_symbols: &RawDataSection,
-) -> Result<()> {
-    // todo: implement diffing
-    // for sym in new_symbols.symbols.iter() {
-    //     match sym {
-    //         SymbolInfo::Func { flags, index, name } => {}
-    //         SymbolInfo::Data {
-    //             flags,
-    //             name,
-    //             symbol,
-    //         } => {}
-    //         _ => {}
-    //     }
-    // }
+fn convert_import_to_ifunc_call(
+    new: &mut Module,
+    ifunc_table_initializer: TableId,
+    func_id: FunctionId,
+    table_idx: i32,
+) {
+    let func = new.funcs.get_mut(func_id);
+    let ty_id = func.ty();
 
-    Ok(())
+    // Convert the import function to a local function that calls the indirect function from the table
+    let ty = new.types.get(ty_id);
+
+    let params = ty.params().to_vec();
+    let results = ty.results().to_vec();
+    let args: Vec<_> = params.iter().map(|ty| new.locals.add(*ty)).collect();
+
+    // New function that calls the indirect function
+    let mut builder = FunctionBuilder::new(&mut new.types, &params, &results);
+    let mut body = builder.name("stub".into()).func_body();
+
+    // Push the params onto the stack
+    for arg in args.iter() {
+        body.local_get(*arg);
+    }
+
+    // And then the address of the indirect function
+    body.instr(ir::Instr::Const(ir::Const {
+        value: ir::Value::I32(table_idx),
+    }));
+
+    // And call it
+    body.instr(ir::Instr::CallIndirect(ir::CallIndirect {
+        ty: ty_id,
+        table: ifunc_table_initializer,
+    }));
+
+    new.funcs.get_mut(func_id).kind = FunctionKind::Local(builder.local_func(args));
 }
 
 fn collect_func_ifuncs<'a>(
@@ -457,20 +498,7 @@ fn collect_func_ifuncs<'a>(
                     // func_to_offset.insert(*id, offset + idx as i32);
                 }
             }
-            ElementItems::Expressions(_ref_type, _const_exprs) => {
-                // todo - do we need to handle these?
-                for idx in _const_exprs.iter() {
-                    match idx {
-                        ConstExpr::RefFunc(id) => {
-                            let name = m.funcs.get(*id).name.as_deref().unwrap();
-                            // tracing::debug!("Found func as reffunc: {name}");
-                        }
-                        _ => {} // ConstExpr::Value(value) => todo!(),
-                                // ConstExpr::Global(id) => todo!(),
-                                // ConstExpr::RefNull(ref_type) => todo!(),
-                    }
-                }
-            }
+            ElementItems::Expressions(_ref_type, _const_exprs) => {}
         }
     }
 
@@ -765,106 +793,68 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
     let mut already_exported = module
         .exports
         .iter()
-        // .filter(|f| matches!(f.item, ExportItem::Function(_)))
+        .filter(|f| matches!(f.item, ExportItem::Function(_)))
         .map(|exp| exp.name.clone())
         .collect::<HashSet<_>>();
 
-    let mut make_indirect = vec![];
-    let mut names_to_names: HashMap<&str, HashSet<&str>> = HashMap::new();
-    for (name, index) in symbols.code_symbol_map.iter() {
-        let func = module.funcs.get(ids[*index]);
-        if func.name.as_deref() != Some(*name) {
-            tracing::warn!(
-                "Function name mismatch (f.name -> symtab): {:?} != {:?}",
-                func.name,
-                name,
-            );
-        }
-
-        if !name_is_bindgen_symbol(name) {
-            if !already_exported.contains(*name) {
-                module.exports.add(name, func.id());
-            }
-            make_indirect.push(func.id());
-        }
-
-        // names_to_names
-        //     .entry(*name)
-        //     .or_default()
-        //     .insert(func.name.as_deref().unwrap());
-    }
-
-    // for func in module.funcs.iter() {
-    //     if let Some(name) = func.name.as_deref() {
-    //         if let FunctionKind::Local(_lovcal) = &func.kind {
-    //             //             if name == "_ZN4core3fmt3num3imp54_$LT$impl$u20$core..fmt..Display$u20$for$u20$usize$GT$3fmt17h6d9dbc09b6dc47c8E"||
-    //             // name == "_ZN4core3fmt3num55_$LT$impl$u20$core..fmt..UpperHex$u20$for$u20$usize$GT$3fmt17he51f86722515af34E"||
-    //             // name == "_ZN4core3fmt3num55_$LT$impl$u20$core..fmt..LowerHex$u20$for$u20$usize$GT$3fmt17h420305cf5136fed6E"||
-    //             // name == "_ZN4core3fmt8builders9DebugList5entry17h6660e70d2341a018E"||
-    //             // name == "_ZN59_$LT$dyn$u20$core..any..Any$u20$as$u20$core..fmt..Debug$GT$3fmt17h8ab3728dab9d43e8E"{
-
-    //             //             // tracing::debug!("Found a function: {name} -> {index}");
-    //             //             tracing::debug!("ifunc: {:#?}", ifuncs.contains(&func.id()));
-    //             //             tracing::debug!("is bindgen:: {:#?}", name_is_bindgen_symbol(name));
-    //             //             module.exports.add(name, func.id());
-    //             //         }
-
-    //             // tracing::debug!("Found a function: {name} -> {index}");
-    //             // tracing::debug!("ifunc: {:#?}", ifuncs.contains(&func.id()));
-    //             // tracing::debug!("is bindgen:: {:#?}", name_is_bindgen_symbol(name));
-    //             // module.exports.add(name, func.id());
-
-    //             if !ifuncs.contains(&func.id()) && !name_is_bindgen_symbol(name) {
-    //                 // if !ifuncs.contains(&func.id()) && !name_is_bindgen_symbol(name) {
-    //                 // if !ifuncs.contains(&func.id()) && !name_is_bindgen_symbol(name) {
-    //                 make_indirect.push(func.id());
-    //             }
+    // for i in module.imports.iter() {
+    //     if let ImportKind::Function(id) = i.kind {
+    //         if let Some(name) = module.funcs.get(id).name.as_deref() {
+    //             tracing::info!("Found import: {i:?}");
     //         }
     //     }
     // }
 
-    //     for (name, index) in symbols.code_symbol_map.iter() {
-    //         let func = module.funcs.get(ids[*index]);
+    let imported_funcs = module
+        .imports
+        .iter()
+        .filter_map(|i| match i.kind {
+            ImportKind::Function(id) => Some((id, i)),
+            _ => None,
+        })
+        .collect::<HashMap<_, _>>();
 
-    //         // 22:55:45 [dev] Failed to find ifunc table index for _ZN4core3fmt3num3imp54_$LT$impl$u20$core..fmt..Display$u20$for$u20$usize$GT$3fmt17h6d9dbc09b6dc47c8E
-    //         // 22:55:45 [dev] Failed to find ifunc table index for _ZN4core3fmt3num55_$LT$impl$u20$core..fmt..UpperHex$u20$for$u20$usize$GT$3fmt17he51f86722515af34E
-    //         // 22:55:45 [dev] Failed to find ifunc table index for _ZN4core3fmt3num55_$LT$impl$u20$core..fmt..LowerHex$u20$for$u20$usize$GT$3fmt17h420305cf5136fed6E
-    //         // 22:55:45 [dev] Failed to find ifunc table index for _ZN4core3fmt8builders9DebugList5entry17h6660e70d2341a018E
-    //         // 22:55:45 [dev] Failed to find ifunc table index for _ZN59_$LT$dyn$u20$core..any..Any$u20$as$u20$core..fmt..Debug$GT$3fmt17h8ab3728dab9d43e8E
+    let mut make_indirect = vec![];
+    let mut names_to_names: HashMap<&str, HashSet<&str>> = HashMap::new();
 
-    //         // if *name == "_ZN4core3fmt3num3imp54_$LT$impl$u20$core..fmt..Display$u20$for$u20$usize$GT$3fmt17h6d9dbc09b6dc47c8E" {
+    let imports = module
+        .imports
+        .iter()
+        .filter_map(|i| match i.kind {
+            ImportKind::Function(id) => Some((i.id(), id)),
+            _ => None,
+        })
+        .collect::<HashMap<_, _>>();
 
-    //         if func.name.as_deref() != Some(*name) {
-    //             tracing::warn!("Function name mismatch: {:?} != {}", func.name, name);
-    //         }
+    // We're going to add *all* the imports that start with __wbindgen to a function that's exported
+    // This prevents them from being dissovlved
+    for (imp, f) in imports {
+        let name = &module.imports.get(imp).name;
+        if name.starts_with("__wbindgen") && !name.starts_with("__wbindgen_describe") {
+            module.exports.add(name, f);
+            tracing::info!("Hoisting import -> {name}");
+            already_exported.insert(name.clone());
+        }
+    }
 
-    //         if let FunctionKind::Local(_local) = &func.kind {
-    //             // if !already_exported.contains(*name) {
-    //             //     // if !already_exported.contains(*name) && !name_is_bindgen_symbol(name) {
-    //             //     module.exports.add(name, func.id());
-    //             //     already_exported.insert(name.to_string());
-    //             // }
+    for (name, index) in symbols.code_symbol_map.iter() {
+        let func = module.funcs.get(ids[*index]);
 
-    //             if *name == "_ZN4core3fmt3num3imp54_$LT$impl$u20$core..fmt..Display$u20$for$u20$usize$GT$3fmt17h6d9dbc09b6dc47c8E"||
-    // *name == "_ZN4core3fmt3num55_$LT$impl$u20$core..fmt..UpperHex$u20$for$u20$usize$GT$3fmt17he51f86722515af34E"||
-    // *name == "_ZN4core3fmt3num55_$LT$impl$u20$core..fmt..LowerHex$u20$for$u20$usize$GT$3fmt17h420305cf5136fed6E"||
-    // *name == "_ZN4core3fmt8builders9DebugList5entry17h6660e70d2341a018E"||
-    // *name == "_ZN59_$LT$dyn$u20$core..any..Any$u20$as$u20$core..fmt..Debug$GT$3fmt17h8ab3728dab9d43e8E"{
+        if let FunctionKind::Local(_) = &func.kind {
+            if !already_exported.contains(*name) {
+                if !already_exported.contains(*name) && !name_is_bindgen_symbol(name) {
+                    module.exports.add(name, func.id());
+                    already_exported.insert(name.to_string());
+                }
+            }
 
-    //             tracing::debug!("Found a function: {name} -> {index}");
-    //             tracing::debug!("ifunc: {:#?}", ifuncs.contains(&func.id()));
-    //             tracing::debug!("is bindgen:: {:#?}", name_is_bindgen_symbol(name));
-    //             module.exports.add(name, func.id());
-    //         }
-
-    //             // if !name_is_bindgen_symbol(name) {
-    //             if !ifuncs.contains(&func.id()) && !name_is_bindgen_symbol(name) {
-    //                 // if !ifuncs.contains(&func.id()) && !name_is_bindgen_symbol(name) {
-    //                 // if !ifuncs.contains(&func.id()) && !name_is_bindgen_symbol(name) {
-    //                 make_indirect.push(func.id());
-    //             }
-    //         }
-    //     }a
+            if !name_is_bindgen_symbol(name) {
+                if !ifuncs.contains(&func.id()) {
+                    make_indirect.push(func.id());
+                }
+            }
+        }
+    }
 
     tracing::trace!("Hoisting {} functions", make_indirect.len());
     let seg = module.elements.get_mut(ifunc_table_initializer);
@@ -1166,3 +1156,143 @@ fn parse_module_with_ids(bindgened: &[u8]) -> Result<ParsedModule> {
 // // if name.contains("__wbindgen") || name.contains("wbg") {
 // //     tracing::debug!("sus name: {name}");
 // // }
+
+// https://github.com/rustwasm/wasm-bindgen/blob/c35cc9369d5e0dc418986f7811a0dd702fb33ef9/src/lib.rs#L1061-L1160
+// externs! {
+//     #[link(wasm_import_module = "__wbindgen_placeholder__")]
+//     extern "C" {
+//         fn __wbindgen_object_clone_ref(idx: u32) -> u32;
+//         fn __wbindgen_object_drop_ref(idx: u32) -> ();
+
+//         fn __wbindgen_string_new(ptr: *const u8, len: usize) -> u32;
+//         fn __wbindgen_number_new(f: f64) -> u32;
+//         fn __wbindgen_bigint_from_str(ptr: *const u8, len: usize) -> u32;
+//         fn __wbindgen_bigint_from_i64(n: i64) -> u32;
+//         fn __wbindgen_bigint_from_u64(n: u64) -> u32;
+//         fn __wbindgen_bigint_from_i128(hi: i64, lo: u64) -> u32;
+//         fn __wbindgen_bigint_from_u128(hi: u64, lo: u64) -> u32;
+//         fn __wbindgen_symbol_named_new(ptr: *const u8, len: usize) -> u32;
+//         fn __wbindgen_symbol_anonymous_new() -> u32;
+
+//         fn __wbindgen_externref_heap_live_count() -> u32;
+
+//         fn __wbindgen_is_null(idx: u32) -> u32;
+//         fn __wbindgen_is_undefined(idx: u32) -> u32;
+//         fn __wbindgen_is_symbol(idx: u32) -> u32;
+//         fn __wbindgen_is_object(idx: u32) -> u32;
+//         fn __wbindgen_is_array(idx: u32) -> u32;
+//         fn __wbindgen_is_function(idx: u32) -> u32;
+//         fn __wbindgen_is_string(idx: u32) -> u32;
+//         fn __wbindgen_is_bigint(idx: u32) -> u32;
+//         fn __wbindgen_typeof(idx: u32) -> u32;
+
+//         fn __wbindgen_in(prop: u32, obj: u32) -> u32;
+
+//         fn __wbindgen_is_falsy(idx: u32) -> u32;
+//         fn __wbindgen_as_number(idx: u32) -> f64;
+//         fn __wbindgen_try_into_number(idx: u32) -> u32;
+//         fn __wbindgen_neg(idx: u32) -> u32;
+//         fn __wbindgen_bit_and(a: u32, b: u32) -> u32;
+//         fn __wbindgen_bit_or(a: u32, b: u32) -> u32;
+//         fn __wbindgen_bit_xor(a: u32, b: u32) -> u32;
+//         fn __wbindgen_bit_not(idx: u32) -> u32;
+//         fn __wbindgen_shl(a: u32, b: u32) -> u32;
+//         fn __wbindgen_shr(a: u32, b: u32) -> u32;
+//         fn __wbindgen_unsigned_shr(a: u32, b: u32) -> u32;
+//         fn __wbindgen_add(a: u32, b: u32) -> u32;
+//         fn __wbindgen_sub(a: u32, b: u32) -> u32;
+//         fn __wbindgen_div(a: u32, b: u32) -> u32;
+//         fn __wbindgen_checked_div(a: u32, b: u32) -> u32;
+//         fn __wbindgen_mul(a: u32, b: u32) -> u32;
+//         fn __wbindgen_rem(a: u32, b: u32) -> u32;
+//         fn __wbindgen_pow(a: u32, b: u32) -> u32;
+//         fn __wbindgen_lt(a: u32, b: u32) -> u32;
+//         fn __wbindgen_le(a: u32, b: u32) -> u32;
+//         fn __wbindgen_ge(a: u32, b: u32) -> u32;
+//         fn __wbindgen_gt(a: u32, b: u32) -> u32;
+
+//         fn __wbindgen_number_get(idx: u32) -> WasmRet<Option<f64>>;
+//         fn __wbindgen_boolean_get(idx: u32) -> u32;
+//         fn __wbindgen_string_get(idx: u32) -> WasmSlice;
+//         fn __wbindgen_bigint_get_as_i64(idx: u32) -> WasmRet<Option<i64>>;
+
+//         fn __wbindgen_debug_string(ret: *mut [usize; 2], idx: u32) -> ();
+
+//         fn __wbindgen_throw(a: *const u8, b: usize) -> !;
+//         fn __wbindgen_rethrow(a: u32) -> !;
+//         fn __wbindgen_error_new(a: *const u8, b: usize) -> u32;
+
+//         fn __wbindgen_cb_drop(idx: u32) -> u32;
+
+//         fn __wbindgen_describe(v: u32) -> ();
+//         fn __wbindgen_describe_closure(a: u32, b: u32, c: u32) -> u32;
+
+//         fn __wbindgen_json_parse(ptr: *const u8, len: usize) -> u32;
+//         fn __wbindgen_json_serialize(idx: u32) -> WasmSlice;
+//         fn __wbindgen_jsval_eq(a: u32, b: u32) -> u32;
+//         fn __wbindgen_jsval_loose_eq(a: u32, b: u32) -> u32;
+
+//         fn __wbindgen_copy_to_typed_array(ptr: *const u8, len: usize, idx: u32) -> ();
+
+//         fn __wbindgen_uint8_array_new(ptr: *mut u8, len: usize) -> u32;
+//         fn __wbindgen_uint8_clamped_array_new(ptr: *mut u8, len: usize) -> u32;
+//         fn __wbindgen_uint16_array_new(ptr: *mut u16, len: usize) -> u32;
+//         fn __wbindgen_uint32_array_new(ptr: *mut u32, len: usize) -> u32;
+//         fn __wbindgen_biguint64_array_new(ptr: *mut u64, len: usize) -> u32;
+//         fn __wbindgen_int8_array_new(ptr: *mut i8, len: usize) -> u32;
+//         fn __wbindgen_int16_array_new(ptr: *mut i16, len: usize) -> u32;
+//         fn __wbindgen_int32_array_new(ptr: *mut i32, len: usize) -> u32;
+//         fn __wbindgen_bigint64_array_new(ptr: *mut i64, len: usize) -> u32;
+//         fn __wbindgen_float32_array_new(ptr: *mut f32, len: usize) -> u32;
+//         fn __wbindgen_float64_array_new(ptr: *mut f64, len: usize) -> u32;
+
+//         fn __wbindgen_array_new() -> u32;
+//         fn __wbindgen_array_push(array: u32, value: u32) -> ();
+
+//         fn __wbindgen_not(idx: u32) -> u32;
+
+//         fn __wbindgen_exports() -> u32;
+//         fn __wbindgen_memory() -> u32;
+//         fn __wbindgen_module() -> u32;
+//         fn __wbindgen_function_table() -> u32;
+//     }
+// }
+
+// for e in old.exports.iter() {
+//     if e.name.starts_with("__externref") || e.name.contains("wbindgen_externref") {
+//         if let ExportItem::Function(func) = e.item {
+//             let tyid = old.funcs.get(func).ty();
+//             let ty = old.types.get(tyid);
+//             let params = ty.params().to_vec();
+//             let results = ty.results().to_vec();
+
+//             let new_ty = new.types.add(&params, &results);
+
+//             let (new_func, new_imp) = new.add_import_func("env", &e.name, new_ty);
+//             new.exports.add(&e.name, new_func);
+//         }
+//     }
+// }
+
+// // Run the xform
+// let mut wbgxform = wasm_bindgen_externref_xform::Context::default();
+
+// // quick hack, prepare fails with PIC/PIE code. we temporarily clear out the segments of the main func table to prevent this error from hitting
+// let main_func_table_id = new.tables.main_function_table()?.unwrap();
+// let segs = std::mem::take(&mut new.tables.get_mut(main_func_table_id).elem_segments);
+// wbgxform.prepare(&mut new)?;
+// new.tables.get_mut(main_func_table_id).elem_segments = segs;
+// wbgxform.run(&mut new)?;
+
+#[test]
+fn print_target_features() {
+    let path = "/Users/jonathankelley/Development/dioxus/target/wasm32-unknown-unknown/wasm-dev/simple-web-example-fullstack.wasm";
+    let module = Module::from_file(path).unwrap();
+    for (id, custom) in module.customs.iter() {
+        if custom.name() == "target_features" {
+            let data = custom.data(&Default::default());
+            let text = String::from_utf8(data.to_vec());
+            println!("Target Features: {:?}", text);
+        }
+    }
+}

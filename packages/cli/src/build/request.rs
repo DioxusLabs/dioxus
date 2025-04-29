@@ -860,7 +860,7 @@ session_cache_dir: {}"#,
 
         // Fat builds need to be linked with the fat linker. Would also like to link here for thin builds
         if matches!(ctx.mode, BuildMode::Fat) {
-            self.perform_fat_link(ctx, &exe).await?;
+            self.run_fat_link(ctx, &exe).await?;
         }
 
         let assets = self.collect_assets(&exe)?;
@@ -1434,7 +1434,7 @@ session_cache_dir: {}"#,
     ///
     /// todo: I think we can traverse our immediate dependencies and inspect their symbols, unless they `pub use` a crate
     /// todo: we should try and make this faster with memmapping
-    pub(crate) async fn perform_fat_link(&self, ctx: &BuildContext, exe: &Path) -> Result<()> {
+    pub(crate) async fn run_fat_link(&self, ctx: &BuildContext, exe: &Path) -> Result<()> {
         ctx.status_starting_link();
 
         let raw_args = std::fs::read_to_string(self.link_args_file.path())
@@ -1896,6 +1896,18 @@ session_cache_dir: {}"#,
                 }
                 .to_json(),
             ));
+        }
+
+        // Disable reference types on wasm when using hotpatching
+        // https://blog.rust-lang.org/2024/09/24/webassembly-targets-change-in-default-target-features/#disabling-on-by-default-webassembly-proposals
+        if self.platform == Platform::Web
+            && matches!(ctx.mode, BuildMode::Thin { .. } | BuildMode::Fat)
+        {
+            env_vars.push(("RUSTFLAGS", {
+                let mut rust_flags = std::env::var("RUSTFLAGS").unwrap_or_default();
+                rust_flags.push_str(" -Ctarget-cpu=mvp");
+                rust_flags
+            }));
         }
 
         if let Some(target_dir) = self.custom_target_dir.as_ref() {
@@ -3032,6 +3044,13 @@ session_cache_dir: {}"#,
             // This will overwrite the file in place
             // We will wasm-opt it in just a second...
             std::fs::write(&post_bindgen_wasm, modules.main.bytes)?;
+        }
+
+        if matches!(ctx.mode, BuildMode::Fat) {
+            // add `export { __wbg_get_imports };` to the end of the wasmbindgen js file
+            let mut js = std::fs::read(self.wasm_bindgen_js_output_file())?;
+            writeln!(js, "\nexport {{ __wbg_get_imports }};")?;
+            std::fs::write(self.wasm_bindgen_js_output_file(), js)?;
         }
 
         // Make sure to optimize the main wasm file if requested or if bundle splitting
