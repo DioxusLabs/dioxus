@@ -20,7 +20,8 @@ use subsecond_types::*;
 use target_lexicon::{OperatingSystem, Triple};
 use thiserror::Error;
 use walrus::{
-    ir::Visitor, ConstExpr, ElementItems, ElementKind, ExportItem, FunctionId, FunctionKind,
+    ir::{self, Visitor},
+    ConstExpr, ElementItems, ElementKind, ExportItem, FunctionBuilder, FunctionId, FunctionKind,
     ImportKind, Module, ModuleConfig,
 };
 use wasmparser::{
@@ -148,7 +149,7 @@ fn create_wasm_jump_table(original: &Path, patch: &Path) -> Result<JumpTable> {
         symbols: new_raw_data,
     } = parse_module_with_ids(&new_bytes)?;
 
-    let name_to_ifunc_old = collect_func_ifuncs(&old, &old_raw_data, &old_ids);
+    let (name_to_ifunc_old, funcid_to_idx) = collect_func_ifuncs(&old, &old_raw_data, &old_ids);
 
     if old_raw_data.symbols.is_empty() {
         tracing::warn!("No debug symbols in the WASM output. Make sure to set `opt-level = 0` for hotpatching to work properly.");
@@ -159,8 +160,18 @@ fn create_wasm_jump_table(original: &Path, patch: &Path) -> Result<JumpTable> {
     // // We currently don't support updating them since we'd somehow need to merge the glue code together
     // ensure_wasm_bindgen_unchanged(&old, &new, &old_raw_data, &new_raw_data)?;
 
+    let exports_to_funcids = old
+        .exports
+        .iter()
+        .filter_map(|e| match e.item {
+            ExportItem::Function(id) => Some((e.name.as_str(), id)),
+            _ => None,
+        })
+        .collect::<HashMap<_, _>>();
+
     let mut mems = vec![];
     let mut funcs = vec![];
+    let mut to_ifuncs = vec![];
 
     // Collect all the GOT entries from the new module.
     for t in new.imports.iter() {
@@ -173,7 +184,18 @@ fn create_wasm_jump_table(original: &Path, patch: &Path) -> Result<JumpTable> {
                 funcs.push((t.id(), entry));
             }
             "GOT.mem" => mems.push(t.id()),
-            _ => {}
+            "env" => {
+                // tracing::debug!("Found env import: {t:?}");
+                to_ifuncs.push(t.id());
+            }
+            m => {
+                tracing::info!("Unknown import module: {m} -> {}", t.name);
+                // let Some(entry) = name_to_ifunc_old.get(t.name.as_str()).cloned() else {
+                //     let exists = old.exports.get_func(t.name.as_str());
+                //     return Err(PatchError::InvalidModule(format!("Expected to find <{m}> in ifunc table but it was missing: {} -> {exists:?}\nDid all symbols make it into the static lib?", t.name.as_str())));
+                // };
+                // funcs.push((t.id(), entry));
+            }
         }
     }
 
@@ -284,6 +306,71 @@ fn create_wasm_jump_table(original: &Path, patch: &Path) -> Result<JumpTable> {
         ));
     }
 
+    // Conver the env func imports into ifuncs
+    let ifunc_table_initializer = new
+        .elements
+        .iter()
+        .find_map(|e| match e.kind {
+            ElementKind::Active { table, .. } => Some(table),
+            _ => None,
+        })
+        .context("Missing ifunc table")?;
+
+    for t in to_ifuncs {
+        let import = new.imports.get(t);
+        let ImportKind::Function(func_id) = import.kind else {
+            continue;
+        };
+
+        let corr_export = exports_to_funcids
+            .get(import.name.as_str())
+            .unwrap_or_else(|| {
+                panic!("Failed to find export for {}", import.name);
+            });
+
+        let Some(table_idx) = funcid_to_idx.get(corr_export).cloned() else {
+            tracing::warn!("Failed to find ifunc table index for {}", import.name);
+            continue;
+        };
+        // tracing::info!("Found ifunc table index for {}: {}", import.name, table_idx);
+        // .unwrap_or_else(|| panic!("Failed to find ifunc table index for {}", import.name));
+
+        // Delete the import - we'll satisfy this function locally
+        new.imports.delete(t);
+
+        let func = new.funcs.get_mut(func_id);
+        let ty_id = func.ty();
+
+        // Convert the import function to a local function that calls the indirect function from the table
+        let ty = new.types.get(ty_id);
+
+        let params = ty.params().to_vec();
+        let results = ty.results().to_vec();
+        let args: Vec<_> = params.iter().map(|ty| new.locals.add(*ty)).collect();
+
+        // New function that calls the indirect function
+        let mut builder = FunctionBuilder::new(&mut new.types, &params, &results);
+        let mut body = builder.name("stub".into()).func_body();
+
+        // Push the params onto the stack
+        for arg in args.iter() {
+            body.local_get(*arg);
+        }
+
+        // And then the address of the indirect function
+        body.instr(ir::Instr::Const(ir::Const {
+            value: ir::Value::I32(table_idx),
+        }));
+
+        // And call it
+        body.instr(ir::Instr::CallIndirect(ir::CallIndirect {
+            ty: ty_id,
+            table: ifunc_table_initializer,
+        }));
+
+        new.funcs.get_mut(func_id).kind = FunctionKind::Local(builder.local_func(args));
+    }
+
     // Update the wasm module on the filesystem to use the newly lifted version
     let lib = patch.to_path_buf();
     std::fs::write(&lib, new.emit_wasm())?;
@@ -292,7 +379,7 @@ fn create_wasm_jump_table(original: &Path, patch: &Path) -> Result<JumpTable> {
     //
     // The ifunc_count will be passed to the dynamic loader so it can allocate the right amount of space
     // in the indirect function table when loading the patch.
-    let name_to_ifunc_new = collect_func_ifuncs(&new, &new_raw_data, &new_ids);
+    let (name_to_ifunc_new, _) = collect_func_ifuncs(&new, &new_raw_data, &new_ids);
     let ifunc_count = name_to_ifunc_new.len() as u64;
     let mut map = AddressMap::default();
     for (name, idx) in name_to_ifunc_new.iter() {
@@ -338,8 +425,9 @@ fn collect_func_ifuncs<'a>(
     m: &'a Module,
     raw: &'a RawDataSection<'a>,
     ids_to_fns: &[FunctionId],
-) -> HashMap<&'a str, i32> {
+) -> (HashMap<&'a str, i32>, HashMap<FunctionId, i32>) {
     let mut func_to_offset = HashMap::new();
+    let mut funcid_to_offset = HashMap::new();
 
     for el in m.elements.iter() {
         let ElementKind::Active { offset, .. } = &el.kind else {
@@ -363,54 +451,70 @@ fn collect_func_ifuncs<'a>(
         match &el.items {
             ElementItems::Functions(ids) => {
                 for (idx, id) in ids.iter().enumerate() {
-                    func_to_offset.insert(*id, offset + idx as i32);
+                    let name = m.funcs.get(*id).name.as_deref().unwrap();
+                    func_to_offset.insert(name, offset + idx as i32);
+                    funcid_to_offset.insert(*id, offset + idx as i32);
+                    // func_to_offset.insert(*id, offset + idx as i32);
                 }
             }
             ElementItems::Expressions(_ref_type, _const_exprs) => {
                 // todo - do we need to handle these?
-            }
-        }
-    }
-
-    // The actual symbol table has multiple symbols mapping to the same function.
-    //
-    // When we read the "name" field of functions, that might not actually be all of the names it
-    // is known by. IE the GOT.func entries will use different names to reference the same actual function.
-    //
-    // We need to do some work to create a mapping between every function name and the real function
-    // it corresponds to.
-    let mut duplicated_to_real = HashMap::new();
-    for sym in raw.symbols.iter() {
-        if let SymbolInfo::Func { index, name, .. } = sym {
-            if let Some(real_name) = name.as_deref() {
-                if let Some(real) = ids_to_fns.get(*index as usize) {
-                    duplicated_to_real.insert(real_name, real);
-
-                    // Weirdly enough, the name of this func might
-                    let func = m.funcs.get(*real);
-                    if let Some(name) = func.name.as_deref() {
-                        if real_name != name {
-                            tracing::error!(
-                                "Duplicate name was incorrect found: {real_name} -> {name}"
-                            );
+                for idx in _const_exprs.iter() {
+                    match idx {
+                        ConstExpr::RefFunc(id) => {
+                            let name = m.funcs.get(*id).name.as_deref().unwrap();
+                            // tracing::debug!("Found func as reffunc: {name}");
                         }
-
-                        duplicated_to_real.insert(name, real);
+                        _ => {} // ConstExpr::Value(value) => todo!(),
+                                // ConstExpr::Global(id) => todo!(),
+                                // ConstExpr::RefNull(ref_type) => todo!(),
                     }
                 }
             }
         }
     }
 
-    // Now, we need to go through all the symbols and find the real offset they have
-    let mut offsets = HashMap::new();
-    for (dupename, real_id) in duplicated_to_real {
-        if let Some(offset) = func_to_offset.get(real_id) {
-            offsets.insert(dupename, *offset as i32);
-        }
-    }
+    // // The actual symbol table has multiple symbols mapping to the same function.
+    // //
+    // // When we read the "name" field of functions, that might not actually be all of the names it
+    // // is known by. IE the GOT.func entries will use different names to reference the same actual function.
+    // //
+    // // We need to do some work to create a mapping between every function name and the real function
+    // // it corresponds to.
+    // let mut duplicated_to_real = HashMap::new();
+    // for sym in raw.symbols.iter() {
+    //     if let SymbolInfo::Func { index, name, .. } = sym {
+    //         if let Some(real_name) = name.as_deref() {
+    //             if let Some(real) = ids_to_fns.get(*index as usize) {
+    //                 duplicated_to_real.insert(real_name, real);
 
-    offsets
+    //                 // Weirdly enough, the name of this func might
+    //                 let func = m.funcs.get(*real);
+    //                 if let Some(name) = func.name.as_deref() {
+    //                     if real_name != name {
+    //                         tracing::error!(
+    //                             "Duplicate name was incorrect found: {real_name} -> {name}"
+    //                         );
+    //                     }
+
+    //                     duplicated_to_real.insert(name, real);
+    //                 }
+    //             }
+    //         }
+    //     }
+    // }
+
+    // // Now, we need to go through all the symbols and find the real offset they have
+    // let mut offsets = HashMap::new();
+    // for (dupename, real_id) in duplicated_to_real {
+    //     if let Some(offset) = func_to_offset.get(real_id) {
+    //         offsets.insert(dupename, *offset as i32);
+    //     }
+    // }
+
+    // offsets
+    // todo!()
+    (func_to_offset, funcid_to_offset)
 }
 
 /// Resolve the undefined symbols in the incrementals against the original binary, returning an object
@@ -644,7 +748,7 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
     //
     // Unfortunately, the indices it gives us ARE NOT VALID.
     // We need to work around it by using the FunctionId from the module as a link between the merged function names.
-    let ifunc_map = collect_func_ifuncs(&module, &symbols, &ids);
+    let (ifunc_map, _) = collect_func_ifuncs(&module, &symbols, &ids);
     let ifuncs = module
         .funcs
         .iter()
@@ -666,81 +770,101 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
         .collect::<HashSet<_>>();
 
     let mut make_indirect = vec![];
+    let mut names_to_names: HashMap<&str, HashSet<&str>> = HashMap::new();
     for (name, index) in symbols.code_symbol_map.iter() {
         let func = module.funcs.get(ids[*index]);
-
-        if *name == "_ZN4core3fmt3num3imp54_$LT$impl$u20$core..fmt..Display$u20$for$u20$usize$GT$3fmt17h6d9dbc09b6dc47c8E" {
-        // if *name == "_ZN42_$LT$$RF$T$u20$as$u20$core..fmt..Debug$GT$3fmt17h8dcb6eecee078060E" {
-            // if name.contains("3fmt17h8dcb6eecee07806") {
-            tracing::debug!("Found a special function: {name}");
-            tracing::debug!("Kind: {:?}", func.kind);
-            tracing::debug!("already exported? {:?}", already_exported.contains(*name));
-            tracing::debug!("ifuncs contains it?: {:?}", ifuncs.get(&func.id()));
+        if func.name.as_deref() != Some(*name) {
+            tracing::warn!(
+                "Function name mismatch (f.name -> symtab): {:?} != {:?}",
+                func.name,
+                name,
+            );
         }
 
-        if name_is_bindgen_symbol(name) {
-            /// The __wbindgen_describe_ functions also reference funcs like:
-            /// _ZN86_$LT$dioxus_web..document..JSOwner$u20$as$u20$wasm_bindgen..describe..WasmDescribe$GT$8describe17ha9b39368d518c1f9E
-            ///
-            /// These can be found by walking the instructions, so we build a Visitor
-            /// ... todo: we might not need to do this since it seems that it's not reliable enough
-            #[derive(Default)]
-            struct AccAllDescribes {
-                funcs: HashSet<FunctionId>,
-            }
-
-            impl<'a> Visitor<'a> for AccAllDescribes {
-                fn visit_function_id(&mut self, function: &walrus::FunctionId) {
-                    self.funcs.insert(*function);
-                }
-            }
-
-            // let mut acc = AccAllDescribes::default();
-            // for func in module.funcs.iter() {
-            //     let Some(name) = func.name.as_ref() else {
-            //         continue;
-            //     };
-
-            //     // Only deal with the __wbindgen_describe_ functions
-            //     if !name_is_bindgen_symbol(name) {
-            //         continue;
-            //     }
-
-            //     // They call other functions, so we need to find those too and make sure not to mark them as exported
-            //     if let FunctionKind::Local(func) = &module.funcs.get(func.id()).kind {
-            //         walrus::ir::dfs_in_order(&mut acc, &func, func.entry_block());
-            //     }
-
-            //     acc.funcs.insert(func.id());
-            // }
-
-            if let FunctionKind::Local(local) = &func.kind {
-                let mut accer = AccAllDescribes::default();
-                walrus::ir::dfs_in_order(&mut accer, &local, local.entry_block());
-                for func in accer.funcs {
-                    if let Some(new_name) = module.funcs.get(func).name.as_deref() {
-                        if !name_is_bindgen_symbol(new_name) {
-                            tracing::warn!("references real {name} -> {new_name}");
-                            //     // make_indirect.push(func);
-                        }
-                    }
-                }
-            }
-
-            continue;
-        }
-
-        if let FunctionKind::Local(_local) = &func.kind {
-            if !already_exported.contains(*name) && !name_is_bindgen_symbol(name) {
+        if !name_is_bindgen_symbol(name) {
+            if !already_exported.contains(*name) {
                 module.exports.add(name, func.id());
-                already_exported.insert(name.to_string());
             }
-
-            if !ifuncs.contains(&func.id()) && !name_is_describe_symbol(name) {
-                make_indirect.push(func.id());
-            }
+            make_indirect.push(func.id());
         }
+
+        // names_to_names
+        //     .entry(*name)
+        //     .or_default()
+        //     .insert(func.name.as_deref().unwrap());
     }
+
+    // for func in module.funcs.iter() {
+    //     if let Some(name) = func.name.as_deref() {
+    //         if let FunctionKind::Local(_lovcal) = &func.kind {
+    //             //             if name == "_ZN4core3fmt3num3imp54_$LT$impl$u20$core..fmt..Display$u20$for$u20$usize$GT$3fmt17h6d9dbc09b6dc47c8E"||
+    //             // name == "_ZN4core3fmt3num55_$LT$impl$u20$core..fmt..UpperHex$u20$for$u20$usize$GT$3fmt17he51f86722515af34E"||
+    //             // name == "_ZN4core3fmt3num55_$LT$impl$u20$core..fmt..LowerHex$u20$for$u20$usize$GT$3fmt17h420305cf5136fed6E"||
+    //             // name == "_ZN4core3fmt8builders9DebugList5entry17h6660e70d2341a018E"||
+    //             // name == "_ZN59_$LT$dyn$u20$core..any..Any$u20$as$u20$core..fmt..Debug$GT$3fmt17h8ab3728dab9d43e8E"{
+
+    //             //             // tracing::debug!("Found a function: {name} -> {index}");
+    //             //             tracing::debug!("ifunc: {:#?}", ifuncs.contains(&func.id()));
+    //             //             tracing::debug!("is bindgen:: {:#?}", name_is_bindgen_symbol(name));
+    //             //             module.exports.add(name, func.id());
+    //             //         }
+
+    //             // tracing::debug!("Found a function: {name} -> {index}");
+    //             // tracing::debug!("ifunc: {:#?}", ifuncs.contains(&func.id()));
+    //             // tracing::debug!("is bindgen:: {:#?}", name_is_bindgen_symbol(name));
+    //             // module.exports.add(name, func.id());
+
+    //             if !ifuncs.contains(&func.id()) && !name_is_bindgen_symbol(name) {
+    //                 // if !ifuncs.contains(&func.id()) && !name_is_bindgen_symbol(name) {
+    //                 // if !ifuncs.contains(&func.id()) && !name_is_bindgen_symbol(name) {
+    //                 make_indirect.push(func.id());
+    //             }
+    //         }
+    //     }
+    // }
+
+    //     for (name, index) in symbols.code_symbol_map.iter() {
+    //         let func = module.funcs.get(ids[*index]);
+
+    //         // 22:55:45 [dev] Failed to find ifunc table index for _ZN4core3fmt3num3imp54_$LT$impl$u20$core..fmt..Display$u20$for$u20$usize$GT$3fmt17h6d9dbc09b6dc47c8E
+    //         // 22:55:45 [dev] Failed to find ifunc table index for _ZN4core3fmt3num55_$LT$impl$u20$core..fmt..UpperHex$u20$for$u20$usize$GT$3fmt17he51f86722515af34E
+    //         // 22:55:45 [dev] Failed to find ifunc table index for _ZN4core3fmt3num55_$LT$impl$u20$core..fmt..LowerHex$u20$for$u20$usize$GT$3fmt17h420305cf5136fed6E
+    //         // 22:55:45 [dev] Failed to find ifunc table index for _ZN4core3fmt8builders9DebugList5entry17h6660e70d2341a018E
+    //         // 22:55:45 [dev] Failed to find ifunc table index for _ZN59_$LT$dyn$u20$core..any..Any$u20$as$u20$core..fmt..Debug$GT$3fmt17h8ab3728dab9d43e8E
+
+    //         // if *name == "_ZN4core3fmt3num3imp54_$LT$impl$u20$core..fmt..Display$u20$for$u20$usize$GT$3fmt17h6d9dbc09b6dc47c8E" {
+
+    //         if func.name.as_deref() != Some(*name) {
+    //             tracing::warn!("Function name mismatch: {:?} != {}", func.name, name);
+    //         }
+
+    //         if let FunctionKind::Local(_local) = &func.kind {
+    //             // if !already_exported.contains(*name) {
+    //             //     // if !already_exported.contains(*name) && !name_is_bindgen_symbol(name) {
+    //             //     module.exports.add(name, func.id());
+    //             //     already_exported.insert(name.to_string());
+    //             // }
+
+    //             if *name == "_ZN4core3fmt3num3imp54_$LT$impl$u20$core..fmt..Display$u20$for$u20$usize$GT$3fmt17h6d9dbc09b6dc47c8E"||
+    // *name == "_ZN4core3fmt3num55_$LT$impl$u20$core..fmt..UpperHex$u20$for$u20$usize$GT$3fmt17he51f86722515af34E"||
+    // *name == "_ZN4core3fmt3num55_$LT$impl$u20$core..fmt..LowerHex$u20$for$u20$usize$GT$3fmt17h420305cf5136fed6E"||
+    // *name == "_ZN4core3fmt8builders9DebugList5entry17h6660e70d2341a018E"||
+    // *name == "_ZN59_$LT$dyn$u20$core..any..Any$u20$as$u20$core..fmt..Debug$GT$3fmt17h8ab3728dab9d43e8E"{
+
+    //             tracing::debug!("Found a function: {name} -> {index}");
+    //             tracing::debug!("ifunc: {:#?}", ifuncs.contains(&func.id()));
+    //             tracing::debug!("is bindgen:: {:#?}", name_is_bindgen_symbol(name));
+    //             module.exports.add(name, func.id());
+    //         }
+
+    //             // if !name_is_bindgen_symbol(name) {
+    //             if !ifuncs.contains(&func.id()) && !name_is_bindgen_symbol(name) {
+    //                 // if !ifuncs.contains(&func.id()) && !name_is_bindgen_symbol(name) {
+    //                 // if !ifuncs.contains(&func.id()) && !name_is_bindgen_symbol(name) {
+    //                 make_indirect.push(func.id());
+    //             }
+    //         }
+    //     }a
 
     tracing::trace!("Hoisting {} functions", make_indirect.len());
     let seg = module.elements.get_mut(ifunc_table_initializer);
@@ -769,15 +893,6 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
     Ok(module.emit_wasm())
 }
 
-fn name_is_describe_symbol(name: &str) -> bool {
-    name.contains("__wbindgen_describe")
-        || name.contains("wasm_bindgen..describe..WasmDescribe")
-        || name.contains("wasm_bindgen..closure..WasmClosure$GT$8describe")
-        || name.contains("wasm_bindgen7closure16Closure$LT$T$GT$4wrap8describe")
-        || name.contains("__wbindgen_describe_closure")
-        || name.contains("__wbindgen_externref_xform")
-}
-
 fn name_is_bindgen_symbol(name: &str) -> bool {
     name.contains("__wbindgen_describe")
         || name.contains("wasm_bindgen..describe..WasmDescribe")
@@ -785,7 +900,8 @@ fn name_is_bindgen_symbol(name: &str) -> bool {
         || name.contains("wasm_bindgen7closure16Closure$LT$T$GT$4wrap8describe")
         || name.contains("__wbindgen_describe_closure")
         || name.contains("__wbindgen_externref_xform")
-        || name.contains("wasm_bindgen4__rt19link_mem_intrinsics")
+    // || name.contains("wasm_bindgen4__rt19link_mem_intrinsics")
+    // || name.contains("__wbindgen")
 }
 
 /// Manually parse the data section from a wasm module
@@ -985,3 +1101,68 @@ fn parse_module_with_ids(bindgened: &[u8]) -> Result<ParsedModule> {
 
 //     // println!("Section: {sect:?} -> {data:?}");
 // }
+
+// if *name == "_ZN4core3fmt3num3imp54_$LT$impl$u20$core..fmt..Display$u20$for$u20$usize$GT$3fmt17h6d9dbc09b6dc47c8E" {
+// // if *name == "_ZN42_$LT$$RF$T$u20$as$u20$core..fmt..Debug$GT$3fmt17h8dcb6eecee078060E" {
+//     // if name.contains("3fmt17h8dcb6eecee07806") {
+//     tracing::debug!("Found a special function: {name}");
+//     tracing::debug!("Kind: {:?}", func.kind);
+//     tracing::debug!("already exported? {:?}", already_exported.contains(*name));
+//     tracing::debug!("ifuncs contains it?: {:?}", ifuncs.get(&func.id()));
+// }
+
+// if name_is_bindgen_symbol(name) {
+//     /// The __wbindgen_describe_ functions also reference funcs like:
+//     /// _ZN86_$LT$dioxus_web..document..JSOwner$u20$as$u20$wasm_bindgen..describe..WasmDescribe$GT$8describe17ha9b39368d518c1f9E
+//     ///
+//     /// These can be found by walking the instructions, so we build a Visitor
+//     /// ... todo: we might not need to do this since it seems that it's not reliable enough
+//     #[derive(Default)]
+//     struct AccAllDescribes {
+//         funcs: HashSet<FunctionId>,
+//     }
+
+//     impl<'a> Visitor<'a> for AccAllDescribes {
+//         fn visit_function_id(&mut self, function: &walrus::FunctionId) {
+//             self.funcs.insert(*function);
+//         }
+//     }
+
+//     // let mut acc = AccAllDescribes::default();
+//     // for func in module.funcs.iter() {
+//     //     let Some(name) = func.name.as_ref() else {
+//     //         continue;
+//     //     };
+
+//     //     // Only deal with the __wbindgen_describe_ functions
+//     //     if !name_is_bindgen_symbol(name) {
+//     //         continue;
+//     //     }
+
+//     //     // They call other functions, so we need to find those too and make sure not to mark them as exported
+//     //     if let FunctionKind::Local(func) = &module.funcs.get(func.id()).kind {
+//     //         walrus::ir::dfs_in_order(&mut acc, &func, func.entry_block());
+//     //     }
+
+//     //     acc.funcs.insert(func.id());
+//     // }
+
+//     // if let FunctionKind::Local(local) = &func.kind {
+//     //     let mut accer = AccAllDescribes::default();
+//     //     walrus::ir::dfs_in_order(&mut accer, &local, local.entry_block());
+//     //     for func in accer.funcs {
+//     //         if let Some(new_name) = module.funcs.get(func).name.as_deref() {
+//     //             if !name_is_bindgen_symbol(new_name) {
+//     //                 tracing::warn!("references real {name} -> {new_name}");
+//     //                 //     // make_indirect.push(func);
+//     //             }
+//     //         }
+//     //     }
+//     // }
+
+//     continue;
+// }
+
+// // if name.contains("__wbindgen") || name.contains("wbg") {
+// //     tracing::debug!("sus name: {name}");
+// // }

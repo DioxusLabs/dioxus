@@ -1,5 +1,5 @@
 [package]
-name = "simple-web-example"
+name = "simple-web-example-fullstack"
 version = "0.1.0"
 edition = "2021"
 publish = false
@@ -7,11 +7,12 @@ publish = false
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-dioxus = { workspace = true }
+dioxus = { workspace = true, features = ["fullstack"] }
 serde = { workspace = true }
 reqwest = { workspace = true }
 
 [features]
-default = ["dioxus/web"]
+default = []
+fullstack = ["dioxus/fullstack"]
 web = ["dioxus/web"]
 server = ["dioxus/server"]
