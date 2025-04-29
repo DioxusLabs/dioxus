@@ -102,13 +102,13 @@ impl IntoMsg<ServerMessage> for ClientMessage {
     fn into_msg(self) -> Result<ServerMessage, Self::Error> {
         use ServerMessage as SM;
         Ok(match self {
-            Self::Text(v) => SM::Text(v.into()),
+            Self::Text(v) => SM::Text(v.as_str().into()),
             Self::Binary(v) => SM::Binary(v.into()),
             Self::Ping(v) => SM::Ping(v.into()),
             Self::Pong(v) => SM::Pong(v.into()),
             Self::Close(v) => SM::Close(v.map(|cf| ServerCloseFrame {
                 code: cf.code.into(),
-                reason: cf.reason.into_owned().into(),
+                reason: cf.reason.as_str().into(),
             })),
         })
     }
@@ -120,13 +120,13 @@ impl IntoMsg<ClientMessage> for ServerMessage {
     fn into_msg(self) -> Result<ClientMessage, Self::Error> {
         use ClientMessage as CM;
         Ok(match self {
-            Self::Text(v) => CM::Text(v.to_string()),
+            Self::Text(v) => CM::Text(v.as_str().into()),
             Self::Binary(v) => CM::Binary(v.into()),
             Self::Ping(v) => CM::Ping(v.into()),
             Self::Pong(v) => CM::Pong(v.into()),
             Self::Close(v) => CM::Close(v.map(|cf| ClientCloseFrame {
                 code: cf.code.into(),
-                reason: cf.reason.to_string().into(),
+                reason: cf.reason.as_str().into(),
             })),
             Self::Frame(_) => {
                 // this variant should never be returned by next(), but handle it
