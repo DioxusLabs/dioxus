@@ -211,8 +211,8 @@ impl WebServer {
         }
 
         self.send_shutdown().await;
-        for socket in self.hot_reload_sockets.drain(..) {
-            _ = socket.close().await;
+        for mut socket in self.hot_reload_sockets.drain(..) {
+            _ = socket.send(Message::Close(None)).await;
         }
     }
 
@@ -302,7 +302,11 @@ impl WebServer {
         let mut i = 0;
         while i < self.hot_reload_sockets.len() {
             let socket = &mut self.hot_reload_sockets[i];
-            if socket.send(Message::Text(msg.clone())).await.is_err() {
+            if socket
+                .send(Message::Text(msg.clone().into()))
+                .await
+                .is_err()
+            {
                 self.hot_reload_sockets.remove(i);
             } else {
                 i += 1;
@@ -343,7 +347,7 @@ impl WebServer {
     async fn send_devserver_message(&mut self, msg: DevserverMsg) {
         for socket in self.hot_reload_sockets.iter_mut() {
             _ = socket
-                .send(Message::Text(serde_json::to_string(&msg).unwrap()))
+                .send(Message::Text(serde_json::to_string(&msg).unwrap().into()))
                 .await;
         }
     }
@@ -393,7 +397,11 @@ async fn devserver_mainloop(
 
     // If we're not using rustls, just use regular axum
     if https_cfg.enabled != Some(true) {
-        axum::serve(listener.try_into().unwrap(), router.into_make_service()).await?;
+        axum::serve(
+            tokio::net::TcpListener::from_std(listener).unwrap(),
+            router.into_make_service(),
+        )
+        .await?;
         return Ok(());
     }
 
@@ -434,7 +442,7 @@ fn build_devserver_router(
         // For fullstack, liveview, and server, forward all requests to the inner server
         let address = fullstack_address.unwrap();
         tracing::debug!("Proxying requests to fullstack server at {address}");
-        router = router.nest_service("/",super::proxy::proxy_to(
+        router = router.fallback_service(super::proxy::proxy_to(
             format!("http://{address}").parse().unwrap(),
             true,
             |error| {
@@ -461,8 +469,11 @@ fn build_devserver_router(
                 .unwrap_or_default()
                 .trim_matches('/')
         );
-
-        router = router.nest_service(&base_path, build_serve_dir(args, krate));
+        if base_path == "/" {
+            router = router.fallback_service(build_serve_dir(args, krate));
+        } else {
+            router = router.nest_service(&base_path, build_serve_dir(args, krate));
+        }
     }
 
     // Setup middleware to intercept html requests if the build status is "Building"
@@ -755,6 +766,6 @@ impl SharedStatus {
 
     async fn send_to(&self, socket: &mut WebSocket) -> Result<(), axum::Error> {
         let msg = serde_json::to_string(&self.get()).unwrap();
-        socket.send(Message::Text(msg)).await
+        socket.send(Message::Text(msg.into())).await
     }
 }

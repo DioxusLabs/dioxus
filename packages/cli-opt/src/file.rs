@@ -1,9 +1,9 @@
 use anyhow::Context;
-use manganis::FolderAssetOptions;
+use manganis::{CssModuleAssetOptions, FolderAssetOptions};
 use manganis_core::{AssetOptions, CssAssetOptions, ImageAssetOptions, JsAssetOptions};
 use std::path::Path;
 
-use crate::css::process_scss;
+use crate::css::{process_css_module, process_scss};
 
 use super::{
     css::process_css, folder::process_folder, image::process_image, js::process_js,
@@ -54,6 +54,9 @@ pub(crate) fn process_file_to_with_options(
         ResolvedAssetType::Css(options) => {
             process_css(options, source, &temp_path)?;
         }
+        ResolvedAssetType::CssModule(options) => {
+            process_css_module(options, source, output_path, &temp_path)?;
+        }
         ResolvedAssetType::Scss(options) => {
             process_scss(options, source, &temp_path)?;
         }
@@ -94,6 +97,8 @@ pub(crate) enum ResolvedAssetType {
     Image(ImageAssetOptions),
     /// A css asset
     Css(CssAssetOptions),
+    /// A css module asset
+    CssModule(CssModuleAssetOptions),
     /// A SCSS asset
     Scss(CssAssetOptions),
     /// A javascript asset
@@ -110,6 +115,7 @@ pub(crate) fn resolve_asset_options(source: &Path, options: &AssetOptions) -> Re
     match options {
         AssetOptions::Image(image) => ResolvedAssetType::Image(image.clone()),
         AssetOptions::Css(css) => ResolvedAssetType::Css(css.clone()),
+        AssetOptions::CssModule(css) => ResolvedAssetType::CssModule(css.clone()),
         AssetOptions::Js(js) => ResolvedAssetType::Js(js.clone()),
         AssetOptions::Folder(folder) => ResolvedAssetType::Folder(folder.clone()),
         AssetOptions::Unknown => resolve_unknown_asset_options(source),

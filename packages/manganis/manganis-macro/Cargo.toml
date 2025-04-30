@@ -26,4 +26,4 @@ macro-string = { workspace = true }
 default = []
 
 [dev-dependencies]
-manganis.workspace = true
+manganis = { workspace = true }

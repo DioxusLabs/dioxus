@@ -2,6 +2,7 @@ use crate::{AppBundle, DioxusCrate, Platform, Result};
 use anyhow::Context;
 use dioxus_cli_opt::process_file_to;
 use std::{
+    env,
     net::SocketAddr,
     path::{Path, PathBuf},
     process::Stdio,
@@ -110,6 +111,10 @@ impl AppHandle {
 
         if let Some(base_path) = &krate.config.web.app.base_path {
             envs.push((dioxus_cli_config::ASSET_ROOT_ENV, base_path.clone()));
+        }
+
+        if let Some(env_filter) = env::var_os("RUST_LOG").and_then(|e| e.into_string().ok()) {
+            envs.push(("RUST_LOG", env_filter));
         }
 
         // Launch the server if we were given an address to start it on, and the build includes a server. After we

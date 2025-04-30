@@ -25,25 +25,22 @@ dioxus-interpreter-js = { workspace = true, features = [
 dioxus-fullstack-protocol = { workspace = true, features = ["web"], optional = true }
 generational-box = { workspace = true }
 
-js-sys = "0.3.70"
+js-sys = { workspace = true }
 wasm-bindgen = { workspace = true }
-wasm-bindgen-futures = "0.4.29"
+wasm-bindgen-futures = { workspace = true }
 tracing = { workspace = true }
 rustc-hash = { workspace = true }
-futures-util = { workspace = true, features = [
-    "std",
-    "async-await",
-    "async-await-macro",
-] }
+futures-util = { workspace = true, features = ["std", "async-await", "async-await-macro"] }
 futures-channel = { workspace = true }
 serde_json = { version = "1.0", optional = true }
 serde = { version = "1.0", optional = true }
-serde-wasm-bindgen = { version = "0.5.0", optional = true }
+serde-wasm-bindgen = { version = "0.6.5", optional = true }
 
-async-trait = { version = "0.1.58", optional = true }
+ciborium = { workspace = true, optional = true }
+async-trait = { workspace = true, optional = true }
 
 [dependencies.web-sys]
-version = "0.3.70"
+version = "0.3.77"
 features = [
     "AnimationEvent",
     "ClipboardEvent",
@@ -104,17 +101,24 @@ file_engine = [
     "web-sys/FileList",
     "web-sys/FileReader"
 ]
-devtools = ["web-sys/MessageEvent", "web-sys/WebSocket", "web-sys/Location", "dep:serde_json", "dep:serde", "dioxus-core/serialize"]
+devtools = [
+  "web-sys/MessageEvent",
+  "web-sys/WebSocket",
+  "web-sys/Location",
+  "dep:serde_json",
+  "dep:serde",
+  "dioxus-core/serialize",
+]
 document = ["dep:serde-wasm-bindgen", "dep:serde_json", "dep:serde"]
 
 [dev-dependencies]
 dioxus = { workspace = true, default-features = true }
-wasm-bindgen-test = "0.3.29"
+wasm-bindgen-test = "0.3.50"
 dioxus-ssr = { workspace = true, default-features = false }
-gloo-timers = "0.2.3"
-gloo-dialogs = "0.1.1"
+gloo-timers = { workspace = true }
+gloo-dialogs = { workspace = true }
 dioxus-web = { path = ".", features = ["hydrate"] }
-tracing-wasm = "0.2.1"
+tracing-wasm = { workspace = true }
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]

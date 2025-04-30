@@ -73,7 +73,8 @@ pub(crate) fn hash_file_with_options(
         }
 
         // Otherwise, we can just hash the file contents
-        ResolvedAssetType::Css(_)
+        ResolvedAssetType::CssModule(_)
+        | ResolvedAssetType::Css(_)
         | ResolvedAssetType::Image(_)
         | ResolvedAssetType::Json
         | ResolvedAssetType::File => {

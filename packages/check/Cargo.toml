@@ -16,5 +16,5 @@ syn = { workspace = true, features = ["full", "extra-traits", "visit"] }
 owo-colors = { workspace = true, features = ["supports-colors"] }
 
 [dev-dependencies]
-indoc = "2.0.3"
-pretty_assertions = "1.2.1"
+indoc = "2.0.6"
+pretty_assertions = { workspace = true }
