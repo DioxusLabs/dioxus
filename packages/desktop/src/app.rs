@@ -471,8 +471,8 @@ impl App {
                 (position.x, position.y)
             };
 
-            let size = window.outer_size();
             let (width, height) = if cfg!(target_os = "macos") {
+                let size = window.outer_size();
                 let size = size.to_logical::<u32>(window.scale_factor());
                 // This is to work around a bug in how tao handles inner_size on macOS
                 // We *want* to use inner_size, but that's currently broken, so we use outer_size instead and then an adjustment
@@ -481,6 +481,7 @@ impl App {
                 let adjustment = if window.is_decorated() { 28 } else { 0 };
                 (size.width, size.height.saturating_sub(adjustment))
             } else {
+                let size = window.inner_size();
                 (size.width, size.height)
             };
 
