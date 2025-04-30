@@ -22,7 +22,7 @@ use thiserror::Error;
 use walrus::{
     ir::{self},
     ConstExpr, ElementItems, ElementKind, ExportItem, FunctionBuilder, FunctionId, FunctionKind,
-    ImportKind, Module, ModuleConfig, TableId,
+    ImportKind, LocalFunction, Module, ModuleConfig, TableId,
 };
 use wasmparser::{
     BinaryReader, BinaryReaderError, Linking, LinkingSectionReader, Payload, SymbolInfo,
@@ -160,6 +160,77 @@ fn create_wasm_jump_table(original: &Path, patch: &Path) -> Result<JumpTable> {
     // // We currently don't support updating them since we'd somehow need to merge the glue code together
     // ensure_wasm_bindgen_unchanged(&old, &new, &old_raw_data, &new_raw_data)?;
 
+    // || e.name.contains("wbindgen_externref")
+    // tracing::debug!(
+    //     "externref: {:?}",
+    // {
+    //     let ifunc_table_initializer = new.tables.main_function_table()?.unwrap();
+    //     let (name, offset) = name_to_ifunc_old
+    //         .iter()
+    //         .find(|k| k.0.contains("table_dealloc"))
+    //         .unwrap();
+    //     let original = old.funcs.by_name("__externref_table_dealloc").unwrap();
+    //     let original = old.funcs.get(original);
+    //     let original_ty = old.types.get(original.ty());
+    //     let params = original_ty.params().to_vec();
+    //     let results = original_ty.results().to_vec();
+    //     let args: Vec<_> = params.iter().map(|ty| new.locals.add(*ty)).collect();
+    //     let mut builder = FunctionBuilder::new(&mut new.types, &params, &results);
+    //     let mut body = builder
+    //         .name("__wbindgen_externref_table_dealloc".into())
+    //         .func_body();
+    //     let func_id = new.funcs.add_local(builder.local_func(args));
+    //     convert_import_to_ifunc_call(&mut new, ifunc_table_initializer, func_id, *offset);
+    //     new.exports.add(name, func_id);
+    // }
+    // name_to_ifunc_old.get("__wbindgen_externref_table_dealloc")
+    // );
+    // let ty = new.types.get(new.funcs.get(func_id).ty());
+    // let params = ty.params().to_vec();
+    // let results = ty.results().to_vec();
+    // let args: Vec<_> = params.iter().map(|ty| new.locals.add(*ty)).collect();
+
+    // let mut builder = FunctionBuilder::new(&mut new.types, &params, &results);
+    // let mut body = builder.name("stub".into()).func_body();
+
+    // new.funcs.get_mut(func_id).kind = FunctionKind::Local(builder.local_func(args));
+
+    // new.add_import_func("", name, ty)
+
+    // for e in old.exports.iter() {
+    //     if e.name.starts_with("__externref") {
+    //         if let ExportItem::Function(func) = e.item {
+    //             let tyid = old.funcs.get(func).ty();
+    //             let ty = old.types.get(tyid);
+    //             let params = ty.params().to_vec();
+    //             let results = ty.results().to_vec();
+
+    //             let new_ty = new.types.add(&params, &results);
+
+    //             let (new_func, new_imp) = new.add_import_func("env", &e.name, new_ty);
+    //             new.exports.add(&e.name, new_func);
+    //         }
+    //     }
+    // }
+
+    // // Run the xform
+    // let mut wbgxform = wasm_bindgen_externref_xform::Context::default();
+
+    // // quick hack, prepare fails with PIC/PIE code. we temporarily clear out the segments of the main func table to prevent this error from hitting
+    // let main_func_table_id = new.tables.main_function_table()?.unwrap();
+    // let segs = std::mem::take(&mut new.tables.get_mut(main_func_table_id).elem_segments);
+    // wbgxform.prepare(&mut new)?;
+    // new.tables.get_mut(main_func_table_id).elem_segments = segs;
+    // wbgxform.run(&mut new)?;
+
+    // let unused = new
+    //     .imports
+    //     .iter()
+    //     .find(|f| f.name == "__wbindgen_object_drop_ref_unused")
+    //     .map(|f| f.id())
+    //     .unwrap();
+    // new.imports.get_mut(unused).name = "__wbindgen_object_drop_ref".into();
+
     let exports_to_funcids = old
         .exports
         .iter()
@@ -171,8 +242,8 @@ fn create_wasm_jump_table(original: &Path, patch: &Path) -> Result<JumpTable> {
 
     let mut mems = vec![];
     let mut funcs = vec![];
-    let mut to_ifuncs = vec![];
     let mut wbg_funcs = vec![];
+    // let mut to_ifuncs = vec![];
 
     // Collect all the GOT entries from the new module.
     for t in new.imports.iter() {
@@ -187,7 +258,7 @@ fn create_wasm_jump_table(original: &Path, patch: &Path) -> Result<JumpTable> {
             "GOT.mem" => mems.push(t.id()),
             "env" => {
                 // tracing::debug!("Found env import: {t:?}");
-                to_ifuncs.push(t.id());
+                // to_ifuncs.push(t.id());
             }
             "__wbindgen_placeholder__" => {
                 wbg_funcs.push(t.id());
@@ -320,27 +391,32 @@ fn create_wasm_jump_table(original: &Path, patch: &Path) -> Result<JumpTable> {
         })
         .context("Missing ifunc table")?;
 
-    for t in to_ifuncs {
-        let import = new.imports.get(t);
-        let ImportKind::Function(func_id) = import.kind else {
-            continue;
-        };
+    // for t in to_ifuncs {
+    //     let import = new.imports.get(t);
+    //     let ImportKind::Function(func_id) = import.kind else {
+    //         tracing::error!("Expected env import to be a function -> {}", import.name);
+    //         continue;
+    //     };
 
-        let Some(corr_export) = exports_to_funcids.get(import.name.as_str()) else {
-            tracing::error!("Failed to find export for {}", import.name);
-            continue;
-        };
+    //     let Some(corr_export) = exports_to_funcids.get(import.name.as_str()) else {
+    //         tracing::error!("Failed to find export for {}", import.name);
+    //         if name_is_bindgen_symbol(import.name.as_str()) {
+    //             new.imports.delete(t);
+    //             convert_import_to_ifunc_call(&mut new, ifunc_table_initializer, func_id, 1);
+    //         }
 
-        let Some(table_idx) = funcid_to_idx.get(corr_export).cloned() else {
-            tracing::warn!("Failed to find ifunc table index for {}", import.name);
-            continue;
-        };
+    //         continue;
+    //     };
 
-        // Delete the import - we'll satisfy this function locally
-        new.imports.delete(t);
+    //     let Some(table_idx) = funcid_to_idx.get(corr_export).cloned() else {
+    //         tracing::warn!("Failed to find ifunc table index for {}", import.name);
+    //         continue;
+    //     };
 
-        convert_import_to_ifunc_call(&mut new, ifunc_table_initializer, func_id, table_idx);
-    }
+    //     // Delete the import - we'll satisfy this function locally
+    //     new.imports.delete(t);
+    //     convert_import_to_ifunc_call(&mut new, ifunc_table_initializer, func_id, table_idx);
+    // }
 
     // There's a limited set of instrinsics that get transformed. Namely drop_ref and clone_ref
     // We make special carve-outs for these since they refer to functions with a different name.
@@ -368,35 +444,59 @@ fn create_wasm_jump_table(original: &Path, patch: &Path) -> Result<JumpTable> {
 
         import.module = "wbg".into();
 
-        // De-alias the name to the correct one
-        let alias = match import.name.as_str() {
-            "__wbindgen_object_drop_ref" => "__externref_table_dealloc",
-            // -> do we need to do this for clone_ref and/or table_alloc too?
-            _ => continue,
-        };
+        // if import.name == "__wbindgen_describe" || name_is_bindgen_symbol(import.name.as_str()) {
+        //     let ImportKind::Function(func_id) = import.kind else {
+        //         continue;
+        //     };
+        //     new.imports.delete(t);
+        //     convert_import_to_ifunc_call(&mut new, ifunc_table_initializer, func_id, 1);
 
-        // This becomes an internally synthesized drop function called "__externref_table_dealloc"
-        // however this might not be available to us via the exports.
-        let exists_as_ifunc = name_to_ifunc_old
-            .keys()
-            .find(|k| k.contains(alias))
-            .unwrap();
+        //     continue;
+        // }
 
-        let Some(ifunc) = name_to_ifunc_old.get(exists_as_ifunc) else {
-            tracing::error!("Failed to find ifunc for wbg import {}", import.name);
-            continue;
-        };
+        // // De-alias the name to the correct one
+        // let alias = match import.name.as_str() {
+        //     "__wbindgen_object_drop_ref" => "__externref_table_dealloc",
+        //     // "__wbindgen_object_clone_ref" => "__wbindgen_object_clone_ref",
 
-        let ImportKind::Function(func_id) = import.kind else {
-            continue;
-        };
+        //     // -> do we need to do this for clone_ref and/or table_alloc too?
+        //     _ => continue,
+        // };
 
-        new.imports.delete(t);
-        convert_import_to_ifunc_call(&mut new, ifunc_table_initializer, func_id, *ifunc);
+        // // This becomes an internally synthesized drop function called "__externref_table_dealloc"
+        // // however this might not be available to us via the exports.
+        // let exists_as_ifunc = name_to_ifunc_old
+        //     .keys()
+        //     .find(|k| k.contains(alias))
+        //     .unwrap();
+
+        // let Some(ifunc) = name_to_ifunc_old.get(exists_as_ifunc) else {
+        //     tracing::error!("Failed to find ifunc for wbg import {}", import.name);
+        //     continue;
+        // };
+
+        // let ImportKind::Function(func_id) = import.kind else {
+        //     continue;
+        // };
+
+        // new.imports.delete(t);
+        // // // New function that calls the indirect function
+        // // let ty = new.types.get(new.funcs.get(func_id).ty());
+        // // let params = ty.params().to_vec();
+        // // let results = ty.results().to_vec();
+        // // let args: Vec<_> = params.iter().map(|ty| new.locals.add(*ty)).collect();
+
+        // // let mut builder = FunctionBuilder::new(&mut new.types, &params, &results);
+        // // let mut body = builder.name("stub".into()).func_body();
+
+        // // new.funcs.get_mut(func_id).kind = FunctionKind::Local(builder.local_func(args));
+
+        // convert_import_to_ifunc_call(&mut new, ifunc_table_initializer, func_id, *ifunc);
     }
 
     // Update the wasm module on the filesystem to use the newly lifted version
     let lib = patch.to_path_buf();
+    // walrus::passes::gc::run(&mut new);
     std::fs::write(&lib, new.emit_wasm())?;
 
     // And now assemble the jump table by mapping the old ifunc table to the new one, by name
@@ -826,17 +926,6 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
         })
         .collect::<HashMap<_, _>>();
 
-    // We're going to add *all* the imports that start with __wbindgen to a function that's exported
-    // This prevents them from being dissovlved
-    for (imp, f) in imports {
-        let name = &module.imports.get(imp).name;
-        if name.starts_with("__wbindgen") && !name.starts_with("__wbindgen_describe") {
-            module.exports.add(name, f);
-            tracing::info!("Hoisting import -> {name}");
-            already_exported.insert(name.clone());
-        }
-    }
-
     for (name, index) in symbols.code_symbol_map.iter() {
         let func = module.funcs.get(ids[*index]);
 
@@ -845,6 +934,7 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
                 if !already_exported.contains(*name) && !name_is_bindgen_symbol(name) {
                     module.exports.add(name, func.id());
                     already_exported.insert(name.to_string());
+                    // tracing::debug!("Hoisting function -> {name}");
                 }
             }
 
@@ -885,6 +975,7 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
 
 fn name_is_bindgen_symbol(name: &str) -> bool {
     name.contains("__wbindgen_describe")
+        || name.contains("wasm_bindgen8describe6inform")
         || name.contains("wasm_bindgen..describe..WasmDescribe")
         || name.contains("wasm_bindgen..closure..WasmClosure$GT$8describe")
         || name.contains("wasm_bindgen7closure16Closure$LT$T$GT$4wrap8describe")
@@ -1257,29 +1348,3 @@ fn parse_module_with_ids(bindgened: &[u8]) -> Result<ParsedModule> {
 //         fn __wbindgen_function_table() -> u32;
 //     }
 // }
-
-// for e in old.exports.iter() {
-//     if e.name.starts_with("__externref") || e.name.contains("wbindgen_externref") {
-//         if let ExportItem::Function(func) = e.item {
-//             let tyid = old.funcs.get(func).ty();
-//             let ty = old.types.get(tyid);
-//             let params = ty.params().to_vec();
-//             let results = ty.results().to_vec();
-
-//             let new_ty = new.types.add(&params, &results);
-
-//             let (new_func, new_imp) = new.add_import_func("env", &e.name, new_ty);
-//             new.exports.add(&e.name, new_func);
-//         }
-//     }
-// }
-
-// // Run the xform
-// let mut wbgxform = wasm_bindgen_externref_xform::Context::default();
-
-// // quick hack, prepare fails with PIC/PIE code. we temporarily clear out the segments of the main func table to prevent this error from hitting
-// let main_func_table_id = new.tables.main_function_table()?.unwrap();
-// let segs = std::mem::take(&mut new.tables.get_mut(main_func_table_id).elem_segments);
-// wbgxform.prepare(&mut new)?;
-// new.tables.get_mut(main_func_table_id).elem_segments = segs;
-// wbgxform.run(&mut new)?;

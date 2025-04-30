@@ -6,7 +6,7 @@
 //! dx serve --platform web
 //! ```
 
-use dioxus::prelude::*;
+use dioxus::{logger::tracing, prelude::*};
 
 fn main() {
     dioxus::launch(app);
@@ -23,6 +23,14 @@ fn app() -> Element {
             EvalIt { color: "white" }
             EvalIt { color: "red" }
             EvalIt { color: "yellow" }
+            EvalIt { color: "green" }
+            EvalIt { color: "green" }
+            EvalIt { color: "green" }
+            EvalIt { color: "green" }
+            EvalIt { color: "green" }
+            EvalIt { color: "green" }
+            EvalIt { color: "green" }
+            EvalIt { color: "green" }
         }
         button {
             onclick: move |_| async move {
@@ -34,6 +42,12 @@ fn app() -> Element {
             },
             "Run a server function!"
         }
+        // button {
+        //     onclick: move |_| {
+        //         let items = get_select_data_list("hello".to_string());
+        //         tracing::debug!("items: {:?}", items);
+        //     }
+        // }
         "Server said: {text}"
 
     }
@@ -64,3 +78,16 @@ fn EvalIt(color: String) -> Element {
         }
     }
 }
+
+// use wasm_bindgen::prelude::*;
+// // web-sys does not expose the keys api for select data, so we need to manually bind to it
+// #[wasm_bindgen(inline_js = r#"
+// export function get_select_data_list(select) {
+//     let values = [select];
+
+//     return values;
+// }
+// "#)]
+// extern "C" {
+//     fn get_select_data_list(item: String) -> Vec<String>;
+// }

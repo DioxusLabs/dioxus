@@ -3715,6 +3715,7 @@ dependencies = [
  "uuid",
  "walkdir",
  "walrus",
+ "wasm-bindgen-externref-xform",
  "wasm-encoder 0.228.0",
  "wasm-opt",
  "wasm-split-cli",
@@ -12428,6 +12429,7 @@ dependencies = [
  "dioxus",
  "reqwest 0.12.15",
  "serde",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -15527,6 +15529,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "wasm-bindgen-externref-xform"
+version = "0.2.100"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "940542c5cdbe96c35f98b5da5c65fb9d18df55a0cb1d81fc5ca4acc4fda4d61c"
+dependencies = [
+ "anyhow",
+ "walrus",
+ "wasm-bindgen-wasm-conventions",
+]
+
+[[package]]
 name = "wasm-bindgen-futures"
 version = "0.4.50"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -15593,6 +15606,19 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.100",
+]
+
+[[package]]
+name = "wasm-bindgen-wasm-conventions"
+version = "0.2.100"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b1c24fcaa34d2d84407122cfb1d3f37c3586756cf462be18e049b49245a16c08"
+dependencies = [
+ "anyhow",
+ "leb128",
+ "log",
+ "walrus",
+ "wasmparser 0.214.0",
 ]
 
 [[package]]

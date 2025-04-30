@@ -327,6 +327,7 @@ use krates::{cm::TargetKind, NodeId};
 use manganis::{AssetOptions, JsAssetOptions};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
+use serde_json::to_string;
 use std::{
     collections::HashSet,
     io::Write,
@@ -1274,16 +1275,26 @@ session_cache_dir: {}"#,
                     "--import-memory".to_string(),
                     "--import-table".to_string(),
                     "--growable-table".to_string(),
-                    "--export-all".to_string(),
                     "--export".to_string(),
                     "main".to_string(),
+                    "--export".to_string(),
+                    "__wasm_apply_data_relocs".to_string(),
+                    "--export".to_string(),
+                    "__wasm_apply_global_relocs".to_string(),
                     "--allow-undefined".to_string(),
                     "--no-demangle".to_string(),
                     "--no-entry".to_string(),
                     "--pie".to_string(),
-                    "--no-gc-sections".to_string(),
                     "--experimental-pic".to_string(),
+                    // "--export-all".to_string(),
+                    // "--no-gc-sections".to_string(),
                 ]);
+
+                // for arg in original_args.iter() {
+                //     if arg.starts_with("-Wl,--export=") {
+                //         out_args.push(arg.to_string());
+                //     }
+                // }
             }
 
             // This uses "cc" and these args need to be ld compatible
@@ -1900,15 +1911,15 @@ session_cache_dir: {}"#,
 
         // Disable reference types on wasm when using hotpatching
         // https://blog.rust-lang.org/2024/09/24/webassembly-targets-change-in-default-target-features/#disabling-on-by-default-webassembly-proposals
-        if self.platform == Platform::Web
-            && matches!(ctx.mode, BuildMode::Thin { .. } | BuildMode::Fat)
-        {
-            env_vars.push(("RUSTFLAGS", {
-                let mut rust_flags = std::env::var("RUSTFLAGS").unwrap_or_default();
-                rust_flags.push_str(" -Ctarget-cpu=mvp");
-                rust_flags
-            }));
-        }
+        // if self.platform == Platform::Web
+        //     && matches!(ctx.mode, BuildMode::Thin { .. } | BuildMode::Fat)
+        // {
+        //     env_vars.push(("RUSTFLAGS", {
+        //         let mut rust_flags = std::env::var("RUSTFLAGS").unwrap_or_default();
+        //         rust_flags.push_str(" -Ctarget-cpu=mvp");
+        //         rust_flags
+        //     }));
+        // }
 
         if let Some(target_dir) = self.custom_target_dir.as_ref() {
             env_vars.push(("CARGO_TARGET_DIR", target_dir.display().to_string()));

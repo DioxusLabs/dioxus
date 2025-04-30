@@ -11,8 +11,9 @@ dioxus = { workspace = true, features = ["fullstack"] }
 serde = { workspace = true }
 reqwest = { workspace = true }
 
+wasm-bindgen = { workspace = true }
+
 [features]
 default = []
-fullstack = ["dioxus/fullstack"]
 web = ["dioxus/web"]
 server = ["dioxus/server"]
