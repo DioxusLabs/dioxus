@@ -103,9 +103,9 @@ impl IntoMsg<ServerMessage> for ClientMessage {
         use ServerMessage as SM;
         Ok(match self {
             Self::Text(v) => SM::Text(v.as_str().into()),
-            Self::Binary(v) => SM::Binary(v.into()),
-            Self::Ping(v) => SM::Ping(v.into()),
-            Self::Pong(v) => SM::Pong(v.into()),
+            Self::Binary(v) => SM::Binary(v),
+            Self::Ping(v) => SM::Ping(v),
+            Self::Pong(v) => SM::Pong(v),
             Self::Close(v) => SM::Close(v.map(|cf| ServerCloseFrame {
                 code: cf.code.into(),
                 reason: cf.reason.as_str().into(),
@@ -121,9 +121,9 @@ impl IntoMsg<ClientMessage> for ServerMessage {
         use ClientMessage as CM;
         Ok(match self {
             Self::Text(v) => CM::Text(v.as_str().into()),
-            Self::Binary(v) => CM::Binary(v.into()),
-            Self::Ping(v) => CM::Ping(v.into()),
-            Self::Pong(v) => CM::Pong(v.into()),
+            Self::Binary(v) => CM::Binary(v),
+            Self::Ping(v) => CM::Ping(v),
+            Self::Pong(v) => CM::Pong(v),
             Self::Close(v) => CM::Close(v.map(|cf| ClientCloseFrame {
                 code: cf.code.into(),
                 reason: cf.reason.as_str().into(),
