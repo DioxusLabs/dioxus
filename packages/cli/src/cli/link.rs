@@ -53,7 +53,7 @@ impl LinkAction {
         let log_file = std::fs::File::options()
             .append(true)
             .create(true)
-            .open("/Users/evanalmloff/Desktop/Github/dioxus-test/linker_logs.txt")
+            .open(linker_log_file())
             .unwrap();
         tracing_subscriber::fmt()
             .with_writer(log_file)
@@ -179,7 +179,7 @@ impl LinkAction {
                 let err_file = std::fs::File::options()
                     .append(true)
                     .create(true)
-                    .open("/Users/evanalmloff/Desktop/Github/dioxus-test/linker_err.txt")
+                    .open(linker_error_file())
                     .unwrap();
                 let toolchain = if targeting_wasm {
                     "stable-wasm32-unknown-unknown".to_string()
@@ -200,6 +200,21 @@ impl LinkAction {
             }
         }
     }
+}
+
+fn out_dir() -> PathBuf {
+    // let out_dir = std::env::var("OUT_DIR").unwrap();
+    // let out_dir = PathBuf::from(out_dir);
+    // out_dir
+    PathBuf::from("/Users/evanalmloff/Desktop/Github/dioxus-test")
+}
+
+fn linker_log_file() -> PathBuf {
+    out_dir().join("linker_log.txt")
+}
+
+fn linker_error_file() -> PathBuf {
+    out_dir().join("linker_error.txt")
 }
 
 struct AssetReference {
@@ -331,34 +346,31 @@ fn create_data_object_file<'a>(
     };
 
     let mut linking = LinkingSection::new();
-
     let mut sym_tab = SymbolTable::new();
-
     let mut data_section = DataSection::new();
-    let memory_index = 0;
 
+    let memory_index = 0;
     let mut offset = 0;
+    let mut all_bytes = Vec::new();
+
     for (symbol_name, data) in data_sections {
         let flags = SymbolTable::WASM_SYM_EXPORTED;
-        let index = 0;
         let size = data.len() as u32;
-        data_section.active(
-            memory_index,
-            &ConstExpr::i32_const(offset as i32),
-            data.iter().copied(),
-        );
+
+        all_bytes.extend_from_slice(&data);
         sym_tab.data(
             flags,
             symbol_name,
             Some(DataSymbolDefinition {
-                index,
-                offset,
+                index: memory_index,
+                offset: offset as u32,
                 size,
             }),
         );
         linking.symbol_table(&sym_tab);
-        offset += size;
+        offset += data.len();
     }
+    data_section.active(memory_index, &ConstExpr::i32_const(0), all_bytes);
 
     // Add the linking section to a new Wasm module and get the encoded bytes.
     let mut module = Module::new();

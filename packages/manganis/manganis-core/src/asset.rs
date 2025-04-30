@@ -1,24 +1,13 @@
 use crate::AssetOptions;
 use const_serialize::{deserialize_const, ConstStr, ConstVec, SerializeConst};
-use std::{fmt::Debug, path::PathBuf};
+use std::{fmt::Debug, hash::Hash, path::PathBuf};
 
 /// An asset that should be copied by the bundler with some options. This type will be
 /// serialized into the binary and added to the link section [`LinkSection::CURRENT`](crate::linker::LinkSection::CURRENT).
 /// CLIs that support manganis, should pull out the assets from the link section, optimize,
 /// and write them to the filesystem at [`BundledAsset::bundled_path`] for the application
 /// to use.
-#[derive(
-    Debug,
-    Eq,
-    PartialEq,
-    PartialOrd,
-    Clone,
-    Copy,
-    Hash,
-    SerializeConst,
-    serde::Serialize,
-    serde::Deserialize,
-)]
+#[derive(Debug, Eq, Clone, Copy, SerializeConst, serde::Serialize, serde::Deserialize)]
 pub struct BundledAsset {
     /// The absolute path of the asset
     absolute_source_path: ConstStr,
@@ -28,6 +17,39 @@ pub struct BundledAsset {
     options: AssetOptions,
     /// The link section the wasm asset is bundled at
     link_section: ConstStr,
+}
+
+impl PartialEq for BundledAsset {
+    fn eq(&self, other: &Self) -> bool {
+        self.absolute_source_path == other.absolute_source_path
+            && self.bundled_path == other.bundled_path
+            && self.options == other.options
+    }
+}
+
+impl PartialOrd for BundledAsset {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        match self
+            .absolute_source_path
+            .partial_cmp(&other.absolute_source_path)
+        {
+            Some(core::cmp::Ordering::Equal) => {}
+            ord => return ord,
+        }
+        match self.bundled_path.partial_cmp(&other.bundled_path) {
+            Some(core::cmp::Ordering::Equal) => {}
+            ord => return ord,
+        }
+        self.options.partial_cmp(&other.options)
+    }
+}
+
+impl Hash for BundledAsset {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.absolute_source_path.hash(state);
+        self.bundled_path.hash(state);
+        self.options.hash(state);
+    }
 }
 
 impl BundledAsset {
@@ -148,7 +170,7 @@ impl Asset {
             bytes = bytes.push(unsafe { std::ptr::read_volatile(ptr.add(byte)) });
         }
         let read = bytes.read();
-        deserialize_const!(BundledAsset, read).unwrap().1
+        deserialize_const!(BundledAsset, read).expect("Failed to deserialize asset. Make sure you built with the matching version of the Dioxus CLI").1
     }
 
     /// Return a canonicalized path to the asset

@@ -146,8 +146,9 @@ impl ToTokens for AssetParser {
 
         let mut hash = DefaultHasher::new();
         format!("{:?}", self.options.span()).hash(&mut hash);
+        format!("{:?}", self.options.to_string()).hash(&mut hash);
         asset_string.hash(&mut hash);
-        let asset_hash = format!("__MANGANIS_ASSET_{:x}", hash.finish());
+        let asset_hash = format!("__MANGANIS_ASSET_{:016x}", hash.finish());
 
         // Generate the link section for the asset
         // The link section includes the source path and the output path of the asset

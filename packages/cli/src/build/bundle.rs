@@ -460,11 +460,12 @@ impl AppBundle {
         tokio::task::spawn_blocking(move || {
             optimize_all_assets(
                 assets_to_transfer,
-                |from, _, _| {
+                |from, to, _| {
                     let processing = started_processing.fetch_add(1, Ordering::SeqCst);
                     let from_ = from.strip_prefix(&ws_dir).unwrap_or(from);
+                    let to_ = to.strip_prefix(&ws_dir).unwrap_or(to);
                     tracing::trace!(
-                        "Starting asset copy {processing}/{asset_count} from {from_:?}"
+                        "Starting asset copy {processing}/{asset_count} from {from_:?} to {to_:?}"
                     );
                 },
                 |from, _, _| {

@@ -1,7 +1,7 @@
 //! Utilities for creating hashed paths to assets in Manganis. This module defines [`AssetHash`] which is used to create a hashed path to an asset in both the CLI and the macro.
 
 use std::{
-    hash::Hasher,
+    hash::{Hash, Hasher},
     io::Read,
     path::{Path, PathBuf},
 };
@@ -46,6 +46,7 @@ impl AssetHash {
 fn hash_file(options: &AssetOptions, source: &Path) -> anyhow::Result<AssetHash> {
     // Create a hasher
     let mut hash = std::collections::hash_map::DefaultHasher::new();
+    options.hash(&mut hash);
     hash_file_with_options(options, source, &mut hash, false)?;
 
     let hash = hash.finish();
