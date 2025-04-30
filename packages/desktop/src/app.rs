@@ -478,7 +478,7 @@ impl App {
                 // We *want* to use inner_size, but that's currently broken, so we use outer_size instead and then an adjustment
                 //
                 // https://github.com/tauri-apps/tao/issues/889
-                let adjustment = (56.0 / window.scale_factor()).round() as u32;
+                let adjustment = if window.is_decorated() { 28 } else { 0 };
                 (size.width, size.height.saturating_sub(adjustment))
             } else {
                 (size.width, size.height)
