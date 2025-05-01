@@ -332,12 +332,6 @@ fn create_wasm_jump_table(original: &Path, patch: &Path) -> Result<JumpTable> {
         ));
     }
 
-    // for import in make_env_import {
-    //     let import = new.imports.get_mut(import);
-    //     import.module = "env".into();
-    //     tracing::debug!("Converting GOT.func import to env: {import:?}");
-    // }
-
     // Conver the env func imports into ifuncs
     let ifunc_table_initializer = new
         .elements

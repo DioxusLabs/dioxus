@@ -388,10 +388,6 @@ pub fn register_handler(handler: Arc<dyn Fn() + Send + Sync + 'static>) {
 /// This function will load the library and thus allocates. In cannot be used when the program is
 /// stopped (ie in a signal handler).
 pub unsafe fn apply_patch(mut table: JumpTable) -> Result<(), PatchError> {
-    if cfg!(target_os = "macos") {
-        return Ok(());
-    }
-
     // On non-wasm platforms we can just use libloading and the known aslr offsets to load the library
     #[cfg(any(unix, windows))]
     {

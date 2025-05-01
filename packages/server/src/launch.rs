@@ -139,10 +139,6 @@ async fn serve_server(
                     DevserverMsg::HotReload(hot_reload_msg) => {
                         if hot_reload_msg.for_build_id == Some(dioxus_cli_config::build_id()) {
                             if let Some(table) = hot_reload_msg.jump_table {
-                                if cfg!(target_os = "macos") {
-                                    continue;
-                                }
-
                                 if unsafe { dioxus_devtools::subsecond::apply_patch(table) }.is_ok()
                                 {
                                     let mut new_router = axum::Router::new().serve_static_assets();
