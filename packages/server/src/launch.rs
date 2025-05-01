@@ -174,7 +174,7 @@ async fn serve_server(
                                         )
                                     };
 
-                                    // crate::document::reset_renderer();
+                                    crate::document::reset_renderer();
 
                                     let state = RenderHandleState::new(new_cfg.clone(), new_root)
                                         .with_ssr_state(SSRState::new(&new_cfg));

@@ -13,12 +13,6 @@ fn main() {
 }
 
 fn app() -> Element {
-    rsx! {
-        Child {}
-    }
-}
-
-fn Child() -> Element {
     let mut t = use_signal(|| 0);
     let mut text = use_signal(|| "...".to_string());
 

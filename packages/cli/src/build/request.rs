@@ -327,7 +327,6 @@ use krates::{cm::TargetKind, NodeId};
 use manganis::{AssetOptions, JsAssetOptions};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
-use serde_json::to_string;
 use std::{
     collections::HashSet,
     io::Write,
@@ -344,7 +343,6 @@ use tempfile::{NamedTempFile, TempDir};
 use tokio::{io::AsyncBufReadExt, process::Command};
 use toml_edit::Item;
 use uuid::Uuid;
-use walkdir::WalkDir;
 
 /// This struct is used to plan the build process.
 ///
@@ -1001,6 +999,8 @@ session_cache_dir: {}"#,
             "Keeping bundled output paths: {:#?}",
             keep_bundled_output_paths
         );
+
+        // use walkdir::WalkDir;
         // for item in WalkDir::new(&asset_dir).into_iter().flatten() {
         //     // If this asset is in the manifest, we don't need to remove it
         //     let canonicalized = dunce::canonicalize(item.path())?;

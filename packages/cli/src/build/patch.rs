@@ -20,8 +20,8 @@ use subsecond_types::*;
 use target_lexicon::{OperatingSystem, Triple};
 use thiserror::Error;
 use walrus::{
-    ConstExpr, ElementItems, ElementKind, ExportItem, FunctionBuilder, FunctionId, FunctionKind,
-    ImportKind, Module, ModuleConfig,
+    ConstExpr, DataKind, ElementItems, ElementKind, ExportItem, FunctionBuilder, FunctionId,
+    FunctionKind, ImportKind, Module, ModuleConfig,
 };
 use wasmparser::{
     BinaryReader, BinaryReaderError, Linking, LinkingSectionReader, Payload, SymbolInfo,
@@ -278,11 +278,11 @@ fn create_wasm_jump_table(original: &Path, patch: &Path) -> Result<JumpTable> {
             .context("Missing data segment in the main module")?;
 
         let offset = match data.kind {
-            walrus::DataKind::Active {
+            DataKind::Active {
                 offset: ConstExpr::Value(walrus::ir::Value::I32(idx)),
                 ..
             } => idx,
-            walrus::DataKind::Active {
+            DataKind::Active {
                 offset: ConstExpr::Value(walrus::ir::Value::I64(idx)),
                 ..
             } => idx as i32,
@@ -336,9 +336,9 @@ fn create_wasm_jump_table(original: &Path, patch: &Path) -> Result<JumpTable> {
     Ok(JumpTable {
         map,
         lib,
+        ifunc_count,
         aslr_reference: 0,
         new_base_address: 0,
-        ifunc_count,
     })
 }
 
@@ -364,12 +364,12 @@ fn fill_ifuncs_from_old<'a>(
         .filter_map(|(name, idx)| {
             let new_modules_unified_function = func_to_index.get(idx)?;
             let offset = func_to_offset.get(new_modules_unified_function)?;
-            Some((*name, *offset as i32))
+            Some((*name, *offset))
         })
         .collect()
 }
 
-fn collect_func_ifuncs<'a>(m: &'a Module) -> HashMap<&'a str, i32> {
+fn collect_func_ifuncs(m: &Module) -> HashMap<&str, i32> {
     // Collect all the functions in the module that are ifuncs
     let mut func_to_offset = HashMap::new();
     for el in m.elements.iter() {
@@ -659,7 +659,7 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
         })
         .collect::<HashMap<_, _>>();
 
-    // Wasm-bindgen will synthesize imports to satisfy its external calls. This facilitiates things
+    // Wasm-bindgen will synthesize imports to satisfy its external calls. This facilitates things
     // like inline-js, snippets, and literally the `#[wasm_bindgen]` macro. All calls to JS are
     // just `extern "C"` blocks!
     //
@@ -903,8 +903,8 @@ struct DataSymbol {
 struct ParsedModule<'a> {
     module: Module,
     ids: Vec<FunctionId>,
-    fns_to_ids: HashMap<FunctionId, usize>,
     symbols: RawDataSection<'a>,
+    _fns_to_ids: HashMap<FunctionId, usize>,
 }
 
 /// Parse a module and return the mapping of index to FunctionID.
@@ -939,7 +939,7 @@ fn parse_module_with_ids(bindgened: &[u8]) -> Result<ParsedModule> {
     Ok(ParsedModule {
         module,
         ids,
-        fns_to_ids,
+        _fns_to_ids: fns_to_ids,
         symbols,
     })
 }
