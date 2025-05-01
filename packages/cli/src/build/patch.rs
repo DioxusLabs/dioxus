@@ -745,27 +745,12 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
         .filter_map(|f| ifunc_map.get(f.name.as_deref()?).map(|_| f.id()))
         .collect::<HashSet<_>>();
 
-    let ifunc_table_initializer = module
-        .elements
-        .iter()
-        .last()
-        .context("Missing ifunc table")?
-        .id();
-
-    let mut already_exported = module
+    let already_exported = module
         .exports
         .iter()
         .filter(|f| matches!(f.item, ExportItem::Function(_)))
         .map(|exp| exp.name.clone())
         .collect::<HashSet<_>>();
-
-    // for i in module.imports.iter() {
-    //     if let ImportKind::Function(id) = i.kind {
-    //         if let Some(name) = module.funcs.get(id).name.as_deref() {
-    //             tracing::info!("Found import: {i:?}");
-    //         }
-    //     }
-    // }
 
     let imported_funcs = module
         .imports
@@ -776,17 +761,19 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
         })
         .collect::<HashMap<_, _>>();
 
+    // Wasm-bindgen will synthesize imports to satisfy its external calls. This facilitiates things
+    // like inline-js, snippets, and literally the `#[wasm_bindgen]` macro. All calls to JS are
+    // just `extern "C"` blocks!
+    //
+    // However, wasm-bindgen will run a GC pass on the module, removing any unused imports.
     let mut make_indirect = vec![];
-    let mut names_to_names: HashMap<&str, HashSet<&str>> = HashMap::new();
-
-    for (funcid, importid) in imported_funcs {
+    for (imported_func, importid) in imported_funcs {
         let import = module.imports.get(importid);
-        if (import.name.starts_with("__wbindgen") || import.name.starts_with("__wbg_"))
-            && !name_is_bindgen_symbol(import.name.as_str())
-        {
-            let func = module.funcs.get(funcid);
-            let ty = module.types.get(func.ty());
-            // tracing::info!("Preserving intrinsic: {name} ({ty:?})", name = import.name);
+        let name_is_wbg =
+            import.name.starts_with("__wbindgen") || import.name.starts_with("__wbg_");
+
+        if name_is_wbg && !name_is_bindgen_symbol(import.name.as_str()) {
+            let func = module.funcs.get(imported_func);
 
             let ty = module.types.get(func.ty());
             let params = ty.params().to_vec();
@@ -806,10 +793,9 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
                 body.local_get(*l);
             }
 
-            body.call(funcid);
+            body.call(imported_func);
 
-            let local_func = builder.local_func(locals);
-            let new_func_id = module.funcs.add_local(local_func);
+            let new_func_id = module.funcs.add_local(builder.local_func(locals));
 
             module
                 .exports
@@ -819,61 +805,70 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
         }
     }
 
-    let imports = module
-        .imports
-        .iter()
-        .filter_map(|i| match i.kind {
-            ImportKind::Function(id) => Some((i.id(), id)),
-            _ => None,
-        })
-        .collect::<HashMap<_, _>>();
-
     for (name, index) in symbols.code_symbol_map.iter() {
+        if name_is_bindgen_symbol(name) {
+            continue;
+        }
+
         let func = module.funcs.get(ids[*index]);
 
-        // We want to preserve the intrinsics from getting gc-ed out
-        // These will create corresponding shim functions in the main module.
+        // We want to preserve the intrinsics from getting gc-ed out.
+        //
+        // These will create corresponding shim functions in the main module, that the patches will
+        // then call. Wasm-bindgen doesn't actually check if anyone uses the `__wbindgen` exports and
+        // forcefully deletes them literally by checking for symbols that start with `__wbindgen`. We
+        // preserve these symbols by naming them `__saved_wbg_<name>` and then exporting them.
+        //
+        // When wasm-bindgen runs, it will wrap these intrinsics with an `externref shim`, but we
+        // want to preserve the actual underlying function so side modules can call them directly.
+        //
         // https://github.com/rustwasm/wasm-bindgen/blob/c35cc9369d5e0dc418986f7811a0dd702fb33ef9/crates/cli-support/src/wit/mod.rs#L1505
-        if name.starts_with("__wbindgen") && !name_is_bindgen_symbol(name) {
-            let ty = module.types.get(func.ty());
-            tracing::info!("Preserving intrinsic: {name} ({ty:?})");
+        if name.starts_with("__wbindgen") {
             module
                 .exports
                 .add(&format!("__saved_wbg_{name}"), func.id());
         }
 
+        // This is basically `--export-all` but designed to work around wasm-bindgen not properly gc-ing
+        // imports like __wbindgen_placeholder__ and __wbindgen_externref__
+        //
+        // We only export local functions, and then make sure they can be accessible indirectly.
+        // If we weren't dealing with PIC code, then we could just create local ifuncs in the patch that
+        // call the original function directly. Unfortunately, this would require adding a new relocation
+        // to corresponding GOT.func entry, which we don't want to deal with.
+        //
+        // By exposing all functions both as exports and ifuncs, we can both call them directly and
+        // indirectly.
         if let FunctionKind::Local(_) = &func.kind {
-            if !already_exported.contains(*name) && !name_is_bindgen_symbol(name) {
+            if !already_exported.contains(*name) {
                 module.exports.add(name, func.id());
-                already_exported.insert(name.to_string());
-                // tracing::debug!("Hoisting function -> {name}");
             }
 
-            if !name_is_bindgen_symbol(name) {
-                if !ifuncs.contains(&func.id()) {
-                    make_indirect.push(func.id());
-                }
+            if !ifuncs.contains(&func.id()) {
+                make_indirect.push(func.id());
             }
         }
     }
 
-    tracing::trace!("Hoisting {} functions", make_indirect.len());
-    let seg = module.elements.get_mut(ifunc_table_initializer);
+    // Now we need to make sure to add the new ifuncs to the ifunc segment initializer.
+    // We just assume the last segment is the safest one we can add to which is common practice.
+    let segment = module
+        .elements
+        .iter_mut()
+        .last()
+        .context("Missing ifunc table")?;
     let make_indirect_count = make_indirect.len() as u64;
-    match &mut seg.items {
-        ElementItems::Functions(ids) => {
-            for func in make_indirect {
-                ids.push(func);
-            }
-        }
-        _ => {
-            return Err(PatchError::InvalidModule(
-                "Expected ifunc table to be a function table".into(),
-            ));
-        }
+    let ElementItems::Functions(segment_ids) = &mut segment.items else {
+        return Err(PatchError::InvalidModule(
+            "Expected ifunc table to be a function table".into(),
+        ));
+    };
+
+    for func in make_indirect {
+        segment_ids.push(func);
     }
 
-    if let ElementKind::Active { table, .. } = seg.kind {
+    if let ElementKind::Active { table, .. } = segment.kind {
         let table = module.tables.get_mut(table);
         table.initial += make_indirect_count;
         if let Some(max) = table.maximum {
@@ -884,19 +879,18 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
     Ok(module.emit_wasm())
 }
 
+/// Check if the name is a wasm-bindgen symbol
+///
+/// todo(jon): I believe we can just look at all the functions the wasm_bindgen describe export references.
+/// this is kinda hacky on slow.
 fn name_is_bindgen_symbol(name: &str) -> bool {
     // https://github.com/rustwasm/wasm-bindgen/blob/c35cc9369d5e0dc418986f7811a0dd702fb33ef9/crates/cli-support/src/wit/mod.rs#L1165
     name.contains("__wbindgen_describe")
-        || name.contains("__wbindgen_describe_closure")
+        || name.contains("__wbindgen_externref")
         || name.contains("wasm_bindgen8describe6inform")
         || name.contains("wasm_bindgen..describe..WasmDescribe")
         || name.contains("wasm_bindgen..closure..WasmClosure$GT$8describe")
         || name.contains("wasm_bindgen7closure16Closure$LT$T$GT$4wrap8describe")
-        || name.contains("__wbindgen_externref_xform")
-        || name.contains("__wbindgen_externref")
-
-    // || name.contains("wasm_bindgen4__rt19link_mem_intrinsics")
-    // || name.contains("__wbindgen")
 }
 
 /// Manually parse the data section from a wasm module
