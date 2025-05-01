@@ -485,7 +485,7 @@ pub unsafe fn apply_patch(mut table: JumpTable) -> Result<(), PatchError> {
         let memory_base = (page_count + 1) * PAGE_SIZE;
 
         // We need to grow the memory to accommodate the new module
-        memory.grow((dl_bytes.byte_length() as f64 / PAGE_SIZE as f64).ceil() as u32);
+        memory.grow((dl_bytes.byte_length() as f64 / PAGE_SIZE as f64).ceil() as u32 + 1);
 
         // We grow the ifunc table to accommodate the new functions
         // In theory we could just put all the ifuncs in the jump map and use that for our count,
