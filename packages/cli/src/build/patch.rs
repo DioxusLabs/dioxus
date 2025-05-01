@@ -20,9 +20,8 @@ use subsecond_types::*;
 use target_lexicon::{OperatingSystem, Triple};
 use thiserror::Error;
 use walrus::{
-    ir::{self},
     ConstExpr, ElementItems, ElementKind, ExportItem, FunctionBuilder, FunctionId, FunctionKind,
-    ImportKind, Module, ModuleConfig, TableId,
+    ImportKind, Module, ModuleConfig,
 };
 use wasmparser::{
     BinaryReader, BinaryReaderError, Linking, LinkingSectionReader, Payload, SymbolInfo,
@@ -35,8 +34,8 @@ pub enum PatchError {
     #[error("Failed to read file: {0}")]
     ReadFs(#[from] std::io::Error),
 
-    #[error("Missing symbols in the object file {symbols:?}")]
-    MissingSymbols { symbols: Vec<String> },
+    #[error("No debug symbols in the patch output. Check your profile's `opt-level` and debug symbols config.")]
+    MissingSymbols,
 
     #[error("Failed to parse wasm section: {0}")]
     ParseSection(#[from] wasmparser::BinaryReaderError),
@@ -148,90 +147,55 @@ fn create_wasm_jump_table(original: &Path, patch: &Path) -> Result<JumpTable> {
 
     let ParsedModule {
         module: old,
-        ids: old_ids,
-        symbols: old_raw_data,
+        symbols: old_symbols,
         ..
     } = parse_module_with_ids(&old_bytes)?;
     let ParsedModule {
-        module: mut new,
-        ids: new_ids,
-        symbols: new_raw_data,
-        ..
+        module: mut new, ..
     } = parse_module_with_ids(&new_bytes)?;
 
-    let name_to_ifunc_old = collect_func_ifuncs(&old);
-    let name_to_ifunc_old = fill_ifuncs_from_old(name_to_ifunc_old, &old, &old_raw_data);
-    if old_raw_data.symbols.is_empty() {
-        tracing::warn!("No debug symbols in the WASM output. Make sure to set `opt-level = 0` for hotpatching to work properly.");
-        return Err(PatchError::MissingSymbols { symbols: vec![] });
+    if old_symbols.symbols.is_empty() {
+        return Err(PatchError::MissingSymbols);
     }
 
-    let exports_to_funcids = old
-        .exports
-        .iter()
-        .filter_map(|e| match e.item {
-            ExportItem::Function(id) => Some((e.name.as_str(), id)),
-            _ => None,
-        })
-        .collect::<HashMap<_, _>>();
+    let name_to_ifunc_old = collect_func_ifuncs(&old);
+    let name_to_ifunc_old = fill_ifuncs_from_old(name_to_ifunc_old, &old, &old_symbols);
 
-    let mut mems = vec![];
-    let mut funcs = vec![];
+    let mut got_mems = vec![];
+    let mut got_funcs = vec![];
     let mut wbg_funcs = vec![];
-    // let mut make_env_import = vec![];
-    // let mut to_ifuncs = vec![];
 
     // Collect all the GOT entries from the new module.
-    'import_iter: for t in new.imports.iter() {
-        match t.module.as_str() {
+    // The GOT imports come from the wasm-ld implementation of the dynamic linking spec
+    //
+    // https://github.com/WebAssembly/tool-conventions/blob/main/DynamicLinking.md#imports
+    //
+    // Normally, the base module would synthesize these as exports, but we're not compiling the base
+    // module with `--pie` (nor does wasm-bindgen support it yet), so we need to manually satisfy them.
+    //
+    // One thing to watch out for here is that GOT.func entries have no visibility to any de-duplication
+    // or merging, so we need to take great care in the base module to export *every* symbol even if
+    // they point to the same function.
+    //
+    // The other thing to watch out for here is the __wbindgen_placeholder__ entries. These are meant
+    // to be satisfied by wasm-bindgen via manual code generation, but we can't run wasm-bindgen on the
+    // patch, so we need to do it ourselves. This involves preventing their elimination in the base module
+    // by prefixing them with `__saved_wbg_`. When handling the imports here, we need modify the imported
+    // name to match the prefixed export name in the base module.
+    for import in new.imports.iter() {
+        match import.module.as_str() {
             "GOT.func" => {
-                match name_to_ifunc_old.get(t.name.as_str()).cloned() {
-                    Some(entry) => funcs.push((t.id(), entry)),
-                    _ => {
-                        // match exists {
-                        //     Ok(export) => {
-                        // tracing::info!("Found GOT.func entry as export: {t:?} -> {export:?}");
-                        let sym_index = old_raw_data.code_symbol_map.get(t.name.as_str());
-                        for s in old_raw_data.symbols.iter() {
-                            if let SymbolInfo::Func {
-                                index,
-                                name: Some(name),
-                                ..
-                            } = s
-                            {
-                                if let Some(sym_index) = sym_index {
-                                    if *index == *sym_index as u32 {
-                                        if let Some(ifunc) = name_to_ifunc_old.get(name) {
-                                            tracing::info!("Found GOT.func entry as symbol: {t:?} -> {ifunc:?}");
-                                            funcs.push((t.id(), *ifunc));
-                                            continue 'import_iter;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        let exists = old.exports.get_func(t.name.as_str());
-                        return Err(PatchError::InvalidModule(format!("Expected to find GOT.func entry in ifunc table but it was missing: {} -> {exists:?}\nDid all symbols make it into the static lib?", t.name.as_str())));
-                    }
+                let Some(entry) = name_to_ifunc_old.get(import.name.as_str()).cloned() else {
+                    return Err(PatchError::InvalidModule(format!(
+                        "Expected to find GOT.func entry in ifunc table: {}",
+                        import.name.as_str()
+                    )));
                 };
+                got_funcs.push((import.id(), entry));
             }
-            "GOT.mem" => mems.push(t.id()),
-            "env" => {
-                // tracing::debug!("Found env import: {t:?}");
-                // to_ifuncs.push(t.id());
-            }
-            "__wbindgen_placeholder__" => {
-                wbg_funcs.push(t.id());
-            }
-            m => {
-                tracing::info!("Unknown import module: {m} -> {}", t.name);
-                // let Some(entry) = name_to_ifunc_old.get(t.name.as_str()).cloned() else {
-                //     let exists = old.exports.get_func(t.name.as_str());
-                //     return Err(PatchError::InvalidModule(format!("Expected to find <{m}> in ifunc table but it was missing: {} -> {exists:?}\nDid all symbols make it into the static lib?", t.name.as_str())));
-                // };
-                // funcs.push((t.id(), entry));
-            }
+            "GOT.mem" => got_mems.push(import.id()),
+            "__wbindgen_placeholder__" => wbg_funcs.push(import.id()),
+            m => tracing::trace!("Unknown import: {m}:{}", import.name),
         }
     }
 
@@ -259,11 +223,13 @@ fn create_wasm_jump_table(original: &Path, patch: &Path) -> Result<JumpTable> {
     // Normally, the dynaic linker setup would resolve GOT.func against the same GOT.func export in
     // the main module, but we don't have that. Instead, we simply re-parse the main module, aggregate
     // its ifunc table, and then resolve directly to the index in that table.
-    for (import_id, ifunc_index) in funcs {
-        let ImportKind::Global(id) = new.imports.get(import_id).kind else {
-            return Err(PatchError::InvalidModule(
-                "Expected GOT.func import to be a global".into(),
-            ));
+    for (import_id, ifunc_index) in got_funcs {
+        let import = new.imports.get(import_id);
+        let ImportKind::Global(id) = import.kind else {
+            return Err(PatchError::InvalidModule(format!(
+                "Expected GOT.func import to be a global: {}",
+                import.name
+            )));
         };
 
         // "satisfying" the import means removing it from the import table and replacing its target
@@ -293,15 +259,15 @@ fn create_wasm_jump_table(original: &Path, patch: &Path) -> Result<JumpTable> {
     //
     // We simply use the name of the import as a key into the symbol table and then its offset into
     // its data segment as the value within the global.
-    for mem in mems {
+    for mem in got_mems {
         let import = new.imports.get(mem);
-        let data_symbol_idx = *old_raw_data
+        let data_symbol_idx = *old_symbols
             .data_symbol_map
             .get(import.name.as_str())
             .with_context(|| {
                 format!("Failed to find GOT.mem import by its name: {}", import.name)
             })?;
-        let data_symbol = old_raw_data
+        let data_symbol = old_symbols
             .data_symbols
             .get(&data_symbol_idx)
             .context("Failed to find data symbol by its index")?;
@@ -342,45 +308,12 @@ fn create_wasm_jump_table(original: &Path, patch: &Path) -> Result<JumpTable> {
         ));
     }
 
-    // Conver the env func imports into ifuncs
-    let ifunc_table_initializer = new
-        .elements
-        .iter()
-        .find_map(|e| match e.kind {
-            ElementKind::Active { table, .. } => Some(table),
-            _ => None,
-        })
-        .context("Missing ifunc table")?;
-
-    for t in wbg_funcs {
-        let import = new.imports.get_mut(t);
-        let matching_export = old
-            .exports
-            .iter()
-            .find(|e| e.name.contains(import.name.as_str()));
-        let exists_as_ifunc_maybe = name_to_ifunc_old.keys().find(|k| k.contains(&import.name));
-
-        tracing::debug!(
-            "Converting placeholder to synthesized: {} ({matching_export:?}) or {exists_as_ifunc_maybe:?}",
-            import.name
-        );
-
-        if let Some(matchin) = matching_export {
-            if let ExportItem::Function(id) = matchin.item {
-                let ty = old.funcs.get(id).ty();
-                let ty = old.types.get(ty);
-                tracing::trace!("type of synth: {ty:?}");
-            }
-
-            if let ImportKind::Function(id) = import.kind {
-                let ty = new.funcs.get(id).ty();
-                let ty = new.types.get(ty);
-                tracing::trace!("type of inc: {ty:?}");
-            }
-
-            import.module = "env".into();
-            import.name = matchin.name.clone();
-        }
+    // Wire up the preserved intrinsic functions that we saved before running wasm-bindgen to the expected
+    // imports from the patch.
+    for import_id in wbg_funcs {
+        let import = new.imports.get_mut(import_id);
+        import.module = "env".into();
+        import.name = format!("__saved_wbg_{}", import.name);
     }
 
     // Update the wasm module on the filesystem to use the newly lifted version
@@ -399,8 +332,6 @@ fn create_wasm_jump_table(original: &Path, patch: &Path) -> Result<JumpTable> {
             map.insert(*old_idx as u64, *idx as u64);
         }
     }
-
-    tracing::trace!("Jump table: {:#?}", map);
 
     Ok(JumpTable {
         map,
