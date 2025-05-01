@@ -785,26 +785,23 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
                 .name(format!("__saved_wbg_{}", import.name))
                 .func_body();
 
-            for (i, param) in params.iter().enumerate() {
-                body.local_get(module.locals.add(*param));
+            let locals = params
+                .iter()
+                .map(|ty| module.locals.add(*ty))
+                .collect::<Vec<_>>();
+
+            for l in locals.iter() {
+                body.local_get(*l);
             }
 
             body.call(funcid);
 
-            let local_func =
-                builder.local_func(params.iter().map(|ty| module.locals.add(*ty)).collect());
+            let local_func = builder.local_func(locals);
             let new_func_id = module.funcs.add_local(local_func);
 
             module
                 .exports
                 .add(&format!("__saved_wbg_{}", import.name), new_func_id);
-
-            // let ty = module.types.get(func.ty());
-            // let params = ty.params().to_vec();
-            // let results = ty.results().to_vec();
-            // module
-            //     .exports
-            //     .add(&format!("__saved_wbg_{}", import.name), funcid);
 
             make_indirect.push(new_func_id);
         }
