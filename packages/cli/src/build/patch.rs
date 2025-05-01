@@ -22,7 +22,7 @@ use thiserror::Error;
 use walrus::{
     ir::{self},
     ConstExpr, ElementItems, ElementKind, ExportItem, FunctionBuilder, FunctionId, FunctionKind,
-    ImportKind, LocalFunction, Module, ModuleConfig, TableId,
+    ImportKind, Module, ModuleConfig, TableId,
 };
 use wasmparser::{
     BinaryReader, BinaryReaderError, Linking, LinkingSectionReader, Payload, SymbolInfo,
@@ -55,11 +55,21 @@ pub enum PatchError {
 }
 
 pub fn create_jump_table(original: &Path, patch: &Path, triple: &Triple) -> Result<JumpTable> {
-    // WASM needs its own path since the object crate leaves quite a few of the methods unimplemented
-    if triple.architecture == target_lexicon::Architecture::Wasm32 {
-        return Ok(create_wasm_jump_table(original, patch).unwrap());
+    match triple.architecture {
+        target_lexicon::Architecture::Wasm32 => create_wasm_jump_table(original, patch),
+        _ => create_native_jump_table(original, patch, triple),
     }
+}
 
+/// Assemble a jump table for native architectures. This uses the `object` crate to parse both
+/// executable's symbol tables and then creates a mapping between the two.
+///
+/// We use the `_aslr_reference` as a reference point in the base program to calculate the aslr slide
+/// both at compile time and at runtime.
+///
+/// This does not work for WASM since the `object` crate does not support emitting the WASM format,
+/// and because WASM requires more logic to handle the wasm-bindgen transformations.
+fn create_native_jump_table(original: &Path, patch: &Path, triple: &Triple) -> Result<JumpTable> {
     let obj1_bytes = fs::read(original)?;
     let obj2_bytes = fs::read(patch)?;
     let obj1 = File::parse(&obj1_bytes as &[u8])?;
@@ -100,7 +110,7 @@ pub fn create_jump_table(original: &Path, patch: &Path, triple: &Triple) -> Resu
         | OperatingSystem::Linux
         | OperatingSystem::Windows => *new_name_to_addr.get("main").unwrap(),
 
-        // On wasm, it doesn't matter what the address is since we don't use ASLR
+        // On wasm, it doesn't matter what the address is since the binary is PIC
         _ => 0,
     };
 
@@ -149,7 +159,7 @@ fn create_wasm_jump_table(original: &Path, patch: &Path) -> Result<JumpTable> {
         ..
     } = parse_module_with_ids(&new_bytes)?;
 
-    let name_to_ifunc_old = collect_func_ifuncs(&old, &old_raw_data, &old_ids);
+    let name_to_ifunc_old = collect_func_ifuncs(&old);
     let name_to_ifunc_old = fill_ifuncs_from_old(name_to_ifunc_old, &old, &old_raw_data);
     if old_raw_data.symbols.is_empty() {
         tracing::warn!("No debug symbols in the WASM output. Make sure to set `opt-level = 0` for hotpatching to work properly.");
@@ -381,7 +391,7 @@ fn create_wasm_jump_table(original: &Path, patch: &Path) -> Result<JumpTable> {
     //
     // The ifunc_count will be passed to the dynamic loader so it can allocate the right amount of space
     // in the indirect function table when loading the patch.
-    let name_to_ifunc_new = collect_func_ifuncs(&new, &new_raw_data, &new_ids);
+    let name_to_ifunc_new = collect_func_ifuncs(&new);
     let ifunc_count = name_to_ifunc_new.len() as u64;
     let mut map = AddressMap::default();
     for (name, idx) in name_to_ifunc_new.iter() {
@@ -399,45 +409,6 @@ fn create_wasm_jump_table(original: &Path, patch: &Path) -> Result<JumpTable> {
         new_base_address: 0,
         ifunc_count,
     })
-}
-
-fn convert_import_to_ifunc_call(
-    new: &mut Module,
-    ifunc_table_initializer: TableId,
-    func_id: FunctionId,
-    table_idx: i32,
-) {
-    let func = new.funcs.get_mut(func_id);
-    let ty_id = func.ty();
-
-    // Convert the import function to a local function that calls the indirect function from the table
-    let ty = new.types.get(ty_id);
-
-    let params = ty.params().to_vec();
-    let results = ty.results().to_vec();
-    let args: Vec<_> = params.iter().map(|ty| new.locals.add(*ty)).collect();
-
-    // New function that calls the indirect function
-    let mut builder = FunctionBuilder::new(&mut new.types, &params, &results);
-    let mut body = builder.name("stub".into()).func_body();
-
-    // Push the params onto the stack
-    for arg in args.iter() {
-        body.local_get(*arg);
-    }
-
-    // And then the address of the indirect function
-    body.instr(ir::Instr::Const(ir::Const {
-        value: ir::Value::I32(table_idx),
-    }));
-
-    // And call it
-    body.instr(ir::Instr::CallIndirect(ir::CallIndirect {
-        ty: ty_id,
-        table: ifunc_table_initializer,
-    }));
-
-    new.funcs.get_mut(func_id).kind = FunctionKind::Local(builder.local_func(args));
 }
 
 fn fill_ifuncs_from_old<'a>(
@@ -467,11 +438,7 @@ fn fill_ifuncs_from_old<'a>(
         .collect()
 }
 
-fn collect_func_ifuncs<'a>(
-    m: &'a Module,
-    raw: &'a RawDataSection<'a>,
-    ids_to_fns: &[FunctionId],
-) -> HashMap<&'a str, i32> {
+fn collect_func_ifuncs<'a>(m: &'a Module) -> HashMap<&'a str, i32> {
     // Collect all the functions in the module that are ifuncs
     let mut func_to_offset = HashMap::new();
     for el in m.elements.iter() {
@@ -738,7 +705,7 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
     //
     // Unfortunately, the indices it gives us ARE NOT VALID.
     // We need to work around it by using the FunctionId from the module as a link between the merged function names.
-    let ifunc_map = collect_func_ifuncs(&module, &symbols, &ids);
+    let ifunc_map = collect_func_ifuncs(&module);
     let ifuncs = module
         .funcs
         .iter()
@@ -1044,259 +1011,4 @@ fn parse_module_with_ids(bindgened: &[u8]) -> Result<ParsedModule> {
         fns_to_ids,
         symbols,
     })
-}
-
-// #[test]
-// fn compare_bindgen_sections() {
-//     let bytes = include_bytes!("/Users/jonathankelley/Development/dioxus/target/wasm32-unknown-unknown/wasm-dev/fullstack-hello-world-example.wasm");
-//     let (module, ids, _fns_to_ids) = parse_module_with_ids(bytes).unwrap();
-//     let (sect, section) = module
-//         .customs
-//         .iter()
-//         .find(|(id, f)| f.name() == "__wasm_bindgen_unstable")
-//         .unwrap();
-//     let data = section.data(&Default::default());
-
-//     let syms = parse_bytes_to_data_segment(bytes).unwrap();
-//     for s in syms.symbols.iter() {
-//         match s {
-//             SymbolInfo::Func { flags, index, name } => {
-//                 if let Some(name) = name {
-//                     if name_is_bindgen_symbol(name) {
-//                         println!("func: {name:?} -> {index:?}");
-//                     }
-//                 }
-//             }
-//             SymbolInfo::Data {
-//                 flags,
-//                 name,
-//                 symbol,
-//             } => {
-//                 if name.contains("_GENERATED") {
-//                     let offset = symbol.unwrap().offset;
-//                     println!("[{offset}]   Name: {name:?} -> {symbol:?}");
-//                 }
-
-//                 // println!()
-//             }
-//             SymbolInfo::Global { flags, index, name } => {}
-//             SymbolInfo::Section { flags, section } => {
-//                 println!("Section: {section:?} with flags {flags:?}");
-//             }
-//             SymbolInfo::Event { flags, index, name } => {}
-//             SymbolInfo::Table { flags, index, name } => {}
-//         }
-//     }
-
-//     // println!("Section: {sect:?} -> {data:?}");
-// }
-
-// if *name == "_ZN4core3fmt3num3imp54_$LT$impl$u20$core..fmt..Display$u20$for$u20$usize$GT$3fmt17h6d9dbc09b6dc47c8E" {
-// // if *name == "_ZN42_$LT$$RF$T$u20$as$u20$core..fmt..Debug$GT$3fmt17h8dcb6eecee078060E" {
-//     // if name.contains("3fmt17h8dcb6eecee07806") {
-//     tracing::debug!("Found a special function: {name}");
-//     tracing::debug!("Kind: {:?}", func.kind);
-//     tracing::debug!("already exported? {:?}", already_exported.contains(*name));
-//     tracing::debug!("ifuncs contains it?: {:?}", ifuncs.get(&func.id()));
-// }
-
-// if name_is_bindgen_symbol(name) {
-//     /// The __wbindgen_describe_ functions also reference funcs like:
-//     /// _ZN86_$LT$dioxus_web..document..JSOwner$u20$as$u20$wasm_bindgen..describe..WasmDescribe$GT$8describe17ha9b39368d518c1f9E
-//     ///
-//     /// These can be found by walking the instructions, so we build a Visitor
-//     /// ... todo: we might not need to do this since it seems that it's not reliable enough
-//     #[derive(Default)]
-//     struct AccAllDescribes {
-//         funcs: HashSet<FunctionId>,
-//     }
-
-//     impl<'a> Visitor<'a> for AccAllDescribes {
-//         fn visit_function_id(&mut self, function: &walrus::FunctionId) {
-//             self.funcs.insert(*function);
-//         }
-//     }
-
-//     // let mut acc = AccAllDescribes::default();
-//     // for func in module.funcs.iter() {
-//     //     let Some(name) = func.name.as_ref() else {
-//     //         continue;
-//     //     };
-
-//     //     // Only deal with the __wbindgen_describe_ functions
-//     //     if !name_is_bindgen_symbol(name) {
-//     //         continue;
-//     //     }
-
-//     //     // They call other functions, so we need to find those too and make sure not to mark them as exported
-//     //     if let FunctionKind::Local(func) = &module.funcs.get(func.id()).kind {
-//     //         walrus::ir::dfs_in_order(&mut acc, &func, func.entry_block());
-//     //     }
-
-//     //     acc.funcs.insert(func.id());
-//     // }
-
-//     // if let FunctionKind::Local(local) = &func.kind {
-//     //     let mut accer = AccAllDescribes::default();
-//     //     walrus::ir::dfs_in_order(&mut accer, &local, local.entry_block());
-//     //     for func in accer.funcs {
-//     //         if let Some(new_name) = module.funcs.get(func).name.as_deref() {
-//     //             if !name_is_bindgen_symbol(new_name) {
-//     //                 tracing::warn!("references real {name} -> {new_name}");
-//     //                 //     // make_indirect.push(func);
-//     //             }
-//     //         }
-//     //     }
-//     // }
-
-//     continue;
-// }
-
-// // if name.contains("__wbindgen") || name.contains("wbg") {
-// //     tracing::debug!("sus name: {name}");
-// // }
-
-// https://github.com/rustwasm/wasm-bindgen/blob/c35cc9369d5e0dc418986f7811a0dd702fb33ef9/src/lib.rs#L1061-L1160
-// externs! {
-//     #[link(wasm_import_module = "__wbindgen_placeholder__")]
-//     extern "C" {
-//         fn __wbindgen_object_clone_ref(idx: u32) -> u32;
-//         fn __wbindgen_object_drop_ref(idx: u32) -> ();
-
-//         fn __wbindgen_string_new(ptr: *const u8, len: usize) -> u32;
-//         fn __wbindgen_number_new(f: f64) -> u32;
-//         fn __wbindgen_bigint_from_str(ptr: *const u8, len: usize) -> u32;
-//         fn __wbindgen_bigint_from_i64(n: i64) -> u32;
-//         fn __wbindgen_bigint_from_u64(n: u64) -> u32;
-//         fn __wbindgen_bigint_from_i128(hi: i64, lo: u64) -> u32;
-//         fn __wbindgen_bigint_from_u128(hi: u64, lo: u64) -> u32;
-//         fn __wbindgen_symbol_named_new(ptr: *const u8, len: usize) -> u32;
-//         fn __wbindgen_symbol_anonymous_new() -> u32;
-
-//         fn __wbindgen_externref_heap_live_count() -> u32;
-
-//         fn __wbindgen_is_null(idx: u32) -> u32;
-//         fn __wbindgen_is_undefined(idx: u32) -> u32;
-//         fn __wbindgen_is_symbol(idx: u32) -> u32;
-//         fn __wbindgen_is_object(idx: u32) -> u32;
-//         fn __wbindgen_is_array(idx: u32) -> u32;
-//         fn __wbindgen_is_function(idx: u32) -> u32;
-//         fn __wbindgen_is_string(idx: u32) -> u32;
-//         fn __wbindgen_is_bigint(idx: u32) -> u32;
-//         fn __wbindgen_typeof(idx: u32) -> u32;
-
-//         fn __wbindgen_in(prop: u32, obj: u32) -> u32;
-
-//         fn __wbindgen_is_falsy(idx: u32) -> u32;
-//         fn __wbindgen_as_number(idx: u32) -> f64;
-//         fn __wbindgen_try_into_number(idx: u32) -> u32;
-//         fn __wbindgen_neg(idx: u32) -> u32;
-//         fn __wbindgen_bit_and(a: u32, b: u32) -> u32;
-//         fn __wbindgen_bit_or(a: u32, b: u32) -> u32;
-//         fn __wbindgen_bit_xor(a: u32, b: u32) -> u32;
-//         fn __wbindgen_bit_not(idx: u32) -> u32;
-//         fn __wbindgen_shl(a: u32, b: u32) -> u32;
-//         fn __wbindgen_shr(a: u32, b: u32) -> u32;
-//         fn __wbindgen_unsigned_shr(a: u32, b: u32) -> u32;
-//         fn __wbindgen_add(a: u32, b: u32) -> u32;
-//         fn __wbindgen_sub(a: u32, b: u32) -> u32;
-//         fn __wbindgen_div(a: u32, b: u32) -> u32;
-//         fn __wbindgen_checked_div(a: u32, b: u32) -> u32;
-//         fn __wbindgen_mul(a: u32, b: u32) -> u32;
-//         fn __wbindgen_rem(a: u32, b: u32) -> u32;
-//         fn __wbindgen_pow(a: u32, b: u32) -> u32;
-//         fn __wbindgen_lt(a: u32, b: u32) -> u32;
-//         fn __wbindgen_le(a: u32, b: u32) -> u32;
-//         fn __wbindgen_ge(a: u32, b: u32) -> u32;
-//         fn __wbindgen_gt(a: u32, b: u32) -> u32;
-
-//         fn __wbindgen_number_get(idx: u32) -> WasmRet<Option<f64>>;
-//         fn __wbindgen_boolean_get(idx: u32) -> u32;
-//         fn __wbindgen_string_get(idx: u32) -> WasmSlice;
-//         fn __wbindgen_bigint_get_as_i64(idx: u32) -> WasmRet<Option<i64>>;
-
-//         fn __wbindgen_debug_string(ret: *mut [usize; 2], idx: u32) -> ();
-
-//         fn __wbindgen_throw(a: *const u8, b: usize) -> !;
-//         fn __wbindgen_rethrow(a: u32) -> !;
-//         fn __wbindgen_error_new(a: *const u8, b: usize) -> u32;
-
-//         fn __wbindgen_cb_drop(idx: u32) -> u32;
-
-//         fn __wbindgen_describe(v: u32) -> ();
-//         fn __wbindgen_describe_closure(a: u32, b: u32, c: u32) -> u32;
-
-//         fn __wbindgen_json_parse(ptr: *const u8, len: usize) -> u32;
-//         fn __wbindgen_json_serialize(idx: u32) -> WasmSlice;
-//         fn __wbindgen_jsval_eq(a: u32, b: u32) -> u32;
-//         fn __wbindgen_jsval_loose_eq(a: u32, b: u32) -> u32;
-
-//         fn __wbindgen_copy_to_typed_array(ptr: *const u8, len: usize, idx: u32) -> ();
-
-//         fn __wbindgen_uint8_array_new(ptr: *mut u8, len: usize) -> u32;
-//         fn __wbindgen_uint8_clamped_array_new(ptr: *mut u8, len: usize) -> u32;
-//         fn __wbindgen_uint16_array_new(ptr: *mut u16, len: usize) -> u32;
-//         fn __wbindgen_uint32_array_new(ptr: *mut u32, len: usize) -> u32;
-//         fn __wbindgen_biguint64_array_new(ptr: *mut u64, len: usize) -> u32;
-//         fn __wbindgen_int8_array_new(ptr: *mut i8, len: usize) -> u32;
-//         fn __wbindgen_int16_array_new(ptr: *mut i16, len: usize) -> u32;
-//         fn __wbindgen_int32_array_new(ptr: *mut i32, len: usize) -> u32;
-//         fn __wbindgen_bigint64_array_new(ptr: *mut i64, len: usize) -> u32;
-//         fn __wbindgen_float32_array_new(ptr: *mut f32, len: usize) -> u32;
-//         fn __wbindgen_float64_array_new(ptr: *mut f64, len: usize) -> u32;
-
-//         fn __wbindgen_array_new() -> u32;
-//         fn __wbindgen_array_push(array: u32, value: u32) -> ();
-
-//         fn __wbindgen_not(idx: u32) -> u32;
-
-//         fn __wbindgen_exports() -> u32;
-//         fn __wbindgen_memory() -> u32;
-//         fn __wbindgen_module() -> u32;
-//         fn __wbindgen_function_table() -> u32;
-//     }
-// }
-
-#[test]
-fn is_in_ifuncs() {
-    let path = "/Users/jonathankelley/Development/docsite/target/dx/dioxus_docs_site/debug/web/public/wasm/dioxus_docs_site_bg.wasm";
-    let bytes = fs::read(path).unwrap();
-    let module = walrus::Module::from_buffer(&bytes).unwrap();
-    let symbols = parse_bytes_to_data_segment(&bytes).unwrap();
-    let ifunc_map = collect_func_ifuncs(&module, &symbols, &[]);
-    let target = "_ZN4core3fmt3num3imp54_$LT$impl$u20$core..fmt..Display$u20$for$u20$usize$GT$3fmt17h6d9dbc09b6dc47c8E";
-    let res = ifunc_map.get(target);
-    dbg!(res);
-
-    let res = module
-        .funcs
-        .iter()
-        .find(|f| f.name.as_deref() == Some(target));
-    dbg!(res);
-
-    let res = symbols.code_symbol_map.get(target);
-    dbg!(res);
-
-    // let symbol = &symbols.symbols[*res.unwrap()];
-    // dbg!(symbol);
-    let symbol = symbols
-        .symbols
-        .iter()
-        .find(|s| match s {
-            SymbolInfo::Func { name, .. } => name.as_deref() == Some(target),
-            _ => false,
-        })
-        .unwrap();
-    dbg!(symbol);
-
-    for s in symbols.symbols.iter() {
-        match s {
-            SymbolInfo::Func { name, index, .. } => {
-                if *index == 95157 {
-                    println!("Found a special function: {name:?}");
-                }
-            }
-            _ => {}
-        }
-    }
 }
