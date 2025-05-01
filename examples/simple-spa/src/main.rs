@@ -27,13 +27,21 @@ fn app() -> Element {
             "Get select data"
         }
         div {
-            EvalIt { color: "white" }
             EvalIt { color: "red" }
+            EvalIt { color: "orange" }
             EvalIt { color: "yellow" }
+            EvalIt { color: "green" }
+            EvalIt { color: "blue" }
+            EvalIt { color: "indigo" }
+            EvalIt { color: "violet" }
+            EvalIt { color: "red" }
+            EvalIt { color: "orange" }
             EvalIt { color: "yellow" }
-            EvalIt { color: "yellow" }
-            EvalIt { color: "yellow" }
-            EvalIt { color: "yellow" }
+            EvalIt { color: "green" }
+            EvalIt { color: "blue" }
+            EvalIt { color: "indigo" }
+            EvalIt { color: "violet" }
+            EvalIt { color: "black" }
         }
     }
 }
@@ -60,5 +68,5 @@ export function get_select_data_list(select) {
 }
 "#)]
 extern "C" {
-    fn get_select_data_list(item: String) -> Vec<String>;
+    pub fn get_select_data_list(item: String) -> Vec<String>;
 }

@@ -771,10 +771,12 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
 
     for (funcid, importid) in imported_funcs {
         let import = module.imports.get(importid);
-        if import.name.starts_with("__wbindgen") && !name_is_bindgen_symbol(import.name.as_str()) {
+        if (import.name.starts_with("__wbindgen") || import.name.starts_with("__wbg_"))
+            && !name_is_bindgen_symbol(import.name.as_str())
+        {
             let func = module.funcs.get(funcid);
             let ty = module.types.get(func.ty());
-            tracing::info!("Preserving intrinsic: {name} ({ty:?})", name = import.name);
+            // tracing::info!("Preserving intrinsic: {name} ({ty:?})", name = import.name);
 
             let ty = module.types.get(func.ty());
             let params = ty.params().to_vec();

@@ -26,17 +26,26 @@ fn Child() -> Element {
         h1 { "Set your favorite color" }
         button { onclick: move |_| t += 1, "Click me: {t}" }
         div {
-            EvalIt { color: "white" }
-            EvalIt { color: "blue" }
+            EvalIt { color: "red" }
             EvalIt { color: "orange" }
-            EvalIt { color: "beige" }
-            EvalIt { color: "red" }
-            EvalIt { color: "red" }
-            EvalIt { color: "red" }
             EvalIt { color: "yellow" }
             EvalIt { color: "green" }
-            EvalIt { color: "red" }
-            EvalIt { color: "red" }
+            EvalIt { color: "blue" }
+            EvalIt { color: "indigo" }
+            EvalIt { color: "violet" }
+            EvalIt { color: "pink" }
+            EvalIt { color: "cyan" }
+            EvalIt { color: "lime" }
+            EvalIt { color: "teal" }
+            EvalIt { color: "brown" }
+            EvalIt { color: "gray" }
+            EvalIt { color: "white" }
+            EvalIt { color: "black" }
+            EvalIt { color: "magenta" }
+            EvalIt { color: "maroon" }
+            EvalIt { color: "navy" }
+            EvalIt { color: "olive" }
+            EvalIt { color: "silver" }
         }
         button {
             onclick: move |_| async move {
@@ -57,6 +66,9 @@ fn Child() -> Element {
                 tracing::debug!("Sending: {}", t.to_string());
                 let res = post_server_data(t.to_string()).await;
                 tracing::debug!("res: {:?}", res);
+                if let Ok(data) = res {
+                    text.set(data);
+                }
                 // }
             },
             "Run a server function with data!"
@@ -67,6 +79,7 @@ fn Child() -> Element {
         //         tracing::debug!("items: {:?}", items);
         //     }
         // }
+        "Server said: {text}"
         "Server said: {text}"
 
     }
@@ -108,15 +121,15 @@ fn EvalIt(color: String) -> Element {
     }
 }
 
-// use wasm_bindgen::prelude::*;
-// // web-sys does not expose the keys api for select data, so we need to manually bind to it
-// #[wasm_bindgen(inline_js = r#"
-// export function get_select_data_list(select) {
-//     let values = [select];
+use wasm_bindgen::prelude::*;
+// web-sys does not expose the keys api for select data, so we need to manually bind to it
+#[wasm_bindgen(inline_js = r#"
+export function get_select_data_list(select) {
+    let values = [select];
 
-//     return values;
-// }
-// "#)]
-// extern "C" {
-//     fn get_select_data_list(item: String) -> Vec<String>;
-// }
+    return values;
+}
+"#)]
+extern "C" {
+    fn get_select_data_list(item: String) -> Vec<String>;
+}

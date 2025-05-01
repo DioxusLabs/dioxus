@@ -1271,9 +1271,9 @@ session_cache_dir: {}"#,
                     "--import-memory".to_string(),
                     "--import-table".to_string(),
                     "--growable-table".to_string(),
-                    "--export-all".to_string(),
-                    // "--export".to_string(),
-                    // "main".to_string(),
+                    // "--export-all".to_string(),
+                    "--export".to_string(),
+                    "main".to_string(),
                     // "--export".to_string(),
                     // "__wasm_apply_data_relocs".to_string(),
                     // "--export".to_string(),
@@ -1284,7 +1284,7 @@ session_cache_dir: {}"#,
                     "--pie".to_string(),
                     "--experimental-pic".to_string(),
                     // "--export-all".to_string(),
-                    "--no-gc-sections".to_string(),
+                    // "--no-gc-sections".to_string(),
                 ]);
 
                 // for arg in original_args.iter() {
@@ -1554,6 +1554,8 @@ session_cache_dir: {}"#,
                     for rlib in compiler_rlibs.iter().rev() {
                         args.insert(first_rlib + 2, rlib.display().to_string());
                     }
+
+                    args.insert(first_rlib + 3, "-Wl,-all_load".to_string());
                 }
 
                 OperatingSystem::Windows => {
