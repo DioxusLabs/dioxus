@@ -589,11 +589,13 @@ impl AppBuilder {
             //
             // ie we would've shipped `/Users/foo/Projects/dioxus/target/dx/project/debug/web/public/wasm/lib.wasm`
             //    but we want to ship `/wasm/lib.wasm`
-            jump_table.lib = jump_table
-                .lib
-                .strip_prefix(self.build.root_dir())
-                .unwrap()
-                .to_path_buf();
+            jump_table.lib = PathBuf::from("/").join(
+                jump_table
+                    .lib
+                    .strip_prefix(self.build.root_dir())
+                    .unwrap()
+                    .to_path_buf(),
+            )
         }
 
         let changed_files = match &res.mode {
