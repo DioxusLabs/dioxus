@@ -149,8 +149,8 @@ fn create_wasm_jump_table(original: &Path, patch: &Path) -> Result<JumpTable> {
         ..
     } = parse_module_with_ids(&new_bytes)?;
 
-    let (name_to_ifunc_old, funcid_to_idx) = collect_func_ifuncs(&old, &old_raw_data, &old_ids);
-
+    let name_to_ifunc_old = collect_func_ifuncs(&old, &old_raw_data, &old_ids);
+    let name_to_ifunc_old = fill_ifuncs_from_old(name_to_ifunc_old, &old, &old_raw_data);
     if old_raw_data.symbols.is_empty() {
         tracing::warn!("No debug symbols in the WASM output. Make sure to set `opt-level = 0` for hotpatching to work properly.");
         return Err(PatchError::MissingSymbols { symbols: vec![] });
@@ -381,7 +381,7 @@ fn create_wasm_jump_table(original: &Path, patch: &Path) -> Result<JumpTable> {
     //
     // The ifunc_count will be passed to the dynamic loader so it can allocate the right amount of space
     // in the indirect function table when loading the patch.
-    let (name_to_ifunc_new, _) = collect_func_ifuncs(&new, &new_raw_data, &new_ids);
+    let name_to_ifunc_new = collect_func_ifuncs(&new, &new_raw_data, &new_ids);
     let ifunc_count = name_to_ifunc_new.len() as u64;
     let mut map = AddressMap::default();
     for (name, idx) in name_to_ifunc_new.iter() {
@@ -440,14 +440,40 @@ fn convert_import_to_ifunc_call(
     new.funcs.get_mut(func_id).kind = FunctionKind::Local(builder.local_func(args));
 }
 
+fn fill_ifuncs_from_old<'a>(
+    func_to_offset: HashMap<&'a str, i32>,
+    m: &'a Module,
+    raw: &'a RawDataSection<'a>,
+) -> HashMap<&'a str, i32> {
+    // These are the "real" bindings for functions in the module
+    // Basically a map between a function's index and its real name
+    let func_to_index = m
+        .funcs
+        .iter()
+        .filter_map(|f| {
+            let name = f.name.as_deref()?;
+            Some((*raw.code_symbol_map.get(name)?, name))
+        })
+        .collect::<HashMap<usize, &str>>();
+
+    // Find the corresponding function that shares the same index, but in the ifunc table
+    raw.code_symbol_map
+        .iter()
+        .filter_map(|(name, idx)| {
+            let new_modules_unified_function = func_to_index.get(idx)?;
+            let offset = func_to_offset.get(new_modules_unified_function)?;
+            Some((*name, *offset as i32))
+        })
+        .collect()
+}
+
 fn collect_func_ifuncs<'a>(
     m: &'a Module,
     raw: &'a RawDataSection<'a>,
     ids_to_fns: &[FunctionId],
-) -> (HashMap<&'a str, i32>, HashMap<FunctionId, i32>) {
+) -> HashMap<&'a str, i32> {
+    // Collect all the functions in the module that are ifuncs
     let mut func_to_offset = HashMap::new();
-    let mut funcid_to_offset = HashMap::new();
-
     for el in m.elements.iter() {
         let ElementKind::Active { offset, .. } = &el.kind else {
             continue;
@@ -472,55 +498,13 @@ fn collect_func_ifuncs<'a>(
                 for (idx, id) in ids.iter().enumerate() {
                     let name = m.funcs.get(*id).name.as_deref().unwrap();
                     func_to_offset.insert(name, offset + idx as i32);
-                    funcid_to_offset.insert(*id, offset + idx as i32);
-                    // func_to_offset.insert(*id, offset + idx as i32);
                 }
             }
             ElementItems::Expressions(_ref_type, _const_exprs) => {}
         }
     }
 
-    // // The actual symbol table has multiple symbols mapping to the same function.
-    // //
-    // // When we read the "name" field of functions, that might not actually be all of the names it
-    // // is known by. IE the GOT.func entries will use different names to reference the same actual function.
-    // //
-    // // We need to do some work to create a mapping between every function name and the real function
-    // // it corresponds to.
-    // let mut duplicated_to_real = HashMap::new();
-    // for sym in raw.symbols.iter() {
-    //     if let SymbolInfo::Func { index, name, .. } = sym {
-    //         if let Some(real_name) = name.as_deref() {
-    //             if let Some(real) = ids_to_fns.get(*index as usize) {
-    //                 duplicated_to_real.insert(real_name, real);
-
-    //                 // Weirdly enough, the name of this func might
-    //                 let func = m.funcs.get(*real);
-    //                 if let Some(name) = func.name.as_deref() {
-    //                     if real_name != name {
-    //                         tracing::error!(
-    //                             "Duplicate name was incorrect found: {real_name} -> {name}"
-    //                         );
-    //                     }
-
-    //                     duplicated_to_real.insert(name, real);
-    //                 }
-    //             }
-    //         }
-    //     }
-    // }
-
-    // // Now, we need to go through all the symbols and find the real offset they have
-    // let mut offsets = HashMap::new();
-    // for (dupename, real_id) in duplicated_to_real {
-    //     if let Some(offset) = func_to_offset.get(real_id) {
-    //         offsets.insert(dupename, *offset as i32);
-    //     }
-    // }
-
-    // offsets
-    // todo!()
-    (func_to_offset, funcid_to_offset)
+    func_to_offset
 }
 
 /// Resolve the undefined symbols in the incrementals against the original binary, returning an object
@@ -754,7 +738,7 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
     //
     // Unfortunately, the indices it gives us ARE NOT VALID.
     // We need to work around it by using the FunctionId from the module as a link between the merged function names.
-    let (ifunc_map, _) = collect_func_ifuncs(&module, &symbols, &ids);
+    let ifunc_map = collect_func_ifuncs(&module, &symbols, &ids);
     let ifuncs = module
         .funcs
         .iter()
@@ -1285,7 +1269,7 @@ fn is_in_ifuncs() {
     let bytes = fs::read(path).unwrap();
     let module = walrus::Module::from_buffer(&bytes).unwrap();
     let symbols = parse_bytes_to_data_segment(&bytes).unwrap();
-    let (ifunc_map, _) = collect_func_ifuncs(&module, &symbols, &[]);
+    let ifunc_map = collect_func_ifuncs(&module, &symbols, &[]);
     let target = "_ZN4core3fmt3num3imp54_$LT$impl$u20$core..fmt..Display$u20$for$u20$usize$GT$3fmt17h6d9dbc09b6dc47c8E";
     let res = ifunc_map.get(target);
     dbg!(res);
