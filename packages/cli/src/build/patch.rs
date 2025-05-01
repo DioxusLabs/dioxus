@@ -168,17 +168,43 @@ fn create_wasm_jump_table(original: &Path, patch: &Path) -> Result<JumpTable> {
     let mut mems = vec![];
     let mut funcs = vec![];
     let mut wbg_funcs = vec![];
+    // let mut make_env_import = vec![];
     // let mut to_ifuncs = vec![];
 
     // Collect all the GOT entries from the new module.
-    for t in new.imports.iter() {
+    'import_iter: for t in new.imports.iter() {
         match t.module.as_str() {
             "GOT.func" => {
-                let Some(entry) = name_to_ifunc_old.get(t.name.as_str()).cloned() else {
-                    let exists = old.exports.get_func(t.name.as_str());
-                    return Err(PatchError::InvalidModule(format!("Expected to find GOT.func entry in ifunc table but it was missing: {} -> {exists:?}\nDid all symbols make it into the static lib?", t.name.as_str())));
+                match name_to_ifunc_old.get(t.name.as_str()).cloned() {
+                    Some(entry) => funcs.push((t.id(), entry)),
+                    _ => {
+                        // match exists {
+                        //     Ok(export) => {
+                        // tracing::info!("Found GOT.func entry as export: {t:?} -> {export:?}");
+                        let sym_index = old_raw_data.code_symbol_map.get(t.name.as_str());
+                        for s in old_raw_data.symbols.iter() {
+                            if let SymbolInfo::Func {
+                                index,
+                                name: Some(name),
+                                ..
+                            } = s
+                            {
+                                if let Some(sym_index) = sym_index {
+                                    if *index == *sym_index as u32 {
+                                        if let Some(ifunc) = name_to_ifunc_old.get(name) {
+                                            tracing::info!("Found GOT.func entry as symbol: {t:?} -> {ifunc:?}");
+                                            funcs.push((t.id(), *ifunc));
+                                            continue 'import_iter;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        let exists = old.exports.get_func(t.name.as_str());
+                        return Err(PatchError::InvalidModule(format!("Expected to find GOT.func entry in ifunc table but it was missing: {} -> {exists:?}\nDid all symbols make it into the static lib?", t.name.as_str())));
+                    }
                 };
-                funcs.push((t.id(), entry));
             }
             "GOT.mem" => mems.push(t.id()),
             "env" => {
@@ -305,6 +331,12 @@ fn create_wasm_jump_table(original: &Path, patch: &Path) -> Result<JumpTable> {
             walrus::ir::Value::I32(offset + data_symbol.segment_offset as i32),
         ));
     }
+
+    // for import in make_env_import {
+    //     let import = new.imports.get_mut(import);
+    //     import.module = "env".into();
+    //     tracing::debug!("Converting GOT.func import to env: {import:?}");
+    // }
 
     // Conver the env func imports into ifuncs
     let ifunc_table_initializer = new
@@ -1252,3 +1284,47 @@ fn parse_module_with_ids(bindgened: &[u8]) -> Result<ParsedModule> {
 //         fn __wbindgen_function_table() -> u32;
 //     }
 // }
+
+#[test]
+fn is_in_ifuncs() {
+    let path = "/Users/jonathankelley/Development/docsite/target/dx/dioxus_docs_site/debug/web/public/wasm/dioxus_docs_site_bg.wasm";
+    let bytes = fs::read(path).unwrap();
+    let module = walrus::Module::from_buffer(&bytes).unwrap();
+    let symbols = parse_bytes_to_data_segment(&bytes).unwrap();
+    let (ifunc_map, _) = collect_func_ifuncs(&module, &symbols, &[]);
+    let target = "_ZN4core3fmt3num3imp54_$LT$impl$u20$core..fmt..Display$u20$for$u20$usize$GT$3fmt17h6d9dbc09b6dc47c8E";
+    let res = ifunc_map.get(target);
+    dbg!(res);
+
+    let res = module
+        .funcs
+        .iter()
+        .find(|f| f.name.as_deref() == Some(target));
+    dbg!(res);
+
+    let res = symbols.code_symbol_map.get(target);
+    dbg!(res);
+
+    // let symbol = &symbols.symbols[*res.unwrap()];
+    // dbg!(symbol);
+    let symbol = symbols
+        .symbols
+        .iter()
+        .find(|s| match s {
+            SymbolInfo::Func { name, .. } => name.as_deref() == Some(target),
+            _ => false,
+        })
+        .unwrap();
+    dbg!(symbol);
+
+    for s in symbols.symbols.iter() {
+        match s {
+            SymbolInfo::Func { name, index, .. } => {
+                if *index == 95157 {
+                    println!("Found a special function: {name:?}");
+                }
+            }
+            _ => {}
+        }
+    }
+}

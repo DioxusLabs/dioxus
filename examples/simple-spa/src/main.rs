@@ -62,7 +62,7 @@ fn EvalIt(color: String) -> Element {
 
 #[wasm_bindgen(inline_js = r#"
 export function get_select_data_list(select) {
-    let values = [select];
+    let values = [select, "todor"];
 
     return values;
 }
