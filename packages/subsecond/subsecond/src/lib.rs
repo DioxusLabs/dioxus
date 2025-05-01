@@ -388,6 +388,10 @@ pub fn register_handler(handler: Arc<dyn Fn() + Send + Sync + 'static>) {
 /// This function will load the library and thus allocates. In cannot be used when the program is
 /// stopped (ie in a signal handler).
 pub unsafe fn apply_patch(mut table: JumpTable) -> Result<(), PatchError> {
+    if cfg!(target_os = "macos") {
+        return Ok(());
+    }
+
     // On non-wasm platforms we can just use libloading and the known aslr offsets to load the library
     #[cfg(any(unix, windows))]
     {
@@ -572,6 +576,10 @@ pub unsafe fn apply_patch(mut table: JumpTable) -> Result<(), PatchError> {
             .unchecked_into::<js_sys::Function>();
         _ = func.call0(&JsValue::undefined());
         let func = Reflect::get(&exports, &"__wasm_apply_global_relocs".into())
+            .unwrap()
+            .unchecked_into::<js_sys::Function>();
+        _ = func.call0(&JsValue::undefined());
+        let func = Reflect::get(&exports, &"__wasm_call_ctors".into())
             .unwrap()
             .unchecked_into::<js_sys::Function>();
         _ = func.call0(&JsValue::undefined());

@@ -13,6 +13,12 @@ fn main() {
 }
 
 fn app() -> Element {
+    rsx! {
+        Child {}
+    }
+}
+
+fn Child() -> Element {
     let mut t = use_signal(|| 0);
     let mut text = use_signal(|| "...".to_string());
 
@@ -21,26 +27,39 @@ fn app() -> Element {
         button { onclick: move |_| t += 1, "Click me: {t}" }
         div {
             EvalIt { color: "white" }
+            EvalIt { color: "blue" }
+            EvalIt { color: "orange" }
+            EvalIt { color: "beige" }
+            EvalIt { color: "red" }
+            EvalIt { color: "red" }
             EvalIt { color: "red" }
             EvalIt { color: "yellow" }
             EvalIt { color: "green" }
-            EvalIt { color: "green" }
-            EvalIt { color: "green" }
-            EvalIt { color: "green" }
-            EvalIt { color: "green" }
-            EvalIt { color: "green" }
-            EvalIt { color: "green" }
-            EvalIt { color: "green" }
+            EvalIt { color: "red" }
+            EvalIt { color: "red" }
         }
         button {
             onclick: move |_| async move {
                 if let Ok(data) = get_server_data().await {
                     text.set(data.clone());
-                    post_server_data(data).await.unwrap();
+                    tracing::debug!("Sending: {}", data);
+                    let res = post_server_data(data).await;
+                    tracing::debug!("res: {:?}", res);
                 }
 
             },
             "Run a server function!"
+        }
+        button {
+            onclick: move |_| async move {
+                // if let Ok(data) = get_curr_time().await {
+                //     text.set(data.clone());
+                tracing::debug!("Sending: {}", t.to_string());
+                let res = post_server_data(t.to_string()).await;
+                tracing::debug!("res: {:?}", res);
+                // }
+            },
+            "Run a server function with data!"
         }
         // button {
         //     onclick: move |_| {
@@ -53,16 +72,26 @@ fn app() -> Element {
     }
 }
 
-#[server]
-async fn post_server_data(data: String) -> Result<(), ServerFnError> {
-    println!("Server received: {}", data);
-
-    Ok(())
+#[server(endpoint = "/post_server_data")]
+async fn post_server_data(data: String) -> Result<String, ServerFnError> {
+    tracing::debug!("Server data: {data}");
+    Ok(format!("Server received: {data}"))
 }
 
-#[server]
+#[server(endpoint = "/get_server_data")]
 async fn get_server_data() -> Result<String, ServerFnError> {
     Ok(reqwest::get("https://httpbin.org/ip").await?.text().await?)
+}
+
+#[server(endpoint = "/get_curr_time")]
+async fn get_curr_time() -> Result<String, ServerFnError> {
+    Ok(format!(
+        "current time: -> {}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+    ))
 }
 
 #[component]

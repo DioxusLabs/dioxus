@@ -838,11 +838,7 @@ session_cache_dir: {}"#,
             }
         }
 
-        if output_location.is_none() {
-            tracing::error!("Cargo build failed - no output location. Toggle tracing mode (press `t`) for more information.");
-        }
-
-        let exe = output_location.context("Build `did not return an executable")?;
+        let exe = output_location.context("Cargo build failed - no output location. Toggle tracing mode (press `t`) for more information.")?;
 
         // Accumulate the rustc args from the wrapper, if they exist and can be parsed.
         let mut direct_rustc = RustcArgs::default();
@@ -1275,19 +1271,20 @@ session_cache_dir: {}"#,
                     "--import-memory".to_string(),
                     "--import-table".to_string(),
                     "--growable-table".to_string(),
-                    "--export".to_string(),
-                    "main".to_string(),
-                    "--export".to_string(),
-                    "__wasm_apply_data_relocs".to_string(),
-                    "--export".to_string(),
-                    "__wasm_apply_global_relocs".to_string(),
+                    "--export-all".to_string(),
+                    // "--export".to_string(),
+                    // "main".to_string(),
+                    // "--export".to_string(),
+                    // "__wasm_apply_data_relocs".to_string(),
+                    // "--export".to_string(),
+                    // "__wasm_apply_global_relocs".to_string(),
                     "--allow-undefined".to_string(),
                     "--no-demangle".to_string(),
                     "--no-entry".to_string(),
                     "--pie".to_string(),
                     "--experimental-pic".to_string(),
                     // "--export-all".to_string(),
-                    // "--no-gc-sections".to_string(),
+                    "--no-gc-sections".to_string(),
                 ]);
 
                 // for arg in original_args.iter() {
@@ -1693,6 +1690,10 @@ session_cache_dir: {}"#,
                 cmd.envs(self.cargo_build_env_vars(ctx)?);
                 cmd.arg(format!("-Clinker={}", Workspace::path_to_dx()?.display()));
 
+                if self.platform == Platform::Web {
+                    cmd.arg("-Crelocation-model=pic");
+                }
+
                 tracing::trace!("Direct rustc command: {:#?}", rustc_args.args);
 
                 Ok(cmd)
@@ -1866,19 +1867,26 @@ session_cache_dir: {}"#,
             // I think we can make relocation-model=pic work for non-wasm platforms, enabling
             // fully relocatable modules with no host coordination in lieu of sending out
             // the aslr slide at runtime.
+            //
+            // The other tricky one is -Ctarget-cpu=mvp, which prevents rustc from generating externref
+            // entries.
+            //
+            // https://blog.rust-lang.org/2024/09/24/webassembly-targets-change-in-default-target-features/#disabling-on-by-default-webassembly-proposals
+            //
+            // It's fine that these exist in the base module but not in the patch.
             if self.platform == Platform::Web
                 || self.triple.operating_system == OperatingSystem::Wasi
             {
+                // cargo_args.push("-Crelocation-model=pic".into());
+                cargo_args.push("-Ctarget-cpu=mvp".into());
                 cargo_args.push("-Clink-arg=--no-gc-sections".into());
                 cargo_args.push("-Clink-arg=--growable-table".into());
-                cargo_args.push("-Clink-arg=--whole-archive".into());
                 cargo_args.push("-Clink-arg=--export-table".into());
                 cargo_args.push("-Clink-arg=--export-memory".into());
                 cargo_args.push("-Clink-arg=--emit-relocs".into());
                 cargo_args.push("-Clink-arg=--export=__stack_pointer".into());
                 cargo_args.push("-Clink-arg=--export=__heap_base".into());
                 cargo_args.push("-Clink-arg=--export=__data_end".into());
-                cargo_args.push("-Crelocation-model=pic".into());
             }
         }
 
@@ -1911,15 +1919,15 @@ session_cache_dir: {}"#,
 
         // Disable reference types on wasm when using hotpatching
         // https://blog.rust-lang.org/2024/09/24/webassembly-targets-change-in-default-target-features/#disabling-on-by-default-webassembly-proposals
-        // if self.platform == Platform::Web
-        //     && matches!(ctx.mode, BuildMode::Thin { .. } | BuildMode::Fat)
-        // {
-        //     env_vars.push(("RUSTFLAGS", {
-        //         let mut rust_flags = std::env::var("RUSTFLAGS").unwrap_or_default();
-        //         rust_flags.push_str(" -Ctarget-cpu=mvp");
-        //         rust_flags
-        //     }));
-        // }
+        if self.platform == Platform::Web
+            && matches!(ctx.mode, BuildMode::Thin { .. } | BuildMode::Fat)
+        {
+            env_vars.push(("RUSTFLAGS", {
+                let mut rust_flags = std::env::var("RUSTFLAGS").unwrap_or_default();
+                rust_flags.push_str(" -Ctarget-cpu=mvp");
+                rust_flags
+            }));
+        }
 
         if let Some(target_dir) = self.custom_target_dir.as_ref() {
             env_vars.push(("CARGO_TARGET_DIR", target_dir.display().to_string()));

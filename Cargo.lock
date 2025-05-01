@@ -12439,6 +12439,7 @@ dependencies = [
  "dioxus",
  "reqwest 0.12.15",
  "serde",
+ "wasm-bindgen",
 ]
 
 [[package]]

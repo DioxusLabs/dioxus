@@ -156,81 +156,6 @@ fn create_wasm_jump_table(original: &Path, patch: &Path) -> Result<JumpTable> {
         return Err(PatchError::MissingSymbols { symbols: vec![] });
     }
 
-    // // Do a quick scan to see if the symbols in the wasm-bindgen table have changed at all
-    // // We currently don't support updating them since we'd somehow need to merge the glue code together
-    // ensure_wasm_bindgen_unchanged(&old, &new, &old_raw_data, &new_raw_data)?;
-
-    // || e.name.contains("wbindgen_externref")
-    // tracing::debug!(
-    //     "externref: {:?}",
-    // {
-    //     let ifunc_table_initializer = new.tables.main_function_table()?.unwrap();
-    //     let (name, offset) = name_to_ifunc_old
-    //         .iter()
-    //         .find(|k| k.0.contains("table_dealloc"))
-    //         .unwrap();
-    //     let original = old.funcs.by_name("__externref_table_dealloc").unwrap();
-    //     let original = old.funcs.get(original);
-    //     let original_ty = old.types.get(original.ty());
-    //     let params = original_ty.params().to_vec();
-    //     let results = original_ty.results().to_vec();
-    //     let args: Vec<_> = params.iter().map(|ty| new.locals.add(*ty)).collect();
-    //     let mut builder = FunctionBuilder::new(&mut new.types, &params, &results);
-    //     let mut body = builder
-    //         .name("__wbindgen_externref_table_dealloc".into())
-    //         .func_body();
-    //     let func_id = new.funcs.add_local(builder.local_func(args));
-    //     convert_import_to_ifunc_call(&mut new, ifunc_table_initializer, func_id, *offset);
-    //     new.exports.add(name, func_id);
-    // }
-    // name_to_ifunc_old.get("__wbindgen_externref_table_dealloc")
-    // );
-    // let ty = new.types.get(new.funcs.get(func_id).ty());
-    // let params = ty.params().to_vec();
-    // let results = ty.results().to_vec();
-    // let args: Vec<_> = params.iter().map(|ty| new.locals.add(*ty)).collect();
-
-    // let mut builder = FunctionBuilder::new(&mut new.types, &params, &results);
-    // let mut body = builder.name("stub".into()).func_body();
-
-    // new.funcs.get_mut(func_id).kind = FunctionKind::Local(builder.local_func(args));
-
-    // new.add_import_func("", name, ty)
-
-    // for e in old.exports.iter() {
-    //     if e.name.starts_with("__externref") {
-    //         if let ExportItem::Function(func) = e.item {
-    //             let tyid = old.funcs.get(func).ty();
-    //             let ty = old.types.get(tyid);
-    //             let params = ty.params().to_vec();
-    //             let results = ty.results().to_vec();
-
-    //             let new_ty = new.types.add(&params, &results);
-
-    //             let (new_func, new_imp) = new.add_import_func("env", &e.name, new_ty);
-    //             new.exports.add(&e.name, new_func);
-    //         }
-    //     }
-    // }
-
-    // // Run the xform
-    // let mut wbgxform = wasm_bindgen_externref_xform::Context::default();
-
-    // // quick hack, prepare fails with PIC/PIE code. we temporarily clear out the segments of the main func table to prevent this error from hitting
-    // let main_func_table_id = new.tables.main_function_table()?.unwrap();
-    // let segs = std::mem::take(&mut new.tables.get_mut(main_func_table_id).elem_segments);
-    // wbgxform.prepare(&mut new)?;
-    // new.tables.get_mut(main_func_table_id).elem_segments = segs;
-    // wbgxform.run(&mut new)?;
-
-    // let unused = new
-    //     .imports
-    //     .iter()
-    //     .find(|f| f.name == "__wbindgen_object_drop_ref_unused")
-    //     .map(|f| f.id())
-    //     .unwrap();
-    // new.imports.get_mut(unused).name = "__wbindgen_object_drop_ref".into();
-
     let exports_to_funcids = old
         .exports
         .iter()
@@ -391,112 +316,39 @@ fn create_wasm_jump_table(original: &Path, patch: &Path) -> Result<JumpTable> {
         })
         .context("Missing ifunc table")?;
 
-    // for t in to_ifuncs {
-    //     let import = new.imports.get(t);
-    //     let ImportKind::Function(func_id) = import.kind else {
-    //         tracing::error!("Expected env import to be a function -> {}", import.name);
-    //         continue;
-    //     };
-
-    //     let Some(corr_export) = exports_to_funcids.get(import.name.as_str()) else {
-    //         tracing::error!("Failed to find export for {}", import.name);
-    //         if name_is_bindgen_symbol(import.name.as_str()) {
-    //             new.imports.delete(t);
-    //             convert_import_to_ifunc_call(&mut new, ifunc_table_initializer, func_id, 1);
-    //         }
-
-    //         continue;
-    //     };
-
-    //     let Some(table_idx) = funcid_to_idx.get(corr_export).cloned() else {
-    //         tracing::warn!("Failed to find ifunc table index for {}", import.name);
-    //         continue;
-    //     };
-
-    //     // Delete the import - we'll satisfy this function locally
-    //     new.imports.delete(t);
-    //     convert_import_to_ifunc_call(&mut new, ifunc_table_initializer, func_id, table_idx);
-    // }
-
-    // There's a limited set of instrinsics that get transformed. Namely drop_ref and clone_ref
-    // We make special carve-outs for these since they refer to functions with a different name.
-    //
-    //  else if import.module == "__wbindgen_placeholder__" {
-    //     match import.name.as_str() {
-    //         "__wbindgen_object_drop_ref" => {
-    //             self.intrinsic_map.insert(f, Intrinsic::DropRef);
-    //         }
-    //         "__wbindgen_object_clone_ref" => {
-    //             self.intrinsic_map.insert(f, Intrinsic::CloneRef);
-    //         }
-    //         _ => continue,
-    //     }
-    // }
-    // these should get replaced in the original module with wbg imports
     for t in wbg_funcs {
         let import = new.imports.get_mut(t);
+        let matching_export = old
+            .exports
+            .iter()
+            .find(|e| e.name.contains(import.name.as_str()));
         let exists_as_ifunc_maybe = name_to_ifunc_old.keys().find(|k| k.contains(&import.name));
 
-        tracing::trace!(
-            "Converting placeholder to synthesized: {} ({exists_as_ifunc_maybe:?})",
+        tracing::debug!(
+            "Converting placeholder to synthesized: {} ({matching_export:?}) or {exists_as_ifunc_maybe:?}",
             import.name
         );
 
-        import.module = "wbg".into();
+        if let Some(matchin) = matching_export {
+            if let ExportItem::Function(id) = matchin.item {
+                let ty = old.funcs.get(id).ty();
+                let ty = old.types.get(ty);
+                tracing::trace!("type of synth: {ty:?}");
+            }
 
-        // if import.name == "__wbindgen_describe" || name_is_bindgen_symbol(import.name.as_str()) {
-        //     let ImportKind::Function(func_id) = import.kind else {
-        //         continue;
-        //     };
-        //     new.imports.delete(t);
-        //     convert_import_to_ifunc_call(&mut new, ifunc_table_initializer, func_id, 1);
+            if let ImportKind::Function(id) = import.kind {
+                let ty = new.funcs.get(id).ty();
+                let ty = new.types.get(ty);
+                tracing::trace!("type of inc: {ty:?}");
+            }
 
-        //     continue;
-        // }
-
-        // // De-alias the name to the correct one
-        // let alias = match import.name.as_str() {
-        //     "__wbindgen_object_drop_ref" => "__externref_table_dealloc",
-        //     // "__wbindgen_object_clone_ref" => "__wbindgen_object_clone_ref",
-
-        //     // -> do we need to do this for clone_ref and/or table_alloc too?
-        //     _ => continue,
-        // };
-
-        // // This becomes an internally synthesized drop function called "__externref_table_dealloc"
-        // // however this might not be available to us via the exports.
-        // let exists_as_ifunc = name_to_ifunc_old
-        //     .keys()
-        //     .find(|k| k.contains(alias))
-        //     .unwrap();
-
-        // let Some(ifunc) = name_to_ifunc_old.get(exists_as_ifunc) else {
-        //     tracing::error!("Failed to find ifunc for wbg import {}", import.name);
-        //     continue;
-        // };
-
-        // let ImportKind::Function(func_id) = import.kind else {
-        //     continue;
-        // };
-
-        // new.imports.delete(t);
-        // // // New function that calls the indirect function
-        // // let ty = new.types.get(new.funcs.get(func_id).ty());
-        // // let params = ty.params().to_vec();
-        // // let results = ty.results().to_vec();
-        // // let args: Vec<_> = params.iter().map(|ty| new.locals.add(*ty)).collect();
-
-        // // let mut builder = FunctionBuilder::new(&mut new.types, &params, &results);
-        // // let mut body = builder.name("stub".into()).func_body();
-
-        // // new.funcs.get_mut(func_id).kind = FunctionKind::Local(builder.local_func(args));
-
-        // convert_import_to_ifunc_call(&mut new, ifunc_table_initializer, func_id, *ifunc);
+            import.module = "env".into();
+            import.name = matchin.name.clone();
+        }
     }
 
     // Update the wasm module on the filesystem to use the newly lifted version
     let lib = patch.to_path_buf();
-    // walrus::passes::gc::run(&mut new);
     std::fs::write(&lib, new.emit_wasm())?;
 
     // And now assemble the jump table by mapping the old ifunc table to the new one, by name
@@ -909,13 +761,54 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
         .imports
         .iter()
         .filter_map(|i| match i.kind {
-            ImportKind::Function(id) => Some((id, i)),
+            ImportKind::Function(id) => Some((id, i.id())),
             _ => None,
         })
         .collect::<HashMap<_, _>>();
 
     let mut make_indirect = vec![];
     let mut names_to_names: HashMap<&str, HashSet<&str>> = HashMap::new();
+
+    for (funcid, importid) in imported_funcs {
+        let import = module.imports.get(importid);
+        if import.name.starts_with("__wbindgen") && !name_is_bindgen_symbol(import.name.as_str()) {
+            let func = module.funcs.get(funcid);
+            let ty = module.types.get(func.ty());
+            tracing::info!("Preserving intrinsic: {name} ({ty:?})", name = import.name);
+
+            let ty = module.types.get(func.ty());
+            let params = ty.params().to_vec();
+            let results = ty.results().to_vec();
+
+            let mut builder = FunctionBuilder::new(&mut module.types, &params, &results);
+            let mut body = builder
+                .name(format!("__saved_wbg_{}", import.name))
+                .func_body();
+
+            for (i, param) in params.iter().enumerate() {
+                body.local_get(module.locals.add(*param));
+            }
+
+            body.call(funcid);
+
+            let local_func =
+                builder.local_func(params.iter().map(|ty| module.locals.add(*ty)).collect());
+            let new_func_id = module.funcs.add_local(local_func);
+
+            module
+                .exports
+                .add(&format!("__saved_wbg_{}", import.name), new_func_id);
+
+            // let ty = module.types.get(func.ty());
+            // let params = ty.params().to_vec();
+            // let results = ty.results().to_vec();
+            // module
+            //     .exports
+            //     .add(&format!("__saved_wbg_{}", import.name), funcid);
+
+            make_indirect.push(new_func_id);
+        }
+    }
 
     let imports = module
         .imports
@@ -929,13 +822,22 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
     for (name, index) in symbols.code_symbol_map.iter() {
         let func = module.funcs.get(ids[*index]);
 
+        // We want to preserve the intrinsics from getting gc-ed out
+        // These will create corresponding shim functions in the main module.
+        // https://github.com/rustwasm/wasm-bindgen/blob/c35cc9369d5e0dc418986f7811a0dd702fb33ef9/crates/cli-support/src/wit/mod.rs#L1505
+        if name.starts_with("__wbindgen") && !name_is_bindgen_symbol(name) {
+            let ty = module.types.get(func.ty());
+            tracing::info!("Preserving intrinsic: {name} ({ty:?})");
+            module
+                .exports
+                .add(&format!("__saved_wbg_{name}"), func.id());
+        }
+
         if let FunctionKind::Local(_) = &func.kind {
-            if !already_exported.contains(*name) {
-                if !already_exported.contains(*name) && !name_is_bindgen_symbol(name) {
-                    module.exports.add(name, func.id());
-                    already_exported.insert(name.to_string());
-                    // tracing::debug!("Hoisting function -> {name}");
-                }
+            if !already_exported.contains(*name) && !name_is_bindgen_symbol(name) {
+                module.exports.add(name, func.id());
+                already_exported.insert(name.to_string());
+                // tracing::debug!("Hoisting function -> {name}");
             }
 
             if !name_is_bindgen_symbol(name) {
@@ -974,13 +876,16 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
 }
 
 fn name_is_bindgen_symbol(name: &str) -> bool {
+    // https://github.com/rustwasm/wasm-bindgen/blob/c35cc9369d5e0dc418986f7811a0dd702fb33ef9/crates/cli-support/src/wit/mod.rs#L1165
     name.contains("__wbindgen_describe")
+        || name.contains("__wbindgen_describe_closure")
         || name.contains("wasm_bindgen8describe6inform")
         || name.contains("wasm_bindgen..describe..WasmDescribe")
         || name.contains("wasm_bindgen..closure..WasmClosure$GT$8describe")
         || name.contains("wasm_bindgen7closure16Closure$LT$T$GT$4wrap8describe")
-        || name.contains("__wbindgen_describe_closure")
         || name.contains("__wbindgen_externref_xform")
+        || name.contains("__wbindgen_externref")
+
     // || name.contains("wasm_bindgen4__rt19link_mem_intrinsics")
     // || name.contains("__wbindgen")
 }

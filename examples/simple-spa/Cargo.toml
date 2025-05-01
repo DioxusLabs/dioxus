@@ -10,6 +10,7 @@ publish = false
 dioxus = { workspace = true }
 serde = { workspace = true }
 reqwest = { workspace = true }
+wasm-bindgen = { workspace = true}
 
 [features]
 default = ["dioxus/web"]

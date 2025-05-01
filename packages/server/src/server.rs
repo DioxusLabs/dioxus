@@ -9,6 +9,7 @@ use axum::{
     response::IntoResponse,
 };
 use dioxus_lib::prelude::{Element, VirtualDom};
+use futures_util::StreamExt;
 use http::header::*;
 use server_fn::ServerFnTraitObj;
 use std::sync::Arc;
@@ -231,7 +232,25 @@ async fn handle_server_fns_inner(
     req: Request<Body>,
 ) -> Response<axum::body::Body> {
     let (parts, body) = req.into_parts();
+
+    let mut body_stream = body.into_data_stream();
+    let mut body = vec![];
+    while let Some(Ok(bytes)) = body_stream.next().await {
+        // consume the body stream
+        body.extend(bytes.to_vec());
+    }
+    let maybe_str = String::from_utf8_lossy(&body).to_string();
+    let body = Body::from(body);
+
     let req = Request::from_parts(parts.clone(), body);
+
+    tracing::info!(
+        "Handling server function: {} {} {:#?}\nbody: {:?}",
+        f.path(),
+        f.method(),
+        req,
+        maybe_str
+    );
 
     // Create the server context with info from the request
     let server_context = DioxusServerContext::new(parts);
