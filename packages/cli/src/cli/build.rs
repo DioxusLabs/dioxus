@@ -101,7 +101,7 @@ impl BuildArgs {
         self.fullstack = Some(
             self.fullstack()
                 || self.fullstack.is_none()
-                    && (default_server || krate.has_dioxus_feature("fullstack")),
+                    && (default_server || krate.directly_depends_on_dioxus_feature("fullstack")),
         );
 
         // If the current build is a fullstack build which includes either the client or the server in the default features,
