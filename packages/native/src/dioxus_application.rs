@@ -1,4 +1,3 @@
-use anyrender_vello::VelloWindowRenderer;
 use blitz_shell::BlitzApplication;
 use dioxus_core::{ScopeId, VirtualDom};
 use dioxus_history::{History, MemoryHistory};
@@ -8,6 +7,7 @@ use winit::event::{StartCause, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, EventLoopProxy};
 use winit::window::WindowId;
 
+use crate::DioxusNativeWindowRenderer;
 use crate::{
     assets::DioxusNativeNetProvider, contexts::DioxusNativeDocument,
     mutation_writer::MutationWriter, BlitzShellEvent, DioxusDocument, WindowConfig,
@@ -37,7 +37,7 @@ pub enum DioxusNativeEvent {
 
 pub struct DioxusNativeApplication {
     pending_vdom: Option<VirtualDom>,
-    inner: BlitzApplication<VelloWindowRenderer>,
+    inner: BlitzApplication<DioxusNativeWindowRenderer>,
     proxy: EventLoopProxy<BlitzShellEvent>,
 }
 
@@ -50,7 +50,7 @@ impl DioxusNativeApplication {
         }
     }
 
-    pub fn add_window(&mut self, window_config: WindowConfig<VelloWindowRenderer>) {
+    pub fn add_window(&mut self, window_config: WindowConfig<DioxusNativeWindowRenderer>) {
         self.inner.add_window(window_config);
     }
 
@@ -126,7 +126,8 @@ impl ApplicationHandler<BlitzShellEvent> for DioxusNativeApplication {
 
         // Create document + window from the baked virtualdom
         let doc = DioxusDocument::new(vdom, net_provider);
-        let window = WindowConfig::new(Box::new(doc) as _);
+        let renderer = DioxusNativeWindowRenderer::new();
+        let window = WindowConfig::new(Box::new(doc) as _, renderer);
 
         // little hack since View::init is not public - fix this once alpha-2 is out
         let old_windows = self.inner.windows.keys().copied().collect::<HashSet<_>>();
