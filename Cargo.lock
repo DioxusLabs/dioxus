@@ -8190,6 +8190,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "linker-args"
+version = "0.6.3"
+
+[[package]]
 name = "linux-raw-sys"
 version = "0.4.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"

@@ -26,7 +26,8 @@ use target_lexicon::Triple;
 ///
 /// We use "BaseLink" when a linker is specified, and "NoLink" when it is not. Both generate a resulting
 /// object file.
-#[derive(Debug, Serialize, Deserialize)]
+
+#[derive(Debug)]
 pub struct LinkAction {
     pub linker: Option<PathBuf>,
     pub triple: Triple,
@@ -48,19 +49,60 @@ pub enum LinkerFlavor {
 }
 
 impl LinkAction {
-    pub(crate) const ENV_VAR_NAME: &'static str = "dx_magic_link_file";
+    const DX_LINK_ARG: &str = "DX_LINK";
+    const DX_ARGS_FILE: &str = "DX_LINK_ARGS_FILE";
+    const DX_ERR_FILE: &str = "DX_LINK_ERR_FILE";
+    const DX_LINK_TRIPLE: &str = "DX_LINK_TRIPLE";
+    const DX_LINK_CUSTOM_LINKER: &str = "DX_LINK_CUSTOM_LINKER";
 
     /// Should we write the input arguments to a file (aka act as a linker subprocess)?
     ///
     /// Just check if the magic env var is set
     pub(crate) fn from_env() -> Option<Self> {
-        std::env::var(Self::ENV_VAR_NAME)
-            .ok()
-            .map(|var| serde_json::from_str(&var).expect("Failed to parse magic env var"))
+        if std::env::var(Self::DX_LINK_ARG).is_err() {
+            return None;
+        }
+
+        Some(Self {
+            linker: std::env::var(Self::DX_LINK_CUSTOM_LINKER)
+                .ok()
+                .map(PathBuf::from),
+            link_args_file: std::env::var(Self::DX_ARGS_FILE)
+                .expect("Linker args file not set")
+                .into(),
+            link_err_file: std::env::var(Self::DX_ERR_FILE)
+                .expect("Linker error file not set")
+                .into(),
+            triple: std::env::var(Self::DX_LINK_TRIPLE)
+                .expect("Linker triple not set")
+                .parse()
+                .expect("Failed to parse linker triple"),
+        })
     }
 
-    pub(crate) fn to_json(&self) -> String {
-        serde_json::to_string(self).unwrap()
+    pub(crate) fn write_env_vars(&self, env_vars: &mut Vec<(&str, String)>) -> Result<()> {
+        env_vars.push((Self::DX_LINK_ARG, "1".to_string()));
+        env_vars.push((
+            Self::DX_ARGS_FILE,
+            dunce::canonicalize(&self.link_args_file)?
+                .to_string_lossy()
+                .to_string(),
+        ));
+        env_vars.push((
+            Self::DX_ERR_FILE,
+            dunce::canonicalize(&self.link_err_file)?
+                .to_string_lossy()
+                .to_string(),
+        ));
+        env_vars.push((Self::DX_LINK_TRIPLE, self.triple.to_string()));
+        if let Some(linker) = &self.linker {
+            env_vars.push((
+                Self::DX_LINK_CUSTOM_LINKER,
+                dunce::canonicalize(linker)?.to_string_lossy().to_string(),
+            ));
+        }
+
+        Ok(())
     }
 
     pub(crate) async fn run_link(self) {
@@ -82,33 +124,7 @@ impl LinkAction {
     async fn run_link_inner(self) -> Result<()> {
         let mut args: Vec<_> = std::env::args().collect();
 
-        // Handle command files, usually a windows thing.
-        if let Some(command) = args.iter().find(|arg| arg.starts_with('@')).cloned() {
-            let path = command.trim().trim_start_matches('@');
-            let file_binary = std::fs::read(path).unwrap();
-
-            // This may be a utf-16le file. Let's try utf-8 first.
-            let content = String::from_utf8(file_binary.clone()).unwrap_or_else(|_| {
-                // Convert Vec<u8> to Vec<u16> to convert into a String
-                let binary_u16le: Vec<u16> = file_binary
-                    .chunks_exact(2)
-                    .map(|a| u16::from_le_bytes([a[0], a[1]]))
-                    .collect();
-
-                String::from_utf16_lossy(&binary_u16le)
-            });
-
-            // Gather linker args, and reset the args to be just the linker args
-            args = content
-                .lines()
-                .map(|line| {
-                    let line_parsed = line.to_string();
-                    let line_parsed = line_parsed.trim_end_matches('"').to_string();
-                    let line_parsed = line_parsed.trim_start_matches('"').to_string();
-                    line_parsed
-                })
-                .collect();
-        }
+        handle_linker_command_file(&mut args);
 
         // Write the linker args to a file for the main process to read
         // todo: we might need to encode these as escaped shell words in case newlines are passed
@@ -191,5 +207,35 @@ impl LinkAction {
         }
 
         Ok(())
+    }
+}
+
+pub fn handle_linker_command_file(args: &mut Vec<String>) {
+    // Handle command files, usually a windows thing.
+    if let Some(command) = args.iter().find(|arg| arg.starts_with('@')).cloned() {
+        let path = command.trim().trim_start_matches('@');
+        let file_binary = std::fs::read(path).unwrap();
+
+        // This may be a utf-16le file. Let's try utf-8 first.
+        let content = String::from_utf8(file_binary.clone()).unwrap_or_else(|_| {
+            // Convert Vec<u8> to Vec<u16> to convert into a String
+            let binary_u16le: Vec<u16> = file_binary
+                .chunks_exact(2)
+                .map(|a| u16::from_le_bytes([a[0], a[1]]))
+                .collect();
+
+            String::from_utf16_lossy(&binary_u16le)
+        });
+
+        // Gather linker args, and reset the args to be just the linker args
+        *args = content
+            .lines()
+            .map(|line| {
+                let line_parsed = line.to_string();
+                let line_parsed = line_parsed.trim_end_matches('"').to_string();
+                let line_parsed = line_parsed.trim_start_matches('"').to_string();
+                line_parsed
+            })
+            .collect();
     }
 }

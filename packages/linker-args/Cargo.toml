@@ -1,0 +1,6 @@
+[package]
+name = "linker-args"
+edition = "2024"
+version.workspace = true
+
+[dependencies]

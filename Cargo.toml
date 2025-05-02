@@ -121,7 +121,7 @@ members = [
     "packages/playwright-tests/cli-optimization",
     "packages/playwright-tests/wasm-split-harness",
     "packages/playwright-tests/default-features-disabled"
-]
+, "packages/linker-args"]
 
 [workspace.package]
 version = "0.6.3"

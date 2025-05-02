@@ -35,7 +35,7 @@ pub async fn run_rustc() {
     // this is a stupid hack
     if std::env::args()
         .take(5)
-        .any(|arg| arg.ends_with(".o") || arg == "-flavor")
+        .any(|arg| arg.ends_with(".o") || arg == "-flavor" || arg.starts_with("@"))
     {
         return crate::link::LinkAction::from_env()
             .expect("Linker action not found")

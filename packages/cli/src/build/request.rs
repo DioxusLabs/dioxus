@@ -1463,7 +1463,7 @@ session_cache_dir: {}"#,
         //
         // The nature of this process involves making extremely fat archives, so we should try and
         // speed up the future linking process by caching the archive.
-        if std::env::var("DX_CACHE_FAT_LIB").is_err() {
+        if !crate::devcfg::should_cache_dep_lib(&out_ar_path) {
             let mut bytes = vec![];
             let mut out_ar = ar::Builder::new(&mut bytes);
             for rlib in &rlibs {
@@ -1894,16 +1894,13 @@ session_cache_dir: {}"#,
         if self.custom_linker.is_some()
             || matches!(ctx.mode, BuildMode::Thin { .. } | BuildMode::Fat)
         {
-            env_vars.push((
-                LinkAction::ENV_VAR_NAME,
-                LinkAction {
-                    linker: self.custom_linker.clone(),
-                    link_err_file: self.link_err_file.path().to_path_buf(),
-                    link_args_file: self.link_args_file.path().to_path_buf(),
-                    triple: self.triple.clone(),
-                }
-                .to_json(),
-            ));
+            LinkAction {
+                linker: self.custom_linker.clone(),
+                link_err_file: dunce::canonicalize(self.link_err_file.path().to_path_buf())?,
+                link_args_file: dunce::canonicalize(self.link_args_file.path().to_path_buf())?,
+                triple: self.triple.clone(),
+            }
+            .write_env_vars(&mut env_vars);
         }
 
         // Disable reference types on wasm when using hotpatching

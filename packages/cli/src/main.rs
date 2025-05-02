@@ -8,6 +8,7 @@ mod build;
 mod bundle_utils;
 mod cli;
 mod config;
+mod devcfg;
 mod dx_build_info;
 mod error;
 mod fastfs;
