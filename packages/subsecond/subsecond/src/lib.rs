@@ -532,25 +532,6 @@ pub unsafe fn apply_patch(mut table: JumpTable) -> Result<(), PatchError> {
         let imports = Object::new();
         Reflect::set(&imports, &"env".into(), &env).unwrap();
 
-        // // Merge the main module's imports into this module
-        // // The patch modules might be importing something from the wbindgen import list and we need
-        // // these imports readily available.
-        // let window = web_sys::window().unwrap();
-        // let func = Reflect::get(&window, &"__wbg_get_imports".into())
-        //     .unwrap()
-        //     .unchecked_into::<js_sys::Function>();
-        // let wbg_imports: Object = func.call0(&JsValue::undefined()).unwrap().unchecked_into();
-        // let wbg = Reflect::get(&wbg_imports, &"wbg".into()).unwrap();
-        // Reflect::set(
-        //     &wbg,
-        //     &"__wbindgen_object_drop_ref".into(),
-        //     &js_sys::Function::new_no_args("").into(),
-        // )
-        // .unwrap();
-        // for key in Object::keys(&wbg_imports) {
-        //     Reflect::set(&imports, &key, &Reflect::get(&wbg_imports, &key).unwrap()).unwrap();
-        // }
-
         // Download the module, returning { module, instance }
         let result_object = JsFuture::from(WebAssembly::instantiate_module(
             dl_bytes.unchecked_ref(),
@@ -559,7 +540,7 @@ pub unsafe fn apply_patch(mut table: JumpTable) -> Result<(), PatchError> {
         .await
         .unwrap();
 
-        // We need to run the data relocations
+        // We need to run the data relocations and then fire off the constructors
         let res: Object = result_object.unchecked_into();
         let instance: Object = Reflect::get(&res, &"instance".into())
             .unwrap()
