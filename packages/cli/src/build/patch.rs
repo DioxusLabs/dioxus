@@ -407,6 +407,15 @@ fn create_wasm_jump_table(
         import.name = format!("__saved_wbg_{}", import.name);
     }
 
+    // Wipe away the unnecessary sections
+    let customs = new.customs.iter().map(|f| f.0).collect::<Vec<_>>();
+    for custom_id in customs {
+        let custom = new.customs.get_mut(custom_id).unwrap();
+        if custom.name().contains("manganis") || custom.name().contains("__wasm_bindgen") {
+            new.customs.delete(custom_id);
+        }
+    }
+
     // Clear the start function from the patch - we don't want any code automatically running!
     new.start = None;
 
