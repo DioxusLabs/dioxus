@@ -546,6 +546,7 @@ impl Output {
             BuildStage::Restarting => lines.push("Restarting".yellow()),
             BuildStage::Linking => lines.push("Linking".yellow()),
             BuildStage::Hotpatching => lines.push("Hot-patching...".yellow()),
+            BuildStage::ExtractingAssets => lines.push("Extracting assets".yellow()),
             _ => {}
         };
 

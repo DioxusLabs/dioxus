@@ -858,7 +858,7 @@ session_cache_dir: {}"#,
             self.run_fat_link(ctx, &exe).await?;
         }
 
-        let assets = self.collect_assets(&exe)?;
+        let assets = self.collect_assets(&exe, ctx)?;
         let time_end = SystemTime::now();
         let mode = ctx.mode.clone();
         let platform = self.platform;
@@ -879,7 +879,7 @@ session_cache_dir: {}"#,
     ///
     /// This uses "known paths" that have stayed relatively stable during cargo's lifetime.
     /// One day this system might break and we might need to go back to using the linker approach.
-    fn collect_assets(&self, exe: &Path) -> Result<AssetManifest> {
+    fn collect_assets(&self, exe: &Path, ctx: &BuildContext) -> Result<AssetManifest> {
         tracing::debug!("Collecting assets from exe at {} ...", exe.display());
 
         // walk every file in the incremental cache dir, reading and inserting items into the manifest.
@@ -887,6 +887,7 @@ session_cache_dir: {}"#,
 
         // And then add from the exe directly, just in case it's LTO compiled and has no incremental cache
         if !self.skip_assets {
+            ctx.status_extracting_assets();
             _ = manifest.add_from_object_path(exe);
         }
 
