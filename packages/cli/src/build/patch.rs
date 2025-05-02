@@ -6,6 +6,7 @@ use object::{
     write::{MachOBuildVersion, StandardSection, Symbol, SymbolSection},
     Endianness, Object, ObjectSymbol, SymbolKind, SymbolScope,
 };
+use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     path::Path,
@@ -150,16 +151,14 @@ fn create_wasm_jump_table(original: &Path, patch: &Path) -> Result<JumpTable> {
         symbols: old_symbols,
         ..
     } = parse_module_with_ids(&old_bytes)?;
-    let ParsedModule {
-        module: mut new, ..
-    } = parse_module_with_ids(&new_bytes)?;
+    let mut new = Module::from_buffer(&new_bytes)?;
 
     if old_symbols.symbols.is_empty() {
         return Err(PatchError::MissingSymbols);
     }
 
     let name_to_ifunc_old = collect_func_ifuncs(&old);
-    let name_to_ifunc_old = fill_ifuncs_from_old(name_to_ifunc_old, &old, &old_symbols);
+    let name_to_ifunc_old = fill_ifuncs_from_old(&old, &old_symbols, name_to_ifunc_old);
 
     let mut got_mems = vec![];
     let mut got_funcs = vec![];
@@ -440,15 +439,15 @@ fn convert_import_to_ifunc_call(
 }
 
 fn fill_ifuncs_from_old<'a>(
-    func_to_offset: HashMap<&'a str, i32>,
-    m: &'a Module,
+    old: &'a Module,
     raw: &'a RawDataSection<'a>,
+    func_to_offset: HashMap<&'a str, i32>,
 ) -> HashMap<&'a str, i32> {
     // These are the "real" bindings for functions in the module
     // Basically a map between a function's index and its real name
-    let func_to_index = m
+    let func_to_index = old
         .funcs
-        .iter()
+        .par_iter()
         .filter_map(|f| {
             let name = f.name.as_deref()?;
             Some((*raw.code_symbol_map.get(name)?, name))
@@ -457,7 +456,7 @@ fn fill_ifuncs_from_old<'a>(
 
     // Find the corresponding function that shares the same index, but in the ifunc table
     raw.code_symbol_map
-        .iter()
+        .par_iter()
         .filter_map(|(name, idx)| {
             let new_modules_unified_function = func_to_index.get(idx)?;
             let offset = func_to_offset.get(new_modules_unified_function)?;
@@ -1001,7 +1000,6 @@ struct ParsedModule<'a> {
     module: Module,
     ids: Vec<FunctionId>,
     symbols: RawDataSection<'a>,
-    _fns_to_ids: HashMap<FunctionId, usize>,
 }
 
 /// Parse a module and return the mapping of index to FunctionID.
@@ -1026,17 +1024,11 @@ fn parse_module_with_ids(bindgened: &[u8]) -> Result<ParsedModule> {
     let mut ids = vec![];
     std::mem::swap(&mut ids, &mut *ids_);
 
-    let mut fns_to_ids = HashMap::new();
-    for (idx, id) in ids.iter().enumerate() {
-        fns_to_ids.insert(*id, idx);
-    }
-
     let symbols = parse_bytes_to_data_segment(bindgened).context("Failed to parse data segment")?;
 
     Ok(ParsedModule {
         module,
         ids,
-        _fns_to_ids: fns_to_ids,
         symbols,
     })
 }

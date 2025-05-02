@@ -544,6 +544,8 @@ impl Output {
             BuildStage::Failed => lines.push("Failed".red()),
             BuildStage::Aborted => lines.push("Aborted".red()),
             BuildStage::Restarting => lines.push("Restarting".yellow()),
+            BuildStage::Linking => lines.push("Linking".yellow()),
+            BuildStage::Hotpatching => lines.push("Hot-patching".yellow()),
             _ => {}
         };
 

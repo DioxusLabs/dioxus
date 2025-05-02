@@ -207,7 +207,6 @@ pub use subsecond_types::JumpTable;
 // todo: if there's a reference held while we run our patch, this gets invalidated. should probably
 // be a pointer to a jump table instead, behind a cell or something. I believe Atomic + relaxed is basically a no-op
 static HOTRELOAD_HANDLERS: Mutex<Vec<Arc<dyn Fn() + Send + Sync>>> = Mutex::new(Vec::new());
-static mut CHANGED: bool = false;
 static mut SUBSECOND_ENABLED: bool = false;
 
 /// Call a given function with hot-reloading enabled. If the function's code changes, `call` will use
@@ -264,12 +263,6 @@ pub fn call<O>(f: impl FnMut() -> O) -> O {
 // For Dioxus purposes, this is not a big deal, but for libraries like bevy which heavily rely on
 // multithreading, it might become an issue.
 static APP_JUMP_TABLE: AtomicPtr<JumpTable> = AtomicPtr::new(std::ptr::null_mut());
-fn set_new_jump_table(table: JumpTable) {
-    APP_JUMP_TABLE.store(
-        Box::into_raw(Box::new(table)),
-        std::sync::atomic::Ordering::Relaxed,
-    );
-}
 fn get_jump_table() -> Option<&'static JumpTable> {
     let ptr = APP_JUMP_TABLE.load(std::sync::atomic::Ordering::Relaxed);
     if ptr.is_null() {
@@ -498,7 +491,8 @@ pub unsafe fn apply_patch(mut table: JumpTable) -> Result<(), PatchError> {
             *v += table_base as u64;
         }
 
-        // Build up the import object
+        // Build up the import object. We copy everything over from the current exports, but then
+        // need to add in the memory and table base offsets for the relocations to work.
         //
         // let imports = {
         //     env: {
@@ -533,6 +527,7 @@ pub unsafe fn apply_patch(mut table: JumpTable) -> Result<(), PatchError> {
         Reflect::set(&imports, &"env".into(), &env).unwrap();
 
         // Download the module, returning { module, instance }
+        // we unwrap here instead of using `?` since this whole thing is async
         let result_object = JsFuture::from(WebAssembly::instantiate_module(
             dl_bytes.unchecked_ref(),
             &imports,
@@ -548,18 +543,18 @@ pub unsafe fn apply_patch(mut table: JumpTable) -> Result<(), PatchError> {
         let exports: Object = Reflect::get(&instance, &"exports".into())
             .unwrap()
             .unchecked_into();
-        let func = Reflect::get(&exports, &"__wasm_apply_data_relocs".into())
+        _ = Reflect::get(&exports, &"__wasm_apply_data_relocs".into())
             .unwrap()
-            .unchecked_into::<js_sys::Function>();
-        _ = func.call0(&JsValue::undefined());
-        let func = Reflect::get(&exports, &"__wasm_apply_global_relocs".into())
+            .unchecked_into::<js_sys::Function>()
+            .call0(&JsValue::undefined());
+        _ = Reflect::get(&exports, &"__wasm_apply_global_relocs".into())
             .unwrap()
-            .unchecked_into::<js_sys::Function>();
-        _ = func.call0(&JsValue::undefined());
-        let func = Reflect::get(&exports, &"__wasm_call_ctors".into())
+            .unchecked_into::<js_sys::Function>()
+            .call0(&JsValue::undefined());
+        _ = Reflect::get(&exports, &"__wasm_call_ctors".into())
             .unwrap()
-            .unchecked_into::<js_sys::Function>();
-        _ = func.call0(&JsValue::undefined());
+            .unchecked_into::<js_sys::Function>()
+            .call0(&JsValue::undefined());
 
         unsafe { commit_patch(table) };
     });
@@ -574,9 +569,10 @@ pub enum PatchError {
 }
 
 unsafe fn commit_patch(table: JumpTable) {
-    // Update runtime state
-    set_new_jump_table(table);
-    CHANGED = true;
+    APP_JUMP_TABLE.store(
+        Box::into_raw(Box::new(table)),
+        std::sync::atomic::Ordering::Relaxed,
+    );
     HOTRELOAD_HANDLERS
         .lock()
         .unwrap()
