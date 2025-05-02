@@ -21,7 +21,7 @@ use target_lexicon::{OperatingSystem, Triple};
 use thiserror::Error;
 use walrus::{
     ConstExpr, DataKind, ElementItems, ElementKind, ExportItem, FunctionBuilder, FunctionId,
-    FunctionKind, ImportKind, Module, ModuleConfig,
+    FunctionKind, ImportKind, Module, ModuleConfig, TableId,
 };
 use wasmparser::{
     BinaryReader, BinaryReaderError, Linking, LinkingSectionReader, Payload, SymbolInfo,
@@ -164,6 +164,7 @@ fn create_wasm_jump_table(original: &Path, patch: &Path) -> Result<JumpTable> {
     let mut got_mems = vec![];
     let mut got_funcs = vec![];
     let mut wbg_funcs = vec![];
+    let mut env_funcs = vec![];
 
     // Collect all the GOT entries from the new module.
     // The GOT imports come from the wasm-ld implementation of the dynamic linking spec
@@ -194,6 +195,7 @@ fn create_wasm_jump_table(original: &Path, patch: &Path) -> Result<JumpTable> {
                 got_funcs.push((import.id(), entry));
             }
             "GOT.mem" => got_mems.push(import.id()),
+            "env" => env_funcs.push(import.id()),
             "__wbindgen_placeholder__" => wbg_funcs.push(import.id()),
             m => tracing::trace!("Unknown import: {m}:{}", import.name),
         }
@@ -308,6 +310,56 @@ fn create_wasm_jump_table(original: &Path, patch: &Path) -> Result<JumpTable> {
         ));
     }
 
+    // wasm-bindgen has a limit on the number of exports a module can have, so we need to call the main
+    // module's functions indirectly. This is done by dropping the env import and replacing it with a
+    // local function that calls the indirect function from the table.
+    //
+    // https://github.com/emscripten-core/emscripten/issues/22863
+    let ifunc_table_initializer = new
+        .elements
+        .iter()
+        .find_map(|e| match e.kind {
+            ElementKind::Active { table, .. } => Some(table),
+            _ => None,
+        })
+        .context("Missing ifunc table")?;
+    let old_exports = old
+        .exports
+        .iter()
+        .map(|e| e.name.as_str())
+        .collect::<HashSet<_>>();
+    let old_imports = old
+        .imports
+        .iter()
+        .map(|i| i.name.as_str())
+        .collect::<HashSet<_>>();
+    for env_func_import in env_funcs {
+        let import = new.imports.get(env_func_import);
+        let ImportKind::Function(func_id) = import.kind else {
+            continue;
+        };
+
+        if old_exports.contains(import.name.as_str()) {
+            continue;
+        }
+
+        if old_imports.contains(import.name.as_str()) {
+            continue;
+        }
+
+        if let Some(table_idx) = name_to_ifunc_old.get(import.name.as_str()) {
+            let name = import.name.as_str().to_string();
+            new.imports.delete(env_func_import);
+            convert_import_to_ifunc_call(
+                &mut new,
+                ifunc_table_initializer,
+                func_id,
+                *table_idx,
+                name,
+            );
+        }
+    }
+
     // Wire up the preserved intrinsic functions that we saved before running wasm-bindgen to the expected
     // imports from the patch.
     for import_id in wbg_funcs {
@@ -315,6 +367,9 @@ fn create_wasm_jump_table(original: &Path, patch: &Path) -> Result<JumpTable> {
         import.module = "env".into();
         import.name = format!("__saved_wbg_{}", import.name);
     }
+
+    // Clear the start function from the patch - we don't want any code automatically running!
+    new.start = None;
 
     // Update the wasm module on the filesystem to use the newly lifted version
     let lib = patch.to_path_buf();
@@ -340,6 +395,48 @@ fn create_wasm_jump_table(original: &Path, patch: &Path) -> Result<JumpTable> {
         aslr_reference: 0,
         new_base_address: 0,
     })
+}
+
+fn convert_import_to_ifunc_call(
+    new: &mut Module,
+    ifunc_table_initializer: TableId,
+    func_id: FunctionId,
+    table_idx: i32,
+    name: String,
+) {
+    use walrus::ir;
+
+    let func = new.funcs.get_mut(func_id);
+    let ty_id = func.ty();
+
+    // Convert the import function to a local function that calls the indirect function from the table
+    let ty = new.types.get(ty_id);
+
+    let params = ty.params().to_vec();
+    let results = ty.results().to_vec();
+    let locals: Vec<_> = params.iter().map(|ty| new.locals.add(*ty)).collect();
+
+    // New function that calls the indirect function
+    let mut builder = FunctionBuilder::new(&mut new.types, &params, &results);
+    let mut body = builder.name(name).func_body();
+
+    // Push the params onto the stack
+    for arg in locals.iter() {
+        body.local_get(*arg);
+    }
+
+    // And then the address of the indirect function
+    body.instr(ir::Instr::Const(ir::Const {
+        value: ir::Value::I32(table_idx),
+    }));
+
+    // And call it
+    body.instr(ir::Instr::CallIndirect(ir::CallIndirect {
+        ty: ty_id,
+        table: ifunc_table_initializer,
+    }));
+
+    new.funcs.get_mut(func_id).kind = FunctionKind::Local(builder.local_func(locals));
 }
 
 fn fill_ifuncs_from_old<'a>(
@@ -739,7 +836,7 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
         // indirectly.
         if let FunctionKind::Local(_) = &func.kind {
             if !already_exported.contains(*name) {
-                module.exports.add(name, func.id());
+                // module.exports.add(name, func.id());
             }
 
             if !ifuncs.contains(&func.id()) {
