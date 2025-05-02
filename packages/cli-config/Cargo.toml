@@ -10,6 +10,8 @@ description = "CLI Configuration for dioxus-cli"
 keywords = ["web", "desktop", "mobile", "gui", "wasm"]
 
 [dependencies]
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
 wasm-bindgen = { workspace = true, optional = true }
 
 [features]
