@@ -17,13 +17,13 @@ pub struct Renderer {
     pub pre_render: bool,
 
     /// A callback used to render components. You can set this callback to control what components are rendered and add wrappers around components that are not present in CSR
-    pub(crate) render_components: Option<ComponentRenderCallback>,
+    render_components: Option<ComponentRenderCallback>,
 
     /// A cache of templates that have been rendered
-    pub(crate) template_cache: FxHashMap<Template, Arc<StringCache>>,
+    template_cache: FxHashMap<Template, Arc<StringCache>>,
 
     /// The current dynamic node id for hydration
-    pub(crate) dynamic_node_id: usize,
+    dynamic_node_id: usize,
 }
 
 impl Renderer {
