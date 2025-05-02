@@ -13,12 +13,14 @@ mod assets;
 mod contexts;
 mod dioxus_application;
 mod dioxus_document;
+mod dioxus_renderer;
 mod events;
 mod mutation_writer;
 
-use blitz_dom::{ns, Atom, QualName};
+use blitz_dom::{ns, Atom, LocalName, Namespace, QualName};
 pub use dioxus_application::{DioxusNativeApplication, DioxusNativeEvent};
 pub use dioxus_document::DioxusDocument;
+pub use dioxus_renderer::DioxusNativeWindowRenderer;
 
 use blitz_shell::{create_default_event_loop, BlitzShellEvent, Config, WindowConfig};
 use dioxus_core::{ComponentFunction, Element, VirtualDom};
@@ -94,8 +96,8 @@ pub fn launch_cfg_with_props<P: Clone + 'static, M: 'static>(
 pub(crate) fn qual_name(local_name: &str, namespace: Option<&str>) -> QualName {
     QualName {
         prefix: None,
-        ns: namespace.map(Atom::from).unwrap_or(ns!(html)),
-        local: Atom::from(local_name),
+        ns: namespace.map(Namespace::from).unwrap_or(ns!(html)),
+        local: LocalName::from(local_name),
     }
 }
 
