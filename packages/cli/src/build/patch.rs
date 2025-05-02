@@ -9,11 +9,8 @@ use object::{
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
-    path::Path,
-};
-use std::{
-    fs,
     ops::{Deref, Range},
+    path::Path,
     path::PathBuf,
     sync::{Arc, RwLock},
 };
@@ -54,18 +51,32 @@ pub enum PatchError {
     InvalidModule(String),
 }
 
-pub struct CachedBaseModule {
-    pub path: PathBuf,
+/// A cache for the hotpatching engine that stores the original module's parsed symbol table.
+/// For large projects, this can shave up to 50% off the total patching time. Since we compile the base
+/// module with every symbol in it, it can be quite large (hundreds of MB), so storing this here lets
+/// us avoid re-parsing the module every time we want to patch it.
+///
+/// On the Dioxus Docsite, it dropped the patch time from 3s to 1.1s (!)
+pub struct HotpatchModuleCache {
+    pub _path: PathBuf,
+
+    // .... wasm stuff
     pub symbol_ifunc_map: HashMap<String, i32>,
     pub old_wasm: Module,
     pub old_bytes: Vec<u8>,
+    pub old_exports: HashSet<String>,
+    pub old_imports: HashSet<String>,
+
+    // ... native stuff
+    pub old_name_to_addr: HashMap<String, u64>,
 }
 
+/// Create a jump table for the given original and patch files.
 pub fn create_jump_table(
     original: &Path,
     patch: &Path,
     triple: &Triple,
-    cache: &mut Option<CachedBaseModule>,
+    cache: &mut Option<HotpatchModuleCache>,
 ) -> Result<JumpTable> {
     match triple.architecture {
         target_lexicon::Architecture::Wasm32 => create_wasm_jump_table(original, patch, cache),
@@ -85,23 +96,33 @@ fn create_native_jump_table(
     original: &Path,
     patch: &Path,
     triple: &Triple,
-    cache: &mut Option<CachedBaseModule>,
+    cache: &mut Option<HotpatchModuleCache>,
 ) -> Result<JumpTable> {
-    let obj1_bytes = fs::read(original)?;
-    let obj2_bytes = fs::read(patch)?;
-    let obj1 = File::parse(&obj1_bytes as &[u8])?;
+    if cache.is_none() {
+        let obj1_bytes = std::fs::read(original)?;
+        let obj1 = File::parse(&obj1_bytes as &[u8])?;
+        let old_syms = obj1.symbol_map();
+        let old_name_to_addr = old_syms
+            .symbols()
+            .iter()
+            .map(|s| (s.name().to_string(), s.address()))
+            .collect::<HashMap<_, _>>();
+        *cache = Some(HotpatchModuleCache {
+            old_name_to_addr,
+            _path: original.to_path_buf(),
+            old_bytes: obj1_bytes,
+            symbol_ifunc_map: Default::default(),
+            old_wasm: Module::default(),
+            old_exports: Default::default(),
+            old_imports: Default::default(),
+        });
+    }
+
+    let old_name_to_addr = &cache.as_mut().unwrap().old_name_to_addr;
+    let obj2_bytes = std::fs::read(patch)?;
     let obj2 = File::parse(&obj2_bytes as &[u8])?;
-
     let mut map = AddressMap::default();
-
-    let old_syms = obj1.symbol_map();
     let new_syms = obj2.symbol_map();
-
-    let old_name_to_addr = old_syms
-        .symbols()
-        .iter()
-        .map(|s| (s.name(), s.address()))
-        .collect::<HashMap<_, _>>();
 
     let new_name_to_addr = new_syms
         .symbols()
@@ -110,7 +131,7 @@ fn create_native_jump_table(
         .collect::<HashMap<_, _>>();
 
     for (new_name, new_addr) in new_name_to_addr.iter() {
-        if let Some(old_addr) = old_name_to_addr.get(new_name) {
+        if let Some(old_addr) = old_name_to_addr.get(*new_name) {
             map.insert(*old_addr, *new_addr);
         }
     }
@@ -162,12 +183,14 @@ fn create_native_jump_table(
 fn create_wasm_jump_table(
     original: &Path,
     patch: &Path,
-    cache: &mut Option<CachedBaseModule>,
+    cache: &mut Option<HotpatchModuleCache>,
 ) -> Result<JumpTable> {
+    // This caching step is crucial for performance on large projects. The original module can be
+    // quite large (hundreds of MB), so this step drastically speeds it up.
     if cache.is_none() {
-        let old_bytes = fs::read(original)?;
+        let old_bytes = std::fs::read(original)?;
         let ParsedModule {
-            module: old,
+            module: old_wasm,
             symbols: old_symbols,
             ..
         } = parse_module_with_ids(&old_bytes)?;
@@ -176,17 +199,30 @@ fn create_wasm_jump_table(
             return Err(PatchError::MissingSymbols);
         }
 
-        let name_to_ifunc_old = collect_func_ifuncs(&old);
-        let name_to_ifunc_old = fill_ifuncs_from_old(&old, &old_symbols, name_to_ifunc_old);
+        let name_to_ifunc_old = collect_func_ifuncs(&old_wasm);
+        let name_to_ifunc_old = fill_ifuncs_from_old(&old_wasm, &old_symbols, name_to_ifunc_old);
         let symbol_ifunc_map = name_to_ifunc_old
             .iter()
             .map(|(name, idx)| (name.to_string(), *idx))
             .collect::<HashMap<_, _>>();
-        *cache = Some(CachedBaseModule {
+        let old_exports = old_wasm
+            .exports
+            .iter()
+            .map(|e| e.name.to_string())
+            .collect::<HashSet<_>>();
+        let old_imports = old_wasm
+            .imports
+            .iter()
+            .map(|i| i.name.to_string())
+            .collect::<HashSet<_>>();
+        *cache = Some(HotpatchModuleCache {
+            _path: original.to_path_buf(),
             old_bytes,
-            path: original.to_path_buf(),
             symbol_ifunc_map,
-            old_wasm: old,
+            old_exports,
+            old_imports,
+            old_wasm,
+            old_name_to_addr: Default::default(),
         });
     }
 
@@ -195,11 +231,9 @@ fn create_wasm_jump_table(
     let old = &cache.old_wasm;
     let old_symbols =
         parse_bytes_to_data_segment(&cache.old_bytes).context("Failed to parse data segment")?;
-
-    let new_bytes = fs::read(patch).context("Could not read patch file")?;
+    let new_bytes = std::fs::read(patch).context("Could not read patch file")?;
 
     let mut new = Module::from_buffer(&new_bytes)?;
-
     let mut got_mems = vec![];
     let mut got_funcs = vec![];
     let mut wbg_funcs = vec![];
@@ -362,27 +396,15 @@ fn create_wasm_jump_table(
             _ => None,
         })
         .context("Missing ifunc table")?;
-    let old_exports = old
-        .exports
-        .iter()
-        .map(|e| e.name.as_str())
-        .collect::<HashSet<_>>();
-    let old_imports = old
-        .imports
-        .iter()
-        .map(|i| i.name.as_str())
-        .collect::<HashSet<_>>();
     for env_func_import in env_funcs {
         let import = new.imports.get(env_func_import);
         let ImportKind::Function(func_id) = import.kind else {
             continue;
         };
 
-        if old_exports.contains(import.name.as_str()) {
-            continue;
-        }
-
-        if old_imports.contains(import.name.as_str()) {
+        if cache.old_exports.contains(import.name.as_str())
+            || cache.old_imports.contains(import.name.as_str())
+        {
             continue;
         }
 
@@ -569,7 +591,7 @@ pub fn create_undefined_symbol_stub(
     let mut undefined_symbols = HashSet::new();
     let mut defined_symbols = HashSet::new();
     for path in sorted {
-        let bytes = fs::read(path).with_context(|| format!("failed to read {:?}", path))?;
+        let bytes = std::fs::read(path).with_context(|| format!("failed to read {:?}", path))?;
         let file = File::parse(bytes.deref() as &[u8])?;
         for symbol in file.symbols() {
             if symbol.is_undefined() {
@@ -636,7 +658,7 @@ pub fn create_undefined_symbol_stub(
     }
 
     // Load the original binary
-    let bytes = fs::read(source_path)?;
+    let bytes = std::fs::read(source_path)?;
     let source = File::parse(bytes.deref() as &[u8]).context("Failed to parse")?;
     let symbol_table = source
         .symbols()

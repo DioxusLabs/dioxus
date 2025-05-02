@@ -21,7 +21,7 @@ use tokio::{
     task::JoinHandle,
 };
 
-use super::{BuildContext, BuildId, BuildMode, CachedBaseModule};
+use super::{BuildContext, BuildId, BuildMode, HotpatchModuleCache};
 
 /// The component of the serve engine that watches ongoing builds and manages their state, open handle,
 /// and progress.
@@ -62,7 +62,7 @@ pub(crate) struct AppBuilder {
 
     /// The list of patches applied to the app, used to know which ones to reapply and/or iterate from.
     pub patches: Vec<JumpTable>,
-    pub patch_cache: Option<CachedBaseModule>,
+    pub patch_cache: Option<HotpatchModuleCache>,
 
     /// The virtual directory that assets will be served from
     /// Used mostly for apk/ipa builds since they live in simulator
