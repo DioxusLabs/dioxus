@@ -715,7 +715,7 @@ pub fn create_undefined_symbol_stub(
                 target_lexicon::Architecture::X86_32(_) => {
                     // For 32-bit Intel, use JMP instruction with absolute address
                     let mut code = vec![0xE9]; // jmp rel32
-                    let rel_addr = (abs_addr as i32 - 5) as i32; // Relative address (offset from next instruction)
+                    let rel_addr = abs_addr as i32 - 5; // Relative address (offset from next instruction)
                     code.extend_from_slice(&rel_addr.to_le_bytes());
                     code
                 }
