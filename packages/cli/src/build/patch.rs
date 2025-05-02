@@ -18,8 +18,8 @@ use subsecond_types::*;
 use target_lexicon::{OperatingSystem, Triple};
 use thiserror::Error;
 use walrus::{
-    ConstExpr, DataKind, ElementItems, ElementKind, ExportItem, FunctionBuilder, FunctionId,
-    FunctionKind, ImportKind, Module, ModuleConfig, TableId,
+    ConstExpr, DataKind, ElementItems, ElementKind, FunctionBuilder, FunctionId, FunctionKind,
+    ImportKind, Module, ModuleConfig, TableId,
 };
 use wasmparser::{
     BinaryReader, BinaryReaderError, Linking, LinkingSectionReader, Payload, SymbolInfo,
@@ -104,7 +104,7 @@ fn create_native_jump_table(
         let old_syms = obj1.symbol_map();
         let old_name_to_addr = old_syms
             .symbols()
-            .iter()
+            .par_iter()
             .map(|s| (s.name().to_string(), s.address()))
             .collect::<HashMap<_, _>>();
         *cache = Some(HotpatchModuleCache {
@@ -126,7 +126,7 @@ fn create_native_jump_table(
 
     let new_name_to_addr = new_syms
         .symbols()
-        .iter()
+        .par_iter()
         .map(|s| (s.name(), s.address()))
         .collect::<HashMap<_, _>>();
 
@@ -139,24 +139,27 @@ fn create_native_jump_table(
     let new_base_address = match triple.operating_system {
         // The symbol in the symtab is called "_main" but in the dysymtab it is called "main"
         OperatingSystem::MacOSX(_) | OperatingSystem::Darwin(_) | OperatingSystem::IOS(_) => {
-            *new_name_to_addr.get("_main").unwrap()
+            *new_name_to_addr
+                .get("_main")
+                .context("failed to find '_main' symbol in patch")?
         }
 
         // No distincation between the two on these platforms
         OperatingSystem::Freebsd
         | OperatingSystem::Openbsd
         | OperatingSystem::Linux
-        | OperatingSystem::Windows => *new_name_to_addr.get("main").unwrap(),
+        | OperatingSystem::Windows => *new_name_to_addr
+            .get("main")
+            .context("failed to find 'main' symbol in patch")?,
 
         // On wasm, it doesn't matter what the address is since the binary is PIC
         _ => 0,
     };
 
-    let aslr_reference = *old_name_to_addr.get("_aslr_reference").unwrap_or_else(|| {
-        old_name_to_addr
-            .get("aslr_reference")
-            .expect("failed to find aslr_reference")
-    });
+    let aslr_reference = *old_name_to_addr
+        .get("_aslr_reference")
+        .or_else(|| old_name_to_addr.get("aslr_reference"))
+        .context("failed to find '_aslr_reference' symbol in original module")?;
 
     Ok(JumpTable {
         lib: patch.to_path_buf(),
@@ -202,7 +205,7 @@ fn create_wasm_jump_table(
         let name_to_ifunc_old = collect_func_ifuncs(&old_wasm);
         let name_to_ifunc_old = fill_ifuncs_from_old(&old_wasm, &old_symbols, name_to_ifunc_old);
         let symbol_ifunc_map = name_to_ifunc_old
-            .iter()
+            .par_iter()
             .map(|(name, idx)| (name.to_string(), *idx))
             .collect::<HashMap<_, _>>();
         let old_exports = old_wasm
@@ -561,8 +564,9 @@ fn collect_func_ifuncs(m: &Module) -> HashMap<&str, i32> {
         match &el.items {
             ElementItems::Functions(ids) => {
                 for (idx, id) in ids.iter().enumerate() {
-                    let name = m.funcs.get(*id).name.as_deref().unwrap();
-                    func_to_offset.insert(name, offset + idx as i32);
+                    if let Some(name) = m.funcs.get(*id).name.as_deref() {
+                        func_to_offset.insert(name, offset + idx as i32);
+                    }
                 }
             }
             ElementItems::Expressions(_ref_type, _const_exprs) => {}
@@ -579,6 +583,10 @@ fn collect_func_ifuncs(m: &Module) -> HashMap<&str, i32> {
 /// bypassing the dynamic linker.
 ///
 /// This is very similar to malware :) but it's not!
+///
+/// Note - this function is not defined to run on WASM binaries. The `object` crate does not
+///
+/// todo... we need to wire up the cache
 pub fn create_undefined_symbol_stub(
     source_path: &Path,
     incrementals: &[PathBuf],
@@ -636,8 +644,8 @@ pub fn create_undefined_symbol_stub(
             obj.set_macho_build_version({
                 let mut build_version = MachOBuildVersion::default();
                 build_version.platform = macho::PLATFORM_MACOS;
-                build_version.minos = (11 << 16) | (0 << 8) | 0;
-                build_version.sdk = (11 << 16) | (0 << 8) | 0;
+                build_version.minos = (11 << 16) | (0 << 8) | 0; // 11.0.0
+                build_version.sdk = (11 << 16) | (0 << 8) | 0; // SDK 11.0.0
                 build_version
             });
         }
@@ -665,18 +673,13 @@ pub fn create_undefined_symbol_stub(
         .flat_map(|s| Some((s.name().ok()?, s)))
         .collect::<HashMap<_, _>>();
 
-    // Get the offset from the main module
-    let aslr_offset = match triple.architecture {
-        target_lexicon::Architecture::Wasm32 => 0,
-        _ => {
-            let aslr_ref = symbol_table.get("_aslr_reference").unwrap_or_else(|| {
-                symbol_table
-                    .get("aslr_reference")
-                    .expect("failed to find aslr_reference")
-            });
-            aslr_reference - aslr_ref.address()
-        }
-    };
+    // Get the offset from the main module and adjust the addresses by the slide
+    let aslr_ref_address = symbol_table
+        .get("_aslr_reference")
+        .or_else(|| symbol_table.get("aslr_reference"))
+        .context("Failed to find _aslr_reference symbol")?
+        .address();
+    let aslr_offset = aslr_reference - aslr_ref_address;
 
     // we need to assemble a PLT/GOT so direct calls to the patch symbols work
     // for each symbol we either write the address directly (as a symbol) or create a PLT/GOT entry
@@ -806,15 +809,8 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
     let ifunc_map = collect_func_ifuncs(&module);
     let ifuncs = module
         .funcs
-        .iter()
+        .par_iter()
         .filter_map(|f| ifunc_map.get(f.name.as_deref()?).map(|_| f.id()))
-        .collect::<HashSet<_>>();
-
-    let already_exported = module
-        .exports
-        .iter()
-        .filter(|f| matches!(f.item, ExportItem::Function(_)))
-        .map(|exp| exp.name.clone())
         .collect::<HashSet<_>>();
 
     let imported_funcs = module
@@ -902,13 +898,11 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
         // call the original function directly. Unfortunately, this would require adding a new relocation
         // to corresponding GOT.func entry, which we don't want to deal with.
         //
-        // By exposing all functions both as exports and ifuncs, we can both call them directly and
-        // indirectly.
+        // Note that we don't export via the export table, but rather the ifunc table. This is to work
+        // around issues on large projects where we hit the maximum number of exports.
+        //
+        // https://github.com/emscripten-core/emscripten/issues/22863
         if let FunctionKind::Local(_) = &func.kind {
-            if !already_exported.contains(*name) {
-                // module.exports.add(name, func.id());
-            }
-
             if !ifuncs.contains(&func.id()) {
                 make_indirect.push(func.id());
             }
@@ -948,8 +942,11 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
 ///
 /// todo(jon): I believe we can just look at all the functions the wasm_bindgen describe export references.
 /// this is kinda hacky on slow.
+///
+/// Uses the heuristics from the wasm-bindgen source code itself:
+///
+/// https://github.com/rustwasm/wasm-bindgen/blob/c35cc9369d5e0dc418986f7811a0dd702fb33ef9/crates/cli-support/src/wit/mod.rs#L1165
 fn name_is_bindgen_symbol(name: &str) -> bool {
-    // https://github.com/rustwasm/wasm-bindgen/blob/c35cc9369d5e0dc418986f7811a0dd702fb33ef9/crates/cli-support/src/wit/mod.rs#L1165
     name.contains("__wbindgen_describe")
         || name.contains("__wbindgen_externref")
         || name.contains("wasm_bindgen8describe6inform")
