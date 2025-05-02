@@ -13,12 +13,12 @@ use winit::event_loop::EventLoopProxy;
 use crate::NodeId;
 
 pub struct DioxusNativeNetProvider {
-    callback: Arc<dyn NetCallback<Data = Resource> + 'static>,
-    inner_net_provider: Arc<dyn NetProvider<Data = Resource> + 'static>,
+    callback: Arc<dyn NetCallback<Resource> + 'static>,
+    inner_net_provider: Arc<dyn NetProvider<Resource> + 'static>,
 }
 impl DioxusNativeNetProvider {
-    pub fn shared(proxy: EventLoopProxy<BlitzShellEvent>) -> Arc<dyn NetProvider<Data = Resource>> {
-        Arc::new(Self::new(proxy)) as Arc<dyn NetProvider<Data = Resource>>
+    pub fn shared(proxy: EventLoopProxy<BlitzShellEvent>) -> Arc<dyn NetProvider<Resource>> {
+        Arc::new(Self::new(proxy)) as Arc<dyn NetProvider<Resource>>
     }
 
     pub fn new(proxy: EventLoopProxy<BlitzShellEvent>) -> Self {
@@ -31,14 +31,12 @@ impl DioxusNativeNetProvider {
     }
 }
 
-impl NetProvider for DioxusNativeNetProvider {
-    type Data = Resource;
-
+impl NetProvider<Resource> for DioxusNativeNetProvider {
     fn fetch(
         &self,
         doc_id: usize,
         request: blitz_traits::net::Request,
-        handler: blitz_traits::net::BoxedHandler<Self::Data>,
+        handler: blitz_traits::net::BoxedHandler<Resource>,
     ) {
         if request.url.scheme() == "dioxus" {
             match dioxus_asset_resolver::serve_asset_from_raw_path(request.url.path()) {
