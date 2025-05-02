@@ -199,7 +199,7 @@ impl LinkAction {
 }
 
 fn linker_log_file() -> Option<PathBuf> {
-    std::env::var("DIOXUS_LINKER_LOG_OUTPUT")
+    std::env::var("DIOXUS_LINKER_LOG_FILE")
         .ok()
         .map(PathBuf::from)
 }
@@ -284,23 +284,42 @@ impl AssetReferences {
 
 // find the current linker
 fn find_linker(toolchain: String) -> Command {
-    let target = toolchain.split("-").nth(1).unwrap();
-    match target {
+    // If there is a linker environment variable, use that
+    if let Ok(linker) = std::env::var("DIOXUS_LINKER") {
+        return Command::new(linker);
+    }
+
+    let target = toolchain.split("-").collect::<Vec<_>>();
+    tracing::info!("Linking for target: {:?}", target);
+    match target.as_slice() {
         // usually just ld64 - uses your `cc`
-        "aarch64" => {
-            // env -u IPHONEOS_DEPLOYMENT_TARGET -u TVOS_DEPLOYMENT_TARGET -u XROS_DEPLOYMENT_TARGET LC_ALL="C" "cc"
+        [_, _, "apple", _] => {
             let mut command = Command::new(PathBuf::from("cc"));
             command.env_remove("IPHONEOS_DEPLOYMENT_TARGET");
             command.env_remove("TVOS_DEPLOYMENT_TARGET");
             command.env_remove("XROS_DEPLOYMENT_TARGET");
             command
         }
-        "wasm32" => {
+        [_, _, "linux", _] => {
+            let mut command = Command::new("cc");
+            command.env("LC_ALL", "C");
+            command
+        }
+        [_, "wasm32", _, _] => {
             let mut command = Command::new(wasm_ld());
             command.env("LC_ALL", "C");
             command
         }
-        _ => todo!("Unsupported target: {}", target),
+        _ => {
+            panic!(
+                "Unknown target {}. Please set the environment variable DIOXUS_LINKER to the path of your linker.
+If you don't know where your linker is, create a blank rust file and run `rustc temp.rs --print link-args`.
+On unix-like platforms, you can run this command to find your link args:
+`echo \"fn main(){{}}\" > ./temp.rs && rustc temp.rs --print link-args -Z unstable-options && rm ./temp.rs`
+Once you find the linker args for your platform feel free to open an issue with link args so we can
+add support for the platform out of the box: https://github.com/DioxusLabs/dioxus/issues/new", target.join("-")
+        )
+        }
     }
 }
 
@@ -323,6 +342,10 @@ fn wasm_ld() -> PathBuf {
         .join("rust-lld");
     root
 }
+
+// fn linux_ld() -> PathBuf {
+//     LC_ALL="C" PATH="/home/evan/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/bin:/home/evan/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/bin/self-contained:/home/evan/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin:/snap/bin" VSLANG="1033" "cc" "-m64" "/tmp/rustcI2egGS/symbols.o" "main.main.4cac11b5fb976cef-cgu.0.rcgu.o" "main.97rcuhy2qxy2iu2fheg5t5ywl.rcgu.o" "-Wl,--as-needed" "-Wl,-Bstatic" "/home/evan/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libstd-5024342751ec4fae.rlib" "/home/evan/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libpanic_unwind-2ef37a08deacbef7.rlib" "/home/evan/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libobject-6474163bcabd56d4.rlib" "/home/evan/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libmemchr-0c669fc4488b33a7.rlib" "/home/evan/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libaddr2line-facd468809e87d62.rlib" "/home/evan/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libgimli-a761ff9b49802762.rlib" "/home/evan/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/librustc_demangle-b5857e32e98a1522.rlib" "/home/evan/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libstd_detect-b4d4247665203a7e.rlib" "/home/evan/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libhashbrown-ba5952c0e6997780.rlib" "/home/evan/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/librustc_std_workspace_alloc-c28e1bddb833f318.rlib" "/home/evan/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libminiz_oxide-0c142178ac12e90a.rlib" "/home/evan/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libadler2-9849bba3624604db.rlib" "/home/evan/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libunwind-91be5c201001b2fd.rlib" "/home/evan/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libcfg_if-03f10e69535bbda2.rlib" "/home/evan/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/liblibc-be500544df63862d.rlib" "/home/evan/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/liballoc-db9414217643e13f.rlib" "/home/evan/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/librustc_std_workspace_core-fc0ad1732fa36810.rlib" "/home/evan/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libcore-11d9a250f9da47d5.rlib" "/home/evan/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libcompiler_builtins-64829956fbeadedf.rlib" "-Wl,-Bdynamic" "-lgcc_s" "-lutil" "-lrt" "-lpthread" "-lm" "-ldl" "-lc" "-L" "/tmp/rustcI2egGS/raw-dylibs" "-B/home/evan/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/bin/gcc-ld" "-fuse-ld=lld" "-Wl,-znostart-stop-gc" "-Wl,--eh-frame-hdr" "-Wl,-z,noexecstack" "-L" "/home/evan/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib" "-o" "main" "-Wl,--gc-sections" "-pie" "-Wl,-z,relro,-z,now" "-nodefaultlibs"
+// }
 
 fn create_data_object_file<'a>(
     data_sections: impl IntoIterator<Item = (&'a str, &'a [u8])>,
