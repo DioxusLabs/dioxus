@@ -305,6 +305,7 @@ fn find_linker(toolchain: String) -> Command {
         [_, _, _, "linux", _] => {
             let mut command = Command::new("cc");
             command.env("LC_ALL", "C");
+            command.arg("-m64");
             command
         }
         // Eg. x86_64-pc-windows-msvc
