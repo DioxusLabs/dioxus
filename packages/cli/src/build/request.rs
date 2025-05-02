@@ -1093,7 +1093,6 @@ session_cache_dir: {}"#,
         aslr_reference: u64,
         artifacts: &mut BuildArtifacts,
     ) -> Result<()> {
-        tracing::debug!("Patching existing bundle");
         ctx.status_hotpatching();
 
         tracing::debug!(
@@ -1271,27 +1270,14 @@ session_cache_dir: {}"#,
                     "--import-memory".to_string(),
                     "--import-table".to_string(),
                     "--growable-table".to_string(),
-                    // "--export-all".to_string(),
                     "--export".to_string(),
                     "main".to_string(),
-                    // "--export".to_string(),
-                    // "__wasm_apply_data_relocs".to_string(),
-                    // "--export".to_string(),
-                    // "__wasm_apply_global_relocs".to_string(),
                     "--allow-undefined".to_string(),
                     "--no-demangle".to_string(),
                     "--no-entry".to_string(),
                     "--pie".to_string(),
                     "--experimental-pic".to_string(),
-                    // "--export-all".to_string(),
-                    // "--no-gc-sections".to_string(),
                 ]);
-
-                // for arg in original_args.iter() {
-                //     if arg.starts_with("-Wl,--export=") {
-                //         out_args.push(arg.to_string());
-                //     }
-                // }
             }
 
             // This uses "cc" and these args need to be ld compatible

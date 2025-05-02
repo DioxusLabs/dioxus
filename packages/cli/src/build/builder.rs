@@ -21,7 +21,7 @@ use tokio::{
     task::JoinHandle,
 };
 
-use super::{BuildContext, BuildId, BuildMode};
+use super::{BuildContext, BuildId, BuildMode, CachedBaseModule};
 
 /// The component of the serve engine that watches ongoing builds and manages their state, open handle,
 /// and progress.
@@ -62,6 +62,7 @@ pub(crate) struct AppBuilder {
 
     /// The list of patches applied to the app, used to know which ones to reapply and/or iterate from.
     pub patches: Vec<JumpTable>,
+    pub patch_cache: Option<CachedBaseModule>,
 
     /// The virtual directory that assets will be served from
     /// Used mostly for apk/ipa builds since they live in simulator
@@ -154,6 +155,7 @@ impl AppBuilder {
             stdout: None,
             entropy_app_exe: None,
             artifacts: None,
+            patch_cache: None,
         })
     }
 
@@ -307,6 +309,8 @@ impl AppBuilder {
         // Abort all the ongoing builds, cleaning up any loose artifacts and waiting to cleanly exit
         // And then start a new build, resetting our progress/stage to the beginning and replacing the old tokio task
         self.abort_all(BuildStage::Restarting);
+        self.artifacts.take();
+        self.patch_cache.take();
         self.build_task = tokio::spawn({
             let request = self.build.clone();
             let ctx = BuildContext {
@@ -574,7 +578,8 @@ impl AppBuilder {
 
         tracing::debug!("Patching {} -> {}", original.display(), new.display());
 
-        let mut jump_table = crate::build::create_jump_table(&original, &new, &triple)?;
+        let mut jump_table =
+            crate::build::create_jump_table(&original, &new, &triple, &mut self.patch_cache)?;
 
         // If it's android, we need to copy the assets to the device and then change the location of the patch
         if self.build.platform == Platform::Android {

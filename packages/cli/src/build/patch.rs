@@ -54,10 +54,22 @@ pub enum PatchError {
     InvalidModule(String),
 }
 
-pub fn create_jump_table(original: &Path, patch: &Path, triple: &Triple) -> Result<JumpTable> {
+pub struct CachedBaseModule {
+    pub path: PathBuf,
+    pub symbol_ifunc_map: HashMap<String, i32>,
+    pub old_wasm: Module,
+    pub old_bytes: Vec<u8>,
+}
+
+pub fn create_jump_table(
+    original: &Path,
+    patch: &Path,
+    triple: &Triple,
+    cache: &mut Option<CachedBaseModule>,
+) -> Result<JumpTable> {
     match triple.architecture {
-        target_lexicon::Architecture::Wasm32 => create_wasm_jump_table(original, patch),
-        _ => create_native_jump_table(original, patch, triple),
+        target_lexicon::Architecture::Wasm32 => create_wasm_jump_table(original, patch, cache),
+        _ => create_native_jump_table(original, patch, triple, cache),
     }
 }
 
@@ -69,7 +81,12 @@ pub fn create_jump_table(original: &Path, patch: &Path, triple: &Triple) -> Resu
 ///
 /// This does not work for WASM since the `object` crate does not support emitting the WASM format,
 /// and because WASM requires more logic to handle the wasm-bindgen transformations.
-fn create_native_jump_table(original: &Path, patch: &Path, triple: &Triple) -> Result<JumpTable> {
+fn create_native_jump_table(
+    original: &Path,
+    patch: &Path,
+    triple: &Triple,
+    cache: &mut Option<CachedBaseModule>,
+) -> Result<JumpTable> {
     let obj1_bytes = fs::read(original)?;
     let obj2_bytes = fs::read(patch)?;
     let obj1 = File::parse(&obj1_bytes as &[u8])?;
@@ -142,23 +159,46 @@ fn create_native_jump_table(original: &Path, patch: &Path, triple: &Triple) -> R
 /// to manually satisfy them here, removing their need to be imported.
 ///
 /// https://github.com/WebAssembly/tool-conventions/blob/main/DynamicLinking.md
-fn create_wasm_jump_table(original: &Path, patch: &Path) -> Result<JumpTable> {
-    let old_bytes = fs::read(original).context("Could not read original file")?;
-    let new_bytes = fs::read(patch).context("Could not read patch file")?;
+fn create_wasm_jump_table(
+    original: &Path,
+    patch: &Path,
+    cache: &mut Option<CachedBaseModule>,
+) -> Result<JumpTable> {
+    if cache.is_none() {
+        let old_bytes = fs::read(original)?;
+        let ParsedModule {
+            module: old,
+            symbols: old_symbols,
+            ..
+        } = parse_module_with_ids(&old_bytes)?;
 
-    let ParsedModule {
-        module: old,
-        symbols: old_symbols,
-        ..
-    } = parse_module_with_ids(&old_bytes)?;
-    let mut new = Module::from_buffer(&new_bytes)?;
+        if old_symbols.symbols.is_empty() {
+            return Err(PatchError::MissingSymbols);
+        }
 
-    if old_symbols.symbols.is_empty() {
-        return Err(PatchError::MissingSymbols);
+        let name_to_ifunc_old = collect_func_ifuncs(&old);
+        let name_to_ifunc_old = fill_ifuncs_from_old(&old, &old_symbols, name_to_ifunc_old);
+        let symbol_ifunc_map = name_to_ifunc_old
+            .iter()
+            .map(|(name, idx)| (name.to_string(), *idx))
+            .collect::<HashMap<_, _>>();
+        *cache = Some(CachedBaseModule {
+            old_bytes,
+            path: original.to_path_buf(),
+            symbol_ifunc_map,
+            old_wasm: old,
+        });
     }
 
-    let name_to_ifunc_old = collect_func_ifuncs(&old);
-    let name_to_ifunc_old = fill_ifuncs_from_old(&old, &old_symbols, name_to_ifunc_old);
+    let cache = cache.as_mut().unwrap();
+    let name_to_ifunc_old = &cache.symbol_ifunc_map;
+    let old = &cache.old_wasm;
+    let old_symbols =
+        parse_bytes_to_data_segment(&cache.old_bytes).context("Failed to parse data segment")?;
+
+    let new_bytes = fs::read(patch).context("Could not read patch file")?;
+
+    let mut new = Module::from_buffer(&new_bytes)?;
 
     let mut got_mems = vec![];
     let mut got_funcs = vec![];
@@ -382,7 +422,7 @@ fn create_wasm_jump_table(original: &Path, patch: &Path) -> Result<JumpTable> {
     let ifunc_count = name_to_ifunc_new.len() as u64;
     let mut map = AddressMap::default();
     for (name, idx) in name_to_ifunc_new.iter() {
-        if let Some(old_idx) = name_to_ifunc_old.get(name) {
+        if let Some(old_idx) = name_to_ifunc_old.get(*name) {
             map.insert(*old_idx as u64, *idx as u64);
         }
     }
