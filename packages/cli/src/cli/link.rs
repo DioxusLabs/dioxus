@@ -293,6 +293,7 @@ fn find_linker(toolchain: String) -> Command {
     tracing::info!("Linking for target: {:?}", target);
     match target.as_slice() {
         // usually just ld64 - uses your `cc`
+        // Eg. aarch64-apple-darwin
         [_, _, "apple", _] => {
             let mut command = Command::new(PathBuf::from("cc"));
             command.env_remove("IPHONEOS_DEPLOYMENT_TARGET");
@@ -300,11 +301,19 @@ fn find_linker(toolchain: String) -> Command {
             command.env_remove("XROS_DEPLOYMENT_TARGET");
             command
         }
-        [_, _, "linux", _] => {
+        // Eg. nightly-x86_64-unknown-linux-gnu
+        [_, _, _, "linux", _] => {
             let mut command = Command::new("cc");
             command.env("LC_ALL", "C");
             command
         }
+        // Eg. x86_64-pc-windows-msvc
+        [_, _, "windows", _] => {
+            let mut command = Command::new("link.exe");
+            command.arg("/NOLOGO");
+            command
+        }
+        // Eg. nightly-wasm32-unknown-unknown
         [_, "wasm32", _, _] => {
             let mut command = Command::new(wasm_ld());
             command.env("LC_ALL", "C");
