@@ -47,7 +47,7 @@ hyper-rustls = { workspace = true }
 rustls = { workspace = true }
 rayon = { workspace = true }
 futures-channel = { workspace = true }
-cargo-config2 = { workspace = true, optional = true }
+cargo-config2 = { workspace = true }
 krates = { version = "0.17.5" }
 regex = "1.11.1"
 console = "0.15.11"
