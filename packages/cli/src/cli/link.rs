@@ -50,17 +50,19 @@ impl LinkAction {
     /// hmmmmmmmm tbh I'd rather just pass the object files back and do the parsing here, but the interface
     /// is nicer to just bounce back the args and let the host do the parsing/canonicalization
     pub(crate) fn run(self) {
-        let log_file = std::fs::File::options()
-            .append(true)
-            .create(true)
-            .open(linker_log_file())
-            .unwrap();
-        tracing_subscriber::fmt()
-            .with_writer(log_file)
-            .with_max_level(tracing::Level::DEBUG)
-            .compact()
-            .with_ansi(false)
-            .init();
+        if let Some(log_path) = linker_log_file() {
+            let log_file = std::fs::File::options()
+                .append(true)
+                .create(true)
+                .open(log_path)
+                .unwrap();
+            tracing_subscriber::fmt()
+                .with_writer(log_file)
+                .with_max_level(tracing::Level::DEBUG)
+                .compact()
+                .with_ansi(false)
+                .init();
+        }
 
         match self {
             // Literally just run the android linker :)
@@ -176,11 +178,6 @@ impl LinkAction {
                 std::fs::write(dest, contents).expect("Failed to write output file");
 
                 // forward the modified object files to the real linker
-                let err_file = std::fs::File::options()
-                    .append(true)
-                    .create(true)
-                    .open(linker_error_file())
-                    .unwrap();
                 let toolchain = if targeting_wasm {
                     "stable-wasm32-unknown-unknown".to_string()
                 } else {
@@ -190,7 +187,6 @@ impl LinkAction {
                 let mut linker_command = find_linker(toolchain);
                 let status = linker_command
                     .args(linker_args)
-                    .stderr(err_file)
                     .status()
                     .expect("Failed to spawn linker");
 
@@ -202,21 +198,11 @@ impl LinkAction {
     }
 }
 
-fn out_dir() -> PathBuf {
-    // let out_dir = std::env::var("OUT_DIR").unwrap();
-    // let out_dir = PathBuf::from(out_dir);
-    // out_dir
-    PathBuf::from("/Users/evanalmloff/Desktop/Github/dioxus-test")
+fn linker_log_file() -> Option<PathBuf> {
+    std::env::var("DIOXUS_LINKER_LOG_OUTPUT")
+        .ok()
+        .map(PathBuf::from)
 }
-
-fn linker_log_file() -> PathBuf {
-    out_dir().join("linker_log.txt")
-}
-
-fn linker_error_file() -> PathBuf {
-    out_dir().join("linker_error.txt")
-}
-
 struct AssetReference {
     file: PathBuf,
     offset: usize,
