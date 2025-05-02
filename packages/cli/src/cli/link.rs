@@ -308,8 +308,8 @@ fn find_linker(toolchain: String) -> Command {
             command.arg("-m64");
             command
         }
-        // Eg. x86_64-pc-windows-msvc
-        [_, _, "windows", _] => {
+        // Eg. stable-x86_64-pc-windows-msvc
+        [_, _, _, "windows", _] => {
             let mut command = Command::new("link.exe");
             command.arg("/NOLOGO");
             command
