@@ -99,7 +99,7 @@ impl WasmBindgen {
     }
 
     /// Run the bindgen command with the current settings
-    pub(crate) async fn run(&self) -> Result<()> {
+    pub(crate) async fn run(&self) -> Result<std::process::Output> {
         let binary = self.get_binary_path().await?;
 
         let mut args = Vec::new();
@@ -159,9 +159,24 @@ impl WasmBindgen {
         tracing::debug!("wasm-bindgen args: {:#?}", args);
 
         // Run bindgen
-        Command::new(binary).args(args).output().await?;
+        let output = Command::new(binary).args(args).output().await?;
 
-        Ok(())
+        // Check for errors
+        if !output.stderr.is_empty() {
+            if output.status.success() {
+                tracing::debug!(
+                    "wasm-bindgen warnings: {}",
+                    String::from_utf8_lossy(&output.stderr)
+                );
+            } else {
+                tracing::error!(
+                    "wasm-bindgen error: {}",
+                    String::from_utf8_lossy(&output.stderr)
+                );
+            }
+        }
+
+        Ok(output)
     }
 
     /// Verify the installed version of wasm-bindgen-cli
