@@ -13,6 +13,7 @@ pub(crate) mod serve;
 pub(crate) mod target;
 pub(crate) mod translate;
 pub(crate) mod verbosity;
+pub(crate) mod winres;
 
 pub(crate) use build::*;
 pub(crate) use serve::*;
