@@ -83,106 +83,97 @@ pub fn create_jump_table(
     // - windows requires the pdb crate and pdb files
     // - nix requires the object crate
     match triple.operating_system {
-        OperatingSystem::Windows => create_windows_jump_table(original, patch, triple, cache),
+        OperatingSystem::Windows => create_windows_jump_table(original, patch, cache),
         _ if triple.architecture == target_lexicon::Architecture::Wasm32 => {
             create_wasm_jump_table(original, patch, cache)
         }
-        _ => create_nix_jump_table(original, patch, triple, cache),
+        _ => create_native_jump_table(original, patch, triple, cache),
     }
 }
 
 fn create_windows_jump_table(
     original: &Path,
     patch: &Path,
-    triple: &Triple,
     cache: &mut Option<HotpatchModuleCache>,
 ) -> std::result::Result<JumpTable, PatchError> {
     use pdb::FallibleIterator;
 
-    let old_pdb_file = original.with_extension("pdb");
+    if cache.is_none() {
+        // due to lifetimes, this code is unfortunately duplicated.
+        // the pdb crate doesn't bind the lifetime of the items in the iterator to the symbol table,
+        // so we're stuck with local lifetime.s
+        let old_pdb_file = original.with_extension("pdb");
+        let old_pdb_file_handle = std::fs::File::open(old_pdb_file).unwrap();
+        let mut pdb_file = pdb::PDB::open(old_pdb_file_handle).unwrap();
+        let symbol_table = pdb_file.global_symbols().unwrap();
+        let address_map = pdb_file.address_map().unwrap();
+        let mut name_to_address = HashMap::new();
+        let mut symbols = symbol_table.iter();
+        while let Ok(Some(symbol)) = symbols.next() {
+            match symbol.parse() {
+                Ok(pdb::SymbolData::Public(data)) if data.function => {
+                    let rva = data.offset.to_rva(&address_map).unwrap_or_default();
+                    name_to_address.insert(data.name.to_string().to_string(), rva.0 as u64);
+                }
+                _ => {}
+            }
+        }
+
+        *cache = Some(HotpatchModuleCache {
+            old_name_to_addr: name_to_address,
+            _path: original.to_path_buf(),
+            old_bytes: vec![],
+            symbol_ifunc_map: Default::default(),
+            old_wasm: Module::default(),
+            old_exports: Default::default(),
+            old_imports: Default::default(),
+        });
+    }
+
+    let cache = cache.as_mut().unwrap();
+    let old_name_to_addr = &cache.old_name_to_addr;
+
+    let mut new_name_to_addr = HashMap::new();
     let new_pdb_file = patch.with_extension("pdb");
-
-    // let pdb_file  = "/Users/jonathankelley/Desktop/Windows Shared/synced!/dioxus-demo.pdb";
-    let old_pdb_file_handle = std::fs::File::open(old_pdb_file).unwrap();
-    let mut pdbf = pdb::PDB::open(old_pdb_file_handle).unwrap();
-    // for s in pdbf.global_symbols().unwrap().iter().iterator() {
-    //     println!("PDB Symbol: {:?}", s);
-    // }
-
-    let symbol_table = pdbf.global_symbols().unwrap();
-    let address_map = pdbf.address_map().unwrap();
-
-    // let name_to_address = symbol_table
-    //     .iter()
-    //     .filter_map(|f| match f.parse() {
-    //         Ok(pdb::SymbolData::Public(data))) => todo!(),
-    //         Err(_) => todo!(),
-    //     })
-    //     .collect::<HashMap<_, _>>();
+    let new_pdb_file_handle = std::fs::File::open(new_pdb_file).unwrap();
+    let mut pdb_file = pdb::PDB::open(new_pdb_file_handle).unwrap();
+    let symbol_table = pdb_file.global_symbols().unwrap();
+    let address_map = pdb_file.address_map().unwrap();
     let mut symbols = symbol_table.iter();
-    while let Some(symbol) = symbols.next().unwrap() {
+    while let Ok(Some(symbol)) = symbols.next() {
         match symbol.parse() {
             Ok(pdb::SymbolData::Public(data)) if data.function => {
-                // we found the location of a function!
                 let rva = data.offset.to_rva(&address_map).unwrap_or_default();
-                println!("{} is {}", rva, data.name);
+                new_name_to_addr.insert(data.name.to_string(), rva.0 as u64);
             }
             _ => {}
         }
     }
 
-    // // let old_name_to_addr = &cache.as_mut().unwrap().old_name_to_addr;
-    // let obj2_bytes = std::fs::read(patch)?;
-    // let obj2 = File::parse(&obj2_bytes as &[u8])?;
-    // let mut map = AddressMap::default();
-    // let new_syms = obj2.symbol_map();
+    let mut map = AddressMap::default();
+    for (new_name, new_addr) in new_name_to_addr.iter() {
+        if let Some(old_addr) = old_name_to_addr.get(new_name.as_ref()) {
+            map.insert(*old_addr, *new_addr);
+        }
+    }
 
-    // let new_name_to_addr = new_syms
-    //     .symbols()
-    //     .par_iter()
-    //     .map(|s| (s.name(), s.address()))
-    //     .collect::<HashMap<_, _>>();
+    let new_base_address = new_name_to_addr
+        .get("main")
+        .cloned()
+        .context("failed to find 'main' symbol in patch")?;
 
-    // for (new_name, new_addr) in new_name_to_addr.iter() {
-    //     if let Some(old_addr) = old_name_to_addr.get(*new_name) {
-    //         map.insert(*old_addr, *new_addr);
-    //     }
-    // }
+    let aslr_reference = old_name_to_addr
+        .get("aslr_reference")
+        .cloned()
+        .context("failed to find '_aslr_reference' symbol in original module")?;
 
-    // let new_base_address = match triple.operating_system {
-    //     // The symbol in the symtab is called "_main" but in the dysymtab it is called "main"
-    //     OperatingSystem::MacOSX(_) | OperatingSystem::Darwin(_) | OperatingSystem::IOS(_) => {
-    //         *new_name_to_addr
-    //             .get("_main")
-    //             .context("failed to find '_main' symbol in patch")?
-    //     }
-
-    //     // No distincation between the two on these platforms
-    //     OperatingSystem::Freebsd
-    //     | OperatingSystem::Openbsd
-    //     | OperatingSystem::Linux
-    //     | OperatingSystem::Windows => *new_name_to_addr
-    //         .get("main")
-    //         .context("failed to find 'main' symbol in patch")?,
-
-    //     // On wasm, it doesn't matter what the address is since the binary is PIC
-    //     _ => 0,
-    // };
-
-    // let aslr_reference = *old_name_to_addr
-    //     .get("_aslr_reference")
-    //     .or_else(|| old_name_to_addr.get("aslr_reference"))
-    //     .context("failed to find '_aslr_reference' symbol in original module")?;
-
-    // Ok(JumpTable {
-    //     lib: patch.to_path_buf(),
-    //     map,
-    //     new_base_address,
-    //     aslr_reference,
-    //     ifunc_count: 0,
-    // })
-
-    todo!()
+    Ok(JumpTable {
+        lib: patch.to_path_buf(),
+        map,
+        new_base_address,
+        aslr_reference,
+        ifunc_count: 0,
+    })
 }
 
 /// Assemble a jump table for "nix" architectures. This uses the `object` crate to parse both
@@ -194,7 +185,7 @@ fn create_windows_jump_table(
 ///
 /// This does not work for WASM since the `object` crate does not support emitting the WASM format,
 /// and because WASM requires more logic to handle the wasm-bindgen transformations.
-fn create_nix_jump_table(
+fn create_native_jump_table(
     original: &Path,
     patch: &Path,
     triple: &Triple,
