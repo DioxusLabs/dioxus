@@ -16,7 +16,6 @@ serde-wasm-bindgen = { version = "*"}
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 web-sys = { version = "*", features = ["FetchEvent", "Request", "Window", "Response", "ResponseType", "console"] }
 
-
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 libloading = "0.8.6"
 libc = "0.2.170"
