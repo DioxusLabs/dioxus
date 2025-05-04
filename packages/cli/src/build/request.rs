@@ -1895,12 +1895,12 @@ session_cache_dir: {}"#,
             || matches!(ctx.mode, BuildMode::Thin { .. } | BuildMode::Fat)
         {
             LinkAction {
-                linker: self.custom_linker.clone(),
-                link_err_file: dunce::canonicalize(self.link_err_file.path().to_path_buf())?,
-                link_args_file: dunce::canonicalize(self.link_args_file.path().to_path_buf())?,
                 triple: self.triple.clone(),
+                linker: self.custom_linker.clone(),
+                link_err_file: dunce::canonicalize(self.link_err_file.path())?,
+                link_args_file: dunce::canonicalize(self.link_args_file.path())?,
             }
-            .write_env_vars(&mut env_vars);
+            .write_env_vars(&mut env_vars)?;
         }
 
         // Disable reference types on wasm when using hotpatching
@@ -3477,7 +3477,7 @@ session_cache_dir: {}"#,
     ///
     /// This might stop working if/when cargo stabilizes contents-based fingerprinting.
     fn bust_fingerprint(&self, ctx: &BuildContext) -> Result<()> {
-        if !matches!(ctx.mode, BuildMode::Thin { .. }) {
+        if !matches!(ctx.mode, BuildMode::Thin { .. } | BuildMode::Fat) {
             std::fs::File::open(&self.crate_target.src_path)?.set_modified(SystemTime::now())?;
         }
         Ok(())

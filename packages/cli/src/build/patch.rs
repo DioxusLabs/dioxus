@@ -15,7 +15,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 use subsecond_types::*;
-use target_lexicon::{OperatingSystem, Triple};
+use target_lexicon::{Architecture, OperatingSystem, Triple};
 use thiserror::Error;
 use walrus::{
     ConstExpr, DataKind, ElementItems, ElementKind, FunctionBuilder, FunctionId, FunctionKind,
@@ -78,21 +78,125 @@ pub fn create_jump_table(
     triple: &Triple,
     cache: &mut Option<HotpatchModuleCache>,
 ) -> Result<JumpTable> {
-    match triple.architecture {
-        target_lexicon::Architecture::Wasm32 => create_wasm_jump_table(original, patch, cache),
-        _ => create_native_jump_table(original, patch, triple, cache),
+    // Symbols are stored differently based on the platform, so we need to handle them differently.
+    // - Wasm requires the walrus crate and actually modifies the patch file
+    // - windows requires the pdb crate and pdb files
+    // - nix requires the object crate
+    match triple.operating_system {
+        OperatingSystem::Wasi | OperatingSystem::None_
+            if triple.architecture == Architecture::Wasm32 =>
+        {
+            create_wasm_jump_table(original, patch, cache)
+        }
+        OperatingSystem::Windows => create_windows_jump_table(original, patch, triple, cache),
+        _ => create_nix_jump_table(original, patch, triple, cache),
     }
 }
 
-/// Assemble a jump table for native architectures. This uses the `object` crate to parse both
-/// executable's symbol tables and then creates a mapping between the two.
+fn create_windows_jump_table(
+    original: &Path,
+    patch: &Path,
+    triple: &Triple,
+    cache: &mut Option<HotpatchModuleCache>,
+) -> std::result::Result<JumpTable, PatchError> {
+    use pdb::FallibleIterator;
+
+    let old_pdb_file = original.with_extension("pdb");
+    let new_pdb_file = patch.with_extension("pdb");
+
+    // let pdb_file  = "/Users/jonathankelley/Desktop/Windows Shared/synced!/dioxus-demo.pdb";
+    let old_pdb_file_handle = std::fs::File::open(old_pdb_file).unwrap();
+    let mut pdbf = pdb::PDB::open(old_pdb_file_handle).unwrap();
+    // for s in pdbf.global_symbols().unwrap().iter().iterator() {
+    //     println!("PDB Symbol: {:?}", s);
+    // }
+
+    let symbol_table = pdbf.global_symbols().unwrap();
+    let address_map = pdbf.address_map().unwrap();
+
+    // let name_to_address = symbol_table
+    //     .iter()
+    //     .filter_map(|f| match f.parse() {
+    //         Ok(pdb::SymbolData::Public(data))) => todo!(),
+    //         Err(_) => todo!(),
+    //     })
+    //     .collect::<HashMap<_, _>>();
+    let mut symbols = symbol_table.iter();
+    while let Some(symbol) = symbols.next().unwrap() {
+        match symbol.parse() {
+            Ok(pdb::SymbolData::Public(data)) if data.function => {
+                // we found the location of a function!
+                let rva = data.offset.to_rva(&address_map).unwrap_or_default();
+                println!("{} is {}", rva, data.name);
+            }
+            _ => {}
+        }
+    }
+
+    // // let old_name_to_addr = &cache.as_mut().unwrap().old_name_to_addr;
+    // let obj2_bytes = std::fs::read(patch)?;
+    // let obj2 = File::parse(&obj2_bytes as &[u8])?;
+    // let mut map = AddressMap::default();
+    // let new_syms = obj2.symbol_map();
+
+    // let new_name_to_addr = new_syms
+    //     .symbols()
+    //     .par_iter()
+    //     .map(|s| (s.name(), s.address()))
+    //     .collect::<HashMap<_, _>>();
+
+    // for (new_name, new_addr) in new_name_to_addr.iter() {
+    //     if let Some(old_addr) = old_name_to_addr.get(*new_name) {
+    //         map.insert(*old_addr, *new_addr);
+    //     }
+    // }
+
+    // let new_base_address = match triple.operating_system {
+    //     // The symbol in the symtab is called "_main" but in the dysymtab it is called "main"
+    //     OperatingSystem::MacOSX(_) | OperatingSystem::Darwin(_) | OperatingSystem::IOS(_) => {
+    //         *new_name_to_addr
+    //             .get("_main")
+    //             .context("failed to find '_main' symbol in patch")?
+    //     }
+
+    //     // No distincation between the two on these platforms
+    //     OperatingSystem::Freebsd
+    //     | OperatingSystem::Openbsd
+    //     | OperatingSystem::Linux
+    //     | OperatingSystem::Windows => *new_name_to_addr
+    //         .get("main")
+    //         .context("failed to find 'main' symbol in patch")?,
+
+    //     // On wasm, it doesn't matter what the address is since the binary is PIC
+    //     _ => 0,
+    // };
+
+    // let aslr_reference = *old_name_to_addr
+    //     .get("_aslr_reference")
+    //     .or_else(|| old_name_to_addr.get("aslr_reference"))
+    //     .context("failed to find '_aslr_reference' symbol in original module")?;
+
+    // Ok(JumpTable {
+    //     lib: patch.to_path_buf(),
+    //     map,
+    //     new_base_address,
+    //     aslr_reference,
+    //     ifunc_count: 0,
+    // })
+
+    todo!()
+}
+
+/// Assemble a jump table for "nix" architectures. This uses the `object` crate to parse both
+/// executable's symbol tables and then creates a mapping between the two. Unlike windows, the symbol
+/// tables are stored within the binary itself, so we can use the `object` crate to parse them.
 ///
 /// We use the `_aslr_reference` as a reference point in the base program to calculate the aslr slide
 /// both at compile time and at runtime.
 ///
 /// This does not work for WASM since the `object` crate does not support emitting the WASM format,
 /// and because WASM requires more logic to handle the wasm-bindgen transformations.
-fn create_native_jump_table(
+fn create_nix_jump_table(
     original: &Path,
     patch: &Path,
     triple: &Triple,
@@ -625,9 +729,9 @@ pub fn create_undefined_symbol_stub(
             _ => todo!(),
         },
         match triple.architecture {
-            target_lexicon::Architecture::Aarch64(_) => object::Architecture::Aarch64,
-            target_lexicon::Architecture::Wasm32 => object::Architecture::Wasm32,
-            target_lexicon::Architecture::X86_64 => object::Architecture::X86_64,
+            Architecture::Aarch64(_) => object::Architecture::Aarch64,
+            Architecture::Wasm32 => object::Architecture::Wasm32,
+            Architecture::X86_64 => object::Architecture::X86_64,
             _ => todo!(),
         },
         match triple.endianness() {
@@ -640,7 +744,7 @@ pub fn create_undefined_symbol_stub(
     // Write the headers so we load properly in ios/macos
     #[allow(clippy::identity_op)]
     match triple.operating_system {
-        target_lexicon::OperatingSystem::Darwin(_) => {
+        OperatingSystem::Darwin(_) => {
             obj.set_macho_build_version({
                 let mut build_version = MachOBuildVersion::default();
                 build_version.platform = macho::PLATFORM_MACOS;
@@ -649,7 +753,7 @@ pub fn create_undefined_symbol_stub(
                 build_version
             });
         }
-        target_lexicon::OperatingSystem::IOS(_) => {
+        OperatingSystem::IOS(_) => {
             obj.set_macho_build_version({
                 let mut build_version = MachOBuildVersion::default();
                 build_version.platform = match triple.environment {
@@ -695,8 +799,8 @@ pub fn create_undefined_symbol_stub(
         }
 
         let name_offset = match triple.operating_system {
-            target_lexicon::OperatingSystem::Darwin(_) => 1,
-            target_lexicon::OperatingSystem::IOS(_) => 1,
+            OperatingSystem::Darwin(_) => 1,
+            OperatingSystem::IOS(_) => 1,
             _ => 0,
         };
 
@@ -704,7 +808,7 @@ pub fn create_undefined_symbol_stub(
 
         if sym.kind() == SymbolKind::Text {
             let jump_code = match triple.architecture {
-                target_lexicon::Architecture::X86_64 => {
+                Architecture::X86_64 => {
                     // Use JMP instruction to absolute address: FF 25 followed by 32-bit offset
                     // Then the 64-bit absolute address
                     let mut code = vec![0xFF, 0x25, 0x00, 0x00, 0x00, 0x00]; // jmp [rip+0]
@@ -712,14 +816,14 @@ pub fn create_undefined_symbol_stub(
                     code.extend_from_slice(&abs_addr.to_le_bytes());
                     code
                 }
-                target_lexicon::Architecture::X86_32(_) => {
+                Architecture::X86_32(_) => {
                     // For 32-bit Intel, use JMP instruction with absolute address
                     let mut code = vec![0xE9]; // jmp rel32
                     let rel_addr = abs_addr as i32 - 5; // Relative address (offset from next instruction)
                     code.extend_from_slice(&rel_addr.to_le_bytes());
                     code
                 }
-                target_lexicon::Architecture::Aarch64(_) => {
+                Architecture::Aarch64(_) => {
                     // For ARM64, we load the address into a register and branch
                     let mut code = Vec::new();
                     // LDR X16, [PC, #0]  ; Load from the next instruction
@@ -730,7 +834,7 @@ pub fn create_undefined_symbol_stub(
                     code.extend_from_slice(&abs_addr.to_le_bytes());
                     code
                 }
-                target_lexicon::Architecture::Arm(_) => {
+                Architecture::Arm(_) => {
                     // For 32-bit ARM, use LDR PC, [PC, #-4] to load the address and branch
                     let mut code = Vec::new();
                     // LDR PC, [PC, #-4] ; Load the address into PC (branching to it)

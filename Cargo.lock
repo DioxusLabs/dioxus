@@ -450,7 +450,7 @@ dependencies = [
  "reqwest 0.11.27",
  "ring",
  "rsa",
- "scroll",
+ "scroll 0.12.0",
  "security-framework 2.11.1",
  "security-framework-sys",
  "semver 1.0.26",
@@ -489,7 +489,7 @@ dependencies = [
  "apple-xar",
  "cpio-archive",
  "flate2",
- "scroll",
+ "scroll 0.12.0",
  "serde",
  "serde-xml-rs",
  "thiserror 1.0.69",
@@ -512,7 +512,7 @@ dependencies = [
  "md-5",
  "rand 0.8.5",
  "reqwest 0.11.27",
- "scroll",
+ "scroll 0.12.0",
  "serde",
  "serde-xml-rs",
  "sha1",
@@ -3681,6 +3681,7 @@ dependencies = [
  "once_cell",
  "open",
  "path-absolutize",
+ "pdb",
  "plist",
  "prettyplease",
  "proc-macro2",
@@ -6341,7 +6342,7 @@ checksum = "1b363a30c165f666402fe6a3024d3bec7ebc898f96a4a23bd1c99f8dbf3f4f47"
 dependencies = [
  "log",
  "plain",
- "scroll",
+ "scroll 0.12.0",
 ]
 
 [[package]]
@@ -9947,6 +9948,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "df94ce210e5bc13cb6651479fa48d14f601d9858cfe0467f43ae157023b938d3"
 
 [[package]]
+name = "pdb"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "82040a392923abe6279c00ab4aff62d5250d1c8555dc780e4b02783a7aa74863"
+dependencies = [
+ "fallible-iterator",
+ "scroll 0.11.0",
+ "uuid",
+]
+
+[[package]]
 name = "pear"
 version = "0.2.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11838,6 +11850,12 @@ name = "scratch"
 version = "1.0.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9f6280af86e5f559536da57a45ebc84948833b3bee313a7dd25232e09c878a52"
+
+[[package]]
+name = "scroll"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "04c565b551bafbef4157586fa379538366e4385d42082f255bfd96e4fe8519da"
 
 [[package]]
 name = "scroll"
