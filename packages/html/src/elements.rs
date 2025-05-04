@@ -1103,7 +1103,10 @@ builder_constructors! {
         usemap: String DEFAULT, // FIXME should be a fragment starting with '#'
         width: usize DEFAULT,
         referrerpolicy: String DEFAULT,
-        // sizes: SpacedList<String>, // FIXME it's not really just a string
+        sizes: String DEFAULT, // FIXME
+        elementtiming: String DEFAULT,
+        fetchpriority: String DEFAULT,
+        attributionsrc: String DEFAULT,
     };
 
     /// Build a
