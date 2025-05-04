@@ -1606,6 +1606,8 @@ session_cache_dir: {}"#,
         // And now we can run the linker with our new args
         let linker = self.select_linker()?;
 
+        tracing::debug!("Fat linking with args: {:?} {:#?}", linker, args);
+
         // Run the linker directly!
         let res = Command::new(linker)
             .args(args.iter().skip(1))
