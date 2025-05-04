@@ -123,6 +123,9 @@ impl LinkAction {
     /// it both for determining if we should act as a linker and the for the file name itself.
     async fn run_link_inner(self) -> Result<()> {
         let mut args: Vec<_> = std::env::args().collect();
+        if args.is_empty() {
+            return Ok(());
+        }
 
         handle_linker_command_file(&mut args);
 
@@ -231,7 +234,7 @@ pub fn handle_linker_command_file(args: &mut Vec<String>) {
         *args = content
             .lines()
             .map(|line| {
-                let line_parsed = line.to_string();
+                let line_parsed = line.trim().to_string();
                 let line_parsed = line_parsed.trim_end_matches('"').to_string();
                 let line_parsed = line_parsed.trim_start_matches('"').to_string();
                 line_parsed

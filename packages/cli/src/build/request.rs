@@ -1546,7 +1546,14 @@ session_cache_dir: {}"#,
                 }
 
                 OperatingSystem::Windows => {
-                    // args[first_rlib] = format!("-Wl,--whole-archive");
+                    args[first_rlib] = format!("-Wl,/WHOLEARCHIVE");
+                    args.insert(first_rlib + 1, out_ar_path.display().to_string());
+                    args.retain(|arg| !arg.ends_with(".rlib"));
+
+                    // add back the compiler rlibs
+                    for rlib in compiler_rlibs.iter().rev() {
+                        args.insert(first_rlib + 2, rlib.display().to_string());
+                    }
                 }
 
                 _ => {}
