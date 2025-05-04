@@ -1559,7 +1559,10 @@ session_cache_dir: {}"#,
                     // }
 
                     args.iter_mut().for_each(|arg| {
-                        if arg.ends_with(".rlib") {
+                        if arg.ends_with(".rlib")
+                            && !arg.contains(".rustup")
+                            && !arg.contains("libwindows")
+                        {
                             *arg = format!("/WHOLEARCHIVE:{}", arg);
                         }
                     });
