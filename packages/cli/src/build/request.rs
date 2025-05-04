@@ -625,10 +625,12 @@ impl BuildRequest {
 
         // Set up some tempfiles so we can do some IPC between us and the linker/rustc wrapper (which is occasionally us!)
         let link_args_file = Arc::new(
-            NamedTempFile::new().context("Failed to create temporary file for linker args")?,
+            NamedTempFile::with_suffix(".txt")
+                .context("Failed to create temporary file for linker args")?,
         );
         let link_err_file = Arc::new(
-            NamedTempFile::new().context("Failed to create temporary file for linker args")?,
+            NamedTempFile::with_suffix(".txt")
+                .context("Failed to create temporary file for linker args")?,
         );
         let rustc_wrapper_args_file = Arc::new(
             NamedTempFile::with_suffix(".json")
@@ -1562,8 +1564,16 @@ session_cache_dir: {}"#,
 
         // We also need to remove the `-o` flag since we want the linker output to end up in the
         // rust exe location, not in the deps dir as it normally would.
-        if let Some(idx) = args.iter().position(|arg| *arg == "-o") {
+        if let Some(idx) = args
+            .iter()
+            .position(|arg| *arg == "-o" || *arg == "--output")
+        {
             args.remove(idx + 1);
+            args.remove(idx);
+        }
+
+        // same but windows support
+        if let Some(idx) = args.iter().position(|arg| arg.starts_with("/OUT")) {
             args.remove(idx);
         }
 
@@ -1580,7 +1590,11 @@ session_cache_dir: {}"#,
         // Run the linker directly!
         let res = Command::new(linker)
             .args(args.iter().skip(1))
-            .arg("-o")
+            .args(if self.platform == Platform::Windows {
+                vec![format!("/OUT:{}", exe.display())]
+            } else {
+                vec!["-o".to_string(), exe.display().to_string()]
+            })
             .arg(exe)
             .output()
             .await?;
