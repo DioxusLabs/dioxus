@@ -3477,7 +3477,8 @@ session_cache_dir: {}"#,
     ///
     /// This might stop working if/when cargo stabilizes contents-based fingerprinting.
     fn bust_fingerprint(&self, ctx: &BuildContext) -> Result<()> {
-        if !matches!(ctx.mode, BuildMode::Thin { .. } | BuildMode::Fat) {
+        // if matches!(ctx.mode, BuildMode::Fat | BuildMode::Base) {
+        if !matches!(ctx.mode, BuildMode::Thin { .. }) {
             std::fs::File::open(&self.crate_target.src_path)?.set_modified(SystemTime::now())?;
         }
         Ok(())

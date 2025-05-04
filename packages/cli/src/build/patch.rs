@@ -15,7 +15,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 use subsecond_types::*;
-use target_lexicon::{Architecture, OperatingSystem, Triple};
+use target_lexicon::{OperatingSystem, Triple};
 use thiserror::Error;
 use walrus::{
     ConstExpr, DataKind, ElementItems, ElementKind, FunctionBuilder, FunctionId, FunctionKind,
@@ -83,12 +83,10 @@ pub fn create_jump_table(
     // - windows requires the pdb crate and pdb files
     // - nix requires the object crate
     match triple.operating_system {
-        OperatingSystem::Wasi | OperatingSystem::None_
-            if triple.architecture == Architecture::Wasm32 =>
-        {
+        OperatingSystem::Windows => create_windows_jump_table(original, patch, triple, cache),
+        _ if triple.architecture == target_lexicon::Architecture::Wasm32 => {
             create_wasm_jump_table(original, patch, cache)
         }
-        OperatingSystem::Windows => create_windows_jump_table(original, patch, triple, cache),
         _ => create_nix_jump_table(original, patch, triple, cache),
     }
 }
@@ -729,9 +727,9 @@ pub fn create_undefined_symbol_stub(
             _ => todo!(),
         },
         match triple.architecture {
-            Architecture::Aarch64(_) => object::Architecture::Aarch64,
-            Architecture::Wasm32 => object::Architecture::Wasm32,
-            Architecture::X86_64 => object::Architecture::X86_64,
+            target_lexicon::Architecture::Aarch64(_) => object::Architecture::Aarch64,
+            target_lexicon::Architecture::Wasm32 => object::Architecture::Wasm32,
+            target_lexicon::Architecture::X86_64 => object::Architecture::X86_64,
             _ => todo!(),
         },
         match triple.endianness() {
@@ -744,7 +742,7 @@ pub fn create_undefined_symbol_stub(
     // Write the headers so we load properly in ios/macos
     #[allow(clippy::identity_op)]
     match triple.operating_system {
-        OperatingSystem::Darwin(_) => {
+        target_lexicon::OperatingSystem::Darwin(_) => {
             obj.set_macho_build_version({
                 let mut build_version = MachOBuildVersion::default();
                 build_version.platform = macho::PLATFORM_MACOS;
@@ -753,7 +751,7 @@ pub fn create_undefined_symbol_stub(
                 build_version
             });
         }
-        OperatingSystem::IOS(_) => {
+        target_lexicon::OperatingSystem::IOS(_) => {
             obj.set_macho_build_version({
                 let mut build_version = MachOBuildVersion::default();
                 build_version.platform = match triple.environment {
@@ -799,8 +797,8 @@ pub fn create_undefined_symbol_stub(
         }
 
         let name_offset = match triple.operating_system {
-            OperatingSystem::Darwin(_) => 1,
-            OperatingSystem::IOS(_) => 1,
+            target_lexicon::OperatingSystem::Darwin(_) => 1,
+            target_lexicon::OperatingSystem::IOS(_) => 1,
             _ => 0,
         };
 
@@ -808,7 +806,7 @@ pub fn create_undefined_symbol_stub(
 
         if sym.kind() == SymbolKind::Text {
             let jump_code = match triple.architecture {
-                Architecture::X86_64 => {
+                target_lexicon::Architecture::X86_64 => {
                     // Use JMP instruction to absolute address: FF 25 followed by 32-bit offset
                     // Then the 64-bit absolute address
                     let mut code = vec![0xFF, 0x25, 0x00, 0x00, 0x00, 0x00]; // jmp [rip+0]
@@ -816,14 +814,14 @@ pub fn create_undefined_symbol_stub(
                     code.extend_from_slice(&abs_addr.to_le_bytes());
                     code
                 }
-                Architecture::X86_32(_) => {
+                target_lexicon::Architecture::X86_32(_) => {
                     // For 32-bit Intel, use JMP instruction with absolute address
                     let mut code = vec![0xE9]; // jmp rel32
                     let rel_addr = abs_addr as i32 - 5; // Relative address (offset from next instruction)
                     code.extend_from_slice(&rel_addr.to_le_bytes());
                     code
                 }
-                Architecture::Aarch64(_) => {
+                target_lexicon::Architecture::Aarch64(_) => {
                     // For ARM64, we load the address into a register and branch
                     let mut code = Vec::new();
                     // LDR X16, [PC, #0]  ; Load from the next instruction
@@ -834,7 +832,7 @@ pub fn create_undefined_symbol_stub(
                     code.extend_from_slice(&abs_addr.to_le_bytes());
                     code
                 }
-                Architecture::Arm(_) => {
+                target_lexicon::Architecture::Arm(_) => {
                     // For 32-bit ARM, use LDR PC, [PC, #-4] to load the address and branch
                     let mut code = Vec::new();
                     // LDR PC, [PC, #-4] ; Load the address into PC (branching to it)

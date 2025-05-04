@@ -72,6 +72,7 @@ members = [
     "packages/asset-resolver",
     "packages/depinfo",
     "packages/server",
+    "packages/linker-args",
 
     # Playwright tests
     "packages/playwright-tests/liveview",
@@ -120,8 +121,8 @@ members = [
     "packages/playwright-tests/nested-suspense",
     "packages/playwright-tests/cli-optimization",
     "packages/playwright-tests/wasm-split-harness",
-    "packages/playwright-tests/default-features-disabled"
-, "packages/linker-args"]
+    "packages/playwright-tests/default-features-disabled",
+]
 
 [workspace.package]
 version = "0.6.3"
