@@ -1548,15 +1548,22 @@ session_cache_dir: {}"#,
                 }
 
                 OperatingSystem::Windows => {
-                    args[first_rlib] = "-Wl,--whole-archive".to_string();
-                    args.insert(first_rlib + 1, out_ar_path.display().to_string());
-                    args.insert(first_rlib + 2, "-Wl,--no-whole-archive".to_string());
-                    args.retain(|arg| !arg.ends_with(".rlib"));
+                    // args[first_rlib] = "-Wl,--whole-archive".to_string();
+                    // args.insert(first_rlib + 1, out_ar_path.display().to_string());
+                    // args.insert(first_rlib + 2, "-Wl,--no-whole-archive".to_string());
+                    // args.retain(|arg| !arg.ends_with(".rlib"));
 
-                    // add back the compiler rlibs
-                    for rlib in compiler_rlibs.iter().rev() {
-                        args.insert(first_rlib + 3, rlib.display().to_string());
-                    }
+                    // // add back the compiler rlibs
+                    // for rlib in compiler_rlibs.iter().rev() {
+                    //     args.insert(first_rlib + 3, rlib.display().to_string());
+                    // }
+
+                    args.iter_mut().for_each(|arg| {
+                        if arg.ends_with(".rlib") {
+                            *arg = format!("/WHOLEARCHIVE:{}", arg);
+                        }
+                    });
+
                     // args[first_rlib] = format!("-Wl,/WHOLEARCHIVE");
                     // args.insert(first_rlib + 1, out_ar_path.display().to_string());
                     // args.retain(|arg| !arg.ends_with(".rlib"));
@@ -1599,13 +1606,13 @@ session_cache_dir: {}"#,
         // Run the linker directly!
         let res = Command::new(linker)
             .args(args.iter().skip(1))
-            // .args(if self.platform == Platform::Windows {
-            //     vec![format!("/OUT:{}", exe.display())]
-            // } else {
-            //     vec!["-o".to_string(), exe.display().to_string()]
-            // })
-            .arg("-o")
-            .arg(exe)
+            .args(if self.platform == Platform::Windows {
+                vec![format!("/OUT:{}", exe.display())]
+            } else {
+                vec!["-o".to_string(), exe.display().to_string()]
+            })
+            // .arg("-o")
+            // .arg(exe)
             .output()
             .await?;
 
