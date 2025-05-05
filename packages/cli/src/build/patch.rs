@@ -850,8 +850,8 @@ pub fn create_undefined_symbol_stub(
     // for each symbol we either write the address directly (as a symbol) or create a PLT/GOT entry
     let text_section = obj.section_id(StandardSection::Text);
     for name in undefined_symbols {
-        if name.starts_with("__imp__") {
-            let Some(sym) = symbol_table.get(name.as_str().trim_start_matches("__imp__")) else {
+        if name.starts_with("__imp_") {
+            let Some(sym) = symbol_table.get(name.as_str().trim_start_matches("__imp_")) else {
                 tracing::error!("Symbol not found: {}", name);
                 continue;
             };
