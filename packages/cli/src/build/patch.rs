@@ -113,14 +113,18 @@ impl HotpatchModuleCache {
                 let mut symbols = symbol_table.iter();
                 while let Ok(Some(symbol)) = symbols.next() {
                     match symbol.parse() {
-                        Ok(pdb::SymbolData::Public(data)) if data.function => {
+                        Ok(pdb::SymbolData::Public(data)) => {
                             let rva = data.offset.to_rva(&address_map).unwrap_or_default();
                             name_to_address.insert(
                                 data.name.to_string().to_string(),
                                 CachedSymbol {
                                     address: rva.0 as u64,
-                                    kind: SymbolKind::Text,
-                                    is_text: true,
+                                    kind: if data.function {
+                                        SymbolKind::Text
+                                    } else {
+                                        SymbolKind::Data
+                                    },
+                                    is_text: data.function,
                                     is_undefined: false,
                                     is_weak: false,
                                 },
