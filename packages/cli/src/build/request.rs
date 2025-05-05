@@ -1379,7 +1379,7 @@ session_cache_dir: {}"#,
                     "/PDBALTPATH:%_PDB%".to_string(),
                     "/EXPORT:main".to_string(),
                     "/HIGHENTROPYVA:NO".to_string(),
-                    "/SUBSYSTEM:WINDOWS".to_string(),
+                    // "/SUBSYSTEM:WINDOWS".to_string(),
                 ]);
             }
 

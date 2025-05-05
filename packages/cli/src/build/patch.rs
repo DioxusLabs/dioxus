@@ -134,7 +134,7 @@ impl HotpatchModuleCache {
                             );
                         }
 
-                        Ok(pdb::SymbolData::Data(data)) if data.global => {
+                        Ok(pdb::SymbolData::Data(data)) => {
                             let rva = data.offset.to_rva(&address_map);
                             let is_undefined = rva.is_none();
                             let rva = rva.unwrap_or_default();
@@ -759,6 +759,7 @@ pub fn create_undefined_symbol_stub(
     // Find all the undefined symbols in the incrementals
     let mut undefined_symbols = HashSet::new();
     let mut defined_symbols = HashSet::new();
+
     for path in sorted {
         let bytes = std::fs::read(path).with_context(|| format!("failed to read {:?}", path))?;
         let file = File::parse(bytes.deref() as &[u8])?;
@@ -863,6 +864,32 @@ pub fn create_undefined_symbol_stub(
         };
 
         let abs_addr = sym.address + aslr_offset;
+
+        if name.starts_with("__imp_") {
+            // This is an import table entry
+            let data_section = obj.section_id(StandardSection::Data);
+
+            // Add a pointer to the resolved address
+            let offset = obj.append_section_data(
+                data_section,
+                &abs_addr.to_le_bytes(),
+                8, // Use proper alignment
+            );
+
+            // Add the symbol as a data symbol in our data section
+            obj.add_symbol(Symbol {
+                name: name.as_bytes()[name_offset..].to_vec(),
+                value: offset, // Offset within the data section
+                size: 8,       // Size of pointer
+                scope: SymbolScope::Linkage,
+                kind: SymbolKind::Data, // Always Data for IAT entries
+                weak: false,
+                section: SymbolSection::Section(data_section),
+                flags: object::SymbolFlags::None,
+            });
+
+            continue;
+        }
 
         if sym.kind == SymbolKind::Text {
             let jump_code = match triple.operating_system {
