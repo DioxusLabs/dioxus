@@ -114,7 +114,10 @@ impl HotpatchModuleCache {
                 while let Ok(Some(symbol)) = symbols.next() {
                     match symbol.parse() {
                         Ok(pdb::SymbolData::Public(data)) => {
-                            let rva = data.offset.to_rva(&address_map).unwrap_or_default();
+                            let rva = data.offset.to_rva(&address_map);
+                            let is_undefined = rva.is_none();
+                            let rva = rva.unwrap_or_default();
+
                             name_to_address.insert(
                                 data.name.to_string().to_string(),
                                 CachedSymbol {
@@ -125,14 +128,16 @@ impl HotpatchModuleCache {
                                         SymbolKind::Data
                                     },
                                     is_text: data.function,
-                                    is_undefined: false,
+                                    is_undefined: is_undefined,
                                     is_weak: false,
                                 },
                             );
                         }
 
                         Ok(pdb::SymbolData::Data(data)) if data.global => {
-                            let rva = data.offset.to_rva(&address_map).unwrap_or_default();
+                            let rva = data.offset.to_rva(&address_map);
+                            let is_undefined = rva.is_none();
+                            let rva = rva.unwrap_or_default();
                             name_to_address.insert(
                                 data.name.to_string().to_string(),
                                 CachedSymbol {
@@ -269,9 +274,11 @@ fn create_windows_jump_table(
     let mut symbols = symbol_table.iter();
     while let Ok(Some(symbol)) = symbols.next() {
         match symbol.parse() {
-            Ok(pdb::SymbolData::Public(data)) if data.function => {
-                let rva = data.offset.to_rva(&address_map).unwrap_or_default();
-                new_name_to_addr.insert(data.name.to_string(), rva.0 as u64);
+            Ok(pdb::SymbolData::Public(data)) => {
+                let rva = data.offset.to_rva(&address_map);
+                if let Some(rva) = rva {
+                    new_name_to_addr.insert(data.name.to_string(), rva.0 as u64);
+                }
             }
             _ => {}
         }
@@ -919,7 +926,7 @@ pub fn create_undefined_symbol_stub(
                     size: 0,
                     scope: SymbolScope::Linkage,
                     kind: SymbolKind::Data,
-                    weak: false,
+                    weak: sym.is_weak,
                     section: SymbolSection::Absolute,
                     flags: object::SymbolFlags::None,
                 });

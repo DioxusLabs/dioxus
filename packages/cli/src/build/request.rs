@@ -1364,7 +1364,24 @@ session_cache_dir: {}"#,
                 }
             }
 
-            OperatingSystem::Windows => {}
+            OperatingSystem::Windows => {
+                out_args.extend([
+                    "shlwapi.lib".to_string(),
+                    "kernel32.lib".to_string(),
+                    "advapi32.lib".to_string(),
+                    "ntdll.lib".to_string(),
+                    "userenv.lib".to_string(),
+                    "ws2_32.lib".to_string(),
+                    "dbghelp.lib".to_string(),
+                    "/defaultlib:msvcrt".to_string(),
+                    "/DLL".to_string(),
+                    "/NOENTRY".to_string(),
+                    "/DEBUG".to_string(),
+                    "/PDBALTPATH:%_PDB%".to_string(),
+                    "/EXPORT:main".to_string(),
+                    "/HIGHENTROPYVA:NO".to_string(),
+                ]);
+            }
 
             _ => return Err(anyhow::anyhow!("Unsupported platform for thin linking").into()),
         }
@@ -1595,6 +1612,8 @@ session_cache_dir: {}"#,
                     for rlib in compiler_rlibs.iter().rev() {
                         args.insert(first_rlib + 1, rlib.display().to_string());
                     }
+
+                    args.insert(first_rlib, "/HIGHENTROPYVA:NO".to_string());
                 }
 
                 _ => {}
