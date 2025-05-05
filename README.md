@@ -244,7 +244,7 @@ Tauri is a framework for building desktop mobile apps where your frontend is wri
 
 Leptos is a library for building fullstack web-apps, similar to SolidJS and SolidStart. The two libraries share similar goals on the web, but have several key differences:
 
-- **Reactivity model**: Leptos uses signals to drive both reactivity and rendering, while Dioxus uses signals just for reactivity. For managing re-renders, Dioxus uses a highly optimized VirtualDOM to support desktop and mobile architectures. Both Dioxus and Leptos are extremely fast.
+- **Reactivity model**: Leptos uses signals to drive both reactivity and rendering, while Dioxus uses signals just for reactivity. For managing re-renders, Dioxus uses a highly optimized VirtualDOM to support desktop and mobile architectures. Both Dioxus and Leptos are extremely fast. Under the hood, Dioxus leverages [sledgehammer](https://docs.rs/sledgehammer), a low-level runtime that brings performance very close to Vanilla JS.
 
 - **Different scopes**: Dioxus provides renderers for web, desktop, mobile, LiveView, and more. We also maintain community libraries and a cross-platform SDK. Leptos has a tighter focus on the fullstack web with features that Dioxus doesn't have like islands, `<Form />` components, and other web-specific utilities.
 
@@ -271,13 +271,13 @@ view! {
 
 ### Dioxus vs Yew
 
-Yew is a framework for building single-page web apps and initially served as an inspiration for Dioxus. Unfortunately, the architecture of Yew didn't support the various features we wanted, and thus Dioxus was born.
+Yew is a framework for building reactive web apps and initially served as an inspiration for Dioxus. While Yew was originally focused on single-page applications (SPAs), it has since grown and can also be used to build full-stack web applications using crates like [`wasm-bindgen`](https://crates.io/crates/wasm-bindgen), [`gloo`](https://crates.io/crates/gloo), and server-side frameworks like [`rocket`](https://crates.io/crates/rocket) and [`axum`](https://crates.io/crates/axum).
 
-- **Single-page apps**: Yew is designed exclusively for single-page web apps and is intrinsically tied to the web platform. Dioxus is fullstack and cross-platform, making it suitable for building web, desktop, mobile, and server apps.
+- **Full-stack capabilities**: Yew was initially designed for SPAs and remains deeply integrated with the web platform. However, it can now be extended to full-stack development. Dioxus, in contrast, was built from the ground up for fullstack and cross-platform development, enabling seamless app creation across web, desktop, mobile, and server applications.
 
-- **Developer Tooling**: Dioxus provides a number of utilities like autoformatting, hot-reloading, and a bundler.
+- **Developer Tooling**: Dioxus offers a richer set of built-in developer tools, such as autoformatting, hot-reloading, and an integrated bundler, helping streamline the development experience.
 
-- **Ongoing support**: Dioxus is very actively maintained with new features and bug fixes being added on a daily basis.
+- **Ongoing support**: Dioxus is very actively maintained, with new features and bug fixes being released frequently.
 
 ### Dioxus vs egui
 
