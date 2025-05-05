@@ -138,15 +138,16 @@ module.exports = defineConfig({
       reuseExistingServer: !process.env.CI,
       stdout: "pipe",
     },
-    {
-      cwd: path.join(process.cwd(), "nested-suspense"),
-      command:
-        'cargo run --package dioxus-cli --release -- serve --bin nested-suspense-ssg --force-sequential --platform web --ssg --addr "127.0.0.1" --port 6060',
-      port: 6060,
-      timeout: 50 * 60 * 1000,
-      reuseExistingServer: !process.env.CI,
-      stdout: "pipe",
-    },
+    // currently disabled - we want ssg to be a "bundle" feature, not a serve feature.
+    // {
+    //   cwd: path.join(process.cwd(), "nested-suspense"),
+    //   command:
+    //     'cargo run --package dioxus-cli --release -- serve --bin nested-suspense-ssg --force-sequential --platform web --ssg --addr "127.0.0.1" --port 6060',
+    //   port: 6060,
+    //   timeout: 50 * 60 * 1000,
+    //   reuseExistingServer: !process.env.CI,
+    //   stdout: "pipe",
+    // },
     {
       cwd: path.join(process.cwd(), "cli-optimization"),
       // Remove the cache folder for the cli-optimization build to force a full cache reset
