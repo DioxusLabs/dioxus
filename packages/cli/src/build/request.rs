@@ -699,9 +699,13 @@ session_cache_dir: {}"#,
         let mut artifacts = self.cargo_build(ctx).await?;
 
         // Write the build artifacts to the bundle on the disk
-        match ctx.mode {
-            BuildMode::Thin { aslr_reference, .. } => {
-                self.write_patch(ctx, aslr_reference, &mut artifacts)
+        match &ctx.mode {
+            BuildMode::Thin {
+                aslr_reference,
+                cache,
+                ..
+            } => {
+                self.write_patch(ctx, *aslr_reference, &mut artifacts, &cache)
                     .await?;
             }
 
@@ -1105,6 +1109,7 @@ session_cache_dir: {}"#,
         ctx: &BuildContext,
         aslr_reference: u64,
         artifacts: &mut BuildArtifacts,
+        cache: &Arc<HotpatchModuleCache>,
     ) -> Result<()> {
         ctx.status_hotpatching();
 
@@ -1190,7 +1195,7 @@ session_cache_dir: {}"#,
         // making this hotpatch a failure.
         if self.platform != Platform::Web {
             let stub_bytes = crate::build::create_undefined_symbol_stub(
-                &self.main_exe(),
+                cache,
                 &object_files,
                 &self.triple,
                 aslr_reference,

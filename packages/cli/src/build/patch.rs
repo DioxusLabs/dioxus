@@ -68,7 +68,15 @@ pub struct HotpatchModuleCache {
     pub old_imports: HashSet<String>,
 
     // ... native stuff
-    pub old_name_to_addr: HashMap<String, u64>,
+    pub old_name_to_addr: HashMap<String, CachedSymbol>,
+}
+
+pub struct CachedSymbol {
+    pub address: u64,
+    pub kind: SymbolKind,
+    pub is_text: bool,
+    pub is_undefined: bool,
+    pub is_weak: bool,
 }
 
 impl PartialEq for HotpatchModuleCache {
@@ -107,7 +115,16 @@ impl HotpatchModuleCache {
                     match symbol.parse() {
                         Ok(pdb::SymbolData::Public(data)) if data.function => {
                             let rva = data.offset.to_rva(&address_map).unwrap_or_default();
-                            name_to_address.insert(data.name.to_string().to_string(), rva.0 as u64);
+                            name_to_address.insert(
+                                data.name.to_string().to_string(),
+                                CachedSymbol {
+                                    address: rva.0 as u64,
+                                    kind: SymbolKind::Text,
+                                    is_text: true,
+                                    is_undefined: false,
+                                    is_weak: false,
+                                },
+                            );
                         }
                         _ => {}
                     }
@@ -167,11 +184,20 @@ impl HotpatchModuleCache {
             _ => {
                 let obj1_bytes = std::fs::read(original)?;
                 let obj1 = File::parse(&obj1_bytes as &[u8])?;
-                let old_syms = obj1.symbol_map();
-                let old_name_to_addr = old_syms
+                let old_name_to_addr = obj1
                     .symbols()
-                    .par_iter()
-                    .map(|s| (s.name().to_string(), s.address()))
+                    .filter_map(|s| {
+                        Some((
+                            s.name().ok()?.to_string(),
+                            CachedSymbol {
+                                address: s.address(),
+                                is_text: matches!(s.kind(), SymbolKind::Text),
+                                is_undefined: s.is_undefined(),
+                                is_weak: s.is_weak(),
+                                kind: s.kind(),
+                            },
+                        ))
+                    })
                     .collect::<HashMap<_, _>>();
                 HotpatchModuleCache {
                     old_name_to_addr,
@@ -235,7 +261,7 @@ fn create_windows_jump_table(
     let mut map = AddressMap::default();
     for (new_name, new_addr) in new_name_to_addr.iter() {
         if let Some(old_addr) = old_name_to_addr.get(new_name.as_ref()) {
-            map.insert(*old_addr, *new_addr);
+            map.insert(old_addr.address, *new_addr);
         }
     }
 
@@ -246,7 +272,7 @@ fn create_windows_jump_table(
 
     let aslr_reference = old_name_to_addr
         .get("aslr_reference")
-        .cloned()
+        .map(|s| s.address)
         .context("failed to find '_aslr_reference' symbol in original module")?;
 
     Ok(JumpTable {
@@ -286,7 +312,7 @@ fn create_native_jump_table(
 
     for (new_name, new_addr) in new_name_to_addr.iter() {
         if let Some(old_addr) = old_name_to_addr.get(*new_name) {
-            map.insert(*old_addr, *new_addr);
+            map.insert(old_addr.address, *new_addr);
         }
     }
 
@@ -310,9 +336,10 @@ fn create_native_jump_table(
         _ => 0,
     };
 
-    let aslr_reference = *old_name_to_addr
+    let aslr_reference = old_name_to_addr
         .get("_aslr_reference")
         .or_else(|| old_name_to_addr.get("aslr_reference"))
+        .map(|s| s.address)
         .context("failed to find '_aslr_reference' symbol in original module")?;
 
     Ok(JumpTable {
@@ -696,7 +723,7 @@ fn collect_func_ifuncs(m: &Module) -> HashMap<&str, i32> {
 ///
 /// todo... we need to wire up the cache
 pub fn create_undefined_symbol_stub(
-    source_path: &Path,
+    cache: &HotpatchModuleCache,
     incrementals: &[PathBuf],
     triple: &Triple,
     aslr_reference: u64,
@@ -774,19 +801,20 @@ pub fn create_undefined_symbol_stub(
     }
 
     // Load the original binary
-    let bytes = std::fs::read(source_path)?;
-    let source = File::parse(bytes.deref() as &[u8]).context("Failed to parse")?;
-    let symbol_table = source
-        .symbols()
-        .flat_map(|s| Some((s.name().ok()?, s)))
-        .collect::<HashMap<_, _>>();
+    // let bytes = std::fs::read(source_path)?;
+    // let source = File::parse(bytes.deref() as &[u8]).context("Failed to parse")?;
+    // let symbol_table = source
+    //     .symbols()
+    //     .flat_map(|s| Some((s.name().ok()?, s)))
+    //     .collect::<HashMap<_, _>>();
+    let symbol_table = &cache.old_name_to_addr;
 
     // Get the offset from the main module and adjust the addresses by the slide
     let aslr_ref_address = symbol_table
         .get("_aslr_reference")
         .or_else(|| symbol_table.get("aslr_reference"))
-        .context("Failed to find _aslr_reference symbol")?
-        .address();
+        .map(|s| s.address)
+        .context("Failed to find _aslr_reference symbol")?;
     let aslr_offset = aslr_reference - aslr_ref_address;
 
     // we need to assemble a PLT/GOT so direct calls to the patch symbols work
@@ -798,7 +826,7 @@ pub fn create_undefined_symbol_stub(
             continue;
         };
 
-        if sym.is_undefined() {
+        if sym.is_undefined {
             continue;
         }
 
@@ -808,9 +836,9 @@ pub fn create_undefined_symbol_stub(
             _ => 0,
         };
 
-        let abs_addr = sym.address() + aslr_offset;
+        let abs_addr = sym.address + aslr_offset;
 
-        if sym.kind() == SymbolKind::Text {
+        if sym.kind == SymbolKind::Text {
             let jump_code = match triple.architecture {
                 target_lexicon::Architecture::X86_64 => {
                     // Use JMP instruction to absolute address: FF 25 followed by 32-bit offset
@@ -865,7 +893,7 @@ pub fn create_undefined_symbol_stub(
             });
         } else {
             // It's likely a static
-            if sym.kind() == SymbolKind::Unknown {
+            if sym.kind == SymbolKind::Unknown {
                 obj.add_symbol(Symbol {
                     name: name.as_bytes()[name_offset..].to_vec(),
                     value: abs_addr,
@@ -882,8 +910,8 @@ pub fn create_undefined_symbol_stub(
                     value: abs_addr,
                     size: 0,
                     scope: SymbolScope::Linkage,
-                    kind: sym.kind(),
-                    weak: sym.is_weak(),
+                    kind: sym.kind,
+                    weak: sym.is_weak,
                     section: SymbolSection::Absolute,
                     flags: object::SymbolFlags::None,
                 });
