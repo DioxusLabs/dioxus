@@ -1497,7 +1497,7 @@ session_cache_dir: {}"#,
 
                     if !name.ends_with(".o") {
                         tracing::warn!("Unknown object file in rlib: {:?}", name);
-                        continue;
+                        // continue;
                     }
 
                     out_ar
