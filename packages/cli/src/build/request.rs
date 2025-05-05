@@ -705,7 +705,7 @@ session_cache_dir: {}"#,
                 cache,
                 ..
             } => {
-                self.write_patch(ctx, *aslr_reference, &mut artifacts, &cache)
+                self.write_patch(ctx, *aslr_reference, &mut artifacts, cache)
                     .await?;
             }
 
@@ -730,7 +730,9 @@ session_cache_dir: {}"#,
 
         // Populate the patch cache if we're in fat mode
         if matches!(ctx.mode, BuildMode::Fat) {
-            artifacts.patch_cache = Some(Arc::new(self.create_patch_cache(ctx).await?));
+            artifacts.patch_cache = Some(Arc::new(
+                self.create_patch_cache(ctx, &artifacts.exe).await?,
+            ));
         }
 
         Ok(artifacts)
@@ -1579,35 +1581,6 @@ session_cache_dir: {}"#,
                 }
 
                 OperatingSystem::Windows => {
-                    // args[first_rlib] = "-Wl,--whole-archive".to_string();
-                    // args.insert(first_rlib + 1, out_ar_path.display().to_string());
-                    // args.insert(first_rlib + 2, "-Wl,--no-whole-archive".to_string());
-                    // args.retain(|arg| !arg.ends_with(".rlib"));
-
-                    // // add back the compiler rlibs
-                    // for rlib in compiler_rlibs.iter().rev() {
-                    //     args.insert(first_rlib + 3, rlib.display().to_string());
-                    // }
-
-                    // args.iter_mut().for_each(|arg| {
-                    //     if arg.ends_with(".rlib")
-                    //         && !arg.contains(".rustup")
-                    //         && !arg.contains("libwindows")
-                    //     {
-                    //         *arg = format!("/WHOLEARCHIVE:{}", arg);
-                    //     }
-                    // });
-
-                    // args[first_rlib] = format!("-Wl,/WHOLEARCHIVE");
-                    // args.insert(first_rlib + 1, out_ar_path.display().to_string());
-                    // args.retain(|arg| !arg.ends_with(".rlib"));
-
-                    // // add back the compiler rlibs
-                    // for rlib in compiler_rlibs.iter().rev() {
-                    //     args.insert(first_rlib + 2, rlib.display().to_string());
-                    // }
-
-                    // args[first_rlib] = format!("-Wl,/WHOLEARCHIVE");
                     args[first_rlib] = format!("/WHOLEARCHIVE:{}", out_ar_path.display());
                     args.retain(|arg| !arg.ends_with(".rlib"));
 
@@ -1649,15 +1622,14 @@ session_cache_dir: {}"#,
         tracing::debug!("Fat linking with args: {:?} {:#?}", linker, args);
 
         // Run the linker directly!
+        let out_arg = match self.platform {
+            Platform::Windows => vec![format!("/OUT:{}", exe.display())],
+            _ => vec!["-o".to_string(), exe.display().to_string()],
+        };
+
         let res = Command::new(linker)
             .args(args.iter().skip(1))
-            .args(if self.platform == Platform::Windows {
-                vec![format!("/OUT:{}", exe.display())]
-            } else {
-                vec!["-o".to_string(), exe.display().to_string()]
-            })
-            // .arg("-o")
-            // .arg(exe)
+            .args(out_arg)
             .output()
             .await?;
 
@@ -3567,10 +3539,14 @@ session_cache_dir: {}"#,
         Ok(())
     }
 
-    async fn create_patch_cache(&self, ctx: &BuildContext) -> Result<HotpatchModuleCache> {
+    async fn create_patch_cache(
+        &self,
+        ctx: &BuildContext,
+        exe: &Path,
+    ) -> Result<HotpatchModuleCache> {
         let exe = match self.platform {
             Platform::Web => self.wasm_bindgen_wasm_output_file(),
-            _ => self.main_exe(),
+            _ => exe.to_path_buf(),
         };
 
         Ok(HotpatchModuleCache::new(&exe, &self.triple)?)
