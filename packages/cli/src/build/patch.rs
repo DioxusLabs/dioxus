@@ -122,14 +122,13 @@ impl HotpatchModuleCache {
                                 data.name.to_string().to_string(),
                                 CachedSymbol {
                                     address: rva.0 as u64,
-                                    // kind: SymbolKind::Text,
                                     kind: if data.function {
                                         SymbolKind::Text
                                     } else {
                                         SymbolKind::Data
                                     },
                                     is_text: data.function,
-                                    is_undefined: is_undefined,
+                                    is_undefined,
                                     is_weak: false,
                                 },
                             );
@@ -145,7 +144,7 @@ impl HotpatchModuleCache {
                                     address: rva.0 as u64,
                                     kind: SymbolKind::Data,
                                     is_text: false,
-                                    is_undefined: is_undefined,
+                                    is_undefined,
                                     is_weak: false,
                                 },
                             );
