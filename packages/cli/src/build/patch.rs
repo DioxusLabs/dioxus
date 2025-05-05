@@ -844,6 +844,9 @@ pub fn create_undefined_symbol_stub(
         .context("Failed to find _aslr_reference symbol")?;
     let aslr_offset = aslr_reference - aslr_ref_address;
 
+    // Windows has a different calling convention.
+    let is_windows = matches!(triple.operating_system, OperatingSystem::Windows);
+
     // we need to assemble a PLT/GOT so direct calls to the patch symbols work
     // for each symbol we either write the address directly (as a symbol) or create a PLT/GOT entry
     let text_section = obj.section_id(StandardSection::Text);
@@ -866,44 +869,104 @@ pub fn create_undefined_symbol_stub(
         let abs_addr = sym.address + aslr_offset;
 
         if sym.kind == SymbolKind::Text {
-            let jump_code = match triple.architecture {
-                target_lexicon::Architecture::X86_64 => {
-                    // Use JMP instruction to absolute address: FF 25 followed by 32-bit offset
-                    // Then the 64-bit absolute address
-                    let mut code = vec![0xFF, 0x25, 0x00, 0x00, 0x00, 0x00]; // jmp [rip+0]
-                                                                             // Append the 64-bit address
-                    code.extend_from_slice(&abs_addr.to_le_bytes());
-                    code
-                }
-                target_lexicon::Architecture::X86_32(_) => {
-                    // For 32-bit Intel, use JMP instruction with absolute address
-                    let mut code = vec![0xE9]; // jmp rel32
-                    let rel_addr = abs_addr as i32 - 5; // Relative address (offset from next instruction)
-                    code.extend_from_slice(&rel_addr.to_le_bytes());
-                    code
-                }
-                target_lexicon::Architecture::Aarch64(_) => {
-                    // For ARM64, we load the address into a register and branch
-                    let mut code = Vec::new();
-                    // LDR X16, [PC, #0]  ; Load from the next instruction
-                    code.extend_from_slice(&[0x50, 0x00, 0x00, 0x58]);
-                    // BR X16            ; Branch to the address in X16
-                    code.extend_from_slice(&[0x00, 0x02, 0x1F, 0xD6]);
-                    // Store the 64-bit address
-                    code.extend_from_slice(&abs_addr.to_le_bytes());
-                    code
-                }
-                target_lexicon::Architecture::Arm(_) => {
-                    // For 32-bit ARM, use LDR PC, [PC, #-4] to load the address and branch
-                    let mut code = Vec::new();
-                    // LDR PC, [PC, #-4] ; Load the address into PC (branching to it)
-                    code.extend_from_slice(&[0x04, 0xF0, 0x1F, 0xE5]);
-                    // Store the 32-bit address
-                    code.extend_from_slice(&(abs_addr as u32).to_le_bytes());
-                    code
-                }
-                // Add other architectures as needed
-                _ => todo!(),
+            let jump_code = match triple.operating_system {
+                // The windows ABI and calling convention is different than the SystemV ABI.
+                OperatingSystem::Windows => match triple.architecture {
+                    target_lexicon::Architecture::X86_64 => {
+                        // Windows x64 has specific requirements for alignment and position-independent code
+                        let mut code = vec![
+                            0x48, 0xB8, // movabs RAX, imm64 (move 64-bit immediate to RAX)
+                        ];
+                        // Append the absolute 64-bit address
+                        code.extend_from_slice(&abs_addr.to_le_bytes());
+                        // jmp RAX (jump to the address in RAX)
+                        code.extend_from_slice(&[0xFF, 0xE0]);
+                        code
+                    }
+                    target_lexicon::Architecture::X86_32(_) => {
+                        // On Windows 32-bit, we can use direct jump but need proper alignment
+                        let mut code = vec![
+                            0xB8, // mov EAX, imm32 (move immediate value to EAX)
+                        ];
+                        // Append the absolute 32-bit address
+                        code.extend_from_slice(&(abs_addr as u32).to_le_bytes());
+                        // jmp EAX (jump to the address in EAX)
+                        code.extend_from_slice(&[0xFF, 0xE0]);
+                        code
+                    }
+                    target_lexicon::Architecture::Aarch64(_) => {
+                        // Windows ARM64 requires a different approach:
+                        // 1. We need to preserve the X16/X17 registers which are special on Windows ARM64
+                        // 2. Need to handle Windows memory protection requirements
+                        let mut code = Vec::new();
+
+                        // ADRP X16, 0 ; Form PC-relative address to page - will be fixed up
+                        code.extend_from_slice(&[0x10, 0x00, 0x00, 0x90]);
+                        // LDR X16, [X16, #0x8] ; Load from the next instruction + 8
+                        code.extend_from_slice(&[0x10, 0x08, 0x40, 0xF9]);
+                        // BR X16 ; Branch to the address in X16
+                        code.extend_from_slice(&[0x00, 0x02, 0x1F, 0xD6]);
+                        // 4-byte alignment padding
+                        code.extend_from_slice(&[0x00, 0x00, 0x00, 0x00]);
+                        // Store the 64-bit address - 8-byte aligned
+                        code.extend_from_slice(&abs_addr.to_le_bytes());
+                        code
+                    }
+                    target_lexicon::Architecture::Arm(_) => {
+                        // For Windows 32-bit ARM, we need a different approach
+                        let mut code = Vec::new();
+                        // LDR r12, [pc, #8] ; Load the address into r12
+                        code.extend_from_slice(&[0x08, 0xC0, 0x9F, 0xE5]);
+                        // BX r12 ; Branch to the address in r12
+                        code.extend_from_slice(&[0x1C, 0xFF, 0x2F, 0xE1]);
+                        // 4-byte alignment padding
+                        code.extend_from_slice(&[0x00, 0x00, 0x00, 0x00]);
+                        // Store the 32-bit address - 4-byte aligned
+                        code.extend_from_slice(&(abs_addr as u32).to_le_bytes());
+                        code
+                    }
+                    // Add other architectures as needed
+                    _ => todo!(),
+                },
+                _ => match triple.architecture {
+                    target_lexicon::Architecture::X86_64 => {
+                        // Use JMP instruction to absolute address: FF 25 followed by 32-bit offset
+                        // Then the 64-bit absolute address
+                        let mut code = vec![0xFF, 0x25, 0x00, 0x00, 0x00, 0x00]; // jmp [rip+0]
+                                                                                 // Append the 64-bit address
+                        code.extend_from_slice(&abs_addr.to_le_bytes());
+                        code
+                    }
+                    target_lexicon::Architecture::X86_32(_) => {
+                        // For 32-bit Intel, use JMP instruction with absolute address
+                        let mut code = vec![0xE9]; // jmp rel32
+                        let rel_addr = abs_addr as i32 - 5; // Relative address (offset from next instruction)
+                        code.extend_from_slice(&rel_addr.to_le_bytes());
+                        code
+                    }
+                    target_lexicon::Architecture::Aarch64(_) => {
+                        // For ARM64, we load the address into a register and branch
+                        let mut code = Vec::new();
+                        // LDR X16, [PC, #0]  ; Load from the next instruction
+                        code.extend_from_slice(&[0x50, 0x00, 0x00, 0x58]);
+                        // BR X16            ; Branch to the address in X16
+                        code.extend_from_slice(&[0x00, 0x02, 0x1F, 0xD6]);
+                        // Store the 64-bit address
+                        code.extend_from_slice(&abs_addr.to_le_bytes());
+                        code
+                    }
+                    target_lexicon::Architecture::Arm(_) => {
+                        // For 32-bit ARM, use LDR PC, [PC, #-4] to load the address and branch
+                        let mut code = Vec::new();
+                        // LDR PC, [PC, #-4] ; Load the address into PC (branching to it)
+                        code.extend_from_slice(&[0x04, 0xF0, 0x1F, 0xE5]);
+                        // Store the 32-bit address
+                        code.extend_from_slice(&(abs_addr as u32).to_le_bytes());
+                        code
+                    }
+                    // Add other architectures as needed
+                    _ => todo!(),
+                },
             };
 
             // Add the jump code to the text section
@@ -920,29 +983,21 @@ pub fn create_undefined_symbol_stub(
             });
         } else {
             // It's likely a static
-            if sym.kind == SymbolKind::Unknown {
-                obj.add_symbol(Symbol {
-                    name: name.as_bytes()[name_offset..].to_vec(),
-                    value: abs_addr,
-                    size: 0,
-                    scope: SymbolScope::Linkage,
-                    kind: SymbolKind::Data,
-                    weak: sym.is_weak,
-                    section: SymbolSection::Absolute,
-                    flags: object::SymbolFlags::None,
-                });
-            } else {
-                obj.add_symbol(Symbol {
-                    name: name.as_bytes()[name_offset..].to_vec(),
-                    value: abs_addr,
-                    size: 0,
-                    scope: SymbolScope::Linkage,
-                    kind: sym.kind,
-                    weak: sym.is_weak,
-                    section: SymbolSection::Absolute,
-                    flags: object::SymbolFlags::None,
-                });
-            }
+            let kind = match sym.kind {
+                SymbolKind::Unknown => SymbolKind::Data,
+                k => k,
+            };
+
+            obj.add_symbol(Symbol {
+                name: name.as_bytes()[name_offset..].to_vec(),
+                value: abs_addr,
+                size: 0,
+                scope: SymbolScope::Linkage,
+                kind,
+                weak: sym.is_weak,
+                section: SymbolSection::Absolute,
+                flags: object::SymbolFlags::None,
+            });
         }
     }
 
