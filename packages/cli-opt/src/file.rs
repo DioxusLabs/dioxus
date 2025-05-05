@@ -113,11 +113,11 @@ pub(crate) enum ResolvedAssetType {
 
 pub(crate) fn resolve_asset_options(source: &Path, options: &AssetOptions) -> ResolvedAssetType {
     match options {
-        AssetOptions::Image(image) => ResolvedAssetType::Image(image.clone()),
-        AssetOptions::Css(css) => ResolvedAssetType::Css(css.clone()),
-        AssetOptions::CssModule(css) => ResolvedAssetType::CssModule(css.clone()),
-        AssetOptions::Js(js) => ResolvedAssetType::Js(js.clone()),
-        AssetOptions::Folder(folder) => ResolvedAssetType::Folder(folder.clone()),
+        AssetOptions::Image(image) => ResolvedAssetType::Image(*image),
+        AssetOptions::Css(css) => ResolvedAssetType::Css(*css),
+        AssetOptions::CssModule(css) => ResolvedAssetType::CssModule(*css),
+        AssetOptions::Js(js) => ResolvedAssetType::Js(*js),
+        AssetOptions::Folder(folder) => ResolvedAssetType::Folder(*folder),
         AssetOptions::Unknown => resolve_unknown_asset_options(source),
         _ => {
             tracing::warn!("Unknown asset options... you may need to update the Dioxus CLI. Defaulting to a generic file: {:?}", options);

@@ -61,7 +61,7 @@ fn bundle_js_to_writer(
     write_to: &mut impl std::io::Write,
 ) -> anyhow::Result<()> {
     inside_handler(|globals, cm| {
-        bundle_js_to_writer_inside_handler(&globals, cm, file, bundle, minify, write_to)
+        bundle_js_to_writer_inside_handler(globals, cm, file, bundle, minify, write_to)
     })
 }
 

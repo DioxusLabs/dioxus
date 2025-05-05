@@ -85,7 +85,7 @@ pub(crate) fn hash_file_with_options(
             let files = std::fs::read_dir(source)?;
             for file in files.flatten() {
                 let path = file.path();
-                hash_file_with_options(&options, &path, hasher, true)?;
+                hash_file_with_options(options, &path, hasher, true)?;
             }
         }
     }
@@ -114,9 +114,9 @@ pub(crate) fn hash_file_contents(source: &Path, hasher: &mut impl Hasher) -> any
 /// Add a hash to the asset, or log an error if it fails
 pub fn add_hash_to_asset(asset: &mut BundledAsset) {
     let source = asset.absolute_source_path();
-    match AssetHash::hash_file_contents(asset.options(), &source) {
+    match AssetHash::hash_file_contents(asset.options(), source) {
         Ok(hash) => {
-            let options = asset.options().clone();
+            let options = *asset.options();
 
             // Set the bundled path to the source path with the hash appended before the extension
             let source_path = PathBuf::from(source);

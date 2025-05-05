@@ -1,12 +1,13 @@
+use anyhow::Context;
 use const_serialize::ConstVec;
-use dioxus_cli_opt::AssetManifest;
+use dioxus_cli_opt::{process_file_to, AssetManifest};
 use manganis::BundledAsset;
 use object::{Object, ObjectSection, ReadCache};
 use rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::fmt::Debug;
-use std::fs;
+use std::fs::{self, create_dir_all};
 use std::io::{Read, Seek, Write};
 use std::path::PathBuf;
 use std::process::Command;
@@ -14,8 +15,12 @@ use target_lexicon::Triple;
 use tempfile::NamedTempFile;
 
 #[derive(Debug, Serialize, Deserialize)]
-pub enum LinkAction {
+pub(crate) enum LinkAction {
     BuildAssetManifest {
+        destination: PathBuf,
+    },
+    OptimizeAssets {
+        /// The destination directory for the assets.
         destination: PathBuf,
     },
     LinkAndroid {
@@ -25,12 +30,19 @@ pub enum LinkAction {
 }
 
 impl LinkAction {
-    pub(crate) const ENV_VAR_NAME: &'static str = "dx_magic_link_file";
+    pub(crate) const ENV_VAR_NAME: &'static str = "DX_LINK_JSON";
+    pub(crate) const ENV_VAR_NAME_ASSETS_TARGET: &'static str = "DX_LINK_ASSETS_TARGET"; // The target directory for the assets
+    pub(crate) const DX_LINKER_ENV_VAR: &'static str = "DX_LINKER"; // The linker to use
 
     /// Should we write the input arguments to a file (aka act as a linker subprocess)?
     ///
     /// Just check if the magic env var is set
     pub(crate) fn from_env() -> Option<Self> {
+        if let Ok(target) = std::env::var(Self::ENV_VAR_NAME_ASSETS_TARGET) {
+            return Some(LinkAction::OptimizeAssets {
+                destination: PathBuf::from(target),
+            });
+        }
         std::env::var(Self::ENV_VAR_NAME)
             .ok()
             .map(|var| serde_json::from_str(&var).expect("Failed to parse magic env var"))
@@ -49,13 +61,12 @@ impl LinkAction {
     ///
     /// hmmmmmmmm tbh I'd rather just pass the object files back and do the parsing here, but the interface
     /// is nicer to just bounce back the args and let the host do the parsing/canonicalization
-    pub(crate) fn run(self) {
+    pub(crate) fn run(self) -> crate::Result<()> {
         if let Some(log_path) = linker_log_file() {
             let log_file = std::fs::File::options()
                 .append(true)
                 .create(true)
-                .open(log_path)
-                .unwrap();
+                .open(log_path)?;
             tracing_subscriber::fmt()
                 .with_writer(log_file)
                 .with_max_level(tracing::Level::DEBUG)
@@ -76,126 +87,113 @@ impl LinkAction {
                 cmd.stderr(std::process::Stdio::piped())
                     .stdout(std::process::Stdio::piped())
                     .status()
-                    .expect("Failed to run android linker");
+                    .context("Failed to run android linker")?;
             }
 
             // Assemble an asset manifest by walking the object files being passed to us
             LinkAction::BuildAssetManifest { destination: dest } => {
-                let args: Vec<_> = std::env::args().collect();
-                let mut references = AssetReferences::default();
+                let manifest = link_asset_manifest();
 
-                let mut obj_args = args.clone();
-                references.assets.clear();
-                // Handle command files, usually a windows thing.
-                if let Some(command) = args.iter().find(|arg| arg.starts_with('@')).cloned() {
-                    let path = command.trim().trim_start_matches('@');
-                    let file_binary = std::fs::read(path).unwrap();
+                let contents =
+                    serde_json::to_string(&manifest).context("Failed to write manifest")?;
+                std::fs::write(dest, contents).context("Failed to write output file")?;
+            }
 
-                    // This may be a utf-16le file. Let's try utf-8 first.
-                    let content = String::from_utf8(file_binary.clone()).unwrap_or_else(|_| {
-                        // Convert Vec<u8> to Vec<u16> to convert into a String
-                        let binary_u16le: Vec<u16> = file_binary
-                            .chunks_exact(2)
-                            .map(|a| u16::from_le_bytes([a[0], a[1]]))
-                            .collect();
-
-                        String::from_utf16_lossy(&binary_u16le)
-                    });
-
-                    // Gather linker args, and reset the args to be just the linker args
-                    obj_args = content
-                        .lines()
-                        .map(|line| {
-                            let line_parsed = line.to_string();
-                            let line_parsed = line_parsed.trim_end_matches('"').to_string();
-                            let line_parsed = line_parsed.trim_start_matches('"').to_string();
-                            line_parsed
-                        })
-                        .collect();
-                }
-
-                // Parse through linker args for `.o` or `.rlib` files.
-                obj_args.retain(|item| item.ends_with(".o") || item.ends_with(".rlib"));
-                for item in obj_args {
-                    let path_to_item = PathBuf::from(item);
-                    if let Ok(path) = path_to_item.canonicalize() {
-                        _ = references.add_from_object_path(&path);
-                    }
-                }
-
-                // Hash each file in parallel
-                references.assets.par_iter_mut().for_each(|asset| {
-                    dioxus_cli_opt::add_hash_to_asset(&mut asset.bundled_asset);
-                });
-
-                let targeting_wasm = args.contains(&"wasm".to_string());
-                let mut linker_args = args.into_iter().skip(1).collect::<Vec<_>>();
-                let mut _tempfile_handle = None;
-
-                // If we are targeting wasm, create an object file to satisfy the imports
-                if targeting_wasm {
-                    let mut data_sections = Vec::new();
-                    for asset in references.assets.iter() {
-                        let name = asset.bundled_asset.link_section();
-                        let data =
-                            const_serialize::serialize_const(&asset.bundled_asset, ConstVec::new());
-                        const_serialize::deserialize_const!(BundledAsset, data.read()).unwrap();
-                        data_sections.push((name, data.as_ref().to_vec()));
-                    }
-
-                    // Create the object file
-                    let object_file = create_data_object_file(
-                        data_sections
-                            .iter()
-                            .map(|(name, data)| (*name, data.as_ref())),
+            // Optimize the assets by copying them to the destination
+            LinkAction::OptimizeAssets { destination } => {
+                let manifest = link_asset_manifest();
+                create_dir_all(&destination)?;
+                for asset in manifest.assets() {
+                    let path = PathBuf::from(asset.absolute_source_path());
+                    let destination_path = destination.join(asset.bundled_path());
+                    tracing::debug!(
+                        "Processing asset {} --> {} {:#?}",
+                        path.display(),
+                        destination_path.display(),
+                        asset
                     );
-                    let mut temp_file =
-                        NamedTempFile::new().expect("Failed to create temporary file");
-                    temp_file
-                        .write_all(&object_file)
-                        .expect("Failed to write object file");
-                    linker_args.push(temp_file.path().to_string_lossy().to_string());
-                    _tempfile_handle = Some(temp_file);
-                }
-                // Otherwise overwrite the object files
-                else {
-                    for asset in &references.assets {
-                        // Write the asset to the object file
-                        if let Err(err) = asset.write() {
-                            tracing::error!("Failed to write asset to object file: {err}");
-                        }
-                    }
-                }
-
-                // Extract the manifest from the hashed assets
-                let mut manifest = AssetManifest::default();
-                for asset in references.assets.iter() {
-                    // Add the asset to the manifest
-                    manifest.insert_asset(asset.bundled_asset);
-                }
-
-                let contents = serde_json::to_string(&manifest).expect("Failed to write manifest");
-                std::fs::write(dest, contents).expect("Failed to write output file");
-
-                // forward the modified object files to the real linker
-                let toolchain = if targeting_wasm {
-                    "stable-wasm32-unknown-unknown".to_string()
-                } else {
-                    std::env::var("RUSTUP_TOOLCHAIN").unwrap()
-                };
-
-                let mut linker_command = find_linker(toolchain);
-                let status = linker_command
-                    .args(linker_args)
-                    .status()
-                    .expect("Failed to spawn linker");
-
-                if let Some(code) = status.code() {
-                    std::process::exit(code);
+                    process_file_to(asset.options(), &path, &destination_path)?;
                 }
             }
         }
+
+        Ok(())
     }
+}
+
+fn link_asset_manifest() -> AssetManifest {
+    let args: Vec<_> = std::env::args().collect();
+    let mut references = AssetReferences::from_link_args(&args);
+
+    // Hash each file in parallel
+    references.assets.par_iter_mut().for_each(|asset| {
+        dioxus_cli_opt::add_hash_to_asset(&mut asset.bundled_asset);
+    });
+
+    // Look for --flavor wasm in the args
+    let targeting_wasm =
+        args.contains(&"-flavor".to_string()) && args.contains(&"wasm".to_string());
+    let mut linker_args = args.into_iter().skip(1).collect::<Vec<_>>();
+    let mut _tempfile_handle = None;
+
+    // If we are targeting wasm, create an object file to satisfy the imports
+    if targeting_wasm {
+        let mut data_sections = Vec::new();
+        for asset in references.assets.iter() {
+            let name = asset.bundled_asset.link_section();
+            let data = const_serialize::serialize_const(&asset.bundled_asset, ConstVec::new());
+            const_serialize::deserialize_const!(BundledAsset, data.read()).unwrap();
+            data_sections.push((name, data.as_ref().to_vec()));
+        }
+
+        // Create the object file
+        let object_file = create_data_object_file(
+            data_sections
+                .iter()
+                .map(|(name, data)| (*name, data.as_ref())),
+        );
+        let mut temp_file = NamedTempFile::new().expect("Failed to create temporary file");
+        temp_file
+            .write_all(&object_file)
+            .expect("Failed to write object file");
+        linker_args.push(temp_file.path().to_string_lossy().to_string());
+        _tempfile_handle = Some(temp_file);
+    }
+    // Otherwise overwrite the object files
+    else {
+        for asset in &references.assets {
+            // Write the asset to the object file
+            if let Err(err) = asset.write() {
+                tracing::error!("Failed to write asset to object file: {err}");
+            }
+        }
+    }
+
+    // Extract the manifest from the hashed assets
+    let mut manifest = AssetManifest::default();
+    for asset in references.assets.iter() {
+        // Add the asset to the manifest
+        manifest.insert_asset(asset.bundled_asset);
+    }
+
+    // forward the modified object files to the real linker
+    let toolchain = if targeting_wasm {
+        "stable-wasm32-unknown-unknown".to_string()
+    } else {
+        std::env::var("RUSTUP_TOOLCHAIN").unwrap()
+    };
+
+    let mut linker_command = find_linker(toolchain);
+    let status = linker_command
+        .args(linker_args)
+        .status()
+        .expect("Failed to spawn linker");
+
+    if let Some(code) = status.code() {
+        std::process::exit(code);
+    }
+
+    manifest
 }
 
 fn linker_log_file() -> Option<PathBuf> {
@@ -227,12 +225,61 @@ impl AssetReference {
     }
 }
 
+fn collect_object_files_from_args(args: &[String]) -> Vec<PathBuf> {
+    let mut obj_args = args.to_vec();
+    // Handle command files, usually a windows thing.
+    if let Some(command) = args.iter().find(|arg| arg.starts_with('@')).cloned() {
+        let path = command.trim().trim_start_matches('@');
+        let file_binary = std::fs::read(path).unwrap();
+
+        // This may be a utf-16le file. Let's try utf-8 first.
+        let content = String::from_utf8(file_binary.clone()).unwrap_or_else(|_| {
+            // Convert Vec<u8> to Vec<u16> to convert into a String
+            let binary_u16le: Vec<u16> = file_binary
+                .chunks_exact(2)
+                .map(|a| u16::from_le_bytes([a[0], a[1]]))
+                .collect();
+
+            String::from_utf16_lossy(&binary_u16le)
+        });
+
+        // Gather linker args, and reset the args to be just the linker args
+        obj_args = content
+            .lines()
+            .map(|line| {
+                let line_parsed = line.to_string();
+                let line_parsed = line_parsed.trim_end_matches('"').to_string();
+                let line_parsed = line_parsed.trim_start_matches('"').to_string();
+                line_parsed
+            })
+            .collect();
+    }
+
+    // Parse through linker args for `.o` or `.rlib` files.
+    obj_args.retain(|item| item.ends_with(".o") || item.ends_with(".rlib"));
+
+    obj_args.iter().map(PathBuf::from).collect()
+}
+
 #[derive(Default)]
 struct AssetReferences {
     assets: Vec<AssetReference>,
 }
 
 impl AssetReferences {
+    fn from_link_args(args: &[String]) -> Self {
+        let mut references = AssetReferences::default();
+        let obj_files = collect_object_files_from_args(args);
+        for file in obj_files {
+            if let Ok(path) = file.canonicalize() {
+                if let Err(err) = references.add_from_object_path(&path) {
+                    tracing::error!("Failed to read object file: {err}");
+                }
+            }
+        }
+        references
+    }
+
     fn add_from_object_path(&mut self, path: &PathBuf) -> Result<(), Box<dyn Error>> {
         let mut binary_data = fs::File::options().read(true).open(path)?;
         let mut range = None;
@@ -285,7 +332,7 @@ impl AssetReferences {
 // find the current linker
 fn find_linker(toolchain: String) -> Command {
     // If there is a linker environment variable, use that
-    if let Ok(linker) = std::env::var("DIOXUS_LINKER") {
+    if let Ok(linker) = std::env::var(LinkAction::DX_LINKER_ENV_VAR) {
         return Command::new(linker);
     }
 
@@ -376,7 +423,7 @@ fn create_data_object_file<'a>(
         let flags = SymbolTable::WASM_SYM_EXPORTED;
         let size = data.len() as u32;
 
-        all_bytes.extend_from_slice(&data);
+        all_bytes.extend_from_slice(data);
         sym_tab.data(
             flags,
             symbol_name,

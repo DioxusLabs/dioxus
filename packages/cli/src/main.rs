@@ -34,7 +34,7 @@ pub(crate) use rustc::*;
 pub(crate) use settings::*;
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<()> {
     // If we're being ran as a linker (likely from ourselves), we want to act as a linker instead.
     if let Some(link_action) = link::LinkAction::from_env() {
         return link_action.run();
@@ -57,7 +57,6 @@ async fn main() {
         Commands::Serve(opts) => opts.serve().await,
         Commands::Bundle(opts) => opts.bundle().await,
         Commands::Run(opts) => opts.run().await,
-        Commands::BuildAssets(opts) => opts.run().await,
     };
 
     // Provide a structured output for third party tools that can consume the output of the CLI
@@ -75,5 +74,7 @@ async fn main() {
 
             std::process::exit(1);
         }
-    };
+    }
+
+    Ok(())
 }

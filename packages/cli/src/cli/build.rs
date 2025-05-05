@@ -93,7 +93,7 @@ impl BuildArgs {
     pub(crate) async fn resolve(&mut self, krate: &DioxusCrate) -> Result<()> {
         let default_platforms = krate.default_platforms();
         let default_platform = default_platforms.iter().find(|p| **p != Platform::Server);
-        let default_server = default_platforms.iter().any(|p| *p == Platform::Server);
+        let default_server = default_platforms.contains(&Platform::Server);
         let auto_platform = krate.autodetect_platform();
 
         // Make sure we set the fullstack platform so we actually build the fullstack variant

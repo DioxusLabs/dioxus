@@ -1,6 +1,5 @@
 pub(crate) mod autoformat;
 pub(crate) mod build;
-pub(crate) mod build_assets;
 pub(crate) mod bundle;
 pub(crate) mod check;
 pub(crate) mod clean;
@@ -91,10 +90,6 @@ pub(crate) enum Commands {
     #[clap(subcommand)]
     #[clap(name = "config")]
     Config(config::Config),
-
-    /// Build the assets for a specific target.
-    #[clap(name = "build_assets")]
-    BuildAssets(build_assets::BuildAssets),
 }
 
 impl Display for Commands {
@@ -111,7 +106,6 @@ impl Display for Commands {
             Commands::Check(_) => write!(f, "check"),
             Commands::Bundle(_) => write!(f, "bundle"),
             Commands::Run(_) => write!(f, "run"),
-            Commands::BuildAssets(_) => write!(f, "build_assets"),
         }
     }
 }
