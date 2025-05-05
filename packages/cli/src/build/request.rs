@@ -1490,6 +1490,16 @@ session_cache_dir: {}"#,
                         continue;
                     }
 
+                    if name.ends_with(".dll") || name.ends_with(".so") || name.ends_with(".lib") {
+                        compiler_rlibs.push(rlib.to_owned());
+                        continue;
+                    }
+
+                    if !name.ends_with(".o") {
+                        tracing::warn!("Unknown object file in rlib: {:?}", name);
+                        continue;
+                    }
+
                     out_ar
                         .append(&object_file.header().clone(), object_file)
                         .context("Failed to add object file to archive")?;
@@ -1558,14 +1568,14 @@ session_cache_dir: {}"#,
                     //     args.insert(first_rlib + 3, rlib.display().to_string());
                     // }
 
-                    args.iter_mut().for_each(|arg| {
-                        if arg.ends_with(".rlib")
-                            && !arg.contains(".rustup")
-                            && !arg.contains("libwindows")
-                        {
-                            *arg = format!("/WHOLEARCHIVE:{}", arg);
-                        }
-                    });
+                    // args.iter_mut().for_each(|arg| {
+                    //     if arg.ends_with(".rlib")
+                    //         && !arg.contains(".rustup")
+                    //         && !arg.contains("libwindows")
+                    //     {
+                    //         *arg = format!("/WHOLEARCHIVE:{}", arg);
+                    //     }
+                    // });
 
                     // args[first_rlib] = format!("-Wl,/WHOLEARCHIVE");
                     // args.insert(first_rlib + 1, out_ar_path.display().to_string());
@@ -1575,6 +1585,15 @@ session_cache_dir: {}"#,
                     // for rlib in compiler_rlibs.iter().rev() {
                     //     args.insert(first_rlib + 2, rlib.display().to_string());
                     // }
+
+                    // args[first_rlib] = format!("-Wl,/WHOLEARCHIVE");
+                    args[first_rlib] = format!("/WHOLEARCHIVE:{}", out_ar_path.display());
+                    args.retain(|arg| !arg.ends_with(".rlib"));
+
+                    // add back the compiler rlibs
+                    for rlib in compiler_rlibs.iter().rev() {
+                        args.insert(first_rlib + 1, rlib.display().to_string());
+                    }
                 }
 
                 _ => {}
