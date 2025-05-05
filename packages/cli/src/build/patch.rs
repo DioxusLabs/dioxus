@@ -844,9 +844,6 @@ pub fn create_undefined_symbol_stub(
         .context("Failed to find _aslr_reference symbol")?;
     let aslr_offset = aslr_reference - aslr_ref_address;
 
-    // Windows has a different calling convention.
-    let is_windows = matches!(triple.operating_system, OperatingSystem::Windows);
-
     // we need to assemble a PLT/GOT so direct calls to the patch symbols work
     // for each symbol we either write the address directly (as a symbol) or create a PLT/GOT entry
     let text_section = obj.section_id(StandardSection::Text);
@@ -895,21 +892,51 @@ pub fn create_undefined_symbol_stub(
                         code
                     }
                     target_lexicon::Architecture::Aarch64(_) => {
-                        // Windows ARM64 requires a different approach:
-                        // 1. We need to preserve the X16/X17 registers which are special on Windows ARM64
-                        // 2. Need to handle Windows memory protection requirements
+                        //     // Windows ARM64 requires a different approach:
+                        //     // 1. We need to preserve the X16/X17 registers which are special on Windows ARM64
+                        //     // 2. Need to handle Windows memory protection requirements
+                        //     let mut code = Vec::new();
+
+                        //     // ADRP X16, 0 ; Form PC-relative address to page - will be fixed up
+                        //     code.extend_from_slice(&[0x10, 0x00, 0x00, 0x90]);
+                        //     // LDR X16, [X16, #0x8] ; Load from the next instruction + 8
+                        //     code.extend_from_slice(&[0x10, 0x08, 0x40, 0xF9]);
+                        //     // BR X16 ; Branch to the address in X16
+                        //     code.extend_from_slice(&[0x00, 0x02, 0x1F, 0xD6]);
+                        //     // 4-byte alignment padding
+                        //     code.extend_from_slice(&[0x00, 0x00, 0x00, 0x00]);
+                        //     // Store the 64-bit address - 8-byte aligned
+                        //     code.extend_from_slice(&abs_addr.to_le_bytes());
+                        //     code
+                        // Windows ARM64 implementation
                         let mut code = Vec::new();
 
-                        // ADRP X16, 0 ; Form PC-relative address to page - will be fixed up
-                        code.extend_from_slice(&[0x10, 0x00, 0x00, 0x90]);
-                        // LDR X16, [X16, #0x8] ; Load from the next instruction + 8
-                        code.extend_from_slice(&[0x10, 0x08, 0x40, 0xF9]);
-                        // BR X16 ; Branch to the address in X16
+                        // Use MOV/MOVK sequence to load 64-bit address into X16
+                        // This is more reliable than ADRP+LDR for direct hotpatching
+
+                        // MOVZ X16, #imm16_0 (bits 0-15 of address)
+                        let imm16_0 = (abs_addr & 0xFFFF) as u16;
+                        let movz = 0xD2800010u32 | ((imm16_0 as u32) << 5);
+                        code.extend_from_slice(&movz.to_le_bytes());
+
+                        // MOVK X16, #imm16_1, LSL #16 (bits 16-31 of address)
+                        let imm16_1 = ((abs_addr >> 16) & 0xFFFF) as u16;
+                        let movk1 = 0xF2A00010u32 | ((imm16_1 as u32) << 5);
+                        code.extend_from_slice(&movk1.to_le_bytes());
+
+                        // MOVK X16, #imm16_2, LSL #32 (bits 32-47 of address)
+                        let imm16_2 = ((abs_addr >> 32) & 0xFFFF) as u16;
+                        let movk2 = 0xF2C00010u32 | ((imm16_2 as u32) << 5);
+                        code.extend_from_slice(&movk2.to_le_bytes());
+
+                        // MOVK X16, #imm16_3, LSL #48 (bits 48-63 of address)
+                        let imm16_3 = ((abs_addr >> 48) & 0xFFFF) as u16;
+                        let movk3 = 0xF2E00010u32 | ((imm16_3 as u32) << 5);
+                        code.extend_from_slice(&movk3.to_le_bytes());
+
+                        // BR X16 (Branch to address in X16)
                         code.extend_from_slice(&[0x00, 0x02, 0x1F, 0xD6]);
-                        // 4-byte alignment padding
-                        code.extend_from_slice(&[0x00, 0x00, 0x00, 0x00]);
-                        // Store the 64-bit address - 8-byte aligned
-                        code.extend_from_slice(&abs_addr.to_le_bytes());
+
                         code
                     }
                     target_lexicon::Architecture::Arm(_) => {
