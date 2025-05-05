@@ -72,7 +72,6 @@ members = [
     "packages/asset-resolver",
     "packages/depinfo",
     "packages/server",
-    "packages/linker-args",
 
     # Playwright tests
     "packages/playwright-tests/liveview",

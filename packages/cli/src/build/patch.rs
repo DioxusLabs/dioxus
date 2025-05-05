@@ -255,10 +255,7 @@ pub fn create_jump_table(
     }
 }
 
-fn create_windows_jump_table(
-    patch: &Path,
-    cache: &HotpatchModuleCache,
-) -> std::result::Result<JumpTable, PatchError> {
+fn create_windows_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> Result<JumpTable> {
     use pdb::FallibleIterator;
     let old_name_to_addr = &cache.old_name_to_addr;
 
@@ -270,14 +267,11 @@ fn create_windows_jump_table(
     let address_map = pdb_file.address_map().unwrap();
     let mut symbols = symbol_table.iter();
     while let Ok(Some(symbol)) = symbols.next() {
-        match symbol.parse() {
-            Ok(pdb::SymbolData::Public(data)) => {
-                let rva = data.offset.to_rva(&address_map);
-                if let Some(rva) = rva {
-                    new_name_to_addr.insert(data.name.to_string(), rva.0 as u64);
-                }
+        if let Ok(pdb::SymbolData::Public(data)) = symbol.parse() {
+            let rva = data.offset.to_rva(&address_map);
+            if let Some(rva) = rva {
+                new_name_to_addr.insert(data.name.to_string(), rva.0 as u64);
             }
-            _ => {}
         }
     }
 

@@ -730,9 +730,7 @@ session_cache_dir: {}"#,
 
         // Populate the patch cache if we're in fat mode
         if matches!(ctx.mode, BuildMode::Fat) {
-            artifacts.patch_cache = Some(Arc::new(
-                self.create_patch_cache(ctx, &artifacts.exe).await?,
-            ));
+            artifacts.patch_cache = Some(Arc::new(self.create_patch_cache(&artifacts.exe).await?));
         }
 
         Ok(artifacts)
@@ -3565,11 +3563,7 @@ session_cache_dir: {}"#,
         Ok(())
     }
 
-    async fn create_patch_cache(
-        &self,
-        ctx: &BuildContext,
-        exe: &Path,
-    ) -> Result<HotpatchModuleCache> {
+    async fn create_patch_cache(&self, exe: &Path) -> Result<HotpatchModuleCache> {
         let exe = match self.platform {
             Platform::Web => self.wasm_bindgen_wasm_output_file(),
             _ => exe.to_path_buf(),
