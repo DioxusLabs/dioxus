@@ -74,7 +74,6 @@ pub struct HotpatchModuleCache {
 pub struct CachedSymbol {
     pub address: u64,
     pub kind: SymbolKind,
-    pub is_text: bool,
     pub is_undefined: bool,
     pub is_weak: bool,
 }
@@ -127,7 +126,6 @@ impl HotpatchModuleCache {
                                     } else {
                                         SymbolKind::Data
                                     },
-                                    is_text: data.function,
                                     is_undefined,
                                     is_weak: false,
                                 },
@@ -138,13 +136,13 @@ impl HotpatchModuleCache {
                             let rva = data.offset.to_rva(&address_map);
                             let is_undefined = rva.is_none();
                             let rva = rva.unwrap_or_default();
+
                             name_to_address.insert(
                                 data.name.to_string().to_string(),
                                 CachedSymbol {
                                     address: rva.0 as u64,
                                     kind: SymbolKind::Data,
-                                    is_text: false,
-                                    is_undefined: is_undefined,
+                                    is_undefined,
                                     is_weak: false,
                                 },
                             );
@@ -215,7 +213,6 @@ impl HotpatchModuleCache {
                             s.name().ok()?.to_string(),
                             CachedSymbol {
                                 address: s.address(),
-                                is_text: matches!(s.kind(), SymbolKind::Text),
                                 is_undefined: s.is_undefined(),
                                 is_weak: s.is_weak(),
                                 kind: s.kind(),
