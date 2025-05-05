@@ -126,6 +126,21 @@ impl HotpatchModuleCache {
                                 },
                             );
                         }
+
+                        Ok(pdb::SymbolData::Data(data)) if data.global => {
+                            let rva = data.offset.to_rva(&address_map).unwrap_or_default();
+                            name_to_address.insert(
+                                data.name.to_string().to_string(),
+                                CachedSymbol {
+                                    address: rva.0 as u64,
+                                    kind: SymbolKind::Data,
+                                    is_text: false,
+                                    is_undefined: false,
+                                    is_weak: false,
+                                },
+                            );
+                        }
+
                         _ => {}
                     }
                 }

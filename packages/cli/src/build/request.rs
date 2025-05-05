@@ -1213,6 +1213,12 @@ session_cache_dir: {}"#,
         // And now we can run the linker with our new args
         let linker = self.select_linker()?;
 
+        let out_exe = self.patch_exe(artifacts.time_start);
+        let out_arg = match self.triple.operating_system {
+            OperatingSystem::Windows => vec![format!("/OUT:{}", out_exe.display())],
+            _ => vec!["-o".to_string(), out_exe.display().to_string()],
+        };
+
         // Run the linker directly!
         //
         // We dump its output directly into the patch exe location which is different than how rustc
@@ -1220,8 +1226,7 @@ session_cache_dir: {}"#,
         let res = Command::new(linker)
             .args(object_files.iter())
             .args(self.thin_link_args(&args)?)
-            .arg("-o")
-            .arg(self.patch_exe(artifacts.time_start))
+            .args(out_arg)
             .output()
             .await?;
 
@@ -1622,8 +1627,8 @@ session_cache_dir: {}"#,
         tracing::debug!("Fat linking with args: {:?} {:#?}", linker, args);
 
         // Run the linker directly!
-        let out_arg = match self.platform {
-            Platform::Windows => vec![format!("/OUT:{}", exe.display())],
+        let out_arg = match self.triple.operating_system {
+            OperatingSystem::Windows => vec![format!("/OUT:{}", exe.display())],
             _ => vec!["-o".to_string(), exe.display().to_string()],
         };
 
