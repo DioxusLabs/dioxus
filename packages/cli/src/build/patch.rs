@@ -776,6 +776,8 @@ pub fn create_undefined_symbol_stub(
         .cloned()
         .collect();
 
+    tracing::debug!("Undefined symbols: {:#?}", undefined_symbols);
+
     // Create a new object file (architecture doesn't matter much for our purposes)
     let mut obj = object::write::Object::new(
         match triple.binary_format {
