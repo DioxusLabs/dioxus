@@ -850,6 +850,39 @@ pub fn create_undefined_symbol_stub(
     // for each symbol we either write the address directly (as a symbol) or create a PLT/GOT entry
     let text_section = obj.section_id(StandardSection::Text);
     for name in undefined_symbols {
+        if name.starts_with("__imp__") {
+            let Some(sym) = symbol_table.get(name.as_str().trim_start_matches("__imp__")) else {
+                tracing::error!("Symbol not found: {}", name);
+                continue;
+            };
+
+            let abs_addr = sym.address + aslr_offset;
+
+            // This is an import table entry
+            let data_section = obj.section_id(StandardSection::Data);
+
+            // Add a pointer to the resolved address
+            let offset = obj.append_section_data(
+                data_section,
+                &abs_addr.to_le_bytes(),
+                8, // Use proper alignment
+            );
+
+            // Add the symbol as a data symbol in our data section
+            obj.add_symbol(Symbol {
+                name: name.as_bytes().to_vec(),
+                value: offset, // Offset within the data section
+                size: 8,       // Size of pointer
+                scope: SymbolScope::Linkage,
+                kind: SymbolKind::Data, // Always Data for IAT entries
+                weak: false,
+                section: SymbolSection::Section(data_section),
+                flags: object::SymbolFlags::None,
+            });
+
+            continue;
+        }
+
         let Some(sym) = symbol_table.get(name.as_str()) else {
             tracing::error!("Symbol not found: {}", name);
             continue;
@@ -866,32 +899,6 @@ pub fn create_undefined_symbol_stub(
         };
 
         let abs_addr = sym.address + aslr_offset;
-
-        if name.starts_with("__imp_") {
-            // This is an import table entry
-            let data_section = obj.section_id(StandardSection::Data);
-
-            // Add a pointer to the resolved address
-            let offset = obj.append_section_data(
-                data_section,
-                &abs_addr.to_le_bytes(),
-                8, // Use proper alignment
-            );
-
-            // Add the symbol as a data symbol in our data section
-            obj.add_symbol(Symbol {
-                name: name.as_bytes()[name_offset..].to_vec(),
-                value: offset, // Offset within the data section
-                size: 8,       // Size of pointer
-                scope: SymbolScope::Linkage,
-                kind: SymbolKind::Data, // Always Data for IAT entries
-                weak: false,
-                section: SymbolSection::Section(data_section),
-                flags: object::SymbolFlags::None,
-            });
-
-            continue;
-        }
 
         if sym.kind == SymbolKind::Text {
             let jump_code = match triple.operating_system {
