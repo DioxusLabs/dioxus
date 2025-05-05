@@ -1375,11 +1375,11 @@ session_cache_dir: {}"#,
                     "dbghelp.lib".to_string(),
                     "/defaultlib:msvcrt".to_string(),
                     "/DLL".to_string(),
-                    "/NOENTRY".to_string(),
                     "/DEBUG".to_string(),
                     "/PDBALTPATH:%_PDB%".to_string(),
                     "/EXPORT:main".to_string(),
                     "/HIGHENTROPYVA:NO".to_string(),
+                    "/SUBSYSTEM:WINDOWS".to_string(),
                 ]);
             }
 

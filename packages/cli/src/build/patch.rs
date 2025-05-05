@@ -144,7 +144,7 @@ impl HotpatchModuleCache {
                                     address: rva.0 as u64,
                                     kind: SymbolKind::Data,
                                     is_text: false,
-                                    is_undefined,
+                                    is_undefined: is_undefined,
                                     is_weak: false,
                                 },
                             );
