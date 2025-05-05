@@ -1219,6 +1219,8 @@ session_cache_dir: {}"#,
             _ => vec!["-o".to_string(), out_exe.display().to_string()],
         };
 
+        tracing::debug!("Linking with {:?} using args: {:#?}", linker, object_files);
+
         // Run the linker directly!
         //
         // We dump its output directly into the patch exe location which is different than how rustc
