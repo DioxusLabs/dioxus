@@ -30,9 +30,13 @@ pub(crate) enum LinkAction {
 }
 
 impl LinkAction {
+    // Internal API used to pass information from the CLI build process to the linker
     pub(crate) const ENV_VAR_NAME: &'static str = "DX_LINK_JSON";
+
+    // Publicly documented CLI APIs for linking
     pub(crate) const ENV_VAR_NAME_ASSETS_TARGET: &'static str = "DX_LINK_ASSETS_TARGET"; // The target directory for the assets
     pub(crate) const DX_LINKER_ENV_VAR: &'static str = "DX_LINKER"; // The linker to use
+    pub(crate) const LOG_FILE_VAR_NAME: &'static str = "DX_LINK_LOG_FILE"; // The log file to use
 
     /// Should we write the input arguments to a file (aka act as a linker subprocess)?
     ///
@@ -92,17 +96,24 @@ impl LinkAction {
 
             // Assemble an asset manifest by walking the object files being passed to us
             LinkAction::BuildAssetManifest { destination: dest } => {
-                let manifest = link_asset_manifest();
+                let (manifest, status) = link_asset_manifest();
 
                 let contents =
                     serde_json::to_string(&manifest).context("Failed to write manifest")?;
                 std::fs::write(dest, contents).context("Failed to write output file")?;
+
+                if let Some(code) = status.code() {
+                    std::process::exit(code);
+                }
             }
 
             // Optimize the assets by copying them to the destination
             LinkAction::OptimizeAssets { destination } => {
-                let manifest = link_asset_manifest();
-                create_dir_all(&destination)?;
+                let (manifest, status) = link_asset_manifest();
+                tracing::info!("Found assets: {:#?}", manifest.assets().collect::<Vec<_>>());
+                if let Err(err) = create_dir_all(&destination) {
+                    tracing::error!("Failed to create destination directory: {err}");
+                }
                 for asset in manifest.assets() {
                     let path = PathBuf::from(asset.absolute_source_path());
                     let destination_path = destination.join(asset.bundled_path());
@@ -114,6 +125,9 @@ impl LinkAction {
                     );
                     process_file_to(asset.options(), &path, &destination_path)?;
                 }
+                if let Some(code) = status.code() {
+                    std::process::exit(code);
+                }
             }
         }
 
@@ -121,7 +135,7 @@ impl LinkAction {
     }
 }
 
-fn link_asset_manifest() -> AssetManifest {
+fn link_asset_manifest() -> (AssetManifest, std::process::ExitStatus) {
     let args: Vec<_> = std::env::args().collect();
     let mut references = AssetReferences::from_link_args(&args);
 
@@ -142,7 +156,6 @@ fn link_asset_manifest() -> AssetManifest {
         for asset in references.assets.iter() {
             let name = asset.bundled_asset.link_section();
             let data = const_serialize::serialize_const(&asset.bundled_asset, ConstVec::new());
-            const_serialize::deserialize_const!(BundledAsset, data.read()).unwrap();
             data_sections.push((name, data.as_ref().to_vec()));
         }
 
@@ -189,15 +202,11 @@ fn link_asset_manifest() -> AssetManifest {
         .status()
         .expect("Failed to spawn linker");
 
-    if let Some(code) = status.code() {
-        std::process::exit(code);
-    }
-
-    manifest
+    (manifest, status)
 }
 
 fn linker_log_file() -> Option<PathBuf> {
-    std::env::var("DIOXUS_LINKER_LOG_FILE")
+    std::env::var(LinkAction::LOG_FILE_VAR_NAME)
         .ok()
         .map(PathBuf::from)
 }
@@ -273,7 +282,7 @@ impl AssetReferences {
         for file in obj_files {
             if let Ok(path) = file.canonicalize() {
                 if let Err(err) = references.add_from_object_path(&path) {
-                    tracing::error!("Failed to read object file: {err}");
+                    tracing::error!("Failed to read object file {}: {err}", path.display());
                 }
             }
         }
@@ -292,12 +301,15 @@ impl AssetReferences {
                         .iter()
                         .any(|link_section| link_section.link_section == name)
                     {
+                        let Some(file_range) = section.file_range() else {
+                            continue;
+                        };
                         if file.format() == object::BinaryFormat::Wasm {
                             // In wasm this is actually the start and end
-                            let (start, end) = section.file_range().unwrap();
+                            let (start, end) = file_range;
                             range = Some(start as usize..end as usize);
                         } else {
-                            let (offset, len) = section.file_range().unwrap();
+                            let (offset, len) = file_range;
                             range = Some(offset as usize..(offset + len) as usize);
                         }
                         break;
@@ -349,10 +361,12 @@ fn find_linker(toolchain: String) -> Command {
             command
         }
         // Eg. nightly-x86_64-unknown-linux-gnu
-        [_, _, _, "linux", _] => {
+        [_, arch, _, "linux", _] => {
             let mut command = Command::new("cc");
             command.env("LC_ALL", "C");
-            command.arg("-m64");
+            if arch.contains("64") {
+                command.arg("-m64");
+            }
             command
         }
         // Eg. stable-x86_64-pc-windows-msvc
@@ -399,10 +413,6 @@ fn wasm_ld() -> PathBuf {
         .join("rust-lld");
     root
 }
-
-// fn linux_ld() -> PathBuf {
-//     LC_ALL="C" PATH="/home/evan/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/bin:/home/evan/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/bin/self-contained:/home/evan/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin:/snap/bin" VSLANG="1033" "cc" "-m64" "/tmp/rustcI2egGS/symbols.o" "main.main.4cac11b5fb976cef-cgu.0.rcgu.o" "main.97rcuhy2qxy2iu2fheg5t5ywl.rcgu.o" "-Wl,--as-needed" "-Wl,-Bstatic" "/home/evan/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libstd-5024342751ec4fae.rlib" "/home/evan/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libpanic_unwind-2ef37a08deacbef7.rlib" "/home/evan/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libobject-6474163bcabd56d4.rlib" "/home/evan/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libmemchr-0c669fc4488b33a7.rlib" "/home/evan/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libaddr2line-facd468809e87d62.rlib" "/home/evan/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libgimli-a761ff9b49802762.rlib" "/home/evan/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/librustc_demangle-b5857e32e98a1522.rlib" "/home/evan/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libstd_detect-b4d4247665203a7e.rlib" "/home/evan/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libhashbrown-ba5952c0e6997780.rlib" "/home/evan/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/librustc_std_workspace_alloc-c28e1bddb833f318.rlib" "/home/evan/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libminiz_oxide-0c142178ac12e90a.rlib" "/home/evan/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libadler2-9849bba3624604db.rlib" "/home/evan/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libunwind-91be5c201001b2fd.rlib" "/home/evan/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libcfg_if-03f10e69535bbda2.rlib" "/home/evan/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/liblibc-be500544df63862d.rlib" "/home/evan/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/liballoc-db9414217643e13f.rlib" "/home/evan/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/librustc_std_workspace_core-fc0ad1732fa36810.rlib" "/home/evan/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libcore-11d9a250f9da47d5.rlib" "/home/evan/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libcompiler_builtins-64829956fbeadedf.rlib" "-Wl,-Bdynamic" "-lgcc_s" "-lutil" "-lrt" "-lpthread" "-lm" "-ldl" "-lc" "-L" "/tmp/rustcI2egGS/raw-dylibs" "-B/home/evan/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/bin/gcc-ld" "-fuse-ld=lld" "-Wl,-znostart-stop-gc" "-Wl,--eh-frame-hdr" "-Wl,-z,noexecstack" "-L" "/home/evan/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib" "-o" "main" "-Wl,--gc-sections" "-pie" "-Wl,-z,relro,-z,now" "-nodefaultlibs"
-// }
 
 fn create_data_object_file<'a>(
     data_sections: impl IntoIterator<Item = (&'a str, &'a [u8])>,

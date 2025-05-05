@@ -33,6 +33,66 @@ use std::{
 };
 
 /// Build, Bundle & Ship Dioxus Apps.
+///
+/// ## Creating a New Project
+///
+/// You can use `dx new` to create a new dioxus project. The CLI will ask you a few questions about your project and then create a new project for you:
+/// ```sh
+/// dx new my-app
+/// ```
+///
+/// ## Serving Your App
+///
+/// You can use `dx serve` to serve your dioxus app. This will start a local server and watch for changes to your app:
+/// ```sh
+/// dx serve
+/// ```
+///
+/// ## Bundling Your App
+///
+/// Once you are ready to ship your app, you can use `dx bundle` to build your app. This will create a production-ready build of your app:
+/// ```sh
+/// dx bundle
+/// ```
+///
+/// ## Asset Optimizer
+///
+/// When you serve dioxus with dx, it will automatically handle the build process for you. If you need to integrate with a larger build system,
+/// you can use the `dx` asset optimizer separately to link to your assets. If you set the `DX_LINK_ASSETS_TARGET` environment variable, dx will
+/// proxy your linker and copy the optimized assets it finds in your program into the specified directory.
+///
+/// ### Usage with trunk
+///
+/// If you are using trunk, you need to create a temporary asset directory to store the output of the dx asset optimizer that will be copied by trunk into your dist directory:
+/// ```html
+/// <html>
+///   <head>
+///     <link data-trunk rel="rust"/>
+///     <link data-trunk rel="copy-dir" href="./dist_assets/" data-target-path="./assets/"/>
+///   </head>
+///   <body>
+///     <div id="main"></div>
+///   </body>
+/// </html>
+/// ```
+/// Then when you build, you need to set the `DX_LINK_ASSETS_TARGET` environment variable to the path of the temporary asset directory and `dx` as your linker:
+/// ```sh
+/// DX_LINK_ASSETS_TARGET="dist_assets" RUSTFLAGS="-Clinker=dx" trunk serve
+/// ```
+///
+/// ### Usage with cargo
+///
+/// If you are using cargo, you need to set the `DX_LINK_ASSETS_TARGET` environment variable to the path where your optimize assets will be stored and `dx` as your linker:
+/// ```sh
+/// DX_LINK_ASSETS_TARGET="dist_assets" RUSTFLAGS="-Clinker=dx" cargo run
+/// ```
+///
+/// ### Custom linker path
+///
+/// DX will try to find the default linker for your system, but if you need to use a custom linker on top of the dx proxy, you can set the `DX_LINKER` environment variable to the path of your custom linker. For example, if you are using `lld` as your linker, you can set the `DX_LINKER` environment variable to the path of `lld`:
+/// ```sh
+/// DX_LINKER="/path/to/lld" DX_LINK_ASSETS_TARGET="dist_assets" RUSTFLAGS="-Clinker=dx" cargo run
+/// ```
 #[derive(Parser)]
 #[clap(name = "dioxus", version = VERSION.as_str())]
 pub(crate) struct Cli {
