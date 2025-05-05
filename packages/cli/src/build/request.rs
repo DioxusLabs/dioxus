@@ -1511,6 +1511,8 @@ session_cache_dir: {}"#,
             tracing::debug!("Wrote fat archive to {:?}", out_ar_path);
         }
 
+        compiler_rlibs.dedup();
+
         // We're going to replace the first rlib in the args with our fat archive
         // And then remove the rest of the rlibs
         //
