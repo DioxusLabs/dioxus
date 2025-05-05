@@ -344,6 +344,8 @@ use tokio::{io::AsyncBufReadExt, process::Command};
 use toml_edit::Item;
 use uuid::Uuid;
 
+use super::HotpatchModuleCache;
+
 /// This struct is used to plan the build process.
 ///
 /// The point here is to be able to take in the user's config from the CLI without modifying the
@@ -416,6 +418,7 @@ pub enum BuildMode {
         rustc_args: RustcArgs,
         changed_files: Vec<PathBuf>,
         aslr_reference: u64,
+        cache: Arc<HotpatchModuleCache>,
     },
 }
 
@@ -432,6 +435,7 @@ pub struct BuildArtifacts {
     pub(crate) time_end: SystemTime,
     pub(crate) assets: AssetManifest,
     pub(crate) mode: BuildMode,
+    pub(crate) patch_cache: Option<Arc<HotpatchModuleCache>>,
 }
 
 pub(crate) static PROFILE_WASM: &str = "wasm-dev";
@@ -720,6 +724,11 @@ session_cache_dir: {}"#,
             }
         }
 
+        // Populate the patch cache if we're in fat mode
+        if matches!(ctx.mode, BuildMode::Fat) {
+            artifacts.patch_cache = Some(Arc::new(self.create_patch_cache(ctx).await?));
+        }
+
         Ok(artifacts)
     }
 
@@ -874,6 +883,7 @@ session_cache_dir: {}"#,
             time_start,
             assets,
             mode,
+            patch_cache: None,
         })
     }
 
@@ -1490,14 +1500,18 @@ session_cache_dir: {}"#,
                         continue;
                     }
 
+                    if object_file.header().size() == 0 {
+                        continue;
+                    }
+
+                    // rlibs might contain dlls/sos/lib files which we don't want to include
                     if name.ends_with(".dll") || name.ends_with(".so") || name.ends_with(".lib") {
                         compiler_rlibs.push(rlib.to_owned());
                         continue;
                     }
 
-                    if !name.ends_with(".o") {
-                        tracing::warn!("Unknown object file in rlib: {:?}", name);
-                        // continue;
+                    if !(name.ends_with(".o") || name.ends_with(".obj")) {
+                        tracing::debug!("Unknown object file in rlib: {:?}", name);
                     }
 
                     out_ar
@@ -3546,5 +3560,14 @@ session_cache_dir: {}"#,
             std::fs::File::open(&self.crate_target.src_path)?.set_modified(SystemTime::now())?;
         }
         Ok(())
+    }
+
+    async fn create_patch_cache(&self, ctx: &BuildContext) -> Result<HotpatchModuleCache> {
+        let exe = match self.platform {
+            Platform::Web => self.wasm_bindgen_wasm_output_file(),
+            _ => self.main_exe(),
+        };
+
+        Ok(HotpatchModuleCache::new(&exe, &self.triple)?)
     }
 }

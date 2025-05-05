@@ -131,10 +131,10 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &mut TraceController) -> 
                         tracing::error!("Build failed: {:#?}", err);
                     }
                     BuilderUpdate::BuildReady { bundle } => match bundle.mode {
-                        BuildMode::Thin { .. } => {
+                        BuildMode::Thin { ref cache, .. } => {
                             let elapsed =
                                 bundle.time_end.duration_since(bundle.time_start).unwrap();
-                            match builder.hotpatch(&bundle, id).await {
+                            match builder.hotpatch(&bundle, id, cache.clone()).await {
                                 Ok(jumptable) => devserver.send_patch(jumptable, elapsed, id).await,
                                 Err(err) => {
                                     tracing::error!("Failed to hot-patch app: {err}");

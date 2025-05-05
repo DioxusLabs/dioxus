@@ -58,7 +58,7 @@ pub enum PatchError {
 ///
 /// On the Dioxus Docsite, it dropped the patch time from 3s to 1.1s (!)
 pub struct HotpatchModuleCache {
-    pub _path: PathBuf,
+    pub path: PathBuf,
 
     // .... wasm stuff
     pub symbol_ifunc_map: HashMap<String, i32>,
@@ -71,66 +71,148 @@ pub struct HotpatchModuleCache {
     pub old_name_to_addr: HashMap<String, u64>,
 }
 
+impl PartialEq for HotpatchModuleCache {
+    fn eq(&self, other: &Self) -> bool {
+        self.path == other.path
+    }
+}
+
+impl std::fmt::Debug for HotpatchModuleCache {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("HotpatchModuleCache")
+            .field("_path", &self.path)
+            .finish()
+    }
+}
+
+impl HotpatchModuleCache {
+    // / This caching step is crucial for performance on large projects. The original module can be
+    /// quite large (hundreds of MB), so this step drastically speeds it up.
+    pub fn new(original: &Path, triple: &Triple) -> Result<Self> {
+        let cache = match triple.operating_system {
+            OperatingSystem::Windows => {
+                use pdb::FallibleIterator;
+
+                // due to lifetimes, this code is unfortunately duplicated.
+                // the pdb crate doesn't bind the lifetime of the items in the iterator to the symbol table,
+                // so we're stuck with local lifetime.s
+                let old_pdb_file = original.with_extension("pdb");
+                let old_pdb_file_handle = std::fs::File::open(old_pdb_file).unwrap();
+                let mut pdb_file = pdb::PDB::open(old_pdb_file_handle).unwrap();
+                let symbol_table = pdb_file.global_symbols().unwrap();
+                let address_map = pdb_file.address_map().unwrap();
+                let mut name_to_address = HashMap::new();
+                let mut symbols = symbol_table.iter();
+                while let Ok(Some(symbol)) = symbols.next() {
+                    match symbol.parse() {
+                        Ok(pdb::SymbolData::Public(data)) if data.function => {
+                            let rva = data.offset.to_rva(&address_map).unwrap_or_default();
+                            name_to_address.insert(data.name.to_string().to_string(), rva.0 as u64);
+                        }
+                        _ => {}
+                    }
+                }
+
+                HotpatchModuleCache {
+                    old_name_to_addr: name_to_address,
+                    path: original.to_path_buf(),
+                    old_bytes: vec![],
+                    symbol_ifunc_map: Default::default(),
+                    old_wasm: Module::default(),
+                    old_exports: Default::default(),
+                    old_imports: Default::default(),
+                }
+            }
+
+            _ if triple.architecture == target_lexicon::Architecture::Wasm32 => {
+                tracing::debug!("Creating wasm cache");
+                let old_bytes = std::fs::read(original)?;
+                let ParsedModule {
+                    module: old_wasm,
+                    symbols: old_symbols,
+                    ..
+                } = parse_module_with_ids(&old_bytes)?;
+
+                if old_symbols.symbols.is_empty() {
+                    return Err(PatchError::MissingSymbols);
+                }
+
+                let name_to_ifunc_old = collect_func_ifuncs(&old_wasm);
+                let name_to_ifunc_old =
+                    fill_ifuncs_from_old(&old_wasm, &old_symbols, name_to_ifunc_old);
+                let symbol_ifunc_map = name_to_ifunc_old
+                    .par_iter()
+                    .map(|(name, idx)| (name.to_string(), *idx))
+                    .collect::<HashMap<_, _>>();
+                let old_exports = old_wasm
+                    .exports
+                    .iter()
+                    .map(|e| e.name.to_string())
+                    .collect::<HashSet<_>>();
+                let old_imports = old_wasm
+                    .imports
+                    .iter()
+                    .map(|i| i.name.to_string())
+                    .collect::<HashSet<_>>();
+                HotpatchModuleCache {
+                    path: original.to_path_buf(),
+                    old_bytes,
+                    symbol_ifunc_map,
+                    old_exports,
+                    old_imports,
+                    old_wasm,
+                    old_name_to_addr: Default::default(),
+                }
+            }
+            _ => {
+                let obj1_bytes = std::fs::read(original)?;
+                let obj1 = File::parse(&obj1_bytes as &[u8])?;
+                let old_syms = obj1.symbol_map();
+                let old_name_to_addr = old_syms
+                    .symbols()
+                    .par_iter()
+                    .map(|s| (s.name().to_string(), s.address()))
+                    .collect::<HashMap<_, _>>();
+                HotpatchModuleCache {
+                    old_name_to_addr,
+                    path: original.to_path_buf(),
+                    old_bytes: obj1_bytes,
+                    symbol_ifunc_map: Default::default(),
+                    old_wasm: Module::default(),
+                    old_exports: Default::default(),
+                    old_imports: Default::default(),
+                }
+            }
+        };
+
+        Ok(cache)
+    }
+}
+
 /// Create a jump table for the given original and patch files.
 pub fn create_jump_table(
-    original: &Path,
     patch: &Path,
     triple: &Triple,
-    cache: &mut Option<HotpatchModuleCache>,
+    cache: &HotpatchModuleCache,
 ) -> Result<JumpTable> {
     // Symbols are stored differently based on the platform, so we need to handle them differently.
     // - Wasm requires the walrus crate and actually modifies the patch file
     // - windows requires the pdb crate and pdb files
     // - nix requires the object crate
     match triple.operating_system {
-        OperatingSystem::Windows => create_windows_jump_table(original, patch, cache),
+        OperatingSystem::Windows => create_windows_jump_table(patch, cache),
         _ if triple.architecture == target_lexicon::Architecture::Wasm32 => {
-            create_wasm_jump_table(original, patch, cache)
+            create_wasm_jump_table(patch, cache)
         }
-        _ => create_native_jump_table(original, patch, triple, cache),
+        _ => create_native_jump_table(patch, triple, cache),
     }
 }
 
 fn create_windows_jump_table(
-    original: &Path,
     patch: &Path,
-    cache: &mut Option<HotpatchModuleCache>,
+    cache: &HotpatchModuleCache,
 ) -> std::result::Result<JumpTable, PatchError> {
     use pdb::FallibleIterator;
-
-    if cache.is_none() {
-        // due to lifetimes, this code is unfortunately duplicated.
-        // the pdb crate doesn't bind the lifetime of the items in the iterator to the symbol table,
-        // so we're stuck with local lifetime.s
-        let old_pdb_file = original.with_extension("pdb");
-        let old_pdb_file_handle = std::fs::File::open(old_pdb_file).unwrap();
-        let mut pdb_file = pdb::PDB::open(old_pdb_file_handle).unwrap();
-        let symbol_table = pdb_file.global_symbols().unwrap();
-        let address_map = pdb_file.address_map().unwrap();
-        let mut name_to_address = HashMap::new();
-        let mut symbols = symbol_table.iter();
-        while let Ok(Some(symbol)) = symbols.next() {
-            match symbol.parse() {
-                Ok(pdb::SymbolData::Public(data)) if data.function => {
-                    let rva = data.offset.to_rva(&address_map).unwrap_or_default();
-                    name_to_address.insert(data.name.to_string().to_string(), rva.0 as u64);
-                }
-                _ => {}
-            }
-        }
-
-        *cache = Some(HotpatchModuleCache {
-            old_name_to_addr: name_to_address,
-            _path: original.to_path_buf(),
-            old_bytes: vec![],
-            symbol_ifunc_map: Default::default(),
-            old_wasm: Module::default(),
-            old_exports: Default::default(),
-            old_imports: Default::default(),
-        });
-    }
-
-    let cache = cache.as_mut().unwrap();
     let old_name_to_addr = &cache.old_name_to_addr;
 
     let mut new_name_to_addr = HashMap::new();
@@ -186,32 +268,11 @@ fn create_windows_jump_table(
 /// This does not work for WASM since the `object` crate does not support emitting the WASM format,
 /// and because WASM requires more logic to handle the wasm-bindgen transformations.
 fn create_native_jump_table(
-    original: &Path,
     patch: &Path,
     triple: &Triple,
-    cache: &mut Option<HotpatchModuleCache>,
+    cache: &HotpatchModuleCache,
 ) -> Result<JumpTable> {
-    if cache.is_none() {
-        let obj1_bytes = std::fs::read(original)?;
-        let obj1 = File::parse(&obj1_bytes as &[u8])?;
-        let old_syms = obj1.symbol_map();
-        let old_name_to_addr = old_syms
-            .symbols()
-            .par_iter()
-            .map(|s| (s.name().to_string(), s.address()))
-            .collect::<HashMap<_, _>>();
-        *cache = Some(HotpatchModuleCache {
-            old_name_to_addr,
-            _path: original.to_path_buf(),
-            old_bytes: obj1_bytes,
-            symbol_ifunc_map: Default::default(),
-            old_wasm: Module::default(),
-            old_exports: Default::default(),
-            old_imports: Default::default(),
-        });
-    }
-
-    let old_name_to_addr = &cache.as_mut().unwrap().old_name_to_addr;
+    let old_name_to_addr = &cache.old_name_to_addr;
     let obj2_bytes = std::fs::read(patch)?;
     let obj2 = File::parse(&obj2_bytes as &[u8])?;
     let mut map = AddressMap::default();
@@ -276,53 +337,7 @@ fn create_native_jump_table(
 /// to manually satisfy them here, removing their need to be imported.
 ///
 /// https://github.com/WebAssembly/tool-conventions/blob/main/DynamicLinking.md
-fn create_wasm_jump_table(
-    original: &Path,
-    patch: &Path,
-    cache: &mut Option<HotpatchModuleCache>,
-) -> Result<JumpTable> {
-    // This caching step is crucial for performance on large projects. The original module can be
-    // quite large (hundreds of MB), so this step drastically speeds it up.
-    if cache.is_none() {
-        let old_bytes = std::fs::read(original)?;
-        let ParsedModule {
-            module: old_wasm,
-            symbols: old_symbols,
-            ..
-        } = parse_module_with_ids(&old_bytes)?;
-
-        if old_symbols.symbols.is_empty() {
-            return Err(PatchError::MissingSymbols);
-        }
-
-        let name_to_ifunc_old = collect_func_ifuncs(&old_wasm);
-        let name_to_ifunc_old = fill_ifuncs_from_old(&old_wasm, &old_symbols, name_to_ifunc_old);
-        let symbol_ifunc_map = name_to_ifunc_old
-            .par_iter()
-            .map(|(name, idx)| (name.to_string(), *idx))
-            .collect::<HashMap<_, _>>();
-        let old_exports = old_wasm
-            .exports
-            .iter()
-            .map(|e| e.name.to_string())
-            .collect::<HashSet<_>>();
-        let old_imports = old_wasm
-            .imports
-            .iter()
-            .map(|i| i.name.to_string())
-            .collect::<HashSet<_>>();
-        *cache = Some(HotpatchModuleCache {
-            _path: original.to_path_buf(),
-            old_bytes,
-            symbol_ifunc_map,
-            old_exports,
-            old_imports,
-            old_wasm,
-            old_name_to_addr: Default::default(),
-        });
-    }
-
-    let cache = cache.as_mut().unwrap();
+fn create_wasm_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> Result<JumpTable> {
     let name_to_ifunc_old = &cache.symbol_ifunc_map;
     let old = &cache.old_wasm;
     let old_symbols =

@@ -7,6 +7,7 @@ use dioxus_cli_opt::process_file_to;
 use futures_util::future::OptionFuture;
 use std::{
     env,
+    sync::Arc,
     time::{Duration, Instant, SystemTime},
 };
 use std::{
@@ -288,6 +289,12 @@ impl AppBuilder {
             }
         };
 
+        let cache = artifacts
+            .patch_cache
+            .clone()
+            .context("Failed to get patch cache")
+            .unwrap();
+
         // Abort all the ongoing builds, cleaning up any loose artifacts and waiting to cleanly exit
         self.abort_all(BuildStage::Restarting);
         self.build_task = tokio::spawn({
@@ -298,6 +305,7 @@ impl AppBuilder {
                     changed_files,
                     rustc_args: artifacts.direct_rustc,
                     aslr_reference,
+                    cache,
                 },
             };
             async move { request.build(&ctx).await }
@@ -542,7 +550,11 @@ impl AppBuilder {
         }
     }
 
-    pub(crate) async fn hotpatch(&mut self, res: &BuildArtifacts) -> Result<JumpTable> {
+    pub(crate) async fn hotpatch(
+        &mut self,
+        res: &BuildArtifacts,
+        cache: Arc<HotpatchModuleCache>,
+    ) -> Result<JumpTable> {
         let original = self.build.main_exe();
         let new = self.build.patch_exe(res.time_start);
         let triple = self.build.triple.clone();
@@ -578,8 +590,7 @@ impl AppBuilder {
 
         tracing::debug!("Patching {} -> {}", original.display(), new.display());
 
-        let mut jump_table =
-            crate::build::create_jump_table(&original, &new, &triple, &mut self.patch_cache)?;
+        let mut jump_table = crate::build::create_jump_table(&new, &triple, &cache)?;
 
         // If it's android, we need to copy the assets to the device and then change the location of the patch
         if self.build.platform == Platform::Android {

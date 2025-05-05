@@ -1,7 +1,7 @@
 use super::{AppBuilder, ServeUpdate, WebServer};
 use crate::{
-    BuildArtifacts, BuildId, BuildMode, BuildTargets, Error, Platform, Result, ServeArgs, TraceSrc,
-    Workspace,
+    BuildArtifacts, BuildId, BuildMode, BuildTargets, Error, HotpatchModuleCache, Platform, Result,
+    ServeArgs, TraceSrc, Workspace,
 };
 use anyhow::Context;
 use dioxus_core::internal::{
@@ -569,14 +569,15 @@ impl AppServer {
         &mut self,
         res: &BuildArtifacts,
         id: BuildId,
+        cache: Arc<HotpatchModuleCache>,
     ) -> Result<JumpTable> {
         let jump_table = match id {
-            BuildId::CLIENT => self.client.hotpatch(res).await,
+            BuildId::CLIENT => self.client.hotpatch(res, cache).await,
             BuildId::SERVER => {
                 self.server
                     .as_mut()
                     .context("Server not found")?
-                    .hotpatch(res)
+                    .hotpatch(res, cache)
                     .await
             }
             _ => return Err(Error::Runtime("Invalid build id".into())),
