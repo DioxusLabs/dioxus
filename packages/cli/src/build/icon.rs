@@ -192,7 +192,7 @@ fn android_vector_drawable(tree: &resvg::usvg::Tree, out_dir: &Path) -> Result<(
 
     // Here the recursive conversion node
     for node in tree.root().children() {
-        usvg_node_to_vector_drawable(&node, &mut xml)?;
+        usvg_node_to_vector_drawable(node, &mut xml)?;
     }
 
     xml.write(XmlEvent::end_element())
@@ -322,8 +322,10 @@ pub fn gen_android_icons(icon_path: &Path, out_dir: &Path) -> Result<()> {
         let svg_data = std::fs::read(icon_path)?;
         let mut fontdb = usvg::fontdb::Database::new();
         fontdb.load_system_fonts();
-        let mut opt = usvg::Options::default();
-        opt.fontdb = std::sync::Arc::new(fontdb);
+        let opt = usvg::Options {
+            fontdb: std::sync::Arc::new(fontdb),
+            ..Default::default()
+        };
         let tree = usvg::Tree::from_data(&svg_data, &opt).context("Failed to parse SVG")?;
         Source::Svg(tree)
     } else {
