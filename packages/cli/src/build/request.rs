@@ -2531,6 +2531,16 @@ session_cache_dir: {}"#,
                     .filter(|platform| *platform != Platform::Server)
                     .map(|f| (f, feature.to_string()))
             })
+            .filter(|(_platform, feature)| {
+                ws.krates
+                    .get_deps(krate.node_id)
+                    .any(|(node, _)| match node {
+                        krates::Node::Feature { krate_index, name } => {
+                            name == feature && ws.krates[*krate_index].name == "dioxus"
+                        }
+                        _ => false,
+                    })
+            })
             .collect::<Vec<_>>();
 
         if manually_enabled_platforms.len() > 1 {
