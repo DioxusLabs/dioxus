@@ -3,17 +3,19 @@ use dioxus_signals::{GlobalKey, Writable};
 
 pub use dioxus_devtools_types::*;
 pub use subsecond;
-
-#[derive(Debug, PartialEq, thiserror::Error)]
-pub enum DevtoolsError {
-    #[error("Failed to load the patch: {0}")]
-    PatchFailed(#[from] subsecond::PatchError),
-}
+use subsecond::PatchError;
 
 /// Applies template and literal changes to the VirtualDom
 ///
 /// Assets need to be handled by the renderer.
-pub fn apply_changes(dom: &VirtualDom, msg: &HotReloadMsg) -> Result<(), DevtoolsError> {
+pub fn apply_changes(dom: &VirtualDom, msg: &HotReloadMsg) {
+    try_apply_changes(dom, msg).unwrap()
+}
+
+/// Applies template and literal changes to the VirtualDom, but doesn't panic if patching fails.
+///
+/// Assets need to be handled by the renderer.
+pub fn try_apply_changes(dom: &VirtualDom, msg: &HotReloadMsg) -> Result<(), PatchError> {
     dom.runtime().on_scope(ScopeId::ROOT, || {
         // 1. Update signals...
         let ctx = dioxus_signals::get_global_context();

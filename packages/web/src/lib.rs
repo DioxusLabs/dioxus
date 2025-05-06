@@ -74,7 +74,7 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
             msg = hotreload_rx.next() => {
                 if let Some(msg) = msg {
                     if msg.for_build_id == Some(dioxus_cli_config::build_id()) {
-                        dioxus_devtools::apply_changes(&virtual_dom, &msg).unwrap();
+                        dioxus_devtools::apply_changes(&virtual_dom, &msg);
                     }
                 }
             }
@@ -205,20 +205,20 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
         }
         #[cfg(all(feature = "devtools", debug_assertions))]
         if let Some(hr_msg) = hotreload_msg {
-            if dioxus_devtools::apply_changes(&virtual_dom, &hr_msg).is_ok() {
-                if !hr_msg.assets.is_empty() {
-                    crate::devtools::invalidate_browser_asset_cache();
-                }
+            dioxus_devtools::apply_changes(&virtual_dom, &hr_msg);
 
-                if hr_msg.for_build_id == Some(dioxus_cli_config::build_id()) {
-                    devtools::show_toast(
-                        "Hot-patch success!",
-                        &format!("App successfully patched in {} ms", hr_msg.ms_elapsed),
-                        devtools::ToastLevel::Success,
-                        Duration::from_millis(2000),
-                        false,
-                    );
-                }
+            if !hr_msg.assets.is_empty() {
+                crate::devtools::invalidate_browser_asset_cache();
+            }
+
+            if hr_msg.for_build_id == Some(dioxus_cli_config::build_id()) {
+                devtools::show_toast(
+                    "Hot-patch success!",
+                    &format!("App successfully patched in {} ms", hr_msg.ms_elapsed),
+                    devtools::ToastLevel::Success,
+                    Duration::from_millis(2000),
+                    false,
+                );
             }
         }
 

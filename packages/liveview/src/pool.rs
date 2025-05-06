@@ -217,7 +217,7 @@ pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), Li
                 #[cfg(all(feature = "devtools", debug_assertions))]
                 match msg {
                     dioxus_devtools::DevserverMsg::HotReload(msg)=> {
-                        _ = dioxus_devtools::apply_changes(&vdom, &msg);
+                        dioxus_devtools::apply_changes(&vdom, &msg);
                     }
                     dioxus_devtools::DevserverMsg::Shutdown => {
                         std::process::exit(0);
