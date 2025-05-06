@@ -7,6 +7,7 @@
 
 mod builder;
 mod bundle;
+mod icon;
 mod prerender;
 mod progress;
 mod request;

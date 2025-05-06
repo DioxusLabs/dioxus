@@ -98,6 +98,12 @@ ansi-to-html = "0.2.2"
 path-absolutize = "3.1"
 ratatui = { version = "0.29.0", features = ["crossterm", "unstable"] }
 
+# Image format/conversion
+image = { version = "0.25" }
+resvg = "0.45.0"
+# for Android VectorDrawable
+xml-rs = "0.8"
+
 # disable `log` entirely since `walrus` uses it and is *much* slower with it enableda
 log = { version = "0.4", features = ["max_level_off", "release_max_level_off"] }
 
