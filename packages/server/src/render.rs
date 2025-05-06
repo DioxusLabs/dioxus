@@ -7,7 +7,6 @@ use crate::{
 use dioxus_cli_config::base_path;
 use dioxus_fullstack_hooks::{StreamingContext, StreamingStatus};
 use dioxus_fullstack_protocol::{HydrationContext, SerializedHydrationData};
-use dioxus_interpreter_js::INITIALIZE_STREAMING_JS;
 use dioxus_isrg::{CachedRender, IncrementalRendererError, RenderFreshness};
 use dioxus_lib::document::Document;
 use dioxus_lib::prelude::dioxus_core::DynamicNode;
@@ -662,7 +661,11 @@ impl FullstackHTMLTemplate {
 
         to.write_str(&index.close_head)?;
 
-        write!(to, "<script>{INITIALIZE_STREAMING_JS}</script>")?;
+        #[cfg(feature = "document")]
+        {
+            use dioxus_interpreter_js::INITIALIZE_STREAMING_JS;
+            write!(to, "<script>{INITIALIZE_STREAMING_JS}</script>")?;
+        }
 
         Ok(())
     }

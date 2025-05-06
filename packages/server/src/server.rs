@@ -67,6 +67,7 @@ pub trait DioxusRouterExt<S>: DioxusRouterFnExt<S> {
         Self: Sized;
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl<S> DioxusRouterExt<S> for Router<S>
 where
     S: Send + Sync + Clone + 'static,
@@ -186,12 +187,9 @@ where
         mut self,
         context_providers: ContextProviders,
     ) -> Self {
-        tracing::trace!("Registering server functions...");
-
         for f in collect_raw_server_fns() {
             self = register_server_fn_on_router(f, self, context_providers.clone());
         }
-
         self
     }
 }
@@ -220,7 +218,7 @@ where
 
 pub type AxumServerFn = ServerFnTraitObj<http::Request<Body>, http::Response<Body>>;
 
-pub fn collect_raw_server_fns() -> Vec<&'static AxumServerFn> {
+pub(crate) fn collect_raw_server_fns() -> Vec<&'static AxumServerFn> {
     inventory::iter::<AxumServerFn>().collect()
 }
 
