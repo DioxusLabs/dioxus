@@ -134,7 +134,7 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &mut TraceController) -> 
                         BuildMode::Thin { ref cache, .. } => {
                             let elapsed =
                                 bundle.time_end.duration_since(bundle.time_start).unwrap();
-                            match builder.hotpatch(&bundle, id, cache.clone()).await {
+                            match builder.hotpatch(&bundle, id, cache).await {
                                 Ok(jumptable) => devserver.send_patch(jumptable, elapsed, id).await,
                                 Err(err) => {
                                     tracing::error!("Failed to hot-patch app: {err}");

@@ -68,7 +68,7 @@ pub struct HotpatchModuleCache {
     pub old_imports: HashSet<String>,
 
     // ... native stuff
-    pub old_name_to_addr: HashMap<String, CachedSymbol>,
+    pub symbol_table: HashMap<String, CachedSymbol>,
 }
 
 pub struct CachedSymbol {
@@ -153,7 +153,7 @@ impl HotpatchModuleCache {
                 }
 
                 HotpatchModuleCache {
-                    old_name_to_addr: name_to_address,
+                    symbol_table: name_to_address,
                     path: original.to_path_buf(),
                     old_bytes: vec![],
                     symbol_ifunc_map: Default::default(),
@@ -200,7 +200,7 @@ impl HotpatchModuleCache {
                     old_exports,
                     old_imports,
                     old_wasm,
-                    old_name_to_addr: Default::default(),
+                    symbol_table: Default::default(),
                 }
             }
             _ => {
@@ -221,7 +221,7 @@ impl HotpatchModuleCache {
                     })
                     .collect::<HashMap<_, _>>();
                 HotpatchModuleCache {
-                    old_name_to_addr,
+                    symbol_table: old_name_to_addr,
                     path: original.to_path_buf(),
                     old_bytes: obj1_bytes,
                     symbol_ifunc_map: Default::default(),
@@ -257,7 +257,7 @@ pub fn create_jump_table(
 
 fn create_windows_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> Result<JumpTable> {
     use pdb::FallibleIterator;
-    let old_name_to_addr = &cache.old_name_to_addr;
+    let old_name_to_addr = &cache.symbol_table;
 
     let mut new_name_to_addr = HashMap::new();
     let new_pdb_file = patch.with_extension("pdb");
@@ -315,7 +315,7 @@ fn create_native_jump_table(
     triple: &Triple,
     cache: &HotpatchModuleCache,
 ) -> Result<JumpTable> {
-    let old_name_to_addr = &cache.old_name_to_addr;
+    let old_name_to_addr = &cache.symbol_table;
     let obj2_bytes = std::fs::read(patch)?;
     let obj2 = File::parse(&obj2_bytes as &[u8])?;
     let mut map = AddressMap::default();
@@ -820,14 +820,7 @@ pub fn create_undefined_symbol_stub(
         _ => {}
     }
 
-    // Load the original binary
-    // let bytes = std::fs::read(source_path)?;
-    // let source = File::parse(bytes.deref() as &[u8]).context("Failed to parse")?;
-    // let symbol_table = source
-    //     .symbols()
-    //     .flat_map(|s| Some((s.name().ok()?, s)))
-    //     .collect::<HashMap<_, _>>();
-    let symbol_table = &cache.old_name_to_addr;
+    let symbol_table = &cache.symbol_table;
 
     // Get the offset from the main module and adjust the addresses by the slide
     let aslr_ref_address = symbol_table
@@ -841,40 +834,7 @@ pub fn create_undefined_symbol_stub(
     // for each symbol we either write the address directly (as a symbol) or create a PLT/GOT entry
     let text_section = obj.section_id(StandardSection::Text);
     for name in undefined_symbols {
-        if name.starts_with("__imp_") {
-            let Some(sym) = symbol_table.get(name.as_str().trim_start_matches("__imp_")) else {
-                tracing::error!("Symbol not found: {}", name);
-                continue;
-            };
-
-            let abs_addr = sym.address + aslr_offset;
-
-            // This is an import table entry
-            let data_section = obj.section_id(StandardSection::Data);
-
-            // Add a pointer to the resolved address
-            let offset = obj.append_section_data(
-                data_section,
-                &abs_addr.to_le_bytes(),
-                8, // Use proper alignment
-            );
-
-            // Add the symbol as a data symbol in our data section
-            obj.add_symbol(Symbol {
-                name: name.as_bytes().to_vec(),
-                value: offset, // Offset within the data section
-                size: 8,       // Size of pointer
-                scope: SymbolScope::Linkage,
-                kind: SymbolKind::Data, // Always Data for IAT entries
-                weak: false,
-                section: SymbolSection::Section(data_section),
-                flags: object::SymbolFlags::None,
-            });
-
-            continue;
-        }
-
-        let Some(sym) = symbol_table.get(name.as_str()) else {
+        let Some(sym) = symbol_table.get(name.as_str().trim_start_matches("__imp_")) else {
             tracing::error!("Symbol not found: {}", name);
             continue;
         };
@@ -891,166 +851,194 @@ pub fn create_undefined_symbol_stub(
 
         let abs_addr = sym.address + aslr_offset;
 
-        if sym.kind == SymbolKind::Text {
-            let jump_code = match triple.operating_system {
-                // The windows ABI and calling convention is different than the SystemV ABI.
-                OperatingSystem::Windows => match triple.architecture {
-                    target_lexicon::Architecture::X86_64 => {
-                        // Windows x64 has specific requirements for alignment and position-independent code
-                        let mut code = vec![
-                            0x48, 0xB8, // movabs RAX, imm64 (move 64-bit immediate to RAX)
-                        ];
-                        // Append the absolute 64-bit address
-                        code.extend_from_slice(&abs_addr.to_le_bytes());
-                        // jmp RAX (jump to the address in RAX)
-                        code.extend_from_slice(&[0xFF, 0xE0]);
-                        code
-                    }
-                    target_lexicon::Architecture::X86_32(_) => {
-                        // On Windows 32-bit, we can use direct jump but need proper alignment
-                        let mut code = vec![
-                            0xB8, // mov EAX, imm32 (move immediate value to EAX)
-                        ];
-                        // Append the absolute 32-bit address
-                        code.extend_from_slice(&(abs_addr as u32).to_le_bytes());
-                        // jmp EAX (jump to the address in EAX)
-                        code.extend_from_slice(&[0xFF, 0xE0]);
-                        code
-                    }
-                    target_lexicon::Architecture::Aarch64(_) => {
-                        //     // Windows ARM64 requires a different approach:
-                        //     // 1. We need to preserve the X16/X17 registers which are special on Windows ARM64
-                        //     // 2. Need to handle Windows memory protection requirements
-                        //     let mut code = Vec::new();
+        match sym.kind {
+            // Handle synthesized window linker cross-dll statics.
+            //
+            // The `__imp_` prefix is a rather poorly documented feature of link.exe that makes it possible
+            // to reference statics in DLLs via text sections. The linker will synthesize a function
+            // that returns the address of the static, so calling that function will return the address.
+            // We want to satisfy it by creating a data symbol with the contents of the *actual* symbol
+            // in the original binary.
+            //
+            // We ca't use the `__imp_` from the original binary because it was not properly compiled
+            // with this in mind. Instead we have to create the new symbol.
+            //
+            // This is currently only implemented for 64bit architectures (haven't tested 32bit yet).
+            //
+            // https://stackoverflow.com/questions/5159353/how-can-i-get-rid-of-the-imp-prefix-in-the-linker-in-vc
+            _ if name.starts_with("__imp_") => {
+                let data_section = obj.section_id(StandardSection::Data);
 
-                        //     // ADRP X16, 0 ; Form PC-relative address to page - will be fixed up
-                        //     code.extend_from_slice(&[0x10, 0x00, 0x00, 0x90]);
-                        //     // LDR X16, [X16, #0x8] ; Load from the next instruction + 8
-                        //     code.extend_from_slice(&[0x10, 0x08, 0x40, 0xF9]);
-                        //     // BR X16 ; Branch to the address in X16
-                        //     code.extend_from_slice(&[0x00, 0x02, 0x1F, 0xD6]);
-                        //     // 4-byte alignment padding
-                        //     code.extend_from_slice(&[0x00, 0x00, 0x00, 0x00]);
-                        //     // Store the 64-bit address - 8-byte aligned
-                        //     code.extend_from_slice(&abs_addr.to_le_bytes());
-                        //     code
-                        // Windows ARM64 implementation
-                        let mut code = Vec::new();
+                // Add a pointer to the resolved address
+                let offset = obj.append_section_data(
+                    data_section,
+                    &abs_addr.to_le_bytes(),
+                    8, // Use proper alignment
+                );
 
-                        // Use MOV/MOVK sequence to load 64-bit address into X16
-                        // This is more reliable than ADRP+LDR for direct hotpatching
+                // Add the symbol as a data symbol in our data section
+                obj.add_symbol(Symbol {
+                    name: name.as_bytes().to_vec(),
+                    value: offset, // Offset within the data section
+                    size: 8,       // Size of pointer
+                    scope: SymbolScope::Linkage,
+                    kind: SymbolKind::Data, // Always Data for IAT entries
+                    weak: false,
+                    section: SymbolSection::Section(data_section),
+                    flags: object::SymbolFlags::None,
+                });
+            }
 
-                        // MOVZ X16, #imm16_0 (bits 0-15 of address)
-                        let imm16_0 = (abs_addr & 0xFFFF) as u16;
-                        let movz = 0xD2800010u32 | ((imm16_0 as u32) << 5);
-                        code.extend_from_slice(&movz.to_le_bytes());
+            // Text symbols are normal code symbols. We need to assemble stubs that resolve the undefined
+            // symbols and jump to the original address in the original binary.
+            //
+            // Unfortunately this isn't simply cross-platform, so we need to handle Unix and Windows
+            // calling conventions separately. It also depends on the architecture, making it even more
+            // complicated.
+            SymbolKind::Text => {
+                let jump_code = match triple.operating_system {
+                    // The windows ABI and calling convention is different than the SystemV ABI.
+                    OperatingSystem::Windows => match triple.architecture {
+                        target_lexicon::Architecture::X86_64 => {
+                            // Windows x64 has specific requirements for alignment and position-independent code
+                            let mut code = vec![
+                                0x48, 0xB8, // movabs RAX, imm64 (move 64-bit immediate to RAX)
+                            ];
+                            // Append the absolute 64-bit address
+                            code.extend_from_slice(&abs_addr.to_le_bytes());
+                            // jmp RAX (jump to the address in RAX)
+                            code.extend_from_slice(&[0xFF, 0xE0]);
+                            code
+                        }
+                        target_lexicon::Architecture::X86_32(_) => {
+                            // On Windows 32-bit, we can use direct jump but need proper alignment
+                            let mut code = vec![
+                                0xB8, // mov EAX, imm32 (move immediate value to EAX)
+                            ];
+                            // Append the absolute 32-bit address
+                            code.extend_from_slice(&(abs_addr as u32).to_le_bytes());
+                            // jmp EAX (jump to the address in EAX)
+                            code.extend_from_slice(&[0xFF, 0xE0]);
+                            code
+                        }
+                        target_lexicon::Architecture::Aarch64(_) => {
+                            // Use MOV/MOVK sequence to load 64-bit address into X16
+                            // This is more reliable than ADRP+LDR for direct hotpatching
+                            let mut code = Vec::new();
 
-                        // MOVK X16, #imm16_1, LSL #16 (bits 16-31 of address)
-                        let imm16_1 = ((abs_addr >> 16) & 0xFFFF) as u16;
-                        let movk1 = 0xF2A00010u32 | ((imm16_1 as u32) << 5);
-                        code.extend_from_slice(&movk1.to_le_bytes());
+                            // MOVZ X16, #imm16_0 (bits 0-15 of address)
+                            let imm16_0 = (abs_addr & 0xFFFF) as u16;
+                            let movz = 0xD2800010u32 | ((imm16_0 as u32) << 5);
+                            code.extend_from_slice(&movz.to_le_bytes());
 
-                        // MOVK X16, #imm16_2, LSL #32 (bits 32-47 of address)
-                        let imm16_2 = ((abs_addr >> 32) & 0xFFFF) as u16;
-                        let movk2 = 0xF2C00010u32 | ((imm16_2 as u32) << 5);
-                        code.extend_from_slice(&movk2.to_le_bytes());
+                            // MOVK X16, #imm16_1, LSL #16 (bits 16-31 of address)
+                            let imm16_1 = ((abs_addr >> 16) & 0xFFFF) as u16;
+                            let movk1 = 0xF2A00010u32 | ((imm16_1 as u32) << 5);
+                            code.extend_from_slice(&movk1.to_le_bytes());
 
-                        // MOVK X16, #imm16_3, LSL #48 (bits 48-63 of address)
-                        let imm16_3 = ((abs_addr >> 48) & 0xFFFF) as u16;
-                        let movk3 = 0xF2E00010u32 | ((imm16_3 as u32) << 5);
-                        code.extend_from_slice(&movk3.to_le_bytes());
+                            // MOVK X16, #imm16_2, LSL #32 (bits 32-47 of address)
+                            let imm16_2 = ((abs_addr >> 32) & 0xFFFF) as u16;
+                            let movk2 = 0xF2C00010u32 | ((imm16_2 as u32) << 5);
+                            code.extend_from_slice(&movk2.to_le_bytes());
 
-                        // BR X16 (Branch to address in X16)
-                        code.extend_from_slice(&[0x00, 0x02, 0x1F, 0xD6]);
+                            // MOVK X16, #imm16_3, LSL #48 (bits 48-63 of address)
+                            let imm16_3 = ((abs_addr >> 48) & 0xFFFF) as u16;
+                            let movk3 = 0xF2E00010u32 | ((imm16_3 as u32) << 5);
+                            code.extend_from_slice(&movk3.to_le_bytes());
 
-                        code
-                    }
-                    target_lexicon::Architecture::Arm(_) => {
-                        // For Windows 32-bit ARM, we need a different approach
-                        let mut code = Vec::new();
-                        // LDR r12, [pc, #8] ; Load the address into r12
-                        code.extend_from_slice(&[0x08, 0xC0, 0x9F, 0xE5]);
-                        // BX r12 ; Branch to the address in r12
-                        code.extend_from_slice(&[0x1C, 0xFF, 0x2F, 0xE1]);
-                        // 4-byte alignment padding
-                        code.extend_from_slice(&[0x00, 0x00, 0x00, 0x00]);
-                        // Store the 32-bit address - 4-byte aligned
-                        code.extend_from_slice(&(abs_addr as u32).to_le_bytes());
-                        code
-                    }
-                    // Add other architectures as needed
-                    _ => todo!(),
-                },
-                _ => match triple.architecture {
-                    target_lexicon::Architecture::X86_64 => {
-                        // Use JMP instruction to absolute address: FF 25 followed by 32-bit offset
-                        // Then the 64-bit absolute address
-                        let mut code = vec![0xFF, 0x25, 0x00, 0x00, 0x00, 0x00]; // jmp [rip+0]
-                                                                                 // Append the 64-bit address
-                        code.extend_from_slice(&abs_addr.to_le_bytes());
-                        code
-                    }
-                    target_lexicon::Architecture::X86_32(_) => {
-                        // For 32-bit Intel, use JMP instruction with absolute address
-                        let mut code = vec![0xE9]; // jmp rel32
-                        let rel_addr = abs_addr as i32 - 5; // Relative address (offset from next instruction)
-                        code.extend_from_slice(&rel_addr.to_le_bytes());
-                        code
-                    }
-                    target_lexicon::Architecture::Aarch64(_) => {
-                        // For ARM64, we load the address into a register and branch
-                        let mut code = Vec::new();
-                        // LDR X16, [PC, #0]  ; Load from the next instruction
-                        code.extend_from_slice(&[0x50, 0x00, 0x00, 0x58]);
-                        // BR X16            ; Branch to the address in X16
-                        code.extend_from_slice(&[0x00, 0x02, 0x1F, 0xD6]);
-                        // Store the 64-bit address
-                        code.extend_from_slice(&abs_addr.to_le_bytes());
-                        code
-                    }
-                    target_lexicon::Architecture::Arm(_) => {
-                        // For 32-bit ARM, use LDR PC, [PC, #-4] to load the address and branch
-                        let mut code = Vec::new();
-                        // LDR PC, [PC, #-4] ; Load the address into PC (branching to it)
-                        code.extend_from_slice(&[0x04, 0xF0, 0x1F, 0xE5]);
-                        // Store the 32-bit address
-                        code.extend_from_slice(&(abs_addr as u32).to_le_bytes());
-                        code
-                    }
-                    // Add other architectures as needed
-                    _ => todo!(),
-                },
-            };
+                            // BR X16 (Branch to address in X16)
+                            code.extend_from_slice(&[0x00, 0x02, 0x1F, 0xD6]);
 
-            // Add the jump code to the text section
-            let offset = obj.append_section_data(text_section, &jump_code, 8);
-            obj.add_symbol(Symbol {
-                name: name.as_bytes()[name_offset..].to_vec(),
-                value: offset,
-                size: jump_code.len() as u64,
-                scope: SymbolScope::Linkage,
-                kind: SymbolKind::Text,
-                weak: false,
-                section: SymbolSection::Section(text_section),
-                flags: object::SymbolFlags::None,
-            });
-        } else {
-            // It's likely a static
-            let kind = match sym.kind {
-                SymbolKind::Unknown => SymbolKind::Data,
-                k => k,
-            };
+                            code
+                        }
+                        target_lexicon::Architecture::Arm(_) => {
+                            // For Windows 32-bit ARM, we need a different approach
+                            let mut code = Vec::new();
+                            // LDR r12, [pc, #8] ; Load the address into r12
+                            code.extend_from_slice(&[0x08, 0xC0, 0x9F, 0xE5]);
+                            // BX r12 ; Branch to the address in r12
+                            code.extend_from_slice(&[0x1C, 0xFF, 0x2F, 0xE1]);
+                            // 4-byte alignment padding
+                            code.extend_from_slice(&[0x00, 0x00, 0x00, 0x00]);
+                            // Store the 32-bit address - 4-byte aligned
+                            code.extend_from_slice(&(abs_addr as u32).to_le_bytes());
+                            code
+                        }
+                        // Add other architectures as needed
+                        _ => todo!(),
+                    },
+                    _ => match triple.architecture {
+                        target_lexicon::Architecture::X86_64 => {
+                            // Use JMP instruction to absolute address: FF 25 followed by 32-bit offset
+                            // Then the 64-bit absolute address
+                            let mut code = vec![0xFF, 0x25, 0x00, 0x00, 0x00, 0x00]; // jmp [rip+0]
+                                                                                     // Append the 64-bit address
+                            code.extend_from_slice(&abs_addr.to_le_bytes());
+                            code
+                        }
+                        target_lexicon::Architecture::X86_32(_) => {
+                            // For 32-bit Intel, use JMP instruction with absolute address
+                            let mut code = vec![0xE9]; // jmp rel32
+                            let rel_addr = abs_addr as i32 - 5; // Relative address (offset from next instruction)
+                            code.extend_from_slice(&rel_addr.to_le_bytes());
+                            code
+                        }
+                        target_lexicon::Architecture::Aarch64(_) => {
+                            // For ARM64, we load the address into a register and branch
+                            let mut code = Vec::new();
+                            // LDR X16, [PC, #0]  ; Load from the next instruction
+                            code.extend_from_slice(&[0x50, 0x00, 0x00, 0x58]);
+                            // BR X16            ; Branch to the address in X16
+                            code.extend_from_slice(&[0x00, 0x02, 0x1F, 0xD6]);
+                            // Store the 64-bit address
+                            code.extend_from_slice(&abs_addr.to_le_bytes());
+                            code
+                        }
+                        target_lexicon::Architecture::Arm(_) => {
+                            // For 32-bit ARM, use LDR PC, [PC, #-4] to load the address and branch
+                            let mut code = Vec::new();
+                            // LDR PC, [PC, #-4] ; Load the address into PC (branching to it)
+                            code.extend_from_slice(&[0x04, 0xF0, 0x1F, 0xE5]);
+                            // Store the 32-bit address
+                            code.extend_from_slice(&(abs_addr as u32).to_le_bytes());
+                            code
+                        }
+                        // Add other architectures as needed
+                        _ => todo!(),
+                    },
+                };
 
-            obj.add_symbol(Symbol {
-                name: name.as_bytes()[name_offset..].to_vec(),
-                value: abs_addr,
-                size: 0,
-                scope: SymbolScope::Linkage,
-                kind,
-                weak: sym.is_weak,
-                section: SymbolSection::Absolute,
-                flags: object::SymbolFlags::None,
-            });
+                let offset = obj.append_section_data(text_section, &jump_code, 8);
+                obj.add_symbol(Symbol {
+                    name: name.as_bytes()[name_offset..].to_vec(),
+                    value: offset,
+                    size: jump_code.len() as u64,
+                    scope: SymbolScope::Linkage,
+                    kind: SymbolKind::Text,
+                    weak: false,
+                    section: SymbolSection::Section(text_section),
+                    flags: object::SymbolFlags::None,
+                });
+            }
+
+            // We just assume all non-text symbols are data (globals, statics, etc)
+            _ => {
+                // darwin statics show up as "unknown" symbols even though they are data symbols.
+                let kind = match sym.kind {
+                    SymbolKind::Unknown => SymbolKind::Data,
+                    k => k,
+                };
+                obj.add_symbol(Symbol {
+                    name: name.as_bytes()[name_offset..].to_vec(),
+                    value: abs_addr,
+                    size: 0,
+                    scope: SymbolScope::Linkage,
+                    kind,
+                    weak: sym.is_weak,
+                    section: SymbolSection::Absolute,
+                    flags: object::SymbolFlags::None,
+                });
+            }
         }
     }
 
@@ -1095,7 +1083,7 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
 
     // Wasm-bindgen will synthesize imports to satisfy its external calls. This facilitates things
     // like inline-js, snippets, and literally the `#[wasm_bindgen]` macro. All calls to JS are
-    // just `extern "C"` blocks!
+    // just `extern "wbg"` blocks!
     //
     // However, wasm-bindgen will run a GC pass on the module, removing any unused imports.
     let mut make_indirect = vec![];

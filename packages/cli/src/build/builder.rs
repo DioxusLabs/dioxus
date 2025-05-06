@@ -7,7 +7,6 @@ use dioxus_cli_opt::process_file_to;
 use futures_util::future::OptionFuture;
 use std::{
     env,
-    sync::Arc,
     time::{Duration, Instant, SystemTime},
 };
 use std::{
@@ -553,7 +552,7 @@ impl AppBuilder {
     pub(crate) async fn hotpatch(
         &mut self,
         res: &BuildArtifacts,
-        cache: Arc<HotpatchModuleCache>,
+        cache: &HotpatchModuleCache,
     ) -> Result<JumpTable> {
         let original = self.build.main_exe();
         let new = self.build.patch_exe(res.time_start);
@@ -590,7 +589,7 @@ impl AppBuilder {
 
         tracing::debug!("Patching {} -> {}", original.display(), new.display());
 
-        let mut jump_table = crate::build::create_jump_table(&new, &triple, &cache)?;
+        let mut jump_table = crate::build::create_jump_table(&new, &triple, cache)?;
 
         // If it's android, we need to copy the assets to the device and then change the location of the patch
         if self.build.platform == Platform::Android {

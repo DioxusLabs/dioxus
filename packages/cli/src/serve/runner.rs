@@ -33,10 +33,12 @@ use tokio::process::Command;
 
 /// This is the primary "state" object that holds the builds and handles for the running apps.
 ///
-/// It holds the resolved state from the ServeArgs, providing a source of truth for the rest of the app
-///
 /// It also holds the watcher which is used to watch for changes in the filesystem and trigger rebuilds,
 /// hotreloads, asset updates, etc.
+///
+/// Since we resolve the build request before initializing the CLI, it also serves as a place to store
+/// resolved "serve" arguments, which is why it takes ServeArgs instead of BuildArgs. Simply wrap the
+/// BuildArgs in a default ServeArgs and pass it in.
 pub(crate) struct AppServer {
     /// the platform of the "primary" crate (ie the first)
     pub(crate) workspace: Arc<Workspace>,
@@ -477,6 +479,13 @@ impl AppServer {
     }
 
     /// Open an existing app bundle, if it exists
+    ///
+    /// Will attempt to open the server and client together, in a coordinated way such that the server
+    /// opens first, initializes, and then the client opens.
+    ///
+    /// There's a number of issues we need to be careful to work around:
+    /// - The server failing to boot or crashing on startup (and entering a boot loop)
+    /// -
     pub(crate) async fn open_all(
         &mut self,
         devserver: &WebServer,
@@ -503,7 +512,6 @@ impl AppServer {
         }
 
         // Start the new app before we kill the old one to give it a little bit of time
-        let always_on_top = self.always_on_top;
         self.client.soft_kill().await;
         self.client
             .open(
@@ -511,7 +519,7 @@ impl AppServer {
                 displayed_address,
                 fullstack_address,
                 open_browser,
-                always_on_top,
+                self.always_on_top,
                 BuildId::CLIENT,
             )
             .await?;
@@ -569,7 +577,7 @@ impl AppServer {
         &mut self,
         res: &BuildArtifacts,
         id: BuildId,
-        cache: Arc<HotpatchModuleCache>,
+        cache: &HotpatchModuleCache,
     ) -> Result<JumpTable> {
         let jump_table = match id {
             BuildId::CLIENT => self.client.hotpatch(res, cache).await,
