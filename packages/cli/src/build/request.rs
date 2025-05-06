@@ -368,6 +368,7 @@ pub(crate) struct BuildRequest {
     pub(crate) profile: String,
     pub(crate) release: bool,
     pub(crate) platform: Platform,
+    pub(crate) default_platforms: Vec<Platform>,
     pub(crate) triple: Triple,
     pub(crate) _device: bool,
     pub(crate) package: String,
@@ -531,7 +532,9 @@ impl BuildRequest {
             })?
             .clone();
 
-        let default_platform = Self::default_platform(main_package);
+        let default_platforms = Self::default_platforms(main_package);
+        let default_platform = default_platforms.iter().find(|p| **p != Platform::Server);
+
         let mut features = vec![];
         let mut no_default_features = false;
 
@@ -672,6 +675,7 @@ session_cache_dir: {}"#,
             _device: device,
             workspace,
             config,
+            default_platforms,
             custom_target_dir: None,
             custom_linker,
             link_args_file,
@@ -1216,7 +1220,7 @@ session_cache_dir: {}"#,
             _ => vec!["-o".to_string(), out_exe.display().to_string()],
         };
 
-        tracing::debug!("Linking with {:?} using args: {:#?}", linker, object_files);
+        tracing::trace!("Linking with {:?} using args: {:#?}", linker, object_files);
 
         // Run the linker directly!
         //
@@ -2523,7 +2527,6 @@ session_cache_dir: {}"#,
             .get_enabled_features(krate.kid)?
             .iter()
             .flat_map(|feature| {
-                tracing::trace!("Autodetecting platform from feature {feature}");
                 Platform::autodetect_from_cargo_feature(feature)
                     .filter(|platform| *platform != Platform::Server)
                     .map(|f| (f, feature.to_string()))
@@ -2679,8 +2682,43 @@ session_cache_dir: {}"#,
             .map(|krate| krate.krate.version.to_string())
     }
 
-    pub(crate) fn default_platform(package: &krates::cm::Package) -> Option<Platform> {
-        let default = package.features.get("default")?;
+    // pub(crate) fn default_platform(package: &krates::cm::Package) -> Option<Platform> {
+    //     let default = package.features.get("default")?;
+
+    //     // we only trace features 1 level deep..
+    //     for feature in default.iter() {
+    //         // If the user directly specified a platform we can just use that.
+    //         if feature.starts_with("dioxus/") {
+    //             let dx_feature = feature.trim_start_matches("dioxus/");
+    //             let auto = Platform::autodetect_from_cargo_feature(dx_feature);
+    //             if auto.is_some() {
+    //                 return auto;
+    //             }
+    //         }
+
+    //         // If the user is specifying an internal feature that points to a platform, we can use that
+    //         let internal_feature = package.features.get(feature);
+    //         if let Some(internal_feature) = internal_feature {
+    //             for feature in internal_feature {
+    //                 if feature.starts_with("dioxus/") {
+    //                     let dx_feature = feature.trim_start_matches("dioxus/");
+    //                     let auto = Platform::autodetect_from_cargo_feature(dx_feature);
+    //                     if auto.is_some() {
+    //                         return auto;
+    //                     }
+    //                 }
+    //             }
+    //         }
+    //     }
+
+    //     None
+    // }
+
+    pub(crate) fn default_platforms(package: &krates::cm::Package) -> Vec<Platform> {
+        let Some(default) = package.features.get("default") else {
+            return Vec::new();
+        };
+        let mut platforms = vec![];
 
         // we only trace features 1 level deep..
         for feature in default.iter() {
@@ -2688,8 +2726,8 @@ session_cache_dir: {}"#,
             if feature.starts_with("dioxus/") {
                 let dx_feature = feature.trim_start_matches("dioxus/");
                 let auto = Platform::autodetect_from_cargo_feature(dx_feature);
-                if auto.is_some() {
-                    return auto;
+                if let Some(auto) = auto {
+                    platforms.push(auto);
                 }
             }
 
@@ -2700,53 +2738,18 @@ session_cache_dir: {}"#,
                     if feature.starts_with("dioxus/") {
                         let dx_feature = feature.trim_start_matches("dioxus/");
                         let auto = Platform::autodetect_from_cargo_feature(dx_feature);
-                        if auto.is_some() {
-                            return auto;
+                        if let Some(auto) = auto {
+                            platforms.push(auto);
                         }
                     }
                 }
             }
         }
 
-        None
+        platforms.sort();
+        platforms.dedup();
+        platforms
     }
-
-    // pub(crate) fn default_platforms(&self) -> Vec<Platform> {
-    //     let Some(default) = self.package().features.get("default") else {
-    //         return Vec::new();
-    //     };
-    //     let mut platforms = vec![];
-
-    //     // we only trace features 1 level deep..
-    //     for feature in default.iter() {
-    //         // If the user directly specified a platform we can just use that.
-    //         if feature.starts_with("dioxus/") {
-    //             let dx_feature = feature.trim_start_matches("dioxus/");
-    //             let auto = Platform::autodetect_from_cargo_feature(dx_feature);
-    //             if let Some(auto) = auto {
-    //                 platforms.push(auto);
-    //             }
-    //         }
-
-    //         // If the user is specifying an internal feature that points to a platform, we can use that
-    //         let internal_feature = self.package().features.get(feature);
-    //         if let Some(internal_feature) = internal_feature {
-    //             for feature in internal_feature {
-    //                 if feature.starts_with("dioxus/") {
-    //                     let dx_feature = feature.trim_start_matches("dioxus/");
-    //                     let auto = Platform::autodetect_from_cargo_feature(dx_feature);
-    //                     if let Some(auto) = auto {
-    //                         platforms.push(auto);
-    //                     }
-    //                 }
-    //             }
-    //         }
-    //     }
-
-    //     platforms.sort();
-    //     platforms.dedup();
-    //     platforms
-    // }
 
     /// Gather the features that are enabled for the package
     fn platformless_features(package: &krates::cm::Package) -> Vec<String> {

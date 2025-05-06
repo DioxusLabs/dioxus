@@ -37,8 +37,7 @@ impl Workspace {
         tracing::debug!("Loading workspace!");
 
         let cmd = Cmd::new();
-        let mut builder = krates::Builder::new();
-        builder.workspace(true);
+        let builder = krates::Builder::new();
         let krates = builder
             .build(cmd, |_| {})
             .context("Failed to run cargo metadata")?;

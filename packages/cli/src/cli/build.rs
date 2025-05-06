@@ -108,15 +108,20 @@ impl BuildArgs {
                 // only if we can properly detect that it's a fullstack build. Careful with this, since
                 // we didn't build BuildRequest to be generally mutable.
                 let client = BuildRequest::new(&self.build_arguments, workspace.clone()).await?;
+                let default_server = client
+                    .default_platforms
+                    .iter()
+                    .any(|p| *p == Platform::Server);
 
                 // Make sure we set the fullstack platform so we actually build the fullstack variant
                 // Users need to enable "fullstack" in their default feature set.
                 // todo(jon): fullstack *could* be a feature of the app, but right now we're assuming it's always enabled
                 //
                 // Now we need to resolve the client features
-                let fullstack = (client.fullstack_feature_enabled()
+                let fullstack = ((default_server && client.fullstack_feature_enabled())
                     || self.fullstack.unwrap_or(false))
                     && self.fullstack != Some(false);
+
                 if fullstack {
                     let mut build_args = self.build_arguments.clone();
                     build_args.platform = Some(Platform::Server);

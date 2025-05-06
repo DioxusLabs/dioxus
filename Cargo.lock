@@ -12206,9 +12206,9 @@ dependencies = [
 
 [[package]]
 name = "server_fn"
-version = "0.8.0-rc2"
+version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "382f52442c967ec604c643250dd64973036be257872b928127b444db4c7ff90c"
+checksum = "09b0f92b9d3a62c73f238ac21f7a09f15bad335a9d1651514d9da80d2eaf8d4c"
 dependencies = [
  "axum 0.8.3",
  "base64 0.22.1",
@@ -12226,6 +12226,7 @@ dependencies = [
  "once_cell",
  "pin-project-lite",
  "reqwest 0.12.15",
+ "rustc_version 0.4.1",
  "rustversion",
  "send_wrapper",
  "serde",
@@ -12248,9 +12249,9 @@ dependencies = [
 
 [[package]]
 name = "server_fn_macro"
-version = "0.8.0-rc2"
+version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e2b25202696036a77664e49420e189a96e5af3a8583b5b770debdc8c1dc73ac5"
+checksum = "341dd1087afe9f3e546c5979a4f0b6d55ac072e1201313f86e7fe364223835ac"
 dependencies = [
  "const_format",
  "convert_case 0.8.0",
@@ -12263,9 +12264,9 @@ dependencies = [
 
 [[package]]
 name = "server_fn_macro_default"
-version = "0.8.0-rc2"
+version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4753763e785a383bf0630d6e8694610545bb194c94d3c042c95fa6fc7be70dfb"
+checksum = "bc5ab934f581482a66da82f2b57b15390ad67c9ab85bd9a6c54bb65060fb1380"
 dependencies = [
  "server_fn_macro",
  "syn 2.0.100",

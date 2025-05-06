@@ -14,8 +14,8 @@ use std::{
     path::PathBuf,
     sync::{Arc, RwLock},
 };
-use subsecond_types::*;
-use target_lexicon::{OperatingSystem, Triple};
+use subsecond_types::{AddressMap, JumpTable};
+use target_lexicon::{Architecture, OperatingSystem, Triple};
 use thiserror::Error;
 use walrus::{
     ConstExpr, DataKind, ElementItems, ElementKind, FunctionBuilder, FunctionId, FunctionKind,
@@ -47,8 +47,14 @@ pub enum PatchError {
     #[error("Failed to emit module: {0}")]
     RuntimeError(#[from] anyhow::Error),
 
+    #[error("Failed to read module's PDB file: {0}")]
+    PdbLoadError(#[from] pdb::Error),
+
     #[error("{0}")]
     InvalidModule(String),
+
+    #[error("Unsupported platform: {0}")]
+    UnsupportedPlatform(String),
 }
 
 /// A cache for the hotpatching engine that stores the original module's parsed symbol table.
@@ -57,6 +63,7 @@ pub enum PatchError {
 /// us avoid re-parsing the module every time we want to patch it.
 ///
 /// On the Dioxus Docsite, it dropped the patch time from 3s to 1.1s (!)
+#[derive(Default)]
 pub struct HotpatchModuleCache {
     pub path: PathBuf,
 
@@ -93,7 +100,7 @@ impl std::fmt::Debug for HotpatchModuleCache {
 }
 
 impl HotpatchModuleCache {
-    // / This caching step is crucial for performance on large projects. The original module can be
+    /// This caching step is crucial for performance on large projects. The original module can be
     /// quite large (hundreds of MB), so this step drastically speeds it up.
     pub fn new(original: &Path, triple: &Triple) -> Result<Self> {
         let cache = match triple.operating_system {
@@ -104,20 +111,22 @@ impl HotpatchModuleCache {
                 // the pdb crate doesn't bind the lifetime of the items in the iterator to the symbol table,
                 // so we're stuck with local lifetime.s
                 let old_pdb_file = original.with_extension("pdb");
-                let old_pdb_file_handle = std::fs::File::open(old_pdb_file).unwrap();
-                let mut pdb_file = pdb::PDB::open(old_pdb_file_handle).unwrap();
-                let symbol_table = pdb_file.global_symbols().unwrap();
-                let address_map = pdb_file.address_map().unwrap();
-                let mut name_to_address = HashMap::new();
-                let mut symbols = symbol_table.iter();
+                let old_pdb_file_handle = std::fs::File::open(old_pdb_file)?;
+                let mut pdb_file = pdb::PDB::open(old_pdb_file_handle)?;
+                let global_symbols = pdb_file.global_symbols()?;
+                let address_map = pdb_file.address_map()?;
+                let mut symbol_table = HashMap::new();
+                let mut symbols = global_symbols.iter();
                 while let Ok(Some(symbol)) = symbols.next() {
                     match symbol.parse() {
                         Ok(pdb::SymbolData::Public(data)) => {
                             let rva = data.offset.to_rva(&address_map);
                             let is_undefined = rva.is_none();
+
+                            // treat undefined symbols as 0 to match macho/elf
                             let rva = rva.unwrap_or_default();
 
-                            name_to_address.insert(
+                            symbol_table.insert(
                                 data.name.to_string().to_string(),
                                 CachedSymbol {
                                     address: rva.0 as u64,
@@ -135,9 +144,11 @@ impl HotpatchModuleCache {
                         Ok(pdb::SymbolData::Data(data)) => {
                             let rva = data.offset.to_rva(&address_map);
                             let is_undefined = rva.is_none();
+
+                            // treat undefined symbols as 0 to match macho/elf
                             let rva = rva.unwrap_or_default();
 
-                            name_to_address.insert(
+                            symbol_table.insert(
                                 data.name.to_string().to_string(),
                                 CachedSymbol {
                                     address: rva.0 as u64,
@@ -153,60 +164,89 @@ impl HotpatchModuleCache {
                 }
 
                 HotpatchModuleCache {
-                    symbol_table: name_to_address,
+                    symbol_table,
                     path: original.to_path_buf(),
-                    old_bytes: vec![],
-                    symbol_ifunc_map: Default::default(),
-                    old_wasm: Module::default(),
-                    old_exports: Default::default(),
-                    old_imports: Default::default(),
+                    ..Default::default()
                 }
             }
 
-            _ if triple.architecture == target_lexicon::Architecture::Wasm32 => {
-                tracing::debug!("Creating wasm cache");
-                let old_bytes = std::fs::read(original)?;
+            // We need to load the ifunc table from the original module since that gives us the map
+            // of name to address (since ifunc entries are also pointers in wasm - ie 0x30 is the 30th
+            // entry in the ifunc table)
+            //
+            // One detail here is that with high optimization levels, the names of functions in the ifunc
+            // table will be smaller than the total number of functions in the module. This is because
+            // in high opt-levels, functions are merged. Fortunately, the symbol table remains intact
+            // and functions with different names point to the same function index (not to be confused
+            // with the function index in the module!).
+            //
+            // We need to take an extra step to account for merged functions by mapping function index
+            // to a set of functions that point to the same index.
+            _ if triple.architecture == Architecture::Wasm32 => {
+                let bytes = std::fs::read(original)?;
                 let ParsedModule {
-                    module: old_wasm,
-                    symbols: old_symbols,
-                    ..
-                } = parse_module_with_ids(&old_bytes)?;
+                    module, symbols, ..
+                } = parse_module_with_ids(&bytes)?;
 
-                if old_symbols.symbols.is_empty() {
+                if symbols.symbols.is_empty() {
                     return Err(PatchError::MissingSymbols);
                 }
 
-                let name_to_ifunc_old = collect_func_ifuncs(&old_wasm);
-                let name_to_ifunc_old =
-                    fill_ifuncs_from_old(&old_wasm, &old_symbols, name_to_ifunc_old);
+                let name_to_ifunc_old = collect_func_ifuncs(&module);
+
+                // These are the "real" bindings for functions in the module
+                // Basically a map between a function's index and its real name
+                let func_to_index = module
+                    .funcs
+                    .par_iter()
+                    .filter_map(|f| {
+                        let name = f.name.as_deref()?;
+                        Some((*symbols.code_symbol_map.get(name)?, name))
+                    })
+                    .collect::<HashMap<usize, &str>>();
+
+                // Find the corresponding function that shares the same index, but in the ifunc table
+                let name_to_ifunc_old: HashMap<_, _> = symbols
+                    .code_symbol_map
+                    .par_iter()
+                    .filter_map(|(name, idx)| {
+                        let new_modules_unified_function = func_to_index.get(idx)?;
+                        let offset = name_to_ifunc_old.get(new_modules_unified_function)?;
+                        Some((*name, *offset))
+                    })
+                    .collect();
+
                 let symbol_ifunc_map = name_to_ifunc_old
                     .par_iter()
                     .map(|(name, idx)| (name.to_string(), *idx))
                     .collect::<HashMap<_, _>>();
-                let old_exports = old_wasm
+
+                let old_exports = module
                     .exports
                     .iter()
                     .map(|e| e.name.to_string())
                     .collect::<HashSet<_>>();
-                let old_imports = old_wasm
+
+                let old_imports = module
                     .imports
                     .iter()
                     .map(|i| i.name.to_string())
                     .collect::<HashSet<_>>();
+
                 HotpatchModuleCache {
                     path: original.to_path_buf(),
-                    old_bytes,
+                    old_bytes: bytes,
                     symbol_ifunc_map,
                     old_exports,
                     old_imports,
-                    old_wasm,
-                    symbol_table: Default::default(),
+                    old_wasm: module,
+                    ..Default::default()
                 }
             }
             _ => {
-                let obj1_bytes = std::fs::read(original)?;
-                let obj1 = File::parse(&obj1_bytes as &[u8])?;
-                let old_name_to_addr = obj1
+                let old_bytes = std::fs::read(original)?;
+                let obj = File::parse(&old_bytes as &[u8])?;
+                let symbol_table = obj
                     .symbols()
                     .filter_map(|s| {
                         Some((
@@ -221,13 +261,10 @@ impl HotpatchModuleCache {
                     })
                     .collect::<HashMap<_, _>>();
                 HotpatchModuleCache {
-                    symbol_table: old_name_to_addr,
+                    symbol_table,
                     path: original.to_path_buf(),
-                    old_bytes: obj1_bytes,
-                    symbol_ifunc_map: Default::default(),
-                    old_wasm: Module::default(),
-                    old_exports: Default::default(),
-                    old_imports: Default::default(),
+                    old_bytes,
+                    ..Default::default()
                 }
             }
         };
@@ -248,9 +285,7 @@ pub fn create_jump_table(
     // - nix requires the object crate
     match triple.operating_system {
         OperatingSystem::Windows => create_windows_jump_table(patch, cache),
-        _ if triple.architecture == target_lexicon::Architecture::Wasm32 => {
-            create_wasm_jump_table(patch, cache)
-        }
+        _ if triple.architecture == Architecture::Wasm32 => create_wasm_jump_table(patch, cache),
         _ => create_native_jump_table(patch, triple, cache),
     }
 }
@@ -260,13 +295,12 @@ fn create_windows_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> Resul
     let old_name_to_addr = &cache.symbol_table;
 
     let mut new_name_to_addr = HashMap::new();
-    let new_pdb_file = patch.with_extension("pdb");
-    let new_pdb_file_handle = std::fs::File::open(new_pdb_file).unwrap();
-    let mut pdb_file = pdb::PDB::open(new_pdb_file_handle).unwrap();
-    let symbol_table = pdb_file.global_symbols().unwrap();
-    let address_map = pdb_file.address_map().unwrap();
-    let mut symbols = symbol_table.iter();
-    while let Ok(Some(symbol)) = symbols.next() {
+    let new_pdb_file_handle = std::fs::File::open(patch.with_extension("pdb"))?;
+    let mut pdb_file = pdb::PDB::open(new_pdb_file_handle)?;
+    let symbol_table = pdb_file.global_symbols()?;
+    let address_map = pdb_file.address_map()?;
+    let mut symbol_iter = symbol_table.iter();
+    while let Ok(Some(symbol)) = symbol_iter.next() {
         if let Ok(pdb::SymbolData::Public(data)) = symbol.parse() {
             let rva = data.offset.to_rva(&address_map);
             if let Some(rva) = rva {
@@ -587,9 +621,10 @@ fn create_wasm_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> Result<J
     // Wipe away the unnecessary sections
     let customs = new.customs.iter().map(|f| f.0).collect::<Vec<_>>();
     for custom_id in customs {
-        let custom = new.customs.get_mut(custom_id).unwrap();
-        if custom.name().contains("manganis") || custom.name().contains("__wasm_bindgen") {
-            new.customs.delete(custom_id);
+        if let Some(custom) = new.customs.get_mut(custom_id) {
+            if custom.name().contains("manganis") || custom.name().contains("__wasm_bindgen") {
+                new.customs.delete(custom_id);
+            }
         }
     }
 
@@ -636,7 +671,6 @@ fn convert_import_to_ifunc_call(
 
     // Convert the import function to a local function that calls the indirect function from the table
     let ty = new.types.get(ty_id);
-
     let params = ty.params().to_vec();
     let results = ty.results().to_vec();
     let locals: Vec<_> = params.iter().map(|ty| new.locals.add(*ty)).collect();
@@ -662,33 +696,6 @@ fn convert_import_to_ifunc_call(
     }));
 
     new.funcs.get_mut(func_id).kind = FunctionKind::Local(builder.local_func(locals));
-}
-
-fn fill_ifuncs_from_old<'a>(
-    old: &'a Module,
-    raw: &'a RawDataSection<'a>,
-    func_to_offset: HashMap<&'a str, i32>,
-) -> HashMap<&'a str, i32> {
-    // These are the "real" bindings for functions in the module
-    // Basically a map between a function's index and its real name
-    let func_to_index = old
-        .funcs
-        .par_iter()
-        .filter_map(|f| {
-            let name = f.name.as_deref()?;
-            Some((*raw.code_symbol_map.get(name)?, name))
-        })
-        .collect::<HashMap<usize, &str>>();
-
-    // Find the corresponding function that shares the same index, but in the ifunc table
-    raw.code_symbol_map
-        .par_iter()
-        .filter_map(|(name, idx)| {
-            let new_modules_unified_function = func_to_index.get(idx)?;
-            let offset = func_to_offset.get(new_modules_unified_function)?;
-            Some((*name, *offset))
-        })
-        .collect()
 }
 
 fn collect_func_ifuncs(m: &Module) -> HashMap<&str, i32> {
@@ -767,7 +774,7 @@ pub fn create_undefined_symbol_stub(
         .cloned()
         .collect();
 
-    tracing::debug!("Undefined symbols: {:#?}", undefined_symbols);
+    tracing::trace!("Undefined symbols: {:#?}", undefined_symbols);
 
     // Create a new object file (architecture doesn't matter much for our purposes)
     let mut obj = object::write::Object::new(
@@ -777,13 +784,13 @@ pub fn create_undefined_symbol_stub(
             target_lexicon::BinaryFormat::Coff => object::BinaryFormat::Coff,
             target_lexicon::BinaryFormat::Wasm => object::BinaryFormat::Wasm,
             target_lexicon::BinaryFormat::Xcoff => object::BinaryFormat::Xcoff,
-            _ => todo!(),
+            _ => return Err(PatchError::UnsupportedPlatform(triple.to_string())),
         },
         match triple.architecture {
-            target_lexicon::Architecture::Aarch64(_) => object::Architecture::Aarch64,
-            target_lexicon::Architecture::Wasm32 => object::Architecture::Wasm32,
-            target_lexicon::Architecture::X86_64 => object::Architecture::X86_64,
-            _ => todo!(),
+            Architecture::Aarch64(_) => object::Architecture::Aarch64,
+            Architecture::Wasm32 => object::Architecture::Wasm32,
+            Architecture::X86_64 => object::Architecture::X86_64,
+            _ => return Err(PatchError::UnsupportedPlatform(triple.to_string())),
         },
         match triple.endianness() {
             Ok(target_lexicon::Endianness::Little) => Endianness::Little,
@@ -795,7 +802,7 @@ pub fn create_undefined_symbol_stub(
     // Write the headers so we load properly in ios/macos
     #[allow(clippy::identity_op)]
     match triple.operating_system {
-        target_lexicon::OperatingSystem::Darwin(_) => {
+        OperatingSystem::Darwin(_) => {
             obj.set_macho_build_version({
                 let mut build_version = MachOBuildVersion::default();
                 build_version.platform = macho::PLATFORM_MACOS;
@@ -804,7 +811,7 @@ pub fn create_undefined_symbol_stub(
                 build_version
             });
         }
-        target_lexicon::OperatingSystem::IOS(_) => {
+        OperatingSystem::IOS(_) => {
             obj.set_macho_build_version({
                 let mut build_version = MachOBuildVersion::default();
                 build_version.platform = match triple.environment {
@@ -839,13 +846,16 @@ pub fn create_undefined_symbol_stub(
             continue;
         };
 
+        // Undefined symbols tend to be import symbols (darwin gives them an address of 0 until defined).
+        // If we fail to skip these, then we end up with stuff like alloc at 0x0 which is quite bad!
         if sym.is_undefined {
             continue;
         }
 
+        // ld64 likes to prefix symbols in intermediate object files with an underscore, but our symbol
+        // table doesn't, so we need to strip it off.
         let name_offset = match triple.operating_system {
-            target_lexicon::OperatingSystem::Darwin(_) => 1,
-            target_lexicon::OperatingSystem::IOS(_) => 1,
+            OperatingSystem::MacOSX(_) | OperatingSystem::Darwin(_) | OperatingSystem::IOS(_) => 1,
             _ => 0,
         };
 
@@ -896,10 +906,10 @@ pub fn create_undefined_symbol_stub(
             // calling conventions separately. It also depends on the architecture, making it even more
             // complicated.
             SymbolKind::Text => {
-                let jump_code = match triple.operating_system {
+                let jump_asm = match triple.operating_system {
                     // The windows ABI and calling convention is different than the SystemV ABI.
                     OperatingSystem::Windows => match triple.architecture {
-                        target_lexicon::Architecture::X86_64 => {
+                        Architecture::X86_64 => {
                             // Windows x64 has specific requirements for alignment and position-independent code
                             let mut code = vec![
                                 0x48, 0xB8, // movabs RAX, imm64 (move 64-bit immediate to RAX)
@@ -910,7 +920,7 @@ pub fn create_undefined_symbol_stub(
                             code.extend_from_slice(&[0xFF, 0xE0]);
                             code
                         }
-                        target_lexicon::Architecture::X86_32(_) => {
+                        Architecture::X86_32(_) => {
                             // On Windows 32-bit, we can use direct jump but need proper alignment
                             let mut code = vec![
                                 0xB8, // mov EAX, imm32 (move immediate value to EAX)
@@ -921,7 +931,7 @@ pub fn create_undefined_symbol_stub(
                             code.extend_from_slice(&[0xFF, 0xE0]);
                             code
                         }
-                        target_lexicon::Architecture::Aarch64(_) => {
+                        Architecture::Aarch64(_) => {
                             // Use MOV/MOVK sequence to load 64-bit address into X16
                             // This is more reliable than ADRP+LDR for direct hotpatching
                             let mut code = Vec::new();
@@ -951,7 +961,7 @@ pub fn create_undefined_symbol_stub(
 
                             code
                         }
-                        target_lexicon::Architecture::Arm(_) => {
+                        Architecture::Arm(_) => {
                             // For Windows 32-bit ARM, we need a different approach
                             let mut code = Vec::new();
                             // LDR r12, [pc, #8] ; Load the address into r12
@@ -964,11 +974,10 @@ pub fn create_undefined_symbol_stub(
                             code.extend_from_slice(&(abs_addr as u32).to_le_bytes());
                             code
                         }
-                        // Add other architectures as needed
-                        _ => todo!(),
+                        _ => return Err(PatchError::UnsupportedPlatform(triple.to_string())),
                     },
                     _ => match triple.architecture {
-                        target_lexicon::Architecture::X86_64 => {
+                        Architecture::X86_64 => {
                             // Use JMP instruction to absolute address: FF 25 followed by 32-bit offset
                             // Then the 64-bit absolute address
                             let mut code = vec![0xFF, 0x25, 0x00, 0x00, 0x00, 0x00]; // jmp [rip+0]
@@ -976,14 +985,14 @@ pub fn create_undefined_symbol_stub(
                             code.extend_from_slice(&abs_addr.to_le_bytes());
                             code
                         }
-                        target_lexicon::Architecture::X86_32(_) => {
+                        Architecture::X86_32(_) => {
                             // For 32-bit Intel, use JMP instruction with absolute address
                             let mut code = vec![0xE9]; // jmp rel32
                             let rel_addr = abs_addr as i32 - 5; // Relative address (offset from next instruction)
                             code.extend_from_slice(&rel_addr.to_le_bytes());
                             code
                         }
-                        target_lexicon::Architecture::Aarch64(_) => {
+                        Architecture::Aarch64(_) => {
                             // For ARM64, we load the address into a register and branch
                             let mut code = Vec::new();
                             // LDR X16, [PC, #0]  ; Load from the next instruction
@@ -994,7 +1003,7 @@ pub fn create_undefined_symbol_stub(
                             code.extend_from_slice(&abs_addr.to_le_bytes());
                             code
                         }
-                        target_lexicon::Architecture::Arm(_) => {
+                        Architecture::Arm(_) => {
                             // For 32-bit ARM, use LDR PC, [PC, #-4] to load the address and branch
                             let mut code = Vec::new();
                             // LDR PC, [PC, #-4] ; Load the address into PC (branching to it)
@@ -1003,16 +1012,15 @@ pub fn create_undefined_symbol_stub(
                             code.extend_from_slice(&(abs_addr as u32).to_le_bytes());
                             code
                         }
-                        // Add other architectures as needed
-                        _ => todo!(),
+                        _ => return Err(PatchError::UnsupportedPlatform(triple.to_string())),
                     },
                 };
 
-                let offset = obj.append_section_data(text_section, &jump_code, 8);
+                let offset = obj.append_section_data(text_section, &jump_asm, 8);
                 obj.add_symbol(Symbol {
                     name: name.as_bytes()[name_offset..].to_vec(),
                     value: offset,
-                    size: jump_code.len() as u64,
+                    size: jump_asm.len() as u64,
                     scope: SymbolScope::Linkage,
                     kind: SymbolKind::Text,
                     weak: false,
