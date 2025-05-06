@@ -3705,6 +3705,7 @@ version = "0.6.3"
 dependencies = [
  "anyhow",
  "browserslist-rs 0.16.0",
+ "built",
  "codemap",
  "const-serialize",
  "grass",

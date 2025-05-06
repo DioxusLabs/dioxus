@@ -47,6 +47,8 @@ fn hash_file(options: &AssetOptions, source: &Path) -> anyhow::Result<AssetHash>
     // Create a hasher
     let mut hash = std::collections::hash_map::DefaultHasher::new();
     options.hash(&mut hash);
+    // Hash the version of CLI opt
+    hash.write(crate::build_info::version().as_bytes());
     hash_file_with_options(options, source, &mut hash, false)?;
 
     let hash = hash.finish();
