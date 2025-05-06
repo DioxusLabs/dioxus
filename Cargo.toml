@@ -188,7 +188,7 @@ wasm-split-macro = { path = "packages/wasm-split/wasm-split-macro", version = "0
 wasm-split-cli = { path = "packages/wasm-split/wasm-split-cli", version = "0.1.0" }
 wasm-split-harness = { path = "packages/playwright-tests/wasm-split-harness", version = "0.1.0" }
 
-depinfo = { path = "packages/depinfo", version = "0.1.0" }
+depinfo = { path = "packages/depinfo", version = "0.6.3" }
 warnings = { version = "0.2.1" }
 
 # a fork of pretty please for tests - let's get off of this if we can!
@@ -299,9 +299,10 @@ pretty_assertions = "1.4.0"
 serde_repr = "0.1"
 hyper-util = "0.1.10"
 krates = { version = "0.19.0" }
-libloading = "0.8.3"
-libc = "0.2.155"
-memmap2 = { version = "0.9.5" }
+libloading = "0.8.6"
+libc = "0.2.170"
+memmap2 = "0.9.5"
+memfd = "0.6.4"
 
 # desktop
 wry = { version = "0.45.0", default-features = false }

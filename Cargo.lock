@@ -3334,15 +3334,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5c297a1c74b71ae29df00c3e22dd9534821d60eb9af5a0192823fa2acea70c2a"
 
 [[package]]
-name = "dbg_breakpoint"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fb333c8dc699012c0694fe7c7eca7d625f2bceeeef44fd1de39008d6a6abf777"
-dependencies = [
- "libc",
-]
-
-[[package]]
 name = "dbl"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3363,7 +3354,7 @@ dependencies = [
 
 [[package]]
 name = "depinfo"
-version = "0.1.0"
+version = "0.6.3"
 dependencies = [
  "thiserror 2.0.12",
 ]
@@ -13257,14 +13248,12 @@ dependencies = [
 name = "subsecond"
 version = "0.6.3"
 dependencies = [
- "dbg_breakpoint",
  "js-sys",
  "libc",
  "libloading 0.8.6",
  "memfd",
  "memmap2",
  "serde",
- "serde-wasm-bindgen",
  "subsecond-types",
  "thiserror 2.0.12",
  "wasm-bindgen",
