@@ -1243,7 +1243,7 @@ We checked the folder: {}
             Platform::Liveview => true,
         };
 
-        if requires_entropy || std::env::var("DIOXUS_ENTROPY").is_ok() {
+        if requires_entropy || crate::devcfg::should_force_entropy() {
             // If we already have an entropy app exe, return it - this is useful for re-opening the same app
             if let Some(existing_app_exe) = self.entropy_app_exe.clone() {
                 return existing_app_exe;

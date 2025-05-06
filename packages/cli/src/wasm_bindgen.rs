@@ -460,7 +460,7 @@ mod test {
     /// Test the github installer.
     #[tokio::test]
     async fn test_github_install() {
-        if std::env::var("TEST_INSTALLS").is_err() {
+        if !crate::devcfg::test_installs() {
             return;
         }
         let binary = WasmBindgen::new(VERSION);
@@ -473,7 +473,7 @@ mod test {
     /// Test the cargo installer.
     #[tokio::test]
     async fn test_cargo_install() {
-        if std::env::var("TEST_INSTALLS").is_err() {
+        if !crate::devcfg::test_installs() {
             return;
         }
         let binary = WasmBindgen::new(VERSION);
@@ -487,7 +487,7 @@ mod test {
     // Test the binstall installer
     #[tokio::test]
     async fn test_binstall_install() {
-        if std::env::var("TEST_INSTALLS").is_err() {
+        if !crate::devcfg::test_installs() {
             return;
         }
         let binary = WasmBindgen::new(VERSION);

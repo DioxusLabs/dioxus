@@ -128,7 +128,7 @@ impl CliSettings {
             return true;
         }
 
-        if std::env::var("NO_DOWNLOADS").is_ok() {
+        if crate::devcfg::no_downloads() {
             return true;
         }
 
