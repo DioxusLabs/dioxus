@@ -30,12 +30,13 @@ pub fn tick(handler: Fn(Request) -> Response) {
 }
 ```
 
-For application authors, you can use the `hot` macro to mark a function as hot-reloadable:
+For application authors, you can use `subsecond::call()` to make a function hot-reloadable:
 
 ```rust
-#[hot]
 fn handle_request(request: Request) -> Response {
-    // do thing
+    subsecond::call(|| {
+        // do_thing...
+    })
 }
 ```
 
@@ -43,7 +44,6 @@ If a hot function is actively being called, then subsecond will rewind the stack
 
 ```rust
 // Changes to `serve` will reload the server
-#[hot]
 fn serve() {
     let router = Router::new();
     router.get("/", handle_request);
@@ -51,7 +51,6 @@ fn serve() {
 }
 
 // Changes below "handle_request" won't be reload the router
-#[hot]
 fn handle_request(request: Request) -> Response {
     // do thing
 }
@@ -69,11 +68,9 @@ fn main() {
     })
 }
 
-#[hot]
 fn handle_socket(ws: &WebSocket) {
-    // do things with the websocket
+    subsecond::call(|| {
+        // do things with the websocket
+    })
 }
 ```
-
-
-By default, `main` is a rooted hot point: subsecond will rewind all the way to `main` if it has to. This can cause issues if you perform side-effectual code (deleting files, leaking memory, etc). Subsecond does this by using stack unwinding. If your code does not support stack unwinding, subsecond might not be suitable for you. Subsecond will try its best to defer to the runtime to avoid the stack unwind issue but might not always be possible.

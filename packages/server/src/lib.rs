@@ -63,6 +63,7 @@ mod launch;
 mod render;
 mod router;
 mod server;
+mod server_core;
 mod streaming;
 
 pub(crate) use config::*;
@@ -77,6 +78,8 @@ pub use context::{
     FromServerContext, ProvideServerContext,
 };
 pub use document::ServerDocument;
+
+#[cfg(not(target_arch = "wasm32"))]
 pub use launch::launch;
 
 /// Re-export commonly used items

@@ -43,6 +43,7 @@ pub fn launch(root: BaseComp, contexts: ContextList, platform_config: Vec<Box<dy
     unreachable!("Launching a fullstack app should never return")
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 async fn serve_server(
     original_root: fn() -> Result<VNode, RenderError>,
     contexts: Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync>>,
@@ -139,62 +140,58 @@ async fn serve_server(
                     DevserverMsg::HotReload(hot_reload_msg) => {
                         if hot_reload_msg.for_build_id == Some(dioxus_cli_config::build_id()) {
                             if let Some(table) = hot_reload_msg.jump_table {
-                                if unsafe { dioxus_devtools::subsecond::apply_patch(table) }.is_ok()
-                                {
-                                    let mut new_router = axum::Router::new().serve_static_assets();
-                                    let new_cfg = ServeConfig::new().unwrap();
+                                unsafe { dioxus_devtools::subsecond::apply_patch(table).unwrap() };
 
-                                    let server_fn_iter = collect_raw_server_fns();
+                                let mut new_router = axum::Router::new().serve_static_assets();
+                                let new_cfg = ServeConfig::new().unwrap();
 
-                                    // de-duplicate iteratively by preferring the most recent (first, since it's linked)
-                                    let mut server_fn_map: HashMap<_, _> = HashMap::new();
-                                    for f in server_fn_iter.into_iter().rev() {
-                                        server_fn_map.insert(f.path(), f);
-                                    }
+                                let server_fn_iter = collect_raw_server_fns();
 
-                                    for (_, fn_) in server_fn_map {
-                                        tracing::trace!(
-                                            "Registering server function: {:?} {:?}",
-                                            fn_.path(),
-                                            fn_.method()
-                                        );
-                                        new_router = crate::register_server_fn_on_router(
-                                            fn_,
-                                            new_router,
-                                            new_cfg.context_providers.clone(),
-                                        );
-                                    }
-
-                                    let hot_root = subsecond::HotFn::current(original_root);
-                                    let new_root_addr =
-                                        hot_root.ptr_address() as usize as *const ();
-                                    let new_root = unsafe {
-                                        std::mem::transmute::<*const (), fn() -> Element>(
-                                            new_root_addr,
-                                        )
-                                    };
-
-                                    crate::document::reset_renderer();
-
-                                    let state = RenderHandleState::new(new_cfg.clone(), new_root)
-                                        .with_ssr_state(SSRState::new(&new_cfg));
-
-                                    let fallback_handler =
-                                        axum::routing::get(render_handler).with_state(state);
-
-                                    make_service = apply_base_path(
-                                        new_router.fallback(fallback_handler),
-                                        new_root,
-                                        new_cfg.clone(),
-                                        base_path().map(|s| s.to_string()),
-                                    )
-                                    .into_make_service();
-
-                                    shutdown_tx.send_modify(|i| {
-                                        *i += 1;
-                                        hr_idx += 1;
-                                    });
+                                // de-duplicate iteratively by preferring the most recent (first, since it's linked)
+                                let mut server_fn_map: HashMap<_, _> = HashMap::new();
+                                for f in server_fn_iter.into_iter().rev() {
+                                    server_fn_map.insert(f.path(), f);
                                 }
+
+                                for (_, fn_) in server_fn_map {
+                                    tracing::trace!(
+                                        "Registering server function: {:?} {:?}",
+                                        fn_.path(),
+                                        fn_.method()
+                                    );
+                                    new_router = crate::register_server_fn_on_router(
+                                        fn_,
+                                        new_router,
+                                        new_cfg.context_providers.clone(),
+                                    );
+                                }
+
+                                let hot_root = subsecond::HotFn::current(original_root);
+                                let new_root_addr = hot_root.ptr_address() as usize as *const ();
+                                let new_root = unsafe {
+                                    std::mem::transmute::<*const (), fn() -> Element>(new_root_addr)
+                                };
+
+                                crate::document::reset_renderer();
+
+                                let state = RenderHandleState::new(new_cfg.clone(), new_root)
+                                    .with_ssr_state(SSRState::new(&new_cfg));
+
+                                let fallback_handler =
+                                    axum::routing::get(render_handler).with_state(state);
+
+                                make_service = apply_base_path(
+                                    new_router.fallback(fallback_handler),
+                                    new_root,
+                                    new_cfg.clone(),
+                                    base_path().map(|s| s.to_string()),
+                                )
+                                .into_make_service();
+
+                                shutdown_tx.send_modify(|i| {
+                                    *i += 1;
+                                    hr_idx += 1;
+                                });
                             }
                         }
                     }

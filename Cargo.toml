@@ -222,7 +222,7 @@ tauri-utils = { version = "2.2.0" }
 tauri-bundler = { version = "2.2.4" }
 lru = "0.13.0"
 async-trait = "0.1.87"
-axum = "0.8.1"
+axum = { version = "0.8.1", default-features = false }
 axum-server = { version = "0.7.1", default-features = false }
 server_fn = { version = "0.8.2", default-features = false }
 server_fn_macro = { version = "0.8.2" }

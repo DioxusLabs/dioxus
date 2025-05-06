@@ -328,13 +328,6 @@ impl WebviewInstance {
             WebViewBuilder::new_gtk(vbox)
         };
 
-        // Disable the webview default shortcuts to disable the reload shortcut
-        #[cfg(target_os = "windows")]
-        {
-            use wry::WebViewBuilderExtWindows;
-            webview = webview.with_browser_accelerator_keys(false);
-        }
-
         webview = webview
             .with_web_context(&mut web_context)
             .with_bounds(wry::Rect {

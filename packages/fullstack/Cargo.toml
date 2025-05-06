@@ -12,8 +12,8 @@ resolver = "2"
 
 [dependencies]
 # server functions
-server_fn = { workspace = true }
-dioxus_server_macro = { workspace = true }
+server_fn = { workspace = true, default-features = false }
+dioxus_server_macro = { workspace = true, optional = true}
 
 # axum
 axum = { workspace = true, optional = true }
@@ -24,13 +24,10 @@ generational-box = { workspace = true }
 
 # Dioxus + SSR
 dioxus-server = { workspace = true, optional = true}
-dioxus-ssr = { workspace = true, optional = true }
 dioxus-isrg = { workspace = true, optional = true }
 dioxus-router = { workspace = true, features = ["streaming"], optional = true }
 dioxus-fullstack-hooks = { workspace = true }
 dioxus-fullstack-protocol = { workspace = true }
-hyper = { workspace = true, optional = true }
-http = { workspace = true, optional = true }
 
 # Web Integration
 dioxus-web = { workspace = true, features = ["hydrate"], default-features = false, optional = true }
@@ -78,12 +75,6 @@ dioxus-devtools = { workspace = true, optional = true }
 aws-lc-rs = { version = "1.12.5", optional = true }
 dioxus-history = { workspace = true }
 
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-tokio = { workspace = true, features = ["rt", "sync"], optional = true }
-
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-tokio = { workspace = true, features = ["rt", "sync", "rt-multi-thread"], optional = true }
-
 [dev-dependencies]
 dioxus = { workspace = true, features = ["fullstack"] }
 
@@ -98,45 +89,17 @@ desktop = ["server_fn/reqwest", "dioxus_server_macro/reqwest"]
 mobile = ["server_fn/reqwest", "dioxus_server_macro/reqwest"]
 default-tls = ["server_fn/default-tls"]
 rustls = ["server_fn/rustls", "dep:rustls", "dep:hyper-rustls"]
-# axum = [
-#     "dep:tower-http",
-#     "server_fn/axum",
-#     "axum_core",
-# ]
-# axum_core = [
-#     "dep:axum",
-#     "server_fn/axum-no-default",
-#     "dioxus_server_macro/axum",
-#     "default-tls",
-#     "server",
-# ]
 server = [
+    "server-core" ,
+    "default-tls",
     "server_fn/axum",
+]
+server-core = [
     "server_fn/axum-no-default",
     "dioxus_server_macro/axum",
     "server_fn/reqwest",
     "dioxus_server_macro/reqwest",
     "dep:dioxus-server",
-
-    "server_fn/ssr",
-    "dioxus_server_macro/server",
-    "dioxus-fullstack-hooks/server",
-    "dep:tokio",
-    "dep:tokio-util",
-    "dep:tokio-stream",
-    "dep:dioxus-ssr",
-    "dep:dioxus-isrg",
-    "dep:dioxus-router",
-    "dep:tower",
-    "dep:hyper",
-    "dep:http",
-    "dep:tower-layer",
-    "dep:tracing-futures",
-    "dep:pin-project",
-    "dep:thiserror",
-    "dep:dioxus-cli-config",
-    "dep:async-trait",
-    "dep:parking_lot",
     "dioxus-interpreter-js",
 ]
 aws-lc-rs = ["dep:aws-lc-rs"]

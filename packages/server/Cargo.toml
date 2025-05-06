@@ -11,14 +11,23 @@ keywords = ["web", "desktop", "mobile", "gui", "server"]
 resolver = "2"
 
 [dependencies]
+# dioxus
+dioxus-lib = { workspace = true }
+generational-box = { workspace = true }
+
 # server functions
 server_fn = { workspace = true, default-features = false }
 
-# axum
-axum = { workspace = true }
+# axum + native deps
+axum = { workspace = true, default-features = false }
 tower-http = { workspace = true, features = ["fs"], optional = true }
-dioxus-lib = { workspace = true }
-generational-box = { workspace = true }
+tokio-util = { workspace = true, features = ["rt"], optional = true }
+tokio-stream = { workspace = true, features = ["sync"], optional = true }
+tower = { workspace = true, features = ["util"], optional = true}
+tower-layer = { version = "0.3.2", optional = true}
+hyper-util = { workspace = true, features = ["full"], optional = true }
+hyper = { workspace = true, optional = true }
+http = { workspace = true }
 
 # Dioxus + SSR
 dioxus-ssr = { workspace = true }
@@ -27,17 +36,13 @@ dioxus-router = { workspace = true, features = ["streaming"] }
 dioxus-fullstack-hooks = { workspace = true }
 dioxus-fullstack-protocol = { workspace = true }
 dioxus-interpreter-js = { workspace = true, optional = true }
-hyper = { workspace = true }
-http = { workspace = true }
 
 tracing = { workspace = true }
 tracing-futures = { workspace = true }
 once_cell = { workspace = true }
-tokio-util = { version = "0.7.8", features = ["rt"] }
-async-trait = { version = "0.1.58" }
+async-trait = { workspace = true }
+serde = { workspace = true }
 
-serde = "1.0.159"
-tokio-stream = { version = "0.1.12", features = ["sync"] }
 futures-util = { workspace = true }
 futures-channel = { workspace = true }
 ciborium = { workspace = true }
@@ -48,8 +53,6 @@ hyper-rustls = { workspace = true, optional = true }
 pin-project = { version = "1.1.2" }
 thiserror = { workspace = true }
 bytes = "1.4.0"
-tower = { workspace = true, features = ["util"] }
-tower-layer = { version = "0.3.2" }
 parking_lot = { workspace = true, features = ["send_guard"] }
 web-sys = { version = "0.3.61", features = [
     "Window",
@@ -64,28 +67,35 @@ dioxus-cli-config = { workspace = true }
 dioxus-devtools = { workspace = true, optional = true }
 aws-lc-rs = { version = "1.8.1", optional = true }
 dioxus-history = { workspace = true }
-hyper-util = { workspace = true, features = ["full"] }
 subsecond.workspace = true
 inventory = { workspace = true }
 dashmap = "6.1.0"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-tokio = { workspace = true, features = ["rt", "sync"] }
+tokio = { workspace = true, features = ["rt", "sync", "macros"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-tokio = { workspace = true, features = ["rt", "sync", "rt-multi-thread"] }
+tokio = { workspace = true, features = ["rt", "sync", "rt-multi-thread", "macros", "net"] }
 
 [dev-dependencies]
 dioxus = { workspace = true, features = ["fullstack"] }
 
 [features]
-default = [
-    "devtools",
-    "document",
-    "dioxus-fullstack-hooks/server",
-    "server_fn/axum",
+default = ["devtools", "document", "full"]
+full = [
+    "core",
     "server_fn/ssr",
     "dep:tower-http",
+    "default-tls",
+    "dep:tower",
+    "dep:hyper",
+    "dep:tower-layer",
+    "dep:tokio-util",
+    "dep:hyper-util",
+]
+core = [
+    "server_fn/axum-no-default",
+    "server_fn/ssr",
 ]
 devtools = ["dep:dioxus-devtools"]
 document = ["dep:dioxus-interpreter-js"]
@@ -93,45 +103,7 @@ default-tls = ["server_fn/default-tls"]
 rustls = ["server_fn/rustls", "dep:rustls", "dep:hyper-rustls"]
 aws-lc-rs = ["dep:aws-lc-rs"]
 
-# default = ["devtools", "document", "file_engine", "mounted"]
-# desktop = ["dep:dioxus-desktop", "server_fn/reqwest", "dioxus_server_macro/reqwest"]
-# mobile = ["dep:dioxus-mobile", "server_fn/reqwest", "dioxus_server_macro/reqwest"]
-# document = ["d"]
-# axum_core = [
-#     "dep:axum",
-#     "server_fn/axum-no-default",
-#     "dioxus_server_macro/axum",
-#     "default-tls",
-#     "server",
-# ]
-# axum = [
-#     "dep:tower-http",
-#     "server_fn/axum",
-#     "axum_core",
-# ]
-# server = [
-#     "server_fn/ssr",
-#     "dioxus_server_macro/server",
-#     "dioxus-fullstack-hooks/server",
-#     "dep:tokio",
-#     "dep:tokio-util",
-#     "dep:tokio-stream",
-#     "dep:dioxus-ssr",
-#     "dep:dioxus-isrg",
-#     "dep:dioxus-router",
-#     "dep:tower",
-#     "dep:hyper",
-#     "dep:http",
-#     "dep:tower-layer",
-#     "dep:tracing-futures",
-#     "dep:pin-project",
-#     "dep:thiserror",
-#     "dep:dioxus-cli-config",
-#     "dep:async-trait",
-#     "dep:parking_lot",
-#     "dioxus-interpreter-js",
-# ]
-
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
 features = ["axum", "web", "aws-lc-rs"]
+
