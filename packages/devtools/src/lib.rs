@@ -4,7 +4,7 @@ use dioxus_signals::{GlobalKey, Writable};
 pub use dioxus_devtools_types::*;
 pub use subsecond;
 
-#[derive(Debug, Clone, PartialEq, thiserror::Error)]
+#[derive(Debug, PartialEq, thiserror::Error)]
 pub enum DevtoolsError {
     #[error("Failed to load the patch: {0}")]
     PatchFailed(#[from] subsecond::PatchError),
@@ -50,7 +50,7 @@ pub fn connect(endpoint: String, mut callback: impl FnMut(DevserverMsg) + Send +
     std::thread::spawn(move || {
         let uri = format!(
             "{endpoint}?aslr_reference={}&build_id={}",
-            subsecond::aslr_reference(),
+            subsecond::__aslr_reference(),
             dioxus_cli_config::build_id()
         );
 

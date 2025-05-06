@@ -322,7 +322,7 @@ fn create_windows_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> Resul
         .context("failed to find 'main' symbol in patch")?;
 
     let aslr_reference = old_name_to_addr
-        .get("aslr_reference")
+        .get("__aslr_reference")
         .map(|s| s.address)
         .context("failed to find '_aslr_reference' symbol in original module")?;
 
@@ -388,10 +388,10 @@ fn create_native_jump_table(
     };
 
     let aslr_reference = old_name_to_addr
-        .get("_aslr_reference")
-        .or_else(|| old_name_to_addr.get("aslr_reference"))
+        .get("___aslr_reference")
+        .or_else(|| old_name_to_addr.get("__aslr_reference"))
         .map(|s| s.address)
-        .context("failed to find '_aslr_reference' symbol in original module")?;
+        .context("failed to find '___aslr_reference' symbol in original module")?;
 
     Ok(JumpTable {
         lib: patch.to_path_buf(),
@@ -831,10 +831,10 @@ pub fn create_undefined_symbol_stub(
 
     // Get the offset from the main module and adjust the addresses by the slide
     let aslr_ref_address = symbol_table
-        .get("_aslr_reference")
-        .or_else(|| symbol_table.get("aslr_reference"))
+        .get("___aslr_reference")
+        .or_else(|| symbol_table.get("__aslr_reference"))
         .map(|s| s.address)
-        .context("Failed to find _aslr_reference symbol")?;
+        .context("Failed to find ___aslr_reference symbol")?;
     let aslr_offset = aslr_reference - aslr_ref_address;
 
     // we need to assemble a PLT/GOT so direct calls to the patch symbols work

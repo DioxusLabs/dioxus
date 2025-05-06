@@ -37,8 +37,10 @@
 //! use `dx serve` - this takes the same arguments as `cargo run` but will automatically hot-reload your
 //! application when changes are detected.
 //!
+//! As of Dioxus 0.7, "--hotpatch" is required to use hotpatching while Subsecond is still experimental.
+//!
 //! ```sh
-//! dx serve
+//! dx serve --hotpatch
 //! ```
 //!
 //! ## How it works
@@ -50,10 +52,10 @@
 //! Unlike libraries like [detour](https://crates.io/crates/detour), Subsecond *does not* modify your
 //! process memory. Patching pointers is wildly unsafe and can lead to crashes and undefined behavior.
 //!
-//! Instead, an external tool compiles just the parts of your project that changed, links them together
+//! Instead, an external tool compiles only the parts of your project that changed, links them together
 //! using the addresses of the functions in your running program, and then sends the new jump table to
 //! your application. Subsecond then applies the patch and continues running. Since Subsecond doesn't
-//! modify memory, the program must have some runtime integration to handle the patching.
+//! modify memory, the program must have a runtime integration to handle the patching.
 //!
 //! If the framework you're using doesn't integrate with subsecond, you can rely on the fact that calls
 //! to stale [`call`] instances will emit a safe panic that is automatically caught and retried
@@ -164,14 +166,17 @@
 //! Subsecond works across all major platforms:
 //!
 //! - Android (arm64-v8a, armeabi-v7a)
-//! - iOS (arm64, x86_64)
+//! - iOS (arm64)
 //! - Linux (x86_64, aarch64)
-//! - macOS (x86_64, arm64)
-//! - Windows (x86_64, aarch64)
+//! - macOS (x86_64, aarch64)
+//! - Windows (x86_64, arm64)
 //! - WebAssembly (wasm32)
 //!
 //! If you have a new platform you'd like to see supported, please open an issue on the Subsecond repository.
 //! We are keen to add support for new platforms like wasm64, riscv64, and more.
+//!
+//! Note that iOS device is currently not supported due to code-signing requirements. We hope to fix
+//! this in the future, but for now you can use the simulator to test your app.
 //!
 //! ## Adding the Subsecond badge to your project
 //!
@@ -195,6 +200,8 @@
 //! [sponsoring us on GitHub](https://github.com/sponsors/DioxusLabs) or eventually deploying your
 //! apps with Dioxus Deploy (currently under construction).
 
+pub use subsecond_types::JumpTable;
+
 use std::{
     backtrace,
     mem::transmute,
@@ -202,33 +209,22 @@ use std::{
     sync::{atomic::AtomicPtr, Arc, Mutex},
 };
 
-pub use subsecond_types::JumpTable;
-
-// todo: if there's a reference held while we run our patch, this gets invalidated. should probably
-// be a pointer to a jump table instead, behind a cell or something. I believe Atomic + relaxed is basically a no-op
-static HOTRELOAD_HANDLERS: Mutex<Vec<Arc<dyn Fn() + Send + Sync>>> = Mutex::new(Vec::new());
-static mut SUBSECOND_ENABLED: bool = false;
-
 /// Call a given function with hot-reloading enabled. If the function's code changes, `call` will use
 /// the new version of the function. If code *above* the function changes, this will emit a panic
 /// that forces an unwind to the next [`call`] instance.
-///
-/// # Example
-///
-///
-/// # Without unwinding
-///
-///
-/// # WebAssembly
 ///
 /// WASM/rust does not support unwinding, so [`call`] will not track dependency graph changes.
 /// If you are building a framework for use on WASM, you will need to use `Subsecond::HotFn` directly.
 ///
 /// However, if you wrap your calling code in a future, you *can* simply drop the future which will
 /// cause `drop` to execute and get something similar to unwinding. Not great if refcells are open.
-pub fn call<O>(f: impl FnMut() -> O) -> O {
-    let mut hotfn = HotFn::current(f);
+pub fn call<O>(mut f: impl FnMut() -> O) -> O {
+    // Only run in debug mode - the rest of this function will dissolve away
+    if !cfg!(debug_assertions) {
+        return f();
+    }
 
+    let mut hotfn = HotFn::current(f);
     loop {
         let res = std::panic::catch_unwind(AssertUnwindSafe(|| hotfn.call(())));
 
@@ -242,17 +238,6 @@ pub fn call<O>(f: impl FnMut() -> O) -> O {
         let Some(_hot_payload) = err.downcast_ref::<HotFnPanic>() else {
             std::panic::resume_unwind(err);
         };
-
-        // If subsecond is in the look, issue a breakpoint so they can try and issue a hot-patch.
-        unsafe {
-            if SUBSECOND_ENABLED {
-                #[cfg(any(unix, windows))]
-                {
-                    dbg_breakpoint::breakpoint_if_debugging();
-                }
-                continue;
-            }
-        }
     }
 }
 
@@ -263,6 +248,10 @@ pub fn call<O>(f: impl FnMut() -> O) -> O {
 // For Dioxus purposes, this is not a big deal, but for libraries like bevy which heavily rely on
 // multithreading, it might become an issue.
 static APP_JUMP_TABLE: AtomicPtr<JumpTable> = AtomicPtr::new(std::ptr::null_mut());
+static HOTRELOAD_HANDLERS: Mutex<Vec<Arc<dyn Fn() + Send + Sync>>> = Mutex::new(Vec::new());
+pub fn register_handler(handler: Arc<dyn Fn() + Send + Sync + 'static>) {
+    HOTRELOAD_HANDLERS.lock().unwrap().push(handler);
+}
 fn get_jump_table() -> Option<&'static JumpTable> {
     let ptr = APP_JUMP_TABLE.load(std::sync::atomic::Ordering::Relaxed);
     if ptr.is_null() {
@@ -270,6 +259,20 @@ fn get_jump_table() -> Option<&'static JumpTable> {
     }
 
     Some(unsafe { &*ptr })
+}
+unsafe fn commit_patch(table: JumpTable) {
+    APP_JUMP_TABLE.store(
+        Box::into_raw(Box::new(table)),
+        std::sync::atomic::Ordering::Relaxed,
+    );
+    HOTRELOAD_HANDLERS
+        .lock()
+        .unwrap()
+        .clone()
+        .iter()
+        .for_each(|handler| {
+            handler();
+        });
 }
 
 /// A panic issued by the [`call`] function if the caller would be stale if called. This causes
@@ -296,7 +299,7 @@ where
 impl<A, M, F: HotFunction<A, M>> HotFn<A, M, F> {
     /// Create a new [`HotFn`] instance with the current function.
     ///
-    /// Whenever you call [`HotFn::call`], it will use the current function from the JumpTable.
+    /// Whenever you call [`HotFn::call`], it will use the current function from the [`JumpTable`].
     pub const fn current(f: F) -> HotFn<A, M, F> {
         HotFn {
             inner: f,
@@ -306,12 +309,21 @@ impl<A, M, F: HotFunction<A, M>> HotFn<A, M, F> {
 
     /// Call the function with the given arguments.
     ///
-    /// This will attempt to
+    /// This will unwrap the [`HotFnPanic`] panic, propagating up to the next [`HotFn::call`].
+    ///
+    /// If you want to handle the panic yourself, use [`HotFn::try_call`].
     pub fn call(&mut self, args: A) -> F::Return {
         self.try_call(args).unwrap()
     }
 
-    /// Get the address of the function in memory, might be different than the original
+    /// Get the address of the function in memory which might be different than the original.
+    ///
+    /// This is useful for implementing a memoization strategy to safely preserve state across
+    /// hot-patches. If the ptr_address of a function did not change between patches, then the
+    /// state that exists "above" the function is still valid.
+    ///
+    /// Note that Subsecond does not track this state over time, so it's up to the runtime integration
+    /// to track this state and diff it.
     pub fn ptr_address(&self) -> u64 {
         if size_of::<F>() == size_of::<fn() -> ()>() {
             let ptr: usize = unsafe { std::mem::transmute_copy(&self.inner) };
@@ -334,6 +346,10 @@ impl<A, M, F: HotFunction<A, M>> HotFn<A, M, F> {
     /// then this function will emit an [`HotFnPanic`] which can be unwrapped and handled by next [`call`]
     /// instance.
     pub fn try_call(&mut self, args: A) -> Result<F::Return, HotFnPanic> {
+        if !cfg!(debug_assertions) {
+            return Ok(self.inner.call_it(args));
+        }
+
         unsafe {
             // Try to handle known function pointers. This is *really really* unsafe, but due to how
             // rust trait objects work, it's impossible to make an arbitrary usize-sized type implement Fn()
@@ -362,10 +378,6 @@ impl<A, M, F: HotFunction<A, M>> HotFn<A, M, F> {
     }
 }
 
-pub fn register_handler(handler: Arc<dyn Fn() + Send + Sync + 'static>) {
-    HOTRELOAD_HANDLERS.lock().unwrap().push(handler);
-}
-
 /// Apply the patch using a given jump table.
 ///
 /// # Safety
@@ -386,23 +398,20 @@ pub unsafe fn apply_patch(mut table: JumpTable) -> Result<(), PatchError> {
     {
         // on android we try to cirumvent permissions issues by copying the library to a memmap and then libloading that
         #[cfg(target_os = "android")]
-        let lib = Box::leak(Box::new(android_memmap_dlopen(&table.lib)));
+        let lib = Box::leak(Box::new(android_memmap_dlopen(&table.lib)?));
 
         #[cfg(not(target_os = "android"))]
         let lib = Box::leak(Box::new({
             match libloading::Library::new(&table.lib) {
                 Ok(lib) => lib,
-                err => {
-                    eprintln!("Failed to load library: {:?}", err);
-                    return Err(PatchError::CantLoadPatch);
-                }
+                Err(err) => return Err(PatchError::Dlopen(err.to_string())),
             }
         }));
 
-        // Use the `aslr_offset` symbol as a sentinel for the current executable. This is basically a
+        // Use the `__aslr_reference` symbol as a sentinel for the current executable. This is basically a
         // cross-platform version of `__mh_execute_header` on macOS that sets a reference point for the
         // jump table.
-        let old_offset = aslr_reference() - table.aslr_reference as usize;
+        let old_offset = __aslr_reference() - table.aslr_reference as usize;
 
         // Use the `main` symbol as a sentinel for the loaded library. Might want to move away
         // from this at some point, or make it configurable
@@ -410,8 +419,8 @@ pub unsafe fn apply_patch(mut table: JumpTable) -> Result<(), PatchError> {
             // Leak the library. dlopen is basically a no-op on many platforms and if we even try to drop it,
             // some code might be called (ie drop) that results in really bad crashes (restart your computer...)
             //
-            // todo - we should define a symbol instead of __rust_alloc since it's going to be removed
-            //      see https://github.com/rust-lang/rust/issues/139265
+            // This code currently assumes "main" always makes it to the export list (which it should)
+            // and requires coordination from the CLI to export it.
             lib.get::<*const ()>(b"main")
                 .ok()
                 .unwrap()
@@ -562,31 +571,36 @@ pub unsafe fn apply_patch(mut table: JumpTable) -> Result<(), PatchError> {
     Ok(())
 }
 
-#[derive(Debug, Clone, PartialEq, thiserror::Error)]
+#[derive(Debug, PartialEq, thiserror::Error)]
 pub enum PatchError {
-    #[error("Failed to load the patch")]
-    CantLoadPatch,
+    /// The patch failed to apply.
+    ///
+    /// This returns a string instead of the Dlopen error type so we don't need to bring the libloading
+    /// dependency into the public API.
+    #[error("Failed to load library: {0}")]
+    Dlopen(String),
+
+    /// The patch failed to apply on Android, most likely due to a permissions issue.
+    #[error("Failed to load library on Android: {0}")]
+    AndroidMemfd(String),
 }
 
-unsafe fn commit_patch(table: JumpTable) {
-    APP_JUMP_TABLE.store(
-        Box::into_raw(Box::new(table)),
-        std::sync::atomic::Ordering::Relaxed,
-    );
-    HOTRELOAD_HANDLERS
-        .lock()
-        .unwrap()
-        .clone()
-        .iter()
-        .for_each(|handler| {
-            handler();
-        });
-}
-
+/// This function returns its own address, providing a stable reference point for hot-patch engine
+/// to hook onto. If you were to write an object file for this function, it would amount to:
+///
+/// ```asm
+/// __aslr_reference:
+///         mov     rax, qword ptr [rip + __aslr_reference@GOTPCREL] // notice the @GOTPCREL relocation
+///         ret
+/// ```
+///
+/// The point here being that we have a stable address both at runtime and compile time, making it
+/// possible to calculate the ASLR offset from within the process to correct the jump table.
+#[doc(hidden)]
 #[inline(never)]
 #[no_mangle]
-pub extern "C" fn aslr_reference() -> usize {
-    aslr_reference as *const () as usize
+pub extern "C" fn __aslr_reference() -> usize {
+    __aslr_reference as *const () as usize
 }
 
 /// On Android, we can't dlopen libraries that aren't placed inside /data/data/<package_name>/lib/
@@ -596,8 +610,13 @@ pub extern "C" fn aslr_reference() -> usize {
 ///
 /// I haven't tested it on device yet, so if if it doesn't work, then we can simply revert to using
 /// "adb root" and then pushing the library to the /data/data folder instead of the tmp folder.
+///
+/// Android provides us a flag when calling dlopen to use a file descriptor instead of a path, presumably
+/// because they want to support this.
+/// - https://developer.android.com/ndk/reference/group/libdl
+/// - https://developer.android.com/ndk/reference/structandroid/dlextinfo
 #[cfg(target_os = "android")]
-unsafe fn android_memmap_dlopen(file: &std::path::Path) -> libloading::Library {
+unsafe fn android_memmap_dlopen(file: &std::path::Path) -> Result<libloading::Library, PatchError> {
     use std::ffi::{c_void, CStr, CString};
     use std::os::fd::{AsRawFd, BorrowedFd};
     use std::ptr;
@@ -637,6 +656,7 @@ unsafe fn android_memmap_dlopen(file: &std::path::Path) -> libloading::Library {
     let map = map.make_exec().unwrap();
 
     let filename = c"/subsecond-patch";
+
     let info = ExtInfo {
         flags: 0x10, // ANDROID_DLEXT_USE_LIBRARY_FD
         reserved_addr: ptr::null(),
@@ -658,7 +678,7 @@ unsafe fn android_memmap_dlopen(file: &std::path::Path) -> libloading::Library {
                 return Some(ptr);
             }
         },
-        |err| err.to_str().unwrap().to_string(),
+        |err| err.to_str().unwrap_or_default().to_string(),
     )
     .unwrap();
 
@@ -681,7 +701,6 @@ pub trait HotFunction<Args, Marker> {
     type Real;
 
     /// Call the HotFunction with the given arguments.
-    ///
     ///
     /// # Why
     ///
