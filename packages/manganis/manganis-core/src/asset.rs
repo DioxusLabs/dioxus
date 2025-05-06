@@ -165,8 +165,13 @@ impl Asset {
     pub fn bundled(&self) -> BundledAsset {
         let len = self.bundled.len();
         let ptr = self.bundled as *const u8;
+        if ptr == std::ptr::null() {
+            panic!("Tried to use an asset that was not bundled. Make sure you are compiling dx as the linker");
+        }
         let mut bytes = ConstVec::new();
         for byte in 0..len {
+            // SAFETY: We checked that the pointer was not null above. The pointer is valid for reads and
+            // since we are reading a u8 there are no alignment requirements
             bytes = bytes.push(unsafe { std::ptr::read_volatile(ptr.add(byte)) });
         }
         let read = bytes.read();
