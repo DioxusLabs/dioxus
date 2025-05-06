@@ -686,11 +686,16 @@ unsafe fn android_memmap_dlopen(file: &std::path::Path) -> Result<libloading::Li
         },
         |err| err.to_str().unwrap_or_default().to_string(),
     )
-    .map_err(|e| PatchError::AndroidMemfd(format!("android_dlopen_ext failed: {}", e)))?;
+    .map_err(|e| {
+        PatchError::AndroidMemfd(format!(
+            "android_dlopen_ext failed: {}",
+            e.unwrap_or_default()
+        ))
+    })?;
 
     let lib = unsafe { libloading::os::unix::Library::from_raw(handle as *mut c_void) };
     let lib: libloading::Library = lib.into();
-    lib
+    Ok(lib)
 }
 
 /// A trait that enables types to be hot-patched.
