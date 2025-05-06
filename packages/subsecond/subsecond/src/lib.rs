@@ -643,17 +643,23 @@ unsafe fn android_memmap_dlopen(file: &std::path::Path) -> Result<libloading::Li
     use memmap2::MmapAsRawDesc;
     use std::os::unix::prelude::{FromRawFd, IntoRawFd};
 
-    let contents = std::fs::read(file).unwrap();
+    let contents = std::fs::read(file)
+        .map_err(|e| PatchError::AndroidMemfd(format!("Failed to read file: {}", e)))?;
     let mut mfd = memfd::MemfdOptions::default()
         .create("subsecond-patch")
-        .unwrap();
-    mfd.as_file().set_len(contents.len() as u64).unwrap();
+        .map_err(|e| PatchError::AndroidMemfd(format!("Failed to create memfd: {}", e)))?;
+    mfd.as_file()
+        .set_len(contents.len() as u64)
+        .map_err(|e| PatchError::AndroidMemfd(format!("Failed to set memfd length: {}", e)))?;
 
     let raw_fd = mfd.into_raw_fd();
 
-    let mut map = memmap2::MmapMut::map_mut(raw_fd).unwrap();
+    let mut map = memmap2::MmapMut::map_mut(raw_fd)
+        .map_err(|e| PatchError::AndroidMemfd(format!("Failed to map memfd: {}", e)))?;
     map.copy_from_slice(&contents);
-    let map = map.make_exec().unwrap();
+    let map = map
+        .make_exec()
+        .map_err(|e| PatchError::AndroidMemfd(format!("Failed to make memfd executable: {}", e)))?;
 
     let filename = c"/subsecond-patch";
 
@@ -680,7 +686,7 @@ unsafe fn android_memmap_dlopen(file: &std::path::Path) -> Result<libloading::Li
         },
         |err| err.to_str().unwrap_or_default().to_string(),
     )
-    .unwrap();
+    .map_err(|e| PatchError::AndroidMemfd(format!("android_dlopen_ext failed: {}", e)))?;
 
     let lib = unsafe { libloading::os::unix::Library::from_raw(handle as *mut c_void) };
     let lib: libloading::Library = lib.into();
