@@ -902,7 +902,7 @@ impl BuildRequest {
         // Currently just use the first one
         // Maybe for SVG, we can use the first as foreground and the second as background?
         if let Some(icon) = &self.krate.config.bundle.icon {
-            super::icon::gen_android_icons(&Path::new(&icon[0]), &res.as_path())?
+            super::icon::gen_android_icons(Path::new(&icon[0]), res.as_path())?
         } else {
             create_dir_all(res.join("drawable"))?;
             write(
