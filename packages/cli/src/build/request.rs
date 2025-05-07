@@ -2271,10 +2271,12 @@ session_cache_dir: {}"#,
         struct AndroidHandlebarsObjects {
             application_id: String,
             app_name: String,
+            android_bundle: Option<crate::AndroidSettings>,
         }
         let hbs_data = AndroidHandlebarsObjects {
             application_id: self.full_mobile_app_name(),
             app_name: self.bundled_app_name(),
+            android_bundle: self.config.bundle.android.clone(),
         };
         let hbs = handlebars::Handlebars::new();
 
@@ -3164,8 +3166,15 @@ session_cache_dir: {}"#,
         if let Platform::Android = self.platform {
             ctx.status_running_gradle();
 
+            // When the build mode is set to release and there is an Android signature configuration, use assembleRelease
+            let build_type = if self.release && self.config.bundle.android.is_some() {
+                "assembleRelease"
+            } else {
+                "assembleDebug"
+            };
+
             let output = Command::new(self.gradle_exe()?)
-                .arg("assembleDebug")
+                .arg(build_type)
                 .current_dir(self.root_dir())
                 .output()
                 .await?;

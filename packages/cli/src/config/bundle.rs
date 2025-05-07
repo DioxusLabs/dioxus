@@ -16,6 +16,7 @@ pub(crate) struct BundleConfig {
     pub(crate) deb: Option<DebianSettings>,
     pub(crate) macos: Option<MacOsSettings>,
     pub(crate) windows: Option<WindowsSettings>,
+    pub(crate) android: Option<AndroidSettings>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -183,6 +184,15 @@ impl Default for WebviewInstallMode {
     fn default() -> Self {
         Self::OfflineInstaller { silent: false }
     }
+}
+
+// Because all four fields must appear at the same time, there is no need for an Option
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub(crate) struct AndroidSettings {
+    pub(crate) jks_file: PathBuf,
+    pub(crate) jks_password: String,
+    pub(crate) key_alias: String,
+    pub(crate) key_password: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
