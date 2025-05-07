@@ -39,6 +39,15 @@ pub trait RenderedElementBacking: std::any::Any {
         Box::pin(async { Err(MountedError::NotSupported) })
     }
 
+    /// Scroll to the given element offsets
+    fn scroll(
+        &self,
+        _coordinates: PixelsVector2D,
+        _behavior: ScrollBehavior,
+    ) -> Pin<Box<dyn Future<Output = MountedResult<()>>>> {
+        Box::pin(async { Err(MountedError::NotSupported) })
+    }
+
     /// Set the focus on the element
     fn set_focus(&self, _focus: bool) -> Pin<Box<dyn Future<Output = MountedResult<()>>>> {
         Box::pin(async { Err(MountedError::NotSupported) })
@@ -117,6 +126,16 @@ impl MountedData {
         behavior: ScrollBehavior,
     ) -> Pin<Box<dyn Future<Output = MountedResult<()>>>> {
         self.inner.scroll_to(behavior)
+    }
+
+    /// Scroll to the given element offsets
+    #[doc(alias = "scrollTo")]
+    pub fn scroll(
+        &self,
+        coordinates: PixelsVector2D,
+        behavior: ScrollBehavior,
+    ) -> Pin<Box<dyn Future<Output = MountedResult<()>>>> {
+        self.inner.scroll(coordinates, behavior)
     }
 
     /// Set the focus on the element
