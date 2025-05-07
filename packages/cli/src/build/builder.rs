@@ -448,8 +448,8 @@ impl AppBuilder {
             ("RUST_BACKTRACE", "1".to_string()),
         ];
 
-        if let Some(base_path) = &krate.config.web.app.base_path {
-            envs.push((dioxus_cli_config::ASSET_ROOT_ENV, base_path.clone()));
+        if let Some(base_path) = krate.base_path() {
+            envs.push((dioxus_cli_config::ASSET_ROOT_ENV, base_path.to_string()));
         }
 
         if let Some(env_filter) = env::var_os("RUST_LOG").and_then(|e| e.into_string().ok()) {

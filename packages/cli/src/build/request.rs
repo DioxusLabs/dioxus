@@ -2014,8 +2014,8 @@ session_cache_dir: {}"#,
         // If this is a release build, bake the base path and title into the binary with env vars.
         // todo: should we even be doing this? might be better being a build.rs or something else.
         if self.release {
-            if let Some(base_path) = &self.config.web.app.base_path {
-                env_vars.push((ASSET_ROOT_ENV, base_path.clone()));
+            if let Some(base_path) = self.base_path() {
+                env_vars.push((ASSET_ROOT_ENV, base_path.to_string()));
             }
             env_vars.push((APP_TITLE_ENV, self.config.web.app.title.clone()));
         }
@@ -3612,7 +3612,7 @@ session_cache_dir: {}"#,
 
         // Add the base path to the head if this is a debug build
         if self.is_dev_build() {
-            if let Some(base_path) = &self.config.web.app.base_path {
+            if let Some(base_path) = &self.base_path() {
                 head_resources.push_str(&format_base_path_meta_element(base_path));
             }
         }
@@ -3698,7 +3698,7 @@ r#" <script>
 
     /// Replace any special placeholders in the HTML with resolved values
     fn replace_template_placeholders(&self, html: &mut String, wasm_path: &str, js_path: &str) {
-        let base_path = self.config.web.app.base_path();
+        let base_path = self.base_path_or_default();
         *html = html.replace("{base_path}", base_path);
 
         let app_name = &self.executable_name();
@@ -3727,6 +3727,26 @@ r#" <script>
             *content = content.replace(replace, with);
         } else if let Some(pos) = content.find(or_insert_before) {
             content.insert_str(pos, with);
+        }
+    }
+
+    /// Get the base path from the config or None if this is not a web or server build
+    pub(crate) fn base_path(&self) -> Option<&str> {
+        self.config
+            .web
+            .app
+            .base_path
+            .as_deref()
+            .filter(|_| matches!(self.platform, Platform::Web | Platform::Server))
+    }
+
+    /// Get the normalized base path for the application with `/` trimmed from both ends. If the base path is not set, this will return `.`.
+    pub(crate) fn base_path_or_default(&self) -> &str {
+        let trimmed_path = self.base_path().unwrap_or_default().trim_matches('/');
+        if trimmed_path.is_empty() {
+            "."
+        } else {
+            trimmed_path
         }
     }
 }
