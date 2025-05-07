@@ -359,7 +359,7 @@ impl AppBuilder {
                             krate,
                             ..
                         } => {
-                            tracing::info!("Compiling [{current:>3}/{total}]: {krate}");
+                            tracing::info!("Compiled [{current:>3}/{total}]: {krate}");
                         }
                         BuildStage::RunningBindgen => tracing::info!("Running wasm-bindgen..."),
                         BuildStage::CopyingAssets {
@@ -367,7 +367,11 @@ impl AppBuilder {
                             total,
                             path,
                         } => {
-                            tracing::info!("Copying asset ({current}/{total}): {}", path.display());
+                            tracing::info!(
+                                "Copying asset ({}/{total}): {}",
+                                current + 1,
+                                path.display()
+                            );
                         }
                         BuildStage::Bundling => tracing::info!("Bundling app..."),
                         _ => {}

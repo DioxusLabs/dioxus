@@ -843,14 +843,8 @@ session_cache_dir: {}"#,
                 }
                 Message::CompilerArtifact(artifact) => {
                     units_compiled += 1;
-                    match artifact.executable {
-                        Some(executable) => output_location = Some(executable.into()),
-                        None => ctx.status_build_progress(
-                            units_compiled,
-                            crate_count,
-                            artifact.target.name,
-                        ),
-                    }
+                    ctx.status_build_progress(units_compiled, crate_count, artifact.target.name);
+                    output_location = artifact.executable.map(Into::into);
                 }
                 // todo: this can occasionally swallow errors, so we should figure out what exactly is going wrong
                 //       since that is a really bad user experience.
