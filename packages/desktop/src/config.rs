@@ -204,7 +204,7 @@ impl Config {
     /// #
     /// # fn main() {
     /// let cfg = Config::new()
-    ///     .with_asynchronous_custom_protocol("asset", |id, request, responder| {
+    ///     .with_asynchronous_custom_protocol("asset", |request, responder| {
     ///         tokio::spawn(async move {
     ///             responder.respond(
     ///                 HTTPResponse::builder()
