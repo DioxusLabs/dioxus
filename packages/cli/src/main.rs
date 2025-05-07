@@ -32,6 +32,7 @@ pub(crate) use logging::*;
 pub(crate) use platform::*;
 pub(crate) use rustcwrapper::*;
 pub(crate) use settings::*;
+pub(crate) use tailwind::*;
 pub(crate) use wasm_bindgen::*;
 pub(crate) use workspace::*;
 

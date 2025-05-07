@@ -1,12 +1,9 @@
-use crate::{CliSettings, Result};
+use crate::{Result, Workspace};
 use anyhow::{anyhow, Context};
-use flate2::read::GzDecoder;
 use std::{
     path::{Path, PathBuf},
     process::Stdio,
 };
-use tar::Archive;
-use tempfile::TempDir;
 use tokio::process::Command;
 
 #[derive(Debug)]
@@ -22,20 +19,42 @@ impl TailwindCli {
         Self { version }
     }
 
+    pub(crate) async fn serve(
+        manifest_dir: PathBuf,
+        input_path: Option<PathBuf>,
+        output_path: Option<PathBuf>,
+    ) -> Result<tokio::task::JoinHandle<Result<()>>> {
+        Ok(tokio::spawn(async move {
+            let Some(tailwind) = Self::autodetect(&manifest_dir) else {
+                return Ok(());
+            };
+
+            if !tailwind.get_binary_path()?.exists() {
+                tracing::info!("Installing tailwindcss@{}", tailwind.version);
+                tailwind.install_github().await?;
+            }
+
+            let proc = tailwind.watch(&manifest_dir, input_path, output_path)?;
+            proc.wait_with_output().await?;
+
+            Ok(())
+        }))
+    }
+
     /// Use the correct tailwind version based on the manifest directory.
     /// - If `tailwind.config.js` or `tailwind.config.ts` exists, use v3.
     /// - If `tailwind.css` exists, use v4.
     pub(crate) fn autodetect(manifest_dir: &Path) -> Option<Self> {
         if manifest_dir.join("tailwind.config.js").exists() {
-            return Some(Self::new(Self::V3_TAG.to_string()));
+            return Some(Self::v3());
         }
 
         if manifest_dir.join("tailwind.config.ts").exists() {
-            return Some(Self::new(Self::V3_TAG.to_string()));
+            return Some(Self::v3());
         }
 
         if manifest_dir.join("tailwind.css").exists() {
-            return Some(Self::new(Self::V4_TAG.to_string()));
+            return Some(Self::v4());
         }
 
         None
@@ -111,18 +130,15 @@ impl TailwindCli {
             )
         })?;
 
-        println!("url: {url}");
-
         // Get the final binary location.
         let binary_path = self.get_binary_path()?;
 
         // Download then extract tailwindcss.
         let bytes = reqwest::get(url).await?.bytes().await?;
 
-        println!("writing to: {:?}", binary_path);
-
         std::fs::create_dir_all(binary_path.parent().unwrap())
             .context("failed to create tailwindcss directory")?;
+
         std::fs::write(&binary_path, &bytes).context("failed to write tailwindcss binary")?;
 
         // Make the binary executable.
@@ -155,12 +171,8 @@ impl TailwindCli {
         Some(format!("tailwindcss-{}-{}", platform, arch))
     }
 
-    fn install_dir(&self) -> anyhow::Result<PathBuf> {
-        let bindgen_dir = dirs::data_local_dir()
-            .expect("user should be running on a compatible operating system")
-            .join("dioxus/tailwind/");
-
-        std::fs::create_dir_all(&bindgen_dir)?;
+    fn install_dir(&self) -> Result<PathBuf> {
+        let bindgen_dir = Workspace::dioxus_home_dir().join("tailwind/");
         Ok(bindgen_dir)
     }
 
@@ -181,15 +193,5 @@ impl TailwindCli {
             self.version,
             self.downloaded_bin_name()?
         ))
-    }
-}
-
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn install_tailwind_from_github() {
-        let tw4 = TailwindCli::v4();
-        let _ = tw4.install_github().await.unwrap();
     }
 }

@@ -1,7 +1,7 @@
 use super::{AppBuilder, ServeUpdate, WebServer};
 use crate::{
     BuildArtifacts, BuildId, BuildMode, BuildTargets, Error, HotpatchModuleCache, Platform, Result,
-    ServeArgs, TraceSrc, Workspace,
+    ServeArgs, TailwindCli, TraceSrc, Workspace,
 };
 use anyhow::Context;
 use dioxus_core::internal::{
@@ -74,7 +74,7 @@ pub(crate) struct AppServer {
     pub(crate) cross_origin_policy: bool,
 
     // Additional plugin-type tools
-    pub(crate) tw_watcher: Option<tokio::process::Child>,
+    pub(crate) _tw_watcher: tokio::task::JoinHandle<Result<()>>,
 }
 
 pub(crate) struct CachedFile {
@@ -151,12 +151,12 @@ impl AppServer {
             .map(|server| AppBuilder::start(&server, build_mode))
             .transpose()?;
 
-        let pkg_dir = client.build.package_manifest_dir();
-        tracing::debug!("pkgdir: {:?}", pkg_dir);
-        let tw_watcher = crate::tailwind::TailwindCli::autodetect(&pkg_dir)
-            .and_then(|tw| tw.watch(&pkg_dir, None, None).ok());
-
-        tracing::debug!("Tailwind watcher: {:?}", tw_watcher);
+        let tw_watcher = TailwindCli::serve(
+            client.build.package_manifest_dir(),
+            client.build.config.application.tailwind_input.clone(),
+            client.build.config.application.tailwind_output.clone(),
+        )
+        .await?;
 
         tracing::debug!("Proxied port: {:?}", proxied_port);
 
@@ -184,7 +184,7 @@ impl AppServer {
             _force_sequential: force_sequential,
             cross_origin_policy,
             fullstack,
-            tw_watcher,
+            _tw_watcher: tw_watcher,
         };
 
         // Only register the hot-reload stuff if we're watching the filesystem
