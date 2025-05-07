@@ -75,12 +75,6 @@ impl LinkAction {
     ///
     /// Just check if the magic env var is set
     pub(crate) fn from_env() -> Option<Self> {
-        if let Ok(target) = std::env::var(Self::ENV_VAR_NAME_ASSETS_TARGET) {
-            return Some(LinkAction::OptimizeAssets {
-                destination: PathBuf::from(target),
-            });
-        }
-
         if std::env::var(Self::DX_LINK_ARG).is_err() {
             return None;
         }
@@ -308,7 +302,7 @@ impl LinkAction {
                     .iter()
                     .map(|(name, data)| (*name, data.as_ref())),
             );
-            let mut asset_file = self.out_path(&args).join("manganis_assets_out");
+            let asset_file = self.out_path(&args).join("manganis_assets_out");
             std::fs::write(asset_file.with_extension("o"), object_file)
                 .context("Failed to write object file")?;
             args.push(asset_file.to_string_lossy().to_string());
