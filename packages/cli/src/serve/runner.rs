@@ -393,11 +393,9 @@ impl AppServer {
             }
         }
 
-        // We decided to make the hotpatch engine drive *all* hotreloads, even if they are just RSX
-        // hot-reloads. This is a temporary measure to thoroughly test the hotpatch engine until
-        // we're comfortable with both co-existing. Keeping both would lead to two potential sources
-        // of errors, and we want to avoid that for now.
-        if needs_full_rebuild || self.use_hotpatch_engine {
+        // todo - we need to distinguish between hotpatchable rebuilds and true full rebuilds.
+        //        A full rebuild is required when the user modifies static initializers which we haven't wired up yet.
+        if needs_full_rebuild {
             if self.use_hotpatch_engine {
                 self.client.patch_rebuild(files.to_vec());
                 if let Some(server) = self.server.as_mut() {
