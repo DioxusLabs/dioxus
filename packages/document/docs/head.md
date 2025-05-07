@@ -38,7 +38,7 @@ fn RedirectToDioxusHomepageWithoutJS() -> Element {
 
 Since Dioxus does not guarantee head element ordering, one can use es6 imports as a more predictable way to handle dependencies.
 
-```rust
+```rust, ignore
 # use dioxus::prelude::*;
 static HIGHLIGHT: Asset = asset!("/assets/highlight/es/highlight.min.js");
 static RUST: Asset = asset!("/assets/highlight/es/languages/rust.min.js");

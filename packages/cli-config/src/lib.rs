@@ -69,6 +69,7 @@ pub const APP_TITLE_ENV: &str = "DIOXUS_APP_TITLE";
 #[doc(hidden)]
 pub const OUT_DIR: &str = "DIOXUS_OUT_DIR";
 pub const SESSION_CACHE_DIR: &str = "DIOXUS_SESSION_CACHE_DIR";
+pub const BUILD_ID: &str = "DIOXUS_BUILD_ID";
 
 /// Reads an environment variable at runtime in debug mode or at compile time in
 /// release mode. When bundling in release mode, we will not be running under the
@@ -305,4 +306,21 @@ pub fn session_cache_dir() -> Option<PathBuf> {
 /// The session cache directory for android
 pub fn android_session_cache_dir() -> PathBuf {
     PathBuf::from("/data/local/tmp/dx/")
+}
+
+/// The unique build id for this application, used to disambiguate between different builds of the same
+/// application.
+pub fn build_id() -> u64 {
+    #[cfg(target_arch = "wasm32")]
+    {
+        0
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        std::env::var(BUILD_ID)
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0)
+    }
 }

@@ -18,8 +18,8 @@ tracing = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 futures-channel = { workspace = true }
-futures-util.workspace = true
-generational-box.workspace = true
+futures-util = { workspace = true }
+generational-box = { workspace = true }
 
 [build-dependencies]
 lazy-js-bundle = { workspace = true }

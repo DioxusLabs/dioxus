@@ -24,7 +24,7 @@ convert_case = { workspace = true }
 htmlentity = "1.3.2"
 
 [dev-dependencies]
-pretty_assertions = "1.2.1"
+pretty_assertions = { workspace = true }
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
