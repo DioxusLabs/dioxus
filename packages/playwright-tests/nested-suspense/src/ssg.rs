@@ -3,6 +3,8 @@ use dioxus::prelude::*;
 use nested_suspense::app;
 
 fn main() {
+    dioxus::logger::init(dioxus::logger::tracing::Level::TRACE).expect("logger failed to init");
+
     dioxus::LaunchBuilder::new()
         .with_cfg(server_only! {
             ServeConfig::builder()
@@ -15,6 +17,7 @@ fn main() {
                                 .unwrap()
                                 .join("public")
                         )
+                        .clear_cache(false)
                 )
                 .enable_out_of_order_streaming()
         })

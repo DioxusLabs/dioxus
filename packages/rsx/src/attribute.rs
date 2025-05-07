@@ -25,7 +25,8 @@ use syn::{
     parse::{Parse, ParseStream},
     parse_quote,
     spanned::Spanned,
-    Block, Expr, ExprClosure, ExprIf, Ident, Lit, LitBool, LitFloat, LitInt, LitStr, Token,
+    Block, Expr, ExprBlock, ExprClosure, ExprIf, Ident, Lit, LitBool, LitFloat, LitInt, LitStr,
+    Stmt, Token,
 };
 
 /// A property value in the from of a `name: value` pair with an optional comma.
@@ -233,25 +234,55 @@ impl Attribute {
                         )
                     }
                 }
-                AttributeValue::EventTokens(tokens) => match &self.name {
-                    AttributeName::BuiltIn(name) => {
-                        let event_tokens_is_closure =
-                            syn::parse2::<ExprClosure>(tokens.to_token_stream()).is_ok();
-                        let function_name =
-                            quote_spanned! { tokens.span() => dioxus_elements::events::#name };
-                        let function = if event_tokens_is_closure {
-                            // If we see an explicit closure, we can call the `call_with_explicit_closure` version of the event for better type inference
-                            quote_spanned! { tokens.span() => #function_name::call_with_explicit_closure }
-                        } else {
-                            function_name
+                AttributeValue::EventTokens(_) | AttributeValue::AttrExpr(_) => {
+                    let (tokens, span) = match &self.value {
+                        AttributeValue::EventTokens(tokens) => {
+                            (tokens.to_token_stream(), tokens.span())
+                        }
+                        AttributeValue::AttrExpr(tokens) => {
+                            (tokens.to_token_stream(), tokens.span())
+                        }
+                        _ => unreachable!(),
+                    };
+
+                    fn check_tokens_is_closure(tokens: &TokenStream2) -> bool {
+                        if syn::parse2::<ExprClosure>(tokens.to_token_stream()).is_ok() {
+                            return true;
+                        }
+                        let Ok(block) = syn::parse2::<ExprBlock>(tokens.to_token_stream()) else {
+                            return false;
                         };
-                        quote_spanned! { tokens.span() =>
-                            #function(#tokens)
+                        let mut block = &block;
+                        loop {
+                            match block.block.stmts.last() {
+                                Some(Stmt::Expr(Expr::Closure(_), _)) => return true,
+                                Some(Stmt::Expr(Expr::Block(b), _)) => {
+                                    block = b;
+                                    continue;
+                                }
+                                _ => return false,
+                            }
                         }
                     }
-                    AttributeName::Custom(_) => unreachable!("Handled elsewhere in the macro"),
-                    AttributeName::Spread(_) => unreachable!("Handled elsewhere in the macro"),
-                },
+                    match &self.name {
+                        AttributeName::BuiltIn(name) => {
+                            let event_tokens_is_closure = check_tokens_is_closure(&tokens);
+                            let function_name =
+                                quote_spanned! { span => dioxus_elements::events::#name };
+                            let function = if event_tokens_is_closure {
+                                // If we see an explicit closure, we can call the `call_with_explicit_closure` version of the event for better type inference
+                                quote_spanned! { span => #function_name::call_with_explicit_closure }
+                            } else {
+                                function_name
+                            };
+                            quote_spanned! { span =>
+                                #function(#tokens)
+                            }
+                        }
+                        AttributeName::Custom(_) => unreachable!("Handled elsewhere in the macro"),
+                        AttributeName::Spread(_) => unreachable!("Handled elsewhere in the macro"),
+                    }
+                }
                 _ => {
                     quote_spanned! { value.span() => dioxus_elements::events::#name(#value) }
                 }
@@ -834,8 +865,41 @@ mod tests {
         let a: Attribute = parse2(quote! { onclick: |e| {} }).unwrap();
         let b: Attribute = parse2(quote! { onclick: |e| {} }).unwrap();
         let c: Attribute = parse2(quote! { onclick: move |e| {} }).unwrap();
+        let d: Attribute = parse2(quote! { onclick: { |e| {} } }).unwrap();
         assert_eq!(a, b);
         assert_ne!(a, c);
+        assert_ne!(a, d);
+    }
+
+    #[test]
+    fn call_with_explicit_closure() {
+        let mut a: Attribute = parse2(quote! { onclick: |e| {} }).unwrap();
+        a.el_name = Some(parse_quote!(button));
+        assert!(a
+            .rendered_as_dynamic_attr()
+            .to_string()
+            .contains("call_with_explicit_closure"));
+
+        let mut a: Attribute = parse2(quote! { onclick: { let a = 1; |e| {} } }).unwrap();
+        a.el_name = Some(parse_quote!(button));
+        assert!(a
+            .rendered_as_dynamic_attr()
+            .to_string()
+            .contains("call_with_explicit_closure"));
+
+        let mut a: Attribute = parse2(quote! { onclick: { let b = 2; { |e| { b } } } }).unwrap();
+        a.el_name = Some(parse_quote!(button));
+        assert!(a
+            .rendered_as_dynamic_attr()
+            .to_string()
+            .contains("call_with_explicit_closure"));
+
+        let mut a: Attribute = parse2(quote! { onclick: { let r = |e| { b }; r } }).unwrap();
+        a.el_name = Some(parse_quote!(button));
+        assert!(!a
+            .rendered_as_dynamic_attr()
+            .to_string()
+            .contains("call_with_explicit_closure"));
     }
 
     /// Make sure reserved keywords are parsed as attributes

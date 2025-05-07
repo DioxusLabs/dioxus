@@ -2,15 +2,6 @@ use crate::config::WasmOptLevel;
 use crate::{Result, WasmOptConfig};
 use std::path::Path;
 
-#[memoize::memoize(SharedCache)]
-pub fn wasm_opt_available() -> bool {
-    if cfg!(feature = "optimizations") {
-        return true;
-    }
-
-    which::which("wasm-opt").is_ok()
-}
-
 /// Write these wasm bytes with a particular set of optimizations
 pub async fn write_wasm(bytes: &[u8], output_path: &Path, cfg: &WasmOptConfig) -> Result<()> {
     tokio::fs::write(output_path, bytes).await?;

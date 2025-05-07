@@ -66,9 +66,39 @@ impl dioxus_html::RenderedElementBacking for Synthetic<web_sys::Element> {
 
     fn scroll_to(
         &self,
-        behavior: dioxus_html::ScrollBehavior,
+        input_options: dioxus_html::ScrollToOptions,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = dioxus_html::MountedResult<()>>>> {
         let options = web_sys::ScrollIntoViewOptions::new();
+        options.set_behavior(match input_options.behavior {
+            dioxus_html::ScrollBehavior::Instant => web_sys::ScrollBehavior::Instant,
+            dioxus_html::ScrollBehavior::Smooth => web_sys::ScrollBehavior::Smooth,
+        });
+        options.set_block(match input_options.vertical {
+            dioxus_html::ScrollLogicalPosition::Start => web_sys::ScrollLogicalPosition::Start,
+            dioxus_html::ScrollLogicalPosition::Center => web_sys::ScrollLogicalPosition::Center,
+            dioxus_html::ScrollLogicalPosition::End => web_sys::ScrollLogicalPosition::End,
+            dioxus_html::ScrollLogicalPosition::Nearest => web_sys::ScrollLogicalPosition::Nearest,
+        });
+        options.set_inline(match input_options.horizontal {
+            dioxus_html::ScrollLogicalPosition::Start => web_sys::ScrollLogicalPosition::Start,
+            dioxus_html::ScrollLogicalPosition::Center => web_sys::ScrollLogicalPosition::Center,
+            dioxus_html::ScrollLogicalPosition::End => web_sys::ScrollLogicalPosition::End,
+            dioxus_html::ScrollLogicalPosition::Nearest => web_sys::ScrollLogicalPosition::Nearest,
+        });
+        self.event
+            .scroll_into_view_with_scroll_into_view_options(&options);
+
+        Box::pin(async { Ok(()) })
+    }
+
+    fn scroll(
+        &self,
+        coordinates: dioxus_html::geometry::PixelsVector2D,
+        behavior: dioxus_html::ScrollBehavior,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = dioxus_html::MountedResult<()>>>> {
+        let options = web_sys::ScrollToOptions::new();
+        options.set_top(coordinates.y);
+        options.set_left(coordinates.x);
         match behavior {
             dioxus_html::ScrollBehavior::Instant => {
                 options.set_behavior(web_sys::ScrollBehavior::Instant);
@@ -77,8 +107,7 @@ impl dioxus_html::RenderedElementBacking for Synthetic<web_sys::Element> {
                 options.set_behavior(web_sys::ScrollBehavior::Smooth);
             }
         }
-        self.event
-            .scroll_into_view_with_scroll_into_view_options(&options);
+        self.event.scroll_with_scroll_to_options(&options);
 
         Box::pin(async { Ok(()) })
     }

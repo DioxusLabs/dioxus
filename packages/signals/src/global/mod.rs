@@ -268,6 +268,12 @@ impl GlobalLazyContext {
             })
         })
     }
+
+    #[doc(hidden)]
+    /// Clear all global signals of a given type.
+    pub fn clear<T: 'static>(&self) {
+        self.map.borrow_mut().retain(|_k, v| !v.is::<T>());
+    }
 }
 
 /// Get the global context for signals

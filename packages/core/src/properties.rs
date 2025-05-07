@@ -1,4 +1,4 @@
-use std::{any::TypeId, fmt::Arguments};
+use std::fmt::Arguments;
 
 use crate::innerlude::*;
 
@@ -167,27 +167,39 @@ pub fn verify_component_called_as_component<C: ComponentFunction<P, M>, P, M>(co
     )
 )]
 pub trait ComponentFunction<Props, Marker = ()>: Clone + 'static {
-    /// Get the type id of the component.
-    fn id(&self) -> TypeId {
-        TypeId::of::<Self>()
-    }
+    /// Get the raw address of the component render function.
+    fn fn_ptr(&self) -> usize;
 
     /// Convert the component to a function that takes props and returns an element.
     fn rebuild(&self, props: Props) -> Element;
 }
 
 /// Accept any callbacks that take props
-impl<F: Fn(P) -> Element + Clone + 'static, P> ComponentFunction<P> for F {
+impl<F, P> ComponentFunction<P> for F
+where
+    F: Fn(P) -> Element + Clone + 'static,
+{
     fn rebuild(&self, props: P) -> Element {
-        self(props)
+        subsecond::HotFn::current(self.clone()).call((props,))
+    }
+
+    fn fn_ptr(&self) -> usize {
+        subsecond::HotFn::current(self.clone()).ptr_address() as usize
     }
 }
 
 /// Accept any callbacks that take no props
 pub struct EmptyMarker;
-impl<F: Fn() -> Element + Clone + 'static> ComponentFunction<(), EmptyMarker> for F {
-    fn rebuild(&self, _: ()) -> Element {
-        self()
+impl<F> ComponentFunction<(), EmptyMarker> for F
+where
+    F: Fn() -> Element + Clone + 'static,
+{
+    fn rebuild(&self, props: ()) -> Element {
+        subsecond::HotFn::current(self.clone()).call(props)
+    }
+
+    fn fn_ptr(&self) -> usize {
+        subsecond::HotFn::current(self.clone()).ptr_address() as usize
     }
 }
 

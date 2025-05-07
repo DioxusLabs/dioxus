@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use crate::{
     assets::*, ipc::UserWindowEvent, shortcut::IntoAccelerator, window, DesktopContext,
-    ShortcutHandle, ShortcutRegistryError, WryEventHandler,
+    HotKeyState, ShortcutHandle, ShortcutRegistryError, WryEventHandler,
 };
 use dioxus_core::{
     prelude::{consume_context, use_hook_with_cleanup},
@@ -116,13 +116,14 @@ pub fn use_asset_handler(
 /// Get a closure that executes any JavaScript in the WebView context.
 pub fn use_global_shortcut(
     accelerator: impl IntoAccelerator,
-    mut handler: impl FnMut() + 'static,
+    handler: impl FnMut(HotKeyState) + 'static,
 ) -> Result<ShortcutHandle, ShortcutRegistryError> {
     // wrap the user's handler in something that keeps it up to date
-    let cb = use_callback(move |_| handler());
+    let cb = use_callback(handler);
 
     use_hook_with_cleanup(
-        move || window().create_shortcut(accelerator.accelerator(), move || cb(())),
+        #[allow(clippy::redundant_closure)]
+        move || window().create_shortcut(accelerator.accelerator(), move |state| cb(state)),
         |handle| {
             if let Ok(handle) = handle {
                 handle.remove();

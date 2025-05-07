@@ -609,10 +609,8 @@ pub struct VComponent {
     /// The name of this component
     pub name: &'static str,
 
-    /// The function pointer of the component, known at compile time
-    ///
-    /// It is possible that components get folded at compile time, so these shouldn't be really used as a key
-    pub(crate) render_fn: TypeId,
+    /// The raw pointer to the render function
+    pub(crate) render_fn: usize,
 
     /// The props for this component
     pub(crate) props: BoxedAnyProps,
@@ -622,8 +620,8 @@ impl Clone for VComponent {
     fn clone(&self) -> Self {
         Self {
             name: self.name,
-            render_fn: self.render_fn,
             props: self.props.duplicate(),
+            render_fn: self.render_fn,
         }
     }
 }
@@ -638,7 +636,7 @@ impl VComponent {
     where
         P: Properties + 'static,
     {
-        let render_fn = component.id();
+        let render_fn = component.fn_ptr();
         let props = Box::new(VProps::new(
             component,
             <P as Properties>::memoize,
@@ -647,9 +645,9 @@ impl VComponent {
         ));
 
         VComponent {
+            render_fn,
             name: fn_name,
             props,
-            render_fn,
         }
     }
 

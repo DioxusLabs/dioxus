@@ -524,12 +524,11 @@ mod tests {
     }
 
     #[test]
-    fn merges_attributes() {
+    fn merge_trivial_attributes() {
         let input = quote::quote! {
             div {
-                class: "hello world",
-                class: if count > 3 { "abc {def}" },
-                class: if count < 50 { "small" } else { "big" }
+                class: "foo",
+                class: "bar",
             }
         };
 
@@ -543,12 +542,129 @@ mod tests {
 
         let attr = &parsed.merged_attributes[0].value;
 
-        println!("{}", attr.to_token_stream().pretty_unparse());
+        assert_eq!(
+            attr.to_token_stream().pretty_unparse().as_str(),
+            "\"foo bar\""
+        );
 
-        let _attr = match attr {
-            AttributeValue::AttrLiteral(lit) => lit,
-            _ => panic!("expected literal"),
+        if let AttributeValue::AttrLiteral(_) = attr {
+        } else {
+            panic!("expected literal")
+        }
+    }
+
+    #[test]
+    fn merge_formatted_attributes() {
+        let input = quote::quote! {
+            div {
+                class: "foo",
+                class: "{bar}",
+            }
         };
+
+        let parsed: Element = syn::parse2(input).unwrap();
+        assert_eq!(parsed.diagnostics.len(), 0);
+        assert_eq!(parsed.merged_attributes.len(), 1);
+        assert_eq!(
+            parsed.merged_attributes[0].name.to_string(),
+            "class".to_string()
+        );
+
+        let attr = &parsed.merged_attributes[0].value;
+
+        assert_eq!(
+            attr.to_token_stream().pretty_unparse().as_str(),
+            "::std::format!(\"foo {0:}\", bar)"
+        );
+
+        if let AttributeValue::AttrLiteral(_) = attr {
+        } else {
+            panic!("expected literal")
+        }
+    }
+
+    #[test]
+    fn merge_conditional_attributes() {
+        let input = quote::quote! {
+            div {
+                class: "foo",
+                class: if true { "bar" },
+                class: if false { "baz" } else { "qux" }
+            }
+        };
+
+        let parsed: Element = syn::parse2(input).unwrap();
+        assert_eq!(parsed.diagnostics.len(), 0);
+        assert_eq!(parsed.merged_attributes.len(), 1);
+        assert_eq!(
+            parsed.merged_attributes[0].name.to_string(),
+            "class".to_string()
+        );
+
+        let attr = &parsed.merged_attributes[0].value;
+
+        assert_eq!(
+            attr.to_token_stream().pretty_unparse().as_str(),
+            "::std::format!(\n    \
+                \"foo {0:} {1:}\",\n    \
+                { if true { \"bar\".to_string() } else { ::std::string::String::new() } },\n    \
+                { if false { \"baz\".to_string() } else { \"qux\".to_string() } },\n\
+            )"
+        );
+
+        if let AttributeValue::AttrLiteral(_) = attr {
+        } else {
+            panic!("expected literal")
+        }
+    }
+
+    #[test]
+    fn merge_all_attributes() {
+        let input = quote::quote! {
+            div {
+                class: "foo",
+                class: "{bar}",
+                class: if true { "baz" },
+                class: if false { "{qux}" } else { "quux" }
+            }
+        };
+
+        let parsed: Element = syn::parse2(input).unwrap();
+        assert_eq!(parsed.diagnostics.len(), 0);
+        assert_eq!(parsed.merged_attributes.len(), 1);
+        assert_eq!(
+            parsed.merged_attributes[0].name.to_string(),
+            "class".to_string()
+        );
+
+        let attr = &parsed.merged_attributes[0].value;
+
+        if cfg!(debug_assertions) {
+            assert_eq!(
+                attr.to_token_stream().pretty_unparse().as_str(),
+                "::std::format!(\n    \
+                    \"foo {0:} {1:} {2:}\",\n    \
+                    bar,\n    \
+                    { if true { \"baz\".to_string() } else { ::std::string::String::new() } },\n    \
+                    { if false { ::std::format!(\"{qux}\").to_string() } else { \"quux\".to_string() } },\n\
+                )"
+            );
+        } else {
+            assert_eq!(
+                attr.to_token_stream().pretty_unparse().as_str(),
+                "::std::format!(\n    \
+                    \"foo {0:} {1:} {2:}\",\n    \
+                    bar,\n    \
+                    { if true { \"baz\".to_string() } else { ::std::string::String::new() } },\n    \
+                    { if false { (qux).to_string().to_string() } else { \"quux\".to_string() } },\n\
+                )"
+            );
+        }
+
+        if let AttributeValue::AttrLiteral(_) = attr {
+        } else {
+            panic!("expected literal")
+        }
     }
 
     /// There are a number of cases where merging attributes doesn't make sense
