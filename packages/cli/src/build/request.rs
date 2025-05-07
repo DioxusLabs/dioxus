@@ -3758,4 +3758,14 @@ r#" <script>
             trimmed_path
         }
     }
+
+    /// Get the path to the package manifest directory
+    pub(crate) fn package_manifest_dir(&self) -> PathBuf {
+        self.workspace.krates[self.crate_package]
+            .manifest_path
+            .parent()
+            .unwrap()
+            .to_path_buf()
+            .into()
+    }
 }

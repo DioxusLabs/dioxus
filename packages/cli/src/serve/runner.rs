@@ -151,7 +151,12 @@ impl AppServer {
             .map(|server| AppBuilder::start(&server, build_mode))
             .transpose()?;
 
-        let tw_watcher = None;
+        let pkg_dir = client.build.package_manifest_dir();
+        tracing::debug!("pkgdir: {:?}", pkg_dir);
+        let tw_watcher = crate::tailwind::TailwindCli::autodetect(&pkg_dir)
+            .and_then(|tw| tw.watch(&pkg_dir, None, None).ok());
+
+        tracing::debug!("Tailwind watcher: {:?}", tw_watcher);
 
         tracing::debug!("Proxied port: {:?}", proxied_port);
 
