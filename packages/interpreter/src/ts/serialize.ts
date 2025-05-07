@@ -102,6 +102,10 @@ export function serializeEvent(
     // extend({ files: files });
   }
 
+  if (event.type === "scroll") {
+    extend(serializeScrollEvent(event));
+  }
+
   return contents;
 }
 
@@ -316,5 +320,39 @@ function serializeDragEvent(event: DragEvent): SerializedEvent {
       ...serializeMouseEvent(event),
     },
     files,
+  };
+}
+
+function serializeScrollEvent(event: Event): SerializedEvent {
+  let scrollLeft = 0;
+  let scrollTop = 0;
+  let scrollWidth = 0;
+  let scrollHeight = 0;
+  let clientWidth = 0;
+  let clientHeight = 0;
+
+  if (event.target instanceof Element) {
+    scrollLeft = event.target.scrollLeft;
+    scrollTop = event.target.scrollTop;
+    scrollWidth = event.target.scrollWidth;
+    scrollHeight = event.target.scrollHeight;
+    clientWidth = event.target.clientWidth;
+    clientHeight = event.target.clientHeight;
+  } else if (event.target === document) {
+    scrollLeft = window.scrollX || document.documentElement.scrollLeft;
+    scrollTop = window.scrollY || document.documentElement.scrollTop;
+    scrollWidth = document.documentElement.scrollWidth;
+    scrollHeight = document.documentElement.scrollHeight;
+    clientWidth = document.documentElement.clientWidth;
+    clientHeight = document.documentElement.clientHeight;
+  }
+
+  return {
+    scroll_left: scrollLeft,
+    scroll_top: scrollTop,
+    scroll_width: scrollWidth,
+    scroll_height: scrollHeight,
+    client_width: clientWidth,
+    client_height: clientHeight,
   };
 }
