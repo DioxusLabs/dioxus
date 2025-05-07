@@ -354,20 +354,19 @@ impl ServeConfigBuilder {
                 let index_path = self
                     .index_path
                     .unwrap_or_else(|| public_path.join("index.html"));
-                load_index_path(index_path).unwrap_or_else(|_| {
-                    r#"
-                    <!DOCTYPE html>
-                    <html>
-                        <head>
-                            <title>My App</title>
-                        </head>
-                        <body>
-                            <div id="main"></div>
-                        </body>
-                    </html>
-                    "#
-                    .to_string()
-                })
+                load_index_path(index_path)?
+                // load_index_path(index_path).unwrap_or_else(|_| {
+                //     r#"
+                //     <!DOCTYPE html>
+                //     <html>
+                //         <head> </head>
+                //         <body>
+                //             <div id="main"></div>
+                //         </body>
+                //     </html>
+                //     "#
+                //     .to_string()
+                // })
             }
         };
 
@@ -478,7 +477,7 @@ fn load_index_html(contents: String, root_id: &'static str) -> IndexHtml {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct IndexHtml {
     pub(crate) head_before_title: String,
     pub(crate) head_after_title: String,

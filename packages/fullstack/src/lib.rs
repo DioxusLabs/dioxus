@@ -19,10 +19,6 @@ pub use dioxus_server::*;
 pub mod prelude {
     pub use dioxus_fullstack_hooks::*;
 
-    #[cfg(feature = "server")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
-    pub use dioxus_isrg::{IncrementalRenderer, IncrementalRendererConfig};
-
     pub use dioxus_server_macro::*;
     pub use server_fn::{self, ServerFn as _, ServerFnError};
 

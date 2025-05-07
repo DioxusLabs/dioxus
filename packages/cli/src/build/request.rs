@@ -535,14 +535,14 @@ impl BuildRequest {
         let default_platforms = Self::default_platforms(main_package);
         let default_platform = default_platforms.iter().find(|p| **p != Platform::Server);
 
-        let mut features = vec![];
-        let mut no_default_features = false;
+        let mut features = args.features.clone();
+        let mut no_default_features = args.no_default_features;
 
         // The user passed --platform XYZ but already has `default = ["ABC"]` in their Cargo.toml
         // We want to strip out the default platform and use the one they passed, setting no-default-features
         if args.platform.is_some() && default_platform.is_some() {
+            Self::platformless_features(main_package);
             no_default_features = true;
-            features.extend(Self::platformless_features(main_package));
         }
 
         // Inherit the platform from the args, or auto-detect it
@@ -2733,10 +2733,20 @@ session_cache_dir: {}"#,
     // }
 
     pub(crate) fn default_platforms(package: &krates::cm::Package) -> Vec<Platform> {
-        let Some(default) = package.features.get("default") else {
-            return Vec::new();
-        };
         let mut platforms = vec![];
+
+        // Attempt to discover the platform directly from the dioxus dependency
+        if let Some(dxs) = package.dependencies.iter().find(|dep| dep.name == "dioxus") {
+            for f in dxs.features.iter() {
+                if let Some(platform) = Platform::autodetect_from_cargo_feature(f) {
+                    platforms.push(platform);
+                }
+            }
+        }
+
+        let Some(default) = package.features.get("default") else {
+            return platforms;
+        };
 
         // we only trace features 1 level deep..
         for feature in default.iter() {
@@ -2766,12 +2776,18 @@ session_cache_dir: {}"#,
 
         platforms.sort();
         platforms.dedup();
+
+        tracing::debug!("Default platforms: {platforms:?}");
+
         platforms
     }
 
     /// Gather the features that are enabled for the package
     fn platformless_features(package: &krates::cm::Package) -> Vec<String> {
-        let default = package.features.get("default").unwrap();
+        let Some(default) = package.features.get("default") else {
+            return Vec::new();
+        };
+
         let mut kept_features = vec![];
 
         // Only keep the top-level features in the default list that don't point to a platform directly
@@ -3328,7 +3344,7 @@ session_cache_dir: {}"#,
         static INITIALIZED: OnceCell<Result<()>> = OnceCell::new();
 
         let success = INITIALIZED.get_or_init(|| {
-            _ = remove_dir_all(self.exe_dir());
+            // _ = remove_dir_all(self.exe_dir());
 
             self.flush_session_cache();
 

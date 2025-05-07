@@ -98,7 +98,9 @@ server-core = [
     "server_fn/axum-no-default",
     "dioxus_server_macro/axum",
     "server_fn/reqwest",
+    "server_fn/ssr",
     "dioxus_server_macro/reqwest",
+    "dioxus-fullstack-hooks/server",
     "dep:dioxus-server",
     "dioxus-interpreter-js",
 ]

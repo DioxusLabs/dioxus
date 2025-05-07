@@ -64,25 +64,25 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
     let mut hydration_receiver: Option<futures_channel::mpsc::UnboundedReceiver<SuspenseMessage>> =
         None;
 
-    // If we are hydrating, then the hotreload message might actually have a patch for us to apply.
-    // Let's wait for a moment to see if we get a hotreload message before we start hydrating.
-    // That way, the hydration will use the same functions that the server used to serialize the data.
-    #[cfg(all(feature = "devtools", debug_assertions))]
-    loop {
-        let mut timeout = gloo_timers::future::TimeoutFuture::new(100).fuse();
-        futures_util::select! {
-            msg = hotreload_rx.next() => {
-                if let Some(msg) = msg {
-                    if msg.for_build_id == Some(dioxus_cli_config::build_id()) {
-                        dioxus_devtools::apply_changes(&virtual_dom, &msg);
-                    }
-                }
-            }
-            _ = &mut timeout => {
-                break;
-            }
-        }
-    }
+    // // If we are hydrating, then the hotreload message might actually have a patch for us to apply.
+    // // Let's wait for a moment to see if we get a hotreload message before we start hydrating.
+    // // That way, the hydration will use the same functions that the server used to serialize the data.
+    // #[cfg(all(feature = "devtools", debug_assertions))]
+    // loop {
+    //     let mut timeout = gloo_timers::future::TimeoutFuture::new(100).fuse();
+    //     futures_util::select! {
+    //         msg = hotreload_rx.next() => {
+    //             if let Some(msg) = msg {
+    //                 if msg.for_build_id == Some(dioxus_cli_config::build_id()) {
+    //                     dioxus_devtools::apply_changes(&virtual_dom, &msg);
+    //                 }
+    //             }
+    //         }
+    //         _ = &mut timeout => {
+    //             break;
+    //         }
+    //     }
+    // }
 
     if should_hydrate {
         #[cfg(feature = "hydrate")]
@@ -154,8 +154,7 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
         // if virtual dom has nothing, wait for it to have something before requesting idle time
         // if there is work then this future resolves immediately.
         #[cfg(all(feature = "devtools", debug_assertions))]
-        let hotreload_msg;
-
+        let template;
         #[allow(unused)]
         let mut hydration_work: Option<SuspenseMessage> = None;
 
@@ -174,13 +173,13 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
                 let mut devtools_next = hotreload_rx.select_next_some();
                 select! {
                     _ = work => {
-                        hotreload_msg = None;
+                        template = None;
                     },
                     new_template = devtools_next => {
-                        hotreload_msg = Some(new_template);
+                        template = Some(new_template);
                     },
                     hydration_data = rx_hydration => {
-                        hotreload_msg = None;
+                        template = None;
                         #[cfg(feature = "hydrate")]
                         {
                             hydration_work = Some(hydration_data);
@@ -203,8 +202,10 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
                 }
             }
         }
+
         #[cfg(all(feature = "devtools", debug_assertions))]
-        if let Some(hr_msg) = hotreload_msg {
+        if let Some(hr_msg) = template {
+            // Replace all templates
             dioxus_devtools::apply_changes(&virtual_dom, &hr_msg);
 
             if !hr_msg.assets.is_empty() {

@@ -14,11 +14,7 @@ use dioxus_router::prelude::ParseRouteError;
 use dioxus_ssr::Renderer;
 use futures_channel::mpsc::Sender;
 use futures_util::{Stream, StreamExt};
-use std::fmt::Write;
-use std::rc::Rc;
-use std::sync::Arc;
-use std::sync::RwLock;
-use std::{collections::HashMap, future::Future};
+use std::{collections::HashMap, fmt::Write, future::Future, rc::Rc, sync::Arc, sync::RwLock};
 use tokio::task::JoinHandle;
 
 use crate::StreamingMode;
@@ -177,6 +173,8 @@ impl SsrRendererPool {
 
         let wrapper = FullstackHTMLTemplate { cfg: cfg.clone() };
 
+        tracing::debug!("Renering wrapper with index: {:#?}", cfg.index);
+
         let server_context = server_context.clone();
         let mut renderer = self
             .renderers
@@ -190,7 +188,7 @@ impl SsrRendererPool {
 
         let create_render_future = move || async move {
             let mut virtual_dom = virtual_dom_factory();
-            let document = std::rc::Rc::new(crate::document::ServerDocument::default());
+            let document = Rc::new(ServerDocument::default());
             virtual_dom.provide_root_context(document.clone());
             // If there is a base path, trim the base path from the route and add the base path formatting to the
             // history provider
@@ -204,9 +202,10 @@ impl SsrRendererPool {
             } else {
                 history = dioxus_history::MemoryHistory::with_initial_path(&route);
             }
+
             let streaming_context = in_root_scope(&virtual_dom, StreamingContext::new);
             virtual_dom.provide_root_context(Rc::new(history) as Rc<dyn dioxus_history::History>);
-            virtual_dom.provide_root_context(document.clone() as std::rc::Rc<dyn Document>);
+            virtual_dom.provide_root_context(document.clone() as Rc<dyn Document>);
             virtual_dom.provide_root_context(streaming_context);
 
             // rebuild the virtual dom
@@ -623,7 +622,7 @@ impl FullstackHTMLTemplate {
         let ServeConfig { index, .. } = &self.cfg;
 
         let title = {
-            let document: Option<std::rc::Rc<ServerDocument>> =
+            let document: Option<Rc<ServerDocument>> =
                 virtual_dom.in_runtime(|| ScopeId::ROOT.consume_context());
             // Collect any head content from the document provider and inject that into the head
             document.and_then(|document| document.title())
@@ -637,7 +636,7 @@ impl FullstackHTMLTemplate {
         }
         to.write_str(&index.head_after_title)?;
 
-        let document: Option<std::rc::Rc<ServerDocument>> =
+        let document: Option<Rc<ServerDocument>> =
             virtual_dom.in_runtime(|| ScopeId::ROOT.consume_context());
         if let Some(document) = document {
             // Collect any head content from the document provider and inject that into the head
@@ -661,11 +660,11 @@ impl FullstackHTMLTemplate {
 
         to.write_str(&index.close_head)?;
 
-        #[cfg(feature = "document")]
-        {
-            use dioxus_interpreter_js::INITIALIZE_STREAMING_JS;
-            write!(to, "<script>{INITIALIZE_STREAMING_JS}</script>")?;
-        }
+        // // #[cfg(feature = "document")]
+        // {
+        use dioxus_interpreter_js::INITIALIZE_STREAMING_JS;
+        write!(to, "<script>{INITIALIZE_STREAMING_JS}</script>")?;
+        // }
 
         Ok(())
     }
@@ -715,21 +714,6 @@ impl FullstackHTMLTemplate {
         let ServeConfig { index, .. } = &self.cfg;
 
         to.write_str(&index.after_closing_body_tag)?;
-
-        Ok(())
-    }
-
-    /// Wrap a body in the template
-    pub fn wrap_body<R: std::fmt::Write>(
-        &self,
-        to: &mut R,
-        virtual_dom: &VirtualDom,
-        body: impl std::fmt::Display,
-    ) -> Result<(), dioxus_isrg::IncrementalRendererError> {
-        self.render_head(to, virtual_dom)?;
-        write!(to, "{body}")?;
-        self.render_after_main(to, virtual_dom)?;
-        self.render_after_body(to)?;
 
         Ok(())
     }

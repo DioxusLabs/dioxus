@@ -66,7 +66,6 @@ pub struct Output {
     throbber: RefCell<throbber_widgets_tui::ThrobberState>,
 }
 
-#[allow(unused)]
 #[derive(Clone, Copy)]
 struct RenderState<'a> {
     runner: &'a AppServer,

@@ -796,7 +796,7 @@ impl AppServer {
             self.client.build.crate_dir(),
             self.client.build.crate_package,
         ) {
-            tracing::debug!("Watching path {path:?}");
+            tracing::trace!("Watching path {path:?}");
 
             if let Err(err) = self.watcher.watch(&path, RecursiveMode::Recursive) {
                 handle_notify_error(err);
@@ -805,7 +805,7 @@ impl AppServer {
 
         // Also watch the crates themselves, but not recursively, such that we can pick up new folders
         for krate in self.all_watched_crates() {
-            tracing::debug!("Watching path {krate:?}");
+            tracing::trace!("Watching path {krate:?}");
             if let Err(err) = self.watcher.watch(&krate, RecursiveMode::NonRecursive) {
                 handle_notify_error(err);
             }

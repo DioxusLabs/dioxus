@@ -11,9 +11,12 @@ fn main() {
 fn app() -> Element {
     let server_features = use_server_future(get_server_features)?.unwrap().unwrap();
     let mut client_features = use_signal(Vec::new);
+
     use_effect(move || {
         client_features.set(current_platform_features());
     });
+
+    let mut count = use_signal(|| 0);
 
     rsx! {
         div {
@@ -21,6 +24,10 @@ fn app() -> Element {
         }
         div {
             "client features: {client_features:?}"
+        }
+        button {
+            onclick: move |_| count += 1,
+            "{count}"
         }
     }
 }

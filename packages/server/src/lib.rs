@@ -60,7 +60,6 @@ pub mod context;
 
 mod document;
 mod render;
-mod router;
 mod server;
 mod streaming;
 
@@ -94,3 +93,5 @@ pub mod prelude {
     pub use crate::render::{FullstackHTMLTemplate, SSRState};
     pub use crate::server::*;
 }
+
+pub use dioxus_isrg::{IncrementalRenderer, IncrementalRendererConfig};

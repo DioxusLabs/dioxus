@@ -118,7 +118,7 @@ impl BuildArgs {
                 // todo(jon): fullstack *could* be a feature of the app, but right now we're assuming it's always enabled
                 //
                 // Now we need to resolve the client features
-                let fullstack = ((default_server && client.fullstack_feature_enabled())
+                let fullstack = ((default_server || client.fullstack_feature_enabled())
                     || self.fullstack.unwrap_or(false))
                     && self.fullstack != Some(false);
 
