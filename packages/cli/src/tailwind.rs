@@ -1,4 +1,4 @@
-use crate::{Result, Workspace};
+use crate::{CliSettings, Result, Workspace};
 use anyhow::{anyhow, Context};
 use std::{
     path::{Path, PathBuf},
@@ -100,13 +100,13 @@ impl TailwindCli {
     }
 
     fn get_binary_path(&self) -> anyhow::Result<PathBuf> {
-        // if CliSettings::prefer_no_downloads() {
-        //     which::which("tailwindcss").map_err(|_| anyhow!("Missing tailwindcss@{}", self.version))
-        // } else {
-        let installed_name = self.installed_bin_name();
-        let install_dir = self.install_dir()?;
-        Ok(install_dir.join(installed_name))
-        // }
+        if CliSettings::prefer_no_downloads() {
+            which::which("tailwindcss").map_err(|_| anyhow!("Missing tailwindcss@{}", self.version))
+        } else {
+            let installed_name = self.installed_bin_name();
+            let install_dir = self.install_dir()?;
+            Ok(install_dir.join(installed_name))
+        }
     }
 
     fn installed_bin_name(&self) -> String {
