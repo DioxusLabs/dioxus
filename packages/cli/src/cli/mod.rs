@@ -20,7 +20,6 @@ pub(crate) use target::*;
 pub(crate) use verbosity::*;
 
 use crate::{error::Result, Error, StructuredOutput};
-use anyhow::Context;
 use clap::{Parser, Subcommand};
 use html_parser::Dom;
 use once_cell::sync::Lazy;
@@ -30,7 +29,7 @@ use std::{
     fs::File,
     io::{Read, Write},
     path::PathBuf,
-    process::{Command, Stdio},
+    process::Command,
 };
 
 /// Build, Bundle & Ship Dioxus Apps.
@@ -93,7 +92,7 @@ pub(crate) enum Commands {
     Config(config::Config),
 
     /// Build the assets for a specific target.
-    #[clap(name = "build_assets")]
+    #[clap(name = "assets")]
     BuildAssets(build_assets::BuildAssets),
 }
 

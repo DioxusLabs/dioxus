@@ -1,20 +1,21 @@
-//! The primary entrypoint for our build + optimize + bundle engine
+//! The core build module for `dx`, enabling building, bundling, and runtime hot-patching of Rust
+//! applications. This module defines the entire end-to-end build process, including bundling for
+//! all major platforms including Mac, Windows, Linux, iOS, Android, and WebAssembly.
 //!
-//! Handles multiple ongoing tasks and allows you to queue up builds from interactive and non-interactive contexts
-//!
-//! Uses a request -> response architecture that allows you to monitor the progress with an optional message
-//! receiver.
+//! The bulk of the builder code is contained within the [`request`] module which establishes the
+//! arguments and flow of the build process. The [`context`] module contains the context for the build
+//! including status updates and build customization. The [`patch`] module contains the logic for
+//! hot-patching Rust code through binary analysis and a custom linker. The [`builder`] module contains
+//! the management of the ongoing build and methods to open the build as a running app.
 
 mod builder;
-mod bundle;
-mod prerender;
-mod progress;
+mod context;
+mod patch;
 mod request;
-mod templates;
-mod verify;
-mod web;
+mod tools;
 
 pub(crate) use builder::*;
-pub(crate) use bundle::*;
-pub(crate) use progress::*;
+pub(crate) use context::*;
+pub(crate) use patch::*;
 pub(crate) use request::*;
+pub(crate) use tools::*;

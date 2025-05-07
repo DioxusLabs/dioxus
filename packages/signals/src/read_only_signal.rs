@@ -55,12 +55,7 @@ impl<T: 'static, S: Storage<SignalData<T>>> ReadOnlySignal<T, S> {
     /// Mark any readers of the signal as dirty
     pub fn mark_dirty(&mut self) {
         use crate::write::Writable;
-        use warnings::Warning;
-        // We diff props while rendering, but we only write to the signal if it has
-        // changed so it is safe to ignore the warning
-        crate::warnings::signal_write_in_component_body::allow(|| {
-            _ = self.inner.try_write();
-        });
+        _ = self.inner.try_write();
     }
 }
 
