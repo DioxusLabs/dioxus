@@ -2526,11 +2526,13 @@ session_cache_dir: {}"#,
             .krates
             .get_enabled_features(krate.kid)?
             .iter()
+            // detect the platform from the enabled list
             .flat_map(|feature| {
                 Platform::autodetect_from_cargo_feature(feature)
                     .filter(|platform| *platform != Platform::Server)
                     .map(|f| (f, feature.to_string()))
             })
+            // filter down only if the feature is enabled on this crate or if it's a direct dependency of dioxus itself
             .filter(|(_platform, feature)| {
                 ws.krates
                     .get_deps(krate.node_id)
@@ -2540,8 +2542,14 @@ session_cache_dir: {}"#,
                         }
                         _ => false,
                     })
+                    || package
+                        .dependencies
+                        .iter()
+                        .any(|dep| dep.name == "dioxus" && dep.features.contains(feature))
             })
             .collect::<Vec<_>>();
+
+        tracing::debug!("Manually enabled platforms: {manually_enabled_platforms:?}");
 
         if manually_enabled_platforms.len() > 1 {
             tracing::error!("Multiple platforms are enabled. Please specify a platform with `--platform <platform>` or set a single default platform using a cargo feature.");
@@ -3742,7 +3750,7 @@ r#" <script>
       window.__wasm_split_main_initSync = initSync;
 
       // Actually perform the load
-      init(module_or_path: "/{base_path}/{wasm_path}").then((wasm) => {
+      init({module_or_path: "/{base_path}/{wasm_path}"}).then((wasm) => {
         // assign this module to be accessible globally
         window.__dx_mainWasm = wasm;
         window.__dx_mainInit = init;
