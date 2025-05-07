@@ -311,6 +311,12 @@ impl AppServer {
                 // Get the cached file if it exists - ignoring if it doesn't exist
                 let Some(cached_file) = self.file_map.get_mut(path) else {
                     tracing::debug!("No entry for file in filemap: {:?}", path);
+                    tracing::debug!("Filemap: {:#?}", self.file_map.keys());
+                    continue;
+                };
+
+                let Ok(local_path) = path.strip_prefix(self.workspace.workspace_root()) else {
+                    tracing::debug!("Skipping file outside workspace dir: {:?}", path);
                     continue;
                 };
 
@@ -341,7 +347,7 @@ impl AppServer {
                     };
 
                     // Format the template location, normalizing the path
-                    let file_name: String = path
+                    let file_name: String = local_path
                         .components()
                         .map(|c| c.as_os_str().to_string_lossy())
                         .collect::<Vec<_>>()
@@ -392,15 +398,23 @@ impl AppServer {
         // we're comfortable with both co-existing. Keeping both would lead to two potential sources
         // of errors, and we want to avoid that for now.
         if needs_full_rebuild || self.use_hotpatch_engine {
-            self.client.patch_rebuild(files.to_vec());
-
-            if let Some(server) = self.server.as_mut() {
-                server.patch_rebuild(files.to_vec());
+            if self.use_hotpatch_engine {
+                self.client.patch_rebuild(files.to_vec());
+                if let Some(server) = self.server.as_mut() {
+                    server.patch_rebuild(files.to_vec());
+                }
+                self.clear_hot_reload_changes();
+                self.clear_cached_rsx();
+                server.send_patch_start().await;
+            } else {
+                self.client.start_rebuild(BuildMode::Base);
+                if let Some(server) = self.server.as_mut() {
+                    server.start_rebuild(BuildMode::Base);
+                }
+                self.clear_hot_reload_changes();
+                self.clear_cached_rsx();
+                server.send_reload_start().await;
             }
-
-            self.clear_hot_reload_changes();
-            self.clear_cached_rsx();
-            server.send_patch_start().await;
         } else {
             let msg = HotReloadMsg {
                 templates,

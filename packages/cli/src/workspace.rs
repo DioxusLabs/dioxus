@@ -321,6 +321,10 @@ impl Workspace {
         ]
     }
 
+    pub(crate) fn workspace_root(&self) -> PathBuf {
+        self.krates.workspace_root().as_std_path().to_path_buf()
+    }
+
     /// Returns the root of the crate that the command is run from, without calling `cargo metadata`
     ///
     /// If the command is run from the workspace root, this will return the top-level Cargo.toml

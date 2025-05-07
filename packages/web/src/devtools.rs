@@ -115,7 +115,11 @@ fn make_ws(tx: UnboundedSender<HotReloadMsg>, poll_interval: i32, reload: bool) 
                     &format!("Error parsing devserver message: {}", e).into(),
                 ),
 
-                _ => {}
+                e => {
+                    web_sys::console::error_1(
+                        &format!("Error parsing devserver message: {:?}", e).into(),
+                    );
+                }
             }
         })
         .into_js_value()

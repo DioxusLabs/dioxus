@@ -64,27 +64,27 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
     let mut hydration_receiver: Option<futures_channel::mpsc::UnboundedReceiver<SuspenseMessage>> =
         None;
 
-    // // If we are hydrating, then the hotreload message might actually have a patch for us to apply.
-    // // Let's wait for a moment to see if we get a hotreload message before we start hydrating.
-    // // That way, the hydration will use the same functions that the server used to serialize the data.
-    // #[cfg(all(feature = "devtools", debug_assertions))]
-    // loop {
-    //     let mut timeout = gloo_timers::future::TimeoutFuture::new(100).fuse();
-    //     futures_util::select! {
-    //         msg = hotreload_rx.next() => {
-    //             if let Some(msg) = msg {
-    //                 if msg.for_build_id == Some(dioxus_cli_config::build_id()) {
-    //                     dioxus_devtools::apply_changes(&virtual_dom, &msg);
-    //                 }
-    //             }
-    //         }
-    //         _ = &mut timeout => {
-    //             break;
-    //         }
-    //     }
-    // }
-
     if should_hydrate {
+        // If we are hydrating, then the hotreload message might actually have a patch for us to apply.
+        // Let's wait for a moment to see if we get a hotreload message before we start hydrating.
+        // That way, the hydration will use the same functions that the server used to serialize the data.
+        #[cfg(all(feature = "devtools", debug_assertions))]
+        loop {
+            let mut timeout = gloo_timers::future::TimeoutFuture::new(100).fuse();
+            futures_util::select! {
+                msg = hotreload_rx.next() => {
+                    if let Some(msg) = msg {
+                        if msg.for_build_id == Some(dioxus_cli_config::build_id()) {
+                            dioxus_devtools::apply_changes(&virtual_dom, &msg);
+                        }
+                    }
+                }
+                _ = &mut timeout => {
+                    break;
+                }
+            }
+        }
+
         #[cfg(feature = "hydrate")]
         {
             use dioxus_fullstack_protocol::HydrationContext;
