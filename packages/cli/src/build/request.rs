@@ -3167,7 +3167,7 @@ session_cache_dir: {}"#,
             ctx.status_running_gradle();
 
             // When the build mode is set to release and there is an Android signature configuration, use assembleRelease
-            let build_type = if self.release {
+            let build_type = if self.release && self.config.bundle.android.is_some() {
                 "assembleRelease"
             } else {
                 "assembleDebug"
