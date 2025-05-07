@@ -72,12 +72,12 @@ impl RenderedElementBacking for LiveviewElement {
 
     fn scroll_to(
         &self,
-        behavior: dioxus_html::ScrollBehavior,
+        options: dioxus_html::ScrollToOptions,
     ) -> std::pin::Pin<Box<dyn futures_util::Future<Output = dioxus_html::MountedResult<()>>>> {
         let script = format!(
             "return window.interpreter.scrollTo({}, {});",
             self.id.0,
-            serde_json::to_string(&behavior).expect("Failed to serialize ScrollBehavior")
+            serde_json::to_string(&options).expect("Failed to serialize ScrollToOptions")
         );
 
         let fut = self.query.new_query::<bool>(&script).resolve();
