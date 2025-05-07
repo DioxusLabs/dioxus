@@ -7,7 +7,7 @@ license = "MIT OR Apache-2.0"
 publish = false
 
 [dependencies]
-dioxus = { workspace = true, features = ["web"]}
+dioxus = { workspace = true, features = ["web"] }
 
 [build-dependencies]
 reqwest = { workspace = true, features = ["blocking"] }

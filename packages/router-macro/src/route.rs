@@ -1,4 +1,4 @@
-use quote::{format_ident, quote};
+use quote::{format_ident, quote, quote_spanned};
 use syn::parse::Parse;
 use syn::parse::ParseStream;
 use syn::parse_quote;
@@ -270,6 +270,11 @@ impl Route {
             RouteType::Leaf { component } => {
                 let dynamic_segments = self.dynamic_segments();
                 let dynamic_segments_from_route = self.dynamic_segments();
+
+
+                let component = quote_spanned! { name.span() =>
+                    #component
+                };
 
                 /*
                 The implementation of this is pretty gnarly/gross.

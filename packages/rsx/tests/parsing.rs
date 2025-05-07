@@ -71,6 +71,7 @@ fn complex_kitchen_sink() {
         // complex_carry
         button {
             class: "flex items-center pl-3 py-3 pr-2 text-gray-500 hover:bg-indigo-50 rounded",
+            width: {"100%"}.to_string(),
             onclick: move |evt| {
                 show_user_menu.set(!show_user_menu.get());
                 evt.cancel_bubble();
@@ -166,4 +167,28 @@ fn key_cannot_be_static() {
     let parsed = syn::parse2::<CallBody>(item).unwrap();
     println!("{:?}", parsed.body.diagnostics);
     assert!(!parsed.body.diagnostics.is_empty());
+}
+
+#[test]
+fn braced_expressions() {
+    let item = quote::quote! {
+        div {
+            width: {100} - 50,
+            width: {"100%"}.to_string(),
+            width: {|| "100%"}(),
+        }
+        // Partial expressions in braces rsx should be allowed and output as-is
+        // for autocomplete
+        {partial.}
+        div {}
+        {partial.}
+        // Comments should be ignored
+        div {}
+        {partial.}
+        "hello world"
+        {partial.}
+        if true {}
+    };
+
+    let _cb: CallBody = syn::parse2(item).unwrap();
 }

@@ -26,17 +26,18 @@ dioxus-mobile = { workspace = true, optional = true }
 dioxus-desktop = { workspace = true, default-features = true, optional = true }
 dioxus-fullstack = { workspace = true, default-features = true, optional = true }
 dioxus-liveview = { workspace = true, optional = true }
+dioxus-server = { workspace = true, optional = true }
 dioxus-ssr = { workspace = true, optional = true }
 dioxus-native = { workspace = true, optional = true }
+dioxus_server_macro = { workspace = true, optional = true }
 manganis = { workspace = true, features = ["dioxus"], optional = true }
 dioxus-logger = { workspace = true, optional = true }
 warnings = { workspace = true, optional = true }
 wasm-split = { workspace = true, optional = true }
+subsecond = { workspace = true }
 
 serde = { workspace = true, optional = true }
 dioxus-cli-config = { workspace = true, optional = true }
-
-[target.'cfg(not(any(target_arch = "wasm32", target_os = "ios", target_os = "android")))'.dependencies]
 dioxus-devtools = { workspace = true, optional = true }
 
 [features]
@@ -89,8 +90,16 @@ web = [
 ]
 ssr = ["dep:dioxus-ssr", "dioxus-config-macro/ssr"]
 liveview = ["dep:dioxus-liveview", "dioxus-config-macro/liveview"]
-server = ["dioxus-fullstack?/axum", "dioxus-fullstack?/server", "ssr", "dioxus-liveview?/axum"]
 native = ["dep:dioxus-native"] # todo(jon): decompose the desktop crate such that "webview" is the default and native is opt-in
+server = [
+  "dep:dioxus-server",
+  "dep:dioxus_server_macro",
+  "dioxus_server_macro/server",
+  "dioxus_server_macro/axum",
+  "ssr",
+  "dioxus-liveview?/axum",
+  "dioxus-fullstack?/server",
+]
 
 # This feature just disables the no-renderer-enabled warning
 third-party-renderer = []

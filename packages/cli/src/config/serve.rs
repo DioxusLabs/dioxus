@@ -1,7 +1,4 @@
-#![allow(unused)] // lots of configs...
-
 use clap::Parser;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr, SocketAddrV4};
 
 /// The arguments for the address the server will run on
 #[derive(Clone, Debug, Default, Parser)]

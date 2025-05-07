@@ -327,7 +327,14 @@ impl App {
         match msg {
             DevserverMsg::HotReload(hr_msg) => {
                 for webview in self.webviews.values_mut() {
-                    dioxus_devtools::apply_changes(&webview.dom, &hr_msg);
+                    {
+                        // This is a place where wry says it's threadsafe but it's actually not.
+                        // If we're patching the app, we want to make sure it's not going to progress in the interim.
+                        let lock = crate::android_sync_lock::android_runtime_lock();
+                        dioxus_devtools::apply_changes(&webview.dom, &hr_msg);
+                        drop(lock);
+                    }
+
                     webview.poll_vdom();
                 }
 
@@ -346,6 +353,7 @@ impl App {
             DevserverMsg::Shutdown => {
                 self.control_flow = ControlFlow::Exit;
             }
+            _ => {}
         }
     }
 
