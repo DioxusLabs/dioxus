@@ -13,7 +13,7 @@ use crossterm::{
 };
 use ratatui::{
     prelude::*,
-    widgets::{Block, BorderType, Borders, LineGauge, Paragraph, Wrap},
+    widgets::{Block, BorderType, Borders, LineGauge, Paragraph},
     TerminalOptions, Viewport,
 };
 use std::{
@@ -642,8 +642,7 @@ impl Output {
                 } else {
                     " ".dark_gray()
                 },
-            ]))
-            .wrap(Wrap { trim: false }),
+            ])),
             current_platform,
         );
 
@@ -663,8 +662,7 @@ impl Output {
                     "ServerFns at: ".gray()
                 },
                 address,
-            ]))
-            .wrap(Wrap { trim: false }),
+            ])),
             serve_address,
         );
     }
@@ -689,8 +687,7 @@ impl Output {
                 lines.push("]".yellow());
 
                 lines
-            }))
-            .wrap(Wrap { trim: false }),
+            })),
             area,
         );
     }
