@@ -17,6 +17,7 @@ mod platform;
 mod rustcwrapper;
 mod serve;
 mod settings;
+mod tailwind;
 mod wasm_bindgen;
 mod wasm_opt;
 mod workspace;

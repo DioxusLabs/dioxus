@@ -369,6 +369,13 @@ impl Workspace {
                 .context("Failed to find dx")?,
         )
     }
+
+    /// Returns the path to the dioxus home directory, used to install tools and other things
+    pub(crate) fn dioxus_home_dir() -> PathBuf {
+        dirs::data_local_dir()
+            .map(|f| f.join("dioxus/"))
+            .unwrap_or_else(|| dirs::home_dir().unwrap().join(".dioxus"))
+    }
 }
 
 impl std::fmt::Debug for Workspace {
