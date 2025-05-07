@@ -92,6 +92,7 @@ pub mod prelude {
     };
     pub use crate::render::{FullstackHTMLTemplate, SSRState};
     pub use crate::server::*;
+    pub use dioxus_isrg::{IncrementalRenderer, IncrementalRendererConfig};
 }
 
 pub use dioxus_isrg::{IncrementalRenderer, IncrementalRendererConfig};
