@@ -2428,7 +2428,7 @@ session_cache_dir: {}"#,
             .join("main")
             .join("kotlin");
 
-        for segment in "dev.adioxus.main".split('.') {
+        for segment in "dev.dioxus.main".split('.') {
             kotlin_dir = kotlin_dir.join(segment);
         }
 
@@ -2473,6 +2473,26 @@ session_cache_dir: {}"#,
         self.internal_out_dir()
             .join(self.executable_name())
             .join(if release { "release" } else { "debug" })
+            .join(platform.build_folder_name())
+    }
+
+    /// target/dx/bundle/app/
+    /// target/dx/bundle/app/blah.app
+    /// target/dx/bundle/app/blah.exe
+    /// target/dx/bundle/app/public/
+    pub(crate) fn bundle_dir(&self, platform: Platform) -> PathBuf {
+        self.internal_out_dir()
+            .join(self.executable_name())
+            .join("bundle")
+            .join(platform.build_folder_name())
+    }
+
+    /// Get the workspace directory for the crate
+    pub(crate) fn workspace_dir(&self) -> PathBuf {
+        self.workspace
+            .krates
+            .workspace_root()
+            .as_std_path()
             .to_path_buf()
     }
 
@@ -3712,8 +3732,7 @@ r#" <script>
 
     /// Get the base path from the config or None if this is not a web or server build
     pub(crate) fn base_path(&self) -> Option<&str> {
-        self.krate
-            .config
+        self.config
             .web
             .app
             .base_path
