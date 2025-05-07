@@ -173,8 +173,6 @@ impl SsrRendererPool {
 
         let wrapper = FullstackHTMLTemplate { cfg: cfg.clone() };
 
-        tracing::debug!("Renering wrapper with index: {:#?}", cfg.index);
-
         let server_context = server_context.clone();
         let mut renderer = self
             .renderers
