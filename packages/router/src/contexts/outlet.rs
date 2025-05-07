@@ -75,10 +75,19 @@ impl<R> OutletContext<R> {
 /// # Examples
 ///
 /// ```rust, no_run
-/// # use dioxus::prelude::*;
+/// # use dioxus_lib::prelude::*;
+/// # use dioxus_router::prelude::{use_outlet_context,Routable};
 ///
-/// #[derive(Clone)]
-/// struct MyRouter;
+/// # #[derive(Routable,Clone,PartialEq)]
+/// # enum MyRouter {
+/// #   #[route("/")]
+/// #   MyView
+/// # }
+///
+/// # #[component]
+/// # fn MyView() -> Element {
+/// #   rsx!{ div { "My Text" } }
+/// # }
 ///
 /// let outlet_ctx = use_outlet_context::<MyRouter>();
 /// println!("Current nesting level: {}", outlet_ctx.level());

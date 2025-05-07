@@ -255,9 +255,10 @@ impl_event! [
     ///
     /// The `MountedData` struct contains cross platform APIs that work on the desktop, mobile, liveview and web platforms. For the web platform, you can also downcast the `MountedData` event to the `web-sys::Element` type for more web specific APIs:
     ///
-    /// ```rust, no_run
-    /// # use dioxus::prelude::*;
-    /// # use dioxus_web::WebEventExt;
+    /// ```rust, ignore
+    /// use dioxus::prelude::*;
+    /// use dioxus_web::WebEventExt; // provides [`as_web_event()`] method
+    ///
     /// fn App() -> Element {
     ///     rsx! {
     ///         div {

@@ -261,7 +261,7 @@ impl LaunchBuilder {
     /// # Example
     /// ```rust, no_run
     /// use dioxus::prelude::*;
-    /// use dioxus_desktop::{Config,WindowBuilder};
+    /// use dioxus_desktop::{Config, WindowBuilder};
     ///
     /// fn app() -> Element {
     ///     rsx! {
