@@ -3740,6 +3740,7 @@ dependencies = [
  "throbber-widgets-tui",
  "tokio",
  "tokio-stream",
+ "tokio-tungstenite",
  "tokio-util",
  "toml",
  "toml_edit 0.22.26",
