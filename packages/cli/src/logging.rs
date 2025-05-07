@@ -69,11 +69,11 @@ impl TraceController {
             EnvFilter::from_env(LOG_ENV)
         } else if matches!(args.action, Commands::Serve(_)) {
             EnvFilter::new(
-                "error,dx=trace,dioxus_cli=trace,manganis_cli_support=trace,wasm_split_cli=trace",
+                "error,dx=trace,dioxus_cli=trace,manganis_cli_support=trace,wasm_split_cli=trace,subsecond_cli_support=trace",
             )
         } else {
             EnvFilter::new(format!(
-                "error,dx={our_level},dioxus_cli={our_level},manganis_cli_support={our_level},,wasm_split_cli={our_level}",
+                "error,dx={our_level},dioxus_cli={our_level},manganis_cli_support={our_level},wasm_split_cli={our_level},subsecond_cli_support={our_level}",
                 our_level = if args.verbosity.verbose {
                     "debug"
                 } else {
@@ -154,19 +154,23 @@ impl TraceController {
 
         ServeUpdate::TracingLog { log }
     }
-}
 
-impl Drop for TraceController {
-    fn drop(&mut self) {
+    pub(crate) fn shutdown_panic(&mut self) {
         TUI_ACTIVE.store(false, Ordering::Relaxed);
 
         // re-emit any remaining messages
         while let Ok(Some(msg)) = self.tui_rx.try_next() {
-            let contents = match msg.content {
+            let content = match msg.content {
                 TraceContent::Text(text) => text,
                 TraceContent::Cargo(msg) => msg.message.to_string(),
             };
-            tracing::error!("{}", contents);
+            match msg.level {
+                Level::ERROR => tracing::error!("{content}"),
+                Level::WARN => tracing::warn!("{content}"),
+                Level::INFO => tracing::info!("{content}"),
+                Level::DEBUG => tracing::debug!("{content}"),
+                Level::TRACE => tracing::trace!("{content}"),
+            }
         }
     }
 }

@@ -12,7 +12,7 @@ pub struct ReadOnlySignal<T: 'static, S: Storage<SignalData<T>> = UnsyncStorage>
 }
 
 /// A signal that can only be read from.
-pub type ReadSignal<T, S> = ReadOnlySignal<T, S>;
+pub type ReadSignal<T, S = UnsyncStorage> = ReadOnlySignal<T, S>;
 
 impl<T: 'static, S: Storage<SignalData<T>>> From<Signal<T, S>> for ReadOnlySignal<T, S> {
     fn from(inner: Signal<T, S>) -> Self {
@@ -55,12 +55,7 @@ impl<T: 'static, S: Storage<SignalData<T>>> ReadOnlySignal<T, S> {
     /// Mark any readers of the signal as dirty
     pub fn mark_dirty(&mut self) {
         use crate::write::Writable;
-        use warnings::Warning;
-        // We diff props while rendering, but we only write to the signal if it has
-        // changed so it is safe to ignore the warning
-        crate::warnings::signal_write_in_component_body::allow(|| {
-            _ = self.inner.try_write();
-        });
+        _ = self.inner.try_write();
     }
 }
 

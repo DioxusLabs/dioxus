@@ -9,19 +9,17 @@ authors = ["Jonathan Kelley", "Evan Almloff"]
 license = "MIT OR Apache-2.0"
 description = "Server function macros for Dioxus"
 
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
-proc-macro2 = "^1.0.63"
-quote = "^1.0.26"
+proc-macro2 = { workspace = true }
+quote = { workspace = true }
 syn = { workspace = true, features = ["full"] }
-server_fn_macro = { version = "0.7.3" }
+server_fn_macro = { workspace = true }
+
 
 [dev-dependencies]
 dioxus = { workspace = true, features = ["fullstack"] }
 serde = { workspace = true, features = ["derive"] }
-tower-http = { workspace = true, features = ["timeout"]}
+tower-http = { workspace = true, features = ["timeout"] }
 axum = { workspace = true }
 
 [lib]
@@ -31,6 +29,7 @@ proc-macro = true
 axum = ["server_fn_macro/axum"]
 server = ["server_fn_macro/ssr"]
 reqwest = ["server_fn_macro/reqwest"]
+generic = ["server_fn_macro/generic"]
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]

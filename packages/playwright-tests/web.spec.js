@@ -165,3 +165,21 @@ test("merge styles", async ({ page }) => {
   await expect(div).toHaveCSS("width", "100px");
   await expect(div).toHaveCSS("height", "100px");
 });
+
+test("select multiple", async ({ page }) => {
+  await page.goto("http://localhost:9999");
+  // wait until the select element is mounted
+  const staticSelect = page.locator("select#static-multiple-select");
+  await staticSelect.waitFor({ state: "attached" });
+  await expect(staticSelect).toHaveValues([]);
+  // Make sure the multiple attribute is actually set
+  await staticSelect.selectOption(["1", "2"]);
+  await expect(staticSelect).toHaveValues(["1", "2"]);
+
+  // The dynamic select element should act exactly the same
+  const dynamicSelect = page.locator("select#dynamic-multiple-select");
+  await dynamicSelect.waitFor({ state: "attached" });
+  await expect(dynamicSelect).toHaveValues([]);
+  await dynamicSelect.selectOption(["1", "2"]);
+  await expect(dynamicSelect).toHaveValues(["1", "2"]);
+});

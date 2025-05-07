@@ -51,5 +51,5 @@ pub use config::{Config, WindowCloseBehaviour};
 pub use desktop_context::{window, DesktopContext, DesktopService, WeakDesktopContext};
 pub use event_handlers::WryEventHandler;
 pub use hooks::*;
-pub use shortcut::{ShortcutHandle, ShortcutRegistryError};
+pub use shortcut::{HotKeyState, ShortcutHandle, ShortcutRegistryError};
 pub use wry::RequestAsyncResponder;

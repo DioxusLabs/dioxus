@@ -58,9 +58,12 @@ export function setAttributeInner(
       node.innerHTML = value;
       break;
 
+
     case "style":
       // Save the existing styles
       const existingStyles: Record<string, string> = {};
+
+
       for (let i = 0; i < node.style.length; i++) {
         const prop = node.style[i];
         existingStyles[prop] = node.style.getPropertyValue(prop);
@@ -76,15 +79,30 @@ export function setAttributeInner(
       }
       break;
 
-    // The presence of a an attribute is enough to set it to true, provided the value is being set to a truthy value
-    // Again, kinda ugly and would prefer this logic to be baked into dioxus-html at compile time
-    default:
-      // https://github.com/facebook/react/blob/8b88ac2592c5f555f315f9440cbb665dd1e7457a/packages/react-dom/src/shared/DOMProperty.js#L352-L364
-      if (!truthy(value) && isBoolAttr(field)) {
-        node.removeAttribute(field);
-      } else {
-        node.setAttribute(field, value);
+
+    case "multiple":
+      setAttributeDefault(node, field, value);
+      // reset the selected value whenever multiple changes
+      // @ts-ignore
+      let options = node.options;
+      for (const option of options) {
+        option.selected = option.defaultSelected;
       }
+      break;
+
+    default:
+      setAttributeDefault(node, field, value);
+  }
+}
+
+function setAttributeDefault(node: HTMLElement, field: string, value: string) {
+  // The presence of a an attribute is enough to set it to true, provided the value is being set to a truthy value
+  // Again, kinda ugly and would prefer this logic to be baked into dioxus-html at compile time
+  // https://github.com/facebook/react/blob/8b88ac2592c5f555f315f9440cbb665dd1e7457a/packages/react-dom/src/shared/DOMProperty.js#L352-L364
+  if (!truthy(value) && isBoolAttr(field)) {
+    node.removeAttribute(field);
+  } else {
+    node.setAttribute(field, value);
   }
 }
 

@@ -64,6 +64,7 @@ fn app() -> Element {
         WebSysClosure {}
         DocumentElements {}
         MergeStyles {}
+        SelectMultiple {}
     }
 }
 
@@ -156,7 +157,7 @@ fn DocumentElements() -> Element {
     }
 }
 
-/// Regression test for https://github.com/DioxusLabs/dioxus/issues/3887
+// Regression test for https://github.com/DioxusLabs/dioxus/issues/3887
 #[component]
 fn MergeStyles() -> Element {
     let px = 100;
@@ -166,6 +167,29 @@ fn MergeStyles() -> Element {
             id: "merge-styles-div",
             style: "width: {px}px; height: {px}px",
             background_color: "red",
+        }
+    }
+}
+
+// Select elements have odd default behavior when you set the multiple attribute after mounting the element
+// Regression test for https://github.com/DioxusLabs/dioxus/issues/3185
+#[component]
+fn SelectMultiple() -> Element {
+    rsx! {
+        select {
+            id: "static-multiple-select",
+            // This is static and will be set in the template
+            multiple: "true",
+            option { label: "Value1", value: "1" }
+            option { label: "Value2", value: "2" }
+        }
+
+        select {
+            id: "dynamic-multiple-select",
+            // This is dynamic and will be set after it is mounted
+            multiple: true,
+            option { label: "Value1", value: "1" }
+            option { label: "Value2", value: "2" }
         }
     }
 }

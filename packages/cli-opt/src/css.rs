@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use anyhow::Context;
+use anyhow::{anyhow, Context};
 use codemap::SpanLoc;
 use grass::OutputStyle;
 use lightningcss::{
@@ -8,7 +8,7 @@ use lightningcss::{
     stylesheet::{MinifyOptions, ParserOptions, StyleSheet},
     targets::{Browsers, Targets},
 };
-use manganis_core::CssAssetOptions;
+use manganis_core::{CssAssetOptions, CssModuleAssetOptions};
 
 pub(crate) fn process_css(
     css_options: &CssAssetOptions,
@@ -36,6 +36,74 @@ pub(crate) fn process_css(
     std::fs::write(output_path, css).with_context(|| {
         format!(
             "Failed to write css to output location: {}",
+            output_path.display()
+        )
+    })?;
+
+    Ok(())
+}
+
+pub(crate) fn process_css_module(
+    css_options: &CssModuleAssetOptions,
+    source: &Path,
+    final_path: &Path,
+    output_path: &Path,
+) -> anyhow::Result<()> {
+    let mut css = std::fs::read_to_string(source)?;
+
+    // Collect the file hash name.
+    let mut src_name = source
+        .file_name()
+        .and_then(|x| x.to_str())
+        .ok_or(anyhow!("Failed to read name of css module source file."))?
+        .strip_suffix(".css")
+        .unwrap()
+        .to_string();
+
+    src_name.push('-');
+
+    let out_name = final_path
+        .file_name()
+        .and_then(|x| x.to_str())
+        .ok_or(anyhow!("Failed to read name of css module output file."))?
+        .strip_suffix(".css")
+        .unwrap();
+
+    let hash = out_name
+        .strip_prefix(&src_name)
+        .ok_or(anyhow!("Failed to read hash of css module."))?;
+
+    // Rewrite CSS idents with ident+hash.
+    let (classes, ids) = manganis_core::collect_css_idents(&css);
+
+    for class in classes {
+        css = css.replace(&format!(".{class}"), &format!(".{class}{hash}"));
+    }
+
+    for id in ids {
+        css = css.replace(&format!("#{id}"), &format!("#{id}{hash}"));
+    }
+
+    // Minify CSS
+    let css = if css_options.minified() {
+        // Try to minify the css. If we fail, log the error and use the unminified css
+        match minify_css(&css) {
+            Ok(minified) => minified,
+            Err(err) => {
+                tracing::error!(
+                    "Failed to minify css module; Falling back to unminified css. Error: {}",
+                    err
+                );
+                css
+            }
+        }
+    } else {
+        css
+    };
+
+    std::fs::write(output_path, css).with_context(|| {
+        format!(
+            "Failed to write css module to output location: {}",
             output_path.display()
         )
     })?;
