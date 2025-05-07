@@ -160,7 +160,7 @@ impl MutationWriter<'_> {
                     .collect();
 
                 let mut data = ElementNodeData::new(name, attrs);
-                data.flush_style_attribute(self.doc.guard());
+                data.flush_style_attribute(self.doc.guard(), self.doc.base_url.clone());
 
                 let child_ids: Vec<NodeId> = children
                     .iter()
@@ -404,7 +404,7 @@ impl WriteMutations for MutationWriter<'_> {
                     }
 
                     if name == "style" {
-                        element.flush_style_attribute(&self.doc.guard);
+                        element.flush_style_attribute(&self.doc.guard, self.doc.base_url.clone());
                     }
 
                     if name == "src" && !val.is_empty() {
