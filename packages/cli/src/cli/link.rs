@@ -110,7 +110,6 @@ impl LinkAction {
             // Optimize the assets by copying them to the destination
             LinkAction::OptimizeAssets { destination } => {
                 let (manifest, status) = link_asset_manifest();
-                tracing::info!("Found assets: {:#?}", manifest.assets().collect::<Vec<_>>());
                 if let Err(err) = create_dir_all(&destination) {
                     tracing::error!("Failed to create destination directory: {err}");
                 }
@@ -201,6 +200,8 @@ fn link_asset_manifest() -> (AssetManifest, std::process::ExitStatus) {
         .args(linker_args)
         .status()
         .expect("Failed to spawn linker");
+
+    tracing::info!("Found assets: {:#?}", manifest.assets().collect::<Vec<_>>());
 
     (manifest, status)
 }
