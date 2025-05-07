@@ -22,13 +22,29 @@ pub use cargo_metadata;
 #[non_exhaustive]
 #[derive(Serialize, Deserialize, Clone)]
 pub enum StructuredOutput {
-    BuildFinished { path: PathBuf },
-    BuildUpdate { stage: BuildStage },
-    CargoOutput { message: CompilerMessage },
-    BundleOutput { bundles: Vec<PathBuf> },
-    HtmlTranslate { html: String },
+    BuildsFinished {
+        client: PathBuf,
+        server: Option<PathBuf>,
+    },
+    BuildFinished {
+        path: PathBuf,
+    },
+    BuildUpdate {
+        stage: BuildStage,
+    },
+    CargoOutput {
+        message: CompilerMessage,
+    },
+    BundleOutput {
+        bundles: Vec<PathBuf>,
+    },
+    HtmlTranslate {
+        html: String,
+    },
     Success,
-    Error { message: String },
+    Error {
+        message: String,
+    },
 }
 
 impl std::fmt::Debug for StructuredOutput {
@@ -46,11 +62,10 @@ pub enum BuildStage {
     Initializing,
     Starting {
         crate_count: usize,
-        is_server: bool,
+        patch: bool,
     },
     InstallingTooling,
     Compiling {
-        is_server: bool,
         current: usize,
         total: usize,
         krate: String,
@@ -58,7 +73,9 @@ pub enum BuildStage {
     RunningBindgen,
     SplittingBundle,
     OptimizingWasm,
-    PrerenderingRoutes,
+    Linking,
+    Hotpatching,
+    ExtractingAssets,
     CopyingAssets {
         current: usize,
         total: usize,

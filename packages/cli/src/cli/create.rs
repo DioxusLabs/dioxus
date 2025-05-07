@@ -58,6 +58,9 @@ impl Create {
         // If no template is specified, use the default one and set the branch to the latest release.
         resolve_template_and_branch(&mut self.template, &mut self.branch);
 
+        // cargo-generate requires the path to be created first.
+        std::fs::create_dir_all(&self.path)?;
+
         let args = GenerateArgs {
             define: self.option,
             destination: Some(self.path),
@@ -77,11 +80,19 @@ impl Create {
                 tag: self.tag,
                 ..Default::default()
             },
+            verbose: crate::logging::VERBOSITY
+                .get()
+                .map(|f| f.verbose)
+                .unwrap_or(false),
             ..Default::default()
         };
+
         restore_cursor_on_sigint();
+        tracing::debug!(dx_src = ?TraceSrc::Dev, "Creating new project with args: {args:#?}");
         let path = cargo_generate::generate(args)?;
+
         _ = post_create(&path);
+
         Ok(StructuredOutput::Success)
     }
 }

@@ -479,3 +479,18 @@ pub fn use_hook_with_cleanup<T: Clone + 'static>(
     use_drop(move || cleanup(_value));
     value
 }
+
+/// Force every component to be dirty and require a re-render. Used by hot-reloading.
+///
+/// This might need to change to a different flag in the event hooks order changes within components.
+/// What we really need is a way to mark components as needing a complete rebuild if they were hit by changes.
+pub fn force_all_dirty() {
+    Runtime::with(|rt| {
+        rt.scope_states.borrow_mut().iter().for_each(|state| {
+            if let Some(scope) = state.as_ref() {
+                scope.needs_update();
+            }
+        });
+    })
+    .expect("Runtime to exist");
+}

@@ -34,6 +34,15 @@ pub trait RenderedElementBacking: std::any::Any {
     /// Scroll to make the element visible
     fn scroll_to(
         &self,
+        _options: ScrollToOptions,
+    ) -> Pin<Box<dyn Future<Output = MountedResult<()>>>> {
+        Box::pin(async { Err(MountedError::NotSupported) })
+    }
+
+    /// Scroll to the given element offsets
+    fn scroll(
+        &self,
+        _coordinates: PixelsVector2D,
         _behavior: ScrollBehavior,
     ) -> Pin<Box<dyn Future<Output = MountedResult<()>>>> {
         Box::pin(async { Err(MountedError::NotSupported) })
@@ -61,6 +70,46 @@ pub enum ScrollBehavior {
     /// Scroll to the element smoothly
     #[cfg_attr(feature = "serialize", serde(rename = "smooth"))]
     Smooth,
+}
+
+/// The desired final position within the scrollable ancestor container for a given axis.
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[doc(alias = "ScrollIntoViewOptions")]
+pub enum ScrollLogicalPosition {
+    /// Aligns the element's start edge (top or left) with the start of the scrollable container,
+    /// making the element appear at the start of the visible area.
+    #[cfg_attr(feature = "serialize", serde(rename = "start"))]
+    Start,
+    /// Aligns the element at the center of the scrollable container,
+    /// positioning it in the middle of the visible area.
+    #[cfg_attr(feature = "serialize", serde(rename = "center"))]
+    Center,
+    /// Aligns the element's end edge (bottom or right) with the end of the scrollable container,
+    /// making the element appear at the end of the visible area
+    #[cfg_attr(feature = "serialize", serde(rename = "end"))]
+    End,
+    /// Scrolls the element to the nearest edge in the given axis.
+    /// This minimizes the scrolling distance.
+    #[cfg_attr(feature = "serialize", serde(rename = "nearest"))]
+    Nearest,
+}
+
+/// The way that scrolling should be performed
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[doc(alias = "ScrollIntoViewOptions")]
+pub struct ScrollToOptions {
+    pub behavior: ScrollBehavior,
+    pub vertical: ScrollLogicalPosition,
+    pub horizontal: ScrollLogicalPosition,
+}
+impl Default for ScrollToOptions {
+    fn default() -> Self {
+        Self {
+            behavior: ScrollBehavior::Smooth,
+            vertical: ScrollLogicalPosition::Start,
+            horizontal: ScrollLogicalPosition::Center,
+        }
+    }
 }
 
 /// An Element that has been rendered and allows reading and modifying information about it.
@@ -116,7 +165,29 @@ impl MountedData {
         &self,
         behavior: ScrollBehavior,
     ) -> Pin<Box<dyn Future<Output = MountedResult<()>>>> {
-        self.inner.scroll_to(behavior)
+        self.inner.scroll_to(ScrollToOptions {
+            behavior,
+            ..ScrollToOptions::default()
+        })
+    }
+
+    /// Scroll to make the element visible
+    #[doc(alias = "scrollIntoView")]
+    pub fn scroll_to_with_options(
+        &self,
+        options: ScrollToOptions,
+    ) -> Pin<Box<dyn Future<Output = MountedResult<()>>>> {
+        self.inner.scroll_to(options)
+    }
+
+    /// Scroll to the given element offsets
+    #[doc(alias = "scrollTo")]
+    pub fn scroll(
+        &self,
+        coordinates: PixelsVector2D,
+        behavior: ScrollBehavior,
+    ) -> Pin<Box<dyn Future<Output = MountedResult<()>>>> {
+        self.inner.scroll(coordinates, behavior)
     }
 
     /// Set the focus on the element
@@ -184,9 +255,10 @@ impl_event! [
     ///
     /// The `MountedData` struct contains cross platform APIs that work on the desktop, mobile, liveview and web platforms. For the web platform, you can also downcast the `MountedData` event to the `web-sys::Element` type for more web specific APIs:
     ///
-    /// ```rust, no_run
-    /// # use dioxus::prelude::*;
-    /// # use dioxus_web::WebEventExt;
+    /// ```rust, ignore
+    /// use dioxus::prelude::*;
+    /// use dioxus_web::WebEventExt; // provides [`as_web_event()`] method
+    ///
     /// fn App() -> Element {
     ///     rsx! {
     ///         div {
