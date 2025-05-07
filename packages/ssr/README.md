@@ -20,7 +20,7 @@ Dioxus SSR provides utilities to render Dioxus components to valid HTML. Once re
 ```rust
 # use dioxus::prelude::*;
 fn app() -> Element {
-  rsx!{
+  rsx! {
     div {"hello world!"}
   }
 }
@@ -38,7 +38,7 @@ The simplest example is to simply render some `rsx!` nodes to HTML. This can be 
 
 ```rust, no_run
 # use dioxus::prelude::*;
-let content = dioxus_ssr::render_element(rsx!{
+let content = dioxus_ssr::render_element(rsx! {
     div {
         for i in 0..5 {
             "Number: {i}"

@@ -32,8 +32,12 @@ impl CliSettings {
     /// Load the settings from the local, global, or default config in that order
     pub(crate) fn load() -> Arc<Self> {
         static SETTINGS: Lazy<Arc<CliSettings>> =
-            Lazy::new(|| Arc::new(CliSettings::from_global().unwrap_or_default()));
+            Lazy::new(|| Arc::new(CliSettings::global_or_default()));
         SETTINGS.clone()
+    }
+
+    pub fn global_or_default() -> Self {
+        CliSettings::from_global().unwrap_or_default()
     }
 
     /// Get the current settings structure from global.
@@ -124,7 +128,7 @@ impl CliSettings {
             return true;
         }
 
-        if std::env::var("NO_DOWNLOADS").is_ok() {
+        if crate::devcfg::no_downloads() {
             return true;
         }
 

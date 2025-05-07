@@ -9,7 +9,7 @@ publish = false
 
 [dependencies]
 dioxus = { workspace = true, features = ["fullstack", "router"] }
-chrono = { version = "0.4.38", features = ["serde"] }
+chrono = { workspace = true, features = ["serde"] }
 reqwest = { workspace= true, features = ["json"] }
 serde = { workspace = true, features = ["derive"] }
 

@@ -18,4 +18,3 @@ web-sys = { workspace = true, features = ["Document", "Window", "HtmlElement", "
 once_cell = { workspace = true }
 getrandom = { workspace = true, features = ["js"] }
 reqwest = { workspace = true, features = ["json"] }
-

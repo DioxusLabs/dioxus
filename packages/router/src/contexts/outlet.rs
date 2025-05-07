@@ -74,7 +74,12 @@ impl<R> OutletContext<R> {
 ///
 /// # Examples
 ///
-/// ```rust
+/// ```rust, no_run
+/// # use dioxus::prelude::*;
+///
+/// #[derive(Clone)]
+/// struct MyRouter;
+///
 /// let outlet_ctx = use_outlet_context::<MyRouter>();
 /// println!("Current nesting level: {}", outlet_ctx.level());
 /// ```

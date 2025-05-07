@@ -6,7 +6,7 @@ publish = false
 
 [dependencies]
 dioxus = { workspace = true, features = ["launch", "fullstack"] }
-serde = "1.0.159"
+serde = { workspace = true }
 
 [features]
 default = []
