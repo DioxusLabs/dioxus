@@ -109,7 +109,7 @@ impl BuildArgs {
                 // we didn't build BuildRequest to be generally mutable.
                 let client = BuildRequest::new(&self.build_arguments, workspace.clone()).await?;
                 let default_server = client
-                    .default_platforms
+                    .enabled_platforms
                     .iter()
                     .any(|p| *p == Platform::Server);
 

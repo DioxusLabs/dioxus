@@ -77,7 +77,7 @@ which = { version = "7.0.2" }
 
 # plugin packages
 open = { workspace = true }
-cargo-generate = "0.22.1"
+cargo-generate = "0.23.3"
 toml_edit = "0.22.24"
 
 # formatting

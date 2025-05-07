@@ -368,7 +368,7 @@ pub(crate) struct BuildRequest {
     pub(crate) profile: String,
     pub(crate) release: bool,
     pub(crate) platform: Platform,
-    pub(crate) default_platforms: Vec<Platform>,
+    pub(crate) enabled_platforms: Vec<Platform>,
     pub(crate) triple: Triple,
     pub(crate) _device: bool,
     pub(crate) package: String,
@@ -532,25 +532,37 @@ impl BuildRequest {
             })?
             .clone();
 
-        let default_platforms = Self::default_platforms(main_package);
-        let default_platform = default_platforms.iter().find(|p| **p != Platform::Server);
+        // The crate might enable multiple platforms or no platforms at
+        // We collect all the platforms it enables first and then select based on the --platform arg
+        let enabled_platforms =
+            Self::enabled_cargo_toml_platforms(main_package, args.no_default_features);
 
         let mut features = args.features.clone();
         let mut no_default_features = args.no_default_features;
 
-        // The user passed --platform XYZ but already has `default = ["ABC"]` in their Cargo.toml
-        // We want to strip out the default platform and use the one they passed, setting no-default-features
-        if args.platform.is_some() && default_platform.is_some() {
-            Self::platformless_features(main_package);
-            no_default_features = true;
-        }
+        let platform: Platform = match args.platform {
+            Some(platform) => match enabled_platforms.len() {
+                0 => platform,
 
-        // Inherit the platform from the args, or auto-detect it
-        let platform = args
-            .platform
-            .map(Some)
-            .unwrap_or_else(|| Self::autodetect_platform(&workspace, main_package).map(|a| a.0))
-            .context("No platform was specified and could not be auto-detected. Please specify a platform with `--platform <platform>` or set a default platform using a cargo feature.")?;
+                // The user passed --platform XYZ but already has `default = ["ABC"]` in their Cargo.toml or dioxus = { features = ["abc"] }
+                // We want to strip out the default platform and use the one they passed, setting no-default-features
+                _ => {
+                    features.extend(Self::platformless_features(main_package));
+                    no_default_features = true;
+                    platform
+                }
+            },
+            None => match enabled_platforms.len() {
+                0 => return Err(anyhow::anyhow!("No platform specified and no platform marked as default in Cargo.toml. Try specifying a platform with `--platform`").into()),
+                1 => enabled_platforms[0],
+                _ => {
+                    return Err(anyhow::anyhow!(
+                        "Multiple platforms enabled in Cargo.toml. Please specify a platform with `--platform` or set a default platform in Cargo.toml"
+                    )
+                    .into())
+                }
+            },
+        };
 
         // Add any features required to turn on the client
         features.push(Self::feature_for_platform(main_package, platform));
@@ -675,7 +687,7 @@ session_cache_dir: {}"#,
             _device: device,
             workspace,
             config,
-            default_platforms,
+            enabled_platforms,
             custom_target_dir: None,
             custom_linker,
             link_args_file,
@@ -2511,101 +2523,6 @@ session_cache_dir: {}"#,
         self.crate_target.kind[0]
     }
 
-    /// Try to autodetect the platform from the package by reading its features
-    ///
-    /// Read the default-features list and/or the features list on dioxus to see if we can autodetect the platform
-    fn autodetect_platform(
-        ws: &Workspace,
-        package: &krates::cm::Package,
-    ) -> Option<(Platform, String)> {
-        let krate = ws.krates.krates_by_name("dioxus").next()?;
-
-        // We're going to accumulate the platforms that are enabled
-        // This will let us create a better warning if multiple platforms are enabled
-        let manually_enabled_platforms = ws
-            .krates
-            .get_enabled_features(krate.kid)?
-            .iter()
-            // detect the platform from the enabled list
-            .flat_map(|feature| {
-                Platform::autodetect_from_cargo_feature(feature)
-                    .filter(|platform| *platform != Platform::Server)
-                    .map(|f| (f, feature.to_string()))
-            })
-            // filter down only if the feature is enabled on this crate or if it's a direct dependency of dioxus itself
-            .filter(|(_platform, feature)| {
-                ws.krates
-                    .get_deps(krate.node_id)
-                    .any(|(node, _)| match node {
-                        krates::Node::Feature { krate_index, name } => {
-                            name == feature && ws.krates[*krate_index].name == "dioxus"
-                        }
-                        _ => false,
-                    })
-                    || package
-                        .dependencies
-                        .iter()
-                        .any(|dep| dep.name == "dioxus" && dep.features.contains(feature))
-            })
-            .collect::<Vec<_>>();
-
-        tracing::debug!("Manually enabled platforms: {manually_enabled_platforms:?}");
-
-        if manually_enabled_platforms.len() > 1 {
-            tracing::error!("Multiple platforms are enabled. Please specify a platform with `--platform <platform>` or set a single default platform using a cargo feature.");
-            for platform in manually_enabled_platforms {
-                tracing::error!("  - {platform:?}");
-            }
-            return None;
-        }
-
-        if manually_enabled_platforms.len() == 1 {
-            return manually_enabled_platforms.first().cloned();
-        }
-
-        // Let's try and find the list of platforms from the feature list
-        // This lets apps that specify web + server to work without specifying the platform.
-        // This is because we treat `server` as a binary thing rather than a dedicated platform, so at least we can disambiguate it
-        let possible_platforms = package
-            .features
-            .iter()
-            .filter_map(|(feature, _features)| {
-                match Platform::autodetect_from_cargo_feature(feature) {
-                    Some(platform) => Some((platform, feature.to_string())),
-                    None => {
-                        let auto_implicit = _features
-                            .iter()
-                            .filter_map(|f| {
-                                if !f.starts_with("dioxus?/") && !f.starts_with("dioxus/") {
-                                    return None;
-                                }
-
-                                let rest = f
-                                    .trim_start_matches("dioxus/")
-                                    .trim_start_matches("dioxus?/");
-
-                                Platform::autodetect_from_cargo_feature(rest)
-                            })
-                            .collect::<Vec<_>>();
-
-                        if auto_implicit.len() == 1 {
-                            Some((auto_implicit.first().copied().unwrap(), feature.to_string()))
-                        } else {
-                            None
-                        }
-                    }
-                }
-            })
-            .filter(|platform| platform.0 != Platform::Server)
-            .collect::<Vec<_>>();
-
-        if possible_platforms.len() == 1 {
-            return possible_platforms.first().cloned();
-        }
-
-        None
-    }
-
     /// Get the features required to build for the given platform
     fn feature_for_platform(package: &krates::cm::Package, platform: Platform) -> String {
         // Try to find the feature that activates the dioxus feature for the given platform
@@ -2700,53 +2617,47 @@ session_cache_dir: {}"#,
             .map(|krate| krate.krate.version.to_string())
     }
 
-    // pub(crate) fn default_platform(package: &krates::cm::Package) -> Option<Platform> {
-    //     let default = package.features.get("default")?;
-
-    //     // we only trace features 1 level deep..
-    //     for feature in default.iter() {
-    //         // If the user directly specified a platform we can just use that.
-    //         if feature.starts_with("dioxus/") {
-    //             let dx_feature = feature.trim_start_matches("dioxus/");
-    //             let auto = Platform::autodetect_from_cargo_feature(dx_feature);
-    //             if auto.is_some() {
-    //                 return auto;
-    //             }
-    //         }
-
-    //         // If the user is specifying an internal feature that points to a platform, we can use that
-    //         let internal_feature = package.features.get(feature);
-    //         if let Some(internal_feature) = internal_feature {
-    //             for feature in internal_feature {
-    //                 if feature.starts_with("dioxus/") {
-    //                     let dx_feature = feature.trim_start_matches("dioxus/");
-    //                     let auto = Platform::autodetect_from_cargo_feature(dx_feature);
-    //                     if auto.is_some() {
-    //                         return auto;
-    //                     }
-    //                 }
-    //             }
-    //         }
-    //     }
-
-    //     None
-    // }
-
-    pub(crate) fn default_platforms(package: &krates::cm::Package) -> Vec<Platform> {
+    /// Return the platforms that are enabled for the package
+    ///
+    /// Ideally only one platform is enabled but we need to be able to
+    pub(crate) fn enabled_cargo_toml_platforms(
+        package: &krates::cm::Package,
+        no_default_features: bool,
+    ) -> Vec<Platform> {
         let mut platforms = vec![];
 
-        // // Attempt to discover the platform directly from the dioxus dependency
-        // if let Some(dxs) = package.dependencies.iter().find(|dep| dep.name == "dioxus") {
-        //     for f in dxs.features.iter() {
-        //         if let Some(platform) = Platform::autodetect_from_cargo_feature(f) {
-        //             platforms.push(platform);
-        //         }
-        //     }
-        // }
+        // Attempt to discover the platform directly from the dioxus dependency
+        //
+        // [dependencies]
+        // dioxus = { features = ["web"] }
+        //
+        if let Some(dxs) = package.dependencies.iter().find(|dep| dep.name == "dioxus") {
+            for f in dxs.features.iter() {
+                if let Some(platform) = Platform::autodetect_from_cargo_feature(f) {
+                    platforms.push(platform);
+                }
+            }
+        }
+
+        // Start searching through the default features
+        //
+        // [features]
+        // default = ["dioxus/web"]
+        //
+        // or
+        //
+        // [features]
+        // default = ["web"]
+        // web = ["dioxus/web"]
+        if no_default_features {
+            return platforms;
+        }
 
         let Some(default) = package.features.get("default") else {
             return platforms;
         };
+
+        tracing::debug!("Default features: {default:?}");
 
         // we only trace features 1 level deep..
         for feature in default.iter() {
@@ -3344,7 +3255,9 @@ session_cache_dir: {}"#,
         static INITIALIZED: OnceCell<Result<()>> = OnceCell::new();
 
         let success = INITIALIZED.get_or_init(|| {
-            // _ = remove_dir_all(self.exe_dir());
+            if self.platform != Platform::Server {
+                _ = remove_dir_all(self.exe_dir());
+            }
 
             self.flush_session_cache();
 
