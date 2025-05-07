@@ -1,3 +1,5 @@
+use crate::Result;
+use anyhow::Context;
 use anyhow::Context;
 use const_serialize::ConstVec;
 use dioxus_cli_opt::{process_file_to, AssetManifest};
@@ -12,30 +14,62 @@ use std::io::{Read, Seek, Write};
 use std::path::PathBuf;
 use std::process::Command;
 use target_lexicon::Triple;
+use target_lexicon::Triple;
 use tempfile::NamedTempFile;
 
-#[derive(Debug, Serialize, Deserialize)]
-pub(crate) enum LinkAction {
-    BuildAssetManifest {
-        destination: PathBuf,
-    },
-    OptimizeAssets {
-        /// The destination directory for the assets.
-        destination: PathBuf,
-    },
-    LinkAndroid {
-        linker: PathBuf,
-        extra_flags: Vec<String>,
-    },
+/// `dx` can act as a linker in a few scenarios. Note that we don't *actually* implement the linker logic,
+/// instead just proxying to a specified linker (or not linking at all!).
+///
+/// This comes in two flavors:
+/// --------------------------
+/// - `BaseLink`: We are linking dependencies and want to dynamically select the linker from the environment.
+///               This is mostly implemented for Android where the linker is selected in part by the
+///               device connected over ADB which can not be determined by .cargo/Config.toml.
+///               We implemented this because previous setups like cargo mobile required a hard-coded
+///               linker path in your project which does not work in team-based setups.
+///
+/// - `NoLink`: We are not linking at all, and instead deferring our linking to the driving process,
+///             usually being `dx` itself. In this case, we are just writing the linker args to a file
+///             and then outputting a dummy object file to satisfy the linker. This is generally used
+///             by the binary patching engine since we need to actually do "real linker logic" like
+///             traversing object files and satisfying missing symbols. That process is *much* easier
+///             to do in the driving host process when we have all the information available. Unfortunately,
+///             rustc doesn't provide a "real" way of granularly stepping through the compile process
+///             so this is basically a hack.
+///
+/// We use "BaseLink" when a linker is specified, and "NoLink" when it is not. Both generate a resulting
+/// object file.
+
+#[derive(Debug)]
+pub struct LinkAction {
+    pub linker: Option<PathBuf>,
+    pub triple: Triple,
+    pub link_args_file: PathBuf,
+    pub link_err_file: PathBuf,
+}
+
+/// The linker flavor to use. This influences the argument style that gets passed to the linker.
+/// We're imitating the rustc linker flavors here.
+///
+/// https://doc.rust-lang.org/beta/nightly-rustc/rustc_target/spec/enum.LinkerFlavor.html
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+pub enum LinkerFlavor {
+    Gnu,
+    Darwin,
+    WasmLld,
+    Unix,
+    Msvc,
 }
 
 impl LinkAction {
-    // Internal API used to pass information from the CLI build process to the linker
-    pub(crate) const ENV_VAR_NAME: &'static str = "DX_LINK_JSON";
+    const DX_LINK_ARG: &str = "DX_LINK";
+    const DX_ARGS_FILE: &str = "DX_LINK_ARGS_FILE";
+    const DX_ERR_FILE: &str = "DX_LINK_ERR_FILE";
+    const DX_LINK_TRIPLE: &str = "DX_LINK_TRIPLE";
+    const DX_LINK_CUSTOM_LINKER: &str = "DX_LINK_CUSTOM_LINKER";
 
     // Publicly documented CLI APIs for linking
     pub(crate) const ENV_VAR_NAME_ASSETS_TARGET: &'static str = "DX_LINK_ASSETS_TARGET"; // The target directory for the assets
-    pub(crate) const DX_LINKER_ENV_VAR: &'static str = "DX_LINKER"; // The linker to use
     pub(crate) const LOG_FILE_VAR_NAME: &'static str = "DX_LINK_LOG_FILE"; // The log file to use
 
     /// Should we write the input arguments to a file (aka act as a linker subprocess)?
@@ -47,138 +81,283 @@ impl LinkAction {
                 destination: PathBuf::from(target),
             });
         }
-        std::env::var(Self::ENV_VAR_NAME)
-            .ok()
-            .map(|var| serde_json::from_str(&var).expect("Failed to parse magic env var"))
+
+        if std::env::var(Self::DX_LINK_ARG).is_err() {
+            return None;
+        }
+
+        Some(Self {
+            linker: std::env::var(Self::DX_LINK_CUSTOM_LINKER)
+                .ok()
+                .map(PathBuf::from),
+            link_args_file: std::env::var(Self::DX_ARGS_FILE)
+                .expect("Linker args file not set")
+                .into(),
+            link_err_file: std::env::var(Self::DX_ERR_FILE)
+                .expect("Linker error file not set")
+                .into(),
+            triple: std::env::var(Self::DX_LINK_TRIPLE)
+                .expect("Linker triple not set")
+                .parse()
+                .expect("Failed to parse linker triple"),
+        })
     }
 
-    pub(crate) fn to_json(&self) -> String {
-        serde_json::to_string(self).unwrap()
+    pub(crate) fn write_env_vars(&self, env_vars: &mut Vec<(&str, String)>) -> Result<()> {
+        env_vars.push((Self::DX_LINK_ARG, "1".to_string()));
+        env_vars.push((
+            Self::DX_ARGS_FILE,
+            dunce::canonicalize(&self.link_args_file)?
+                .to_string_lossy()
+                .to_string(),
+        ));
+        env_vars.push((
+            Self::DX_ERR_FILE,
+            dunce::canonicalize(&self.link_err_file)?
+                .to_string_lossy()
+                .to_string(),
+        ));
+        env_vars.push((Self::DX_LINK_TRIPLE, self.triple.to_string()));
+        if let Some(linker) = &self.linker {
+            env_vars.push((
+                Self::DX_LINK_CUSTOM_LINKER,
+                dunce::canonicalize(linker)?.to_string_lossy().to_string(),
+            ));
+        }
+
+        Ok(())
+    }
+
+    pub(crate) async fn run_link(self) {
+        let link_err_file = self.link_err_file.clone();
+        let res = self.run_link_inner().await;
+
+        if let Err(err) = res {
+            // If we failed to run the linker, we need to write the error to the file
+            // so that the main process can read it.
+            _ = std::fs::create_dir_all(link_err_file.parent().unwrap());
+            _ = std::fs::write(link_err_file, format!("Linker error: {err}"));
+        }
     }
 
     /// Write the incoming linker args to a file
     ///
     /// The file will be given by the dx-magic-link-arg env var itself, so we use
     /// it both for determining if we should act as a linker and the for the file name itself.
-    ///
-    /// This will panic if it fails
-    ///
-    /// hmmmmmmmm tbh I'd rather just pass the object files back and do the parsing here, but the interface
-    /// is nicer to just bounce back the args and let the host do the parsing/canonicalization
-    pub(crate) fn run(self) -> crate::Result<()> {
-        if let Some(log_path) = linker_log_file() {
-            let log_file = std::fs::File::options()
-                .append(true)
-                .create(true)
-                .open(log_path)?;
-            tracing_subscriber::fmt()
-                .with_writer(log_file)
-                .with_max_level(tracing::Level::DEBUG)
-                .compact()
-                .with_ansi(false)
-                .init();
+    async fn run_link_inner(self) -> Result<()> {
+        init_linker_logger();
+
+        let mut args: Vec<_> = std::env::args().collect();
+        if args.is_empty() {
+            return Ok(());
         }
 
-        match self {
-            // Literally just run the android linker :)
-            LinkAction::LinkAndroid {
-                linker,
-                extra_flags,
-            } => {
-                let mut cmd = std::process::Command::new(linker);
-                cmd.args(std::env::args().skip(1));
-                cmd.args(extra_flags);
-                cmd.stderr(std::process::Stdio::piped())
-                    .stdout(std::process::Stdio::piped())
-                    .status()
-                    .context("Failed to run android linker")?;
-            }
+        handle_linker_command_file(&mut args);
 
-            // Assemble an asset manifest by walking the object files being passed to us
-            LinkAction::BuildAssetManifest { destination: dest } => {
-                let (manifest, status) = link_asset_manifest();
+        // Write the linker args to a file for the main process to read
+        // todo: we might need to encode these as escaped shell words in case newlines are passed
+        std::fs::write(self.link_args_file, args.join("\n"))?;
 
-                let contents =
-                    serde_json::to_string(&manifest).context("Failed to write manifest")?;
-                std::fs::write(dest, contents).context("Failed to write output file")?;
+        // If there's a linker specified, we use that. Otherwise, we write a dummy object file to satisfy
+        // any post-processing steps that rustc does.
+        match self.linker {
+            Some(linker) => {
+                let res = std::process::Command::new(linker)
+                    .args(args.iter().skip(1))
+                    .output()
+                    .expect("Failed to run linker");
 
-                if let Some(code) = status.code() {
-                    std::process::exit(code);
-                }
-            }
-
-            // Optimize the assets by copying them to the destination
-            LinkAction::OptimizeAssets { destination } => {
-                let (manifest, status) = link_asset_manifest();
-                if let Err(err) = create_dir_all(&destination) {
-                    tracing::error!("Failed to create destination directory: {err}");
-                }
-                for asset in manifest.assets() {
-                    let path = PathBuf::from(asset.absolute_source_path());
-                    let destination_path = destination.join(asset.bundled_path());
-                    tracing::debug!(
-                        "Processing asset {} --> {} {:#?}",
-                        path.display(),
-                        destination_path.display(),
-                        asset
+                if !res.stderr.is_empty() || !res.stdout.is_empty() {
+                    _ = std::fs::create_dir_all(self.link_err_file.parent().unwrap());
+                    _ = std::fs::write(
+                        self.link_err_file,
+                        format!(
+                            "Linker error: {}\n{}",
+                            String::from_utf8_lossy(&res.stdout),
+                            String::from_utf8_lossy(&res.stderr)
+                        ),
                     );
-                    process_file_to(asset.options(), &path, &destination_path)?;
                 }
-                if let Some(code) = status.code() {
-                    std::process::exit(code);
-                }
+            }
+            None => {
+                // Extract the out path - we're going to write a dummy object file to satisfy the linker
+                let out_file: PathBuf = match self.triple.operating_system {
+                    target_lexicon::OperatingSystem::Windows => {
+                        let out_arg = args.iter().find(|arg| arg.starts_with("/OUT")).unwrap();
+                        out_arg.trim_start_matches("/OUT:").to_string().into()
+                    }
+                    _ => {
+                        let out = args.iter().position(|arg| arg == "-o").unwrap();
+                        args[out + 1].clone().into()
+                    }
+                };
+
+                // This creates an object file that satisfies rust's use of llvm-objcopy
+                //
+                // I'd rather we *not* do this and instead generate a truly linked file (and then delete it) but
+                // this at least lets us delay linking until the host compiler is ready.
+                //
+                // This is because our host compiler is a stateful server and not a stateless linker.
+                //
+                // todo(jon): do we use Triple::host or the target triple? I think I ran into issues
+                // using the target triple, hence the use of "host" but it might not even matter?
+                let triple = Triple::host();
+                let format = match triple.binary_format {
+                    target_lexicon::BinaryFormat::Elf => object::BinaryFormat::Elf,
+                    target_lexicon::BinaryFormat::Coff => object::BinaryFormat::Coff,
+                    target_lexicon::BinaryFormat::Macho => object::BinaryFormat::MachO,
+                    target_lexicon::BinaryFormat::Wasm => object::BinaryFormat::Wasm,
+                    target_lexicon::BinaryFormat::Xcoff => object::BinaryFormat::Xcoff,
+                    target_lexicon::BinaryFormat::Unknown => todo!(),
+                    _ => todo!("Binary format not supported"),
+                };
+
+                let arch = match triple.architecture {
+                    target_lexicon::Architecture::Wasm32 => object::Architecture::Wasm32,
+                    target_lexicon::Architecture::Wasm64 => object::Architecture::Wasm64,
+                    target_lexicon::Architecture::X86_64 => object::Architecture::X86_64,
+                    target_lexicon::Architecture::Arm(_) => object::Architecture::Arm,
+                    target_lexicon::Architecture::Aarch64(_) => object::Architecture::Aarch64,
+                    target_lexicon::Architecture::LoongArch64 => object::Architecture::LoongArch64,
+                    target_lexicon::Architecture::Unknown => object::Architecture::Unknown,
+                    _ => todo!("Architecture not supported"),
+                };
+
+                let endian = match triple.endianness() {
+                    Ok(target_lexicon::Endianness::Little) => object::Endianness::Little,
+                    Ok(target_lexicon::Endianness::Big) => object::Endianness::Big,
+                    Err(_) => todo!("Endianness not supported"),
+                };
+
+                let bytes = object::write::Object::new(format, arch, endian)
+                    .write()
+                    .context("Failed to emit stub link file")?;
+
+                // Write a dummy object file to satisfy rust/linker since it'll run llvm-objcopy
+                // ... I wish it *didn't* do that but I can't tell how to disable the linker without
+                // using --emit=obj which is not exactly what we want since that will still pull in
+                // the dependencies.
+                std::fs::create_dir_all(out_file.parent().unwrap())?;
+                std::fs::write(out_file, bytes)?;
             }
         }
 
         Ok(())
     }
+
+    fn link_asset_manifest() -> (AssetManifest, std::process::ExitStatus) {
+        let args: Vec<_> = std::env::args().collect();
+        let mut references = AssetReferences::from_link_args(&args);
+
+        // Hash each file in parallel
+        references.assets.par_iter_mut().for_each(|asset| {
+            dioxus_cli_opt::add_hash_to_asset(&mut asset.bundled_asset);
+        });
+
+        // Look for --flavor wasm in the args
+        let targeting_wasm =
+            args.contains(&"-flavor".to_string()) && args.contains(&"wasm".to_string());
+        let mut linker_args = args.into_iter().skip(1).collect::<Vec<_>>();
+        let mut _tempfile_handle = None;
+
+        // If we are targeting wasm, create an object file to satisfy the imports
+        if targeting_wasm {
+            let mut data_sections = Vec::new();
+            for asset in references.assets.iter() {
+                let name = asset.bundled_asset.link_section();
+                let data = const_serialize::serialize_const(&asset.bundled_asset, ConstVec::new());
+                data_sections.push((name, data.as_ref().to_vec()));
+            }
+
+            // Create the object file
+            let object_file = create_data_object_file(
+                data_sections
+                    .iter()
+                    .map(|(name, data)| (*name, data.as_ref())),
+            );
+            let mut temp_file = NamedTempFile::new().expect("Failed to create temporary file");
+            temp_file
+                .write_all(&object_file)
+                .expect("Failed to write object file");
+            linker_args.push(temp_file.path().to_string_lossy().to_string());
+            _tempfile_handle = Some(temp_file);
+        }
+        // Otherwise overwrite the object files
+        else {
+            for asset in &references.assets {
+                // Write the asset to the object file
+                if let Err(err) = asset.write() {
+                    tracing::error!("Failed to write asset to object file: {err}");
+                }
+            }
+
+            Ok(())
+        }
+
+        // // Assemble an asset manifest by walking the object files being passed to us
+        // LinkAction::BuildAssetManifest { destination: dest } => {
+        //     let (manifest, status) = link_asset_manifest();
+
+        //     let contents =
+        //         serde_json::to_string(&manifest).context("Failed to write manifest")?;
+        //     std::fs::write(dest, contents).context("Failed to write output file")?;
+
+        //     if let Some(code) = status.code() {
+        //         std::process::exit(code);
+        //     }
+        // }
+
+        // // Optimize the assets by copying them to the destination
+        // LinkAction::OptimizeAssets { destination } => {
+        //     let (manifest, status) = link_asset_manifest();
+        //     if let Err(err) = create_dir_all(&destination) {
+        //         tracing::error!("Failed to create destination directory: {err}");
+        //     }
+        //     for asset in manifest.assets() {
+        //         let path = PathBuf::from(asset.absolute_source_path());
+        //         let destination_path = destination.join(asset.bundled_path());
+        //         tracing::debug!(
+        //             "Processing asset {} --> {} {:#?}",
+        //             path.display(),
+        //             destination_path.display(),
+        //             asset
+        //         );
+        //         process_file_to(asset.options(), &path, &destination_path)?;
+        //     }
+        //     if let Some(code) = status.code() {
+        //         std::process::exit(code);
+        //     }
+        // }
+    }
 }
 
-fn link_asset_manifest() -> (AssetManifest, std::process::ExitStatus) {
-    let args: Vec<_> = std::env::args().collect();
-    let mut references = AssetReferences::from_link_args(&args);
+pub fn handle_linker_command_file(args: &mut Vec<String>) {
+    // Handle command files, usually a windows thing.
+    if let Some(command) = args.iter().find(|arg| arg.starts_with('@')).cloned() {
+        let path = command.trim().trim_start_matches('@');
+        let file_binary = std::fs::read(path).unwrap();
 
-    // Hash each file in parallel
-    references.assets.par_iter_mut().for_each(|asset| {
-        dioxus_cli_opt::add_hash_to_asset(&mut asset.bundled_asset);
-    });
+        // This may be a utf-16le file. Let's try utf-8 first.
+        let content = String::from_utf8(file_binary.clone()).unwrap_or_else(|_| {
+            // Convert Vec<u8> to Vec<u16> to convert into a String
+            let binary_u16le: Vec<u16> = file_binary
+                .chunks_exact(2)
+                .map(|a| u16::from_le_bytes([a[0], a[1]]))
+                .collect();
 
-    // Look for --flavor wasm in the args
-    let targeting_wasm =
-        args.contains(&"-flavor".to_string()) && args.contains(&"wasm".to_string());
-    let mut linker_args = args.into_iter().skip(1).collect::<Vec<_>>();
-    let mut _tempfile_handle = None;
+            String::from_utf16_lossy(&binary_u16le)
+        });
 
-    // If we are targeting wasm, create an object file to satisfy the imports
-    if targeting_wasm {
-        let mut data_sections = Vec::new();
-        for asset in references.assets.iter() {
-            let name = asset.bundled_asset.link_section();
-            let data = const_serialize::serialize_const(&asset.bundled_asset, ConstVec::new());
-            data_sections.push((name, data.as_ref().to_vec()));
-        }
-
-        // Create the object file
-        let object_file = create_data_object_file(
-            data_sections
-                .iter()
-                .map(|(name, data)| (*name, data.as_ref())),
-        );
-        let mut temp_file = NamedTempFile::new().expect("Failed to create temporary file");
-        temp_file
-            .write_all(&object_file)
-            .expect("Failed to write object file");
-        linker_args.push(temp_file.path().to_string_lossy().to_string());
-        _tempfile_handle = Some(temp_file);
-    }
-    // Otherwise overwrite the object files
-    else {
-        for asset in &references.assets {
-            // Write the asset to the object file
-            if let Err(err) = asset.write() {
-                tracing::error!("Failed to write asset to object file: {err}");
-            }
-        }
+        // Gather linker args, and reset the args to be just the linker args
+        *args = content
+            .lines()
+            .map(|line| {
+                let line_parsed = line.trim().to_string();
+                let line_parsed = line_parsed.trim_end_matches('"').to_string();
+                let line_parsed = line_parsed.trim_start_matches('"').to_string();
+                line_parsed
+            })
+            .collect();
     }
 
     // Extract the manifest from the hashed assets
@@ -211,6 +390,22 @@ fn linker_log_file() -> Option<PathBuf> {
         .ok()
         .map(PathBuf::from)
 }
+
+fn init_linker_logger() {
+    if let Some(log_path) = linker_log_file() {
+        let log_file = std::fs::File::options()
+            .append(true)
+            .create(true)
+            .open(log_path)?;
+        tracing_subscriber::fmt()
+            .with_writer(log_file)
+            .with_max_level(tracing::Level::DEBUG)
+            .compact()
+            .with_ansi(false)
+            .init();
+    }
+}
+
 struct AssetReference {
     file: PathBuf,
     offset: usize,

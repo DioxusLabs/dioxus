@@ -1,7 +1,6 @@
 use crate::{
-    serve::{ansi_buffer::AnsiStringLine, Builder, ServeUpdate, Watcher, WebServer},
-    BuildStage, BuildUpdate, DioxusCrate, Platform, RustcDetails, ServeArgs, TraceContent,
-    TraceMsg, TraceSrc,
+    serve::{ansi_buffer::AnsiStringLine, ServeUpdate, WebServer},
+    BuildStage, BuilderUpdate, Platform, TraceContent, TraceMsg, TraceSrc,
 };
 use crossterm::{
     cursor::{Hide, Show},
@@ -26,6 +25,8 @@ use std::{
 };
 use tracing::Level;
 
+use super::AppServer;
+
 const TICK_RATE_MS: u64 = 100;
 const VIEWPORT_MAX_WIDTH: u16 = 100;
 const VIEWPORT_HEIGHT_SMALL: u16 = 5;
@@ -46,7 +47,6 @@ pub struct Output {
     // A list of all messages from build, dev, app, and more.
     more_modal_open: bool,
     interactive: bool,
-    platform: Platform,
 
     // Whether to show verbose logs or not
     // We automatically hide "debug" logs if verbose is false (only showing "info" / "warn" / "error")
@@ -64,31 +64,24 @@ pub struct Output {
     // ! needs to be wrapped in an &mut since `render stateful widget` requires &mut... but our
     // "render" method only borrows &self (for no particular reason at all...)
     throbber: RefCell<throbber_widgets_tui::ThrobberState>,
-
-    rustc_details: RustcDetails,
 }
 
-#[allow(unused)]
 #[derive(Clone, Copy)]
 struct RenderState<'a> {
-    opts: &'a ServeArgs,
-    krate: &'a DioxusCrate,
-    build_engine: &'a Builder,
+    runner: &'a AppServer,
     server: &'a WebServer,
-    watcher: &'a Watcher,
 }
 
 impl Output {
-    pub(crate) async fn start(cfg: &ServeArgs) -> crate::Result<Self> {
+    pub(crate) async fn start(interactive: bool) -> crate::Result<Self> {
         let mut output = Self {
+            interactive,
             term: Rc::new(RefCell::new(None)),
-            interactive: cfg.is_interactive_tty(),
             dx_version: format!(
                 "{}-{}",
                 env!("CARGO_PKG_VERSION"),
                 crate::dx_build_info::GIT_COMMIT_HASH_SHORT.unwrap_or("main")
             ),
-            platform: cfg.build_arguments.platform.expect("To be resolved by now"),
             events: None,
             more_modal_open: false,
             pending_logs: VecDeque::new(),
@@ -101,7 +94,6 @@ impl Output {
                 interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
                 interval
             },
-            rustc_details: RustcDetails::from_cli().await?,
         };
 
         output.startup()?;
@@ -113,15 +105,6 @@ impl Output {
     /// This is meant to be paired with "shutdown" to restore the terminal to its original state.
     fn startup(&mut self) -> io::Result<()> {
         if self.interactive {
-            // set the panic hook to fix the terminal in the event of a panic
-            // The terminal might be left in a wonky state if a panic occurs, and we don't want it to be completely broken
-            let original_hook = std::panic::take_hook();
-            std::panic::set_hook(Box::new(move |info| {
-                _ = disable_raw_mode();
-                _ = stdout().execute(Show);
-                original_hook(info);
-            }));
-
             // Check if writing the terminal is going to block infinitely.
             // If it does, we should disable interactive mode. This ensures we work with programs like `bg`
             // which suspend the process and cause us to block when writing output.
@@ -183,7 +166,12 @@ impl Output {
     /// Call the shutdown functions that might mess with the terminal settings - see the related code
     /// in "startup" for more details about what we need to unset
     pub(crate) fn shutdown(&self) -> io::Result<()> {
-        if self.interactive {
+        Self::remote_shutdown(self.interactive)?;
+        Ok(())
+    }
+
+    pub(crate) fn remote_shutdown(interactive: bool) -> io::Result<()> {
+        if interactive {
             stdout()
                 .execute(Show)?
                 .execute(DisableFocusChange)?
@@ -329,7 +317,7 @@ impl Output {
     }
 
     /// Push a message from the websocket to the logs
-    pub fn push_ws_message(&mut self, platform: Platform, message: axum::extract::ws::Message) {
+    pub fn push_ws_message(&mut self, platform: Platform, message: &axum::extract::ws::Message) {
         use dioxus_devtools_types::ClientMsg;
 
         // We can only handle text messages from the websocket...
@@ -341,12 +329,16 @@ impl Output {
         let res = serde_json::from_str::<ClientMsg>(text.as_str());
 
         // Client logs being errors aren't fatal, but we should still report them them
-        let ClientMsg::Log { level, messages } = match res {
+        let msg = match res {
             Ok(msg) => msg,
             Err(err) => {
-                tracing::error!(dx_src = ?TraceSrc::Dev, "Error parsing message from {}: {}", platform, err);
+                tracing::error!(dx_src = ?TraceSrc::Dev, "Error parsing message from {}: {} -> {:?}", platform, err, text.as_str());
                 return;
             }
+        };
+
+        let ClientMsg::Log { level, messages } = msg else {
+            return;
         };
 
         // FIXME(jon): why are we pulling only the first message here?
@@ -373,26 +365,19 @@ impl Output {
     /// approach, but then we'd need to do that *everywhere* instead of simply performing a react-like
     /// re-render when external state changes. Ratatui will diff the intermediate buffer, so we at least
     /// we won't be drawing it.
-    pub(crate) fn new_build_update(&mut self, update: &BuildUpdate) {
+    pub(crate) fn new_build_update(&mut self, update: &BuilderUpdate) {
         match update {
-            BuildUpdate::Progress {
+            BuilderUpdate::Progress {
                 stage: BuildStage::Starting { .. },
             } => self.tick_animation = true,
-            BuildUpdate::BuildReady { .. } => self.tick_animation = false,
-            BuildUpdate::BuildFailed { .. } => self.tick_animation = false,
+            BuilderUpdate::BuildReady { .. } => self.tick_animation = false,
+            BuilderUpdate::BuildFailed { .. } => self.tick_animation = false,
             _ => {}
         }
     }
 
     /// Render the current state of everything to the console screen
-    pub fn render(
-        &mut self,
-        opts: &ServeArgs,
-        config: &DioxusCrate,
-        build_engine: &Builder,
-        server: &WebServer,
-        watcher: &Watcher,
-    ) {
+    pub fn render(&mut self, runner: &AppServer, server: &WebServer) {
         if !self.interactive {
             return;
         }
@@ -409,16 +394,7 @@ impl Output {
 
         // Then, draw the frame, passing along all the state of the TUI so we can render it properly
         _ = term.draw(|frame| {
-            self.render_frame(
-                frame,
-                RenderState {
-                    opts,
-                    krate: config,
-                    build_engine,
-                    server,
-                    watcher,
-                },
-            );
+            self.render_frame(frame, RenderState { runner, server });
         });
     }
 
@@ -488,39 +464,46 @@ impl Output {
         ])
         .areas(gauge_area);
 
+        let client = &state.runner.client();
         self.render_single_gauge(
             frame,
             app_progress,
-            state.build_engine.compile_progress(),
+            client.compile_progress(),
             "App:    ",
             state,
-            state.build_engine.compile_duration(),
+            client.compile_duration(),
         );
 
-        if state.build_engine.request.build.fullstack() {
+        if state.runner.is_fullstack() {
             self.render_single_gauge(
                 frame,
                 second_progress,
-                state.build_engine.server_compile_progress(),
+                state.runner.server_compile_progress(),
                 "Server: ",
                 state,
-                state.build_engine.compile_duration(),
+                client.compile_duration(),
             );
         } else {
             self.render_single_gauge(
                 frame,
                 second_progress,
-                state.build_engine.bundle_progress(),
+                client.bundle_progress(),
                 "Bundle: ",
                 state,
-                state.build_engine.bundle_duration(),
+                client.bundle_duration(),
             );
         }
 
         let mut lines = vec!["Status:  ".white()];
-        match &state.build_engine.stage {
+        match &client.stage {
             BuildStage::Initializing => lines.push("Initializing".yellow()),
-            BuildStage::Starting { .. } => lines.push("Starting build".yellow()),
+            BuildStage::Starting { patch, .. } => {
+                if *patch {
+                    lines.push("Hot-patching...".yellow())
+                } else {
+                    lines.push("Starting build".yellow())
+                }
+            }
             BuildStage::InstallingTooling => lines.push("Installing tooling".yellow()),
             BuildStage::Compiling {
                 current,
@@ -535,7 +518,6 @@ impl Output {
             BuildStage::OptimizingWasm => lines.push("Optimizing wasm".yellow()),
             BuildStage::SplittingBundle => lines.push("Splitting bundle".yellow()),
             BuildStage::CompressingAssets => lines.push("Compressing assets".yellow()),
-            BuildStage::PrerenderingRoutes => lines.push("Prerendering static routes".yellow()),
             BuildStage::RunningBindgen => lines.push("Running wasm-bindgen".yellow()),
             BuildStage::RunningGradle => lines.push("Running gradle assemble".yellow()),
             BuildStage::Bundling => lines.push("Bundling app".yellow()),
@@ -552,15 +534,18 @@ impl Output {
             }
             BuildStage::Success => {
                 lines.push("Serving ".yellow());
-                lines.push(state.krate.executable_name().white());
+                lines.push(client.build.executable_name().white());
                 lines.push(" 🚀 ".green());
-                if let Some(comp_time) = state.build_engine.total_build_time() {
+                if let Some(comp_time) = client.total_build_time() {
                     lines.push(format!("{:.1}s", comp_time.as_secs_f32()).dark_gray());
                 }
             }
             BuildStage::Failed => lines.push("Failed".red()),
             BuildStage::Aborted => lines.push("Aborted".red()),
             BuildStage::Restarting => lines.push("Restarting".yellow()),
+            BuildStage::Linking => lines.push("Linking".yellow()),
+            BuildStage::Hotpatching => lines.push("Hot-patching...".yellow()),
+            BuildStage::ExtractingAssets => lines.push("Extracting assets".yellow()),
             _ => {}
         };
 
@@ -576,7 +561,7 @@ impl Output {
         state: RenderState,
         time_taken: Option<Duration>,
     ) {
-        let failed = state.build_engine.stage == BuildStage::Failed;
+        let failed = state.runner.client.stage == BuildStage::Failed;
         let value = if failed { 1.0 } else { value.clamp(0.0, 1.0) };
 
         let [gauge_row, _, icon] = Layout::horizontal([
@@ -647,11 +632,12 @@ impl Output {
         ])
         .areas(area);
 
+        let client = &state.runner.client();
         frame.render_widget(
             Paragraph::new(Line::from(vec![
                 "Platform: ".gray(),
-                self.platform.expected_name().yellow(),
-                if state.opts.build_arguments.fullstack() {
+                client.build.platform.expected_name().yellow(),
+                if state.runner.is_fullstack() {
                     " + fullstack".yellow()
                 } else {
                     " ".dark_gray()
@@ -671,7 +657,7 @@ impl Output {
 
         frame.render_widget_ref(
             Paragraph::new(Line::from(vec![
-                if self.platform == Platform::Web {
+                if client.build.platform == Platform::Web {
                     "Serving at: ".gray()
                 } else {
                     "ServerFns at: ".gray()
@@ -688,7 +674,7 @@ impl Output {
             Paragraph::new(Line::from({
                 let mut lines = vec!["App features: ".gray(), "[".yellow()];
 
-                let feature_list: Vec<String> = state.build_engine.request.all_target_features();
+                let feature_list: Vec<String> = state.runner.client().build.all_target_features();
                 let num_features = feature_list.len();
 
                 for (idx, feature) in feature_list.into_iter().enumerate() {
@@ -737,7 +723,7 @@ impl Output {
         frame.render_widget(
             Paragraph::new(Line::from(vec![
                 "rustc: ".gray(),
-                self.rustc_details.version.as_str().yellow(),
+                state.runner.workspace.rustc_version.as_str().yellow(),
             ])),
             meta_list[2],
         );
@@ -869,8 +855,8 @@ impl Output {
             .iter()
             .map(|line| {
                 // Very important to strip ansi codes before counting graphemes - the ansi codes count as multiple graphemes!
-                let grapheme_count = console::strip_ansi_codes(line).graphemes(true).count() as u16;
-                grapheme_count.max(1).div_ceil(term_size.width)
+                let grapheme_count = console::strip_ansi_codes(line).graphemes(true).count();
+                grapheme_count.max(1).div_ceil(term_size.width as usize) as u16
             })
             .sum::<u16>();
 
@@ -1005,7 +991,11 @@ impl Output {
 
                 // Create the ansi -> raw string line with a width of either the viewport width or the max width
                 let line_length = line.styled_graphemes(Style::default()).count();
-                lines.push(AnsiStringLine::new(line_length as _).render(&line));
+                if line_length < u16::MAX as usize {
+                    lines.push(AnsiStringLine::new(line_length as _).render(&line));
+                } else {
+                    lines.push(line.to_string())
+                }
             }
         }
 

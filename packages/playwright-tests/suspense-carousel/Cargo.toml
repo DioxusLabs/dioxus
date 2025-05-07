@@ -5,8 +5,8 @@ version.workspace = true
 publish = false
 
 [dependencies]
-async-std = "1.13.0"
 dioxus = { workspace = true, features = ["fullstack"] }
+async-std = "1.13.0"
 serde = "1.0.218"
 
 [features]

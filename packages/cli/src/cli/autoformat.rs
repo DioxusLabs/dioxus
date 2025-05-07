@@ -1,5 +1,5 @@
-use super::*;
-use crate::{metadata::collect_rs_files, DioxusCrate};
+use super::{check::collect_rs_files, *};
+use crate::Workspace;
 use anyhow::Context;
 use dioxus_autofmt::{IndentOptions, IndentType};
 use rayon::prelude::*;
@@ -38,7 +38,7 @@ pub(crate) struct Autoformat {
 }
 
 impl Autoformat {
-    pub(crate) fn autoformat(self) -> Result<StructuredOutput> {
+    pub(crate) async fn autoformat(self) -> Result<StructuredOutput> {
         let Autoformat {
             check,
             raw,
@@ -62,15 +62,16 @@ impl Autoformat {
         } else {
             // Default to formatting the project.
             let crate_dir = if let Some(package) = self.package {
-                // TODO (matt): Do we need to use the entire `DioxusCrate` here?
-                let target_args = TargetArgs {
-                    package: Some(package),
-                    ..Default::default()
-                };
-                let dx_crate =
-                    DioxusCrate::new(&target_args).context("failed to parse crate graph")?;
-
-                Cow::Owned(dx_crate.crate_dir())
+                let workspace = Workspace::current().await?;
+                let dx_crate = workspace
+                    .find_main_package(Some(package))
+                    .context("Failed to find package")?;
+                workspace.krates[dx_crate]
+                    .manifest_path
+                    .parent()
+                    .unwrap()
+                    .to_path_buf()
+                    .into()
             } else {
                 Cow::Borrowed(Path::new("."))
             };
@@ -171,7 +172,8 @@ fn autoformat_project(
     format_rust_code: bool,
     dir: impl AsRef<Path>,
 ) -> Result<()> {
-    let files_to_format = collect_rs_files(dir);
+    let mut files_to_format = vec![];
+    collect_rs_files(dir.as_ref(), &mut files_to_format);
 
     if files_to_format.is_empty() {
         return Ok(());
@@ -297,5 +299,5 @@ async fn test_auto_fmt() {
         package: None,
     };
 
-    fmt.autoformat().unwrap();
+    fmt.autoformat().await.unwrap();
 }

@@ -19,7 +19,6 @@ pub(crate) use target::*;
 pub(crate) use verbosity::*;
 
 use crate::{error::Result, Error, StructuredOutput};
-use anyhow::Context;
 use clap::{Parser, Subcommand};
 use html_parser::Dom;
 use once_cell::sync::Lazy;
@@ -29,7 +28,7 @@ use std::{
     fs::File,
     io::{Read, Write},
     path::PathBuf,
-    process::{Command, Stdio},
+    process::Command,
 };
 
 /// Build, Bundle & Ship Dioxus Apps.

@@ -42,6 +42,13 @@ impl Renderer {
         self.render_components = Some(Arc::new(callback));
     }
 
+    /// Completely clear the renderer cache and reset the dynamic node id
+    pub fn clear(&mut self) {
+        self.template_cache.clear();
+        self.dynamic_node_id = 0;
+        self.render_components = None;
+    }
+
     /// Reset the callback that the renderer uses to render components
     pub fn reset_render_components(&mut self) {
         self.render_components = None;

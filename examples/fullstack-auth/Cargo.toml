@@ -48,17 +48,17 @@ optional = true
 [features]
 default = []
 server = [
-    "dioxus-cli-config",
-    "axum",
-    "tokio",
-    "dioxus-fullstack/axum",
-    "tower-http",
-    "async-trait",
-    "sqlx",
-    "axum_session",
-    "axum_session_auth",
-    "axum_session_sqlx",
-    "http",
-    "tower",
+    "dioxus-fullstack/server",
+    "dep:dioxus-cli-config",
+    "dep:axum",
+    "dep:tokio",
+    "dep:tower-http",
+    "dep:async-trait",
+    "dep:sqlx",
+    "dep:axum_session",
+    "dep:axum_session_auth",
+    "dep:axum_session_sqlx",
+    "dep:http",
+    "dep:tower",
 ]
-web = ["dioxus/web", "dioxus-web"]
+web = ["dioxus/web", "dep:dioxus-web"]

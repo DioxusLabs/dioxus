@@ -1,8 +1,7 @@
 use crate::{CliSettings, Result};
 use anyhow::{anyhow, Context};
 use flate2::read::GzDecoder;
-use std::path::PathBuf;
-use std::{path::Path, process::Stdio};
+use std::path::{Path, PathBuf};
 use tar::Archive;
 use tempfile::TempDir;
 use tokio::{fs, process::Command};
@@ -100,7 +99,7 @@ impl WasmBindgen {
     }
 
     /// Run the bindgen command with the current settings
-    pub(crate) async fn run(&self) -> Result<()> {
+    pub(crate) async fn run(&self) -> Result<std::process::Output> {
         let binary = self.get_binary_path().await?;
 
         let mut args = Vec::new();
@@ -160,14 +159,24 @@ impl WasmBindgen {
         tracing::debug!("wasm-bindgen args: {:#?}", args);
 
         // Run bindgen
-        Command::new(binary)
-            .args(args)
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .output()
-            .await?;
+        let output = Command::new(binary).args(args).output().await?;
 
-        Ok(())
+        // Check for errors
+        if !output.stderr.is_empty() {
+            if output.status.success() {
+                tracing::debug!(
+                    "wasm-bindgen warnings: {}",
+                    String::from_utf8_lossy(&output.stderr)
+                );
+            } else {
+                tracing::error!(
+                    "wasm-bindgen error: {}",
+                    String::from_utf8_lossy(&output.stderr)
+                );
+            }
+        }
+
+        Ok(output)
     }
 
     /// Verify the installed version of wasm-bindgen-cli
@@ -288,8 +297,6 @@ impl WasmBindgen {
                 "--install-path",
             ])
             .arg(tempdir.path())
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::piped())
             .output()
             .await?;
 
@@ -322,8 +329,6 @@ impl WasmBindgen {
                 "--root",
             ])
             .arg(tempdir.path())
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::piped())
             .output()
             .await
             .context("failed to install wasm-bindgen-cli from cargo-install")?;
@@ -455,7 +460,7 @@ mod test {
     /// Test the github installer.
     #[tokio::test]
     async fn test_github_install() {
-        if std::env::var("TEST_INSTALLS").is_err() {
+        if !crate::devcfg::test_installs() {
             return;
         }
         let binary = WasmBindgen::new(VERSION);
@@ -468,7 +473,7 @@ mod test {
     /// Test the cargo installer.
     #[tokio::test]
     async fn test_cargo_install() {
-        if std::env::var("TEST_INSTALLS").is_err() {
+        if !crate::devcfg::test_installs() {
             return;
         }
         let binary = WasmBindgen::new(VERSION);
@@ -482,7 +487,7 @@ mod test {
     // Test the binstall installer
     #[tokio::test]
     async fn test_binstall_install() {
-        if std::env::var("TEST_INSTALLS").is_err() {
+        if !crate::devcfg::test_installs() {
             return;
         }
         let binary = WasmBindgen::new(VERSION);
