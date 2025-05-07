@@ -985,7 +985,11 @@ session_cache_dir: {}"#,
             | Platform::Liveview
             | Platform::Server => {
                 // We wipe away the dir completely, which is not great behavior :/
-                _ = std::fs::remove_dir_all(self.exe_dir());
+                // Don't wipe server since web will need this folder too.
+                if self.platform != Platform::Server {
+                    _ = std::fs::remove_dir_all(self.exe_dir());
+                }
+
                 std::fs::create_dir_all(self.exe_dir())?;
                 std::fs::copy(exe, self.main_exe())?;
             }

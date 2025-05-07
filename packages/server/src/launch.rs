@@ -103,7 +103,7 @@ async fn serve_server(
 
     let listener = tokio::net::TcpListener::bind(address).await.unwrap();
 
-    tracing::debug!("Listening on {address}");
+    tracing::trace!("Listening on {address}");
 
     enum Msg {
         TcpStream(std::io::Result<(TcpStream, SocketAddr)>),
@@ -202,10 +202,7 @@ async fn serve_server(
                     _ => {}
                 }
             }
-            Msg::TcpStream(Err(_)) => {}
-            Msg::TcpStream(Ok((tcp_stream, remote_addr))) => {
-                tracing::trace!("Accepted connection from {remote_addr}");
-
+            Msg::TcpStream(Ok((tcp_stream, _remote_addr))) => {
                 let this_hr_index = hr_idx;
                 let mut make_service = make_service.clone();
                 let mut shutdown_rx = shutdown_rx.clone();
@@ -248,6 +245,7 @@ async fn serve_server(
                     }
                 });
             }
+            Msg::TcpStream(Err(_)) => {}
         }
     }
 }

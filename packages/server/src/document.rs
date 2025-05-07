@@ -13,7 +13,7 @@ static RENDERER: Lazy<RwLock<Renderer>> = Lazy::new(|| RwLock::new(Renderer::new
 
 /// Reset the static renderer to a fresh state, clearing its cache.
 pub(crate) fn reset_renderer() {
-    // RENDERER.write().clear();
+    RENDERER.write().clear();
 }
 
 #[derive(Default)]
