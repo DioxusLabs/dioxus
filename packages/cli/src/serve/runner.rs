@@ -397,7 +397,7 @@ impl AppServer {
         // hot-reloads. This is a temporary measure to thoroughly test the hotpatch engine until
         // we're comfortable with both co-existing. Keeping both would lead to two potential sources
         // of errors, and we want to avoid that for now.
-        if needs_full_rebuild || self.use_hotpatch_engine {
+        if needs_full_rebuild {
             if self.use_hotpatch_engine {
                 self.client.patch_rebuild(files.to_vec());
                 if let Some(server) = self.server.as_mut() {
