@@ -11,13 +11,14 @@ keywords = ["dom", "ui", "gui", "react"]
 
 
 [features]
-default = ["accessibility", "hot-reload", "menu", "tracing", "net", "svg"]
+default = ["accessibility", "hot-reload", "menu", "tracing", "net", "svg", "system-fonts"]
 svg = ["blitz-dom/svg", "blitz-renderer-vello/svg"]
 net = ["dep:tokio", "dep:blitz-net"]
 accessibility = ["blitz-shell/accessibility", "blitz-dom/accessibility"]
 menu = ["blitz-shell/menu"]
 tracing = ["dep:tracing", "blitz-shell/tracing", "blitz-dom/tracing"]
 hot-reload = ["dep:dioxus-cli-config", "dep:dioxus-devtools"]
+system-fonts = ["blitz-dom/system_fonts"]
 autofocus = []
 
 [dependencies]
