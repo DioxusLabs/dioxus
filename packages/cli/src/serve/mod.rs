@@ -3,6 +3,7 @@ use crate::{AppBuilder, BuildId, BuildMode, BuilderUpdate, Result, ServeArgs, Tr
 mod ansi_buffer;
 mod output;
 mod proxy;
+mod proxy_ws;
 mod runner;
 mod server;
 mod update;

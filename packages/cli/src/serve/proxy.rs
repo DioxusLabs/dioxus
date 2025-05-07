@@ -4,12 +4,14 @@ use crate::{Error, Result};
 
 use anyhow::{anyhow, Context};
 use axum::body::Body;
+use axum::http::request::Parts;
 use axum::{body::Body as MyBody, response::IntoResponse};
 use axum::{
     http::StatusCode,
     routing::{any, MethodRouter},
     Router,
 };
+use hyper::header::*;
 use hyper::{Request, Response, Uri};
 use hyper_util::{
     client::legacy::{self, connect::HttpConnector},
@@ -99,7 +101,7 @@ pub(crate) fn proxy_to(
 ) -> MethodRouter {
     let client = ProxyClient::new(url.clone());
 
-    any(move |mut req: Request<MyBody>| async move {
+    any(move |parts: Parts, mut req: Request<MyBody>| async move {
         // Prevent request loops
         if req.headers().get("x-proxied-by-dioxus").is_some() {
             return Err(Response::builder()
@@ -115,26 +117,12 @@ pub(crate) fn proxy_to(
             "true".parse().expect("header value is valid"),
         );
 
-        // We have to throw a redirect for ws connections since the upgrade handler will not be called
-        // Our _dioxus handler will override this in the default case
+        let upgrade = req.headers().get(UPGRADE);
         if req.uri().scheme().map(|f| f.as_str()) == Some("ws")
             || req.uri().scheme().map(|f| f.as_str()) == Some("wss")
+            || upgrade.is_some_and(|h| h.as_bytes().eq_ignore_ascii_case(b"websocket"))
         {
-            let new_host = url.host().unwrap_or("localhost");
-            let proxied_uri = format!(
-                "{scheme}://{host}:{port}{path_and_query}",
-                scheme = req.uri().scheme_str().unwrap_or("ws"),
-                port = url.port().unwrap(),
-                host = new_host,
-                path_and_query = req
-                    .uri()
-                    .path_and_query()
-                    .map(|f| f.to_string())
-                    .unwrap_or_default()
-            );
-            tracing::info!(dx_src = ?TraceSrc::Dev, "Proxied websocket request {req:?} to {proxied_uri}");
-
-            return Ok(axum::response::Redirect::permanent(&proxied_uri).into_response());
+            return super::proxy_ws::proxy_websocket(parts, req, &url).await;
         }
 
         if nocache {
@@ -169,7 +157,7 @@ pub(crate) fn proxy_to(
     })
 }
 
-fn handle_proxy_error(e: Error) -> axum::http::Response<axum::body::Body> {
+pub(crate) fn handle_proxy_error(e: Error) -> axum::http::Response<axum::body::Body> {
     tracing::error!(dx_src = ?TraceSrc::Dev, "Proxy error: {}", e);
     axum::http::Response::builder()
         .status(axum::http::StatusCode::INTERNAL_SERVER_ERROR)
