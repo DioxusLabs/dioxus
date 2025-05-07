@@ -63,6 +63,7 @@ fn app() -> Element {
         OnMounted {}
         WebSysClosure {}
         DocumentElements {}
+        MergeStyles {}
         SelectMultiple {}
     }
 }
@@ -153,6 +154,20 @@ fn DocumentElements() -> Element {
         document::Stylesheet { id: "stylesheet-head", href: "https://fonts.googleapis.com/css?family=Roboto:300,300italic,700,700italic" }
         document::Script { id: "script-head", async: true, "console.log('hello world');" }
         document::Style { id: "style-head", "body {{ font-family: 'Roboto'; }}" }
+    }
+}
+
+// Regression test for https://github.com/DioxusLabs/dioxus/issues/3887
+#[component]
+fn MergeStyles() -> Element {
+    let px = 100;
+
+    rsx! {
+        div {
+            id: "merge-styles-div",
+            style: "width: {px}px; height: {px}px",
+            background_color: "red",
+        }
     }
 }
 
