@@ -2735,14 +2735,14 @@ session_cache_dir: {}"#,
     pub(crate) fn default_platforms(package: &krates::cm::Package) -> Vec<Platform> {
         let mut platforms = vec![];
 
-        // Attempt to discover the platform directly from the dioxus dependency
-        if let Some(dxs) = package.dependencies.iter().find(|dep| dep.name == "dioxus") {
-            for f in dxs.features.iter() {
-                if let Some(platform) = Platform::autodetect_from_cargo_feature(f) {
-                    platforms.push(platform);
-                }
-            }
-        }
+        // // Attempt to discover the platform directly from the dioxus dependency
+        // if let Some(dxs) = package.dependencies.iter().find(|dep| dep.name == "dioxus") {
+        //     for f in dxs.features.iter() {
+        //         if let Some(platform) = Platform::autodetect_from_cargo_feature(f) {
+        //             platforms.push(platform);
+        //         }
+        //     }
+        // }
 
         let Some(default) = package.features.get("default") else {
             return platforms;
