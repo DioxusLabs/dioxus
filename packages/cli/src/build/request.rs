@@ -322,13 +322,11 @@ use crate::{
 use anyhow::Context;
 use dioxus_cli_config::format_base_path_meta_element;
 use dioxus_cli_config::{APP_TITLE_ENV, ASSET_ROOT_ENV};
-use dioxus_cli_opt::AssetManifest;
 use dioxus_cli_opt::{process_file_to, AssetManifest};
 use itertools::Itertools;
 use krates::{cm::TargetKind, NodeId};
 use manganis::{AssetOptions, JsAssetOptions};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
-use serde::Deserialize;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashSet,
@@ -341,7 +339,6 @@ use std::{
     },
     time::{SystemTime, UNIX_EPOCH},
 };
-use std::{path::PathBuf, process::Stdio, time::Instant};
 use target_lexicon::{OperatingSystem, Triple};
 use tempfile::{NamedTempFile, TempDir};
 use tokio::{io::AsyncBufReadExt, process::Command};
@@ -388,6 +385,7 @@ pub(crate) struct BuildRequest {
     pub(crate) session_cache_dir: Arc<TempDir>,
     pub(crate) link_args_file: Arc<NamedTempFile>,
     pub(crate) link_err_file: Arc<NamedTempFile>,
+    pub(crate) link_asset_manifest_file: Arc<NamedTempFile>,
     pub(crate) rustc_wrapper_args_file: Arc<NamedTempFile>,
 }
 
@@ -653,6 +651,10 @@ impl BuildRequest {
             NamedTempFile::with_suffix(".txt")
                 .context("Failed to create temporary file for linker args")?,
         );
+        let link_asset_manifest_file = Arc::new(
+            NamedTempFile::with_suffix(".json")
+                .context("Failed to create temporary file for asset manifest")?,
+        );
         let rustc_wrapper_args_file = Arc::new(
             NamedTempFile::with_suffix(".json")
                 .context("Failed to create temporary file for rustc wrapper args")?,
@@ -695,6 +697,7 @@ session_cache_dir: {}"#,
             custom_linker,
             link_args_file,
             link_err_file,
+            link_asset_manifest_file,
             session_cache_dir,
             rustc_wrapper_args_file,
             extra_rustc_args,
@@ -891,7 +894,7 @@ session_cache_dir: {}"#,
             self.run_fat_link(ctx, &exe).await?;
         }
 
-        let assets = AssetManifest::load_from_file(&out_file)?;
+        let assets = AssetManifest::load_from_file(self.link_asset_manifest_file.path())?;
         let time_end = SystemTime::now();
         let mode = ctx.mode.clone();
         let platform = self.platform;
@@ -907,25 +910,6 @@ session_cache_dir: {}"#,
             mode,
             patch_cache: None,
         })
-    }
-
-    /// Traverse the target directory and collect all assets from the incremental cache
-    ///
-    /// This uses "known paths" that have stayed relatively stable during cargo's lifetime.
-    /// One day this system might break and we might need to go back to using the linker approach.
-    fn collect_assets(&self, exe: &Path, ctx: &BuildContext) -> Result<AssetManifest> {
-        tracing::debug!("Collecting assets from exe at {} ...", exe.display());
-
-        // walk every file in the incremental cache dir, reading and inserting items into the manifest.
-        let mut manifest = AssetManifest::default();
-
-        // And then add from the exe directly, just in case it's LTO compiled and has no incremental cache
-        if !self.skip_assets {
-            ctx.status_extracting_assets();
-            _ = manifest.add_from_object_path(exe);
-        }
-
-        Ok(manifest)
     }
 
     /// Take the output of rustc and make it into the main exe of the bundle
@@ -1017,8 +1001,7 @@ session_cache_dir: {}"#,
 
         // Create a set of all the paths that new files will be bundled to
         let mut keep_bundled_output_paths: HashSet<_> = assets
-            .assets
-            .values()
+            .assets()
             .map(|a| asset_dir.join(a.bundled_path()))
             .collect();
 
@@ -1057,8 +1040,8 @@ session_cache_dir: {}"#,
         let mut assets_to_transfer = vec![];
 
         // Queue the bundled assets
-        for (asset, bundled) in &assets.assets {
-            let from = asset.clone();
+        for bundled in assets.assets() {
+            let from = PathBuf::from(bundled.absolute_source_path());
             let to = asset_dir.join(bundled.bundled_path());
 
             // prefer to log using a shorter path relative to the workspace dir by trimming the workspace dir
@@ -1272,11 +1255,6 @@ session_cache_dir: {}"#,
         if let Some(idx) = args.iter().position(|arg| *arg == "-o") {
             _ = std::fs::remove_file(PathBuf::from(args[idx + 1]));
         }
-
-        // Now extract the assets from the fat binary
-        artifacts
-            .assets
-            .add_from_object_path(&self.patch_exe(artifacts.time_start))?;
 
         // Clean up the temps manually
         // todo: we might want to keep them around for debugging purposes
@@ -1988,18 +1966,19 @@ session_cache_dir: {}"#,
             env_vars.extend(self.android_env_vars()?);
         };
 
-        // If we're either zero-linking or using a custom linker, make `dx` itself do the linking.
-        if self.custom_linker.is_some()
-            || matches!(ctx.mode, BuildMode::Thin { .. } | BuildMode::Fat)
-        {
-            LinkAction {
-                triple: self.triple.clone(),
-                linker: self.custom_linker.clone(),
-                link_err_file: dunce::canonicalize(self.link_err_file.path())?,
-                link_args_file: dunce::canonicalize(self.link_args_file.path())?,
-            }
-            .write_env_vars(&mut env_vars)?;
+        // Write the enviorment variables for the dx linker intercept used for both asset collection and hot reload builds.
+        LinkAction {
+            triple: self.triple.clone(),
+            linker: self.custom_linker.clone(),
+            link_err_file: dunce::canonicalize(self.link_err_file.path())?,
+            link_args_file: dunce::canonicalize(self.link_args_file.path())?,
+            link_asset_manifest_file: (!self.skip_assets)
+                .then(|| dunce::canonicalize(self.link_asset_manifest_file.path()))
+                .transpose()?,
+            link_log_file: None,
+            link_asset_out_dir: None,
         }
+        .write_env_vars(&mut env_vars)?;
 
         // Disable reference types on wasm when using hotpatching
         // https://blog.rust-lang.org/2024/09/24/webassembly-targets-change-in-default-target-features/#disabling-on-by-default-webassembly-proposals
@@ -3624,7 +3603,7 @@ session_cache_dir: {}"#,
         }
 
         // Inject any resources from manganis into the head
-        for asset in assets.assets.values() {
+        for asset in assets.assets() {
             let asset_path = asset.bundled_path();
             match asset.options() {
                 AssetOptions::Css(css_options) => {
@@ -3654,7 +3633,11 @@ session_cache_dir: {}"#,
 
         // Manually inject the wasm file for preloading. WASM currently doesn't support preloading in the manganis asset system
         let wasm_source_path = self.wasm_bindgen_wasm_output_file();
-        if let Some(wasm_path) = assets.assets.get(&wasm_source_path) {
+        if let Some(wasm_assets) = assets.get_assets_for_source(&wasm_source_path) {
+            let wasm_path = wasm_assets
+                .iter()
+                .next()
+                .expect("There should be exactly one optimized wasm asset");
             let wasm_path = wasm_path.bundled_path();
             head_resources.push_str(&format!(
                     "<link rel=\"preload\" as=\"fetch\" type=\"application/wasm\" href=\"/{{base_path}}/assets/{wasm_path}\" crossorigin>"

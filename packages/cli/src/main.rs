@@ -35,10 +35,11 @@ pub(crate) use wasm_bindgen::*;
 pub(crate) use workspace::*;
 
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() {
     // The CLI uses dx as a rustcwrapper in some instances (like binary patching)
     if rustcwrapper::is_wrapping_rustc() {
-        return rustcwrapper::run_rustc().await;
+        rustcwrapper::run_rustc().await;
+        return;
     }
 
     // If we're being ran as a linker (likely from ourselves), we want to act as a linker instead.
@@ -79,6 +80,4 @@ async fn main() -> Result<()> {
             std::process::exit(1);
         }
     }
-
-    Ok(())
 }

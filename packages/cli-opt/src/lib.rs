@@ -65,6 +65,13 @@ impl AssetManifest {
         self.assets.get(path)
     }
 
+    /// Check if the manifest contains a specific asset
+    pub fn contains(&self, asset: &BundledAsset) -> bool {
+        self.assets
+            .get(&PathBuf::from(asset.absolute_source_path()))
+            .map_or(false, |assets| assets.contains(asset))
+    }
+
     /// Iterate over all the assets in the manifest
     pub fn assets(&self) -> impl Iterator<Item = &BundledAsset> {
         self.assets.values().flat_map(|assets| assets.iter())
