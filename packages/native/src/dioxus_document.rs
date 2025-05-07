@@ -219,7 +219,6 @@ impl Document for DioxusDocument {
                 for node_id in chain.clone().into_iter() {
                     let node = &self.inner.tree()[node_id];
                     let dioxus_id = node.element_data().and_then(DioxusDocument::dioxus_id);
-                    println!("{} {:?}", node_id, dioxus_id);
 
                     if let Some(id) = dioxus_id {
                         if kevent.state.is_pressed() {
@@ -256,9 +255,9 @@ impl Document for DioxusDocument {
                                             None | Some("text" | "password" | "email" | "search")
                                         );
                                     if triggers_input_event {
-                                        let form_data = wrap_event_data(dbg!(
-                                            self.input_event_form_data(&chain, element)
-                                        ));
+                                        let form_data = wrap_event_data(
+                                            self.input_event_form_data(&chain, element),
+                                        );
                                         let input_event = Event::new(form_data, true);
                                         self.vdom.runtime().handle_event("input", input_event, id);
                                     }
@@ -371,10 +370,7 @@ impl DioxusDocument {
             .collect()
     }
 
-    pub fn new(
-        vdom: VirtualDom,
-        net_provider: Option<Arc<dyn NetProvider<Resource>>>,
-    ) -> Self {
+    pub fn new(vdom: VirtualDom, net_provider: Option<Arc<dyn NetProvider<Resource>>>) -> Self {
         let viewport = Viewport::new(0, 0, 1.0, ColorScheme::Light);
         let mut doc = BaseDocument::new(viewport);
 

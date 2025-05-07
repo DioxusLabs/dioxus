@@ -204,7 +204,7 @@ impl MutationWriter<'_> {
 impl WriteMutations for MutationWriter<'_> {
     fn append_children(&mut self, id: ElementId, m: usize) {
         #[cfg(feature = "tracing")]
-        tracing::info!("append_children id:{} m:{}", id.0, m);
+        tracing::trace!("append_children id:{} m:{}", id.0, m);
 
         let children = self.state.stack.split_off(self.state.stack.len() - m);
         let parent = self.state.element_to_node_id(id);
@@ -218,7 +218,7 @@ impl WriteMutations for MutationWriter<'_> {
 
     fn assign_node_id(&mut self, path: &'static [u8], id: ElementId) {
         #[cfg(feature = "tracing")]
-        tracing::info!("assign_node_id path:{:?} id:{}", path, id.0);
+        tracing::trace!("assign_node_id path:{:?} id:{}", path, id.0);
 
         // If there is an existing node already mapped to that ID and
         // it has no parent, then drop it
@@ -236,7 +236,7 @@ impl WriteMutations for MutationWriter<'_> {
 
     fn create_placeholder(&mut self, id: ElementId) {
         #[cfg(feature = "tracing")]
-        tracing::info!("create_placeholder id:{}", id.0);
+        tracing::trace!("create_placeholder id:{}", id.0);
 
         let node_id = self.doc.create_node(NodeData::Comment);
         self.set_id_mapping(node_id, id);
@@ -245,7 +245,7 @@ impl WriteMutations for MutationWriter<'_> {
 
     fn create_text_node(&mut self, value: &str, id: ElementId) {
         #[cfg(feature = "tracing")]
-        tracing::info!("create_text_node id:{} text:{}", id.0, value);
+        tracing::trace!("create_text_node id:{} text:{}", id.0, value);
 
         let node_id = self.doc.create_text_node(value);
         self.set_id_mapping(node_id, id);
@@ -278,7 +278,7 @@ impl WriteMutations for MutationWriter<'_> {
 
     fn replace_node_with(&mut self, id: ElementId, m: usize) {
         #[cfg(feature = "tracing")]
-        tracing::info!("replace_node_with id:{} m:{}", id.0, m);
+        tracing::trace!("replace_node_with id:{} m:{}", id.0, m);
 
         let new_nodes = self.state.stack.split_off(self.state.stack.len() - m);
         let anchor_node_id = self.state.element_to_node_id(id);
@@ -289,7 +289,7 @@ impl WriteMutations for MutationWriter<'_> {
 
     fn replace_placeholder_with_nodes(&mut self, path: &'static [u8], m: usize) {
         #[cfg(feature = "tracing")]
-        tracing::info!("replace_placeholder_with_nodes path:{:?} m:{}", path, m);
+        tracing::trace!("replace_placeholder_with_nodes path:{:?} m:{}", path, m);
 
         let new_nodes = self.state.stack.split_off(self.state.stack.len() - m);
         let anchor_node_id = self.load_child(path);
@@ -300,7 +300,7 @@ impl WriteMutations for MutationWriter<'_> {
 
     fn insert_nodes_after(&mut self, id: ElementId, m: usize) {
         #[cfg(feature = "tracing")]
-        tracing::info!("insert_nodes_after id:{} m:{}", id.0, m);
+        tracing::trace!("insert_nodes_after id:{} m:{}", id.0, m);
 
         let new_nodes = self.state.stack.split_off(self.state.stack.len() - m);
         let anchor_node_id = self.state.element_to_node_id(id);
@@ -323,7 +323,7 @@ impl WriteMutations for MutationWriter<'_> {
 
     fn insert_nodes_before(&mut self, id: ElementId, m: usize) {
         #[cfg(feature = "tracing")]
-        tracing::info!("insert_nodes_before id:{} m:{}", id.0, m);
+        tracing::trace!("insert_nodes_before id:{} m:{}", id.0, m);
 
         let new_nodes = self.state.stack.split_off(self.state.stack.len() - m);
         let anchor_node_id = self.state.element_to_node_id(id);
@@ -342,7 +342,7 @@ impl WriteMutations for MutationWriter<'_> {
         let node_id = self.state.element_to_node_id(id);
 
         #[cfg(feature = "tracing")]
-        tracing::info!(
+        tracing::trace!(
             "set_attribute node_id:{} ns: {:?} name:{}, value:{:?}",
             node_id,
             ns,
@@ -449,7 +449,7 @@ impl WriteMutations for MutationWriter<'_> {
 
     fn set_node_text(&mut self, value: &str, id: ElementId) {
         #[cfg(feature = "tracing")]
-        tracing::info!("set_node_text id:{} value:{}", id.0, value);
+        tracing::trace!("set_node_text id:{} value:{}", id.0, value);
 
         let node_id = self.state.element_to_node_id(id);
         let node = self.doc.get_node_mut(node_id).unwrap();
@@ -500,7 +500,7 @@ impl WriteMutations for MutationWriter<'_> {
 
     fn remove_node(&mut self, id: ElementId) {
         #[cfg(feature = "tracing")]
-        tracing::info!("remove_node id:{}", id.0);
+        tracing::trace!("remove_node id:{}", id.0);
 
         let node_id = self.state.element_to_node_id(id);
         self.doc.remove_node(node_id);
@@ -508,7 +508,7 @@ impl WriteMutations for MutationWriter<'_> {
 
     fn push_root(&mut self, id: ElementId) {
         #[cfg(feature = "tracing")]
-        tracing::info!("push_root id:{}", id.0,);
+        tracing::trace!("push_root id:{}", id.0,);
 
         let node_id = self.state.element_to_node_id(id);
         self.state.stack.push(node_id);
