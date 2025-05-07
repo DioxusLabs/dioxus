@@ -2,23 +2,9 @@
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![deny(missing_docs)]
 
-//! Dioxus WebSys
-//!
-//! ## Overview
-//! ------------
-//! This crate implements a renderer of the Dioxus Virtual DOM for the web browser using WebSys. This web render for
-//! Dioxus is one of the more advanced renderers, supporting:
-//! - idle work
-//! - animations
-//! - jank-free rendering
-//! - controlled components
-//! - hydration
-//! - and more.
-//!
-//! The actual implementation is farily thin, with the heavy lifting happening inside the Dioxus Core crate.
-//!
-//! To purview the examples, check of the root Dioxus crate - the examples in this crate are mostly meant to provide
-//! validation of websys-specific features and not the general use of Dioxus.
+//! # Dioxus Web
+
+use std::time::Duration;
 
 pub use crate::cfg::Config;
 use crate::hydration::SuspenseMessage;
@@ -69,7 +55,7 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
     let runtime = virtual_dom.runtime();
 
     #[cfg(all(feature = "devtools", debug_assertions))]
-    let mut hotreload_rx = devtools::init(runtime.clone());
+    let mut hotreload_rx = devtools::init();
 
     let should_hydrate = web_config.hydrate;
 
@@ -79,6 +65,26 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
         None;
 
     if should_hydrate {
+        // If we are hydrating, then the hotreload message might actually have a patch for us to apply.
+        // Let's wait for a moment to see if we get a hotreload message before we start hydrating.
+        // That way, the hydration will use the same functions that the server used to serialize the data.
+        #[cfg(all(feature = "devtools", debug_assertions))]
+        loop {
+            let mut timeout = gloo_timers::future::TimeoutFuture::new(100).fuse();
+            futures_util::select! {
+                msg = hotreload_rx.next() => {
+                    if let Some(msg) = msg {
+                        if msg.for_build_id == Some(dioxus_cli_config::build_id()) {
+                            dioxus_devtools::apply_changes(&virtual_dom, &msg);
+                        }
+                    }
+                }
+                _ = &mut timeout => {
+                    break;
+                }
+            }
+        }
+
         #[cfg(feature = "hydrate")]
         {
             use dioxus_fullstack_protocol::HydrationContext;
@@ -204,6 +210,16 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
 
             if !hr_msg.assets.is_empty() {
                 crate::devtools::invalidate_browser_asset_cache();
+            }
+
+            if hr_msg.for_build_id == Some(dioxus_cli_config::build_id()) {
+                devtools::show_toast(
+                    "Hot-patch success!",
+                    &format!("App successfully patched in {} ms", hr_msg.ms_elapsed),
+                    devtools::ToastLevel::Success,
+                    Duration::from_millis(2000),
+                    false,
+                );
             }
         }
 

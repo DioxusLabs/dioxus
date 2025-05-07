@@ -4,13 +4,9 @@
 //! We also set up a little recursive timer that will attempt to reconnect if the connection is lost.
 
 use std::fmt::Display;
-use std::rc::Rc;
 use std::time::Duration;
 
-use dioxus_core::prelude::RuntimeGuard;
-use dioxus_core::{Runtime, ScopeId};
 use dioxus_devtools::{DevserverMsg, HotReloadMsg};
-use dioxus_document::eval;
 use futures_channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
 use js_sys::JsString;
 use wasm_bindgen::JsCast;
@@ -25,40 +21,36 @@ const POLL_INTERVAL_SCALE_FACTOR: i32 = 2;
 const TOAST_TIMEOUT: Duration = Duration::from_secs(5);
 const TOAST_TIMEOUT_LONG: Duration = Duration::from_secs(3600); // Duration::MAX is too long for JS.
 
-pub(crate) fn init(runtime: Rc<Runtime>) -> UnboundedReceiver<HotReloadMsg> {
+pub(crate) fn init() -> UnboundedReceiver<HotReloadMsg> {
     // Create the tx/rx pair that we'll use for the top-level future in the dioxus loop
     let (tx, rx) = unbounded();
 
     // Wire up the websocket to the devserver
-    make_ws(runtime, tx.clone(), POLL_INTERVAL_MIN, false);
+    make_ws(tx.clone(), POLL_INTERVAL_MIN, false);
+
     playground(tx);
 
     rx
 }
 
-fn make_ws(
-    runtime: Rc<Runtime>,
-    tx: UnboundedSender<HotReloadMsg>,
-    poll_interval: i32,
-    reload: bool,
-) {
+fn make_ws(tx: UnboundedSender<HotReloadMsg>, poll_interval: i32, reload: bool) {
     // Get the location of the devserver, using the current location plus the /_dioxus path
     // The idea here being that the devserver is always located on the /_dioxus behind a proxy
     let location = web_sys::window().unwrap().location();
     let url = format!(
-        "{protocol}//{host}/_dioxus",
+        "{protocol}//{host}/_dioxus?build_id={build_id}",
         protocol = match location.protocol().unwrap() {
             prot if prot == "https:" => "wss:",
             _ => "ws:",
         },
         host = location.host().unwrap(),
+        build_id = dioxus_cli_config::build_id(),
     );
 
     let ws = WebSocket::new(&url).unwrap();
 
     // Set the onmessage handler to bounce messages off to the main dioxus loop
     let tx_ = tx.clone();
-    let runtime_ = runtime.clone();
     ws.set_onmessage(Some(
         Closure::<dyn FnMut(MessageEvent)>::new(move |e: MessageEvent| {
             let Ok(text) = e.data().dyn_into::<JsString>() else {
@@ -67,9 +59,9 @@ fn make_ws(
 
             // The devserver messages have some &'static strs in them, so we need to leak the source string
             let string: String = text.into();
-            // let leaked: &'static str = Box::leak(Box::new(string));
+            let string = Box::leak(string.into_boxed_str());
 
-            match serde_json::from_str::<DevserverMsg>(&string) {
+            match serde_json::from_str::<DevserverMsg>(string) {
                 Ok(DevserverMsg::HotReload(hr)) => _ = tx_.unbounded_send(hr),
 
                 // todo: we want to throw a screen here that shows the user that the devserver has disconnected
@@ -82,16 +74,24 @@ fn make_ws(
 
                 // The devserver is telling us that it started a full rebuild. This does not mean that it is ready.
                 Ok(DevserverMsg::FullReloadStart) => show_toast(
-                    runtime_.clone(),
                     "Your app is being rebuilt.",
                     "A non-hot-reloadable change occurred and we must rebuild.",
                     ToastLevel::Info,
                     TOAST_TIMEOUT_LONG,
                     false,
                 ),
+
+                // The devserver is telling us that it started a full rebuild. This does not mean that it is ready.
+                Ok(DevserverMsg::HotPatchStart) => show_toast(
+                    "Hot-patching app...",
+                    "Hot-patching modified Rust code.",
+                    ToastLevel::Info,
+                    TOAST_TIMEOUT_LONG,
+                    false,
+                ),
+
                 // The devserver is telling us that the full rebuild failed.
                 Ok(DevserverMsg::FullReloadFailed) => show_toast(
-                    runtime_.clone(),
                     "Oops! The build failed.",
                     "We tried to rebuild your app, but something went wrong.",
                     ToastLevel::Error,
@@ -102,7 +102,6 @@ fn make_ws(
                 // The devserver is telling us to reload the whole page
                 Ok(DevserverMsg::FullReloadCommand) => {
                     show_toast(
-                        runtime_.clone(),
                         "Successfully rebuilt.",
                         "Your app was rebuilt successfully and without error.",
                         ToastLevel::Success,
@@ -115,6 +114,12 @@ fn make_ws(
                 Err(e) => web_sys::console::error_1(
                     &format!("Error parsing devserver message: {}", e).into(),
                 ),
+
+                e => {
+                    web_sys::console::error_1(
+                        &format!("Error parsing devserver message: {:?}", e).into(),
+                    );
+                }
             }
         })
         .into_js_value()
@@ -134,13 +139,11 @@ fn make_ws(
 
             // set timeout to reload the page in timeout_ms
             let tx = tx.clone();
-            let runtime = runtime.clone();
             web_sys::window()
                 .unwrap()
                 .set_timeout_with_callback_and_timeout_and_arguments_0(
                     Closure::<dyn FnMut()>::new(move || {
                         make_ws(
-                            runtime.clone(),
                             tx.clone(),
                             POLL_INTERVAL_MAX.min(poll_interval * POLL_INTERVAL_SCALE_FACTOR),
                             true,
@@ -162,7 +165,7 @@ fn make_ws(
     ws.set_onopen(Some(
         Closure::<dyn FnMut(MessageEvent)>::new(move |_evt| {
             if reload {
-                window().unwrap().location().reload().unwrap()
+                window().unwrap().location().reload().unwrap();
             }
         })
         .into_js_value()
@@ -183,7 +186,7 @@ fn make_ws(
 }
 
 /// Represents what color the toast should have.
-enum ToastLevel {
+pub(crate) enum ToastLevel {
     /// Green
     Success,
     /// Blue
@@ -203,8 +206,7 @@ impl Display for ToastLevel {
 }
 
 /// Displays a toast to the developer.
-fn show_toast(
-    runtime: Rc<Runtime>,
+pub(crate) fn show_toast(
     header_text: &str,
     message: &str,
     level: ToastLevel,
@@ -218,17 +220,13 @@ fn show_toast(
         false => "showDXToast",
     };
 
-    // Create the guard before running eval which uses the global runtime context
-    let _guard = RuntimeGuard::new(runtime);
-    ScopeId::ROOT.in_runtime(|| {
-        eval(&format!(
-            r#"
+    _ = js_sys::eval(&format!(
+        r#"
             if (typeof {js_fn_name} !== "undefined") {{
-                {js_fn_name}("{header_text}", "{message}", "{level}", {as_ms});
+                window.{js_fn_name}("{header_text}", "{message}", "{level}", {as_ms});
             }}
             "#,
-        ));
-    });
+    ));
 }
 
 /// Force a hotreload of the assets on this page by walking them and changing their URLs to include

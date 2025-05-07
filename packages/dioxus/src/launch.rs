@@ -96,11 +96,7 @@ impl LaunchBuilder {
         )
     )]
     pub fn new() -> LaunchBuilder {
-        let platform = if cfg!(feature = "liveview") {
-            KnownPlatform::Liveview
-        } else if cfg!(feature = "server") {
-            KnownPlatform::Server
-        } else if cfg!(feature = "native") {
+        let platform = if cfg!(feature = "native") {
             KnownPlatform::Native
         } else if cfg!(feature = "desktop") {
             KnownPlatform::Desktop
@@ -108,6 +104,10 @@ impl LaunchBuilder {
             KnownPlatform::Mobile
         } else if cfg!(feature = "web") {
             KnownPlatform::Web
+        } else if cfg!(feature = "server") {
+            KnownPlatform::Server
+        } else if cfg!(feature = "liveview") {
+            KnownPlatform::Liveview
         } else {
             panic!("No platform feature enabled. Please enable one of the following features: liveview, desktop, mobile, web, tui, fullstack to use the launch API.")
         };
@@ -284,7 +284,6 @@ impl LaunchBuilder {
     }
 
     /// Launch your application.
-    ///
     #[allow(clippy::diverging_sub_expression)]
     pub fn launch(self, app: fn() -> Element) {
         let Self {
@@ -343,7 +342,7 @@ impl LaunchBuilder {
 
         #[cfg(feature = "server")]
         if matches!(platform, KnownPlatform::Server) {
-            return dioxus_fullstack::server::launch::launch(app, contexts, configs);
+            return dioxus_server::launch(app, contexts, configs);
         }
 
         #[cfg(feature = "web")]
@@ -364,8 +363,8 @@ impl LaunchBuilder {
 
                 #[cfg(feature = "document")]
                 {
-                    use dioxus_fullstack::document;
-                    let document = std::rc::Rc::new(document::web::FullstackWebDocument)
+                    use dioxus_fullstack::FullstackWebDocument;
+                    let document = std::rc::Rc::new(FullstackWebDocument)
                         as std::rc::Rc<dyn crate::prelude::document::Document>;
                     vdom.provide_root_context(document);
                 }

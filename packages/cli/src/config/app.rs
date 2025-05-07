@@ -3,7 +3,6 @@ use std::path::PathBuf;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct ApplicationConfig {
-    #[serde(default)]
     pub(crate) asset_dir: Option<PathBuf>,
 
     #[serde(default)]

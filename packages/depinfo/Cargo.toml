@@ -1,0 +1,14 @@
+[package]
+name = "depinfo"
+version.workspace = true
+edition = "2021"
+authors = ["Jonathan Kelley"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/DioxusLabs/dioxus/"
+homepage = "https://dioxuslabs.com"
+description = "Depinfo parser for Rust"
+keywords = ["rustc", "cargo", "dep-info" ]
+
+[dependencies]
+thiserror = { workspace = true }
+

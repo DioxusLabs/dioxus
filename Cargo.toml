@@ -70,6 +70,8 @@ members = [
     "packages/config-macros",
     "packages/native",
     "packages/asset-resolver",
+    "packages/depinfo",
+    "packages/server",
 
     # Playwright tests
     "packages/playwright-tests/liveview",
@@ -89,6 +91,10 @@ members = [
     "packages/wasm-split/wasm-split-cli",
     "packages/wasm-split/wasm-used",
 
+    # subsecond
+    "packages/subsecond/subsecond",
+    "packages/subsecond/subsecond-types",
+
     # Full project examples
     "example-projects/fullstack-hackernews",
     "example-projects/ecommerce-site",
@@ -107,6 +113,7 @@ members = [
     # Playwright tests
     "packages/playwright-tests/liveview",
     "packages/playwright-tests/web",
+    "packages/playwright-tests/barebones-template",
     "packages/playwright-tests/fullstack",
     "packages/playwright-tests/fullstack-mounted",
     "packages/playwright-tests/fullstack-routing",
@@ -114,7 +121,7 @@ members = [
     "packages/playwright-tests/nested-suspense",
     "packages/playwright-tests/cli-optimization",
     "packages/playwright-tests/wasm-split-harness",
-    "packages/playwright-tests/default-features-disabled"
+    "packages/playwright-tests/default-features-disabled",
 ]
 
 [workspace.package]
@@ -152,6 +159,7 @@ dioxus-cli-config = { path = "packages/cli-config", version = "0.6.2" }
 dioxus-cli-opt = { path = "packages/cli-opt", version = "0.6.2" }
 dioxus-devtools = { path = "packages/devtools", version = "0.6.2" }
 dioxus-devtools-types = { path = "packages/devtools-types", version = "0.6.2" }
+dioxus-server = { path = "packages/server", version = "0.6.2" }
 dioxus-fullstack = { path = "packages/fullstack", version = "0.6.2" }
 dioxus-fullstack-hooks = { path = "packages/fullstack-hooks", version = "0.6.3" }
 dioxus-fullstack-protocol = { path = "packages/fullstack-protocol", version = "0.6.3" }
@@ -166,16 +174,22 @@ const-serialize-macro = { path = "packages/const-serialize-macro", version = "0.
 generational-box = { path = "packages/generational-box", version = "0.6.2" }
 lazy-js-bundle = { path = "packages/lazy-js-bundle", version = "0.6.2" }
 
+# subsecond
+subsecond-types = { path = "packages/subsecond/subsecond-types", version = "0.6.3" }
+subsecond = { path = "packages/subsecond/subsecond", version = "0.6.3" }
 
+# manganis
 manganis = { path = "packages/manganis/manganis", version = "0.6.2" }
 manganis-core = { path = "packages/manganis/manganis-core", version = "0.6.2" }
 manganis-macro = { path = "packages/manganis/manganis-macro", version = "0.6.2" }
 
+# wasm-split
 wasm-split = { path = "packages/wasm-split/wasm-split", version = "0.1.0" }
 wasm-split-macro = { path = "packages/wasm-split/wasm-split-macro", version = "0.1.0" }
 wasm-split-cli = { path = "packages/wasm-split/wasm-split-cli", version = "0.1.0" }
 wasm-split-harness = { path = "packages/playwright-tests/wasm-split-harness", version = "0.1.0" }
 
+depinfo = { path = "packages/depinfo", version = "0.6.3" }
 warnings = { version = "0.2.1" }
 
 # a fork of pretty please for tests - let's get off of this if we can!
@@ -209,8 +223,10 @@ tauri-utils = { version = "2.2.0" }
 tauri-bundler = { version = "2.2.4" }
 lru = "0.13.0"
 async-trait = "0.1.87"
-axum = "0.8.1"
+axum = { version = "0.8.1", default-features = false }
 axum-server = { version = "0.7.1", default-features = false }
+server_fn = { version = "0.8.2", default-features = false }
+server_fn_macro = { version = "0.8.2" }
 tower = "0.5.2"
 http = "1.2.0"
 notify = { version = "8.0.0" }
@@ -268,11 +284,14 @@ sha2 = "0.10.8"
 walrus = { version = "0.23.3", features = ["parallel"] }
 id-arena = "2.2.1"
 async-compression = { version = "0.4.20", features = ["futures-io", "gzip", "brotli"] }
-getrandom = { version = "0.3.1" }
+getrandom = { version = "0.2.0" }
 async-once-cell = { version = "0.5.4" }
 rayon = "1.10.0"
 wasmparser = "0.226.0"
 itertools = "0.14.0"
+object = { version = "0.36.0" }
+bincode = "1.3.3"
+inventory = { version = "0.3.5" }
 macro-string = "0.1.4"
 walkdir = "2.5.0"
 url = "2.3.1"
@@ -280,10 +299,15 @@ separator = "0.4.1"
 pretty_assertions = "1.4.0"
 serde_repr = "0.1"
 hyper-util = "0.1.10"
+krates = { version = "0.19.0" }
+libloading = "0.8.6"
+libc = "0.2.170"
+memmap2 = "0.9.5"
+memfd = "0.6.4"
 
 # desktop
-wry = { version = "0.50.3", default-features = false }
-tao = { version = "0.32.6", features = ["rwh_05"] }
+wry = { version = "0.45.0", default-features = false }
+tao = { version = "0.33.0", features = ["rwh_05"] }
 webbrowser = "1.0.3"
 infer = "0.19.0"
 dunce = "1.0.5"
@@ -301,13 +325,20 @@ open = "5.1.2"
 # web
 gloo-dialogs = "0.2.0"
 
+# tui stuff
+ansi-to-tui = "7.0"
+ansi-to-html = "0.2.1"
+path-absolutize = "3.1"
+crossterm = { version = "0.29.0" }
+ratatui = { version = "0.29.0" }
+shell-words = "1.1.0"
+color-eyre = "0.6.3"
+
 # native
 keyboard-types = { version = "0.7", default-features = false }
 winit = { version = "0.30.2", features = ["rwh_06"] }
 
-# disable debug symbols in dev builds - shouldn't matter for downstream crates but makes our binaries (examples, cli, etc) build faster
 [profile.dev]
-debug = 0
 
 # our release profile should be fast to compile and fast to run
 # when we ship our CI builds, we turn on LTO which improves perf leftover by turning on incremental
@@ -315,7 +346,7 @@ debug = 0
 incremental = true
 
 # crank up the opt level for wasm-split-cli in dev mode
-# important here that lto is on and the debug symbols are presenta (since they're used by wasm-opt)a
+# important here that lto is on and the debug symbols are present (since they're used by wasm-opt)a
 [profile.wasm-split-release]
 inherits = "release"
 opt-level = 'z'
@@ -386,13 +417,12 @@ separator = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 rand = { workspace = true, features = ["small_rng"] }
-form_urlencoded = "1.2.1"
-async-std = "1.13.0"
+form_urlencoded = "1.2.0"
+async-std = "1.12.0"
 web-time = "1.1.0"
-axum = { workspace = true, default-features = true }
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
-getrandom = { workspace = true }
+getrandom = { workspace = true, features = ["js"] }
 tokio = { version = "1.43", default-features = false, features = ["sync", "macros", "io-util", "rt", "time"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
