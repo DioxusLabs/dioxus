@@ -1,4 +1,4 @@
-use blitz_renderer_vello::BlitzVelloRenderer;
+use anyrender_vello::VelloWindowRenderer;
 use blitz_shell::BlitzApplication;
 use dioxus_core::{ScopeId, VirtualDom};
 use dioxus_history::{History, MemoryHistory};
@@ -16,7 +16,7 @@ use crate::{
 
 pub struct DioxusNativeApplication {
     pending_vdom: Option<VirtualDom>,
-    inner: BlitzApplication<DioxusDocument, BlitzVelloRenderer>,
+    inner: BlitzApplication<VelloWindowRenderer>,
     proxy: EventLoopProxy<BlitzShellEvent>,
 }
 
@@ -29,7 +29,7 @@ impl DioxusNativeApplication {
         }
     }
 
-    pub fn add_window(&mut self, window_config: WindowConfig<DioxusDocument, BlitzVelloRenderer>) {
+    pub fn add_window(&mut self, window_config: WindowConfig<VelloWindowRenderer>) {
         self.inner.add_window(window_config);
     }
 
@@ -48,7 +48,8 @@ impl DioxusNativeApplication {
             DioxusNativeEvent::DevserverEvent(event) => match event {
                 dioxus_devtools::DevserverMsg::HotReload(hotreload_message) => {
                     for window in self.inner.windows.values_mut() {
-                        dioxus_devtools::apply_changes(&window.doc.vdom, hotreload_message);
+                        let doc = window.downcast_doc_mut::<DioxusDocument>();
+                        dioxus_devtools::apply_changes(&doc.vdom, hotreload_message);
                         window.poll();
                     }
                 }
@@ -66,7 +67,8 @@ impl DioxusNativeApplication {
                 window,
             } => {
                 if let Some(window) = self.inner.windows.get_mut(window) {
-                    window.doc.create_head_element(name, attributes, contents);
+                    let doc = window.downcast_doc_mut::<DioxusDocument>();
+                    doc.create_head_element(name, attributes, contents);
                     window.poll();
                 }
             }
@@ -103,7 +105,7 @@ impl ApplicationHandler<BlitzShellEvent> for DioxusNativeApplication {
 
         // Create document + window from the baked virtualdom
         let doc = DioxusDocument::new(vdom, net_provider);
-        let window = WindowConfig::new(doc);
+        let window = WindowConfig::new(Box::new(doc) as _);
 
         // little hack since View::init is not public - fix this once alpha-2 is out
         let old_windows = self.inner.windows.keys().copied().collect::<HashSet<_>>();
@@ -114,7 +116,8 @@ impl ApplicationHandler<BlitzShellEvent> for DioxusNativeApplication {
         // todo(jon): we should actually mess with the pending windows instead of passing along the contexts
         for window_id in new_windows.difference(&old_windows) {
             let window = self.inner.windows.get_mut(window_id).unwrap();
-            window.doc.vdom.in_runtime(|| {
+            let doc = window.downcast_doc_mut::<DioxusDocument>();
+            doc.vdom.in_runtime(|| {
                 let shared: Rc<dyn dioxus_document::Document> =
                     Rc::new(DioxusNativeDocument::new(self.proxy.clone(), *window_id));
                 ScopeId::ROOT.provide_context(shared);
@@ -122,14 +125,12 @@ impl ApplicationHandler<BlitzShellEvent> for DioxusNativeApplication {
 
             // Add history
             let history_provider: Rc<dyn History> = Rc::new(MemoryHistory::default());
-            window
-                .doc
-                .vdom
+            doc.vdom
                 .in_runtime(|| ScopeId::ROOT.provide_context(history_provider));
 
             // Queue rebuild
-            let mut writer = MutationWriter::new(&mut window.doc.inner, &mut window.doc.vdom_state);
-            window.doc.vdom.rebuild(&mut writer);
+            let mut writer = MutationWriter::new(&mut doc.inner, &mut doc.vdom_state);
+            doc.vdom.rebuild(&mut writer);
             drop(writer);
 
             // And then request redraw

@@ -1,15 +1,21 @@
 //! Integration between Dioxus and Blitz
 
-use std::{any::Any, collections::HashMap, rc::Rc, sync::Arc};
+use std::{
+    any::Any,
+    collections::HashMap,
+    ops::{Deref, DerefMut},
+    rc::Rc,
+    sync::Arc,
+};
 
 use blitz_dom::{
     local_name, namespace_url,
     net::Resource,
     node::{Attribute, NodeSpecificData},
-    ns, Atom, BaseDocument, ElementNodeData, Node, NodeData, QualName, DEFAULT_CSS,
+    ns, Atom, BaseDocument, Document, ElementNodeData, Node, NodeData, QualName, DEFAULT_CSS,
 };
 
-use blitz_traits::{net::NetProvider, ColorScheme, Document, DomEvent, DomEventData, Viewport};
+use blitz_traits::{net::NetProvider, ColorScheme, DomEvent, DomEventData, Viewport};
 use dioxus_core::{ElementId, Event, VirtualDom};
 use dioxus_html::{set_event_converter, FormValue, PlatformEventData};
 use futures_util::{pin_mut, FutureExt};
@@ -42,14 +48,14 @@ pub struct DioxusDocument {
 }
 
 // Implement DocumentLike and required traits for DioxusDocument
-
-impl AsRef<BaseDocument> for DioxusDocument {
-    fn as_ref(&self) -> &BaseDocument {
+impl Deref for DioxusDocument {
+    type Target = BaseDocument;
+    fn deref(&self) -> &BaseDocument {
         &self.inner
     }
 }
-impl AsMut<BaseDocument> for DioxusDocument {
-    fn as_mut(&mut self) -> &mut BaseDocument {
+impl DerefMut for DioxusDocument {
+    fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.inner
     }
 }
@@ -59,8 +65,6 @@ impl From<DioxusDocument> for BaseDocument {
     }
 }
 impl Document for DioxusDocument {
-    type Doc = BaseDocument;
-
     fn poll(&mut self, mut cx: std::task::Context) -> bool {
         {
             let fut = self.vdom.wait_for_work();
@@ -80,6 +84,10 @@ impl Document for DioxusDocument {
 
     fn id(&self) -> usize {
         self.inner.id()
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 
     fn handle_event(&mut self, event: &mut DomEvent) {
