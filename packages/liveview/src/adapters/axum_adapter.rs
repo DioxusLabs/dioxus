@@ -25,12 +25,12 @@ fn transform_rx(message: Result<Message, axum::Error>) -> Result<Vec<u8>, LiveVi
     message
         .map_err(|_| LiveViewError::SendingFailed)?
         .into_text()
-        .map(|s| s.into_bytes())
+        .map(|s| s.as_str().into())
         .map_err(|_| LiveViewError::SendingFailed)
 }
 
 async fn transform_tx(message: Vec<u8>) -> Result<Message, axum::Error> {
-    Ok(Message::Binary(message))
+    Ok(Message::Binary(message.into()))
 }
 
 impl LiveviewRouter for Router {
@@ -65,9 +65,9 @@ impl LiveviewRouter for Router {
         // Add an extra catch all segment to the route
         let mut route = route.trim_matches('/').to_string();
         if route.is_empty() {
-            route = "/*route".to_string();
+            route = "/{*route}".to_string();
         } else {
-            route = format!("/{route}/*route");
+            route = format!("/{route}/{{*route}}");
         }
 
         self.route(

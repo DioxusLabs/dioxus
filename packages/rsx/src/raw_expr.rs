@@ -1,4 +1,4 @@
-use proc_macro2::TokenStream as TokenStream2;
+use proc_macro2::{Delimiter, TokenStream as TokenStream2, TokenTree};
 use quote::ToTokens;
 use std::hash;
 use syn::{parse::Parse, spanned::Spanned, token::Brace, Expr};
@@ -15,8 +15,33 @@ pub struct PartialExpr {
 
 impl Parse for PartialExpr {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        // Parse as an expression if there is no brace
-        if !input.peek(syn::token::Brace) {
+        // Input is a braced expression if it's a braced group
+        // followed by either of the following:
+        // - the end of the stream
+        // - a comma
+        // - another braced group
+        // - an identifier
+        // - a string literal
+        let mut is_braced = false;
+        if let Some((TokenTree::Group(group), next)) = input.fork().cursor().token_tree() {
+            let next_char_is_a_comma = next.punct().is_some_and(|(tt, _)| tt.as_char() == ',');
+            let next_is_a_braced_exp = next.group(Delimiter::Brace).is_some();
+            let next_is_an_ident = next.ident().is_some();
+            let next_is_a_string_literal = next.literal().is_some();
+
+            if group.delimiter() == Delimiter::Brace
+                && (next.eof()
+                    || next_char_is_a_comma
+                    || next_is_a_braced_exp
+                    || next_is_an_ident
+                    || next_is_a_string_literal)
+            {
+                is_braced = true
+            }
+        };
+
+        // Parse as an expression if it's not braced
+        if !is_braced {
             let expr = input.parse::<syn::Expr>()?;
             return Ok(Self {
                 brace: None,

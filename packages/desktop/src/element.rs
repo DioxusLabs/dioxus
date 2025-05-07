@@ -104,6 +104,36 @@ impl RenderedElementBacking for DesktopElement {
         })
     }
 
+    fn scroll(
+        &self,
+        coordinates: PixelsVector2D,
+        behavior: dioxus_html::ScrollBehavior,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = MountedResult<()>>>> {
+        let script = format!(
+            "return window.interpreter.scroll({}, {}, {}, {});",
+            self.id.0,
+            coordinates.x,
+            coordinates.y,
+            serde_json::to_string(&behavior).expect("Failed to serialize ScrollBehavior")
+        );
+        let webview = self
+            .webview
+            .upgrade()
+            .expect("Webview should be alive if the element is being queried");
+        let fut = self.query.new_query::<bool>(&script, webview).resolve();
+        Box::pin(async move {
+            match fut.await {
+                Ok(true) => Ok(()),
+                Ok(false) => MountedResult::Err(dioxus_html::MountedError::OperationFailed(
+                    Box::new(DesktopQueryError::FailedToQuery),
+                )),
+                Err(err) => {
+                    MountedResult::Err(dioxus_html::MountedError::OperationFailed(Box::new(err)))
+                }
+            }
+        })
+    }
+
     fn set_focus(
         &self,
         focus: bool,

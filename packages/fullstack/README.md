@@ -72,7 +72,7 @@ First, make sure your `axum` dependency is optional and enabled by the server fe
 ```toml
 [dependencies]
 dioxus = { version = "*", features = ["fullstack"] }
-axum = { version = "0.7.0", optional = true }
+axum = { version = "0.8.0", optional = true }
 tokio = { version = "1.0", features = ["full"], optional = true }
 dioxus-cli-config = { version = "*", optional = true }
 

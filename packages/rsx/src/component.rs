@@ -220,7 +220,10 @@ impl Component {
         let mut tokens = if let Some(props) = manual_props.as_ref() {
             quote_spanned! { props.span() => let mut __manual_props = #props; }
         } else {
-            quote_spanned! { self.name.span() => fc_to_builder(#name #generics) }
+            // we only want to span the name and generics, not the `fc_to_builder` call so jump-to-def
+            // only finds the single entry (#name)
+            let spanned = quote_spanned! { self.name.span() => #name #generics };
+            quote! { fc_to_builder(#spanned) }
         };
 
         tokens.append_all(self.add_fields_to_builder(

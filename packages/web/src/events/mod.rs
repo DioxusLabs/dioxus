@@ -21,6 +21,7 @@ mod mounted;
 mod mouse;
 mod pointer;
 mod resize;
+mod scroll;
 mod selection;
 mod toggle;
 mod touch;
