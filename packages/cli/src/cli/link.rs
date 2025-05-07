@@ -39,8 +39,8 @@ use target_lexicon::Triple;
 pub struct LinkAction {
     pub linker: Option<PathBuf>,
     pub triple: Triple,
-    pub link_args_file: PathBuf,
-    pub link_err_file: PathBuf,
+    pub link_args_file: Option<PathBuf>,
+    pub link_err_file: Option<PathBuf>,
     pub link_log_file: Option<PathBuf>,
     pub link_asset_manifest_file: Option<PathBuf>,
     pub link_asset_out_dir: Option<PathBuf>,
@@ -75,7 +75,9 @@ impl LinkAction {
     ///
     /// Just check if the magic env var is set
     pub(crate) fn from_env() -> Option<Self> {
-        if std::env::var(Self::DX_LINK_ARG).is_err() {
+        if std::env::var(Self::DX_LINK_ARG).is_err()
+            && std::env::var(Self::ENV_VAR_NAME_ASSETS_TARGET).is_err()
+        {
             return None;
         }
 
@@ -83,12 +85,8 @@ impl LinkAction {
             linker: std::env::var(Self::DX_LINK_CUSTOM_LINKER)
                 .ok()
                 .map(PathBuf::from),
-            link_args_file: std::env::var(Self::DX_ARGS_FILE)
-                .expect("Linker args file not set")
-                .into(),
-            link_err_file: std::env::var(Self::DX_ERR_FILE)
-                .expect("Linker error file not set")
-                .into(),
+            link_args_file: std::env::var(Self::DX_ARGS_FILE).ok().map(PathBuf::from),
+            link_err_file: std::env::var(Self::DX_ERR_FILE).ok().map(PathBuf::from),
             triple: std::env::var(Self::DX_LINK_TRIPLE)
                 .expect("Linker triple not set")
                 .parse()
@@ -107,18 +105,22 @@ impl LinkAction {
 
     pub(crate) fn write_env_vars(&self, env_vars: &mut Vec<(&str, String)>) -> Result<()> {
         env_vars.push((Self::DX_LINK_ARG, "1".to_string()));
-        env_vars.push((
-            Self::DX_ARGS_FILE,
-            dunce::canonicalize(&self.link_args_file)?
-                .to_string_lossy()
-                .to_string(),
-        ));
-        env_vars.push((
-            Self::DX_ERR_FILE,
-            dunce::canonicalize(&self.link_err_file)?
-                .to_string_lossy()
-                .to_string(),
-        ));
+        if let Some(link_args_file) = &self.link_args_file {
+            env_vars.push((
+                Self::DX_ARGS_FILE,
+                dunce::canonicalize(&link_args_file)?
+                    .to_string_lossy()
+                    .to_string(),
+            ));
+        }
+        if let Some(link_err_file) = &self.link_err_file {
+            env_vars.push((
+                Self::DX_ERR_FILE,
+                dunce::canonicalize(&link_err_file)?
+                    .to_string_lossy()
+                    .to_string(),
+            ));
+        }
         env_vars.push((Self::DX_LINK_TRIPLE, self.triple.to_string()));
         if let Some(linker) = &self.linker {
             env_vars.push((
@@ -159,10 +161,17 @@ impl LinkAction {
         let res = self.run_link_inner().await;
 
         if let Err(err) = res {
-            // If we failed to run the linker, we need to write the error to the file
-            // so that the main process can read it.
-            _ = std::fs::create_dir_all(link_err_file.parent().unwrap());
-            _ = std::fs::write(link_err_file, format!("Linker error: {err}"));
+            match &link_err_file {
+                Some(link_err_file) => {
+                    // If we failed to run the linker, we need to write the error to the file
+                    // so that the main process can read it.
+                    _ = std::fs::create_dir_all(link_err_file.parent().unwrap());
+                    _ = std::fs::write(link_err_file, format!("Linker error: {err}"));
+                }
+                None => {
+                    tracing::error!("Failed to run linker: {err}");
+                }
+            }
         }
     }
 
@@ -180,9 +189,11 @@ impl LinkAction {
 
         handle_linker_command_file(&mut args);
 
-        // Write the linker args to a file for the main process to read
-        // todo: we might need to encode these as escaped shell words in case newlines are passed
-        std::fs::write(&self.link_args_file, args.join("\n"))?;
+        if let Some(link_args_file) = &self.link_args_file {
+            // Write the linker args to a file for the main process to read
+            // todo: we might need to encode these as escaped shell words in case newlines are passed
+            std::fs::write(link_args_file, args.join("\n"))?;
+        }
 
         // If there's a linker specified, we use that. Otherwise, we write a dummy object file to satisfy
         // any post-processing steps that rustc does.
@@ -194,15 +205,17 @@ impl LinkAction {
                     .expect("Failed to run linker");
 
                 if !res.stderr.is_empty() || !res.stdout.is_empty() {
-                    _ = std::fs::create_dir_all(self.link_err_file.parent().unwrap());
-                    _ = std::fs::write(
-                        self.link_err_file,
-                        format!(
-                            "Linker error: {}\n{}",
-                            String::from_utf8_lossy(&res.stdout),
-                            String::from_utf8_lossy(&res.stderr)
-                        ),
+                    let message = format!(
+                        "Linker error: {}\n{}",
+                        String::from_utf8_lossy(&res.stdout),
+                        String::from_utf8_lossy(&res.stderr)
                     );
+                    if let Some(link_err_file) = &self.link_err_file {
+                        _ = std::fs::create_dir_all(link_err_file.parent().unwrap());
+                        _ = std::fs::write(link_err_file, message);
+                    } else {
+                        tracing::error!("Failed to run linker: {message}");
+                    }
                 }
             }
             None => {

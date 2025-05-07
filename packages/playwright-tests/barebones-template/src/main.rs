@@ -14,7 +14,6 @@ fn App() -> Element {
         document::Link { rel: "icon", href: FAVICON }
         document::Link { rel: "stylesheet", href: MAIN_CSS }
         Hero {}
-
     }
 }
 
@@ -35,3 +34,5 @@ pub fn Hero() -> Element {
         }
     }
 }
+
+// DX_LINK_ASSETS_TARGET="dist_assets" RUSTFLAGS="-Clinker=/Users/evanalmloff/Desktop/Github/dioxus/target/release/dx" cargo run

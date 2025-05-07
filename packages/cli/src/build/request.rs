@@ -1970,8 +1970,8 @@ session_cache_dir: {}"#,
         LinkAction {
             triple: self.triple.clone(),
             linker: self.custom_linker.clone(),
-            link_err_file: dunce::canonicalize(self.link_err_file.path())?,
-            link_args_file: dunce::canonicalize(self.link_args_file.path())?,
+            link_err_file: Some(dunce::canonicalize(self.link_err_file.path())?),
+            link_args_file: Some(dunce::canonicalize(self.link_args_file.path())?),
             link_asset_manifest_file: (!self.skip_assets)
                 .then(|| dunce::canonicalize(self.link_asset_manifest_file.path()))
                 .transpose()?,
