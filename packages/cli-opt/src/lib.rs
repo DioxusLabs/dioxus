@@ -69,7 +69,7 @@ impl AssetManifest {
     pub fn contains(&self, asset: &BundledAsset) -> bool {
         self.assets
             .get(&PathBuf::from(asset.absolute_source_path()))
-            .map_or(false, |assets| assets.contains(asset))
+            .is_some_and(|assets| assets.contains(asset))
     }
 
     /// Iterate over all the assets in the manifest

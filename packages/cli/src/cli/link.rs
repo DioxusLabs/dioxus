@@ -10,7 +10,7 @@ use std::error::Error;
 use std::fmt::Debug;
 use std::fs::{self, create_dir_all};
 use std::io::{Seek, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::str::FromStr;
 use target_lexicon::Triple;
@@ -126,7 +126,7 @@ impl LinkAction {
         if let Some(link_args_file) = &self.link_args_file {
             env_vars.push((
                 Self::DX_ARGS_FILE,
-                dunce::canonicalize(&link_args_file)?
+                dunce::canonicalize(link_args_file)?
                     .to_string_lossy()
                     .to_string(),
             ));
@@ -134,7 +134,7 @@ impl LinkAction {
         if let Some(link_err_file) = &self.link_err_file {
             env_vars.push((
                 Self::DX_ERR_FILE,
-                dunce::canonicalize(&link_err_file)?
+                dunce::canonicalize(link_err_file)?
                     .to_string_lossy()
                     .to_string(),
             ));
@@ -329,7 +329,7 @@ impl LinkAction {
     }
 
     fn link_asset_manifest(&self, args: &mut Vec<String>) -> Result<()> {
-        let mut references = AssetReferences::from_link_args(&args);
+        let mut references = AssetReferences::from_link_args(args);
 
         // Hash each file in parallel
         references.assets.par_iter_mut().for_each(|asset| {
@@ -356,7 +356,7 @@ impl LinkAction {
                     .map(|(name, data)| (*name, data.as_ref())),
             );
             let asset_file = self
-                .out_dir(&args)
+                .out_dir(args)
                 .join("manganis_assets_out")
                 .with_extension("o");
             std::fs::write(&asset_file, object_file).context("Failed to write object file")?;
@@ -394,7 +394,7 @@ impl LinkAction {
         }
 
         if let Some(link_asset_out_dir) = &self.link_asset_out_dir {
-            if let Err(err) = create_dir_all(&link_asset_out_dir) {
+            if let Err(err) = create_dir_all(link_asset_out_dir) {
                 tracing::error!("Failed to create destination directory: {err}");
             }
             for asset in manifest.assets() {
@@ -498,7 +498,7 @@ impl AssetReferences {
             let path = PathBuf::from(file);
             if path
                 .extension()
-                .map_or(false, |ext| ext == "o" || ext == "rlib")
+                .is_some_and(|ext| ext == "o" || ext == "rlib")
             {
                 if let Ok(path) = path.canonicalize() {
                     if let Err(err) = references.add_from_object_path(&path) {
@@ -535,7 +535,7 @@ impl AssetReferences {
 
     fn add_from_object_data<'a>(
         &mut self,
-        path: &PathBuf,
+        path: &Path,
         read_cache: impl ReadRef<'a>,
         file_offset: usize,
     ) -> Result<(), Box<dyn Error>> {
@@ -646,7 +646,7 @@ fn guess_target_triple() -> Triple {
     // Get rid of the stable/nightly prefix
     let toolchain = toolchain.split_once("-").unwrap().1;
 
-    Triple::from_str(&toolchain).unwrap_or_else(|_| {
+    Triple::from_str(toolchain).unwrap_or_else(|_| {
         tracing::error!("Failed to parse target triple from toolchain: {toolchain}");
         Triple::host()
     })
@@ -659,7 +659,7 @@ fn find_linker(sysroot: &Sysroot) -> Command {
         // usually just ld64 - uses your `cc`
         // Eg. aarch64-apple-darwin
         (OperatingSystem::Darwin(_), _) => {
-            let mut command = Command::new(PathBuf::from(sysroot.cc()));
+            let mut command = Command::new(sysroot.cc());
             command.env_remove("IPHONEOS_DEPLOYMENT_TARGET");
             command.env_remove("TVOS_DEPLOYMENT_TARGET");
             command.env_remove("XROS_DEPLOYMENT_TARGET");

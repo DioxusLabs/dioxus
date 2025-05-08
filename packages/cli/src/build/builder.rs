@@ -565,7 +565,7 @@ impl AppBuilder {
         let asset_dir = self.build.asset_dir();
 
         for bundled in res.assets.assets() {
-            if original_artifacts.assets.contains(&bundled) {
+            if original_artifacts.assets.contains(bundled) {
                 continue;
             }
             let from = dunce::canonicalize(PathBuf::from(bundled.absolute_source_path()))?;
