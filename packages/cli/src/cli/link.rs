@@ -3,13 +3,13 @@ use anyhow::Context;
 use const_serialize::ConstVec;
 use dioxus_cli_opt::{process_file_to, AssetManifest};
 use manganis::BundledAsset;
-use object::{Object, ObjectSection, ReadCache};
+use object::{Object, ObjectSection, ReadCache, ReadRef};
 use rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::fmt::Debug;
 use std::fs::{self, create_dir_all};
-use std::io::{Read, Seek, Write};
+use std::io::{Seek, Write};
 use std::path::PathBuf;
 use std::process::Command;
 use std::str::FromStr;
@@ -193,7 +193,6 @@ impl LinkAction {
                 _ = std::fs::write(link_err_file, format!("Linker error: {err}"));
             }
         }
-        tracing::info!("Linker finished");
     }
 
     /// Write the incoming linker args to a file
@@ -202,7 +201,6 @@ impl LinkAction {
     /// it both for determining if we should act as a linker and the for the file name itself.
     async fn run_link_inner(self) -> Result<()> {
         self.init_linker_logger()?;
-        tracing::info!("Linker: {:#?}", self);
 
         let mut args: Vec<_> = std::env::args().collect();
         if args.is_empty() {
@@ -363,7 +361,6 @@ impl LinkAction {
                 .out_dir(&args)
                 .join("manganis_assets_out")
                 .with_extension("o");
-            tracing::info!("Writing object file to {:?}", asset_file);
             std::fs::write(&asset_file, object_file).context("Failed to write object file")?;
             args.push(asset_file.to_string_lossy().to_string());
         }
@@ -501,7 +498,10 @@ impl AssetReferences {
         handle_linker_command_file(&mut args);
         for file in args {
             let path = PathBuf::from(file);
-            if path.extension().map_or(false, |ext| ext == "o") {
+            if path
+                .extension()
+                .map_or(false, |ext| ext == "o" || ext == "rlib")
+            {
                 if let Ok(path) = path.canonicalize() {
                     if let Err(err) = references.add_from_object_path(&path) {
                         tracing::error!("Failed to read object file {}: {err}", path.display());
@@ -514,10 +514,36 @@ impl AssetReferences {
 
     fn add_from_object_path(&mut self, path: &PathBuf) -> Result<(), Box<dyn Error>> {
         let mut binary_data = fs::File::options().read(true).open(path)?;
+        let read_cache = ReadCache::new(&mut binary_data);
+        // Try to read the object file as an archive
+        if let Ok(archive) = object::read::archive::ArchiveFile::parse(&read_cache) {
+            for member in archive.members() {
+                let member = member?;
+                let (offset, _) = member.file_range();
+                let member_data = member.data(&read_cache)?;
+                self.add_from_object_data(
+                    path,
+                    &ReadCache::new(&mut std::io::Cursor::new(member_data)),
+                    offset as usize,
+                )?;
+            }
+        }
+        // Otherwise, read it as a regular object file
+        else {
+            self.add_from_object_data(path, &read_cache, 0)?;
+        }
+        Ok(())
+    }
+
+    fn add_from_object_data<'a>(
+        &mut self,
+        path: &PathBuf,
+        read_cache: impl ReadRef<'a>,
+        file_offset: usize,
+    ) -> Result<(), Box<dyn Error>> {
         let mut range = None;
         {
-            let read_cache = ReadCache::new(&mut binary_data);
-            let file = object::File::parse(&read_cache)?;
+            let file = object::File::parse(read_cache)?;
             for section in file.sections() {
                 if let Ok(name) = section.name() {
                     if manganis_core::linker::LinkSection::ALL
@@ -541,11 +567,14 @@ impl AssetReferences {
             }
         }
         if let Some(range) = range {
-            binary_data.seek(std::io::SeekFrom::Start(range.start as u64))?;
-            let mut data_in_range = vec![0; range.len()];
-            binary_data.read_exact(&mut data_in_range)?;
+            let data_in_range = read_cache
+                .read_bytes_at(range.start as u64, range.len() as u64)
+                .map_err(|_| {
+                    tracing::error!("Failed to read object file");
+                    std::io::Error::new(std::io::ErrorKind::Other, "Failed to read object file")
+                })?;
             let mut offset = 0;
-            let mut buffer = const_serialize::ConstReadBuffer::new(&data_in_range);
+            let mut buffer = const_serialize::ConstReadBuffer::new(data_in_range);
 
             while let Some((remaining_buffer, bundled_asset)) =
                 const_serialize::deserialize_const!(BundledAsset, buffer)
@@ -553,7 +582,7 @@ impl AssetReferences {
                 let len = (data_in_range.len() - remaining_buffer.remaining().len()) - offset;
                 self.assets.push(AssetReference {
                     file: path.clone(),
-                    offset: range.start + offset,
+                    offset: range.start + file_offset + offset,
                     bundled_asset,
                 });
                 offset += len;
@@ -611,7 +640,6 @@ fn guess_target_triple() -> Triple {
     let targeting_wasm =
         args.contains(&"-flavor".to_string()) && args.contains(&"wasm".to_string());
     let toolchain = if targeting_wasm {
-        tracing::info!("Detected wasm from args: {:?}", args);
         "stable-wasm32-unknown-unknown".to_string()
     } else {
         std::env::var("RUSTUP_TOOLCHAIN").unwrap()
@@ -629,7 +657,6 @@ fn guess_target_triple() -> Triple {
 // Try to guess the current linker from the toolchain
 fn find_linker(sysroot: &Sysroot) -> Command {
     let toolchain = guess_target_triple();
-    tracing::info!("Linking for target: {:?}", toolchain);
     match (toolchain.operating_system, toolchain.architecture) {
         // usually just ld64 - uses your `cc`
         // Eg. aarch64-apple-darwin
