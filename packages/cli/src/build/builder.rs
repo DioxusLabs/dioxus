@@ -4,7 +4,6 @@ use crate::{
 };
 use anyhow::Context;
 use dioxus_cli_opt::process_file_to;
-use dioxus_core_types::bundled;
 use futures_util::future::OptionFuture;
 use std::{
     env,

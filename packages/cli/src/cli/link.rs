@@ -11,6 +11,7 @@ use std::fmt::Debug;
 use std::fs::{self, create_dir_all};
 use std::io::{Read, Seek, Write};
 use std::path::PathBuf;
+use std::str::FromStr;
 use target_lexicon::Triple;
 
 /// `dx` can act as a linker in a few scenarios. Note that we don't *actually* implement the linker logic,
@@ -88,9 +89,9 @@ impl LinkAction {
             link_args_file: std::env::var(Self::DX_ARGS_FILE).ok().map(PathBuf::from),
             link_err_file: std::env::var(Self::DX_ERR_FILE).ok().map(PathBuf::from),
             triple: std::env::var(Self::DX_LINK_TRIPLE)
-                .expect("Linker triple not set")
-                .parse()
-                .expect("Failed to parse linker triple"),
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or_else(guess_target_triple),
             link_asset_manifest_file: std::env::var(Self::DX_LINK_ASSET_MANIFEST)
                 .ok()
                 .map(PathBuf::from),
@@ -161,18 +162,15 @@ impl LinkAction {
         let res = self.run_link_inner().await;
 
         if let Err(err) = res {
-            match &link_err_file {
-                Some(link_err_file) => {
-                    // If we failed to run the linker, we need to write the error to the file
-                    // so that the main process can read it.
-                    _ = std::fs::create_dir_all(link_err_file.parent().unwrap());
-                    _ = std::fs::write(link_err_file, format!("Linker error: {err}"));
-                }
-                None => {
-                    tracing::error!("Failed to run linker: {err}");
-                }
+            tracing::error!("Failed to run linker: {err}");
+            if let Some(link_err_file) = &link_err_file {
+                // If we failed to run the linker, we need to write the error to the file
+                // so that the main process can read it.
+                _ = std::fs::create_dir_all(link_err_file.parent().unwrap());
+                _ = std::fs::write(link_err_file, format!("Linker error: {err}"));
             }
         }
+        tracing::info!("Linker finished");
     }
 
     /// Write the incoming linker args to a file
@@ -181,13 +179,16 @@ impl LinkAction {
     /// it both for determining if we should act as a linker and the for the file name itself.
     async fn run_link_inner(self) -> Result<()> {
         self.init_linker_logger()?;
+        tracing::info!("Linker: {:#?}", self);
 
         let mut args: Vec<_> = std::env::args().collect();
         if args.is_empty() {
+            tracing::error!("No arguments passed to linker");
             return Ok(());
         }
 
         handle_linker_command_file(&mut args);
+        self.link_asset_manifest(&mut args)?;
 
         if let Some(link_args_file) = &self.link_args_file {
             // Write the linker args to a file for the main process to read
@@ -202,9 +203,11 @@ impl LinkAction {
                 let res = std::process::Command::new(linker)
                     .args(args.iter().skip(1))
                     .output()
-                    .expect("Failed to run linker");
+                    .context("Failed to await linker")?;
 
                 if !res.stderr.is_empty() || !res.stdout.is_empty() {
+                    tracing::info!("linker stdout: {:?}", res.stdout);
+                    tracing::error!("linker stderr: {:?}", res.stderr);
                     let message = format!(
                         "Linker error: {}\n{}",
                         String::from_utf8_lossy(&res.stdout),
@@ -213,8 +216,6 @@ impl LinkAction {
                     if let Some(link_err_file) = &self.link_err_file {
                         _ = std::fs::create_dir_all(link_err_file.parent().unwrap());
                         _ = std::fs::write(link_err_file, message);
-                    } else {
-                        tracing::error!("Failed to run linker: {message}");
                     }
                 }
             }
@@ -288,6 +289,15 @@ impl LinkAction {
         }
     }
 
+    fn out_dir(&self, args: &[String]) -> PathBuf {
+        let out_path = self.out_path(args);
+        if out_path.is_dir() {
+            out_path
+        } else {
+            out_path.parent().unwrap().to_path_buf()
+        }
+    }
+
     fn link_asset_manifest(&self, args: &mut Vec<String>) -> Result<()> {
         let mut references = AssetReferences::from_link_args(&args);
 
@@ -315,9 +325,12 @@ impl LinkAction {
                     .iter()
                     .map(|(name, data)| (*name, data.as_ref())),
             );
-            let asset_file = self.out_path(&args).join("manganis_assets_out");
-            std::fs::write(asset_file.with_extension("o"), object_file)
-                .context("Failed to write object file")?;
+            let asset_file = self
+                .out_dir(&args)
+                .join("manganis_assets_out")
+                .with_extension("o");
+            tracing::info!("Writing object file to {:?}", asset_file);
+            std::fs::write(&asset_file, object_file).context("Failed to write object file")?;
             args.push(asset_file.to_string_lossy().to_string());
         }
         // Otherwise overwrite the object files
@@ -339,6 +352,10 @@ impl LinkAction {
 
         tracing::info!("Found assets: {:#?}", manifest.assets().collect::<Vec<_>>());
 
+        tracing::info!(
+            "writing asset manifest to {:?}",
+            self.link_asset_manifest_file
+        );
         if let Some(link_asset_manifest_file) = &self.link_asset_manifest_file {
             // Write the asset manifest to the file
             let contents =
@@ -551,4 +568,25 @@ fn create_data_object_file<'a>(
     let mut module = Module::new();
     module.section(&data_section).section(&linking);
     module.finish()
+}
+
+/// Try to guess the target triple we are linking for
+fn guess_target_triple() -> Triple {
+    let args: Vec<String> = std::env::args().collect();
+    // Look for --flavor wasm in the args
+    let targeting_wasm =
+        args.contains(&"-flavor".to_string()) && args.contains(&"wasm".to_string());
+    let toolchain = if targeting_wasm {
+        "stable-wasm32-unknown-unknown".to_string()
+    } else {
+        std::env::var("RUSTUP_TOOLCHAIN").unwrap()
+    };
+
+    // Get rid of the stable/nightly prefix
+    let toolchain = toolchain.split_once("-").unwrap().1;
+
+    Triple::from_str(&toolchain).unwrap_or_else(|_| {
+        tracing::error!("Failed to parse target triple from toolchain: {toolchain}");
+        Triple::host()
+    })
 }
