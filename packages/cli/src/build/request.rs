@@ -1962,7 +1962,7 @@ session_cache_dir: {}"#,
             env_vars.extend(self.android_env_vars()?);
         };
 
-        // Write the enviorment variables for the dx linker intercept used for both asset collection and hot reload builds.
+        // Write the environment variables for the dx linker intercept used for both asset collection and hot reload builds.
         LinkAction {
             triple: self.triple.clone(),
             linker: match self.custom_linker.clone() {
