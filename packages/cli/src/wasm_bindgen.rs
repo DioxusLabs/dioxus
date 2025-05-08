@@ -1,4 +1,4 @@
-use crate::{CliSettings, Result};
+use crate::{CliSettings, Result, Workspace};
 use anyhow::{anyhow, Context};
 use flate2::read::GzDecoder;
 use std::path::{Path, PathBuf};
@@ -402,10 +402,7 @@ impl WasmBindgen {
     }
 
     async fn install_dir(&self) -> anyhow::Result<PathBuf> {
-        let bindgen_dir = dirs::data_local_dir()
-            .expect("user should be running on a compatible operating system")
-            .join("dioxus/wasm-bindgen/");
-
+        let bindgen_dir = Workspace::dioxus_home_dir().join("wasm-bindgen/");
         fs::create_dir_all(&bindgen_dir).await?;
         Ok(bindgen_dir)
     }

@@ -657,8 +657,6 @@ impl AppBuilder {
             None => self.build.asset_dir(),
         };
 
-        tracing::debug!("Hotreloading asset {changed_file:?} in target {asset_dir:?}");
-
         // Canonicalize the path as Windows may use long-form paths "\\\\?\\C:\\".
         let changed_file = dunce::canonicalize(changed_file)
             .inspect_err(|e| tracing::debug!("Failed to canonicalize hotreloaded asset: {e}"))
@@ -667,6 +665,8 @@ impl AppBuilder {
         // The asset might've been renamed thanks to the manifest, let's attempt to reload that too
         let resource = artifacts.assets.assets.get(&changed_file)?;
         let output_path = asset_dir.join(resource.bundled_path());
+
+        tracing::debug!("Hotreloading asset {changed_file:?} in target {asset_dir:?}");
 
         // Remove the old asset if it exists
         _ = std::fs::remove_file(&output_path);
@@ -1310,6 +1310,6 @@ We checked the folder: {}
 
     /// Check if the queued build is blocking hotreloads
     pub(crate) fn can_receive_hotreloads(&self) -> bool {
-        matches!(&self.stage, BuildStage::Success)
+        matches!(&self.stage, BuildStage::Success | BuildStage::Failed)
     }
 }
