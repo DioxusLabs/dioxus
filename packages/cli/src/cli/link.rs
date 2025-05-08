@@ -240,9 +240,22 @@ impl LinkAction {
                 if !res.stderr.is_empty() || !res.stdout.is_empty() {
                     let stdout = String::from_utf8_lossy(&res.stdout);
                     let stderr = String::from_utf8_lossy(&res.stderr);
-                    tracing::info!("linker stdout: {}", stdout);
-                    tracing::error!("linker stderr: {}", stderr);
-                    let message = format!("Linker error: {}\n{}", stdout, stderr);
+                    // Trim lines containing libcompiler_builtins. There is a noisy error rust-lld warns about
+                    // but doesn't cause any issues.
+                    // Eg.
+                    // rust-lld: warning: /Users/_/.rustup/toolchains/stable-aarch64-apple-darwin/lib/rustlib/wasm32-unknown-unknown/lib/libcompiler_builtins-c52b53342d7142a8.rlib: archive member '45c91108d938afe8-subvti3.o' is neither Wasm object file nor LLVM bitcode
+                    fn trim_libcompiler_builtins(messages: &str) -> String {
+                        messages
+                            .lines()
+                            .filter(|line| !line.contains("libcompiler_builtins"))
+                            .collect::<Vec<_>>()
+                            .join("\n")
+                    }
+                    let trimmed_stdout = trim_libcompiler_builtins(&stdout);
+                    let trimmed_stderr = trim_libcompiler_builtins(&stderr);
+                    tracing::info!("linker stdout: {}", trimmed_stdout);
+                    tracing::error!("linker stderr: {}", trimmed_stderr);
+                    let message = format!("Linker error: {}\n{}", trimmed_stdout, trimmed_stderr);
                     if let Some(link_err_file) = &self.link_err_file {
                         _ = std::fs::create_dir_all(link_err_file.parent().unwrap());
                         _ = std::fs::write(link_err_file, message);
