@@ -124,7 +124,7 @@ impl CliSettings {
 
     /// Check if we should prefer to use the no-downloads feature
     pub(crate) fn prefer_no_downloads() -> bool {
-        if cfg!(feature = "no-downloads") {
+        if cfg!(feature = "no-downloads") && !cfg!(debug_assertions) {
             return true;
         }
 

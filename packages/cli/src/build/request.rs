@@ -849,14 +849,8 @@ session_cache_dir: {}"#,
                 }
                 Message::CompilerArtifact(artifact) => {
                     units_compiled += 1;
-                    match artifact.executable {
-                        Some(executable) => output_location = Some(executable.into()),
-                        None => ctx.status_build_progress(
-                            units_compiled,
-                            crate_count,
-                            artifact.target.name,
-                        ),
-                    }
+                    ctx.status_build_progress(units_compiled, crate_count, artifact.target.name);
+                    output_location = artifact.executable.map(Into::into);
                 }
                 // todo: this can occasionally swallow errors, so we should figure out what exactly is going wrong
                 //       since that is a really bad user experience.
@@ -2010,8 +2004,8 @@ session_cache_dir: {}"#,
         // If this is a release build, bake the base path and title into the binary with env vars.
         // todo: should we even be doing this? might be better being a build.rs or something else.
         if self.release {
-            if let Some(base_path) = &self.config.web.app.base_path {
-                env_vars.push((ASSET_ROOT_ENV, base_path.clone()));
+            if let Some(base_path) = self.base_path() {
+                env_vars.push((ASSET_ROOT_ENV, base_path.to_string()));
             }
             env_vars.push((APP_TITLE_ENV, self.config.web.app.title.clone()));
         }
@@ -2267,10 +2261,12 @@ session_cache_dir: {}"#,
         struct AndroidHandlebarsObjects {
             application_id: String,
             app_name: String,
+            android_bundle: Option<crate::AndroidSettings>,
         }
         let hbs_data = AndroidHandlebarsObjects {
             application_id: self.full_mobile_app_name(),
             app_name: self.bundled_app_name(),
+            android_bundle: self.config.bundle.android.clone(),
         };
         let hbs = handlebars::Handlebars::new();
 
@@ -3160,8 +3156,15 @@ session_cache_dir: {}"#,
         if let Platform::Android = self.platform {
             ctx.status_running_gradle();
 
+            // When the build mode is set to release and there is an Android signature configuration, use assembleRelease
+            let build_type = if self.release && self.config.bundle.android.is_some() {
+                "assembleRelease"
+            } else {
+                "assembleDebug"
+            };
+
             let output = Command::new(self.gradle_exe()?)
-                .arg("assembleDebug")
+                .arg(build_type)
                 .current_dir(self.root_dir())
                 .output()
                 .await?;
@@ -3608,7 +3611,7 @@ session_cache_dir: {}"#,
 
         // Add the base path to the head if this is a debug build
         if self.is_dev_build() {
-            if let Some(base_path) = &self.config.web.app.base_path {
+            if let Some(base_path) = &self.base_path() {
                 head_resources.push_str(&format_base_path_meta_element(base_path));
             }
         }
@@ -3698,7 +3701,7 @@ r#" <script>
 
     /// Replace any special placeholders in the HTML with resolved values
     fn replace_template_placeholders(&self, html: &mut String, wasm_path: &str, js_path: &str) {
-        let base_path = self.config.web.app.base_path();
+        let base_path = self.base_path_or_default();
         *html = html.replace("{base_path}", base_path);
 
         let app_name = &self.executable_name();
@@ -3728,5 +3731,35 @@ r#" <script>
         } else if let Some(pos) = content.find(or_insert_before) {
             content.insert_str(pos, with);
         }
+    }
+
+    /// Get the base path from the config or None if this is not a web or server build
+    pub(crate) fn base_path(&self) -> Option<&str> {
+        self.config
+            .web
+            .app
+            .base_path
+            .as_deref()
+            .filter(|_| matches!(self.platform, Platform::Web | Platform::Server))
+    }
+
+    /// Get the normalized base path for the application with `/` trimmed from both ends. If the base path is not set, this will return `.`.
+    pub(crate) fn base_path_or_default(&self) -> &str {
+        let trimmed_path = self.base_path().unwrap_or_default().trim_matches('/');
+        if trimmed_path.is_empty() {
+            "."
+        } else {
+            trimmed_path
+        }
+    }
+
+    /// Get the path to the package manifest directory
+    pub(crate) fn package_manifest_dir(&self) -> PathBuf {
+        self.workspace.krates[self.crate_package]
+            .manifest_path
+            .parent()
+            .unwrap()
+            .to_path_buf()
+            .into()
     }
 }

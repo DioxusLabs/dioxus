@@ -13,6 +13,16 @@ android {
         versionCode = 1
         versionName = "1.0"
     }
+    {{#if android_bundle}}
+    signingConfigs {
+        create("release") {
+            storeFile = file("../../../../../../../{{ android_bundle.jks_file }}")
+            storePassword = "{{ android_bundle.jks_password }}"
+            keyAlias = "{{ android_bundle.key_alias }}"
+            keyPassword = "{{ android_bundle.key_password }}"
+        }
+    }
+    {{/if}}
     buildTypes {
         getByName("debug") {
             isDebuggable = true
@@ -27,7 +37,10 @@ android {
         }
         getByName("release") {
             isMinifyEnabled = true
-             proguardFiles(
+            {{#if android_bundle}}
+            signingConfig = signingConfigs.getByName("release")
+            {{/if}}
+            proguardFiles(
                 *fileTree(".") { include("**/*.pro") }
                     .plus(getDefaultProguardFile("proguard-android-optimize.txt"))
                     .toList().toTypedArray()

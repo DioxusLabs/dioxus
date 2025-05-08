@@ -359,7 +359,7 @@ impl AppBuilder {
                             krate,
                             ..
                         } => {
-                            tracing::info!("Compiling [{current:>3}/{total}]: {krate}");
+                            tracing::info!("Compiled [{current:>3}/{total}]: {krate}");
                         }
                         BuildStage::RunningBindgen => tracing::info!("Running wasm-bindgen..."),
                         BuildStage::CopyingAssets {
@@ -367,7 +367,11 @@ impl AppBuilder {
                             total,
                             path,
                         } => {
-                            tracing::info!("Copying asset ({current}/{total}): {}", path.display());
+                            tracing::info!(
+                                "Copying asset ({}/{total}): {}",
+                                current + 1,
+                                path.display()
+                            );
                         }
                         BuildStage::Bundling => tracing::info!("Bundling app..."),
                         _ => {}
@@ -444,8 +448,8 @@ impl AppBuilder {
             ("RUST_BACKTRACE", "1".to_string()),
         ];
 
-        if let Some(base_path) = &krate.config.web.app.base_path {
-            envs.push((dioxus_cli_config::ASSET_ROOT_ENV, base_path.clone()));
+        if let Some(base_path) = krate.base_path() {
+            envs.push((dioxus_cli_config::ASSET_ROOT_ENV, base_path.to_string()));
         }
 
         if let Some(env_filter) = env::var_os("RUST_LOG").and_then(|e| e.into_string().ok()) {
@@ -650,8 +654,6 @@ impl AppBuilder {
             None => self.build.asset_dir(),
         };
 
-        tracing::debug!("Hotreloading asset {changed_file:?} in target {asset_dir:?}");
-
         // Canonicalize the path as Windows may use long-form paths "\\\\?\\C:\\".
         let changed_file = dunce::canonicalize(changed_file)
             .inspect_err(|e| tracing::debug!("Failed to canonicalize hotreloaded asset: {e}"))
@@ -662,6 +664,8 @@ impl AppBuilder {
         let mut bundled_names = Vec::new();
         for resource in resources {
             let output_path = asset_dir.join(resource.bundled_path());
+
+            tracing::debug!("Hotreloading asset {changed_file:?} in target {asset_dir:?}");
 
             // Remove the old asset if it exists
             _ = std::fs::remove_file(&output_path);
@@ -1307,6 +1311,6 @@ We checked the folder: {}
 
     /// Check if the queued build is blocking hotreloads
     pub(crate) fn can_receive_hotreloads(&self) -> bool {
-        matches!(&self.stage, BuildStage::Success)
+        matches!(&self.stage, BuildStage::Success | BuildStage::Failed)
     }
 }

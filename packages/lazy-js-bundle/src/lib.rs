@@ -172,13 +172,23 @@ fn gen_bindings(input_path: &Path, output_path: &Path, minify_level: MinifyLevel
         .arg("--outfile")
         .arg(output_path)
         .args(minify_level.as_args())
-        .status()
-        .unwrap();
+        .status();
+
+    let status = match status {
+        Ok(status) => status,
+        Err(error) => {
+            if Command::new("bun").status().is_ok() {
+                panic!(
+                    "Bun failed to generated bindings for {:?}. Error:\n{:?}",
+                    input_path, error
+                );
+            } else {
+                panic!("Make sure you have Bun installed. Failed to generate bindings for {:?}. Error:\n{:?}", input_path, error);
+            }
+        }
+    };
 
     if !status.success() {
-        panic!(
-            "Failed to generate bindings for {:?}. Make sure you have bun installed",
-            input_path
-        );
+        panic!("Bun failed to generate bindings for {:?}.", input_path);
     }
 }

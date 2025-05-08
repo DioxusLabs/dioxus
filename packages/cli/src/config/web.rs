@@ -98,22 +98,6 @@ pub(crate) struct WebAppConfig {
     pub(crate) base_path: Option<String>,
 }
 
-impl WebAppConfig {
-    /// Get the normalized base path for the application with `/` trimmed from both ends. If the base path is not set, this will return `.`.
-    pub(crate) fn base_path(&self) -> &str {
-        let trimmed_path = self
-            .base_path
-            .as_deref()
-            .unwrap_or_default()
-            .trim_matches('/');
-        if trimmed_path.is_empty() {
-            "."
-        } else {
-            trimmed_path
-        }
-    }
-}
-
 impl Default for WebAppConfig {
     fn default() -> Self {
         Self {

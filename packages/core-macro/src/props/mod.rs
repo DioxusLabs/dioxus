@@ -1416,10 +1416,15 @@ Finally, call `.build()` to create the instance of `{name}`.
                     // If field has `into`, apply it to the default value.
                     // Ignore any blank defaults as it causes type inference errors.
                     let is_default = *default == parse_quote!(::core::default::Default::default());
+                    // If this is a signal type, we use super_into and the props struct as the owner
+                    let is_child_owned_type = child_owned_type(field.ty);
+
                     let mut into = quote!{};
 
                     if !is_default {
-                        if field.builder_attr.auto_into {
+                        if is_child_owned_type {
+                            into = quote!{ .super_into() }
+                        } else if field.builder_attr.auto_into {
                             into = quote!{ .into() }
                         } else if field.builder_attr.auto_to_string {
                             into = quote!{ .to_string() }
@@ -1428,6 +1433,8 @@ Finally, call `.build()` to create the instance of `{name}`.
 
                     if field.builder_attr.skip {
                         quote!(let #name = #default #into;)
+                    } else if is_child_owned_type {
+                        quote!(let #name = #helper_trait_name::into_value(#name, || with_owner(self.owner.clone(), move || (#default) #into));)
                     } else {
                         quote!(let #name = #helper_trait_name::into_value(#name, || #default #into);)
                     }

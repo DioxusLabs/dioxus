@@ -22,6 +22,8 @@ impl Default for DioxusConfig {
                 asset_dir: None,
                 sub_package: None,
                 out_dir: None,
+                tailwind_input: None,
+                tailwind_output: None,
             },
             web: WebConfig {
                 app: WebAppConfig {

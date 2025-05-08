@@ -3,6 +3,7 @@ use crate::{AppBuilder, BuildId, BuildMode, BuilderUpdate, Result, ServeArgs, Tr
 mod ansi_buffer;
 mod output;
 mod proxy;
+mod proxy_ws;
 mod runner;
 mod server;
 mod update;
@@ -71,7 +72,6 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &mut TraceController) -> 
                     continue;
                 }
 
-                tracing::debug!("Starting hotpatching: {:?}", files);
                 builder.handle_file_change(&files, &mut devserver).await;
             }
 

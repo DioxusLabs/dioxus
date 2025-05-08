@@ -516,18 +516,18 @@ const fn char_to_bytes(char: char) -> ([u8; 4], usize) {
             bytes[0] = code as u8;
         }
         2 => {
-            bytes[0] = (code >> 6 & 0x1F) as u8 | BYTE_CHAR_BOUNDARIES[1];
+            bytes[0] = ((code >> 6) & 0x1F) as u8 | BYTE_CHAR_BOUNDARIES[1];
             bytes[1] = (code & 0x3F) as u8 | CONTINUED_CHAR_MASK;
         }
         3 => {
-            bytes[0] = (code >> 12 & 0x0F) as u8 | BYTE_CHAR_BOUNDARIES[2];
-            bytes[1] = (code >> 6 & 0x3F) as u8 | CONTINUED_CHAR_MASK;
+            bytes[0] = ((code >> 12) & 0x0F) as u8 | BYTE_CHAR_BOUNDARIES[2];
+            bytes[1] = ((code >> 6) & 0x3F) as u8 | CONTINUED_CHAR_MASK;
             bytes[2] = (code & 0x3F) as u8 | CONTINUED_CHAR_MASK;
         }
         4 => {
-            bytes[0] = (code >> 18 & 0x07) as u8 | BYTE_CHAR_BOUNDARIES[3];
-            bytes[1] = (code >> 12 & 0x3F) as u8 | CONTINUED_CHAR_MASK;
-            bytes[2] = (code >> 6 & 0x3F) as u8 | CONTINUED_CHAR_MASK;
+            bytes[0] = ((code >> 18) & 0x07) as u8 | BYTE_CHAR_BOUNDARIES[3];
+            bytes[1] = ((code >> 12) & 0x3F) as u8 | CONTINUED_CHAR_MASK;
+            bytes[2] = ((code >> 6) & 0x3F) as u8 | CONTINUED_CHAR_MASK;
             bytes[3] = (code & 0x3F) as u8 | CONTINUED_CHAR_MASK;
         }
         _ => panic!(
