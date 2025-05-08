@@ -88,9 +88,9 @@ use std::{
 ///
 /// ### Custom linker path
 ///
-/// DX will try to find the default linker for your system, but if you need to use a custom linker on top of the dx proxy, you can set the `DX_LINKER` environment variable to the path of your custom linker. For example, if you are using `lld` as your linker, you can set the `DX_LINKER` environment variable to the path of `lld`:
+/// DX will try to find the default linker for your system, but if you need to use a custom linker on top of the dx proxy, you can set the `DX_LINK_CUSTOM_LINKER` environment variable to the path of your custom linker. For example, if you are using `lld` as your linker, you can set the `DX_LINK_CUSTOM_LINKER` environment variable to the path of `lld`:
 /// ```sh
-/// DX_LINKER="/path/to/lld" DX_LINK_ASSETS_TARGET="dist_assets" RUSTFLAGS="-Clinker=dx" cargo run
+/// DX_LINK_CUSTOM_LINKER="/path/to/lld" DX_LINK_ASSETS_TARGET="dist_assets" RUSTFLAGS="-Clinker=dx" cargo run
 /// ```
 #[derive(Parser)]
 #[clap(name = "dioxus", version = VERSION.as_str())]

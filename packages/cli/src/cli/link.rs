@@ -74,10 +74,10 @@ impl LinkAction {
     const DX_ARGS_FILE: &str = "DX_LINK_ARGS_FILE";
     const DX_ERR_FILE: &str = "DX_LINK_ERR_FILE";
     const DX_LINK_TRIPLE: &str = "DX_LINK_TRIPLE";
-    const DX_LINK_CUSTOM_LINKER: &str = "DX_LINK_CUSTOM_LINKER";
     const DX_LINK_ASSET_MANIFEST: &str = "DX_LINK_ASSET_MANIFEST";
 
     // Publicly documented CLI APIs for linking
+    const DX_LINK_CUSTOM_LINKER: &str = "DX_LINK_CUSTOM_LINKER";
     pub(crate) const ENV_VAR_NAME_ASSETS_TARGET: &'static str = "DX_LINK_ASSETS_TARGET"; // The target directory for the assets
     pub(crate) const LOG_FILE_VAR_NAME: &'static str = "DX_LINK_LOG_FILE"; // The log file to use
 
