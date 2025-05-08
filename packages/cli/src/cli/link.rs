@@ -633,7 +633,7 @@ fn find_linker(sysroot: &Sysroot) -> Command {
     match (toolchain.operating_system, toolchain.architecture) {
         // usually just ld64 - uses your `cc`
         // Eg. aarch64-apple-darwin
-        (OperatingSystem::MacOSX(_), _) => {
+        (OperatingSystem::Darwin(_), _) => {
             let mut command = Command::new(PathBuf::from(sysroot.cc()));
             command.env_remove("IPHONEOS_DEPLOYMENT_TARGET");
             command.env_remove("TVOS_DEPLOYMENT_TARGET");
