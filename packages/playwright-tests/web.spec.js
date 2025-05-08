@@ -157,7 +157,7 @@ test("document elements", async ({ page }) => {
 });
 
 test("merge styles", async ({ page }) => {
-  await page.goto("http://localhost:9999");
+  await page.goto("http://localhost:9990");
   // wait until the div is mounted
   const div = page.locator("div#merge-styles-div");
   await div.waitFor({ state: "attached" });
