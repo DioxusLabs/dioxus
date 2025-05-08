@@ -90,7 +90,6 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &mut TraceController) -> 
             // Run the server in the background
             // Waiting for updates here lets us tap into when clients are added/removed
             ServeUpdate::NewConnection { id, aslr_reference } => {
-                // Send the client
                 devserver
                     .send_hotreload(builder.applied_hot_reload_changes(BuildId::CLIENT))
                     .await;

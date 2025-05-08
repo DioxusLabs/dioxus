@@ -15,6 +15,7 @@ use std::{
     collections::HashMap,
     rc::Rc,
     sync::Arc,
+    time::Duration,
 };
 use tao::{
     dpi::PhysicalSize,
@@ -322,7 +323,13 @@ impl App {
 
     #[cfg(all(feature = "devtools", debug_assertions))]
     pub fn handle_hot_reload_msg(&mut self, msg: dioxus_devtools::DevserverMsg) {
+        use std::time::Duration;
+
         use dioxus_devtools::DevserverMsg;
+
+        /// Amount of time that toats should be displayed.
+        const TOAST_TIMEOUT: Duration = Duration::from_secs(3);
+        const TOAST_TIMEOUT_LONG: Duration = Duration::from_secs(3600); // Duration::MAX is too long for JS.
 
         match msg {
             DevserverMsg::HotReload(hr_msg) => {
@@ -343,17 +350,67 @@ impl App {
                         webview.kick_stylsheets();
                     }
                 }
+
+                if hr_msg.jump_table.is_some()
+                    && hr_msg.for_build_id == Some(dioxus_cli_config::build_id())
+                {
+                    self.send_toast_to_all(
+                        "Hot-patch success!",
+                        &format!("App successfully patched in {} ms", hr_msg.ms_elapsed),
+                        "success",
+                        TOAST_TIMEOUT,
+                        false,
+                    );
+                }
             }
-            DevserverMsg::FullReloadCommand
-            | DevserverMsg::FullReloadStart
-            | DevserverMsg::FullReloadFailed => {
-                // usually only web gets this message - what are we supposed to do?
-                // Maybe we could just binary patch ourselves in place without losing window state?
+            DevserverMsg::FullReloadCommand => {
+                self.send_toast_to_all(
+                    "Successfully rebuilt.",
+                    "Your app was rebuilt successfully and without error.",
+                    "success",
+                    TOAST_TIMEOUT,
+                    true,
+                );
             }
+            DevserverMsg::FullReloadStart => self.send_toast_to_all(
+                "Your app is being rebuilt.",
+                "A non-hot-reloadable change occurred and we must rebuild.",
+                "info",
+                TOAST_TIMEOUT_LONG,
+                false,
+            ),
+            DevserverMsg::FullReloadFailed => self.send_toast_to_all(
+                "Oops! The build failed.",
+                "We tried to rebuild your app, but something went wrong.",
+                "error",
+                TOAST_TIMEOUT_LONG,
+                false,
+            ),
+            DevserverMsg::HotPatchStart => self.send_toast_to_all(
+                "Hot-patching app...",
+                "Hot-patching modified Rust code.",
+                "info",
+                TOAST_TIMEOUT_LONG,
+                false,
+            ),
             DevserverMsg::Shutdown => {
                 self.control_flow = ControlFlow::Exit;
             }
             _ => {}
+        }
+    }
+
+    #[cfg(all(feature = "devtools", debug_assertions))]
+    fn send_toast_to_all(
+        &self,
+        header_text: &str,
+        message: &str,
+        level: &str,
+        duration: Duration,
+        after_reload: bool,
+    ) {
+        for webview in self.webviews.values() {
+            webview.show_toast(header_text, message, level, duration, after_reload);
         }
     }
 

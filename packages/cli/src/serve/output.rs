@@ -969,7 +969,7 @@ impl Output {
                             TraceSrc::App(_platform) => match log.level {
                                 Level::ERROR => Style::new().red(),
                                 Level::WARN => Style::new().yellow(),
-                                Level::INFO => Style::new().green(),
+                                Level::INFO => Style::new().gray(),
                                 Level::DEBUG => Style::new().gray(),
                                 Level::TRACE => Style::new().gray(),
                             },
