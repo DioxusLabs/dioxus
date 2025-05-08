@@ -579,7 +579,7 @@ impl AssetReferences {
             {
                 let len = (data_in_range.len() - remaining_buffer.remaining().len()) - offset;
                 self.assets.push(AssetReference {
-                    file: path.clone(),
+                    file: path.to_path_buf(),
                     offset: range.start + file_offset + offset,
                     bundled_asset,
                 });
