@@ -148,8 +148,6 @@ impl AppServer {
             .map(|server| AppBuilder::start(&server, build_mode))
             .transpose()?;
 
-        tracing::debug!("Proxied port: {:?}", proxied_port);
-
         // Create the runner
         let mut runner = Self {
             file_map: Default::default(),

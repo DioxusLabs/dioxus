@@ -248,10 +248,9 @@ impl AndroidTools {
 
 fn var_or_debug(name: &str) -> Option<PathBuf> {
     use std::env::var;
-    use tracing::debug;
 
     var(name)
-        .inspect_err(|_| debug!("{name} not set"))
+        .inspect_err(|_| tracing::trace!("{name} not set"))
         .ok()
         .map(PathBuf::from)
 }

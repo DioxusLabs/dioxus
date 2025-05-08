@@ -666,10 +666,10 @@ impl BuildRequest {
 
         tracing::debug!(
             r#"Log Files:
-link_args_file: {},
-link_err_file: {},
-rustc_wrapper_args_file: {},
-session_cache_dir: {}"#,
+                • link_args_file: {},
+                • link_err_file: {},
+                • rustc_wrapper_args_file: {},
+                • session_cache_dir: {}"#,
             link_args_file.path().display(),
             link_err_file.path().display(),
             rustc_wrapper_args_file.path().display(),
@@ -886,7 +886,8 @@ session_cache_dir: {}"#,
         let time_end = SystemTime::now();
         let mode = ctx.mode.clone();
         let platform = self.platform;
-        tracing::debug!("Build completed successfully - output location: {:?}", exe);
+
+        tracing::debug!("Build completed successfully: {:?}", exe);
 
         Ok(BuildArtifacts {
             time_end,
@@ -905,8 +906,6 @@ session_cache_dir: {}"#,
     /// This uses "known paths" that have stayed relatively stable during cargo's lifetime.
     /// One day this system might break and we might need to go back to using the linker approach.
     fn collect_assets(&self, exe: &Path, ctx: &BuildContext) -> Result<AssetManifest> {
-        tracing::debug!("Collecting assets from exe at {} ...", exe.display());
-
         // walk every file in the incremental cache dir, reading and inserting items into the manifest.
         let mut manifest = AssetManifest::default();
 
@@ -1764,7 +1763,6 @@ session_cache_dir: {}"#,
                 cmd.current_dir(self.workspace_dir());
                 cmd.env_clear();
                 cmd.args(rustc_args.args[1..].iter());
-                cmd.envs(rustc_args.envs.iter().cloned());
                 cmd.env_remove("RUSTC_WORKSPACE_WRAPPER");
                 cmd.env_remove("RUSTC_WRAPPER");
                 cmd.env_remove(DX_RUSTC_WRAPPER_ENV_VAR);
@@ -1775,7 +1773,11 @@ session_cache_dir: {}"#,
                     cmd.arg("-Crelocation-model=pic");
                 }
 
-                tracing::trace!("Direct rustc command: {:#?}", rustc_args.args);
+                tracing::debug!("Direct rustc: {:#?}", cmd);
+
+                cmd.envs(rustc_args.envs.iter().cloned());
+
+                tracing::trace!("Setting env vars: {:#?}", rustc_args.envs);
 
                 Ok(cmd)
             }
@@ -1800,8 +1802,6 @@ session_cache_dir: {}"#,
                     .args(self.cargo_build_arguments(ctx))
                     .envs(self.cargo_build_env_vars(ctx)?);
 
-                tracing::trace!("Cargo command: {:#?}", cmd);
-
                 if ctx.mode == BuildMode::Fat {
                     cmd.env(
                         DX_RUSTC_WRAPPER_ENV_VAR,
@@ -1815,6 +1815,8 @@ session_cache_dir: {}"#,
                         Workspace::path_to_dx()?.display().to_string(),
                     );
                 }
+
+                tracing::debug!("Cargo: {:#?}", cmd);
 
                 Ok(cmd)
             }
@@ -2657,8 +2659,6 @@ session_cache_dir: {}"#,
             return platforms;
         };
 
-        tracing::debug!("Default features: {default:?}");
-
         // we only trace features 1 level deep..
         for feature in default.iter() {
             // If the user directly specified a platform we can just use that.
@@ -2687,8 +2687,6 @@ session_cache_dir: {}"#,
 
         platforms.sort();
         platforms.dedup();
-
-        tracing::debug!("Default platforms: {platforms:?}");
 
         platforms
     }
@@ -3273,9 +3271,15 @@ session_cache_dir: {}"#,
             create_dir_all(self.exe_dir())?;
             create_dir_all(self.asset_dir())?;
 
-            tracing::debug!("Initialized Root dir: {:?}", self.root_dir());
-            tracing::debug!("Initialized Exe dir: {:?}", self.exe_dir());
-            tracing::debug!("Initialized Asset dir: {:?}", self.asset_dir());
+            tracing::debug!(
+                r#"Initialized build dirs:
+               • root dir: {:?}
+               • exe dir: {:?}
+               • asset dir: {:?}"#,
+                self.root_dir(),
+                self.exe_dir(),
+                self.asset_dir(),
+            );
 
             // we could download the templates from somewhere (github?) but after having banged my head against
             // cargo-mobile2 for ages, I give up with that. We're literally just going to hardcode the templates
@@ -3387,7 +3391,6 @@ session_cache_dir: {}"#,
     /// This should generally be only called on the first build since it takes time to verify the tooling
     /// is in place, and we don't want to slow down subsequent builds.
     pub(crate) async fn verify_tooling(&self, ctx: &BuildContext) -> Result<()> {
-        tracing::debug!("Verifying tooling...");
         ctx.status_installing_tooling();
 
         self
