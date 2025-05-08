@@ -1,7 +1,7 @@
 use super::{AppBuilder, ServeUpdate, WebServer};
 use crate::{
     BuildArtifacts, BuildId, BuildMode, BuildTargets, Error, HotpatchModuleCache, Platform, Result,
-    ServeArgs, TraceSrc, Workspace,
+    ServeArgs, TailwindCli, TraceSrc, Workspace,
 };
 use anyhow::Context;
 use dioxus_core::internal::{
@@ -72,6 +72,9 @@ pub(crate) struct AppServer {
     pub(crate) devserver_bind_ip: IpAddr,
     pub(crate) proxied_port: Option<u16>,
     pub(crate) cross_origin_policy: bool,
+
+    // Additional plugin-type tools
+    pub(crate) _tw_watcher: tokio::task::JoinHandle<Result<()>>,
 }
 
 pub(crate) struct CachedFile {
@@ -148,6 +151,13 @@ impl AppServer {
             .map(|server| AppBuilder::start(&server, build_mode))
             .transpose()?;
 
+        let tw_watcher = TailwindCli::serve(
+            client.build.package_manifest_dir(),
+            client.build.config.application.tailwind_input.clone(),
+            client.build.config.application.tailwind_output.clone(),
+        )
+        .await?;
+
         tracing::debug!("Proxied port: {:?}", proxied_port);
 
         // Create the runner
@@ -174,6 +184,7 @@ impl AppServer {
             _force_sequential: force_sequential,
             cross_origin_policy,
             fullstack,
+            _tw_watcher: tw_watcher,
         };
 
         // Only register the hot-reload stuff if we're watching the filesystem

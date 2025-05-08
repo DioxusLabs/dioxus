@@ -72,7 +72,6 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &mut TraceController) -> 
                     continue;
                 }
 
-                tracing::debug!("Starting hotpatching: {:?}", files);
                 builder.handle_file_change(&files, &mut devserver).await;
             }
 
