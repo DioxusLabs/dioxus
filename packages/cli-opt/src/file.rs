@@ -1,4 +1,5 @@
 use anyhow::Context;
+use manganis::{CssModuleAssetOptions, FolderAssetOptions};
 use manganis_core::{AssetOptions, CssAssetOptions, ImageAssetOptions, JsAssetOptions};
 use std::path::Path;
 
@@ -33,7 +34,7 @@ pub(crate) fn process_file_to_with_options(
     }
     if let Some(parent) = output_path.parent() {
         if !parent.exists() {
-            std::fs::create_dir_all(parent)?;
+            std::fs::create_dir_all(parent).context("Failed to create directory")?;
         }
     }
 
@@ -47,63 +48,94 @@ pub(crate) fn process_file_to_with_options(
             .unwrap_or_default()
             .to_string_lossy()
     ));
+    let resolved_options = resolve_asset_options(source, options);
 
-    match options {
-        AssetOptions::Unknown => match source.extension().map(|e| e.to_string_lossy()).as_deref() {
-            Some("css") => {
-                process_css(&CssAssetOptions::new(), source, &temp_path)?;
-            }
-            Some("scss" | "sass") => {
-                process_scss(&CssAssetOptions::new(), source, &temp_path)?;
-            }
-            Some("js") => {
-                process_js(&JsAssetOptions::new(), source, &temp_path, !in_folder)?;
-            }
-            Some("json") => {
-                process_json(source, &temp_path)?;
-            }
-            Some("jpg" | "jpeg" | "png" | "webp" | "avif") => {
-                process_image(&ImageAssetOptions::new(), source, &temp_path)?;
-            }
-            Some(_) | None => {
-                if source.is_dir() {
-                    process_folder(source, &temp_path)?;
-                } else {
-                    let source_file = std::fs::File::open(source)?;
-                    let mut reader = std::io::BufReader::new(source_file);
-                    let output_file = std::fs::File::create(&temp_path)?;
-                    let mut writer = std::io::BufWriter::new(output_file);
-                    std::io::copy(&mut reader, &mut writer).with_context(|| {
-                        format!(
-                            "Failed to write file to output location: {}",
-                            temp_path.display()
-                        )
-                    })?;
-                }
-            }
-        },
-        AssetOptions::Css(options) => {
+    match &resolved_options {
+        ResolvedAssetType::Css(options) => {
             process_css(options, source, &temp_path)?;
         }
-        AssetOptions::CssModule(options) => {
+        ResolvedAssetType::CssModule(options) => {
             process_css_module(options, source, output_path, &temp_path)?;
         }
-        AssetOptions::Js(options) => {
+        ResolvedAssetType::Scss(options) => {
+            process_scss(options, source, &temp_path)?;
+        }
+        ResolvedAssetType::Js(options) => {
             process_js(options, source, &temp_path, !in_folder)?;
         }
-        AssetOptions::Image(options) => {
+        ResolvedAssetType::Image(options) => {
             process_image(options, source, &temp_path)?;
         }
-        AssetOptions::Folder(_) => {
+        ResolvedAssetType::Json => {
+            process_json(source, &temp_path)?;
+        }
+        ResolvedAssetType::Folder(_) => {
             process_folder(source, &temp_path)?;
         }
-        _ => {
-            tracing::warn!("Unknown asset options: {:?}", options);
+        ResolvedAssetType::File => {
+            let source_file = std::fs::File::open(source)?;
+            let mut reader = std::io::BufReader::new(source_file);
+            let output_file = std::fs::File::create(&temp_path)?;
+            let mut writer = std::io::BufWriter::new(output_file);
+            std::io::copy(&mut reader, &mut writer).with_context(|| {
+                format!(
+                    "Failed to write file to output location: {}",
+                    temp_path.display()
+                )
+            })?;
         }
     }
 
     // If everything was successful, rename the temp file to the final output path
-    std::fs::rename(temp_path, output_path)?;
+    std::fs::rename(temp_path, output_path).context("Failed to rename output file")?;
 
     Ok(())
+}
+
+pub(crate) enum ResolvedAssetType {
+    /// An image asset
+    Image(ImageAssetOptions),
+    /// A css asset
+    Css(CssAssetOptions),
+    /// A css module asset
+    CssModule(CssModuleAssetOptions),
+    /// A SCSS asset
+    Scss(CssAssetOptions),
+    /// A javascript asset
+    Js(JsAssetOptions),
+    /// A json asset
+    Json,
+    /// A folder asset
+    Folder(FolderAssetOptions),
+    /// A generic file
+    File,
+}
+
+pub(crate) fn resolve_asset_options(source: &Path, options: &AssetOptions) -> ResolvedAssetType {
+    match options {
+        AssetOptions::Image(image) => ResolvedAssetType::Image(*image),
+        AssetOptions::Css(css) => ResolvedAssetType::Css(*css),
+        AssetOptions::CssModule(css) => ResolvedAssetType::CssModule(*css),
+        AssetOptions::Js(js) => ResolvedAssetType::Js(*js),
+        AssetOptions::Folder(folder) => ResolvedAssetType::Folder(*folder),
+        AssetOptions::Unknown => resolve_unknown_asset_options(source),
+        _ => {
+            tracing::warn!("Unknown asset options... you may need to update the Dioxus CLI. Defaulting to a generic file: {:?}", options);
+            resolve_unknown_asset_options(source)
+        }
+    }
+}
+
+fn resolve_unknown_asset_options(source: &Path) -> ResolvedAssetType {
+    match source.extension().map(|e| e.to_string_lossy()).as_deref() {
+        Some("scss" | "sass") => ResolvedAssetType::Scss(CssAssetOptions::new()),
+        Some("css") => ResolvedAssetType::Css(CssAssetOptions::new()),
+        Some("js") => ResolvedAssetType::Js(JsAssetOptions::new()),
+        Some("json") => ResolvedAssetType::Json,
+        Some("jpg" | "jpeg" | "png" | "webp" | "avif") => {
+            ResolvedAssetType::Image(ImageAssetOptions::new())
+        }
+        _ if source.is_dir() => ResolvedAssetType::Folder(FolderAssetOptions::new()),
+        _ => ResolvedAssetType::File,
+    }
 }

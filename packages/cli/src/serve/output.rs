@@ -151,7 +151,7 @@ impl Output {
         use std::io::IsTerminal;
 
         if !stdout().is_terminal() {
-            return io::Result::Err(io::Error::new(io::ErrorKind::Other, "Not a terminal"));
+            return io::Result::Err(io::Error::other("Not a terminal"));
         }
 
         enable_raw_mode()?;
@@ -545,7 +545,6 @@ impl Output {
             BuildStage::Restarting => lines.push("Restarting".yellow()),
             BuildStage::Linking => lines.push("Linking".yellow()),
             BuildStage::Hotpatching => lines.push("Hot-patching...".yellow()),
-            BuildStage::ExtractingAssets => lines.push("Extracting assets".yellow()),
             _ => {}
         };
 
