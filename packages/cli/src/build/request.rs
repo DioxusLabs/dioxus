@@ -329,7 +329,7 @@ use manganis::{AssetOptions, JsAssetOptions};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::HashSet,
+    collections::{BTreeMap, HashSet},
     io::Write,
     path::{Path, PathBuf},
     process::Stdio,
@@ -3770,5 +3770,87 @@ r#" <script>
             .unwrap()
             .to_path_buf()
             .into()
+    }
+
+    pub(crate) async fn start_simulators(&self) -> Result<()> {
+        match self.platform {
+            // Boot an iOS simulator if one is not already running.
+            //
+            // We always choose the most recently opened simulator based on the xcrun list.
+            // Note that simulators can be running but the simulator app itself is not open.
+            // Calling `open::that` is always fine, even on running apps, since apps are singletons.
+            Platform::Ios => {
+                #[derive(Deserialize, Debug)]
+                struct XcrunListJson {
+                    // "com.apple.CoreSimulator.SimRuntime.iOS-18-4": [{}, {}, {}]
+                    devices: BTreeMap<String, Vec<XcrunDevice>>,
+                }
+
+                #[derive(Deserialize, Debug)]
+                struct XcrunDevice {
+                    #[serde(rename = "lastBootedAt")]
+                    last_booted_at: Option<String>,
+                    udid: String,
+                    name: String,
+                    state: String,
+                }
+                let xcrun_list = Command::new("xcrun")
+                    .arg("simctl")
+                    .arg("list")
+                    .arg("-j")
+                    .output()
+                    .await?;
+
+                let as_str = String::from_utf8_lossy(&xcrun_list.stdout);
+                let xcrun_list_json = serde_json::from_str::<XcrunListJson>(as_str.trim());
+                if let Ok(xcrun_list_json) = xcrun_list_json {
+                    if xcrun_list_json.devices.is_empty() {
+                        tracing::warn!(
+                            "No iOS sdks installed found. Please install the iOS SDK in Xcode."
+                        );
+                    }
+
+                    if let Some((_rt, devices)) = xcrun_list_json.devices.iter().next() {
+                        if devices.iter().all(|device| device.state != "Booted") {
+                            let last_booted =
+                                devices
+                                    .iter()
+                                    .max_by_key(|device| match device.last_booted_at {
+                                        Some(ref last_booted) => last_booted,
+                                        None => "2000-01-01T01:01:01Z",
+                                    });
+
+                            if let Some(device) = last_booted {
+                                tracing::info!("Booting iOS simulator: \"{}\"", device.name);
+                                Command::new("xcrun")
+                                    .arg("simctl")
+                                    .arg("boot")
+                                    .arg(&device.udid)
+                                    .output()
+                                    .await?;
+                            }
+                        }
+                    }
+                }
+                let path_to_xcode = Command::new("xcode-select")
+                    .arg("--print-path")
+                    .output()
+                    .await?;
+                let path_to_xcode: PathBuf = String::from_utf8_lossy(&path_to_xcode.stdout)
+                    .as_ref()
+                    .trim()
+                    .into();
+                let path_to_sim = path_to_xcode.join("Applications").join("Simulator.app");
+                open::that(path_to_sim)?;
+            }
+
+            Platform::Android => {}
+
+            _ => {
+                // nothing - maybe on the web we should open the browser?
+            }
+        };
+
+        Ok(())
     }
 }

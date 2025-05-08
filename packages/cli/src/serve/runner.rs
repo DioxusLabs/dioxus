@@ -155,8 +155,9 @@ impl AppServer {
             client.build.package_manifest_dir(),
             client.build.config.application.tailwind_input.clone(),
             client.build.config.application.tailwind_output.clone(),
-        )
-        .await?;
+        );
+
+        _ = client.build.start_simulators().await;
 
         // Create the runner
         let mut runner = Self {
