@@ -15,7 +15,7 @@ pub struct Workspace {
     pub(crate) krates: Krates,
     pub(crate) settings: CliSettings,
     pub(crate) wasm_opt: Option<PathBuf>,
-    pub(crate) sysroot: PathBuf,
+    pub(crate) sysroot: Sysroot,
     pub(crate) rustc_version: String,
     pub(crate) ignore: Gitignore,
     pub(crate) cargo_toml: cargo_toml::Manifest,
@@ -44,12 +44,7 @@ impl Workspace {
             .context("Failed to run cargo metadata")?;
 
         let settings = CliSettings::global_or_default();
-        let sysroot = Command::new("rustc")
-            .args(["--print", "sysroot"])
-            .output()
-            .await
-            .map(|out| String::from_utf8(out.stdout))?
-            .context("Failed to extract rustc sysroot output")?;
+        let sysroot = Sysroot::new().await?;
 
         let rustc_version = Command::new("rustc")
             .args(["--version"])
@@ -72,7 +67,7 @@ impl Workspace {
             krates,
             settings,
             wasm_opt,
-            sysroot: sysroot.trim().into(),
+            sysroot,
             rustc_version: rustc_version.trim().into(),
             ignore,
             cargo_toml,
@@ -114,50 +109,6 @@ impl Workspace {
         }
 
         false
-    }
-
-    #[allow(unused)]
-    pub fn rust_lld(&self) -> PathBuf {
-        self.sysroot
-            .join("lib")
-            .join("rustlib")
-            .join(Triple::host().to_string())
-            .join("bin")
-            .join("rust-lld")
-    }
-
-    /// Return the path to the `cc` compiler
-    ///
-    /// This is used for the patching system to run the linker.
-    /// We could also just use lld given to us by rust itself.
-    pub fn cc(&self) -> PathBuf {
-        PathBuf::from("cc")
-    }
-
-    /// The windows linker
-    pub fn lld_link(&self) -> PathBuf {
-        self.gcc_ld_dir().join("lld-link")
-    }
-
-    pub fn wasm_ld(&self) -> PathBuf {
-        self.gcc_ld_dir().join("wasm-ld")
-    }
-
-    // wasm-ld: ./rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/wasm-ld
-    // rust-lld: ./rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/rust-lld
-    fn gcc_ld_dir(&self) -> PathBuf {
-        self.sysroot
-            .join("lib")
-            .join("rustlib")
-            .join(Triple::host().to_string())
-            .join("bin")
-            .join("gcc-ld")
-    }
-
-    pub fn has_wasm32_unknown_unknown(&self) -> bool {
-        self.sysroot
-            .join("lib/rustlib/wasm32-unknown-unknown")
-            .exists()
     }
 
     /// Find the "main" package in the workspace. There might not be one!
@@ -380,5 +331,69 @@ impl std::fmt::Debug for Workspace {
             .field("sysroot", &self.sysroot)
             .field("wasm_opt", &self.wasm_opt)
             .finish()
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct Sysroot {
+    sysroot: PathBuf,
+}
+
+impl Sysroot {
+    pub(crate) async fn new() -> Result<Self> {
+        let sysroot = Command::new("rustc")
+            .args(["--print", "sysroot"])
+            .output()
+            .await
+            .map(|out| String::from_utf8(out.stdout))?
+            .context("Failed to extract rustc sysroot output")?;
+
+        Ok(Self {
+            sysroot: sysroot.trim().into(),
+        })
+    }
+
+    #[allow(unused)]
+    pub fn rust_lld(&self) -> PathBuf {
+        self.sysroot
+            .join("lib")
+            .join("rustlib")
+            .join(Triple::host().to_string())
+            .join("bin")
+            .join("rust-lld")
+    }
+
+    /// Return the path to the `cc` compiler
+    ///
+    /// This is used for the patching system to run the linker.
+    /// We could also just use lld given to us by rust itself.
+    pub fn cc(&self) -> PathBuf {
+        PathBuf::from("cc")
+    }
+
+    /// The windows linker
+    pub fn lld_link(&self) -> PathBuf {
+        self.gcc_ld_dir().join("lld-link")
+    }
+
+    pub fn wasm_ld(&self) -> PathBuf {
+        self.gcc_ld_dir().join("wasm-ld")
+    }
+
+    // wasm-ld: ./rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/wasm-ld
+    // rust-lld: ./rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/rust-lld
+    fn gcc_ld_dir(&self) -> PathBuf {
+        self.sysroot
+            .join("lib")
+            .join("rustlib")
+            .join(Triple::host().to_string())
+            .join("bin")
+            .join("gcc-ld")
+    }
+
+    pub fn has_wasm32_unknown_unknown(&self) -> bool {
+        self.sysroot
+            .join("lib/rustlib/wasm32-unknown-unknown")
+            .exists()
     }
 }

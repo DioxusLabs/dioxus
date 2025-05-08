@@ -1,4 +1,4 @@
-use crate::Result;
+use crate::{Result, Sysroot};
 use anyhow::Context;
 use const_serialize::ConstVec;
 use dioxus_cli_opt::{process_file_to, AssetManifest};
@@ -11,8 +11,10 @@ use std::fmt::Debug;
 use std::fs::{self, create_dir_all};
 use std::io::{Read, Seek, Write};
 use std::path::PathBuf;
+use std::process::Command;
 use std::str::FromStr;
 use target_lexicon::Triple;
+use target_lexicon::{Architecture, OperatingSystem};
 
 /// `dx` can act as a linker in a few scenarios. Note that we don't *actually* implement the linker logic,
 /// instead just proxying to a specified linker (or not linking at all!).
@@ -38,13 +40,20 @@ use target_lexicon::Triple;
 /// object file.
 #[derive(Debug)]
 pub struct LinkAction {
-    pub linker: Option<PathBuf>,
+    pub linker: Linker,
     pub triple: Triple,
     pub link_args_file: Option<PathBuf>,
     pub link_err_file: Option<PathBuf>,
     pub link_log_file: Option<PathBuf>,
     pub link_asset_manifest_file: Option<PathBuf>,
     pub link_asset_out_dir: Option<PathBuf>,
+}
+
+#[derive(Debug)]
+pub enum Linker {
+    Override(PathBuf),
+    Auto,
+    None,
 }
 
 /// The linker flavor to use. This influences the argument style that gets passed to the linker.
@@ -82,10 +91,18 @@ impl LinkAction {
             return None;
         }
 
+        let linker = std::env::var(Self::DX_LINK_CUSTOM_LINKER);
+        let linker = match &linker {
+            Ok(linker) if linker.eq_ignore_ascii_case("auto") => Linker::Auto,
+            Ok(linker) => {
+                let linker = PathBuf::from(linker);
+                Linker::Override(linker)
+            }
+            Err(_) => Linker::None,
+        };
+
         Some(Self {
-            linker: std::env::var(Self::DX_LINK_CUSTOM_LINKER)
-                .ok()
-                .map(PathBuf::from),
+            linker,
             link_args_file: std::env::var(Self::DX_ARGS_FILE).ok().map(PathBuf::from),
             link_err_file: std::env::var(Self::DX_ERR_FILE).ok().map(PathBuf::from),
             triple: std::env::var(Self::DX_LINK_TRIPLE)
@@ -123,11 +140,17 @@ impl LinkAction {
             ));
         }
         env_vars.push((Self::DX_LINK_TRIPLE, self.triple.to_string()));
-        if let Some(linker) = &self.linker {
-            env_vars.push((
-                Self::DX_LINK_CUSTOM_LINKER,
-                dunce::canonicalize(linker)?.to_string_lossy().to_string(),
-            ));
+        match &self.linker {
+            Linker::Override(linker) => {
+                env_vars.push((
+                    Self::DX_LINK_CUSTOM_LINKER,
+                    dunce::canonicalize(linker)?.to_string_lossy().to_string(),
+                ));
+            }
+            Linker::Auto => {
+                env_vars.push((Self::DX_LINK_CUSTOM_LINKER, "auto".to_string()));
+            }
+            Linker::None => {}
         }
         if let Some(link_asset_manifest_file) = &self.link_asset_manifest_file {
             env_vars.push((
@@ -196,11 +219,22 @@ impl LinkAction {
             std::fs::write(link_args_file, args.join("\n"))?;
         }
 
+        let linker = match &self.linker {
+            Linker::Override(linker) => Some(Command::new(linker)),
+            Linker::Auto => {
+                let sysroot = Sysroot::new().await?;
+                // Try to find the linker from the toolchain
+                let linker = find_linker(&self.triple, &sysroot);
+                Some(linker)
+            }
+            Linker::None => None,
+        };
+
         // If there's a linker specified, we use that. Otherwise, we write a dummy object file to satisfy
         // any post-processing steps that rustc does.
-        match &self.linker {
-            Some(linker) => {
-                let res = std::process::Command::new(linker)
+        match linker {
+            Some(mut linker) => {
+                let res = linker
                     .args(args.iter().skip(1))
                     .output()
                     .context("Failed to await linker")?;
@@ -589,4 +623,51 @@ fn guess_target_triple() -> Triple {
         tracing::error!("Failed to parse target triple from toolchain: {toolchain}");
         Triple::host()
     })
+}
+
+// Try to guess the current linker from the toolchain
+fn find_linker(toolchain: &Triple, sysroot: &Sysroot) -> Command {
+    tracing::info!("Linking for target: {:?}", toolchain);
+    match (toolchain.operating_system, toolchain.architecture) {
+        // usually just ld64 - uses your `cc`
+        // Eg. aarch64-apple-darwin
+        (OperatingSystem::MacOSX(_), _) => {
+            let mut command = Command::new(PathBuf::from(sysroot.cc()));
+            command.env_remove("IPHONEOS_DEPLOYMENT_TARGET");
+            command.env_remove("TVOS_DEPLOYMENT_TARGET");
+            command.env_remove("XROS_DEPLOYMENT_TARGET");
+            command
+        }
+        // Eg. nightly-x86_64-unknown-linux-gnu
+        (OperatingSystem::Linux, arch) => {
+            let mut command = Command::new(sysroot.cc());
+            command.env("LC_ALL", "C");
+            if arch == target_lexicon::Architecture::X86_64 {
+                command.arg("-m64");
+            }
+            command
+        }
+        // Eg. stable-x86_64-pc-windows-msvc
+        (OperatingSystem::Windows, _) => {
+            let mut command = Command::new("link.exe");
+            command.arg("/NOLOGO");
+            command
+        }
+        // Eg. nightly-wasm32-unknown-unknown
+        (_, Architecture::Wasm32 | Architecture::Wasm64) => {
+            let mut command = Command::new(sysroot.wasm_ld());
+            command.env("LC_ALL", "C");
+            command
+        }
+        _ => {
+            panic!(
+                "Unknown target {}. Please set the environment variable DIOXUS_LINKER to the path of your linker.
+If you don't know where your linker is, create a blank rust file and run `rustc temp.rs --print link-args`.
+On unix-like platforms, you can run this command to find your link args:
+`echo \"fn main(){{}}\" > ./temp.rs && rustc temp.rs --print link-args -Z unstable-options && rm ./temp.rs`
+Once you find the linker args for your platform feel free to open an issue with link args so we can
+add support for the platform out of the box: https://github.com/DioxusLabs/dioxus/issues/new", toolchain
+        )
+        }
+    }
 }

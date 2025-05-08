@@ -1689,7 +1689,9 @@ session_cache_dir: {}"#,
     /// linker format.
     fn select_linker(&self) -> Result<PathBuf, Error> {
         let cc = match self.triple.operating_system {
-            OperatingSystem::Unknown if self.platform == Platform::Web => self.workspace.wasm_ld(),
+            OperatingSystem::Unknown if self.platform == Platform::Web => {
+                self.workspace.sysroot.wasm_ld()
+            }
 
             // The android clang linker is *special* and has some android-specific flags that we need
             //
@@ -1702,11 +1704,11 @@ session_cache_dir: {}"#,
             // We could also use `lld` here, but it might not be installed by default.
             //
             // Note that this is *clang*, not `lld`.
-            OperatingSystem::Darwin(_) | OperatingSystem::IOS(_) => self.workspace.cc(),
+            OperatingSystem::Darwin(_) | OperatingSystem::IOS(_) => self.workspace.sysroot.cc(),
 
             // On windows, instead of trying to find the system linker, we just go with the lld.link
             // that rustup provides. It's faster and more stable then reyling on link.exe in path.
-            OperatingSystem::Windows => self.workspace.lld_link(),
+            OperatingSystem::Windows => self.workspace.sysroot.lld_link(),
 
             // The rest of the platforms use `cc` as the linker which should be available in your path,
             // provided you have build-tools setup. On mac/linux this is the default, but on Windows
@@ -1720,7 +1722,7 @@ session_cache_dir: {}"#,
             // Note that "cc" is *not* a linker. It's a compiler! The arguments we pass need to be in
             // the form of `-Wl,<args>` for them to make it to the linker. This matches how rust does it
             // which is confusing.
-            _ => self.workspace.cc(),
+            _ => self.workspace.sysroot.cc(),
         };
 
         Ok(cc)
@@ -1969,7 +1971,16 @@ session_cache_dir: {}"#,
         // Write the enviorment variables for the dx linker intercept used for both asset collection and hot reload builds.
         LinkAction {
             triple: self.triple.clone(),
-            linker: self.custom_linker.clone(),
+            linker: match self.custom_linker.clone() {
+                Some(linker) => crate::Linker::Override(linker),
+                None => {
+                    if matches!(ctx.mode, BuildMode::Thin { .. }) {
+                        crate::Linker::None
+                    } else {
+                        crate::Linker::Auto
+                    }
+                }
+            },
             link_err_file: Some(dunce::canonicalize(self.link_err_file.path())?),
             link_args_file: Some(dunce::canonicalize(self.link_args_file.path())?),
             link_asset_manifest_file: (!self.skip_assets)
@@ -3384,7 +3395,7 @@ session_cache_dir: {}"#,
     async fn verify_web_tooling(&self) -> Result<()> {
         // Install target using rustup.
         #[cfg(not(feature = "no-downloads"))]
-        if !self.workspace.has_wasm32_unknown_unknown() {
+        if !self.workspace.sysroot.has_wasm32_unknown_unknown() {
             tracing::info!(
                 "Web platform requires wasm32-unknown-unknown to be installed. Installing..."
             );
@@ -3396,7 +3407,7 @@ session_cache_dir: {}"#,
         }
 
         // Ensure target is installed.
-        if !self.workspace.has_wasm32_unknown_unknown() {
+        if !self.workspace.sysroot.has_wasm32_unknown_unknown() {
             return Err(Error::Other(anyhow::anyhow!(
                 "Missing target wasm32-unknown-unknown."
             )));
