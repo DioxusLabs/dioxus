@@ -58,6 +58,25 @@ export function setAttributeInner(
       node.innerHTML = value;
       break;
 
+    case "style":
+      // Save the existing styles
+      const existingStyles: Record<string, string> = {};
+
+      for (let i = 0; i < node.style.length; i++) {
+        const prop = node.style[i];
+        existingStyles[prop] = node.style.getPropertyValue(prop);
+      }
+      // Override all styles
+      node.setAttribute(field, value);
+      // Restore the old styles
+      for (const prop in existingStyles) {
+        // If it wasn't overridden, restore it
+        if (!node.style.getPropertyValue(prop)) {
+          node.style.setProperty(prop, existingStyles[prop]);
+        }
+      }
+      break;
+
     case "multiple":
       setAttributeDefault(node, field, value);
       // reset the selected value whenever multiple changes

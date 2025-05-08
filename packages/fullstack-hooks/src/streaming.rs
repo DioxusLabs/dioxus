@@ -89,7 +89,7 @@ pub fn commit_initial_chunk() {
 ///     // up in the initial chunk.
 ///     use_hook(|| {
 ///         if current_status() == StreamingStatus::InitialChunkCommitted {
-///            log::warn!("Since `MetaTitle` was rendered after the initial chunk was committed, the meta tag will not show up in the head without javascript enabled.");
+///            dioxus::logger::tracing::warn!("Since `MetaTitle` was rendered after the initial chunk was committed, the meta tag will not show up in the head without javascript enabled.");
 ///         }
 ///     });
 ///

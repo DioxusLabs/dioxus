@@ -49,8 +49,50 @@ mod test_default_into {
         pub some_data: bool,
 
         pub some_other_data: bool,
+
+        // Test default values for signals
+        #[props(default)]
+        read_only_w_default: ReadOnlySignal<bool>,
+
+        #[props(default = true)]
+        read_only_w_default_val: ReadOnlySignal<bool>,
+
+        #[props(default = ReadOnlySignal::new(Signal::new(true)))]
+        read_only_w_default_val_explicit: ReadOnlySignal<bool>,
+
+        // Test default values for callbacks/event handlers
+        #[props(default)]
+        callback_w_default: Callback,
+
+        #[props(default = move |_| {})]
+        callback_w_default_val_closure: Callback,
+
+        #[props(default = {
+            fn test(_: ()) {}
+            test
+        })]
+        callback_w_default_val_expr_fn: Callback,
+
+        #[props(default = Callback::new(move |_: ()| {}))]
+        callback_w_default_val_explicit: Callback,
+
+        #[props(default)]
+        event_handler_w_default: EventHandler<KeyboardEvent>,
+
+        #[props(default = move |_| {})]
+        event_handler_w_default_val_closure: EventHandler<KeyboardEvent>,
+
+        #[props(default = {
+            fn test(_: KeyboardEvent) {}
+            test
+        })]
+        event_handler_w_default_val_expr_fn: EventHandler<KeyboardEvent>,
+
+        #[props(default = EventHandler::new(move |_: KeyboardEvent| {}))]
+        event_handler_w_default_val_explicit: EventHandler<KeyboardEvent>,
     }
 }
+
 /// This test ensures that read-only signals that contain an option (`Signal<Option<u16>>`)
 /// are correctly created as default when not provided.
 ///

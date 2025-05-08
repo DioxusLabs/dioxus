@@ -399,3 +399,8 @@ impl std::fmt::Display for TakeDataError {
 }
 
 impl std::error::Error for TakeDataError {}
+
+/// Create a new entry in the serialize context for the head element hydration
+pub fn head_element_hydration_entry() -> SerializeContextEntry<bool> {
+    serialize_context().create_entry()
+}
