@@ -243,7 +243,7 @@ impl LinkAction {
                     // Trim lines containing libcompiler_builtins. There is a noisy error rust-lld warns about
                     // but doesn't cause any issues.
                     // Eg.
-                    // rust-lld: warning: /Users/_/.rustup/toolchains/stable-aarch64-apple-darwin/lib/rustlib/wasm32-unknown-unknown/lib/libcompiler_builtins-c52b53342d7142a8.rlib: archive member '45c91108d938afe8-subvti3.o' is neither Wasm object file nor LLVM bitcode
+                    // rust-lld: warning: /Users/_/.rustup/toolchains/stable-aarch64-apple-darwin/lib/rustlib/wasm32-unknown-unknown/lib/libcompiler_builtins-_.rlib: archive member '_.o' is neither Wasm object file nor LLVM bitcode
                     fn trim_libcompiler_builtins(messages: &str) -> String {
                         messages
                             .lines()
