@@ -224,7 +224,7 @@ impl LinkAction {
             Linker::Auto => {
                 let sysroot = Sysroot::new().await?;
                 // Try to find the linker from the toolchain
-                let linker = find_linker(&self.triple, &sysroot);
+                let linker = find_linker(&sysroot);
                 Some(linker)
             }
             Linker::None => None,
@@ -611,6 +611,7 @@ fn guess_target_triple() -> Triple {
     let targeting_wasm =
         args.contains(&"-flavor".to_string()) && args.contains(&"wasm".to_string());
     let toolchain = if targeting_wasm {
+        tracing::info!("Detected wasm from args: {:?}", args);
         "stable-wasm32-unknown-unknown".to_string()
     } else {
         std::env::var("RUSTUP_TOOLCHAIN").unwrap()
@@ -626,7 +627,8 @@ fn guess_target_triple() -> Triple {
 }
 
 // Try to guess the current linker from the toolchain
-fn find_linker(toolchain: &Triple, sysroot: &Sysroot) -> Command {
+fn find_linker(sysroot: &Sysroot) -> Command {
+    let toolchain = guess_target_triple();
     tracing::info!("Linking for target: {:?}", toolchain);
     match (toolchain.operating_system, toolchain.architecture) {
         // usually just ld64 - uses your `cc`
@@ -655,7 +657,7 @@ fn find_linker(toolchain: &Triple, sysroot: &Sysroot) -> Command {
         }
         // Eg. nightly-wasm32-unknown-unknown
         (_, Architecture::Wasm32 | Architecture::Wasm64) => {
-            let mut command = Command::new(sysroot.wasm_ld());
+            let mut command = Command::new(sysroot.rust_lld());
             command.env("LC_ALL", "C");
             command
         }
@@ -664,7 +666,7 @@ fn find_linker(toolchain: &Triple, sysroot: &Sysroot) -> Command {
                 "Unknown target {}. Please set the environment variable DIOXUS_LINKER to the path of your linker.
 If you don't know where your linker is, create a blank rust file and run `rustc temp.rs --print link-args`.
 On unix-like platforms, you can run this command to find your link args:
-`echo \"fn main(){{}}\" > ./temp.rs && rustc temp.rs --print link-args -Z unstable-options && rm ./temp.rs`
+`echo \"fn main(){{}}\" > ./temp.rs && rustc +nightly temp.rs --print link-args -Z unstable-options && rm ./temp.rs`
 Once you find the linker args for your platform feel free to open an issue with link args so we can
 add support for the platform out of the box: https://github.com/DioxusLabs/dioxus/issues/new", toolchain
         )
