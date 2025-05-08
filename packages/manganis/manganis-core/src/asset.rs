@@ -165,7 +165,7 @@ impl Asset {
     pub fn bundled(&self) -> BundledAsset {
         let len = self.bundled.len();
         let ptr = self.bundled as *const u8;
-        if ptr == std::ptr::null() {
+        if ptr.is_null() {
             panic!("Tried to use an asset that was not bundled. Make sure you are compiling dx as the linker");
         }
         let mut bytes = ConstVec::new();

@@ -238,13 +238,11 @@ impl LinkAction {
                     .context("Failed to await linker")?;
 
                 if !res.stderr.is_empty() || !res.stdout.is_empty() {
-                    tracing::info!("linker stdout: {:?}", res.stdout);
-                    tracing::error!("linker stderr: {:?}", res.stderr);
-                    let message = format!(
-                        "Linker error: {}\n{}",
-                        String::from_utf8_lossy(&res.stdout),
-                        String::from_utf8_lossy(&res.stderr)
-                    );
+                    let stdout = String::from_utf8_lossy(&res.stdout);
+                    let stderr = String::from_utf8_lossy(&res.stderr);
+                    tracing::info!("linker stdout: {}", stdout);
+                    tracing::error!("linker stderr: {}", stderr);
+                    let message = format!("Linker error: {}\n{}", stdout, stderr);
                     if let Some(link_err_file) = &self.link_err_file {
                         _ = std::fs::create_dir_all(link_err_file.parent().unwrap());
                         _ = std::fs::write(link_err_file, message);
