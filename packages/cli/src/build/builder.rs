@@ -4,7 +4,7 @@ use crate::{
 };
 use anyhow::Context;
 use dioxus_cli_opt::process_file_to;
-use futures_util::future::OptionFuture;
+use futures_util::{future::OptionFuture, pin_mut, FutureExt};
 use std::{
     env,
     time::{Duration, Instant, SystemTime},
@@ -1157,6 +1157,18 @@ We checked the folder: {}
                 .await
             {
                 tracing::error!("failed to forward port {port}: {e}");
+            }
+
+            // Wait for device to be ready
+            let cmd = Command::new(&adb).arg("wait-for-device").output();
+            let cmd_future = cmd.fuse();
+            pin_mut!(cmd_future);
+            tokio::select! {
+                _ = &mut cmd_future => {}
+                _ = tokio::time::sleep(Duration::from_millis(50)) => {
+                    tracing::info!("Waiting for android emulator to be ready...");
+                    _ = cmd_future.await;
+                }
             }
 
             // Install

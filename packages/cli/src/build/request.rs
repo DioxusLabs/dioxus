@@ -370,7 +370,7 @@ pub(crate) struct BuildRequest {
     pub(crate) platform: Platform,
     pub(crate) enabled_platforms: Vec<Platform>,
     pub(crate) triple: Triple,
-    pub(crate) _device: bool,
+    pub(crate) device: bool,
     pub(crate) package: String,
     pub(crate) features: Vec<String>,
     pub(crate) extra_cargo_args: Vec<String>,
@@ -684,7 +684,7 @@ impl BuildRequest {
             crate_target,
             profile,
             triple,
-            _device: device,
+            device,
             workspace,
             config,
             enabled_platforms,
@@ -3773,6 +3773,10 @@ r#" <script>
     }
 
     pub(crate) async fn start_simulators(&self) -> Result<()> {
+        if self.device {
+            return Ok(());
+        }
+
         match self.platform {
             // Boot an iOS simulator if one is not already running.
             //
@@ -3844,7 +3848,32 @@ r#" <script>
                 open::that(path_to_sim)?;
             }
 
-            Platform::Android => {}
+            Platform::Android => {
+                let tools = self.workspace.android_tools()?;
+                let emulator = tools.emulator();
+                let avds = Command::new(&emulator).arg("-list-avds").output().await?;
+                let avds = String::from_utf8_lossy(&avds.stdout);
+                let avd = avds.trim().lines().next().map(|s| s.trim().to_string());
+                if let Some(avd) = avd {
+                    tracing::info!("Booting Android emulator: \"{avd}\"");
+                    tokio::spawn(async move {
+                        Command::new(&emulator)
+                            .arg("-avd")
+                            .arg(avd)
+                            .args(["-netdelay", "none", "-netspeed", "full"])
+                            .stdin(std::process::Stdio::null())
+                            .stdout(std::process::Stdio::piped())
+                            .stderr(std::process::Stdio::piped())
+                            .spawn()
+                            .unwrap()
+                            .wait()
+                            .await
+                            .unwrap();
+                    });
+                } else {
+                    tracing::warn!("No Android emulators found. Please create one using `emulator -avd <name>`");
+                }
+            }
 
             _ => {
                 // nothing - maybe on the web we should open the browser?
