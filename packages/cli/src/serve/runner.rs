@@ -155,10 +155,9 @@ impl AppServer {
             client.build.package_manifest_dir(),
             client.build.config.application.tailwind_input.clone(),
             client.build.config.application.tailwind_output.clone(),
-        )
-        .await?;
+        );
 
-        tracing::debug!("Proxied port: {:?}", proxied_port);
+        _ = client.build.start_simulators().await;
 
         // Create the runner
         let mut runner = Self {
@@ -447,6 +446,11 @@ impl AppServer {
             // https://github.com/DioxusLabs/dioxus/issues/3361
             if !msg.is_empty() && self.client.can_receive_hotreloads() {
                 tracing::info!(dx_src = ?TraceSrc::Dev, "Hotreloading: {}", file);
+
+                if !server.has_hotreload_sockets() && self.client.build.platform != Platform::Web {
+                    tracing::warn!("No clients to hotreload - try reloading the app!");
+                }
+
                 server.send_hotreload(msg).await;
             } else {
                 tracing::debug!(dx_src = ?TraceSrc::Dev, "Ignoring file change: {}", file);

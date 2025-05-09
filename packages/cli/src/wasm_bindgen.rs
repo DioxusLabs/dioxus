@@ -156,7 +156,7 @@ impl WasmBindgen {
             .expect("input_path should be valid utf8");
         args.push(input_path);
 
-        tracing::debug!("wasm-bindgen args: {:#?}", args);
+        tracing::debug!("wasm-bindgen: {:#?}", args);
 
         // Run bindgen
         let output = Command::new(binary).args(args).output().await?;

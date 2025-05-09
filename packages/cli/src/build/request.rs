@@ -329,7 +329,7 @@ use manganis::{AssetOptions, JsAssetOptions};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::HashSet,
+    collections::{BTreeMap, HashSet},
     io::Write,
     path::{Path, PathBuf},
     process::Stdio,
@@ -370,7 +370,7 @@ pub(crate) struct BuildRequest {
     pub(crate) platform: Platform,
     pub(crate) enabled_platforms: Vec<Platform>,
     pub(crate) triple: Triple,
-    pub(crate) _device: bool,
+    pub(crate) device: bool,
     pub(crate) package: String,
     pub(crate) features: Vec<String>,
     pub(crate) extra_cargo_args: Vec<String>,
@@ -666,10 +666,10 @@ impl BuildRequest {
 
         tracing::debug!(
             r#"Log Files:
-link_args_file: {},
-link_err_file: {},
-rustc_wrapper_args_file: {},
-session_cache_dir: {}"#,
+                • link_args_file: {},
+                • link_err_file: {},
+                • rustc_wrapper_args_file: {},
+                • session_cache_dir: {}"#,
             link_args_file.path().display(),
             link_err_file.path().display(),
             rustc_wrapper_args_file.path().display(),
@@ -684,7 +684,7 @@ session_cache_dir: {}"#,
             crate_target,
             profile,
             triple,
-            _device: device,
+            device,
             workspace,
             config,
             enabled_platforms,
@@ -886,7 +886,8 @@ session_cache_dir: {}"#,
         let time_end = SystemTime::now();
         let mode = ctx.mode.clone();
         let platform = self.platform;
-        tracing::debug!("Build completed successfully - output location: {:?}", exe);
+
+        tracing::debug!("Build completed successfully: {:?}", exe);
 
         Ok(BuildArtifacts {
             time_end,
@@ -905,8 +906,6 @@ session_cache_dir: {}"#,
     /// This uses "known paths" that have stayed relatively stable during cargo's lifetime.
     /// One day this system might break and we might need to go back to using the linker approach.
     fn collect_assets(&self, exe: &Path, ctx: &BuildContext) -> Result<AssetManifest> {
-        tracing::debug!("Collecting assets from exe at {} ...", exe.display());
-
         // walk every file in the incremental cache dir, reading and inserting items into the manifest.
         let mut manifest = AssetManifest::default();
 
@@ -1764,7 +1763,6 @@ session_cache_dir: {}"#,
                 cmd.current_dir(self.workspace_dir());
                 cmd.env_clear();
                 cmd.args(rustc_args.args[1..].iter());
-                cmd.envs(rustc_args.envs.iter().cloned());
                 cmd.env_remove("RUSTC_WORKSPACE_WRAPPER");
                 cmd.env_remove("RUSTC_WRAPPER");
                 cmd.env_remove(DX_RUSTC_WRAPPER_ENV_VAR);
@@ -1775,7 +1773,11 @@ session_cache_dir: {}"#,
                     cmd.arg("-Crelocation-model=pic");
                 }
 
-                tracing::trace!("Direct rustc command: {:#?}", rustc_args.args);
+                tracing::debug!("Direct rustc: {:#?}", cmd);
+
+                cmd.envs(rustc_args.envs.iter().cloned());
+
+                tracing::trace!("Setting env vars: {:#?}", rustc_args.envs);
 
                 Ok(cmd)
             }
@@ -1800,8 +1802,6 @@ session_cache_dir: {}"#,
                     .args(self.cargo_build_arguments(ctx))
                     .envs(self.cargo_build_env_vars(ctx)?);
 
-                tracing::trace!("Cargo command: {:#?}", cmd);
-
                 if ctx.mode == BuildMode::Fat {
                     cmd.env(
                         DX_RUSTC_WRAPPER_ENV_VAR,
@@ -1815,6 +1815,8 @@ session_cache_dir: {}"#,
                         Workspace::path_to_dx()?.display().to_string(),
                     );
                 }
+
+                tracing::debug!("Cargo: {:#?}", cmd);
 
                 Ok(cmd)
             }
@@ -2657,8 +2659,6 @@ session_cache_dir: {}"#,
             return platforms;
         };
 
-        tracing::debug!("Default features: {default:?}");
-
         // we only trace features 1 level deep..
         for feature in default.iter() {
             // If the user directly specified a platform we can just use that.
@@ -2687,8 +2687,6 @@ session_cache_dir: {}"#,
 
         platforms.sort();
         platforms.dedup();
-
-        tracing::debug!("Default platforms: {platforms:?}");
 
         platforms
     }
@@ -3273,9 +3271,15 @@ session_cache_dir: {}"#,
             create_dir_all(self.exe_dir())?;
             create_dir_all(self.asset_dir())?;
 
-            tracing::debug!("Initialized Root dir: {:?}", self.root_dir());
-            tracing::debug!("Initialized Exe dir: {:?}", self.exe_dir());
-            tracing::debug!("Initialized Asset dir: {:?}", self.asset_dir());
+            tracing::debug!(
+                r#"Initialized build dirs:
+               • root dir: {:?}
+               • exe dir: {:?}
+               • asset dir: {:?}"#,
+                self.root_dir(),
+                self.exe_dir(),
+                self.asset_dir(),
+            );
 
             // we could download the templates from somewhere (github?) but after having banged my head against
             // cargo-mobile2 for ages, I give up with that. We're literally just going to hardcode the templates
@@ -3387,7 +3391,6 @@ session_cache_dir: {}"#,
     /// This should generally be only called on the first build since it takes time to verify the tooling
     /// is in place, and we don't want to slow down subsequent builds.
     pub(crate) async fn verify_tooling(&self, ctx: &BuildContext) -> Result<()> {
-        tracing::debug!("Verifying tooling...");
         ctx.status_installing_tooling();
 
         self
@@ -3767,5 +3770,117 @@ r#" <script>
             .unwrap()
             .to_path_buf()
             .into()
+    }
+
+    pub(crate) async fn start_simulators(&self) -> Result<()> {
+        if self.device {
+            return Ok(());
+        }
+
+        match self.platform {
+            // Boot an iOS simulator if one is not already running.
+            //
+            // We always choose the most recently opened simulator based on the xcrun list.
+            // Note that simulators can be running but the simulator app itself is not open.
+            // Calling `open::that` is always fine, even on running apps, since apps are singletons.
+            Platform::Ios => {
+                #[derive(Deserialize, Debug)]
+                struct XcrunListJson {
+                    // "com.apple.CoreSimulator.SimRuntime.iOS-18-4": [{}, {}, {}]
+                    devices: BTreeMap<String, Vec<XcrunDevice>>,
+                }
+
+                #[derive(Deserialize, Debug)]
+                struct XcrunDevice {
+                    #[serde(rename = "lastBootedAt")]
+                    last_booted_at: Option<String>,
+                    udid: String,
+                    name: String,
+                    state: String,
+                }
+                let xcrun_list = Command::new("xcrun")
+                    .arg("simctl")
+                    .arg("list")
+                    .arg("-j")
+                    .output()
+                    .await?;
+
+                let as_str = String::from_utf8_lossy(&xcrun_list.stdout);
+                let xcrun_list_json = serde_json::from_str::<XcrunListJson>(as_str.trim());
+                if let Ok(xcrun_list_json) = xcrun_list_json {
+                    if xcrun_list_json.devices.is_empty() {
+                        tracing::warn!(
+                            "No iOS sdks installed found. Please install the iOS SDK in Xcode."
+                        );
+                    }
+
+                    if let Some((_rt, devices)) = xcrun_list_json.devices.iter().next() {
+                        if devices.iter().all(|device| device.state != "Booted") {
+                            let last_booted =
+                                devices
+                                    .iter()
+                                    .max_by_key(|device| match device.last_booted_at {
+                                        Some(ref last_booted) => last_booted,
+                                        None => "2000-01-01T01:01:01Z",
+                                    });
+
+                            if let Some(device) = last_booted {
+                                tracing::info!("Booting iOS simulator: \"{}\"", device.name);
+                                Command::new("xcrun")
+                                    .arg("simctl")
+                                    .arg("boot")
+                                    .arg(&device.udid)
+                                    .output()
+                                    .await?;
+                            }
+                        }
+                    }
+                }
+                let path_to_xcode = Command::new("xcode-select")
+                    .arg("--print-path")
+                    .output()
+                    .await?;
+                let path_to_xcode: PathBuf = String::from_utf8_lossy(&path_to_xcode.stdout)
+                    .as_ref()
+                    .trim()
+                    .into();
+                let path_to_sim = path_to_xcode.join("Applications").join("Simulator.app");
+                open::that(path_to_sim)?;
+            }
+
+            Platform::Android => {
+                let tools = self.workspace.android_tools()?;
+                tokio::spawn(async move {
+                    let emulator = tools.emulator();
+                    let avds = Command::new(&emulator)
+                        .arg("-list-avds")
+                        .output()
+                        .await
+                        .unwrap();
+                    let avds = String::from_utf8_lossy(&avds.stdout);
+                    let avd = avds.trim().lines().next().map(|s| s.trim().to_string());
+                    if let Some(avd) = avd {
+                        tracing::info!("Booting Android emulator: \"{avd}\"");
+                        Command::new(&emulator)
+                            .arg("-avd")
+                            .arg(avd)
+                            .args(["-netdelay", "none", "-netspeed", "full"])
+                            .stdout(std::process::Stdio::null()) // prevent accumulating huge amounts of mem usage
+                            .stderr(std::process::Stdio::null()) // prevent accumulating huge amounts of mem usage
+                            .output()
+                            .await
+                            .unwrap();
+                    } else {
+                        tracing::warn!("No Android emulators found. Please create one using `emulator -avd <name>`");
+                    }
+                });
+            }
+
+            _ => {
+                // nothing - maybe on the web we should open the browser?
+            }
+        };
+
+        Ok(())
     }
 }

@@ -1,7 +1,14 @@
 [package]
 name = "wasm-split-macro"
-version = "0.1.0"
 edition = "2021"
+version = { workspace = true }
+authors = ["Jonathan Kelley"]
+description = "macro crate for wasm-split - a tool for splitting up large WASM binaries into smaller chunks"
+repository = "https://github.com/DioxusLabs/dioxus/"
+license = "MIT OR Apache-2.0"
+keywords = ["wasm", "cli", "split", "dioxus"]
+rust-version = "1.81.0"
+
 
 [dependencies]
 syn = { workspace = true, features = ["full"] }
