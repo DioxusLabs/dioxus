@@ -7,7 +7,8 @@ use crate::{
     shortcut::ShortcutRegistry,
     webview::WebviewInstance,
 };
-use dioxus_core::{ElementId, VirtualDom};
+use dioxus_core::{ElementId, ScopeId, VirtualDom};
+use dioxus_history::History;
 use dioxus_html::PlatformEventData;
 use std::{
     any::Any,
@@ -519,6 +520,9 @@ impl App {
 
     #[cfg(debug_assertions)]
     fn persist_window_state(&self) {
+        use dioxus_core::ScopeId;
+        use dioxus_history::History;
+
         if let Some(webview) = self.webviews.values().next() {
             let window = &webview.desktop_context.window;
 
@@ -548,12 +552,20 @@ impl App {
                 return;
             };
 
+            let url = webview.dom.in_runtime(|| {
+                ScopeId::ROOT
+                    .consume_context::<Rc<dyn History>>()
+                    .unwrap()
+                    .current_route()
+            });
+
             let state = PreservedWindowState {
                 x,
                 y,
                 width: size.width.max(200),
                 height: size.height.saturating_sub(adjustment).max(200),
                 monitor: monitor_name.to_string(),
+                url: Some(url),
             };
 
             // Yes... I know... we're loading a file that might not be ours... but it's a debug feature
@@ -597,6 +609,16 @@ impl App {
                 if explicit_inner_size.is_none() {
                     window.set_inner_size(tao::dpi::PhysicalSize::new(size.0, size.1));
                 }
+
+                // Set the url if it exists
+                webview.dom.in_runtime(|| {
+                    if let Some(url) = state.url {
+                        ScopeId::ROOT
+                            .consume_context::<Rc<dyn History>>()
+                            .unwrap()
+                            .replace(url);
+                    }
+                })
             }
         }
     }
@@ -620,7 +642,7 @@ impl App {
                         }
 
                         // give it a moment for the event to be processed
-                        std::thread::sleep(std::time::Duration::from_secs(1));
+                        std::thread::sleep(std::time::Duration::from_millis(100));
                     }
                 }
             });
@@ -635,6 +657,7 @@ struct PreservedWindowState {
     width: u32,
     height: u32,
     monitor: String,
+    url: Option<String>,
 }
 
 /// Hide the last window when using LastWindowHides.

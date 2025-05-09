@@ -704,7 +704,7 @@ impl AppBuilder {
         let target = dioxus_cli_config::android_session_cache_dir().join(bundled_name);
         tracing::debug!("Pushing asset to device: {target:?}");
 
-        let res = tokio::process::Command::new(&self.build.workspace.android_tools()?.adb)
+        let res = Command::new(&self.build.workspace.android_tools()?.adb)
             .arg("push")
             .arg(changed_file)
             .arg(&target)
@@ -1140,7 +1140,7 @@ We checked the folder: {}
         let adb = self.build.workspace.android_tools()?.adb.clone();
 
         // Start backgrounded since .open() is called while in the arm of the top-level match
-        tokio::task::spawn(async move {
+        let _handle: JoinHandle<Result<()>> = tokio::task::spawn(async move {
             // call `adb root` so we can push patches to the device
             if root {
                 if let Err(e) = Command::new(&adb).arg("root").output().await {
@@ -1160,7 +1160,11 @@ We checked the folder: {}
             }
 
             // Wait for device to be ready
-            let cmd = Command::new(&adb).arg("wait-for-device").output();
+            let cmd = Command::new(&adb)
+                .arg("wait-for-device")
+                .arg("shell")
+                .arg(r#"while [[ -z $(getprop sys.boot_completed) ]]; do sleep 1; done;"#)
+                .output();
             let cmd_future = cmd.fuse();
             pin_mut!(cmd_future);
             tokio::select! {
@@ -1173,15 +1177,16 @@ We checked the folder: {}
 
             // Install
             // adb install -r app-debug.apk
-            if let Err(e) = Command::new(&adb)
+            let res = Command::new(&adb)
                 .arg("install")
                 .arg("-r")
                 .arg(apk_path)
                 .output()
-                .await
-            {
-                tracing::error!("Failed to install apk with `adb`: {e}");
-            };
+                .await?;
+            let std_err = String::from_utf8_lossy(&res.stderr);
+            if !std_err.is_empty() {
+                tracing::error!("Failed to install apk with `adb`: {std_err}");
+            }
 
             // Write the env vars to a .env file in our session cache
             let env_file = session_cache.join(".env");
@@ -1193,32 +1198,30 @@ We checked the folder: {}
             _ = std::fs::write(&env_file, contents);
 
             // Push the env file to the device
-            if let Err(e) = tokio::process::Command::new(&adb)
+            Command::new(&adb)
                 .arg("push")
                 .arg(env_file)
                 .arg(dioxus_cli_config::android_session_cache_dir().join(".env"))
                 .output()
-                .await
-                .context("Failed to push asset to device")
-            {
-                tracing::error!("Failed to push .env file to device: {e}");
-            }
+                .await?;
 
             // eventually, use the user's MainActivity, not our MainActivity
             // adb shell am start -n dev.dioxus.main/dev.dioxus.main.MainActivity
             let activity_name = format!("{}/dev.dioxus.main.MainActivity", full_mobile_app_name,);
-
-            if let Err(e) = Command::new(&adb)
+            let res = Command::new(&adb)
                 .arg("shell")
                 .arg("am")
                 .arg("start")
                 .arg("-n")
                 .arg(activity_name)
                 .output()
-                .await
-            {
-                tracing::error!("Failed to start app with `adb`: {e}");
-            };
+                .await?;
+            let std_err = String::from_utf8_lossy(res.stderr.trim_ascii());
+            if !std_err.is_empty() {
+                tracing::error!("Failed to start app with `adb`: {std_err}");
+            }
+
+            Ok(())
         });
 
         Ok(())

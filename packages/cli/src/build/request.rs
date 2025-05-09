@@ -3850,29 +3850,30 @@ r#" <script>
 
             Platform::Android => {
                 let tools = self.workspace.android_tools()?;
-                let emulator = tools.emulator();
-                let avds = Command::new(&emulator).arg("-list-avds").output().await?;
-                let avds = String::from_utf8_lossy(&avds.stdout);
-                let avd = avds.trim().lines().next().map(|s| s.trim().to_string());
-                if let Some(avd) = avd {
-                    tracing::info!("Booting Android emulator: \"{avd}\"");
-                    tokio::spawn(async move {
+                tokio::spawn(async move {
+                    let emulator = tools.emulator();
+                    let avds = Command::new(&emulator)
+                        .arg("-list-avds")
+                        .output()
+                        .await
+                        .unwrap();
+                    let avds = String::from_utf8_lossy(&avds.stdout);
+                    let avd = avds.trim().lines().next().map(|s| s.trim().to_string());
+                    if let Some(avd) = avd {
+                        tracing::info!("Booting Android emulator: \"{avd}\"");
                         Command::new(&emulator)
                             .arg("-avd")
                             .arg(avd)
                             .args(["-netdelay", "none", "-netspeed", "full"])
-                            .stdin(std::process::Stdio::null())
-                            .stdout(std::process::Stdio::piped())
-                            .stderr(std::process::Stdio::piped())
-                            .spawn()
-                            .unwrap()
-                            .wait()
+                            .stdout(std::process::Stdio::null()) // prevent accumulating huge amounts of mem usage
+                            .stderr(std::process::Stdio::null()) // prevent accumulating huge amounts of mem usage
+                            .output()
                             .await
                             .unwrap();
-                    });
-                } else {
-                    tracing::warn!("No Android emulators found. Please create one using `emulator -avd <name>`");
-                }
+                    } else {
+                        tracing::warn!("No Android emulators found. Please create one using `emulator -avd <name>`");
+                    }
+                });
             }
 
             _ => {

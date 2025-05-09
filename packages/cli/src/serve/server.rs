@@ -264,6 +264,10 @@ impl WebServer {
         }
     }
 
+    pub(crate) fn has_hotreload_sockets(&self) -> bool {
+        !self.hot_reload_sockets.is_empty()
+    }
+
     /// Sends hot reloadable changes to all clients.
     pub(crate) async fn send_hotreload(&mut self, reload: HotReloadMsg) {
         if reload.is_empty() {
