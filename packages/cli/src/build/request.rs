@@ -2274,7 +2274,7 @@ session_cache_dir: {}"#,
             android_bundle: Option<crate::AndroidSettings>,
         }
         let hbs_data = AndroidHandlebarsObjects {
-            application_id: self.full_mobile_app_name(),
+            application_id: self.bundle_identifier(),
             app_name: self.bundled_app_name(),
             android_bundle: self.config.bundle.android.clone(),
         };
@@ -2731,30 +2731,27 @@ session_cache_dir: {}"#,
         kept_features
     }
 
-    pub(crate) fn mobile_org(&self) -> String {
-        let identifier = self.bundle_identifier();
-        let mut split = identifier.splitn(3, '.');
-        let sub = split
-            .next()
-            .expect("Identifier to have at least 3 periods like `com.example.app`");
-        let tld = split
-            .next()
-            .expect("Identifier to have at least 3 periods like `com.example.app`");
-        format!("{}.{}", sub, tld)
-    }
-
     pub(crate) fn bundled_app_name(&self) -> String {
         use convert_case::{Case, Casing};
         self.executable_name().to_case(Case::Pascal)
     }
 
-    pub(crate) fn full_mobile_app_name(&self) -> String {
-        format!("{}.{}", self.mobile_org(), self.bundled_app_name())
-    }
-
     pub(crate) fn bundle_identifier(&self) -> String {
-        if let Some(identifier) = self.config.bundle.identifier.clone() {
-            return identifier.clone();
+        if let Some(identifier) = &self.config.bundle.identifier {
+            let dot_count = identifier.matches('.').count();
+            if dot_count >= 2
+                && !identifier.starts_with('.')
+                && !identifier.ends_with('.')
+                && !identifier.contains("..")
+            {
+                return identifier.clone();
+            } else {
+                // The original `mobile_org` function used `expect` directly.
+                // Maybe it's acceptable for the CLI to panic directly when this error occurs.
+                // And if we change it to a Result type, the `client_connected` function in serve/runner.rs does not return a Result and cannot call `?`,
+                // We also need to handle the error in place, otherwise it will expand the scope of modifications further.
+                panic!("Invalid bundle identifier: {identifier:?}. E.g. `com.example.app`");
+            }
         }
 
         format!("com.example.{}", self.bundled_app_name())
