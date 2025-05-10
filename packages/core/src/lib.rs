@@ -33,8 +33,6 @@ mod hotreload_utils;
 /// Items exported from this module are used in macros and should not be used directly.
 #[doc(hidden)]
 pub mod internal {
-    pub use crate::properties::verify_component_called_as_component;
-
     #[doc(hidden)]
     pub use crate::hotreload_utils::{
         DynamicLiteralPool, DynamicValuePool, FmtSegment, FmtedSegments, HotReloadAttributeValue,
