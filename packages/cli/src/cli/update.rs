@@ -106,11 +106,7 @@ impl SelfUpdate {
                 return Err(Error::Unique("Unsupported OS".to_string()));
             };
 
-            let zip_ext = if cfg!(target_os = "windows") {
-                "zip"
-            } else {
-                "tar.gz"
-            };
+            let zip_ext = "zip";
 
             tracing::debug!("Available assets: {:?}", latest.assets);
 

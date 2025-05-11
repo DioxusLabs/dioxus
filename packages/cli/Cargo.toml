@@ -164,10 +164,7 @@ name = "dx"
 escargot = "0.5"
 
 [package.metadata.binstall]
-pkg-url = "{ repo }/releases/download/v{ version }/dx-{ target }-v{ version }{ archive-suffix }"
-pkg-fmt = "tgz"
-
-[package.metadata.binstall.overrides.x86_64-pc-windows-msvc]
+pkg-url = "{ repo }/releases/download/v{ version }/dx-{ target }{ archive-suffix }"
 pkg-fmt = "zip"
 
 [package.metadata.docs.rs]
