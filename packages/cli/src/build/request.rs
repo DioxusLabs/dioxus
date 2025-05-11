@@ -2738,8 +2738,7 @@ session_cache_dir: {}"#,
 
     pub(crate) fn bundle_identifier(&self) -> String {
         if let Some(identifier) = &self.config.bundle.identifier {
-            let dot_count = identifier.matches('.').count();
-            if dot_count >= 2
+            if identifier.contains('.')
                 && !identifier.starts_with('.')
                 && !identifier.ends_with('.')
                 && !identifier.contains("..")
@@ -2750,7 +2749,7 @@ session_cache_dir: {}"#,
                 // Maybe it's acceptable for the CLI to panic directly when this error occurs.
                 // And if we change it to a Result type, the `client_connected` function in serve/runner.rs does not return a Result and cannot call `?`,
                 // We also need to handle the error in place, otherwise it will expand the scope of modifications further.
-                panic!("Invalid bundle identifier: {identifier:?}. E.g. `com.example.app`");
+                panic!("Invalid bundle identifier: {identifier:?}. E.g. `com.example`, `com.example.app`");
             }
         }
 
