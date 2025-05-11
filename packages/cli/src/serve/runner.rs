@@ -445,7 +445,8 @@ impl AppServer {
             // Also make sure the builder isn't busy since that might cause issues with hotreloads
             // https://github.com/DioxusLabs/dioxus/issues/3361
             if !msg.is_empty() && self.client.can_receive_hotreloads() {
-                tracing::info!(dx_src = ?TraceSrc::Dev, "Hotreloading: {}", file);
+                use crate::styles::NOTE_STYLE;
+                tracing::info!(dx_src = ?TraceSrc::Dev, "Hotreloading: {NOTE_STYLE}{}{NOTE_STYLE:#}", file);
 
                 if !server.has_hotreload_sockets() && self.client.build.platform != Platform::Web {
                     tracing::warn!("No clients to hotreload - try reloading the app!");

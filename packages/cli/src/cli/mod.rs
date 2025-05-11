@@ -163,4 +163,5 @@ pub mod styles {
     // we can style stuff using the ansi sequences like: "hotpatched in {GLOW_STYLE}{}{GLOW_STYLE:X}ms"
     pub(crate) const GLOW_STYLE: Style = AnsiColor::Yellow.on_default();
     pub(crate) const NOTE_STYLE: Style = AnsiColor::Green.on_default();
+    pub(crate) const LINK_STYLE: Style = AnsiColor::Blue.on_default();
 }
