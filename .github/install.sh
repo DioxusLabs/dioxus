@@ -63,9 +63,7 @@ else
 fi
 
 GITHUB=${GITHUB-"https://github.com"}
-
 github_repo="$GITHUB/dioxuslabs/dioxus"
-
 exe_name=dx
 
 if [[ $# = 0 ]]; then
