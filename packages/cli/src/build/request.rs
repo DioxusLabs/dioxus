@@ -536,6 +536,10 @@ impl BuildRequest {
         // We collect all the platforms it enables first and then select based on the --platform arg
         let enabled_platforms =
             Self::enabled_cargo_toml_platforms(main_package, args.no_default_features);
+        let using_dioxus_explicitly = main_package
+            .dependencies
+            .iter()
+            .any(|dep| dep.name == "dioxus");
 
         let mut features = args.features.clone();
         let mut no_default_features = args.no_default_features;
@@ -552,6 +556,7 @@ impl BuildRequest {
                     platform
                 }
             },
+            None if !using_dioxus_explicitly => Platform::autodetect_from_cargo_feature("desktop").unwrap(),
             None => match enabled_platforms.len() {
                 0 => return Err(anyhow::anyhow!("No platform specified and no platform marked as default in Cargo.toml. Try specifying a platform with `--platform`").into()),
                 1 => enabled_platforms[0],
@@ -565,7 +570,9 @@ impl BuildRequest {
         };
 
         // Add any features required to turn on the client
-        features.push(Self::feature_for_platform(main_package, platform));
+        if using_dioxus_explicitly {
+            features.push(Self::feature_for_platform(main_package, platform));
+        }
 
         // Set the profile of the build if it's not already set
         // This is mostly used for isolation of builds (preventing thrashing) but also useful to have multiple performance profiles

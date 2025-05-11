@@ -50,7 +50,33 @@ pub fn try_apply_changes(dom: &VirtualDom, msg: &HotReloadMsg) -> Result<(), Pat
 ///
 /// This doesn't use any form of security or protocol, so it's not safe to expose to the internet.
 #[cfg(not(target_arch = "wasm32"))]
-pub fn connect(endpoint: String, mut callback: impl FnMut(DevserverMsg) + Send + 'static) {
+pub fn connect(callback: impl FnMut(DevserverMsg) + Send + 'static) {
+    let Some(endpoint) = dioxus_cli_config::devserver_ws_endpoint() else {
+        return;
+    };
+
+    connect_at(endpoint, callback);
+}
+
+/// Connect to the devserver and handle hot-patch messages only, implementing the subsecond hotpatch
+/// protocol.
+///
+/// This is intended to be used by non-dioxus projects that want to use hotpatching.
+///
+/// To handle the full devserver protocol, use `connect` instead.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn connect_subsecond() {
+    connect(|msg| {
+        if let DevserverMsg::HotReload(hot_reload_msg) = msg {
+            if let Some(jumptable) = hot_reload_msg.jump_table {
+                unsafe { subsecond::apply_patch(jumptable).unwrap() };
+            }
+        }
+    });
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub fn connect_at(endpoint: String, mut callback: impl FnMut(DevserverMsg) + Send + 'static) {
     std::thread::spawn(move || {
         let uri = format!(
             "{endpoint}?aslr_reference={}&build_id={}",

@@ -170,12 +170,10 @@ impl App {
 
     #[cfg(all(feature = "devtools", debug_assertions))]
     pub fn connect_hotreload(&self) {
-        if let Some(endpoint) = dioxus_cli_config::devserver_ws_endpoint() {
-            let proxy = self.shared.proxy.clone();
-            dioxus_devtools::connect(endpoint, move |msg| {
-                _ = proxy.send_event(UserWindowEvent::HotReloadEvent(msg));
-            })
-        }
+        let proxy = self.shared.proxy.clone();
+        dioxus_devtools::connect(move |msg| {
+            _ = proxy.send_event(UserWindowEvent::HotReloadEvent(msg));
+        })
     }
 
     pub fn handle_new_window(&mut self) {

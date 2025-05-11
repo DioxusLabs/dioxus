@@ -12,6 +12,7 @@ pub(crate) mod run;
 pub(crate) mod serve;
 pub(crate) mod target;
 pub(crate) mod translate;
+pub(crate) mod update;
 pub(crate) mod verbosity;
 
 pub(crate) use build::*;
@@ -91,6 +92,10 @@ pub(crate) enum Commands {
     #[clap(name = "config")]
     Config(config::Config),
 
+    /// Update the Dioxus CLI to the latest version.
+    #[clap(name = "self-update")]
+    SelfUpdate(update::SelfUpdate),
+
     /// Build the assets for a specific target.
     #[clap(name = "assets")]
     BuildAssets(build_assets::BuildAssets),
@@ -110,7 +115,8 @@ impl Display for Commands {
             Commands::Check(_) => write!(f, "check"),
             Commands::Bundle(_) => write!(f, "bundle"),
             Commands::Run(_) => write!(f, "run"),
-            Commands::BuildAssets(_) => write!(f, "build_assets"),
+            Commands::BuildAssets(_) => write!(f, "assets"),
+            Commands::SelfUpdate(_) => write!(f, "self-update"),
         }
     }
 }

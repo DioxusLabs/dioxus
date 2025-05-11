@@ -51,11 +51,7 @@ async fn serve_server(
 ) {
     let (devtools_tx, mut devtools_rx) = futures_channel::mpsc::unbounded();
 
-    if let Some(endpoint) = dioxus_cli_config::devserver_ws_endpoint() {
-        dioxus_devtools::connect(endpoint, move |msg| {
-            _ = devtools_tx.unbounded_send(msg);
-        })
-    }
+    dioxus_devtools::connect(move |msg| _ = devtools_tx.unbounded_send(msg));
 
     let platform_config = platform_config
         .into_iter()

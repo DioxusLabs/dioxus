@@ -3725,6 +3725,8 @@ dependencies = [
  "regex",
  "reqwest 0.12.15",
  "rustls 0.23.27",
+ "self-replace",
+ "self_update",
  "serde",
  "serde_json",
  "shell-words",
@@ -4845,6 +4847,7 @@ dependencies = [
  "ed25519",
  "serde",
  "sha2",
+ "signature",
  "subtle",
  "zeroize",
 ]
@@ -12151,6 +12154,41 @@ dependencies = [
 ]
 
 [[package]]
+name = "self-replace"
+version = "1.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "03ec815b5eab420ab893f63393878d89c90fdd94c0bcc44c07abb8ad95552fb7"
+dependencies = [
+ "fastrand",
+ "tempfile",
+ "windows-sys 0.52.0",
+]
+
+[[package]]
+name = "self_update"
+version = "0.42.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d832c086ece0dacc29fb2947bb4219b8f6e12fe9e40b7108f9e57c4224e47b5c"
+dependencies = [
+ "either",
+ "flate2",
+ "hyper 1.6.0",
+ "indicatif",
+ "log",
+ "quick-xml 0.37.5",
+ "regex",
+ "reqwest 0.12.15",
+ "self-replace",
+ "semver",
+ "serde_json",
+ "tar",
+ "tempfile",
+ "urlencoding",
+ "zip 2.6.1",
+ "zipsign-api",
+]
+
+[[package]]
 name = "semver"
 version = "1.0.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -17719,6 +17757,7 @@ dependencies = [
  "flate2",
  "indexmap 2.9.0",
  "memchr",
+ "time",
  "zopfli",
 ]
 
@@ -17731,6 +17770,17 @@ dependencies = [
  "byteorder",
  "bytesize",
  "thiserror 1.0.69",
+]
+
+[[package]]
+name = "zipsign-api"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8e7c724c3a8e5833aad6b7028f4f0989fa3a640ce799bf8c352f417b8ef9db3e"
+dependencies = [
+ "base64 0.22.1",
+ "ed25519-dalek",
+ "thiserror 2.0.12",
 ]
 
 [[package]]
