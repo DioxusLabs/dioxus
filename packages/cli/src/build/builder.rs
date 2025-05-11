@@ -617,9 +617,11 @@ impl AppBuilder {
             _ => vec![],
         };
 
+        use crate::styles::{GLOW_STYLE, NOTE_STYLE};
+
         let changed_file = changed_files.first().unwrap();
         tracing::info!(
-            "Hot-patching: {} took {:?}ms",
+            "Hot-patching: {NOTE_STYLE}{}{NOTE_STYLE:#} took {GLOW_STYLE}{:?}ms{GLOW_STYLE:#}",
             changed_file
                 .strip_prefix(std::env::current_dir().unwrap())
                 .unwrap_or(changed_file.as_path())

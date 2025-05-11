@@ -477,6 +477,8 @@ impl AppServer {
         let should_open = self.client.stage == BuildStage::Success
             && (self.server.as_ref().map(|s| s.stage == BuildStage::Success)).unwrap_or(true);
 
+        use crate::cli::styles::GLOW_STYLE;
+
         if should_open {
             let time_taken = artifacts
                 .time_end
@@ -485,11 +487,14 @@ impl AppServer {
 
             if self.client.builds_opened == 0 {
                 tracing::info!(
-                    "Build completed successfully in {:?}ms, launching app! 💫",
+                    "Build completed successfully in {GLOW_STYLE}{:?}ms{GLOW_STYLE:#}, launching app! 💫",
                     time_taken.as_millis()
                 );
             } else {
-                tracing::info!("Build completed in {:?}ms", time_taken.as_millis());
+                tracing::info!(
+                    "Build completed in {GLOW_STYLE}{:?}ms{GLOW_STYLE:#}",
+                    time_taken.as_millis()
+                );
             }
 
             let open_browser = self.client.builds_opened == 0 && self.open_browser;
