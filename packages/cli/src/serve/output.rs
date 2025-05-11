@@ -163,13 +163,6 @@ impl Output {
         Ok(())
     }
 
-    /// Call the shutdown functions that might mess with the terminal settings - see the related code
-    /// in "startup" for more details about what we need to unset
-    pub(crate) fn shutdown(&self) -> io::Result<()> {
-        Self::remote_shutdown(self.interactive)?;
-        Ok(())
-    }
-
     pub(crate) fn remote_shutdown(interactive: bool) -> io::Result<()> {
         if interactive {
             stdout()

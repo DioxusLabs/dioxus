@@ -96,8 +96,9 @@ impl TailwindCli {
             .arg("--output")
             .arg(output_path)
             .arg("--watch")
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
             .spawn()?;
 
         Ok(proc)

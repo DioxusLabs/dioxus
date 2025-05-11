@@ -1,5 +1,5 @@
 use crate::{
-    styles::{GLOW_STYLE, LINK_STYLE, NOTE_STYLE},
+    styles::{GLOW_STYLE, LINK_STYLE},
     AppBuilder, BuildId, BuildMode, BuilderUpdate, Result, ServeArgs, TraceController,
 };
 
@@ -47,7 +47,7 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &mut TraceController) -> 
                 • Press {GLOW_STYLE}`p`{GLOW_STYLE:#} to toggle automatic rebuilds
                 • Press {GLOW_STYLE}`v`{GLOW_STYLE:#} to toggle verbose logging
                 • Press {GLOW_STYLE}`/`{GLOW_STYLE:#} for more commands and shortcuts
-                Learn more at {LINK_STYLE}https://dioxuslabs.com/learn/0.6/getting_started{LINK_STYLE:#}
+                Learn more at {LINK_STYLE}https://dioxuslabs.com/learn/0.7/getting_started{LINK_STYLE:#}
                ----------------------------------------------------------------"#,
     );
 
@@ -205,7 +205,6 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &mut TraceController) -> 
             ServeUpdate::Exit { error } => {
                 _ = builder.cleanup_all().await;
                 _ = devserver.shutdown().await;
-                _ = screen.shutdown();
 
                 match error {
                     Some(err) => return Err(anyhow::anyhow!("{}", err).into()),
