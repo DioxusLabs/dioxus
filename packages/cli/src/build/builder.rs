@@ -1188,14 +1188,24 @@ We checked the folder: {}
                 tracing::error!("Failed to install apk with `adb`: {std_err}");
             }
 
+            // Clear the session cache dir on the device
+            Command::new(&adb)
+                .arg("shell")
+                .arg("rm")
+                .arg("-rf")
+                .arg(dioxus_cli_config::android_session_cache_dir())
+                .output()
+                .await?;
+
             // Write the env vars to a .env file in our session cache
             let env_file = session_cache.join(".env");
-            let contents: String = envs
-                .iter()
-                .map(|(key, value)| format!("{key}={value}"))
-                .collect::<Vec<_>>()
-                .join("\n");
-            _ = std::fs::write(&env_file, contents);
+            _ = std::fs::write(
+                &env_file,
+                envs.iter()
+                    .map(|(key, value)| format!("{key}={value}"))
+                    .collect::<Vec<_>>()
+                    .join("\n"),
+            );
 
             // Push the env file to the device
             Command::new(&adb)
