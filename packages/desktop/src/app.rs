@@ -326,8 +326,8 @@ impl App {
 
         use dioxus_devtools::DevserverMsg;
 
-        /// Amount of time that toats should be displayed.
-        const TOAST_TIMEOUT: Duration = Duration::from_secs(3);
+        // Amount of time that toats should be displayed.
+        const TOAST_TIMEOUT: Duration = Duration::from_secs(2);
         const TOAST_TIMEOUT_LONG: Duration = Duration::from_secs(3600); // Duration::MAX is too long for JS.
 
         match msg {
