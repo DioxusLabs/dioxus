@@ -2333,12 +2333,19 @@ impl BuildRequest {
             app.join("proguard-rules.pro"),
             include_bytes!("../../assets/android/gen/app/proguard-rules.pro"),
         )?;
-        write(
-            app.join("src").join("main").join("AndroidManifest.xml"),
-            hbs.render_template(
+
+        let manifest_xml = match self.config.application.android_manifest.as_deref() {
+            Some(manifest) => std::fs::read_to_string(self.package_manifest_dir().join(manifest))
+                .context("Failed to locate custom AndroidManifest.xml")?,
+            _ => hbs.render_template(
                 include_str!("../../assets/android/gen/app/src/main/AndroidManifest.xml.hbs"),
                 &hbs_data,
             )?,
+        };
+
+        write(
+            app.join("src").join("main").join("AndroidManifest.xml"),
+            manifest_xml,
         )?;
 
         // Write the main activity manually since tao dropped support for it
@@ -3135,6 +3142,22 @@ impl BuildRequest {
             pub bundle_name: String,
             pub bundle_identifier: String,
             pub executable_name: String,
+        }
+
+        // Attempt to use the user's manually specified
+        let _app = &self.config.application;
+        match platform {
+            Platform::MacOS => {
+                if let Some(macos_info_plist) = _app.macos_info_plist.as_deref() {
+                    return Ok(std::fs::read_to_string(macos_info_plist)?);
+                }
+            }
+            Platform::Ios => {
+                if let Some(macos_info_plist) = _app.ios_info_plist.as_deref() {
+                    return Ok(std::fs::read_to_string(macos_info_plist)?);
+                }
+            }
+            _ => {}
         }
 
         match platform {

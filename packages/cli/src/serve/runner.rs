@@ -159,6 +159,9 @@ impl AppServer {
 
         _ = client.build.start_simulators().await;
 
+        // Encourage the user to update to a new dx version
+        crate::update::log_if_cli_could_update();
+
         // Create the runner
         let mut runner = Self {
             file_map: Default::default(),

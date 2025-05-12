@@ -209,3 +209,39 @@ impl SelfUpdate {
         .context("Failed to run self-update")?
     }
 }
+
+/// Check against the github release list to see if the currently released `dx` version is
+/// more up-to-date than our own.
+///
+/// We only toss out this warning once and then save to the settings file to ignore this version
+/// in the future.
+pub fn log_if_cli_could_update() {
+    tokio::task::spawn_blocking(|| {
+        let release = self_update::backends::github::Update::configure()
+            .repo_owner("dioxuslabs")
+            .repo_name("dioxus")
+            .bin_name("dx")
+            .current_version(cargo_crate_version!())
+            .build()
+            .unwrap()
+            .get_latest_release();
+
+        if let Ok(release) = release {
+            let old = krates::semver::Version::parse(cargo_crate_version!());
+            let new = krates::semver::Version::parse(&release.version);
+
+            if let (Ok(old), Ok(new)) = (old, new) {
+                if old < new {
+                    _ = crate::CliSettings::modify_settings(|f| {
+                        let ignored = f.ignore_version_update.as_deref().unwrap_or_default();
+                        if release.version != ignored {
+                            use crate::styles::GLOW_STYLE;
+                            tracing::warn!("A new dx version is available: {new}! Run {GLOW_STYLE}dx self-update{GLOW_STYLE:#} to update.");
+                            f.ignore_version_update = Some(new.to_string());
+                        }
+                    });
+                }
+            }
+        }
+    });
+}
