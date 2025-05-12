@@ -1157,7 +1157,7 @@ impl BuildRequest {
         //
         // Many args are passed twice, too, which can be confusing, but generally don't have any real
         // effect. Note that on macos/ios, there's a special macho header that needs to be set, otherwise
-        // dyld will complain.a
+        // dyld will complain.
         //
         // Also, some flags in darwin land might become deprecated, need to be super conservative:
         // - https://developer.apple.com/forums/thread/773907
@@ -1229,7 +1229,6 @@ impl BuildRequest {
 
         // And now we can run the linker with our new args
         let linker = self.select_linker()?;
-
         let out_exe = self.patch_exe(artifacts.time_start);
         let out_arg = match self.triple.operating_system {
             OperatingSystem::Windows => vec![format!("/OUT:{}", out_exe.display())],
@@ -1307,6 +1306,13 @@ impl BuildRequest {
             //
             // We don't use *any* of the original linker args since they do lots of custom exports
             // and other things that we don't need.
+            //
+            // The trickiest one here is -Crelocation-model=pic, which forces data symbols
+            // into a GOT, making it possible to import them from the main module.
+            //
+            // I think we can make relocation-model=pic work for non-wasm platforms, enabling
+            // fully relocatable modules with no host coordination in lieu of sending out
+            // the aslr slide at runtime.
             OperatingSystem::Unknown if self.platform == Platform::Web => {
                 out_args.extend([
                     "--fatal-warnings".to_string(),
@@ -1396,7 +1402,6 @@ impl BuildRequest {
                     "/PDBALTPATH:%_PDB%".to_string(),
                     "/EXPORT:main".to_string(),
                     "/HIGHENTROPYVA:NO".to_string(),
-                    // "/SUBSYSTEM:WINDOWS".to_string(),
                 ]);
             }
 
@@ -1951,14 +1956,7 @@ impl BuildRequest {
             //
             // https://github.com/WebAssembly/tool-conventions/blob/main/DynamicLinking.md
             //
-            // The trickiest one here is -Crelocation-model=pic, which forces data symbols
-            // into a GOT, making it possible to import them from the main module.
-            //
-            // I think we can make relocation-model=pic work for non-wasm platforms, enabling
-            // fully relocatable modules with no host coordination in lieu of sending out
-            // the aslr slide at runtime.
-            //
-            // The other tricky one is -Ctarget-cpu=mvp, which prevents rustc from generating externref
+            // The tricky one is -Ctarget-cpu=mvp, which prevents rustc from generating externref
             // entries.
             //
             // https://blog.rust-lang.org/2024/09/24/webassembly-targets-change-in-default-target-features/#disabling-on-by-default-webassembly-proposals
@@ -1967,7 +1965,6 @@ impl BuildRequest {
             if self.platform == Platform::Web
                 || self.triple.operating_system == OperatingSystem::Wasi
             {
-                // cargo_args.push("-Crelocation-model=pic".into());
                 cargo_args.push("-Ctarget-cpu=mvp".into());
                 cargo_args.push("-Clink-arg=--no-gc-sections".into());
                 cargo_args.push("-Clink-arg=--growable-table".into());
@@ -2888,13 +2885,15 @@ impl BuildRequest {
                 // If pre-compressing is enabled, we can pre_compress the wasm-bindgen output
                 let pre_compress = self.should_pre_compress_web_assets(self.release);
 
-                ctx.status_compressing_assets();
-                let asset_dir = self.asset_dir();
-                tokio::task::spawn_blocking(move || {
-                    crate::fastfs::pre_compress_folder(&asset_dir, pre_compress)
-                })
-                .await
-                .unwrap()?;
+                if pre_compress {
+                    ctx.status_compressing_assets();
+                    let asset_dir = self.asset_dir();
+                    tokio::task::spawn_blocking(move || {
+                        crate::fastfs::pre_compress_folder(&asset_dir, pre_compress)
+                    })
+                    .await
+                    .unwrap()?;
+                }
             }
             Platform::MacOS => {}
             Platform::Windows => {}
