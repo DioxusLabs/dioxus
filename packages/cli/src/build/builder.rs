@@ -623,9 +623,9 @@ impl AppBuilder {
         tracing::info!(
             "Hot-patching: {NOTE_STYLE}{}{NOTE_STYLE:#} took {GLOW_STYLE}{:?}ms{GLOW_STYLE:#}",
             changed_file
-                .strip_prefix(std::env::current_dir().unwrap())
-                .unwrap_or(changed_file.as_path())
-                .display(),
+                .display()
+                .to_string()
+                .trim_start_matches(&self.build.crate_dir().display().to_string()),
             SystemTime::now()
                 .duration_since(res.time_start)
                 .unwrap()
