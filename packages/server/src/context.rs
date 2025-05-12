@@ -1,9 +1,43 @@
+use enumset::{EnumSet, EnumSetType};
 use parking_lot::RwLock;
 use std::any::Any;
 use std::collections::HashMap;
+use std::sync::atomic::AtomicU32;
 use std::sync::Arc;
 
 type SendSyncAnyMap = std::collections::HashMap<std::any::TypeId, ContextType>;
+
+#[derive(EnumSetType)]
+enum ResponsePartsModified {
+    Version,
+    Headers,
+    Status,
+    Extensions,
+    Body,
+}
+
+struct AtomicResponsePartsModified {
+    modified: AtomicU32,
+}
+
+impl AtomicResponsePartsModified {
+    fn new() -> Self {
+        Self {
+            modified: AtomicU32::new(EnumSet::<ResponsePartsModified>::empty().as_u32()),
+        }
+    }
+
+    fn set(&self, part: ResponsePartsModified) {
+        let modified =
+            EnumSet::from_u32(self.modified.load(std::sync::atomic::Ordering::Relaxed)) | part;
+        self.modified
+            .store(modified.as_u32(), std::sync::atomic::Ordering::Relaxed);
+    }
+
+    fn is_modified(&self, part: ResponsePartsModified) -> bool {
+        self.modified.load(std::sync::atomic::Ordering::Relaxed) & (1 << part as usize) != 0
+    }
+}
 
 /// A shared context for server functions that contains information about the request and middleware state.
 ///
@@ -24,6 +58,7 @@ type SendSyncAnyMap = std::collections::HashMap<std::any::TypeId, ContextType>;
 #[derive(Clone)]
 pub struct DioxusServerContext {
     shared_context: Arc<RwLock<SendSyncAnyMap>>,
+    response_parts_modified: Arc<AtomicResponsePartsModified>,
     response_parts: Arc<RwLock<http::response::Parts>>,
     pub(crate) parts: Arc<RwLock<http::request::Parts>>,
     response_sent: Arc<std::sync::atomic::AtomicBool>,
@@ -48,6 +83,7 @@ impl Default for DioxusServerContext {
     fn default() -> Self {
         Self {
             shared_context: Arc::new(RwLock::new(HashMap::new())),
+            response_parts_modified: Arc::new(AtomicResponsePartsModified::new()),
             response_parts: Arc::new(RwLock::new(
                 http::response::Response::new(()).into_parts().0,
             )),
@@ -59,7 +95,7 @@ impl Default for DioxusServerContext {
 
 mod server_fn_impl {
     use super::*;
-    use parking_lot::{RwLockReadGuard, RwLockWriteGuard};
+    use parking_lot::{MappedRwLockWriteGuard, RwLockReadGuard, RwLockWriteGuard};
     use std::any::{Any, TypeId};
 
     impl DioxusServerContext {
@@ -68,6 +104,7 @@ mod server_fn_impl {
             Self {
                 parts: Arc::new(RwLock::new(parts)),
                 shared_context: Arc::new(RwLock::new(SendSyncAnyMap::new())),
+                response_parts_modified: Arc::new(AtomicResponsePartsModified::new()),
                 response_parts: std::sync::Arc::new(RwLock::new(
                     http::response::Response::new(()).into_parts().0,
                 )),
@@ -81,6 +118,7 @@ mod server_fn_impl {
             Self {
                 parts,
                 shared_context: Arc::new(RwLock::new(SendSyncAnyMap::new())),
+                response_parts_modified: Arc::new(AtomicResponsePartsModified::new()),
                 response_parts: std::sync::Arc::new(RwLock::new(
                     http::response::Response::new(()).into_parts().0,
                 )),
@@ -178,7 +216,7 @@ mod server_fn_impl {
             self.response_parts.read()
         }
 
-        /// Get the response parts from the server context
+        /// Get the headers from the server context mutably
         ///
         #[doc = include_str!("../docs/request_origin.md")]
         ///
@@ -189,13 +227,82 @@ mod server_fn_impl {
         /// #[server]
         /// async fn set_headers() -> Result<(), ServerFnError> {
         ///     let server_context = server_context();
-        ///     server_context.response_parts_mut()
-        ///         .headers
+        ///     server_context.headers_mut()
         ///         .insert("Cookie", http::HeaderValue::from_static("dioxus=fullstack"));
         ///     Ok(())
         /// }
         /// ```
-        pub fn response_parts_mut(&self) -> RwLockWriteGuard<'_, http::response::Parts> {
+        pub fn headers_mut(&self) -> MappedRwLockWriteGuard<'_, http::HeaderMap> {
+            self.response_parts_modified
+                .set(ResponsePartsModified::Headers);
+            RwLockWriteGuard::map(self.response_parts_mut(), |parts| &mut parts.headers)
+        }
+
+        /// Get the status from the server context mutably
+        ///
+        #[doc = include_str!("../docs/request_origin.md")]
+        ///
+        /// # Example
+        ///
+        /// ```rust, no_run
+        /// # use dioxus::prelude::*;
+        /// #[server]
+        /// async fn set_status() -> Result<(), ServerFnError> {
+        ///     let server_context = server_context();
+        ///     *server_context.status_mut() = http::StatusCode::INTERNAL_SERVER_ERROR;
+        ///     Ok(())
+        /// }
+        /// ```
+        pub fn status_mut(&self) -> MappedRwLockWriteGuard<'_, http::StatusCode> {
+            self.response_parts_modified
+                .set(ResponsePartsModified::Status);
+            RwLockWriteGuard::map(self.response_parts_mut(), |parts| &mut parts.status)
+        }
+
+        /// Get the version from the server context mutably
+        ///
+        #[doc = include_str!("../docs/request_origin.md")]
+        ///
+        /// # Example
+        ///
+        /// ```rust, no_run
+        /// # use dioxus::prelude::*;
+        /// #[server]
+        /// async fn set_version() -> Result<(), ServerFnError> {
+        ///     let server_context = server_context();
+        ///     *server_context.version_mut() = http::Version::HTTP_2;
+        ///     Ok(())
+        /// }
+        /// ```
+        pub fn version_mut(&self) -> MappedRwLockWriteGuard<'_, http::Version> {
+            self.response_parts_modified
+                .set(ResponsePartsModified::Version);
+            RwLockWriteGuard::map(self.response_parts_mut(), |parts| &mut parts.version)
+        }
+
+        /// Get the extensions from the server context mutably
+        ///
+        #[doc = include_str!("../docs/request_origin.md")]
+        ///
+        /// # Example
+        ///
+        /// ```rust, no_run
+        /// # use dioxus::prelude::*;
+        /// #[server]
+        /// async fn set_version() -> Result<(), ServerFnError> {
+        ///     let server_context = server_context();
+        ///     *server_context.version_mut() = http::Version::HTTP_2;
+        ///     Ok(())
+        /// }
+        /// ```
+        pub fn extensions_mut(&self) -> MappedRwLockWriteGuard<'_, http::Extensions> {
+            self.response_parts_modified
+                .set(ResponsePartsModified::Extensions);
+            RwLockWriteGuard::map(self.response_parts_mut(), |parts| &mut parts.extensions)
+        }
+
+        /// Get the response parts mutably. This does not track what parts have been written to so it should not be exposed publicly.
+        fn response_parts_mut(&self) -> RwLockWriteGuard<'_, http::response::Parts> {
             if self
                 .response_sent
                 .load(std::sync::atomic::Ordering::Relaxed)
@@ -280,13 +387,33 @@ mod server_fn_impl {
                 .store(true, std::sync::atomic::Ordering::Relaxed);
             let parts = self.response_parts.read();
 
-            let mut_headers = response.headers_mut();
-            for (key, value) in parts.headers.iter() {
-                mut_headers.insert(key, value.clone());
+            if self
+                .response_parts_modified
+                .is_modified(ResponsePartsModified::Headers)
+            {
+                let mut_headers = response.headers_mut();
+                for (key, value) in parts.headers.iter() {
+                    mut_headers.insert(key, value.clone());
+                }
             }
-            *response.status_mut() = parts.status;
-            *response.version_mut() = parts.version;
-            response.extensions_mut().extend(parts.extensions.clone());
+            if self
+                .response_parts_modified
+                .is_modified(ResponsePartsModified::Status)
+            {
+                *response.status_mut() = parts.status;
+            }
+            if self
+                .response_parts_modified
+                .is_modified(ResponsePartsModified::Version)
+            {
+                *response.version_mut() = parts.version;
+            }
+            if self
+                .response_parts_modified
+                .is_modified(ResponsePartsModified::Extensions)
+            {
+                response.extensions_mut().extend(parts.extensions.clone());
+            }
         }
     }
 }

@@ -4469,6 +4469,7 @@ dependencies = [
  "dioxus-lib",
  "dioxus-router",
  "dioxus-ssr",
+ "enumset",
  "futures-channel",
  "futures-util",
  "generational-box",
