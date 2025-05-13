@@ -150,7 +150,7 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &mut TraceController) -> 
                         }
                         BuildMode::Base | BuildMode::Fat => {
                             _ = builder
-                                .open(bundle, &mut devserver)
+                                .open(&bundle, &mut devserver)
                                 .await
                                 .inspect_err(|e| tracing::error!("Failed to open app: {}", e));
                         }

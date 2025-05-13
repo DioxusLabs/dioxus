@@ -65,6 +65,7 @@ pub(crate) struct AppServer {
     pub(crate) _wsl_file_poll_interval: u16,
     pub(crate) always_on_top: bool,
     pub(crate) fullstack: bool,
+    pub(crate) ssg: bool,
     pub(crate) watch_fs: bool,
 
     // resolve args related to the webserver
@@ -125,6 +126,7 @@ impl AppServer {
         let (watcher_tx, watcher_rx) = futures_channel::mpsc::unbounded();
         let watcher = create_notify_watcher(watcher_tx.clone(), wsl_file_poll_interval as u64);
 
+        let ssg = args.targets.ssg;
         let BuildTargets { client, server } = args.targets.into_targets().await?;
 
         // All servers will end up behind us (the devserver) but on a different port
@@ -184,6 +186,7 @@ impl AppServer {
             _force_sequential: force_sequential,
             cross_origin_policy,
             fullstack,
+            ssg,
             _tw_watcher: tw_watcher,
         };
 
@@ -204,6 +207,21 @@ impl AppServer {
         Ok(runner)
     }
 
+    async fn rebuild_ssg(&self) {
+        if self.client.stage != BuildStage::Success {
+            return;
+        }
+        // Run SSG and cache static routes if the server build is done
+        if let Some(server) = self.server.as_ref() {
+            if !self.ssg || server.stage != BuildStage::Success {
+                return;
+            }
+            if let Err(err) = crate::pre_render_static_routes(&server.build.main_exe()).await {
+                tracing::error!("Failed to pre-render static routes: {err}");
+            }
+        }
+    }
+
     pub(crate) async fn wait(&mut self) -> ServeUpdate {
         let client = &mut self.client;
         let server = self.server.as_mut();
@@ -215,6 +233,7 @@ impl AppServer {
         tokio::select! {
             // Wait for the client to finish
             client_update = client_wait => {
+                self.rebuild_ssg().await;
                 ServeUpdate::BuilderUpdate {
                     id: BuildId::CLIENT,
                     update: client_update,
@@ -222,6 +241,7 @@ impl AppServer {
             }
 
             Some(server_update) = server_wait => {
+                self.rebuild_ssg().await;
                 ServeUpdate::BuilderUpdate {
                     id: BuildId::SERVER,
                     update: server_update,
@@ -457,7 +477,7 @@ impl AppServer {
     /// Finally "bundle" this app and return a handle to it
     pub(crate) async fn open(
         &mut self,
-        artifacts: BuildArtifacts,
+        artifacts: &BuildArtifacts,
         devserver: &mut WebServer,
     ) -> Result<()> {
         // Make sure to save artifacts regardless of if we're opening the app or not
