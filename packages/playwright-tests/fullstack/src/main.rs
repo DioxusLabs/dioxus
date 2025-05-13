@@ -185,7 +185,7 @@ async fn echo_ws(
 /// This component tests websocket server functions
 #[component]
 fn WebSockets() -> Element {
-    let mut received = use_signal(|| String::new());
+    let mut received = use_signal(String::new);
     use_future(move || async move {
         let (mut tx, rx) = mpsc::channel(1);
         let mut receiver = echo_ws(rx.into()).await.unwrap();

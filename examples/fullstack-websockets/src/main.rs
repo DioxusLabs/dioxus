@@ -10,7 +10,7 @@ fn main() {
 }
 
 fn app() -> Element {
-    let mut received = use_signal(|| String::new());
+    let mut uppercase = use_signal(String::new);
     let mut uppercase_channel = use_signal(|| None);
 
     // Start the websocket connection in a background task
@@ -21,7 +21,7 @@ fn app() -> Element {
         uppercase_channel.set(Some(tx));
         // Whenever we get a message from the server, update the uppercase signal
         while let Some(Ok(msg)) = receiver.next().await {
-            received.set(msg);
+            uppercase.set(msg);
         }
     });
 
@@ -34,7 +34,7 @@ fn app() -> Element {
                 }
             },
         }
-        "Uppercase: {received}"
+        "Uppercase: {uppercase}"
     }
 }
 
