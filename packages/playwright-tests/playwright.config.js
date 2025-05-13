@@ -94,6 +94,15 @@ module.exports = defineConfig({
       stdout: "pipe",
     },
     {
+      cwd: path.join(process.cwd(), "web-routing"),
+      command:
+        'cargo run --package dioxus-cli --release -- serve --force-sequential --platform web --addr "127.0.0.1" --port 2020',
+      port: 2020,
+      timeout: 50 * 60 * 1000,
+      reuseExistingServer: !process.env.CI,
+      stdout: "pipe",
+    },
+    {
       cwd: path.join(process.cwd(), "fullstack"),
       command:
         'cargo run --package dioxus-cli --release -- serve --force-sequential --platform web --addr "127.0.0.1" --port 3333',
