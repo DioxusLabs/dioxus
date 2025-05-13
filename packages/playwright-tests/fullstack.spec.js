@@ -68,3 +68,11 @@ test("document elements", async ({ page }) => {
   const main = page.locator("#main");
   await expect(main).toHaveCSS("font-family", "Roboto");
 });
+
+test("websockets", async ({ page }) => {
+  await page.goto("http://localhost:3333");
+  // wait until the websocket div is mounted
+  const wsDiv = page.locator("div#websocket-div");
+  await expect(wsDiv).toHaveText("Received: HELLO WORLD");
+});
+
