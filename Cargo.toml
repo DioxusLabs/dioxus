@@ -109,6 +109,7 @@ members = [
     "examples/fullstack-streaming",
     "examples/fullstack-desktop",
     "examples/fullstack-auth",
+    "examples/fullstack-websockets",
 
     # Playwright tests
     "packages/playwright-tests/liveview",
