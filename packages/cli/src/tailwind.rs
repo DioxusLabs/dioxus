@@ -89,6 +89,17 @@ impl TailwindCli {
                 .context("failed to create tailwindcss output directory")?;
         }
 
+        tracing::debug!("Spawning tailwindcss@{} with args: {:?}", self.version, {
+            [
+                binary_path.to_string_lossy().to_string(),
+                "--input".to_string(),
+                input_path.to_string_lossy().to_string(),
+                "--output".to_string(),
+                output_path.to_string_lossy().to_string(),
+                "--watch".to_string(),
+            ]
+        });
+
         let mut cmd = Command::new(binary_path);
         let proc = cmd
             .arg("--input")
@@ -96,7 +107,6 @@ impl TailwindCli {
             .arg("--output")
             .arg(output_path)
             .arg("--watch")
-            .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .spawn()?;
