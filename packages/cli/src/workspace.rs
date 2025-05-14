@@ -83,7 +83,7 @@ impl Workspace {
                • rustc version: {rustc_version}
                • workspace root: {workspace_root}
                • dioxus versions: [{dioxus_versions:?}]"#,
-            sysroot = workspace.sysroot.display(),
+            sysroot = workspace.sysroot.sysroot.display(),
             rustc_version = workspace.rustc_version,
             workspace_root = workspace.workspace_root().display(),
             dioxus_versions = workspace
