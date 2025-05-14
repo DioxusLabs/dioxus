@@ -8,7 +8,6 @@ pub(crate) mod config;
 pub(crate) mod create;
 pub(crate) mod init;
 pub(crate) mod link;
-pub(crate) mod mcp;
 pub(crate) mod run;
 pub(crate) mod serve;
 pub(crate) mod target;
@@ -99,10 +98,6 @@ pub(crate) enum Commands {
     #[clap(name = "config")]
     Config(config::Config),
 
-    /// Connect to the MCP server.
-    #[clap(name = "mcp")]
-    McpServer(mcp::McpServer),
-
     /// Update the Dioxus CLI to the latest version.
     #[clap(name = "self-update")]
     SelfUpdate(update::SelfUpdate),
@@ -124,7 +119,6 @@ impl Display for Commands {
             Commands::Run(_) => write!(f, "run"),
             Commands::BuildAssets(_) => write!(f, "assets"),
             Commands::SelfUpdate(_) => write!(f, "self-update"),
-            Commands::McpServer(_) => write!(f, "mcp-server"),
         }
     }
 }
