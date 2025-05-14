@@ -70,14 +70,16 @@ test("document elements", async ({ page }) => {
 });
 
 test("assets cache correctly", async ({ page }) => {
-  // Navigate to the page that includes the image.
-  await page.goto("http://localhost:3333");
-
   // Wait for the hashed image to be loaded
-  const hashedImageResponse = await page.waitForResponse((resp) => {
+  const hashedImageFuture = page.waitForResponse((resp) => {
     console.log("Response URL:", resp.url());
     return resp.url().includes("/assets/image-") && resp.status() === 200;
   });
+
+  // Navigate to the page that includes the image.
+  await page.goto("http://localhost:3333");
+
+  const hashedImageResponse = await hashedImageFuture;
 
   // Make sure the hashed image cache control header is set to immutable
   const cacheControl = hashedImageResponse.headers()["cache-control"];
