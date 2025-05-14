@@ -1,3 +1,4 @@
+use crate::prelude::SuspenseContext;
 use crate::runtime::RuntimeError;
 use crate::{innerlude::SuspendedFuture, runtime::Runtime, CapturedError, Element, ScopeId, Task};
 use std::future::Future;
@@ -38,6 +39,13 @@ pub fn throw_error(error: impl Into<CapturedError> + 'static) {
     current_scope_id()
         .unwrap_or_else(|e| panic!("{}", e))
         .throw_error(error)
+}
+
+/// Get the suspense context the current scope is in
+pub fn suspense_context() -> Option<SuspenseContext> {
+    current_scope_id()
+        .unwrap_or_else(|e| panic!("{}", e))
+        .suspense_context()
 }
 
 /// Consume context from the current scope
@@ -120,7 +128,7 @@ pub fn spawn_isomorphic(fut: impl Future<Output = ()> + 'static) -> Task {
     Runtime::with_current_scope(|cx| cx.spawn_isomorphic(fut)).unwrap()
 }
 
-/// Spawns the future but does not return the [`Task`]. This task will automatically be canceled when the component is dropped.
+/// Spawns the future and returns the [`Task`]. This task will automatically be canceled when the component is dropped.
 ///
 /// # Example
 /// ```rust
@@ -470,4 +478,19 @@ pub fn use_hook_with_cleanup<T: Clone + 'static>(
     let _value = value.clone();
     use_drop(move || cleanup(_value));
     value
+}
+
+/// Force every component to be dirty and require a re-render. Used by hot-reloading.
+///
+/// This might need to change to a different flag in the event hooks order changes within components.
+/// What we really need is a way to mark components as needing a complete rebuild if they were hit by changes.
+pub fn force_all_dirty() {
+    Runtime::with(|rt| {
+        rt.scope_states.borrow_mut().iter().for_each(|state| {
+            if let Some(scope) = state.as_ref() {
+                scope.needs_update();
+            }
+        });
+    })
+    .expect("Runtime to exist");
 }

@@ -7,9 +7,9 @@ license = "MIT OR Apache-2.0"
 publish = false
 
 [dependencies]
-dioxus = { workspace = true, features = ["web"]}
+dioxus = { workspace = true, features = ["web"] }
 
 [build-dependencies]
 reqwest = { workspace = true, features = ["blocking"] }
-flate2 = "1.0.35"
-tar = "0.4.43"
+flate2 = "1.1.0"
+tar = "0.4.44"

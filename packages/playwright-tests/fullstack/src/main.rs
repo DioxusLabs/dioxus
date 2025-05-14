@@ -5,7 +5,14 @@
 // - Hydration
 
 #![allow(non_snake_case)]
-use dioxus::{prelude::*, CapturedError};
+use dioxus::{
+    prelude::{
+        server_fn::{codec::JsonEncoding, BoxedStream, Websocket},
+        *,
+    },
+    CapturedError,
+};
+use futures::{channel::mpsc, SinkExt, StreamExt};
 
 fn main() {
     dioxus::LaunchBuilder::new()
@@ -44,6 +51,7 @@ fn app() -> Element {
         DefaultServerFnCodec {}
         DocumentElements {}
         Assets {}
+        WebSockets {}
     }
 }
 
@@ -108,6 +116,9 @@ async fn server_error() -> Result<String, ServerFnError> {
 
 #[component]
 fn Errors() -> Element {
+    // Make the suspense boundary below happen during streaming
+    use_hook(commit_initial_chunk);
+
     rsx! {
         // This is a tricky case for suspense https://github.com/DioxusLabs/dioxus/issues/2570
         // Root suspense boundary is already resolved when the inner suspense boundary throws an error.
@@ -133,7 +144,7 @@ fn Errors() -> Element {
 pub fn ThrowsError() -> Element {
     use_server_future(server_error)?
         .unwrap()
-        .map_err(|err| RenderError::Aborted(CapturedError::from_display(err)))?;
+        .map_err(CapturedError::from_display)?;
     rsx! {
         "success"
     }
@@ -167,6 +178,45 @@ fn Assets() -> Element {
         }
         img {
             src: "/assets/nested/image.png",
+        }
+    }
+}
+
+#[server(protocol = Websocket<JsonEncoding, JsonEncoding>)]
+async fn echo_ws(
+    input: BoxedStream<String, ServerFnError>,
+) -> Result<BoxedStream<String, ServerFnError>, ServerFnError> {
+    let mut input = input;
+
+    let (mut tx, rx) = mpsc::channel(1);
+
+    tokio::spawn(async move {
+        while let Some(msg) = input.next().await {
+            let _ = tx.send(msg.map(|msg| msg.to_ascii_uppercase())).await;
+        }
+    });
+
+    Ok(rx.into())
+}
+
+/// This component tests websocket server functions
+#[component]
+fn WebSockets() -> Element {
+    let mut received = use_signal(String::new);
+    use_future(move || async move {
+        let (mut tx, rx) = mpsc::channel(1);
+        let mut receiver = echo_ws(rx.into()).await.unwrap();
+        tx.send(Ok("hello world".to_string())).await.unwrap();
+        while let Some(Ok(msg)) = receiver.next().await {
+            println!("Received: {}", msg);
+            received.set(msg);
+        }
+    });
+
+    rsx! {
+        div {
+            id: "websocket-div",
+            "Received: {received}"
         }
     }
 }

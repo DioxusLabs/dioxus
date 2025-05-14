@@ -1,4 +1,4 @@
-use std::{any::TypeId, fmt::Arguments};
+use std::fmt::Arguments;
 
 use crate::innerlude::*;
 
@@ -114,35 +114,6 @@ where
     P::builder()
 }
 
-/// A warning that will trigger if a component is called as a function
-#[warnings::warning]
-pub(crate) fn component_called_as_function<C: ComponentFunction<P, M>, P, M>(_: C) {
-    // We trim WithOwner from the end of the type name for component with a builder that include a special owner which may not match the function name directly
-    let type_name = std::any::type_name::<C>();
-    let component_name = Runtime::with(|rt| {
-        current_scope_id()
-            .ok()
-            .and_then(|id| rt.get_state(id).map(|scope| scope.name))
-    })
-    .ok()
-    .flatten();
-
-    // If we are in a component, and the type name is the same as the active component name, then we can just return
-    if component_name == Some(type_name) {
-        return;
-    }
-
-    // Otherwise the component was called like a function, so we should log an error
-    tracing::error!("It looks like you called the component {type_name} like a function instead of a component. Components should be called with braces like `{type_name} {{ prop: value }}` instead of as a function");
-}
-
-/// Make sure that this component is currently running as a component, not a function call
-#[doc(hidden)]
-#[allow(clippy::no_effect)]
-pub fn verify_component_called_as_component<C: ComponentFunction<P, M>, P, M>(component: C) {
-    component_called_as_function(component);
-}
-
 /// Any component that implements the `ComponentFn` trait can be used as a component.
 ///
 /// This trait is automatically implemented for functions that are in one of the following forms:
@@ -167,27 +138,39 @@ pub fn verify_component_called_as_component<C: ComponentFunction<P, M>, P, M>(co
     )
 )]
 pub trait ComponentFunction<Props, Marker = ()>: Clone + 'static {
-    /// Get the type id of the component.
-    fn id(&self) -> TypeId {
-        TypeId::of::<Self>()
-    }
+    /// Get the raw address of the component render function.
+    fn fn_ptr(&self) -> usize;
 
     /// Convert the component to a function that takes props and returns an element.
     fn rebuild(&self, props: Props) -> Element;
 }
 
 /// Accept any callbacks that take props
-impl<F: Fn(P) -> Element + Clone + 'static, P> ComponentFunction<P> for F {
+impl<F, P> ComponentFunction<P> for F
+where
+    F: Fn(P) -> Element + Clone + 'static,
+{
     fn rebuild(&self, props: P) -> Element {
-        self(props)
+        subsecond::HotFn::current(self.clone()).call((props,))
+    }
+
+    fn fn_ptr(&self) -> usize {
+        subsecond::HotFn::current(self.clone()).ptr_address() as usize
     }
 }
 
 /// Accept any callbacks that take no props
 pub struct EmptyMarker;
-impl<F: Fn() -> Element + Clone + 'static> ComponentFunction<(), EmptyMarker> for F {
-    fn rebuild(&self, _: ()) -> Element {
-        self()
+impl<F> ComponentFunction<(), EmptyMarker> for F
+where
+    F: Fn() -> Element + Clone + 'static,
+{
+    fn rebuild(&self, props: ()) -> Element {
+        subsecond::HotFn::current(self.clone()).call(props)
+    }
+
+    fn fn_ptr(&self) -> usize {
+        subsecond::HotFn::current(self.clone()).ptr_address() as usize
     }
 }
 
