@@ -1,5 +1,5 @@
 [package]
-name = "dioxus-playwright-fullstack-test"
+name = "fullstack-websocket-example"
 version = "0.1.0"
 edition = "2021"
 publish = false
@@ -9,10 +9,8 @@ publish = false
 [dependencies]
 dioxus = { workspace = true, features = ["fullstack"] }
 futures.workspace = true
-serde = "1.0.218"
 tokio = { workspace = true, features = ["full"], optional = true }
 
 [features]
-default = []
 server = ["dioxus/server", "dep:tokio"]
 web = ["dioxus/web"]

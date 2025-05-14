@@ -4334,6 +4334,7 @@ name = "dioxus-playwright-fullstack-test"
 version = "0.1.0"
 dependencies = [
  "dioxus",
+ "futures",
  "serde",
  "tokio",
 ]
@@ -4469,6 +4470,7 @@ dependencies = [
  "dioxus-lib",
  "dioxus-router",
  "dioxus-ssr",
+ "enumset",
  "futures-channel",
  "futures-util",
  "generational-box",
@@ -5562,6 +5564,15 @@ dependencies = [
  "futures-util",
  "once_cell",
  "serde",
+ "tokio",
+]
+
+[[package]]
+name = "fullstack-websocket-example"
+version = "0.1.0"
+dependencies = [
+ "dioxus",
+ "futures",
  "tokio",
 ]
 

@@ -42,6 +42,7 @@ tracing-futures = { workspace = true }
 once_cell = { workspace = true }
 async-trait = { workspace = true }
 serde = { workspace = true }
+enumset = "1.1.5"
 
 futures-util = { workspace = true }
 futures-channel = { workspace = true }
