@@ -359,7 +359,13 @@ impl HTMLData {
             #[cfg(debug_assertions)]
             debug_types: format_js_list_of_strings(&self.debug_types),
             #[cfg(debug_assertions)]
-            debug_locations: format_js_list_of_strings(&self.debug_locations),
+            debug_locations: format_js_list_of_strings(
+                &self
+                    .debug_locations
+                    .iter()
+                    .map(|s| Some(s.as_ref().unwrap().replace("\\", "\\\\").to_string()))
+                    .collect::<Vec<_>>(),
+            ),
         }
     }
 }
