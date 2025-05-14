@@ -190,6 +190,7 @@ wasm-splitter = { path = "packages/wasm-split/wasm-split", version = "0.7.0-alph
 wasm-split-macro = { path = "packages/wasm-split/wasm-split-macro", version = "0.7.0-alpha.0" }
 wasm-split-cli = { path = "packages/wasm-split/wasm-split-cli", version = "0.7.0-alpha.0" }
 wasm-split-harness = { path = "packages/playwright-tests/wasm-split-harness", version = "0.7.0-alpha.0" }
+wasm-used = { path = "packages/wasm-split/wasm-used", version = "0.7.0-alpha.0" }
 
 depinfo = { path = "packages/depinfo", version = "0.7.0-alpha.0" }
 warnings = { version = "0.2.1" }
