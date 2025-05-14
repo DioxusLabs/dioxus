@@ -756,8 +756,6 @@ macro_rules! impl_hot_function {
                 unsafe fn call_as_ptr(&mut self, args: ($($arg,)*)) -> Self::Return {
                     unsafe {
                         if let Some(jump_table) = get_jump_table() {
-
-
                             let real = std::mem::transmute_copy::<Self, Self::Real>(&self) as *const ();
 
                             // Android implements MTE / pointer tagging and we need to preserve the tag.
@@ -765,7 +763,7 @@ macro_rules! impl_hot_function {
                             // This is only implemented on 64-bit platforms since pointer tagging is not available on 32-bit platforms
                             // In dev, Dioxus disables MTE to work around this issue, but we still handle it anyways.
                             #[cfg(all(target_pointer_width = "64", target_os = "android"))] let nibble  = real as u64 & 0xFF00_0000_0000_0000;
-                            #[cfg(target_pointer_width = "64")] let real    = real as u64 & 0x00FFF_FFF_FFFF_FFFF;
+                            #[cfg(all(target_pointer_width = "64", target_os = "android"))] let real    = real as u64 & 0x00FFF_FFF_FFFF_FFFF;
 
                             #[cfg(target_pointer_width = "64")] let real  = real as u64;
 

@@ -1,4 +1,7 @@
-use crate::{AppBuilder, BuildId, BuildMode, BuilderUpdate, Result, ServeArgs, TraceController};
+use crate::{
+    styles::{GLOW_STYLE, LINK_STYLE},
+    AppBuilder, BuildId, BuildMode, BuilderUpdate, Result, ServeArgs, TraceController,
+};
 
 mod ansi_buffer;
 mod output;
@@ -34,25 +37,24 @@ pub(crate) use update::*;
 /// - I want us to be able to detect a `server_fn` in the project and then upgrade from a static server
 ///   to a dynamic one on the fly.
 pub(crate) async fn serve_all(args: ServeArgs, tracer: &mut TraceController) -> Result<()> {
-    // Load the args into a plan, resolving all tooling, build dirs, arguments, decoding the multi-target, etc
-    let mut builder = AppServer::start(args).await?;
-    let mut devserver = WebServer::start(&builder)?;
-    let mut screen = Output::start(builder.interactive).await?;
-
     // This is our default splash screen. We might want to make this a fancier splash screen in the future
     // Also, these commands might not be the most important, but it's all we've got enabled right now
     tracing::info!(
         r#"-----------------------------------------------------------------
-                Serving your Dioxus app: {} 🚀
-                • Press `ctrl+c` to exit the server
-                • Press `r` to rebuild the app
-                • Press `p` to toggle automatic rebuilds
-                • Press `v` to toggle verbose logging
-                • Press `/` for more commands and shortcuts
-                Learn more at https://dioxuslabs.com/learn/0.6/getting_started
+                Serving your Dioxus app! 🚀
+                • Press {GLOW_STYLE}`ctrl+c`{GLOW_STYLE:#} to exit the server
+                • Press {GLOW_STYLE}`r`{GLOW_STYLE:#} to rebuild the app
+                • Press {GLOW_STYLE}`p`{GLOW_STYLE:#} to toggle automatic rebuilds
+                • Press {GLOW_STYLE}`v`{GLOW_STYLE:#} to toggle verbose logging
+                • Press {GLOW_STYLE}`/`{GLOW_STYLE:#} for more commands and shortcuts
+                Learn more at {LINK_STYLE}https://dioxuslabs.com/learn/0.7/getting_started{LINK_STYLE:#}
                ----------------------------------------------------------------"#,
-        builder.app_name()
     );
+
+    // Load the args into a plan, resolving all tooling, build dirs, arguments, decoding the multi-target, etc
+    let mut builder = AppServer::start(args).await?;
+    let mut devserver = WebServer::start(&builder)?;
+    let mut screen = Output::start(builder.interactive).await?;
 
     loop {
         // Draw the state of the server to the screen
@@ -89,7 +91,6 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &mut TraceController) -> 
             // Run the server in the background
             // Waiting for updates here lets us tap into when clients are added/removed
             ServeUpdate::NewConnection { id, aslr_reference } => {
-                // Send the client
                 devserver
                     .send_hotreload(builder.applied_hot_reload_changes(BuildId::CLIENT))
                     .await;
@@ -128,7 +129,7 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &mut TraceController) -> 
                         screen.push_cargo_log(message);
                     }
                     BuilderUpdate::BuildFailed { err } => {
-                        tracing::error!("Build failed: {:#?}", err);
+                        tracing::error!("Build failed: {}", err);
                     }
                     BuilderUpdate::BuildReady { bundle } => match bundle.mode {
                         BuildMode::Thin { ref cache, .. } => {
@@ -204,7 +205,6 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &mut TraceController) -> 
             ServeUpdate::Exit { error } => {
                 _ = builder.cleanup_all().await;
                 _ = devserver.shutdown().await;
-                _ = screen.shutdown();
 
                 match error {
                     Some(err) => return Err(anyhow::anyhow!("{}", err).into()),

@@ -19,7 +19,11 @@ const EVENTS_PATH: &str = "http://dioxus.index.html/__events";
 #[cfg(not(any(target_os = "android", target_os = "windows")))]
 const EVENTS_PATH: &str = "dioxus://index.html/__events";
 
-static DEFAULT_INDEX: &str = include_str!("./index.html");
+#[cfg(debug_assertions)]
+static DEFAULT_INDEX: &str = include_str!("./assets/dev.index.html");
+
+#[cfg(not(debug_assertions))]
+static DEFAULT_INDEX: &str = include_str!("./assets/prod.index.html");
 
 #[allow(clippy::too_many_arguments)] // just for now, should fix this eventually
 /// Handle a request from the webview

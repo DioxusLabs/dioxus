@@ -5,7 +5,14 @@
 // - Hydration
 
 #![allow(non_snake_case)]
-use dioxus::{prelude::*, CapturedError};
+use dioxus::{
+    prelude::{
+        server_fn::{codec::JsonEncoding, BoxedStream, Websocket},
+        *,
+    },
+    CapturedError,
+};
+use futures::{channel::mpsc, SinkExt, StreamExt};
 
 fn main() {
     dioxus::LaunchBuilder::new()
@@ -43,6 +50,7 @@ fn app() -> Element {
         OnMounted {}
         DefaultServerFnCodec {}
         DocumentElements {}
+        WebSockets {}
     }
 }
 
@@ -154,5 +162,44 @@ fn DocumentElements() -> Element {
         document::Stylesheet { id: "stylesheet-head", href: "https://fonts.googleapis.com/css?family=Roboto:300,300italic,700,700italic" }
         document::Script { id: "script-head", async: true, "console.log('hello world');" }
         document::Style { id: "style-head", "body {{ font-family: 'Roboto'; }}" }
+    }
+}
+
+#[server(protocol = Websocket<JsonEncoding, JsonEncoding>)]
+async fn echo_ws(
+    input: BoxedStream<String, ServerFnError>,
+) -> Result<BoxedStream<String, ServerFnError>, ServerFnError> {
+    let mut input = input;
+
+    let (mut tx, rx) = mpsc::channel(1);
+
+    tokio::spawn(async move {
+        while let Some(msg) = input.next().await {
+            let _ = tx.send(msg.map(|msg| msg.to_ascii_uppercase())).await;
+        }
+    });
+
+    Ok(rx.into())
+}
+
+/// This component tests websocket server functions
+#[component]
+fn WebSockets() -> Element {
+    let mut received = use_signal(String::new);
+    use_future(move || async move {
+        let (mut tx, rx) = mpsc::channel(1);
+        let mut receiver = echo_ws(rx.into()).await.unwrap();
+        tx.send(Ok("hello world".to_string())).await.unwrap();
+        while let Some(Ok(msg)) = receiver.next().await {
+            println!("Received: {}", msg);
+            received.set(msg);
+        }
+    });
+
+    rsx! {
+        div {
+            id: "websocket-div",
+            "Received: {received}"
+        }
     }
 }

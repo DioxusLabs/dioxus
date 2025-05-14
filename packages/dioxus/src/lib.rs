@@ -76,7 +76,7 @@ pub use dioxus_cli_config as cli_config;
 
 #[cfg(feature = "wasm-split")]
 #[cfg_attr(docsrs, doc(cfg(feature = "wasm-split")))]
-pub use wasm_split;
+pub use wasm_splitter as wasm_split;
 
 pub use subsecond;
 
@@ -144,7 +144,7 @@ pub mod prelude {
 
     #[cfg(feature = "wasm-split")]
     #[cfg_attr(docsrs, doc(cfg(feature = "wasm-split")))]
-    pub use wasm_split;
+    pub use wasm_splitter as wasm_split;
 }
 
 #[cfg(feature = "web")]
