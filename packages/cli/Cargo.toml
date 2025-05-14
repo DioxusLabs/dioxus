@@ -138,7 +138,6 @@ wasm-bindgen-externref-xform = "0.2.100"
 pdb = "0.8.0"
 self_update = { version = "0.42.0", features = ["archive-tar", "archive-zip", "compression-flate2", "compression-zip-deflate"] }
 self-replace = "1.5.0"
-sentry = { version = "0.38.0", default-features = false,  features = ["backtrace", "contexts", "panic"] }
 
 [build-dependencies]
 built = { version = "0.7.5", features = ["git2"] }
