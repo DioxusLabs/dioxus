@@ -186,7 +186,7 @@ manganis-core = { path = "packages/manganis/manganis-core", version = "0.7.0-alp
 manganis-macro = { path = "packages/manganis/manganis-macro", version = "0.7.0-alpha.0" }
 
 # wasm-split
-wasm-split = { path = "packages/wasm-split/wasm-split", version = "0.7.0-alpha.0" }
+wasm-splitter = { path = "packages/wasm-split/wasm-split", version = "0.7.0-alpha.0" }
 wasm-split-macro = { path = "packages/wasm-split/wasm-split-macro", version = "0.7.0-alpha.0" }
 wasm-split-cli = { path = "packages/wasm-split/wasm-split-cli", version = "0.7.0-alpha.0" }
 wasm-split-harness = { path = "packages/playwright-tests/wasm-split-harness", version = "0.7.0-alpha.0" }
@@ -409,7 +409,7 @@ base64 = { workspace = true, optional = true }
 http-range = { version = "0.1.5", optional = true }
 wgpu = { version = "0.19", optional = true }
 ouroboros = { version = "*", optional = true }
-wasm-split = { workspace = true }
+wasm-splitter = { workspace = true, package = "wasm-split" }
 
 [dev-dependencies]
 dioxus = { workspace = true, features = ["router"] }

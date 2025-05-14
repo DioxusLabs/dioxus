@@ -3605,7 +3605,7 @@ dependencies = [
  "tokio",
  "tracing",
  "warnings",
- "wasm-split",
+ "wasm-splitter",
 ]
 
 [[package]]
@@ -4027,7 +4027,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
- "wasm-split",
+ "wasm-splitter",
  "web-time",
  "wgpu 0.19.4",
 ]
@@ -15887,14 +15887,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "wasm-split"
-version = "0.7.0-alpha.0"
-dependencies = [
- "async-once-cell",
- "wasm-split-macro",
-]
-
-[[package]]
 name = "wasm-split-cli"
 version = "0.7.0-alpha.0"
 dependencies = [
@@ -15938,6 +15930,14 @@ dependencies = [
  "quote",
  "sha2",
  "syn 2.0.101",
+]
+
+[[package]]
+name = "wasm-splitter"
+version = "0.7.0-alpha.0"
+dependencies = [
+ "async-once-cell",
+ "wasm-split-macro",
 ]
 
 [[package]]

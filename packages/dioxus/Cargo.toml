@@ -33,7 +33,7 @@ dioxus_server_macro = { workspace = true, optional = true }
 manganis = { workspace = true, features = ["dioxus"], optional = true }
 dioxus-logger = { workspace = true, optional = true }
 warnings = { workspace = true, optional = true }
-wasm-split = { workspace = true, optional = true }
+wasm-splitter = { workspace = true, package = "wasm-split", optional = true }
 subsecond = { workspace = true }
 
 serde = { workspace = true, optional = true }
@@ -70,7 +70,7 @@ logger = ["dep:dioxus-logger"]
 cli-config = ["dep:dioxus-cli-config"]
 warnings = ["dep:warnings"]
 wasm-split = [
-  "dep:wasm-split",
+  "dep:wasm-splitter",
   "dioxus-config-macros/wasm-split",
 ] # note: to turn on the router splitter, you need to manually enable wasm-split on the router
 

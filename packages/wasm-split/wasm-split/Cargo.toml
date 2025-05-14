@@ -1,5 +1,5 @@
 [package]
-name = "wasm-split"
+name = "wasm-splitter"
 version = { workspace = true }
 edition = "2021"
 authors = ["Jonathan Kelley"]
