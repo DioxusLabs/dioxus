@@ -103,6 +103,7 @@ jobs:
           manifest_path: packages/cli/Cargo.toml
           ref: refs/tags/${{ env.RELEASE_POST }}
           features: optimizations
+          zip: "all"
 
   # todo: these things
   # Run benchmarks, which we'll use to display on the website
