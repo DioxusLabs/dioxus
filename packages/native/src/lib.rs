@@ -69,13 +69,11 @@ pub fn launch_cfg_with_props<P: Clone + 'static, M: 'static>(
     ))]
     {
         use crate::event::DioxusNativeEvent;
-        if let Some(endpoint) = dioxus_cli_config::devserver_ws_endpoint() {
-            let proxy = event_loop.create_proxy();
-            dioxus_devtools::connect(endpoint, move |event| {
-                let dxn_event = DioxusNativeEvent::DevserverEvent(event);
-                let _ = proxy.send_event(BlitzShellEvent::embedder_event(dxn_event));
-            })
-        }
+        let proxy = event_loop.create_proxy();
+        dioxus_devtools::connect(move |event| {
+            let dxn_event = DioxusNativeEvent::DevserverEvent(event);
+            let _ = proxy.send_event(BlitzShellEvent::embedder_event(dxn_event));
+        })
     }
 
     // Spin up the virtualdom

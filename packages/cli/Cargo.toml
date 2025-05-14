@@ -136,6 +136,8 @@ backtrace = "0.3.74"
 ar = "0.9.0"
 wasm-bindgen-externref-xform = "0.2.100"
 pdb = "0.8.0"
+self_update = { version = "0.42.0", features = ["archive-tar", "archive-zip", "compression-flate2", "compression-zip-deflate"] }
+self-replace = "1.5.0"
 
 [build-dependencies]
 built = { version = "0.7.5", features = ["git2"] }
@@ -162,10 +164,7 @@ name = "dx"
 escargot = "0.5"
 
 [package.metadata.binstall]
-pkg-url = "{ repo }/releases/download/v{ version }/dx-{ target }-v{ version }{ archive-suffix }"
-pkg-fmt = "tgz"
-
-[package.metadata.binstall.overrides.x86_64-pc-windows-msvc]
+pkg-url = "{ repo }/releases/download/v{ version }/dx-{ target }{ archive-suffix }"
 pkg-fmt = "zip"
 
 [package.metadata.docs.rs]

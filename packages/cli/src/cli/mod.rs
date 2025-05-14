@@ -12,6 +12,7 @@ pub(crate) mod run;
 pub(crate) mod serve;
 pub(crate) mod target;
 pub(crate) mod translate;
+pub(crate) mod update;
 pub(crate) mod verbosity;
 
 pub(crate) use build::*;
@@ -20,6 +21,7 @@ pub(crate) use target::*;
 pub(crate) use verbosity::*;
 
 use crate::{error::Result, Error, StructuredOutput};
+use clap::builder::styling::{AnsiColor, Effects, Style, Styles};
 use clap::{Parser, Subcommand};
 use html_parser::Dom;
 use once_cell::sync::Lazy;
@@ -32,9 +34,10 @@ use std::{
     process::Command,
 };
 
-/// Build, Bundle & Ship Dioxus Apps.
+/// Dioxus: build web, desktop, and mobile apps with a single codebase.
 #[derive(Parser)]
 #[clap(name = "dioxus", version = VERSION.as_str())]
+#[clap(styles = CARGO_STYLING)]
 pub(crate) struct Cli {
     #[command(subcommand)]
     pub(crate) action: Commands,
@@ -45,21 +48,29 @@ pub(crate) struct Cli {
 
 #[derive(Subcommand)]
 pub(crate) enum Commands {
+    /// Create a new Dioxus project.
+    #[clap(name = "new")]
+    New(create::Create),
+
+    /// Build, watch, and serve the project.
+    #[clap(name = "serve")]
+    Serve(serve::ServeArgs),
+
+    /// Bundle the Dioxus app into a shippable object.
+    #[clap(name = "bundle")]
+    Bundle(bundle::Bundle),
+
     /// Build the Dioxus project and all of its assets.
     #[clap(name = "build")]
     Build(build::BuildArgs),
 
-    /// Translate a source file into Dioxus code.
-    #[clap(name = "translate")]
-    Translate(translate::Translate),
+    /// Run the project without any hotreloading.
+    #[clap(name = "run")]
+    Run(run::RunArgs),
 
-    /// Build, watch & serve the Dioxus project and all of its assets.
-    #[clap(name = "serve")]
-    Serve(serve::ServeArgs),
-
-    /// Create a new project for Dioxus.
-    #[clap(name = "new")]
-    New(create::Create),
+    /// Build the assets for a specific target.
+    #[clap(name = "assets")]
+    BuildAssets(build_assets::BuildAssets),
 
     /// Init a new project for Dioxus in the current directory (by default).
     /// Will attempt to keep your project in a good state.
@@ -70,9 +81,9 @@ pub(crate) enum Commands {
     #[clap(name = "clean")]
     Clean(clean::Clean),
 
-    /// Bundle the Dioxus app into a shippable object.
-    #[clap(name = "bundle")]
-    Bundle(bundle::Bundle),
+    /// Translate a source file into Dioxus code.
+    #[clap(name = "translate")]
+    Translate(translate::Translate),
 
     /// Automatically format RSX.
     #[clap(name = "fmt")]
@@ -82,18 +93,14 @@ pub(crate) enum Commands {
     #[clap(name = "check")]
     Check(check::Check),
 
-    /// Run the project without any hotreloading
-    #[clap(name = "run")]
-    Run(run::RunArgs),
-
     /// Dioxus config file controls.
     #[clap(subcommand)]
     #[clap(name = "config")]
     Config(config::Config),
 
-    /// Build the assets for a specific target.
-    #[clap(name = "assets")]
-    BuildAssets(build_assets::BuildAssets),
+    /// Update the Dioxus CLI to the latest version.
+    #[clap(name = "self-update")]
+    SelfUpdate(update::SelfUpdate),
 }
 
 impl Display for Commands {
@@ -110,7 +117,8 @@ impl Display for Commands {
             Commands::Check(_) => write!(f, "check"),
             Commands::Bundle(_) => write!(f, "bundle"),
             Commands::Run(_) => write!(f, "run"),
-            Commands::BuildAssets(_) => write!(f, "build_assets"),
+            Commands::BuildAssets(_) => write!(f, "assets"),
+            Commands::SelfUpdate(_) => write!(f, "self-update"),
         }
     }
 }
@@ -122,3 +130,32 @@ pub(crate) static VERSION: Lazy<String> = Lazy::new(|| {
         crate::dx_build_info::GIT_COMMIT_HASH_SHORT.unwrap_or("was built without git repository")
     )
 });
+
+/// Cargo's color style
+/// [source](https://github.com/crate-ci/clap-cargo/blob/master/src/style.rs)
+pub(crate) const CARGO_STYLING: Styles = Styles::styled()
+    .header(styles::HEADER)
+    .usage(styles::USAGE)
+    .literal(styles::LITERAL)
+    .placeholder(styles::PLACEHOLDER)
+    .error(styles::ERROR)
+    .valid(styles::VALID)
+    .invalid(styles::INVALID);
+
+pub mod styles {
+    use super::*;
+    pub(crate) const HEADER: Style = AnsiColor::Green.on_default().effects(Effects::BOLD);
+    pub(crate) const USAGE: Style = AnsiColor::Green.on_default().effects(Effects::BOLD);
+    pub(crate) const LITERAL: Style = AnsiColor::Cyan.on_default().effects(Effects::BOLD);
+    pub(crate) const PLACEHOLDER: Style = AnsiColor::Cyan.on_default();
+    pub(crate) const ERROR: Style = AnsiColor::Red.on_default().effects(Effects::BOLD);
+
+    pub(crate) const VALID: Style = AnsiColor::Cyan.on_default().effects(Effects::BOLD);
+    pub(crate) const INVALID: Style = AnsiColor::Yellow.on_default().effects(Effects::BOLD);
+
+    // extra styles for styling logs
+    // we can style stuff using the ansi sequences like: "hotpatched in {GLOW_STYLE}{}{GLOW_STYLE:X}ms"
+    pub(crate) const GLOW_STYLE: Style = AnsiColor::Yellow.on_default();
+    pub(crate) const NOTE_STYLE: Style = AnsiColor::Green.on_default();
+    pub(crate) const LINK_STYLE: Style = AnsiColor::Blue.on_default();
+}

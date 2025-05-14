@@ -163,13 +163,6 @@ impl Output {
         Ok(())
     }
 
-    /// Call the shutdown functions that might mess with the terminal settings - see the related code
-    /// in "startup" for more details about what we need to unset
-    pub(crate) fn shutdown(&self) -> io::Result<()> {
-        Self::remote_shutdown(self.interactive)?;
-        Ok(())
-    }
-
     pub(crate) fn remote_shutdown(interactive: bool) -> io::Result<()> {
         if interactive {
             stdout()
@@ -966,11 +959,23 @@ impl Output {
                                 " ".repeat(3usize.saturating_sub(log.source.to_string().len()))
                         ))
                         .style(match log.source {
-                            TraceSrc::App(_platform) => Style::new().blue(),
-                            TraceSrc::Dev => Style::new().magenta(),
-                            TraceSrc::Build => Style::new().yellow(),
-                            TraceSrc::Bundle => Style::new().magenta(),
+                            TraceSrc::App(_platform) => match log.level {
+                                Level::ERROR => Style::new().red(),
+                                Level::WARN => Style::new().yellow(),
+                                Level::INFO => Style::new().magenta(),
+                                Level::DEBUG => Style::new().magenta(),
+                                Level::TRACE => Style::new().magenta(),
+                            },
+                            TraceSrc::Dev => match log.level {
+                                Level::ERROR => Style::new().red(),
+                                Level::WARN => Style::new().yellow(),
+                                Level::INFO => Style::new().blue(),
+                                Level::DEBUG => Style::new().blue(),
+                                Level::TRACE => Style::new().blue(),
+                            },
                             TraceSrc::Cargo => Style::new().yellow(),
+                            TraceSrc::Build => Style::new().blue(),
+                            TraceSrc::Bundle => Style::new().blue(),
                             TraceSrc::Unknown => Style::new().gray(),
                         }),
                     );

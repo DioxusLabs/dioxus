@@ -26,6 +26,8 @@ pub(crate) struct CliSettings {
     pub(crate) wsl_file_poll_interval: Option<u16>,
     /// Use tooling from path rather than downloading them.
     pub(crate) no_downloads: Option<bool>,
+    /// Ignore updates for this version
+    pub(crate) ignore_version_update: Option<String>,
 }
 
 impl CliSettings {

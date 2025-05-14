@@ -19,12 +19,12 @@ impl TailwindCli {
         Self { version }
     }
 
-    pub(crate) async fn serve(
+    pub(crate) fn serve(
         manifest_dir: PathBuf,
         input_path: Option<PathBuf>,
         output_path: Option<PathBuf>,
-    ) -> Result<tokio::task::JoinHandle<Result<()>>> {
-        Ok(tokio::spawn(async move {
+    ) -> tokio::task::JoinHandle<Result<()>> {
+        tokio::spawn(async move {
             let Some(tailwind) = Self::autodetect(&manifest_dir) else {
                 return Ok(());
             };
@@ -38,12 +38,16 @@ impl TailwindCli {
             proc.wait_with_output().await?;
 
             Ok(())
-        }))
+        })
     }
 
     /// Use the correct tailwind version based on the manifest directory.
+    ///
     /// - If `tailwind.config.js` or `tailwind.config.ts` exists, use v3.
     /// - If `tailwind.css` exists, use v4.
+    ///
+    /// Note that v3 still uses the tailwind.css file, but usually the accompanying js file indicates
+    /// that the project is using v3.
     pub(crate) fn autodetect(manifest_dir: &Path) -> Option<Self> {
         if manifest_dir.join("tailwind.config.js").exists() {
             return Some(Self::v3());
@@ -92,8 +96,9 @@ impl TailwindCli {
             .arg("--output")
             .arg(output_path)
             .arg("--watch")
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
             .spawn()?;
 
         Ok(proc)

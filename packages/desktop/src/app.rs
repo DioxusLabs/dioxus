@@ -7,7 +7,8 @@ use crate::{
     shortcut::ShortcutRegistry,
     webview::WebviewInstance,
 };
-use dioxus_core::{ElementId, VirtualDom};
+use dioxus_core::{ElementId, ScopeId, VirtualDom};
+use dioxus_history::History;
 use dioxus_html::PlatformEventData;
 use std::{
     any::Any,
@@ -15,6 +16,7 @@ use std::{
     collections::HashMap,
     rc::Rc,
     sync::Arc,
+    time::Duration,
 };
 use tao::{
     dpi::PhysicalSize,
@@ -168,12 +170,10 @@ impl App {
 
     #[cfg(all(feature = "devtools", debug_assertions))]
     pub fn connect_hotreload(&self) {
-        if let Some(endpoint) = dioxus_cli_config::devserver_ws_endpoint() {
-            let proxy = self.shared.proxy.clone();
-            dioxus_devtools::connect(endpoint, move |msg| {
-                _ = proxy.send_event(UserWindowEvent::HotReloadEvent(msg));
-            })
-        }
+        let proxy = self.shared.proxy.clone();
+        dioxus_devtools::connect(move |msg| {
+            _ = proxy.send_event(UserWindowEvent::HotReloadEvent(msg));
+        })
     }
 
     pub fn handle_new_window(&mut self) {
@@ -322,7 +322,13 @@ impl App {
 
     #[cfg(all(feature = "devtools", debug_assertions))]
     pub fn handle_hot_reload_msg(&mut self, msg: dioxus_devtools::DevserverMsg) {
+        use std::time::Duration;
+
         use dioxus_devtools::DevserverMsg;
+
+        // Amount of time that toats should be displayed.
+        const TOAST_TIMEOUT: Duration = Duration::from_secs(2);
+        const TOAST_TIMEOUT_LONG: Duration = Duration::from_secs(3600); // Duration::MAX is too long for JS.
 
         match msg {
             DevserverMsg::HotReload(hr_msg) => {
@@ -343,17 +349,67 @@ impl App {
                         webview.kick_stylsheets();
                     }
                 }
+
+                if hr_msg.jump_table.is_some()
+                    && hr_msg.for_build_id == Some(dioxus_cli_config::build_id())
+                {
+                    self.send_toast_to_all(
+                        "Hot-patch success!",
+                        &format!("App successfully patched in {} ms", hr_msg.ms_elapsed),
+                        "success",
+                        TOAST_TIMEOUT,
+                        false,
+                    );
+                }
             }
-            DevserverMsg::FullReloadCommand
-            | DevserverMsg::FullReloadStart
-            | DevserverMsg::FullReloadFailed => {
-                // usually only web gets this message - what are we supposed to do?
-                // Maybe we could just binary patch ourselves in place without losing window state?
+            DevserverMsg::FullReloadCommand => {
+                self.send_toast_to_all(
+                    "Successfully rebuilt.",
+                    "Your app was rebuilt successfully and without error.",
+                    "success",
+                    TOAST_TIMEOUT,
+                    true,
+                );
             }
+            DevserverMsg::FullReloadStart => self.send_toast_to_all(
+                "Your app is being rebuilt.",
+                "A non-hot-reloadable change occurred and we must rebuild.",
+                "info",
+                TOAST_TIMEOUT_LONG,
+                false,
+            ),
+            DevserverMsg::FullReloadFailed => self.send_toast_to_all(
+                "Oops! The build failed.",
+                "We tried to rebuild your app, but something went wrong.",
+                "error",
+                TOAST_TIMEOUT_LONG,
+                false,
+            ),
+            DevserverMsg::HotPatchStart => self.send_toast_to_all(
+                "Hot-patching app...",
+                "Hot-patching modified Rust code.",
+                "info",
+                TOAST_TIMEOUT_LONG,
+                false,
+            ),
             DevserverMsg::Shutdown => {
                 self.control_flow = ControlFlow::Exit;
             }
             _ => {}
+        }
+    }
+
+    #[cfg(all(feature = "devtools", debug_assertions))]
+    fn send_toast_to_all(
+        &self,
+        header_text: &str,
+        message: &str,
+        level: &str,
+        duration: Duration,
+        after_reload: bool,
+    ) {
+        for webview in self.webviews.values() {
+            webview.show_toast(header_text, message, level, duration, after_reload);
         }
     }
 
@@ -462,6 +518,9 @@ impl App {
 
     #[cfg(debug_assertions)]
     fn persist_window_state(&self) {
+        use dioxus_core::ScopeId;
+        use dioxus_history::History;
+
         if let Some(webview) = self.webviews.values().next() {
             let window = &webview.desktop_context.window;
 
@@ -491,12 +550,20 @@ impl App {
                 return;
             };
 
+            let url = webview.dom.in_runtime(|| {
+                ScopeId::ROOT
+                    .consume_context::<Rc<dyn History>>()
+                    .unwrap()
+                    .current_route()
+            });
+
             let state = PreservedWindowState {
                 x,
                 y,
                 width: size.width.max(200),
                 height: size.height.saturating_sub(adjustment).max(200),
                 monitor: monitor_name.to_string(),
+                url: Some(url),
             };
 
             // Yes... I know... we're loading a file that might not be ours... but it's a debug feature
@@ -540,6 +607,16 @@ impl App {
                 if explicit_inner_size.is_none() {
                     window.set_inner_size(tao::dpi::PhysicalSize::new(size.0, size.1));
                 }
+
+                // Set the url if it exists
+                webview.dom.in_runtime(|| {
+                    if let Some(url) = state.url {
+                        ScopeId::ROOT
+                            .consume_context::<Rc<dyn History>>()
+                            .unwrap()
+                            .replace(url);
+                    }
+                })
             }
         }
     }
@@ -563,7 +640,7 @@ impl App {
                         }
 
                         // give it a moment for the event to be processed
-                        std::thread::sleep(std::time::Duration::from_secs(1));
+                        std::thread::sleep(std::time::Duration::from_millis(100));
                     }
                 }
             });
@@ -578,6 +655,7 @@ struct PreservedWindowState {
     width: u32,
     height: u32,
     monitor: String,
+    url: Option<String>,
 }
 
 /// Hide the last window when using LastWindowHides.

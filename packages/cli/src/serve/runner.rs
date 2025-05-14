@@ -155,10 +155,12 @@ impl AppServer {
             client.build.package_manifest_dir(),
             client.build.config.application.tailwind_input.clone(),
             client.build.config.application.tailwind_output.clone(),
-        )
-        .await?;
+        );
 
-        tracing::debug!("Proxied port: {:?}", proxied_port);
+        _ = client.build.start_simulators().await;
+
+        // Encourage the user to update to a new dx version
+        crate::update::log_if_cli_could_update();
 
         // Create the runner
         let mut runner = Self {
@@ -446,7 +448,13 @@ impl AppServer {
             // Also make sure the builder isn't busy since that might cause issues with hotreloads
             // https://github.com/DioxusLabs/dioxus/issues/3361
             if !msg.is_empty() && self.client.can_receive_hotreloads() {
-                tracing::info!(dx_src = ?TraceSrc::Dev, "Hotreloading: {}", file);
+                use crate::styles::NOTE_STYLE;
+                tracing::info!(dx_src = ?TraceSrc::Dev, "Hotreloading: {NOTE_STYLE}{}{NOTE_STYLE:#}", file);
+
+                if !server.has_hotreload_sockets() && self.client.build.platform != Platform::Web {
+                    tracing::warn!("No clients to hotreload - try reloading the app!");
+                }
+
                 server.send_hotreload(msg).await;
             } else {
                 tracing::debug!(dx_src = ?TraceSrc::Dev, "Ignoring file change: {}", file);
@@ -473,6 +481,8 @@ impl AppServer {
         let should_open = self.client.stage == BuildStage::Success
             && (self.server.as_ref().map(|s| s.stage == BuildStage::Success)).unwrap_or(true);
 
+        use crate::cli::styles::GLOW_STYLE;
+
         if should_open {
             let time_taken = artifacts
                 .time_end
@@ -481,11 +491,14 @@ impl AppServer {
 
             if self.client.builds_opened == 0 {
                 tracing::info!(
-                    "Build completed successfully in {:?}ms, launching app! 💫",
+                    "Build completed successfully in {GLOW_STYLE}{:?}ms{GLOW_STYLE:#}, launching app! 💫",
                     time_taken.as_millis()
                 );
             } else {
-                tracing::info!("Build completed in {:?}ms", time_taken.as_millis());
+                tracing::info!(
+                    "Build completed in {GLOW_STYLE}{:?}ms{GLOW_STYLE:#}",
+                    time_taken.as_millis()
+                );
             }
 
             let open_browser = self.client.builds_opened == 0 && self.open_browser;
