@@ -173,12 +173,14 @@ fn Assets() -> Element {
         img {
             src: asset!("/assets/image.png"),
         }
-        img {
-            src: "/assets/image.png",
-        }
-        img {
-            src: "/assets/nested/image.png",
-        }
+        // TODO: raw assets support was removed and needs to be restored
+        // https://github.com/DioxusLabs/dioxus/issues/4115
+        // img {
+        //     src: "/assets/image.png",
+        // }
+        // img {
+        //     src: "/assets/nested/image.png",
+        // }
     }
 }
 
