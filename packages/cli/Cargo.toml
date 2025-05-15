@@ -38,7 +38,7 @@ cargo_toml = { workspace = true, features = ["features"] }
 futures-util = { workspace = true, features = ["async-await-macro"] }
 notify = { workspace = true, features = ["serde"] }
 html_parser = { workspace = true }
-cargo_metadata = { workspace = true, features = ["builder"]}
+cargo_metadata = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tokio-stream = { workspace = true }
 tokio-tungstenite = { workspace = true }

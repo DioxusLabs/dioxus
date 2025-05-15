@@ -2097,7 +2097,6 @@ checksum = "dd5eb614ed4c27c5d706420e4320fbe3216ab31fa1c33cd8246ac36dae4479ba"
 dependencies = [
  "camino",
  "cargo-platform",
- "derive_builder",
  "semver",
  "serde",
  "serde_json",
