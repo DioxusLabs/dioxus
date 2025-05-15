@@ -11,3 +11,4 @@ tsconfig.lsif.json
 *.lsif
 *.db
 *.vsix
+pkg/

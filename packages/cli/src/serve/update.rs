@@ -32,6 +32,10 @@ pub(crate) enum ServeUpdate {
 
     ToggleShouldRebuild,
 
+    OpenDebugger {
+        id: BuildId,
+    },
+
     Redraw,
 
     TracingLog {
