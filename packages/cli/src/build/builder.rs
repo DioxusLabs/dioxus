@@ -1,6 +1,6 @@
 use crate::{
-    BuildArtifacts, BuildRequest, BuildStage, BuilderUpdate, Platform, ProgressRx, ProgressTx,
-    Result, StructuredOutput,
+    serve::WebServer, BuildArtifacts, BuildRequest, BuildStage, BuilderUpdate, Platform,
+    ProgressRx, ProgressTx, Result, StructuredOutput,
 };
 use anyhow::Context;
 use dioxus_cli_opt::process_file_to;
@@ -94,6 +94,7 @@ pub(crate) struct AppBuilder {
 
     /// The debugger for the app - must be enabled with the `d` key
     pub(crate) app_debugger: Option<Child>,
+    pub(crate) pid: Option<u32>,
 }
 
 impl AppBuilder {
@@ -160,6 +161,7 @@ impl AppBuilder {
             artifacts: None,
             patch_cache: None,
             app_debugger: None,
+            pid: None,
         })
     }
 
@@ -792,6 +794,7 @@ impl AppBuilder {
             .arg("simctl")
             .arg("launch")
             .arg("--console")
+            // .arg("--terminate-running-process")
             .arg("booted")
             .arg(self.build.bundle_identifier())
             .envs(ios_envs)
@@ -1344,16 +1347,39 @@ We checked the folder: {}
         matches!(&self.stage, BuildStage::Success | BuildStage::Failed)
     }
 
-    pub(crate) async fn open_debugger(&mut self) {
-        let Some(Some(pid)) = self.child.as_mut().map(|f| f.id()) else {
-            tracing::warn!("No process to attach debugger to");
-            return;
-        };
+    pub(crate) async fn open_debugger(&mut self, server: &WebServer) {
+        let url = match self.build.platform {
+            Platform::Web => {
+                // code --open-url "vscode://DioxusLabs.dioxus/debugger?uri=http://127.0.0.1:8080"
+                let address = server.devserver_address();
+                let base_path = self.build.config.web.app.base_path.clone();
+                let https = self.build.config.web.https.enabled.unwrap_or_default();
+                let protocol = if https { "https" } else { "http" };
+                let base_path = match base_path.as_deref() {
+                    Some(base_path) => format!("/{}", base_path.trim_matches('/')),
+                    None => "".to_owned(),
+                };
+                format!("vscode://DioxusLabs.dioxus/debugger?uri={protocol}://{address}{base_path}")
+            }
+            Platform::Ios => return,
+            Platform::Android => return,
 
-        let url = format!(
-            "vscode://vadimcn.vscode-lldb/launch/config?{{'request':'attach','pid':{}}}",
-            pid
-        );
+            Platform::MacOS
+            | Platform::Windows
+            | Platform::Linux
+            | Platform::Server
+            | Platform::Liveview => {
+                let Some(Some(pid)) = self.child.as_mut().map(|f| f.id()) else {
+                    tracing::warn!("No process to attach debugger to");
+                    return;
+                };
+
+                format!(
+                    "vscode://vadimcn.vscode-lldb/launch/config?{{'request':'attach','pid':{}}}",
+                    pid
+                )
+            }
+        };
 
         tracing::info!("Opening debugger: {url}");
 

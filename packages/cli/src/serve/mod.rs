@@ -203,7 +203,7 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &mut TraceController) -> 
             }
 
             ServeUpdate::OpenDebugger { id } => {
-                builder.open_debugger(id).await;
+                builder.open_debugger(&devserver, id).await;
             }
 
             ServeUpdate::Exit { error } => {

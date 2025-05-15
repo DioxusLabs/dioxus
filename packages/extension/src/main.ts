@@ -177,12 +177,12 @@ function fmtDocument(document: vscode.TextDocument) {
 
 class UriLaunchServer implements vscode.UriHandler {
 	handleUri(uri: vscode.Uri): vscode.ProviderResult<void> {
-		console.log("URI Handler: ", uri);
 		if (uri.path === '/debugger') {
 			let query = decodeURIComponent(uri.query);
 			let params = new URLSearchParams(query);
 			let route = params.get('uri');
-			vscode.commands.executeCommand('vscode.js-debug.debugLink', route);
+			vscode.window.showInformationMessage(`Opening Chrome debugger: ${route}`);
+			vscode.commands.executeCommand('extension.js-debug.debugLink', route);
 		}
 	}
 }
