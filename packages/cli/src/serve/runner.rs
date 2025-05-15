@@ -74,7 +74,7 @@ pub(crate) struct AppServer {
     pub(crate) cross_origin_policy: bool,
 
     // Additional plugin-type tools
-    pub(crate) _tw_watcher: tokio::task::JoinHandle<Result<()>>,
+    pub(crate) tw_watcher: tokio::task::JoinHandle<Result<()>>,
 }
 
 pub(crate) struct CachedFile {
@@ -186,7 +186,7 @@ impl AppServer {
             _force_sequential: force_sequential,
             cross_origin_policy,
             fullstack,
-            _tw_watcher: tw_watcher,
+            tw_watcher,
         };
 
         // Only register the hot-reload stuff if we're watching the filesystem
@@ -564,7 +564,7 @@ impl AppServer {
     }
 
     /// Shutdown all the running processes
-    pub(crate) async fn cleanup_all(&mut self) -> Result<()> {
+    pub(crate) async fn shutdown(&mut self) -> Result<()> {
         self.client.soft_kill().await;
 
         if let Some(server) = self.server.as_mut() {
@@ -587,6 +587,9 @@ impl AppServer {
                 );
             }
         }
+
+        // force the tailwind watcher to stop - if we don't, it eats our stdin
+        self.tw_watcher.abort();
 
         Ok(())
     }

@@ -203,7 +203,7 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &mut TraceController) -> 
             }
 
             ServeUpdate::Exit { error } => {
-                _ = builder.cleanup_all().await;
+                _ = builder.shutdown().await;
                 _ = devserver.shutdown().await;
 
                 match error {
