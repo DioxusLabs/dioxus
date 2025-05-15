@@ -7,6 +7,7 @@ use dioxus_cli_opt::process_file_to;
 use futures_util::{future::OptionFuture, pin_mut, FutureExt};
 use std::{
     env,
+    process::ExitStatus,
     time::{Duration, Instant, SystemTime},
 };
 use std::{
@@ -191,10 +192,15 @@ impl AppBuilder {
             Some(status) = OptionFuture::from(self.child.as_mut().map(|f| f.wait())) => {
                 // Panicking here is on purpose. If the task crashes due to a JoinError (a panic),
                 // we want to propagate that panic up to the serve controller.
-                let status = status.unwrap();
                 self.child = None;
+                match status {
+                    Ok(status) => ProcessExited { status },
+                    Err(err) => {
+                        tracing::error!("Failed to wait for child process: {err}");
+                        ProcessExited { status: ExitStatus::default() }
 
-                ProcessExited { status }
+                    }
+                }
             }
         };
 
