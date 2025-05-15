@@ -89,6 +89,9 @@ impl BuildArgs {
     pub async fn into_targets(self) -> Result<BuildTargets> {
         let workspace = Workspace::current().await?;
 
+        // do some logging to ensure dx matches the dioxus version since we're not always API compatible
+        workspace.check_dioxus_version_against_cli();
+
         let mut server = None;
 
         let client = match self.targets {

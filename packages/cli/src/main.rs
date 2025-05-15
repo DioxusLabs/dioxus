@@ -49,7 +49,6 @@ async fn main() {
     }
 
     let args = TraceController::initialize();
-
     let result = match args.action {
         Commands::Translate(opts) => opts.translate(),
         Commands::New(opts) => opts.create(),
@@ -63,6 +62,7 @@ async fn main() {
         Commands::Bundle(opts) => opts.bundle().await,
         Commands::Run(opts) => opts.run().await,
         Commands::BuildAssets(opts) => opts.run().await,
+        Commands::SelfUpdate(opts) => opts.self_update().await,
     };
 
     // Provide a structured output for third party tools that can consume the output of the CLI
