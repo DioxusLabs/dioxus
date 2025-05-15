@@ -320,6 +320,7 @@ use crate::{
     TargetArgs, TraceSrc, WasmBindgen, WasmOptConfig, Workspace, DX_RUSTC_WRAPPER_ENV_VAR,
 };
 use anyhow::Context;
+use cargo_metadata::diagnostic::Diagnostic;
 use dioxus_cli_config::format_base_path_meta_element;
 use dioxus_cli_config::{APP_TITLE_ENV, ASSET_ROOT_ENV};
 use dioxus_cli_opt::{process_file_to, AssetManifest};
@@ -807,7 +808,7 @@ impl BuildRequest {
 
             match message {
                 Message::BuildScriptExecuted(_) => units_compiled += 1,
-                Message::CompilerMessage(msg) => ctx.status_build_diagnostic(msg),
+                Message::CompilerMessage(msg) => ctx.status_build_diagnostic(msg.message),
                 Message::TextLine(line) => {
                     // Handle the case where we're getting lines directly from rustc.
                     // These are in a different format than the normal cargo output, though I imagine
@@ -827,6 +828,11 @@ impl BuildRequest {
                         if artifact.emit == "link" {
                             output_location = Some(artifact.artifact);
                         }
+                    }
+
+                    // Handle direct rustc diagnostics
+                    if let Ok(diag) = serde_json::from_str::<Diagnostic>(&line) {
+                        ctx.status_build_diagnostic(diag);
                     }
 
                     // For whatever reason, if there's an error while building, we still receive the TextLine

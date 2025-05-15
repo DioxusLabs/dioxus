@@ -2,7 +2,7 @@
 
 use super::BuildMode;
 use crate::{BuildArtifacts, BuildStage, Error, TraceSrc};
-use cargo_metadata::CompilerMessage;
+use cargo_metadata::diagnostic::Diagnostic;
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use serde::{Deserialize, Serialize};
 use std::{path::PathBuf, process::ExitStatus};
@@ -35,7 +35,7 @@ pub enum BuilderUpdate {
     },
 
     CompilerMessage {
-        message: CompilerMessage,
+        message: Diagnostic,
     },
 
     BuildReady {
@@ -92,7 +92,7 @@ impl BuildContext {
         })
     }
 
-    pub(crate) fn status_build_diagnostic(&self, message: CompilerMessage) {
+    pub(crate) fn status_build_diagnostic(&self, message: Diagnostic) {
         _ = self
             .tx
             .unbounded_send(BuilderUpdate::CompilerMessage { message });

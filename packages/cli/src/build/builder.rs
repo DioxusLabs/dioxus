@@ -380,7 +380,7 @@ impl AppBuilder {
                     tracing::info!(json = ?StructuredOutput::BuildUpdate { stage: stage.clone() });
                 }
                 BuilderUpdate::CompilerMessage { message } => {
-                    tracing::info!(json = ?StructuredOutput::CargoOutput { message: message.clone() }, %message);
+                    tracing::info!(json = ?StructuredOutput::RustcOutput { message: message.clone() }, %message);
                 }
                 BuilderUpdate::BuildReady { bundle } => {
                     tracing::debug!(json = ?StructuredOutput::BuildFinished {
@@ -392,7 +392,7 @@ impl AppBuilder {
                     // Flush remaining compiler messages
                     while let Ok(Some(msg)) = self.rx.try_next() {
                         if let BuilderUpdate::CompilerMessage { message } = msg {
-                            tracing::info!(json = ?StructuredOutput::CargoOutput { message: message.clone() }, %message);
+                            tracing::info!(json = ?StructuredOutput::RustcOutput { message: message.clone() }, %message);
                         }
                     }
 

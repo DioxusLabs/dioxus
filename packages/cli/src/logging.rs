@@ -15,7 +15,7 @@
 //! 4. Build fmt layer for non-interactive logging with a custom writer that prevents output during interactive mode.
 
 use crate::{serve::ServeUpdate, Cli, Commands, Platform as TargetPlatform, Verbosity};
-use cargo_metadata::{diagnostic::DiagnosticLevel, CompilerMessage};
+use cargo_metadata::diagnostic::{Diagnostic, DiagnosticLevel};
 use clap::Parser;
 use futures_channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
 use once_cell::sync::OnceCell;
@@ -349,7 +349,7 @@ pub struct TraceMsg {
 #[derive(Clone, PartialEq)]
 #[allow(clippy::large_enum_variant)]
 pub enum TraceContent {
-    Cargo(CompilerMessage),
+    Cargo(Diagnostic),
     Text(String),
 }
 
@@ -366,9 +366,9 @@ impl TraceMsg {
     /// Create a new trace message from a cargo compiler message
     ///
     /// All `cargo` messages are logged at the `TRACE` level since they get *very* noisy during development
-    pub fn cargo(content: CompilerMessage) -> Self {
+    pub fn cargo(content: Diagnostic) -> Self {
         Self {
-            level: match content.message.level {
+            level: match content.level {
                 DiagnosticLevel::Ice => Level::ERROR,
                 DiagnosticLevel::Error => Level::ERROR,
                 DiagnosticLevel::FailureNote => Level::ERROR,

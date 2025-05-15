@@ -2,6 +2,7 @@ use crate::{
     serve::{ansi_buffer::AnsiStringLine, ServeUpdate, WebServer},
     BuildStage, BuilderUpdate, Platform, TraceContent, TraceMsg, TraceSrc,
 };
+use cargo_metadata::diagnostic::Diagnostic;
 use crossterm::{
     cursor::{Hide, Show},
     event::{
@@ -294,10 +295,10 @@ impl Output {
         self.pending_logs.push_front(message);
     }
 
-    pub fn push_cargo_log(&mut self, message: cargo_metadata::CompilerMessage) {
+    pub fn push_cargo_log(&mut self, message: Diagnostic) {
         use cargo_metadata::diagnostic::DiagnosticLevel;
 
-        if self.trace || !matches!(message.message.level, DiagnosticLevel::Note) {
+        if self.trace || !matches!(message.level, DiagnosticLevel::Note) {
             self.push_log(TraceMsg::cargo(message));
         }
     }
@@ -924,7 +925,7 @@ impl Output {
         use chrono::Timelike;
 
         let rendered = match log.content {
-            TraceContent::Cargo(msg) => msg.message.rendered.unwrap_or_default(),
+            TraceContent::Cargo(msg) => msg.rendered.unwrap_or_default(),
             TraceContent::Text(text) => text,
         };
 

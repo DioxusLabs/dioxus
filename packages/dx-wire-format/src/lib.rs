@@ -1,4 +1,4 @@
-use cargo_metadata::CompilerMessage;
+use cargo_metadata::{diagnostic::Diagnostic, CompilerMessage};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -34,6 +34,9 @@ pub enum StructuredOutput {
     },
     CargoOutput {
         message: CompilerMessage,
+    },
+    RustcOutput {
+        message: Diagnostic,
     },
     BundleOutput {
         bundles: Vec<PathBuf>,
