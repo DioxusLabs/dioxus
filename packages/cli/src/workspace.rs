@@ -3,7 +3,7 @@ use crate::Result;
 use crate::{config::DioxusConfig, AndroidTools};
 use anyhow::Context;
 use ignore::gitignore::Gitignore;
-use krates::{semver::Version, KrateDetails, LockOptions};
+use krates::{semver::Version, KrateDetails};
 use krates::{Cmd, Krates, NodeId};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -34,12 +34,7 @@ impl Workspace {
             return Ok(ws.clone());
         }
 
-        let mut cmd = Cmd::new();
-        cmd.lock_opts(LockOptions {
-            offline: true,
-            frozen: false,
-            locked: false,
-        });
+        let cmd = Cmd::new();
         let mut builder = krates::Builder::new();
         builder.workspace(true);
         let krates = builder
