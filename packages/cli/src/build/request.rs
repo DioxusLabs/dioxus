@@ -1241,10 +1241,10 @@ impl BuildRequest {
         //
         // We dump its output directly into the patch exe location which is different than how rustc
         // does it since it uses llvm-objcopy into the `target/debug/` folder.
-        let res = match self.triple.operating_system {
+        let res = match cfg!(target_os = "windows") {
             // Handle windows response files
             // https://learn.microsoft.com/en-us/cpp/build/reference/at-specify-a-linker-response-file?view=msvc-170
-            OperatingSystem::Windows => {
+            true => {
                 let cmd_file = tempfile::NamedTempFile::new()?;
                 let mut contents = String::new();
                 for arg in object_files.iter() {
@@ -1261,7 +1261,7 @@ impl BuildRequest {
                     .output()
                     .await?
             }
-            _ => {
+            false => {
                 Command::new(linker)
                     .args(object_files.iter())
                     .args(self.thin_link_args(&args)?)
@@ -1698,10 +1698,10 @@ impl BuildRequest {
             _ => vec!["-o".to_string(), exe.display().to_string()],
         };
 
-        let res = match self.triple.operating_system {
+        let res = match cfg!(target_os = "windows") {
             // Handle windows response files
             // https://learn.microsoft.com/en-us/cpp/build/reference/at-specify-a-linker-response-file?view=msvc-170
-            OperatingSystem::Windows => {
+            true => {
                 let cmd_file = tempfile::NamedTempFile::new()?;
                 let mut contents = String::new();
                 for arg in args.iter().skip(1) {
@@ -1715,7 +1715,7 @@ impl BuildRequest {
                     .output()
                     .await?
             }
-            _ => {
+            false => {
                 Command::new(linker)
                     .args(args.iter().skip(1))
                     .args(out_arg)
