@@ -34,8 +34,12 @@ impl TailwindCli {
                 tailwind.install_github().await?;
             }
 
-            let proc = tailwind.watch(&manifest_dir, input_path, output_path)?;
-            proc.wait_with_output().await?;
+            // the tw watcher blocks on stdin, and `.wait()` will drop stdin
+            // unfortunately the tw watcher just deadlocks in this case, so we take the stdin manually
+            let mut proc = tailwind.watch(&manifest_dir, input_path, output_path)?;
+            let stdin = proc.stdin.take();
+            proc.wait().await?;
+            drop(stdin);
 
             Ok(())
         })
@@ -107,6 +111,8 @@ impl TailwindCli {
             .arg("--output")
             .arg(output_path)
             .arg("--watch")
+            .kill_on_drop(true)
+            .stdin(Stdio::piped())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .spawn()?;
