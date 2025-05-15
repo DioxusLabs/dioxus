@@ -1,4 +1,6 @@
-use crate::{cli::*, AppBuilder, BuildRequest, Workspace, PROFILE_SERVER};
+use crate::{
+    cli::*, pre_render_static_routes, AppBuilder, BuildRequest, Workspace, PROFILE_SERVER,
+};
 use crate::{BuildMode, Platform};
 use target_lexicon::Triple;
 
@@ -15,6 +17,10 @@ pub struct BuildArgs {
     /// This is automatically detected from `dx serve` if the "fullstack" feature is enabled by default.
     #[clap(long)]
     pub(crate) fullstack: Option<bool>,
+
+    /// Pre-render all routes returned from the app's `/static_routes` endpoint [default: false]
+    #[clap(long)]
+    pub(crate) ssg: bool,
 
     /// The feature to use for the client in a fullstack app [default: "web"]
     #[clap(long)]
@@ -63,6 +69,7 @@ impl BuildArgs {
     pub async fn build(self) -> Result<StructuredOutput> {
         tracing::info!("Building project...");
 
+        let ssg = self.ssg;
         let targets = self.into_targets().await?;
 
         AppBuilder::start(&targets.client, BuildMode::Base)?
@@ -73,9 +80,14 @@ impl BuildArgs {
 
         if let Some(server) = targets.server.as_ref() {
             // If the server is present, we need to build it as well
-            AppBuilder::start(server, BuildMode::Base)?
+            let server = AppBuilder::start(server, BuildMode::Base)?
                 .finish_build()
                 .await?;
+
+            // Run SSG and cache static routes
+            if ssg {
+                pre_render_static_routes(&server.exe).await?;
+            }
 
             tracing::info!(path = ?targets.client.root_dir(), "Server build completed successfully! 🚀");
         }
