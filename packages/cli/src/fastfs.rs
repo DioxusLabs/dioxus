@@ -50,6 +50,7 @@ pub(crate) fn pre_compress_folder(path: &Path, pre_compress: bool) -> std::io::R
         let entry_path = entry.path();
         if entry_path.is_file() {
             if pre_compress {
+                tracing::info!("Pre-compressing file {}", entry_path.display());
                 if let Err(err) = pre_compress_file(entry_path) {
                     tracing::error!("Failed to pre-compress file {entry_path:?}: {err}");
                 }

@@ -103,8 +103,10 @@ fn bundle_js_to_writer_inside_handler(
 
         parser.parse_module().map_err(|err| {
             HANDLER.with(|handler| {
-                let message = err.into_diagnostic(handler).message();
-                anyhow::anyhow!("{}", message)
+                let mut error = err.into_diagnostic(handler);
+                // swc errors panic on drop if you don't cancel them
+                error.cancel();
+                anyhow::anyhow!("{}", error.message())
             })
         })?
     };
@@ -165,8 +167,10 @@ impl Load for PathLoader {
                 &mut Vec::new(),
             )
             .map_err(|err| {
-                let message = err.into_diagnostic(handler).message();
-                anyhow::anyhow!("{}", message)
+                let mut error = err.into_diagnostic(handler);
+                // swc errors panic on drop if you don't cancel them
+                error.cancel();
+                anyhow::anyhow!("{}", error.message())
             })
             .context("Failed to parse javascript")
         })?;
@@ -228,16 +232,17 @@ pub(crate) fn process_js(
     if js_options.minified() {
         if let Err(err) = bundle_js_to_writer(source.to_path_buf(), bundle, true, &mut writer) {
             tracing::error!("Failed to minify js. Falling back to non-minified: {err}");
+        } else {
+            return Ok(());
         }
-    } else {
-        let mut source_file = std::fs::File::open(source)?;
-        std::io::copy(&mut source_file, &mut writer).with_context(|| {
-            format!(
-                "Failed to write js to output location: {}",
-                output_path.display()
-            )
-        })?;
     }
+    let mut source_file = std::fs::File::open(source)?;
+    std::io::copy(&mut source_file, &mut writer).with_context(|| {
+        format!(
+            "Failed to write js to output location: {}",
+            output_path.display()
+        )
+    })?;
 
     Ok(())
 }

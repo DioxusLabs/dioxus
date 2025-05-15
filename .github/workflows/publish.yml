@@ -76,7 +76,7 @@ jobs:
       - name: Install stable
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: "1.84.0"
+          toolchain: "1.86.0"
           targets: ${{ matrix.platform.target }}
 
       - uses: Swatinem/rust-cache@v2
@@ -98,11 +98,12 @@ jobs:
           bin: dx
           token: ${{ secrets.GITHUB_TOKEN }}
           target: ${{ matrix.platform.target }}
-          archive: $bin-$target-${{ env.RELEASE_TAG }}
+          archive: $bin-$target
           checksum: sha256
           manifest_path: packages/cli/Cargo.toml
           ref: refs/tags/${{ env.RELEASE_POST }}
-          features: wasm-opt
+          features: optimizations
+          zip: "all"
 
   # todo: these things
   # Run benchmarks, which we'll use to display on the website

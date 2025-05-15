@@ -19,8 +19,8 @@ use dioxus_history::{History, MemoryHistory};
 use dioxus_hooks::to_owned;
 use dioxus_html::{HasFileData, HtmlEvent, PlatformEventData};
 use futures_util::{pin_mut, FutureExt};
-use std::cell::OnceCell;
 use std::sync::Arc;
+use std::{cell::OnceCell, time::Duration};
 use std::{rc::Rc, task::Waker};
 use wry::{DragDropEvent, RequestAsyncResponder, WebContext, WebViewBuilder};
 
@@ -328,14 +328,8 @@ impl WebviewInstance {
             WebViewBuilder::new_gtk(vbox)
         };
 
-        // Disable the webview default shortcuts to disable the reload shortcut
-        #[cfg(target_os = "windows")]
-        {
-            use wry::WebViewBuilderExtWindows;
-            webview = webview.with_browser_accelerator_keys(false);
-        }
-
         webview = webview
+            .with_web_context(&mut web_context)
             .with_bounds(wry::Rect {
                 position: wry::dpi::Position::Logical(wry::dpi::LogicalPosition::new(0.0, 0.0)),
                 size: wry::dpi::Size::Physical(wry::dpi::PhysicalSize::new(
@@ -358,8 +352,14 @@ impl WebviewInstance {
                     false
                 }
             }) // prevent all navigations
-            .with_asynchronous_custom_protocol(String::from("dioxus"), request_handler)
-            .with_web_context(&mut web_context);
+            .with_asynchronous_custom_protocol(String::from("dioxus"), request_handler);
+
+        // Disable the webview default shortcuts to disable the reload shortcut
+        #[cfg(target_os = "windows")]
+        {
+            use wry::WebViewBuilderExtWindows;
+            webview = webview.with_browser_accelerator_keys(false);
+        }
 
         if !cfg.disable_file_drop_handler {
             webview = webview.with_drag_drop_handler(file_drop_handler);
@@ -397,8 +397,6 @@ impl WebviewInstance {
             webview = webview.with_devtools(true);
         }
 
-        let webview = webview.build().unwrap();
-
         let menu = if cfg!(not(any(target_os = "android", target_os = "ios"))) {
             let menu_option = cfg.menu.into();
             if let Some(menu) = &menu_option {
@@ -409,6 +407,7 @@ impl WebviewInstance {
             None
         };
 
+        let webview = webview.build().unwrap();
         let desktop_context = Rc::from(DesktopService::new(
             webview,
             window,
@@ -480,6 +479,31 @@ impl WebviewInstance {
             .desktop_context
             .webview
             .evaluate_script("window.interpreter.kickAllStylesheetsOnPage()");
+    }
+
+    /// Displays a toast to the developer.
+    pub(crate) fn show_toast(
+        &self,
+        header_text: &str,
+        message: &str,
+        level: &str,
+        duration: Duration,
+        after_reload: bool,
+    ) {
+        let as_ms = duration.as_millis();
+
+        let js_fn_name = match after_reload {
+            true => "scheduleDXToast",
+            false => "showDXToast",
+        };
+
+        _ = self.desktop_context.webview.evaluate_script(&format!(
+            r#"
+                if (typeof {js_fn_name} !== "undefined") {{
+                    window.{js_fn_name}("{header_text}", "{message}", "{level}", {as_ms});
+                }}
+                "#,
+        ));
     }
 }
 
