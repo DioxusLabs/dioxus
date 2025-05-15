@@ -1241,12 +1241,35 @@ impl BuildRequest {
         //
         // We dump its output directly into the patch exe location which is different than how rustc
         // does it since it uses llvm-objcopy into the `target/debug/` folder.
-        let res = Command::new(linker)
-            .args(object_files.iter())
-            .args(self.thin_link_args(&args)?)
-            .args(out_arg)
-            .output()
-            .await?;
+        let res = match cfg!(target_os = "windows") {
+            // Handle windows response files
+            // https://learn.microsoft.com/en-us/cpp/build/reference/at-specify-a-linker-response-file?view=msvc-170
+            true => {
+                let cmd_file = tempfile::NamedTempFile::new()?;
+                let mut contents = String::new();
+                for arg in object_files.iter() {
+                    contents.push_str(&format!("{}\n", dunce::canonicalize(arg)?.display()));
+                }
+                for arg in self.thin_link_args(&args)? {
+                    contents.push_str(&format!("{}\n", arg));
+                }
+                for arg in out_arg.iter() {
+                    contents.push_str(&format!("{}\n", arg));
+                }
+                Command::new(linker)
+                    .arg(format!("@{}", cmd_file.path().display()))
+                    .output()
+                    .await?
+            }
+            false => {
+                Command::new(linker)
+                    .args(object_files.iter())
+                    .args(self.thin_link_args(&args)?)
+                    .args(out_arg)
+                    .output()
+                    .await?
+            }
+        };
 
         if !res.stderr.is_empty() {
             let errs = String::from_utf8_lossy(&res.stderr);
@@ -1675,11 +1698,31 @@ impl BuildRequest {
             _ => vec!["-o".to_string(), exe.display().to_string()],
         };
 
-        let res = Command::new(linker)
-            .args(args.iter().skip(1))
-            .args(out_arg)
-            .output()
-            .await?;
+        let res = match cfg!(target_os = "windows") {
+            // Handle windows response files
+            // https://learn.microsoft.com/en-us/cpp/build/reference/at-specify-a-linker-response-file?view=msvc-170
+            true => {
+                let cmd_file = tempfile::NamedTempFile::new()?;
+                let mut contents = String::new();
+                for arg in args.iter().skip(1) {
+                    contents.push_str(&format!("{}\n", arg));
+                }
+                for arg in out_arg.iter() {
+                    contents.push_str(&format!("{}\n", arg));
+                }
+                Command::new(linker)
+                    .arg(format!("@{}", cmd_file.path().display()))
+                    .output()
+                    .await?
+            }
+            false => {
+                Command::new(linker)
+                    .args(args.iter().skip(1))
+                    .args(out_arg)
+                    .output()
+                    .await?
+            }
+        };
 
         if !res.stderr.is_empty() {
             let errs = String::from_utf8_lossy(&res.stderr);
