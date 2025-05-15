@@ -1,6 +1,6 @@
 use crate::{
     serve::{ansi_buffer::AnsiStringLine, ServeUpdate, WebServer},
-    BuildStage, BuilderUpdate, Platform, TraceContent, TraceMsg, TraceSrc,
+    BuildId, BuildStage, BuilderUpdate, Platform, TraceContent, TraceMsg, TraceSrc,
 };
 use crossterm::{
     cursor::{Hide, Show},
@@ -245,10 +245,15 @@ impl Output {
                 tracing::info!("Tracing is now {}", if self.trace { "on" } else { "off" });
             }
             KeyCode::Char('d') => {
-                // if key.modifiers.contains(KeyModifiers::SHIFT) {
-                tracing::info!("Opening debugger");
-                return Ok(Some(ServeUpdate::OpenDebugger));
-                // }
+                if key.modifiers.contains(KeyModifiers::SHIFT) {
+                    return Ok(Some(ServeUpdate::OpenDebugger {
+                        id: BuildId::SERVER,
+                    }));
+                } else {
+                    return Ok(Some(ServeUpdate::OpenDebugger {
+                        id: BuildId::CLIENT,
+                    }));
+                }
             }
 
             KeyCode::Char('c') => {

@@ -1343,4 +1343,23 @@ We checked the folder: {}
     pub(crate) fn can_receive_hotreloads(&self) -> bool {
         matches!(&self.stage, BuildStage::Success | BuildStage::Failed)
     }
+
+    pub(crate) async fn open_debugger(&mut self) {
+        let Some(Some(pid)) = self.child.as_mut().map(|f| f.id()) else {
+            tracing::warn!("No process to attach debugger to");
+            return;
+        };
+
+        let url = format!(
+            "vscode://vadimcn.vscode-lldb/launch/config?{{'request':'attach','pid':{}}}",
+            pid
+        );
+
+        tracing::info!("Opening debugger: {url}");
+
+        _ = tokio::process::Command::new("code")
+            .arg("--open-url")
+            .arg(url)
+            .spawn();
+    }
 }

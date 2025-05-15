@@ -969,31 +969,18 @@ impl AppServer {
     }
 
     // todo: add a way to open the server's debugger too
-    pub(crate) async fn open_debugger(&self) {
-        let Some(handle) = self.running.as_ref() else {
-            return;
-        };
-
-        let Some(app) = handle.app_child.as_ref() else {
-            return;
-        };
-
-        let Some(id) = app.id() else {
-            return;
-        };
-
-        let url = format!(
-            "vscode://vadimcn.vscode-lldb/launch/config?{{'request':'attach','pid':{}}}",
-            id
-        );
-
-        tracing::info!("Opening debugger: {url}");
-
-        tokio::process::Command::new("code")
-            .arg("--open-url")
-            .arg(url)
-            .spawn()
-            .unwrap();
+    pub(crate) async fn open_debugger(&mut self, build: BuildId) {
+        match build {
+            BuildId::CLIENT => {
+                self.client.open_debugger().await;
+            }
+            BuildId::SERVER => {
+                if let Some(server) = self.server.as_mut() {
+                    server.open_debugger().await;
+                }
+            }
+            _ => {}
+        }
     }
 }
 
