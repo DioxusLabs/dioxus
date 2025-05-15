@@ -5,6 +5,7 @@ use crate::AssetOptions;
 /// The type of an image. You can read more about the tradeoffs between image formats [here](https://developer.mozilla.org/en-US/docs/Web/Media/Formats/Image_types)
 #[derive(
     Debug,
+    Eq,
     PartialEq,
     PartialOrd,
     Clone,
@@ -31,6 +32,7 @@ pub enum ImageFormat {
 /// The size of an image asset
 #[derive(
     Debug,
+    Eq,
     PartialEq,
     PartialOrd,
     Clone,
@@ -56,6 +58,7 @@ pub enum ImageSize {
 /// Options for an image asset
 #[derive(
     Debug,
+    Eq,
     PartialEq,
     PartialOrd,
     Clone,

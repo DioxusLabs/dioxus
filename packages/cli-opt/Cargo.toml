@@ -67,3 +67,6 @@ swc_parallel = { version = "=1.0.1", default-features = false }
 swc_timer = { version = "=1.0.0", default-features = false }
 swc_visit = { version = "=2.0.0", default-features = false }
 browserslist-rs = { version = "=0.16.0" }
+
+[build-dependencies]
+built = { version = "0.7.5", features = ["git2"] }

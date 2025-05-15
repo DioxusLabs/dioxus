@@ -2,7 +2,7 @@
 const { test, expect, defineConfig } = require("@playwright/test");
 
 test("button click", async ({ page }) => {
-  await page.goto("http://localhost:9999");
+  await page.goto("http://localhost:9990");
 
   // Expect the page to contain the counter text.
   const main = page.locator("#main");
@@ -21,7 +21,7 @@ test("button click", async ({ page }) => {
 });
 
 test("svg", async ({ page }) => {
-  await page.goto("http://localhost:9999");
+  await page.goto("http://localhost:9990");
 
   // Expect the page to contain the svg.
   const svg = page.locator("svg");
@@ -36,7 +36,7 @@ test("svg", async ({ page }) => {
 });
 
 test("raw attribute", async ({ page }) => {
-  await page.goto("http://localhost:9999");
+  await page.goto("http://localhost:9990");
 
   // Expect the page to contain the div with the raw attribute.
   const div = page.locator("div.raw-attribute-div");
@@ -44,7 +44,7 @@ test("raw attribute", async ({ page }) => {
 });
 
 test("hidden attribute", async ({ page }) => {
-  await page.goto("http://localhost:9999");
+  await page.goto("http://localhost:9990");
 
   // Expect the page to contain the div with the hidden attribute.
   const div = page.locator("div.hidden-attribute-div");
@@ -52,7 +52,7 @@ test("hidden attribute", async ({ page }) => {
 });
 
 test("dangerous inner html", async ({ page }) => {
-  await page.goto("http://localhost:9999");
+  await page.goto("http://localhost:9990");
 
   // Expect the page to contain the div with the dangerous inner html.
   const div = page.locator("div.dangerous-inner-html-div");
@@ -60,7 +60,7 @@ test("dangerous inner html", async ({ page }) => {
 });
 
 test("input value", async ({ page }) => {
-  await page.goto("http://localhost:9999");
+  await page.goto("http://localhost:9990");
 
   // Expect the page to contain the input with the value.
   const input = page.locator("input");
@@ -68,7 +68,7 @@ test("input value", async ({ page }) => {
 });
 
 test("style", async ({ page }) => {
-  await page.goto("http://localhost:9999");
+  await page.goto("http://localhost:9990");
 
   // Expect the page to contain the div with the style.
   const div = page.locator("div.style-div");
@@ -77,7 +77,7 @@ test("style", async ({ page }) => {
 });
 
 test("eval", async ({ page }) => {
-  await page.goto("http://localhost:9999");
+  await page.goto("http://localhost:9990");
 
   // Expect the page to contain the div with the eval and have no text.
   const div = page.locator("div.eval-result");
@@ -95,7 +95,7 @@ test("eval", async ({ page }) => {
 });
 
 test("prevent default", async ({ page }) => {
-  await page.goto("http://localhost:9999");
+  await page.goto("http://localhost:9990");
 
   // Expect the page to contain the div with the eval and have no text.
   const a = page.locator("a.prevent-default");
@@ -109,7 +109,7 @@ test("prevent default", async ({ page }) => {
 });
 
 test("onmounted", async ({ page }) => {
-  await page.goto("http://localhost:9999");
+  await page.goto("http://localhost:9990");
 
   // Expect the onmounted event to be called exactly once.
   const mountedDiv = page.locator("div.onmounted-div");
@@ -117,7 +117,7 @@ test("onmounted", async ({ page }) => {
 });
 
 test("web-sys closure", async ({ page }) => {
-  await page.goto("http://localhost:9999");
+  await page.goto("http://localhost:9990");
   // wait until the div is mounted
   const scrollDiv = page.locator("div#web-sys-closure-div");
   await scrollDiv.waitFor({ state: "attached" });
@@ -126,7 +126,7 @@ test("web-sys closure", async ({ page }) => {
 });
 
 test("document elements", async ({ page }) => {
-  await page.goto("http://localhost:9999");
+  await page.goto("http://localhost:9990");
   // wait until the meta element is mounted
   const meta = page.locator("meta#meta-head[name='testing']");
   await meta.waitFor({ state: "attached" });
@@ -157,7 +157,7 @@ test("document elements", async ({ page }) => {
 });
 
 test("merge styles", async ({ page }) => {
-  await page.goto("http://localhost:9999");
+  await page.goto("http://localhost:9990");
   // wait until the div is mounted
   const div = page.locator("div#merge-styles-div");
   await div.waitFor({ state: "attached" });
@@ -167,7 +167,7 @@ test("merge styles", async ({ page }) => {
 });
 
 test("select multiple", async ({ page }) => {
-  await page.goto("http://localhost:9999");
+  await page.goto("http://localhost:9990");
   // wait until the select element is mounted
   const staticSelect = page.locator("select#static-multiple-select");
   await staticSelect.waitFor({ state: "attached" });
