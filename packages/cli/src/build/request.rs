@@ -2953,7 +2953,7 @@ impl BuildRequest {
     /// Check if assets should be pre_compressed. This will only be true in release mode if the user
     /// has enabled pre_compress in the web config.
     fn should_pre_compress_web_assets(&self, release: bool) -> bool {
-        self.config.web.pre_compress && release
+        self.config.web.pre_compress & release
     }
 
     /// Bundle the web app
@@ -3147,7 +3147,7 @@ impl BuildRequest {
 
         // In release mode, we make the wasm and bindgen files into assets so they get bundled with max
         // optimizations.
-        let wasm_path = if self.release {
+        let wasm_path = if self.release && !should_bundle_split {
             // Register the main.js with the asset system so it bundles in the snippets and optimizes
             let name = assets.register_asset(
                 &self.wasm_bindgen_js_output_file(),
@@ -3159,7 +3159,7 @@ impl BuildRequest {
             format!("wasm/{}", asset.file_name().unwrap().to_str().unwrap())
         };
 
-        let js_path = if self.release {
+        let js_path = if self.release && !should_bundle_split {
             // Make sure to register the main wasm file with the asset system
             let name = assets.register_asset(&post_bindgen_wasm, AssetOptions::Unknown)?;
             format!("assets/{}", name.bundled_path())
