@@ -328,6 +328,9 @@ impl VNode {
                     to.remove_node(id);
                 }
                 dom.reclaim(id);
+            } else {
+                let id = dom.get_mounted_root_node(mount, idx);
+                dom.reclaim(id);
             }
         }
     }
@@ -379,8 +382,8 @@ impl VNode {
                     } else {
                         to.remove_node(id);
                     }
-                    dom.reclaim(id)
                 }
+                dom.reclaim(id)
             }
             Fragment(nodes) => {
                 for node in &nodes[..nodes.len() - 1] {
