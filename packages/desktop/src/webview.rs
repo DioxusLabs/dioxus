@@ -19,8 +19,8 @@ use dioxus_history::{History, MemoryHistory};
 use dioxus_hooks::to_owned;
 use dioxus_html::{HasFileData, HtmlEvent, PlatformEventData};
 use futures_util::{pin_mut, FutureExt};
-use std::cell::OnceCell;
 use std::sync::Arc;
+use std::{cell::OnceCell, time::Duration};
 use std::{rc::Rc, task::Waker};
 use wry::{DragDropEvent, RequestAsyncResponder, WebContext, WebViewBuilder};
 
@@ -479,6 +479,31 @@ impl WebviewInstance {
             .desktop_context
             .webview
             .evaluate_script("window.interpreter.kickAllStylesheetsOnPage()");
+    }
+
+    /// Displays a toast to the developer.
+    pub(crate) fn show_toast(
+        &self,
+        header_text: &str,
+        message: &str,
+        level: &str,
+        duration: Duration,
+        after_reload: bool,
+    ) {
+        let as_ms = duration.as_millis();
+
+        let js_fn_name = match after_reload {
+            true => "scheduleDXToast",
+            false => "showDXToast",
+        };
+
+        _ = self.desktop_context.webview.evaluate_script(&format!(
+            r#"
+                if (typeof {js_fn_name} !== "undefined") {{
+                    window.{js_fn_name}("{header_text}", "{message}", "{level}", {as_ms});
+                }}
+                "#,
+        ));
     }
 }
 

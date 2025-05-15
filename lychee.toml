@@ -4,3 +4,4 @@ exclude_path = ['target']
 no_progress = false
 cache = true
 max_cache_age = "10d"
+accept = ["200..=204", "429"]

@@ -329,7 +329,7 @@ use manganis::{AssetOptions, JsAssetOptions};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::HashSet,
+    collections::{BTreeMap, HashSet},
     io::Write,
     path::{Path, PathBuf},
     process::Stdio,
@@ -370,7 +370,7 @@ pub(crate) struct BuildRequest {
     pub(crate) platform: Platform,
     pub(crate) enabled_platforms: Vec<Platform>,
     pub(crate) triple: Triple,
-    pub(crate) _device: bool,
+    pub(crate) device: bool,
     pub(crate) package: String,
     pub(crate) features: Vec<String>,
     pub(crate) extra_cargo_args: Vec<String>,
@@ -536,6 +536,10 @@ impl BuildRequest {
         // We collect all the platforms it enables first and then select based on the --platform arg
         let enabled_platforms =
             Self::enabled_cargo_toml_platforms(main_package, args.no_default_features);
+        let using_dioxus_explicitly = main_package
+            .dependencies
+            .iter()
+            .any(|dep| dep.name == "dioxus");
 
         let mut features = args.features.clone();
         let mut no_default_features = args.no_default_features;
@@ -552,6 +556,7 @@ impl BuildRequest {
                     platform
                 }
             },
+            None if !using_dioxus_explicitly => Platform::autodetect_from_cargo_feature("desktop").unwrap(),
             None => match enabled_platforms.len() {
                 0 => return Err(anyhow::anyhow!("No platform specified and no platform marked as default in Cargo.toml. Try specifying a platform with `--platform`").into()),
                 1 => enabled_platforms[0],
@@ -565,7 +570,9 @@ impl BuildRequest {
         };
 
         // Add any features required to turn on the client
-        features.push(Self::feature_for_platform(main_package, platform));
+        if using_dioxus_explicitly {
+            features.push(Self::feature_for_platform(main_package, platform));
+        }
 
         // Set the profile of the build if it's not already set
         // This is mostly used for isolation of builds (preventing thrashing) but also useful to have multiple performance profiles
@@ -666,10 +673,10 @@ impl BuildRequest {
 
         tracing::debug!(
             r#"Log Files:
-link_args_file: {},
-link_err_file: {},
-rustc_wrapper_args_file: {},
-session_cache_dir: {}"#,
+                • link_args_file: {},
+                • link_err_file: {},
+                • rustc_wrapper_args_file: {},
+                • session_cache_dir: {}"#,
             link_args_file.path().display(),
             link_err_file.path().display(),
             rustc_wrapper_args_file.path().display(),
@@ -684,7 +691,7 @@ session_cache_dir: {}"#,
             crate_target,
             profile,
             triple,
-            _device: device,
+            device,
             workspace,
             config,
             enabled_platforms,
@@ -886,7 +893,8 @@ session_cache_dir: {}"#,
         let time_end = SystemTime::now();
         let mode = ctx.mode.clone();
         let platform = self.platform;
-        tracing::debug!("Build completed successfully - output location: {:?}", exe);
+
+        tracing::debug!("Build completed successfully: {:?}", exe);
 
         Ok(BuildArtifacts {
             time_end,
@@ -905,8 +913,6 @@ session_cache_dir: {}"#,
     /// This uses "known paths" that have stayed relatively stable during cargo's lifetime.
     /// One day this system might break and we might need to go back to using the linker approach.
     fn collect_assets(&self, exe: &Path, ctx: &BuildContext) -> Result<AssetManifest> {
-        tracing::debug!("Collecting assets from exe at {} ...", exe.display());
-
         // walk every file in the incremental cache dir, reading and inserting items into the manifest.
         let mut manifest = AssetManifest::default();
 
@@ -1151,7 +1157,7 @@ session_cache_dir: {}"#,
         //
         // Many args are passed twice, too, which can be confusing, but generally don't have any real
         // effect. Note that on macos/ios, there's a special macho header that needs to be set, otherwise
-        // dyld will complain.a
+        // dyld will complain.
         //
         // Also, some flags in darwin land might become deprecated, need to be super conservative:
         // - https://developer.apple.com/forums/thread/773907
@@ -1223,7 +1229,6 @@ session_cache_dir: {}"#,
 
         // And now we can run the linker with our new args
         let linker = self.select_linker()?;
-
         let out_exe = self.patch_exe(artifacts.time_start);
         let out_arg = match self.triple.operating_system {
             OperatingSystem::Windows => vec![format!("/OUT:{}", out_exe.display())],
@@ -1301,6 +1306,13 @@ session_cache_dir: {}"#,
             //
             // We don't use *any* of the original linker args since they do lots of custom exports
             // and other things that we don't need.
+            //
+            // The trickiest one here is -Crelocation-model=pic, which forces data symbols
+            // into a GOT, making it possible to import them from the main module.
+            //
+            // I think we can make relocation-model=pic work for non-wasm platforms, enabling
+            // fully relocatable modules with no host coordination in lieu of sending out
+            // the aslr slide at runtime.
             OperatingSystem::Unknown if self.platform == Platform::Web => {
                 out_args.extend([
                     "--fatal-warnings".to_string(),
@@ -1390,7 +1402,6 @@ session_cache_dir: {}"#,
                     "/PDBALTPATH:%_PDB%".to_string(),
                     "/EXPORT:main".to_string(),
                     "/HIGHENTROPYVA:NO".to_string(),
-                    // "/SUBSYSTEM:WINDOWS".to_string(),
                 ]);
             }
 
@@ -1764,7 +1775,6 @@ session_cache_dir: {}"#,
                 cmd.current_dir(self.workspace_dir());
                 cmd.env_clear();
                 cmd.args(rustc_args.args[1..].iter());
-                cmd.envs(rustc_args.envs.iter().cloned());
                 cmd.env_remove("RUSTC_WORKSPACE_WRAPPER");
                 cmd.env_remove("RUSTC_WRAPPER");
                 cmd.env_remove(DX_RUSTC_WRAPPER_ENV_VAR);
@@ -1775,7 +1785,11 @@ session_cache_dir: {}"#,
                     cmd.arg("-Crelocation-model=pic");
                 }
 
-                tracing::trace!("Direct rustc command: {:#?}", rustc_args.args);
+                tracing::debug!("Direct rustc: {:#?}", cmd);
+
+                cmd.envs(rustc_args.envs.iter().cloned());
+
+                tracing::trace!("Setting env vars: {:#?}", rustc_args.envs);
 
                 Ok(cmd)
             }
@@ -1800,8 +1814,6 @@ session_cache_dir: {}"#,
                     .args(self.cargo_build_arguments(ctx))
                     .envs(self.cargo_build_env_vars(ctx)?);
 
-                tracing::trace!("Cargo command: {:#?}", cmd);
-
                 if ctx.mode == BuildMode::Fat {
                     cmd.env(
                         DX_RUSTC_WRAPPER_ENV_VAR,
@@ -1815,6 +1827,8 @@ session_cache_dir: {}"#,
                         Workspace::path_to_dx()?.display().to_string(),
                     );
                 }
+
+                tracing::debug!("Cargo: {:#?}", cmd);
 
                 Ok(cmd)
             }
@@ -1942,14 +1956,7 @@ session_cache_dir: {}"#,
             //
             // https://github.com/WebAssembly/tool-conventions/blob/main/DynamicLinking.md
             //
-            // The trickiest one here is -Crelocation-model=pic, which forces data symbols
-            // into a GOT, making it possible to import them from the main module.
-            //
-            // I think we can make relocation-model=pic work for non-wasm platforms, enabling
-            // fully relocatable modules with no host coordination in lieu of sending out
-            // the aslr slide at runtime.
-            //
-            // The other tricky one is -Ctarget-cpu=mvp, which prevents rustc from generating externref
+            // The tricky one is -Ctarget-cpu=mvp, which prevents rustc from generating externref
             // entries.
             //
             // https://blog.rust-lang.org/2024/09/24/webassembly-targets-change-in-default-target-features/#disabling-on-by-default-webassembly-proposals
@@ -1958,7 +1965,6 @@ session_cache_dir: {}"#,
             if self.platform == Platform::Web
                 || self.triple.operating_system == OperatingSystem::Wasi
             {
-                // cargo_args.push("-Crelocation-model=pic".into());
                 cargo_args.push("-Ctarget-cpu=mvp".into());
                 cargo_args.push("-Clink-arg=--no-gc-sections".into());
                 cargo_args.push("-Clink-arg=--growable-table".into());
@@ -2324,12 +2330,19 @@ session_cache_dir: {}"#,
             app.join("proguard-rules.pro"),
             include_bytes!("../../assets/android/gen/app/proguard-rules.pro"),
         )?;
-        write(
-            app.join("src").join("main").join("AndroidManifest.xml"),
-            hbs.render_template(
+
+        let manifest_xml = match self.config.application.android_manifest.as_deref() {
+            Some(manifest) => std::fs::read_to_string(self.package_manifest_dir().join(manifest))
+                .context("Failed to locate custom AndroidManifest.xml")?,
+            _ => hbs.render_template(
                 include_str!("../../assets/android/gen/app/src/main/AndroidManifest.xml.hbs"),
                 &hbs_data,
             )?,
+        };
+
+        write(
+            app.join("src").join("main").join("AndroidManifest.xml"),
+            manifest_xml,
         )?;
 
         // Write the main activity manually since tao dropped support for it
@@ -2657,8 +2670,6 @@ session_cache_dir: {}"#,
             return platforms;
         };
 
-        tracing::debug!("Default features: {default:?}");
-
         // we only trace features 1 level deep..
         for feature in default.iter() {
             // If the user directly specified a platform we can just use that.
@@ -2687,8 +2698,6 @@ session_cache_dir: {}"#,
 
         platforms.sort();
         platforms.dedup();
-
-        tracing::debug!("Default platforms: {platforms:?}");
 
         platforms
     }
@@ -2876,13 +2885,15 @@ session_cache_dir: {}"#,
                 // If pre-compressing is enabled, we can pre_compress the wasm-bindgen output
                 let pre_compress = self.should_pre_compress_web_assets(self.release);
 
-                ctx.status_compressing_assets();
-                let asset_dir = self.asset_dir();
-                tokio::task::spawn_blocking(move || {
-                    crate::fastfs::pre_compress_folder(&asset_dir, pre_compress)
-                })
-                .await
-                .unwrap()?;
+                if pre_compress {
+                    ctx.status_compressing_assets();
+                    let asset_dir = self.asset_dir();
+                    tokio::task::spawn_blocking(move || {
+                        crate::fastfs::pre_compress_folder(&asset_dir, pre_compress)
+                    })
+                    .await
+                    .unwrap()?;
+                }
             }
             Platform::MacOS => {}
             Platform::Windows => {}
@@ -3132,6 +3143,22 @@ session_cache_dir: {}"#,
             pub executable_name: String,
         }
 
+        // Attempt to use the user's manually specified
+        let _app = &self.config.application;
+        match platform {
+            Platform::MacOS => {
+                if let Some(macos_info_plist) = _app.macos_info_plist.as_deref() {
+                    return Ok(std::fs::read_to_string(macos_info_plist)?);
+                }
+            }
+            Platform::Ios => {
+                if let Some(macos_info_plist) = _app.ios_info_plist.as_deref() {
+                    return Ok(std::fs::read_to_string(macos_info_plist)?);
+                }
+            }
+            _ => {}
+        }
+
         match platform {
             Platform::MacOS => handlebars::Handlebars::new()
                 .render_template(
@@ -3273,9 +3300,15 @@ session_cache_dir: {}"#,
             create_dir_all(self.exe_dir())?;
             create_dir_all(self.asset_dir())?;
 
-            tracing::debug!("Initialized Root dir: {:?}", self.root_dir());
-            tracing::debug!("Initialized Exe dir: {:?}", self.exe_dir());
-            tracing::debug!("Initialized Asset dir: {:?}", self.asset_dir());
+            tracing::debug!(
+                r#"Initialized build dirs:
+               • root dir: {:?}
+               • exe dir: {:?}
+               • asset dir: {:?}"#,
+                self.root_dir(),
+                self.exe_dir(),
+                self.asset_dir(),
+            );
 
             // we could download the templates from somewhere (github?) but after having banged my head against
             // cargo-mobile2 for ages, I give up with that. We're literally just going to hardcode the templates
@@ -3387,7 +3420,6 @@ session_cache_dir: {}"#,
     /// This should generally be only called on the first build since it takes time to verify the tooling
     /// is in place, and we don't want to slow down subsequent builds.
     pub(crate) async fn verify_tooling(&self, ctx: &BuildContext) -> Result<()> {
-        tracing::debug!("Verifying tooling...");
         ctx.status_installing_tooling();
 
         self
@@ -3767,5 +3799,117 @@ r#" <script>
             .unwrap()
             .to_path_buf()
             .into()
+    }
+
+    pub(crate) async fn start_simulators(&self) -> Result<()> {
+        if self.device {
+            return Ok(());
+        }
+
+        match self.platform {
+            // Boot an iOS simulator if one is not already running.
+            //
+            // We always choose the most recently opened simulator based on the xcrun list.
+            // Note that simulators can be running but the simulator app itself is not open.
+            // Calling `open::that` is always fine, even on running apps, since apps are singletons.
+            Platform::Ios => {
+                #[derive(Deserialize, Debug)]
+                struct XcrunListJson {
+                    // "com.apple.CoreSimulator.SimRuntime.iOS-18-4": [{}, {}, {}]
+                    devices: BTreeMap<String, Vec<XcrunDevice>>,
+                }
+
+                #[derive(Deserialize, Debug)]
+                struct XcrunDevice {
+                    #[serde(rename = "lastBootedAt")]
+                    last_booted_at: Option<String>,
+                    udid: String,
+                    name: String,
+                    state: String,
+                }
+                let xcrun_list = Command::new("xcrun")
+                    .arg("simctl")
+                    .arg("list")
+                    .arg("-j")
+                    .output()
+                    .await?;
+
+                let as_str = String::from_utf8_lossy(&xcrun_list.stdout);
+                let xcrun_list_json = serde_json::from_str::<XcrunListJson>(as_str.trim());
+                if let Ok(xcrun_list_json) = xcrun_list_json {
+                    if xcrun_list_json.devices.is_empty() {
+                        tracing::warn!(
+                            "No iOS sdks installed found. Please install the iOS SDK in Xcode."
+                        );
+                    }
+
+                    if let Some((_rt, devices)) = xcrun_list_json.devices.iter().next() {
+                        if devices.iter().all(|device| device.state != "Booted") {
+                            let last_booted =
+                                devices
+                                    .iter()
+                                    .max_by_key(|device| match device.last_booted_at {
+                                        Some(ref last_booted) => last_booted,
+                                        None => "2000-01-01T01:01:01Z",
+                                    });
+
+                            if let Some(device) = last_booted {
+                                tracing::info!("Booting iOS simulator: \"{}\"", device.name);
+                                Command::new("xcrun")
+                                    .arg("simctl")
+                                    .arg("boot")
+                                    .arg(&device.udid)
+                                    .output()
+                                    .await?;
+                            }
+                        }
+                    }
+                }
+                let path_to_xcode = Command::new("xcode-select")
+                    .arg("--print-path")
+                    .output()
+                    .await?;
+                let path_to_xcode: PathBuf = String::from_utf8_lossy(&path_to_xcode.stdout)
+                    .as_ref()
+                    .trim()
+                    .into();
+                let path_to_sim = path_to_xcode.join("Applications").join("Simulator.app");
+                open::that(path_to_sim)?;
+            }
+
+            Platform::Android => {
+                let tools = self.workspace.android_tools()?;
+                tokio::spawn(async move {
+                    let emulator = tools.emulator();
+                    let avds = Command::new(&emulator)
+                        .arg("-list-avds")
+                        .output()
+                        .await
+                        .unwrap();
+                    let avds = String::from_utf8_lossy(&avds.stdout);
+                    let avd = avds.trim().lines().next().map(|s| s.trim().to_string());
+                    if let Some(avd) = avd {
+                        tracing::info!("Booting Android emulator: \"{avd}\"");
+                        Command::new(&emulator)
+                            .arg("-avd")
+                            .arg(avd)
+                            .args(["-netdelay", "none", "-netspeed", "full"])
+                            .stdout(std::process::Stdio::null()) // prevent accumulating huge amounts of mem usage
+                            .stderr(std::process::Stdio::null()) // prevent accumulating huge amounts of mem usage
+                            .output()
+                            .await
+                            .unwrap();
+                    } else {
+                        tracing::warn!("No Android emulators found. Please create one using `emulator -avd <name>`");
+                    }
+                });
+            }
+
+            _ => {
+                // nothing - maybe on the web we should open the browser?
+            }
+        };
+
+        Ok(())
     }
 }

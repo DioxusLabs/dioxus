@@ -4,7 +4,7 @@ use crate::{
 };
 use anyhow::Context;
 use dioxus_cli_opt::process_file_to;
-use futures_util::future::OptionFuture;
+use futures_util::{future::OptionFuture, pin_mut, FutureExt};
 use std::{
     env,
     time::{Duration, Instant, SystemTime},
@@ -617,13 +617,15 @@ impl AppBuilder {
             _ => vec![],
         };
 
+        use crate::styles::{GLOW_STYLE, NOTE_STYLE};
+
         let changed_file = changed_files.first().unwrap();
         tracing::info!(
-            "Hot-patching: {} took {:?}ms",
+            "Hot-patching: {NOTE_STYLE}{}{NOTE_STYLE:#} took {GLOW_STYLE}{:?}ms{GLOW_STYLE:#}",
             changed_file
-                .strip_prefix(std::env::current_dir().unwrap())
-                .unwrap_or(changed_file.as_path())
-                .display(),
+                .display()
+                .to_string()
+                .trim_start_matches(&self.build.crate_dir().display().to_string()),
             SystemTime::now()
                 .duration_since(res.time_start)
                 .unwrap()
@@ -704,7 +706,7 @@ impl AppBuilder {
         let target = dioxus_cli_config::android_session_cache_dir().join(bundled_name);
         tracing::debug!("Pushing asset to device: {target:?}");
 
-        let res = tokio::process::Command::new(&self.build.workspace.android_tools()?.adb)
+        let res = Command::new(&self.build.workspace.android_tools()?.adb)
             .arg("push")
             .arg(changed_file)
             .arg(&target)
@@ -1140,7 +1142,7 @@ We checked the folder: {}
         let adb = self.build.workspace.android_tools()?.adb.clone();
 
         // Start backgrounded since .open() is called while in the arm of the top-level match
-        tokio::task::spawn(async move {
+        let _handle: JoinHandle<Result<()>> = tokio::task::spawn(async move {
             // call `adb root` so we can push patches to the device
             if root {
                 if let Err(e) = Command::new(&adb).arg("root").output().await {
@@ -1159,54 +1161,79 @@ We checked the folder: {}
                 tracing::error!("failed to forward port {port}: {e}");
             }
 
+            // Wait for device to be ready
+            let cmd = Command::new(&adb)
+                .arg("wait-for-device")
+                .arg("shell")
+                .arg(r#"while [[ -z $(getprop sys.boot_completed) ]]; do sleep 1; done;"#)
+                .output();
+            let cmd_future = cmd.fuse();
+            pin_mut!(cmd_future);
+            tokio::select! {
+                _ = &mut cmd_future => {}
+                _ = tokio::time::sleep(Duration::from_millis(50)) => {
+                    tracing::info!("Waiting for android emulator to be ready...");
+                    _ = cmd_future.await;
+                }
+            }
+
             // Install
             // adb install -r app-debug.apk
-            if let Err(e) = Command::new(&adb)
+            let res = Command::new(&adb)
                 .arg("install")
                 .arg("-r")
                 .arg(apk_path)
                 .output()
-                .await
-            {
-                tracing::error!("Failed to install apk with `adb`: {e}");
-            };
+                .await?;
+            let std_err = String::from_utf8_lossy(&res.stderr);
+            if !std_err.is_empty() {
+                tracing::error!("Failed to install apk with `adb`: {std_err}");
+            }
+
+            // Clear the session cache dir on the device
+            Command::new(&adb)
+                .arg("shell")
+                .arg("rm")
+                .arg("-rf")
+                .arg(dioxus_cli_config::android_session_cache_dir())
+                .output()
+                .await?;
 
             // Write the env vars to a .env file in our session cache
             let env_file = session_cache.join(".env");
-            let contents: String = envs
-                .iter()
-                .map(|(key, value)| format!("{key}={value}"))
-                .collect::<Vec<_>>()
-                .join("\n");
-            _ = std::fs::write(&env_file, contents);
+            _ = std::fs::write(
+                &env_file,
+                envs.iter()
+                    .map(|(key, value)| format!("{key}={value}"))
+                    .collect::<Vec<_>>()
+                    .join("\n"),
+            );
 
             // Push the env file to the device
-            if let Err(e) = tokio::process::Command::new(&adb)
+            Command::new(&adb)
                 .arg("push")
                 .arg(env_file)
                 .arg(dioxus_cli_config::android_session_cache_dir().join(".env"))
                 .output()
-                .await
-                .context("Failed to push asset to device")
-            {
-                tracing::error!("Failed to push .env file to device: {e}");
-            }
+                .await?;
 
             // eventually, use the user's MainActivity, not our MainActivity
             // adb shell am start -n dev.dioxus.main/dev.dioxus.main.MainActivity
             let activity_name = format!("{}/dev.dioxus.main.MainActivity", full_mobile_app_name,);
-
-            if let Err(e) = Command::new(&adb)
+            let res = Command::new(&adb)
                 .arg("shell")
                 .arg("am")
                 .arg("start")
                 .arg("-n")
                 .arg(activity_name)
                 .output()
-                .await
-            {
-                tracing::error!("Failed to start app with `adb`: {e}");
-            };
+                .await?;
+            let std_err = String::from_utf8_lossy(res.stderr.trim_ascii());
+            if !std_err.is_empty() {
+                tracing::error!("Failed to start app with `adb`: {std_err}");
+            }
+
+            Ok(())
         });
 
         Ok(())

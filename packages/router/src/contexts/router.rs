@@ -141,16 +141,27 @@ impl RouterContext {
             site_map: R::SITE_MAP,
         };
 
+        let history = history();
+
         // set the updater
-        history().updater(Arc::new(move || {
+        history.updater(Arc::new(move || {
             for &rc in subscribers.lock().unwrap().iter() {
                 rc.mark_dirty();
             }
         }));
 
-        Self {
+        let myself = Self {
             inner: CopyValue::new_in_scope(myself, ScopeId::ROOT),
+        };
+
+        // If the current route is different from the one in the browser, replace the current route
+        let current_route: R = myself.current();
+
+        if current_route.to_string() != history.current_route() {
+            myself.replace(current_route);
         }
+
+        myself
     }
 
     /// Check if the router is running in a liveview context
