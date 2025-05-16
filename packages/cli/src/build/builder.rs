@@ -537,7 +537,7 @@ impl AppBuilder {
         #[cfg(windows)]
         {
             _ = Command::new("taskkill")
-                .args(["/F", "/PID", &pid.to_string()])
+                .args(["/PID", &pid.to_string()])
                 .spawn();
         }
 
