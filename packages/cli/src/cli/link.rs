@@ -122,7 +122,7 @@ impl LinkAction {
     /// The file will be given by the dx-magic-link-arg env var itself, so we use
     /// it both for determining if we should act as a linker and the for the file name itself.
     async fn run_link_inner(self) -> Result<()> {
-        let mut args: Vec<_> = std::env::args().collect();
+        let mut args: Vec<_> = std::env::args().skip(1).collect();
         if args.is_empty() {
             return Ok(());
         }
@@ -131,16 +131,18 @@ impl LinkAction {
 
         // Write the linker args to a file for the main process to read
         // todo: we might need to encode these as escaped shell words in case newlines are passed
-        std::fs::write(self.link_args_file, args.join("\n"))?;
+        std::fs::write(&self.link_args_file, args.join("\n"))?;
 
         // If there's a linker specified, we use that. Otherwise, we write a dummy object file to satisfy
         // any post-processing steps that rustc does.
         match self.linker {
             Some(linker) => {
-                let res = std::process::Command::new(linker)
-                    .args(args.iter().skip(1))
-                    .output()
-                    .expect("Failed to run linker");
+                let mut cmd = std::process::Command::new(linker);
+                match cfg!(target_os = "windows") {
+                    true => cmd.arg(format!("@{}", &self.link_args_file.display())),
+                    false => cmd.args(args),
+                };
+                let res = cmd.output().expect("Failed to run linker");
 
                 if !res.stderr.is_empty() || !res.stdout.is_empty() {
                     _ = std::fs::create_dir_all(self.link_err_file.parent().unwrap());
