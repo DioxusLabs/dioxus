@@ -1241,12 +1241,35 @@ impl BuildRequest {
         //
         // We dump its output directly into the patch exe location which is different than how rustc
         // does it since it uses llvm-objcopy into the `target/debug/` folder.
-        let res = Command::new(linker)
-            .args(object_files.iter())
-            .args(self.thin_link_args(&args)?)
-            .args(out_arg)
-            .output()
-            .await?;
+        let res = match cfg!(target_os = "windows") {
+            // Handle windows response files
+            // https://learn.microsoft.com/en-us/cpp/build/reference/at-specify-a-linker-response-file?view=msvc-170
+            true => {
+                let cmd_file = tempfile::NamedTempFile::new()?;
+                let mut contents = String::new();
+                for arg in object_files.iter() {
+                    contents.push_str(&format!("{}\n", dunce::canonicalize(arg)?.display()));
+                }
+                for arg in self.thin_link_args(&args)? {
+                    contents.push_str(&format!("{}\n", arg));
+                }
+                for arg in out_arg.iter() {
+                    contents.push_str(&format!("{}\n", arg));
+                }
+                Command::new(linker)
+                    .arg(format!("@{}", cmd_file.path().display()))
+                    .output()
+                    .await?
+            }
+            false => {
+                Command::new(linker)
+                    .args(object_files.iter())
+                    .args(self.thin_link_args(&args)?)
+                    .args(out_arg)
+                    .output()
+                    .await?
+            }
+        };
 
         if !res.stderr.is_empty() {
             let errs = String::from_utf8_lossy(&res.stderr);
@@ -1675,11 +1698,31 @@ impl BuildRequest {
             _ => vec!["-o".to_string(), exe.display().to_string()],
         };
 
-        let res = Command::new(linker)
-            .args(args.iter().skip(1))
-            .args(out_arg)
-            .output()
-            .await?;
+        let res = match cfg!(target_os = "windows") {
+            // Handle windows response files
+            // https://learn.microsoft.com/en-us/cpp/build/reference/at-specify-a-linker-response-file?view=msvc-170
+            true => {
+                let cmd_file = tempfile::NamedTempFile::new()?;
+                let mut contents = String::new();
+                for arg in args.iter().skip(1) {
+                    contents.push_str(&format!("{}\n", arg));
+                }
+                for arg in out_arg.iter() {
+                    contents.push_str(&format!("{}\n", arg));
+                }
+                Command::new(linker)
+                    .arg(format!("@{}", cmd_file.path().display()))
+                    .output()
+                    .await?
+            }
+            false => {
+                Command::new(linker)
+                    .args(args.iter().skip(1))
+                    .args(out_arg)
+                    .output()
+                    .await?
+            }
+        };
 
         if !res.stderr.is_empty() {
             let errs = String::from_utf8_lossy(&res.stderr);
@@ -2910,7 +2953,7 @@ impl BuildRequest {
     /// Check if assets should be pre_compressed. This will only be true in release mode if the user
     /// has enabled pre_compress in the web config.
     fn should_pre_compress_web_assets(&self, release: bool) -> bool {
-        self.config.web.pre_compress && release
+        self.config.web.pre_compress & release
     }
 
     /// Bundle the web app
@@ -3104,7 +3147,7 @@ impl BuildRequest {
 
         // In release mode, we make the wasm and bindgen files into assets so they get bundled with max
         // optimizations.
-        let wasm_path = if self.release {
+        let wasm_path = if self.release && !should_bundle_split {
             // Register the main.js with the asset system so it bundles in the snippets and optimizes
             let name = assets.register_asset(
                 &self.wasm_bindgen_js_output_file(),
@@ -3116,7 +3159,7 @@ impl BuildRequest {
             format!("wasm/{}", asset.file_name().unwrap().to_str().unwrap())
         };
 
-        let js_path = if self.release {
+        let js_path = if self.release && !should_bundle_split {
             // Make sure to register the main wasm file with the asset system
             let name = assets.register_asset(&post_bindgen_wasm, AssetOptions::Unknown)?;
             format!("assets/{}", name.bundled_path())
