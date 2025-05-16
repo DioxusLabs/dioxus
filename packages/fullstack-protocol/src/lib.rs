@@ -347,8 +347,11 @@ impl HTMLData {
                 .iter()
                 .map(|s| match s {
                     Some(s) => {
-                        // Double escape backslashes for JS
-                        let escaped = s.replace(r#"\"#, r#"\\"#).replace("\n", r#"\n"#).replace(r#"""#, r#"\""#).to_string();
+                        // Escape backslashes, quotes, and newlines
+                        let escaped = s
+                            .replace(r#"\"#, r#"\\"#)
+                            .replace("\n", r#"\n"#)
+                            .replace(r#"""#, r#"\""#);
 
                         format!(r#""{escaped}""#)
                     }
