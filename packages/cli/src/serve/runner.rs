@@ -534,7 +534,7 @@ impl AppServer {
         // Always open the server first after the client has been built
         if let Some(server) = self.server.as_mut() {
             tracing::debug!("Opening server build");
-            server.soft_kill().await;
+            // server.soft_kill().await;
             server
                 .open(
                     devserver_ip,
@@ -548,7 +548,7 @@ impl AppServer {
         }
 
         // Start the new app before we kill the old one to give it a little bit of time
-        self.client.soft_kill().await;
+        // self.client.soft_kill().await;
         self.client
             .open(
                 devserver_ip,

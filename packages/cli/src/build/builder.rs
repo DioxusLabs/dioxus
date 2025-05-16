@@ -7,7 +7,6 @@ use dioxus_cli_opt::process_file_to;
 use futures_util::{future::OptionFuture, pin_mut, FutureExt};
 use std::{
     env,
-    process::ExitStatus,
     time::{Duration, Instant, SystemTime},
 };
 use std::{
@@ -195,11 +194,7 @@ impl AppBuilder {
                 self.child = None;
                 match status {
                     Ok(status) => ProcessExited { status },
-                    Err(err) => {
-                        tracing::error!("Failed to wait for child process: {err}");
-                        ProcessExited { status: ExitStatus::default() }
-
-                    }
+                    Err(err) => ProcessWaitFailed { err }
                 }
             }
         };
@@ -275,6 +270,7 @@ impl AppBuilder {
             StdoutReceived { .. } => {}
             StderrReceived { .. } => {}
             ProcessExited { .. } => {}
+            ProcessWaitFailed { .. } => {}
         }
 
         update
@@ -414,6 +410,7 @@ impl AppBuilder {
                 BuilderUpdate::StdoutReceived { .. } => {}
                 BuilderUpdate::StderrReceived { .. } => {}
                 BuilderUpdate::ProcessExited { .. } => {}
+                BuilderUpdate::ProcessWaitFailed { .. } => {}
             }
         }
     }

@@ -65,6 +65,12 @@ pub enum BuilderUpdate {
     ProcessExited {
         status: ExitStatus,
     },
+
+    /// Waiting for the process failed. This might be because it's hung or being debugged.
+    /// This is not the same as the process exiting, so it should just be logged but not treated as an error.
+    ProcessWaitFailed {
+        err: std::io::Error,
+    },
 }
 
 impl BuildContext {

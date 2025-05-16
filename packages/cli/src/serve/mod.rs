@@ -173,6 +173,11 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &mut TraceController) -> 
                             tracing::error!("Application [{platform}] exited with error: {status}");
                         }
                     }
+                    BuilderUpdate::ProcessWaitFailed { err } => {
+                        tracing::warn!(
+                            "Failed to wait for process - maybe it's hung or beng debugged?: {err}"
+                        );
+                    }
                 }
             }
 
