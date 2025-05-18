@@ -1940,6 +1940,12 @@ impl BuildRequest {
             ));
         }
 
+        // for debuggability, we need to make sure android studio can properly understand our build
+        // https://stackoverflow.com/questions/68481401/debugging-a-prebuilt-shared-library-in-android-studio
+        if self.platform == Platform::Android {
+            cargo_args.push("-Clink-arg=-Wl,--build-id=sha1".to_string());
+        }
+
         // Our fancy hot-patching engine needs a lot of customization to work properly.
         //
         // These args are mostly intended to be passed when *fat* linking but are generally fine to

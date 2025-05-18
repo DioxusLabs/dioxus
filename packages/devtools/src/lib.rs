@@ -79,9 +79,10 @@ pub fn connect_subsecond() {
 pub fn connect_at(endpoint: String, mut callback: impl FnMut(DevserverMsg) + Send + 'static) {
     std::thread::spawn(move || {
         let uri = format!(
-            "{endpoint}?aslr_reference={}&build_id={}",
+            "{endpoint}?aslr_reference={}&build_id={}&pid={}",
             subsecond::__aslr_reference(),
-            dioxus_cli_config::build_id()
+            dioxus_cli_config::build_id(),
+            std::process::id()
         );
 
         let (mut websocket, _req) = match tungstenite::connect(uri) {

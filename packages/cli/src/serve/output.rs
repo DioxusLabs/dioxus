@@ -244,16 +244,15 @@ impl Output {
                 self.trace = !self.trace;
                 tracing::info!("Tracing is now {}", if self.trace { "on" } else { "off" });
             }
+            KeyCode::Char('D') => {
+                return Ok(Some(ServeUpdate::OpenDebugger {
+                    id: BuildId::SERVER,
+                }));
+            }
             KeyCode::Char('d') => {
-                if key.modifiers.contains(KeyModifiers::SHIFT) {
-                    return Ok(Some(ServeUpdate::OpenDebugger {
-                        id: BuildId::SERVER,
-                    }));
-                } else {
-                    return Ok(Some(ServeUpdate::OpenDebugger {
-                        id: BuildId::CLIENT,
-                    }));
-                }
+                return Ok(Some(ServeUpdate::OpenDebugger {
+                    id: BuildId::CLIENT,
+                }));
             }
 
             KeyCode::Char('c') => {

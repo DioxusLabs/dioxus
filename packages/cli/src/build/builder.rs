@@ -5,8 +5,10 @@ use crate::{
 use anyhow::Context;
 use dioxus_cli_opt::process_file_to;
 use futures_util::{future::OptionFuture, pin_mut, FutureExt};
+use itertools::Itertools;
 use std::{
     env,
+    pin::Pin,
     time::{Duration, Instant, SystemTime},
 };
 use std::{
@@ -16,7 +18,7 @@ use std::{
 };
 use subsecond_types::JumpTable;
 use tokio::{
-    io::{AsyncBufReadExt, BufReader, Lines},
+    io::{AsyncBufRead, AsyncBufReadExt, BufReader, Lines},
     process::{Child, ChildStderr, ChildStdout, Command},
     task::JoinHandle,
 };
@@ -73,8 +75,8 @@ pub(crate) struct AppBuilder {
 
     // stdio for the app so we can read its stdout/stderr
     // we don't map stdin today (todo) but most apps don't need it
-    pub stdout: Option<Lines<BufReader<ChildStdout>>>,
-    pub stderr: Option<Lines<BufReader<ChildStderr>>>,
+    pub stdout: Option<Lines<Pin<Box<dyn AsyncBufRead>>>>,
+    pub stderr: Option<Lines<Pin<Box<dyn AsyncBufRead>>>>,
 
     /// The executables but with some extra entropy in their name so we can run two instances of the
     /// same app without causing collisions on the filesystem.
@@ -93,7 +95,6 @@ pub(crate) struct AppBuilder {
     pub bundle_end: Option<Instant>,
 
     /// The debugger for the app - must be enabled with the `d` key
-    pub(crate) app_debugger: Option<Child>,
     pub(crate) pid: Option<u32>,
 }
 
@@ -160,7 +161,6 @@ impl AppBuilder {
             entropy_app_exe: None,
             artifacts: None,
             patch_cache: None,
-            app_debugger: None,
             pid: None,
         })
     }
@@ -189,12 +189,15 @@ impl AppBuilder {
                 StderrReceived {  msg }
             },
             Some(status) = OptionFuture::from(self.child.as_mut().map(|f| f.wait())) => {
-                // Panicking here is on purpose. If the task crashes due to a JoinError (a panic),
-                // we want to propagate that panic up to the serve controller.
-                self.child = None;
                 match status {
-                    Ok(status) => ProcessExited { status },
-                    Err(err) => ProcessWaitFailed { err }
+                    Ok(status) => {
+                        self.child = None;
+                        ProcessExited { status }
+                    },
+                    Err(err) => {
+                        let () = futures_util::future::pending().await;
+                        ProcessWaitFailed { err }
+                    }
                 }
             }
         };
@@ -473,7 +476,7 @@ impl AppBuilder {
         }
 
         // We try to use stdin/stdout to communicate with the app
-        let running_process = match self.build.platform {
+        match self.build.platform {
             // Unfortunately web won't let us get a proc handle to it (to read its stdout/stderr) so instead
             // use use the websocket to communicate with it. I wish we could merge the concepts here,
             // like say, opening the socket as a subprocess, but alas, it's simpler to do that somewhere else.
@@ -482,15 +485,12 @@ impl AppBuilder {
                 if open_browser {
                     self.open_web(open_address.unwrap_or(devserver_ip));
                 }
-
-                None
             }
 
-            Platform::Ios => Some(self.open_ios_sim(envs).await?),
+            Platform::Ios => self.open_ios_sim(envs).await?,
 
             Platform::Android => {
                 self.open_android_sim(false, devserver_ip, envs).await?;
-                None
             }
 
             // These are all just basically running the main exe, but with slightly different resource dir paths
@@ -498,17 +498,8 @@ impl AppBuilder {
             | Platform::MacOS
             | Platform::Windows
             | Platform::Linux
-            | Platform::Liveview => Some(self.open_with_main_exe(envs)?),
+            | Platform::Liveview => self.open_with_main_exe(envs)?,
         };
-
-        // If we have a running process, we need to attach to it and wait for its outputs
-        if let Some(mut child) = running_process {
-            let stdout = BufReader::new(child.stdout.take().unwrap());
-            let stderr = BufReader::new(child.stderr.take().unwrap());
-            self.stdout = Some(stdout.lines());
-            self.stderr = Some(stderr.lines());
-            self.child = Some(child);
-        }
 
         self.builds_opened += 1;
 
@@ -737,19 +728,27 @@ impl AppBuilder {
     /// paths right now, but they will when we start to enable things like swift integration.
     ///
     /// Server/liveview/desktop are all basically the same, though
-    fn open_with_main_exe(&mut self, envs: Vec<(&str, String)>) -> Result<Child> {
+    fn open_with_main_exe(&mut self, envs: Vec<(&str, String)>) -> Result<()> {
         let main_exe = self.app_exe();
 
         tracing::debug!("Opening app with main exe: {main_exe:?}");
 
-        let child = Command::new(main_exe)
+        let mut child = Command::new(main_exe)
             .envs(envs)
             .stderr(Stdio::piped())
             .stdout(Stdio::piped())
             .kill_on_drop(true)
             .spawn()?;
 
-        Ok(child)
+        let stdout = BufReader::new(child.stdout.take().unwrap());
+        let stderr = BufReader::new(child.stderr.take().unwrap());
+        let stdout: Pin<Box<dyn AsyncBufRead>> = Box::pin(stdout);
+        let stderr: Pin<Box<dyn AsyncBufRead>> = Box::pin(stderr);
+        self.stdout = Some(stdout.lines());
+        self.stderr = Some(stderr.lines());
+        self.child = Some(child);
+
+        Ok(())
     }
 
     /// Open the web app by opening the browser to the given address.
@@ -774,7 +773,7 @@ impl AppBuilder {
     ///
     /// TODO(jon): we should probably check if there's a simulator running before trying to install,
     /// and open the simulator if we have to.
-    async fn open_ios_sim(&mut self, envs: Vec<(&str, String)>) -> Result<Child> {
+    async fn open_ios_sim(&mut self, envs: Vec<(&str, String)>) -> Result<()> {
         tracing::debug!("Installing app to simulator {:?}", self.build.root_dir());
 
         let res = Command::new("xcrun")
@@ -793,20 +792,51 @@ impl AppBuilder {
             .iter()
             .map(|(k, v)| (format!("SIMCTL_CHILD_{k}"), v.clone()));
 
-        let child = Command::new("xcrun")
+        let stdout_file = tempfile::tempfile()?;
+        let stderr_file = tempfile::tempfile()?;
+
+        let mut child = Command::new("xcrun")
             .arg("simctl")
             .arg("launch")
-            .arg("--console")
-            // .arg("--terminate-running-process")
             .arg("booted")
             .arg(self.build.bundle_identifier())
+            .arg(format!("--stdout={}", 123))
+            .arg(format!("--stderr={}", 123))
             .envs(ios_envs)
             .stderr(Stdio::piped())
             .stdout(Stdio::piped())
             .kill_on_drop(true)
-            .spawn()?;
+            .output()
+            .await?;
 
-        Ok(child)
+        let pstdout = String::from_utf8_lossy(&child.stdout);
+        let pstderr = String::from_utf8_lossy(&child.stderr);
+
+        if child.status.success() {
+            self.pid = pstdout
+                .trim()
+                .split_ascii_whitespace()
+                .last()
+                .unwrap()
+                .parse()
+                .ok();
+            tracing::debug!("Launched app with pid: {:?}", self.pid);
+        }
+
+        let stdout_io = tokio::fs::File::from(stdout_file);
+        let stderr_io = tokio::fs::File::from(stderr_file);
+
+        // Create BufReaders
+        let stdout_reader = BufReader::new(stdout_io);
+        let stderr_reader = BufReader::new(stderr_io);
+        let stdout_reader: Pin<Box<dyn AsyncBufRead>> = Box::pin(stdout_reader);
+        let stderr_reader: Pin<Box<dyn AsyncBufRead>> = Box::pin(stderr_reader);
+
+        // Store the line streams for later polling
+        self.stdout = Some(stdout_reader.lines());
+        self.stderr = Some(stderr_reader.lines());
+
+        Ok(())
     }
 
     /// We have this whole thing figured out, but we don't actually use it yet.
@@ -1350,10 +1380,122 @@ We checked the folder: {}
         matches!(&self.stage, BuildStage::Success | BuildStage::Failed)
     }
 
-    pub(crate) async fn open_debugger(&mut self, server: &WebServer) {
+    pub(crate) async fn open_debugger(&mut self, server: &WebServer) -> Result<()> {
         let url = match self.build.platform {
+            // https://stackoverflow.com/questions/53733781/how-do-i-use-lldb-to-debug-c-code-on-android-on-command-line/64997332#64997332
+            // https://android.googlesource.com/platform/development/+/refs/heads/main/scripts/gdbclient.py
+            // run lldbserver on the device and then connect
+            //
+            // # TODO: https://code.visualstudio.com/api/references/vscode-api#debug and
+            // #       https://code.visualstudio.com/api/extension-guides/debugger-extension and
+            // #       https://github.com/vadimcn/vscode-lldb/blob/6b775c439992b6615e92f4938ee4e211f1b060cf/extension/pickProcess.ts#L6
+            //
+            // res = {
+            //     "name": "(lldbclient.py) Attach {} (port: {})".format(binary_name.split("/")[-1], port),
+            //     "type": "lldb",
+            //     "request": "custom",
+            //     "relativePathBase": root,
+            //     "sourceMap": { "/b/f/w" : root, '': root, '.': root },
+            //     "initCommands": ['settings append target.exec-search-paths {}'.format(' '.join(solib_search_path))],
+            //     "targetCreateCommands": ["target create {}".format(binary_name),
+            //                              "target modules search-paths add / {}/".format(sysroot)],
+            //     "processCreateCommands": ["gdb-remote {}".format(str(port))]
+            // }
+            //
+            // https://github.com/vadimcn/codelldb/issues/213
+            //
+            // lots of pain to figure this out:
+            //
+            // (lldb) image add target/dx/tw6/debug/android/app/app/src/main/jniLibs/arm64-v8a/libdioxusmain.so
+            // (lldb) settings append target.exec-search-paths target/dx/tw6/debug/android/app/app/src/main/jniLibs/arm64-v8a/libdioxusmain.so
+            // (lldb) process handle SIGSEGV --pass true --stop false --notify true (otherwise the java threads cause crash)
+            //
+            Platform::Android => {
+                // adb push ./sdk/ndk/29.0.13113456/toolchains/llvm/prebuilt/darwin-x86_64/lib/clang/20/lib/linux/aarch64/lldb-server /tmp
+                // adb shell "/tmp/lldb-server --server --listen ..."
+                // "vscode://vadimcn.vscode-lldb/launch/config?{{'request':'connect','port': {}}}",
+                // format!(
+                //     "vscode://vadimcn.vscode-lldb/launch/config?{{'request':'attach','pid':{pid}}}"
+                // )
+                let tools = &self.build.workspace.android_tools()?;
+
+                // get the pid of the app
+                let pid = Command::new(&tools.adb)
+                    .arg("shell")
+                    .arg("pidof")
+                    .arg(self.build.bundle_identifier())
+                    .output()
+                    .await
+                    .ok()
+                    .and_then(|output| String::from_utf8(output.stdout).ok())
+                    .and_then(|s| s.trim().parse::<u32>().ok())
+                    .unwrap();
+
+                // copy the lldb-server to the device
+                let lldb_server = tools
+                    .android_tools_dir()
+                    .parent()
+                    .unwrap()
+                    .join("lib")
+                    .join("clang")
+                    .join("20")
+                    .join("lib")
+                    .join("linux")
+                    .join("aarch64")
+                    .join("lldb-server");
+                tracing::info!("Copying lldb-server to device: {lldb_server:?}");
+
+                let res = Command::new(&tools.adb)
+                    .arg("push")
+                    .arg(lldb_server)
+                    .arg("/tmp/lldb-server")
+                    .output()
+                    .await;
+
+                // Forward requests on 10086 to the device
+                let res = Command::new(&tools.adb)
+                    .arg("forward")
+                    .arg("tcp:10086")
+                    .arg("tcp:10086")
+                    .output()
+                    .await;
+
+                // start the server. when the debug session ends, it dies automatically
+                Command::new(&tools.adb)
+                    .arg("shell")
+                    .arg(r#"cd /tmp && ./lldb-server g :10086"#)
+                    .kill_on_drop(false)
+                    .stdin(Stdio::null())
+                    .stdout(Stdio::piped())
+                    .stderr(Stdio::piped())
+                    .spawn()
+                    .unwrap();
+
+                let program_path = self.build.main_exe();
+                format!(
+                    r#"vscode://vadimcn.vscode-lldb/launch/config?{{
+                        'request':'attach',
+                        'pid': '{pid}',
+                        'processCreateCommands': [
+                            'gdb-remote 10086',
+                            'target create {program_path}',
+                            'platform select remote-android',
+                            'image add {program_path}',
+                            'settings append target.exec-search-paths {program_path}',
+                            'process handle SIGSEGV --pass true --stop false --notify true',
+                            'process attach --pid {pid}',
+                        ]
+                    }}"#,
+                    program_path = program_path.display(),
+                )
+                .lines()
+                .map(|line| line.trim())
+                .join(" ")
+            }
+
             Platform::Web => {
                 // code --open-url "vscode://DioxusLabs.dioxus/debugger?uri=http://127.0.0.1:8080"
+                // todo - debugger could open to the *current* page afaik we don't have a way to have that info
                 let address = server.devserver_address();
                 let base_path = self.build.config.web.app.base_path.clone();
                 let https = self.build.config.web.https.enabled.unwrap_or_default();
@@ -1364,8 +1506,17 @@ We checked the folder: {}
                 };
                 format!("vscode://DioxusLabs.dioxus/debugger?uri={protocol}://{address}{base_path}")
             }
-            Platform::Ios => return,
-            Platform::Android => return,
+
+            Platform::Ios => {
+                let Some(pid) = self.pid else {
+                    tracing::warn!("No process to attach debugger to");
+                    return Ok(());
+                };
+
+                format!(
+                    "vscode://vadimcn.vscode-lldb/launch/config?{{'request':'attach','pid':{pid}}}"
+                )
+            }
 
             Platform::MacOS
             | Platform::Windows
@@ -1374,7 +1525,7 @@ We checked the folder: {}
             | Platform::Liveview => {
                 let Some(Some(pid)) = self.child.as_mut().map(|f| f.id()) else {
                     tracing::warn!("No process to attach debugger to");
-                    return;
+                    return Ok(());
                 };
 
                 format!(
@@ -1384,11 +1535,13 @@ We checked the folder: {}
             }
         };
 
-        tracing::info!("Opening debugger: {url}");
+        tracing::info!("Opening debugger for [{}]: {url}", self.build.platform);
 
         _ = tokio::process::Command::new("code")
             .arg("--open-url")
             .arg(url)
             .spawn();
+
+        Ok(())
     }
 }
