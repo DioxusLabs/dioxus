@@ -3148,11 +3148,8 @@ impl BuildRequest {
         // In release mode, we make the wasm and bindgen files into assets so they get bundled with max
         // optimizations.
         let wasm_path = if self.release && !should_bundle_split {
-            // Register the main.js with the asset system so it bundles in the snippets and optimizes
-            let name = assets.register_asset(
-                &self.wasm_bindgen_js_output_file(),
-                AssetOptions::Js(JsAssetOptions::new().with_minify(true).with_preload(true)),
-            )?;
+            // Make sure to register the main wasm file with the asset system
+            let name = assets.register_asset(&post_bindgen_wasm, AssetOptions::Unknown)?;
             format!("assets/{}", name.bundled_path())
         } else {
             let asset = self.wasm_bindgen_wasm_output_file();
@@ -3160,8 +3157,11 @@ impl BuildRequest {
         };
 
         let js_path = if self.release && !should_bundle_split {
-            // Make sure to register the main wasm file with the asset system
-            let name = assets.register_asset(&post_bindgen_wasm, AssetOptions::Unknown)?;
+            // Register the main.js with the asset system so it bundles in the snippets and optimizes
+            let name = assets.register_asset(
+                &self.wasm_bindgen_js_output_file(),
+                AssetOptions::Js(JsAssetOptions::new().with_minify(true).with_preload(true)),
+            )?;
             format!("assets/{}", name.bundled_path())
         } else {
             let asset = self.wasm_bindgen_js_output_file();
