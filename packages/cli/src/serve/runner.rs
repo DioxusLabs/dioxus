@@ -975,11 +975,11 @@ impl AppServer {
     pub(crate) async fn open_debugger(&mut self, dev: &WebServer, build: BuildId) {
         match build {
             BuildId::CLIENT => {
-                self.client.open_debugger(dev).await;
+                _ = self.client.open_debugger(dev).await;
             }
             BuildId::SERVER => {
                 if let Some(server) = self.server.as_mut() {
-                    server.open_debugger(dev).await;
+                    _ = server.open_debugger(dev).await;
                 }
             }
             _ => {}

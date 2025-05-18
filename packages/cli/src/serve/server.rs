@@ -69,7 +69,7 @@ pub(crate) struct ConnectedWsClient {
     socket: WebSocket,
     build_id: Option<BuildId>,
     aslr_reference: Option<u64>,
-    pid: Option<u32>,
+    _pid: Option<u32>,
 }
 
 impl WebServer {
@@ -509,7 +509,7 @@ fn build_devserver_router(
                 get(
                     |ws: WebSocketUpgrade, ext: Extension<UnboundedSender<ConnectedWsClient>>, query: Query<ConnectionQuery>| async move {
                         tracing::debug!("New devtool websocket connection: {:?}", query);
-                        ws.on_upgrade(move |socket| async move { _ = ext.0.unbounded_send(ConnectedWsClient { socket, aslr_reference: query.aslr_reference, build_id: query.build_id, pid: query.pid }) })
+                        ws.on_upgrade(move |socket| async move { _ = ext.0.unbounded_send(ConnectedWsClient { socket, aslr_reference: query.aslr_reference, build_id: query.build_id, _pid: query.pid }) })
                     },
                 ),
             )
@@ -518,7 +518,7 @@ fn build_devserver_router(
                 "/build_status",
                 get(
                     |ws: WebSocketUpgrade, ext: Extension<UnboundedSender<ConnectedWsClient>>| async move {
-                        ws.on_upgrade(move |socket| async move { _ = ext.0.unbounded_send(ConnectedWsClient { socket, aslr_reference: None, build_id: None, pid: None }) })
+                        ws.on_upgrade(move |socket| async move { _ = ext.0.unbounded_send(ConnectedWsClient { socket, aslr_reference: None, build_id: None, _pid: None }) })
                     },
                 ),
             )

@@ -19,7 +19,7 @@ use std::{
 use subsecond_types::JumpTable;
 use tokio::{
     io::{AsyncBufRead, AsyncBufReadExt, BufReader, Lines},
-    process::{Child, ChildStderr, ChildStdout, Command},
+    process::{Child, Command},
     task::JoinHandle,
 };
 
@@ -795,7 +795,7 @@ impl AppBuilder {
         let stdout_file = tempfile::tempfile()?;
         let stderr_file = tempfile::tempfile()?;
 
-        let mut child = Command::new("xcrun")
+        let child = Command::new("xcrun")
             .arg("simctl")
             .arg("launch")
             .arg("booted")
@@ -810,7 +810,6 @@ impl AppBuilder {
             .await?;
 
         let pstdout = String::from_utf8_lossy(&child.stdout);
-        let pstderr = String::from_utf8_lossy(&child.stderr);
 
         if child.status.success() {
             self.pid = pstdout
@@ -1382,6 +1381,47 @@ We checked the folder: {}
 
     pub(crate) async fn open_debugger(&mut self, server: &WebServer) -> Result<()> {
         let url = match self.build.platform {
+            Platform::MacOS
+            | Platform::Windows
+            | Platform::Linux
+            | Platform::Server
+            | Platform::Liveview => {
+                let Some(Some(pid)) = self.child.as_mut().map(|f| f.id()) else {
+                    tracing::warn!("No process to attach debugger to");
+                    return Ok(());
+                };
+
+                format!(
+                    "vscode://vadimcn.vscode-lldb/launch/config?{{'request':'attach','pid':{}}}",
+                    pid
+                )
+            }
+
+            Platform::Web => {
+                // code --open-url "vscode://DioxusLabs.dioxus/debugger?uri=http://127.0.0.1:8080"
+                // todo - debugger could open to the *current* page afaik we don't have a way to have that info
+                let address = server.devserver_address();
+                let base_path = self.build.config.web.app.base_path.clone();
+                let https = self.build.config.web.https.enabled.unwrap_or_default();
+                let protocol = if https { "https" } else { "http" };
+                let base_path = match base_path.as_deref() {
+                    Some(base_path) => format!("/{}", base_path.trim_matches('/')),
+                    None => "".to_owned(),
+                };
+                format!("vscode://DioxusLabs.dioxus/debugger?uri={protocol}://{address}{base_path}")
+            }
+
+            Platform::Ios => {
+                let Some(pid) = self.pid else {
+                    tracing::warn!("No process to attach debugger to");
+                    return Ok(());
+                };
+
+                format!(
+                    "vscode://vadimcn.vscode-lldb/launch/config?{{'request':'attach','pid':{pid}}}"
+                )
+            }
+
             // https://stackoverflow.com/questions/53733781/how-do-i-use-lldb-to-debug-c-code-on-android-on-command-line/64997332#64997332
             // https://android.googlesource.com/platform/development/+/refs/heads/main/scripts/gdbclient.py
             // run lldbserver on the device and then connect
@@ -1443,9 +1483,10 @@ We checked the folder: {}
                     .join("linux")
                     .join("aarch64")
                     .join("lldb-server");
+
                 tracing::info!("Copying lldb-server to device: {lldb_server:?}");
 
-                let res = Command::new(&tools.adb)
+                _ = Command::new(&tools.adb)
                     .arg("push")
                     .arg(lldb_server)
                     .arg("/tmp/lldb-server")
@@ -1453,85 +1494,47 @@ We checked the folder: {}
                     .await;
 
                 // Forward requests on 10086 to the device
-                let res = Command::new(&tools.adb)
+                _ = Command::new(&tools.adb)
                     .arg("forward")
                     .arg("tcp:10086")
                     .arg("tcp:10086")
                     .output()
                     .await;
 
-                // start the server. when the debug session ends, it dies automatically
-                Command::new(&tools.adb)
+                // start the server - running it multiple times will make the subsequent ones fail (which is fine)
+                _ = Command::new(&tools.adb)
                     .arg("shell")
-                    .arg(r#"cd /tmp && ./lldb-server g :10086"#)
+                    .arg(r#"./lldb-server platform --server --listen '*:10086'"#)
                     .kill_on_drop(false)
                     .stdin(Stdio::null())
                     .stdout(Stdio::piped())
                     .stderr(Stdio::piped())
-                    .spawn()
-                    .unwrap();
+                    .spawn();
 
                 let program_path = self.build.main_exe();
                 format!(
                     r#"vscode://vadimcn.vscode-lldb/launch/config?{{
+                        'name':'Attach to Android',
+                        'type':'lldb',
                         'request':'attach',
                         'pid': '{pid}',
                         'processCreateCommands': [
-                            'gdb-remote 10086',
-                            'target create {program_path}',
                             'platform select remote-android',
-                            'image add {program_path}',
+                            'platform connect connect://localhost:10086',
+                            'settings set target.inherit-env false',
+                            'settings set target.inline-breakpoint-strategy always',
+                            'settings set target.process.thread.step-avoid-regexp \"JavaBridge|JDWP|Binder|ReferenceQueueDaemon\"',
+                            'process handle SIGSEGV --pass true --stop false --notify true"',
                             'settings append target.exec-search-paths {program_path}',
-                            'process handle SIGSEGV --pass true --stop false --notify true',
-                            'process attach --pid {pid}',
+                            'attach --pid {pid}',
+                            'continue'
                         ]
                     }}"#,
                     program_path = program_path.display(),
                 )
                 .lines()
                 .map(|line| line.trim())
-                .join(" ")
-            }
-
-            Platform::Web => {
-                // code --open-url "vscode://DioxusLabs.dioxus/debugger?uri=http://127.0.0.1:8080"
-                // todo - debugger could open to the *current* page afaik we don't have a way to have that info
-                let address = server.devserver_address();
-                let base_path = self.build.config.web.app.base_path.clone();
-                let https = self.build.config.web.https.enabled.unwrap_or_default();
-                let protocol = if https { "https" } else { "http" };
-                let base_path = match base_path.as_deref() {
-                    Some(base_path) => format!("/{}", base_path.trim_matches('/')),
-                    None => "".to_owned(),
-                };
-                format!("vscode://DioxusLabs.dioxus/debugger?uri={protocol}://{address}{base_path}")
-            }
-
-            Platform::Ios => {
-                let Some(pid) = self.pid else {
-                    tracing::warn!("No process to attach debugger to");
-                    return Ok(());
-                };
-
-                format!(
-                    "vscode://vadimcn.vscode-lldb/launch/config?{{'request':'attach','pid':{pid}}}"
-                )
-            }
-
-            Platform::MacOS
-            | Platform::Windows
-            | Platform::Linux
-            | Platform::Server
-            | Platform::Liveview => {
-                let Some(Some(pid)) = self.child.as_mut().map(|f| f.id()) else {
-                    tracing::warn!("No process to attach debugger to");
-                    return Ok(());
-                };
-
-                format!(
-                    "vscode://vadimcn.vscode-lldb/launch/config?{{'request':'attach','pid':{}}}",
-                    pid
-                )
+                .join("")
             }
         };
 
