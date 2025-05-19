@@ -320,6 +320,7 @@ use crate::{
     TargetArgs, TraceSrc, WasmBindgen, WasmOptConfig, Workspace, DX_RUSTC_WRAPPER_ENV_VAR,
 };
 use anyhow::Context;
+use cargo_metadata::diagnostic::Diagnostic;
 use dioxus_cli_config::format_base_path_meta_element;
 use dioxus_cli_config::{APP_TITLE_ENV, ASSET_ROOT_ENV};
 use dioxus_cli_opt::{process_file_to, AssetManifest};
@@ -807,7 +808,7 @@ impl BuildRequest {
 
             match message {
                 Message::BuildScriptExecuted(_) => units_compiled += 1,
-                Message::CompilerMessage(msg) => ctx.status_build_diagnostic(msg),
+                Message::CompilerMessage(msg) => ctx.status_build_diagnostic(msg.message),
                 Message::TextLine(line) => {
                     // Handle the case where we're getting lines directly from rustc.
                     // These are in a different format than the normal cargo output, though I imagine
@@ -827,6 +828,11 @@ impl BuildRequest {
                         if artifact.emit == "link" {
                             output_location = Some(artifact.artifact);
                         }
+                    }
+
+                    // Handle direct rustc diagnostics
+                    if let Ok(diag) = serde_json::from_str::<Diagnostic>(&line) {
+                        ctx.status_build_diagnostic(diag);
                     }
 
                     // For whatever reason, if there's an error while building, we still receive the TextLine
@@ -1241,12 +1247,35 @@ impl BuildRequest {
         //
         // We dump its output directly into the patch exe location which is different than how rustc
         // does it since it uses llvm-objcopy into the `target/debug/` folder.
-        let res = Command::new(linker)
-            .args(object_files.iter())
-            .args(self.thin_link_args(&args)?)
-            .args(out_arg)
-            .output()
-            .await?;
+        let res = match cfg!(target_os = "windows") {
+            // Handle windows response files
+            // https://learn.microsoft.com/en-us/cpp/build/reference/at-specify-a-linker-response-file?view=msvc-170
+            true => {
+                let cmd_file = tempfile::NamedTempFile::new()?;
+                let mut contents = String::new();
+                for arg in object_files.iter() {
+                    contents.push_str(&format!("{}\n", dunce::canonicalize(arg)?.display()));
+                }
+                for arg in self.thin_link_args(&args)? {
+                    contents.push_str(&format!("{}\n", arg));
+                }
+                for arg in out_arg.iter() {
+                    contents.push_str(&format!("{}\n", arg));
+                }
+                Command::new(linker)
+                    .arg(format!("@{}", cmd_file.path().display()))
+                    .output()
+                    .await?
+            }
+            false => {
+                Command::new(linker)
+                    .args(object_files.iter())
+                    .args(self.thin_link_args(&args)?)
+                    .args(out_arg)
+                    .output()
+                    .await?
+            }
+        };
 
         if !res.stderr.is_empty() {
             let errs = String::from_utf8_lossy(&res.stderr);
@@ -1679,11 +1708,31 @@ impl BuildRequest {
             _ => vec!["-o".to_string(), exe.display().to_string()],
         };
 
-        let res = Command::new(linker)
-            .args(args.iter().skip(1))
-            .args(out_arg)
-            .output()
-            .await?;
+        let res = match cfg!(target_os = "windows") {
+            // Handle windows response files
+            // https://learn.microsoft.com/en-us/cpp/build/reference/at-specify-a-linker-response-file?view=msvc-170
+            true => {
+                let cmd_file = tempfile::NamedTempFile::new()?;
+                let mut contents = String::new();
+                for arg in args.iter().skip(1) {
+                    contents.push_str(&format!("{}\n", arg));
+                }
+                for arg in out_arg.iter() {
+                    contents.push_str(&format!("{}\n", arg));
+                }
+                Command::new(linker)
+                    .arg(format!("@{}", cmd_file.path().display()))
+                    .output()
+                    .await?
+            }
+            false => {
+                Command::new(linker)
+                    .args(args.iter().skip(1))
+                    .args(out_arg)
+                    .output()
+                    .await?
+            }
+        };
 
         if !res.stderr.is_empty() {
             let errs = String::from_utf8_lossy(&res.stderr);
@@ -2914,7 +2963,7 @@ impl BuildRequest {
     /// Check if assets should be pre_compressed. This will only be true in release mode if the user
     /// has enabled pre_compress in the web config.
     fn should_pre_compress_web_assets(&self, release: bool) -> bool {
-        self.config.web.pre_compress && release
+        self.config.web.pre_compress & release
     }
 
     /// Bundle the web app
