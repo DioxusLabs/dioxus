@@ -123,7 +123,7 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &mut TraceController) -> 
                 devserver.new_build_update(&update).await;
 
                 // Start the SSG build if we need to
-                builder.new_build_update(&update).await;
+                builder.new_build_update(&update, &devserver).await;
 
                 // And then open the app if it's ready
                 match update {

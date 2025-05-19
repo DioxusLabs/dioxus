@@ -4,16 +4,18 @@ use dioxus_dx_wire_format::BuildStage;
 use futures_util::{stream::FuturesUnordered, StreamExt};
 use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
-    path::Path,
     time::Duration,
 };
 use tokio::process::Command;
 
-use super::BuilderUpdate;
+use crate::BuildId;
+
+use super::{AppBuilder, BuilderUpdate};
 
 /// Pre-render the static routes, performing static-site generation
 pub(crate) async fn pre_render_static_routes(
-    server_exe: &Path,
+    devserver_ip: Option<SocketAddr>,
+    builder: &mut AppBuilder,
     updates: Option<&futures_channel::mpsc::UnboundedSender<BuilderUpdate>>,
 ) -> anyhow::Result<()> {
     if let Some(updates) = updates {
@@ -23,6 +25,7 @@ pub(crate) async fn pre_render_static_routes(
             })
             .unwrap();
     }
+    let server_exe = builder.build.main_exe();
 
     // Use the address passed in through environment variables or default to localhost:9999. We need
     // to default to a value that is different than the CLI default address to avoid conflicts
@@ -38,10 +41,15 @@ pub(crate) async fn pre_render_static_routes(
 
     tracing::info!("Running SSG at http://{address}:{port} for {server_exe:?}");
 
+    let vars = builder.child_environment_variables(
+        devserver_ip,
+        Some(fullstack_address),
+        false,
+        BuildId::SERVER,
+    );
     // Run the server executable
-    let _child = Command::new(server_exe)
-        .env(dioxus_cli_config::SERVER_PORT_ENV, port)
-        .env(dioxus_cli_config::SERVER_IP_ENV, address)
+    let _child = Command::new(&server_exe)
+        .envs(vars)
         .current_dir(server_exe.parent().unwrap())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())

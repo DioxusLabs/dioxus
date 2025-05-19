@@ -78,13 +78,12 @@ impl BuildArgs {
 
         if let Some(server) = targets.server.as_ref() {
             // If the server is present, we need to build it as well
-            let server = AppBuilder::start(server, BuildMode::Base)?
-                .finish_build()
-                .await?;
+            let mut server_build = AppBuilder::start(server, BuildMode::Base)?;
+            server_build.finish_build().await?;
 
             // Run SSG and cache static routes
             if ssg {
-                crate::pre_render_static_routes(&server.exe, None).await?;
+                crate::pre_render_static_routes(None, &mut server_build, None).await?;
             }
 
             tracing::info!(path = ?targets.client.root_dir(), "Server build completed successfully! 🚀");

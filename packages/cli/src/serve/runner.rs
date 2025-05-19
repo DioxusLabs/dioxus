@@ -209,17 +209,21 @@ impl AppServer {
         Ok(runner)
     }
 
-    pub(crate) async fn rebuild_ssg(&self) {
+    pub(crate) async fn rebuild_ssg(&mut self, devserver: &WebServer) {
         if self.client.stage != BuildStage::Success {
             return;
         }
         // Run SSG and cache static routes if the server build is done
-        if let Some(server) = self.server.as_ref() {
+        if let Some(server) = self.server.as_mut() {
             if !self.ssg || server.stage != BuildStage::Success {
                 return;
             }
-            if let Err(err) =
-                crate::pre_render_static_routes(&server.build.main_exe(), Some(&server.tx)).await
+            if let Err(err) = crate::pre_render_static_routes(
+                Some(devserver.devserver_address()),
+                server,
+                Some(&server.tx.clone()),
+            )
+            .await
             {
                 tracing::error!("Failed to pre-render static routes: {err}");
             }
@@ -295,10 +299,10 @@ impl AppServer {
     }
 
     /// Handle an update from the builder
-    pub(crate) async fn new_build_update(&mut self, update: &BuilderUpdate) {
+    pub(crate) async fn new_build_update(&mut self, update: &BuilderUpdate, devserver: &WebServer) {
         if let BuilderUpdate::BuildReady { .. } = update {
             // If the build is ready, we need to check if we need to pre-render with ssg
-            self.rebuild_ssg().await;
+            self.rebuild_ssg(devserver).await;
         }
     }
 
