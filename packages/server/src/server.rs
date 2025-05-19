@@ -8,10 +8,16 @@ use axum::{
     http::{Request, Response, StatusCode},
     response::IntoResponse,
 };
+use dioxus_cli_config::server_config;
 use dioxus_lib::prelude::{Element, VirtualDom};
 use http::header::*;
 use server_fn::ServerFnTraitObj;
+use std::collections::HashSet;
+use std::path::Path;
 use std::sync::Arc;
+use tower::util::MapResponse;
+use tower::ServiceExt;
+use tower_http::services::fs::ServeFileSystemResponseBody;
 
 /// A extension trait with utilities for integrating Dioxus with your Axum router.
 pub trait DioxusRouterExt<S>: DioxusRouterFnExt<S> {
@@ -72,9 +78,7 @@ impl<S> DioxusRouterExt<S> for Router<S>
 where
     S: Send + Sync + Clone + 'static,
 {
-    fn serve_static_assets(mut self) -> Self {
-        use tower_http::services::{ServeDir, ServeFile};
-
+    fn serve_static_assets(self) -> Self {
         let public_path = crate::public_path();
 
         if !public_path.exists() {
@@ -82,38 +86,21 @@ where
         }
 
         // Serve all files in public folder except index.html
-        let dir = std::fs::read_dir(&public_path).unwrap_or_else(|e| {
-            panic!(
-                "Couldn't read public directory at {:?}: {}",
-                &public_path, e
-            )
-        });
+        let serve_config = server_config();
+        let immutable_assets: HashSet<_> = serve_config
+            .immutable_assets()
+            .iter()
+            .map(|s| s.trim_start_matches("/"))
+            .collect();
+        let assets_dir = crate::assets_path();
 
-        for entry in dir.flatten() {
-            let path = entry.path();
-            if path.ends_with("index.html") {
-                continue;
-            }
-            let route = path
-                .strip_prefix(&public_path)
-                .unwrap()
-                .iter()
-                .map(|segment| {
-                    segment.to_str().unwrap_or_else(|| {
-                        panic!("Failed to convert path segment {:?} to string", segment)
-                    })
-                })
-                .collect::<Vec<_>>()
-                .join("/");
-            let route = format!("/{}", route);
-            if path.is_dir() {
-                self = self.nest_service(&route, ServeDir::new(path).precompressed_br());
-            } else {
-                self = self.nest_service(&route, ServeFile::new(path).precompressed_br());
-            }
-        }
-
-        self
+        serve_dir_cached(
+            self,
+            &public_path,
+            &assets_dir,
+            &immutable_assets,
+            &public_path,
+        )
     }
 
     fn serve_dioxus_application(self, cfg: ServeConfig, app: fn() -> Element) -> Self {
@@ -433,4 +420,79 @@ fn report_err<E: std::fmt::Display>(e: E) -> Response<axum::body::Body> {
         .status(StatusCode::INTERNAL_SERVER_ERROR)
         .body(body::Body::new(format!("Error: {}", e)))
         .unwrap()
+}
+
+fn serve_dir_cached<S>(
+    mut router: Router<S>,
+    public_path: &std::path::Path,
+    assets_dir: &std::path::Path,
+    immutable_assets: &HashSet<&str>,
+    directory: &std::path::Path,
+) -> Router<S>
+where
+    S: Send + Sync + Clone + 'static,
+{
+    use tower_http::services::ServeFile;
+
+    let dir = std::fs::read_dir(directory)
+        .unwrap_or_else(|e| panic!("Couldn't read public directory at {:?}: {}", &directory, e));
+
+    for entry in dir.flatten() {
+        let path = entry.path();
+        // Don't serve the index.html file. The SSR handler will generate it.
+        if path == public_path.join("index.html") {
+            continue;
+        }
+        let route = path.strip_prefix(public_path).unwrap();
+        let route = path_components_to_route_lossy(route);
+
+        if path.is_dir() {
+            router = serve_dir_cached(router, public_path, assets_dir, immutable_assets, &path);
+        } else {
+            let serve_file = ServeFile::new(&path).precompressed_br();
+            // All cached assets are served at the root of the asset directory. If we know an asset
+            // is hashed for cache busting, we can cache the response on the client side forever. If
+            // the asset changes, the hash in the path will also change and the client will refetch it.
+            let file_relative_to_asset_dir = path
+                .strip_prefix(assets_dir)
+                .map(path_components_to_route_lossy)
+                .unwrap_or_default();
+            let file_relative_to_asset_dir = file_relative_to_asset_dir.trim_start_matches("/");
+            if immutable_assets.contains(file_relative_to_asset_dir) {
+                router = router.nest_service(&route, cache_response_forever(serve_file))
+            } else {
+                router = router.nest_service(&route, serve_file)
+            }
+        }
+    }
+
+    router
+}
+
+fn path_components_to_route_lossy(path: &Path) -> String {
+    let route = path
+        .iter()
+        .map(|segment| segment.to_string_lossy())
+        .collect::<Vec<_>>()
+        .join("/");
+    format!("/{}", route)
+}
+
+type MappedAxumService<S> = MapResponse<
+    S,
+    fn(Response<ServeFileSystemResponseBody>) -> Response<ServeFileSystemResponseBody>,
+>;
+
+fn cache_response_forever<
+    S: ServiceExt<Request<Body>, Response = Response<ServeFileSystemResponseBody>>,
+>(
+    service: S,
+) -> MappedAxumService<S> {
+    service.map_response(|mut response: Response<ServeFileSystemResponseBody>| {
+        response.headers_mut().insert(
+            CACHE_CONTROL,
+            HeaderValue::from_static("public, max-age=31536000, immutable"),
+        );
+        response
+    })
 }
