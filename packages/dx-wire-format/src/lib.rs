@@ -78,7 +78,6 @@ pub enum BuildStage {
     OptimizingWasm,
     Linking,
     Hotpatching,
-    ExtractingAssets,
     CopyingAssets {
         current: usize,
         total: usize,

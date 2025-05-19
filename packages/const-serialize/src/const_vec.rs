@@ -420,3 +420,17 @@ fn test_const_vec_remove() {
     assert_eq!(value, Some(5678));
     assert_eq!(vec.as_ref(), &[]);
 }
+
+#[test]
+fn test_const_vec_extend() {
+    const VEC: ConstVec<u32> = {
+        let mut vec = ConstVec::new();
+        vec = vec.push(1234);
+        vec = vec.push(5678);
+        vec = vec.extend(&[91011, 1213]);
+        vec
+    };
+    let vec = VEC;
+    println!("{:?}", vec);
+    assert_eq!(vec.as_ref(), &[1234, 5678, 91011, 1213]);
+}

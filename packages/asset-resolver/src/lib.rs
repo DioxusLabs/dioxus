@@ -72,7 +72,7 @@ pub fn serve_asset_from_raw_path(path: &str) -> Result<Response<Vec<u8>>, AssetS
 /// - [ ] Linux (rpm)
 /// - [ ] Linux (deb)
 /// - [ ] Android
-#[allow(unused)]
+#[allow(unreachable_code)]
 fn get_asset_root() -> PathBuf {
     let cur_exe = std::env::current_exe().unwrap();
 
