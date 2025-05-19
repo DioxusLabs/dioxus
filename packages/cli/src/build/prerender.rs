@@ -1,7 +1,10 @@
+use anyhow::bail;
 use anyhow::Context;
 use dioxus_cli_config::{server_ip, server_port};
 use futures_util::stream::FuturesUnordered;
 use futures_util::StreamExt;
+use reqwest::Url;
+use std::net::ToSocketAddrs;
 use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
     path::Path,
@@ -34,7 +37,9 @@ pub(crate) async fn pre_render_static_routes(server_exe: &Path) -> anyhow::Resul
         .spawn()?;
 
     // Borrow reqwest_client so we only move the reference into the futures
-    let reqwest_client = reqwest::Client::new();
+    let reqwest_client = reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .build()?;
     let reqwest_client = &reqwest_client;
 
     // Get the routes from the `/static_routes` endpoint
@@ -83,11 +88,37 @@ pub(crate) async fn pre_render_static_routes(server_exe: &Path) -> anyhow::Resul
             tracing::info!("Rendering {route} for SSG");
 
             // For each route, ping the server to force it to cache the response for ssg
-            let request = reqwest_client
-                .get(format!("http://{address}:{port}{route}"))
+            let raw = format!("http://{address}:{port}{route}");
+            let url = Url::parse(&raw).with_context(|| format!("Invalid URL: {}", raw))?;
+
+            // Scheme check
+            match url.scheme() {
+                "http" | "https" => {}
+                bad => bail!("Disallowed URL scheme: {}", bad),
+            }
+
+            // DNS resolution
+            let host = url.host_str().context("Missing host")?;
+            let port = url.port_or_known_default().context("Missing port")?;
+            let addrs = (host, port)
+                .to_socket_addrs()
+                .context("DNS resolution failed")?;
+
+            // IP allowlist
+            for addr in addrs {
+                let ip = addr.ip();
+                if !(ip.is_loopback() || ip.is_unspecified()) {
+                    bail!("Disallowed IP address: {}", ip);
+                }
+            }
+
+            // Send request
+            let response = reqwest_client
+                .get(url)
                 .header("Accept", "text/html")
                 .send()
-                .await?;
+                .await
+                .context("Request failed")?;
 
             // If it takes longer than 30 seconds to resolve the route, log a warning
             let warning_task = tokio::spawn({
@@ -101,12 +132,12 @@ pub(crate) async fn pre_render_static_routes(server_exe: &Path) -> anyhow::Resul
             // Wait for the streaming response to completely finish before continuing. We don't use the html it returns directly
             // because it may contain artifacts of intermediate streaming steps while the page is loading. The SSG app should write
             // the final clean HTML to the disk automatically after the request completes.
-            let _html = request.text().await?;
+            let _html = response.text().await?;
 
             // Cancel the warning task if it hasn't already run
             warning_task.abort();
 
-            Ok::<_, reqwest::Error>(route)
+            Ok(Ok::<_, reqwest::Error>(route))
         })
         .collect::<FuturesUnordered<_>>();
 
