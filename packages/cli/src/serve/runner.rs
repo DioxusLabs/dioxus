@@ -218,7 +218,9 @@ impl AppServer {
             if !self.ssg || server.stage != BuildStage::Success {
                 return;
             }
-            if let Err(err) = crate::pre_render_static_routes(&server.build.main_exe()).await {
+            if let Err(err) =
+                crate::pre_render_static_routes(&server.build.main_exe(), Some(&server.tx)).await
+            {
                 tracing::error!("Failed to pre-render static routes: {err}");
             }
         }
@@ -558,7 +560,8 @@ impl AppServer {
         let displayed_address = devserver.displayed_address();
 
         // Always open the server first after the client has been built
-        if let Some(server) = self.server.as_mut() {
+        // Only open the server if it isn't prerendered
+        if let Some(server) = self.server.as_mut().filter(|_| !self.ssg) {
             tracing::debug!("Opening server build");
             server.soft_kill().await;
             server

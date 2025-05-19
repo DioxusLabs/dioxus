@@ -88,4 +88,5 @@ pub enum BuildStage {
     Aborted,
     Restarting,
     CompressingAssets,
+    Prerendering,
 }

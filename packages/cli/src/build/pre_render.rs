@@ -1,5 +1,6 @@
 use anyhow::Context;
 use dioxus_cli_config::{server_ip, server_port};
+use dioxus_dx_wire_format::BuildStage;
 use futures_util::{stream::FuturesUnordered, StreamExt};
 use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
@@ -8,8 +9,21 @@ use std::{
 };
 use tokio::process::Command;
 
+use super::BuilderUpdate;
+
 /// Pre-render the static routes, performing static-site generation
-pub(crate) async fn pre_render_static_routes(server_exe: &Path) -> anyhow::Result<()> {
+pub(crate) async fn pre_render_static_routes(
+    server_exe: &Path,
+    updates: Option<&futures_channel::mpsc::UnboundedSender<BuilderUpdate>>,
+) -> anyhow::Result<()> {
+    if let Some(updates) = updates {
+        updates
+            .unbounded_send(BuilderUpdate::Progress {
+                stage: BuildStage::Prerendering,
+            })
+            .unwrap();
+    }
+
     // Use the address passed in through environment variables or default to localhost:9999. We need
     // to default to a value that is different than the CLI default address to avoid conflicts
     let ip = server_ip().unwrap_or_else(|| IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)));

@@ -1,6 +1,4 @@
-use crate::{
-    cli::*, pre_render_static_routes, AppBuilder, BuildRequest, Workspace, PROFILE_SERVER,
-};
+use crate::{cli::*, AppBuilder, BuildRequest, Workspace, PROFILE_SERVER};
 use crate::{BuildMode, Platform};
 use target_lexicon::Triple;
 
@@ -86,7 +84,7 @@ impl BuildArgs {
 
             // Run SSG and cache static routes
             if ssg {
-                pre_render_static_routes(&server.exe).await?;
+                crate::pre_render_static_routes(&server.exe, None).await?;
             }
 
             tracing::info!(path = ?targets.client.root_dir(), "Server build completed successfully! 🚀");
