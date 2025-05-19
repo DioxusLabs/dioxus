@@ -1,7 +1,7 @@
 use super::{AppBuilder, ServeUpdate, WebServer};
 use crate::{
-    BuildArtifacts, BuildId, BuildMode, BuildTargets, Error, HotpatchModuleCache, Platform, Result,
-    ServeArgs, TailwindCli, TraceSrc, Workspace,
+    BuildArtifacts, BuildId, BuildMode, BuildTargets, BuilderUpdate, Error, HotpatchModuleCache,
+    Platform, Result, ServeArgs, TailwindCli, TraceSrc, Workspace,
 };
 use anyhow::Context;
 use dioxus_core::internal::{
@@ -134,7 +134,7 @@ impl AppServer {
         let fullstack = server.is_some();
         let should_proxy_port = match client.platform {
             Platform::Server => true,
-            _ => fullstack,
+            _ => fullstack && !ssg,
         };
 
         let proxied_port = should_proxy_port
@@ -209,7 +209,7 @@ impl AppServer {
         Ok(runner)
     }
 
-    async fn rebuild_ssg(&self) {
+    pub(crate) async fn rebuild_ssg(&self) {
         if self.client.stage != BuildStage::Success {
             return;
         }
@@ -235,7 +235,6 @@ impl AppServer {
         tokio::select! {
             // Wait for the client to finish
             client_update = client_wait => {
-                self.rebuild_ssg().await;
                 ServeUpdate::BuilderUpdate {
                     id: BuildId::CLIENT,
                     update: client_update,
@@ -243,7 +242,6 @@ impl AppServer {
             }
 
             Some(server_update) = server_wait => {
-                self.rebuild_ssg().await;
                 ServeUpdate::BuilderUpdate {
                     id: BuildId::SERVER,
                     update: server_update,
@@ -291,6 +289,14 @@ impl AppServer {
                 ServeUpdate::FilesChanged { files }
             }
 
+        }
+    }
+
+    /// Handle an update from the builder
+    pub(crate) async fn new_build_update(&mut self, update: &BuilderUpdate) {
+        if let BuilderUpdate::BuildReady { .. } = update {
+            // If the build is ready, we need to check if we need to pre-render with ssg
+            self.rebuild_ssg().await;
         }
     }
 
