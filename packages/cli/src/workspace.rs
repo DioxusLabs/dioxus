@@ -5,9 +5,9 @@ use anyhow::Context;
 use ignore::gitignore::Gitignore;
 use krates::{semver::Version, KrateDetails};
 use krates::{Cmd, Krates, NodeId};
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::{collections::HashSet, path::Path};
+use std::{path::PathBuf, time::Duration};
 use target_lexicon::Triple;
 use tokio::process::Command;
 
@@ -34,12 +34,30 @@ impl Workspace {
             return Ok(ws.clone());
         }
 
-        let cmd = Cmd::new();
-        let mut builder = krates::Builder::new();
-        builder.workspace(true);
-        let krates = builder
-            .build(cmd, |_| {})
-            .context("Failed to run cargo metadata")?;
+        let krates_future = tokio::task::spawn_blocking(|| {
+            let cmd = Cmd::new();
+            let mut builder = krates::Builder::new();
+            builder.workspace(true);
+            builder
+                .build(cmd, |_| {})
+                .context("Failed to run cargo metadata")
+        });
+
+        let spin_future = async move {
+            tokio::time::sleep(Duration::from_millis(500)).await;
+            tracing::warn!("Waiting for cargo-metadata...");
+            loop {
+                tokio::time::sleep(Duration::from_millis(3000)).await;
+                tracing::warn!(
+                    "Taking a while, maybe your internet is down? Try again with --offline"
+                );
+            }
+        };
+
+        let krates = tokio::select! {
+            f = krates_future => f.context("failed to run cargo metadata")??,
+            _ = spin_future => unreachable!()
+        };
 
         let settings = CliSettings::global_or_default();
         let sysroot = Command::new("rustc")
