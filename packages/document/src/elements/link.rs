@@ -30,6 +30,7 @@ pub struct LinkProps {
     pub blocking: Option<String>,
     #[props(extends = link, extends = GlobalAttributes)]
     pub additional_attributes: Vec<Attribute>,
+    pub onload: Option<String>,
 }
 
 impl LinkProps {
@@ -78,6 +79,9 @@ impl LinkProps {
         }
         if let Some(blocking) = &self.blocking {
             attributes.push(("blocking", blocking.clone()));
+        }
+        if let Some(onload) = &self.onload {
+            attributes.push(("onload", onload.clone()));
         }
         attributes
     }
