@@ -284,6 +284,10 @@ pub struct HotFnPanic {
     _backtrace: backtrace::Backtrace,
 }
 
+/// A pointer to a hot patched function
+#[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
+pub struct HotFnPtr(pub u64);
+
 /// A hot-reloadable function.
 ///
 /// To call this function, use the [`HotFn::call`] method. This will automatically use the latest
@@ -324,20 +328,20 @@ impl<A, M, F: HotFunction<A, M>> HotFn<A, M, F> {
     ///
     /// Note that Subsecond does not track this state over time, so it's up to the runtime integration
     /// to track this state and diff it.
-    pub fn ptr_address(&self) -> u64 {
+    pub fn ptr_address(&self) -> HotFnPtr {
         if size_of::<F>() == size_of::<fn() -> ()>() {
             let ptr: usize = unsafe { std::mem::transmute_copy(&self.inner) };
-            return ptr as u64;
+            return HotFnPtr(ptr as u64);
         }
 
         let known_fn_ptr = <F as HotFunction<A, M>>::call_it as *const () as usize;
         if let Some(jump_table) = get_jump_table() {
             if let Some(ptr) = jump_table.map.get(&(known_fn_ptr as u64)).cloned() {
-                return ptr;
+                return HotFnPtr(ptr);
             }
         }
 
-        known_fn_ptr as u64
+        HotFnPtr(known_fn_ptr as u64)
     }
 
     /// Attempt to call the function with the given arguments.
