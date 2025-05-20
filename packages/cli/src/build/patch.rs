@@ -905,7 +905,32 @@ pub fn create_undefined_symbol_stub(
             // Unfortunately this isn't simply cross-platform, so we need to handle Unix and Windows
             // calling conventions separately. It also depends on the architecture, making it even more
             // complicated.
-            SymbolKind::Text => {
+            //
+            // Rust code typically generates Tls symbols as functions (text), so we handle them as jumps too.
+            // Figured this out by checking the disassembly of the symbols causing the violation.
+            // ```
+            // __ZN17crossbeam_channel5waker17current_thread_id9THREAD_ID29_$u7b$$u7b$constant$u7d$$u7d$28_$u7b$$u7b$closure$u7d$$u7d$17h33618d877d86bb77E:
+            //    stp     x20, x19, [sp, #-0x20]!
+            //    stp     x29, x30, [sp, #0x10]
+            //    add     x29, sp, #0x10
+            //    adrp    x19, 21603 ; 0x1054bd000
+            //    add     x19, x19, #0x998
+            //    ldr     x20, [x19]
+            //    mov     x0, x19
+            //    blr     x20
+            //    ldr     x8, [x0]
+            //    cbz     x8, 0x10005acc0
+            //    mov     x0, x19
+            //    blr     x20
+            //    ldp     x29, x30, [sp, #0x10]
+            //    ldp     x20, x19, [sp], #0x20
+            //    ret
+            //    mov     x0, x19
+            //    blr     x20
+            //    bl      __ZN3std3sys12thread_local6native4lazy20Storage$LT$T$C$D$GT$10initialize17h818476638edff4e6E
+            //    b       0x10005acac
+            // ```
+            SymbolKind::Text | SymbolKind::Tls => {
                 let jump_asm = match triple.operating_system {
                     // The windows ABI and calling convention is different than the SystemV ABI.
                     OperatingSystem::Windows => match triple.architecture {
@@ -1015,7 +1040,6 @@ pub fn create_undefined_symbol_stub(
                         _ => return Err(PatchError::UnsupportedPlatform(triple.to_string())),
                     },
                 };
-
                 let offset = obj.append_section_data(text_section, &jump_asm, 8);
                 obj.add_symbol(Symbol {
                     name: name.as_bytes()[name_offset..].to_vec(),
