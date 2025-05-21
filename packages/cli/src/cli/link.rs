@@ -122,7 +122,7 @@ impl LinkAction {
     /// The file will be given by the dx-magic-link-arg env var itself, so we use
     /// it both for determining if we should act as a linker and the for the file name itself.
     async fn run_link_inner(self) -> Result<()> {
-        let mut args: Vec<_> = std::env::args().skip(1).collect();
+        let mut args: Vec<_> = std::env::args().collect();
         if args.is_empty() {
             return Ok(());
         }
@@ -140,7 +140,7 @@ impl LinkAction {
                 let mut cmd = std::process::Command::new(linker);
                 match cfg!(target_os = "windows") {
                     true => cmd.arg(format!("@{}", &self.link_args_file.display())),
-                    false => cmd.args(args),
+                    false => cmd.args(args.iter().skip(1)),
                 };
                 let res = cmd.output().expect("Failed to run linker");
 
