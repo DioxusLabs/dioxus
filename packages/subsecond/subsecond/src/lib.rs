@@ -402,7 +402,11 @@ impl<A, M, F: HotFunction<A, M>> HotFn<A, M, F> {
     /// If this function is stale and can't be updated in place (ie, changes occurred above this call),
     /// then this function will emit an [`HotFnPanic`] which can be unwrapped and handled by next [`call`]
     /// instance.
-    pub fn try_call_with_ptr(&mut self, ptr: HotFnPtr, args: A) -> Result<F::Return, HotFnPanic> {
+    ///
+    /// # Safety
+    ///
+    /// The [`HotFnPtr`] must be to a function whose arguments layouts haven't changed.
+    pub unsafe fn try_call_with_ptr(&mut self, ptr: HotFnPtr, args: A) -> Result<F::Return, HotFnPanic> {
         if !cfg!(debug_assertions) {
             return Ok(self.inner.call_it(args));
         }
