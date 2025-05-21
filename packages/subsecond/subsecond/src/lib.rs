@@ -285,8 +285,22 @@ pub struct HotFnPanic {
 }
 
 /// A pointer to a hot patched function
+#[non_exhaustive]
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
 pub struct HotFnPtr(pub u64);
+
+impl HotFnPtr {
+    /// Create a new [`HotFnPtr`].
+    ///
+    /// The safe way to get one is through [`HotFn::ptr_address`].
+    ///
+    /// # Safety
+    ///
+    /// The underlying `u64` must point to a valid function.
+    pub unsafe fn new(index: u64) -> Self {
+        Self(index)
+    }
+}
 
 /// A hot-reloadable function.
 ///
