@@ -1605,6 +1605,13 @@ impl BuildRequest {
             let bytes = out_ar.into_inner().context("Failed to finalize archive")?;
             std::fs::write(&out_ar_path, bytes).context("Failed to write archive")?;
             tracing::debug!("Wrote fat archive to {:?}", out_ar_path);
+
+            // Run the ranlib command to index the archive. This slows down this process a bit,
+            // but is necessary for some linkers to work properly.
+            // We ignore its error in case it doesn't recognize the architecture
+            if let Some(ranlib) = self.select_ranlib() {
+                _ = Command::new(ranlib).arg(&out_ar_path).output().await;
+            }
         }
 
         compiler_rlibs.dedup();
@@ -3960,5 +3967,12 @@ r#" <script>
         };
 
         Ok(())
+    }
+
+    fn select_ranlib(&self) -> Option<PathBuf> {
+        // prefer the modern llvm-ranlib if they have it
+        which::which("llvm-ranlib")
+            .or_else(|_| which::which("ranlib"))
+            .ok()
     }
 }
