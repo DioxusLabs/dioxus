@@ -15,7 +15,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 use subsecond_types::{AddressMap, JumpTable};
-use target_lexicon::{Architecture, OperatingSystem, Triple};
+use target_lexicon::{Architecture, OperatingSystem, PointerWidth, Triple};
 use thiserror::Error;
 use walrus::{
     ConstExpr, DataKind, ElementItems, ElementKind, FunctionBuilder, FunctionId, FunctionKind,
@@ -83,6 +83,7 @@ pub struct CachedSymbol {
     pub kind: SymbolKind,
     pub is_undefined: bool,
     pub is_weak: bool,
+    pub size: u64,
 }
 
 impl PartialEq for HotpatchModuleCache {
@@ -137,6 +138,7 @@ impl HotpatchModuleCache {
                                     },
                                     is_undefined,
                                     is_weak: false,
+                                    size: 0,
                                 },
                             );
                         }
@@ -155,6 +157,7 @@ impl HotpatchModuleCache {
                                     kind: SymbolKind::Data,
                                     is_undefined,
                                     is_weak: false,
+                                    size: 0,
                                 },
                             );
                         }
@@ -256,6 +259,7 @@ impl HotpatchModuleCache {
                                 is_undefined: s.is_undefined(),
                                 is_weak: s.is_weak(),
                                 kind: s.kind(),
+                                size: s.size(),
                             },
                         ))
                     })
@@ -905,32 +909,7 @@ pub fn create_undefined_symbol_stub(
             // Unfortunately this isn't simply cross-platform, so we need to handle Unix and Windows
             // calling conventions separately. It also depends on the architecture, making it even more
             // complicated.
-            //
-            // Rust code typically generates Tls symbols as functions (text), so we handle them as jumps too.
-            // Figured this out by checking the disassembly of the symbols causing the violation.
-            // ```
-            // __ZN17crossbeam_channel5waker17current_thread_id9THREAD_ID29_$u7b$$u7b$constant$u7d$$u7d$28_$u7b$$u7b$closure$u7d$$u7d$17h33618d877d86bb77E:
-            //    stp     x20, x19, [sp, #-0x20]!
-            //    stp     x29, x30, [sp, #0x10]
-            //    add     x29, sp, #0x10
-            //    adrp    x19, 21603 ; 0x1054bd000
-            //    add     x19, x19, #0x998
-            //    ldr     x20, [x19]
-            //    mov     x0, x19
-            //    blr     x20
-            //    ldr     x8, [x0]
-            //    cbz     x8, 0x10005acc0
-            //    mov     x0, x19
-            //    blr     x20
-            //    ldp     x29, x30, [sp, #0x10]
-            //    ldp     x20, x19, [sp], #0x20
-            //    ret
-            //    mov     x0, x19
-            //    blr     x20
-            //    bl      __ZN3std3sys12thread_local6native4lazy20Storage$LT$T$C$D$GT$10initialize17h818476638edff4e6E
-            //    b       0x10005acac
-            // ```
-            SymbolKind::Text | SymbolKind::Tls => {
+            SymbolKind::Text => {
                 let jump_asm = match triple.operating_system {
                     // The windows ABI and calling convention is different than the SystemV ABI.
                     OperatingSystem::Windows => match triple.architecture {
@@ -1049,6 +1028,75 @@ pub fn create_undefined_symbol_stub(
                     kind: SymbolKind::Text,
                     weak: false,
                     section: SymbolSection::Section(text_section),
+                    flags: object::SymbolFlags::None,
+                });
+            }
+
+            // Rust code typically generates Tls accessors as functions (text), but they are referenced
+            // indirectly as data symbols. We end up handling this by adding the TLS symbol as a data
+            // symbol with the initializer as the address of the original tls initializer. That way
+            // if new TLS are added at runtime, they get initialized properly, but otherwise, the
+            // tls initialization check (cbz) properly skips re-initialization on patches.
+            //
+            // ```
+            // __ZN17crossbeam_channel5waker17current_thread_id9THREAD_ID29_$u7b$$u7b$constant$u7d$$u7d$28_$u7b$$u7b$closure$u7d$$u7d$17h33618d877d86bb77E:
+            //    stp     x20, x19, [sp, #-0x20]!
+            //    stp     x29, x30, [sp, #0x10]
+            //    add     x29, sp, #0x10
+            //    adrp    x19, 21603 ; 0x1054bd000
+            //    add     x19, x19, #0x998
+            //    ldr     x20, [x19]
+            //    mov     x0, x19
+            //    blr     x20
+            //    ldr     x8, [x0]
+            //    cbz     x8, 0x10005acc0
+            //    mov     x0, x19
+            //    blr     x20
+            //    ldp     x29, x30, [sp, #0x10]
+            //    ldp     x20, x19, [sp], #0x20
+            //    ret
+            //    mov     x0, x19
+            //    blr     x20
+            //    bl      __ZN3std3sys12thread_local6native4lazy20Storage$LT$T$C$D$GT$10initialize17h818476638edff4e6E
+            //    b       0x10005acac
+            // ```
+            SymbolKind::Tls => {
+                let tls_section = obj.section_id(StandardSection::Tls);
+
+                let pointer_width = match triple.pointer_width().unwrap() {
+                    PointerWidth::U16 => 2,
+                    PointerWidth::U32 => 4,
+                    PointerWidth::U64 => 8,
+                };
+
+                let size = if sym.size == 0 {
+                    pointer_width
+                } else {
+                    sym.size
+                };
+
+                let align = size.min(pointer_width).next_power_of_two();
+                let mut init = vec![0u8; size as usize];
+
+                // write the contents of the symbol to the init vec
+                init.iter_mut()
+                    .zip(match triple.endianness() {
+                        Ok(target_lexicon::Endianness::Little) => abs_addr.to_le_bytes(),
+                        Ok(target_lexicon::Endianness::Big) => abs_addr.to_be_bytes(),
+                        _ => return Err(PatchError::UnsupportedPlatform(triple.to_string())),
+                    })
+                    .for_each(|(b, v)| *b = v);
+
+                let offset = obj.append_section_data(tls_section, &init, align);
+
+                obj.add_symbol(Symbol {
+                    name: name.as_bytes()[name_offset..].to_vec(),
+                    value: offset, // offset inside .tdata
+                    size,
+                    scope: SymbolScope::Linkage,
+                    kind: SymbolKind::Tls,
+                    weak: false,
+                    section: SymbolSection::Section(tls_section),
                     flags: object::SymbolFlags::None,
                 });
             }
