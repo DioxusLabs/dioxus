@@ -441,6 +441,7 @@ pub unsafe fn apply_patch(mut table: JumpTable) -> Result<(), PatchError> {
         // cross-platform version of `__mh_execute_header` on macOS that sets a reference point for the
         // jump table.
         let old_offset = __aslr_reference() - table.aslr_reference as usize;
+        // let old_offset = __aslr_reference() - table.aslr_reference as usize;
 
         // Use the `main` symbol as a sentinel for the loaded library. Might want to move away
         // from this at some point, or make it configurable
@@ -614,14 +615,8 @@ pub enum PatchError {
     AndroidMemfd(String),
 }
 
-/// This function returns its own address, providing a stable reference point for hot-patch engine
-/// to hook onto. If you were to write an object file for this function, it would amount to:
-///
-/// ```asm
-/// __aslr_reference:
-///         mov     rax, qword ptr [rip + __aslr_reference@GOTPCREL] // notice the @GOTPCREL relocation
-///         ret
-/// ```
+/// This function returns the address of the main function in the current executable. This is used as
+/// an anchor to reference the current executable's base address.
 ///
 /// The point here being that we have a stable address both at runtime and compile time, making it
 /// possible to calculate the ASLR offset from within the process to correct the jump table.
@@ -629,7 +624,35 @@ pub enum PatchError {
 #[inline(never)]
 #[no_mangle]
 pub extern "C" fn __aslr_reference() -> usize {
-    __aslr_reference as *const () as usize
+    #[cfg(target_arch = "wasm32")]
+    return 0;
+
+    #[cfg(windows)]
+    return unsafe {
+        use std::ffi::CString;
+
+        // Windows API declarations
+        extern "system" {
+            fn GetModuleHandleA(lpModuleName: *const i8) -> *mut std::ffi::c_void;
+            fn GetProcAddress(
+                hModule: *mut std::ffi::c_void,
+                lpProcName: *const i8,
+            ) -> *mut std::ffi::c_void;
+        }
+
+        // Get handle to the current executable (NULL gets the main module)
+        let module_handle = GetModuleHandleA(std::ptr::null());
+
+        // Get the address of the "main" symbol
+        let main_symbol = GetProcAddress(module_handle, c"main".as_ptr() as _);
+
+        main_symbol as _
+    };
+
+    #[cfg(not(target_arch = "wasm32"))]
+    unsafe {
+        libc::dlsym(libc::RTLD_DEFAULT, c"main".as_ptr() as _) as _
+    }
 }
 
 /// On Android, we can't dlopen libraries that aren't placed inside /data/data/<package_name>/lib/

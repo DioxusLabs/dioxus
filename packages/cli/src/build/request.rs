@@ -1256,6 +1256,7 @@ impl BuildRequest {
         //     -nodefaultlibs
         //     -Wl,-all_load
         // ```
+        let mut dylibs = vec![];
         let mut object_files = args
             .iter()
             .filter(|arg| arg.ends_with(".rcgu.o"))
@@ -1289,6 +1290,17 @@ impl BuildRequest {
             let patch_file = self.main_exe().with_file_name("stub.o");
             std::fs::write(&patch_file, stub_bytes)?;
             object_files.push(patch_file);
+
+            // Add the dylibs/sos to the linker args
+            // Make sure to use the one in the bundle
+            for arg in &rustc_args.link_args {
+                if arg.ends_with(".dylib") || arg.ends_with(".so") || arg.ends_with(".dll") {
+                    dylibs.push(
+                        self.frameworks_folder()
+                            .join(PathBuf::from(arg).file_name().unwrap()),
+                    );
+                }
+            }
         }
 
         // And now we can run the linker with our new args
@@ -1307,6 +1319,7 @@ impl BuildRequest {
         // does it since it uses llvm-objcopy into the `target/debug/` folder.
         let res = Command::new(linker)
             .args(object_files.iter())
+            .args(dylibs.iter())
             .args(self.thin_link_args(&args)?)
             .args(out_arg)
             .env_clear()
