@@ -1046,7 +1046,7 @@ pub fn create_undefined_symbol_stub(
                     value: offset,
                     size: jump_asm.len() as u64,
                     scope: SymbolScope::Linkage,
-                    kind: SymbolKind::Text,
+                    kind: sym.kind,
                     weak: false,
                     section: SymbolSection::Section(text_section),
                     flags: object::SymbolFlags::None,
