@@ -64,7 +64,17 @@
 //! Subsecond is only enabled when debug_assertions are enabled so you can safely ship your application
 //! with Subsecond enabled without worrying about the performance overhead.
 //!
-//! ## Globals and statics
+//! ## Workspace support
+//!
+//! Subsecond currently only patches the "tip" crate - ie the crate in which your `main.rs` is located.
+//! Changes to crates outside this crate will be ignored, which can be confusing. We plan to add full
+//! workspace support in the future, but for now be aware of this limitation. Crate setups that have
+//! a `main.rs` importing a `lib.rs` won't patch sensibly since the crate becomes a library for itself.
+//!
+//! This is due to limitations in rustc itself where the build-graph is non-deterministic and changes
+//! to functions that forward generics can cause a cascade of codegen changes.
+//!
+//! ## Globals, statics, and thread-locals
 //!
 //! Subsecond *does* support hot-reloading of globals, statics, and thread locals. However, there are several limitations:
 //!
@@ -75,6 +85,12 @@
 //! Subsecond purposefully handles statics this way since many libraries like Dioxus and Tokio rely
 //! on persistent global runtimes.
 //!
+//! HUGE WARNING: Currently, thread-locals in the "tip" crate (the one being patched) will seemingly
+//! reset to their initial value on new patches. This is because we don't currently bind thread-locals
+//! in the patches to their original addresses in the main program. If you rely on thread-locals heavily
+//! in your tip crate, you should be aware of this. Sufficiently complex setups might crash or even
+//! segfault. We plan to fix this in the future, but for now, you should be aware of this limitation.
+//!
 //! ## Struct layout and alignment
 //!
 //! Subsecond currently does not support hot-reloading of structs. This is because the generated code
@@ -84,13 +100,26 @@
 //! To mitigate this, framework authors can integrate with Subsecond to either dispose of the old struct
 //! or to re-allocate the struct in a way that is compatible with the new layout. This is called "re-instancing."
 //!
-//! Because Subsecond performs a safe panic if a stale function is called, you should never witness
-//! a crash due to a struct layout change. However, changing a struct's layout will likely cause a
-//! re-instantiation of the struct and potentially a loss of state.
+//! In practice, frameworks that implement subsecond patching properly will throw out the old state
+//! and thus you should never witness a segfault due to misalignment or size changes. Frameworks are
+//! encouraged to aggressively dispose of old state that might cause size and alignment changes.
 //!
 //! We'd like to lift this limitation in the future by providing utilities to re-instantiate structs,
 //! but for now it's up to the framework authors to handle this. For example, Dioxus apps simply throw
 //! out the old state and rebuild it from scratch.
+//!
+//! ## Pointer versioning
+//!
+//! Currently, Subsecond does not "version" function pointers. We have plans to provide this metadata
+//! so framework authors can safely memoize changes without much runtime overhead. Frameworks like
+//! Dioxus and Bevy circumvent this issue by using the TypeID of structs passed to hot functions as
+//! well as the `ptr_address` method on [`HotFn`] to determine if the function pointer has changed.
+//!
+//! Currently, the `ptr_address` method will always return the most up-to-date version of the function
+//! even if the function contents itself did not change. In essence, this is equivalent to a version
+//! of the function where every function is considered "new." This means that framework authors who
+//! integrate re-instancing in their apps might dispose of old state too aggressively. For now, this
+//! is the safer and more practical approach.
 //!
 //! ## Nesting Calls
 //!
