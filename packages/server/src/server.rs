@@ -67,11 +67,11 @@ pub trait DioxusRouterExt<S>: DioxusRouterFnExt<S> {
         Self: Sized;
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl<S> DioxusRouterExt<S> for Router<S>
 where
     S: Send + Sync + Clone + 'static,
 {
-    #[cfg(not(target_arch = "wasm32"))]
     fn serve_static_assets(mut self) -> Self {
         use tower_http::services::{ServeDir, ServeFile};
 
