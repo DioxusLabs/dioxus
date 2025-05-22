@@ -44,8 +44,8 @@ pub enum LinkerFlavor {
     Gnu,
     Darwin,
     WasmLld,
-    Unix,
     Msvc,
+    Unsupported, // a catch-all for unsupported linkers, usually the stripped-down unix ones
 }
 
 impl LinkAction {

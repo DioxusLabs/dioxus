@@ -316,8 +316,9 @@
 //! - xbuild: <https://github.com/rust-mobile/xbuild/blob/master/xbuild/src/command/build.rs>
 
 use crate::{
-    AndroidTools, BuildContext, DioxusConfig, Error, LinkAction, Platform, Result, RustcArgs,
-    TargetArgs, TraceSrc, WasmBindgen, WasmOptConfig, Workspace, DX_RUSTC_WRAPPER_ENV_VAR,
+    AndroidTools, BuildContext, DioxusConfig, Error, LinkAction, LinkerFlavor, Platform, Result,
+    RustcArgs, TargetArgs, TraceSrc, WasmBindgen, WasmOptConfig, Workspace,
+    DX_RUSTC_WRAPPER_ENV_VAR,
 };
 use anyhow::Context;
 use cargo_metadata::diagnostic::Diagnostic;
@@ -643,11 +644,22 @@ impl BuildRequest {
             },
         };
 
-        let custom_linker = if platform == Platform::Android {
+        let cargo_config = cargo_config2::Config::load().unwrap();
+
+        let mut custom_linker = if platform == Platform::Android {
             Some(workspace.android_tools()?.android_cc(&triple))
         } else {
             None
         };
+
+        // Respect the custom linkers defined in the cargo config
+        if let Ok(Some(linker)) = cargo_config.linker(triple.to_string()) {
+            custom_linker = Some(linker);
+        }
+
+        if let Some(linker) = &custom_linker {
+            tracing::debug!("Using custom linker: {}", linker.display());
+        }
 
         // Set up some tempfiles so we can do some IPC between us and the linker/rustc wrapper (which is occasionally us!)
         let link_args_file = Arc::new(
@@ -1371,12 +1383,9 @@ impl BuildRequest {
     /// This is basically just stripping away the rlibs and other libraries that will be satisfied
     /// by our stub step.
     fn thin_link_args(&self, original_args: &[&str]) -> Result<Vec<String>> {
-        use target_lexicon::OperatingSystem;
-
-        let triple = self.triple.clone();
         let mut out_args = vec![];
 
-        match triple.operating_system {
+        match self.linker_flavor() {
             // wasm32-unknown-unknown -> use wasm-ld (gnu-lld)
             //
             // We need to import a few things - namely the memory and ifunc table.
@@ -1396,7 +1405,7 @@ impl BuildRequest {
             // I think we can make relocation-model=pic work for non-wasm platforms, enabling
             // fully relocatable modules with no host coordination in lieu of sending out
             // the aslr slide at runtime.
-            OperatingSystem::Unknown if self.platform == Platform::Web => {
+            LinkerFlavor::WasmLld => {
                 out_args.extend([
                     "--fatal-warnings".to_string(),
                     "--verbose".to_string(),
@@ -1417,7 +1426,7 @@ impl BuildRequest {
             //
             // Most importantly, we want to pass `-dylib` to both CC and the linker to indicate that
             // we want to generate the shared library instead of an executable.
-            OperatingSystem::IOS(_) | OperatingSystem::MacOSX(_) | OperatingSystem::Darwin(_) => {
+            LinkerFlavor::Darwin => {
                 out_args.extend(["-Wl,-dylib".to_string()]);
 
                 // Preserve the original args. We only preserve:
@@ -1440,7 +1449,7 @@ impl BuildRequest {
             // android/linux need to be compatible with lld
             //
             // android currently drags along its own libraries and other zany flags
-            OperatingSystem::Linux => {
+            LinkerFlavor::Gnu => {
                 out_args.extend([
                     "-shared".to_string(),
                     "-Wl,--eh-frame-hdr".to_string(),
@@ -1470,7 +1479,7 @@ impl BuildRequest {
                 }
             }
 
-            OperatingSystem::Windows => {
+            LinkerFlavor::Msvc => {
                 out_args.extend([
                     "shlwapi.lib".to_string(),
                     "kernel32.lib".to_string(),
@@ -1488,7 +1497,9 @@ impl BuildRequest {
                 ]);
             }
 
-            _ => return Err(anyhow::anyhow!("Unsupported platform for thin linking").into()),
+            LinkerFlavor::Unsupported => {
+                return Err(anyhow::anyhow!("Unsupported platform for thin linking").into())
+            }
         }
 
         let extract_value = |arg: &str| -> Option<String> {
@@ -1533,15 +1544,12 @@ impl BuildRequest {
                 .unwrap_or(0),
         ));
 
-        let extension = match self.triple.operating_system {
-            OperatingSystem::Darwin(_) => "dylib",
-            OperatingSystem::MacOSX(_) => "dylib",
-            OperatingSystem::IOS(_) => "dylib",
-            OperatingSystem::Windows => "dll",
-            OperatingSystem::Linux => "so",
-            OperatingSystem::Wasi => "wasm",
-            OperatingSystem::Unknown if self.platform == Platform::Web => "wasm",
-            _ => "",
+        let extension = match self.linker_flavor() {
+            LinkerFlavor::Darwin => "dylib",
+            LinkerFlavor::Gnu => "so",
+            LinkerFlavor::WasmLld => "wasm",
+            LinkerFlavor::Msvc => "dll",
+            LinkerFlavor::Unsupported => "",
         };
 
         path.with_extension(extension)
@@ -1682,8 +1690,8 @@ impl BuildRequest {
         // We also need to insert the -force_load flag to force the linker to load the archive
         let mut args = rustc_args.link_args.clone();
         if let Some(first_rlib) = args.iter().position(|arg| arg.ends_with(".rlib")) {
-            match self.triple.operating_system {
-                OperatingSystem::Unknown if self.platform == Platform::Web => {
+            match self.linker_flavor() {
+                LinkerFlavor::WasmLld => {
                     // We need to use the --whole-archive flag for wasm
                     args[first_rlib] = "--whole-archive".to_string();
                     args.insert(first_rlib + 1, out_ar_path.display().to_string());
@@ -1695,9 +1703,7 @@ impl BuildRequest {
                         args.insert(first_rlib + 3, rlib.display().to_string());
                     }
                 }
-
-                // Subtle difference - on linux and android we go through clang and thus pass `-Wl,` prefix
-                OperatingSystem::Linux => {
+                LinkerFlavor::Gnu => {
                     args[first_rlib] = "-Wl,--whole-archive".to_string();
                     args.insert(first_rlib + 1, out_ar_path.display().to_string());
                     args.insert(first_rlib + 2, "-Wl,--no-whole-archive".to_string());
@@ -1708,8 +1714,7 @@ impl BuildRequest {
                         args.insert(first_rlib + 3, rlib.display().to_string());
                     }
                 }
-
-                OperatingSystem::Darwin(_) | OperatingSystem::IOS(_) => {
+                LinkerFlavor::Darwin => {
                     args[first_rlib] = "-Wl,-force_load".to_string();
                     args.insert(first_rlib + 1, out_ar_path.display().to_string());
                     args.retain(|arg| !arg.ends_with(".rlib"));
@@ -1721,8 +1726,7 @@ impl BuildRequest {
 
                     args.insert(first_rlib + 3, "-Wl,-all_load".to_string());
                 }
-
-                OperatingSystem::Windows => {
+                LinkerFlavor::Msvc => {
                     args[first_rlib] = format!("/WHOLEARCHIVE:{}", out_ar_path.display());
                     args.retain(|arg| !arg.ends_with(".rlib"));
 
@@ -1733,8 +1737,9 @@ impl BuildRequest {
 
                     args.insert(first_rlib, "/HIGHENTROPYVA:NO".to_string());
                 }
-
-                _ => {}
+                LinkerFlavor::Unsupported => {
+                    tracing::error!("Unsupported platform for fat linking");
+                }
             };
         }
 
@@ -1802,6 +1807,44 @@ impl BuildRequest {
         Ok(())
     }
 
+    fn linker_flavor(&self) -> LinkerFlavor {
+        if let Some(custom) = self.custom_linker.as_ref() {
+            let name = custom.file_name().unwrap().to_ascii_lowercase();
+            match name.to_str() {
+                Some("lld-link") => return LinkerFlavor::Msvc,
+                Some("lld-link.exe") => return LinkerFlavor::Msvc,
+                Some("wasm-ld") => return LinkerFlavor::WasmLld,
+                Some("ld64.lld") => return LinkerFlavor::Darwin,
+                Some("ld.lld") => return LinkerFlavor::Gnu,
+                Some("ld.gold") => return LinkerFlavor::Gnu,
+                Some("mold") => return LinkerFlavor::Gnu,
+                _ => {}
+            }
+        }
+
+        match self.triple.environment {
+            target_lexicon::Environment::Gnu
+            | target_lexicon::Environment::Gnuabi64
+            | target_lexicon::Environment::Gnueabi
+            | target_lexicon::Environment::Gnueabihf
+            | target_lexicon::Environment::GnuLlvm => LinkerFlavor::Gnu,
+            target_lexicon::Environment::Musl => LinkerFlavor::Gnu,
+            target_lexicon::Environment::Android => LinkerFlavor::Gnu,
+            target_lexicon::Environment::Msvc => LinkerFlavor::Msvc,
+            target_lexicon::Environment::Macabi => LinkerFlavor::Darwin,
+            _ => match self.triple.operating_system {
+                OperatingSystem::Darwin(_) => LinkerFlavor::Darwin,
+                OperatingSystem::Linux => LinkerFlavor::Gnu,
+                OperatingSystem::Windows => LinkerFlavor::Msvc,
+                _ => match self.triple.architecture {
+                    target_lexicon::Architecture::Wasm32 => LinkerFlavor::WasmLld,
+                    target_lexicon::Architecture::Wasm64 => LinkerFlavor::WasmLld,
+                    _ => LinkerFlavor::Unsupported,
+                },
+            },
+        }
+    }
+
     /// Select the linker to use for this platform.
     ///
     /// We prefer to use the rust-lld linker when we can since it's usually there.
@@ -1825,25 +1868,25 @@ impl BuildRequest {
             return Ok(PathBuf::from(linker));
         }
 
-        let cc = match self.triple.operating_system {
-            OperatingSystem::Unknown if self.platform == Platform::Web => self.workspace.wasm_ld(),
+        if let Some(linker) = self.custom_linker.clone() {
+            return Ok(linker);
+        }
 
-            // The android clang linker is *special* and has some android-specific flags that we need
-            //
-            // Note that this is *clang*, not `lld`.
-            OperatingSystem::Linux if self.platform == Platform::Android => {
-                self.workspace.android_tools()?.android_cc(&self.triple)
-            }
+        let cc = match self.linker_flavor() {
+            LinkerFlavor::WasmLld => self.workspace.wasm_ld(),
 
             // On macOS, we use the system linker since it's usually there.
             // We could also use `lld` here, but it might not be installed by default.
             //
             // Note that this is *clang*, not `lld`.
-            OperatingSystem::Darwin(_) | OperatingSystem::IOS(_) => self.workspace.cc(),
+            LinkerFlavor::Darwin => self.workspace.cc(),
+
+            // On Linux, we use the system linker since it's usually there.
+            LinkerFlavor::Gnu => self.workspace.cc(),
 
             // On windows, instead of trying to find the system linker, we just go with the lld.link
             // that rustup provides. It's faster and more stable then reyling on link.exe in path.
-            OperatingSystem::Windows => self.workspace.lld_link(),
+            LinkerFlavor::Msvc => self.workspace.lld_link(),
 
             // The rest of the platforms use `cc` as the linker which should be available in your path,
             // provided you have build-tools setup. On mac/linux this is the default, but on Windows
@@ -1857,7 +1900,7 @@ impl BuildRequest {
             // Note that "cc" is *not* a linker. It's a compiler! The arguments we pass need to be in
             // the form of `-Wl,<args>` for them to make it to the linker. This matches how rust does it
             // which is confusing.
-            _ => self.workspace.cc(),
+            LinkerFlavor::Unsupported => self.workspace.cc(),
         };
 
         Ok(cc)
