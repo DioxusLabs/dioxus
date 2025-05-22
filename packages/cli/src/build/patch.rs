@@ -15,7 +15,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 use subsecond_types::{AddressMap, JumpTable};
-use target_lexicon::{Architecture, OperatingSystem, Triple};
+use target_lexicon::{Architecture, OperatingSystem, PointerWidth, Triple};
 use thiserror::Error;
 use walrus::{
     ConstExpr, DataKind, ElementItems, ElementKind, FunctionBuilder, FunctionId, FunctionKind,
@@ -758,10 +758,13 @@ pub fn create_undefined_symbol_stub(
     let mut undefined_symbols = HashSet::new();
     let mut defined_symbols = HashSet::new();
 
+    let mut symbol_map = HashMap::new();
+
     for path in sorted {
         let bytes = std::fs::read(path).with_context(|| format!("failed to read {:?}", path))?;
         let file = File::parse(bytes.deref() as &[u8])?;
         for symbol in file.symbols() {
+            symbol_map.insert(symbol.name()?.to_string(), symbol.size());
             if symbol.is_undefined() {
                 undefined_symbols.insert(symbol.name()?.to_string());
             } else if symbol.is_global() {
@@ -930,7 +933,7 @@ pub fn create_undefined_symbol_stub(
             //    bl      __ZN3std3sys12thread_local6native4lazy20Storage$LT$T$C$D$GT$10initialize17h818476638edff4e6E
             //    b       0x10005acac
             // ```
-            SymbolKind::Text | SymbolKind::Tls => {
+            SymbolKind::Text => {
                 let jump_asm = match triple.operating_system {
                     // The windows ABI and calling convention is different than the SystemV ABI.
                     OperatingSystem::Windows => match triple.architecture {
@@ -1041,14 +1044,47 @@ pub fn create_undefined_symbol_stub(
                     },
                 };
                 let offset = obj.append_section_data(text_section, &jump_asm, 8);
+
                 obj.add_symbol(Symbol {
                     name: name.as_bytes()[name_offset..].to_vec(),
                     value: offset,
                     size: jump_asm.len() as u64,
                     scope: SymbolScope::Linkage,
-                    kind: sym.kind,
+                    kind: SymbolKind::Text,
                     weak: false,
                     section: SymbolSection::Section(text_section),
+                    flags: object::SymbolFlags::None,
+                });
+            }
+            SymbolKind::Tls => {
+                let tls_section = obj.section_id(StandardSection::Tls);
+
+                let pointer_width = |triple: &Triple| match triple.pointer_width().unwrap() {
+                    PointerWidth::U16 => 2,
+                    PointerWidth::U32 => 4,
+                    PointerWidth::U64 => 8,
+                };
+
+                let original_size = symbol_map.get(&name).unwrap();
+
+                let size = if *original_size == 0 {
+                    pointer_width(triple)
+                } else {
+                    *original_size
+                };
+                let align = size.min(pointer_width(triple)).next_power_of_two();
+
+                let init = vec![0u8; size as usize];
+                let offset = obj.append_section_data(tls_section, &init, align);
+
+                obj.add_symbol(Symbol {
+                    name: name.as_bytes()[name_offset..].to_vec(),
+                    value: offset, // offset inside .tdata
+                    size,
+                    scope: SymbolScope::Linkage,
+                    kind: SymbolKind::Tls,
+                    weak: false,
+                    section: SymbolSection::Section(tls_section),
                     flags: object::SymbolFlags::None,
                 });
             }
