@@ -1848,6 +1848,8 @@ impl BuildRequest {
             target_lexicon::Environment::Macabi => LinkerFlavor::Darwin,
             _ => match self.triple.operating_system {
                 OperatingSystem::Darwin(_) => LinkerFlavor::Darwin,
+                OperatingSystem::IOS(_) => LinkerFlavor::Darwin,
+                OperatingSystem::MacOSX(_) => LinkerFlavor::Darwin,
                 OperatingSystem::Linux => LinkerFlavor::Gnu,
                 OperatingSystem::Windows => LinkerFlavor::Msvc,
                 _ => match self.triple.architecture {
