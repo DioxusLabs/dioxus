@@ -678,14 +678,11 @@ pub enum PatchError {
 /// possible to calculate the ASLR offset from within the process to correct the jump table.
 #[doc(hidden)]
 pub fn aslr_reference() -> usize {
-    #[cfg(target_arch = "wasm32")]
+    #[cfg(target_family = "wasm")]
     return 0;
 
     #[cfg(windows)]
     return unsafe {
-        use std::ffi::CString;
-
-        // Windows API declarations
         extern "system" {
             fn GetModuleHandleA(lpModuleName: *const i8) -> *mut std::ffi::c_void;
             fn GetProcAddress(
@@ -694,16 +691,10 @@ pub fn aslr_reference() -> usize {
             ) -> *mut std::ffi::c_void;
         }
 
-        // Get handle to the current executable (NULL gets the main module)
-        let module_handle = GetModuleHandleA(std::ptr::null());
-
-        // Get the address of the "main" symbol
-        let main_symbol = GetProcAddress(module_handle, c"main".as_ptr() as _);
-
-        main_symbol as _
+        GetProcAddress(GetModuleHandleA(std::ptr::null()), c"main".as_ptr() as _) as _
     };
 
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(not(target_family = "wasm"))]
     unsafe {
         libc::dlsym(libc::RTLD_DEFAULT, c"main".as_ptr() as _) as _
     }

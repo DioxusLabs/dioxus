@@ -1815,6 +1815,10 @@ impl BuildRequest {
         Ok(())
     }
 
+    /// Automatically detect the linker flavor based on the target triple and any custom linkers.
+    ///
+    /// This tries to replicate what rustc does when selecting the linker flavor based on the linker
+    /// and triple.
     fn linker_flavor(&self) -> LinkerFlavor {
         if let Some(custom) = self.custom_linker.as_ref() {
             let name = custom.file_name().unwrap().to_ascii_lowercase();
@@ -1826,6 +1830,8 @@ impl BuildRequest {
                 Some("ld.lld") => return LinkerFlavor::Gnu,
                 Some("ld.gold") => return LinkerFlavor::Gnu,
                 Some("mold") => return LinkerFlavor::Gnu,
+                Some("sold") => return LinkerFlavor::Gnu,
+                Some("wild") => return LinkerFlavor::Gnu,
                 _ => {}
             }
         }
