@@ -22,10 +22,16 @@ export function setAttributeInner(
   // A few attributes are need to be set with either boolean values or require some sort of translation
   switch (field) {
     case "value":
-      // @ts-ignore
-      if (node.value !== value) {
+      // If this is a option element, set the attribute normally
+      if (node.tagName === "OPTION") {
+        setAttributeDefault(node, field, value);
+      } else {
+        // Otherwise, set the property if it has changed
         // @ts-ignore
-        node.value = value;
+        if (node.value !== value) {
+          // @ts-ignore
+          node.value = value;
+        }
       }
       break;
 
