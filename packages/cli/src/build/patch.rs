@@ -246,7 +246,6 @@ impl HotpatchModuleCache {
                     ..Default::default()
                 }
             }
-
             _ => {
                 let old_bytes = std::fs::read(original)?;
                 let obj = File::parse(&old_bytes as &[u8])?;
@@ -1104,8 +1103,6 @@ pub fn create_undefined_symbol_stub(
 
             // We just assume all non-text symbols are data (globals, statics, etc)
             _ => {
-                tracing::debug!("Unknown symbol kind: {:?} for {}", sym.kind, name);
-
                 // darwin statics show up as "unknown" symbols even though they are data symbols.
                 let kind = match sym.kind {
                     SymbolKind::Unknown => SymbolKind::Data,
