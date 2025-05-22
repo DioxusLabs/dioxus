@@ -378,7 +378,7 @@ pub(crate) struct BuildRequest {
     pub(crate) extra_cargo_args: Vec<String>,
     pub(crate) extra_rustc_args: Vec<String>,
     pub(crate) no_default_features: bool,
-    pub(crate) custom_target_dir: Option<PathBuf>,
+    pub(crate) target_dir: PathBuf,
     pub(crate) skip_assets: bool,
     pub(crate) wasm_split: bool,
     pub(crate) debug_symbols: bool,
@@ -644,6 +644,8 @@ impl BuildRequest {
             },
         };
 
+        // Somethings we override are also present in the user's config.
+        // If we can't get them by introspecting cargo, then we need to get them from the config
         let cargo_config = cargo_config2::Config::load().unwrap();
 
         let mut custom_linker = if platform == Platform::Android {
@@ -652,14 +654,15 @@ impl BuildRequest {
             None
         };
 
-        // Respect the custom linkers defined in the cargo config
         if let Ok(Some(linker)) = cargo_config.linker(triple.to_string()) {
             custom_linker = Some(linker);
         }
 
-        if let Some(linker) = &custom_linker {
-            tracing::debug!("Using custom linker: {}", linker.display());
-        }
+        let target_dir = std::env::var("CARGO_TARGET_DIR")
+            .ok()
+            .map(PathBuf::from)
+            .or_else(|| cargo_config.build.target_dir.clone())
+            .unwrap_or_else(|| workspace.workspace_root().join("target"));
 
         // Set up some tempfiles so we can do some IPC between us and the linker/rustc wrapper (which is occasionally us!)
         let link_args_file = Arc::new(
@@ -689,11 +692,16 @@ impl BuildRequest {
                 • link_args_file: {},
                 • link_err_file: {},
                 • rustc_wrapper_args_file: {},
-                • session_cache_dir: {}"#,
+                • session_cache_dir: {}
+                • linker: {:?}
+                • target_dir: {:?}
+                "#,
             link_args_file.path().display(),
             link_err_file.path().display(),
             rustc_wrapper_args_file.path().display(),
             session_cache_dir.path().display(),
+            custom_linker,
+            target_dir,
         );
 
         Ok(Self {
@@ -708,7 +716,7 @@ impl BuildRequest {
             workspace,
             config,
             enabled_platforms,
-            custom_target_dir: None,
+            target_dir,
             custom_linker,
             link_args_file,
             link_err_file,
@@ -2184,10 +2192,6 @@ impl BuildRequest {
             }));
         }
 
-        if let Some(target_dir) = self.custom_target_dir.as_ref() {
-            env_vars.push(("CARGO_TARGET_DIR", target_dir.display().to_string()));
-        }
-
         // If this is a release build, bake the base path and title into the binary with env vars.
         // todo: should we even be doing this? might be better being a build.rs or something else.
         if self.release {
@@ -2643,7 +2647,7 @@ impl BuildRequest {
     /// is "distributed" after building an application (configurable in the
     /// `Dioxus.toml`).
     fn internal_out_dir(&self) -> PathBuf {
-        let dir = self.workspace_dir().join("target").join("dx");
+        let dir = self.target_dir.join("dx");
         std::fs::create_dir_all(&dir).unwrap();
         dir
     }
