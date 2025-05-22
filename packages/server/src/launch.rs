@@ -163,7 +163,7 @@ async fn serve_server(
                                 }
 
                                 let hot_root = subsecond::HotFn::current(original_root);
-                                let new_root_addr = hot_root.ptr_address() as usize as *const ();
+                                let new_root_addr = hot_root.ptr_address().0 as usize as *const ();
                                 let new_root = unsafe {
                                     std::mem::transmute::<*const (), fn() -> Element>(new_root_addr)
                                 };
