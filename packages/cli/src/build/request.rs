@@ -726,9 +726,10 @@ impl BuildRequest {
             BuildMode::Thin {
                 aslr_reference,
                 cache,
+                rustc_args,
                 ..
             } => {
-                self.write_patch(ctx, *aslr_reference, &mut artifacts, cache)
+                self.write_patch(ctx, *aslr_reference, &mut artifacts, cache, rustc_args)
                     .await?;
             }
 
@@ -892,7 +893,7 @@ impl BuildRequest {
 
         // Fat builds need to be linked with the fat linker. Would also like to link here for thin builds
         if matches!(ctx.mode, BuildMode::Fat) {
-            self.run_fat_link(ctx, &exe).await?;
+            self.run_fat_link(ctx, &exe, &direct_rustc).await?;
         }
 
         let assets = self.collect_assets(&exe, ctx)?;
@@ -1135,6 +1136,7 @@ impl BuildRequest {
         aslr_reference: u64,
         artifacts: &mut BuildArtifacts,
         cache: &Arc<HotpatchModuleCache>,
+        rustc_args: &RustcArgs,
     ) -> Result<()> {
         ctx.status_hotpatching();
 
@@ -1251,6 +1253,8 @@ impl BuildRequest {
             .args(object_files.iter())
             .args(self.thin_link_args(&args)?)
             .args(out_arg)
+            .env_clear()
+            .envs(rustc_args.envs.iter().map(|(k, v)| (k, v)))
             .output()
             .await?;
 
@@ -1500,7 +1504,12 @@ impl BuildRequest {
     ///
     /// todo: I think we can traverse our immediate dependencies and inspect their symbols, unless they `pub use` a crate
     /// todo: we should try and make this faster with memmapping
-    pub(crate) async fn run_fat_link(&self, ctx: &BuildContext, exe: &Path) -> Result<()> {
+    pub(crate) async fn run_fat_link(
+        &self,
+        ctx: &BuildContext,
+        exe: &Path,
+        rustc_args: &RustcArgs,
+    ) -> Result<()> {
         ctx.status_starting_link();
 
         let raw_args = std::fs::read_to_string(self.link_args_file.path())
@@ -1691,6 +1700,8 @@ impl BuildRequest {
         let res = Command::new(linker)
             .args(args.iter().skip(1))
             .args(out_arg)
+            .env_clear()
+            .envs(rustc_args.envs.iter().map(|(k, v)| (k, v)))
             .output()
             .await?;
 
