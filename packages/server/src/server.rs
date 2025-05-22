@@ -116,11 +116,6 @@ where
         self
     }
 
-    #[cfg(target_arch = "wasm32")]
-    fn serve_static_assets(mut self) -> Self {
-        self
-    }
-
     fn serve_dioxus_application(self, cfg: ServeConfig, app: fn() -> Element) -> Self {
         // Add server functions and render index.html
         let server = self
