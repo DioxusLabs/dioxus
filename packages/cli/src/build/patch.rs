@@ -836,6 +836,7 @@ pub fn create_undefined_symbol_stub(
     // Get the offset from the main module and adjust the addresses by the slide
     let aslr_ref_address = symbol_table
         .get("_main")
+        .or_else(|| symbol_table.get("main"))
         .map(|s| s.address)
         .context("Failed to find _main symbol")?;
 

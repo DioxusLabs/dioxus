@@ -911,7 +911,11 @@ impl BuildRequest {
         let mode = ctx.mode.clone();
         let platform = self.platform;
 
-        tracing::debug!("Build completed successfully: {:?}", exe);
+        tracing::debug!(
+            "Build completed successfully in {}us: {:?}",
+            time_end.duration_since(time_start).unwrap().as_micros(),
+            exe
+        );
 
         Ok(BuildArtifacts {
             time_end,
