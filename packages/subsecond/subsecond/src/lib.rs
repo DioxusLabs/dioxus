@@ -435,7 +435,11 @@ impl<A, M, F: HotFunction<A, M>> HotFn<A, M, F> {
     /// # Safety
     ///
     /// The [`HotFnPtr`] must be to a function whose arguments layouts haven't changed.
-    pub unsafe fn try_call_with_ptr(&mut self, ptr: HotFnPtr, args: A) -> Result<F::Return, HotFnPanic> {
+    pub unsafe fn try_call_with_ptr(
+        &mut self,
+        ptr: HotFnPtr,
+        args: A,
+    ) -> Result<F::Return, HotFnPanic> {
         if !cfg!(debug_assertions) {
             return Ok(self.inner.call_it(args));
         }
@@ -491,11 +495,9 @@ pub unsafe fn apply_patch(mut table: JumpTable) -> Result<(), PatchError> {
             }
         }));
 
-        // Use the `__aslr_reference` symbol as a sentinel for the current executable. This is basically a
-        // cross-platform version of `__mh_execute_header` on macOS that sets a reference point for the
-        // jump table.
-        let old_offset = __aslr_reference() - table.aslr_reference as usize;
-        // let old_offset = __aslr_reference() - table.aslr_reference as usize;
+        // Use the `main` symbol as a sentinel for the current executable. This is basically a
+        // cross-platform version of `__mh_execute_header` on macOS that we can use to base the executable.
+        let old_offset = aslr_reference() - table.aslr_reference as usize;
 
         // Use the `main` symbol as a sentinel for the loaded library. Might want to move away
         // from this at some point, or make it configurable
@@ -675,9 +677,7 @@ pub enum PatchError {
 /// The point here being that we have a stable address both at runtime and compile time, making it
 /// possible to calculate the ASLR offset from within the process to correct the jump table.
 #[doc(hidden)]
-#[inline(never)]
-#[no_mangle]
-pub extern "C" fn __aslr_reference() -> usize {
+pub fn aslr_reference() -> usize {
     #[cfg(target_arch = "wasm32")]
     return 0;
 
