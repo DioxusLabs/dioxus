@@ -313,6 +313,24 @@ pub struct HotFnPanic {
     _backtrace: backtrace::Backtrace,
 }
 
+/// A pointer to a hot patched function
+#[non_exhaustive]
+#[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
+pub struct HotFnPtr(pub u64);
+
+impl HotFnPtr {
+    /// Create a new [`HotFnPtr`].
+    ///
+    /// The safe way to get one is through [`HotFn::ptr_address`].
+    ///
+    /// # Safety
+    ///
+    /// The underlying `u64` must point to a valid function.
+    pub unsafe fn new(index: u64) -> Self {
+        Self(index)
+    }
+}
+
 /// A hot-reloadable function.
 ///
 /// To call this function, use the [`HotFn::call`] method. This will automatically use the latest
@@ -353,20 +371,20 @@ impl<A, M, F: HotFunction<A, M>> HotFn<A, M, F> {
     ///
     /// Note that Subsecond does not track this state over time, so it's up to the runtime integration
     /// to track this state and diff it.
-    pub fn ptr_address(&self) -> u64 {
+    pub fn ptr_address(&self) -> HotFnPtr {
         if size_of::<F>() == size_of::<fn() -> ()>() {
             let ptr: usize = unsafe { std::mem::transmute_copy(&self.inner) };
-            return ptr as u64;
+            return HotFnPtr(ptr as u64);
         }
 
         let known_fn_ptr = <F as HotFunction<A, M>>::call_it as *const () as usize;
         if let Some(jump_table) = get_jump_table() {
             if let Some(ptr) = jump_table.map.get(&(known_fn_ptr as u64)).cloned() {
-                return ptr;
+                return HotFnPtr(ptr);
             }
         }
 
-        known_fn_ptr as u64
+        HotFnPtr(known_fn_ptr as u64)
     }
 
     /// Attempt to call the function with the given arguments.
@@ -403,6 +421,42 @@ impl<A, M, F: HotFunction<A, M>> HotFn<A, M, F> {
             }
 
             Ok(self.inner.call_it(args))
+        }
+    }
+
+    /// Attempt to call the function with the given arguments, using the given [`HotFnPtr`].
+    ///
+    /// You can get a [`HotFnPtr`] from [`Self::ptr_address`].
+    ///
+    /// If this function is stale and can't be updated in place (ie, changes occurred above this call),
+    /// then this function will emit an [`HotFnPanic`] which can be unwrapped and handled by next [`call`]
+    /// instance.
+    ///
+    /// # Safety
+    ///
+    /// The [`HotFnPtr`] must be to a function whose arguments layouts haven't changed.
+    pub unsafe fn try_call_with_ptr(&mut self, ptr: HotFnPtr, args: A) -> Result<F::Return, HotFnPanic> {
+        if !cfg!(debug_assertions) {
+            return Ok(self.inner.call_it(args));
+        }
+
+        unsafe {
+            // Try to handle known function pointers. This is *really really* unsafe, but due to how
+            // rust trait objects work, it's impossible to make an arbitrary usize-sized type implement Fn()
+            // since that would require a vtable pointer, pushing out the bounds of the pointer size.
+            if size_of::<F>() == size_of::<fn() -> ()>() {
+                return Ok(self.inner.call_as_ptr(args));
+            }
+
+            // Handle trait objects. This will occur for sizes other than usize. Normal rust functions
+            // become ZST's and thus their <T as SomeFn>::call becomes a function pointer to the function.
+            //
+            // For non-zst (trait object) types, then there might be an issue. The real call function
+            // will likely end up in the vtable and will never be hot-reloaded since signature takes self.
+            // The type sig of the cast should match the call_it function
+            // Technically function pointers need to be aligned, but that alignment is 1 so we're good
+            let call_it = transmute::<*const (), fn(&F, A) -> F::Return>(ptr.0 as _);
+            Ok(call_it(&self.inner, args))
         }
     }
 }
