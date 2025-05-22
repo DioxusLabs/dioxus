@@ -739,6 +739,9 @@ impl BuildRequest {
                 self.write_executable(ctx, &artifacts.exe, &mut artifacts.assets)
                     .await
                     .context("Failed to write main executable")?;
+                self.write_frameworks(ctx, &artifacts.direct_rustc)
+                    .await
+                    .context("Failed to write frameworks")?;
                 self.write_assets(ctx, &artifacts.assets)
                     .await
                     .context("Failed to write assets")?;
@@ -891,6 +894,13 @@ impl BuildRequest {
             }
         }
 
+        // Collect the linker args from the and update the rustc args
+        direct_rustc.link_args = std::fs::read_to_string(self.link_args_file.path())
+            .context("Failed to read link args from file")?
+            .lines()
+            .map(|s| s.to_string())
+            .collect::<Vec<_>>();
+
         // Fat builds need to be linked with the fat linker. Would also like to link here for thin builds
         if matches!(ctx.mode, BuildMode::Fat) {
             self.run_fat_link(ctx, &exe, &direct_rustc).await?;
@@ -1003,6 +1013,52 @@ impl BuildRequest {
         }
 
         Ok(())
+    }
+
+    async fn write_frameworks(&self, _ctx: &BuildContext, direct_rustc: &RustcArgs) -> Result<()> {
+        let framework_dir = self.frameworks_folder();
+        _ = std::fs::create_dir_all(&framework_dir);
+
+        for arg in &direct_rustc.link_args {
+            // todo - how do we handle windows dlls? we don't want to bundle the system dlls
+            // for now, we don't do anything with dlls, and only use .dylibs and .so files
+            if arg.ends_with(".dylib") | arg.ends_with(".so") {
+                let from = PathBuf::from(arg);
+                let to = framework_dir.join(from.file_name().unwrap());
+                _ = std::fs::remove_file(&to);
+
+                tracing::debug!("Copying framework from {from:?} to {to:?}");
+
+                // in dev and on normal oses, we want to symlink the file
+                // otherwise, just copy it (since in release you want to distribute the framework)
+                if cfg!(any(windows, unix)) && !self.release {
+                    #[cfg(windows)]
+                    std::os::windows::fs::symlink_file(from, to).with_context(|| {
+                        "Failed to symlink framework into bundle: {from:?} -> {to:?}"
+                    })?;
+
+                    #[cfg(unix)]
+                    std::os::unix::fs::symlink(from, to).with_context(|| {
+                        "Failed to symlink framework into bundle: {from:?} -> {to:?}"
+                    })?;
+                } else {
+                    std::fs::copy(from, to)?;
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    fn frameworks_folder(&self) -> PathBuf {
+        match self.triple.operating_system {
+            OperatingSystem::Darwin(_) | OperatingSystem::MacOSX(_) => {
+                self.root_dir().join("Contents").join("Frameworks")
+            }
+            OperatingSystem::IOS(_) => self.root_dir().join("Frameworks"),
+            OperatingSystem::Linux | OperatingSystem::Windows => self.root_dir(),
+            _ => self.root_dir(),
+        }
     }
 
     /// Copy the assets out of the manifest and into the target location
@@ -1512,12 +1568,9 @@ impl BuildRequest {
     ) -> Result<()> {
         ctx.status_starting_link();
 
-        let raw_args = std::fs::read_to_string(self.link_args_file.path())
-            .context("Failed to read link args from file")?;
-        let args = raw_args.lines().collect::<Vec<_>>();
-
         // Filter out the rlib files from the arguments
-        let rlibs = args
+        let rlibs = rustc_args
+            .link_args
             .iter()
             .filter(|arg| arg.ends_with(".rlib"))
             .map(PathBuf::from)
@@ -1573,7 +1626,11 @@ impl BuildRequest {
                     }
 
                     // rlibs might contain dlls/sos/lib files which we don't want to include
-                    if name.ends_with(".dll") || name.ends_with(".so") || name.ends_with(".lib") {
+                    if name.ends_with(".dll")
+                        || name.ends_with(".so")
+                        || name.ends_with(".lib")
+                        || name.ends_with(".dylib")
+                    {
                         compiler_rlibs.push(rlib.to_owned());
                         continue;
                     }
@@ -1606,7 +1663,7 @@ impl BuildRequest {
         // And then remove the rest of the rlibs
         //
         // We also need to insert the -force_load flag to force the linker to load the archive
-        let mut args = args.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        let mut args = rustc_args.link_args.clone();
         if let Some(first_rlib) = args.iter().position(|arg| arg.ends_with(".rlib")) {
             match self.triple.operating_system {
                 OperatingSystem::Unknown if self.platform == Platform::Web => {
@@ -1690,6 +1747,7 @@ impl BuildRequest {
         let linker = self.select_linker()?;
 
         tracing::trace!("Fat linking with args: {:?} {:#?}", linker, args);
+        tracing::trace!("Fat linking with env: {:#?}", rustc_args.envs);
 
         // Run the linker directly!
         let out_arg = match self.triple.operating_system {
@@ -1933,6 +1991,21 @@ impl BuildRequest {
                 "-Clinker={}",
                 Workspace::path_to_dx().expect("can't find dx").display()
             ));
+        }
+
+        // Handle frameworks/dylibs by setting the rpath
+        // This is dependent on the bundle structure - in this case, appimage and appbundle for mac/linux
+        // todo: we need to figure out what to do for windows
+        match self.triple.operating_system {
+            OperatingSystem::Darwin(_) | OperatingSystem::IOS(_) => {
+                cargo_args.push("-Clink-arg=-Wl,-rpath,@executable_path/../Frameworks".to_string());
+                cargo_args.push("-Clink-arg=-Wl,-rpath,@executable_path".to_string());
+            }
+            OperatingSystem::Linux => {
+                cargo_args.push("-Clink-arg=-Wl,-rpath,$ORIGIN/../lib".to_string());
+                cargo_args.push("-Clink-arg=-Wl,-rpath,$ORIGIN".to_string());
+            }
+            _ => {}
         }
 
         // Our fancy hot-patching engine needs a lot of customization to work properly.
