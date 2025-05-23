@@ -1744,6 +1744,7 @@ impl BuildRequest {
                     }
 
                     args.insert(first_rlib, "/HIGHENTROPYVA:NO".to_string());
+                    args.insert(first_rlib, "/EXPORT:main".to_string());
                 }
                 LinkerFlavor::Unsupported => {
                     tracing::error!("Unsupported platform for fat linking");
