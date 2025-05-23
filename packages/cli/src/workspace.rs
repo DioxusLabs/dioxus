@@ -10,7 +10,6 @@ use std::sync::Arc;
 use std::{collections::HashSet, path::Path};
 use target_lexicon::Triple;
 use tokio::process::Command;
-use which::which;
 
 pub struct Workspace {
     pub(crate) krates: Krates,
@@ -68,7 +67,7 @@ impl Workspace {
 
         let android_tools = crate::build::get_android_tools();
 
-        let lld = which::which("lld").or_else(|_| which("ld.lld")).ok();
+        let lld = which::which("lld").or_else(|_| which::which("ld.lld")).ok();
 
         let workspace = Arc::new(Self {
             krates,
