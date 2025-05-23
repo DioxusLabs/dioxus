@@ -1034,7 +1034,7 @@ pub fn create_undefined_symbol_stub(
                     kind: SymbolKind::Text,
                     weak: false,
                     section: SymbolSection::Section(text_section),
-                    flags: SymbolFlags::None,
+                    flags: SymbolFlags::None, // ignore for these stubs
                 });
             }
 
@@ -1103,7 +1103,7 @@ pub fn create_undefined_symbol_stub(
                     kind: SymbolKind::Tls,
                     weak: false,
                     section: SymbolSection::Section(tls_section),
-                    flags: SymbolFlags::None,
+                    flags: SymbolFlags::None, // ignore for these stubs
                 });
             }
 
@@ -1123,7 +1123,7 @@ pub fn create_undefined_symbol_stub(
                     kind,
                     weak: sym.is_weak,
                     section: SymbolSection::Absolute,
-                    flags: sym.flags,
+                    flags: sym.flags, // important on elf where these matter
                 });
             }
         }
