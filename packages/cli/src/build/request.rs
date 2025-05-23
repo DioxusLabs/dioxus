@@ -1609,12 +1609,23 @@ impl BuildRequest {
             .map(PathBuf::from)
             .collect::<Vec<_>>();
 
-        // Acquire a hash from the rlib names
+        // Acquire a hash from the rlib names, sizes, and modified times
         let hash_id = Uuid::new_v5(
             &Uuid::NAMESPACE_OID,
             rlibs
                 .iter()
-                .map(|p| p.file_name().unwrap().to_string_lossy())
+                .map(|p| {
+                    format!(
+                        "{}-{}-{}",
+                        p.file_name().unwrap().to_string_lossy(),
+                        p.metadata().map(|m| m.len()).unwrap_or_default(),
+                        p.metadata()
+                            .ok()
+                            .and_then(|m| m.modified().ok())
+                            .and_then(|f| f.duration_since(UNIX_EPOCH).map(|f| f.as_secs()).ok())
+                            .unwrap_or_default()
+                    )
+                })
                 .collect::<String>()
                 .as_bytes(),
         );
@@ -1629,7 +1640,7 @@ impl BuildRequest {
         //
         // The nature of this process involves making extremely fat archives, so we should try and
         // speed up the future linking process by caching the archive.
-        if !crate::devcfg::should_cache_dep_lib(&out_ar_path) {
+        if !out_ar_path.exists() {
             let mut bytes = vec![];
             let mut out_ar = ar::Builder::new(&mut bytes);
             for rlib in &rlibs {
@@ -1743,7 +1754,10 @@ impl BuildRequest {
                         args.insert(first_rlib + 1, rlib.display().to_string());
                     }
 
+                    // Prevent alsr from overflowing 32 bits
                     args.insert(first_rlib, "/HIGHENTROPYVA:NO".to_string());
+
+                    // Export `main` so subsecond can use it for a reference point
                     args.insert(first_rlib, "/EXPORT:main".to_string());
                 }
                 LinkerFlavor::Unsupported => {
