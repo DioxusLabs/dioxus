@@ -897,8 +897,6 @@ impl BuildRequest {
             }
         }
 
-        let exe = output_location.context("Cargo build failed - no output location. Toggle tracing mode (press `t`) for more information.")?;
-
         // Accumulate the rustc args from the wrapper, if they exist and can be parsed.
         let mut direct_rustc = RustcArgs::default();
         if let Ok(res) = std::fs::read_to_string(self.rustc_wrapper_args_file.path()) {
@@ -910,7 +908,11 @@ impl BuildRequest {
         // If there's any warnings from the linker, we should print them out
         if let Ok(linker_warnings) = std::fs::read_to_string(self.link_err_file.path()) {
             if !linker_warnings.is_empty() {
-                tracing::warn!("Linker warnings: {}", linker_warnings);
+                if output_location.is_none() {
+                    tracing::error!("Linker warnings: {}", linker_warnings);
+                } else {
+                    tracing::debug!("Linker warnings: {}", linker_warnings);
+                }
             }
         }
 
@@ -920,6 +922,8 @@ impl BuildRequest {
             .lines()
             .map(|s| s.to_string())
             .collect::<Vec<_>>();
+
+        let exe = output_location.context("Cargo build failed - no output location. Toggle tracing mode (press `t`) for more information.")?;
 
         // Fat builds need to be linked with the fat linker. Would also like to link here for thin builds
         if matches!(ctx.mode, BuildMode::Fat) {
@@ -1316,13 +1320,11 @@ impl BuildRequest {
             object_files.push(patch_file);
 
             // Add the dylibs/sos to the linker args
-            // Make sure to use the one in the bundle
+            // Make sure to use the one in the bundle, not the ones in the target dir or system.
             for arg in &rustc_args.link_args {
-                if arg.ends_with(".dylib") || arg.ends_with(".so") || arg.ends_with(".dll") {
-                    dylibs.push(
-                        self.frameworks_folder()
-                            .join(PathBuf::from(arg).file_name().unwrap()),
-                    );
+                if arg.ends_with(".dylib") || arg.ends_with(".so") {
+                    let path = PathBuf::from(arg);
+                    dylibs.push(self.frameworks_folder().join(path.file_name().unwrap()));
                 }
             }
         }

@@ -371,49 +371,15 @@ fn create_native_jump_table(
         }
     }
 
-    let new_base_address = match triple.operating_system {
-        // The symbol in the symtab is called "_main" but in the dysymtab it is called "main"
-        OperatingSystem::MacOSX(_) | OperatingSystem::Darwin(_) | OperatingSystem::IOS(_) => {
-            *new_name_to_addr
-                .get("_main")
-                .context("failed to find '_main' symbol in patch")?
-        }
-
-        // No distincation between the two on these platforms
-        OperatingSystem::Freebsd
-        | OperatingSystem::Openbsd
-        | OperatingSystem::Linux
-        | OperatingSystem::Windows => *new_name_to_addr
-            .get("main")
-            .context("failed to find 'main' symbol in patch")?,
-
-        // On wasm, it doesn't matter what the address is since the binary is PIC
-        _ => 0,
-    };
-
-    let aslr_reference = match triple.operating_system {
-        // The symbol in the symtab is called "_main" but in the dysymtab it is called "main"
-        OperatingSystem::MacOSX(_) | OperatingSystem::Darwin(_) | OperatingSystem::IOS(_) => {
-            old_name_to_addr
-                .get("_main")
-                .context("failed to find '_main' symbol in original module")?
-                .address
-        }
-
-        // No distincation between the two on these platforms
-        OperatingSystem::Freebsd
-        | OperatingSystem::Openbsd
-        | OperatingSystem::Linux
-        | OperatingSystem::Windows => {
-            old_name_to_addr
-                .get("main")
-                .context("failed to find 'main' symbol in original module")?
-                .address
-        }
-
-        // On wasm, it doesn't matter what the address is since the binary is PIC
-        _ => 0,
-    };
+    let sentinel = main_sentinel(triple);
+    let new_base_address = new_name_to_addr
+        .get(sentinel)
+        .cloned()
+        .context("failed to find 'main' symbol in base - are deubg symbols enabled?")?;
+    let aslr_reference = old_name_to_addr
+        .get(sentinel)
+        .map(|s| s.address)
+        .context("failed to find 'main' symbol in original module - are debug symbols enabled?")?;
 
     Ok(JumpTable {
         lib: patch.to_path_buf(),
@@ -849,32 +815,12 @@ pub fn create_undefined_symbol_stub(
         _ => {}
     }
 
-    let symbol_table = &cache.symbol_table;
-
-    // Get the offset from the main module and adjust the addresses by the slide
-    let aslr_ref_address = match triple.operating_system {
-        // The symbol in the symtab is called "_main" but in the dysymtab it is called "main"
-        OperatingSystem::MacOSX(_) | OperatingSystem::Darwin(_) | OperatingSystem::IOS(_) => {
-            symbol_table
-                .get("_main")
-                .context("failed to find '_main' symbol in patch")?
-                .address
-        }
-
-        // No distincation between the two on these platforms
-        OperatingSystem::Freebsd
-        | OperatingSystem::Openbsd
-        | OperatingSystem::Linux
-        | OperatingSystem::Windows => {
-            symbol_table
-                .get("main")
-                .context("failed to find 'main' symbol in patch")?
-                .address
-        }
-
-        // On wasm, it doesn't matter what the address is since the binary is PIC
-        _ => 0,
-    };
+    // Get the offset from the main module and adjust the addresses by the slide;
+    let aslr_ref_address = cache
+        .symbol_table
+        .get(main_sentinel(triple))
+        .context("failed to find '_main' symbol in patch")?
+        .address;
 
     if aslr_reference < aslr_ref_address {
         return Err(PatchError::InvalidModule(
@@ -889,7 +835,10 @@ pub fn create_undefined_symbol_stub(
     // for each symbol we either write the address directly (as a symbol) or create a PLT/GOT entry
     let text_section = obj.section_id(StandardSection::Text);
     for name in undefined_symbols {
-        let Some(sym) = symbol_table.get(name.as_str().trim_start_matches("__imp_")) else {
+        let Some(sym) = cache
+            .symbol_table
+            .get(name.as_str().trim_start_matches("__imp_"))
+        else {
             tracing::error!("Symbol not found: {}", name);
             continue;
         };
@@ -1482,4 +1431,19 @@ fn parse_module_with_ids(bindgened: &[u8]) -> Result<ParsedModule> {
         ids,
         symbols,
     })
+}
+
+/// Get the main sentinel symbol for the given target triple
+///
+/// We need to special case darwin since `main` is the entrypoint but `_main` is the actual symbol.
+/// The entrypoint ends up outside the text section, seemingly, and breaks our aslr detection.
+fn main_sentinel(triple: &Triple) -> &'static str {
+    match triple.operating_system {
+        // The symbol in the symtab is called "_main" but in the dysymtab it is called "main"
+        OperatingSystem::MacOSX(_) | OperatingSystem::Darwin(_) | OperatingSystem::IOS(_) => {
+            "_main"
+        }
+
+        _ => "main",
+    }
 }
