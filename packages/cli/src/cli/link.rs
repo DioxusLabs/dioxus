@@ -129,6 +129,10 @@ impl LinkAction {
 
         handle_linker_command_file(&mut args);
 
+        if self.triple.environment == target_lexicon::Environment::Android {
+            args.retain(|arg| !arg.ends_with(".lib"));
+        }
+
         // Write the linker args to a file for the main process to read
         // todo: we might need to encode these as escaped shell words in case newlines are passed
         std::fs::write(&self.link_args_file, args.join("\n"))?;
