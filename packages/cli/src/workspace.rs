@@ -10,6 +10,7 @@ use std::sync::Arc;
 use std::{collections::HashSet, path::Path};
 use target_lexicon::Triple;
 use tokio::process::Command;
+use which::which;
 
 pub struct Workspace {
     pub(crate) krates: Krates,
@@ -20,6 +21,7 @@ pub struct Workspace {
     pub(crate) ignore: Gitignore,
     pub(crate) cargo_toml: cargo_toml::Manifest,
     pub(crate) android_tools: Option<Arc<AndroidTools>>,
+    pub(crate) lld: Option<PathBuf>,
 }
 
 impl Workspace {
@@ -66,6 +68,8 @@ impl Workspace {
 
         let android_tools = crate::build::get_android_tools();
 
+        let lld = which::which("lld").or_else(|_| which("ld.lld")).ok();
+
         let workspace = Arc::new(Self {
             krates,
             settings,
@@ -75,6 +79,7 @@ impl Workspace {
             ignore,
             cargo_toml,
             android_tools,
+            lld,
         });
 
         tracing::debug!(

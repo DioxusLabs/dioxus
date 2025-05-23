@@ -1487,6 +1487,11 @@ impl BuildRequest {
                         out_args.push(arg.to_string());
                     }
                 }
+
+                // use ld.lld if it exists. todo: use rust-lld
+                if self.workspace.lld.is_some() {
+                    out_args.push("-Wl,-fuse-ld=lld".to_string());
+                }
             }
 
             LinkerFlavor::Msvc => {
@@ -1747,6 +1752,14 @@ impl BuildRequest {
 
                     // Export `main` so subsecond can use it for a reference point
                     args.insert(first_rlib, "-Wl,--export-dynamic-symbol,main".to_string());
+
+                    // use ld.lld if it exists, and don't override their linker.
+                    // todo: use rust-lld
+                    if self.workspace.lld.is_some()
+                        && !args.iter().any(|arg| arg.starts_with("-Wl,-fuse-ld"))
+                    {
+                        args.insert(first_rlib, "-Wl,-fuse-ld=lld".to_string());
+                    }
                 }
                 LinkerFlavor::Darwin => {
                     args[first_rlib] = "-Wl,-force_load".to_string();
