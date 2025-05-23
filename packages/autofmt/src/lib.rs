@@ -3,16 +3,19 @@
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 
 use crate::writer::*;
+use class_names::format_class_attrs;
 use dioxus_rsx::{BodyNode, CallBody};
 use proc_macro2::{LineColumn, Span};
 use syn::parse::Parser;
 
 mod buffer;
+mod class_names;
 mod collect_macros;
 mod indent;
 mod prettier_please;
 mod writer;
 
+pub use class_names::TailwindSorter;
 pub use indent::{IndentOptions, IndentType};
 
 /// A modification to the original file to be applied by an IDE
@@ -40,10 +43,14 @@ pub struct FormattedBlock {
 ///
 /// It accepts
 #[deprecated(note = "Use try_fmt_file instead - this function panics on error.")]
-pub fn fmt_file(contents: &str, indent: IndentOptions) -> Vec<FormattedBlock> {
+pub fn fmt_file(
+    contents: &str,
+    indent: IndentOptions,
+    sorter: Option<&TailwindSorter>,
+) -> Vec<FormattedBlock> {
     let parsed =
         syn::parse_file(contents).expect("fmt_file should only be called on valid syn::File files");
-    try_fmt_file(contents, &parsed, indent).expect("Failed to format file")
+    try_fmt_file(contents, &parsed, indent, sorter).expect("Failed to format file")
 }
 
 /// Format a file into a list of `FormattedBlock`s to be applied by an IDE for autoformatting.
@@ -64,6 +71,7 @@ pub fn try_fmt_file(
     contents: &str,
     parsed: &syn::File,
     indent: IndentOptions,
+    sorter: Option<&TailwindSorter>,
 ) -> syn::Result<Vec<FormattedBlock>> {
     let mut formatted_blocks = Vec::new();
 
@@ -86,7 +94,10 @@ pub fn try_fmt_file(
             continue;
         }
 
-        let body = item.parse_body_with(CallBody::parse_strict)?;
+        let mut body = item.parse_body_with(CallBody::parse_strict)?;
+        if let Some(sorter) = sorter {
+            format_class_attrs(&mut body, sorter);
+        }
 
         let rsx_start = macro_path.span().start();
 
@@ -153,8 +164,16 @@ pub fn write_block_out(body: &CallBody) -> Option<String> {
     buf.consume()
 }
 
-pub fn fmt_block(block: &str, indent_level: usize, indent: IndentOptions) -> Option<String> {
-    let body = CallBody::parse_strict.parse_str(block).unwrap();
+pub fn fmt_block(
+    block: &str,
+    indent_level: usize,
+    indent: IndentOptions,
+    sorter: Option<&TailwindSorter>,
+) -> Option<String> {
+    let mut body = CallBody::parse_strict.parse_str(block).unwrap();
+    if let Some(sorter) = sorter {
+        format_class_attrs(&mut body, sorter);
+    }
 
     let mut buf = Writer::new(block, indent);
     buf.out.indent_level = indent_level;
