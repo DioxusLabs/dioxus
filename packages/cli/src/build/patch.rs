@@ -391,11 +391,29 @@ fn create_native_jump_table(
         _ => 0,
     };
 
-    let aslr_reference = old_name_to_addr
-        .get("_main")
-        .or_else(|| old_name_to_addr.get("main"))
-        .map(|s| s.address)
-        .context("failed to find '_main' symbol in original module")?;
+    let aslr_reference = match triple.operating_system {
+        // The symbol in the symtab is called "_main" but in the dysymtab it is called "main"
+        OperatingSystem::MacOSX(_) | OperatingSystem::Darwin(_) | OperatingSystem::IOS(_) => {
+            old_name_to_addr
+                .get("_main")
+                .context("failed to find '_main' symbol in original module")?
+                .address
+        }
+
+        // No distincation between the two on these platforms
+        OperatingSystem::Freebsd
+        | OperatingSystem::Openbsd
+        | OperatingSystem::Linux
+        | OperatingSystem::Windows => {
+            old_name_to_addr
+                .get("main")
+                .context("failed to find 'main' symbol in original module")?
+                .address
+        }
+
+        // On wasm, it doesn't matter what the address is since the binary is PIC
+        _ => 0,
+    };
 
     Ok(JumpTable {
         lib: patch.to_path_buf(),
