@@ -852,16 +852,34 @@ pub fn create_undefined_symbol_stub(
     let symbol_table = &cache.symbol_table;
 
     // Get the offset from the main module and adjust the addresses by the slide
-    let aslr_ref_address = symbol_table
-        .get("_main")
-        .or_else(|| symbol_table.get("main"))
-        .map(|s| s.address)
-        .context("Failed to find _main symbol")?;
+    let aslr_ref_address = match triple.operating_system {
+        // The symbol in the symtab is called "_main" but in the dysymtab it is called "main"
+        OperatingSystem::MacOSX(_) | OperatingSystem::Darwin(_) | OperatingSystem::IOS(_) => {
+            symbol_table
+                .get("_main")
+                .context("failed to find '_main' symbol in patch")?
+                .address
+        }
+
+        // No distincation between the two on these platforms
+        OperatingSystem::Freebsd
+        | OperatingSystem::Openbsd
+        | OperatingSystem::Linux
+        | OperatingSystem::Windows => {
+            symbol_table
+                .get("main")
+                .context("failed to find 'main' symbol in patch")?
+                .address
+        }
+
+        // On wasm, it doesn't matter what the address is since the binary is PIC
+        _ => 0,
+    };
 
     if aslr_reference < aslr_ref_address {
         return Err(PatchError::InvalidModule(
-            "ASLR reference is less than the main module's address - is there a `main`?"
-                .to_string(),
+            format!(
+            "ASLR reference is less than the main module's address - is there a `main`?. {:x} < {:x}", aslr_reference, aslr_ref_address )
         ));
     }
 
