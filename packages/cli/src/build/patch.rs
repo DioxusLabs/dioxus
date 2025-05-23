@@ -3,8 +3,8 @@ use itertools::Itertools;
 use object::{
     macho::{self},
     read::File,
-    write::{MachOBuildVersion, StandardSection, Symbol, SymbolSection},
-    Endianness, Object, ObjectSymbol, SymbolKind, SymbolScope,
+    write::{MachOBuildVersion, SectionId, StandardSection, Symbol, SymbolId, SymbolSection},
+    Endianness, Object, ObjectSymbol, SymbolFlags, SymbolKind, SymbolScope,
 };
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use std::{
@@ -84,6 +84,7 @@ pub struct CachedSymbol {
     pub is_undefined: bool,
     pub is_weak: bool,
     pub size: u64,
+    pub flags: SymbolFlags<SectionId, SymbolId>,
 }
 
 impl PartialEq for HotpatchModuleCache {
@@ -139,6 +140,7 @@ impl HotpatchModuleCache {
                                     is_undefined,
                                     is_weak: false,
                                     size: 0,
+                                    flags: SymbolFlags::None,
                                 },
                             );
                         }
@@ -158,6 +160,7 @@ impl HotpatchModuleCache {
                                     is_undefined,
                                     is_weak: false,
                                     size: 0,
+                                    flags: SymbolFlags::None,
                                 },
                             );
                         }
@@ -252,6 +255,15 @@ impl HotpatchModuleCache {
                 let symbol_table = obj
                     .symbols()
                     .filter_map(|s| {
+                        let flags = match s.flags() {
+                            SymbolFlags::None => SymbolFlags::None,
+                            SymbolFlags::Elf { st_info, st_other } => {
+                                SymbolFlags::Elf { st_info, st_other }
+                            }
+                            SymbolFlags::MachO { n_desc } => SymbolFlags::MachO { n_desc },
+                            _ => SymbolFlags::None,
+                        };
+
                         Some((
                             s.name().ok()?.to_string(),
                             CachedSymbol {
@@ -260,6 +272,7 @@ impl HotpatchModuleCache {
                                 is_weak: s.is_weak(),
                                 kind: s.kind(),
                                 size: s.size(),
+                                flags,
                             },
                         ))
                     })
@@ -892,7 +905,7 @@ pub fn create_undefined_symbol_stub(
                     kind: SymbolKind::Data, // Always Data for IAT entries
                     weak: false,
                     section: SymbolSection::Section(data_section),
-                    flags: object::SymbolFlags::None,
+                    flags: SymbolFlags::None,
                 });
             }
 
@@ -1021,7 +1034,7 @@ pub fn create_undefined_symbol_stub(
                     kind: SymbolKind::Text,
                     weak: false,
                     section: SymbolSection::Section(text_section),
-                    flags: object::SymbolFlags::None,
+                    flags: SymbolFlags::None,
                 });
             }
 
@@ -1090,7 +1103,7 @@ pub fn create_undefined_symbol_stub(
                     kind: SymbolKind::Tls,
                     weak: false,
                     section: SymbolSection::Section(tls_section),
-                    flags: object::SymbolFlags::None,
+                    flags: SymbolFlags::None,
                 });
             }
 
@@ -1101,6 +1114,7 @@ pub fn create_undefined_symbol_stub(
                     SymbolKind::Unknown => SymbolKind::Data,
                     k => k,
                 };
+
                 obj.add_symbol(Symbol {
                     name: name.as_bytes()[name_offset..].to_vec(),
                     value: abs_addr,
@@ -1109,7 +1123,7 @@ pub fn create_undefined_symbol_stub(
                     kind,
                     weak: sym.is_weak,
                     section: SymbolSection::Absolute,
-                    flags: object::SymbolFlags::None,
+                    flags: sym.flags,
                 });
             }
         }
