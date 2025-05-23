@@ -694,7 +694,7 @@ pub fn aslr_reference() -> usize {
         GetProcAddress(GetModuleHandleA(std::ptr::null()), c"main".as_ptr() as _) as _
     };
 
-    #[cfg(not(target_family = "wasm"))]
+    #[cfg(not(any(target_family = "wasm", windows)))]
     unsafe {
         libc::dlsym(libc::RTLD_DEFAULT, c"main".as_ptr() as _) as _
     }
