@@ -1609,21 +1609,24 @@ impl BuildRequest {
             .map(PathBuf::from)
             .collect::<Vec<_>>();
 
-        // Acquire a hash from the rlib names, sizes, and modified times
+        // Acquire a hash from the rlib names, sizes, modified times, and dx's git commit hash
+        // This ensures that any changes in dx or the rlibs will cause a new hash to be generated
+        // The hash relies on both dx and rustc hashes, so it should be thoroughly unique
         let hash_id = Uuid::new_v5(
             &Uuid::NAMESPACE_OID,
             rlibs
                 .iter()
                 .map(|p| {
                     format!(
-                        "{}-{}-{}",
+                        "{}-{}-{}-{}",
                         p.file_name().unwrap().to_string_lossy(),
                         p.metadata().map(|m| m.len()).unwrap_or_default(),
                         p.metadata()
                             .ok()
                             .and_then(|m| m.modified().ok())
                             .and_then(|f| f.duration_since(UNIX_EPOCH).map(|f| f.as_secs()).ok())
-                            .unwrap_or_default()
+                            .unwrap_or_default(),
+                        crate::dx_build_info::GIT_COMMIT_HASH.unwrap_or_default()
                     )
                 })
                 .collect::<String>()
@@ -1632,8 +1635,13 @@ impl BuildRequest {
 
         // Check if we already have a cached object file
         let out_ar_path = exe.with_file_name(format!("libfatdependencies-{hash_id}.a"));
+        let out_rlibs_list = exe.with_file_name(format!("rlibs-{hash_id}.txt"));
 
-        let mut compiler_rlibs = vec![];
+        // Use the rlibs list if it exists
+        let mut compiler_rlibs = std::fs::read_to_string(&out_rlibs_list)
+            .ok()
+            .map(|s| s.lines().map(PathBuf::from).collect::<Vec<_>>())
+            .unwrap_or_default();
 
         // Create it by dumping all the rlibs into it
         // This will include the std rlibs too, which can severely bloat the size of the archive
@@ -1826,6 +1834,15 @@ impl BuildRequest {
         for f in args.iter().filter(|arg| arg.ends_with(".rcgu.o")) {
             _ = std::fs::remove_file(f);
         }
+
+        // Cache the rlibs list
+        _ = std::fs::write(
+            &out_rlibs_list,
+            compiler_rlibs
+                .into_iter()
+                .map(|s| s.display().to_string())
+                .join("\n"),
+        );
 
         Ok(())
     }
