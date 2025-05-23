@@ -2956,6 +2956,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "cross-tls-crate"
+version = "0.1.0"
+
+[[package]]
+name = "cross-tls-crate-dylib"
+version = "0.1.0"
+
+[[package]]
 name = "crossbeam"
 version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -13479,6 +13487,15 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
+]
+
+[[package]]
+name = "subsecond-tls-harness"
+version = "0.1.0"
+dependencies = [
+ "cross-tls-crate",
+ "cross-tls-crate-dylib",
+ "dioxus-devtools",
 ]
 
 [[package]]

@@ -927,7 +927,15 @@ impl BuildRequest {
 
         // Fat builds need to be linked with the fat linker. Would also like to link here for thin builds
         if matches!(ctx.mode, BuildMode::Fat) {
+            let link_start = SystemTime::now();
             self.run_fat_link(ctx, &exe, &direct_rustc).await?;
+            tracing::debug!(
+                "Fat linking completed in {}us",
+                SystemTime::now()
+                    .duration_since(link_start)
+                    .unwrap()
+                    .as_micros()
+            );
         }
 
         let assets = self.collect_assets(&exe, ctx)?;
