@@ -852,7 +852,7 @@ pub fn create_undefined_symbol_stub(
             .symbol_table
             .get(name.as_str().trim_start_matches("__imp_"))
         else {
-            tracing::error!("Symbol not found: {}", name);
+            tracing::debug!("Symbol not found: {}", name);
             continue;
         };
 

@@ -1706,8 +1706,10 @@ impl BuildRequest {
             // Run the ranlib command to index the archive. This slows down this process a bit,
             // but is necessary for some linkers to work properly.
             // We ignore its error in case it doesn't recognize the architecture
-            if let Some(ranlib) = self.select_ranlib() {
-                _ = Command::new(ranlib).arg(&out_ar_path).output().await;
+            if self.linker_flavor() == LinkerFlavor::Darwin {
+                if let Some(ranlib) = self.select_ranlib() {
+                    _ = Command::new(ranlib).arg(&out_ar_path).output().await;
+                }
             }
         }
 
@@ -1742,6 +1744,9 @@ impl BuildRequest {
                     for rlib in compiler_rlibs.iter().rev() {
                         args.insert(first_rlib + 3, rlib.display().to_string());
                     }
+
+                    // Export `main` so subsecond can use it for a reference point
+                    args.insert(first_rlib, "-Wl,--export-dynamic-symbol,main".to_string());
                 }
                 LinkerFlavor::Darwin => {
                     args[first_rlib] = "-Wl,-force_load".to_string();
