@@ -26,9 +26,12 @@ pub async fn optimize(input_path: &Path, output_path: &Path, cfg: &WasmOptConfig
 }
 
 async fn run_locally(input_path: &Path, output_path: &Path, cfg: &WasmOptConfig) -> Result<()> {
+    // defaults needed by wasm-bindgen.
+    // wasm is a moving target, and we add these by default since they progressively get enabled by default.
     let mut args = vec![
-        // needed by wasm-bindgen
         "--enable-reference-types",
+        "--enable-bulk-memory",
+        "--enable-mutable-globals",
     ];
 
     if cfg.memory_packing {
@@ -41,6 +44,10 @@ async fn run_locally(input_path: &Path, output_path: &Path, cfg: &WasmOptConfig)
         args.push("--strip-debug");
     } else {
         args.push("--debuginfo");
+    }
+
+    for extra in &cfg.extra_features {
+        args.push(extra);
     }
 
     let level = match cfg.level {
@@ -72,6 +79,8 @@ async fn run_from_lib(
     output_path: &Path,
     options: &WasmOptConfig,
 ) -> Result<()> {
+    use std::str::FromStr;
+
     let mut level = match options.level {
         WasmOptLevel::Z => wasm_opt::OptimizationOptions::new_optimize_for_size_aggressively(),
         WasmOptLevel::S => wasm_opt::OptimizationOptions::new_optimize_for_size(),
@@ -84,8 +93,30 @@ async fn run_from_lib(
 
     level
         .enable_feature(wasm_opt::Feature::ReferenceTypes)
+        .enable_feature(wasm_opt::Feature::BulkMemory)
+        .enable_feature(wasm_opt::Feature::MutableGlobals)
         .add_pass(wasm_opt::Pass::MemoryPacking)
-        .debug_info(options.debug)
+        .debug_info(options.debug);
+
+    for arg in options.extra_features.iter() {
+        if arg.starts_with("--enable-") {
+            let feature = arg.trim_start_matches("--enable-");
+            if let Ok(feature) = wasm_opt::Feature::from_str(feature) {
+                level.enable_feature(feature);
+            } else {
+                tracing::warn!("Unknown wasm-opt feature: {}", feature);
+            }
+        } else if arg.starts_with("--disable-") {
+            let feature = arg.trim_start_matches("--disable-");
+            if let Ok(feature) = wasm_opt::Feature::from_str(feature) {
+                level.disable_feature(feature);
+            } else {
+                tracing::warn!("Unknown wasm-opt feature: {}", feature);
+            }
+        }
+    }
+
+    level
         .run(input_path, output_path)
         .map_err(|err| crate::Error::Other(anyhow::anyhow!(err)))?;
 
