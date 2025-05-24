@@ -1485,6 +1485,7 @@ impl BuildRequest {
                     if arg.starts_with("-l")
                         || arg.starts_with("-m")
                         || arg.starts_with("-Wl,--target=")
+                        || arg.starts_with("-Wl,-fuse-ld")
                     {
                         out_args.push(arg.to_string());
                     }
@@ -2129,8 +2130,8 @@ impl BuildRequest {
                 cargo_args.push("-Clink-arg=-Wl,-rpath,@executable_path".to_string());
             }
             OperatingSystem::Linux => {
-                // cargo_args.push("-Clink-arg=-Wl,-rpath,$ORIGIN/../lib".to_string());
-                // cargo_args.push("-Clink-arg=-Wl,-rpath,$ORIGIN".to_string());
+                cargo_args.push("-Clink-arg=-Wl,-rpath,$ORIGIN/../lib".to_string());
+                cargo_args.push("-Clink-arg=-Wl,-rpath,$ORIGIN".to_string());
             }
             _ => {}
         }
