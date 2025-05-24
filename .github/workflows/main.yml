@@ -39,7 +39,7 @@ env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: 0 # todo(jon): cargo-cache wipes incremental artifacts, but we eventually want to cache them
   RUST_BACKTRACE: 1
-  rust_nightly: nightly-2025-04-07
+  rust_nightly: nightly-2025-05-20
 
 jobs:
   check-msrv:
@@ -48,7 +48,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.86.0
+      - uses: dtolnay/rust-toolchain@1.88.0
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
