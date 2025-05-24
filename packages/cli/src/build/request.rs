@@ -1646,6 +1646,7 @@ impl BuildRequest {
         // Check if we already have a cached object file
         let out_ar_path = exe.with_file_name(format!("libdeps-{hash_id}.a",));
         let out_rlibs_list = exe.with_file_name(format!("rlibs-{hash_id}.txt"));
+        let mut archive_has_contents = false;
 
         // Use the rlibs list if it exists
         let mut compiler_rlibs = std::fs::read_to_string(&out_rlibs_list)
@@ -1706,6 +1707,7 @@ impl BuildRequest {
                         tracing::debug!("Unknown object file in rlib: {:?}", name);
                     }
 
+                    archive_has_contents = true;
                     out_ar
                         .append(&object_file.header().clone(), object_file)
                         .context("Failed to add object file to archive")?;
@@ -1733,65 +1735,70 @@ impl BuildRequest {
         //
         // We also need to insert the -force_load flag to force the linker to load the archive
         let mut args = rustc_args.link_args.clone();
-        if let Some(first_rlib) = args.iter().position(|arg| arg.ends_with(".rlib")) {
-            match self.linker_flavor() {
-                LinkerFlavor::WasmLld => {
-                    // We need to use the --whole-archive flag for wasm
-                    args[first_rlib] = "--whole-archive".to_string();
-                    args.insert(first_rlib + 1, out_ar_path.display().to_string());
-                    args.insert(first_rlib + 2, "--no-whole-archive".to_string());
-                    args.retain(|arg| !arg.ends_with(".rlib"));
-
-                    // add back the compiler rlibs
-                    for rlib in compiler_rlibs.iter().rev() {
-                        args.insert(first_rlib + 3, rlib.display().to_string());
+        if let Some(last_object) = args.iter().rposition(|arg| arg.ends_with(".o")) {
+            if archive_has_contents {
+                match self.linker_flavor() {
+                    LinkerFlavor::WasmLld => {
+                        args.insert(last_object, "--whole-archive".to_string());
+                        args.insert(last_object + 1, out_ar_path.display().to_string());
+                        args.insert(last_object + 2, "--no-whole-archive".to_string());
+                        args.retain(|arg| !arg.ends_with(".rlib"));
+                        for rlib in compiler_rlibs.iter().rev() {
+                            args.insert(last_object + 3, rlib.display().to_string());
+                        }
                     }
-                }
-                LinkerFlavor::Gnu => {
-                    args[first_rlib] = "-Wl,--whole-archive".to_string();
-                    args.insert(first_rlib + 1, out_ar_path.display().to_string());
-                    args.insert(first_rlib + 2, "-Wl,--no-whole-archive".to_string());
-                    args.retain(|arg| !arg.ends_with(".rlib"));
-
-                    // add back the compiler rlibs
-                    for rlib in compiler_rlibs.iter().rev() {
-                        args.insert(first_rlib + 3, rlib.display().to_string());
+                    LinkerFlavor::Gnu => {
+                        args.insert(last_object, "-Wl,--whole-archive".to_string());
+                        args.insert(last_object + 1, out_ar_path.display().to_string());
+                        args.insert(last_object + 2, "-Wl,--no-whole-archive".to_string());
+                        args.retain(|arg| !arg.ends_with(".rlib"));
+                        for rlib in compiler_rlibs.iter().rev() {
+                            args.insert(last_object + 3, rlib.display().to_string());
+                        }
                     }
-
-                    // Export `main` so subsecond can use it for a reference point
-                    args.insert(first_rlib, "-Wl,--export-dynamic-symbol,main".to_string());
-                }
-                LinkerFlavor::Darwin => {
-                    args[first_rlib] = "-Wl,-force_load".to_string();
-                    args.insert(first_rlib + 1, out_ar_path.display().to_string());
-                    args.retain(|arg| !arg.ends_with(".rlib"));
-
-                    // add back the compiler rlibs
-                    for rlib in compiler_rlibs.iter().rev() {
-                        args.insert(first_rlib + 2, rlib.display().to_string());
+                    LinkerFlavor::Darwin => {
+                        args.insert(last_object, "-Wl,-force_load".to_string());
+                        args.insert(last_object + 1, out_ar_path.display().to_string());
+                        args.retain(|arg| !arg.ends_with(".rlib"));
+                        for rlib in compiler_rlibs.iter().rev() {
+                            args.insert(last_object + 2, rlib.display().to_string());
+                        }
                     }
-
-                    args.insert(first_rlib + 3, "-Wl,-all_load".to_string());
-                }
-                LinkerFlavor::Msvc => {
-                    args[first_rlib] = format!("/WHOLEARCHIVE:{}", out_ar_path.display());
-                    args.retain(|arg| !arg.ends_with(".rlib"));
-
-                    // add back the compiler rlibs
-                    for rlib in compiler_rlibs.iter().rev() {
-                        args.insert(first_rlib + 1, rlib.display().to_string());
+                    LinkerFlavor::Msvc => {
+                        args.insert(
+                            last_object,
+                            format!("/WHOLEARCHIVE:{}", out_ar_path.display()),
+                        );
+                        args.retain(|arg| !arg.ends_with(".rlib"));
+                        for rlib in compiler_rlibs.iter().rev() {
+                            args.insert(last_object + 1, rlib.display().to_string());
+                        }
                     }
+                    LinkerFlavor::Unsupported => {
+                        tracing::error!("Unsupported platform for fat linking");
+                    }
+                };
+            }
+        }
 
-                    // Prevent alsr from overflowing 32 bits
-                    args.insert(first_rlib, "/HIGHENTROPYVA:NO".to_string());
+        // Add custom args to the linkers
+        match self.linker_flavor() {
+            LinkerFlavor::Gnu => {
+                // Export `main` so subsecond can use it for a reference point
+                args.push("-Wl,--export-dynamic-symbol,main".to_string());
+            }
+            LinkerFlavor::Darwin => {
+                // `-all_load` is an extra step to ensure that all symbols are loaded (different than force_load)
+                args.push("-Wl,-all_load".to_string());
+            }
+            LinkerFlavor::Msvc => {
+                // Prevent alsr from overflowing 32 bits
+                args.push("/HIGHENTROPYVA:NO".to_string());
 
-                    // Export `main` so subsecond can use it for a reference point
-                    args.insert(first_rlib, "/EXPORT:main".to_string());
-                }
-                LinkerFlavor::Unsupported => {
-                    tracing::error!("Unsupported platform for fat linking");
-                }
-            };
+                // Export `main` so subsecond can use it for a reference point
+                args.push("/EXPORT:main".to_string());
+            }
+            LinkerFlavor::WasmLld | LinkerFlavor::Unsupported => {}
         }
 
         // We also need to remove the `-o` flag since we want the linker output to end up in the
