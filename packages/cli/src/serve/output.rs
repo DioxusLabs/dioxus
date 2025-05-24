@@ -721,7 +721,13 @@ impl Output {
         frame.render_widget(
             Paragraph::new(Line::from(vec![
                 "Hotreload: ".gray(),
-                "rsx and assets".yellow(),
+                if !state.runner.automatic_rebuilds {
+                    "disabled".dark_gray()
+                } else if state.runner.use_hotpatch_engine {
+                    "hot-patching".yellow()
+                } else {
+                    "rsx and assets".yellow()
+                },
             ])),
             meta_list[3],
         );

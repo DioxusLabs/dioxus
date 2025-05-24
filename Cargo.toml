@@ -94,6 +94,9 @@ members = [
     # subsecond
     "packages/subsecond/subsecond",
     "packages/subsecond/subsecond-types",
+    "packages/subsecond/subsecond-tests/cross-tls-crate",
+    "packages/subsecond/subsecond-tests/cross-tls-crate-dylib",
+    "packages/subsecond/subsecond-tests/cross-tls-test",
 
     # Full project examples
     "example-projects/fullstack-hackernews",

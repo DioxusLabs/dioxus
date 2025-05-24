@@ -80,7 +80,7 @@ pub fn connect_at(endpoint: String, mut callback: impl FnMut(DevserverMsg) + Sen
     std::thread::spawn(move || {
         let uri = format!(
             "{endpoint}?aslr_reference={}&build_id={}",
-            subsecond::__aslr_reference(),
+            subsecond::aslr_reference(),
             dioxus_cli_config::build_id()
         );
 

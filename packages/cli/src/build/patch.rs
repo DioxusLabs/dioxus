@@ -3,8 +3,8 @@ use itertools::Itertools;
 use object::{
     macho::{self},
     read::File,
-    write::{MachOBuildVersion, StandardSection, Symbol, SymbolSection},
-    Endianness, Object, ObjectSymbol, SymbolKind, SymbolScope,
+    write::{MachOBuildVersion, SectionId, StandardSection, Symbol, SymbolId, SymbolSection},
+    Endianness, Object, ObjectSymbol, SymbolFlags, SymbolKind, SymbolScope,
 };
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use std::{
@@ -84,6 +84,7 @@ pub struct CachedSymbol {
     pub is_undefined: bool,
     pub is_weak: bool,
     pub size: u64,
+    pub flags: SymbolFlags<SectionId, SymbolId>,
 }
 
 impl PartialEq for HotpatchModuleCache {
@@ -139,6 +140,7 @@ impl HotpatchModuleCache {
                                     is_undefined,
                                     is_weak: false,
                                     size: 0,
+                                    flags: SymbolFlags::None,
                                 },
                             );
                         }
@@ -158,6 +160,7 @@ impl HotpatchModuleCache {
                                     is_undefined,
                                     is_weak: false,
                                     size: 0,
+                                    flags: SymbolFlags::None,
                                 },
                             );
                         }
@@ -252,6 +255,15 @@ impl HotpatchModuleCache {
                 let symbol_table = obj
                     .symbols()
                     .filter_map(|s| {
+                        let flags = match s.flags() {
+                            SymbolFlags::None => SymbolFlags::None,
+                            SymbolFlags::Elf { st_info, st_other } => {
+                                SymbolFlags::Elf { st_info, st_other }
+                            }
+                            SymbolFlags::MachO { n_desc } => SymbolFlags::MachO { n_desc },
+                            _ => SymbolFlags::None,
+                        };
+
                         Some((
                             s.name().ok()?.to_string(),
                             CachedSymbol {
@@ -260,6 +272,7 @@ impl HotpatchModuleCache {
                                 is_weak: s.is_weak(),
                                 kind: s.kind(),
                                 size: s.size(),
+                                flags,
                             },
                         ))
                     })
@@ -326,9 +339,9 @@ fn create_windows_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> Resul
         .context("failed to find 'main' symbol in patch")?;
 
     let aslr_reference = old_name_to_addr
-        .get("__aslr_reference")
+        .get("main")
         .map(|s| s.address)
-        .context("failed to find '_aslr_reference' symbol in original module")?;
+        .context("failed to find '_main' symbol in original module")?;
 
     Ok(JumpTable {
         lib: patch.to_path_buf(),
@@ -371,31 +384,15 @@ fn create_native_jump_table(
         }
     }
 
-    let new_base_address = match triple.operating_system {
-        // The symbol in the symtab is called "_main" but in the dysymtab it is called "main"
-        OperatingSystem::MacOSX(_) | OperatingSystem::Darwin(_) | OperatingSystem::IOS(_) => {
-            *new_name_to_addr
-                .get("_main")
-                .context("failed to find '_main' symbol in patch")?
-        }
-
-        // No distincation between the two on these platforms
-        OperatingSystem::Freebsd
-        | OperatingSystem::Openbsd
-        | OperatingSystem::Linux
-        | OperatingSystem::Windows => *new_name_to_addr
-            .get("main")
-            .context("failed to find 'main' symbol in patch")?,
-
-        // On wasm, it doesn't matter what the address is since the binary is PIC
-        _ => 0,
-    };
-
+    let sentinel = main_sentinel(triple);
+    let new_base_address = new_name_to_addr
+        .get(sentinel)
+        .cloned()
+        .context("failed to find 'main' symbol in base - are deubg symbols enabled?")?;
     let aslr_reference = old_name_to_addr
-        .get("___aslr_reference")
-        .or_else(|| old_name_to_addr.get("__aslr_reference"))
+        .get(sentinel)
         .map(|s| s.address)
-        .context("failed to find '___aslr_reference' symbol in original module")?;
+        .context("failed to find 'main' symbol in original module - are debug symbols enabled?")?;
 
     Ok(JumpTable {
         lib: patch.to_path_buf(),
@@ -831,22 +828,31 @@ pub fn create_undefined_symbol_stub(
         _ => {}
     }
 
-    let symbol_table = &cache.symbol_table;
+    // Get the offset from the main module and adjust the addresses by the slide;
+    let aslr_ref_address = cache
+        .symbol_table
+        .get(main_sentinel(triple))
+        .context("failed to find '_main' symbol in patch")?
+        .address;
 
-    // Get the offset from the main module and adjust the addresses by the slide
-    let aslr_ref_address = symbol_table
-        .get("___aslr_reference")
-        .or_else(|| symbol_table.get("__aslr_reference"))
-        .map(|s| s.address)
-        .context("Failed to find ___aslr_reference symbol")?;
+    if aslr_reference < aslr_ref_address {
+        return Err(PatchError::InvalidModule(
+            format!(
+            "ASLR reference is less than the main module's address - is there a `main`?. {:x} < {:x}", aslr_reference, aslr_ref_address )
+        ));
+    }
+
     let aslr_offset = aslr_reference - aslr_ref_address;
 
     // we need to assemble a PLT/GOT so direct calls to the patch symbols work
     // for each symbol we either write the address directly (as a symbol) or create a PLT/GOT entry
     let text_section = obj.section_id(StandardSection::Text);
     for name in undefined_symbols {
-        let Some(sym) = symbol_table.get(name.as_str().trim_start_matches("__imp_")) else {
-            tracing::error!("Symbol not found: {}", name);
+        let Some(sym) = cache
+            .symbol_table
+            .get(name.as_str().trim_start_matches("__imp_"))
+        else {
+            tracing::debug!("Symbol not found: {}", name);
             continue;
         };
 
@@ -899,7 +905,7 @@ pub fn create_undefined_symbol_stub(
                     kind: SymbolKind::Data, // Always Data for IAT entries
                     weak: false,
                     section: SymbolSection::Section(data_section),
-                    flags: object::SymbolFlags::None,
+                    flags: SymbolFlags::None,
                 });
             }
 
@@ -1028,7 +1034,7 @@ pub fn create_undefined_symbol_stub(
                     kind: SymbolKind::Text,
                     weak: false,
                     section: SymbolSection::Section(text_section),
-                    flags: object::SymbolFlags::None,
+                    flags: SymbolFlags::None, // ignore for these stubs
                 });
             }
 
@@ -1097,7 +1103,7 @@ pub fn create_undefined_symbol_stub(
                     kind: SymbolKind::Tls,
                     weak: false,
                     section: SymbolSection::Section(tls_section),
-                    flags: object::SymbolFlags::None,
+                    flags: SymbolFlags::None, // ignore for these stubs
                 });
             }
 
@@ -1108,6 +1114,15 @@ pub fn create_undefined_symbol_stub(
                     SymbolKind::Unknown => SymbolKind::Data,
                     k => k,
                 };
+
+                // plain linux *wants* these flags, but android doesn't.
+                // unsure what's going on here, but this is special cased for now.
+                // I think the more advanced linkers don't want these flags, but the default linux linker (ld) does.
+                let flags = match triple.environment {
+                    target_lexicon::Environment::Android => SymbolFlags::None,
+                    _ => sym.flags,
+                };
+
                 obj.add_symbol(Symbol {
                     name: name.as_bytes()[name_offset..].to_vec(),
                     value: abs_addr,
@@ -1116,7 +1131,7 @@ pub fn create_undefined_symbol_stub(
                     kind,
                     weak: sym.is_weak,
                     section: SymbolSection::Absolute,
-                    flags: object::SymbolFlags::None,
+                    flags,
                 });
             }
         }
@@ -1438,4 +1453,19 @@ fn parse_module_with_ids(bindgened: &[u8]) -> Result<ParsedModule> {
         ids,
         symbols,
     })
+}
+
+/// Get the main sentinel symbol for the given target triple
+///
+/// We need to special case darwin since `main` is the entrypoint but `_main` is the actual symbol.
+/// The entrypoint ends up outside the text section, seemingly, and breaks our aslr detection.
+fn main_sentinel(triple: &Triple) -> &'static str {
+    match triple.operating_system {
+        // The symbol in the symtab is called "_main" but in the dysymtab it is called "main"
+        OperatingSystem::MacOSX(_) | OperatingSystem::Darwin(_) | OperatingSystem::IOS(_) => {
+            "_main"
+        }
+
+        _ => "main",
+    }
 }

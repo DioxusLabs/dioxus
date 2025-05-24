@@ -495,10 +495,9 @@ pub unsafe fn apply_patch(mut table: JumpTable) -> Result<(), PatchError> {
             }
         }));
 
-        // Use the `__aslr_reference` symbol as a sentinel for the current executable. This is basically a
-        // cross-platform version of `__mh_execute_header` on macOS that sets a reference point for the
-        // jump table.
-        let old_offset = __aslr_reference() - table.aslr_reference as usize;
+        // Use the `main` symbol as a sentinel for the current executable. This is basically a
+        // cross-platform version of `__mh_execute_header` on macOS that we can use to base the executable.
+        let old_offset = aslr_reference() - table.aslr_reference as usize;
 
         // Use the `main` symbol as a sentinel for the loaded library. Might want to move away
         // from this at some point, or make it configurable
@@ -672,22 +671,49 @@ pub enum PatchError {
     AndroidMemfd(String),
 }
 
-/// This function returns its own address, providing a stable reference point for hot-patch engine
-/// to hook onto. If you were to write an object file for this function, it would amount to:
-///
-/// ```asm
-/// __aslr_reference:
-///         mov     rax, qword ptr [rip + __aslr_reference@GOTPCREL] // notice the @GOTPCREL relocation
-///         ret
-/// ```
+/// This function returns the address of the main function in the current executable. This is used as
+/// an anchor to reference the current executable's base address.
 ///
 /// The point here being that we have a stable address both at runtime and compile time, making it
 /// possible to calculate the ASLR offset from within the process to correct the jump table.
+///
+/// It should only be called from the main executable *first* and not from a shared library since it
+/// self-initializes.
 #[doc(hidden)]
-#[inline(never)]
-#[no_mangle]
-pub extern "C" fn __aslr_reference() -> usize {
-    __aslr_reference as *const () as usize
+pub fn aslr_reference() -> usize {
+    #[cfg(target_family = "wasm")]
+    return 0;
+
+    #[cfg(not(target_family = "wasm"))]
+    unsafe {
+        use std::ffi::c_void;
+
+        // The first call to this function should occur in the
+        static mut MAIN_PTR: *mut c_void = std::ptr::null_mut();
+
+        if MAIN_PTR.is_null() {
+            #[cfg(unix)]
+            {
+                MAIN_PTR = libc::dlsym(libc::RTLD_DEFAULT, c"main".as_ptr() as _);
+            }
+
+            #[cfg(windows)]
+            {
+                extern "system" {
+                    fn GetModuleHandleA(lpModuleName: *const i8) -> *mut std::ffi::c_void;
+                    fn GetProcAddress(
+                        hModule: *mut std::ffi::c_void,
+                        lpProcName: *const i8,
+                    ) -> *mut std::ffi::c_void;
+                }
+
+                MAIN_PTR =
+                    GetProcAddress(GetModuleHandleA(std::ptr::null()), c"main".as_ptr() as _) as _;
+            }
+        }
+
+        MAIN_PTR as usize
+    }
 }
 
 /// On Android, we can't dlopen libraries that aren't placed inside /data/data/<package_name>/lib/
