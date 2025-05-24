@@ -1037,12 +1037,6 @@ impl BuildRequest {
             | Platform::Ios
             | Platform::Liveview
             | Platform::Server => {
-                // We wipe away the dir completely, which is not great behavior :/
-                // Don't wipe server since web will need this folder too.
-                if self.platform != Platform::Server {
-                    _ = std::fs::remove_dir_all(self.exe_dir());
-                }
-
                 std::fs::create_dir_all(self.exe_dir())?;
                 std::fs::copy(exe, self.main_exe())?;
             }
@@ -1495,11 +1489,6 @@ impl BuildRequest {
                         out_args.push(arg.to_string());
                     }
                 }
-
-                // use ld.lld if it exists. todo: use rust-lld
-                // if self.workspace.lld.is_some() {
-                //     out_args.push("-Wl,-fuse-ld=lld".to_string());
-                // }
             }
 
             LinkerFlavor::Msvc => {
@@ -1667,6 +1656,8 @@ impl BuildRequest {
         // Since we're using the git hash for the CLI entropy, debug builds should always regenerate
         // the archive since their hash might not change, but the logic might.
         if !out_ar_path.exists() || cfg!(debug_assertions) {
+            compiler_rlibs.clear();
+
             let mut bytes = vec![];
             let mut out_ar = ar::Builder::new(&mut bytes);
             for rlib in &rlibs {
@@ -1761,16 +1752,8 @@ impl BuildRequest {
                         args.insert(first_rlib + 3, rlib.display().to_string());
                     }
 
-                    // // Export `main` so subsecond can use it for a reference point
-                    // args.insert(first_rlib, "-Wl,--export-dynamic-symbol,main".to_string());
-
-                    // // use ld.lld if it exists, and don't override their linker.
-                    // // todo: use rust-lld
-                    // if self.workspace.lld.is_some()
-                    //     && !args.iter().any(|arg| arg.starts_with("-Wl,-fuse-ld"))
-                    // {
-                    //     args.insert(first_rlib, "-Wl,-fuse-ld=lld".to_string());
-                    // }
+                    // Export `main` so subsecond can use it for a reference point
+                    args.insert(first_rlib, "-Wl,--export-dynamic-symbol,main".to_string());
                 }
                 LinkerFlavor::Darwin => {
                     args[first_rlib] = "-Wl,-force_load".to_string();
