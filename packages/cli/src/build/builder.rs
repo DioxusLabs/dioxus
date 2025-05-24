@@ -8,7 +8,6 @@ use futures_util::{future::OptionFuture, pin_mut, FutureExt};
 use itertools::Itertools;
 use std::{
     env,
-    pin::Pin,
     time::{Duration, Instant, SystemTime},
 };
 use std::{
@@ -18,8 +17,8 @@ use std::{
 };
 use subsecond_types::JumpTable;
 use tokio::{
-    io::{AsyncBufRead, AsyncBufReadExt, BufReader, Lines},
-    process::{Child, Command},
+    io::{AsyncBufReadExt, BufReader, Lines},
+    process::{Child, ChildStderr, ChildStdout, Command},
     task::JoinHandle,
 };
 
@@ -75,8 +74,8 @@ pub(crate) struct AppBuilder {
 
     // stdio for the app so we can read its stdout/stderr
     // we don't map stdin today (todo) but most apps don't need it
-    pub stdout: Option<Lines<Pin<Box<dyn AsyncBufRead>>>>,
-    pub stderr: Option<Lines<Pin<Box<dyn AsyncBufRead>>>>,
+    pub stdout: Option<Lines<BufReader<ChildStdout>>>,
+    pub stderr: Option<Lines<BufReader<ChildStderr>>>,
 
     /// The executables but with some extra entropy in their name so we can run two instances of the
     /// same app without causing collisions on the filesystem.
@@ -742,8 +741,6 @@ impl AppBuilder {
 
         let stdout = BufReader::new(child.stdout.take().unwrap());
         let stderr = BufReader::new(child.stderr.take().unwrap());
-        let stdout: Pin<Box<dyn AsyncBufRead>> = Box::pin(stdout);
-        let stderr: Pin<Box<dyn AsyncBufRead>> = Box::pin(stderr);
         self.stdout = Some(stdout.lines());
         self.stderr = Some(stderr.lines());
         self.child = Some(child);
@@ -792,48 +789,23 @@ impl AppBuilder {
             .iter()
             .map(|(k, v)| (format!("SIMCTL_CHILD_{k}"), v.clone()));
 
-        let stdout_file = tempfile::tempfile()?;
-        let stderr_file = tempfile::tempfile()?;
-
-        let child = Command::new("xcrun")
+        let mut child = Command::new("xcrun")
             .arg("simctl")
             .arg("launch")
+            .arg("--console")
             .arg("booted")
             .arg(self.build.bundle_identifier())
-            .arg(format!("--stdout={}", 123))
-            .arg(format!("--stderr={}", 123))
             .envs(ios_envs)
             .stderr(Stdio::piped())
             .stdout(Stdio::piped())
             .kill_on_drop(true)
-            .output()
-            .await?;
+            .spawn()?;
 
-        let pstdout = String::from_utf8_lossy(&child.stdout);
-
-        if child.status.success() {
-            self.pid = pstdout
-                .trim()
-                .split_ascii_whitespace()
-                .last()
-                .unwrap()
-                .parse()
-                .ok();
-            tracing::debug!("Launched app with pid: {:?}", self.pid);
-        }
-
-        let stdout_io = tokio::fs::File::from(stdout_file);
-        let stderr_io = tokio::fs::File::from(stderr_file);
-
-        // Create BufReaders
-        let stdout_reader = BufReader::new(stdout_io);
-        let stderr_reader = BufReader::new(stderr_io);
-        let stdout_reader: Pin<Box<dyn AsyncBufRead>> = Box::pin(stdout_reader);
-        let stderr_reader: Pin<Box<dyn AsyncBufRead>> = Box::pin(stderr_reader);
-
-        // Store the line streams for later polling
-        self.stdout = Some(stdout_reader.lines());
-        self.stderr = Some(stderr_reader.lines());
+        let stdout = BufReader::new(child.stdout.take().unwrap());
+        let stderr = BufReader::new(child.stderr.take().unwrap());
+        self.stdout = Some(stdout.lines());
+        self.stderr = Some(stderr.lines());
+        self.child = Some(child);
 
         Ok(())
     }
