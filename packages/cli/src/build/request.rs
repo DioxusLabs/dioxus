@@ -2128,6 +2128,12 @@ impl BuildRequest {
             ));
         }
 
+        // for debuggability, we need to make sure android studio can properly understand our build
+        // https://stackoverflow.com/questions/68481401/debugging-a-prebuilt-shared-library-in-android-studio
+        if self.platform == Platform::Android {
+            cargo_args.push("-Clink-arg=-Wl,--build-id=sha1".to_string());
+        }
+
         // Handle frameworks/dylibs by setting the rpath
         // This is dependent on the bundle structure - in this case, appimage and appbundle for mac/linux
         // todo: we need to figure out what to do for windows

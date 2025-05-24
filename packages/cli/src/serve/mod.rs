@@ -90,7 +90,11 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &mut TraceController) -> 
 
             // Run the server in the background
             // Waiting for updates here lets us tap into when clients are added/removed
-            ServeUpdate::NewConnection { id, aslr_reference } => {
+            ServeUpdate::NewConnection {
+                id,
+                aslr_reference,
+                pid,
+            } => {
                 devserver
                     .send_hotreload(builder.applied_hot_reload_changes(BuildId::CLIENT))
                     .await;
@@ -101,7 +105,7 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &mut TraceController) -> 
                         .await;
                 }
 
-                builder.client_connected(id, aslr_reference).await;
+                builder.client_connected(id, aslr_reference, pid).await;
             }
 
             // Received a message from the devtools server - currently we only use this for
@@ -173,6 +177,11 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &mut TraceController) -> 
                             tracing::error!("Application [{platform}] exited with error: {status}");
                         }
                     }
+                    BuilderUpdate::ProcessWaitFailed { err } => {
+                        tracing::warn!(
+                            "Failed to wait for process - maybe it's hung or being debugged?: {err}"
+                        );
+                    }
                 }
             }
 
@@ -200,6 +209,10 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &mut TraceController) -> 
                         "disabled"
                     }
                 )
+            }
+
+            ServeUpdate::OpenDebugger { id } => {
+                builder.open_debugger(&devserver, id).await;
             }
 
             ServeUpdate::Exit { error } => {

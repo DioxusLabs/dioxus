@@ -123,6 +123,7 @@ impl RunArgs {
 
                             break;
                         }
+                        BuilderUpdate::ProcessWaitFailed { .. } => {}
                     }
                 }
                 _ => {}

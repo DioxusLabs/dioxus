@@ -692,6 +692,7 @@ impl AppServer {
         &mut self,
         build_id: BuildId,
         aslr_reference: Option<u64>,
+        pid: Option<u32>,
     ) {
         match build_id {
             BuildId::CLIENT => {
@@ -700,6 +701,9 @@ impl AppServer {
                 if self.client.build.platform != Platform::Web {
                     if let Some(aslr_reference) = aslr_reference {
                         self.client.aslr_reference = Some(aslr_reference);
+                    }
+                    if let Some(pid) = pid {
+                        self.client.pid = Some(pid);
                     }
                 }
             }
@@ -969,6 +973,24 @@ impl AppServer {
         };
 
         server.compiled_crates as f64 / server.expected_crates as f64
+    }
+
+    pub(crate) async fn open_debugger(&mut self, dev: &WebServer, build: BuildId) {
+        if self.use_hotpatch_engine {
+            tracing::warn!("Debugging symbols might not work properly with hotpatching enabled. Consider disabling hotpatching for debugging.");
+        }
+
+        match build {
+            BuildId::CLIENT => {
+                _ = self.client.open_debugger(dev).await;
+            }
+            BuildId::SERVER => {
+                if let Some(server) = self.server.as_mut() {
+                    _ = server.open_debugger(dev).await;
+                }
+            }
+            _ => {}
+        }
     }
 }
 

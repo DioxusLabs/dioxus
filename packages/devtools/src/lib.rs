@@ -49,7 +49,7 @@ pub fn try_apply_changes(dom: &VirtualDom, msg: &HotReloadMsg) -> Result<(), Pat
 /// Connect to the devserver and handle its messages with a callback.
 ///
 /// This doesn't use any form of security or protocol, so it's not safe to expose to the internet.
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(target_family = "wasm"))]
 pub fn connect(callback: impl FnMut(DevserverMsg) + Send + 'static) {
     let Some(endpoint) = dioxus_cli_config::devserver_ws_endpoint() else {
         return;
@@ -64,7 +64,7 @@ pub fn connect(callback: impl FnMut(DevserverMsg) + Send + 'static) {
 /// This is intended to be used by non-dioxus projects that want to use hotpatching.
 ///
 /// To handle the full devserver protocol, use `connect` instead.
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(target_family = "wasm"))]
 pub fn connect_subsecond() {
     connect(|msg| {
         if let DevserverMsg::HotReload(hot_reload_msg) = msg {
@@ -75,13 +75,14 @@ pub fn connect_subsecond() {
     });
 }
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(target_family = "wasm"))]
 pub fn connect_at(endpoint: String, mut callback: impl FnMut(DevserverMsg) + Send + 'static) {
     std::thread::spawn(move || {
         let uri = format!(
-            "{endpoint}?aslr_reference={}&build_id={}",
+            "{endpoint}?aslr_reference={}&build_id={}&pid={}",
             subsecond::aslr_reference(),
-            dioxus_cli_config::build_id()
+            dioxus_cli_config::build_id(),
+            std::process::id()
         );
 
         let (mut websocket, _req) = match tungstenite::connect(uri) {

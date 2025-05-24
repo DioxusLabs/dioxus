@@ -1,6 +1,6 @@
 use crate::{
     serve::{ansi_buffer::AnsiStringLine, ServeUpdate, WebServer},
-    BuildStage, BuilderUpdate, Platform, TraceContent, TraceMsg, TraceSrc,
+    BuildId, BuildStage, BuilderUpdate, Platform, TraceContent, TraceMsg, TraceSrc,
 };
 use cargo_metadata::diagnostic::Diagnostic;
 use crossterm::{
@@ -244,6 +244,16 @@ impl Output {
             KeyCode::Char('t') => {
                 self.trace = !self.trace;
                 tracing::info!("Tracing is now {}", if self.trace { "on" } else { "off" });
+            }
+            KeyCode::Char('D') => {
+                return Ok(Some(ServeUpdate::OpenDebugger {
+                    id: BuildId::SERVER,
+                }));
+            }
+            KeyCode::Char('d') => {
+                return Ok(Some(ServeUpdate::OpenDebugger {
+                    id: BuildId::CLIENT,
+                }));
             }
 
             KeyCode::Char('c') => {
