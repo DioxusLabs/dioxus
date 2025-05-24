@@ -1646,7 +1646,7 @@ impl BuildRequest {
         // Check if we already have a cached object file
         let out_ar_path = exe.with_file_name(format!("libdeps-{hash_id}.a",));
         let out_rlibs_list = exe.with_file_name(format!("rlibs-{hash_id}.txt"));
-        let mut archive_has_contents = false;
+        let mut archive_has_contents = out_ar_path.exists();
 
         // Use the rlibs list if it exists
         let mut compiler_rlibs = std::fs::read_to_string(&out_rlibs_list)
@@ -1662,7 +1662,7 @@ impl BuildRequest {
         //
         // Since we're using the git hash for the CLI entropy, debug builds should always regenerate
         // the archive since their hash might not change, but the logic might.
-        if !out_ar_path.exists() || cfg!(debug_assertions) {
+        if !archive_has_contents || cfg!(debug_assertions) {
             compiler_rlibs.clear();
 
             let mut bytes = vec![];
