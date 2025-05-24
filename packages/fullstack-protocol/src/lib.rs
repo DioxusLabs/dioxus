@@ -346,7 +346,15 @@ impl HTMLData {
             let body = list
                 .iter()
                 .map(|s| match s {
-                    Some(s) => format!(r#""{s}""#),
+                    Some(s) => {
+                        // Escape backslashes, quotes, and newlines
+                        let escaped = s
+                            .replace(r#"\"#, r#"\\"#)
+                            .replace("\n", r#"\n"#)
+                            .replace(r#"""#, r#"\""#);
+
+                        format!(r#""{escaped}""#)
+                    }
                     None => r#""unknown""#.to_string(),
                 })
                 .collect::<Vec<_>>()
