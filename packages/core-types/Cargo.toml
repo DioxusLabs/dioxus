@@ -11,4 +11,3 @@ keywords = ["dom", "ui", "gui", "react", ]
 
 
 [dependencies]
-once_cell = { workspace = true }

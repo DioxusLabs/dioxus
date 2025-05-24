@@ -1,7 +1,7 @@
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 pub fn is_bundled_app() -> bool {
-    static BUNDLED: Lazy<bool> = Lazy::new(|| {
+    static BUNDLED: LazyLock<bool> = LazyLock::new(|| {
         // If the env var is set, we're bundled
         if std::env::var("DIOXUS_CLI_ENABLED").is_ok() {
             return true;

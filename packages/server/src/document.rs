@@ -6,10 +6,10 @@ use std::cell::RefCell;
 
 use dioxus_lib::{document::*, prelude::*};
 use dioxus_ssr::Renderer;
-use once_cell::sync::Lazy;
 use parking_lot::RwLock;
+use std::sync::LazyLock;
 
-static RENDERER: Lazy<RwLock<Renderer>> = Lazy::new(|| RwLock::new(Renderer::new()));
+static RENDERER: LazyLock<RwLock<Renderer>> = LazyLock::new(|| RwLock::new(Renderer::new()));
 
 /// Reset the static renderer to a fresh state, clearing its cache.
 pub(crate) fn reset_renderer() {

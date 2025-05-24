@@ -71,7 +71,6 @@ dunce = { workspace = true }
 dirs = { workspace = true }
 reqwest = { workspace = true, features = ["rustls-tls", "trust-dns", "json"] }
 tower = { workspace = true }
-once_cell = { workspace = true }
 
 # path lookup
 which = { version = "7.0.2" }

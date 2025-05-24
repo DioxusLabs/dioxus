@@ -41,7 +41,6 @@ dioxus-mobile = { workspace = true, optional = true }
 
 tracing = { workspace = true }
 tracing-futures = { workspace = true, optional = true }
-once_cell = { workspace = true }
 tokio-util = { workspace = true, features = ["rt"], optional = true }
 async-trait = { workspace = true, optional = true }
 

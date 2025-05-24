@@ -1,7 +1,7 @@
 use super::*;
 use crate::{AddressArguments, BuildArgs, TraceController};
 use futures_util::FutureExt;
-use once_cell::sync::OnceCell;
+use std::sync::OnceLock;
 use std::{backtrace::Backtrace, panic::AssertUnwindSafe};
 
 /// Serve the project
@@ -102,7 +102,7 @@ impl ServeArgs {
             line: u32,
             column: u32,
         }
-        static BACKTRACE: OnceCell<(Backtrace, Option<SavedLocation>)> = OnceCell::new();
+        static BACKTRACE: OnceLock<(Backtrace, Option<SavedLocation>)> = OnceLock::new();
 
         // We *don't* want printing here, since it'll break the tui and log ordering.
         //

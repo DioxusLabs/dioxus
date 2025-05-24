@@ -4,8 +4,6 @@
 #![deny(missing_docs)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
-pub use once_cell;
-
 #[cfg(all(feature = "web", feature = "document"))]
 mod web;
 

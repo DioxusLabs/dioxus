@@ -15,6 +15,5 @@ js-sys = { workspace = true }
 wasm-bindgen = { workspace = true }
 wasm-bindgen-futures = { workspace = true }
 web-sys = { workspace = true, features = ["Document", "Window", "HtmlElement", "Text", "DomRectReadOnly", "console"] }
-once_cell = { workspace = true }
 getrandom = { workspace = true, features = ["js"] }
 reqwest = { workspace = true, features = ["json"] }
