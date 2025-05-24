@@ -692,6 +692,7 @@ impl AppServer {
         &mut self,
         build_id: BuildId,
         aslr_reference: Option<u64>,
+        pid: Option<u32>,
     ) {
         match build_id {
             BuildId::CLIENT => {
@@ -701,6 +702,8 @@ impl AppServer {
                     if let Some(aslr_reference) = aslr_reference {
                         self.client.aslr_reference = Some(aslr_reference);
                     }
+
+                    self.client.pid = pid;
                 }
             }
             BuildId::SERVER => {
