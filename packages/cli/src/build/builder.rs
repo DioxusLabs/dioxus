@@ -417,29 +417,20 @@ impl AppBuilder {
         }
     }
 
-    pub(crate) async fn open(
+    /// Create a list of environment variables that the child process will use
+    pub(crate) fn child_environment_variables(
         &mut self,
-        devserver_ip: SocketAddr,
-        open_address: Option<SocketAddr>,
+        devserver_ip: Option<SocketAddr>,
         start_fullstack_on_address: Option<SocketAddr>,
-        open_browser: bool,
         always_on_top: bool,
         build_id: BuildId,
-    ) -> Result<()> {
+    ) -> Vec<(&'static str, String)> {
         let krate = &self.build;
 
         // Set the env vars that the clients will expect
         // These need to be stable within a release version (ie 0.6.0)
         let mut envs = vec![
             (dioxus_cli_config::CLI_ENABLED_ENV, "true".to_string()),
-            (
-                dioxus_cli_config::DEVSERVER_IP_ENV,
-                devserver_ip.ip().to_string(),
-            ),
-            (
-                dioxus_cli_config::DEVSERVER_PORT_ENV,
-                devserver_ip.port().to_string(),
-            ),
             (
                 dioxus_cli_config::APP_TITLE_ENV,
                 krate.config.web.app.title.clone(),
@@ -459,6 +450,17 @@ impl AppBuilder {
             ("RUST_BACKTRACE", "1".to_string()),
         ];
 
+        if let Some(devserver_ip) = devserver_ip {
+            envs.push((
+                dioxus_cli_config::DEVSERVER_IP_ENV,
+                devserver_ip.ip().to_string(),
+            ));
+            envs.push((
+                dioxus_cli_config::DEVSERVER_PORT_ENV,
+                devserver_ip.port().to_string(),
+            ));
+        }
+
         if let Some(base_path) = krate.base_path() {
             envs.push((dioxus_cli_config::ASSET_ROOT_ENV, base_path.to_string()));
         }
@@ -473,6 +475,25 @@ impl AppBuilder {
             envs.push((dioxus_cli_config::SERVER_IP_ENV, addr.ip().to_string()));
             envs.push((dioxus_cli_config::SERVER_PORT_ENV, addr.port().to_string()));
         }
+
+        envs
+    }
+
+    pub(crate) async fn open(
+        &mut self,
+        devserver_ip: SocketAddr,
+        open_address: Option<SocketAddr>,
+        start_fullstack_on_address: Option<SocketAddr>,
+        open_browser: bool,
+        always_on_top: bool,
+        build_id: BuildId,
+    ) -> Result<()> {
+        let envs = self.child_environment_variables(
+            Some(devserver_ip),
+            start_fullstack_on_address,
+            always_on_top,
+            build_id,
+        );
 
         // We try to use stdin/stdout to communicate with the app
         match self.build.platform {

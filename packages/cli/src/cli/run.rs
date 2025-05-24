@@ -49,7 +49,7 @@ impl RunArgs {
                     match update {
                         BuilderUpdate::BuildReady { bundle } => {
                             _ = builder
-                                .open(bundle, &mut devserver)
+                                .open(&bundle, &mut devserver)
                                 .await
                                 .inspect_err(|e| tracing::error!("Failed to open app: {}", e));
 
