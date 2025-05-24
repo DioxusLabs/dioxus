@@ -157,7 +157,11 @@ impl Bundle {
         if self.ssg {
             if let Some(server) = server.as_ref() {
                 tracing::info!("Running SSG for static routes...");
-                Self::pre_render_static_routes(&server.main_exe()).await?;
+                Self::pre_render_static_routes(
+                    &server.main_exe(),
+                    client.config.web.app.base_path.as_ref(),
+                )
+                .await?;
                 tracing::info!("SSG complete");
             } else {
                 tracing::error!("SSG is only supported for fullstack apps. Ensure you have the server feature enabled and try again.");
@@ -290,7 +294,10 @@ impl Bundle {
     }
 
     /// Pre-render the static routes, performing static-site generation
-    async fn pre_render_static_routes(server_exe: &Path) -> anyhow::Result<()> {
+    async fn pre_render_static_routes(
+        server_exe: &Path,
+        base_path: Option<&String>,
+    ) -> anyhow::Result<()> {
         // Use the address passed in through environment variables or default to localhost:9999. We need
         // to default to a value that is different than the CLI default address to avoid conflicts
         let ip = server_ip().unwrap_or_else(|| IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)));
@@ -298,6 +305,11 @@ impl Bundle {
         let fullstack_address = SocketAddr::new(ip, port);
         let address = fullstack_address.ip().to_string();
         let port = fullstack_address.port().to_string();
+        let url = if let Some(base_path) = base_path {
+            format!("http://{address}:{port}/{base_path}/api/static_routes")
+        } else {
+            format!("http://{address}:{port}/api/static_routes")
+        };
 
         // Borrow port and address so we can easily moe them into multiple tasks below
         let address = &address;
@@ -330,7 +342,7 @@ impl Bundle {
             );
 
             let request = reqwest_client
-                .post(format!("http://{address}:{port}/api/static_routes"))
+                .post(&url)
                 .body("{}".to_string())
                 .send()
                 .await;
