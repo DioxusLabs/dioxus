@@ -435,7 +435,11 @@ impl<A, M, F: HotFunction<A, M>> HotFn<A, M, F> {
     /// # Safety
     ///
     /// The [`HotFnPtr`] must be to a function whose arguments layouts haven't changed.
-    pub unsafe fn try_call_with_ptr(&mut self, ptr: HotFnPtr, args: A) -> Result<F::Return, HotFnPanic> {
+    pub unsafe fn try_call_with_ptr(
+        &mut self,
+        ptr: HotFnPtr,
+        args: A,
+    ) -> Result<F::Return, HotFnPanic> {
         if !cfg!(debug_assertions) {
             return Ok(self.inner.call_it(args));
         }

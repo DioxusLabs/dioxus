@@ -3713,7 +3713,6 @@ dependencies = [
  "memoize",
  "notify",
  "object 0.36.7",
- "once_cell",
  "open",
  "path-absolutize",
  "pdb",
@@ -3890,9 +3889,6 @@ dependencies = [
 [[package]]
 name = "dioxus-core-types"
 version = "0.7.0-alpha.0"
-dependencies = [
- "once_cell",
-]
 
 [[package]]
 name = "dioxus-desktop"
@@ -3931,7 +3927,6 @@ dependencies = [
  "ndk-sys 0.6.0+11769913",
  "objc",
  "objc_id",
- "once_cell",
  "rand 0.8.5",
  "reqwest 0.12.15",
  "rfd",
@@ -4072,7 +4067,6 @@ dependencies = [
  "futures-util",
  "generational-box",
  "hyper-rustls 0.27.5",
- "once_cell",
  "parking_lot",
  "pin-project",
  "rustls 0.23.27",
@@ -4280,7 +4274,6 @@ dependencies = [
  "dioxus-lib",
  "jni",
  "libc",
- "once_cell",
 ]
 
 [[package]]
@@ -4489,7 +4482,6 @@ dependencies = [
  "hyper-rustls 0.27.5",
  "hyper-util",
  "inventory",
- "once_cell",
  "parking_lot",
  "pin-project",
  "rustls 0.23.27",
@@ -4517,7 +4509,6 @@ dependencies = [
  "futures-channel",
  "futures-util",
  "generational-box",
- "once_cell",
  "parking_lot",
  "rand 0.8.5",
  "reqwest 0.12.15",
@@ -5573,7 +5564,6 @@ dependencies = [
  "dioxus",
  "futures",
  "futures-util",
- "once_cell",
  "serde",
  "tokio",
 ]
@@ -15913,7 +15903,6 @@ dependencies = [
  "futures",
  "getrandom 0.2.16",
  "js-sys",
- "once_cell",
  "reqwest 0.12.15",
  "wasm-bindgen",
  "wasm-bindgen-futures",
