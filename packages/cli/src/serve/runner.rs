@@ -341,14 +341,14 @@ impl AppServer {
                     continue;
                 };
 
+                // Update the most recent version of the file, so when we force a rebuild, we keep operating on the most recent version
+                cached_file.most_recent = Some(new_contents);
+
                 // This assumes the two files are structured similarly. If they're not, we can't diff them
                 let Some(changed_rsx) = dioxus_rsx_hotreload::diff_rsx(&new_file, &old_file) else {
                     needs_full_rebuild = true;
                     break;
                 };
-
-                // Update the most recent version of the file, so when we force a rebuild, we keep operating on the most recent version
-                cached_file.most_recent = Some(new_contents);
 
                 for ChangedRsx { old, new } in changed_rsx {
                     let old_start = old.span().start();

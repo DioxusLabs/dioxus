@@ -20,7 +20,6 @@ pub struct Workspace {
     pub(crate) ignore: Gitignore,
     pub(crate) cargo_toml: cargo_toml::Manifest,
     pub(crate) android_tools: Option<Arc<AndroidTools>>,
-    pub(crate) lld: Option<PathBuf>,
 }
 
 impl Workspace {
@@ -67,8 +66,6 @@ impl Workspace {
 
         let android_tools = crate::build::get_android_tools();
 
-        let lld = which::which("lld").or_else(|_| which::which("ld.lld")).ok();
-
         let workspace = Arc::new(Self {
             krates,
             settings,
@@ -78,7 +75,6 @@ impl Workspace {
             ignore,
             cargo_toml,
             android_tools,
-            lld,
         });
 
         tracing::debug!(

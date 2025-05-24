@@ -1615,7 +1615,8 @@ impl BuildRequest {
 
         // Acquire a hash from the rlib names, sizes, modified times, and dx's git commit hash
         // This ensures that any changes in dx or the rlibs will cause a new hash to be generated
-        // The hash relies on both dx and rustc hashes, so it should be thoroughly unique
+        // The hash relies on both dx and rustc hashes, so it should be thoroughly unique. Keep it
+        // short to avoid long file names.
         let hash_id = Uuid::new_v5(
             &Uuid::NAMESPACE_OID,
             rlibs
@@ -1635,10 +1636,14 @@ impl BuildRequest {
                 })
                 .collect::<String>()
                 .as_bytes(),
-        );
+        )
+        .to_string()
+        .chars()
+        .take(8)
+        .collect::<String>();
 
         // Check if we already have a cached object file
-        let out_ar_path = exe.with_file_name(format!("libfatdependencies-{hash_id}.a"));
+        let out_ar_path = exe.with_file_name(format!("libdeps-{hash_id}.a",));
         let out_rlibs_list = exe.with_file_name(format!("rlibs-{hash_id}.txt"));
 
         // Use the rlibs list if it exists
