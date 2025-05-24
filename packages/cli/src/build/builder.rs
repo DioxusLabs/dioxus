@@ -1476,7 +1476,7 @@ We checked the folder: {}
                 // start the server - running it multiple times will make the subsequent ones fail (which is fine)
                 _ = Command::new(&tools.adb)
                     .arg("shell")
-                    .arg(r#"./lldb-server platform --server --listen '*:10086'"#)
+                    .arg(r#"cd /tmp && ./lldb-server platform --server --listen '*:10086'"#)
                     .kill_on_drop(false)
                     .stdin(Stdio::null())
                     .stdout(Stdio::piped())

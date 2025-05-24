@@ -976,6 +976,10 @@ impl AppServer {
 
     // todo: add a way to open the server's debugger too
     pub(crate) async fn open_debugger(&mut self, dev: &WebServer, build: BuildId) {
+        if self.use_hotpatch_engine {
+            tracing::warn!("Debugging symbols might not work properly with hotpatching enabled. Consider disabling hotpatching for debugging.");
+        }
+
         match build {
             BuildId::CLIENT => {
                 _ = self.client.open_debugger(dev).await;
