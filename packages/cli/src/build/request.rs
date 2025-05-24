@@ -1497,9 +1497,9 @@ impl BuildRequest {
                 }
 
                 // use ld.lld if it exists. todo: use rust-lld
-                if self.workspace.lld.is_some() {
-                    out_args.push("-Wl,-fuse-ld=lld".to_string());
-                }
+                // if self.workspace.lld.is_some() {
+                //     out_args.push("-Wl,-fuse-ld=lld".to_string());
+                // }
             }
 
             LinkerFlavor::Msvc => {
@@ -1663,7 +1663,10 @@ impl BuildRequest {
         //
         // The nature of this process involves making extremely fat archives, so we should try and
         // speed up the future linking process by caching the archive.
-        if !out_ar_path.exists() {
+        //
+        // Since we're using the git hash for the CLI entropy, debug builds should always regenerate
+        // the archive since their hash might not change, but the logic might.
+        if !out_ar_path.exists() || cfg!(debug_assertions) {
             let mut bytes = vec![];
             let mut out_ar = ar::Builder::new(&mut bytes);
             for rlib in &rlibs {
@@ -1758,16 +1761,16 @@ impl BuildRequest {
                         args.insert(first_rlib + 3, rlib.display().to_string());
                     }
 
-                    // Export `main` so subsecond can use it for a reference point
-                    args.insert(first_rlib, "-Wl,--export-dynamic-symbol,main".to_string());
+                    // // Export `main` so subsecond can use it for a reference point
+                    // args.insert(first_rlib, "-Wl,--export-dynamic-symbol,main".to_string());
 
-                    // use ld.lld if it exists, and don't override their linker.
-                    // todo: use rust-lld
-                    if self.workspace.lld.is_some()
-                        && !args.iter().any(|arg| arg.starts_with("-Wl,-fuse-ld"))
-                    {
-                        args.insert(first_rlib, "-Wl,-fuse-ld=lld".to_string());
-                    }
+                    // // use ld.lld if it exists, and don't override their linker.
+                    // // todo: use rust-lld
+                    // if self.workspace.lld.is_some()
+                    //     && !args.iter().any(|arg| arg.starts_with("-Wl,-fuse-ld"))
+                    // {
+                    //     args.insert(first_rlib, "-Wl,-fuse-ld=lld".to_string());
+                    // }
                 }
                 LinkerFlavor::Darwin => {
                     args[first_rlib] = "-Wl,-force_load".to_string();
@@ -2021,7 +2024,7 @@ impl BuildRequest {
 
                 cmd.envs(rustc_args.envs.iter().cloned());
 
-                tracing::trace!("Setting env vars: {:#?}", rustc_args.envs);
+                // tracing::trace!("Setting env vars: {:#?}", rustc_args.envs);
 
                 Ok(cmd)
             }
@@ -2138,8 +2141,8 @@ impl BuildRequest {
                 cargo_args.push("-Clink-arg=-Wl,-rpath,@executable_path".to_string());
             }
             OperatingSystem::Linux => {
-                cargo_args.push("-Clink-arg=-Wl,-rpath,$ORIGIN/../lib".to_string());
-                cargo_args.push("-Clink-arg=-Wl,-rpath,$ORIGIN".to_string());
+                // cargo_args.push("-Clink-arg=-Wl,-rpath,$ORIGIN/../lib".to_string());
+                // cargo_args.push("-Clink-arg=-Wl,-rpath,$ORIGIN".to_string());
             }
             _ => {}
         }

@@ -5,6 +5,7 @@ edition = "2024"
 publish = false
 
 [lib]
-crate-type = ["dylib"]
+# when testing, use a dylib
+# crate-type = ["dylib"]
 
 [dependencies]

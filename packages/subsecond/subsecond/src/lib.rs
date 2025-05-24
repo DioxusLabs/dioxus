@@ -235,7 +235,7 @@ use std::{
     backtrace,
     mem::transmute,
     panic::AssertUnwindSafe,
-    sync::{atomic::AtomicPtr, Arc, Mutex},
+    sync::{Arc, Mutex, atomic::AtomicPtr},
 };
 
 /// Call a given function with hot-reloading enabled. If the function's code changes, `call` will use
@@ -537,9 +537,9 @@ pub unsafe fn apply_patch(mut table: JumpTable) -> Result<(), PatchError> {
             ArrayBuffer, Object, Reflect,
             WebAssembly::{self, Memory, Table},
         };
-        use wasm_bindgen::prelude::*;
         use wasm_bindgen::JsValue;
         use wasm_bindgen::UnwrapThrowExt;
+        use wasm_bindgen::prelude::*;
         use wasm_bindgen_futures::JsFuture;
 
         let funcs: Table = wasm_bindgen::function_table().unchecked_into();
@@ -676,27 +676,43 @@ pub enum PatchError {
 ///
 /// The point here being that we have a stable address both at runtime and compile time, making it
 /// possible to calculate the ASLR offset from within the process to correct the jump table.
+///
+/// It should only be called from the main executable *first* and not from a shared library since it
+/// self-initializes.
 #[doc(hidden)]
 pub fn aslr_reference() -> usize {
     #[cfg(target_family = "wasm")]
     return 0;
 
-    #[cfg(windows)]
-    return unsafe {
-        extern "system" {
-            fn GetModuleHandleA(lpModuleName: *const i8) -> *mut std::ffi::c_void;
-            fn GetProcAddress(
-                hModule: *mut std::ffi::c_void,
-                lpProcName: *const i8,
-            ) -> *mut std::ffi::c_void;
+    #[cfg(not(target_family = "wasm"))]
+    unsafe {
+        use std::ffi::c_void;
+
+        // The first call to this function should occur in the
+        static mut MAIN_PTR: *mut c_void = std::ptr::null_mut();
+
+        if MAIN_PTR.is_null() {
+            #[cfg(unix)]
+            {
+                MAIN_PTR = libc::dlsym(libc::RTLD_DEFAULT, c"main".as_ptr() as _);
+            }
+
+            #[cfg(windows)]
+            {
+                extern "system" {
+                    fn GetModuleHandleA(lpModuleName: *const i8) -> *mut std::ffi::c_void;
+                    fn GetProcAddress(
+                        hModule: *mut std::ffi::c_void,
+                        lpProcName: *const i8,
+                    ) -> *mut std::ffi::c_void;
+                }
+
+                MAIN_PTR =
+                    GetProcAddress(GetModuleHandleA(std::ptr::null()), c"main".as_ptr() as _) as _;
+            }
         }
 
-        GetProcAddress(GetModuleHandleA(std::ptr::null()), c"main".as_ptr() as _) as _
-    };
-
-    #[cfg(not(any(target_family = "wasm", windows)))]
-    unsafe {
-        libc::dlsym(libc::RTLD_DEFAULT, c"main".as_ptr() as _) as _
+        MAIN_PTR as usize
     }
 }
 
@@ -714,7 +730,7 @@ pub fn aslr_reference() -> usize {
 /// - https://developer.android.com/ndk/reference/structandroid/dlextinfo
 #[cfg(target_os = "android")]
 unsafe fn android_memmap_dlopen(file: &std::path::Path) -> Result<libloading::Library, PatchError> {
-    use std::ffi::{c_void, CStr, CString};
+    use std::ffi::{CStr, CString, c_void};
     use std::os::fd::{AsRawFd, BorrowedFd};
     use std::ptr;
 

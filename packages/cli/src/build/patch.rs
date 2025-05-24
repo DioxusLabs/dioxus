@@ -1115,6 +1115,14 @@ pub fn create_undefined_symbol_stub(
                     k => k,
                 };
 
+                // plain linux *wants* these flags, but android doesn't.
+                // unsure what's going on here, but this is special cased for now.
+                // I think the more advanced linkers don't want these flags, but the default linux linker (ld) does.
+                let flags = match triple.environment {
+                    target_lexicon::Environment::Android => SymbolFlags::None,
+                    _ => sym.flags,
+                };
+
                 obj.add_symbol(Symbol {
                     name: name.as_bytes()[name_offset..].to_vec(),
                     value: abs_addr,
@@ -1123,7 +1131,7 @@ pub fn create_undefined_symbol_stub(
                     kind,
                     weak: sym.is_weak,
                     section: SymbolSection::Absolute,
-                    flags: sym.flags, // important on elf where these matter
+                    flags,
                 });
             }
         }
