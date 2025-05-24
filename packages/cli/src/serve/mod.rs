@@ -179,7 +179,7 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &mut TraceController) -> 
                     }
                     BuilderUpdate::ProcessWaitFailed { err } => {
                         tracing::warn!(
-                            "Failed to wait for process - maybe it's hung or beng debugged?: {err}"
+                            "Failed to wait for process - maybe it's hung or being debugged?: {err}"
                         );
                     }
                 }
