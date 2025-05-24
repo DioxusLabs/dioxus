@@ -2023,6 +2023,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "cargo-config2"
+version = "0.1.32"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6dc3749a36e0423c991f1e7a3e4ab0c36a1f489658313db4b187d401d79cc461"
+dependencies = [
+ "serde",
+ "serde_derive",
+ "toml_edit 0.22.26",
+ "windows-sys 0.59.0",
+]
+
+[[package]]
 name = "cargo-generate"
 version = "0.23.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2944,6 +2956,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "cross-tls-crate"
+version = "0.1.0"
+
+[[package]]
+name = "cross-tls-crate-dylib"
+version = "0.1.0"
+
+[[package]]
 name = "crossbeam"
 version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3662,6 +3682,7 @@ dependencies = [
  "backtrace",
  "brotli 7.0.0",
  "built",
+ "cargo-config2",
  "cargo-generate",
  "cargo_metadata",
  "cargo_toml",
@@ -13466,6 +13487,15 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
+]
+
+[[package]]
+name = "subsecond-tls-harness"
+version = "0.1.0"
+dependencies = [
+ "cross-tls-crate",
+ "cross-tls-crate-dylib",
+ "dioxus-devtools",
 ]
 
 [[package]]

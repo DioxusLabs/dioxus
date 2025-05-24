@@ -2,6 +2,7 @@ use crate::{
     serve::{ansi_buffer::AnsiStringLine, ServeUpdate, WebServer},
     BuildId, BuildStage, BuilderUpdate, Platform, TraceContent, TraceMsg, TraceSrc,
 };
+use cargo_metadata::diagnostic::Diagnostic;
 use crossterm::{
     cursor::{Hide, Show},
     event::{
@@ -304,10 +305,10 @@ impl Output {
         self.pending_logs.push_front(message);
     }
 
-    pub fn push_cargo_log(&mut self, message: cargo_metadata::CompilerMessage) {
+    pub fn push_cargo_log(&mut self, message: Diagnostic) {
         use cargo_metadata::diagnostic::DiagnosticLevel;
 
-        if self.trace || !matches!(message.message.level, DiagnosticLevel::Note) {
+        if self.trace || !matches!(message.level, DiagnosticLevel::Note) {
             self.push_log(TraceMsg::cargo(message));
         }
     }
@@ -730,7 +731,13 @@ impl Output {
         frame.render_widget(
             Paragraph::new(Line::from(vec![
                 "Hotreload: ".gray(),
-                "rsx and assets".yellow(),
+                if !state.runner.automatic_rebuilds {
+                    "disabled".dark_gray()
+                } else if state.runner.use_hotpatch_engine {
+                    "hot-patching".yellow()
+                } else {
+                    "rsx and assets".yellow()
+                },
             ])),
             meta_list[3],
         );
@@ -934,7 +941,7 @@ impl Output {
         use chrono::Timelike;
 
         let rendered = match log.content {
-            TraceContent::Cargo(msg) => msg.message.rendered.unwrap_or_default(),
+            TraceContent::Cargo(msg) => msg.rendered.unwrap_or_default(),
             TraceContent::Text(text) => text,
         };
 
