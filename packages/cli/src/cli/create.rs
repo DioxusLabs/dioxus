@@ -72,12 +72,14 @@ impl Create {
             init: true,
             name: self.name,
             silent: self.yes,
+            vcs: Some(cargo_generate::Vcs::Git),
             template_path: TemplatePath {
                 auto_path: self.template,
                 branch: self.branch,
                 revision: self.revision,
                 subfolder: self.subtemplate,
                 tag: self.tag,
+
                 ..Default::default()
             },
             verbose: crate::logging::VERBOSITY
