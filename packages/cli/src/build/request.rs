@@ -1047,17 +1047,19 @@ impl BuildRequest {
 
     async fn write_frameworks(&self, _ctx: &BuildContext, direct_rustc: &RustcArgs) -> Result<()> {
         let framework_dir = self.frameworks_folder();
-        _ = std::fs::create_dir_all(&framework_dir);
 
         for arg in &direct_rustc.link_args {
             // todo - how do we handle windows dlls? we don't want to bundle the system dlls
             // for now, we don't do anything with dlls, and only use .dylibs and .so files
+
             if arg.ends_with(".dylib") | arg.ends_with(".so") {
                 let from = PathBuf::from(arg);
                 let to = framework_dir.join(from.file_name().unwrap());
                 _ = std::fs::remove_file(&to);
 
                 tracing::debug!("Copying framework from {from:?} to {to:?}");
+
+                _ = std::fs::create_dir_all(&framework_dir);
 
                 // in dev and on normal oses, we want to symlink the file
                 // otherwise, just copy it (since in release you want to distribute the framework)
@@ -3185,6 +3187,7 @@ impl BuildRequest {
             .expect("this should have been checked by tool verification");
 
         // Prepare any work dirs
+        _ = std::fs::remove_dir_all(&bindgen_outdir);
         std::fs::create_dir_all(&bindgen_outdir)?;
 
         // Lift the internal functions to exports
@@ -3360,9 +3363,11 @@ impl BuildRequest {
                 .unwrap();
         }
 
+        let package_to_asset = self.release && !should_bundle_split;
+
         // In release mode, we make the wasm and bindgen files into assets so they get bundled with max
         // optimizations.
-        let wasm_path = if self.release && !should_bundle_split {
+        let wasm_path = if package_to_asset {
             // Make sure to register the main wasm file with the asset system
             let name = assets
                 .register_asset(&post_bindgen_wasm, AssetOptions::Unknown)
@@ -3373,7 +3378,7 @@ impl BuildRequest {
             format!("wasm/{}", asset.file_name().unwrap().to_str().unwrap())
         };
 
-        let js_path = if self.release && !should_bundle_split {
+        let js_path = if package_to_asset {
             // Register the main.js with the asset system so it bundles in the snippets and optimizes
             let name = assets
                 .register_asset(
@@ -3386,6 +3391,11 @@ impl BuildRequest {
             let asset = self.wasm_bindgen_js_output_file();
             format!("wasm/{}", asset.file_name().unwrap().to_str().unwrap())
         };
+
+        // Remove the wasm dir if we packaged it to an "asset"-type app
+        if package_to_asset {
+            std::fs::remove_dir_all(&bindgen_outdir).context("Failed to remove bindgen outdir")?;
+        }
 
         // Write the index.html file with the pre-configured contents we got from pre-rendering
         std::fs::write(
