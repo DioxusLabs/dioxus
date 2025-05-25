@@ -433,6 +433,7 @@ impl AppServer {
                 ms_elapsed: 0,
                 jump_table: Default::default(),
                 for_build_id: None,
+                for_pid: None,
             };
 
             self.add_hot_reload_message(&msg);

@@ -1,6 +1,6 @@
 use crate::{
     styles::{GLOW_STYLE, LINK_STYLE},
-    AppBuilder, BuildId, BuildMode, BuilderUpdate, Result, ServeArgs, TraceController,
+    AppBuilder, BuildId, BuildMode, BuilderUpdate, Platform, Result, ServeArgs, TraceController,
 };
 
 mod ansi_buffer;
@@ -140,7 +140,13 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &mut TraceController) -> 
                             let elapsed =
                                 bundle.time_end.duration_since(bundle.time_start).unwrap();
                             match builder.hotpatch(&bundle, id, cache).await {
-                                Ok(jumptable) => devserver.send_patch(jumptable, elapsed, id).await,
+                                Ok(jumptable) => {
+                                    let pid = match id {
+                                        BuildId::CLIENT => builder.client.pid,
+                                        _ => builder.server.as_ref().and_then(|s| s.pid),
+                                    };
+                                    devserver.send_patch(jumptable, elapsed, id, pid).await
+                                }
                                 Err(err) => {
                                     tracing::error!("Failed to hot-patch app: {err}");
 
@@ -189,11 +195,21 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &mut TraceController) -> 
                 screen.push_log(log);
             }
 
-            ServeUpdate::OpenApp => {
-                if let Err(err) = builder.open_all(&devserver, true).await {
-                    tracing::error!("Failed to open app: {err}")
+            ServeUpdate::OpenApp => match builder.use_hotpatch_engine {
+                true if !matches!(builder.client.build.platform, Platform::Web) => {
+                    tracing::warn!(
+                        "Opening a native app with hotpatching enabled requires a full rebuild..."
+                    );
+                    builder.full_rebuild().await;
+                    devserver.send_reload_start().await;
+                    devserver.start_build().await;
                 }
-            }
+                _ => {
+                    if let Err(err) = builder.open_all(&devserver, true).await {
+                        tracing::error!("Failed to open app: {err}")
+                    }
+                }
+            },
 
             ServeUpdate::Redraw => {
                 // simply returning will cause a redraw

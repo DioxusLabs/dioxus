@@ -304,12 +304,14 @@ impl WebServer {
         jump_table: JumpTable,
         time_taken: Duration,
         build: BuildId,
+        for_pid: Option<u32>,
     ) {
         let msg = DevserverMsg::HotReload(HotReloadMsg {
             jump_table: Some(jump_table),
             ms_elapsed: time_taken.as_millis() as u64,
             templates: vec![],
             assets: vec![],
+            for_pid,
             for_build_id: Some(build.0 as _),
         });
         self.send_devserver_message_to_all(msg).await;
