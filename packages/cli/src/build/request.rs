@@ -2458,7 +2458,7 @@ impl BuildRequest {
     }
 
     fn platform_dir(&self) -> PathBuf {
-        self.build_dir(self.platform, self.release)
+        self.build_dir(self.platform)
     }
 
     fn platform_exe_name(&self) -> String {
@@ -2732,10 +2732,10 @@ impl BuildRequest {
     /// target/dx/build/app/web/
     /// target/dx/build/app/web/public/
     /// target/dx/build/app/web/server.exe
-    pub(crate) fn build_dir(&self, platform: Platform, release: bool) -> PathBuf {
+    pub(crate) fn build_dir(&self, platform: Platform) -> PathBuf {
         self.internal_out_dir()
             .join(self.executable_name())
-            .join(if release { "release" } else { "debug" })
+            .join(&self.profile)
             .join(platform.build_folder_name())
     }
 
@@ -3289,7 +3289,9 @@ impl BuildRequest {
                     .context("generated bindgen module has no name?")?;
 
                 let path = bindgen_outdir.join(format!("module_{}_{}.wasm", idx, comp_name));
-                wasm_opt::write_wasm(&module.bytes, &path, &wasm_opt_options).await?;
+                wasm_opt::write_wasm(&module.bytes, &path, &wasm_opt_options)
+                    .await
+                    .context("Failed to wasm-opt")?;
 
                 let hash_id = module
                     .hash_id
@@ -3304,7 +3306,9 @@ impl BuildRequest {
 
                     // Again, register this wasm with the asset system
                     url = assets
-                        .register_asset(&path, AssetOptions::Unknown)?.bundled_path(),
+                        .register_asset(&path, AssetOptions::Unknown)
+                        .context("Failed to register wasm split loader")?
+                        .bundled_path(),
 
                     // This time, make sure to write the dependencies of this chunk
                     // The names here are again, hardcoded in wasm-split - fix this eventually.
