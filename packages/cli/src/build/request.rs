@@ -3213,6 +3213,7 @@ impl BuildRequest {
             || will_wasm_opt
             || ctx.mode == BuildMode::Fat;
         let keep_names = will_wasm_opt || ctx.mode == BuildMode::Fat;
+        let package_to_asset = self.release && !should_bundle_split;
         let demangle = false;
         let wasm_opt_options = WasmOptConfig {
             memory_packing: self.wasm_split,
@@ -3313,7 +3314,9 @@ impl BuildRequest {
                     // Again, register this wasm with the asset system
                     url = assets
                         .register_asset(&path, AssetOptions::Unknown)
-                        .context("Failed to register wasm split loader").unwrap().bundled_path(),
+                        .context("Failed to register wasm split loader")
+                        .unwrap()
+                        .bundled_path(),
 
                     // This time, make sure to write the dependencies of this chunk
                     // The names here are again, hardcoded in wasm-split - fix this eventually.
@@ -3362,8 +3365,6 @@ impl BuildRequest {
                 .await
                 .unwrap();
         }
-
-        let package_to_asset = self.release && !should_bundle_split;
 
         // In release mode, we make the wasm and bindgen files into assets so they get bundled with max
         // optimizations.
