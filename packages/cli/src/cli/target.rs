@@ -97,11 +97,11 @@ pub(crate) struct TargetArgs {
 #[command(subcommand_precedence_over_arg = true)]
 pub(crate) enum TargetCmd {
     /// Specify the arguments for the client build
-    #[clap(name = "client")]
+    #[clap(name = "@client")]
     Client(ChainedCommand<TargetArgs, TargetCmd>),
 
     /// Specify the arguments for the server build
-    #[clap(name = "server")]
+    #[clap(name = "@server")]
     Server(ChainedCommand<TargetArgs, TargetCmd>),
 }
 
