@@ -3286,17 +3286,20 @@ impl BuildRequest {
                 let comp_name = module
                     .component_name
                     .as_ref()
-                    .context("generated bindgen module has no name?")?;
+                    .context("generated bindgen module has no name?")
+                    .unwrap();
 
                 let path = bindgen_outdir.join(format!("module_{}_{}.wasm", idx, comp_name));
                 wasm_opt::write_wasm(&module.bytes, &path, &wasm_opt_options)
                     .await
-                    .context("Failed to wasm-opt")?;
+                    .context("Failed to wasm-opt")
+                    .unwrap();
 
                 let hash_id = module
                     .hash_id
                     .as_ref()
-                    .context("generated wasm-split bindgen module has no hash id?")?;
+                    .context("generated wasm-split bindgen module has no hash id.unwrap()")
+                    .unwrap();
 
                 writeln!(
                     glue,
@@ -3307,7 +3310,7 @@ impl BuildRequest {
                     // Again, register this wasm with the asset system
                     url = assets
                         .register_asset(&path, AssetOptions::Unknown)
-                        .context("Failed to register wasm split loader")?.bundled_path(),
+                        .context("Failed to register wasm split loader").unwrap().bundled_path(),
 
                     // This time, make sure to write the dependencies of this chunk
                     // The names here are again, hardcoded in wasm-split - fix this eventually.
@@ -3317,13 +3320,13 @@ impl BuildRequest {
                         .map(|idx| format!("__wasm_split_load_chunk_{idx}"))
                         .collect::<Vec<_>>()
                         .join(", ")
-                )?;
+                ).unwrap();
             }
 
             // Write the js binding
             // It's not registered as an asset since it will get included in the main.js file
             let js_output_path = bindgen_outdir.join("__wasm_split.js");
-            std::fs::write(&js_output_path, &glue)?;
+            std::fs::write(&js_output_path, &glue).unwrap();
 
             // Make sure to write some entropy to the main.js file so it gets a new hash
             // If we don't do this, the main.js file will be cached and never pick up the chunk names
@@ -3331,33 +3334,39 @@ impl BuildRequest {
             std::fs::OpenOptions::new()
                 .append(true)
                 .open(self.wasm_bindgen_js_output_file())
-                .context("Failed to open main.js file")?
-                .write_all(format!("/*{uuid}*/").as_bytes())?;
+                .context("Failed to open main.js file")
+                .unwrap()
+                .write_all(format!("/*{uuid}*/").as_bytes())
+                .unwrap();
 
             // Write the main wasm_bindgen file and register it with the asset system
             // This will overwrite the file in place
             // We will wasm-opt it in just a second...
-            std::fs::write(&post_bindgen_wasm, modules.main.bytes)?;
+            std::fs::write(&post_bindgen_wasm, modules.main.bytes).unwrap();
         }
 
         if matches!(ctx.mode, BuildMode::Fat) {
             // add `export { __wbg_get_imports };` to the end of the wasmbindgen js file
-            let mut js = std::fs::read(self.wasm_bindgen_js_output_file())?;
-            writeln!(js, "\nexport {{ __wbg_get_imports }};")?;
-            std::fs::write(self.wasm_bindgen_js_output_file(), js)?;
+            let mut js = std::fs::read(self.wasm_bindgen_js_output_file()).unwrap();
+            writeln!(js, "\nexport {{ __wbg_get_imports }};").unwrap();
+            std::fs::write(self.wasm_bindgen_js_output_file(), js).unwrap();
         }
 
         // Make sure to optimize the main wasm file if requested or if bundle splitting
         if should_bundle_split || self.release {
             ctx.status_optimizing_wasm();
-            wasm_opt::optimize(&post_bindgen_wasm, &post_bindgen_wasm, &wasm_opt_options).await?;
+            wasm_opt::optimize(&post_bindgen_wasm, &post_bindgen_wasm, &wasm_opt_options)
+                .await
+                .unwrap();
         }
 
         // In release mode, we make the wasm and bindgen files into assets so they get bundled with max
         // optimizations.
         let wasm_path = if self.release && !should_bundle_split {
             // Make sure to register the main wasm file with the asset system
-            let name = assets.register_asset(&post_bindgen_wasm, AssetOptions::Unknown)?;
+            let name = assets
+                .register_asset(&post_bindgen_wasm, AssetOptions::Unknown)
+                .unwrap();
             format!("assets/{}", name.bundled_path())
         } else {
             let asset = self.wasm_bindgen_wasm_output_file();
@@ -3366,10 +3375,12 @@ impl BuildRequest {
 
         let js_path = if self.release && !should_bundle_split {
             // Register the main.js with the asset system so it bundles in the snippets and optimizes
-            let name = assets.register_asset(
-                &self.wasm_bindgen_js_output_file(),
-                AssetOptions::Js(JsAssetOptions::new().with_minify(true).with_preload(true)),
-            )?;
+            let name = assets
+                .register_asset(
+                    &self.wasm_bindgen_js_output_file(),
+                    AssetOptions::Js(JsAssetOptions::new().with_minify(true).with_preload(true)),
+                )
+                .unwrap();
             format!("assets/{}", name.bundled_path())
         } else {
             let asset = self.wasm_bindgen_js_output_file();
@@ -3379,8 +3390,9 @@ impl BuildRequest {
         // Write the index.html file with the pre-configured contents we got from pre-rendering
         std::fs::write(
             self.root_dir().join("index.html"),
-            self.prepare_html(assets, &wasm_path, &js_path)?,
-        )?;
+            self.prepare_html(assets, &wasm_path, &js_path).unwrap(),
+        )
+        .unwrap();
 
         Ok(())
     }
