@@ -2,10 +2,9 @@
 ///
 /// We want to acquire this mutex before doing anything with the virtualdom directly
 pub fn android_runtime_lock() -> std::sync::MutexGuard<'static, ()> {
-    use once_cell::sync::OnceCell;
-    use std::sync::Mutex;
+    use std::sync::{Mutex, OnceLock};
 
-    static RUNTIME_LOCK: OnceCell<Mutex<()>> = OnceCell::new();
+    static RUNTIME_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
     RUNTIME_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap()
 }

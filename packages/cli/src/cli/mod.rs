@@ -24,8 +24,8 @@ use crate::{error::Result, Error, StructuredOutput};
 use clap::builder::styling::{AnsiColor, Effects, Style, Styles};
 use clap::{Parser, Subcommand};
 use html_parser::Dom;
-use once_cell::sync::Lazy;
 use serde::Deserialize;
+use std::sync::LazyLock;
 use std::{
     fmt::Display,
     fs::File,
@@ -123,7 +123,7 @@ impl Display for Commands {
     }
 }
 
-pub(crate) static VERSION: Lazy<String> = Lazy::new(|| {
+pub(crate) static VERSION: LazyLock<String> = LazyLock::new(|| {
     format!(
         "{} ({})",
         crate::dx_build_info::PKG_VERSION,

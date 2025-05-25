@@ -3532,10 +3532,10 @@ impl BuildRequest {
     ///
     /// It's not guaranteed that they're different from any other folder
     pub(crate) fn prepare_build_dir(&self) -> Result<()> {
-        use once_cell::sync::OnceCell;
         use std::fs::{create_dir_all, remove_dir_all};
+        use std::sync::OnceLock;
 
-        static INITIALIZED: OnceCell<Result<()>> = OnceCell::new();
+        static INITIALIZED: OnceLock<Result<()>> = OnceLock::new();
 
         let success = INITIALIZED.get_or_init(|| {
             if self.platform != Platform::Server {
