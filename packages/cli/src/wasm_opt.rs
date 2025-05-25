@@ -61,7 +61,7 @@ async fn run_locally(input_path: &Path, output_path: &Path, cfg: &WasmOptConfig)
         WasmOptLevel::Four => "-O4",
     };
 
-    tokio::process::Command::new("wasm-opt")
+    let res = tokio::process::Command::new("wasm-opt")
         .arg(input_path)
         .arg(level)
         .arg("-o")
@@ -69,6 +69,11 @@ async fn run_locally(input_path: &Path, output_path: &Path, cfg: &WasmOptConfig)
         .args(args)
         .output()
         .await?;
+
+    if !res.status.success() {
+        let err = String::from_utf8_lossy(&res.stderr);
+        tracing::error!("wasm-opt failed with status code {}: {}", res.status, err);
+    }
 
     Ok(())
 }

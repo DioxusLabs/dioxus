@@ -3361,9 +3361,7 @@ impl BuildRequest {
         // Make sure to optimize the main wasm file if requested or if bundle splitting
         if should_bundle_split || self.release {
             ctx.status_optimizing_wasm();
-            wasm_opt::optimize(&post_bindgen_wasm, &post_bindgen_wasm, &wasm_opt_options)
-                .await
-                .unwrap();
+            wasm_opt::optimize(&post_bindgen_wasm, &post_bindgen_wasm, &wasm_opt_options).await?;
         }
 
         // In release mode, we make the wasm and bindgen files into assets so they get bundled with max
