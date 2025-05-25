@@ -80,7 +80,7 @@ pub use document::ServerDocument;
 mod launch;
 
 #[cfg(not(target_arch = "wasm32"))]
-pub use launch::launch;
+pub use launch::{launch_cfg, launch};
 
 /// Re-export commonly used items
 pub mod prelude {
