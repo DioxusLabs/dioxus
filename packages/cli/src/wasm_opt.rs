@@ -32,6 +32,7 @@ async fn run_locally(input_path: &Path, output_path: &Path, cfg: &WasmOptConfig)
         "--enable-reference-types",
         "--enable-bulk-memory",
         "--enable-mutable-globals",
+        "--enable-nontrapping-float-to-int",
     ];
 
     if cfg.memory_packing {
@@ -95,6 +96,7 @@ async fn run_from_lib(
         .enable_feature(wasm_opt::Feature::ReferenceTypes)
         .enable_feature(wasm_opt::Feature::BulkMemory)
         .enable_feature(wasm_opt::Feature::MutableGlobals)
+        .enable_feature(wasm_opt::Feature::TruncSat)
         .add_pass(wasm_opt::Pass::MemoryPacking)
         .debug_info(options.debug);
 
