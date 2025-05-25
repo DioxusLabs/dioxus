@@ -2458,7 +2458,7 @@ impl BuildRequest {
     }
 
     fn platform_dir(&self) -> PathBuf {
-        self.build_dir(self.platform)
+        self.build_dir(self.platform, self.release)
     }
 
     fn platform_exe_name(&self) -> String {
@@ -2732,10 +2732,10 @@ impl BuildRequest {
     /// target/dx/build/app/web/
     /// target/dx/build/app/web/public/
     /// target/dx/build/app/web/server.exe
-    pub(crate) fn build_dir(&self, platform: Platform) -> PathBuf {
+    pub(crate) fn build_dir(&self, platform: Platform, release: bool) -> PathBuf {
         self.internal_out_dir()
             .join(self.executable_name())
-            .join(&self.profile)
+            .join(if release { "release" } else { "debug" })
             .join(platform.build_folder_name())
     }
 
@@ -3307,8 +3307,7 @@ impl BuildRequest {
                     // Again, register this wasm with the asset system
                     url = assets
                         .register_asset(&path, AssetOptions::Unknown)
-                        .context("Failed to register wasm split loader")?
-                        .bundled_path(),
+                        .context("Failed to register wasm split loader")?.bundled_path(),
 
                     // This time, make sure to write the dependencies of this chunk
                     // The names here are again, hardcoded in wasm-split - fix this eventually.
