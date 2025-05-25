@@ -36,9 +36,17 @@ pub fn try_apply_changes(dom: &VirtualDom, msg: &HotReloadMsg) -> Result<(), Pat
         // 2. Attempt to hotpatch
         if let Some(jump_table) = msg.jump_table.as_ref().cloned() {
             if msg.for_build_id == Some(dioxus_cli_config::build_id()) {
-                unsafe { subsecond::apply_patch(jump_table) }?;
-                dioxus_core::prelude::force_all_dirty();
-                ctx.clear::<Signal<Option<HotReloadedTemplate>>>();
+                let our_pid = if cfg!(target_family = "wasm") {
+                    None
+                } else {
+                    Some(std::process::id())
+                };
+
+                if msg.for_pid == our_pid {
+                    unsafe { subsecond::apply_patch(jump_table) }?;
+                    dioxus_core::prelude::force_all_dirty();
+                    ctx.clear::<Signal<Option<HotReloadedTemplate>>>();
+                }
             }
         }
 
@@ -69,7 +77,9 @@ pub fn connect_subsecond() {
     connect(|msg| {
         if let DevserverMsg::HotReload(hot_reload_msg) = msg {
             if let Some(jumptable) = hot_reload_msg.jump_table {
-                unsafe { subsecond::apply_patch(jumptable).unwrap() };
+                if hot_reload_msg.for_pid == Some(std::process::id()) {
+                    unsafe { subsecond::apply_patch(jumptable).unwrap() };
+                }
             }
         }
     });
