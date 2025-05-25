@@ -342,7 +342,7 @@ impl LaunchBuilder {
 
         #[cfg(feature = "server")]
         if matches!(platform, KnownPlatform::Server) {
-            return dioxus_server::launch(app, contexts, configs);
+            return dioxus_server::launch_cfg(app, contexts, configs);
         }
 
         #[cfg(feature = "web")]

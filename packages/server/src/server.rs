@@ -331,7 +331,7 @@ pub(crate) fn add_server_context(
 pub struct RenderHandleState {
     config: ServeConfig,
     build_virtual_dom: Arc<dyn Fn() -> VirtualDom + Send + Sync>,
-    ssr_state: once_cell::sync::OnceCell<SSRState>,
+    ssr_state: std::sync::OnceLock<SSRState>,
 }
 
 impl RenderHandleState {
@@ -364,7 +364,7 @@ impl RenderHandleState {
 
     /// Set the [`SSRState`] for this [`RenderHandleState`]. Sharing a [`SSRState`] between multiple [`RenderHandleState`]s is more efficient than creating a new [`SSRState`] for each [`RenderHandleState`].
     pub fn with_ssr_state(mut self, ssr_state: SSRState) -> Self {
-        self.ssr_state = once_cell::sync::OnceCell::new();
+        self.ssr_state = std::sync::OnceLock::new();
         if self.ssr_state.set(ssr_state).is_err() {
             panic!("SSRState already set");
         }

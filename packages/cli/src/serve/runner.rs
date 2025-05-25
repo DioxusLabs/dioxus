@@ -777,6 +777,10 @@ impl AppServer {
     fn load_rsx_filemap(&mut self) {
         self.fill_filemap_from_krate(self.client.build.crate_dir());
 
+        if let Some(server) = self.server.as_ref() {
+            self.fill_filemap_from_krate(server.build.crate_dir());
+        }
+
         for krate in self.all_watched_crates() {
             self.fill_filemap_from_krate(krate);
         }
@@ -844,6 +848,17 @@ impl AppServer {
 
             if let Err(err) = self.watcher.watch(&path, RecursiveMode::Recursive) {
                 handle_notify_error(err);
+            }
+        }
+
+        if let Some(server) = self.server.as_ref() {
+            // Watch the server's crate directory as well
+            for path in self.watch_paths(server.build.crate_dir(), server.build.crate_package) {
+                tracing::trace!("Watching path {path:?}");
+
+                if let Err(err) = self.watcher.watch(&path, RecursiveMode::Recursive) {
+                    handle_notify_error(err);
+                }
             }
         }
 
@@ -956,6 +971,23 @@ impl AppServer {
             })
             .chain(Some(crate_dir))
             .collect();
+
+        if let Some(server) = self.server.as_ref() {
+            let server_crate_package = server.build.crate_package;
+            let server_crate_dir = server.build.crate_dir();
+
+            let server_krates: Vec<PathBuf> = self
+                .local_dependencies(server_crate_package)
+                .into_iter()
+                .map(|p| {
+                    p.parent()
+                        .expect("Server manifest to exist and have a parent")
+                        .to_path_buf()
+                })
+                .chain(Some(server_crate_dir))
+                .collect();
+            krates.extend(server_krates);
+        }
 
         krates.dedup();
 
