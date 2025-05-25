@@ -562,10 +562,7 @@ fn build_serve_dir(runner: &AppServer) -> axum::routing::MethodRouter {
     let app = &runner.client;
     let cfg = &runner.client.build.config;
 
-    let out_dir = app
-        .build
-        .build_dir(Platform::Web, app.build.release)
-        .join("public");
+    let out_dir = app.build.root_dir();
     let index_on_404: bool = cfg.web.watcher.index_on_404;
 
     get_service(

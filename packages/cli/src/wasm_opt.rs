@@ -4,7 +4,7 @@ use std::path::Path;
 
 /// Write these wasm bytes with a particular set of optimizations
 pub async fn write_wasm(bytes: &[u8], output_path: &Path, cfg: &WasmOptConfig) -> Result<()> {
-    tokio::fs::write(output_path, bytes).await?;
+    std::fs::write(output_path, bytes)?;
     optimize(output_path, output_path, cfg).await?;
     Ok(())
 }
@@ -32,6 +32,7 @@ async fn run_locally(input_path: &Path, output_path: &Path, cfg: &WasmOptConfig)
         "--enable-reference-types",
         "--enable-bulk-memory",
         "--enable-mutable-globals",
+        "--enable-nontrapping-float-to-int",
     ];
 
     if cfg.memory_packing {
@@ -60,7 +61,7 @@ async fn run_locally(input_path: &Path, output_path: &Path, cfg: &WasmOptConfig)
         WasmOptLevel::Four => "-O4",
     };
 
-    tokio::process::Command::new("wasm-opt")
+    let res = tokio::process::Command::new("wasm-opt")
         .arg(input_path)
         .arg(level)
         .arg("-o")
@@ -68,6 +69,11 @@ async fn run_locally(input_path: &Path, output_path: &Path, cfg: &WasmOptConfig)
         .args(args)
         .output()
         .await?;
+
+    if !res.status.success() {
+        let err = String::from_utf8_lossy(&res.stderr);
+        tracing::error!("wasm-opt failed with status code {}: {}", res.status, err);
+    }
 
     Ok(())
 }
@@ -95,6 +101,7 @@ async fn run_from_lib(
         .enable_feature(wasm_opt::Feature::ReferenceTypes)
         .enable_feature(wasm_opt::Feature::BulkMemory)
         .enable_feature(wasm_opt::Feature::MutableGlobals)
+        .enable_feature(wasm_opt::Feature::TruncSat)
         .add_pass(wasm_opt::Pass::MemoryPacking)
         .debug_info(options.debug);
 

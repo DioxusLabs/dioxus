@@ -46,7 +46,7 @@ impl Default for DioxusConfig {
                     key_path: None,
                     cert_path: None,
                 },
-                pre_compress: true,
+                pre_compress: false,
                 wasm_opt: Default::default(),
             },
             bundle: BundleConfig::default(),
