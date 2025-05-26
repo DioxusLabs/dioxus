@@ -15,8 +15,6 @@ pub struct BundledAsset {
     bundled_path: ConstStr,
     /// The options for the asset
     options: AssetOptions,
-    /// The link section the wasm asset is bundled at
-    link_section: ConstStr,
 }
 
 impl PartialEq for BundledAsset {
@@ -60,13 +58,11 @@ impl BundledAsset {
         absolute_source_path: &str,
         bundled_path: &str,
         options: AssetOptions,
-        link_section: &str,
     ) -> Self {
         Self {
             absolute_source_path: ConstStr::new(absolute_source_path),
             bundled_path: ConstStr::new(bundled_path),
             options,
-            link_section: ConstStr::new(link_section),
         }
     }
 
@@ -82,9 +78,8 @@ impl BundledAsset {
         absolute_source_path: &'static str,
         bundled_path: &'static str,
         options: AssetOptions,
-        link_section: &'static str,
     ) -> Self {
-        Self::new(absolute_source_path, bundled_path, options, link_section)
+        Self::new(absolute_source_path, bundled_path, options)
     }
 
     #[doc(hidden)]
@@ -94,13 +89,11 @@ impl BundledAsset {
         absolute_source_path: ConstStr,
         bundled_path: ConstStr,
         options: AssetOptions,
-        link_section: ConstStr,
     ) -> Self {
         Self {
             absolute_source_path,
             bundled_path,
             options,
-            link_section,
         }
     }
 
@@ -117,11 +110,6 @@ impl BundledAsset {
     /// Get the options for the asset
     pub const fn options(&self) -> &AssetOptions {
         &self.options
-    }
-
-    /// Get the link section the asset is bundled at
-    pub fn link_section(&self) -> &str {
-        self.link_section.as_str()
     }
 }
 

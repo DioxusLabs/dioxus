@@ -82,7 +82,7 @@ impl ToTokens for AssetParser {
         format!("{:?}", self.options.span()).hash(&mut hash);
         format!("{:?}", self.options.to_string()).hash(&mut hash);
         asset_string.hash(&mut hash);
-        let asset_hash = format!("__MANGANIS_ASSET_{:016x}", hash.finish());
+        let asset_hash = format!("{:016x}", hash.finish());
 
         // Generate the link section for the asset
         // The link section includes the source path and the output path of the asset
@@ -113,7 +113,7 @@ impl ToTokens for AssetParser {
                 const __ASSET_HASH: &'static str = #asset_hash;
                 // Create the asset that the crate will use. This is used both in the return value and
                 // added to the linker for the bundler to copy later
-                const __ASSET: manganis::BundledAsset = manganis::macro_helpers::#constructor(__ASSET_SOURCE_PATH, __ASSET_OPTIONS, __ASSET_HASH);
+                const __ASSET: manganis::BundledAsset = manganis::macro_helpers::#constructor(__ASSET_SOURCE_PATH, __ASSET_OPTIONS);
 
                 #link_section
 
