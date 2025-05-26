@@ -127,7 +127,7 @@ impl<T> Clone for SerializeContextEntry<T> {
 }
 
 impl<T> SerializeContextEntry<T> {
-    /// Insert data into an entry that was created with [`SerializeContext::create_entry`]
+    /// Insert data into an entry that was created with [`HydrationContext::create_entry`]
     pub fn insert(self, value: &T, location: &'static std::panic::Location<'static>)
     where
         T: Serialize,

@@ -303,7 +303,7 @@ impl VirtualDom {
         dom
     }
 
-    /// Create a new VirtualDom from something that implements [`AnyProps`]
+    /// Create a new VirtualDom from a VComponent
     #[instrument(skip(root), level = "trace", name = "VirtualDom::new")]
     pub(crate) fn new_with_component(root: VComponent) -> Self {
         let (tx, rx) = futures_channel::mpsc::unbounded();

@@ -49,8 +49,8 @@ pub trait History {
 
     /// Get the current path prefix of the URL.
     ///
-    /// Not all [`HistoryProvider`]s need a prefix feature. It is meant for environments where a
-    /// dioxus-router-core-routed application is not running on `/`. The [`HistoryProvider`] is responsible
+    /// Not all [`History`]s need a prefix feature. It is meant for environments where a
+    /// dioxus-router-core-routed application is not running on `/`. The [`History`] is responsible
     /// for removing the prefix from the dioxus-router-core-internal path, and also for adding it back in
     /// during navigation. This functions value is only used for creating `href`s (e.g. for SSR or
     /// display (but not navigation) in a web app).
@@ -60,7 +60,7 @@ pub trait History {
 
     /// Check whether there is a previous page to navigate back to.
     ///
-    /// If a [`HistoryProvider`] cannot know this, it should return [`true`].
+    /// If a [`History`] cannot know this, it should return [`true`].
     ///
     /// ```rust
     /// # use dioxus::prelude::*;
@@ -87,7 +87,7 @@ pub trait History {
 
     /// Go back to a previous page.
     ///
-    /// If a [`HistoryProvider`] cannot go to a previous page, it should do nothing. This method
+    /// If a [`History`] cannot go to a previous page, it should do nothing. This method
     /// might be called, even if `can_go_back` returns [`false`].
     ///
     /// ```rust
@@ -119,7 +119,7 @@ pub trait History {
 
     /// Check whether there is a future page to navigate forward to.
     ///
-    /// If a [`HistoryProvider`] cannot know this, it should return [`true`].
+    /// If a [`History`] cannot know this, it should return [`true`].
     ///
     /// ```rust
     /// # use dioxus::prelude::*;
@@ -150,7 +150,7 @@ pub trait History {
 
     /// Go forward to a future page.
     ///
-    /// If a [`HistoryProvider`] cannot go to a previous page, it should do nothing. This method
+    /// If a [`History`] cannot go to a previous page, it should do nothing. This method
     /// might be called, even if `can_go_forward` returns [`false`].
     ///
     /// ```rust
@@ -238,7 +238,7 @@ pub trait History {
     /// Navigate to an external URL.
     ///
     /// This should navigate to an external URL, which isn't controlled by the router. If a
-    /// [`HistoryProvider`] cannot do that, it should return [`false`], otherwise [`true`].
+    /// [`History`] cannot do that, it should return [`false`], otherwise [`true`].
     ///
     /// Returning [`false`] will cause the router to handle the external navigation failure.
     #[allow(unused_variables)]
@@ -246,9 +246,9 @@ pub trait History {
         false
     }
 
-    /// Provide the [`HistoryProvider`] with an update callback.
+    /// Provide the [`History`] with an update callback.
     ///
-    /// Some [`HistoryProvider`]s may receive URL updates from outside the router. When such
+    /// Some [`History`]s may receive URL updates from outside the router. When such
     /// updates are received, they should call `callback`, which will cause the router to update.
     #[allow(unused_variables)]
     fn updater(&self, callback: Arc<dyn Fn() + Send + Sync>) {}

@@ -4404,6 +4404,7 @@ dependencies = [
  "dioxus-fullstack-hooks",
  "dioxus-history",
  "dioxus-lib",
+ "dioxus-router",
  "dioxus-router-macro",
  "dioxus-ssr",
  "rustversion",

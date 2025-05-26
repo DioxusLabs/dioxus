@@ -30,7 +30,7 @@ pub struct RustcArgs {
 
 /// Run rustc directly, but output the result to a file.
 ///
-/// https://doc.rust-lang.org/cargo/reference/config.html#buildrustc
+/// <https://doc.rust-lang.org/cargo/reference/config.html#buildrustc>
 pub async fn run_rustc() {
     // if we happen to be both a rustc wrapper and a linker, we want to run the linker if the arguments seem linker-y
     // this is a stupid hack
