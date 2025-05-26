@@ -145,9 +145,13 @@ impl Scope {
             .expect("Scheduler to exist if scope exists");
     }
 
-    /// Create a subscription that schedules a future render for the reference component
+    /// Create a subscription that schedules a future render for the referenced component.
     ///
-    /// ## Notice: you should prefer using [`Self::schedule_update_any`] and [`Self::id`]
+    /// Note: you should prefer using [`Self::schedule_update_any`] and [`Self::id`].
+    ///
+    /// Note: The function returned by this method will schedule an update for the current component even if it has already updated between when `schedule_update` was called and when the returned function is called.
+    /// If the desired behavior is to invalidate the current rendering of the current component (and no-op if already invalidated)
+    /// [`subscribe`](crate::reactive_context::ReactiveContext::subscribe) to the [`current`](crate::reactive_context::ReactiveContext::current) [`ReactiveContext`](crate::reactive_context::ReactiveContext) instead.
     pub fn schedule_update(&self) -> Arc<dyn Fn() + Send + Sync + 'static> {
         let (chan, id) = (self.sender(), self.id);
         Arc::new(move || drop(chan.unbounded_send(SchedulerMsg::Immediate(id))))
@@ -157,7 +161,10 @@ impl Scope {
     ///
     /// A component's [`ScopeId`] can be obtained from `use_hook` or the [`current_scope_id`](crate::prelude::current_scope_id) method.
     ///
-    /// This method should be used when you want to schedule an update for a component
+    /// This method should be used when you want to schedule an update for a component.
+    ///
+    /// Note: It does not matter when `schedule_update_any` is called: the returned function will invalidate what ever generation of the specified component is current when returned function is called.
+    /// If the desired behavior is to schedule invalidation of the current rendering of a component, use [`ReactiveContext`](crate::reactive_context::ReactiveContext) instead.
     pub fn schedule_update_any(&self) -> Arc<dyn Fn(ScopeId) + Send + Sync> {
         let chan = self.sender();
         Arc::new(move |id| {

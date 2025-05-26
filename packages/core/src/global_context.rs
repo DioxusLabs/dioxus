@@ -310,33 +310,37 @@ pub fn use_hook<State: Clone + 'static>(initializer: impl FnOnce() -> State) -> 
     Runtime::with_current_scope(|cx| cx.use_hook(initializer)).unwrap()
 }
 
-/// Get the current render since the inception of this component
+/// Get the current render since the inception of this component.
 ///
-/// This can be used as a helpful diagnostic when debugging hooks/renders, etc
+/// This can be used as a helpful diagnostic when debugging hooks/renders, etc.
 pub fn generation() -> usize {
     Runtime::with_current_scope(|cx| cx.generation()).unwrap()
 }
 
-/// Get the parent of the current scope if it exists
+/// Get the parent of the current scope if it exists.
 pub fn parent_scope() -> Option<ScopeId> {
     Runtime::with_current_scope(|cx| cx.parent_id())
         .ok()
         .flatten()
 }
 
-/// Mark the current scope as dirty, causing it to re-render
+/// Mark the current scope as dirty, causing it to re-render.
 pub fn needs_update() {
     let _ = Runtime::with_current_scope(|cx| cx.needs_update());
 }
 
-/// Mark the current scope as dirty, causing it to re-render
+/// Mark the current scope as dirty, causing it to re-render.
 pub fn needs_update_any(id: ScopeId) {
     let _ = Runtime::with_current_scope(|cx| cx.needs_update_any(id));
 }
 
-/// Schedule an update for the current component
+/// Schedule an update for the current component.
 ///
 /// Note: Unlike [`needs_update`], the function returned by this method will work outside of the dioxus runtime.
+///
+/// Note: The function returned by this method will schedule an update for the current component even if it has already updated between when `schedule_update` was called and when the returned function is called.
+/// If the desired behavior is to invalidate the current rendering of the current component (and no-op if already invalidated)
+/// [`subscribe`](crate::reactive_context::ReactiveContext::subscribe) to the [`current`](crate::reactive_context::ReactiveContext::current) [`ReactiveContext`](crate::reactive_context::ReactiveContext) instead.
 ///
 /// You should prefer [`schedule_update_any`] if you need to update multiple components.
 #[track_caller]
@@ -349,6 +353,9 @@ pub fn schedule_update() -> Arc<dyn Fn() + Send + Sync> {
 /// A component's [`ScopeId`] can be obtained from the [`current_scope_id`] method.
 ///
 /// Note: Unlike [`needs_update`], the function returned by this method will work outside of the dioxus runtime.
+///
+/// Note: It does not matter when `schedule_update_any` is called: the returned function will invalidate what ever generation of the specified component is current when returned function is called.
+/// If the desired behavior is to schedule invalidation of the current rendering of a component, use [`ReactiveContext`](crate::reactive_context::ReactiveContext) instead.
 #[track_caller]
 pub fn schedule_update_any() -> Arc<dyn Fn(ScopeId) + Send + Sync> {
     Runtime::with_current_scope(|cx| cx.schedule_update_any()).unwrap_or_else(|e| panic!("{}", e))
