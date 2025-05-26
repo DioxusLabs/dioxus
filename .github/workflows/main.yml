@@ -138,7 +138,7 @@ jobs:
           cache-all-crates: "true"
       - name: "doc --lib --all-features"
         run: |
-          cargo doc --workspace --no-deps --all-features --document-private-items -- -D warnings
+          cargo doc --workspace --no-deps --all-features --document-private-items
         env:
           RUSTDOCFLAGS: -Dwarnings --document-private-items
 
