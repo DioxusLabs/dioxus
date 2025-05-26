@@ -18,7 +18,6 @@ generational-box = { workspace = true }
 tracing = { workspace = true }
 serde = { workspace = true, features = ["derive"], optional = true }
 parking_lot = { workspace = true}
-once_cell = { workspace = true}
 rustc-hash = { workspace = true }
 futures-channel = { workspace = true }
 futures-util = { workspace = true }

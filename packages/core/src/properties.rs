@@ -155,7 +155,7 @@ where
     }
 
     fn fn_ptr(&self) -> usize {
-        subsecond::HotFn::current(self.clone()).ptr_address() as usize
+        subsecond::HotFn::current(self.clone()).ptr_address().0 as usize
     }
 }
 
@@ -170,7 +170,7 @@ where
     }
 
     fn fn_ptr(&self) -> usize {
-        subsecond::HotFn::current(self.clone()).ptr_address() as usize
+        subsecond::HotFn::current(self.clone()).ptr_address().0 as usize
     }
 }
 

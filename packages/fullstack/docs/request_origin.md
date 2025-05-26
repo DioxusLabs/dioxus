@@ -1,6 +1,6 @@
 This method interacts with information from the current request. The request may come from:
 
-1. The initial SSR render if this method called from a [`Component`](dioxus_lib::prelude::component) or a [`server`](crate::prelude::server) function that is called during the initial render
+1. The initial SSR render if this method called from a [`Component`](dioxus_lib::prelude::component) or a [`server`](dioxus_server) function that is called during the initial render
 
 ```rust
 # use dioxus::prelude::*;
@@ -18,7 +18,7 @@ fn PrintHtmlRequestInfo() -> Element {
 }
 ```
 
-2. A request to a [`server`](crate::prelude::server) function called directly from the client (either on desktop/mobile or on the web frontend after the initial render)
+2. A request to a [`server`](dioxus_server) function called directly from the client (either on desktop/mobile or on the web frontend after the initial render)
 
 ```rust
 # use dioxus::prelude::*;

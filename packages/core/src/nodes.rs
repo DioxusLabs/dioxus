@@ -341,11 +341,8 @@ type StaticTemplateAttributeArray = &'static [TemplateAttribute];
 /// A static layout of a UI tree that describes a set of dynamic and static nodes.
 ///
 /// This is the core innovation in Dioxus. Most UIs are made of static nodes, yet participate in diffing like any
-/// dynamic node. This struct can be created at compile time. It promises that its name is unique, allow Dioxus to use
+/// dynamic node. This struct can be created at compile time. It promises that its pointer is unique, allow Dioxus to use
 /// its static description of the UI to skip immediately to the dynamic nodes during diffing.
-///
-/// For this to work properly, the [`Template::name`] *must* be unique across your entire project. This can be done via variety of
-/// ways, with the suggested approach being the unique code location (file, line, col, etc).
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, Copy, Eq, PartialOrd, Ord)]
 pub struct Template {

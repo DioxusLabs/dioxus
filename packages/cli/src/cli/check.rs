@@ -1,7 +1,7 @@
 //! Run linting against the user's codebase.
 //!
 //! For reference, the rustfmt main.rs file
-//! https://github.com/rust-lang/rustfmt/blob/master/src/bin/main.rs
+//! <https://github.com/rust-lang/rustfmt/blob/master/src/bin/main.rs>
 
 use super::*;
 use crate::BuildRequest;

@@ -31,7 +31,7 @@ pub struct LinkProps {
     pub onclick: Option<EventHandler<MouseEvent>>,
 
     /// The onmounted event handler.
-    /// Fired when the <a> element is mounted.
+    /// Fired when the `<a>` element is mounted.
     pub onmounted: Option<EventHandler<MountedEvent>>,
 
     #[props(default)]
@@ -72,7 +72,7 @@ impl Debug for LinkProps {
 
 /// A link to navigate to another route.
 ///
-/// Only works as descendant of a [`Router`] component, otherwise it will be inactive.
+/// Only works as descendant of a [`super::Router`] component, otherwise it will be inactive.
 ///
 /// Unlike a regular HTML anchor, a [`Link`] allows the router to handle the navigation and doesn't
 /// cause the browser to load a new page.
@@ -82,10 +82,10 @@ impl Debug for LinkProps {
 ///
 /// # External targets
 /// When the [`Link`]s target is an [`NavigationTarget::External`] target, that is used as the `href` directly. This
-/// means that a [`Link`] can always navigate to an [`NavigationTarget::External`] target, even if the [`HistoryProvider`] does not support it.
+/// means that a [`Link`] can always navigate to an [`NavigationTarget::External`] target, even if the [`dioxus_history::History`] does not support it.
 ///
 /// # Panic
-/// - When the [`Link`] is not nested within a [`Router`], but
+/// - When the [`Link`] is not nested within a [`super::Router`], but
 ///   only in debug builds.
 ///
 /// # Example
