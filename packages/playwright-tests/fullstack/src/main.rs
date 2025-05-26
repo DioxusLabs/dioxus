@@ -5,12 +5,9 @@
 // - Hydration
 
 #![allow(non_snake_case)]
-use dioxus::{
-    prelude::{
-        server_fn::{codec::JsonEncoding, BoxedStream, Websocket},
-        *,
-    },
-    CapturedError,
+use dioxus::prelude::{
+    server_fn::{codec::JsonEncoding, BoxedStream, Websocket},
+    *,
 };
 use futures::{channel::mpsc, SinkExt, StreamExt};
 
@@ -166,7 +163,7 @@ fn DocumentElements() -> Element {
 #[server(protocol = Websocket<JsonEncoding, JsonEncoding>)]
 async fn echo_ws(
     input: BoxedStream<String, ServerFnError>,
-) -> ServerFnResult<BoxedStream<String>, ServerFnError> {
+) -> ServerFnResult<BoxedStream<String, ServerFnError>> {
     let mut input = input;
 
     let (mut tx, rx) = mpsc::channel(1);

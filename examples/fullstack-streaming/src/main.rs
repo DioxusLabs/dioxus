@@ -24,7 +24,7 @@ fn app() -> Element {
 }
 
 #[server(output = StreamingText)]
-pub async fn test_stream() -> ServerFnResult<TextStream> {
+pub async fn test_stream() -> ServerFnResult<TextStream<ServerFnError>> {
     let (tx, rx) = futures::channel::mpsc::unbounded();
     tokio::spawn(async move {
         loop {

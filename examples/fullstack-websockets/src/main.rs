@@ -45,7 +45,7 @@ fn app() -> Element {
 #[server(protocol = Websocket<JsonEncoding, JsonEncoding>)]
 async fn uppercase_ws(
     input: BoxedStream<String, ServerFnError>,
-) -> ServerFnResult<BoxedStream<String>, ServerFnError> {
+) -> ServerFnResult<BoxedStream<String, ServerFnError>> {
     let mut input = input;
 
     // Create a channel with the output of the websocket

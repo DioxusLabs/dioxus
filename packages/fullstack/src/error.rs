@@ -4,7 +4,7 @@ use std::{
     str::FromStr,
 };
 
-use dioxus_lib::prelude::dioxus_core::CapturedError;
+use dioxus_lib::prelude::{dioxus_core::CapturedError, RenderError};
 use serde::{de::DeserializeOwned, Serialize};
 use server_fn::{
     codec::JsonEncoding,
@@ -205,6 +205,12 @@ impl<T: Display> Display for ServerFnError<T> {
 impl From<ServerFnError> for CapturedError {
     fn from(error: ServerFnError) -> Self {
         Self::from_display(error)
+    }
+}
+
+impl From<ServerFnError> for RenderError {
+    fn from(error: ServerFnError) -> Self {
+        RenderError::Aborted(CapturedError::from(error))
     }
 }
 
