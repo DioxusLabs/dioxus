@@ -62,6 +62,16 @@ pub(crate) struct WasmOptConfig {
     /// Enable memory packing
     #[serde(default = "false_bool")]
     pub(crate) memory_packing: bool,
+
+    /// Extra arguments to pass to wasm-opt
+    ///
+    /// For example, to enable simd, you can set this to `["--enable-simd"]`.
+    ///
+    /// You can also disable features by prefixing them with `--disable-`, e.g. `["--disable-bulk-memory"]`.
+    ///
+    /// Currently only --enable and --disable flags are supported.
+    #[serde(default)]
+    pub(crate) extra_features: Vec<String>,
 }
 
 /// The wasm-opt level to use for release web builds [default: Z]

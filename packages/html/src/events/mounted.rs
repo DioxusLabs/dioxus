@@ -218,7 +218,7 @@ impl_event! [
     #[doc(alias = "useRef")]
     /// The onmounted event is fired when the element is first added to the DOM. This event gives you a [`MountedData`] object and lets you interact with the raw DOM element.
     ///
-    /// This event is fired once per element. If you need to access the element multiple times, you can store the [`MountedData`] object in a [`use_signal`] hook and use it as needed.
+    /// This event is fired once per element. If you need to access the element multiple times, you can store the [`MountedData`] object in a [`use_signal`](https://docs.rs/dioxus-hooks/latest/dioxus_hooks/fn.use_signal.html) hook and use it as needed.
     ///
     /// # Examples
     ///

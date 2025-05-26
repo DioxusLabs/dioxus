@@ -1,32 +1,27 @@
 use super::*;
 use crate::{AddressArguments, BuildArgs, TraceController};
 use futures_util::FutureExt;
-use once_cell::sync::OnceCell;
+use std::sync::OnceLock;
 use std::{backtrace::Backtrace, panic::AssertUnwindSafe};
 
 /// Serve the project
 ///
 /// `dx serve` takes cargo args by default, except with a required `--platform` arg:
 ///
-/// ```
+/// ```sh
 /// dx serve --example blah --target blah --platform android
 /// ```
 ///
 /// A simple serve:
-/// ```
+/// ```sh
 /// dx serve --platform web
-/// ```
-///
-/// A serve with customized arguments:
-///
-/// ```
 /// ```
 ///
 /// As of dioxus 0.7, `dx serve` allows independent customization of the client and server builds,
 /// allowing workspaces and removing any "magic" done to support ergonomic fullstack serving with
 /// an plain `dx serve`. These require specifying more arguments like features since they won't be autodetected.
 ///
-/// ```
+/// ```sh
 /// dx serve \
 ///     client --package frontend \
 ///     server --package backend
@@ -102,7 +97,7 @@ impl ServeArgs {
             line: u32,
             column: u32,
         }
-        static BACKTRACE: OnceCell<(Backtrace, Option<SavedLocation>)> = OnceCell::new();
+        static BACKTRACE: OnceLock<(Backtrace, Option<SavedLocation>)> = OnceLock::new();
 
         // We *don't* want printing here, since it'll break the tui and log ordering.
         //

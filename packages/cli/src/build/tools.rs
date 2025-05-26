@@ -8,7 +8,7 @@ use tokio::process::Command;
 
 /// The tools for Android (ndk, sdk, etc)
 ///
-/// https://gist.github.com/Pulimet/5013acf2cd5b28e55036c82c91bd56d8?permalink_comment_id=3678614
+/// <https://gist.github.com/Pulimet/5013acf2cd5b28e55036c82c91bd56d8?permalink_comment_id=3678614>
 #[derive(Debug, Clone)]
 pub(crate) struct AndroidTools {
     pub(crate) sdk: Option<PathBuf>,

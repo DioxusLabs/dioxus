@@ -43,7 +43,7 @@ pub struct BuildArgs {
     ///
     /// Server and Client are special targets that integrate with `dx serve`, while `crate` is a generic.
     ///
-    /// ```
+    /// ```sh
     /// dx serve \
     ///     client --target aarch64-apple-darwin \
     ///     server --target wasm32-unknown-unknown \

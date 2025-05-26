@@ -25,11 +25,12 @@ pub fn is_wrapping_rustc() -> bool {
 pub struct RustcArgs {
     pub args: Vec<String>,
     pub envs: Vec<(String, String)>,
+    pub link_args: Vec<String>,
 }
 
 /// Run rustc directly, but output the result to a file.
 ///
-/// https://doc.rust-lang.org/cargo/reference/config.html#buildrustc
+/// <https://doc.rust-lang.org/cargo/reference/config.html#buildrustc>
 pub async fn run_rustc() {
     // if we happen to be both a rustc wrapper and a linker, we want to run the linker if the arguments seem linker-y
     // this is a stupid hack
@@ -50,6 +51,7 @@ pub async fn run_rustc() {
     let rustc_args = RustcArgs {
         args: args().skip(1).collect::<Vec<_>>(),
         envs: vars().collect::<_>(),
+        link_args: Default::default(),
     };
 
     std::fs::create_dir_all(var_file.parent().expect("Failed to get parent dir"))
