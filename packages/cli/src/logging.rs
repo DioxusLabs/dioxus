@@ -15,10 +15,10 @@
 //! 4. Build fmt layer for non-interactive logging with a custom writer that prevents output during interactive mode.
 
 use crate::{serve::ServeUpdate, Cli, Commands, Platform as TargetPlatform, Verbosity};
-use cargo_metadata::{diagnostic::DiagnosticLevel, CompilerMessage};
+use cargo_metadata::diagnostic::{Diagnostic, DiagnosticLevel};
 use clap::Parser;
 use futures_channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
-use once_cell::sync::OnceCell;
+use std::sync::OnceLock;
 use std::{
     collections::HashMap,
     env,
@@ -47,8 +47,8 @@ const LOG_FILE_NAME: &str = "dx.log";
 const DX_SRC_FLAG: &str = "dx_src";
 
 static TUI_ACTIVE: AtomicBool = AtomicBool::new(false);
-static TUI_TX: OnceCell<UnboundedSender<TraceMsg>> = OnceCell::new();
-pub static VERBOSITY: OnceCell<Verbosity> = OnceCell::new();
+static TUI_TX: OnceLock<UnboundedSender<TraceMsg>> = OnceLock::new();
+pub static VERBOSITY: OnceLock<Verbosity> = OnceLock::new();
 
 pub(crate) struct TraceController {
     pub(crate) tui_rx: UnboundedReceiver<TraceMsg>,
@@ -349,7 +349,7 @@ pub struct TraceMsg {
 #[derive(Clone, PartialEq)]
 #[allow(clippy::large_enum_variant)]
 pub enum TraceContent {
-    Cargo(CompilerMessage),
+    Cargo(Diagnostic),
     Text(String),
 }
 
@@ -366,9 +366,9 @@ impl TraceMsg {
     /// Create a new trace message from a cargo compiler message
     ///
     /// All `cargo` messages are logged at the `TRACE` level since they get *very* noisy during development
-    pub fn cargo(content: CompilerMessage) -> Self {
+    pub fn cargo(content: Diagnostic) -> Self {
         Self {
-            level: match content.message.level {
+            level: match content.level {
                 DiagnosticLevel::Ice => Level::ERROR,
                 DiagnosticLevel::Error => Level::ERROR,
                 DiagnosticLevel::FailureNote => Level::ERROR,

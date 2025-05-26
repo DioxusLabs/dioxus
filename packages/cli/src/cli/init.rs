@@ -64,6 +64,7 @@ impl Init {
             init: true,
             name: self.name,
             silent: self.yes,
+            vcs: Some(cargo_generate::Vcs::Git),
             template_path: TemplatePath {
                 auto_path: self.template,
                 branch: self.branch,

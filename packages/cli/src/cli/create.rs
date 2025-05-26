@@ -72,12 +72,14 @@ impl Create {
             init: true,
             name: self.name,
             silent: self.yes,
+            vcs: Some(cargo_generate::Vcs::Git),
             template_path: TemplatePath {
                 auto_path: self.template,
                 branch: self.branch,
                 revision: self.revision,
                 subfolder: self.subtemplate,
                 tag: self.tag,
+
                 ..Default::default()
             },
             verbose: crate::logging::VERBOSITY
@@ -242,14 +244,14 @@ fn remove_triple_newlines(string: &str) -> String {
 // #[cfg(test)]
 // pub(crate) mod tests {
 //     use escargot::{CargoBuild, CargoRun};
-//     use once_cell::sync::Lazy;
+//     use std::sync::LazyLock;
 //     use std::fs::{create_dir_all, read_to_string};
 //     use std::path::{Path, PathBuf};
 //     use std::process::Command;
 //     use tempfile::tempdir;
 //     use toml::Value;
 
-//     static BINARY: Lazy<CargoRun> = Lazy::new(|| {
+//     static BINARY: LazyLock<CargoRun> = LazyLock::new(|| {
 //         CargoBuild::new()
 //             .bin(env!("CARGO_BIN_NAME"))
 //             .current_release()

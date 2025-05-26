@@ -177,6 +177,27 @@ pub trait DioxusRouterFnExt<S> {
     /// }
     /// ```
     fn register_server_functions_with_context(self, context_providers: ContextProviders) -> Self;
+
+    /// Serves a Dioxus application without static assets.
+    /// Sets up server function routes and rendering endpoints only.
+    ///
+    /// Useful for WebAssembly environments or when static assets
+    /// are served by another system.
+    ///
+    /// # Example
+    /// ```rust, no_run
+    /// # use dioxus_lib::prelude::*;
+    /// # use dioxus_fullstack::prelude::*;
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let router = axum::Router::new()
+    ///         .serve_api_application(ServeConfig::new().unwrap(), app)
+    ///         .into_make_service();
+    ///     // ...
+    /// }
+    fn serve_api_application(self, cfg: ServeConfig, app: fn() -> Element) -> Self
+    where
+        Self: Sized;
 }
 
 impl<S> DioxusRouterFnExt<S> for Router<S>
@@ -191,6 +212,20 @@ where
             self = register_server_fn_on_router(f, self, context_providers.clone());
         }
         self
+    }
+
+    fn serve_api_application(self, cfg: ServeConfig, app: fn() -> Element) -> Self
+    where
+        Self: Sized,
+    {
+        let server = self.register_server_functions_with_context(cfg.context_providers.clone());
+
+        let ssr_state = SSRState::new(&cfg);
+
+        server.fallback(
+            get(render_handler)
+                .with_state(RenderHandleState::new(cfg, app).with_ssr_state(ssr_state)),
+        )
     }
 }
 
@@ -296,7 +331,7 @@ pub(crate) fn add_server_context(
 pub struct RenderHandleState {
     config: ServeConfig,
     build_virtual_dom: Arc<dyn Fn() -> VirtualDom + Send + Sync>,
-    ssr_state: once_cell::sync::OnceCell<SSRState>,
+    ssr_state: std::sync::OnceLock<SSRState>,
 }
 
 impl RenderHandleState {
@@ -329,7 +364,7 @@ impl RenderHandleState {
 
     /// Set the [`SSRState`] for this [`RenderHandleState`]. Sharing a [`SSRState`] between multiple [`RenderHandleState`]s is more efficient than creating a new [`SSRState`] for each [`RenderHandleState`].
     pub fn with_ssr_state(mut self, ssr_state: SSRState) -> Self {
-        self.ssr_state = once_cell::sync::OnceCell::new();
+        self.ssr_state = std::sync::OnceLock::new();
         if self.ssr_state.set(ssr_state).is_err() {
             panic!("SSRState already set");
         }
