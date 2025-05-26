@@ -117,9 +117,6 @@ impl ToTokens for AssetParser {
 
                 #link_section
 
-                #[cfg(target_arch = "wasm32")]
-                static __REFERENCE_TO_LINK_SECTION: &'static [u8] = unsafe { &__WASM_LINK_SECTION };
-                #[cfg(not(target_arch = "wasm32"))]
                 static __REFERENCE_TO_LINK_SECTION: &'static [u8] = &__LINK_SECTION;
 
                 manganis::Asset::new(

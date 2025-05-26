@@ -125,7 +125,7 @@ pub(crate) fn extract_assets_from_file(path: impl AsRef<Path>) -> Result<AssetMa
 
     // Read each asset from the data section using the offsets
     for offset in offsets.iter().copied() {
-        file.seek(std::io::SeekFrom::Start(offset as u64))?;
+        file.seek(std::io::SeekFrom::Start(offset))?;
         let mut data_in_range = vec![0; BundledAsset::MEMORY_LAYOUT.size()];
         file.read_exact(&mut data_in_range)?;
 
@@ -149,7 +149,7 @@ pub(crate) fn extract_assets_from_file(path: impl AsRef<Path>) -> Result<AssetMa
         let new_data = ConstVec::new();
         let new_data = const_serialize::serialize_const(asset, new_data);
 
-        file.seek(std::io::SeekFrom::Start(offset as u64))?;
+        file.seek(std::io::SeekFrom::Start(offset))?;
         // Write the modified binary data back to the file
         file.write_all(new_data.as_ref())?;
     }
