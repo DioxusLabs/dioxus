@@ -38,7 +38,7 @@ pub struct Create {
     #[clap(long)]
     subtemplate: Option<String>,
 
-    /// Pass <option>=<value> for the used template (e.g., `foo=bar`)
+    /// Pass `<option>=<value>` for the used template (e.g., `foo=bar`)
     #[clap(short, long)]
     option: Vec<String>,
 
@@ -119,7 +119,7 @@ pub(crate) fn resolve_template_and_branch(
 /// Prevent hidden cursor if Ctrl+C is pressed when interacting
 /// with cargo-generate's prompts.
 ///
-/// See https://github.com/DioxusLabs/dioxus/pull/2603.
+/// See <https://github.com/DioxusLabs/dioxus/pull/2603>.
 pub(crate) fn restore_cursor_on_sigint() {
     ctrlc::set_handler(move || {
         if let Err(err) = console::Term::stdout().show_cursor() {

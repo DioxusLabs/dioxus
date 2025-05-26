@@ -53,9 +53,9 @@ pub fn launch_cfg(
 ///
 /// If you look closely, you'll notice that we impl Send for this struct. This would normally be
 /// unsound. However, we know that the thread that created these objects ("main()" - see JNI_OnLoad)
-/// is finished once `start_app` is called. This is similar to how an Rc<T> is technically safe
-/// to move between threads if you can prove that no other thread is using the Rc<T> at the same time.
-/// Crates like https://crates.io/crates/sendable exist that build on this idea but with runtimk,
+/// is finished once `start_app` is called. This is similar to how an `Rc<T>` is technically safe
+/// to move between threads if you can prove that no other thread is using the `Rc<T>` at the same time.
+/// Crates like <https://crates.io/crates/sendable> exist that build on this idea but with runtime
 /// validation that the current thread is the one that created the object.
 ///
 /// Since `main()` completes, the only reader of this data will be `start_app`, so it's okay to

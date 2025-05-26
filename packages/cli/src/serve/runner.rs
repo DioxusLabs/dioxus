@@ -773,7 +773,7 @@ impl AppServer {
     /// we mostly just care about workspace files and local dependencies.
     ///
     /// Dep-info file background:
-    /// https://doc.rust-lang.org/stable/nightly-rustc/cargo/core/compiler/fingerprint/index.html#dep-info-files
+    /// <https://doc.rust-lang.org/stable/nightly-rustc/cargo/core/compiler/fingerprint/index.html#dep-info-files>
     fn load_rsx_filemap(&mut self) {
         self.fill_filemap_from_krate(self.client.build.crate_dir());
 
@@ -1109,9 +1109,9 @@ fn handle_notify_error(err: notify::Error) {
 
 /// Detects if `dx` is being ran in a WSL environment.
 ///
-/// We determine this based on whether the keyword `microsoft` or `wsl` is contained within the [`WSL_1`] or [`WSL_2`] files.
+/// We determine this based on whether the keyword `microsoft` or `wsl` is contained within the `WSL_1` or `WSL_2` files.
 /// This may fail in the future as it isn't guaranteed by Microsoft.
-/// See https://github.com/microsoft/WSL/issues/423#issuecomment-221627364
+/// See <https://github.com/microsoft/WSL/issues/423#issuecomment-221627364>
 fn is_wsl() -> bool {
     const WSL_1: &str = "/proc/sys/kernel/osrelease";
     const WSL_2: &str = "/proc/version";

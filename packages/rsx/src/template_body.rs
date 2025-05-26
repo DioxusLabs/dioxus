@@ -31,23 +31,23 @@
 //! This means you can't query the ID of any node "in a vacuum" - these are assigned once - but at
 //! least they're stable enough for the purposes of hotreloading
 //!
-//! ```rust, ignore
+//! ```text
 //! rsx! {
 //!     div {
 //!         class: "hello",
-//!         id: "node-{node_id}",    <--- {node_id} has the formatted segment id 0 in the literal pool
-//!         ..props,                 <--- spreads are not reloadable
+//!         id: "node-{node_id}",         <--- {node_id} has the formatted segment id 0 in the literal pool
+//!         ..props,                      <--- spreads are not reloadable
 //!
-//!         "Hello, world!           <--- not tracked but reloadable in the template since it's just a string
+//!         "Hello, world!"               <--- not tracked but reloadable in the template since it's just a string
 //!
-//!         for item in 0..10 {      <--- both 0 and 10 are technically reloadable, but we don't hot reload them today...
+//!         for item in 0..10 {           <--- both 0 and 10 are technically reloadable, but we don't hot reload them today...
 //!             div { "cool-{item}" }     <--- {item} has the formatted segment id 1 in the literal pool
 //!         }
 //!
 //!         Link {
-//!             to: "/home", <-- hotreloadable since its a component prop literal (with component literal id 0)
-//!             class: "link {is_ready}", <-- {is_ready} has the formatted segment id 2 in the literal pool and the property has the component literal id 1
-//!             "Home" <-- hotreloadable since its a component child (via template)
+//!             to: "/home",              <--- hotreloadable since its a component prop literal (with component literal id 0)
+//!             class: "link {is_ready}", <--- {is_ready} has the formatted segment id 2 in the literal pool and the property has the component literal id 1
+//!             "Home"                    <--- hotreloadable since its a component child (via template)
 //!         }
 //!     }
 //! }

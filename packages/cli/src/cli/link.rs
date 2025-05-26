@@ -38,7 +38,7 @@ pub struct LinkAction {
 /// The linker flavor to use. This influences the argument style that gets passed to the linker.
 /// We're imitating the rustc linker flavors here.
 ///
-/// https://doc.rust-lang.org/beta/nightly-rustc/rustc_target/spec/enum.LinkerFlavor.html
+/// <https://doc.rust-lang.org/beta/nightly-rustc/rustc_target/spec/enum.LinkerFlavor.html>
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub enum LinkerFlavor {
     Gnu,

@@ -2,11 +2,11 @@
 
 Dioxus includes a series of components that render into the head of the page:
 
-- [Title](crate::Title)
-- [Meta](crate::Meta)
-- [document::Link](crate::document::Link)
-- [Script](crate::Script)
-- [Style](crate::Style)
+- [Title]
+- [Meta]
+- [document::Link](crate::Link)
+- [Script]
+- [Style]
 
 Each of these components can be used to add extra information to the head of the page. For example, you can use the `Title` component to set the title of the page, or the `Meta` component to add extra metadata to the page.
 
