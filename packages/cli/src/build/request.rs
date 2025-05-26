@@ -315,6 +315,7 @@
 //! ## Extra links
 //! - xbuild: <https://github.com/rust-mobile/xbuild/blob/master/xbuild/src/command/build.rs>
 
+use crate::build_assets::extract_assets_from_file;
 use crate::{
     AndroidTools, BuildContext, DioxusConfig, Error, LinkAction, Platform, Result, RustcArgs,
     TargetArgs, TraceSrc, WasmBindgen, WasmOptConfig, Workspace, DX_RUSTC_WRAPPER_ENV_VAR,
@@ -385,7 +386,6 @@ pub(crate) struct BuildRequest {
     pub(crate) session_cache_dir: Arc<TempDir>,
     pub(crate) link_args_file: Arc<NamedTempFile>,
     pub(crate) link_err_file: Arc<NamedTempFile>,
-    pub(crate) link_asset_manifest_file: Arc<NamedTempFile>,
     pub(crate) rustc_wrapper_args_file: Arc<NamedTempFile>,
 }
 
@@ -658,10 +658,6 @@ impl BuildRequest {
             NamedTempFile::with_suffix(".txt")
                 .context("Failed to create temporary file for linker args")?,
         );
-        let link_asset_manifest_file = Arc::new(
-            NamedTempFile::with_suffix(".json")
-                .context("Failed to create temporary file for asset manifest")?,
-        );
         let rustc_wrapper_args_file = Arc::new(
             NamedTempFile::with_suffix(".json")
                 .context("Failed to create temporary file for rustc wrapper args")?,
@@ -704,7 +700,6 @@ impl BuildRequest {
             custom_linker,
             link_args_file,
             link_err_file,
-            link_asset_manifest_file,
             session_cache_dir,
             rustc_wrapper_args_file,
             extra_rustc_args,
@@ -895,7 +890,7 @@ impl BuildRequest {
             self.run_fat_link(ctx, &exe).await?;
         }
 
-        let assets = AssetManifest::load_from_file(self.link_asset_manifest_file.path())?;
+        let assets = self.collect_assets(&exe, ctx)?;
         let time_end = SystemTime::now();
         let mode = ctx.mode.clone();
         let platform = self.platform;
@@ -912,6 +907,21 @@ impl BuildRequest {
             mode,
             patch_cache: None,
         })
+    }
+
+    /// Collect the assets from the final executable and modify the binary in place to point to the right
+    /// hashed asset location.
+    fn collect_assets(&self, exe: &Path, ctx: &BuildContext) -> Result<AssetManifest> {
+        // walk every file in the incremental cache dir, reading and inserting items into the manifest.
+        let mut manifest = AssetManifest::default();
+
+        // And then add from the exe directly, just in case it's LTO compiled and has no incremental cache
+        if !self.skip_assets {
+            ctx.status_extracting_assets();
+            manifest = extract_assets_from_file(exe)?;
+        }
+
+        Ok(manifest)
     }
 
     /// Take the output of rustc and make it into the main exe of the bundle
@@ -1256,6 +1266,9 @@ impl BuildRequest {
         if let Some(idx) = args.iter().position(|arg| *arg == "-o") {
             _ = std::fs::remove_file(PathBuf::from(args[idx + 1]));
         }
+
+        // Now extract the assets from the fat binary
+        self.collect_assets(&self.patch_exe(artifacts.time_start), ctx)?;
 
         // Clean up the temps manually
         // todo: we might want to keep them around for debugging purposes
@@ -1696,9 +1709,7 @@ impl BuildRequest {
     /// linker format.
     fn select_linker(&self) -> Result<PathBuf, Error> {
         let cc = match self.triple.operating_system {
-            OperatingSystem::Unknown if self.platform == Platform::Web => {
-                self.workspace.sysroot.wasm_ld()
-            }
+            OperatingSystem::Unknown if self.platform == Platform::Web => self.workspace.wasm_ld(),
 
             // The android clang linker is *special* and has some android-specific flags that we need
             //
@@ -1711,11 +1722,11 @@ impl BuildRequest {
             // We could also use `lld` here, but it might not be installed by default.
             //
             // Note that this is *clang*, not `lld`.
-            OperatingSystem::Darwin(_) | OperatingSystem::IOS(_) => self.workspace.sysroot.cc(),
+            OperatingSystem::Darwin(_) | OperatingSystem::IOS(_) => self.workspace.cc(),
 
             // On windows, instead of trying to find the system linker, we just go with the lld.link
             // that rustup provides. It's faster and more stable then reyling on link.exe in path.
-            OperatingSystem::Windows => self.workspace.sysroot.lld_link(),
+            OperatingSystem::Windows => self.workspace.lld_link(),
 
             // The rest of the platforms use `cc` as the linker which should be available in your path,
             // provided you have build-tools setup. On mac/linux this is the default, but on Windows
@@ -1729,7 +1740,7 @@ impl BuildRequest {
             // Note that "cc" is *not* a linker. It's a compiler! The arguments we pass need to be in
             // the form of `-Wl,<args>` for them to make it to the linker. This matches how rust does it
             // which is confusing.
-            _ => self.workspace.sysroot.cc(),
+            _ => self.workspace.cc(),
         };
 
         Ok(cc)
@@ -1863,7 +1874,6 @@ impl BuildRequest {
 
         // Merge in extra args. Order shouldn't really matter.
         cargo_args.extend(self.extra_cargo_args.clone());
-
         cargo_args.push("--".to_string());
         cargo_args.extend(self.extra_rustc_args.clone());
 
@@ -1873,11 +1883,15 @@ impl BuildRequest {
             cargo_args.push("-Clink-args=--emit-relocs".to_string());
         }
 
-        // dx always injects itself as a linker intercept
-        cargo_args.push(format!(
-            "-Clinker={}",
-            Workspace::path_to_dx().expect("can't find dx").display()
-        ));
+        // dx *always* links android and thin builds
+        if self.custom_linker.is_some()
+            || matches!(ctx.mode, BuildMode::Thin { .. } | BuildMode::Fat)
+        {
+            cargo_args.push(format!(
+                "-Clinker={}",
+                Workspace::path_to_dx().expect("can't find dx").display()
+            ));
+        }
 
         // Our fancy hot-patching engine needs a lot of customization to work properly.
         //
@@ -1970,28 +1984,18 @@ impl BuildRequest {
             env_vars.extend(self.android_env_vars()?);
         };
 
-        // Write the environment variables for the dx linker intercept used for both asset collection and hot reload builds.
-        LinkAction {
-            triple: self.triple.clone(),
-            linker: match self.custom_linker.clone() {
-                Some(linker) => crate::Linker::Override(linker),
-                None => {
-                    if matches!(ctx.mode, BuildMode::Thin { .. }) {
-                        crate::Linker::None
-                    } else {
-                        crate::Linker::Auto
-                    }
-                }
-            },
-            link_err_file: Some(dunce::canonicalize(self.link_err_file.path())?),
-            link_args_file: Some(dunce::canonicalize(self.link_args_file.path())?),
-            link_asset_manifest_file: (!self.skip_assets)
-                .then(|| dunce::canonicalize(self.link_asset_manifest_file.path()))
-                .transpose()?,
-            link_log_file: None,
-            link_asset_out_dir: None,
+        // If we're either zero-linking or using a custom linker, make `dx` itself do the linking.
+        if self.custom_linker.is_some()
+            || matches!(ctx.mode, BuildMode::Thin { .. } | BuildMode::Fat)
+        {
+            LinkAction {
+                triple: self.triple.clone(),
+                linker: self.custom_linker.clone(),
+                link_err_file: dunce::canonicalize(self.link_err_file.path())?,
+                link_args_file: dunce::canonicalize(self.link_args_file.path())?,
+            }
+            .write_env_vars(&mut env_vars)?;
         }
-        .write_env_vars(&mut env_vars)?;
 
         // Disable reference types on wasm when using hotpatching
         // https://blog.rust-lang.org/2024/09/24/webassembly-targets-change-in-default-target-features/#disabling-on-by-default-webassembly-proposals
@@ -3432,7 +3436,7 @@ impl BuildRequest {
     async fn verify_web_tooling(&self) -> Result<()> {
         // Install target using rustup.
         #[cfg(not(feature = "no-downloads"))]
-        if !self.workspace.sysroot.has_wasm32_unknown_unknown() {
+        if !self.workspace.has_wasm32_unknown_unknown() {
             tracing::info!(
                 "Web platform requires wasm32-unknown-unknown to be installed. Installing..."
             );
@@ -3444,7 +3448,7 @@ impl BuildRequest {
         }
 
         // Ensure target is installed.
-        if !self.workspace.sysroot.has_wasm32_unknown_unknown() {
+        if !self.workspace.has_wasm32_unknown_unknown() {
             return Err(Error::Other(anyhow::anyhow!(
                 "Missing target wasm32-unknown-unknown."
             )));

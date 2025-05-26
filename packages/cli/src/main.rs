@@ -40,8 +40,7 @@ pub(crate) use workspace::*;
 async fn main() {
     // The CLI uses dx as a rustcwrapper in some instances (like binary patching)
     if rustcwrapper::is_wrapping_rustc() {
-        rustcwrapper::run_rustc().await;
-        return;
+        return rustcwrapper::run_rustc().await;
     }
 
     // If we're being ran as a linker (likely from ourselves), we want to act as a linker instead.
@@ -62,6 +61,7 @@ async fn main() {
         Commands::Serve(opts) => opts.serve().await,
         Commands::Bundle(opts) => opts.bundle().await,
         Commands::Run(opts) => opts.run().await,
+        Commands::BuildAssets(opts) => opts.run().await,
         Commands::SelfUpdate(opts) => opts.self_update().await,
     };
 
@@ -81,5 +81,5 @@ async fn main() {
 
             std::process::exit(1);
         }
-    }
+    };
 }

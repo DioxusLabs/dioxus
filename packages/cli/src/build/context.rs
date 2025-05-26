@@ -169,4 +169,9 @@ impl BuildContext {
             stage: BuildStage::CompressingAssets,
         });
     }
+    pub(crate) fn status_extracting_assets(&self) {
+        _ = self.tx.unbounded_send(BuilderUpdate::Progress {
+            stage: BuildStage::ExtractingAssets,
+        });
+    }
 }

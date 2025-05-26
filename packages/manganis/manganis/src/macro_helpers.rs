@@ -1,5 +1,5 @@
 pub use const_serialize;
-use const_serialize::{serialize_const, ConstStr, ConstVec};
+use const_serialize::{serialize_const, ConstStr, ConstVec, SerializeConst};
 use manganis_core::{AssetOptions, BundledAsset};
 
 const PLACEHOLDER_HASH: ConstStr =
@@ -35,8 +35,13 @@ pub const fn create_bundled_asset_relative(
 
 /// Serialize an asset to a const buffer
 pub const fn serialize_asset(asset: &BundledAsset) -> ConstVec<u8> {
-    let write = ConstVec::new();
-    serialize_const(asset, write)
+    let data = ConstVec::new();
+    let mut data = serialize_const(asset, data);
+    // Reserve the maximum size of the asset
+    while data.len() < BundledAsset::MEMORY_LAYOUT.size() {
+        data = data.push(0);
+    }
+    data
 }
 
 /// Deserialize a const buffer into a BundledAsset

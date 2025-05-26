@@ -137,7 +137,7 @@ pub enum Layout {
 
 impl Layout {
     /// The size of the type in bytes.
-    const fn size(&self) -> usize {
+    pub const fn size(&self) -> usize {
         match self {
             Layout::Enum(layout) => layout.size,
             Layout::Struct(layout) => layout.size,

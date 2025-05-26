@@ -8,10 +8,7 @@ use quote::ToTokens;
 /// After linking, the "manganis" sections of the different object files will be merged.
 pub fn generate_link_section(asset: impl ToTokens, asset_hash: &str) -> TokenStream2 {
     let position = proc_macro2::Span::call_site();
-    let section_name = syn::LitStr::new(
-        manganis_core::linker::LinkSection::CURRENT.link_section,
-        position,
-    );
+    let export_name = syn::LitStr::new(&format!("__MANGANIS__{}", asset_hash), position);
 
     quote::quote! {
         // First serialize the asset into a constant sized buffer
@@ -22,14 +19,7 @@ pub fn generate_link_section(asset: impl ToTokens, asset_hash: &str) -> TokenStr
         const __LEN: usize = __BYTES.len();
 
         // Now that we have the size of the asset, copy the bytes into a static array
-        #[link_section = #section_name]
-        #[cfg_attr(target_arch = "wasm32", used)]
-        static __LINK_SECTION: [u8; __LEN] = manganis::macro_helpers::copy_bytes(__BYTES);
-
-        #[cfg(target_arch = "wasm32")]
-        extern "C" {
-            #[link_name = #asset_hash]
-            static __WASM_LINK_SECTION: [u8; __LEN];
-        }
+        #[unsafe(export_name = #export_name)]
+        static __LINK_SECTION: [u8; __LEN]  = manganis::macro_helpers::copy_bytes(__BYTES);
     }
 }
