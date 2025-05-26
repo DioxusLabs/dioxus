@@ -139,12 +139,8 @@ jobs:
       - name: "doc --lib --all-features"
         run: |
           cargo doc --workspace --no-deps --all-features --document-private-items
-        # env:
-        #   RUSTFLAGS: --cfg docsrs
-        #   RUSTDOCFLAGS: --cfg docsrs
-        # todo: re-enable warnings, private items
-        # RUSTDOCFLAGS: --cfg docsrs -Dwarnings
-        #  --document-private-items
+        env:
+          RUSTDOCFLAGS: -Dwarnings --document-private-items
 
   check:
     if: github.event.pull_request.draft == false

@@ -1140,7 +1140,7 @@ We checked the folder: {}
     /// - If the app fails to launch, errors are logged for debugging purposes.
     ///
     /// # Resources:
-    /// - https://developer.android.com/studio/run/emulator-commandline
+    /// - <https://developer.android.com/studio/run/emulator-commandline>
     async fn open_android_sim(
         &self,
         root: bool,

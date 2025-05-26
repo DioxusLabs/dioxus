@@ -8,25 +8,20 @@ use std::{backtrace::Backtrace, panic::AssertUnwindSafe};
 ///
 /// `dx serve` takes cargo args by default, except with a required `--platform` arg:
 ///
-/// ```
+/// ```sh
 /// dx serve --example blah --target blah --platform android
 /// ```
 ///
 /// A simple serve:
-/// ```
+/// ```sh
 /// dx serve --platform web
-/// ```
-///
-/// A serve with customized arguments:
-///
-/// ```
 /// ```
 ///
 /// As of dioxus 0.7, `dx serve` allows independent customization of the client and server builds,
 /// allowing workspaces and removing any "magic" done to support ergonomic fullstack serving with
 /// an plain `dx serve`. These require specifying more arguments like features since they won't be autodetected.
 ///
-/// ```
+/// ```sh
 /// dx serve \
 ///     client --package frontend \
 ///     server --package backend

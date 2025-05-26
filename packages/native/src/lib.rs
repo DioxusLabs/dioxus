@@ -4,9 +4,9 @@
 //!
 //! ## Feature flags
 //!  - `default`: Enables the features listed below.
-//!  - `accessibility`: Enables [`accesskit`] accessibility support.
+//!  - `accessibility`: Enables [`accesskit`](https://docs.rs/accesskit/latest/accesskit/) accessibility support.
 //!  - `hot-reload`: Enables hot-reloading of Dioxus RSX.
-//!  - `menu`: Enables the [`muda`] menubar.
+//!  - `menu`: Enables the [`muda`](https://docs.rs/muda/latest/muda/) menubar.
 //!  - `tracing`: Enables tracing support.
 
 mod assets;

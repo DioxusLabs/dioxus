@@ -232,7 +232,7 @@ pub fn remove_future(id: Task) {
 ///
 /// <div class="warning">
 ///
-/// `use_hook` is not reactive. It just returns the value on every render. If you need state that will track changes, use [`use_signal`](dioxus::prelude::use_signal) instead.
+/// `use_hook` is not reactive. It just returns the value on every render. If you need state that will track changes, use [`use_signal`](https://docs.rs/dioxus-hooks/latest/dioxus_hooks/fn.use_signal.html) instead.
 ///
 /// ❌ Don't use `use_hook` with `Rc<RefCell<T>>` for state. It will not update the UI and other hooks when the state changes.
 /// ```rust
@@ -356,7 +356,7 @@ pub fn schedule_update_any() -> Arc<dyn Fn(ScopeId) + Send + Sync> {
 
 /// Creates a callback that will be run before the component is removed.
 /// This can be used to clean up side effects from the component
-/// (created with [`use_effect`](dioxus::prelude::use_effect)).
+/// (created with [`use_effect`](https://docs.rs/dioxus-hooks/latest/dioxus_hooks/fn.use_effect.html)).
 ///
 /// Note:
 /// Effects do not run on the server, but use_drop **DOES**. It runs any time the component is dropped including during SSR rendering on the server. If your clean up logic targets web, the logic has to be gated by a feature, see the below example for details.
