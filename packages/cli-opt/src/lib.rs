@@ -40,7 +40,7 @@ impl AssetManifest {
         ))?;
 
         let mut bundled_asset =
-            manganis::macro_helpers::create_bundled_asset(output_path_str, options, "");
+            manganis::macro_helpers::create_bundled_asset(output_path_str, options);
         add_hash_to_asset(&mut bundled_asset);
 
         self.assets

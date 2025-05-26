@@ -153,7 +153,7 @@ pub fn add_hash_to_asset(asset: &mut BundledAsset) {
 
             let bundled_path = bundled_path.to_string_lossy().to_string();
 
-            *asset = BundledAsset::new(source, &bundled_path, options, asset.link_section());
+            *asset = BundledAsset::new(source, &bundled_path, options);
         }
         Err(err) => {
             tracing::error!("Failed to hash asset: {err}");
