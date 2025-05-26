@@ -56,7 +56,7 @@ pub(crate) struct TraceController {
 
 impl TraceController {
     /// Initialize the CLI and set up the tracing infrastructure
-    pub fn initialize() -> Cli {
+    pub fn initialize() -> Commands {
         let args = Cli::parse();
 
         VERBOSITY
@@ -129,7 +129,7 @@ impl TraceController {
 
         sub.init();
 
-        args
+        args.action
     }
 
     /// Get a handle to the trace controller.

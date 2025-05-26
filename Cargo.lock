@@ -3698,6 +3698,7 @@ dependencies = [
  "dioxus-check",
  "dioxus-cli-config",
  "dioxus-cli-opt",
+ "dioxus-cli-telemetry",
  "dioxus-core",
  "dioxus-core-types",
  "dioxus-devtools-types",
@@ -3737,6 +3738,7 @@ dependencies = [
  "path-absolutize",
  "pdb",
  "plist",
+ "posthog-rs",
  "prettyplease",
  "proc-macro2",
  "ratatui",
@@ -3749,6 +3751,7 @@ dependencies = [
  "serde",
  "serde_json",
  "shell-words",
+ "snafu",
  "strum 0.27.1",
  "subsecond-types",
  "syn 2.0.101",
@@ -3845,6 +3848,14 @@ dependencies = [
  "flate2",
  "reqwest 0.12.15",
  "tar",
+]
+
+[[package]]
+name = "dioxus-cli-telemetry"
+version = "0.7.0-alpha.0"
+dependencies = [
+ "chrono",
+ "serde",
 ]
 
 [[package]]
@@ -10719,6 +10730,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d8a2f0d8d040d7848a709caf78912debcc3f33ee4b3cac47d73d1e1069e83507"
 dependencies = [
  "portable-atomic",
+]
+
+[[package]]
+name = "posthog-rs"
+version = "0.3.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ead24e7bd3ce35a88fffe1f9a4747b4844335fa837eddecf9e7ad9708f3e26b3"
+dependencies = [
+ "chrono",
+ "derive_builder",
+ "reqwest 0.11.27",
+ "semver",
+ "serde",
+ "serde_json",
+ "uuid",
 ]
 
 [[package]]

@@ -26,6 +26,7 @@ dioxus-dx-wire-format = { workspace = true }
 wasm-split-cli = { workspace = true }
 depinfo = { workspace = true }
 subsecond-types = { workspace = true }
+dioxus-cli-telemetry = { workspace =  true }
 
 clap = { workspace = true, features = ["derive", "cargo"] }
 convert_case = { workspace = true }
@@ -138,6 +139,8 @@ pdb = "0.8.0"
 self_update = { version = "0.42.0", features = ["archive-tar", "archive-zip", "compression-flate2", "compression-zip-deflate"] }
 self-replace = "1.5.0"
 cargo-config2 = { workspace = true }
+posthog-rs = "0.3.5"
+snafu = { version = "0.7.5", features = ["backtrace", "backtraces"] }
 
 [build-dependencies]
 built = { version = "0.7.5", features = ["git2"] }

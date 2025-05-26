@@ -1,0 +1,64 @@
+//! # Telemetry for the Dioxus CLI
+//!
+//! Dioxus uses telemetry in the CLI to get insight into metrics like performance, panics, and usage
+//! of various arguments. This data helps us track down bugs and improve quality of the tooling.
+//!
+//! Usage of telemetry in open source products can be controversial. Our goal here is to collect
+//! minimally invasive data used exclusively to improve our tooling. Github issues only show *some*
+//! of the problem, but many users stumble into issues which go unreported.
+//!
+//! Our policy follows:
+//! - minimally invasive
+//! - anonymous
+//! - periodic
+//! - transparent
+//! - easy to disable
+//!
+//! We don't send events on every command, but instead perform roll-ups on a daily basis during the
+//! first week of installation, and then weekly after that. If you don't run the CLI, then we won't
+//! send any data - rollups are not done in background processes. Rollups are also capped in size to
+//! a max of 10mb weekly to prevent DDOS of the dioxus telemetry endpoint.
+//!
+//! Note that we do collect a hash of your system's entropy during installation. This lets us aggregate
+//! logs across time about a given installation, IE if your machine is a particular linux distribution,
+//! what types of panics or performance issues do you encounter?
+//!
+//! In the CLI, you can disable this by using any of the methods
+//! - installing with the "disable-telemetry" feature flag
+//! - setting TELEMETRY=false in your env
+//! - setting `dx settings --disable-telemtry`
+
+use std::{collections::HashMap, time::SystemTime};
+
+use chrono::{DateTime, Duration, Utc};
+use serde::{Deserialize, Serialize};
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct TelemetryPayload {
+    pub device_id: String,
+    pub is_ci: bool,
+    pub cli_version: String,
+    pub events: Vec<TelemetryEvent>,
+}
+
+/// An event, correspnding roughly to a trace!()
+///
+/// This can be something like a build, bundle, translate, etc
+/// We collect the phases of the build in a list of events to get a better sense of how long
+/// it took.
+///
+/// ```rust
+/// tracing::trace!(telemetry, stage = "start", "bundling", "Packaging...")
+/// tracing::trace!(telemetry, stage = "end", end = "bundling")
+/// ```
+///
+/// On the analytics, side, we reconstruct the trace messages into a sequence of events, using
+/// the stage as a marker.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct TelemetryEvent {
+    pub name: String,
+    pub message: String,
+    pub stage: String,
+    pub time: DateTime<Utc>,
+    pub values: HashMap<String, String>,
+}

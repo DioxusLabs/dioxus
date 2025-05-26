@@ -18,6 +18,7 @@ mod rustcwrapper;
 mod serve;
 mod settings;
 mod tailwind;
+mod telemetry;
 mod wasm_bindgen;
 mod wasm_opt;
 mod workspace;
@@ -36,50 +37,51 @@ pub(crate) use tailwind::*;
 pub(crate) use wasm_bindgen::*;
 pub(crate) use workspace::*;
 
-#[tokio::main]
-async fn main() {
+fn main() {
     // The CLI uses dx as a rustcwrapper in some instances (like binary patching)
     if rustcwrapper::is_wrapping_rustc() {
-        return rustcwrapper::run_rustc().await;
+        return rustcwrapper::run_rustc();
     }
 
     // If we're being ran as a linker (likely from ourselves), we want to act as a linker instead.
     if let Some(link_args) = link::LinkAction::from_env() {
-        return link_args.run_link().await;
+        return link_args.run_link();
     }
 
-    let args = TraceController::initialize();
-    let result = match args.action {
-        Commands::Translate(opts) => opts.translate(),
-        Commands::New(opts) => opts.create(),
-        Commands::Init(opts) => opts.init(),
-        Commands::Config(opts) => opts.config().await,
-        Commands::Autoformat(opts) => opts.autoformat().await,
-        Commands::Check(opts) => opts.check().await,
-        Commands::Clean(opts) => opts.clean().await,
-        Commands::Build(opts) => opts.build().await,
-        Commands::Serve(opts) => opts.serve().await,
-        Commands::Bundle(opts) => opts.bundle().await,
-        Commands::Run(opts) => opts.run().await,
-        Commands::BuildAssets(opts) => opts.run().await,
-        Commands::SelfUpdate(opts) => opts.self_update().await,
-    };
+    // Run under the telemetry collector so we can log errors/panics.
+    telemetry::main(async {
+        let result = match TraceController::initialize() {
+            Commands::Translate(opts) => opts.translate(),
+            Commands::New(opts) => opts.create(),
+            Commands::Init(opts) => opts.init(),
+            Commands::Config(opts) => opts.config().await,
+            Commands::Autoformat(opts) => opts.autoformat().await,
+            Commands::Check(opts) => opts.check().await,
+            Commands::Clean(opts) => opts.clean().await,
+            Commands::Build(opts) => opts.build().await,
+            Commands::Serve(opts) => opts.serve().await,
+            Commands::Bundle(opts) => opts.bundle().await,
+            Commands::Run(opts) => opts.run().await,
+            Commands::BuildAssets(opts) => opts.run().await,
+            Commands::SelfUpdate(opts) => opts.self_update().await,
+        };
 
-    // Provide a structured output for third party tools that can consume the output of the CLI
-    match result {
-        Ok(output) => {
-            tracing::debug!(json = ?output);
-        }
-        Err(err) => {
-            eprintln!("{err}");
+        // Provide a structured output for third party tools that can consume the output of the CLI
+        match result.as_ref() {
+            Ok(output) => {
+                tracing::debug!(json = ?output);
+            }
+            Err(err) => {
+                eprintln!("{err}");
 
-            tracing::error!(
-                json = ?StructuredOutput::Error {
-                    message: format!("{err:?}"),
-                },
-            );
+                tracing::error!(
+                    json = ?StructuredOutput::Error {
+                        message: format!("{err:?}"),
+                    },
+                );
+            }
+        };
 
-            std::process::exit(1);
-        }
-    };
+        result
+    });
 }

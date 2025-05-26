@@ -39,6 +39,8 @@ pub(crate) enum Setting {
     AlwaysOnTop { value: BoolValue },
     /// Set the interval that file changes are polled on WSL for hot reloading.
     WSLFilePollInterval { value: u16 },
+    /// Disable the built-in telemetry for the CLI
+    DisableTelemetry { value: BoolValue },
 }
 
 impl Display for Setting {
@@ -48,6 +50,7 @@ impl Display for Setting {
             Self::AlwaysOpenBrowser { value: _ } => write!(f, "always-open-browser"),
             Self::AlwaysOnTop { value: _ } => write!(f, "always-on-top"),
             Self::WSLFilePollInterval { value: _ } => write!(f, "wsl-file-poll-interval"),
+            Self::DisableTelemetry { value: _ } => write!(f, "disable-telemetry"),
         }
     }
 }
@@ -114,6 +117,9 @@ impl Config {
                     }
                     Setting::WSLFilePollInterval { value } => {
                         settings.wsl_file_poll_interval = Some(value)
+                    }
+                    Setting::DisableTelemetry { value } => {
+                        settings.disable_telemetry = Some(value.into());
                     }
                 })?;
                 tracing::info!(dx_src = ?TraceSrc::Dev, "🚩 CLI setting `{setting}` has been set.");
