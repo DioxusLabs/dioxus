@@ -294,7 +294,7 @@ impl<'a, T, M> DisplayQueryArgument<'a, T, M> {
     }
 }
 
-impl<'a, T: ToQueryArgument<M>, M> Display for DisplayQueryArgument<'a, T, M> {
+impl<T: ToQueryArgument<M>, M> Display for DisplayQueryArgument<'_, T, M> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.value.display_query_argument(self.query_name, f)
     }
