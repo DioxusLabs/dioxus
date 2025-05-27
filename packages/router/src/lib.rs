@@ -94,7 +94,7 @@ pub mod exports {
 }
 
 pub(crate) mod query_sets {
-    //! Url precent encode sets defined [here](https://url.spec.whatwg.org/#percent-encoded-bytes)
+    //! Url percent encode sets defined [here](https://url.spec.whatwg.org/#percent-encoded-bytes)
 
     use percent_encoding::AsciiSet;
 
