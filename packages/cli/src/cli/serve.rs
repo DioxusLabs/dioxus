@@ -50,10 +50,6 @@ pub(crate) struct ServeArgs {
     #[clap(long)]
     pub(crate) cross_origin_policy: bool,
 
-    /// Additional arguments to pass to the executable
-    #[clap(long)]
-    pub(crate) args: Vec<String>,
-
     /// Sets the interval in seconds that the CLI will poll for file changes on WSL.
     #[clap(long, default_missing_value = "2")]
     pub(crate) wsl_file_poll_interval: Option<u16>,
@@ -78,6 +74,10 @@ pub(crate) struct ServeArgs {
 
     #[clap(flatten)]
     pub(crate) targets: BuildArgs,
+
+    /// Additional arguments to pass to the executable
+    #[clap(last = true)]
+    pub(crate) args: Vec<String>,
 }
 
 impl ServeArgs {

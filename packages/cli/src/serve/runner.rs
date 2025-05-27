@@ -73,6 +73,9 @@ pub(crate) struct AppServer {
     pub(crate) proxied_port: Option<u16>,
     pub(crate) cross_origin_policy: bool,
 
+    // The arguments that should be forwarded to the app when it is opened
+    pub(crate) open_args: Vec<String>,
+
     // Additional plugin-type tools
     pub(crate) tw_watcher: tokio::task::JoinHandle<Result<()>>,
 }
@@ -151,6 +154,8 @@ impl AppServer {
             .map(|server| AppBuilder::start(&server, build_mode))
             .transpose()?;
 
+        let open_args = args.args;
+
         let tw_watcher = TailwindCli::serve(
             client.build.package_manifest_dir(),
             client.build.config.application.tailwind_input.clone(),
@@ -187,6 +192,7 @@ impl AppServer {
             cross_origin_policy,
             fullstack,
             tw_watcher,
+            open_args,
         };
 
         // Only register the hot-reload stuff if we're watching the filesystem
@@ -544,6 +550,7 @@ impl AppServer {
                     false,
                     false,
                     BuildId::SERVER,
+                    &self.open_args,
                 )
                 .await?;
         }
@@ -558,6 +565,7 @@ impl AppServer {
                 open_browser,
                 self.always_on_top,
                 BuildId::CLIENT,
+                &self.open_args,
             )
             .await?;
 
