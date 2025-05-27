@@ -44,7 +44,7 @@ slab = { workspace = true }
 rustc-hash = { workspace = true }
 dioxus-hooks = { workspace = true }
 futures-util = { workspace = true }
-urlencoding = { workspace = true }
+percent-encoding = { workspace = true }
 async-trait = { workspace = true }
 tao = { workspace = true, features = ["rwh_05"] }
 dioxus-history = { workspace = true }

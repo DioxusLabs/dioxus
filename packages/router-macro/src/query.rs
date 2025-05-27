@@ -133,7 +133,7 @@ impl FullQuerySegment {
         quote! {
             {
                 let as_string = #ident.to_string();
-                write!(f, "?{}", dioxus_router::exports::urlencoding::encode(&as_string))?;
+                write!(f, "?{}", percent_encoding::utf8_percent_encode(&as_string, dioxus_router::exports::QUERY_ASCII_SET))?;
             }
         }
     }
@@ -162,7 +162,7 @@ impl QueryArgument {
         quote! {
             {
                 let as_string = #ident.to_string();
-                write!(f, "{}={}", stringify!(#ident), dioxus_router::exports::urlencoding::encode(&as_string))?;
+                write!(f, "{}={}", stringify!(#ident), percent_encoding::utf8_percent_encode(&as_string, dioxus_router::exports::QUERY_ASCII_SET))?;
             }
         }
     }

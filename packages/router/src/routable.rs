@@ -406,7 +406,8 @@ where
         for segment in self {
             write!(f, "/")?;
             let segment = segment.to_string();
-            let encoded = urlencoding::encode(&segment);
+            let encoded =
+                percent_encoding::utf8_percent_encode(&segment, crate::query_sets::PATH_ASCII_SET);
             write!(f, "{}", encoded)?;
         }
         Ok(())
