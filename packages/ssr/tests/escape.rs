@@ -11,7 +11,7 @@ fn escape_static_values() {
 
     assert_eq!(
         dioxus_ssr::pre_render(&dom),
-        "<input disabled=\"&quot;&gt;&lt;div&gt;\" data-node-hydration=\"0\"/>"
+        "<input disabled=\"&#34;&#62;&#60;div&#62;\" data-node-hydration=\"0\"/>"
     );
 }
 
@@ -27,7 +27,7 @@ fn escape_dynamic_values() {
 
     assert_eq!(
         dioxus_ssr::pre_render(&dom),
-        "<input disabled=\"&quot;&gt;&lt;div&gt;\" data-node-hydration=\"0\"/>"
+        "<input disabled=\"&#34;&#62;&#60;div&#62;\" data-node-hydration=\"0\"/>"
     );
 }
 
@@ -42,7 +42,7 @@ fn escape_static_style() {
 
     assert_eq!(
         dioxus_ssr::pre_render(&dom),
-        "<div style=\"width:&quot;&gt;&lt;div&gt;;\" data-node-hydration=\"0\"></div>"
+        "<div style=\"width:&#34;&#62;&#60;div&#62;;\" data-node-hydration=\"0\"></div>"
     );
 }
 
@@ -58,7 +58,7 @@ fn escape_dynamic_style() {
 
     assert_eq!(
         dioxus_ssr::pre_render(&dom),
-        "<div style=\"width:&quot;&gt;&lt;div&gt;;\" data-node-hydration=\"0\"></div>"
+        "<div style=\"width:&#34;&#62;&#60;div&#62;;\" data-node-hydration=\"0\"></div>"
     );
 }
 
@@ -77,7 +77,7 @@ fn escape_static_text() {
 
     assert_eq!(
         dioxus_ssr::pre_render(&dom),
-        "<div data-node-hydration=\"0\">&quot;&gt;&lt;div&gt;</div>"
+        "<div data-node-hydration=\"0\">&#34;&#62;&#60;div&#62;</div>"
     );
 }
 
@@ -97,7 +97,7 @@ fn escape_dynamic_text() {
 
     assert_eq!(
         dioxus_ssr::pre_render(&dom),
-        "<div data-node-hydration=\"0\"><!--node-id1-->&quot;&gt;&lt;div&gt;<!--#--></div>"
+        "<div data-node-hydration=\"0\"><!--node-id1-->&#34;&#62;&#60;div&#62;<!--#--></div>"
     );
 }
 
@@ -219,7 +219,7 @@ fn escape_static_component_fragment_div() {
 
     assert_eq!(
         dioxus_ssr::pre_render(&dom),
-        "<div data-node-hydration=\"0\"><!--node-id1-->body { font-family: &quot;sans-serif&quot;; }<!--#--></div>"
+        "<div data-node-hydration=\"0\"><!--node-id1-->body { font-family: &#34;sans-serif&#34;; }<!--#--></div>"
     );
 }
 
@@ -244,6 +244,6 @@ fn escape_dynamic_component_fragment_div() {
 
     assert_eq!(
         dioxus_ssr::pre_render(&dom),
-        "<div data-node-hydration=\"0\"><!--node-id1-->body { font-family: &quot;sans-serif&quot;; }<!--#--></div>"
+        "<div data-node-hydration=\"0\"><!--node-id1-->body { font-family: &#34;sans-serif&#34;; }<!--#--></div>"
     );
 }
