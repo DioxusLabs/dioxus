@@ -1,4 +1,4 @@
-use crate::{components::FailureExternalNavigation, prelude::*};
+use crate::prelude::*;
 use dioxus_lib::prelude::*;
 use std::sync::Arc;
 
@@ -31,10 +31,21 @@ pub struct RouterConfig<R> {
     pub(crate) on_update: Option<RoutingCallback<R>>,
 }
 
+#[cfg(not(feature = "html"))]
 impl<R> Default for RouterConfig<R> {
     fn default() -> Self {
         Self {
-            failure_external_navigation: FailureExternalNavigation,
+            failure_external_navigation: || VNode::empty(),
+            on_update: None,
+        }
+    }
+}
+
+#[cfg(feature = "html")]
+impl<R> Default for RouterConfig<R> {
+    fn default() -> Self {
+        Self {
+            failure_external_navigation: crate::components::FailureExternalNavigation,
             on_update: None,
         }
     }
