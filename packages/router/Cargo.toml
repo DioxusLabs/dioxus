@@ -21,7 +21,7 @@ dioxus-cli-config = { workspace = true }
 rustversion = { workspace = true }
 
 [features]
-default = []
+default = ["html"]
 streaming = ["dep:dioxus-fullstack-hooks"]
 wasm-split = []
 html = ["dioxus-lib/html"]
