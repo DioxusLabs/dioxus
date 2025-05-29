@@ -1488,6 +1488,7 @@ impl BuildRequest {
                         || arg.starts_with("-m")
                         || arg.starts_with("-Wl,--target=")
                         || arg.starts_with("-Wl,-fuse-ld")
+                        || arg.starts_with("-fuse-ld")
                     {
                         out_args.push(arg.to_string());
                     }
