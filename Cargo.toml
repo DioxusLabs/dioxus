@@ -202,7 +202,7 @@ warnings = { version = "0.2.1" }
 prettier-please = { version = "0.3.0", features = ["verbatim"] }
 anyhow = "1.0.97"
 clap = { version = "4.5.31" }
-askama_escape = "0.10.3"
+askama_escape = "0.13.0"
 tracing = "0.1.41"
 tracing-futures = "0.2.5"
 tracing-subscriber = { version = "0.3.19", default-features = false }
