@@ -52,12 +52,15 @@ fn app() -> Element {
         } = event
         {
             let ctx = graphics_resources.value();
-            ctx.as_ref().unwrap().with_resources(|srcs| {
-                let mut cfg = srcs.config.clone();
-                cfg.width = new_size.width;
-                cfg.height = new_size.height;
-                srcs.surface.configure(&srcs.device, &cfg);
-            });
+            if let Some(ctx_ref) = ctx.as_ref() {
+                ctx_ref.with_resources(|srcs| {
+                    let mut cfg = srcs.config.clone();
+                    cfg.width = new_size.width;
+                    cfg.height = new_size.height;
+                    srcs.surface.configure(&srcs.device, &cfg);
+                });
+            }
+
             window().window.request_redraw();
         }
     });
@@ -71,7 +74,7 @@ fn app() -> Element {
             justify_content: "center",
             align_items: "center",
             font_size: "20px",
-            div { "text overlaied on wgpu surface!" }
+            div { "text overlaid on a wgpu surface!" }
         }
     }
 }

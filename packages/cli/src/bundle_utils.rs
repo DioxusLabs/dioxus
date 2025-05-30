@@ -113,6 +113,7 @@ impl From<MacOsSettings> for tauri_bundler::MacOsSettings {
             info_plist_path: val.info_plist_path,
             files: val.files,
             hardened_runtime: val.hardened_runtime,
+            bundle_version: val.bundle_version,
         }
     }
 }

@@ -60,7 +60,7 @@ export class NativeDioxusChannel extends DioxusChannel {
     this.rust_to_js = new Channel();
     this.request_id = request_id;
 
-    window.__msg_queues[request_id] = this.weak();
+    window.__msg_queues[request_id] = this;
     window.finalizationRegistry.register(this, { id: request_id });
   }
 
@@ -87,4 +87,9 @@ export class NativeDioxusChannel extends DioxusChannel {
 
   // Receive data sent from javascript in rust. This is a no-op in the native interpreter because the rust code runs remotely
   async rustRecv(): Promise<any> { }
+
+  // Close the channel, dropping it.
+  close(): void {
+    window.__msg_queues[this.request_id] = null;
+  }
 }

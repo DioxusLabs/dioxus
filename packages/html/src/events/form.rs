@@ -117,7 +117,7 @@ impl FormData {
 
     /// Did this form pass its own validation?
     pub fn valid(&self) -> bool {
-        self.inner.value().is_empty()
+        !self.inner.value().is_empty()
     }
 }
 

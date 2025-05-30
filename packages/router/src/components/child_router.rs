@@ -36,7 +36,7 @@ impl<R> Clone for ChildRouteMapping<R> {
     }
 }
 
-/// Props for the [`ChildHistoryProvider`] component.
+/// Props for the [`ChildRouter`] component.
 #[derive(Props, Clone)]
 pub struct ChildRouterProps<R: Routable> {
     /// The child route to render

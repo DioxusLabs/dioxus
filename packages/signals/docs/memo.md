@@ -51,7 +51,7 @@ fn app() -> Element {
 }
 ```
 
-For a full list of all the helpers available, check out the [`Readable`], [`ReadableVecExt`], and [`ReadableOptionExt`] traits.
+For a full list of all the helpers available, check out the [`Readable`], [`ReadableVecExt`](crate::ReadableVecExt), and [`ReadableOptionExt`](crate::ReadableOptionExt) traits.
 
 # Memos with Async
 

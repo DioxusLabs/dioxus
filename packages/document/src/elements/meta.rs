@@ -39,7 +39,7 @@ impl MetaProps {
     }
 }
 
-/// Render a [`meta`](crate::elements::meta) tag into the head of the page.
+/// Render a [`<meta>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/meta) tag into the head of the page.
 ///
 /// # Example
 ///
@@ -69,6 +69,12 @@ pub fn Meta(props: MetaProps) -> Element {
 
     use_hook(|| {
         let document = document();
+        let insert_link = document.create_head_component();
+
+        if !insert_link {
+            return;
+        }
+
         document.create_meta(props);
     });
 

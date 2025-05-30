@@ -1,3 +1,4 @@
+use crate::prelude::SuspenseContext;
 use crate::runtime::RuntimeError;
 use crate::{innerlude::SuspendedFuture, runtime::Runtime, CapturedError, Element, ScopeId, Task};
 use std::future::Future;
@@ -38,6 +39,13 @@ pub fn throw_error(error: impl Into<CapturedError> + 'static) {
     current_scope_id()
         .unwrap_or_else(|e| panic!("{}", e))
         .throw_error(error)
+}
+
+/// Get the suspense context the current scope is in
+pub fn suspense_context() -> Option<SuspenseContext> {
+    current_scope_id()
+        .unwrap_or_else(|e| panic!("{}", e))
+        .suspense_context()
 }
 
 /// Consume context from the current scope
@@ -120,7 +128,7 @@ pub fn spawn_isomorphic(fut: impl Future<Output = ()> + 'static) -> Task {
     Runtime::with_current_scope(|cx| cx.spawn_isomorphic(fut)).unwrap()
 }
 
-/// Spawns the future but does not return the [`Task`]. This task will automatically be canceled when the component is dropped.
+/// Spawns the future and returns the [`Task`]. This task will automatically be canceled when the component is dropped.
 ///
 /// # Example
 /// ```rust
@@ -224,7 +232,7 @@ pub fn remove_future(id: Task) {
 ///
 /// <div class="warning">
 ///
-/// `use_hook` is not reactive. It just returns the value on every render. If you need state that will track changes, use [`use_signal`](dioxus::prelude::use_signal) instead.
+/// `use_hook` is not reactive. It just returns the value on every render. If you need state that will track changes, use [`use_signal`](https://docs.rs/dioxus-hooks/latest/dioxus_hooks/fn.use_signal.html) instead.
 ///
 /// ❌ Don't use `use_hook` with `Rc<RefCell<T>>` for state. It will not update the UI and other hooks when the state changes.
 /// ```rust
@@ -302,33 +310,37 @@ pub fn use_hook<State: Clone + 'static>(initializer: impl FnOnce() -> State) -> 
     Runtime::with_current_scope(|cx| cx.use_hook(initializer)).unwrap()
 }
 
-/// Get the current render since the inception of this component
+/// Get the current render since the inception of this component.
 ///
-/// This can be used as a helpful diagnostic when debugging hooks/renders, etc
+/// This can be used as a helpful diagnostic when debugging hooks/renders, etc.
 pub fn generation() -> usize {
     Runtime::with_current_scope(|cx| cx.generation()).unwrap()
 }
 
-/// Get the parent of the current scope if it exists
+/// Get the parent of the current scope if it exists.
 pub fn parent_scope() -> Option<ScopeId> {
     Runtime::with_current_scope(|cx| cx.parent_id())
         .ok()
         .flatten()
 }
 
-/// Mark the current scope as dirty, causing it to re-render
+/// Mark the current scope as dirty, causing it to re-render.
 pub fn needs_update() {
     let _ = Runtime::with_current_scope(|cx| cx.needs_update());
 }
 
-/// Mark the current scope as dirty, causing it to re-render
+/// Mark the current scope as dirty, causing it to re-render.
 pub fn needs_update_any(id: ScopeId) {
     let _ = Runtime::with_current_scope(|cx| cx.needs_update_any(id));
 }
 
-/// Schedule an update for the current component
+/// Schedule an update for the current component.
 ///
 /// Note: Unlike [`needs_update`], the function returned by this method will work outside of the dioxus runtime.
+///
+/// Note: The function returned by this method will schedule an update for the current component even if it has already updated between when `schedule_update` was called and when the returned function is called.
+/// If the desired behavior is to invalidate the current rendering of the current component (and no-op if already invalidated)
+/// [`subscribe`](crate::reactive_context::ReactiveContext::subscribe) to the [`current`](crate::reactive_context::ReactiveContext::current) [`ReactiveContext`](crate::reactive_context::ReactiveContext) instead.
 ///
 /// You should prefer [`schedule_update_any`] if you need to update multiple components.
 #[track_caller]
@@ -341,6 +353,9 @@ pub fn schedule_update() -> Arc<dyn Fn() + Send + Sync> {
 /// A component's [`ScopeId`] can be obtained from the [`current_scope_id`] method.
 ///
 /// Note: Unlike [`needs_update`], the function returned by this method will work outside of the dioxus runtime.
+///
+/// Note: It does not matter when `schedule_update_any` is called: the returned function will invalidate what ever generation of the specified component is current when returned function is called.
+/// If the desired behavior is to schedule invalidation of the current rendering of a component, use [`ReactiveContext`](crate::reactive_context::ReactiveContext) instead.
 #[track_caller]
 pub fn schedule_update_any() -> Arc<dyn Fn(ScopeId) + Send + Sync> {
     Runtime::with_current_scope(|cx| cx.schedule_update_any()).unwrap_or_else(|e| panic!("{}", e))
@@ -348,7 +363,7 @@ pub fn schedule_update_any() -> Arc<dyn Fn(ScopeId) + Send + Sync> {
 
 /// Creates a callback that will be run before the component is removed.
 /// This can be used to clean up side effects from the component
-/// (created with [`use_effect`](dioxus::prelude::use_effect)).
+/// (created with [`use_effect`](https://docs.rs/dioxus-hooks/latest/dioxus_hooks/fn.use_effect.html)).
 ///
 /// Note:
 /// Effects do not run on the server, but use_drop **DOES**. It runs any time the component is dropped including during SSR rendering on the server. If your clean up logic targets web, the logic has to be gated by a feature, see the below example for details.
@@ -470,4 +485,19 @@ pub fn use_hook_with_cleanup<T: Clone + 'static>(
     let _value = value.clone();
     use_drop(move || cleanup(_value));
     value
+}
+
+/// Force every component to be dirty and require a re-render. Used by hot-reloading.
+///
+/// This might need to change to a different flag in the event hooks order changes within components.
+/// What we really need is a way to mark components as needing a complete rebuild if they were hit by changes.
+pub fn force_all_dirty() {
+    Runtime::with(|rt| {
+        rt.scope_states.borrow_mut().iter().for_each(|state| {
+            if let Some(scope) = state.as_ref() {
+                scope.needs_update();
+            }
+        });
+    })
+    .expect("Runtime to exist");
 }

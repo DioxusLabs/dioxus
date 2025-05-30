@@ -9,7 +9,6 @@ This example app is a fullstack web application leveraging the [FakeStoreAPI](ht
 1. Run the following commands to serve the application (see the tailwind example in the main Dioxus repo for more detailed information about setting up tailwind):
 
 ```bash
-npx @tailwindcss/cli@latest -i ./input.css -o ./public/tailwind.css --watch
 dx serve
 ```
 

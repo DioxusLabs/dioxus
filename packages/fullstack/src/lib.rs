@@ -4,76 +4,22 @@
 #![deny(missing_docs)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
-use std::sync::Arc;
+#[cfg(all(feature = "web", feature = "document"))]
+mod web;
 
-pub use once_cell;
-
-mod html_storage;
-
-#[allow(unused)]
-pub(crate) type ContextProviders =
-    Arc<Vec<Box<dyn Fn() -> Box<dyn std::any::Any> + Send + Sync + 'static>>>;
-
-#[cfg(feature = "axum")]
-#[cfg_attr(docsrs, doc(cfg(feature = "axum")))]
-pub mod server;
-
-#[cfg(feature = "axum_core")]
-#[cfg_attr(docsrs, doc(cfg(feature = "axum_core")))]
-pub mod axum_core;
-
-mod hooks;
-
-pub mod document;
-#[cfg(feature = "server")]
-mod render;
-#[cfg(feature = "server")]
-mod streaming;
+#[cfg(all(feature = "web", feature = "document"))]
+pub use web::FullstackWebDocument;
 
 #[cfg(feature = "server")]
-mod serve_config;
-
-#[cfg(feature = "server")]
-pub use serve_config::*;
-
-#[cfg(feature = "server")]
-mod server_context;
+pub use dioxus_server::*;
 
 /// A prelude of commonly used items in dioxus-fullstack.
 pub mod prelude {
-    use crate::hooks;
-    pub use hooks::{server_cached::use_server_cached, server_future::use_server_future};
-
-    #[cfg(feature = "axum")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "axum")))]
-    pub use crate::server::*;
-
-    #[cfg(feature = "axum_core")]
-    pub use crate::axum_core::*;
-
-    #[cfg(feature = "server")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
-    pub use crate::render::{FullstackHTMLTemplate, SSRState};
-
-    #[cfg(feature = "server")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
-    pub use crate::serve_config::{ServeConfig, ServeConfigBuilder};
-
-    #[cfg(feature = "axum")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "axum")))]
-    pub use crate::server_context::Axum;
-
-    #[cfg(feature = "server")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
-    pub use crate::server_context::{
-        extract, server_context, with_server_context, DioxusServerContext, FromContext,
-        FromServerContext, ProvideServerContext,
-    };
-
-    #[cfg(feature = "server")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
-    pub use dioxus_isrg::{IncrementalRenderer, IncrementalRendererConfig};
+    pub use dioxus_fullstack_hooks::*;
 
     pub use dioxus_server_macro::*;
     pub use server_fn::{self, ServerFn as _, ServerFnError};
+
+    #[cfg(feature = "server")]
+    pub use dioxus_server::prelude::*;
 }

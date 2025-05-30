@@ -1,6 +1,6 @@
 use super::*;
 
-/// Render a [`link`](crate::elements::link) tag into the head of the page with the stylesheet rel.
+/// Render a [`<link>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/link) tag into the head of the page with the stylesheet rel.
 /// This is equivalent to the [`Link`](crate::Link) component with a slightly more ergonomic API.
 ///
 ///

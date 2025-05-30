@@ -15,10 +15,10 @@
 //! 4. Build fmt layer for non-interactive logging with a custom writer that prevents output during interactive mode.
 
 use crate::{serve::ServeUpdate, Cli, Commands, Platform as TargetPlatform, Verbosity};
-use cargo_metadata::{diagnostic::DiagnosticLevel, CompilerMessage};
+use cargo_metadata::diagnostic::{Diagnostic, DiagnosticLevel};
 use clap::Parser;
 use futures_channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
-use once_cell::sync::OnceCell;
+use std::sync::OnceLock;
 use std::{
     collections::HashMap,
     env,
@@ -47,8 +47,8 @@ const LOG_FILE_NAME: &str = "dx.log";
 const DX_SRC_FLAG: &str = "dx_src";
 
 static TUI_ACTIVE: AtomicBool = AtomicBool::new(false);
-static TUI_TX: OnceCell<UnboundedSender<TraceMsg>> = OnceCell::new();
-pub static VERBOSITY: OnceCell<Verbosity> = OnceCell::new();
+static TUI_TX: OnceLock<UnboundedSender<TraceMsg>> = OnceLock::new();
+pub static VERBOSITY: OnceLock<Verbosity> = OnceLock::new();
 
 pub(crate) struct TraceController {
     pub(crate) tui_rx: UnboundedReceiver<TraceMsg>,
@@ -69,11 +69,11 @@ impl TraceController {
             EnvFilter::from_env(LOG_ENV)
         } else if matches!(args.action, Commands::Serve(_)) {
             EnvFilter::new(
-                "error,dx=trace,dioxus_cli=trace,manganis_cli_support=trace,wasm_split_cli=trace",
+                "error,dx=trace,dioxus_cli=trace,manganis_cli_support=trace,wasm_split_cli=trace,subsecond_cli_support=trace",
             )
         } else {
             EnvFilter::new(format!(
-                "error,dx={our_level},dioxus_cli={our_level},manganis_cli_support={our_level},,wasm_split_cli={our_level}",
+                "error,dx={our_level},dioxus_cli={our_level},manganis_cli_support={our_level},wasm_split_cli={our_level},subsecond_cli_support={our_level}",
                 our_level = if args.verbosity.verbose {
                     "debug"
                 } else {
@@ -154,19 +154,23 @@ impl TraceController {
 
         ServeUpdate::TracingLog { log }
     }
-}
 
-impl Drop for TraceController {
-    fn drop(&mut self) {
+    pub(crate) fn shutdown_panic(&mut self) {
         TUI_ACTIVE.store(false, Ordering::Relaxed);
 
         // re-emit any remaining messages
         while let Ok(Some(msg)) = self.tui_rx.try_next() {
-            let contents = match msg.content {
+            let content = match msg.content {
                 TraceContent::Text(text) => text,
                 TraceContent::Cargo(msg) => msg.message.to_string(),
             };
-            tracing::error!("{}", contents);
+            match msg.level {
+                Level::ERROR => tracing::error!("{content}"),
+                Level::WARN => tracing::warn!("{content}"),
+                Level::INFO => tracing::info!("{content}"),
+                Level::DEBUG => tracing::debug!("{content}"),
+                Level::TRACE => tracing::trace!("{content}"),
+            }
         }
     }
 }
@@ -345,7 +349,7 @@ pub struct TraceMsg {
 #[derive(Clone, PartialEq)]
 #[allow(clippy::large_enum_variant)]
 pub enum TraceContent {
-    Cargo(CompilerMessage),
+    Cargo(Diagnostic),
     Text(String),
 }
 
@@ -362,9 +366,9 @@ impl TraceMsg {
     /// Create a new trace message from a cargo compiler message
     ///
     /// All `cargo` messages are logged at the `TRACE` level since they get *very* noisy during development
-    pub fn cargo(content: CompilerMessage) -> Self {
+    pub fn cargo(content: Diagnostic) -> Self {
         Self {
-            level: match content.message.level {
+            level: match content.level {
                 DiagnosticLevel::Ice => Level::ERROR,
                 DiagnosticLevel::Error => Level::ERROR,
                 DiagnosticLevel::FailureNote => Level::ERROR,
