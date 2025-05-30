@@ -150,6 +150,9 @@ pub fn server(args: proc_macro::TokenStream, body: TokenStream) -> TokenStream {
     };
 
     parsed
+        .default_protocol(Some(
+            parse_quote!(server_fn::Http<server_fn::codec::Json, server_fn::codec::Json>),
+        ))
         .default_input_encoding(Some(parse_quote!(server_fn::codec::Json)))
         .default_output_encoding(Some(parse_quote!(server_fn::codec::Json)))
         .default_server_fn_path(Some(parse_quote!(server_fn)))

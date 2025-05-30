@@ -16,6 +16,10 @@ pub struct BuildArgs {
     #[clap(long)]
     pub(crate) fullstack: Option<bool>,
 
+    /// Pre-render all routes returned from the app's `/static_routes` endpoint [default: false]
+    #[clap(long)]
+    pub(crate) ssg: bool,
+
     /// The feature to use for the client in a fullstack app [default: "web"]
     #[clap(long)]
     pub(crate) client_features: Vec<String>,
@@ -63,6 +67,7 @@ impl BuildArgs {
     pub async fn build(self) -> Result<StructuredOutput> {
         tracing::info!("Building project...");
 
+        let ssg = self.ssg;
         let targets = self.into_targets().await?;
 
         AppBuilder::start(&targets.client, BuildMode::Base)?
@@ -73,9 +78,13 @@ impl BuildArgs {
 
         if let Some(server) = targets.server.as_ref() {
             // If the server is present, we need to build it as well
-            AppBuilder::start(server, BuildMode::Base)?
-                .finish_build()
-                .await?;
+            let mut server_build = AppBuilder::start(server, BuildMode::Base)?;
+            server_build.finish_build().await?;
+
+            // Run SSG and cache static routes
+            if ssg {
+                crate::pre_render_static_routes(None, &mut server_build, None).await?;
+            }
 
             tracing::info!(path = ?targets.client.root_dir(), "Server build completed successfully! 🚀");
         }
