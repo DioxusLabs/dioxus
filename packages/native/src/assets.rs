@@ -1,16 +1,10 @@
 use blitz_shell::BlitzShellNetCallback;
 use std::sync::Arc;
 
-use blitz_dom::{
-    net::{CssHandler, ImageHandler, Resource},
-    util::ImageType,
-    BaseDocument,
-};
+use blitz_dom::net::Resource;
 use blitz_shell::BlitzShellEvent;
 use blitz_traits::net::{NetCallback, NetProvider};
 use winit::event_loop::EventLoopProxy;
-
-use crate::NodeId;
 
 pub struct DioxusNativeNetProvider {
     callback: Arc<dyn NetCallback<Resource> + 'static>,
@@ -52,27 +46,4 @@ impl NetProvider<Resource> for DioxusNativeNetProvider {
             self.inner_net_provider.fetch(doc_id, request, handler);
         }
     }
-}
-
-pub fn fetch_linked_stylesheet(doc: &BaseDocument, node_id: NodeId, queued_url: String) {
-    let url = doc.resolve_url(&queued_url);
-    doc.net_provider.fetch(
-        doc.id(),
-        blitz_traits::net::Request::get(url.clone()),
-        Box::new(CssHandler {
-            node: node_id,
-            source_url: url,
-            guard: doc.guard.clone(),
-            provider: doc.net_provider.clone(),
-        }),
-    );
-}
-
-pub fn fetch_image(doc: &BaseDocument, node_id: usize, queued_image: String) {
-    let src = doc.resolve_url(&queued_image);
-    doc.net_provider.fetch(
-        doc.id(),
-        blitz_traits::net::Request::get(src),
-        Box::new(ImageHandler::new(node_id, ImageType::Image)),
-    );
 }
