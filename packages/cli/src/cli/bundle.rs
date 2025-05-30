@@ -27,11 +27,9 @@ pub struct Bundle {
     #[clap(long)]
     pub out_dir: Option<PathBuf>,
 
-    /// Build the fullstack variant of this app, using that as the fileserver and backend
-    ///
-    /// This defaults to `false` but will be overridden to true if the `fullstack` feature is enabled.
+    /// Run the ssg config of the app and generate the files
     #[clap(long)]
-    pub(crate) fullstack: bool,
+    pub(crate) ssg: bool,
 
     /// The arguments for the dioxus build
     #[clap(flatten)]

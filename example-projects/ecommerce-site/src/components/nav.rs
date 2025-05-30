@@ -35,7 +35,7 @@ pub fn nav() -> Element {
                             }
                         }
                     }
-                    a { class: "flex-shrink-0 xl:mx-auto text-3xl font-bold font-heading",
+                    a { class: "shrink-0 xl:mx-auto text-3xl font-bold font-heading",
                         href: "/",
                         img { class: "h-9",
                             width: "auto",
@@ -121,7 +121,7 @@ pub fn nav() -> Element {
                             }
                         }
                     }
-                    input { class: "block mb-10 py-5 px-8 bg-gray-100 rounded-md border-transparent focus:ring-blue-300 focus:border-blue-300 focus:outline-none",
+                    input { class: "block mb-10 py-5 px-8 bg-gray-100 rounded-md border-transparent focus:ring-blue-300 focus:border-blue-300 focus:outline-hidden",
                         r#type: "search",
                         placeholder: "Search",
                     }

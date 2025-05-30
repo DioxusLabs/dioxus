@@ -335,13 +335,13 @@ fn to_string_works() {
                     PreRendered("\"".to_string()),
                     PreRendered(">".to_string()),
                     InnerHtmlMarker,
-                    PreRendered("Hello world 1 --&gt;".to_string()),
+                    PreRendered("Hello world 1 --&#62;".to_string()),
                     Node {
                         index: 0,
                         escape_text: EscapeText::Escape
                     },
                     PreRendered(
-                        "&lt;-- Hello world 2<div>nest 1</div><div></div><div>nest 2</div>"
+                        "&#60;-- Hello world 2<div>nest 1</div><div></div><div>nest 2</div>"
                             .to_string()
                     ),
                     Node {
@@ -360,7 +360,7 @@ fn to_string_works() {
 
     use Segment::*;
 
-    assert_eq!(out, "<div class=\"asdasdasd asdasdasd\" id=\"id-123\">Hello world 1 --&gt;123&lt;-- Hello world 2<div>nest 1</div><div></div><div>nest 2</div>&lt;/diiiiiiiiv&gt;<div>finalize 0</div><div>finalize 1</div><div>finalize 2</div><div>finalize 3</div><div>finalize 4</div></div>");
+    assert_eq!(out, "<div class=\"asdasdasd asdasdasd\" id=\"id-123\">Hello world 1 --&#62;123&#60;-- Hello world 2<div>nest 1</div><div></div><div>nest 2</div>&#60;/diiiiiiiiv&#62;<div>finalize 0</div><div>finalize 1</div><div>finalize 2</div><div>finalize 3</div><div>finalize 4</div></div>");
 }
 
 #[test]

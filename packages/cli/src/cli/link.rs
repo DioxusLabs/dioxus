@@ -98,7 +98,10 @@ impl LinkAction {
         if let Some(linker) = &self.linker {
             env_vars.push((
                 Self::DX_LINK_CUSTOM_LINKER,
-                dunce::canonicalize(linker)?.to_string_lossy().to_string(),
+                dunce::canonicalize(linker)
+                    .unwrap_or(linker.clone())
+                    .to_string_lossy()
+                    .to_string(),
             ));
         }
 
