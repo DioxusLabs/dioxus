@@ -55,7 +55,7 @@
 //!
 //! Currently, we defer most of our deploy-based bundling to Tauri bundle, though we should migrate
 //! to just bundling everything ourselves. This would require us to implement code-signing which
-//! is a bit of a pain, but fortunately a solved process (https://github.com/rust-mobile/xbuild).
+//! is a bit of a pain, but fortunately a solved process (<https://github.com/rust-mobile/xbuild>).
 //!
 //! ## Build Structure
 //!
@@ -107,7 +107,7 @@
 //!
 //! ### Linux:
 //!
-//! https://docs.appimage.org/reference/appdir.html#ref-appdir
+//! <https://docs.appimage.org/reference/appdir.html#ref-appdir>
 //! current_exe.join("Assets")
 //! ```
 //! app.appimage/
@@ -157,7 +157,7 @@
 //! drive the kotlin build ourselves. This would let us drop gradle (yay! no plugins!) but requires
 //! us to manage dependencies (like kotlinc) ourselves (yuck!).
 //!
-//! https://github.com/WanghongLin/miscellaneous/blob/master/tools/build-apk-manually.sh
+//! <https://github.com/WanghongLin/miscellaneous/blob/master/tools/build-apk-manually.sh>
 //!
 //! Unfortunately, it seems that while we can drop the `android` build plugin, we still will need
 //! gradle since kotlin is basically gradle-only.
@@ -309,8 +309,8 @@
 //! The idea here is that we can run any of the programs in the same way that they're deployed.
 //!
 //! ## Bundle structure links
-//! - apple: <https>://developer.apple.com/documentation/bundleresources/placing_content_in_a_bundle>
-//! - appimage: <https>://docs.appimage.org/packaging-guide/manual.html#ref-manual>
+//! - apple: <https://developer.apple.com/documentation/bundleresources/placing_content_in_a_bundle>
+//! - appimage: <https://docs.appimage.org/packaging-guide/manual.html#ref-manual>
 //!
 //! ## Extra links
 //! - xbuild: <https://github.com/rust-mobile/xbuild/blob/master/xbuild/src/command/build.rs>
@@ -1201,8 +1201,10 @@ impl BuildRequest {
         .await
         .map_err(|e| anyhow::anyhow!("A task failed while trying to copy assets: {e}"))??;
 
-        // // Remove the wasm bindgen output directory if it exists
-        // _ = std::fs::remove_dir_all(self.wasm_bindgen_out_dir());
+        // Remove the wasm dir if we packaged it to an "asset"-type app
+        if self.should_bundle_to_asset() {
+            _ = std::fs::remove_dir_all(self.wasm_bindgen_out_dir());
+        }
 
         // Write the version file so we know what version of the optimizer we used
         std::fs::write(self.asset_optimizer_version_file(), crate::VERSION.as_str())?;
@@ -1484,6 +1486,7 @@ impl BuildRequest {
                         || arg.starts_with("-m")
                         || arg.starts_with("-Wl,--target=")
                         || arg.starts_with("-Wl,-fuse-ld")
+                        || arg.starts_with("-fuse-ld")
                     {
                         out_args.push(arg.to_string());
                     }
@@ -3159,6 +3162,11 @@ impl BuildRequest {
         self.config.web.pre_compress & release
     }
 
+    /// Check if the wasm output should be bundled to an asset type app.
+    fn should_bundle_to_asset(&self) -> bool {
+        self.release && !self.wasm_split && self.platform == Platform::Web
+    }
+
     /// Bundle the web app
     /// - Run wasm-bindgen
     /// - Bundle split
@@ -3372,11 +3380,6 @@ impl BuildRequest {
             let asset = self.wasm_bindgen_js_output_file();
             format!("wasm/{}", asset.file_name().unwrap().to_str().unwrap())
         };
-
-        // Remove the wasm dir if we packaged it to an "asset"-type app
-        if package_to_asset {
-            std::fs::remove_dir_all(&bindgen_outdir).context("Failed to remove bindgen outdir")?;
-        }
 
         // Write the index.html file with the pre-configured contents we got from pre-rendering
         std::fs::write(

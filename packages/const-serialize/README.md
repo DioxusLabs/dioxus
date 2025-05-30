@@ -53,5 +53,5 @@ The rust [nomicon](https://doc.rust-lang.org/nomicon/data.html) defines the memo
 ## Limitations
 
 - Only constant sized types are supported. This means that you can't serialize a type like `Vec<T>`. These types are difficult to create in const contexts in general
-- Only types with a well defined memory layout are supported (see https://github.com/rust-lang/rfcs/pull/3727 and https://onevariable.com/blog/pods-from-scratch). `repr(Rust)` enums don't have a well defined layout, so they are not supported. `repr(C, u8)` enums can be used instead
+- Only types with a well defined memory layout are supported (see <https://github.com/rust-lang/rfcs/pull/3727> and <https://onevariable.com/blog/pods-from-scratch>). `repr(Rust)` enums don't have a well defined layout, so they are not supported. `repr(C, u8)` enums can be used instead
 - Const rust does not support mutable references or points, so this crate leans heavily on function data structures for data processing.

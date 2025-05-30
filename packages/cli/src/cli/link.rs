@@ -38,7 +38,7 @@ pub struct LinkAction {
 /// The linker flavor to use. This influences the argument style that gets passed to the linker.
 /// We're imitating the rustc linker flavors here.
 ///
-/// https://doc.rust-lang.org/beta/nightly-rustc/rustc_target/spec/enum.LinkerFlavor.html
+/// <https://doc.rust-lang.org/beta/nightly-rustc/rustc_target/spec/enum.LinkerFlavor.html>
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub enum LinkerFlavor {
     Gnu,
@@ -98,7 +98,10 @@ impl LinkAction {
         if let Some(linker) = &self.linker {
             env_vars.push((
                 Self::DX_LINK_CUSTOM_LINKER,
-                dunce::canonicalize(linker)?.to_string_lossy().to_string(),
+                dunce::canonicalize(linker)
+                    .unwrap_or(linker.clone())
+                    .to_string_lossy()
+                    .to_string(),
             ));
         }
 

@@ -80,7 +80,7 @@ pub(crate) struct WixSettings {
     pub(crate) fips_compliant: bool,
     /// MSI installer version in the format `major.minor.patch.build` (build is optional).
     ///
-    /// Because a valid version is required for MSI installer, it will be derived from [`PackageSettings::version`] if this field is not set.
+    /// Because a valid version is required for MSI installer, it will be derived from [`tauri_bundler::PackageSettings::version`] if this field is not set.
     ///
     /// The first field is the major version and has a maximum value of 255. The second field is the minor version and has a maximum value of 255.
     /// The third and fourth fields have a maximum value of 65,535.

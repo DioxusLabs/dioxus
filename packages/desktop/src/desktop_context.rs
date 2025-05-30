@@ -42,7 +42,7 @@ pub type WeakDesktopContext = Weak<DesktopService>;
 
 /// An imperative interface to the current window.
 ///
-/// To get a handle to the current window, use the [`use_window`] hook.
+/// To get a handle to the current window, use the [`window`] function.
 ///
 ///
 /// # Example
@@ -195,7 +195,7 @@ impl DesktopService {
     /// Create a wry event handler that listens for wry events.
     /// This event handler is scoped to the currently active window and will only receive events that are either global or related to the current window.
     ///
-    /// The id this function returns can be used to remove the event handler with [`DesktopContext::remove_wry_event_handler`]
+    /// The id this function returns can be used to remove the event handler with [`Self::remove_wry_event_handler`]
     pub fn create_wry_event_handler(
         &self,
         handler: impl FnMut(&Event<UserWindowEvent>, &EventLoopWindowTarget<UserWindowEvent>) + 'static,
@@ -203,7 +203,7 @@ impl DesktopService {
         self.shared.event_handlers.add(self.window.id(), handler)
     }
 
-    /// Remove a wry event handler created with [`DesktopContext::create_wry_event_handler`]
+    /// Remove a wry event handler created with [`Self::create_wry_event_handler`]
     pub fn remove_wry_event_handler(&self, id: WryEventHandler) {
         self.shared.event_handlers.remove(id)
     }
@@ -237,7 +237,7 @@ impl DesktopService {
     ///
     /// When the component is dropped, the handler is removed.
     ///
-    /// See [`use_asset_handle`](crate::use_asset_handle) for a convenient hook.
+    /// See [`crate::use_asset_handler`] for a convenient hook.
     pub fn register_asset_handler(
         &self,
         name: String,

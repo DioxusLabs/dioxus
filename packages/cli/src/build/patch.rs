@@ -415,7 +415,7 @@ fn create_native_jump_table(
 /// It doesn't seem like we can compile the base module to export these, sadly, so we're going
 /// to manually satisfy them here, removing their need to be imported.
 ///
-/// https://github.com/WebAssembly/tool-conventions/blob/main/DynamicLinking.md
+/// <https://github.com/WebAssembly/tool-conventions/blob/main/DynamicLinking.md>
 fn create_wasm_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> Result<JumpTable> {
     let name_to_ifunc_old = &cache.symbol_ifunc_map;
     let old = &cache.old_wasm;
@@ -1299,7 +1299,7 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
 ///
 /// Uses the heuristics from the wasm-bindgen source code itself:
 ///
-/// https://github.com/rustwasm/wasm-bindgen/blob/c35cc9369d5e0dc418986f7811a0dd702fb33ef9/crates/cli-support/src/wit/mod.rs#L1165
+/// <https://github.com/rustwasm/wasm-bindgen/blob/c35cc9369d5e0dc418986f7811a0dd702fb33ef9/crates/cli-support/src/wit/mod.rs#L1165>
 fn name_is_bindgen_symbol(name: &str) -> bool {
     name.contains("__wbindgen_describe")
         || name.contains("__wbindgen_externref")

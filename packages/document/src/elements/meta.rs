@@ -39,7 +39,7 @@ impl MetaProps {
     }
 }
 
-/// Render a [`meta`](crate::elements::meta) tag into the head of the page.
+/// Render a [`<meta>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/meta) tag into the head of the page.
 ///
 /// # Example
 ///

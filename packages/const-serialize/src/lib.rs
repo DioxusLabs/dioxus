@@ -857,7 +857,7 @@ const fn deserialize_const_ptr<'a, const N: usize>(
     }
 }
 
-/// Deserialize a type into the output buffer. Accepts (Type, ConstVec<u8>) as input and returns Option<(ConstReadBuffer, Instance of type)>
+/// Deserialize a type into the output buffer. Accepts `(type, ConstVec<u8>)` as input and returns `Option<(ConstReadBuffer, Instance of type)>`
 ///
 /// # Example
 /// ```rust

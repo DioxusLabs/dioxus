@@ -328,7 +328,7 @@ impl<T, const MAX_SIZE: usize> ConstVec<T, MAX_SIZE> {
 }
 
 impl<const MAX_SIZE: usize> ConstVec<u8, MAX_SIZE> {
-    /// Convert the [`ConstVec`] into a [`ConstReadBuffer`](crate::ConstReadBuffer)
+    /// Convert the [`ConstVec`] into a [`ConstReadBuffer`]
     ///
     /// # Example
     /// ```rust
