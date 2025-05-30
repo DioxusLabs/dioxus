@@ -439,6 +439,10 @@ impl Workspace {
             .map(|f| f.join("dioxus/"))
             .unwrap_or_else(|| dirs::home_dir().unwrap().join(".dioxus"))
     }
+
+    pub(crate) fn telemetry_file() -> PathBuf {
+        Self::dioxus_home_dir().join("telemetry.log")
+    }
 }
 
 impl std::fmt::Debug for Workspace {

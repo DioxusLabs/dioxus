@@ -4,25 +4,42 @@ use std::{
     sync::{LazyLock, Mutex, OnceLock},
 };
 
-use crate::Result;
+use crate::{Result, Workspace};
 use dioxus_cli_telemetry::TelemetryEvent;
 use dioxus_dx_wire_format::StructuredOutput;
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 
 static TELEMETRY_TX: OnceLock<UnboundedSender<TelemetryEvent>> = OnceLock::new();
+static TELEMETRY_RX: OnceLock<Mutex<UnboundedReceiver<TelemetryEvent>>> = OnceLock::new();
 
 /// The main entrypoint for the log collector.
-/// We don't collect every log from the user's session since that can fill up quickly.
-/// Instead,
+///
+/// As the app runs, we simply fire off messages into the TelemetryTx handle.
+///
+/// Once the session is over, or the tx is flushed manually, we then log to a file.
+/// This prevents any performance issues from building up during long sesssion.
+/// For `dx serve`, we asyncronously flush after full rebuilds are *completed*.
 pub fn main(app: impl Future<Output = Result<StructuredOutput>>) {
-    let rt = tokio::runtime::Runtime::new().unwrap();
-    let _guard = rt.enter();
+    // let rt = tokio::runtime::Runtime::new().unwrap();
+    // let _guard = rt.enter();
 
-    let writer_thread = tokio::spawn(async move {
-        // while let Some(msg) = msg
-    });
+    // let res = rt.block_on(tokio::spawn(async move {}));
+    manually_flush();
+}
 
-    let res = rt.block_on(tokio::spawn(async move {}));
+/// Manually flush the telemetry queue so not as
+pub fn manually_flush() -> tokio::task::JoinHandle<()> {
+    tokio::task::spawn(async move {
+        let mut log_file = std::fs::File::options()
+            .append(true)
+            .open(Workspace::telemetry_file())
+            .unwrap();
+
+        let mut rx = TELEMETRY_RX.get().unwrap().lock().unwrap();
+        while let Ok(Some(msg)) = rx.try_next() {
+            _ = serde_json::to_writer(&mut log_file, &msg);
+        }
+    })
 }
 
 /// Set the backtrace, and then initiate a rollup upload of any pending logs.
