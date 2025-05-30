@@ -455,7 +455,11 @@ impl AppBuilder {
             ),
         ];
 
-        if crate::VERBOSITY.get().unwrap().verbose {
+        if crate::VERBOSITY
+            .get()
+            .map(|f| f.verbose)
+            .unwrap_or_default()
+        {
             envs.push(("RUST_BACKTRACE", "1".to_string()));
         }
 
