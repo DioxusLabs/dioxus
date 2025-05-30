@@ -1203,8 +1203,10 @@ impl BuildRequest {
         .await
         .map_err(|e| anyhow::anyhow!("A task failed while trying to copy assets: {e}"))??;
 
-        // // Remove the wasm bindgen output directory if it exists
-        // _ = std::fs::remove_dir_all(self.wasm_bindgen_out_dir());
+        // Remove the wasm dir if we packaged it to an "asset"-type app
+        if self.should_bundle_to_asset() {
+            _ = std::fs::remove_dir_all(self.wasm_bindgen_out_dir());
+        }
 
         // Write the version file so we know what version of the optimizer we used
         std::fs::write(self.asset_optimizer_version_file(), crate::VERSION.as_str())?;
@@ -3164,6 +3166,11 @@ impl BuildRequest {
         self.config.web.pre_compress & release
     }
 
+    /// Check if the wasm output should be bundled to an asset type app.
+    fn should_bundle_to_asset(&self) -> bool {
+        self.release && !self.wasm_split && self.platform == Platform::Web
+    }
+
     /// Bundle the web app
     /// - Run wasm-bindgen
     /// - Bundle split
@@ -3377,11 +3384,6 @@ impl BuildRequest {
             let asset = self.wasm_bindgen_js_output_file();
             format!("wasm/{}", asset.file_name().unwrap().to_str().unwrap())
         };
-
-        // Remove the wasm dir if we packaged it to an "asset"-type app
-        if package_to_asset {
-            std::fs::remove_dir_all(&bindgen_outdir).context("Failed to remove bindgen outdir")?;
-        }
 
         // Write the index.html file with the pre-configured contents we got from pre-rendering
         std::fs::write(
