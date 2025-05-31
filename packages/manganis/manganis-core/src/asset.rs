@@ -129,7 +129,11 @@ impl BundledAsset {
 pub struct Asset {
     /// A pointer to the bundled asset. This will be resolved after the linker has run and
     /// put into the lazy asset
-    bundled: *const [u8],
+    ///
+    /// WARNING: Don't read this directly. Reads can get optimized away at compile time before
+    /// the data for this is filled in by the CLI after the binary is built. Instead, use
+    /// [`std::ptr::read_volatile`] to read the data.
+    bundled: &'static [u8],
 }
 
 impl Debug for Asset {
@@ -145,14 +149,14 @@ impl Asset {
     #[doc(hidden)]
     /// This should only be called from the macro
     /// Create a new asset from the bundled form of the asset and the link section
-    pub const fn new(bundled: *const [u8]) -> Self {
+    pub const fn new(bundled: &'static [u8]) -> Self {
         Self { bundled }
     }
 
     /// Get the bundled asset
     pub fn bundled(&self) -> BundledAsset {
         let len = self.bundled.len();
-        let ptr = self.bundled as *const u8;
+        let ptr = self.bundled as *const [u8] as *const u8;
         if ptr.is_null() {
             panic!("Tried to use an asset that was not bundled. Make sure you are compiling dx as the linker");
         }
