@@ -13,13 +13,12 @@ mod assets;
 mod contexts;
 mod dioxus_application;
 mod dioxus_document;
-mod event;
-mod event_handler;
+mod events;
 mod mutation_writer;
 
-pub use dioxus_application::DioxusNativeApplication;
+use blitz_dom::{ns, Atom, QualName};
+pub use dioxus_application::{DioxusNativeApplication, DioxusNativeEvent};
 pub use dioxus_document::DioxusDocument;
-pub use event::DioxusNativeEvent;
 
 use blitz_shell::{create_default_event_loop, BlitzShellEvent, Config, WindowConfig};
 use dioxus_core::{ComponentFunction, Element, VirtualDom};
@@ -68,7 +67,6 @@ pub fn launch_cfg_with_props<P: Clone + 'static, M: 'static>(
         not(target_os = "ios")
     ))]
     {
-        use crate::event::DioxusNativeEvent;
         let proxy = event_loop.create_proxy();
         dioxus_devtools::connect(move |event| {
             let dxn_event = DioxusNativeEvent::DevserverEvent(event);
@@ -92,3 +90,36 @@ pub fn launch_cfg_with_props<P: Clone + 'static, M: 'static>(
     // Run event loop
     event_loop.run_app(&mut application).unwrap();
 }
+
+pub(crate) fn qual_name(local_name: &str, namespace: Option<&str>) -> QualName {
+    QualName {
+        prefix: None,
+        ns: namespace.map(Atom::from).unwrap_or(ns!(html)),
+        local: Atom::from(local_name),
+    }
+}
+
+// Syntax sugar to make tracing calls less noisy in function below
+macro_rules! trace {
+    ($pattern:literal) => {{
+        #[cfg(feature = "tracing")]
+        tracing::info!($pattern);
+    }};
+    ($pattern:literal, $item1:expr) => {{
+        #[cfg(feature = "tracing")]
+        tracing::info!($pattern, $item1);
+    }};
+    ($pattern:literal, $item1:expr, $item2:expr) => {{
+        #[cfg(feature = "tracing")]
+        tracing::info!($pattern, $item1, $item2);
+    }};
+    ($pattern:literal, $item1:expr, $item2:expr, $item3:expr) => {{
+        #[cfg(feature = "tracing")]
+        tracing::info!($pattern, $item1, $item2);
+    }};
+    ($pattern:literal, $item1:expr, $item2:expr, $item3:expr, $item4:expr) => {{
+        #[cfg(feature = "tracing")]
+        tracing::info!($pattern, $item1, $item2, $item3, $item4);
+    }};
+}
+pub(crate) use trace;
