@@ -5,10 +5,10 @@
 //! `asset!()` macro. The new system, implemented here, instead performs the hashing at build time,
 //! which provides more flexibility in the asset processing pipeline.
 //!
-//! We chose to implement this approach since assets might reference each other and our asset pipeline
-//! wants to compress, minify, and optimize assets before they are used in the application. The
-//! hashes then might no longer be valid - a css file with an extra comment has the same hash after
-//! optimization, but not before minification.
+//! We chose to implement this approach since assets might reference each other which means we minimally
+//! need to parse the asset to create a unique hash for each asset before they are used in the application.
+//! The hashes are used both for cache busting the asset in the browser and to cache the asset optimization
+//! process in the build system.
 //!
 //! We use the same lessons learned from the hot-patching engine which parses the binary file and its
 //! symbol table to find symbols that match the `__MANGANIS__` prefix. These symbols are ideally data
