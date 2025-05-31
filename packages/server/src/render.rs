@@ -5,7 +5,8 @@ use crate::{
     DioxusServerContext,
 };
 use dioxus_cli_config::base_path;
-use dioxus_fullstack_hooks::{StreamingContext, StreamingStatus};
+use dioxus_fullstack_hooks::history::FullstackHistory;
+use dioxus_fullstack_hooks::prelude::{StreamingContext, StreamingStatus};
 use dioxus_fullstack_protocol::{HydrationContext, SerializedHydrationData};
 use dioxus_isrg::{CachedRender, IncrementalRendererError, RenderFreshness};
 use dioxus_lib::document::Document;
@@ -200,6 +201,8 @@ impl SsrRendererPool {
             } else {
                 history = dioxus_history::MemoryHistory::with_initial_path(&route);
             }
+            // Wrap the memory history in a fullstack history provider to provide the initial route for hydration
+            let history = FullstackHistory::new_server(history);
 
             let streaming_context = in_root_scope(&virtual_dom, StreamingContext::new);
             virtual_dom.provide_root_context(Rc::new(history) as Rc<dyn dioxus_history::History>);
