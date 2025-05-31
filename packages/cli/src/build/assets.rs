@@ -52,11 +52,25 @@ fn find_symbol_offsets<'a, R: ReadRef<'a>>(
 /// Find the pdb file matching the executable file.
 fn find_pdb_file(path: &Path) -> Option<PathBuf> {
     let mut pdb_file = path.with_extension("pdb");
-    // If the pdb file does not exist, try to find it in the same directory as the executable with _'s instead of -'s
-    if !pdb_file.exists() {
-        if let Some(file_name) = pdb_file.file_name() {
-            let new_file_name = file_name.to_string_lossy().replace('-', "_");
-            pdb_file.set_file_name(new_file_name);
+    // Also try to find it in the same directory as the executable with _'s instead of -'s
+    if let Some(file_name) = pdb_file.file_name() {
+        let new_file_name = file_name.to_string_lossy().replace('-', "_");
+        let altrnate_pdb_file = pdb_file.with_file_name(new_file_name);
+        // Keep the most recent pdb file
+        match (pdb_file.metadata(), altrnate_pdb_file.metadata()) {
+            (Ok(pdb_metadata), Ok(alternate_metadata)) => {
+                if let (Ok(pdb_modified), Ok(alternate_modified)) =
+                    (pdb_metadata.modified(), alternate_metadata.modified())
+                {
+                    if pdb_modified < alternate_modified {
+                        pdb_file = altrnate_pdb_file;
+                    }
+                }
+            }
+            (Err(_), Ok(_)) => {
+                pdb_file = altrnate_pdb_file;
+            }
+            _ => {}
         }
     }
     if pdb_file.exists() {
