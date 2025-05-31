@@ -73,8 +73,28 @@ fn find_symbol_offsets<'a, R: ReadRef<'a>>(
     // If there is a pdb file in the same directory as the executable, use it to find the symbols
     let pdb_file = path.with_extension("pdb");
     // replace any -'s in the filename with _'s
-    let pdb_file = pdb_file.with_file_name(pdb_file.file_name().unwrap().to_str().unwrap().replace("-", "_"));
+    let pdb_file = pdb_file.with_file_name(
+        pdb_file
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .replace("-", "_"),
+    );
     tracing::info!("Looking for PDB file at {}", pdb_file.display());
+
+    // Print the data section contents according to object
+    for section in file.sections() {
+        if section.kind() == object::SectionKind::Data {
+            let section_data = section.data().unwrap_or(&[]);
+            tracing::info!(
+                "Section {}: {} bytes",
+                section.name().unwrap_or("Unnamed"),
+                section_data.len()
+            );
+            tracing::info!("Contents: {}", String::from_utf8_lossy(section_data));
+        }
+    }
 
     if file.format() == object::BinaryFormat::Wasm {
         find_wasm_symbol_offsets(file_contents, file)
@@ -82,7 +102,7 @@ fn find_symbol_offsets<'a, R: ReadRef<'a>>(
         tracing::info!("Found PDB file at {}", pdb_file.display());
         let pdb_file_handle = std::fs::File::open(pdb_file).unwrap();
         let mut pdb_file = pdb::PDB::open(pdb_file_handle).unwrap();
-        let Ok(Some(sections)) = pdb_file.sections() else { 
+        let Ok(Some(sections)) = pdb_file.sections() else {
             tracing::error!("Failed to read sections from PDB file");
             return Ok(Vec::new());
         };
@@ -96,21 +116,27 @@ fn find_symbol_offsets<'a, R: ReadRef<'a>>(
                     let Some(rva) = data.offset.to_section_offset(&address_map) else {
                         continue;
                     };
-                    
+
                     let name = data.name.to_string();
                     if name.contains("__MANGANIS__") {
                         let section = sections
                             .get(rva.section as usize)
                             .expect("Section index out of bounds");
                         tracing::info!("Found section {:?}", section);
-                        tracing::info!("contents of section as str {}", String::from_utf8_lossy(&file_contents[section.pointer_to_raw_data as usize..section.pointer_to_raw_data as usize + section.virtual_size as usize]));
-    
+                        tracing::info!(
+                            "contents of section as str {}",
+                            String::from_utf8_lossy(
+                                &file_contents[section.pointer_to_raw_data as usize
+                                    ..section.pointer_to_raw_data as usize
+                                        + section.virtual_size as usize]
+                            )
+                        );
+
                         tracing::info!("Found public symbol {} at address {:?}", data.name, rva);
-                        addressses.push((section.pointer_to_raw_data + rva.offset) as u64); 
+                        addressses.push((section.pointer_to_raw_data + rva.offset) as u64);
                     }
                 }
 
-            
                 _ => {}
             }
         }
@@ -267,10 +293,7 @@ pub(crate) fn extract_assets_from_file(path: impl AsRef<Path>) -> Result<AssetMa
 
         if let Some((_, bundled_asset)) = const_serialize::deserialize_const!(BundledAsset, buffer)
         {
-            tracing::info!(
-                "Found asset at offset {offset} {:?} ",
-                bundled_asset
-            );
+            tracing::info!("Found asset at offset {offset} {:?} ", bundled_asset);
             assets.push(bundled_asset);
         } else {
             tracing::warn!("Found an asset at offset {offset} that could not be deserialized. This may be caused by a mismatch between your dioxus and dioxus-cli versions.");
