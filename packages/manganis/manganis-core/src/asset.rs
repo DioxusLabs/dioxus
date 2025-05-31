@@ -3,7 +3,7 @@ use const_serialize::{deserialize_const, ConstStr, ConstVec, SerializeConst};
 use std::{fmt::Debug, hash::Hash, path::PathBuf};
 
 /// An asset that should be copied by the bundler with some options. This type will be
-/// serialized into the binary and added to the link section [`LinkSection::CURRENT`](crate::linker::LinkSection::CURRENT).
+/// serialized into the binary.
 /// CLIs that support manganis, should pull out the assets from the link section, optimize,
 /// and write them to the filesystem at [`BundledAsset::bundled_path`] for the application
 /// to use.
