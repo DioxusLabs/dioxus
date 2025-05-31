@@ -10,13 +10,19 @@ pub mod routable;
 
 /// Components interacting with the router.
 pub mod components {
+    #[cfg(feature = "html")]
     mod default_errors;
+    #[cfg(feature = "html")]
     pub use default_errors::*;
 
+    #[cfg(feature = "html")]
     mod history_buttons;
+    #[cfg(feature = "html")]
     pub use history_buttons::*;
 
+    #[cfg(feature = "html")]
     mod link;
+    #[cfg(feature = "html")]
     pub use link::*;
 
     mod outlet;
@@ -60,10 +66,11 @@ pub use hooks::router;
 
 /// A collection of useful items most applications might need.
 pub mod prelude {
+    #[cfg(feature = "html")]
     pub use crate::components::{
-        GoBackButton, GoForwardButton, HistoryButtonProps, Link, LinkProps, Outlet, Router,
-        RouterProps,
+        GoBackButton, GoForwardButton, HistoryButtonProps, Link, LinkProps,
     };
+    pub use crate::components::{Outlet, Router, RouterProps};
     pub use crate::contexts::*;
     pub use crate::hooks::*;
     pub use crate::navigation::*;
