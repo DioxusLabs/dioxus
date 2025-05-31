@@ -642,7 +642,7 @@ impl AppBuilder {
     /// This will return the bundled name of the assets such that we can send it to the clients letting
     /// them know what to reload. It's not super important that this is robust since most clients will
     /// kick all stylsheets without necessarily checking the name.
-    pub(crate) async fn hotreload_bundled_asset(
+    pub(crate) async fn hotreload_bundled_assets(
         &self,
         changed_file: &PathBuf,
     ) -> Option<Vec<PathBuf>> {

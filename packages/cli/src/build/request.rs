@@ -315,7 +315,6 @@
 //! ## Extra links
 //! - xbuild: <https://github.com/rust-mobile/xbuild/blob/master/xbuild/src/command/build.rs>
 
-use super::extract_assets_from_file;
 use crate::{
     AndroidTools, BuildContext, DioxusConfig, Error, LinkAction, LinkerFlavor, Platform, Result,
     RustcArgs, TargetArgs, TraceSrc, WasmBindgen, WasmOptConfig, Workspace,
@@ -971,7 +970,7 @@ impl BuildRequest {
         // And then add from the exe directly, just in case it's LTO compiled and has no incremental cache
         if !self.skip_assets {
             ctx.status_extracting_assets();
-            manifest = extract_assets_from_file(exe)?;
+            manifest = super::assets::extract_assets_from_file(exe)?;
         }
 
         Ok(manifest)

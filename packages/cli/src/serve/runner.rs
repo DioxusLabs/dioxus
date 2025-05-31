@@ -309,7 +309,7 @@ impl AppServer {
 
             // If it's an asset, we want to hotreload it
             // todo(jon): don't hardcode this here
-            if let Some(bundled_names) = self.client.hotreload_bundled_asset(path).await {
+            if let Some(bundled_names) = self.client.hotreload_bundled_assets(path).await {
                 for bundled_name in bundled_names {
                     assets.push(PathBuf::from("/assets/").join(bundled_name));
                 }
