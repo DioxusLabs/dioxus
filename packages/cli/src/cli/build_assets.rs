@@ -71,31 +71,13 @@ fn find_symbol_offsets<'a, R: ReadRef<'a>>(
     use pdb::FallibleIterator;
 
     // If there is a pdb file in the same directory as the executable, use it to find the symbols
-    let pdb_file = path.with_extension("pdb");
-    // replace any -'s in the filename with _'s
-    let pdb_file = pdb_file.with_file_name(
-        pdb_file
-            .file_name()
-            .unwrap()
-            .to_str()
-            .unwrap()
-            .replace("-", "_"),
-    );
-    tracing::info!("Looking for PDB file at {}", pdb_file.display());
-
-    // Print the data section contents according to object
-    for section in file.sections() {
-            let section_data = section.data().unwrap_or(&[]);
-            let as_str = String::from_utf8_lossy(section_data);
-            if as_str.contains("D:\\Users\\Desktop\\github\\dioxus-test\\assets\\img.png") {
-                tracing::info!("Found asset in section {}", section.name().unwrap_or("Unnamed")); 
-            }
-            // tracing::info!(
-            //     "Section {}: {} bytes",
-            //     section.name().unwrap_or("Unnamed"),
-            //     section_data.len()
-            // );
-            // tracing::info!("Contents: {}", String::from_utf8_lossy(section_data));
+    let mut pdb_file = path.with_extension("pdb");
+    // If the pdb file does not exist, try to find it in the same directory as the executable with _'s instead of -'s
+    if !pdb_file.exists() {
+        if let Some(file_name) = pdb_file.file_name() {
+            let new_file_name = file_name.to_str().unwrap().replace('-', "_");
+            pdb_file.set_file_name(new_file_name);
+        }
     }
 
     if file.format() == object::BinaryFormat::Wasm {
@@ -124,19 +106,8 @@ fn find_symbol_offsets<'a, R: ReadRef<'a>>(
                         let section = sections
                             .get(rva.section as usize - 1)
                             .expect("Section index out of bounds");
-                    tracing::info!("all sections {:?}", sections);
-                        tracing::info!("Found section {:?}", section);
-                        // tracing::info!(
-                        //     "contents of section as str {}",
-                        //     String::from_utf8_lossy(
-                        //         &file_contents[section.pointer_to_raw_data as usize
-                        //             ..section.pointer_to_raw_data as usize
-                        //                 + section.virtual_size as usize]
-                        //     )
-                        // );
-
-                        tracing::info!("Found public symbol {} at address {:?}", data.name, rva);
-                        addressses.push((section.pointer_to_raw_data + rva.offset) as u64);
+                  
+                                          addressses.push((section.pointer_to_raw_data + rva.offset) as u64);
                     }
                 }
 
