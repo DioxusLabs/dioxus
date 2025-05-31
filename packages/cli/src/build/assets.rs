@@ -1,3 +1,33 @@
+//! The dioxus asset system.
+//!
+//! This module provides functionality for extracting assets from a binary file and then writing back
+//! their asset hashes directly into the binary file. Previously, we performed asset hashing in the
+//! `asset!()` macro. The new system, implemented here, instead performs the hashing at build time,
+//! which provides more flexibility in the asset processing pipeline.
+//!
+//! We chose to implement this approach since assets might reference each other and our asset pipeline
+//! wants to compress, minify, and optimize assets before they are used in the application. The
+//! hashes then might no longer be valid - a css file with an extra comment has the same hash after
+//! optimization, but not before minification.
+//!
+//! We use the same lessons learned from the hot-patching engine which parses the binary file and its
+//! symbol table to find symbols that match the `__MANGANIS__` prefix. These symbols are ideally data
+//! symbols and contain the BundledAsset data type which implements ConstSerialize and ConstDeserialize.
+//!
+//! When the binary is built, the `dioxus asset!()` macro will emit its metadata into the __MANGANIS__
+//! symbols, which we process here. After reading the metadata directly from the executable, we then
+//! hash it and write the hash directly into the binary file.
+//!
+//! During development, we can skip this step for most platforms since local paths are sufficient
+//! for asset loading. However, for WASM and for production builds, we need to ensure that assets
+//! can be found relative to the current exe. Unfortunately, on android, the `current_exe` path is wrong,
+//! so the assets are resolved against the "asset root" - which is covered by the asset loader crate.
+//!
+//! Finding the __MANGANIS__ symbols is not quite straightforward when hotpatching, especially on WASM
+//! since we build and link the module as relocatable, which is not a stable WASM proposal. In this
+//! implementation, we handle both the non-PIE *and* PIC cases which are rather bespoke to our whole
+//! build system.
+
 use std::{
     io::{Cursor, Read, Seek, Write},
     path::{Path, PathBuf},
