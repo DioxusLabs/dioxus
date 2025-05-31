@@ -1432,25 +1432,14 @@ impl BuildRequest {
                     "--pie".to_string(),
                     "--experimental-pic".to_string(),
                 ]);
-                // Find the export args. windows of "--export", "something"
-                let export_args = original_args
-                    .windows(2)
-                    .filter_map(|args| {
-                        if args[0] == "--export" || args[0] == "-export" {
-                            Some(args[1].to_string())
-                        } else {
-                            None
-                        }
-                    })
-                    // Only keep manganis exports
-                    .filter(|s| s.starts_with("__MANGANIS__"))
-                    .collect::<Vec<_>>();
-                tracing::info!("Export args: {:#?}", export_args);
-                out_args.extend(
-                    export_args
-                        .iter()
-                        .flat_map(|s| vec!["--export".to_string(), s.to_string()]),
-                );
+
+                // retain exports so post-processing has hooks to work with
+                for (idx, arg) in original_args.iter().enumerate() {
+                    if *arg == "--export" {
+                        out_args.push(arg.to_string());
+                        out_args.push(original_args[idx + 1].to_string());
+                    }
+                }
             }
 
             // This uses "cc" and these args need to be ld compatible
