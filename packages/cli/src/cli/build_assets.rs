@@ -1,11 +1,11 @@
 use std::{
-    collections::HashMap,
     fs::create_dir_all,
     io::{Cursor, Read, Seek, Write},
     path::{Path, PathBuf},
 };
 
 use crate::{Result, StructuredOutput};
+use anyhow::Context;
 use clap::Parser;
 use const_serialize::{ConstVec, SerializeConst};
 use dioxus_cli_opt::{process_file_to, AssetManifest};
@@ -75,7 +75,7 @@ fn find_symbol_offsets<'a, R: ReadRef<'a>>(
     // If the pdb file does not exist, try to find it in the same directory as the executable with _'s instead of -'s
     if !pdb_file.exists() {
         if let Some(file_name) = pdb_file.file_name() {
-            let new_file_name = file_name.to_str().unwrap().replace('-', "_");
+            let new_file_name = file_name.to_string_lossy().replace('-', "_");
             pdb_file.set_file_name(new_file_name);
         }
     }
@@ -83,15 +83,18 @@ fn find_symbol_offsets<'a, R: ReadRef<'a>>(
     if file.format() == object::BinaryFormat::Wasm {
         find_wasm_symbol_offsets(file_contents, file)
     } else if pdb_file.exists() {
-        tracing::info!("Found PDB file at {}", pdb_file.display());
-        let pdb_file_handle = std::fs::File::open(pdb_file).unwrap();
-        let mut pdb_file = pdb::PDB::open(pdb_file_handle).unwrap();
+        let pdb_file_handle = std::fs::File::open(pdb_file)?;
+        let mut pdb_file = pdb::PDB::open(pdb_file_handle).context("Failed to open PDB file")?;
         let Ok(Some(sections)) = pdb_file.sections() else {
             tracing::error!("Failed to read sections from PDB file");
             return Ok(Vec::new());
         };
-        let global_symbols = pdb_file.global_symbols().unwrap();
-        let address_map = pdb_file.address_map().unwrap();
+        let global_symbols = pdb_file
+            .global_symbols()
+            .context("Failed to read global symbols from PDB file")?;
+        let address_map = pdb_file
+            .address_map()
+            .context("Failed to read address map from PDB file")?;
         let mut symbols = global_symbols.iter();
         let mut addressses = Vec::new();
         while let Ok(Some(symbol)) = symbols.next() {
@@ -106,8 +109,8 @@ fn find_symbol_offsets<'a, R: ReadRef<'a>>(
                         let section = sections
                             .get(rva.section as usize - 1)
                             .expect("Section index out of bounds");
-                  
-                                          addressses.push((section.pointer_to_raw_data + rva.offset) as u64);
+
+                        addressses.push((section.pointer_to_raw_data + rva.offset) as u64);
                     }
                 }
 
@@ -183,7 +186,7 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
             );
             continue;
         };
-        let section_size = section.data().unwrap().len() as u64;
+        let section_size = section.data()?.len() as u64;
         let section_start = section_range_end - section_size;
         // Translate the section_relative_address to the file offset
         // WASM files have a section address of 0 in object, reparse the data section with wasmparser
@@ -192,8 +195,12 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
             &file_contents[section_start as usize..section_range_end as usize],
             0,
         ))
-        .unwrap();
-        let main_memory = reader.into_iter().next().unwrap().unwrap();
+        .context("Failed to create WASM data section reader")?;
+        let main_memory = reader
+            .into_iter()
+            .next()
+            .context("Failed find main memory from WASM data section")?
+            .context("Failed to read main memory from WASM data section")?;
         let main_memory_offset = match main_memory.kind {
             wasmparser::DataKind::Active { offset_expr, .. } => {
                 match offset_expr.get_operators_reader().into_iter().next() {
@@ -261,13 +268,11 @@ pub(crate) fn extract_assets_from_file(path: impl AsRef<Path>) -> Result<AssetMa
         file.seek(std::io::SeekFrom::Start(offset))?;
         let mut data_in_range = vec![0; BundledAsset::MEMORY_LAYOUT.size()];
         file.read_exact(&mut data_in_range)?;
-        tracing::info!("As str {}", String::from_utf8_lossy(&data_in_range));
 
         let buffer = const_serialize::ConstReadBuffer::new(&data_in_range);
 
         if let Some((_, bundled_asset)) = const_serialize::deserialize_const!(BundledAsset, buffer)
         {
-            tracing::info!("Found asset at offset {offset} {:?} ", bundled_asset);
             assets.push(bundled_asset);
         } else {
             tracing::warn!("Found an asset at offset {offset} that could not be deserialized. This may be caused by a mismatch between your dioxus and dioxus-cli versions.");
