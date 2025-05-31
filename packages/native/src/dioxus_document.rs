@@ -86,7 +86,7 @@ impl DioxusDocument {
         // Include default and user-specified stylesheets
         doc.add_user_agent_stylesheet(DEFAULT_CSS);
 
-        let vdom_state = DioxusState::create(&mut doc);
+        let vdom_state = DioxusState::create(main_element_id);
         let mut doc = Self {
             vdom,
             vdom_state,

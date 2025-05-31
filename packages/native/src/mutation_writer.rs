@@ -19,10 +19,7 @@ pub struct DioxusState {
 
 impl DioxusState {
     /// Initialize the DioxusState in the RealDom
-    pub fn create(doc: &mut BaseDocument) -> Self {
-        let root = doc.root_element();
-        let root_id = root.id;
-
+    pub fn create(root_id: usize) -> Self {
         Self {
             templates: FxHashMap::default(),
             stack: vec![root_id],
