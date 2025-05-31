@@ -70,12 +70,16 @@ fn find_symbol_offsets<'a, R: ReadRef<'a>>(
 ) -> Result<Vec<u64>> {
     let pdb_file = find_pdb_file(path);
 
-    if file.format() == object::BinaryFormat::Wasm {
-        find_wasm_symbol_offsets(file_contents, file)
-    } else if let Some(pdb_file) = pdb_file {
-        find_pdb_symbol_offsets(&pdb_file)
-    } else {
-        find_native_symbol_offsets(file)
+    match file.format() {
+        // We need to handle dynamic offsets in wasm files differently
+        object::BinaryFormat::Wasm => find_wasm_symbol_offsets(file_contents, file),
+        // Windows puts the symbol information in a PDB file alongside the executable.
+        // If this is a windows PE file and we found a PDB file, we will use that to find the symbol offsets.
+        object::BinaryFormat::Pe if pdb_file.is_some() => {
+            find_pdb_symbol_offsets(&pdb_file.unwrap())
+        }
+        // Otherwise, look for manganis symbols in the object file.
+        _ => find_native_symbol_offsets(file),
     }
 }
 
