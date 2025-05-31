@@ -12,7 +12,7 @@ rust-version = "1.79.0"
 
 [dependencies]
 http = { workspace = true }
-urlencoding = { workspace = true }
+percent-encoding = { workspace = true }
 infer = { workspace = true }
 thiserror = { workspace = true }
 dioxus-cli-config = { workspace = true }

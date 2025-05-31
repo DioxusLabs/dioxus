@@ -531,9 +531,17 @@ impl RouteEnum {
                     // Remove any trailing slashes. We parse /route/ and /route in the same way
                     // Note: we don't use trim because it includes more code
                     let route = route.strip_suffix('/').unwrap_or(route);
-                    let query = dioxus_router::exports::urlencoding::decode(query).unwrap_or(query.into());
-                    let hash = dioxus_router::exports::urlencoding::decode(hash).unwrap_or(hash.into());
-                    let mut segments = route.split('/').map(|s| dioxus_router::exports::urlencoding::decode(s).unwrap_or(s.into()));
+                    let query = dioxus_router::exports::percent_encoding::percent_decode_str(query)
+                        .decode_utf8()
+                        .unwrap_or(query.into());
+                    let hash = dioxus_router::exports::percent_encoding::percent_decode_str(hash)
+                        .decode_utf8()
+                        .unwrap_or(hash.into());
+                    let mut segments = route.split('/').map(|s| {
+                        dioxus_router::exports::percent_encoding::percent_decode_str(s)
+                            .decode_utf8()
+                            .unwrap_or(s.into())
+                    });
                     // skip the first empty segment
                     if s.starts_with('/') {
                         let _ = segments.next();

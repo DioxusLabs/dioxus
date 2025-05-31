@@ -3675,8 +3675,8 @@ dependencies = [
  "ndk",
  "ndk-context",
  "ndk-sys 0.6.0+11769913",
+ "percent-encoding",
  "thiserror 2.0.12",
- "urlencoding",
 ]
 
 [[package]]
@@ -3985,6 +3985,7 @@ dependencies = [
  "ndk-sys 0.6.0+11769913",
  "objc",
  "objc_id",
+ "percent-encoding",
  "rand 0.8.5",
  "reqwest 0.12.15",
  "rfd",
@@ -4000,7 +4001,6 @@ dependencies = [
  "tokio-tungstenite",
  "tracing",
  "tray-icon",
- "urlencoding",
  "webbrowser",
  "wry",
 ]
@@ -4447,12 +4447,12 @@ dependencies = [
  "dioxus-router",
  "dioxus-router-macro",
  "dioxus-ssr",
+ "percent-encoding",
  "rustversion",
  "serde",
  "tokio",
  "tracing",
  "url",
- "urlencoding",
 ]
 
 [[package]]

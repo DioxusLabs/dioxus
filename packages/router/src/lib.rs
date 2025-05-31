@@ -89,5 +89,36 @@ mod utils {
 
 #[doc(hidden)]
 pub mod exports {
-    pub use urlencoding;
+    pub use crate::query_sets::*;
+    pub use percent_encoding;
+}
+
+pub(crate) mod query_sets {
+    //! Url percent encode sets defined [here](https://url.spec.whatwg.org/#percent-encoded-bytes)
+
+    use percent_encoding::AsciiSet;
+
+    /// The ASCII set that must be escaped in query strings.
+    pub const QUERY_ASCII_SET: &AsciiSet = &percent_encoding::CONTROLS
+        .add(b' ')
+        .add(b'"')
+        .add(b'#')
+        .add(b'<')
+        .add(b'>');
+
+    /// The ASCII set that must be escaped in path segments.
+    pub const PATH_ASCII_SET: &AsciiSet = &QUERY_ASCII_SET
+        .add(b'?')
+        .add(b'^')
+        .add(b'`')
+        .add(b'{')
+        .add(b'}');
+
+    /// The ASCII set that must be escaped in hash fragments.
+    pub const FRAGMENT_ASCII_SET: &AsciiSet = &percent_encoding::CONTROLS
+        .add(b' ')
+        .add(b'"')
+        .add(b'<')
+        .add(b'>')
+        .add(b'`');
 }

@@ -123,7 +123,7 @@ impl<T: for<'a> From<&'a str>> FromQuery for T {
 ///     }
 /// }
 ///
-/// // We also need to implement Display for CustomQuery which will be used to format the query string into the URL
+/// // We also need to implement Display for CustomQuery so that ToQueryArgument is implemented automatically
 /// impl std::fmt::Display for CustomQuery {
 ///     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 ///         write!(f, "{}", self.count)
@@ -143,7 +143,7 @@ impl<T: for<'a> From<&'a str>> FromQuery for T {
         note = "FromQueryArgument is automatically implemented for types that implement `FromStr` and `Default`. You need to either implement FromStr and Default or implement FromQueryArgument manually."
     )
 )]
-pub trait FromQueryArgument: Default {
+pub trait FromQueryArgument<P = ()>: Default {
     /// The error that can occur when parsing a query argument.
     type Err;
 
@@ -165,6 +165,138 @@ where
                 Err(err)
             }
         }
+    }
+}
+
+/// A marker type for `Option<T>` to implement `FromQueryArgument`.
+pub struct OptionMarker;
+
+impl<T: Default + FromStr> FromQueryArgument<OptionMarker> for Option<T>
+where
+    <T as FromStr>::Err: Display,
+{
+    type Err = <T as FromStr>::Err;
+
+    fn from_query_argument(argument: &str) -> Result<Self, Self::Err> {
+        match T::from_str(argument) {
+            Ok(result) => Ok(Some(result)),
+            Err(err) => {
+                tracing::error!("Failed to parse query argument: {}", err);
+                Err(err)
+            }
+        }
+    }
+}
+
+/// Something that can be formatted as a query argument. This trait must be implemented for any type that is used as a query argument like `#[route("/?:query")]`.
+///
+/// **This trait is automatically implemented for any types that implement [`Display`].**
+///
+/// ```rust
+/// use dioxus::prelude::*;
+///
+/// #[derive(Routable, Clone, PartialEq, Debug)]
+/// enum Route {
+///     // FromQuerySegment must be implemented for any types you use in the query segment
+///     // When you don't spread the query, you can parse multiple values form the query
+///     // This url will be in the format `/?query=123&other=456`
+///     #[route("/?:query&:other")]
+///     Home {
+///         query: CustomQuery,
+///         other: i32,
+///     },
+/// }
+///
+/// // We can derive Default for CustomQuery
+/// // If the router fails to parse the query value, it will use the default value instead
+/// #[derive(Default, Clone, PartialEq, Debug)]
+/// struct CustomQuery {
+///     count: i32,
+/// }
+///
+/// // We implement FromStr for CustomQuery so that FromQuerySegment is implemented automatically
+/// impl std::str::FromStr for CustomQuery {
+///     type Err = <i32 as std::str::FromStr>::Err;
+///
+///     fn from_str(query: &str) -> Result<Self, Self::Err> {
+///         Ok(CustomQuery {
+///             count: query.parse()?,
+///         })
+///     }
+/// }
+///
+/// // We also need to implement Display for CustomQuery so that ToQueryArgument is implemented automatically
+/// impl std::fmt::Display for CustomQuery {
+///     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+///         write!(f, "{}", self.count)
+///     }
+/// }
+///
+/// # #[component]
+/// # fn Home(query: CustomQuery, other: i32) -> Element {
+/// #     unimplemented!()
+/// # }
+/// ```
+pub trait ToQueryArgument<T = ()> {
+    /// Display the query argument as a string.
+    fn display_query_argument(
+        &self,
+        query_name: &str,
+        f: &mut std::fmt::Formatter<'_>,
+    ) -> std::fmt::Result;
+}
+
+impl<T> ToQueryArgument for T
+where
+    T: Display,
+{
+    fn display_query_argument(
+        &self,
+        query_name: &str,
+        f: &mut std::fmt::Formatter<'_>,
+    ) -> std::fmt::Result {
+        write!(f, "{}={}", query_name, self)
+    }
+}
+
+impl<T: Display> ToQueryArgument<OptionMarker> for Option<T> {
+    fn display_query_argument(
+        &self,
+        query_name: &str,
+        f: &mut std::fmt::Formatter<'_>,
+    ) -> std::fmt::Result {
+        if let Some(value) = self {
+            write!(f, "{}={}", query_name, value)
+        } else {
+            Ok(())
+        }
+    }
+}
+
+/// A type that implements [`ToQueryArgument`] along with the query name. This type implements Display and can be used to format the query argument into a string.
+pub struct DisplayQueryArgument<'a, T, M = ()> {
+    /// The query name.
+    query_name: &'a str,
+    /// The value to format.
+    value: &'a T,
+    /// The `ToQueryArgument` marker type, which can be used to differentiate between different types of query arguments.
+    _marker: std::marker::PhantomData<M>,
+}
+
+impl<'a, T, M> DisplayQueryArgument<'a, T, M> {
+    /// Create a new `DisplayQueryArgument`.
+    pub fn new(query_name: &'a str, value: &'a T) -> Self {
+        Self {
+            query_name,
+            value,
+            _marker: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<T: ToQueryArgument<M>, M> Display for DisplayQueryArgument<'_, T, M> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.value.display_query_argument(self.query_name, f)
     }
 }
 
@@ -406,7 +538,8 @@ where
         for segment in self {
             write!(f, "/")?;
             let segment = segment.to_string();
-            let encoded = urlencoding::encode(&segment);
+            let encoded =
+                percent_encoding::utf8_percent_encode(&segment, crate::query_sets::PATH_ASCII_SET);
             write!(f, "{}", encoded)?;
         }
         Ok(())

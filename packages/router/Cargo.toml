@@ -15,7 +15,7 @@ dioxus-history = { workspace = true }
 dioxus-router-macro = { workspace = true }
 dioxus-fullstack-hooks = { workspace = true, optional = true }
 tracing = { workspace = true }
-urlencoding = { workspace = true }
+percent-encoding = { workspace = true }
 url = { workspace = true }
 dioxus-cli-config = { workspace = true }
 rustversion = { workspace = true }

@@ -39,13 +39,8 @@ impl QuerySegment {
             QuerySegment::Segments(segments) => {
                 let mut tokens = TokenStream2::new();
                 tokens.extend(quote! { write!(f, "?")?; });
-                let mut segments_iter = segments.iter();
-                if let Some(first_segment) = segments_iter.next() {
-                    tokens.extend(first_segment.write());
-                }
-                for segment in segments_iter {
-                    tokens.extend(quote! { write!(f, "&")?; });
-                    tokens.extend(segment.write());
+                for (i, segment) in segments.iter().enumerate() {
+                    tokens.extend(segment.write(i == segments.len() - 1));
                 }
                 tokens
             }
@@ -133,7 +128,7 @@ impl FullQuerySegment {
         quote! {
             {
                 let as_string = #ident.to_string();
-                write!(f, "?{}", dioxus_router::exports::urlencoding::encode(&as_string))?;
+                write!(f, "?{}", dioxus_router::exports::percent_encoding::utf8_percent_encode(&as_string, dioxus_router::exports::QUERY_ASCII_SET))?;
             }
         }
     }
@@ -151,18 +146,27 @@ impl QueryArgument {
         let ty = &self.ty;
         quote! {
             let #ident = match split_query.get(stringify!(#ident)) {
-                Some(query_argument) => <#ty as dioxus_router::routable::FromQueryArgument>::from_query_argument(query_argument).unwrap_or_default(),
+                Some(query_argument) => {
+                    use dioxus_router::routable::FromQueryArgument;
+                    <#ty>::from_query_argument(query_argument).unwrap_or_default()
+                },
                 None => <#ty as Default>::default(),
             };
         }
     }
 
-    pub fn write(&self) -> TokenStream2 {
+    pub fn write(&self, trailing: bool) -> TokenStream2 {
         let ident = &self.ident;
+        let write_ampersand = if !trailing {
+            quote! { if !as_string.is_empty() { write!(f, "&")?; } }
+        } else {
+            quote! {}
+        };
         quote! {
             {
-                let as_string = #ident.to_string();
-                write!(f, "{}={}", stringify!(#ident), dioxus_router::exports::urlencoding::encode(&as_string))?;
+                let as_string = dioxus_router::routable::DisplayQueryArgument::new(stringify!(#ident), #ident).to_string();
+                write!(f, "{}", dioxus_router::exports::percent_encoding::utf8_percent_encode(&as_string, dioxus_router::exports::QUERY_ASCII_SET))?;
+                #write_ampersand
             }
         }
     }

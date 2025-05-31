@@ -27,7 +27,7 @@ impl RouteSegment {
             Self::Dynamic(ident, _) => quote! {
                 {
                     let as_string = #ident.to_string();
-                    write!(f, "/{}", dioxus_router::exports::urlencoding::encode(&as_string))?;
+                    write!(f, "/{}", dioxus_router::exports::percent_encoding::utf8_percent_encode(&as_string, dioxus_router::exports::PATH_ASCII_SET))?;
                 }
             },
             Self::CatchAll(ident, _) => quote! { #ident.display_route_segments(f)?; },
