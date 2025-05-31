@@ -102,6 +102,8 @@ fn find_symbol_offsets<'a, R: ReadRef<'a>>(
                         let section = sections
                             .get(rva.section as usize)
                             .expect("Section index out of bounds");
+                        tracing::info!("Found section {:?}", section);
+                        tracing::info!("contents of section as str {}", String::from_utf8_lossy(&file_contents[section.pointer_to_raw_data as usize..section.pointer_to_raw_data as usize + section.virtual_size as usize]));
     
                         tracing::info!("Found public symbol {} at address {:?}", data.name, rva);
                         addressses.push((section.pointer_to_raw_data + rva.offset) as u64); 
