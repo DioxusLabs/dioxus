@@ -106,7 +106,7 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
 
     // All integer literal global values in the wasm file
     let mut global_values = Vec::new();
-    for section in parser.parse_all(&file_contents) {
+    for section in parser.parse_all(file_contents) {
         let Ok(wasmparser::Payload::GlobalSection(global_section)) = section else {
             continue;
         };
