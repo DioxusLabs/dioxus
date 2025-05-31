@@ -95,7 +95,7 @@ fn find_pdb_symbol_offsets(pdb_file: &Path) -> Result<Vec<u64>> {
         .address_map()
         .context("Failed to read address map from PDB file")?;
     let mut symbols = global_symbols.iter();
-    let mut addressses = Vec::new();
+    let mut addresses = Vec::new();
     while let Ok(Some(symbol)) = symbols.next() {
         let Ok(pdb::SymbolData::Public(data)) = symbol.parse() else {
             continue;
@@ -110,10 +110,10 @@ fn find_pdb_symbol_offsets(pdb_file: &Path) -> Result<Vec<u64>> {
                 .get(rva.section as usize - 1)
                 .expect("Section index out of bounds");
 
-            addressses.push((section.pointer_to_raw_data + rva.offset) as u64);
+            addresses.push((section.pointer_to_raw_data + rva.offset) as u64);
         }
     }
-    Ok(addressses)
+    Ok(addresses)
 }
 
 /// Find the offsets of any manganis symbols in a native object file.
