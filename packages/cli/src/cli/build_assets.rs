@@ -72,45 +72,47 @@ fn find_symbol_offsets<'a, R: ReadRef<'a>>(
 
     // If there is a pdb file in the same directory as the executable, use it to find the symbols
     let pdb_file = path.with_extension("pdb");
+    // replace any -'s in the filename with _'s
+    let pdb_file = pdb_file.with_file_name(pdb_file.file_name().unwrap().to_str().unwrap().replace("-", "_"));
+    tracing::info!("Looking for PDB file at {}", pdb_file.display());
 
     if file.format() == object::BinaryFormat::Wasm {
         find_wasm_symbol_offsets(file_contents, file)
     } else if pdb_file.exists() {
+        tracing::info!("Found PDB file at {}", pdb_file.display());
         let pdb_file_handle = std::fs::File::open(pdb_file).unwrap();
         let mut pdb_file = pdb::PDB::open(pdb_file_handle).unwrap();
+        let Ok(Some(sections)) = pdb_file.sections() else { 
+            tracing::error!("Failed to read sections from PDB file");
+            return Ok(Vec::new());
+        };
         let global_symbols = pdb_file.global_symbols().unwrap();
         let address_map = pdb_file.address_map().unwrap();
         let mut symbols = global_symbols.iter();
+        let mut addressses = Vec::new();
         while let Ok(Some(symbol)) = symbols.next() {
             match symbol.parse() {
                 Ok(pdb::SymbolData::Public(data)) => {
-                    let rva = data.offset.to_rva(&address_map);
-
-                    // treat undefined symbols as 0 to match macho/elf
-                    let rva = rva.unwrap_or_default();
-
+                    let Some(rva) = data.offset.to_section_offset(&address_map) else {
+                        continue;
+                    };
+                    
                     let name = data.name.to_string();
                     if name.contains("__MANGANIS__") {
-                        println!("Found public symbol {} at address {:#x}", data.name, rva.0,);
+                        let section = sections
+                            .get(rva.section as usize)
+                            .expect("Section index out of bounds");
+    
+                        tracing::info!("Found public symbol {} at address {:?}", data.name, rva);
+                        addressses.push((section.pointer_to_raw_data + rva.offset) as u64); 
                     }
                 }
 
-                Ok(pdb::SymbolData::Data(data)) => {
-                    let rva = data.offset.to_rva(&address_map);
-
-                    // treat undefined symbols as 0 to match macho/elf
-                    let rva = rva.unwrap_or_default();
-
-                    let name = data.name.to_string();
-                    if name.contains("__MANGANIS__") {
-                        println!("Found data symbol {} at address {:#x}", data.name, rva.0,);
-                    }
-                }
-
+            
                 _ => {}
             }
         }
-        Ok(Vec::new())
+        Ok(addressses)
     } else {
         find_native_symbol_offsets(file)
     }
@@ -257,11 +259,16 @@ pub(crate) fn extract_assets_from_file(path: impl AsRef<Path>) -> Result<AssetMa
         file.seek(std::io::SeekFrom::Start(offset))?;
         let mut data_in_range = vec![0; BundledAsset::MEMORY_LAYOUT.size()];
         file.read_exact(&mut data_in_range)?;
+        tracing::info!("As str {}", String::from_utf8_lossy(&data_in_range));
 
         let buffer = const_serialize::ConstReadBuffer::new(&data_in_range);
 
         if let Some((_, bundled_asset)) = const_serialize::deserialize_const!(BundledAsset, buffer)
         {
+            tracing::info!(
+                "Found asset at offset {offset} {:?} ",
+                bundled_asset
+            );
             assets.push(bundled_asset);
         } else {
             tracing::warn!("Found an asset at offset {offset} that could not be deserialized. This may be caused by a mismatch between your dioxus and dioxus-cli versions.");
