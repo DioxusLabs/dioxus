@@ -453,11 +453,15 @@ impl AppBuilder {
                 dioxus_cli_config::ALWAYS_ON_TOP_ENV,
                 always_on_top.to_string(),
             ),
-            // unset the cargo dirs in the event we're running `dx` locally
-            // since the child process will inherit the env vars, we don't want to confuse the downstream process
-            ("CARGO_MANIFEST_DIR", "".to_string()),
-            ("RUST_BACKTRACE", "1".to_string()),
         ];
+
+        if crate::VERBOSITY
+            .get()
+            .map(|f| f.verbose)
+            .unwrap_or_default()
+        {
+            envs.push(("RUST_BACKTRACE", "1".to_string()));
+        }
 
         if let Some(base_path) = krate.base_path() {
             envs.push((dioxus_cli_config::ASSET_ROOT_ENV, base_path.to_string()));
@@ -734,6 +738,7 @@ impl AppBuilder {
 
         let mut child = Command::new(main_exe)
             .envs(envs)
+            .env_remove("CARGO_MANIFEST_DIR") // running under `dx` shouldn't expose cargo-only :
             .stderr(Stdio::piped())
             .stdout(Stdio::piped())
             .kill_on_drop(true)
@@ -796,6 +801,7 @@ impl AppBuilder {
             .arg("booted")
             .arg(self.build.bundle_identifier())
             .envs(ios_envs)
+            .env_remove("CARGO_MANIFEST_DIR")
             .stderr(Stdio::piped())
             .stdout(Stdio::piped())
             .kill_on_drop(true)
