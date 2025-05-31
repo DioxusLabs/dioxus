@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     fs::create_dir_all,
     io::{Cursor, Read, Seek, Write},
     path::{Path, PathBuf},
@@ -63,11 +64,53 @@ fn manganis_symbols<'a, 'b, R: ReadRef<'a>>(
 }
 
 fn find_symbol_offsets<'a, R: ReadRef<'a>>(
+    path: &Path,
     file_contents: &[u8],
     file: &File<'a, R>,
 ) -> Result<Vec<u64>> {
+    use pdb::FallibleIterator;
+
+    // If there is a pdb file in the same directory as the executable, use it to find the symbols
+    let pdb_file = path.with_extension("pdb");
+
     if file.format() == object::BinaryFormat::Wasm {
         find_wasm_symbol_offsets(file_contents, file)
+    } else if pdb_file.exists() {
+        let pdb_file_handle = std::fs::File::open(pdb_file).unwrap();
+        let mut pdb_file = pdb::PDB::open(pdb_file_handle).unwrap();
+        let global_symbols = pdb_file.global_symbols().unwrap();
+        let address_map = pdb_file.address_map().unwrap();
+        let mut symbols = global_symbols.iter();
+        while let Ok(Some(symbol)) = symbols.next() {
+            match symbol.parse() {
+                Ok(pdb::SymbolData::Public(data)) => {
+                    let rva = data.offset.to_rva(&address_map);
+
+                    // treat undefined symbols as 0 to match macho/elf
+                    let rva = rva.unwrap_or_default();
+
+                    let name = data.name.to_string();
+                    if name.contains("__MANGANIS__") {
+                        println!("Found public symbol {} at address {:#x}", data.name, rva.0,);
+                    }
+                }
+
+                Ok(pdb::SymbolData::Data(data)) => {
+                    let rva = data.offset.to_rva(&address_map);
+
+                    // treat undefined symbols as 0 to match macho/elf
+                    let rva = rva.unwrap_or_default();
+
+                    let name = data.name.to_string();
+                    if name.contains("__MANGANIS__") {
+                        println!("Found data symbol {} at address {:#x}", data.name, rva.0,);
+                    }
+                }
+
+                _ => {}
+            }
+        }
+        Ok(Vec::new())
     } else {
         find_native_symbol_offsets(file)
     }
@@ -205,7 +248,7 @@ pub(crate) fn extract_assets_from_file(path: impl AsRef<Path>) -> Result<AssetMa
     let mut reader = Cursor::new(&file_contents);
     let read_cache = ReadCache::new(&mut reader);
     let object_file = object::File::parse(&read_cache)?;
-    let offsets = find_symbol_offsets(&file_contents, &object_file)?;
+    let offsets = find_symbol_offsets(path, &file_contents, &object_file)?;
 
     let mut assets = Vec::new();
 
