@@ -315,7 +315,7 @@
 //! ## Extra links
 //! - xbuild: <https://github.com/rust-mobile/xbuild/blob/master/xbuild/src/command/build.rs>
 
-use crate::build_assets::extract_assets_from_file;
+use super::extract_assets_from_file;
 use crate::{
     AndroidTools, BuildContext, DioxusConfig, Error, LinkAction, LinkerFlavor, Platform, Result,
     RustcArgs, TargetArgs, TraceSrc, WasmBindgen, WasmOptConfig, Workspace,
