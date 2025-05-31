@@ -9,7 +9,7 @@ use clap::Parser;
 use const_serialize::{ConstVec, SerializeConst};
 use dioxus_cli_opt::{process_file_to, AssetManifest};
 use manganis::BundledAsset;
-use object::{File, Object, ObjectSection, ObjectSymbol, ReadCache, ReadRef};
+use object::{File, Object, ObjectSection, ObjectSymbol, ReadCache, ReadRef, Section, Symbol};
 use rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
 use tracing::debug;
 use wasmparser::BinaryReader;
@@ -44,181 +44,154 @@ impl BuildAssets {
     }
 }
 
+fn manganis_symbols<'a, 'b, R: ReadRef<'a>>(
+    file: &'b File<'a, R>,
+) -> impl Iterator<Item = (Symbol<'a, 'b, R>, Section<'a, 'b, R>)> + 'b {
+    file.symbols()
+        .filter(|symbol| {
+            if let Ok(name) = symbol.name() {
+                name.contains("__MANGANIS__")
+            } else {
+                false
+            }
+        })
+        .filter_map(move |symbol| {
+            let section_index = symbol.section_index()?;
+            let section = file.section_by_index(section_index).ok()?;
+            Some((symbol, section))
+        })
+}
+
 fn find_symbol_offsets<'a, R: ReadRef<'a>>(
     file_contents: &[u8],
     file: &File<'a, R>,
 ) -> Result<Vec<u64>> {
+    if file.format() == object::BinaryFormat::Wasm {
+        find_wasm_symbol_offsets(file_contents, file)
+    } else {
+        find_native_symbol_offsets(file)
+    }
+}
+
+fn find_native_symbol_offsets<'a, R: ReadRef<'a>>(file: &File<'a, R>) -> Result<Vec<u64>> {
     let mut offsets = Vec::new();
-    {
-        for symbol in file.symbols() {
-            let Ok(name) = symbol.name() else {
-                continue;
-            };
-            if name.contains("__MANGANIS__") {
-                tracing::info!("Found symbol {}", name);
-                let virtual_address = symbol.address();
+    for (symbol, section) in manganis_symbols(file) {
+        let virtual_address = symbol.address();
 
-                let section = symbol.section_index();
-                if let Some(section) = section {
-                    let Ok(section) = file.section_by_index(section) else {
-                        tracing::error!(
-                            "Found symbol {} in section {}, but the section is not valid",
-                            name,
-                            section
-                        );
-                        continue;
-                    };
-                    let Some((section_range_start, section_range_end)) = section.file_range()
-                    else {
-                        tracing::error!(
-                            "Found symbol {} in section {}, but the section has no file range",
-                            name,
-                            section.index()
-                        );
-                        continue;
-                    };
-                    let section_size = section.data().unwrap().len() as u64;
-                    let section_start = section_range_end - section_size;
-                    // Translate the section_relative_address to the file offset
-                    let (section_address, section_offset) = if file.format()
-                        == object::BinaryFormat::Wasm
-                    {
-                        // WASM files have a section address of 0 in object, reparse the data section with wasmparser
-                        // to get the correct address and section start
-                        let reader = wasmparser::DataSectionReader::new(BinaryReader::new(
-                            &file_contents[section_start as usize..section_range_end as usize],
-                            0,
-                        ))
-                        .unwrap();
-                        let main_memory = reader.into_iter().next().unwrap().unwrap();
-                        let main_memory_offset = match main_memory.kind {
-                            wasmparser::DataKind::Active { offset_expr, .. } => {
-                                match offset_expr.get_operators_reader().into_iter().next() {
-                                    Some(Ok(wasmparser::Operator::I32Const { value })) => {
-                                        -value as i128
-                                    }
-                                    Some(Ok(wasmparser::Operator::I64Const { value })) => {
-                                        -value as i128
-                                    }
-                                    Some(Ok(wasmparser::Operator::GlobalGet { global_index })) => {
-                                        // Reparse the whole file to find the globals
-                                        let parser = wasmparser::Parser::new(0);
-                                        let mut global_value = None;
-                                        for section in parser.parse_all(&file_contents) {
-                                            let Ok(wasmparser::Payload::GlobalSection(
-                                                global_section,
-                                            )) = section
-                                            else {
-                                                continue;
-                                            };
+        let Some((section_range_start, _)) = section.file_range() else {
+            tracing::error!(
+                "Found __MANGANIS__ symbol {:?} in section {}, but the section has no file range",
+                symbol.name(),
+                section.index()
+            );
+            continue;
+        };
+        // Translate the section_relative_address to the file offset
+        let section_relative_address: u64 = (virtual_address as i128 - section.address() as i128)
+            .try_into()
+            .expect("Virtual address should be greater than or equal to section address");
+        let file_offset = section_range_start + section_relative_address;
+        offsets.push(file_offset);
+    }
 
-                                            for (index, global) in
-                                                global_section.into_iter().enumerate()
-                                            {
-                                                let Ok(global) = global else {
-                                                    continue;
-                                                };
-                                                tracing::info!(
-                                                    "Found global {} with value {:?}",
-                                                    index,
-                                                    global
-                                                        .init_expr
-                                                        .get_operators_reader()
-                                                        .into_iter()
-                                                        .next()
-                                                );
-                                                if index == global_index as usize {
-                                                    match global
-                                                        .init_expr
-                                                        .get_operators_reader()
-                                                        .into_iter()
-                                                        .next()
-                                                    {
-                                                        Some(Ok(
-                                                            wasmparser::Operator::I32Const {
-                                                                value,
-                                                            },
-                                                        )) => global_value = Some(value as u64),
-                                                        Some(Ok(
-                                                            wasmparser::Operator::I64Const {
-                                                                value,
-                                                            },
-                                                        )) => global_value = Some(value as u64),
-                                                        value => {
-                                                            tracing::error!(
-                                                                "Found symbol {} in WASM file, but the global init expression is not a constant is is {:?}",
-                                                                name,
-                                                                value
-                                                            );
-                                                            continue;
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                        let Some(value) = global_value else {
-                                            tracing::error!(
-                                                "Found symbol {} in WASM file, but the global index {} is not found",
-                                                name,
-                                                global_index
-                                            );
-                                            continue;
-                                        };
-                                        value as i128
-                                    }
-                                    offset_expr => {
-                                        tracing::error!(
-                                            "Found symbol {} in WASM file, but the offset expression is not a constant is is {:?}",
-                                            name,
-                                            offset_expr
-                                        );
-                                        continue;
-                                    }
-                                }
-                            }
-                            _ => {
-                                tracing::error!(
-                                    "Found symbol {} in WASM file, but the data section is not active",
-                                    name
-                                );
-                                continue;
-                            }
+    Ok(offsets)
+}
+
+fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
+    file_contents: &[u8],
+    file: &File<'a, R>,
+) -> Result<Vec<u64>> {
+    // Parse the wasm file to find the globals
+    let parser = wasmparser::Parser::new(0);
+
+    // All integer literal global values in the wasm file
+    let mut global_values = Vec::new();
+    for section in parser.parse_all(&file_contents) {
+        let Ok(wasmparser::Payload::GlobalSection(global_section)) = section else {
+            continue;
+        };
+
+        global_values = global_section
+            .into_iter()
+            .map(|global| {
+                let global = global.ok()?;
+                match global.init_expr.get_operators_reader().into_iter().next() {
+                    Some(Ok(wasmparser::Operator::I32Const { value })) => Some(value as u64),
+                    Some(Ok(wasmparser::Operator::I64Const { value })) => Some(value as u64),
+                    _ => None,
+                }
+            })
+            .collect::<Vec<_>>();
+    }
+    let mut offsets = Vec::new();
+
+    for (symbol, section) in manganis_symbols(file) {
+        let virtual_address = symbol.address();
+
+        let Some((_, section_range_end)) = section.file_range() else {
+            tracing::error!(
+                "Found __MANGANIS__ symbol {:?} in section {}, but the section has no file range",
+                symbol.name(),
+                section.index()
+            );
+            continue;
+        };
+        let section_size = section.data().unwrap().len() as u64;
+        let section_start = section_range_end - section_size;
+        // Translate the section_relative_address to the file offset
+        // WASM files have a section address of 0 in object, reparse the data section with wasmparser
+        // to get the correct address and section start
+        let reader = wasmparser::DataSectionReader::new(BinaryReader::new(
+            &file_contents[section_start as usize..section_range_end as usize],
+            0,
+        ))
+        .unwrap();
+        let main_memory = reader.into_iter().next().unwrap().unwrap();
+        let main_memory_offset = match main_memory.kind {
+            wasmparser::DataKind::Active { offset_expr, .. } => {
+                match offset_expr.get_operators_reader().into_iter().next() {
+                    Some(Ok(wasmparser::Operator::I32Const { value })) => -value as i128,
+                    Some(Ok(wasmparser::Operator::I64Const { value })) => -value as i128,
+                    Some(Ok(wasmparser::Operator::GlobalGet { global_index })) => {
+                        let Some(value) =
+                            global_values.get(global_index as usize).copied().flatten()
+                        else {
+                            tracing::error!(
+                                "Found __MANGANIS__ symbol {:?} in WASM file, but the global index {} is not found",
+                                symbol.name(),
+                                global_index
+                            );
+                            continue;
                         };
-                        // main_memory.data is a slice somewhere in file_contents. Find out the offset in the file
-                        let data_start_offset = (main_memory.data.as_ptr() as u64)
-                            .checked_sub(file_contents.as_ptr() as u64)
-                            .expect("Data section start offset should be within the file contents");
-                        (main_memory_offset, data_start_offset)
-                    } else {
-                        (-(section.address() as i128), section_range_start)
-                    };
-                    tracing::info!(
-                        "Found symbol {} with address {}, section address {}, section offset {}, section size {}, section start {}, section end {}",
-                        name,
-                        virtual_address,
-                        section_address,
-                        section_offset,
-                        section_size,
-                        section_range_start,
-                        section_range_end
-                    );
-                    let section_relative_address: u64 = ((virtual_address as i128)
-                        + section_address)
-                        .try_into()
-                        .expect(
-                            "Virtual address should be greater than or equal to section address",
+                        value as i128
+                    }
+                    offset_expr => {
+                        tracing::error!(
+                            "Found __MANGANIS__ symbol {:?} in WASM file, but the offset expression is not a constant is is {:?}",
+                            symbol.name(),
+                            offset_expr
                         );
-                    let file_offset = section_offset + section_relative_address;
-                    offsets.push(file_offset);
-                } else {
-                    tracing::error!(
-                        "Found symbol {} with address {}, but it has no section",
-                        name,
-                        virtual_address
-                    );
+                        continue;
+                    }
                 }
             }
-        }
+            _ => {
+                tracing::error!(
+                    "Found __MANGANIS__ symbol {:?} in WASM file, but the data section is not active",
+                    symbol.name()
+                );
+                continue;
+            }
+        };
+        // main_memory.data is a slice somewhere in file_contents. Find out the offset in the file
+        let data_start_offset = (main_memory.data.as_ptr() as u64)
+            .checked_sub(file_contents.as_ptr() as u64)
+            .expect("Data section start offset should be within the file contents");
+        let section_relative_address: u64 = ((virtual_address as i128) + main_memory_offset)
+            .try_into()
+            .expect("Virtual address should be greater than or equal to section address");
+        let file_offset = data_start_offset + section_relative_address;
+        offsets.push(file_offset);
     }
 
     Ok(offsets)
@@ -226,7 +199,6 @@ fn find_symbol_offsets<'a, R: ReadRef<'a>>(
 
 pub(crate) fn extract_assets_from_file(path: impl AsRef<Path>) -> Result<AssetManifest> {
     let path = path.as_ref();
-    tracing::info!("Extracting assets from file: {}", path.display());
     let mut file = std::fs::File::options().write(true).read(true).open(path)?;
     let mut file_contents = Vec::new();
     file.read_to_end(&mut file_contents)?;
@@ -290,7 +262,6 @@ pub(crate) fn extract_assets_from_file(path: impl AsRef<Path>) -> Result<AssetMa
     // Finally, create the asset manifest
     let mut manifest = AssetManifest::default();
     for asset in assets {
-        tracing::info!("Found asset: {:#?}", asset);
         manifest.insert_asset(asset);
     }
 
