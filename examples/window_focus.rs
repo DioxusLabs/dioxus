@@ -8,12 +8,15 @@
 use dioxus::desktop::tao::event::Event as WryEvent;
 use dioxus::desktop::tao::event::WindowEvent;
 use dioxus::desktop::use_wry_event_handler;
-use dioxus::desktop::{Config, WindowCloseBehaviour};
+use dioxus::desktop::{Config, DefaultWindowCloseBehaviour};
 use dioxus::prelude::*;
 
 fn main() {
     dioxus::LaunchBuilder::desktop()
-        .with_cfg(Config::new().with_close_behaviour(WindowCloseBehaviour::CloseWindow))
+        .with_cfg(
+            Config::new()
+                .with_default_window_close_behaviour(DefaultWindowCloseBehaviour::WindowsCloses),
+        )
         .launch(app)
 }
 
