@@ -95,10 +95,10 @@ fn find_symbol_offsets<'a, R: ReadRef<'a>>(
                             wasmparser::DataKind::Active { offset_expr, .. } => {
                                 match offset_expr.get_operators_reader().into_iter().next() {
                                     Some(Ok(wasmparser::Operator::I32Const { value })) => {
-                                        value as u64
+                                        -value as i128
                                     }
                                     Some(Ok(wasmparser::Operator::I64Const { value })) => {
-                                        value as u64
+                                        -value as i128
                                     }
                                     Some(Ok(wasmparser::Operator::GlobalGet { global_index })) => {
                                         // Reparse the whole file to find the globals
@@ -118,6 +118,15 @@ fn find_symbol_offsets<'a, R: ReadRef<'a>>(
                                                 let Ok(global) = global else {
                                                     continue;
                                                 };
+                                                tracing::info!(
+                                                    "Found global {} with value {:?}",
+                                                    index,
+                                                    global
+                                                        .init_expr
+                                                        .get_operators_reader()
+                                                        .into_iter()
+                                                        .next()
+                                                );
                                                 if index == global_index as usize {
                                                     match global
                                                         .init_expr
@@ -155,7 +164,7 @@ fn find_symbol_offsets<'a, R: ReadRef<'a>>(
                                             );
                                             continue;
                                         };
-                                        value
+                                        value as i128
                                     }
                                     offset_expr => {
                                         tracing::error!(
@@ -181,7 +190,7 @@ fn find_symbol_offsets<'a, R: ReadRef<'a>>(
                             .expect("Data section start offset should be within the file contents");
                         (main_memory_offset, data_start_offset)
                     } else {
-                        (section.address(), section_range_start)
+                        (-(section.address() as i128), section_range_start)
                     };
                     tracing::info!(
                         "Found symbol {} with address {}, section address {}, section offset {}, section size {}, section start {}, section end {}",
@@ -193,8 +202,10 @@ fn find_symbol_offsets<'a, R: ReadRef<'a>>(
                         section_range_start,
                         section_range_end
                     );
-                    let section_relative_address =
-                        virtual_address.checked_sub(section_address).expect(
+                    let section_relative_address: u64 = ((virtual_address as i128)
+                        + section_address)
+                        .try_into()
+                        .expect(
                             "Virtual address should be greater than or equal to section address",
                         );
                     let file_offset = section_offset + section_relative_address;
