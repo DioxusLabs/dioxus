@@ -98,23 +98,20 @@ fn find_symbol_offsets<'a, R: ReadRef<'a>>(
         let mut symbols = global_symbols.iter();
         let mut addressses = Vec::new();
         while let Ok(Some(symbol)) = symbols.next() {
-            match symbol.parse() {
-                Ok(pdb::SymbolData::Public(data)) => {
-                    let Some(rva) = data.offset.to_section_offset(&address_map) else {
-                        continue;
-                    };
+            let Ok(pdb::SymbolData::Public(data)) = symbol.parse() else {
+                continue;
+            };
+            let Some(rva) = data.offset.to_section_offset(&address_map) else {
+                continue;
+            };
 
-                    let name = data.name.to_string();
-                    if name.contains("__MANGANIS__") {
-                        let section = sections
-                            .get(rva.section as usize - 1)
-                            .expect("Section index out of bounds");
+            let name = data.name.to_string();
+            if name.contains("__MANGANIS__") {
+                let section = sections
+                    .get(rva.section as usize - 1)
+                    .expect("Section index out of bounds");
 
-                        addressses.push((section.pointer_to_raw_data + rva.offset) as u64);
-                    }
-                }
-
-                _ => {}
+                addressses.push((section.pointer_to_raw_data + rva.offset) as u64);
             }
         }
         Ok(addressses)
