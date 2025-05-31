@@ -3811,7 +3811,7 @@ dependencies = [
  "walkdir",
  "walrus",
  "wasm-bindgen-externref-xform",
- "wasm-encoder 0.228.0",
+ "wasm-encoder 0.229.0",
  "wasm-opt",
  "wasm-split-cli",
  "wasmparser 0.226.0",
@@ -3831,6 +3831,7 @@ version = "0.7.0-alpha.0"
 dependencies = [
  "anyhow",
  "browserslist-rs 0.16.0",
+ "built",
  "codemap",
  "const-serialize",
  "grass",
@@ -15940,12 +15941,12 @@ dependencies = [
 
 [[package]]
 name = "wasm-encoder"
-version = "0.228.0"
+version = "0.229.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "05d30290541f2d4242a162bbda76b8f2d8b1ac59eab3568ed6f2327d52c9b2c4"
+checksum = "38ba1d491ecacb085a2552025c10a675a6fddcbd03b1fc9b36c536010ce265d2"
 dependencies = [
  "leb128fmt",
- "wasmparser 0.228.0",
+ "wasmparser 0.229.0",
 ]
 
 [[package]]
@@ -16101,9 +16102,9 @@ dependencies = [
 
 [[package]]
 name = "wasmparser"
-version = "0.228.0"
+version = "0.229.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4abf1132c1fdf747d56bbc1bb52152400c70f336870f968b85e89ea422198ae3"
+checksum = "0cc3b1f053f5d41aa55640a1fa9b6d1b8a9e4418d118ce308d20e24ff3575a8c"
 dependencies = [
  "bitflags 2.9.1",
  "indexmap 2.9.0",

@@ -309,8 +309,10 @@ impl AppServer {
 
             // If it's an asset, we want to hotreload it
             // todo(jon): don't hardcode this here
-            if let Some(bundled_name) = self.client.hotreload_bundled_asset(path).await {
-                assets.push(PathBuf::from("/assets/").join(bundled_name));
+            if let Some(bundled_names) = self.client.hotreload_bundled_assets(path).await {
+                for bundled_name in bundled_names {
+                    assets.push(PathBuf::from("/assets/").join(bundled_name));
+                }
             }
 
             // If it's a rust file, we want to hotreload it using the filemap

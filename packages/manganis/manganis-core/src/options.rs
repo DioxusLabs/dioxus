@@ -7,6 +7,7 @@ use crate::{
 /// Settings for a generic asset
 #[derive(
     Debug,
+    Eq,
     PartialEq,
     PartialOrd,
     Clone,

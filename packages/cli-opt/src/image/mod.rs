@@ -14,7 +14,8 @@ pub(crate) fn process_image(
     output_path: &Path,
 ) -> anyhow::Result<()> {
     let mut image = image::ImageReader::new(std::io::Cursor::new(&*std::fs::read(source)?))
-        .with_guessed_format()?
+        .with_guessed_format()
+        .context("Failed to guess image format")?
         .decode();
 
     if let Ok(image) = &mut image {
@@ -25,10 +26,10 @@ pub(crate) fn process_image(
 
     match (image, image_options.format()) {
         (image, ImageFormat::Png) => {
-            compress_png(image?, output_path);
+            compress_png(image.context("Failed to decode image")?, output_path);
         }
         (image, ImageFormat::Jpg) => {
-            compress_jpg(image?, output_path)?;
+            compress_jpg(image.context("Failed to decode image")?, output_path)?;
         }
         (Ok(image), ImageFormat::Avif) => {
             if let Err(error) = image.save(output_path) {
@@ -41,20 +42,30 @@ pub(crate) fn process_image(
             }
         }
         (Ok(image), _) => {
-            image.save(output_path)?;
-        }
-        // If we can't decode the image or it is of an unknown type, we just copy the file
-        _ => {
-            let source_file = std::fs::File::open(source)?;
-            let mut reader = std::io::BufReader::new(source_file);
-            let output_file = std::fs::File::create(output_path)?;
-            let mut writer = std::io::BufWriter::new(output_file);
-            std::io::copy(&mut reader, &mut writer).with_context(|| {
+            image.save(output_path).with_context(|| {
                 format!(
-                    "Failed to write image to output location: {}",
+                    "Failed to save image (from {}) with path {}",
+                    source.display(),
                     output_path.display()
                 )
             })?;
+        }
+        // If we can't decode the image or it is of an unknown type, we just copy the file
+        _ => {
+            let source_file = std::fs::File::open(source).context("Failed to open source file")?;
+            let mut reader = std::io::BufReader::new(source_file);
+            let output_file = std::fs::File::create(output_path).with_context(|| {
+                format!("Failed to create output file: {}", output_path.display())
+            })?;
+            let mut writer = std::io::BufWriter::new(output_file);
+            std::io::copy(&mut reader, &mut writer)
+                .with_context(|| {
+                    format!(
+                        "Failed to write image to output location: {}",
+                        output_path.display()
+                    )
+                })
+                .context("Failed to copy image data")?;
         }
     }
 
