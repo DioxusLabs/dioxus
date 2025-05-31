@@ -85,15 +85,17 @@ fn find_symbol_offsets<'a, R: ReadRef<'a>>(
 
     // Print the data section contents according to object
     for section in file.sections() {
-        if section.kind() == object::SectionKind::Data {
             let section_data = section.data().unwrap_or(&[]);
-            tracing::info!(
-                "Section {}: {} bytes",
-                section.name().unwrap_or("Unnamed"),
-                section_data.len()
-            );
-            tracing::info!("Contents: {}", String::from_utf8_lossy(section_data));
-        }
+            let as_str = String::from_utf8_lossy(section_data);
+            if as_str.contains("D:\\Users\\Desktop\\github\\dioxus-test\\assets\\img.png") {
+                tracing::info!("Found asset in section {}", section.name().unwrap_or("Unnamed")); 
+            }
+            // tracing::info!(
+            //     "Section {}: {} bytes",
+            //     section.name().unwrap_or("Unnamed"),
+            //     section_data.len()
+            // );
+            // tracing::info!("Contents: {}", String::from_utf8_lossy(section_data));
     }
 
     if file.format() == object::BinaryFormat::Wasm {
@@ -120,17 +122,18 @@ fn find_symbol_offsets<'a, R: ReadRef<'a>>(
                     let name = data.name.to_string();
                     if name.contains("__MANGANIS__") {
                         let section = sections
-                            .get(rva.section as usize)
+                            .get(rva.section as usize - 1)
                             .expect("Section index out of bounds");
+                    tracing::info!("all sections {:?}", sections);
                         tracing::info!("Found section {:?}", section);
-                        tracing::info!(
-                            "contents of section as str {}",
-                            String::from_utf8_lossy(
-                                &file_contents[section.pointer_to_raw_data as usize
-                                    ..section.pointer_to_raw_data as usize
-                                        + section.virtual_size as usize]
-                            )
-                        );
+                        // tracing::info!(
+                        //     "contents of section as str {}",
+                        //     String::from_utf8_lossy(
+                        //         &file_contents[section.pointer_to_raw_data as usize
+                        //             ..section.pointer_to_raw_data as usize
+                        //                 + section.virtual_size as usize]
+                        //     )
+                        // );
 
                         tracing::info!("Found public symbol {} at address {:?}", data.name, rva);
                         addressses.push((section.pointer_to_raw_data + rva.offset) as u64);
