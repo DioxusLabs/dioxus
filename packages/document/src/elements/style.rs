@@ -111,6 +111,7 @@ pub fn Style(props: StyleProps) -> Element {
                     hreflang: None,
                     integrity: None,
                     blocking: None,
+                    onload: None,
                 });
             }
             // The style has neither contents nor src, log an error

@@ -36,6 +36,9 @@ pub(crate) enum Error {
     #[error("Failed to perform hotpatch: {0}")]
     PatchingFailed(#[from] crate::build::PatchError),
 
+    #[error("Failed to read object file: {0}")]
+    ObjectReadFailed(#[from] object::Error),
+
     #[error("{0}")]
     CapturedPanic(String),
 

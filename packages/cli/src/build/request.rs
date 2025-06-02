@@ -961,10 +961,8 @@ impl BuildRequest {
         })
     }
 
-    /// Traverse the target directory and collect all assets from the incremental cache
-    ///
-    /// This uses "known paths" that have stayed relatively stable during cargo's lifetime.
-    /// One day this system might break and we might need to go back to using the linker approach.
+    /// Collect the assets from the final executable and modify the binary in place to point to the right
+    /// hashed asset location.
     fn collect_assets(&self, exe: &Path, ctx: &BuildContext) -> Result<AssetManifest> {
         // walk every file in the incremental cache dir, reading and inserting items into the manifest.
         let mut manifest = AssetManifest::default();
@@ -972,7 +970,7 @@ impl BuildRequest {
         // And then add from the exe directly, just in case it's LTO compiled and has no incremental cache
         if !self.skip_assets {
             ctx.status_extracting_assets();
-            _ = manifest.add_from_object_path(exe);
+            manifest = super::assets::extract_assets_from_file(exe)?;
         }
 
         Ok(manifest)
@@ -1109,8 +1107,7 @@ impl BuildRequest {
 
         // Create a set of all the paths that new files will be bundled to
         let mut keep_bundled_output_paths: HashSet<_> = assets
-            .assets
-            .values()
+            .assets()
             .map(|a| asset_dir.join(a.bundled_path()))
             .collect();
 
@@ -1149,8 +1146,8 @@ impl BuildRequest {
         let mut assets_to_transfer = vec![];
 
         // Queue the bundled assets
-        for (asset, bundled) in &assets.assets {
-            let from = asset.clone();
+        for bundled in assets.assets() {
+            let from = PathBuf::from(bundled.absolute_source_path());
             let to = asset_dir.join(bundled.bundled_path());
 
             // prefer to log using a shorter path relative to the workspace dir by trimming the workspace dir
@@ -1203,8 +1200,10 @@ impl BuildRequest {
         .await
         .map_err(|e| anyhow::anyhow!("A task failed while trying to copy assets: {e}"))??;
 
-        // // Remove the wasm bindgen output directory if it exists
-        // _ = std::fs::remove_dir_all(self.wasm_bindgen_out_dir());
+        // Remove the wasm dir if we packaged it to an "asset"-type app
+        if self.should_bundle_to_asset() {
+            _ = std::fs::remove_dir_all(self.wasm_bindgen_out_dir());
+        }
 
         // Write the version file so we know what version of the optimizer we used
         std::fs::write(self.asset_optimizer_version_file(), crate::VERSION.as_str())?;
@@ -1379,9 +1378,7 @@ impl BuildRequest {
         }
 
         // Now extract the assets from the fat binary
-        artifacts
-            .assets
-            .add_from_object_path(&self.patch_exe(artifacts.time_start))?;
+        self.collect_assets(&self.patch_exe(artifacts.time_start), ctx)?;
 
         // Clean up the temps manually
         // todo: we might want to keep them around for debugging purposes
@@ -1434,6 +1431,14 @@ impl BuildRequest {
                     "--pie".to_string(),
                     "--experimental-pic".to_string(),
                 ]);
+
+                // retain exports so post-processing has hooks to work with
+                for (idx, arg) in original_args.iter().enumerate() {
+                    if *arg == "--export" {
+                        out_args.push(arg.to_string());
+                        out_args.push(original_args[idx + 1].to_string());
+                    }
+                }
             }
 
             // This uses "cc" and these args need to be ld compatible
@@ -1488,6 +1493,7 @@ impl BuildRequest {
                         || arg.starts_with("-m")
                         || arg.starts_with("-Wl,--target=")
                         || arg.starts_with("-Wl,-fuse-ld")
+                        || arg.starts_with("-fuse-ld")
                     {
                         out_args.push(arg.to_string());
                     }
@@ -3163,6 +3169,11 @@ impl BuildRequest {
         self.config.web.pre_compress & release
     }
 
+    /// Check if the wasm output should be bundled to an asset type app.
+    fn should_bundle_to_asset(&self) -> bool {
+        self.release && !self.wasm_split && self.platform == Platform::Web
+    }
+
     /// Bundle the web app
     /// - Run wasm-bindgen
     /// - Bundle split
@@ -3376,11 +3387,6 @@ impl BuildRequest {
             let asset = self.wasm_bindgen_js_output_file();
             format!("wasm/{}", asset.file_name().unwrap().to_str().unwrap())
         };
-
-        // Remove the wasm dir if we packaged it to an "asset"-type app
-        if package_to_asset {
-            std::fs::remove_dir_all(&bindgen_outdir).context("Failed to remove bindgen outdir")?;
-        }
 
         // Write the index.html file with the pre-configured contents we got from pre-rendering
         std::fs::write(
@@ -3921,7 +3927,7 @@ impl BuildRequest {
         }
 
         // Inject any resources from manganis into the head
-        for asset in assets.assets.values() {
+        for asset in assets.assets() {
             let asset_path = asset.bundled_path();
             match asset.options() {
                 AssetOptions::Css(css_options) => {
@@ -3951,7 +3957,11 @@ impl BuildRequest {
 
         // Manually inject the wasm file for preloading. WASM currently doesn't support preloading in the manganis asset system
         let wasm_source_path = self.wasm_bindgen_wasm_output_file();
-        if let Some(wasm_path) = assets.assets.get(&wasm_source_path) {
+        if let Some(wasm_assets) = assets.get_assets_for_source(&wasm_source_path) {
+            let wasm_path = wasm_assets
+                .iter()
+                .next()
+                .expect("There should be exactly one optimized wasm asset");
             let wasm_path = wasm_path.bundled_path();
             head_resources.push_str(&format!(
                     "<link rel=\"preload\" as=\"fetch\" type=\"application/wasm\" href=\"/{{base_path}}/assets/{wasm_path}\" crossorigin>"
