@@ -45,7 +45,7 @@ jobs:
   check-msrv:
     if: github.event.pull_request.draft == false
     name: Check MSRV
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.86.0
@@ -66,7 +66,7 @@ jobs:
   test:
     if: github.event.pull_request.draft == false
     name: Test Suite
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - name: Free Disk Space
@@ -87,7 +87,7 @@ jobs:
   release-test:
     if: github.event.pull_request.draft == false
     name: Test Suite with Optimizations
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - name: Free Disk Space
@@ -108,7 +108,7 @@ jobs:
   fmt:
     if: github.event.pull_request.draft == false
     name: Rustfmt
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.86.0
@@ -122,7 +122,7 @@ jobs:
   docs:
     if: github.event.pull_request.draft == false
     name: Docs
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: awalsh128/cache-apt-pkgs-action@latest
@@ -145,7 +145,7 @@ jobs:
   check:
     if: github.event.pull_request.draft == false
     name: Check
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: awalsh128/cache-apt-pkgs-action@latest
@@ -161,7 +161,7 @@ jobs:
   clippy:
     if: github.event.pull_request.draft == false
     name: Clippy
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: awalsh128/cache-apt-pkgs-action@latest
@@ -181,7 +181,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-24.04, macos-latest]
     steps:
       - uses: actions/checkout@v4
       - uses: nixbuild/nix-quick-install-action@master
@@ -262,8 +262,24 @@ jobs:
               args: "--package dioxus-mobile",
             }
           - {
+              target: x86_64-unknown-linux-gnu,
+              os: ubuntu-24.04,
+              toolchain: "1.86.0",
+              cross: false,
+              command: "build",
+              args: "--all --tests",
+            }
+          - {
+              target: aarch64-unknown-linux-gnu,
+              os: ubuntu-24.04-arm,
+              toolchain: "1.86.0",
+              cross: false,
+              command: "build",
+              args: "--all --tests",
+            }
+          - {
               target: aarch64-linux-android,
-              os: ubuntu-latest,
+              os: ubuntu-24.04,
               toolchain: "1.86.0",
               cross: true,
               command: "build",
@@ -282,6 +298,16 @@ jobs:
       - name: Install nasm for windows (tls)
         if: ${{ matrix.platform.target == 'x86_64-pc-windows-msvc' }}
         uses: ilammy/setup-nasm@v1
+
+      - name: Free Disk Space
+        if: ${{ matrix.platform.os == 'ubuntu-24.04' || matrix.platform.os == 'ubuntu-24.04-arm' }}
+        uses: ./.github/actions/free-disk-space
+
+      - uses: awalsh128/cache-apt-pkgs-action@latest
+        if: ${{ matrix.platform.os == 'ubuntu-24.04' || matrix.platform.os == 'ubuntu-24.04-arm' }}
+        with:
+          packages: libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
+          version: 1.0
 
       - name: Install cross
         if: ${{ matrix.platform.cross == true }}
@@ -335,7 +361,7 @@ jobs:
   # semver:
   #   if: github.event.pull_request.draft == false && !contains(github.event.pull_request.labels.*.name, 'breaking')
   #   name: Semver Check
-  #   runs-on: ubuntu-latest
+  #   runs-on: ubuntu-24.04
   #   steps:
   #     - uses: actions/checkout@v4
   #     - uses: dtolnay/rust-toolchain@1.86.0

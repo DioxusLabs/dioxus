@@ -50,7 +50,6 @@ hyper-rustls = { workspace = true }
 rustls = { workspace = true }
 rayon = { workspace = true }
 futures-channel = { workspace = true }
-target-lexicon = { version = "0.13.2", features = ["serde", "serde_support"] }
 krates = { workspace = true }
 regex = "1.11.1"
 console = "0.15.11"
@@ -61,7 +60,12 @@ axum-server = { workspace = true, features = ["tls-rustls"] }
 axum-extra = { workspace = true, features = ["typed-header"] }
 tower-http = { workspace = true, features = ["full"] }
 proc-macro2 = { workspace = true, features = ["span-locations"] }
-syn = { workspace = true, features = ["full", "extra-traits", "visit", "visit-mut"] }
+syn = { workspace = true, features = [
+    "full",
+    "extra-traits",
+    "visit",
+    "visit-mut",
+] }
 
 headers = "0.4.0"
 walkdir = "2"
@@ -108,6 +112,8 @@ log = { version = "0.4", features = ["max_level_off", "release_max_level_off"] }
 tempfile = "3.13"
 manganis = { workspace = true }
 manganis-core = { workspace = true }
+target-lexicon = { version = "0.13.2", features = ["serde", "serde_support"] }
+wasm-encoder = "0.229.0"
 
 # Extracting data from an executable
 object = { workspace = true, features = ["all"] }
@@ -130,7 +136,6 @@ local-ip-address = "0.6.3"
 dircpy = "0.3.19"
 plist = "1.7.0"
 memoize = "0.5.1"
-wasm-encoder = "0.228.0"
 backtrace = "0.3.74"
 ar = "0.9.0"
 wasm-bindgen-externref-xform = "0.2.100"
