@@ -388,6 +388,7 @@ pub(crate) struct BuildRequest {
     pub(crate) link_args_file: Arc<NamedTempFile>,
     pub(crate) link_err_file: Arc<NamedTempFile>,
     pub(crate) rustc_wrapper_args_file: Arc<NamedTempFile>,
+    pub(crate) base_path: Option<String>,
 }
 
 /// dx can produce different "modes" of a build. A "regular" build is a "base" build. The Fat and Thin
@@ -727,6 +728,7 @@ impl BuildRequest {
             release,
             package,
             skip_assets: args.skip_assets,
+            base_path: args.base_path.clone(),
             wasm_split: args.wasm_split,
             debug_symbols: args.debug_symbols,
             inject_loading_scripts: args.inject_loading_scripts,
@@ -4045,11 +4047,9 @@ r#" <script>
 
     /// Get the base path from the config or None if this is not a web or server build
     pub(crate) fn base_path(&self) -> Option<&str> {
-        self.config
-            .web
-            .app
-            .base_path
+        self.base_path
             .as_deref()
+            .or(self.config.web.app.base_path.as_deref())
             .filter(|_| matches!(self.platform, Platform::Web | Platform::Server))
     }
 
