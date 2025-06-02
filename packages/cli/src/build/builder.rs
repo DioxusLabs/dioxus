@@ -758,10 +758,10 @@ impl AppBuilder {
     /// Check if we need to use https or not, and if so, add the protocol.
     /// Go to the basepath if that's set too.
     fn open_web(&self, address: SocketAddr) {
-        let base_path = self.build.config.web.app.base_path.clone();
+        let base_path = self.build.base_path();
         let https = self.build.config.web.https.enabled.unwrap_or_default();
         let protocol = if https { "https" } else { "http" };
-        let base_path = match base_path.as_deref() {
+        let base_path = match base_path {
             Some(base_path) => format!("/{}", base_path.trim_matches('/')),
             None => "".to_owned(),
         };
@@ -1380,10 +1380,10 @@ We checked the folder: {}
                 // code --open-url "vscode://DioxusLabs.dioxus/debugger?uri=http://127.0.0.1:8080"
                 // todo - debugger could open to the *current* page afaik we don't have a way to have that info
                 let address = server.devserver_address();
-                let base_path = self.build.config.web.app.base_path.clone();
+                let base_path = self.build.base_path();
                 let https = self.build.config.web.https.enabled.unwrap_or_default();
                 let protocol = if https { "https" } else { "http" };
-                let base_path = match base_path.as_deref() {
+                let base_path = match base_path {
                     Some(base_path) => format!("/{}", base_path.trim_matches('/')),
                     None => "".to_owned(),
                 };

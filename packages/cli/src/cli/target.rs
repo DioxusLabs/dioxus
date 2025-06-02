@@ -92,7 +92,7 @@ pub(crate) struct TargetArgs {
     pub(crate) device: Option<bool>,
 
     /// The base path the build will fetch assets relative to. This will override the
-    /// base path set in the `dioxus` config. [default: "."]
+    /// base path set in the `dioxus` config.
     #[clap(long)]
     pub(crate) base_path: Option<String>,
 }
