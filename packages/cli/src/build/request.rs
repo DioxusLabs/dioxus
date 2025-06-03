@@ -3217,7 +3217,7 @@ impl BuildRequest {
         //
         // We leave demangling to false since it's faster and these tools seem to prefer the raw symbols.
         // todo(jon): investigate if the chrome extension needs them demangled or demangles them automatically.
-        let will_wasm_opt = (self.release || self.wasm_split) && self.workspace.wasm_opt.is_some();
+        let will_wasm_opt = self.release || self.wasm_split;
         let keep_debug = self.config.web.wasm_opt.debug
             || self.debug_symbols
             || self.wasm_split
@@ -3265,7 +3265,7 @@ impl BuildRequest {
 
             if !will_wasm_opt {
                 return Err(anyhow::anyhow!(
-                    "Bundle splitting requires wasm-opt to be installed or the CLI to be built with `--features optimizations`. Please install wasm-opt and try again."
+                    "Bundle splitting should automatically enable wasm-opt, but it was not enabled."
                 )
                 .into());
             }
