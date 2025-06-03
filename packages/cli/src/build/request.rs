@@ -1945,20 +1945,6 @@ impl BuildRequest {
     /// cause issues with a custom linker setup. In theory, rust translates most flags to the right
     /// linker format.
     fn select_linker(&self) -> Result<PathBuf, Error> {
-        // Use a custom linker for non-crosscompile and crosscompile targets
-        if matches!(
-            self.triple.operating_system,
-            OperatingSystem::Darwin(_) | OperatingSystem::Linux | OperatingSystem::Windows
-        ) {
-            if let Ok(linker) = std::env::var("DX_HOST_LINKER") {
-                return Ok(PathBuf::from(linker));
-            }
-        }
-
-        if let Ok(linker) = std::env::var("DX_LINKER") {
-            return Ok(PathBuf::from(linker));
-        }
-
         if let Some(linker) = self.custom_linker.clone() {
             return Ok(linker);
         }
