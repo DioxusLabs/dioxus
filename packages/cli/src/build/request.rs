@@ -1693,6 +1693,7 @@ impl BuildRequest {
 
                 let rlib_contents = std::fs::read(rlib)?;
                 let mut reader = ar::Archive::new(std::io::Cursor::new(rlib_contents));
+                let mut keep_linker_rlib = false;
                 while let Some(Ok(object_file)) = reader.next_entry() {
                     let name = std::str::from_utf8(object_file.header().identifier()).unwrap();
                     if name.ends_with(".rmeta") {
@@ -1704,23 +1705,29 @@ impl BuildRequest {
                     }
 
                     // rlibs might contain dlls/sos/lib files which we don't want to include
-                    if name.ends_with(".dll")
-                        || name.ends_with(".so")
-                        || name.ends_with(".lib")
-                        || name.ends_with(".dylib")
-                    {
-                        compiler_rlibs.push(rlib.to_owned());
+                    //
+                    // This catches .dylib, .so, .dll, .lib, .o, etc files that are not compatible with
+                    // our "fat archive" linking process.
+                    //
+                    // We only trust `.rcgu.o` files to make it into the --all_load archive.
+                    // This is a temporary stopgap to prevent issues with libraries that generate
+                    // object files that are not compatible with --all_load.
+                    // see https://github.com/DioxusLabs/dioxus/issues/4237
+                    if !(name.ends_with(".rcgu.o") || name.ends_with(".obj")) {
+                        keep_linker_rlib = true;
                         continue;
-                    }
-
-                    if !(name.ends_with(".o") || name.ends_with(".obj")) {
-                        tracing::debug!("Unknown object file in rlib: {:?}", name);
                     }
 
                     archive_has_contents = true;
                     out_ar
                         .append(&object_file.header().clone(), object_file)
                         .context("Failed to add object file to archive")?;
+                }
+
+                // Some rlibs contain weird artifacts that we don't want to include in the fat archive.
+                // However, we still want them around in the linker in case the regular linker can handle them.
+                if keep_linker_rlib {
+                    compiler_rlibs.push(rlib.clone());
                 }
             }
 
@@ -1798,8 +1805,7 @@ impl BuildRequest {
                 args.push("-Wl,--export-dynamic-symbol,main".to_string());
             }
             LinkerFlavor::Darwin => {
-                // `-all_load` is an extra step to ensure that all symbols are loaded (different than force_load)
-                args.push("-Wl,-all_load".to_string());
+                args.push("-Wl,-exported_symbol,_main".to_string());
             }
             LinkerFlavor::Msvc => {
                 // Prevent alsr from overflowing 32 bits
