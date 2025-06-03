@@ -342,7 +342,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 use target_lexicon::{OperatingSystem, Triple};
-use tempfile::{NamedTempFile, TempDir};
+use tempfile::TempDir;
 use tokio::{io::AsyncBufReadExt, process::Command};
 use toml_edit::Item;
 use uuid::Uuid;
@@ -385,9 +385,6 @@ pub(crate) struct BuildRequest {
     pub(crate) inject_loading_scripts: bool,
     pub(crate) custom_linker: Option<PathBuf>,
     pub(crate) session_cache_dir: Arc<TempDir>,
-    pub(crate) link_args_file: Arc<NamedTempFile>,
-    pub(crate) link_err_file: Arc<NamedTempFile>,
-    pub(crate) rustc_wrapper_args_file: Arc<NamedTempFile>,
     pub(crate) base_path: Option<String>,
 }
 
@@ -665,19 +662,6 @@ impl BuildRequest {
             .or_else(|| cargo_config.build.target_dir.clone())
             .unwrap_or_else(|| workspace.workspace_root().join("target"));
 
-        // Set up some tempfiles so we can do some IPC between us and the linker/rustc wrapper (which is occasionally us!)
-        let link_args_file = Arc::new(
-            NamedTempFile::with_suffix(".txt")
-                .context("Failed to create temporary file for linker args")?,
-        );
-        let link_err_file = Arc::new(
-            NamedTempFile::with_suffix(".txt")
-                .context("Failed to create temporary file for linker args")?,
-        );
-        let rustc_wrapper_args_file = Arc::new(
-            NamedTempFile::with_suffix(".json")
-                .context("Failed to create temporary file for rustc wrapper args")?,
-        );
         let session_cache_dir = Arc::new(
             TempDir::new().context("Failed to create temporary directory for session cache")?,
         );
@@ -690,16 +674,10 @@ impl BuildRequest {
 
         tracing::debug!(
             r#"Log Files:
-                • link_args_file: {},
-                • link_err_file: {},
-                • rustc_wrapper_args_file: {},
                 • session_cache_dir: {}
                 • linker: {:?}
                 • target_dir: {:?}
                 "#,
-            link_args_file.path().display(),
-            link_err_file.path().display(),
-            rustc_wrapper_args_file.path().display(),
             session_cache_dir.path().display(),
             custom_linker,
             target_dir,
@@ -719,10 +697,7 @@ impl BuildRequest {
             enabled_platforms,
             target_dir,
             custom_linker,
-            link_args_file,
-            link_err_file,
             session_cache_dir,
-            rustc_wrapper_args_file,
             extra_rustc_args,
             extra_cargo_args,
             release,
@@ -736,9 +711,20 @@ impl BuildRequest {
     }
 
     pub(crate) async fn build(&self, ctx: &BuildContext) -> Result<BuildArtifacts> {
-        // If we forget to do this, then we won't get the linker args since rust skips the full build
-        // We need to make sure to not react to this though, so the filemap must cache it
-        _ = self.bust_fingerprint(ctx);
+        // Set up some files so we can do some IPC between us and the linker/rustc wrapper (which is occasionally us!)
+        // We make sure to not overwrite them if they already exist
+        let _ = std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .open(self.link_args_file())?;
+        let _ = std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .open(self.link_err_file())?;
+        let _ = std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .open(self.rustc_wrapper_args_file())?;
 
         // Run the cargo build to produce our artifacts
         let mut artifacts = self.cargo_build(ctx).await?;
@@ -901,14 +887,15 @@ impl BuildRequest {
 
         // Accumulate the rustc args from the wrapper, if they exist and can be parsed.
         let mut direct_rustc = RustcArgs::default();
-        if let Ok(res) = std::fs::read_to_string(self.rustc_wrapper_args_file.path()) {
+
+        if let Ok(res) = std::fs::read_to_string(self.rustc_wrapper_args_file()) {
             if let Ok(res) = serde_json::from_str(&res) {
                 direct_rustc = res;
             }
         }
 
         // If there's any warnings from the linker, we should print them out
-        if let Ok(linker_warnings) = std::fs::read_to_string(self.link_err_file.path()) {
+        if let Ok(linker_warnings) = std::fs::read_to_string(self.link_err_file()) {
             if !linker_warnings.is_empty() {
                 if output_location.is_none() {
                     tracing::error!("Linker warnings: {}", linker_warnings);
@@ -919,7 +906,7 @@ impl BuildRequest {
         }
 
         // Collect the linker args from the and update the rustc args
-        direct_rustc.link_args = std::fs::read_to_string(self.link_args_file.path())
+        direct_rustc.link_args = std::fs::read_to_string(self.link_args_file())
             .context("Failed to read link args from file")?
             .lines()
             .map(|s| s.to_string())
@@ -928,7 +915,7 @@ impl BuildRequest {
         let exe = output_location.context("Cargo build failed - no output location. Toggle tracing mode (press `t`) for more information.")?;
 
         // Fat builds need to be linked with the fat linker. Would also like to link here for thin builds
-        if matches!(ctx.mode, BuildMode::Fat) {
+        if matches!(ctx.mode, BuildMode::Fat) && units_compiled > 0 {
             let link_start = SystemTime::now();
             self.run_fat_link(ctx, &exe, &direct_rustc).await?;
             tracing::debug!(
@@ -1231,9 +1218,9 @@ impl BuildRequest {
 
         tracing::debug!(
             "Original builds for patch: {}",
-            self.link_args_file.path().display()
+            self.link_args_file().display()
         );
-        let raw_args = std::fs::read_to_string(self.link_args_file.path())
+        let raw_args = std::fs::read_to_string(self.link_args_file())
             .context("Failed to read link args from file")?;
         let args = raw_args.lines().collect::<Vec<_>>();
 
@@ -2058,7 +2045,7 @@ impl BuildRequest {
                 if ctx.mode == BuildMode::Fat {
                     cmd.env(
                         DX_RUSTC_WRAPPER_ENV_VAR,
-                        dunce::canonicalize(self.rustc_wrapper_args_file.path())
+                        dunce::canonicalize(self.rustc_wrapper_args_file())
                             .unwrap()
                             .display()
                             .to_string(),
@@ -2257,8 +2244,8 @@ impl BuildRequest {
             LinkAction {
                 triple: self.triple.clone(),
                 linker: self.custom_linker.clone(),
-                link_err_file: dunce::canonicalize(self.link_err_file.path())?,
-                link_args_file: dunce::canonicalize(self.link_args_file.path())?,
+                link_err_file: dunce::canonicalize(self.link_err_file())?,
+                link_args_file: dunce::canonicalize(self.link_args_file())?,
             }
             .write_env_vars(&mut env_vars)?;
         }
@@ -2489,6 +2476,18 @@ impl BuildRequest {
             // todo: maybe this should be called AppRun?
             Platform::Linux => self.executable_name().to_string(),
         }
+    }
+
+    fn link_args_file(&self) -> PathBuf {
+        self.platform_dir().join("link_args.txt")
+    }
+
+    fn link_err_file(&self) -> PathBuf {
+        self.platform_dir().join("link_err.txt")
+    }
+
+    fn rustc_wrapper_args_file(&self) -> PathBuf {
+        self.platform_dir().join("rustc_wrapper_args.txt")
     }
 
     /// Assemble the android app dir.
@@ -3797,28 +3796,6 @@ impl BuildRequest {
     /// Eventually, we want to check for the prereqs for wry/tao as outlined by tauri:
     ///     <https://tauri.app/start/prerequisites/>
     async fn verify_linux_tooling(&self) -> Result<()> {
-        Ok(())
-    }
-
-    /// update the mtime of the "main" file to bust the fingerprint, forcing rustc to recompile it.
-    ///
-    /// This prevents rustc from using the cached version of the binary, which can cause issues
-    /// with our hotpatching setup since it uses linker interception.
-    ///
-    /// This is sadly a hack. I think there might be other ways of busting the fingerprint (rustc wrapper?)
-    /// but that would require relying on cargo internals.
-    ///
-    /// This might stop working if/when cargo stabilizes contents-based fingerprinting.
-    fn bust_fingerprint(&self, ctx: &BuildContext) -> Result<()> {
-        if !matches!(ctx.mode, BuildMode::Thin { .. }) {
-            std::fs::File::open(&self.crate_target.src_path)?.set_modified(SystemTime::now())?;
-
-            // read and write the file to update the mtime
-            if cfg!(target_os = "windows") {
-                let contents = std::fs::read_to_string(&self.crate_target.src_path)?;
-                _ = std::fs::write(&self.crate_target.src_path, contents);
-            }
-        }
         Ok(())
     }
 
