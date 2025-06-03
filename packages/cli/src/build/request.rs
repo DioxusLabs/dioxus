@@ -1713,9 +1713,17 @@ impl BuildRequest {
                         continue;
                     }
 
-                    if !(name.ends_with(".o") || name.ends_with(".obj")) {
+                    // We only trust `.rcgu.o` files to make it into the --all_load archive.
+                    // This is a temporary stopgap to prevent issues with libraries that generate
+                    // object files that are not compatible with --all_load.
+                    // see https://github.com/DioxusLabs/dioxus/issues/4237
+                    if !(name.ends_with(".rcgu.o") || name.ends_with(".obj")) {
                         tracing::debug!("Unknown object file in rlib: {:?}", name);
+                        compiler_rlibs.push(rlib.to_owned());
+                        continue;
                     }
+
+                    tracing::trace!("{:?}", name);
 
                     archive_has_contents = true;
                     out_ar
@@ -1798,8 +1806,7 @@ impl BuildRequest {
                 args.push("-Wl,--export-dynamic-symbol,main".to_string());
             }
             LinkerFlavor::Darwin => {
-                // `-all_load` is an extra step to ensure that all symbols are loaded (different than force_load)
-                args.push("-Wl,-all_load".to_string());
+                args.push("-Wl,-exported_symbol,_main".to_string());
             }
             LinkerFlavor::Msvc => {
                 // Prevent alsr from overflowing 32 bits
