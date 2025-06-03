@@ -1718,8 +1718,6 @@ impl BuildRequest {
                         continue;
                     }
 
-                    tracing::trace!("{:?}", name);
-
                     archive_has_contents = true;
                     out_ar
                         .append(&object_file.header().clone(), object_file)
