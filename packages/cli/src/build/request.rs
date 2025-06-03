@@ -1726,7 +1726,6 @@ impl BuildRequest {
 
                 // Some rlibs contain weird artifacts that we don't want to include in the fat archive.
                 // However, we still want them around in the linker in case the regular linker can handle them.
-                // For example, dylibs,
                 if keep_linker_rlib {
                     compiler_rlibs.push(rlib.clone());
                 }
