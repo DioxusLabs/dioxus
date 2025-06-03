@@ -3217,8 +3217,7 @@ impl BuildRequest {
         //
         // We leave demangling to false since it's faster and these tools seem to prefer the raw symbols.
         // todo(jon): investigate if the chrome extension needs them demangled or demangles them automatically.
-        let will_wasm_opt = (self.release || self.wasm_split)
-            && (self.workspace.wasm_opt.is_some() || cfg!(feature = "optimizations"));
+        let will_wasm_opt = (self.release || self.wasm_split) && self.workspace.wasm_opt.is_some();
         let keep_debug = self.config.web.wasm_opt.debug
             || self.debug_symbols
             || self.wasm_split
