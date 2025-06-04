@@ -1,9 +1,9 @@
 use super::{check::collect_rs_files, *};
 use crate::Workspace;
 use anyhow::Context;
-use dioxus_autofmt::{IndentOptions, IndentType};
+use dioxus_autofmt::{IndentOptions, IndentType, TailwindSorter};
 use rayon::prelude::*;
-use std::{borrow::Cow, fs, path::Path};
+use std::{fs, path::Path};
 
 // For reference, the rustfmt main.rs file
 // https://github.com/rust-lang/rustfmt/blob/master/src/bin/main.rs
@@ -48,37 +48,62 @@ impl Autoformat {
             ..
         } = self;
 
+        // We need to always load the crate info to determine if Tailwind is in use,
+        // since we need to load its CSS to sort class names.
+        let workspace = Workspace::current().await?;
+        let dx_crate = workspace
+            .find_main_package(self.package)
+            .context("Failed to find package")?;
+        let tailwind_css = workspace
+            .load_dioxus_config(dx_crate)?
+            .and_then(|config| config.application.tailwind_output);
+
+        let tailwind_sorter = tailwind_css
+            .and_then(|tailwind_css| {
+                tracing::debug!("Found Tailwind CSS at {}", tailwind_css.display());
+                fs::read_to_string(&tailwind_css)
+                    .map_err(|_e| {
+                        tracing::warn!(
+                            "Failed to read Tailwind CSS file at {}",
+                            tailwind_css.display()
+                        );
+                    })
+                    .ok()
+            })
+            .and_then(|css| TailwindSorter::new(&css));
+
         if let Some(file) = file {
             // Format a single file
-            refactor_file(file, split_line_attributes, format_rust_code)?;
+            refactor_file(
+                file,
+                split_line_attributes,
+                format_rust_code,
+                tailwind_sorter.as_ref(),
+            )?;
         } else if let Some(raw) = raw {
             // Format raw text.
             let indent = indentation_for(".", self.split_line_attributes)?;
-            if let Some(inner) = dioxus_autofmt::fmt_block(&raw, 0, indent) {
+            if let Some(inner) =
+                dioxus_autofmt::fmt_block(&raw, 0, indent, tailwind_sorter.as_ref())
+            {
                 println!("{}", inner);
             } else {
                 return Err("error formatting codeblock".into());
             }
         } else {
             // Default to formatting the project.
-            let crate_dir = if let Some(package) = self.package {
-                let workspace = Workspace::current().await?;
-                let dx_crate = workspace
-                    .find_main_package(Some(package))
-                    .context("Failed to find package")?;
-                workspace.krates[dx_crate]
-                    .manifest_path
-                    .parent()
-                    .unwrap()
-                    .to_path_buf()
-                    .into()
-            } else {
-                Cow::Borrowed(Path::new("."))
-            };
-
-            if let Err(e) =
-                autoformat_project(check, split_line_attributes, format_rust_code, crate_dir)
-            {
+            let crate_dir = workspace.krates[dx_crate]
+                .manifest_path
+                .parent()
+                .unwrap()
+                .to_path_buf();
+            if let Err(e) = autoformat_project(
+                check,
+                split_line_attributes,
+                format_rust_code,
+                crate_dir,
+                tailwind_sorter.as_ref(),
+            ) {
                 return Err(format!("error formatting project: {}", e).into());
             }
         }
@@ -91,6 +116,7 @@ fn refactor_file(
     file: String,
     split_line_attributes: bool,
     format_rust_code: bool,
+    sorter: Option<&TailwindSorter>,
 ) -> Result<(), Error> {
     let indent = indentation_for(".", split_line_attributes)?;
     let file_content = if file == "-" {
@@ -109,7 +135,7 @@ fn refactor_file(
     }
 
     let Ok(Ok(edits)) =
-        syn::parse_file(&s).map(|file| dioxus_autofmt::try_fmt_file(&s, &file, indent))
+        syn::parse_file(&s).map(|file| dioxus_autofmt::try_fmt_file(&s, &file, indent, sorter))
     else {
         return Err(format!("failed to format file: {}", s).into());
     };
@@ -131,6 +157,7 @@ fn format_file(
     path: impl AsRef<Path>,
     indent: IndentOptions,
     format_rust_code: bool,
+    sorter: Option<&TailwindSorter>,
 ) -> Result<usize> {
     let mut contents = fs::read_to_string(&path)?;
     let mut if_write = false;
@@ -145,7 +172,7 @@ fn format_file(
 
     let parsed = syn::parse_file(&contents)
         .map_err(|err| Error::Parse(format!("Failed to parse file: {}", err)))?;
-    let edits = dioxus_autofmt::try_fmt_file(&contents, &parsed, indent)
+    let edits = dioxus_autofmt::try_fmt_file(&contents, &parsed, indent, sorter)
         .map_err(|err| Error::Parse(format!("Failed to format file: {}", err)))?;
     let len = edits.len();
 
@@ -171,13 +198,10 @@ fn autoformat_project(
     split_line_attributes: bool,
     format_rust_code: bool,
     dir: impl AsRef<Path>,
+    sorter: Option<&TailwindSorter>,
 ) -> Result<()> {
     let mut files_to_format = vec![];
     collect_rs_files(dir.as_ref(), &mut files_to_format);
-
-    if files_to_format.is_empty() {
-        return Ok(());
-    }
 
     if files_to_format.is_empty() {
         return Ok(());
@@ -188,7 +212,7 @@ fn autoformat_project(
     let counts = files_to_format
         .into_par_iter()
         .map(|path| {
-            let res = format_file(&path, indent.clone(), format_rust_code);
+            let res = format_file(&path, indent.clone(), format_rust_code, sorter);
             match res {
                 Ok(cnt) => Some(cnt),
                 Err(err) => {
