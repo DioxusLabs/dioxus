@@ -388,6 +388,7 @@ pub(crate) struct BuildRequest {
     pub(crate) link_args_file: Arc<NamedTempFile>,
     pub(crate) link_err_file: Arc<NamedTempFile>,
     pub(crate) rustc_wrapper_args_file: Arc<NamedTempFile>,
+    pub(crate) base_path: Option<String>,
 }
 
 /// dx can produce different "modes" of a build. A "regular" build is a "base" build. The Fat and Thin
@@ -727,6 +728,7 @@ impl BuildRequest {
             release,
             package,
             skip_assets: args.skip_assets,
+            base_path: args.base_path.clone(),
             wasm_split: args.wasm_split,
             debug_symbols: args.debug_symbols,
             inject_loading_scripts: args.inject_loading_scripts,
@@ -1494,6 +1496,7 @@ impl BuildRequest {
                         || arg.starts_with("-Wl,--target=")
                         || arg.starts_with("-Wl,-fuse-ld")
                         || arg.starts_with("-fuse-ld")
+                        || arg.contains("-ld-path")
                     {
                         out_args.push(arg.to_string());
                     }
@@ -1691,6 +1694,7 @@ impl BuildRequest {
 
                 let rlib_contents = std::fs::read(rlib)?;
                 let mut reader = ar::Archive::new(std::io::Cursor::new(rlib_contents));
+                let mut keep_linker_rlib = false;
                 while let Some(Ok(object_file)) = reader.next_entry() {
                     let name = std::str::from_utf8(object_file.header().identifier()).unwrap();
                     if name.ends_with(".rmeta") {
@@ -1702,23 +1706,29 @@ impl BuildRequest {
                     }
 
                     // rlibs might contain dlls/sos/lib files which we don't want to include
-                    if name.ends_with(".dll")
-                        || name.ends_with(".so")
-                        || name.ends_with(".lib")
-                        || name.ends_with(".dylib")
-                    {
-                        compiler_rlibs.push(rlib.to_owned());
+                    //
+                    // This catches .dylib, .so, .dll, .lib, .o, etc files that are not compatible with
+                    // our "fat archive" linking process.
+                    //
+                    // We only trust `.rcgu.o` files to make it into the --all_load archive.
+                    // This is a temporary stopgap to prevent issues with libraries that generate
+                    // object files that are not compatible with --all_load.
+                    // see https://github.com/DioxusLabs/dioxus/issues/4237
+                    if !(name.ends_with(".rcgu.o") || name.ends_with(".obj")) {
+                        keep_linker_rlib = true;
                         continue;
-                    }
-
-                    if !(name.ends_with(".o") || name.ends_with(".obj")) {
-                        tracing::debug!("Unknown object file in rlib: {:?}", name);
                     }
 
                     archive_has_contents = true;
                     out_ar
                         .append(&object_file.header().clone(), object_file)
                         .context("Failed to add object file to archive")?;
+                }
+
+                // Some rlibs contain weird artifacts that we don't want to include in the fat archive.
+                // However, we still want them around in the linker in case the regular linker can handle them.
+                if keep_linker_rlib {
+                    compiler_rlibs.push(rlib.clone());
                 }
             }
 
@@ -1796,8 +1806,7 @@ impl BuildRequest {
                 args.push("-Wl,--export-dynamic-symbol,main".to_string());
             }
             LinkerFlavor::Darwin => {
-                // `-all_load` is an extra step to ensure that all symbols are loaded (different than force_load)
-                args.push("-Wl,-all_load".to_string());
+                args.push("-Wl,-exported_symbol,_main".to_string());
             }
             LinkerFlavor::Msvc => {
                 // Prevent alsr from overflowing 32 bits
@@ -1937,20 +1946,6 @@ impl BuildRequest {
     /// cause issues with a custom linker setup. In theory, rust translates most flags to the right
     /// linker format.
     fn select_linker(&self) -> Result<PathBuf, Error> {
-        // Use a custom linker for non-crosscompile and crosscompile targets
-        if matches!(
-            self.triple.operating_system,
-            OperatingSystem::Darwin(_) | OperatingSystem::Linux | OperatingSystem::Windows
-        ) {
-            if let Ok(linker) = std::env::var("DX_HOST_LINKER") {
-                return Ok(PathBuf::from(linker));
-            }
-        }
-
-        if let Ok(linker) = std::env::var("DX_LINKER") {
-            return Ok(PathBuf::from(linker));
-        }
-
         if let Some(linker) = self.custom_linker.clone() {
             return Ok(linker);
         }
@@ -4045,11 +4040,9 @@ r#" <script>
 
     /// Get the base path from the config or None if this is not a web or server build
     pub(crate) fn base_path(&self) -> Option<&str> {
-        self.config
-            .web
-            .app
-            .base_path
+        self.base_path
             .as_deref()
+            .or(self.config.web.app.base_path.as_deref())
             .filter(|_| matches!(self.platform, Platform::Web | Platform::Server))
     }
 

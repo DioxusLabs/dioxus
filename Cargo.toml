@@ -316,7 +316,7 @@ tao = { version = "0.33.0", features = ["rwh_05"] }
 webbrowser = "1.0.3"
 infer = "0.19.0"
 dunce = "1.0.5"
-urlencoding = "2.1.3"
+percent-encoding = "2.3.1"
 global-hotkey = "0.7.0"
 rfd = { version = "0.15.2", default-features = false }
 muda = "0.16.1"
