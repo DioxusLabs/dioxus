@@ -196,7 +196,7 @@ pub async fn connect_to_database() -> SqlitePool {
 pub type Session =
     axum_session_auth::AuthSession<crate::auth::User, i64, SessionSqlitePool, sqlx::SqlitePool>;
 
-pub async fn get_session() -> Result<Session, ServerFnError> {
+pub async fn get_session() -> ServerFnResult<Session> {
     extract::<Session, _>()
         .await
         .map_err(|_| ServerFnError::new("AuthSessionLayer was not found"))

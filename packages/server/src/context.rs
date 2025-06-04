@@ -48,7 +48,7 @@ impl AtomicResponsePartsModified {
 /// ```rust, no_run
 /// # use dioxus::prelude::*;
 /// #[server]
-/// async fn read_headers() -> Result<(), ServerFnError> {
+/// async fn read_headers() -> ServerFnResult {
 ///     let server_context = server_context();
 ///     let headers: http::HeaderMap = server_context.extract().await?;
 ///     println!("{:?}", headers);
@@ -141,7 +141,7 @@ mod server_fn_impl {
         ///     .launch(app);
         ///
         /// #[server]
-        /// async fn read_context() -> Result<u32, ServerFnError> {
+        /// async fn read_context() -> ServerFnResult<u32> {
         ///     // You can extract values from the server context with the `extract` function
         ///     let FromContext(value) = extract().await?;
         ///     Ok(value)
@@ -201,7 +201,7 @@ mod server_fn_impl {
         /// ```rust, no_run
         /// # use dioxus::prelude::*;
         /// #[server]
-        /// async fn set_headers() -> Result<(), ServerFnError> {
+        /// async fn set_headers() -> ServerFnResult {
         ///     let server_context = server_context();
         ///     let response_parts = server_context.response_parts();
         ///     let cookies = response_parts
@@ -225,7 +225,7 @@ mod server_fn_impl {
         /// ```rust, no_run
         /// # use dioxus::prelude::*;
         /// #[server]
-        /// async fn set_headers() -> Result<(), ServerFnError> {
+        /// async fn set_headers() -> ServerFnResult {
         ///     let server_context = server_context();
         ///     server_context.headers_mut()
         ///         .insert("Cookie", http::HeaderValue::from_static("dioxus=fullstack"));
@@ -247,7 +247,7 @@ mod server_fn_impl {
         /// ```rust, no_run
         /// # use dioxus::prelude::*;
         /// #[server]
-        /// async fn set_status() -> Result<(), ServerFnError> {
+        /// async fn set_status() -> ServerFnResult {
         ///     let server_context = server_context();
         ///     *server_context.status_mut() = http::StatusCode::INTERNAL_SERVER_ERROR;
         ///     Ok(())
@@ -268,7 +268,7 @@ mod server_fn_impl {
         /// ```rust, no_run
         /// # use dioxus::prelude::*;
         /// #[server]
-        /// async fn set_version() -> Result<(), ServerFnError> {
+        /// async fn set_version() -> ServerFnResult {
         ///     let server_context = server_context();
         ///     *server_context.version_mut() = http::Version::HTTP_2;
         ///     Ok(())
@@ -289,7 +289,7 @@ mod server_fn_impl {
         /// ```rust, no_run
         /// # use dioxus::prelude::*;
         /// #[server]
-        /// async fn set_version() -> Result<(), ServerFnError> {
+        /// async fn set_version() -> ServerFnResult {
         ///     let server_context = server_context();
         ///     *server_context.version_mut() = http::Version::HTTP_2;
         ///     Ok(())
@@ -323,7 +323,7 @@ mod server_fn_impl {
         /// ```rust, no_run
         /// # use dioxus::prelude::*;
         /// #[server]
-        /// async fn read_headers() -> Result<(), ServerFnError> {
+        /// async fn read_headers() -> ServerFnResult {
         ///     let server_context = server_context();
         ///     let request_parts = server_context.request_parts();
         ///     let id: &i32 = request_parts
@@ -347,7 +347,7 @@ mod server_fn_impl {
         /// ```rust, no_run
         /// # use dioxus::prelude::*;
         /// #[server]
-        /// async fn read_headers() -> Result<(), ServerFnError> {
+        /// async fn read_headers() -> ServerFnResult {
         ///     let server_context = server_context();
         ///     let id: i32 = server_context.request_parts_mut()
         ///         .extensions
@@ -370,7 +370,7 @@ mod server_fn_impl {
         /// ```rust, no_run
         /// # use dioxus::prelude::*;
         /// #[server]
-        /// async fn read_headers() -> Result<(), ServerFnError> {
+        /// async fn read_headers() -> ServerFnResult {
         ///     let server_context = server_context();
         ///     let headers: http::HeaderMap = server_context.extract().await?;
         ///     println!("{:?}", headers);
@@ -526,7 +526,7 @@ impl<T: 'static> std::error::Error for NotFoundInServerContext<T> {}
 ///     .launch(app);
 ///
 /// #[server]
-/// async fn read_context() -> Result<u32, ServerFnError> {
+/// async fn read_context() -> ServerFnResult<u32> {
 ///     // You can extract values from the server context with the `extract` function
 ///     let FromContext(value) = extract().await?;
 ///     Ok(value)
