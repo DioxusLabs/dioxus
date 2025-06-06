@@ -5,12 +5,15 @@
 //! own context, root elements, etc.
 
 use dioxus::prelude::*;
-use dioxus::{desktop::Config, desktop::WindowCloseBehaviour};
+use dioxus::{desktop::Config, desktop::DefaultWindowCloseBehaviour};
 
 fn main() {
     dioxus::LaunchBuilder::desktop()
-        // We can choose the close behavior of the last window to hide. See WindowCloseBehaviour for more options.
-        .with_cfg(Config::new().with_close_behaviour(WindowCloseBehaviour::LastWindowHides))
+        // We can choose the close behavior of the last window to hide. See DefaultWindowCloseBehaviour for more options.
+        .with_cfg(
+            Config::new()
+                .with_default_window_close_behaviour(DefaultWindowCloseBehaviour::LastWindowHides),
+        )
         .launch(app);
 }
 
