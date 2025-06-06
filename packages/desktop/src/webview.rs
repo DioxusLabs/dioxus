@@ -22,7 +22,7 @@ use futures_util::{pin_mut, FutureExt};
 use std::sync::Arc;
 use std::{cell::OnceCell, time::Duration};
 use std::{rc::Rc, task::Waker};
-use wry::{DragDropEvent, RequestAsyncResponder, WebContext, WebViewBuilder};
+use wry::{DragDropEvent, RequestAsyncResponder, WebContext, WebViewBuilder, WebViewId};
 
 #[derive(Clone)]
 pub(crate) struct WebviewEdits {
@@ -235,7 +235,7 @@ impl WebviewInstance {
                 asset_handlers,
                 edits
             ];
-            move |request, responder: RequestAsyncResponder| {
+            move |_id: WebViewId, request, responder: RequestAsyncResponder| {
                 protocol::desktop_handler(
                     request,
                     asset_handlers.clone(),
@@ -303,33 +303,7 @@ impl WebviewInstance {
             }
         };
 
-        #[cfg(any(
-            target_os = "windows",
-            target_os = "macos",
-            target_os = "ios",
-            target_os = "android"
-        ))]
-        let mut webview = if cfg.as_child_window {
-            WebViewBuilder::new_as_child(&window)
-        } else {
-            WebViewBuilder::new(&window)
-        };
-
-        #[cfg(not(any(
-            target_os = "windows",
-            target_os = "macos",
-            target_os = "ios",
-            target_os = "android"
-        )))]
-        let mut webview = {
-            use tao::platform::unix::WindowExtUnix;
-            use wry::WebViewBuilderExtUnix;
-            let vbox = window.default_vbox().unwrap();
-            WebViewBuilder::new_gtk(vbox)
-        };
-
-        webview = webview
-            .with_web_context(&mut web_context)
+        let mut webview = WebViewBuilder::with_web_context(&mut web_context)
             .with_bounds(wry::Rect {
                 position: wry::dpi::Position::Logical(wry::dpi::LogicalPosition::new(0.0, 0.0)),
                 size: wry::dpi::Size::Physical(wry::dpi::PhysicalSize::new(
@@ -407,7 +381,31 @@ impl WebviewInstance {
             None
         };
 
-        let webview = webview.build().unwrap();
+        #[cfg(any(
+            target_os = "windows",
+            target_os = "macos",
+            target_os = "ios",
+            target_os = "android"
+        ))]
+        let webview = if cfg.as_child_window {
+            webview.build_as_child(&window)
+        } else {
+            webview.build(&window)
+        };
+
+        #[cfg(not(any(
+            target_os = "windows",
+            target_os = "macos",
+            target_os = "ios",
+            target_os = "android"
+        )))]
+        let webview = {
+            use tao::platform::unix::WindowExtUnix;
+            use wry::WebViewBuilderExtUnix;
+            let vbox = window.default_vbox().unwrap();
+            webview.build_gtk(vbox).unwrap()
+        };
+
         let desktop_context = Rc::from(DesktopService::new(
             webview,
             window,
