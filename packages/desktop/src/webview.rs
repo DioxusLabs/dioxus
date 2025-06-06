@@ -403,8 +403,9 @@ impl WebviewInstance {
             use tao::platform::unix::WindowExtUnix;
             use wry::WebViewBuilderExtUnix;
             let vbox = window.default_vbox().unwrap();
-            webview.build_gtk(vbox).unwrap()
+            webview.build_gtk(vbox)
         };
+        let webview = webview.unwrap();
 
         let desktop_context = Rc::from(DesktopService::new(
             webview,
