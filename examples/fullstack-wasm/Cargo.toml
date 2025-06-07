@@ -1,0 +1,13 @@
+[package]
+name = "fullstack-wasm"
+edition = "2024"
+version.workspace = true
+
+[features]
+web = ["dioxus/web"]
+server = ["dioxus/server-core"]
+
+[dependencies]
+dioxus = { workspace = true, features = [
+	"fullstack",
+] }

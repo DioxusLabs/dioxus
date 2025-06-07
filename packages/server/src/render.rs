@@ -658,11 +658,11 @@ impl FullstackHTMLTemplate {
 
         to.write_str(&index.close_head)?;
 
-        // // #[cfg(feature = "document")]
-        // {
-        use dioxus_interpreter_js::INITIALIZE_STREAMING_JS;
-        write!(to, "<script>{INITIALIZE_STREAMING_JS}</script>")?;
-        // }
+        #[cfg(feature = "document")]
+        {
+            use dioxus_interpreter_js::INITIALIZE_STREAMING_JS;
+            write!(to, "<script>{INITIALIZE_STREAMING_JS}</script>")?;
+        }
 
         Ok(())
     }
