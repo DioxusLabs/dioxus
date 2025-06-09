@@ -403,11 +403,22 @@ pub(crate) fn public_path() -> PathBuf {
     }
 
     // The CLI always bundles static assets into the exe/public directory
-    std::env::current_exe()
-        .expect("Failed to get current executable path")
-        .parent()
-        .unwrap()
-        .join("public")
+    // On WASM targets, current_exe() is not supported, so fallback to a default path
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        std::env::current_exe()
+            .expect("Failed to get current executable path")
+            .parent()
+            .unwrap()
+            .join("public")
+    }
+    
+    #[cfg(target_arch = "wasm32")]
+    {
+        // For WASM targets (like Cloudflare Workers), use a default public path
+        // This should typically be set via DIOXUS_PUBLIC_PATH environment variable
+        PathBuf::from("public")
+    }
 }
 
 /// An error that can occur when loading the index.html file

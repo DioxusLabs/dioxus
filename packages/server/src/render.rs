@@ -26,8 +26,33 @@ struct PendingSuspenseBoundary {
     children: Vec<ScopeId>,
 }
 
-/// Spawn a task in the background. If wasm is enabled, this will use the single threaded tokio runtime
-fn spawn_platform<Fut>(f: impl FnOnce() -> Fut + Send + 'static) -> JoinHandle<Fut::Output>
+// Define a platform-specific task handle type
+#[cfg(not(target_arch = "wasm32"))]
+type PlatformTaskHandle<T> = JoinHandle<T>;
+
+#[cfg(target_arch = "wasm32")]
+type PlatformTaskHandle<T> = WasmTaskHandle<T>;
+
+#[cfg(target_arch = "wasm32")]
+struct WasmTaskHandle<T> {
+    _phantom: std::marker::PhantomData<T>,
+}
+
+#[cfg(target_arch = "wasm32")]
+impl<T> WasmTaskHandle<T> {
+    fn new() -> Self {
+        Self {
+            _phantom: std::marker::PhantomData,
+        }
+    }
+    
+    fn abort(&self) {
+        // No-op for WASM since tasks run to completion
+    }
+}
+
+/// Spawn a task in the background. If wasm is enabled, this will spawn using wasm_bindgen_futures
+fn spawn_platform<Fut>(f: impl FnOnce() -> Fut + Send + 'static) -> PlatformTaskHandle<Fut::Output>
 where
     Fut: Future + 'static,
     Fut::Output: Send + 'static,
@@ -47,7 +72,13 @@ where
     }
     #[cfg(target_arch = "wasm32")]
     {
-        tokio::task::spawn_local(f())
+        // For WASM, spawn the task using wasm_bindgen_futures
+        wasm_bindgen_futures::spawn_local(async move {
+            f().await;
+        });
+        
+        // Return a dummy handle since WASM tasks run to completion
+        WasmTaskHandle::new()
     }
 }
 
@@ -131,7 +162,7 @@ impl SsrRendererPool {
             receiver: futures_channel::mpsc::Receiver<
                 Result<String, dioxus_isrg::IncrementalRendererError>,
             >,
-            cancel_task: Option<tokio::task::JoinHandle<()>>,
+            cancel_task: Option<PlatformTaskHandle<()>>,
         }
 
         impl Stream for ReceiverWithDrop {

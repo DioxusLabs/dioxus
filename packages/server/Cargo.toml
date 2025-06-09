@@ -73,6 +73,8 @@ dashmap = "6.1.0"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 tokio = { workspace = true, features = ["rt", "sync", "macros"] }
+wasm-bindgen-futures = "0.4"
+futures-executor = "0.3"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { workspace = true, features = ["rt", "sync", "rt-multi-thread", "macros", "net"] }

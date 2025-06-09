@@ -1,7 +1,13 @@
 [package]
 name = "fullstack-wasm"
-edition = "2024"
+edition = "2021"
 version.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false
 
 [features]
 web = ["dioxus/web"]
@@ -11,3 +17,9 @@ server = ["dioxus/server-core"]
 dioxus = { workspace = true, features = [
 	"fullstack",
 ] }
+worker = { version = "0.5.0", features = ["http", "axum"] }
+console_error_panic_hook = { version = "0.1.1" }
+axum = { version = "0.8", default-features = false, features = ["http1", "http2", "json"] }
+tower-service = "0.3.2"
+
+wasm-bindgen = { workspace = true }

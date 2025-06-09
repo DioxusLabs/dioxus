@@ -97,6 +97,7 @@ server = [
 server-core = [
     "server_fn/axum-no-default",
     "dioxus_server_macro/axum",
+    "server_fn/axum-no-default",
     "server_fn/reqwest-no-ws",
     "server_fn/ssr",
     "dioxus_server_macro/reqwest",

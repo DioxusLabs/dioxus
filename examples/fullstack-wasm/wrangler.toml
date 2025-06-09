@@ -1,0 +1,8 @@
+name = "cf-worker"
+main = "build/worker/shim.mjs"
+compatibility_date = "2025-06-08"
+
+[build]
+command = "dx build --release --platform web --features web --target wasm32-unknown-unknown && cargo install -q worker-build && worker-build --features server"
+# without this, wrangler infinitely rebuilds the worker though nothing changed
+watch_dir = ["dummy"]
