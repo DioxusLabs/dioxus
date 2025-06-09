@@ -3,6 +3,9 @@
 use dioxus_autofmt::{FormattedBlock, IndentOptions, IndentType};
 use wasm_bindgen::prelude::*;
 
+// TODO: Can we add Tailwind class sorting to these functions?
+// We would need access to the project's Dioxus.toml.
+
 #[wasm_bindgen]
 pub fn format_rsx(raw: String, use_tabs: bool, indent_size: usize) -> String {
     let block = dioxus_autofmt::fmt_block(
@@ -17,6 +20,7 @@ pub fn format_rsx(raw: String, use_tabs: bool, indent_size: usize) -> String {
             indent_size,
             false,
         ),
+        None,
     );
     block.unwrap()
 }
@@ -40,6 +44,7 @@ pub fn format_selection(
             indent_size,
             false,
         ),
+        None,
     );
     block.unwrap()
 }
@@ -77,7 +82,7 @@ pub fn format_file(contents: String, use_tabs: bool, indent_size: usize) -> Form
     );
 
     let Ok(Ok(_edits)) = syn::parse_file(&contents)
-        .map(|file| dioxus_autofmt::try_fmt_file(&contents, &file, options))
+        .map(|file| dioxus_autofmt::try_fmt_file(&contents, &file, options, None))
     else {
         return FormatBlockInstance {
             new: contents,
