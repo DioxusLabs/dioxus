@@ -58,7 +58,7 @@ fn App() -> Element {
 }
 
 #[server]
-async fn get_meaning(of: String) -> Result<Option<u32>, ServerFnError> {
+async fn get_meaning(of: String) -> ServerFnResult<Option<u32>> {
     Ok(of.contains("life").then(|| 42))
 }
 ```
@@ -131,7 +131,7 @@ fn App() -> Element {
 }
 
 #[server]
-async fn get_meaning(of: String) -> Result<Option<u32>, ServerFnError> {
+async fn get_meaning(of: String) -> ServerFnResult<Option<u32>> {
     Ok(of.contains("life").then(|| 42))
 }
 ```

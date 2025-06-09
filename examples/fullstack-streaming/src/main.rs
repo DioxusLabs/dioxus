@@ -9,13 +9,13 @@ fn app() -> Element {
         button {
             onclick: move |_| async move {
                 response.write().clear();
-                if let Ok(stream) = test_stream().await {
-                    response.write().push_str("Stream started\n");
-                    let mut stream = stream.into_inner();
-                    while let Some(Ok(text)) = stream.next().await {
-                        response.write().push_str(&text);
-                    }
+                let stream = test_stream().await?;
+                response.write().push_str("Stream started\n");
+                let mut stream = stream.into_inner();
+                while let Some(Ok(text)) = stream.next().await {
+                    response.write().push_str(&text);
                 }
+                Ok(())
             },
             "Start stream"
         }
@@ -24,7 +24,7 @@ fn app() -> Element {
 }
 
 #[server(output = StreamingText)]
-pub async fn test_stream() -> Result<TextStream, ServerFnError> {
+pub async fn test_stream() -> ServerFnResult<TextStream<ServerFnError>> {
     let (tx, rx) = futures::channel::mpsc::unbounded();
     tokio::spawn(async move {
         loop {

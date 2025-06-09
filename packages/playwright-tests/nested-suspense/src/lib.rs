@@ -83,7 +83,7 @@ pub struct Content {
 }
 
 #[server]
-async fn server_content(id: usize) -> Result<Content, ServerFnError> {
+async fn server_content(id: usize) -> ServerFnResult<Content> {
     let content_tree = [
         Content {
             title: "The robot says hello world".to_string(),
