@@ -4642,7 +4642,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "serde",
- "server_fn_macro 0.8.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "server_fn_macro",
  "syn 2.0.101",
  "tower-http",
 ]
@@ -12439,9 +12439,9 @@ dependencies = [
 
 [[package]]
 name = "serde_qs"
-version = "0.15.0"
+version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f3faaf9e727533a19351a43cc5a8de957372163c7d35cc48c90b75cdda13c352"
+checksum = "8b417bedc008acbdf6d6b4bc482d29859924114bbe2650b7921fb68a261d0aa6"
 dependencies = [
  "percent-encoding",
  "serde",
@@ -12526,7 +12526,8 @@ dependencies = [
 [[package]]
 name = "server_fn"
 version = "0.8.2"
-source = "git+https://github.com/ryo33/leptos.git?branch=test-ws2#cae23e008e71b44a94c20f05d4581259c2dba9c5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "09b0f92b9d3a62c73f238ac21f7a09f15bad335a9d1651514d9da80d2eaf8d4c"
 dependencies = [
  "axum 0.8.4",
  "base64 0.22.1",
@@ -12581,25 +12582,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "server_fn_macro"
-version = "0.8.2"
-source = "git+https://github.com/ryo33/leptos.git?branch=test-ws2#cae23e008e71b44a94c20f05d4581259c2dba9c5"
-dependencies = [
- "const_format",
- "convert_case 0.8.0",
- "proc-macro2",
- "quote",
- "rustc_version",
- "syn 2.0.101",
- "xxhash-rust",
-]
-
-[[package]]
 name = "server_fn_macro_default"
 version = "0.8.2"
-source = "git+https://github.com/ryo33/leptos.git?branch=test-ws2#cae23e008e71b44a94c20f05d4581259c2dba9c5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bc5ab934f581482a66da82f2b57b15390ad67c9ab85bd9a6c54bb65060fb1380"
 dependencies = [
- "server_fn_macro 0.8.2 (git+https://github.com/ryo33/leptos.git?branch=test-ws2)",
+ "server_fn_macro",
  "syn 2.0.101",
 ]
 
@@ -14597,7 +14585,8 @@ dependencies = [
 [[package]]
 name = "throw_error"
 version = "0.3.0"
-source = "git+https://github.com/ryo33/leptos.git?branch=test-ws2#cae23e008e71b44a94c20f05d4581259c2dba9c5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "41e42a6afdde94f3e656fae18f837cb9bbe500a5ac5de325b09f3ec05b9c28e3"
 dependencies = [
  "pin-project-lite",
 ]

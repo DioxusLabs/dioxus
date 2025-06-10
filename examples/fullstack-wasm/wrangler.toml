@@ -3,6 +3,7 @@ main = "build/worker/shim.mjs"
 compatibility_date = "2025-06-08"
 
 [build]
-command = "dx build --release --platform web --features web --target wasm32-unknown-unknown && cargo install -q worker-build && worker-build --features server"
+command = "cargo build --release --target wasm32-unknown-unknown --features web && cargo install -q worker-build && worker-build --features server-wasm"
+# command = "dx build --release --target wasm32-unknown-unknown --platform web --features web && cargo install -q worker-build && worker-build --features server-wasm"
 # without this, wrangler infinitely rebuilds the worker though nothing changed
 watch_dir = ["dummy"]

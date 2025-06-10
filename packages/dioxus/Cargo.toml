@@ -100,14 +100,14 @@ server = [
   "dioxus-liveview?/axum",
   "dioxus-fullstack?/server",
 ]
-server-core = [
+server-wasm = [
   "dep:dioxus-server",
   "dep:dioxus_server_macro",
   "dioxus_server_macro/server",
   "dioxus_server_macro/axum",
   "ssr",
   "dioxus-liveview?/axum",
-  "dioxus-fullstack?/server-core",
+  "dioxus-fullstack?/server-wasm",
 ]
 
 # This feature just disables the no-renderer-enabled warning

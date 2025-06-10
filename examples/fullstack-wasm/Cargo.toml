@@ -11,7 +11,8 @@ wasm-opt = false
 
 [features]
 web = ["dioxus/web"]
-server = ["dioxus/server-core"]
+server-wasm = ["dioxus/server-wasm"]
+server = ["dioxus/server"]
 
 [dependencies]
 dioxus = { workspace = true, features = [

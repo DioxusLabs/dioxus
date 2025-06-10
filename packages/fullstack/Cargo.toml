@@ -89,21 +89,23 @@ mobile = ["server_fn/reqwest", "dioxus_server_macro/reqwest"]
 default-tls = ["server_fn/default-tls"]
 rustls = ["server_fn/rustls", "dep:rustls", "dep:hyper-rustls"]
 server = [
-    "server-core" ,
-    "default-tls",
-    "server_fn/axum",
-    "server_fn/reqwest",
+  "server-core" ,
+  "default-tls",
+  "server_fn/axum",
+  "server_fn/reqwest",
+  "dioxus_server_macro/reqwest",
+]
+server-wasm = [
+  "server-core",
+  "server_fn/browser",
 ]
 server-core = [
-    "server_fn/axum-no-default",
-    "dioxus_server_macro/axum",
-    "server_fn/axum-no-default",
-    "server_fn/reqwest-no-ws",
-    "server_fn/ssr",
-    "dioxus_server_macro/reqwest",
-    "dioxus-fullstack-hooks/server",
-    "dep:dioxus-server",
-    "dioxus-interpreter-js",
+  "server_fn/axum-no-default",
+  "dioxus_server_macro/axum",
+  "server_fn/ssr",
+  "dioxus-fullstack-hooks/server",
+  "dep:dioxus-server",
+  "dioxus-interpreter-js",
 ]
 aws-lc-rs = ["dep:aws-lc-rs"]
 

@@ -231,7 +231,7 @@ lru = "0.13.0"
 async-trait = "0.1.87"
 axum = { version = "0.8.1", default-features = false }
 axum-server = { version = "0.7.1", default-features = false }
-server_fn = { git = "https://github.com/ryo33/leptos.git", branch = "test-ws2", default-features = false }
+server_fn = { version = "0.8.2", default-features = false }
 server_fn_macro = { version = "0.8.2" }
 tower = "0.5.2"
 http = "1.2.0"
