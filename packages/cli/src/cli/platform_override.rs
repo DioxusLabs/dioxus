@@ -64,13 +64,9 @@ fn merge_matches<T: Args>(base: &ArgMatches, platform: &ArgMatches) -> Result<T,
     let original_ids: Vec<_> = platform.ids().cloned().collect();
     for arg_id in original_ids {
         let arg_name = arg_id.as_str();
-        match platform.value_source(arg_name) {
-            // Remove any default values from the platform matches
-            Some(ValueSource::DefaultValue) => {
-                _ = platform.try_clear_id(arg_name);
-            }
-            // Otherwise leave it in
-            _ => {}
+        // Remove any default values from the platform matches
+        if platform.value_source(arg_name) == Some(ValueSource::DefaultValue) {
+            _ = platform.try_clear_id(arg_name);
         }
     }
 
