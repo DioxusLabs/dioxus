@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use crate::{cli::*, AppBuilder, BuildRequest, Workspace};
 use crate::{BuildMode, Platform};
 
@@ -28,17 +26,11 @@ pub struct BuildTargets {
 }
 
 impl BuildArgs {
-    async fn default_client(&self, workspace: &Arc<Workspace>) -> Result<BuildRequest> {
-        let client = BuildRequest::new(&self.build_arguments, workspace.clone()).await?;
-
-        Ok(client)
+    fn default_client(&self) -> &TargetArgs {
+        &self.build_arguments
     }
 
-    async fn default_server(
-        &self,
-        workspace: &Arc<Workspace>,
-        client: &BuildRequest,
-    ) -> Result<Option<BuildRequest>> {
+    fn default_server(&self, client: &BuildRequest) -> Option<&TargetArgs> {
         // Now resolve the builds that we need to.
         // These come from the args, but we'd like them to come from the `TargetCmd` chained object
         //
@@ -63,16 +55,7 @@ impl BuildArgs {
             || self.fullstack.unwrap_or(false))
             && self.fullstack != Some(false);
 
-        if fullstack {
-            let mut build_args = self.build_arguments.clone();
-            build_args.platform = Some(Platform::Server);
-
-            let _server = BuildRequest::new(&build_args, workspace.clone()).await?;
-
-            Ok(Some(_server))
-        } else {
-            Ok(None)
-        }
+        fullstack.then(|| &self.build_arguments)
     }
 }
 
@@ -109,19 +92,29 @@ impl CommandWithPlatformOverrides<BuildArgs> {
         // do some logging to ensure dx matches the dioxus version since we're not always API compatible
         workspace.check_dioxus_version_against_cli();
 
-        let client = match self.client {
-            Some(client) => BuildRequest::new(&client.build_arguments, workspace.clone()).await?,
-            None => self.shared.default_client(&workspace).await?,
+        let client_args = match &self.client {
+            Some(client) => &client.build_arguments,
+            None => self.shared.default_client(),
+        };
+        let client = BuildRequest::new(client_args, None, workspace.clone()).await?;
+
+        let server_args = match &self.server {
+            Some(server) => Some(&server.build_arguments),
+            None => self.shared.default_server(&client),
         };
 
-        let server = match self.server {
-            Some(mut server) => {
-                // The server platform is always server
-                server.build_arguments.platform = Some(Platform::Server);
-                Some(BuildRequest::new(&server.build_arguments, workspace.clone()).await?)
-            }
-            None => self.shared.default_server(&workspace, &client).await?,
-        };
+        let mut server = None;
+        // If there is a server, make sure we output in the same directory as the client build so we use the server
+        // to serve the web client
+        if let Some(server_args) = server_args {
+            // Copy the main target from the client to the server
+            let main_target = client.main_target.clone();
+            let mut server_args = server_args.clone();
+            // The platform in the server build is always set to Server
+            server_args.platform = Some(Platform::Server);
+            server =
+                Some(BuildRequest::new(&server_args, Some(main_target), workspace.clone()).await?);
+        }
 
         Ok(BuildTargets { client, server })
     }
