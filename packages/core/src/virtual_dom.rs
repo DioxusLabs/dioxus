@@ -16,7 +16,7 @@ use crate::{Task, VComponent};
 use futures_util::StreamExt;
 use slab::Slab;
 use std::collections::BTreeSet;
-use std::{any::Any, rc::Rc, sync::Arc};
+use std::{any::Any, rc::Rc};
 use tracing::instrument;
 
 /// A virtual node system that progresses user events and diffs UI trees.
@@ -759,7 +759,7 @@ impl VirtualDom {
     #[cfg(debug_assertions)]
     fn register_subsecond_handler(&self) {
         let sender = self.runtime().sender.clone();
-        subsecond::register_handler(Arc::new(move || {
+        subsecond::register_handler(std::sync::Arc::new(move || {
             _ = sender.unbounded_send(SchedulerMsg::AllDirty);
         }));
     }
