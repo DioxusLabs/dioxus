@@ -55,7 +55,7 @@ impl BuildArgs {
             || self.fullstack.unwrap_or(false))
             && self.fullstack != Some(false);
 
-        fullstack.then(|| &self.build_arguments)
+        fullstack.then_some(&self.build_arguments)
     }
 }
 
