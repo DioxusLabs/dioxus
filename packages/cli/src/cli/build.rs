@@ -53,9 +53,7 @@ impl BuildArgs {
         // only if we can properly detect that it's a fullstack build. Careful with this, since
         // we didn't build BuildRequest to be generally mutable.
         let default_server = client
-            .enabled_platforms
-            .iter()
-            .any(|p| *p == Platform::Server);
+            .enabled_platforms.contains(&Platform::Server);
 
         // Make sure we set the fullstack platform so we actually build the fullstack variant
         // Users need to enable "fullstack" in their default feature set.

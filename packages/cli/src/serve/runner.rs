@@ -102,9 +102,9 @@ impl AppServer {
         // Find the launch args for the client and server
         let split_args = |args: &str| args.split(' ').map(|s| s.to_string()).collect::<Vec<_>>();
         let server_args = args.platform_args.with_server_or_shared(|c| &c.args);
-        let server_args = split_args(&server_args);
+        let server_args = split_args(server_args);
         let client_args = args.platform_args.with_client_or_shared(|c| &c.args);
-        let client_args = split_args(&client_args);
+        let client_args = split_args(client_args);
 
         // These come from the args but also might come from the workspace settings
         // We opt to use the manually specified args over the workspace settings
