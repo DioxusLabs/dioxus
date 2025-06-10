@@ -19,7 +19,7 @@ pub(crate) struct Check {
 
     /// Information about the target to check
     #[clap(flatten)]
-    pub(crate) build_args: BuildArgs,
+    pub(crate) build_args: CommandWithPlatformOverrides<BuildArgs>,
 }
 
 impl Check {
