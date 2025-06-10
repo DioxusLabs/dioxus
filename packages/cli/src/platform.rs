@@ -114,6 +114,18 @@ impl Display for Platform {
 }
 
 impl Platform {
+    /// A list of all platforms that dioxus supports
+    pub(crate) const ALL: &[Platform] = &[
+        Platform::Web,
+        Platform::MacOS,
+        Platform::Windows,
+        Platform::Linux,
+        Platform::Ios,
+        Platform::Android,
+        Platform::Server,
+        Platform::Liveview,
+    ];
+
     /// Get the feature name for the platform in the dioxus crate
     pub(crate) fn feature_name(&self) -> &str {
         match self {

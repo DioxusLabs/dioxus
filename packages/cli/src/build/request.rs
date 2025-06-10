@@ -442,27 +442,23 @@ pub struct BuildArtifacts {
     pub(crate) patch_cache: Option<Arc<HotpatchModuleCache>>,
 }
 
-const PROFILE_MATRIX: [(Platform, [&str; 2]); 8] = [
-    (Platform::Web, ["wasm-dev", "wasm-release"]),
-    (Platform::Server, ["server-dev", "server-release"]),
-    (Platform::Ios, ["ios-dev", "ios-release"]),
-    (Platform::Android, ["android-dev", "android-release"]),
-    (Platform::Windows, ["windows-dev", "windows-release"]),
-    (Platform::MacOS, ["macos-dev", "macos-release"]),
-    (Platform::Linux, ["linux-dev", "linux-release"]),
-    (Platform::Liveview, ["liveview-dev", "liveview-release"]),
-];
+pub(crate) fn get_profile_for_platform(platform: Platform, release: bool) -> String {
+    let base_profile = match platform {
+        Platform::Web => "wasm",
+        Platform::Server => "server",
+        Platform::Ios => "ios",
+        Platform::Android => "android",
+        Platform::Windows => "windows",
+        Platform::MacOS => "macos",
+        Platform::Linux => "linux",
+        Platform::Liveview => "liveview",
+    };
 
-pub(crate) fn get_profile_for_platform(platform: Platform, release: bool) -> &'static str {
-    PROFILE_MATRIX
-        .iter()
-        .find_map(|(p, profiles)| {
-            if *p == platform {
-                return Some(profiles[release as usize]);
-            }
-            None
-        })
-        .unwrap_or_else(|| panic!("No profile for platform {platform:?}. This is a bug in the dioxus-cli. Please open an issue at https://github.com/DioxusLabs/dioxus/issues/new/choose"))
+    if release {
+        format!("{}-release", base_profile)
+    } else {
+        format!("{}-dev", base_profile)
+    }
 }
 
 impl BuildRequest {
@@ -602,7 +598,7 @@ impl BuildRequest {
         // We might want to move some of these profiles into dioxus.toml and make them "virtual".
         let profile = match args.profile.clone() {
             Some(profile) => profile,
-            None => get_profile_for_platform(platform, release).to_string(),
+            None => get_profile_for_platform(platform, args.release).to_string(),
         };
 
         // Determining release mode is based on the profile, actually, so we need to check that
@@ -2873,17 +2869,18 @@ impl BuildRequest {
             .entry("profile")
             .or_insert(Item::Table(Default::default()))
         {
-            for (platform, [debug_profile, release_profile]) in PROFILE_MATRIX.iter() {
-                if let toml_edit::Entry::Vacant(entry) = table.entry(debug_profile) {
+            for &platform in Platform::ALL {
+                let debug_profile = get_profile_for_platform(platform, false);
+                if let toml_edit::Entry::Vacant(entry) = table.entry(&debug_profile) {
                     let mut client = toml_edit::Table::new();
                     client.insert("inherits", Item::Value("dev".into()));
-                    if platform == &Platform::Web {
+                    if platform == Platform::Web {
                         client.insert("opt-level", Item::Value(1.into()));
                     }
                     entry.insert(Item::Table(client));
                 }
-
-                if let toml_edit::Entry::Vacant(entry) = table.entry(release_profile) {
+                let release_profile = get_profile_for_platform(platform, true);
+                if let toml_edit::Entry::Vacant(entry) = table.entry(&release_profile) {
                     let mut client = toml_edit::Table::new();
                     client.insert("inherits", Item::Value("release".into()));
                     entry.insert(Item::Table(client));

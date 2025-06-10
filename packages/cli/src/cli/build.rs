@@ -1,4 +1,4 @@
-use crate::{cli::*, AppBuilder, BuildRequest, Workspace, PROFILE_SERVER};
+use crate::{cli::*, AppBuilder, BuildRequest, Workspace};
 use crate::{BuildMode, Platform};
 use target_lexicon::Triple;
 
