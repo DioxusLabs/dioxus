@@ -1,7 +1,8 @@
 use super::{AppBuilder, ServeUpdate, WebServer};
 use crate::{
-    BuildArtifacts, BuildId, BuildMode, BuildTargets, Error, HotpatchModuleCache, Platform, Result,
-    ServeArgs, TailwindCli, TraceSrc, Workspace,
+    platform_override::CommandWithPlatformOverrides, BuildArtifacts, BuildId, BuildMode,
+    BuildTargets, Error, HotpatchModuleCache, Platform, Result, ServeArgs, TailwindCli, TraceSrc,
+    Workspace,
 };
 use anyhow::Context;
 use dioxus_core::internal::{
@@ -73,8 +74,10 @@ pub(crate) struct AppServer {
     pub(crate) proxied_port: Option<u16>,
     pub(crate) cross_origin_policy: bool,
 
-    // The arguments that should be forwarded to the app when it is opened
-    pub(crate) open_args: Vec<String>,
+    // The arguments that should be forwarded to the client app when it is opened
+    pub(crate) client_args: Vec<String>,
+    // The arguments that should be forwarded to the server app when it is opened
+    pub(crate) server_args: Vec<String>,
 
     // Additional plugin-type tools
     pub(crate) tw_watcher: tokio::task::JoinHandle<Result<()>>,
@@ -95,6 +98,13 @@ impl AppServer {
         let interactive = args.is_interactive_tty();
         let force_sequential = args.force_sequential;
         let cross_origin_policy = args.cross_origin_policy;
+
+        // Find the launch args for the client and server
+        let split_args = |args: &str| args.split(' ').map(|s| s.to_string()).collect::<Vec<_>>();
+        let server_args = args.platform_args.with_server_or_shared(|c| &c.args);
+        let server_args = split_args(&server_args);
+        let client_args = args.platform_args.with_client_or_shared(|c| &c.args);
+        let client_args = split_args(&client_args);
 
         // These come from the args but also might come from the workspace settings
         // We opt to use the manually specified args over the workspace settings
@@ -128,7 +138,12 @@ impl AppServer {
         let (watcher_tx, watcher_rx) = futures_channel::mpsc::unbounded();
         let watcher = create_notify_watcher(watcher_tx.clone(), wsl_file_poll_interval as u64);
 
-        let BuildTargets { client, server } = args.targets.into_targets().await?;
+        let target_args = CommandWithPlatformOverrides {
+            shared: args.platform_args.shared.targets,
+            server: args.platform_args.server.map(|s| s.targets),
+            client: args.platform_args.client.map(|c| c.targets),
+        };
+        let BuildTargets { client, server } = target_args.into_targets().await?;
 
         // All servers will end up behind us (the devserver) but on a different port
         // This is so we can serve a loading screen as well as devtools without anything particularly fancy
@@ -153,12 +168,6 @@ impl AppServer {
         let server = server
             .map(|server| AppBuilder::start(&server, build_mode))
             .transpose()?;
-
-        let open_args = args
-            .args
-            .split(' ')
-            .map(|s| s.to_string())
-            .collect::<Vec<_>>();
 
         let tw_watcher = TailwindCli::serve(
             client.build.package_manifest_dir(),
@@ -196,7 +205,8 @@ impl AppServer {
             cross_origin_policy,
             fullstack,
             tw_watcher,
-            open_args,
+            server_args,
+            client_args,
         };
 
         // Only register the hot-reload stuff if we're watching the filesystem
@@ -556,7 +566,7 @@ impl AppServer {
                     false,
                     false,
                     BuildId::SERVER,
-                    &self.open_args,
+                    &self.server_args,
                 )
                 .await?;
         }
@@ -571,7 +581,7 @@ impl AppServer {
                 open_browser,
                 self.always_on_top,
                 BuildId::CLIENT,
-                &self.open_args,
+                &self.client_args,
             )
             .await?;
 

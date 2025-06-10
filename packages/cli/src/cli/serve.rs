@@ -72,11 +72,18 @@ pub(crate) struct ServeArgs {
     #[clap(long)]
     pub(crate) force_sequential: bool,
 
+    /// Platform-specific arguments for the build
+    #[clap(flatten)]
+    pub(crate) platform_args: CommandWithPlatformOverrides<PlatformServeArgs>,
+}
+
+#[derive(Clone, Debug, Default, Parser)]
+pub(crate) struct PlatformServeArgs {
     #[clap(flatten)]
     pub(crate) targets: BuildArgs,
 
     /// Additional arguments to pass to the executable
-    #[clap(long)]
+    #[clap(long, default_value = "")]
     pub(crate) args: String,
 }
 
