@@ -76,8 +76,8 @@ pub(crate) struct ServeArgs {
     pub(crate) targets: BuildArgs,
 
     /// Additional arguments to pass to the executable
-    #[clap(last = true)]
-    pub(crate) args: Vec<String>,
+    #[clap(long)]
+    pub(crate) args: String,
 }
 
 impl ServeArgs {

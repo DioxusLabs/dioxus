@@ -154,7 +154,11 @@ impl AppServer {
             .map(|server| AppBuilder::start(&server, build_mode))
             .transpose()?;
 
-        let open_args = args.args;
+        let open_args = args
+            .args
+            .split(' ')
+            .map(|s| s.to_string())
+            .collect::<Vec<_>>();
 
         let tw_watcher = TailwindCli::serve(
             client.build.package_manifest_dir(),
