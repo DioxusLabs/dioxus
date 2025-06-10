@@ -45,7 +45,7 @@ jobs:
   check-msrv:
     if: github.event.pull_request.draft == false
     name: Check MSRV
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.86.0
@@ -66,9 +66,11 @@ jobs:
   test:
     if: github.event.pull_request.draft == false
     name: Test Suite
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+      - name: Free Disk Space
+        uses: ./.github/actions/free-disk-space
       - uses: awalsh128/cache-apt-pkgs-action@latest
         with:
           packages: libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
@@ -85,9 +87,11 @@ jobs:
   release-test:
     if: github.event.pull_request.draft == false
     name: Test Suite with Optimizations
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+      - name: Free Disk Space
+        uses: ./.github/actions/free-disk-space
       - uses: awalsh128/cache-apt-pkgs-action@latest
         with:
           packages: libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
@@ -104,7 +108,7 @@ jobs:
   fmt:
     if: github.event.pull_request.draft == false
     name: Rustfmt
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.86.0
@@ -118,7 +122,7 @@ jobs:
   docs:
     if: github.event.pull_request.draft == false
     name: Docs
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: awalsh128/cache-apt-pkgs-action@latest
@@ -135,17 +139,13 @@ jobs:
       - name: "doc --lib --all-features"
         run: |
           cargo doc --workspace --no-deps --all-features --document-private-items
-        # env:
-        #   RUSTFLAGS: --cfg docsrs
-        #   RUSTDOCFLAGS: --cfg docsrs
-        # todo: re-enable warnings, private items
-        # RUSTDOCFLAGS: --cfg docsrs -Dwarnings
-        #  --document-private-items
+        env:
+          RUSTDOCFLAGS: -Dwarnings --document-private-items
 
   check:
     if: github.event.pull_request.draft == false
     name: Check
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: awalsh128/cache-apt-pkgs-action@latest
@@ -161,7 +161,7 @@ jobs:
   clippy:
     if: github.event.pull_request.draft == false
     name: Clippy
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: awalsh128/cache-apt-pkgs-action@latest
@@ -181,11 +181,14 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-24.04, macos-latest]
     steps:
       - uses: actions/checkout@v4
-      - uses: DeterminateSystems/nix-installer-action@main
-      - uses: DeterminateSystems/magic-nix-cache-action@main
+      - uses: nixbuild/nix-quick-install-action@master
+      - uses: nix-community/cache-nix-action@main
+        with:
+          primary-key: nix-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/*.nix', '**/flake.lock') }}
+          restore-prefixes-first-match: nix-${{ runner.os }}-${{ runner.arch }}
       - name: Install omnix
         run: nix --accept-flake-config profile install "github:juspay/omnix"
       - name: Build all flake outputs
@@ -204,7 +207,7 @@ jobs:
         with:
           node-version: 16
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@master
+        uses: dtolnay/rust-toolchain@1.86.0
         with:
           toolchain: stable
           targets: x86_64-unknown-linux-gnu,wasm32-unknown-unknown
@@ -218,6 +221,7 @@ jobs:
           npm ci
           npm install -D @playwright/test
           npx playwright install --with-deps
+          rm -rf ./target/dx
           npx playwright test
       - uses: actions/upload-artifact@v4
         if: always()
@@ -259,8 +263,24 @@ jobs:
               args: "--package dioxus-mobile",
             }
           - {
+              target: x86_64-unknown-linux-gnu,
+              os: ubuntu-24.04,
+              toolchain: "1.86.0",
+              cross: false,
+              command: "build",
+              args: "--all --tests",
+            }
+          - {
+              target: aarch64-unknown-linux-gnu,
+              os: ubuntu-24.04-arm,
+              toolchain: "1.86.0",
+              cross: false,
+              command: "build",
+              args: "--all --tests",
+            }
+          - {
               target: aarch64-linux-android,
-              os: ubuntu-latest,
+              os: ubuntu-24.04,
               toolchain: "1.86.0",
               cross: true,
               command: "build",
@@ -279,6 +299,16 @@ jobs:
       - name: Install nasm for windows (tls)
         if: ${{ matrix.platform.target == 'x86_64-pc-windows-msvc' }}
         uses: ilammy/setup-nasm@v1
+
+      - name: Free Disk Space
+        if: ${{ matrix.platform.os == 'ubuntu-24.04' || matrix.platform.os == 'ubuntu-24.04-arm' }}
+        uses: ./.github/actions/free-disk-space
+
+      - uses: awalsh128/cache-apt-pkgs-action@latest
+        if: ${{ matrix.platform.os == 'ubuntu-24.04' || matrix.platform.os == 'ubuntu-24.04-arm' }}
+        with:
+          packages: libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
+          version: 1.0
 
       - name: Install cross
         if: ${{ matrix.platform.cross == true }}
@@ -332,7 +362,7 @@ jobs:
   # semver:
   #   if: github.event.pull_request.draft == false && !contains(github.event.pull_request.labels.*.name, 'breaking')
   #   name: Semver Check
-  #   runs-on: ubuntu-latest
+  #   runs-on: ubuntu-24.04
   #   steps:
   #     - uses: actions/checkout@v4
   #     - uses: dtolnay/rust-toolchain@1.86.0

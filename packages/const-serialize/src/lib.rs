@@ -137,7 +137,7 @@ pub enum Layout {
 
 impl Layout {
     /// The size of the type in bytes.
-    const fn size(&self) -> usize {
+    pub const fn size(&self) -> usize {
         match self {
             Layout::Enum(layout) => layout.size,
             Layout::Struct(layout) => layout.size,
@@ -221,7 +221,7 @@ impl_serialize_const_tuple!(T1: 0, T2: 1, T3: 2, T4: 3, T5: 4, T6: 5, T7: 6, T8:
 const MAX_STR_SIZE: usize = 256;
 
 /// A string that is stored in a constant sized buffer that can be serialized and deserialized at compile time
-#[derive(PartialEq, PartialOrd, Clone, Copy, Hash)]
+#[derive(Eq, PartialEq, PartialOrd, Clone, Copy, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ConstStr {
     #[cfg_attr(feature = "serde", serde(with = "serde_bytes"))]
@@ -516,18 +516,18 @@ const fn char_to_bytes(char: char) -> ([u8; 4], usize) {
             bytes[0] = code as u8;
         }
         2 => {
-            bytes[0] = (code >> 6 & 0x1F) as u8 | BYTE_CHAR_BOUNDARIES[1];
+            bytes[0] = ((code >> 6) & 0x1F) as u8 | BYTE_CHAR_BOUNDARIES[1];
             bytes[1] = (code & 0x3F) as u8 | CONTINUED_CHAR_MASK;
         }
         3 => {
-            bytes[0] = (code >> 12 & 0x0F) as u8 | BYTE_CHAR_BOUNDARIES[2];
-            bytes[1] = (code >> 6 & 0x3F) as u8 | CONTINUED_CHAR_MASK;
+            bytes[0] = ((code >> 12) & 0x0F) as u8 | BYTE_CHAR_BOUNDARIES[2];
+            bytes[1] = ((code >> 6) & 0x3F) as u8 | CONTINUED_CHAR_MASK;
             bytes[2] = (code & 0x3F) as u8 | CONTINUED_CHAR_MASK;
         }
         4 => {
-            bytes[0] = (code >> 18 & 0x07) as u8 | BYTE_CHAR_BOUNDARIES[3];
-            bytes[1] = (code >> 12 & 0x3F) as u8 | CONTINUED_CHAR_MASK;
-            bytes[2] = (code >> 6 & 0x3F) as u8 | CONTINUED_CHAR_MASK;
+            bytes[0] = ((code >> 18) & 0x07) as u8 | BYTE_CHAR_BOUNDARIES[3];
+            bytes[1] = ((code >> 12) & 0x3F) as u8 | CONTINUED_CHAR_MASK;
+            bytes[2] = ((code >> 6) & 0x3F) as u8 | CONTINUED_CHAR_MASK;
             bytes[3] = (code & 0x3F) as u8 | CONTINUED_CHAR_MASK;
         }
         _ => panic!(
@@ -857,7 +857,7 @@ const fn deserialize_const_ptr<'a, const N: usize>(
     }
 }
 
-/// Deserialize a type into the output buffer. Accepts (Type, ConstVec<u8>) as input and returns Option<(ConstReadBuffer, Instance of type)>
+/// Deserialize a type into the output buffer. Accepts `(type, ConstVec<u8>)` as input and returns `Option<(ConstReadBuffer, Instance of type)>`
 ///
 /// # Example
 /// ```rust

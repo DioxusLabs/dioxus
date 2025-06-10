@@ -5,6 +5,7 @@ use std::collections::HashSet;
 /// Options for a css asset
 #[derive(
     Debug,
+    Eq,
     PartialEq,
     PartialOrd,
     Clone,
@@ -79,6 +80,7 @@ impl CssAssetOptions {
 /// Options for a css module asset
 #[derive(
     Debug,
+    Eq,
     PartialEq,
     PartialOrd,
     Clone,

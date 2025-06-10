@@ -44,13 +44,12 @@ slab = { workspace = true }
 rustc-hash = { workspace = true }
 dioxus-hooks = { workspace = true }
 futures-util = { workspace = true }
-urlencoding = { workspace = true }
+percent-encoding = { workspace = true }
 async-trait = { workspace = true }
 tao = { workspace = true, features = ["rwh_05"] }
-once_cell = { workspace = true }
 dioxus-history = { workspace = true }
 base64 = { workspace = true }
-
+libc = "0.2.170"
 
 [target.'cfg(unix)'.dependencies]
 signal-hook = "0.3.17"
@@ -59,7 +58,7 @@ signal-hook = "0.3.17"
 wry = { workspace = true, features = ["os-webview", "protocol", "drag-drop", "linux-body"] }
 
 [target.'cfg(any(target_os = "windows",target_os = "macos",target_os = "linux",target_os = "dragonfly", target_os = "freebsd", target_os = "netbsd", target_os = "openbsd"))'.dependencies]
-global-hotkey = "0.6.4"
+global-hotkey = "0.7.0"
 rfd = { version = "0.15.2", default-features = false, features = ["xdg-portal", "tokio"] }
 muda = { workspace = true }
 

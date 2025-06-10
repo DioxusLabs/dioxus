@@ -13,8 +13,11 @@ keywords = ["dom", "ui", "gui", "react", "hot-reloading"]
 dioxus-signals = { workspace = true }
 dioxus-core = { workspace = true, features = ["serialize"] }
 dioxus-devtools-types = { workspace = true }
+dioxus-cli-config = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
+subsecond = { workspace = true }
+thiserror = { workspace = true }
 
 # hot reloading serve
 tracing = { workspace = true }

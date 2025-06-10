@@ -1,23 +1,13 @@
 use crate::AssetOptions;
-use const_serialize::{ConstStr, SerializeConst};
-use std::path::PathBuf;
+use const_serialize::{deserialize_const, ConstStr, ConstVec, SerializeConst};
+use std::{fmt::Debug, hash::Hash, path::PathBuf};
 
 /// An asset that should be copied by the bundler with some options. This type will be
-/// serialized into the binary and added to the link section [`LinkSection::CURRENT`](crate::linker::LinkSection::CURRENT).
+/// serialized into the binary.
 /// CLIs that support manganis, should pull out the assets from the link section, optimize,
 /// and write them to the filesystem at [`BundledAsset::bundled_path`] for the application
 /// to use.
-#[derive(
-    Debug,
-    PartialEq,
-    PartialOrd,
-    Clone,
-    Copy,
-    Hash,
-    SerializeConst,
-    serde::Serialize,
-    serde::Deserialize,
-)]
+#[derive(Debug, Eq, Clone, Copy, SerializeConst, serde::Serialize, serde::Deserialize)]
 pub struct BundledAsset {
     /// The absolute path of the asset
     absolute_source_path: ConstStr,
@@ -27,13 +17,46 @@ pub struct BundledAsset {
     options: AssetOptions,
 }
 
+impl PartialEq for BundledAsset {
+    fn eq(&self, other: &Self) -> bool {
+        self.absolute_source_path == other.absolute_source_path
+            && self.bundled_path == other.bundled_path
+            && self.options == other.options
+    }
+}
+
+impl PartialOrd for BundledAsset {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        match self
+            .absolute_source_path
+            .partial_cmp(&other.absolute_source_path)
+        {
+            Some(core::cmp::Ordering::Equal) => {}
+            ord => return ord,
+        }
+        match self.bundled_path.partial_cmp(&other.bundled_path) {
+            Some(core::cmp::Ordering::Equal) => {}
+            ord => return ord,
+        }
+        self.options.partial_cmp(&other.options)
+    }
+}
+
+impl Hash for BundledAsset {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.absolute_source_path.hash(state);
+        self.bundled_path.hash(state);
+        self.options.hash(state);
+    }
+}
+
 impl BundledAsset {
     #[doc(hidden)]
     /// This should only be called from the macro
     /// Create a new asset
     pub const fn new(
-        absolute_source_path: &'static str,
-        bundled_path: &'static str,
+        absolute_source_path: &str,
+        bundled_path: &str,
         options: AssetOptions,
     ) -> Self {
         Self {
@@ -83,6 +106,7 @@ impl BundledAsset {
     pub fn absolute_source_path(&self) -> &str {
         self.absolute_source_path.as_str()
     }
+
     /// Get the options for the asset
     pub const fn options(&self) -> &AssetOptions {
         &self.options
@@ -101,28 +125,49 @@ impl BundledAsset {
 ///     img { src: ASSET }
 /// };
 /// ```
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(PartialEq, Clone, Copy)]
 pub struct Asset {
-    /// The bundled asset
-    bundled: BundledAsset,
-    /// The link section for the asset
-    keep_link_section: fn() -> u8,
+    /// A pointer to the bundled asset. This will be resolved after the linker has run and
+    /// put into the lazy asset
+    ///
+    /// WARNING: Don't read this directly. Reads can get optimized away at compile time before
+    /// the data for this is filled in by the CLI after the binary is built. Instead, use
+    /// [`std::ptr::read_volatile`] to read the data.
+    bundled: &'static [u8],
 }
+
+impl Debug for Asset {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.resolve().fmt(f)
+    }
+}
+
+unsafe impl Send for Asset {}
+unsafe impl Sync for Asset {}
 
 impl Asset {
     #[doc(hidden)]
     /// This should only be called from the macro
     /// Create a new asset from the bundled form of the asset and the link section
-    pub const fn new(bundled: BundledAsset, keep_link_section: fn() -> u8) -> Self {
-        Self {
-            bundled,
-            keep_link_section,
-        }
+    pub const fn new(bundled: &'static [u8]) -> Self {
+        Self { bundled }
     }
 
     /// Get the bundled asset
-    pub const fn bundled(&self) -> &BundledAsset {
-        &self.bundled
+    pub fn bundled(&self) -> BundledAsset {
+        let len = self.bundled.len();
+        let ptr = self.bundled as *const [u8] as *const u8;
+        if ptr.is_null() {
+            panic!("Tried to use an asset that was not bundled. Make sure you are compiling dx as the linker");
+        }
+        let mut bytes = ConstVec::new();
+        for byte in 0..len {
+            // SAFETY: We checked that the pointer was not null above. The pointer is valid for reads and
+            // since we are reading a u8 there are no alignment requirements
+            bytes = bytes.push(unsafe { std::ptr::read_volatile(ptr.add(byte)) });
+        }
+        let read = bytes.read();
+        deserialize_const!(BundledAsset, read).expect("Failed to deserialize asset. Make sure you built with the matching version of the Dioxus CLI").1
     }
 
     /// Return a canonicalized path to the asset
@@ -130,13 +175,10 @@ impl Asset {
     /// Attempts to resolve it against an `assets` folder in the current directory.
     /// If that doesn't exist, it will resolve against the cargo manifest dir
     pub fn resolve(&self) -> PathBuf {
-        // Force a volatile read of the asset link section to ensure the symbol makes it into the binary
-        (self.keep_link_section)();
-
         #[cfg(feature = "dioxus")]
         // If the asset is relative, we resolve the asset at the current directory
         if !dioxus_core_types::is_bundled_app() {
-            return PathBuf::from(self.bundled.absolute_source_path.as_str());
+            return PathBuf::from(self.bundled().absolute_source_path.as_str());
         }
 
         #[cfg(feature = "dioxus")]
@@ -156,7 +198,7 @@ impl Asset {
 
         // Otherwise presumably we're bundled and we can use the bundled path
         bundle_root.join(PathBuf::from(
-            self.bundled.bundled_path.as_str().trim_start_matches('/'),
+            self.bundled().bundled_path.as_str().trim_start_matches('/'),
         ))
     }
 }

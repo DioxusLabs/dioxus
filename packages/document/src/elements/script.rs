@@ -61,7 +61,7 @@ impl ScriptProps {
     }
 }
 
-/// Render a [`script`](crate::elements::script) tag into the head of the page.
+/// Render a [`<script>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/script) tag into the head of the page.
 ///
 ///
 /// If present, the children of the script component must be a single static or formatted string. If there are more children or the children contain components, conditionals, loops, or fragments, the script will not be added.
