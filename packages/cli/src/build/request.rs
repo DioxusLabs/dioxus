@@ -321,6 +321,7 @@ use crate::{
     DX_RUSTC_WRAPPER_ENV_VAR,
 };
 use anyhow::Context;
+use cargo_config2::cargo_home_with_cwd;
 use cargo_metadata::diagnostic::Diagnostic;
 use dioxus_cli_config::format_base_path_meta_element;
 use dioxus_cli_config::{APP_TITLE_ENV, ASSET_ROOT_ENV};
@@ -441,9 +442,24 @@ pub struct BuildArtifacts {
     pub(crate) patch_cache: Option<Arc<HotpatchModuleCache>>,
 }
 
-pub(crate) static PROFILE_WASM: &str = "wasm-dev";
-pub(crate) static PROFILE_ANDROID: &str = "android-dev";
-pub(crate) static PROFILE_SERVER: &str = "server-dev";
+pub(crate) fn get_profile_for_platform(platform: Platform, release: bool) -> String {
+    let base_profile = match platform {
+        Platform::Web => "wasm",
+        Platform::Server => "server",
+        Platform::Ios => "ios",
+        Platform::Android => "android",
+        Platform::Windows => "windows",
+        Platform::MacOS => "macos",
+        Platform::Linux => "linux",
+        Platform::Liveview => "liveview",
+    };
+
+    if release {
+        format!("{}-release", base_profile)
+    } else {
+        format!("{}-dev", base_profile)
+    }
+}
 
 impl BuildRequest {
     /// Create a new build request.
@@ -582,13 +598,7 @@ impl BuildRequest {
         // We might want to move some of these profiles into dioxus.toml and make them "virtual".
         let profile = match args.profile.clone() {
             Some(profile) => profile,
-            None if args.release => "release".to_string(),
-            None => match platform {
-                Platform::Android => PROFILE_ANDROID.to_string(),
-                Platform::Web => PROFILE_WASM.to_string(),
-                Platform::Server => PROFILE_SERVER.to_string(),
-                _ => "dev".to_string(),
-            },
+            None => get_profile_for_platform(platform, args.release).to_string(),
         };
 
         // Determining release mode is based on the profile, actually, so we need to check that
@@ -2772,6 +2782,19 @@ impl BuildRequest {
             .to_path_buf()
     }
 
+    /// Get the directory where cargo stores its data
+    pub(crate) fn cargo_home(&self) -> Result<PathBuf> {
+        Ok(cargo_home_with_cwd(&self.workspace_dir())
+            .ok_or_else(|| anyhow::anyhow!("Failed to find cargo home. Please set CARGO_HOME."))?)
+    }
+
+    /// Get the path to the global cargo config
+    pub(crate) fn cargo_config(&self) -> Result<PathBuf> {
+        let cargo_home = self.cargo_home()?;
+        let config_path = cargo_home.join("config.toml");
+        Ok(config_path)
+    }
+
     /// Get the package we are currently in
     pub(crate) fn package(&self) -> &krates::cm::Package {
         &self.workspace.krates[self.crate_package]
@@ -2833,7 +2856,7 @@ impl BuildRequest {
     // Find or create the client and server profiles in the top-level Cargo.toml file
     // todo(jon): we should/could make these optional by placing some defaults somewhere
     pub(crate) fn initialize_profiles(&self) -> crate::Result<()> {
-        let config_path = self.workspace_dir().join("Cargo.toml");
+        let config_path = self.cargo_config()?;
         let mut config = match std::fs::read_to_string(&config_path) {
             Ok(config) => config.parse::<toml_edit::DocumentMut>().map_err(|e| {
                 crate::Error::Other(anyhow::anyhow!("Failed to parse Cargo.toml: {}", e))
@@ -2846,23 +2869,22 @@ impl BuildRequest {
             .entry("profile")
             .or_insert(Item::Table(Default::default()))
         {
-            if let toml_edit::Entry::Vacant(entry) = table.entry(PROFILE_WASM) {
-                let mut client = toml_edit::Table::new();
-                client.insert("inherits", Item::Value("dev".into()));
-                client.insert("opt-level", Item::Value(1.into()));
-                entry.insert(Item::Table(client));
-            }
-
-            if let toml_edit::Entry::Vacant(entry) = table.entry(PROFILE_SERVER) {
-                let mut server = toml_edit::Table::new();
-                server.insert("inherits", Item::Value("dev".into()));
-                entry.insert(Item::Table(server));
-            }
-
-            if let toml_edit::Entry::Vacant(entry) = table.entry(PROFILE_ANDROID) {
-                let mut android = toml_edit::Table::new();
-                android.insert("inherits", Item::Value("dev".into()));
-                entry.insert(Item::Table(android));
+            for &platform in Platform::ALL {
+                let debug_profile = get_profile_for_platform(platform, false);
+                if let toml_edit::Entry::Vacant(entry) = table.entry(&debug_profile) {
+                    let mut client = toml_edit::Table::new();
+                    client.insert("inherits", Item::Value("dev".into()));
+                    if platform == Platform::Web {
+                        client.insert("opt-level", Item::Value(1.into()));
+                    }
+                    entry.insert(Item::Table(client));
+                }
+                let release_profile = get_profile_for_platform(platform, true);
+                if let toml_edit::Entry::Vacant(entry) = table.entry(&release_profile) {
+                    let mut client = toml_edit::Table::new();
+                    client.insert("inherits", Item::Value("release".into()));
+                    entry.insert(Item::Table(client));
+                }
             }
         }
 

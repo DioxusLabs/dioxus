@@ -1,4 +1,4 @@
-use crate::{cli::*, AppBuilder, BuildRequest, Workspace, PROFILE_SERVER};
+use crate::{cli::*, AppBuilder, BuildRequest, Workspace};
 use crate::{BuildMode, Platform};
 use target_lexicon::Triple;
 
@@ -25,8 +25,8 @@ pub struct BuildArgs {
     pub(crate) server_features: Vec<String>,
 
     /// Build with custom profile for the fullstack server
-    #[clap(long, default_value_t = PROFILE_SERVER.to_string())]
-    pub(crate) server_profile: String,
+    #[clap(long)]
+    pub(crate) server_profile: Option<String>,
 
     /// The target to build for the server.
     ///
