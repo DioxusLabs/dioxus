@@ -279,8 +279,6 @@ mod_methods! {
     /// <https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/contenteditable>
     contenteditable;
 
-    /// <https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/data>
-    data;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/dir>
     dir;
