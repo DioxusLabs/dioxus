@@ -293,7 +293,7 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
 
 /// Find all assets in the given file, hash them, and write them back to the file.
 /// Then return an `AssetManifest` containing all the assets found in the file.
-pub(crate) fn extract_assets_from_file(path: impl AsRef<Path>) -> Result<AssetManifest> {
+pub fn extract_assets_from_file(path: impl AsRef<Path>) -> Result<AssetManifest> {
     let path = path.as_ref();
     let mut file = std::fs::File::options().write(true).read(true).open(path)?;
     let mut file_contents = Vec::new();

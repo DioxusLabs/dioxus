@@ -6,6 +6,7 @@ pub(crate) mod check;
 pub(crate) mod clean;
 pub(crate) mod config;
 pub(crate) mod create;
+pub(crate) mod eject;
 pub(crate) mod init;
 pub(crate) mod link;
 pub(crate) mod platform_override;
@@ -100,6 +101,10 @@ pub(crate) enum Commands {
     #[clap(name = "self-update")]
     SelfUpdate(update::SelfUpdate),
 
+    /// Eject Android and iOS assets from the CLI to a local directory for customization.
+    #[clap(name = "eject")]
+    Eject(eject::Eject),
+
     /// Run a dioxus build tool. IE `build-assets`, etc
     #[clap(name = "tools")]
     #[clap(subcommand)]
@@ -127,6 +132,7 @@ impl Display for Commands {
             Commands::Check(_) => write!(f, "check"),
             Commands::Bundle(_) => write!(f, "bundle"),
             Commands::Run(_) => write!(f, "run"),
+            Commands::Eject(_) => write!(f, "eject"),
             Commands::SelfUpdate(_) => write!(f, "self-update"),
             Commands::Tools(_) => write!(f, "tools"),
         }

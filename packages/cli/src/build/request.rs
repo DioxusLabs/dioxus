@@ -3694,7 +3694,27 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         Ok(())
     }
 
+    /// Check if there are ejected assets for the current platform
+    /// and return the path to the ejected assets directory if found
+    pub(crate) fn ejected_assets_dir(&self) -> Option<PathBuf> {
+        use crate::build::EjectedAssets;
+        
+        let workspace_dir = self.workspace_dir();
+        
+        match self.platform {
+            Platform::Android => EjectedAssets::android_assets_dir(&workspace_dir),
+            Platform::Ios => EjectedAssets::ios_assets_dir(&workspace_dir),
+            _ => None, // No ejected assets for other platforms yet
+        }
+    }
+
     pub(crate) fn asset_dir(&self) -> PathBuf {
+        // First check if there are ejected assets for this platform
+        if let Some(ejected_dir) = self.ejected_assets_dir() {
+            return ejected_dir;
+        }
+        
+        // If no ejected assets, use the default asset directory
         match self.platform {
             Platform::MacOS => self
                 .root_dir()
