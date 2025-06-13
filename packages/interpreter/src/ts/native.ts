@@ -204,6 +204,9 @@ export class NativeInterpreter extends JSChannel_ {
   }
 
   handleWindowsDragOver(xPos, yPos) {
+    const displayScaleFactor = window.devicePixelRatio || 1;
+    xPos /= displayScaleFactor;
+    yPos /= displayScaleFactor;
     const element = document.elementFromPoint(xPos, yPos);
 
     if (element != window.dxDragLastElement) {
