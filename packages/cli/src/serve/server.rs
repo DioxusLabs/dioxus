@@ -558,22 +558,50 @@ fn build_serve_dir(runner: &AppServer) -> axum::routing::MethodRouter {
     let app = &runner.client;
     let cfg = &runner.client.build.config;
 
+    // Get the workspace root directory to check for ejected assets
+    let workspace_root = runner.workspace.krates.workspace_root().as_std_path().to_path_buf();
+    
+    // Check for ejected Android and iOS assets
+    let android_ejected_dir = workspace_root.join("android");
+    let ios_ejected_dir = workspace_root.join("ios");
+    
+    // Use the standard output directory as fallback
     let out_dir = app.build.root_dir();
     let index_on_404: bool = cfg.web.watcher.index_on_404;
-
-    get_service(
-        ServiceBuilder::new()
-            .override_response_header(
-                HeaderName::from_static("cross-origin-embedder-policy"),
-                coep,
-            )
-            .override_response_header(HeaderName::from_static("cross-origin-opener-policy"), coop)
-            .and_then({
-                let out_dir = out_dir.clone();
-                move |response| async move { Ok(no_cache(index_on_404, &out_dir, response)) }
-            })
-            .service(ServeDir::new(&out_dir)),
-    )
+    
+    // Create a vector of directories to serve, prioritizing ejected assets
+    let mut serve_dirs = Vec::new();
+    
+    // Add ejected asset directories if they exist
+    if android_ejected_dir.exists() {
+        tracing::info!("Serving ejected Android assets directly from: {}", android_ejected_dir.display());
+        serve_dirs.push(android_ejected_dir);
+    }
+    
+    if ios_ejected_dir.exists() {
+        tracing::info!("Serving ejected iOS assets directly from: {}", ios_ejected_dir.display());
+        serve_dirs.push(ios_ejected_dir);
+    }
+    
+    // Always add the standard output directory as fallback
+    serve_dirs.push(out_dir.clone());
+    
+    // Create a service that tries each directory in order
+    let service_builder = ServiceBuilder::new()
+        .override_response_header(
+            HeaderName::from_static("cross-origin-embedder-policy"),
+            coep,
+        )
+        .override_response_header(HeaderName::from_static("cross-origin-opener-policy"), coop)
+        .and_then({
+            let out_dir = out_dir.clone();
+            move |response| async move { Ok(no_cache(index_on_404, &out_dir, response)) }
+        });
+    
+    // Create a service that serves from all directories
+    let service = service_builder.service(ServeDir::new(&serve_dirs[0]));
+    
+    get_service(service)
     .handle_error(|error: Infallible| async move {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
