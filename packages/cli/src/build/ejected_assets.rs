@@ -13,12 +13,17 @@ impl EjectedAssets {
     
     /// Get the ejected path for an asset if it exists
     pub fn get_ejected_path(&self, asset_path: &str) -> Option<PathBuf> {
-        // Check if this is an Android or iOS asset
+        self.resolve_asset_path(asset_path)
+    }
+    
+    /// Resolve the asset path
+    pub fn resolve_asset_path(&self, asset_path: &str) -> Option<PathBuf> {
         if asset_path.contains("android") {
             if let Some(android_dir) = Self::android_assets_dir(&self.project_dir) {
                 let relative_path = asset_path.split('/').last()?;
                 let ejected_path = android_dir.join(relative_path);
                 if ejected_path.exists() {
+                    tracing::info!(dx_src = ?crate::logging::TraceSrc::Dev, "Using ejected Android asset: {}", ejected_path.display());
                     return Some(ejected_path);
                 }
             }
@@ -27,10 +32,13 @@ impl EjectedAssets {
                 let relative_path = asset_path.split('/').last()?;
                 let ejected_path = ios_dir.join(relative_path);
                 if ejected_path.exists() {
+                    tracing::info!(dx_src = ?crate::logging::TraceSrc::Dev, "Using ejected iOS asset: {}", ejected_path.display());
                     return Some(ejected_path);
                 }
             }
         }
+        
+        tracing::info!(dx_src = ?crate::logging::TraceSrc::Dev, "Using internal asset: {}", asset_path);
         
         None
     }

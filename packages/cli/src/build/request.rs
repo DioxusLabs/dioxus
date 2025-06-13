@@ -2572,6 +2572,13 @@ impl BuildRequest {
         use std::fs::{create_dir_all, write};
         let root = self.root_dir();
 
+        // Get the project directory for ejected assets
+        let project_dir = self.workspace.workspace_root();
+        let ejected_android_dir = project_dir.join("android");
+        
+        tracing::info!(dx_src = ?crate::logging::TraceSrc::Dev, "Project directory: {}", project_dir.display());
+        tracing::info!(dx_src = ?crate::logging::TraceSrc::Dev, "Checking for ejected Android assets at: {}", ejected_android_dir.display());
+
         // gradle
         let wrapper = root.join("gradle").join("wrapper");
         create_dir_all(&wrapper)?;
@@ -2616,86 +2623,172 @@ impl BuildRequest {
         };
         let hbs = handlebars::Handlebars::new();
 
+        // Helper function to check for ejected file and use it if it exists
+        let copy_ejected_or_use_template = |rel_path: &str, dest_path: &std::path::Path, template_content: &[u8]| -> Result<()> {
+            let ejected_path = ejected_android_dir.join(rel_path);
+            
+            if ejected_path.exists() {
+                tracing::info!(dx_src = ?crate::logging::TraceSrc::Dev, "Using ejected Android asset: {}", ejected_path.display());
+                std::fs::copy(&ejected_path, dest_path)?;
+            } else {
+                tracing::info!(dx_src = ?crate::logging::TraceSrc::Dev, "Using internal Android asset template for: {}", rel_path);
+                write(dest_path, template_content)?;
+            }
+            Ok(())
+        };
+        
+        // Helper function for handlebars templates
+        let render_ejected_or_use_template = |rel_path: &str, dest_path: &std::path::Path, template_path: &str| -> Result<()> {
+            let ejected_path = ejected_android_dir.join(rel_path);
+            
+            if ejected_path.exists() {
+                tracing::info!(dx_src = ?crate::logging::TraceSrc::Dev, "Using ejected Android asset: {}", ejected_path.display());
+                let content = std::fs::read_to_string(&ejected_path)
+                    .with_context(|| format!("Failed to read ejected file: {}", ejected_path.display()))?;
+                write(dest_path, content)?;
+            } else {
+                tracing::info!(dx_src = ?crate::logging::TraceSrc::Dev, "Using internal Android asset template for: {}", rel_path);
+                write(
+                    dest_path,
+                    hbs.render_template(template_path, &hbs_data)?,
+                )?;
+            }
+            Ok(())
+        };
+
         // Top-level gradle config
-        write(
-            root.join("build.gradle.kts"),
+        copy_ejected_or_use_template(
+            "gen/build.gradle.kts",
+            &root.join("build.gradle.kts"),
             include_bytes!("../../assets/android/gen/build.gradle.kts"),
         )?;
-        write(
-            root.join("gradle.properties"),
+        
+        copy_ejected_or_use_template(
+            "gen/gradle.properties",
+            &root.join("gradle.properties"),
             include_bytes!("../../assets/android/gen/gradle.properties"),
         )?;
-        write(
-            root.join("gradlew"),
+        
+        copy_ejected_or_use_template(
+            "gen/gradlew",
+            &root.join("gradlew"),
             include_bytes!("../../assets/android/gen/gradlew"),
         )?;
-        write(
-            root.join("gradlew.bat"),
+        
+        copy_ejected_or_use_template(
+            "gen/gradlew.bat",
+            &root.join("gradlew.bat"),
             include_bytes!("../../assets/android/gen/gradlew.bat"),
         )?;
-        write(
-            root.join("settings.gradle"),
+        
+        copy_ejected_or_use_template(
+            "gen/settings.gradle",
+            &root.join("settings.gradle"),
             include_bytes!("../../assets/android/gen/settings.gradle"),
         )?;
 
         // Then the wrapper and its properties
-        write(
-            wrapper.join("gradle-wrapper.properties"),
+        copy_ejected_or_use_template(
+            "gen/gradle/wrapper/gradle-wrapper.properties",
+            &wrapper.join("gradle-wrapper.properties"),
             include_bytes!("../../assets/android/gen/gradle/wrapper/gradle-wrapper.properties"),
         )?;
-        write(
-            wrapper.join("gradle-wrapper.jar"),
+        
+        copy_ejected_or_use_template(
+            "gen/gradle/wrapper/gradle-wrapper.jar",
+            &wrapper.join("gradle-wrapper.jar"),
             include_bytes!("../../assets/android/gen/gradle/wrapper/gradle-wrapper.jar"),
         )?;
 
         // Now the app directory
-        write(
-            app.join("build.gradle.kts"),
-            hbs.render_template(
-                include_str!("../../assets/android/gen/app/build.gradle.kts.hbs"),
-                &hbs_data,
-            )?,
+        render_ejected_or_use_template(
+            "gen/app/build.gradle.kts",
+            &app.join("build.gradle.kts"),
+            include_str!("../../assets/android/gen/app/build.gradle.kts.hbs"),
         )?;
-        write(
-            app.join("proguard-rules.pro"),
+        
+        copy_ejected_or_use_template(
+            "gen/app/proguard-rules.pro",
+            &app.join("proguard-rules.pro"),
             include_bytes!("../../assets/android/gen/app/proguard-rules.pro"),
         )?;
 
-        let manifest_xml = match self.config.application.android_manifest.as_deref() {
-            Some(manifest) => std::fs::read_to_string(self.package_manifest_dir().join(manifest))
-                .context("Failed to locate custom AndroidManifest.xml")?,
-            _ => hbs.render_template(
+        // Handle AndroidManifest.xml
+        let manifest_dest = app.join("src").join("main").join("AndroidManifest.xml");
+        let ejected_manifest = ejected_android_dir.join("gen/app/src/main/AndroidManifest.xml");
+        
+        let manifest_xml = if ejected_manifest.exists() {
+            tracing::info!(dx_src = ?crate::logging::TraceSrc::Dev, "Using ejected AndroidManifest.xml: {}", ejected_manifest.display());
+            std::fs::read_to_string(&ejected_manifest)
+                .with_context(|| format!("Failed to read ejected AndroidManifest.xml: {}", ejected_manifest.display()))?
+        } else if let Some(manifest) = self.config.application.android_manifest.as_deref() {
+            tracing::info!(dx_src = ?crate::logging::TraceSrc::Dev, "Using custom AndroidManifest.xml from config");
+            std::fs::read_to_string(self.package_manifest_dir().join(manifest))
+                .context("Failed to locate custom AndroidManifest.xml")?
+        } else {
+            tracing::info!(dx_src = ?crate::logging::TraceSrc::Dev, "Using internal AndroidManifest.xml template");
+            hbs.render_template(
                 include_str!("../../assets/android/gen/app/src/main/AndroidManifest.xml.hbs"),
                 &hbs_data,
-            )?,
+            )?
         };
 
-        write(
-            app.join("src").join("main").join("AndroidManifest.xml"),
-            manifest_xml,
-        )?;
+        write(&manifest_dest, manifest_xml)?;
 
-        // Write the main activity manually since tao dropped support for it
-        write(
-            self.wry_android_kotlin_files_out_dir()
-                .join("MainActivity.kt"),
-            hbs.render_template(
-                include_str!("../../assets/android/MainActivity.kt.hbs"),
-                &hbs_data,
-            )?,
-        )?;
+        // Write the main activity
+        let main_activity_dest = self.wry_android_kotlin_files_out_dir().join("MainActivity.kt");
+        let ejected_main_activity = ejected_android_dir.join("MainActivity.kt");
+        
+        if ejected_main_activity.exists() {
+            tracing::info!(dx_src = ?crate::logging::TraceSrc::Dev, "Using ejected MainActivity.kt: {}", ejected_main_activity.display());
+            std::fs::copy(&ejected_main_activity, &main_activity_dest)?;
+        } else {
+            tracing::info!(dx_src = ?crate::logging::TraceSrc::Dev, "Using internal MainActivity.kt template");
+            write(
+                &main_activity_dest,
+                hbs.render_template(
+                    include_str!("../../assets/android/MainActivity.kt.hbs"),
+                    &hbs_data,
+                )?,
+            )?;
+        }
 
         // Write the res folder, containing stuff like default icons, colors, and menubars.
         let res = app_main.join("res");
         create_dir_all(&res)?;
         create_dir_all(res.join("values"))?;
-        write(
-            res.join("values").join("strings.xml"),
-            hbs.render_template(
+        
+        // Check for ejected strings.xml file
+        let strings_xml_path = res.join("values").join("strings.xml");
+        let ejected_strings_path = ejected_android_dir.join("gen/app/src/main/res/values/strings.xml");
+        
+        tracing::info!(dx_src = ?crate::logging::TraceSrc::Dev, "Checking for ejected strings.xml at: {}", ejected_strings_path.display());
+        
+        if ejected_strings_path.exists() {
+            tracing::info!(dx_src = ?crate::logging::TraceSrc::Dev, "Found ejected strings.xml: {}", ejected_strings_path.display());
+            
+            // Read and log the content of the ejected file
+            let content = std::fs::read_to_string(&ejected_strings_path).unwrap_or_else(|_| "<Failed to read file>".to_string());
+            tracing::info!(dx_src = ?crate::logging::TraceSrc::Dev, "Ejected strings.xml content: {}", content);
+            
+            // Copy the ejected strings.xml file directly
+            std::fs::copy(&ejected_strings_path, &strings_xml_path)?;
+            tracing::info!(dx_src = ?crate::logging::TraceSrc::Dev, "Copied ejected strings.xml to: {}", strings_xml_path.display());
+            
+            // Verify the copied file
+            let copied_content = std::fs::read_to_string(&strings_xml_path).unwrap_or_else(|_| "<Failed to read file>".to_string());
+            tracing::info!(dx_src = ?crate::logging::TraceSrc::Dev, "Copied strings.xml content: {}", copied_content);
+        } else {
+            tracing::info!(dx_src = ?crate::logging::TraceSrc::Dev, "No ejected strings.xml found, using internal template");
+            let template_content = hbs.render_template(
                 include_str!("../../assets/android/gen/app/src/main/res/values/strings.xml.hbs"),
                 &hbs_data,
-            )?,
-        )?;
+            )?;
+            
+            tracing::info!(dx_src = ?crate::logging::TraceSrc::Dev, "Generated template content: {}", template_content);
+            write(&strings_xml_path, &template_content)?;
+            tracing::info!(dx_src = ?crate::logging::TraceSrc::Dev, "Generated strings.xml from template at: {}", strings_xml_path.display());
+        }
         write(
             res.join("values").join("colors.xml"),
             include_bytes!("../../assets/android/gen/app/src/main/res/values/colors.xml"),
