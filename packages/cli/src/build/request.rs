@@ -3861,7 +3861,7 @@ impl BuildRequest {
         };
 
         // Inject any resources from the config into the html
-        self.inject_resources(assets, &mut html)?;
+        self.inject_resources(assets, wasm_path, &mut html)?;
 
         // Inject loading scripts if they are not already present
         self.inject_loading_scripts(&mut html);
@@ -3880,7 +3880,12 @@ impl BuildRequest {
     }
 
     // Inject any resources from the config into the html
-    fn inject_resources(&self, assets: &AssetManifest, html: &mut String) -> Result<()> {
+    fn inject_resources(
+        &self,
+        assets: &AssetManifest,
+        wasm_path: &str,
+        html: &mut String,
+    ) -> Result<()> {
         use std::fmt::Write;
 
         // Collect all resources into a list of styles and scripts
@@ -3950,19 +3955,10 @@ impl BuildRequest {
         }
 
         // Manually inject the wasm file for preloading. WASM currently doesn't support preloading in the manganis asset system
-        let wasm_source_path = self.wasm_bindgen_wasm_output_file();
-        if let Some(wasm_assets) = assets.get_assets_for_source(&wasm_source_path) {
-            let wasm_path = wasm_assets
-                .iter()
-                .next()
-                .expect("There should be exactly one optimized wasm asset");
-            let wasm_path = wasm_path.bundled_path();
-            head_resources.push_str(&format!(
-                    "<link rel=\"preload\" as=\"fetch\" type=\"application/wasm\" href=\"/{{base_path}}/assets/{wasm_path}\" crossorigin>"
-                ));
-
-            Self::replace_or_insert_before("{style_include}", "</head", &head_resources, html);
-        }
+        head_resources.push_str(&format!(
+            "<link rel=\"preload\" as=\"fetch\" type=\"application/wasm\" href=\"/{{base_path}}/assets/{wasm_path}\" crossorigin>"
+        ));
+        Self::replace_or_insert_before("{style_include}", "</head", &head_resources, html);
 
         Ok(())
     }
