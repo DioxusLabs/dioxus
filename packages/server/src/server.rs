@@ -8,6 +8,7 @@ use axum::{
     http::{Request, Response, StatusCode},
     response::IntoResponse,
 };
+use dioxus_cli_config::base_path;
 use dioxus_lib::prelude::{Element, VirtualDom};
 use http::header::*;
 use server_fn::ServerFnTraitObj;
@@ -81,6 +82,18 @@ where
             return self;
         }
 
+        // Get the base path if configured for reverse proxy support
+        let base_path_prefix = base_path()
+            .map(|bp| {
+                let trimmed = bp.trim_matches('/');
+                if trimmed.is_empty() {
+                    String::new()
+                } else {
+                    format!("/{}", trimmed)
+                }
+            })
+            .unwrap_or_default();
+
         // Serve all files in public folder except index.html
         let dir = std::fs::read_dir(&public_path).unwrap_or_else(|e| {
             panic!(
@@ -105,7 +118,11 @@ where
                 })
                 .collect::<Vec<_>>()
                 .join("/");
-            let route = format!("/{}", route);
+            let route = if base_path_prefix.is_empty() {
+                format!("/{}", route)
+            } else {
+                format!("{}/{}", base_path_prefix, route)
+            };
             if path.is_dir() {
                 self = self.nest_service(&route, ServeDir::new(path).precompressed_br());
             } else {

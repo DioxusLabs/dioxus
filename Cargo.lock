@@ -14493,6 +14493,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "test-proxy-app"
+version = "0.1.0"
+dependencies = [
+ "dioxus",
+ "serde",
+]
+
+[[package]]
 name = "thin-slice"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
