@@ -42,6 +42,13 @@ impl EjectedAssets {
 
     /// Check if there are ejected Android assets in the project directory
     pub fn android_assets_dir(project_dir: &Path) -> Option<PathBuf> {
+        // First check for root-level android folder
+        let android_dir_root = project_dir.join("android");
+        if android_dir_root.exists() && android_dir_root.is_dir() {
+            return Some(android_dir_root);
+        }
+        
+        // Fall back to assets/android for backward compatibility
         let android_dir = project_dir.join("assets").join("android");
         if android_dir.exists() && android_dir.is_dir() {
             Some(android_dir)
@@ -52,6 +59,13 @@ impl EjectedAssets {
 
     /// Check if there are ejected iOS assets in the project directory
     pub fn ios_assets_dir(project_dir: &Path) -> Option<PathBuf> {
+        // First check for root-level ios folder
+        let ios_dir_root = project_dir.join("ios");
+        if ios_dir_root.exists() && ios_dir_root.is_dir() {
+            return Some(ios_dir_root);
+        }
+        
+        // Fall back to assets/ios for backward compatibility
         let ios_dir = project_dir.join("assets").join("ios");
         if ios_dir.exists() && ios_dir.is_dir() {
             Some(ios_dir)
@@ -67,6 +81,13 @@ impl EjectedAssets {
     /// * `project_dir` - The project directory
     /// * `platform` - The platform name ("android" or "ios")
     pub fn platform_assets_dir(project_dir: &Path, platform: &str) -> Option<PathBuf> {
+        // First check for root-level platform folder
+        let platform_dir_root = project_dir.join(platform);
+        if platform_dir_root.exists() && platform_dir_root.is_dir() {
+            return Some(platform_dir_root);
+        }
+        
+        // Fall back to assets/platform for backward compatibility
         let platform_dir = project_dir.join("assets").join(platform);
         if platform_dir.exists() && platform_dir.is_dir() {
             Some(platform_dir)
