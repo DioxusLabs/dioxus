@@ -1,5 +1,4 @@
 use std::path::{Path, PathBuf};
-use std::env;
 
 /// Utility struct for working with ejected assets
 pub struct EjectedAssets {
@@ -7,12 +6,6 @@ pub struct EjectedAssets {
 }
 
 impl EjectedAssets {
-    /// Create a new EjectedAssets instance using the current directory
-    pub fn new() -> Self {
-        let project_dir = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-        Self { project_dir }
-    }
-    
     /// Create a new EjectedAssets instance with a specific project directory
     pub fn with_project_dir(project_dir: PathBuf) -> Self {
         Self { project_dir }
