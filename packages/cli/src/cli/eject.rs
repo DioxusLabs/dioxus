@@ -50,24 +50,20 @@ impl Eject {
             .output_dir
             .clone()
             .unwrap_or_else(|| PathBuf::from("."));
-        let assets_dir = output_dir.join("assets");
 
-        println!("Ejecting assets to {}", assets_dir.display());
-
-        // Create the assets directory if it doesn't exist
-        create_dir_all(&assets_dir)?;
+        println!("Ejecting assets to {}", output_dir.display());
 
         // Eject Android assets if requested
         if self.android {
-            self.eject_android_assets(&assets_dir).await?;
+            self.eject_android_assets(&output_dir).await?;
         }
 
         // Eject iOS assets if requested
         if self.ios {
-            self.eject_ios_assets(&assets_dir).await?;
+            self.eject_ios_assets(&output_dir).await?;
         }
 
-        println!("Successfully ejected assets to {}", assets_dir.display());
+        println!("Successfully ejected assets to {}", output_dir.display());
         Ok(StructuredOutput::Success)
     }
 
@@ -78,8 +74,8 @@ impl Eject {
     }
 
     /// Eject Android assets
-    async fn eject_android_assets(&self, assets_dir: &Path) -> Result<()> {
-        let android_dir = assets_dir.join("android");
+    async fn eject_android_assets(&self, output_dir: &Path) -> Result<()> {
+        let android_dir = output_dir.join("android");
         create_dir_all(&android_dir)?;
 
         // Check if android assets directory already exists using platform_assets_dir
@@ -88,24 +84,24 @@ impl Eject {
             println!("Using existing ejected Android assets in {}", android_dir.display());
         } else {
             // Copy assets from CLI package to output directory
-            self.copy_assets_with_rendering(Path::new("../../assets/android"), &android_dir).await?
+            self.copy_assets_with_rendering(Path::new("assets/android"), &android_dir).await?
         }
         
         Ok(())
     }
 
     /// Eject iOS assets
-    async fn eject_ios_assets(&self, assets_dir: &Path) -> Result<()> {
-        let ios_dir = assets_dir.join("ios");
+    async fn eject_ios_assets(&self, output_dir: &Path) -> Result<()> {
+        let ios_dir = output_dir.join("ios");
         create_dir_all(&ios_dir)?;
 
-        // Check if iOS assets directory already exists using platform_assets_dir
+        // Check if ios assets directory already exists using platform_assets_dir
         let project_dir = std::env::current_dir()?;
         if crate::build::ejected_assets::EjectedAssets::platform_assets_dir(&project_dir, "ios").is_some() && !self.force {
             println!("Using existing ejected iOS assets in {}", ios_dir.display());
         } else {
             // Copy assets from CLI package to output directory
-            self.copy_assets_with_rendering(Path::new("../../assets/ios"), &ios_dir).await?
+            self.copy_assets_with_rendering(Path::new("assets/ios"), &ios_dir).await?
         }
         
         Ok(())
@@ -114,8 +110,23 @@ impl Eject {
     /// Copy assets from source to destination, rendering HBS templates
     async fn copy_assets_with_rendering(&self, src_dir: &Path, dest_dir: &Path) -> Result<()> {
         let src_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join(src_dir);
+        println!("Source directory: {}", src_dir.display());
+        println!("Destination directory: {}", dest_dir.display());
+        
         if !src_dir.exists() {
             return Err(format!("Source directory {} does not exist", src_dir.display()).into());
+        }
+        
+        // List files in source directory for debugging
+        println!("Files in source directory:");
+        if let Ok(entries) = fs::read_dir(&src_dir) {
+            for entry in entries {
+                if let Ok(entry) = entry {
+                    println!("  {}", entry.path().display());
+                }
+            }
+        } else {
+            println!("  Failed to read directory contents");
         }
 
         // Get the workspace for project information
@@ -142,7 +153,7 @@ impl Eject {
 
         // Platform-specific template data
         let hbs_data = if src_dir.ends_with("android") {
-            // Android template data
+            // Android template data - match AndroidHandlebarsObjects in request.rs
             let application_id = format!("com.example.{}", package_name.replace("-", "_"));
 
             json!({
@@ -155,8 +166,10 @@ impl Eject {
             let bundle_id = format!("com.example.{}", package_name.replace("-", "_"));
 
             json!({
-                "bundle_id": bundle_id,
-                "app_name": package_name
+                "display_name": package_name,
+                "bundle_name": package_name,
+                "executable_name": package_name,
+                "bundle_identifier": bundle_id
             })
         } else {
             // Generic template data for other platforms
@@ -179,7 +192,10 @@ impl Eject {
         hbs: &Handlebars,
         hbs_data: &serde_json::Value,
     ) -> Result<()> {
+        println!("Copying directory: {} -> {}", src.display(), dest.display());
+        
         if !dest.exists() {
+            println!("Creating destination directory: {}", dest.display());
             create_dir_all(dest)?;
         }
 
