@@ -4,10 +4,14 @@ use dioxus_router::components::HistoryProvider;
 use std::rc::Rc;
 
 fn prepare<R: Routable>() -> String {
-    prepare_at::<R>("/", "/")
+    prepare_at::<R>("/")
 }
 
-fn prepare_at<R: Routable>(at: impl ToString, base_path: impl ToString) -> String {
+fn prepare_at<R: Routable>(at: impl ToString) -> String {
+    prepare_at_with_base_path::<R>(at, "")
+}
+
+fn prepare_at_with_base_path<R: Routable>(at: impl ToString, base_path: impl ToString) -> String {
     let mut vdom = VirtualDom::new_with_props(
         App,
         AppProps::<R> {
@@ -90,7 +94,7 @@ fn href_internal() {
         href = r#"href="/deeply/nested/path/test""#,
     );
 
-    assert_eq!(prepare_at::<Route>("/", base_path), expected);
+    assert_eq!(prepare_at_with_base_path::<Route>("/", base_path), expected);
 }
 
 #[test]
@@ -126,7 +130,10 @@ fn href_external() {
 
     assert_eq!(prepare::<Route>(), expected);
     // The base path should not effect external links
-    assert_eq!(prepare_at::<Route>("/", "/deeply/nested/path"), expected);
+    assert_eq!(
+        prepare_at_with_base_path::<Route>("/", "/deeply/nested/path"),
+        expected
+    );
 }
 
 #[test]
@@ -427,12 +434,12 @@ fn with_child_route() {
     }
 
     assert_eq!(
-        prepare_at::<Route>("/", "/"),
+        prepare_at::<Route>("/"),
         "<h1>App</h1><a href=\"/test\">Parent Link</a><a href=\"/child/this-is-a-child-route\">Child Link</a>"
     );
 
     assert_eq!(
-        prepare_at::<Route>("/child", "/"),
+        prepare_at::<Route>("/child"),
         "<h1>App</h1><a href=\"/test\">Parent Link</a><a href=\"/child/this-is-a-child-route\">Child Link 1</a><a href=\"/child/this-is-a-child-route\">Child Link 2</a>"
     );
 }
@@ -460,7 +467,7 @@ fn with_hash_segment() {
     }
 
     assert_eq!(
-        prepare_at::<Route>("/#test", "/"),
+        prepare_at::<Route>("/#test"),
         "<h1>App</h1><a href=\"/#test\" aria-current=\"page\">Link</a><a href=\"/\">Empty</a>"
     );
 }
