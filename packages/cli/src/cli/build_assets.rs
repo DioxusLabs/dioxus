@@ -23,7 +23,8 @@ impl BuildAssets {
         create_dir_all(&self.destination)?;
         
         // Check for ejected assets
-        let ejected_assets = EjectedAssets::new();
+        let current_dir = std::env::current_dir()?;
+        let ejected_assets = EjectedAssets::with_project_dir(current_dir);
 
         for asset in manifest.assets() {
             let mut source_path = PathBuf::from(asset.absolute_source_path());

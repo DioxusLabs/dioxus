@@ -40,11 +40,9 @@ impl Eject {
         
         // Check if assets are already ejected
         let current_dir = std::env::current_dir()?;
-        // Use with_project_dir to create an instance with a specific project directory
-        let ejected_assets = crate::build::ejected_assets::EjectedAssets::with_project_dir(current_dir.clone());
         
         // Use the static has_ejected_assets method to check if assets are already ejected
-        if ejected_assets.get_ejected_path("android/placeholder").is_some() && !self.force {
+        if crate::build::ejected_assets::EjectedAssets::has_ejected_assets(&current_dir) && !self.force {
             return Err(format!("Assets are already ejected. Use --force to overwrite.").into());
         }
 
