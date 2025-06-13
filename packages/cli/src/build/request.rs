@@ -2575,7 +2575,7 @@ impl BuildRequest {
         // Get the project directory for ejected assets
         let project_dir = self.workspace.workspace_root();
         let ejected_android_dir = project_dir.join("android");
-        
+
         tracing::info!(dx_src = ?crate::logging::TraceSrc::Dev, "Project directory: {}", project_dir.display());
         tracing::info!(dx_src = ?crate::logging::TraceSrc::Dev, "Checking for ejected Android assets at: {}", ejected_android_dir.display());
 
@@ -2624,9 +2624,12 @@ impl BuildRequest {
         let hbs = handlebars::Handlebars::new();
 
         // Helper function to check for ejected file and use it if it exists
-        let copy_ejected_or_use_template = |rel_path: &str, dest_path: &std::path::Path, template_content: &[u8]| -> Result<()> {
+        let copy_ejected_or_use_template = |rel_path: &str,
+                                            dest_path: &std::path::Path,
+                                            template_content: &[u8]|
+         -> Result<()> {
             let ejected_path = ejected_android_dir.join(rel_path);
-            
+
             if ejected_path.exists() {
                 tracing::info!(dx_src = ?crate::logging::TraceSrc::Dev, "Using ejected Android asset: {}", ejected_path.display());
                 std::fs::copy(&ejected_path, dest_path)?;
@@ -2636,22 +2639,23 @@ impl BuildRequest {
             }
             Ok(())
         };
-        
+
         // Helper function for handlebars templates
-        let render_ejected_or_use_template = |rel_path: &str, dest_path: &std::path::Path, template_path: &str| -> Result<()> {
+        let render_ejected_or_use_template = |rel_path: &str,
+                                              dest_path: &std::path::Path,
+                                              template_path: &str|
+         -> Result<()> {
             let ejected_path = ejected_android_dir.join(rel_path);
-            
+
             if ejected_path.exists() {
                 tracing::info!(dx_src = ?crate::logging::TraceSrc::Dev, "Using ejected Android asset: {}", ejected_path.display());
-                let content = std::fs::read_to_string(&ejected_path)
-                    .with_context(|| format!("Failed to read ejected file: {}", ejected_path.display()))?;
+                let content = std::fs::read_to_string(&ejected_path).with_context(|| {
+                    format!("Failed to read ejected file: {}", ejected_path.display())
+                })?;
                 write(dest_path, content)?;
             } else {
                 tracing::info!(dx_src = ?crate::logging::TraceSrc::Dev, "Using internal Android asset template for: {}", rel_path);
-                write(
-                    dest_path,
-                    hbs.render_template(template_path, &hbs_data)?,
-                )?;
+                write(dest_path, hbs.render_template(template_path, &hbs_data)?)?;
             }
             Ok(())
         };
@@ -2662,25 +2666,25 @@ impl BuildRequest {
             &root.join("build.gradle.kts"),
             include_bytes!("../../assets/android/gen/build.gradle.kts"),
         )?;
-        
+
         copy_ejected_or_use_template(
             "gen/gradle.properties",
             &root.join("gradle.properties"),
             include_bytes!("../../assets/android/gen/gradle.properties"),
         )?;
-        
+
         copy_ejected_or_use_template(
             "gen/gradlew",
             &root.join("gradlew"),
             include_bytes!("../../assets/android/gen/gradlew"),
         )?;
-        
+
         copy_ejected_or_use_template(
             "gen/gradlew.bat",
             &root.join("gradlew.bat"),
             include_bytes!("../../assets/android/gen/gradlew.bat"),
         )?;
-        
+
         copy_ejected_or_use_template(
             "gen/settings.gradle",
             &root.join("settings.gradle"),
@@ -2693,7 +2697,7 @@ impl BuildRequest {
             &wrapper.join("gradle-wrapper.properties"),
             include_bytes!("../../assets/android/gen/gradle/wrapper/gradle-wrapper.properties"),
         )?;
-        
+
         copy_ejected_or_use_template(
             "gen/gradle/wrapper/gradle-wrapper.jar",
             &wrapper.join("gradle-wrapper.jar"),
@@ -2706,95 +2710,67 @@ impl BuildRequest {
             &app.join("build.gradle.kts"),
             include_str!("../../assets/android/gen/app/build.gradle.kts.hbs"),
         )?;
-        
+
         copy_ejected_or_use_template(
             "gen/app/proguard-rules.pro",
             &app.join("proguard-rules.pro"),
             include_bytes!("../../assets/android/gen/app/proguard-rules.pro"),
         )?;
 
-        // Handle AndroidManifest.xml
+        // Handle AndroidManifest.xml with special case for config-specified manifest
         let manifest_dest = app.join("src").join("main").join("AndroidManifest.xml");
         let ejected_manifest = ejected_android_dir.join("gen/app/src/main/AndroidManifest.xml");
-        
-        let manifest_xml = if ejected_manifest.exists() {
+
+        if ejected_manifest.exists() {
             tracing::info!(dx_src = ?crate::logging::TraceSrc::Dev, "Using ejected AndroidManifest.xml: {}", ejected_manifest.display());
-            std::fs::read_to_string(&ejected_manifest)
-                .with_context(|| format!("Failed to read ejected AndroidManifest.xml: {}", ejected_manifest.display()))?
+            let _ = std::fs::copy(&ejected_manifest, &manifest_dest)?;
         } else if let Some(manifest) = self.config.application.android_manifest.as_deref() {
             tracing::info!(dx_src = ?crate::logging::TraceSrc::Dev, "Using custom AndroidManifest.xml from config");
-            std::fs::read_to_string(self.package_manifest_dir().join(manifest))
-                .context("Failed to locate custom AndroidManifest.xml")?
+            let custom_manifest =
+                std::fs::read_to_string(self.package_manifest_dir().join(manifest))
+                    .context("Failed to locate custom AndroidManifest.xml")?;
+            write(&manifest_dest, custom_manifest)?;
         } else {
             tracing::info!(dx_src = ?crate::logging::TraceSrc::Dev, "Using internal AndroidManifest.xml template");
-            hbs.render_template(
-                include_str!("../../assets/android/gen/app/src/main/AndroidManifest.xml.hbs"),
-                &hbs_data,
-            )?
-        };
-
-        write(&manifest_dest, manifest_xml)?;
-
-        // Write the main activity
-        let main_activity_dest = self.wry_android_kotlin_files_out_dir().join("MainActivity.kt");
-        let ejected_main_activity = ejected_android_dir.join("MainActivity.kt");
-        
-        if ejected_main_activity.exists() {
-            tracing::info!(dx_src = ?crate::logging::TraceSrc::Dev, "Using ejected MainActivity.kt: {}", ejected_main_activity.display());
-            std::fs::copy(&ejected_main_activity, &main_activity_dest)?;
-        } else {
-            tracing::info!(dx_src = ?crate::logging::TraceSrc::Dev, "Using internal MainActivity.kt template");
             write(
-                &main_activity_dest,
+                &manifest_dest,
                 hbs.render_template(
-                    include_str!("../../assets/android/MainActivity.kt.hbs"),
+                    include_str!("../../assets/android/gen/app/src/main/AndroidManifest.xml.hbs"),
                     &hbs_data,
                 )?,
             )?;
         }
 
+        // Write the main activity using the render helper
+        render_ejected_or_use_template(
+            "MainActivity.kt",
+            &self
+                .wry_android_kotlin_files_out_dir()
+                .join("MainActivity.kt"),
+            include_str!("../../assets/android/MainActivity.kt.hbs"),
+        )?;
+
         // Write the res folder, containing stuff like default icons, colors, and menubars.
         let res = app_main.join("res");
         create_dir_all(&res)?;
         create_dir_all(res.join("values"))?;
-        
-        // Check for ejected strings.xml file
-        let strings_xml_path = res.join("values").join("strings.xml");
-        let ejected_strings_path = ejected_android_dir.join("gen/app/src/main/res/values/strings.xml");
-        
-        tracing::info!(dx_src = ?crate::logging::TraceSrc::Dev, "Checking for ejected strings.xml at: {}", ejected_strings_path.display());
-        
-        if ejected_strings_path.exists() {
-            tracing::info!(dx_src = ?crate::logging::TraceSrc::Dev, "Found ejected strings.xml: {}", ejected_strings_path.display());
-            
-            // Read and log the content of the ejected file
-            let content = std::fs::read_to_string(&ejected_strings_path).unwrap_or_else(|_| "<Failed to read file>".to_string());
-            tracing::info!(dx_src = ?crate::logging::TraceSrc::Dev, "Ejected strings.xml content: {}", content);
-            
-            // Copy the ejected strings.xml file directly
-            std::fs::copy(&ejected_strings_path, &strings_xml_path)?;
-            tracing::info!(dx_src = ?crate::logging::TraceSrc::Dev, "Copied ejected strings.xml to: {}", strings_xml_path.display());
-            
-            // Verify the copied file
-            let copied_content = std::fs::read_to_string(&strings_xml_path).unwrap_or_else(|_| "<Failed to read file>".to_string());
-            tracing::info!(dx_src = ?crate::logging::TraceSrc::Dev, "Copied strings.xml content: {}", copied_content);
-        } else {
-            tracing::info!(dx_src = ?crate::logging::TraceSrc::Dev, "No ejected strings.xml found, using internal template");
-            let template_content = hbs.render_template(
-                include_str!("../../assets/android/gen/app/src/main/res/values/strings.xml.hbs"),
-                &hbs_data,
-            )?;
-            
-            tracing::info!(dx_src = ?crate::logging::TraceSrc::Dev, "Generated template content: {}", template_content);
-            write(&strings_xml_path, &template_content)?;
-            tracing::info!(dx_src = ?crate::logging::TraceSrc::Dev, "Generated strings.xml from template at: {}", strings_xml_path.display());
-        }
-        write(
-            res.join("values").join("colors.xml"),
+
+        // Handle strings.xml with the render helper
+        render_ejected_or_use_template(
+            "gen/app/src/main/res/values/strings.xml",
+            &res.join("values").join("strings.xml"),
+            include_str!("../../assets/android/gen/app/src/main/res/values/strings.xml.hbs"),
+        )?;
+        // Handle colors.xml with the copy helper
+        copy_ejected_or_use_template(
+            "gen/app/src/main/res/values/colors.xml",
+            &res.join("values").join("colors.xml"),
             include_bytes!("../../assets/android/gen/app/src/main/res/values/colors.xml"),
         )?;
-        write(
-            res.join("values").join("styles.xml"),
+        // Handle styles.xml with the copy helper
+        copy_ejected_or_use_template(
+            "gen/app/src/main/res/values/styles.xml",
+            &res.join("values").join("styles.xml"),
             include_bytes!("../../assets/android/gen/app/src/main/res/values/styles.xml"),
         )?;
 
@@ -2807,57 +2783,69 @@ impl BuildRequest {
         )?;
 
         create_dir_all(res.join("drawable"))?;
-        write(
-            res.join("drawable").join("ic_launcher_background.xml"),
+
+        // Handle ic_launcher_background.xml with the copy helper
+        copy_ejected_or_use_template(
+            "gen/app/src/main/res/drawable/ic_launcher_background.xml",
+            &res.join("drawable").join("ic_launcher_background.xml"),
             include_bytes!(
                 "../../assets/android/gen/app/src/main/res/drawable/ic_launcher_background.xml"
             ),
         )?;
         create_dir_all(res.join("drawable-v24"))?;
-        write(
-            res.join("drawable-v24").join("ic_launcher_foreground.xml"),
+
+        // Handle ic_launcher_foreground.xml with the copy helper
+        copy_ejected_or_use_template(
+            "gen/app/src/main/res/drawable-v24/ic_launcher_foreground.xml",
+            &res.join("drawable-v24").join("ic_launcher_foreground.xml"),
             include_bytes!(
                 "../../assets/android/gen/app/src/main/res/drawable-v24/ic_launcher_foreground.xml"
             ),
         )?;
         create_dir_all(res.join("mipmap-anydpi-v26"))?;
-        write(
-            res.join("mipmap-anydpi-v26").join("ic_launcher.xml"),
+        copy_ejected_or_use_template(
+            "gen/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml",
+            &res.join("mipmap-anydpi-v26").join("ic_launcher.xml"),
             include_bytes!(
                 "../../assets/android/gen/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml"
             ),
         )?;
         create_dir_all(res.join("mipmap-hdpi"))?;
-        write(
-            res.join("mipmap-hdpi").join("ic_launcher.webp"),
+        copy_ejected_or_use_template(
+            "gen/app/src/main/res/mipmap-hdpi/ic_launcher.webp",
+            &res.join("mipmap-hdpi").join("ic_launcher.webp"),
             include_bytes!(
                 "../../assets/android/gen/app/src/main/res/mipmap-hdpi/ic_launcher.webp"
             ),
         )?;
         create_dir_all(res.join("mipmap-mdpi"))?;
-        write(
-            res.join("mipmap-mdpi").join("ic_launcher.webp"),
+        copy_ejected_or_use_template(
+            "gen/app/src/main/res/mipmap-mdpi/ic_launcher.webp",
+            &res.join("mipmap-mdpi").join("ic_launcher.webp"),
             include_bytes!(
                 "../../assets/android/gen/app/src/main/res/mipmap-mdpi/ic_launcher.webp"
             ),
         )?;
         create_dir_all(res.join("mipmap-xhdpi"))?;
-        write(
-            res.join("mipmap-xhdpi").join("ic_launcher.webp"),
+        copy_ejected_or_use_template(
+            "gen/app/src/main/res/mipmap-xhdpi/ic_launcher.webp",
+            &res.join("mipmap-xhdpi").join("ic_launcher.webp"),
             include_bytes!(
                 "../../assets/android/gen/app/src/main/res/mipmap-xhdpi/ic_launcher.webp"
             ),
         )?;
         create_dir_all(res.join("mipmap-xxhdpi"))?;
-        write(
-            res.join("mipmap-xxhdpi").join("ic_launcher.webp"),
+        copy_ejected_or_use_template(
+            "gen/app/src/main/res/mipmap-xxhdpi/ic_launcher.webp",
+            &res.join("mipmap-xxhdpi").join("ic_launcher.webp"),
             include_bytes!(
                 "../../assets/android/gen/app/src/main/res/mipmap-xxhdpi/ic_launcher.webp"
             ),
         )?;
         create_dir_all(res.join("mipmap-xxxhdpi"))?;
-        write(
-            res.join("mipmap-xxxhdpi").join("ic_launcher.webp"),
+        copy_ejected_or_use_template(
+            "gen/app/src/main/res/mipmap-xxxhdpi/ic_launcher.webp",
+            &res.join("mipmap-xxxhdpi").join("ic_launcher.webp"),
             include_bytes!(
                 "../../assets/android/gen/app/src/main/res/mipmap-xxxhdpi/ic_launcher.webp"
             ),
@@ -3230,8 +3218,22 @@ impl BuildRequest {
 
             Platform::Ios => {
                 let dest = self.root_dir().join("Info.plist");
-                let plist = self.info_plist_contents(self.platform)?;
-                std::fs::write(dest, plist)?;
+
+                // Check for ejected iOS Info.plist
+                let project_dir = self.workspace_dir();
+                let ejected_ios_dir = project_dir.join("ios");
+                let ejected_plist_path = ejected_ios_dir.join("Info.plist");
+
+                tracing::info!(dx_src = ?crate::logging::TraceSrc::Dev, "Checking for ejected iOS Info.plist at: {}", ejected_plist_path.display());
+
+                if ejected_plist_path.exists() {
+                    tracing::info!(dx_src = ?crate::logging::TraceSrc::Dev, "Using ejected iOS Info.plist: {}", ejected_plist_path.display());
+                    let _ = std::fs::copy(&ejected_plist_path, &dest)?;
+                } else {
+                    tracing::info!(dx_src = ?crate::logging::TraceSrc::Dev, "Using internal iOS Info.plist template");
+                    let plist = self.info_plist_contents(self.platform)?;
+                    std::fs::write(dest, plist)?;
+                }
             }
 
             // AndroidManifest.xml
@@ -3791,9 +3793,9 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
     /// and return the path to the ejected assets directory if found
     pub(crate) fn ejected_assets_dir(&self) -> Option<PathBuf> {
         use crate::build::EjectedAssets;
-        
+
         let workspace_dir = self.workspace_dir();
-        
+
         match self.platform {
             Platform::Android => EjectedAssets::android_assets_dir(&workspace_dir),
             Platform::Ios => EjectedAssets::ios_assets_dir(&workspace_dir),
@@ -3806,7 +3808,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         if let Some(ejected_dir) = self.ejected_assets_dir() {
             return ejected_dir;
         }
-        
+
         // If no ejected assets, use the default asset directory
         match self.platform {
             Platform::MacOS => self
