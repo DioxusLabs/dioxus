@@ -11,13 +11,15 @@
 mod assets;
 mod builder;
 mod context;
+pub mod ejected_assets;
 mod patch;
 mod request;
 mod tools;
 
-pub(crate) use assets::*;
 pub(crate) use builder::*;
 pub(crate) use context::*;
+pub(crate) use ejected_assets::EjectedAssets;
 pub(crate) use patch::*;
 pub(crate) use request::*;
 pub(crate) use tools::*;
+pub use assets::extract_assets_from_file;

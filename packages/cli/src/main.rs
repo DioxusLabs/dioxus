@@ -63,6 +63,7 @@ async fn main() {
         Commands::Run(opts) => opts.run().await,
         Commands::BuildAssets(opts) => opts.run().await,
         Commands::SelfUpdate(opts) => opts.self_update().await,
+        Commands::Eject(opts) => opts.eject().await,
     };
 
     // Provide a structured output for third party tools that can consume the output of the CLI
