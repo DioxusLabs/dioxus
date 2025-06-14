@@ -17,10 +17,11 @@ mod dioxus_renderer;
 mod events;
 mod mutation_writer;
 
-use blitz_dom::{ns, Atom, LocalName, Namespace, QualName};
+use blitz_dom::{ns, LocalName, Namespace, QualName};
 pub use dioxus_application::{DioxusNativeApplication, DioxusNativeEvent};
 pub use dioxus_document::DioxusDocument;
-pub use dioxus_renderer::DioxusNativeWindowRenderer;
+pub use dioxus_renderer::{DioxusNativeWindowRenderer, use_wgpu};
+pub use anyrender_vello::{CustomPaintCtx, CustomPaintSource, TextureHandle};
 
 use blitz_shell::{create_default_event_loop, BlitzShellEvent, Config, WindowConfig};
 use dioxus_core::{ComponentFunction, Element, VirtualDom};

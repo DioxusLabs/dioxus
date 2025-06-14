@@ -67,8 +67,8 @@ impl DioxusNativeWindowRenderer {
 }
 
 impl WindowRenderer for DioxusNativeWindowRenderer {
-    type Scene<'a>
-        = <InnerRenderer as WindowRenderer>::Scene<'a>
+    type ScenePainter<'a>
+        = <InnerRenderer as WindowRenderer>::ScenePainter<'a>
     where
         Self: 'a;
 
@@ -88,7 +88,7 @@ impl WindowRenderer for DioxusNativeWindowRenderer {
         self.inner.borrow_mut().set_size(width, height)
     }
 
-    fn render<F: FnOnce(&mut Self::Scene<'_>)>(&mut self, draw_fn: F) {
+    fn render<F: FnOnce(&mut Self::ScenePainter<'_>)>(&mut self, draw_fn: F) {
         self.inner.borrow_mut().render(draw_fn)
     }
 }

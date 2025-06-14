@@ -16515,6 +16515,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "wgpu-texture"
+version = "0.0.0"
+dependencies = [
+ "bytemuck",
+ "color",
+ "dioxus",
+ "dioxus-native",
+ "wgpu 24.0.5",
+]
+
+[[package]]
 name = "wgpu-types"
 version = "0.19.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"

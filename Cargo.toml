@@ -113,6 +113,7 @@ members = [
     "examples/fullstack-desktop",
     "examples/fullstack-auth",
     "examples/fullstack-websockets",
+    "examples/wgpu-texture",
 
     # Playwright tests
     "packages/playwright-tests/liveview",
