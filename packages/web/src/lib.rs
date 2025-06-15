@@ -31,6 +31,8 @@ pub use document::WebDocument;
 #[cfg(feature = "file_engine")]
 pub use file_engine::*;
 #[cfg(feature = "document")]
+pub use history::HashHistory;
+#[cfg(feature = "document")]
 pub use history::WebHistory;
 
 #[cfg(all(feature = "devtools", debug_assertions))]

@@ -267,3 +267,185 @@ pub(crate) fn get_current(history: &History) -> Option<[f64; 2]> {
         Some([x, y])
     })
 }
+
+/// A [`dioxus_history::History`] provider that integrates with a browser via the [History API](https://developer.mozilla.org/en-US/docs/Web/API/History_API) but uses the url fragment for the route. This allows serving as a single html file or on a single url path.
+pub struct HashHistory {
+    do_scroll_restoration: bool,
+    history: History,
+    pathname: String,
+    window: Window,
+}
+
+impl Default for HashHistory {
+    fn default() -> Self {
+        Self::new(true)
+    }
+}
+
+impl HashHistory {
+    /// Create a new [`HashHistory`].
+    ///
+    /// If `do_scroll_restoration` is [`true`], [`HashHistory`] will take control of the history
+    /// state. It'll also set the browsers scroll restoration to `manual`.
+    pub fn new(do_scroll_restoration: bool) -> Self {
+        let myself = Self::new_inner(do_scroll_restoration);
+
+        let current_route = dioxus_history::History::current_route(&myself);
+        let current_route_str = current_route.to_string();
+        let pathname_str = &myself.pathname;
+        let current_url = format!("{pathname_str}#{current_route_str}");
+        let state = myself.create_state();
+        let _ = replace_state_with_url(&myself.history, &state, Some(&current_url));
+
+        myself
+    }
+
+    fn new_inner(do_scroll_restoration: bool) -> Self {
+        let window = window().expect("access to `window`");
+        let history = window.history().expect("`window` has access to `history`");
+
+        if do_scroll_restoration {
+            history
+                .set_scroll_restoration(ScrollRestoration::Manual)
+                .expect("`history` can set scroll restoration");
+        }
+
+        let pathname = window.location().pathname().unwrap();
+
+        Self {
+            do_scroll_restoration,
+            history,
+            pathname,
+            window,
+        }
+    }
+
+    fn scroll_pos(&self) -> ScrollPosition {
+        self.do_scroll_restoration
+            .then(|| ScrollPosition::of_window(&self.window))
+            .unwrap_or_default()
+    }
+
+    fn create_state(&self) -> [f64; 2] {
+        let scroll = self.scroll_pos();
+        [scroll.x, scroll.y]
+    }
+}
+
+impl HashHistory {
+    fn route_from_location(&self) -> String {
+        let location = self.window.location();
+
+        let hash = location.hash().unwrap();
+        if hash.is_empty() {
+            // If the path is empty, parse the root route instead
+            "/".to_owned()
+        } else {
+            hash.trim_start_matches("#").to_owned()
+        }
+    }
+
+    fn full_path(&self, state: &String) -> String {
+        format!("{}#{state}", self.pathname)
+    }
+
+    fn handle_nav(&self, result: Result<(), JsValue>) {
+        match result {
+            Ok(_) => {
+                if self.do_scroll_restoration {
+                    self.window.scroll_to_with_x_and_y(0.0, 0.0)
+                }
+            }
+            Err(e) => {
+                web_sys::console::error_2(&JsValue::from_str("failed to change state: "), &e);
+            }
+        }
+    }
+
+    fn navigate_external(&self, url: String) -> bool {
+        match self.window.location().set_href(&url) {
+            Ok(_) => true,
+            Err(e) => {
+                web_sys::console::error_4(
+                    &JsValue::from_str("failed to navigate to external url ("),
+                    &JsValue::from_str(&url),
+                    &JsValue::from_str("): "),
+                    &e,
+                );
+                false
+            }
+        }
+    }
+}
+
+impl dioxus_history::History for HashHistory {
+    fn current_route(&self) -> String {
+        self.route_from_location()
+    }
+
+    fn current_prefix(&self) -> Option<String> {
+        Some(format!("{}#", self.pathname))
+    }
+
+    fn go_back(&self) {
+        if let Err(e) = self.history.back() {
+            web_sys::console::error_2(&JsValue::from_str("failed to go back: "), &e);
+        }
+    }
+
+    fn go_forward(&self) {
+        if let Err(e) = self.history.forward() {
+            web_sys::console::error_2(&JsValue::from_str("failed to go forward: "), &e);
+        }
+    }
+
+    fn push(&self, state: String) {
+        if state == self.current_route() {
+            // don't push the same state twice
+            return;
+        }
+
+        let w = window().expect("access to `window`");
+        let h = w.history().expect("`window` has access to `history`");
+
+        // update the scroll position before pushing the new state
+        update_scroll(&w, &h);
+
+        let path = self.full_path(&state);
+
+        let state: [f64; 2] = self.create_state();
+        self.handle_nav(push_state_and_url(&self.history, &state, path));
+    }
+
+    fn replace(&self, state: String) {
+        let path = self.full_path(&state);
+
+        let state = self.create_state();
+        self.handle_nav(replace_state_with_url(&self.history, &state, Some(&path)));
+    }
+
+    fn external(&self, url: String) -> bool {
+        self.navigate_external(url)
+    }
+
+    fn updater(&self, callback: std::sync::Arc<dyn Fn() + Send + Sync>) {
+        let w = self.window.clone();
+        let h = self.history.clone();
+        let d = self.do_scroll_restoration;
+
+        let function = Closure::wrap(Box::new(move |_| {
+            (*callback)();
+            if d {
+                if let Some([x, y]) = get_current(&h) {
+                    ScrollPosition { x, y }.scroll_to(w.clone())
+                }
+            }
+        }) as Box<dyn FnMut(Event)>);
+        self.window
+            .add_event_listener_with_callback(
+                "popstate",
+                &function.into_js_value().unchecked_into(),
+            )
+            .unwrap();
+    }
+}
