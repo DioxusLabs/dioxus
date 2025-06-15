@@ -348,6 +348,8 @@ impl WebviewInstance {
                 } else {
                     if var.starts_with("http://") || var.starts_with("https://") {
                         _ = webbrowser::open(&var);
+                    } else if var.starts_with("mailto:") {
+                        _ = open::that(&var);
                     }
                     false
                 }
