@@ -3985,6 +3985,7 @@ dependencies = [
  "ndk-sys 0.6.0+11769913",
  "objc",
  "objc_id",
+ "open",
  "percent-encoding",
  "rand 0.8.5",
  "reqwest 0.12.15",
