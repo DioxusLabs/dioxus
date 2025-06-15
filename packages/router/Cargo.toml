@@ -15,7 +15,7 @@ dioxus-history = { workspace = true }
 dioxus-router-macro = { workspace = true }
 dioxus-fullstack-hooks = { workspace = true, optional = true }
 tracing = { workspace = true }
-urlencoding = { workspace = true }
+percent-encoding = { workspace = true }
 url = { workspace = true }
 dioxus-cli-config = { workspace = true }
 rustversion = { workspace = true }
@@ -34,6 +34,7 @@ ciborium = { workspace = true }
 base64 = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 tokio = { workspace = true, features = ["full"] }
+dioxus-router = { workspace = true }
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]

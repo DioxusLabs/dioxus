@@ -90,6 +90,11 @@ pub(crate) struct TargetArgs {
     /// If device is false, then we'll build for the simulator
     #[clap(long)]
     pub(crate) device: Option<bool>,
+
+    /// The base path the build will fetch assets relative to. This will override the
+    /// base path set in the `dioxus` config.
+    #[clap(long)]
+    pub(crate) base_path: Option<String>,
 }
 
 /// Chain together multiple target commands
@@ -97,11 +102,11 @@ pub(crate) struct TargetArgs {
 #[command(subcommand_precedence_over_arg = true)]
 pub(crate) enum TargetCmd {
     /// Specify the arguments for the client build
-    #[clap(name = "client")]
+    #[clap(name = "@client")]
     Client(ChainedCommand<TargetArgs, TargetCmd>),
 
     /// Specify the arguments for the server build
-    #[clap(name = "server")]
+    #[clap(name = "@server")]
     Server(ChainedCommand<TargetArgs, TargetCmd>),
 }
 

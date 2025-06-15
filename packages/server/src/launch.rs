@@ -30,9 +30,14 @@ type ContextList = Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync>>;
 
 type BaseComp = fn() -> Element;
 
+/// Launch a fullstack app with the given root component.
+pub fn launch(root: BaseComp) -> ! {
+    launch_cfg(root, vec![], vec![])
+}
+
 /// Launch a fullstack app with the given root component, contexts, and config.
 #[allow(unused)]
-pub fn launch(root: BaseComp, contexts: ContextList, platform_config: Vec<Box<dyn Any>>) -> ! {
+pub fn launch_cfg(root: BaseComp, contexts: ContextList, platform_config: Vec<Box<dyn Any>>) -> ! {
     #[cfg(not(target_arch = "wasm32"))]
     tokio::runtime::Runtime::new()
         .unwrap()

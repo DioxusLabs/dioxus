@@ -38,14 +38,14 @@ pub struct LinkAction {
 /// The linker flavor to use. This influences the argument style that gets passed to the linker.
 /// We're imitating the rustc linker flavors here.
 ///
-/// https://doc.rust-lang.org/beta/nightly-rustc/rustc_target/spec/enum.LinkerFlavor.html
+/// <https://doc.rust-lang.org/beta/nightly-rustc/rustc_target/spec/enum.LinkerFlavor.html>
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub enum LinkerFlavor {
     Gnu,
     Darwin,
     WasmLld,
-    Unix,
     Msvc,
+    Unsupported, // a catch-all for unsupported linkers, usually the stripped-down unix ones
 }
 
 impl LinkAction {
@@ -98,7 +98,10 @@ impl LinkAction {
         if let Some(linker) = &self.linker {
             env_vars.push((
                 Self::DX_LINK_CUSTOM_LINKER,
-                dunce::canonicalize(linker)?.to_string_lossy().to_string(),
+                dunce::canonicalize(linker)
+                    .unwrap_or(linker.clone())
+                    .to_string_lossy()
+                    .to_string(),
             ));
         }
 
@@ -128,6 +131,10 @@ impl LinkAction {
         }
 
         handle_linker_command_file(&mut args);
+
+        if self.triple.environment == target_lexicon::Environment::Android {
+            args.retain(|arg| !arg.ends_with(".lib"));
+        }
 
         // Write the linker args to a file for the main process to read
         // todo: we might need to encode these as escaped shell words in case newlines are passed

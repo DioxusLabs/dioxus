@@ -2,9 +2,10 @@ use const_serialize::SerializeConst;
 
 use crate::AssetOptions;
 
-/// The builder for [`FolderAsset`]
+/// The builder for a folder asset.
 #[derive(
     Debug,
+    Eq,
     PartialEq,
     PartialOrd,
     Clone,

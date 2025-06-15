@@ -10,6 +10,7 @@ pub(crate) enum ServeUpdate {
     NewConnection {
         id: BuildId,
         aslr_reference: Option<u64>,
+        pid: Option<u32>,
     },
     WsMessage {
         platform: Platform,
@@ -31,6 +32,10 @@ pub(crate) enum ServeUpdate {
     RequestRebuild,
 
     ToggleShouldRebuild,
+
+    OpenDebugger {
+        id: BuildId,
+    },
 
     Redraw,
 

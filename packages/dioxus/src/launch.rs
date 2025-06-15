@@ -332,17 +332,17 @@ impl LaunchBuilder {
 
         #[cfg(feature = "mobile")]
         if matches!(platform, KnownPlatform::Mobile) {
-            return dioxus_desktop::launch::launch_cfg(app, contexts, configs);
+            return dioxus_mobile::launch_bindings::launch(app, contexts, configs);
         }
 
         #[cfg(feature = "desktop")]
         if matches!(platform, KnownPlatform::Desktop) {
-            return dioxus_desktop::launch::launch_cfg(app, contexts, configs);
+            return dioxus_desktop::launch::launch(app, contexts, configs);
         }
 
         #[cfg(feature = "server")]
         if matches!(platform, KnownPlatform::Server) {
-            return dioxus_server::launch(app, contexts, configs);
+            return dioxus_server::launch_cfg(app, contexts, configs);
         }
 
         #[cfg(feature = "web")]

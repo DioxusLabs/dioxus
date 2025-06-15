@@ -96,6 +96,67 @@ fn test_serialize_enum() {
 }
 
 #[test]
+fn test_serialize_list_of_lopsided_enums() {
+    #[derive(Clone, Copy, Debug, PartialEq, SerializeConst)]
+    #[repr(C, u8)]
+    enum Enum {
+        A,
+        B { one: u8, two: u16 } = 15,
+    }
+
+    println!("{:#?}", Enum::MEMORY_LAYOUT);
+
+    let data = [Enum::A, Enum::A];
+    let mut buf = ConstVec::new();
+    buf = serialize_const(&data, buf);
+    println!("{:?}", buf.as_ref());
+    let buf = buf.read();
+    assert_eq!(deserialize_const!([Enum; 2], buf).unwrap().1, data);
+
+    let data = [
+        Enum::B {
+            one: 0x11,
+            two: 0x2233,
+        },
+        Enum::B {
+            one: 0x12,
+            two: 0x2244,
+        },
+    ];
+    let mut buf = ConstVec::new();
+    buf = serialize_const(&data, buf);
+    println!("{:?}", buf.as_ref());
+    let buf = buf.read();
+    assert_eq!(deserialize_const!([Enum; 2], buf).unwrap().1, data);
+
+    let data = [
+        Enum::A,
+        Enum::B {
+            one: 0x11,
+            two: 0x2233,
+        },
+    ];
+    let mut buf = ConstVec::new();
+    buf = serialize_const(&data, buf);
+    println!("{:?}", buf.as_ref());
+    let buf = buf.read();
+    assert_eq!(deserialize_const!([Enum; 2], buf).unwrap().1, data);
+
+    let data = [
+        Enum::B {
+            one: 0x11,
+            two: 0x2233,
+        },
+        Enum::A,
+    ];
+    let mut buf = ConstVec::new();
+    buf = serialize_const(&data, buf);
+    println!("{:?}", buf.as_ref());
+    let buf = buf.read();
+    assert_eq!(deserialize_const!([Enum; 2], buf).unwrap().1, data);
+}
+
+#[test]
 fn test_serialize_u8_enum() {
     #[derive(Clone, Copy, Debug, PartialEq, SerializeConst)]
     #[repr(u8)]
