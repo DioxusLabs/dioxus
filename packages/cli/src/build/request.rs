@@ -388,6 +388,7 @@ pub(crate) struct BuildRequest {
     pub(crate) link_args_file: Arc<NamedTempFile>,
     pub(crate) link_err_file: Arc<NamedTempFile>,
     pub(crate) rustc_wrapper_args_file: Arc<NamedTempFile>,
+    pub(crate) base_path: Option<String>,
 }
 
 /// dx can produce different "modes" of a build. A "regular" build is a "base" build. The Fat and Thin
@@ -727,6 +728,7 @@ impl BuildRequest {
             release,
             package,
             skip_assets: args.skip_assets,
+            base_path: args.base_path.clone(),
             wasm_split: args.wasm_split,
             debug_symbols: args.debug_symbols,
             inject_loading_scripts: args.inject_loading_scripts,
@@ -961,10 +963,8 @@ impl BuildRequest {
         })
     }
 
-    /// Traverse the target directory and collect all assets from the incremental cache
-    ///
-    /// This uses "known paths" that have stayed relatively stable during cargo's lifetime.
-    /// One day this system might break and we might need to go back to using the linker approach.
+    /// Collect the assets from the final executable and modify the binary in place to point to the right
+    /// hashed asset location.
     fn collect_assets(&self, exe: &Path, ctx: &BuildContext) -> Result<AssetManifest> {
         // walk every file in the incremental cache dir, reading and inserting items into the manifest.
         let mut manifest = AssetManifest::default();
@@ -972,7 +972,7 @@ impl BuildRequest {
         // And then add from the exe directly, just in case it's LTO compiled and has no incremental cache
         if !self.skip_assets {
             ctx.status_extracting_assets();
-            _ = manifest.add_from_object_path(exe);
+            manifest = super::assets::extract_assets_from_file(exe)?;
         }
 
         Ok(manifest)
@@ -1109,8 +1109,7 @@ impl BuildRequest {
 
         // Create a set of all the paths that new files will be bundled to
         let mut keep_bundled_output_paths: HashSet<_> = assets
-            .assets
-            .values()
+            .assets()
             .map(|a| asset_dir.join(a.bundled_path()))
             .collect();
 
@@ -1149,8 +1148,8 @@ impl BuildRequest {
         let mut assets_to_transfer = vec![];
 
         // Queue the bundled assets
-        for (asset, bundled) in &assets.assets {
-            let from = asset.clone();
+        for bundled in assets.assets() {
+            let from = PathBuf::from(bundled.absolute_source_path());
             let to = asset_dir.join(bundled.bundled_path());
 
             // prefer to log using a shorter path relative to the workspace dir by trimming the workspace dir
@@ -1203,8 +1202,10 @@ impl BuildRequest {
         .await
         .map_err(|e| anyhow::anyhow!("A task failed while trying to copy assets: {e}"))??;
 
-        // // Remove the wasm bindgen output directory if it exists
-        // _ = std::fs::remove_dir_all(self.wasm_bindgen_out_dir());
+        // Remove the wasm dir if we packaged it to an "asset"-type app
+        if self.should_bundle_to_asset() {
+            _ = std::fs::remove_dir_all(self.wasm_bindgen_out_dir());
+        }
 
         // Write the version file so we know what version of the optimizer we used
         std::fs::write(self.asset_optimizer_version_file(), crate::VERSION.as_str())?;
@@ -1379,9 +1380,7 @@ impl BuildRequest {
         }
 
         // Now extract the assets from the fat binary
-        artifacts
-            .assets
-            .add_from_object_path(&self.patch_exe(artifacts.time_start))?;
+        self.collect_assets(&self.patch_exe(artifacts.time_start), ctx)?;
 
         // Clean up the temps manually
         // todo: we might want to keep them around for debugging purposes
@@ -1434,6 +1433,14 @@ impl BuildRequest {
                     "--pie".to_string(),
                     "--experimental-pic".to_string(),
                 ]);
+
+                // retain exports so post-processing has hooks to work with
+                for (idx, arg) in original_args.iter().enumerate() {
+                    if *arg == "--export" {
+                        out_args.push(arg.to_string());
+                        out_args.push(original_args[idx + 1].to_string());
+                    }
+                }
             }
 
             // This uses "cc" and these args need to be ld compatible
@@ -1488,6 +1495,8 @@ impl BuildRequest {
                         || arg.starts_with("-m")
                         || arg.starts_with("-Wl,--target=")
                         || arg.starts_with("-Wl,-fuse-ld")
+                        || arg.starts_with("-fuse-ld")
+                        || arg.contains("-ld-path")
                     {
                         out_args.push(arg.to_string());
                     }
@@ -1685,6 +1694,7 @@ impl BuildRequest {
 
                 let rlib_contents = std::fs::read(rlib)?;
                 let mut reader = ar::Archive::new(std::io::Cursor::new(rlib_contents));
+                let mut keep_linker_rlib = false;
                 while let Some(Ok(object_file)) = reader.next_entry() {
                     let name = std::str::from_utf8(object_file.header().identifier()).unwrap();
                     if name.ends_with(".rmeta") {
@@ -1696,23 +1706,29 @@ impl BuildRequest {
                     }
 
                     // rlibs might contain dlls/sos/lib files which we don't want to include
-                    if name.ends_with(".dll")
-                        || name.ends_with(".so")
-                        || name.ends_with(".lib")
-                        || name.ends_with(".dylib")
-                    {
-                        compiler_rlibs.push(rlib.to_owned());
+                    //
+                    // This catches .dylib, .so, .dll, .lib, .o, etc files that are not compatible with
+                    // our "fat archive" linking process.
+                    //
+                    // We only trust `.rcgu.o` files to make it into the --all_load archive.
+                    // This is a temporary stopgap to prevent issues with libraries that generate
+                    // object files that are not compatible with --all_load.
+                    // see https://github.com/DioxusLabs/dioxus/issues/4237
+                    if !(name.ends_with(".rcgu.o") || name.ends_with(".obj")) {
+                        keep_linker_rlib = true;
                         continue;
-                    }
-
-                    if !(name.ends_with(".o") || name.ends_with(".obj")) {
-                        tracing::debug!("Unknown object file in rlib: {:?}", name);
                     }
 
                     archive_has_contents = true;
                     out_ar
                         .append(&object_file.header().clone(), object_file)
                         .context("Failed to add object file to archive")?;
+                }
+
+                // Some rlibs contain weird artifacts that we don't want to include in the fat archive.
+                // However, we still want them around in the linker in case the regular linker can handle them.
+                if keep_linker_rlib {
+                    compiler_rlibs.push(rlib.clone());
                 }
             }
 
@@ -1790,8 +1806,7 @@ impl BuildRequest {
                 args.push("-Wl,--export-dynamic-symbol,main".to_string());
             }
             LinkerFlavor::Darwin => {
-                // `-all_load` is an extra step to ensure that all symbols are loaded (different than force_load)
-                args.push("-Wl,-all_load".to_string());
+                args.push("-Wl,-exported_symbol,_main".to_string());
             }
             LinkerFlavor::Msvc => {
                 // Prevent alsr from overflowing 32 bits
@@ -1931,20 +1946,6 @@ impl BuildRequest {
     /// cause issues with a custom linker setup. In theory, rust translates most flags to the right
     /// linker format.
     fn select_linker(&self) -> Result<PathBuf, Error> {
-        // Use a custom linker for non-crosscompile and crosscompile targets
-        if matches!(
-            self.triple.operating_system,
-            OperatingSystem::Darwin(_) | OperatingSystem::Linux | OperatingSystem::Windows
-        ) {
-            if let Ok(linker) = std::env::var("DX_HOST_LINKER") {
-                return Ok(PathBuf::from(linker));
-            }
-        }
-
-        if let Ok(linker) = std::env::var("DX_LINKER") {
-            return Ok(PathBuf::from(linker));
-        }
-
         if let Some(linker) = self.custom_linker.clone() {
             return Ok(linker);
         }
@@ -3163,6 +3164,11 @@ impl BuildRequest {
         self.config.web.pre_compress & release
     }
 
+    /// Check if the wasm output should be bundled to an asset type app.
+    fn should_bundle_to_asset(&self) -> bool {
+        self.release && !self.wasm_split && self.platform == Platform::Web
+    }
+
     /// Bundle the web app
     /// - Run wasm-bindgen
     /// - Bundle split
@@ -3204,8 +3210,7 @@ impl BuildRequest {
         //
         // We leave demangling to false since it's faster and these tools seem to prefer the raw symbols.
         // todo(jon): investigate if the chrome extension needs them demangled or demangles them automatically.
-        let will_wasm_opt = (self.release || self.wasm_split)
-            && (self.workspace.wasm_opt.is_some() || cfg!(feature = "optimizations"));
+        let will_wasm_opt = self.release || self.wasm_split;
         let keep_debug = self.config.web.wasm_opt.debug
             || self.debug_symbols
             || self.wasm_split
@@ -3253,7 +3258,7 @@ impl BuildRequest {
 
             if !will_wasm_opt {
                 return Err(anyhow::anyhow!(
-                    "Bundle splitting requires wasm-opt to be installed or the CLI to be built with `--features optimizations`. Please install wasm-opt and try again."
+                    "Bundle splitting should automatically enable wasm-opt, but it was not enabled."
                 )
                 .into());
             }
@@ -3376,11 +3381,6 @@ impl BuildRequest {
             let asset = self.wasm_bindgen_js_output_file();
             format!("wasm/{}", asset.file_name().unwrap().to_str().unwrap())
         };
-
-        // Remove the wasm dir if we packaged it to an "asset"-type app
-        if package_to_asset {
-            std::fs::remove_dir_all(&bindgen_outdir).context("Failed to remove bindgen outdir")?;
-        }
 
         // Write the index.html file with the pre-configured contents we got from pre-rendering
         std::fs::write(
@@ -3921,7 +3921,7 @@ impl BuildRequest {
         }
 
         // Inject any resources from manganis into the head
-        for asset in assets.assets.values() {
+        for asset in assets.assets() {
             let asset_path = asset.bundled_path();
             match asset.options() {
                 AssetOptions::Css(css_options) => {
@@ -3951,7 +3951,11 @@ impl BuildRequest {
 
         // Manually inject the wasm file for preloading. WASM currently doesn't support preloading in the manganis asset system
         let wasm_source_path = self.wasm_bindgen_wasm_output_file();
-        if let Some(wasm_path) = assets.assets.get(&wasm_source_path) {
+        if let Some(wasm_assets) = assets.get_assets_for_source(&wasm_source_path) {
+            let wasm_path = wasm_assets
+                .iter()
+                .next()
+                .expect("There should be exactly one optimized wasm asset");
             let wasm_path = wasm_path.bundled_path();
             head_resources.push_str(&format!(
                     "<link rel=\"preload\" as=\"fetch\" type=\"application/wasm\" href=\"/{{base_path}}/assets/{wasm_path}\" crossorigin>"
@@ -4035,11 +4039,9 @@ r#" <script>
 
     /// Get the base path from the config or None if this is not a web or server build
     pub(crate) fn base_path(&self) -> Option<&str> {
-        self.config
-            .web
-            .app
-            .base_path
+        self.base_path
             .as_deref()
+            .or(self.config.web.app.base_path.as_deref())
             .filter(|_| matches!(self.platform, Platform::Web | Platform::Server))
     }
 

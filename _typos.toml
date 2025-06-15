@@ -8,6 +8,8 @@ seeked = "seeked"
 # https://developer.apple.com/forums/thread/108953
 # udid = unique device identifier
 udid = "udid"
+# Part of Blitz's API
+unparented = "unparented"
 
 [files]
 extend-exclude = ["translations/*", "CHANGELOG.md", "*.js"]

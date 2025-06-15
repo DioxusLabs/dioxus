@@ -453,11 +453,15 @@ impl AppBuilder {
                 dioxus_cli_config::ALWAYS_ON_TOP_ENV,
                 always_on_top.to_string(),
             ),
-            // unset the cargo dirs in the event we're running `dx` locally
-            // since the child process will inherit the env vars, we don't want to confuse the downstream process
-            ("CARGO_MANIFEST_DIR", "".to_string()),
-            ("RUST_BACKTRACE", "1".to_string()),
         ];
+
+        if crate::VERBOSITY
+            .get()
+            .map(|f| f.verbose)
+            .unwrap_or_default()
+        {
+            envs.push(("RUST_BACKTRACE", "1".to_string()));
+        }
 
         if let Some(base_path) = krate.base_path() {
             envs.push((dioxus_cli_config::ASSET_ROOT_ENV, base_path.to_string()));
@@ -563,16 +567,15 @@ impl AppBuilder {
         let original_artifacts = self.artifacts.as_ref().unwrap();
         let asset_dir = self.build.asset_dir();
 
-        for (k, bundled) in res.assets.assets.iter() {
-            let k = dunce::canonicalize(k)?;
-            if original_artifacts.assets.assets.contains_key(k.as_path()) {
+        for bundled in res.assets.assets() {
+            if original_artifacts.assets.contains(bundled) {
                 continue;
             }
+            let from = dunce::canonicalize(PathBuf::from(bundled.absolute_source_path()))?;
 
-            let from = k.clone();
             let to = asset_dir.join(bundled.bundled_path());
 
-            tracing::debug!("Copying asset from patch: {}", k.display());
+            tracing::debug!("Copying asset from patch: {}", from.display());
             if let Err(e) = dioxus_cli_opt::process_file_to(bundled.options(), &from, &to) {
                 tracing::error!("Failed to copy asset: {e}");
                 continue;
@@ -580,13 +583,8 @@ impl AppBuilder {
 
             // If the emulator is android, we need to copy the asset to the device with `adb push asset /data/local/tmp/dx/assets/filename.ext`
             if self.build.platform == Platform::Android {
-                let changed_file = dunce::canonicalize(k).inspect_err(|e| {
-                    tracing::debug!("Failed to canonicalize hotreloaded asset: {e}")
-                })?;
                 let bundled_name = PathBuf::from(bundled.bundled_path());
-                _ = self
-                    .copy_file_to_android_tmp(&changed_file, &bundled_name)
-                    .await;
+                _ = self.copy_file_to_android_tmp(&from, &bundled_name).await;
             }
         }
 
@@ -645,10 +643,13 @@ impl AppBuilder {
     /// dir that the system simulator might be providing. We know this is the case for ios simulators
     /// and haven't yet checked for android.
     ///
-    /// This will return the bundled name of the asset such that we can send it to the clients letting
+    /// This will return the bundled name of the assets such that we can send it to the clients letting
     /// them know what to reload. It's not super important that this is robust since most clients will
     /// kick all stylsheets without necessarily checking the name.
-    pub(crate) async fn hotreload_bundled_asset(&self, changed_file: &PathBuf) -> Option<PathBuf> {
+    pub(crate) async fn hotreload_bundled_assets(
+        &self,
+        changed_file: &PathBuf,
+    ) -> Option<Vec<PathBuf>> {
         let artifacts = self.artifacts.as_ref()?;
 
         // Use the build dir if there's no runtime asset dir as the override. For the case of ios apps,
@@ -664,32 +665,36 @@ impl AppBuilder {
             .ok()?;
 
         // The asset might've been renamed thanks to the manifest, let's attempt to reload that too
-        let resource = artifacts.assets.assets.get(&changed_file)?;
-        let output_path = asset_dir.join(resource.bundled_path());
+        let resources = artifacts.assets.get_assets_for_source(&changed_file)?;
+        let mut bundled_names = Vec::new();
+        for resource in resources {
+            let output_path = asset_dir.join(resource.bundled_path());
 
-        tracing::debug!("Hotreloading asset {changed_file:?} in target {asset_dir:?}");
+            tracing::debug!("Hotreloading asset {changed_file:?} in target {asset_dir:?}");
 
-        // Remove the old asset if it exists
-        _ = std::fs::remove_file(&output_path);
+            // Remove the old asset if it exists
+            _ = std::fs::remove_file(&output_path);
 
-        // And then process the asset with the options into the **old** asset location. If we recompiled,
-        // the asset would be in a new location because the contents and hash have changed. Since we are
-        // hotreloading, we need to use the old asset location it was originally written to.
-        let options = *resource.options();
-        let res = process_file_to(&options, &changed_file, &output_path);
-        let bundled_name = PathBuf::from(resource.bundled_path());
-        if let Err(e) = res {
-            tracing::debug!("Failed to hotreload asset {e}");
+            // And then process the asset with the options into the **old** asset location. If we recompiled,
+            // the asset would be in a new location because the contents and hash have changed. Since we are
+            // hotreloading, we need to use the old asset location it was originally written to.
+            let options = *resource.options();
+            let res = process_file_to(&options, &changed_file, &output_path);
+            let bundled_name = PathBuf::from(resource.bundled_path());
+            if let Err(e) = res {
+                tracing::debug!("Failed to hotreload asset {e}");
+            }
+
+            // If the emulator is android, we need to copy the asset to the device with `adb push asset /data/local/tmp/dx/assets/filename.ext`
+            if self.build.platform == Platform::Android {
+                _ = self
+                    .copy_file_to_android_tmp(&changed_file, &bundled_name)
+                    .await;
+            }
+            bundled_names.push(bundled_name);
         }
 
-        // If the emulator is android, we need to copy the asset to the device with `adb push asset /data/local/tmp/dx/assets/filename.ext`
-        if self.build.platform == Platform::Android {
-            _ = self
-                .copy_file_to_android_tmp(&changed_file, &bundled_name)
-                .await;
-        }
-
-        Some(bundled_name)
+        Some(bundled_names)
     }
 
     /// Copy this file to the tmp folder on the android device, returning the path to the copied file
@@ -734,6 +739,7 @@ impl AppBuilder {
 
         let mut child = Command::new(main_exe)
             .envs(envs)
+            .env_remove("CARGO_MANIFEST_DIR") // running under `dx` shouldn't expose cargo-only :
             .stderr(Stdio::piped())
             .stdout(Stdio::piped())
             .kill_on_drop(true)
@@ -752,10 +758,10 @@ impl AppBuilder {
     /// Check if we need to use https or not, and if so, add the protocol.
     /// Go to the basepath if that's set too.
     fn open_web(&self, address: SocketAddr) {
-        let base_path = self.build.config.web.app.base_path.clone();
+        let base_path = self.build.base_path();
         let https = self.build.config.web.https.enabled.unwrap_or_default();
         let protocol = if https { "https" } else { "http" };
-        let base_path = match base_path.as_deref() {
+        let base_path = match base_path {
             Some(base_path) => format!("/{}", base_path.trim_matches('/')),
             None => "".to_owned(),
         };
@@ -796,6 +802,7 @@ impl AppBuilder {
             .arg("booted")
             .arg(self.build.bundle_identifier())
             .envs(ios_envs)
+            .env_remove("CARGO_MANIFEST_DIR")
             .stderr(Stdio::piped())
             .stdout(Stdio::piped())
             .kill_on_drop(true)
@@ -1373,10 +1380,10 @@ We checked the folder: {}
                 // code --open-url "vscode://DioxusLabs.dioxus/debugger?uri=http://127.0.0.1:8080"
                 // todo - debugger could open to the *current* page afaik we don't have a way to have that info
                 let address = server.devserver_address();
-                let base_path = self.build.config.web.app.base_path.clone();
+                let base_path = self.build.base_path();
                 let https = self.build.config.web.https.enabled.unwrap_or_default();
                 let protocol = if https { "https" } else { "http" };
-                let base_path = match base_path.as_deref() {
+                let base_path = match base_path {
                     Some(base_path) => format!("/{}", base_path.trim_matches('/')),
                     None => "".to_owned(),
                 };

@@ -1,9 +1,11 @@
 use crate::{resolve_path, AssetParseError};
 use macro_string::MacroString;
-use manganis_core::hash::AssetHash;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, ToTokens, TokenStreamExt};
-use std::path::PathBuf;
+use std::{
+    hash::{DefaultHasher, Hash, Hasher},
+    path::PathBuf,
+};
 use syn::{
     parse::{Parse, ParseStream},
     spanned::Spanned as _,
@@ -72,24 +74,19 @@ impl ToTokens for AssetParser {
                 return;
             }
         };
-        let asset_str = asset.to_string_lossy();
-        let mut asset_str = proc_macro2::Literal::string(&asset_str);
+        let asset_string = asset.to_string_lossy();
+        let mut asset_str = proc_macro2::Literal::string(&asset_string);
         asset_str.set_span(self.path_expr.span());
 
-        let hash = match AssetHash::hash_file_contents(asset) {
-            Ok(hash) => hash,
-            Err(err) => {
-                let err = err.to_string();
-                tokens.append_all(quote! { compile_error!(#err) });
-                return;
-            }
-        };
-
-        let hash = hash.bytes();
+        let mut hash = DefaultHasher::new();
+        format!("{:?}", self.options.span()).hash(&mut hash);
+        format!("{:?}", self.options.to_string()).hash(&mut hash);
+        asset_string.hash(&mut hash);
+        let asset_hash = format!("{:016x}", hash.finish());
 
         // Generate the link section for the asset
         // The link section includes the source path and the output path of the asset
-        let link_section = crate::generate_link_section(quote!(__ASSET));
+        let link_section = crate::generate_link_section(quote!(__ASSET), &asset_hash);
 
         // generate the asset::new method to deprecate the `./assets/blah.css` syntax
         let constructor = if asset.is_relative() {
@@ -106,21 +103,25 @@ impl ToTokens for AssetParser {
 
         tokens.extend(quote! {
             {
-                // We keep a hash of the contents of the asset for cache busting
-                const __ASSET_HASH: &[u8] = &[#(#hash),*];
                 // The source is used by the CLI to copy the asset
                 const __ASSET_SOURCE_PATH: &'static str = #asset_str;
                 // The options give the CLI info about how to process the asset
                 // Note: into_asset_options is not a trait, so we cannot accept the options directly
                 // in the constructor. Stable rust doesn't have support for constant functions in traits
                 const __ASSET_OPTIONS: manganis::AssetOptions = #options.into_asset_options();
+                // The input token hash is used to uniquely identify the link section for this asset
+                const __ASSET_HASH: &'static str = #asset_hash;
                 // Create the asset that the crate will use. This is used both in the return value and
                 // added to the linker for the bundler to copy later
-                const __ASSET: manganis::BundledAsset = manganis::macro_helpers::#constructor(__ASSET_SOURCE_PATH, __ASSET_HASH, __ASSET_OPTIONS);
+                const __ASSET: manganis::BundledAsset = manganis::macro_helpers::#constructor(__ASSET_SOURCE_PATH, __ASSET_OPTIONS);
 
                 #link_section
 
-                manganis::Asset::new(__ASSET, __keep_link_section)
+                static __REFERENCE_TO_LINK_SECTION: &'static [u8] = &__LINK_SECTION;
+
+                manganis::Asset::new(
+                    __REFERENCE_TO_LINK_SECTION
+                )
             }
         })
     }

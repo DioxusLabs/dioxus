@@ -11,27 +11,25 @@ keywords = ["dom", "ui", "gui", "react"]
 
 
 [features]
-default = ["accessibility", "hot-reload", "menu", "tracing", "net", "svg"]
-svg = ["blitz-dom/svg", "blitz-renderer-vello/svg"]
+default = ["accessibility", "hot-reload", "menu", "tracing", "net", "svg", "system-fonts"]
+svg = ["blitz-dom/svg", "blitz-paint/svg"]
 net = ["dep:tokio", "dep:blitz-net"]
 accessibility = ["blitz-shell/accessibility", "blitz-dom/accessibility"]
 menu = ["blitz-shell/menu"]
 tracing = ["dep:tracing", "blitz-shell/tracing", "blitz-dom/tracing"]
 hot-reload = ["dep:dioxus-cli-config", "dep:dioxus-devtools"]
+system-fonts = ["blitz-dom/system_fonts"]
 autofocus = []
 
 [dependencies]
 # Blitz dependencies
-blitz-renderer-vello = { version = "0.1.0-alpha.1", default-features = false }
-blitz-dom = { version = "0.1.0-alpha.1", default-features = false }
-blitz-net = { version = "0.1.0-alpha.1", optional = true }
-blitz-traits = { version = "0.1.0-alpha.1" }
-blitz-shell = { version = "0.1.0-alpha.1", default-features = false }
-# blitz-renderer-vello = { git = "https://github.com/dioxuslabs/blitz", rev="c1a7ecf06d1760a268e0046dc0e43f6c796ddc3c", default-features = false }
-# blitz-dom = { git = "https://github.com/dioxuslabs/blitz", rev="c1a7ecf06d1760a268e0046dc0e43f6c796ddc3c", default-features = false }
-# blitz-net = { git = "https://github.com/dioxuslabs/blitz", rev="c1a7ecf06d1760a268e0046dc0e43f6c796ddc3c", optional = true }
-# blitz-traits = { git = "https://github.com/dioxuslabs/blitz", rev="c1a7ecf06d1760a268e0046dc0e43f6c796ddc3c" }
-# blitz-shell = { git = "https://github.com/dioxuslabs/blitz", rev="c1a7ecf06d1760a268e0046dc0e43f6c796ddc3c", default-features = false }
+anyrender = { version = "0.1", default-features = false }
+anyrender_vello = { version = "0.1", default-features = false }
+blitz-dom = { version = "0.1.0-alpha.2", default-features = false }
+blitz-net = { version = "0.1.0-alpha.2", optional = true }
+blitz-paint = { version = "0.1.0-alpha.2", optional = true }
+blitz-traits = { version = "0.1.0-alpha.2" }
+blitz-shell = { version = "0.1.0-alpha.2", default-features = false }
 
 # DioxusLabs dependencies
 dioxus-core = { workspace = true }
