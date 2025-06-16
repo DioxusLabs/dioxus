@@ -5,8 +5,8 @@ use std::sync::Arc;
 use anyrender::WindowRenderer;
 
 pub use anyrender_vello::{
-    CustomPaintSource, VelloWindowRenderer as InnerRenderer,
     wgpu::{Features, Limits},
+    CustomPaintSource, VelloWindowRenderer as InnerRenderer,
 };
 
 pub fn use_wgpu<T: CustomPaintSource>(create_source: impl FnOnce() -> T) -> u64 {
