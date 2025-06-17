@@ -588,7 +588,7 @@ impl<Args: 'static, Ret: 'static> std::ops::Deref for Callback<Args, Ret> {
 
 type AnyEventHandler = Rc<RefCell<dyn FnMut(Event<dyn Any>)>>;
 
-/// An owned callback type used in [`AttributeValue::Listener`]
+/// An owned callback type used in [`AttributeValue::Listener`](crate::AttributeValue::Listener).
 pub struct ListenerCb<T = ()> {
     pub(crate) origin: ScopeId,
     callback: AnyEventHandler,
