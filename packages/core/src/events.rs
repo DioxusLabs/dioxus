@@ -471,14 +471,6 @@ impl<Args: 'static, Ret: 'static> Callback<Args, Ret> {
         Self { callback, origin }
     }
 
-    /// Leak a new reference to the [`Callback`] that will not be dropped unless the callback is dropped manually
-    pub(crate) fn leak_reference(&self) -> generational_box::BorrowResult<Callback<Args, Ret>> {
-        Ok(Callback {
-            callback: self.callback.leak_reference()?,
-            origin: self.origin,
-        })
-    }
-
     /// Call this callback with the appropriate argument type
     ///
     /// This borrows the callback using a RefCell. Recursively calling a callback will cause a panic.
