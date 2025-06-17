@@ -1,6 +1,6 @@
 use crate::{properties::SuperFrom, runtime::RuntimeGuard, Runtime, ScopeId};
 use generational_box::GenerationalBox;
-use std::{cell::RefCell, marker::PhantomData, panic::Location, rc::Rc};
+use std::{any::Any, cell::RefCell, marker::PhantomData, panic::Location, rc::Rc};
 
 /// A wrapper around some generic data that handles the event's state
 ///
@@ -376,6 +376,25 @@ impl<
     }
 }
 
+impl<
+        Function: FnMut(Event<T>) -> Spawn + 'static,
+        T: 'static,
+        Spawn: SpawnIfAsync<Marker> + 'static,
+        Marker,
+    > SuperFrom<Function, MarkerWrapper<Marker>> for ListenerCb<T>
+{
+    fn super_from(input: Function) -> Self {
+        ListenerCb::new(input)
+    }
+}
+
+// ListenerCb<T> can be created from Callback<Event<T>>
+impl<T: 'static> SuperFrom<Callback<Event<T>>> for ListenerCb<T> {
+    fn super_from(input: Callback<Event<T>>) -> Self {
+        ListenerCb::new(move |event| input(event))
+    }
+}
+
 #[doc(hidden)]
 pub struct UnitClosure<Marker>(PhantomData<Marker>);
 
@@ -549,5 +568,61 @@ impl<Args: 'static, Ret: 'static> std::ops::Deref for Callback<Args, Ret> {
 
         // Cast the closure to a trait object.
         reference_to_closure as &_
+    }
+}
+
+/// An owned callback type used in [`AttributeValue::Listener`]
+pub struct ListenerCb<T = ()> {
+    callback: Rc<RefCell<dyn FnMut(Event<dyn Any>)>>,
+    _marker: PhantomData<T>,
+}
+
+impl<T> Clone for ListenerCb<T> {
+    fn clone(&self) -> Self {
+        Self {
+            callback: self.callback.clone(),
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<T> PartialEq for ListenerCb<T> {
+    fn eq(&self, other: &Self) -> bool {
+        // We compare the pointers of the callbacks, since they are unique
+        Rc::ptr_eq(&self.callback, &other.callback)
+    }
+}
+
+impl<T> ListenerCb<T> {
+    /// Create a new [`ListenerCb`] from a callback
+    pub fn new<MaybeAsync: SpawnIfAsync<Marker>, Marker>(
+        mut f: impl FnMut(Event<T>) -> MaybeAsync + 'static,
+    ) -> Self
+    where
+        T: 'static,
+    {
+        Self {
+            callback: Rc::new(RefCell::new(move |event: Event<dyn Any>| {
+                let data = event.data.downcast::<T>().unwrap();
+                f(Event {
+                    metadata: event.metadata.clone(),
+                    data,
+                });
+            })),
+            _marker: PhantomData,
+        }
+    }
+
+    /// Call the callback with an event
+    pub fn call(&self, event: Event<dyn Any>) {
+        (self.callback.borrow_mut())(event);
+    }
+
+    /// Erase the type of the callback, allowing it to be used with any type of event
+    pub fn erase(self) -> ListenerCb {
+        ListenerCb {
+            callback: self.callback,
+            _marker: PhantomData,
+        }
     }
 }

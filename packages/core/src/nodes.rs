@@ -1,5 +1,6 @@
 use dioxus_core_types::DioxusFormattable;
 
+use crate::events::ListenerCb;
 use crate::innerlude::VProps;
 use crate::prelude::RenderError;
 use crate::{any_props::BoxedAnyProps, innerlude::ScopeState};
@@ -9,7 +10,6 @@ use crate::{
     properties::ComponentFunction,
 };
 use crate::{Properties, ScopeId, VirtualDom};
-use std::cell::RefCell;
 use std::ops::Deref;
 use std::rc::Rc;
 use std::vec;
@@ -826,45 +826,12 @@ impl AttributeValue {
     ///
     /// The callback must be confined to the lifetime of the ScopeState
     pub fn listener<T: 'static>(callback: impl FnMut(Event<T>) + 'static) -> AttributeValue {
-        AttributeValue::Listener(ListenerCb::new(callback))
+        AttributeValue::Listener(ListenerCb::new(callback).erase())
     }
 
     /// Create a new [`AttributeValue`] with a value that implements [`AnyValue`]
     pub fn any_value<T: AnyValue>(value: T) -> AttributeValue {
         AttributeValue::Any(Rc::new(value))
-    }
-}
-
-/// An owned callback type used in [`AttributeValue::Listener`]
-#[derive(Clone)]
-pub struct ListenerCb {
-    callback: Rc<RefCell<dyn FnMut(Event<dyn Any>)>>,
-}
-
-impl PartialEq for ListenerCb {
-    fn eq(&self, other: &Self) -> bool {
-        // We compare the pointers of the callbacks, since they are unique
-        Rc::ptr_eq(&self.callback, &other.callback)
-    }
-}
-
-impl ListenerCb {
-    /// Create a new [`ListenerCb`] from a callback
-    pub fn new<T: 'static, F: FnMut(Event<T>) + 'static>(mut callback: F) -> Self {
-        Self {
-            callback: Rc::new(RefCell::new(move |event: Event<dyn Any>| {
-                let data = event.data.downcast::<T>().unwrap();
-                callback(Event {
-                    metadata: event.metadata.clone(),
-                    data,
-                });
-            })),
-        }
-    }
-
-    /// Call the callback with an event
-    pub fn call(&self, event: Event<dyn Any>) {
-        (self.callback.borrow_mut())(event);
     }
 }
 
@@ -1190,6 +1157,12 @@ impl IntoAttributeValue for Arguments<'_> {
 impl IntoAttributeValue for Rc<dyn AnyValue> {
     fn into_value(self) -> AttributeValue {
         AttributeValue::Any(self)
+    }
+}
+
+impl<T> IntoAttributeValue for ListenerCb<T> {
+    fn into_value(self) -> AttributeValue {
+        AttributeValue::Listener(self.erase())
     }
 }
 
