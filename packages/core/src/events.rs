@@ -607,7 +607,8 @@ impl<T> ListenerCb<T> {
                 f(Event {
                     metadata: event.metadata.clone(),
                     data,
-                });
+                })
+                .spawn();
             })),
             _marker: PhantomData,
         }

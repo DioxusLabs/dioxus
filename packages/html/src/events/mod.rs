@@ -29,7 +29,11 @@ macro_rules! impl_event {
                 let event_handler = _f.super_into();
                 ::dioxus_core::Attribute::new(
                     impl_event!(@name $name $($js_name)?),
-                    event_handler,
+                    ::dioxus_core::AttributeValue::listener(move |e: ::dioxus_core::Event<crate::PlatformEventData>| {
+                        let data: $data = e.data().as_ref().into();
+                        let event = ::dioxus_core::Event::new(std::rc::Rc::new(data) as std::rc::Rc<dyn std::any::Any>, e.propagates());
+                        event_handler.call(event);
+                    }),
                     None,
                     false,
                 ).into()
