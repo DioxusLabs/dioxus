@@ -30,9 +30,10 @@ macro_rules! impl_event {
                 ::dioxus_core::Attribute::new(
                     impl_event!(@name $name $($js_name)?),
                     ::dioxus_core::AttributeValue::listener(move |e: ::dioxus_core::Event<crate::PlatformEventData>| {
-                        let data: $data = e.data().as_ref().into();
-                        let event = ::dioxus_core::Event::new(std::rc::Rc::new(data) as std::rc::Rc<dyn std::any::Any>, e.propagates());
-                        event_handler.call(event);
+                        let event: ::dioxus_core::Event<$data> = e.map(|data| {
+                            data.into()
+                        });
+                        event_handler.call(event.into_any());
                     }),
                     None,
                     false,

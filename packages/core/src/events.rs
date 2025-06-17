@@ -1,4 +1,6 @@
-use crate::{properties::SuperFrom, runtime::RuntimeGuard, Runtime, ScopeId};
+use crate::{
+    prelude::current_scope_id, properties::SuperFrom, runtime::RuntimeGuard, Runtime, ScopeId,
+};
 use generational_box::GenerationalBox;
 use std::{any::Any, cell::RefCell, marker::PhantomData, panic::Location, rc::Rc};
 
@@ -64,6 +66,17 @@ impl<T: ?Sized> Event<T> {
         Event {
             data: Rc::new(f(&self.data)),
             metadata: self.metadata.clone(),
+        }
+    }
+
+    /// Convert this event into a boxed event with a dynamic type
+    pub fn into_any(self) -> Event<dyn Any>
+    where
+        T: Sized,
+    {
+        Event {
+            data: self.data as Rc<dyn Any>,
+            metadata: self.metadata,
         }
     }
 
@@ -573,6 +586,7 @@ impl<Args: 'static, Ret: 'static> std::ops::Deref for Callback<Args, Ret> {
 
 /// An owned callback type used in [`AttributeValue::Listener`]
 pub struct ListenerCb<T = ()> {
+    pub(crate) origin: ScopeId,
     callback: Rc<RefCell<dyn FnMut(Event<dyn Any>)>>,
     _marker: PhantomData<T>,
 }
@@ -580,6 +594,7 @@ pub struct ListenerCb<T = ()> {
 impl<T> Clone for ListenerCb<T> {
     fn clone(&self) -> Self {
         Self {
+            origin: self.origin,
             callback: self.callback.clone(),
             _marker: PhantomData,
         }
@@ -589,7 +604,7 @@ impl<T> Clone for ListenerCb<T> {
 impl<T> PartialEq for ListenerCb<T> {
     fn eq(&self, other: &Self) -> bool {
         // We compare the pointers of the callbacks, since they are unique
-        Rc::ptr_eq(&self.callback, &other.callback)
+        Rc::ptr_eq(&self.callback, &other.callback) && self.origin == other.origin
     }
 }
 
@@ -602,6 +617,7 @@ impl<T> ListenerCb<T> {
         T: 'static,
     {
         Self {
+            origin: current_scope_id().expect("ListenerCb must be created within a scope"),
             callback: Rc::new(RefCell::new(move |event: Event<dyn Any>| {
                 let data = event.data.downcast::<T>().unwrap();
                 f(Event {
@@ -616,12 +632,16 @@ impl<T> ListenerCb<T> {
 
     /// Call the callback with an event
     pub fn call(&self, event: Event<dyn Any>) {
-        (self.callback.borrow_mut())(event);
+        let runtime = Runtime::current().expect("ListenerCb must be called within a runtime");
+        runtime.with_scope_on_stack(self.origin, || {
+            (self.callback.borrow_mut())(event);
+        });
     }
 
     /// Erase the type of the callback, allowing it to be used with any type of event
     pub fn erase(self) -> ListenerCb {
         ListenerCb {
+            origin: self.origin,
             callback: self.callback,
             _marker: PhantomData,
         }
