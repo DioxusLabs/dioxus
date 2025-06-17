@@ -404,6 +404,8 @@ impl<
 // ListenerCb<T> can be created from Callback<Event<T>>
 impl<T: 'static> SuperFrom<Callback<Event<T>>> for ListenerCb<T> {
     fn super_from(input: Callback<Event<T>>) -> Self {
+        // https://github.com/rust-lang/rust-clippy/issues/15072
+        #[allow(clippy::redundant_closure)]
         ListenerCb::new(move |event| input(event))
     }
 }
@@ -584,10 +586,12 @@ impl<Args: 'static, Ret: 'static> std::ops::Deref for Callback<Args, Ret> {
     }
 }
 
+type AnyEventHandler = Rc<RefCell<dyn FnMut(Event<dyn Any>)>>;
+
 /// An owned callback type used in [`AttributeValue::Listener`]
 pub struct ListenerCb<T = ()> {
     pub(crate) origin: ScopeId,
-    callback: Rc<RefCell<dyn FnMut(Event<dyn Any>)>>,
+    callback: AnyEventHandler,
     _marker: PhantomData<T>,
 }
 
