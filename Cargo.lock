@@ -472,6 +472,15 @@ checksum = "d301b3b94cb4b2f23d7917810addbbaff90738e0ca2be692bd027e70d7e0330c"
 [[package]]
 name = "anyrender"
 version = "0.4.1"
+dependencies = [
+ "kurbo",
+ "peniko",
+ "raw-window-handle 0.6.2",
+]
+
+[[package]]
+name = "anyrender"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "26bfc8499b47c819e1f2fdbd04b1b85ca34a6e02eca996a58d750644cd847d0d"
 dependencies = [
@@ -483,10 +492,22 @@ dependencies = [
 [[package]]
 name = "anyrender_svg"
 version = "0.4.1"
+dependencies = [
+ "anyrender 0.4.1",
+ "image",
+ "kurbo",
+ "peniko",
+ "thiserror 2.0.12",
+ "usvg",
+]
+
+[[package]]
+name = "anyrender_svg"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3197d2e8de16569a3335c15bb33c331b60e7aefa91466705cd2afa32f6bd5c8d"
 dependencies = [
- "anyrender",
+ "anyrender 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "image",
  "kurbo",
  "peniko",
@@ -497,10 +518,25 @@ dependencies = [
 [[package]]
 name = "anyrender_vello"
 version = "0.4.1"
+dependencies = [
+ "anyrender 0.4.1",
+ "futures-intrusive",
+ "kurbo",
+ "peniko",
+ "pollster",
+ "raw-window-handle 0.6.2",
+ "rustc-hash 1.1.0",
+ "vello",
+ "wgpu",
+]
+
+[[package]]
+name = "anyrender_vello"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7b39c05cc1c08be92d300e09a55cc9d32ffdd5b88a41e55677c75506f35b2180"
 dependencies = [
- "anyrender",
+ "anyrender 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures-intrusive",
  "kurbo",
  "peniko",
@@ -2791,14 +2827,12 @@ dependencies = [
 [[package]]
 name = "blitz-dom"
 version = "0.1.0-alpha.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "428233615df6116571f41c6cb6ebe7ecc41367177c6e224273149a7b7bdb09dc"
 dependencies = [
  "accesskit 0.17.1",
  "app_units",
  "atomic_refcell",
  "bitflags 2.9.1",
- "blitz-traits",
+ "blitz-traits 0.1.0-alpha.5",
  "color",
  "cursor-icon",
  "euclid",
@@ -2816,7 +2850,43 @@ dependencies = [
  "stylo",
  "stylo_config",
  "stylo_dom",
- "stylo_taffy",
+ "stylo_taffy 0.1.0-alpha.5",
+ "stylo_traits",
+ "taffy 0.8.3",
+ "tracing",
+ "url",
+ "usvg",
+]
+
+[[package]]
+name = "blitz-dom"
+version = "0.1.0-alpha.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "428233615df6116571f41c6cb6ebe7ecc41367177c6e224273149a7b7bdb09dc"
+dependencies = [
+ "accesskit 0.17.1",
+ "app_units",
+ "atomic_refcell",
+ "bitflags 2.9.1",
+ "blitz-traits 0.1.0-alpha.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "color",
+ "cursor-icon",
+ "euclid",
+ "html-escape",
+ "image",
+ "keyboard-types",
+ "markup5ever 0.35.0",
+ "objc2 0.6.1",
+ "parley",
+ "peniko",
+ "percent-encoding",
+ "selectors 0.29.0",
+ "slab",
+ "smallvec",
+ "stylo",
+ "stylo_config",
+ "stylo_dom",
+ "stylo_taffy 0.1.0-alpha.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "stylo_traits",
  "taffy 0.8.3",
  "tracing",
@@ -2828,10 +2898,8 @@ dependencies = [
 [[package]]
 name = "blitz-net"
 version = "0.1.0-alpha.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "75d0a4c29d831daccb752dd55a2e017394356da11e0ed246216b4bfda239c3cc"
 dependencies = [
- "blitz-traits",
+ "blitz-traits 0.1.0-alpha.5",
  "data-url 0.3.1",
  "reqwest 0.12.22",
  "tokio",
@@ -2840,13 +2908,32 @@ dependencies = [
 [[package]]
 name = "blitz-paint"
 version = "0.1.0-alpha.5"
+dependencies = [
+ "anyrender 0.4.1",
+ "anyrender_svg 0.4.1",
+ "blitz-dom 0.1.0-alpha.5",
+ "blitz-traits 0.1.0-alpha.5",
+ "color",
+ "euclid",
+ "kurbo",
+ "parley",
+ "peniko",
+ "stylo",
+ "taffy 0.8.3",
+ "tracing",
+ "usvg",
+]
+
+[[package]]
+name = "blitz-paint"
+version = "0.1.0-alpha.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1597bca15e7eb885e34906d9241d2e3e39e0edcdba225afc85652f94122735df"
 dependencies = [
- "anyrender",
- "anyrender_svg",
- "blitz-dom",
- "blitz-traits",
+ "anyrender 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "anyrender_svg 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "blitz-dom 0.1.0-alpha.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "blitz-traits 0.1.0-alpha.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "color",
  "euclid",
  "kurbo",
@@ -2861,20 +2948,31 @@ dependencies = [
 [[package]]
 name = "blitz-shell"
 version = "0.1.0-alpha.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "16507db6a4db31693dee0f421146a93555afb7998b0fdab78fba93d6f9649e56"
 dependencies = [
  "accesskit 0.17.1",
  "accesskit_winit 0.23.1",
  "android-activity",
- "anyrender",
- "blitz-dom",
- "blitz-paint",
- "blitz-traits",
+ "anyrender 0.4.1",
+ "blitz-dom 0.1.0-alpha.5",
+ "blitz-paint 0.1.0-alpha.5",
+ "blitz-traits 0.1.0-alpha.5",
  "futures-util",
  "keyboard-types",
  "tracing",
  "winit",
+]
+
+[[package]]
+name = "blitz-traits"
+version = "0.1.0-alpha.5"
+dependencies = [
+ "bitflags 2.9.1",
+ "bytes",
+ "cursor-icon",
+ "http 1.3.1",
+ "keyboard-types",
+ "smol_str",
+ "url",
 ]
 
 [[package]]
@@ -5646,13 +5744,13 @@ dependencies = [
 name = "dioxus-native"
 version = "0.7.0-alpha.3"
 dependencies = [
- "anyrender",
- "anyrender_vello",
- "blitz-dom",
+ "anyrender 0.4.1",
+ "anyrender_vello 0.4.1",
+ "blitz-dom 0.1.0-alpha.5",
  "blitz-net",
- "blitz-paint",
+ "blitz-paint 0.1.0-alpha.5",
  "blitz-shell",
- "blitz-traits",
+ "blitz-traits 0.1.0-alpha.5",
  "dioxus-asset-resolver",
  "dioxus-cli-config",
  "dioxus-core",
@@ -5673,8 +5771,8 @@ dependencies = [
 name = "dioxus-native-dom"
 version = "0.7.0-alpha.3"
 dependencies = [
- "blitz-dom",
- "blitz-traits",
+ "blitz-dom 0.1.0-alpha.5",
+ "blitz-traits 0.1.0-alpha.5",
  "dioxus-core",
  "dioxus-html",
  "futures-util",
@@ -10629,10 +10727,10 @@ dependencies = [
 name = "native-headless"
 version = "0.0.0"
 dependencies = [
- "anyrender_vello",
- "blitz-dom",
- "blitz-paint",
- "blitz-traits",
+ "anyrender_vello 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "blitz-dom 0.1.0-alpha.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "blitz-paint 0.1.0-alpha.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "blitz-traits 0.1.0-alpha.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "bytemuck",
  "dioxus",
  "dioxus-native-dom",
@@ -15347,6 +15445,14 @@ name = "stylo_static_prefs"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "500f379645e8a87fd03fe88607a5edcb0d8e4e423baa74ba52db198a06a0c261"
+
+[[package]]
+name = "stylo_taffy"
+version = "0.1.0-alpha.5"
+dependencies = [
+ "stylo",
+ "taffy 0.8.3",
+]
 
 [[package]]
 name = "stylo_taffy"
