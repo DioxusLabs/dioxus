@@ -4115,6 +4115,7 @@ dependencies = [
  "dioxus-core",
  "dioxus-fullstack",
  "dioxus-fullstack-protocol",
+ "dioxus-history",
  "dioxus-hooks",
  "dioxus-lib",
  "dioxus-signals",
