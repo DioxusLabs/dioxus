@@ -25,7 +25,7 @@ macro_rules! impl_event {
                 #[doc(alias = $js_name)]
             )?
             #[inline]
-            pub fn $name<__Marker>(mut _f: impl ::dioxus_core::prelude::SuperInto<::dioxus_core::ListenerCb<$data>, __Marker>) -> ::dioxus_core::Attribute {
+            pub fn $name<__Marker>(mut _f: impl ::dioxus_core::prelude::SuperInto<::dioxus_core::ListenerCallback<$data>, __Marker>) -> ::dioxus_core::Attribute {
                 let event_handler = _f.super_into();
                 ::dioxus_core::Attribute::new(
                     impl_event!(@name $name $($js_name)?),

@@ -1,6 +1,6 @@
 use dioxus_core_types::DioxusFormattable;
 
-use crate::events::ListenerCb;
+use crate::events::ListenerCallback;
 use crate::innerlude::VProps;
 use crate::prelude::RenderError;
 use crate::{any_props::BoxedAnyProps, innerlude::ScopeState};
@@ -812,7 +812,7 @@ pub enum AttributeValue {
     Bool(bool),
 
     /// A listener, like "onclick"
-    Listener(ListenerCb),
+    Listener(ListenerCallback),
 
     /// An arbitrary value that implements PartialEq and is static
     Any(Rc<dyn AnyValue>),
@@ -826,7 +826,7 @@ impl AttributeValue {
     ///
     /// The callback must be confined to the lifetime of the ScopeState
     pub fn listener<T: 'static>(callback: impl FnMut(Event<T>) + 'static) -> AttributeValue {
-        AttributeValue::Listener(ListenerCb::new(callback).erase())
+        AttributeValue::Listener(ListenerCallback::new(callback).erase())
     }
 
     /// Create a new [`AttributeValue`] with a value that implements [`AnyValue`]
@@ -1160,7 +1160,7 @@ impl IntoAttributeValue for Rc<dyn AnyValue> {
     }
 }
 
-impl<T> IntoAttributeValue for ListenerCb<T> {
+impl<T> IntoAttributeValue for ListenerCallback<T> {
     fn into_value(self) -> AttributeValue {
         AttributeValue::Listener(self.erase())
     }

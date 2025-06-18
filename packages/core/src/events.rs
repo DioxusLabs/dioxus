@@ -394,19 +394,19 @@ impl<
         T: 'static,
         Spawn: SpawnIfAsync<Marker> + 'static,
         Marker,
-    > SuperFrom<Function, MarkerWrapper<Marker>> for ListenerCb<T>
+    > SuperFrom<Function, MarkerWrapper<Marker>> for ListenerCallback<T>
 {
     fn super_from(input: Function) -> Self {
-        ListenerCb::new(input)
+        ListenerCallback::new(input)
     }
 }
 
-// ListenerCb<T> can be created from Callback<Event<T>>
-impl<T: 'static> SuperFrom<Callback<Event<T>>> for ListenerCb<T> {
+// ListenerCallback<T> can be created from Callback<Event<T>>
+impl<T: 'static> SuperFrom<Callback<Event<T>>> for ListenerCallback<T> {
     fn super_from(input: Callback<Event<T>>) -> Self {
         // https://github.com/rust-lang/rust-clippy/issues/15072
         #[allow(clippy::redundant_closure)]
-        ListenerCb::new(move |event| input(event))
+        ListenerCallback::new(move |event| input(event))
     }
 }
 
@@ -589,13 +589,13 @@ impl<Args: 'static, Ret: 'static> std::ops::Deref for Callback<Args, Ret> {
 type AnyEventHandler = Rc<RefCell<dyn FnMut(Event<dyn Any>)>>;
 
 /// An owned callback type used in [`AttributeValue::Listener`](crate::AttributeValue::Listener).
-pub struct ListenerCb<T = ()> {
+pub struct ListenerCallback<T = ()> {
     pub(crate) origin: ScopeId,
     callback: AnyEventHandler,
     _marker: PhantomData<T>,
 }
 
-impl<T> Clone for ListenerCb<T> {
+impl<T> Clone for ListenerCallback<T> {
     fn clone(&self) -> Self {
         Self {
             origin: self.origin,
@@ -605,15 +605,15 @@ impl<T> Clone for ListenerCb<T> {
     }
 }
 
-impl<T> PartialEq for ListenerCb<T> {
+impl<T> PartialEq for ListenerCallback<T> {
     fn eq(&self, other: &Self) -> bool {
         // We compare the pointers of the callbacks, since they are unique
         Rc::ptr_eq(&self.callback, &other.callback) && self.origin == other.origin
     }
 }
 
-impl<T> ListenerCb<T> {
-    /// Create a new [`ListenerCb`] from a callback
+impl<T> ListenerCallback<T> {
+    /// Create a new [`ListenerCallback`] from a callback
     pub fn new<MaybeAsync: SpawnIfAsync<Marker>, Marker>(
         mut f: impl FnMut(Event<T>) -> MaybeAsync + 'static,
     ) -> Self
@@ -621,7 +621,7 @@ impl<T> ListenerCb<T> {
         T: 'static,
     {
         Self {
-            origin: current_scope_id().expect("ListenerCb must be created within a scope"),
+            origin: current_scope_id().expect("ListenerCallback must be created within a scope"),
             callback: Rc::new(RefCell::new(move |event: Event<dyn Any>| {
                 let data = event.data.downcast::<T>().unwrap();
                 f(Event {
@@ -636,15 +636,15 @@ impl<T> ListenerCb<T> {
 
     /// Call the callback with an event
     pub fn call(&self, event: Event<dyn Any>) {
-        let runtime = Runtime::current().expect("ListenerCb must be called within a runtime");
+        let runtime = Runtime::current().expect("ListenerCallback must be called within a runtime");
         runtime.with_scope_on_stack(self.origin, || {
             (self.callback.borrow_mut())(event);
         });
     }
 
     /// Erase the type of the callback, allowing it to be used with any type of event
-    pub fn erase(self) -> ListenerCb {
-        ListenerCb {
+    pub fn erase(self) -> ListenerCallback {
+        ListenerCallback {
             origin: self.origin,
             callback: self.callback,
             _marker: PhantomData,
