@@ -23,6 +23,9 @@ fn limits() -> Limits {
 type Color = OpaqueColor<Srgb>;
 
 fn main() {
+    #[cfg(feature = "tracing")]
+    tracing_subscriber::fmt::init();
+
     let config: Vec<Box<dyn Any>> = vec![Box::new(FEATURES), Box::new(limits())];
     dioxus_native::launch_cfg(app, Vec::new(), config);
 }

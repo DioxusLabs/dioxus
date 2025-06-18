@@ -1609,6 +1609,7 @@ dependencies = [
  "accesskit",
  "app_units",
  "atomic_refcell",
+ "bitflags 2.9.1",
  "blitz-traits",
  "color",
  "cursor-icon",
@@ -16513,6 +16514,7 @@ dependencies = [
  "color",
  "dioxus",
  "dioxus-native",
+ "tracing-subscriber",
  "wgpu 24.0.5",
 ]
 
