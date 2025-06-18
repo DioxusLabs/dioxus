@@ -80,7 +80,10 @@ where
 
     /// A component to render when an external navigation fails.
     ///
-    /// Defaults to a router-internal component called [`FailureExternalNavigation`]
+    #[cfg_attr(
+        feature = "html",
+        doc = "Defaults to [`crate::components::FailureExternalNavigation`]."
+    )]
     pub fn failure_external_navigation(self, component: fn() -> Element) -> Self {
         Self {
             failure_external_navigation: component,
