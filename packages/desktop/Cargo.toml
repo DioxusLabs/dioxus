@@ -37,7 +37,6 @@ tokio = { workspace = true, features = [
   "fs",
   "io-util",
 ], optional = true }
-webbrowser = { workspace = true }
 infer = { workspace = true }
 dunce = { workspace = true }
 slab = { workspace = true }
