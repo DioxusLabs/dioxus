@@ -417,6 +417,7 @@ impl AppBuilder {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(crate) async fn open(
         &mut self,
         devserver_ip: SocketAddr,
@@ -425,6 +426,7 @@ impl AppBuilder {
         open_browser: bool,
         always_on_top: bool,
         build_id: BuildId,
+        args: &[String],
     ) -> Result<()> {
         let krate = &self.build;
 
@@ -501,7 +503,7 @@ impl AppBuilder {
             | Platform::MacOS
             | Platform::Windows
             | Platform::Linux
-            | Platform::Liveview => self.open_with_main_exe(envs)?,
+            | Platform::Liveview => self.open_with_main_exe(envs, args)?,
         };
 
         self.builds_opened += 1;
@@ -732,12 +734,13 @@ impl AppBuilder {
     /// paths right now, but they will when we start to enable things like swift integration.
     ///
     /// Server/liveview/desktop are all basically the same, though
-    fn open_with_main_exe(&mut self, envs: Vec<(&str, String)>) -> Result<()> {
+    fn open_with_main_exe(&mut self, envs: Vec<(&str, String)>, args: &[String]) -> Result<()> {
         let main_exe = self.app_exe();
 
         tracing::debug!("Opening app with main exe: {main_exe:?}");
 
         let mut child = Command::new(main_exe)
+            .args(args)
             .envs(envs)
             .env_remove("CARGO_MANIFEST_DIR") // running under `dx` shouldn't expose cargo-only :
             .stderr(Stdio::piped())
