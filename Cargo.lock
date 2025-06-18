@@ -381,9 +381,9 @@ checksum = "d301b3b94cb4b2f23d7917810addbbaff90738e0ca2be692bd027e70d7e0330c"
 
 [[package]]
 name = "anyrender"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fff8da5f4a3e508ed376118a7e04ed992df07630fb47d7b3dce8d1f92427975d"
+checksum = "d137e07d59da00378857d3b740e34d9ebedd339e181a23e85d3f936c51b9797e"
 dependencies = [
  "kurbo",
  "peniko",
@@ -391,10 +391,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "anyrender"
+name = "anyrender_svg"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d137e07d59da00378857d3b740e34d9ebedd339e181a23e85d3f936c51b9797e"
+checksum = "eb57f18ae458825c213b5c359fb8bc1466a80b89f2c9e2f03812b021fc87b3ea"
 dependencies = [
  "kurbo",
  "peniko",
@@ -417,9 +417,9 @@ dependencies = [
 
 [[package]]
 name = "anyrender_vello"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "83e99c7f0936960037aa11d64bf7c9c5cf2f624dd9faf8c57a6581b056e08852"
+checksum = "3807802b3aeb615b281a393400fd31be883944334d153829c10cffb087c78b97"
 dependencies = [
  "anyrender 0.1.0",
  "futures-intrusive",
@@ -427,6 +427,7 @@ dependencies = [
  "peniko",
  "pollster",
  "raw-window-handle 0.6.2",
+ "rustc-hash 1.1.0",
  "vello",
  "wgpu 24.0.5",
 ]
@@ -1680,9 +1681,9 @@ dependencies = [
 
 [[package]]
 name = "blitz-shell"
-version = "0.1.0-alpha.2"
+version = "0.1.0-alpha.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ac5e9acd11cd37fee6819686eb4893ae175e2c2563865fb823a9811418a90541"
+checksum = "5d120ea1f2676bf09ba5c324d0904acc1af2337931b9c32d68b68f1bf5160512"
 dependencies = [
  "accesskit",
  "accesskit_winit",
@@ -1693,7 +1694,6 @@ dependencies = [
  "blitz-traits",
  "futures-util",
  "keyboard-types",
- "muda 0.11.5",
  "tracing",
  "winit",
 ]
@@ -2423,46 +2423,16 @@ dependencies = [
 
 [[package]]
 name = "cocoa"
-version = "0.25.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f6140449f97a6e97f9511815c5632d84c8aacf8ac271ad77c559218161a1373c"
-dependencies = [
- "bitflags 1.3.2",
- "block",
- "cocoa-foundation 0.1.2",
- "core-foundation 0.9.4",
- "core-graphics 0.23.2",
- "foreign-types 0.5.0",
- "libc",
- "objc",
-]
-
-[[package]]
-name = "cocoa"
 version = "0.26.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ad36507aeb7e16159dfe68db81ccc27571c3ccd4b76fb2fb72fc59e7a4b1b64c"
 dependencies = [
  "bitflags 2.9.1",
  "block",
- "cocoa-foundation 0.2.1",
+ "cocoa-foundation",
  "core-foundation 0.10.0",
  "core-graphics 0.24.0",
  "foreign-types 0.5.0",
- "libc",
- "objc",
-]
-
-[[package]]
-name = "cocoa-foundation"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8c6234cbb2e4c785b456c0644748b1ac416dd045799740356f8363dfe00c93f7"
-dependencies = [
- "bitflags 1.3.2",
- "block",
- "core-foundation 0.9.4",
- "core-graphics-types 0.1.3",
  "libc",
  "objc",
 ]
@@ -3961,7 +3931,7 @@ version = "0.7.0-alpha.1"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
- "cocoa 0.26.1",
+ "cocoa",
  "core-foundation 0.10.0",
  "dioxus",
  "dioxus-asset-resolver",
@@ -3986,12 +3956,13 @@ dependencies = [
  "jni",
  "lazy-js-bundle",
  "libc",
- "muda 0.16.1",
+ "muda",
  "ndk",
  "ndk-context",
  "ndk-sys 0.6.0+11769913",
  "objc",
  "objc_id",
+ "open",
  "percent-encoding",
  "rand 0.8.5",
  "reqwest 0.12.15",
@@ -4008,7 +3979,6 @@ dependencies = [
  "tokio-tungstenite",
  "tracing",
  "tray-icon",
- "webbrowser",
  "wry",
 ]
 
@@ -8970,24 +8940,6 @@ dependencies = [
  "dunce",
  "libc",
  "nasm-rs",
-]
-
-[[package]]
-name = "muda"
-version = "0.11.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4c47e7625990fc1af2226ea4f34fb2412b03c12639fcb91868581eb3a6893453"
-dependencies = [
- "cocoa 0.25.0",
- "crossbeam-channel",
- "gtk",
- "keyboard-types",
- "objc",
- "once_cell",
- "png",
- "serde",
- "thiserror 1.0.69",
- "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -15120,7 +15072,7 @@ dependencies = [
  "crossbeam-channel",
  "dirs 6.0.0",
  "libappindicator",
- "muda 0.16.1",
+ "muda",
  "objc2 0.6.1",
  "objc2-app-kit 0.3.1",
  "objc2-core-foundation",
@@ -16254,22 +16206,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "webbrowser"
-version = "1.0.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aaf4f3c0ba838e82b4e5ccc4157003fb8c324ee24c058470ffb82820becbde98"
-dependencies = [
- "core-foundation 0.10.0",
- "jni",
- "log",
- "ndk-context",
- "objc2 0.6.1",
- "objc2-foundation 0.3.1",
- "url",
- "web-sys",
-]
-
-[[package]]
 name = "webkit2gtk"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -16570,6 +16506,17 @@ dependencies = [
  "wgpu-types 24.0.0",
  "windows 0.58.0",
  "windows-core 0.58.0",
+]
+
+[[package]]
+name = "wgpu-texture"
+version = "0.0.0"
+dependencies = [
+ "bytemuck",
+ "color",
+ "dioxus",
+ "dioxus-native",
+ "wgpu 24.0.5",
 ]
 
 [[package]]
@@ -17367,7 +17314,7 @@ checksum = "ac0099a336829fbf54c26b5f620c68980ebbe37196772aeaf6118df4931b5cb0"
 dependencies = [
  "base64 0.22.1",
  "block",
- "cocoa 0.26.1",
+ "cocoa",
  "core-graphics 0.24.0",
  "crossbeam-channel",
  "dpi",

@@ -41,7 +41,7 @@ pub struct Bundle {
 
     /// The arguments for the dioxus build
     #[clap(flatten)]
-    pub(crate) args: BuildArgs,
+    pub(crate) args: CommandWithPlatformOverrides<BuildArgs>,
 }
 
 impl Bundle {

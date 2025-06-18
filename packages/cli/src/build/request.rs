@@ -374,6 +374,7 @@ pub(crate) struct BuildRequest {
     pub(crate) triple: Triple,
     pub(crate) device: bool,
     pub(crate) package: String,
+    pub(crate) main_target: String,
     pub(crate) features: Vec<String>,
     pub(crate) extra_cargo_args: Vec<String>,
     pub(crate) extra_rustc_args: Vec<String>,
@@ -463,7 +464,11 @@ impl BuildRequest {
     ///
     /// Note: Build requests are typically created only when the CLI is invoked or when significant
     /// changes are detected in the `Cargo.toml` (e.g., features added or removed).
-    pub(crate) async fn new(args: &TargetArgs, workspace: Arc<Workspace>) -> Result<Self> {
+    pub(crate) async fn new(
+        args: &TargetArgs,
+        main_target: Option<String>,
+        workspace: Arc<Workspace>,
+    ) -> Result<Self> {
         let crate_package = workspace.find_main_package(args.package.clone())?;
 
         let config = workspace
@@ -505,6 +510,10 @@ impl BuildRequest {
                 })
             })
             .unwrap_or(workspace.krates[crate_package].name.clone());
+
+        // Use the main_target for the client + server build if it is set, otherwise use the target name for this
+        // specific build
+        let main_target = main_target.unwrap_or(target_name.clone());
 
         let crate_target = main_package
             .targets
@@ -727,6 +736,7 @@ impl BuildRequest {
             extra_cargo_args,
             release,
             package,
+            main_target,
             skip_assets: args.skip_assets,
             base_path: args.base_path.clone(),
             wasm_split: args.wasm_split,
@@ -2737,7 +2747,7 @@ impl BuildRequest {
     /// target/dx/build/app/web/server.exe
     pub(crate) fn build_dir(&self, platform: Platform, release: bool) -> PathBuf {
         self.internal_out_dir()
-            .join(self.executable_name())
+            .join(&self.main_target)
             .join(if release { "release" } else { "debug" })
             .join(platform.build_folder_name())
     }
@@ -2748,7 +2758,7 @@ impl BuildRequest {
     /// target/dx/bundle/app/public/
     pub(crate) fn bundle_dir(&self, platform: Platform) -> PathBuf {
         self.internal_out_dir()
-            .join(self.executable_name())
+            .join(&self.main_target)
             .join("bundle")
             .join(platform.build_folder_name())
     }
@@ -4138,7 +4148,7 @@ r#" <script>
                     .trim()
                     .into();
                 let path_to_sim = path_to_xcode.join("Applications").join("Simulator.app");
-                open::that(path_to_sim)?;
+                open::that_detached(path_to_sim)?;
             }
 
             Platform::Android => {
