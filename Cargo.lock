@@ -396,18 +396,7 @@ version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eb57f18ae458825c213b5c359fb8bc1466a80b89f2c9e2f03812b021fc87b3ea"
 dependencies = [
- "kurbo",
- "peniko",
- "raw-window-handle 0.6.2",
-]
-
-[[package]]
-name = "anyrender_svg"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eb57f18ae458825c213b5c359fb8bc1466a80b89f2c9e2f03812b021fc87b3ea"
-dependencies = [
- "anyrender 0.2.0",
+ "anyrender",
  "image",
  "kurbo",
  "peniko",
@@ -421,7 +410,7 @@ version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3807802b3aeb615b281a393400fd31be883944334d153829c10cffb087c78b97"
 dependencies = [
- "anyrender 0.1.0",
+ "anyrender",
  "futures-intrusive",
  "kurbo",
  "peniko",
@@ -1664,7 +1653,7 @@ version = "0.1.0-alpha.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a9592d2235bdd5d840ed1e212d9337324d9e43fc11ff3fa5dd723d280c63f85c"
 dependencies = [
- "anyrender 0.2.0",
+ "anyrender",
  "anyrender_svg",
  "blitz-dom",
  "blitz-traits",
@@ -1688,7 +1677,7 @@ dependencies = [
  "accesskit",
  "accesskit_winit",
  "android-activity",
- "anyrender 0.1.0",
+ "anyrender",
  "blitz-dom",
  "blitz-paint",
  "blitz-traits",
@@ -4315,7 +4304,7 @@ dependencies = [
 name = "dioxus-native"
 version = "0.7.0-alpha.1"
 dependencies = [
- "anyrender 0.1.0",
+ "anyrender",
  "anyrender_vello",
  "blitz-dom",
  "blitz-net",
