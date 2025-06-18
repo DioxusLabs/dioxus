@@ -10,7 +10,7 @@ homepage = "https://dioxuslabs.com"
 keywords = ["dom", "ui", "gui", "react", "wasm"]
 
 [dependencies]
-dioxus-lib = { workspace = true }
+dioxus-lib = { workspace = true, default-features = false, features = ["signals", "macro", "hooks"] }
 dioxus-history = { workspace = true }
 dioxus-router-macro = { workspace = true }
 dioxus-fullstack-hooks = { workspace = true, optional = true }
@@ -21,9 +21,10 @@ dioxus-cli-config = { workspace = true }
 rustversion = { workspace = true }
 
 [features]
-default = []
+default = ["html"]
 streaming = ["dep:dioxus-fullstack-hooks"]
 wasm-split = []
+html = ["dioxus-lib/html"]
 
 [dev-dependencies]
 axum = { workspace = true, features = ["ws"] }
