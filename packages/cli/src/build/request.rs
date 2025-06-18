@@ -4148,7 +4148,7 @@ r#" <script>
                     .trim()
                     .into();
                 let path_to_sim = path_to_xcode.join("Applications").join("Simulator.app");
-                open::that(path_to_sim)?;
+                open::that_detached(path_to_sim)?;
             }
 
             Platform::Android => {

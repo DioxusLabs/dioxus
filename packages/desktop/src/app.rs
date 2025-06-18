@@ -271,7 +271,7 @@ impl App {
         if let Some(temp) = msg.params().as_object() {
             if temp.contains_key("href") {
                 if let Some(href) = temp.get("href").and_then(|v| v.as_str()) {
-                    if let Err(e) = webbrowser::open(href) {
+                    if let Err(e) = open::that_detached(href) {
                         tracing::error!("Open Browser error: {:?}", e);
                     }
                 }

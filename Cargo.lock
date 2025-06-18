@@ -3951,6 +3951,7 @@ dependencies = [
  "ndk-sys 0.6.0+11769913",
  "objc",
  "objc_id",
+ "open",
  "percent-encoding",
  "rand 0.8.5",
  "reqwest 0.12.15",
@@ -3967,7 +3968,6 @@ dependencies = [
  "tokio-tungstenite",
  "tracing",
  "tray-icon",
- "webbrowser",
  "wry",
 ]
 
@@ -16192,23 +16192,6 @@ dependencies = [
  "phf_codegen 0.11.3",
  "string_cache",
  "string_cache_codegen",
-]
-
-[[package]]
-name = "webbrowser"
-version = "1.0.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d5df295f8451142f1856b1bd86a606dfe9587d439bc036e319c827700dbd555e"
-dependencies = [
- "core-foundation 0.10.0",
- "home",
- "jni",
- "log",
- "ndk-context",
- "objc2 0.6.1",
- "objc2-foundation 0.3.1",
- "url",
- "web-sys",
 ]
 
 [[package]]

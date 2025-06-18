@@ -314,7 +314,6 @@ memfd = "0.6.4"
 # desktop
 wry = { version = "0.45.0", default-features = false }
 tao = { version = "0.33.0", features = ["rwh_05"] }
-webbrowser = "1.0.3"
 infer = "0.19.0"
 dunce = "1.0.5"
 percent-encoding = "2.3.1"
