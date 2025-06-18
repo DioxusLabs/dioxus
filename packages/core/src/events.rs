@@ -589,6 +589,19 @@ impl<Args: 'static, Ret: 'static> std::ops::Deref for Callback<Args, Ret> {
 type AnyEventHandler = Rc<RefCell<dyn FnMut(Event<dyn Any>)>>;
 
 /// An owned callback type used in [`AttributeValue::Listener`](crate::AttributeValue::Listener).
+///
+/// This is the type that powers the `on` attributes in the `rsx!` macro, allowing you to pass event
+/// handlers to elements.
+///
+/// ```rust, ignore
+/// rsx! {
+///     button {
+///         onclick: AttributeValue::Listener(ListenerCallback::new(move |evt: Event<MouseData>| {
+///             // ...
+///         }
+///     }
+/// }
+/// ```
 pub struct ListenerCallback<T = ()> {
     pub(crate) origin: ScopeId,
     callback: AnyEventHandler,
@@ -614,11 +627,13 @@ impl<T> PartialEq for ListenerCallback<T> {
 
 impl<T> ListenerCallback<T> {
     /// Create a new [`ListenerCallback`] from a callback
-    pub fn new<MaybeAsync: SpawnIfAsync<Marker>, Marker>(
-        mut f: impl FnMut(Event<T>) -> MaybeAsync + 'static,
-    ) -> Self
+    ///
+    /// This is expected to be called within a runtime scope. Make sure a runtime is current before
+    /// calling this method.
+    pub fn new<MaybeAsync, Marker>(mut f: impl FnMut(Event<T>) -> MaybeAsync + 'static) -> Self
     where
         T: 'static,
+        MaybeAsync: SpawnIfAsync<Marker>,
     {
         Self {
             origin: current_scope_id().expect("ListenerCallback must be created within a scope"),
@@ -635,6 +650,9 @@ impl<T> ListenerCallback<T> {
     }
 
     /// Call the callback with an event
+    ///
+    /// This is expected to be called within a runtime scope. Make sure a runtime is current before
+    /// calling this method.
     pub fn call(&self, event: Event<dyn Any>) {
         let runtime = Runtime::current().expect("ListenerCallback must be called within a runtime");
         runtime.with_scope_on_stack(self.origin, || {
