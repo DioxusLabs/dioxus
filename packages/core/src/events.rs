@@ -1,6 +1,8 @@
-use crate::{properties::SuperFrom, runtime::RuntimeGuard, Runtime, ScopeId};
+use crate::{
+    prelude::current_scope_id, properties::SuperFrom, runtime::RuntimeGuard, Runtime, ScopeId,
+};
 use generational_box::GenerationalBox;
-use std::{cell::RefCell, marker::PhantomData, panic::Location, rc::Rc};
+use std::{any::Any, cell::RefCell, marker::PhantomData, panic::Location, rc::Rc};
 
 /// A wrapper around some generic data that handles the event's state
 ///
@@ -64,6 +66,17 @@ impl<T: ?Sized> Event<T> {
         Event {
             data: Rc::new(f(&self.data)),
             metadata: self.metadata.clone(),
+        }
+    }
+
+    /// Convert this event into a boxed event with a dynamic type
+    pub fn into_any(self) -> Event<dyn Any>
+    where
+        T: Sized,
+    {
+        Event {
+            data: self.data as Rc<dyn Any>,
+            metadata: self.metadata,
         }
     }
 
@@ -376,6 +389,27 @@ impl<
     }
 }
 
+impl<
+        Function: FnMut(Event<T>) -> Spawn + 'static,
+        T: 'static,
+        Spawn: SpawnIfAsync<Marker> + 'static,
+        Marker,
+    > SuperFrom<Function, MarkerWrapper<Marker>> for ListenerCallback<T>
+{
+    fn super_from(input: Function) -> Self {
+        ListenerCallback::new(input)
+    }
+}
+
+// ListenerCallback<T> can be created from Callback<Event<T>>
+impl<T: 'static> SuperFrom<Callback<Event<T>>> for ListenerCallback<T> {
+    fn super_from(input: Callback<Event<T>>) -> Self {
+        // https://github.com/rust-lang/rust-clippy/issues/15072
+        #[allow(clippy::redundant_closure)]
+        ListenerCallback::new(move |event| input(event))
+    }
+}
+
 #[doc(hidden)]
 pub struct UnitClosure<Marker>(PhantomData<Marker>);
 
@@ -471,14 +505,6 @@ impl<Args: 'static, Ret: 'static> Callback<Args, Ret> {
         Self { callback, origin }
     }
 
-    /// Leak a new reference to the [`Callback`] that will not be dropped unless the callback is dropped manually
-    pub(crate) fn leak_reference(&self) -> generational_box::BorrowResult<Callback<Args, Ret>> {
-        Ok(Callback {
-            callback: self.callback.leak_reference()?,
-            origin: self.origin,
-        })
-    }
-
     /// Call this callback with the appropriate argument type
     ///
     /// This borrows the callback using a RefCell. Recursively calling a callback will cause a panic.
@@ -557,5 +583,89 @@ impl<Args: 'static, Ret: 'static> std::ops::Deref for Callback<Args, Ret> {
 
         // Cast the closure to a trait object.
         reference_to_closure as &_
+    }
+}
+
+type AnyEventHandler = Rc<RefCell<dyn FnMut(Event<dyn Any>)>>;
+
+/// An owned callback type used in [`AttributeValue::Listener`](crate::AttributeValue::Listener).
+///
+/// This is the type that powers the `on` attributes in the `rsx!` macro, allowing you to pass event
+/// handlers to elements.
+///
+/// ```rust, ignore
+/// rsx! {
+///     button {
+///         onclick: AttributeValue::Listener(ListenerCallback::new(move |evt: Event<MouseData>| {
+///             // ...
+///         }
+///     }
+/// }
+/// ```
+pub struct ListenerCallback<T = ()> {
+    pub(crate) origin: ScopeId,
+    callback: AnyEventHandler,
+    _marker: PhantomData<T>,
+}
+
+impl<T> Clone for ListenerCallback<T> {
+    fn clone(&self) -> Self {
+        Self {
+            origin: self.origin,
+            callback: self.callback.clone(),
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<T> PartialEq for ListenerCallback<T> {
+    fn eq(&self, other: &Self) -> bool {
+        // We compare the pointers of the callbacks, since they are unique
+        Rc::ptr_eq(&self.callback, &other.callback) && self.origin == other.origin
+    }
+}
+
+impl<T> ListenerCallback<T> {
+    /// Create a new [`ListenerCallback`] from a callback
+    ///
+    /// This is expected to be called within a runtime scope. Make sure a runtime is current before
+    /// calling this method.
+    pub fn new<MaybeAsync, Marker>(mut f: impl FnMut(Event<T>) -> MaybeAsync + 'static) -> Self
+    where
+        T: 'static,
+        MaybeAsync: SpawnIfAsync<Marker>,
+    {
+        Self {
+            origin: current_scope_id().expect("ListenerCallback must be created within a scope"),
+            callback: Rc::new(RefCell::new(move |event: Event<dyn Any>| {
+                let data = event.data.downcast::<T>().unwrap();
+                f(Event {
+                    metadata: event.metadata.clone(),
+                    data,
+                })
+                .spawn();
+            })),
+            _marker: PhantomData,
+        }
+    }
+
+    /// Call the callback with an event
+    ///
+    /// This is expected to be called within a runtime scope. Make sure a runtime is current before
+    /// calling this method.
+    pub fn call(&self, event: Event<dyn Any>) {
+        let runtime = Runtime::current().expect("ListenerCallback must be called within a runtime");
+        runtime.with_scope_on_stack(self.origin, || {
+            (self.callback.borrow_mut())(event);
+        });
+    }
+
+    /// Erase the type of the callback, allowing it to be used with any type of event
+    pub fn erase(self) -> ListenerCallback {
+        ListenerCallback {
+            origin: self.origin,
+            callback: self.callback,
+            _marker: PhantomData,
+        }
     }
 }
