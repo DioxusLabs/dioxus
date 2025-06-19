@@ -598,7 +598,7 @@ type AnyEventHandler = Rc<RefCell<dyn FnMut(Event<dyn Any>)>>;
 ///     button {
 ///         onclick: AttributeValue::Listener(ListenerCallback::new(move |evt: Event<MouseData>| {
 ///             // ...
-///         }
+///         }))
 ///     }
 /// }
 /// ```
