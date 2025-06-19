@@ -321,7 +321,8 @@ use crate::{
     DX_RUSTC_WRAPPER_ENV_VAR,
 };
 use anyhow::Context;
-use dioxus_cli_config::{format_base_path_meta_element, ServerConfig, SERVE_CONFIG_FILE};
+use cargo_metadata::diagnostic::Diagnostic;
+use dioxus_cli_config::format_base_path_meta_element;
 use dioxus_cli_config::{APP_TITLE_ENV, ASSET_ROOT_ENV};
 use dioxus_cli_opt::{process_file_to, AssetManifest};
 use itertools::Itertools;
@@ -770,15 +771,12 @@ impl BuildRequest {
                 self.write_executable(ctx, &artifacts.exe, &mut artifacts.assets)
                     .await
                     .context("Failed to write main executable")?;
-                self.write_server_config(&artifacts.assets)
-                    .context("Failed to write server config")?;
                 self.write_frameworks(ctx, &artifacts.direct_rustc)
                     .await
                     .context("Failed to write frameworks")?;
                 self.write_assets(ctx, &artifacts.assets)
                     .await
                     .context("Failed to write assets")?;
-
                 self.write_metadata().await?;
                 self.optimize(ctx).await?;
                 self.assemble(ctx)
@@ -990,30 +988,6 @@ impl BuildRequest {
         Ok(manifest)
     }
 
-    /// Write the server config file to the output directory. This file tells the server what assets are immutable
-    /// and can be cached forever.
-    pub(crate) fn write_server_config(&self, asset_manifest: &AssetManifest) -> Result<()> {
-        if self.platform != Platform::Server {
-            return Ok(());
-        }
-        let assets = asset_manifest
-            .assets
-            .values()
-            .map(|a| a.bundled_path().to_string())
-            .collect::<Vec<_>>();
-
-        let config = ServerConfig::new().with_immutable_assets(assets);
-
-        let config_json =
-            serde_json::to_string_pretty(&config).context("Failed to serialize server config")?;
-
-        let path = self.root_dir().join(SERVE_CONFIG_FILE);
-
-        std::fs::write(&path, config_json).context("Failed to write server config")?;
-
-        Ok(())
-    }
-
     /// Take the output of rustc and make it into the main exe of the bundle
     ///
     /// For wasm, we'll want to run `wasm-bindgen` to make it a wasm binary along with some other optimizations
@@ -1134,7 +1108,6 @@ impl BuildRequest {
     /// Should be the same on all platforms - just copy over the assets from the manifest into the output directory
     async fn write_assets(&self, ctx: &BuildContext, assets: &AssetManifest) -> Result<()> {
         // Server doesn't need assets - web will provide them
-        // Just write the server config file instead
         if self.platform == Platform::Server {
             return Ok(());
         }
