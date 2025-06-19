@@ -334,16 +334,28 @@ pub struct PendingDesktopContext {
     pub(crate) receiver: tokio::sync::oneshot::Receiver<DesktopContext>,
 }
 
+impl PendingDesktopContext {
+    /// Resolve the pending context into a [`DesktopContext`].
+    pub async fn resolve(self) -> DesktopContext {
+        self.try_resolve()
+            .await
+            .expect("Failed to resolve pending desktop context")
+    }
+
+    /// Try to resolve the pending context into a [`DesktopContext`].
+    pub async fn try_resolve(
+        self,
+    ) -> Result<DesktopContext, tokio::sync::oneshot::error::RecvError> {
+        self.receiver.await
+    }
+}
+
 impl IntoFuture for PendingDesktopContext {
     type Output = DesktopContext;
 
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output>>>;
 
     fn into_future(self) -> Self::IntoFuture {
-        let fut = async move {
-            let context = self.receiver.await.unwrap();
-            context
-        };
-        Box::pin(fut)
+        Box::pin(self.resolve())
     }
 }
