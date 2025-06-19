@@ -647,7 +647,7 @@ impl BuildRequest {
         // Somethings we override are also present in the user's config.
         // If we can't get them by introspecting cargo, then we need to get them from the config
         //
-        // This involves specificaly two fields:
+        // This involves specifically two fields:
         // - The linker since we override it for Android and hotpatching
         // - RUSTFLAGS since we also override it for Android and hotpatching
         let cargo_config = cargo_config2::Config::load().unwrap();
