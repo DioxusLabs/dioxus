@@ -114,18 +114,6 @@ impl Display for Platform {
 }
 
 impl Platform {
-    /// A list of all platforms that dioxus supports
-    pub(crate) const ALL: &[Platform] = &[
-        Platform::Web,
-        Platform::MacOS,
-        Platform::Windows,
-        Platform::Linux,
-        Platform::Ios,
-        Platform::Android,
-        Platform::Server,
-        Platform::Liveview,
-    ];
-
     /// Get the feature name for the platform in the dioxus crate
     pub(crate) fn feature_name(&self) -> &str {
         match self {
@@ -195,6 +183,23 @@ impl Platform {
             "liveview" => Some(Platform::Liveview),
             "server" => Some(Platform::Server),
             _ => None,
+        }
+    }
+
+    pub(crate) fn profile_name(&self, release: bool) -> String {
+        let base_profile = match self {
+            Platform::MacOS | Platform::Windows | Platform::Linux => "desktop",
+            Platform::Web => "web",
+            Platform::Ios => "ios",
+            Platform::Android => "android",
+            Platform::Server => "server",
+            Platform::Liveview => "liveview",
+        };
+
+        if release {
+            format!("{}-release", base_profile)
+        } else {
+            format!("{}-dev", base_profile)
         }
     }
 }

@@ -321,7 +321,6 @@ use crate::{
     DX_RUSTC_WRAPPER_ENV_VAR,
 };
 use anyhow::Context;
-use cargo_config2::cargo_home_with_cwd;
 use cargo_metadata::diagnostic::Diagnostic;
 use dioxus_cli_config::format_base_path_meta_element;
 use dioxus_cli_config::{APP_TITLE_ENV, ASSET_ROOT_ENV};
@@ -345,7 +344,6 @@ use std::{
 use target_lexicon::{OperatingSystem, Triple};
 use tempfile::{NamedTempFile, TempDir};
 use tokio::{io::AsyncBufReadExt, process::Command};
-use toml_edit::Item;
 use uuid::Uuid;
 
 use super::HotpatchModuleCache;
@@ -441,25 +439,6 @@ pub struct BuildArtifacts {
     pub(crate) assets: AssetManifest,
     pub(crate) mode: BuildMode,
     pub(crate) patch_cache: Option<Arc<HotpatchModuleCache>>,
-}
-
-pub(crate) fn get_profile_for_platform(platform: Platform, release: bool) -> String {
-    let base_profile = match platform {
-        Platform::Web => "wasm",
-        Platform::Server => "server",
-        Platform::Ios => "ios",
-        Platform::Android => "android",
-        Platform::Windows => "windows",
-        Platform::MacOS => "macos",
-        Platform::Linux => "linux",
-        Platform::Liveview => "liveview",
-    };
-
-    if release {
-        format!("{}-release", base_profile)
-    } else {
-        format!("{}-dev", base_profile)
-    }
 }
 
 impl BuildRequest {
@@ -607,7 +586,7 @@ impl BuildRequest {
         // We might want to move some of these profiles into dioxus.toml and make them "virtual".
         let profile = match args.profile.clone() {
             Some(profile) => profile,
-            None => get_profile_for_platform(platform, args.release).to_string(),
+            None => platform.profile_name(args.release),
         };
 
         // Determining release mode is based on the profile, actually, so we need to check that
@@ -2097,6 +2076,9 @@ impl BuildRequest {
     fn cargo_build_arguments(&self, ctx: &BuildContext) -> Vec<String> {
         let mut cargo_args = Vec::with_capacity(4);
 
+        // Set the `--config profile.{profile}.{key}={value}` flags for the profile, filling in adhoc profile
+        cargo_args.extend(self.profile_args());
+
         // Add required profile flags. --release overrides any custom profiles.
         cargo_args.push("--profile".to_string());
         cargo_args.push(self.profile.to_string());
@@ -2792,19 +2774,6 @@ impl BuildRequest {
             .to_path_buf()
     }
 
-    /// Get the directory where cargo stores its data
-    pub(crate) fn cargo_home(&self) -> Result<PathBuf> {
-        Ok(cargo_home_with_cwd(&self.workspace_dir())
-            .ok_or_else(|| anyhow::anyhow!("Failed to find cargo home. Please set CARGO_HOME."))?)
-    }
-
-    /// Get the path to the global cargo config
-    pub(crate) fn cargo_config(&self) -> Result<PathBuf> {
-        let cargo_home = self.cargo_home()?;
-        let config_path = cargo_home.join("config.toml");
-        Ok(config_path)
-    }
-
     /// Get the package we are currently in
     pub(crate) fn package(&self) -> &krates::cm::Package {
         &self.workspace.krates[self.crate_package]
@@ -2855,53 +2824,6 @@ impl BuildRequest {
             );
             fallback
         })
-    }
-
-    // The `opt-level=1` increases build times, but can noticeably decrease time
-    // between saving changes and being able to interact with an app (for wasm/web). The "overall"
-    // time difference (between having and not having the optimization) can be
-    // almost imperceptible (~1 s) but also can be very noticeable (~6 s) — depends
-    // on setup (hardware, OS, browser, idle load).
-    //
-    // Find or create the client and server profiles in the top-level Cargo.toml file
-    // todo(jon): we should/could make these optional by placing some defaults somewhere
-    pub(crate) fn initialize_profiles(&self) -> crate::Result<()> {
-        let config_path = self.cargo_config()?;
-        let mut config = match std::fs::read_to_string(&config_path) {
-            Ok(config) => config.parse::<toml_edit::DocumentMut>().map_err(|e| {
-                crate::Error::Other(anyhow::anyhow!("Failed to parse Cargo.toml: {}", e))
-            })?,
-            Err(_) => Default::default(),
-        };
-
-        if let Item::Table(table) = config
-            .as_table_mut()
-            .entry("profile")
-            .or_insert(Item::Table(Default::default()))
-        {
-            for &platform in Platform::ALL {
-                let debug_profile = get_profile_for_platform(platform, false);
-                if let toml_edit::Entry::Vacant(entry) = table.entry(&debug_profile) {
-                    let mut client = toml_edit::Table::new();
-                    client.insert("inherits", Item::Value("dev".into()));
-                    if platform == Platform::Web {
-                        client.insert("opt-level", Item::Value(1.into()));
-                    }
-                    entry.insert(Item::Table(client));
-                }
-                let release_profile = get_profile_for_platform(platform, true);
-                if let toml_edit::Entry::Vacant(entry) = table.entry(&release_profile) {
-                    let mut client = toml_edit::Table::new();
-                    client.insert("inherits", Item::Value("release".into()));
-                    entry.insert(Item::Table(client));
-                }
-            }
-        }
-
-        std::fs::write(config_path, config.to_string())
-            .context("Failed to write profiles to Cargo.toml")?;
-
-        Ok(())
     }
 
     /// Return the version of the wasm-bindgen crate if it exists
@@ -3711,10 +3633,6 @@ impl BuildRequest {
     pub(crate) async fn verify_tooling(&self, ctx: &BuildContext) -> Result<()> {
         ctx.status_installing_tooling();
 
-        self
-            .initialize_profiles()
-            .context("Failed to initialize profiles - dioxus can't build without them. You might need to initialize them yourself.")?;
-
         match self.platform {
             Platform::Web => self.verify_web_tooling().await?,
             Platform::Ios => self.verify_ios_tooling().await?,
@@ -4214,5 +4132,68 @@ r#" <script>
         which::which("llvm-ranlib")
             .or_else(|_| which::which("ranlib"))
             .ok()
+    }
+
+    /// Assemble a series of `--config key=value` arguments for the build command.
+    ///
+    /// This adds adhoc profiles that dx uses to isolate builds from each other. Normally if you ran
+    /// `cargo build --feature desktop` and `cargo build --feature server`, then both binaries get
+    /// the same name and overwrite each other, causing thrashing and locking issues.
+    ///
+    /// By creating adhoc profiles, we can ensure that each build is isolated and doesn't interfere with each other.
+    ///
+    /// The user can also define custom profiles in their `Cargo.toml` file, which will be used instead
+    /// of the adhoc profiles.
+    ///
+    /// The names of the profiles are:
+    /// - web-dev
+    /// - web-release
+    /// - desktop-dev
+    /// - desktop-release
+    /// - server-dev
+    /// - server-release
+    /// - ios-dev
+    /// - ios-release
+    /// - android-dev
+    /// - android-release
+    /// - liveview-dev
+    /// - liveview-release
+    ///
+    /// Note how every platform gets its own profile, and each platform has a dev and release profile.
+    fn profile_args(&self) -> Vec<String> {
+        // If the user defined the profile in the Cargo.toml, we don't need to add it to our adhoc list
+        if self
+            .workspace
+            .cargo_toml
+            .profile
+            .custom
+            .contains_key(&self.profile)
+        {
+            return vec![];
+        }
+
+        // Otherwise, we need to add the profile arguments to make it adhoc
+        let mut args = Vec::new();
+
+        let profile = self.profile.as_str();
+        let inherits = if self.release { "release" } else { "dev" };
+
+        // Add the profile definition first.
+        args.push(format!(r#"profile.{profile}.inherits="{inherits}""#));
+
+        // The default dioxus experience is to lightly optimize the web build, both in debug and release
+        // Note that typically in release builds, you would strip debuginfo, but we actually choose to do
+        // that with wasm-opt tooling instead.
+        if matches!(self.platform, Platform::Web) {
+            match self.release {
+                true => args.push(r#"profile.web.opt-level="s""#.to_string()),
+                false => args.push(r#"profile.web.opt-level="1""#.to_string()),
+            }
+        }
+
+        // Prepend --config to each argument
+        args.into_iter()
+            .flat_map(|arg| ["--config".to_string(), arg])
+            .collect()
     }
 }
