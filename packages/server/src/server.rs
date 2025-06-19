@@ -85,9 +85,7 @@ where
         }
 
         // Serve all files in public folder except index.html
-        let assets_dir = crate::assets_path();
-
-        serve_dir_cached(self, &public_path, &assets_dir, &public_path)
+        serve_dir_cached(self, &public_path, &public_path)
     }
 
     fn serve_dioxus_application(self, cfg: ServeConfig, app: fn() -> Element) -> Self {
@@ -447,7 +445,6 @@ fn report_err<E: std::fmt::Display>(e: E) -> Response<axum::body::Body> {
 fn serve_dir_cached<S>(
     mut router: Router<S>,
     public_path: &std::path::Path,
-    assets_dir: &std::path::Path,
     directory: &std::path::Path,
 ) -> Router<S>
 where
@@ -468,7 +465,7 @@ where
         let route = path_components_to_route_lossy(route);
 
         if path.is_dir() {
-            router = serve_dir_cached(router, public_path, assets_dir, &path);
+            router = serve_dir_cached(router, public_path, &path);
         } else {
             let serve_file = ServeFile::new(&path).precompressed_br();
             // All cached assets are served at the root of the asset directory. If we know an asset
@@ -487,7 +484,7 @@ where
 
 fn file_name_looks_immutable(file_name: &str) -> bool {
     // Check if the file name looks like a hash (e.g., "main-dxh12345678.js")
-    file_name.rsplit_once("-dxh").map_or(false, |(_, hash)| {
+    file_name.rsplit_once("-dxh").is_some_and(|(_, hash)| {
         hash.chars()
             .take_while(|c| *c != '.')
             .all(|c| c.is_ascii_hexdigit())
