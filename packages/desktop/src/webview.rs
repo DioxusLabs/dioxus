@@ -346,8 +346,11 @@ impl WebviewInstance {
                 if var.starts_with("dioxus://") || var.starts_with("http://dioxus.") {
                     true
                 } else {
-                    if var.starts_with("http://") || var.starts_with("https://") {
-                        _ = webbrowser::open(&var);
+                    if var.starts_with("http://")
+                        || var.starts_with("https://")
+                        || var.starts_with("mailto:")
+                    {
+                        _ = open::that_detached(&var);
                     }
                     false
                 }

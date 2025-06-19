@@ -3,7 +3,7 @@ use std::fmt::{self, Display, Formatter};
 
 /// A buffer that can be rendered to and then dumped as raw ansi codes
 ///
-/// This is taken from a PR on the ratatui repo (https://github.com/ratatui/ratatui/pull/1065) and
+/// This is taken from a PR on the ratatui repo (<https://github.com/ratatui/ratatui/pull/1065>) and
 /// modified to be more appropriate for our use case.
 pub struct AnsiStringLine {
     buf: Buffer,

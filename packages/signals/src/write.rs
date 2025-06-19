@@ -102,7 +102,8 @@ pub trait Writable: Readable {
     where
         Self::Target: std::ops::Not<Output = Self::Target> + Clone,
     {
-        self.set(!self.cloned());
+        let inverted = !(*self.peek()).clone();
+        self.set(inverted);
     }
 
     /// Index into the inner value and return a reference to the result.

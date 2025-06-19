@@ -3,8 +3,8 @@ use itertools::Itertools;
 use object::{
     macho::{self},
     read::File,
-    write::{MachOBuildVersion, StandardSection, Symbol, SymbolSection},
-    Endianness, Object, ObjectSymbol, SymbolKind, SymbolScope,
+    write::{MachOBuildVersion, SectionId, StandardSection, Symbol, SymbolId, SymbolSection},
+    Endianness, Object, ObjectSymbol, SymbolFlags, SymbolKind, SymbolScope,
 };
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use std::{
@@ -15,7 +15,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 use subsecond_types::{AddressMap, JumpTable};
-use target_lexicon::{Architecture, OperatingSystem, Triple};
+use target_lexicon::{Architecture, OperatingSystem, PointerWidth, Triple};
 use thiserror::Error;
 use walrus::{
     ConstExpr, DataKind, ElementItems, ElementKind, FunctionBuilder, FunctionId, FunctionKind,
@@ -83,6 +83,8 @@ pub struct CachedSymbol {
     pub kind: SymbolKind,
     pub is_undefined: bool,
     pub is_weak: bool,
+    pub size: u64,
+    pub flags: SymbolFlags<SectionId, SymbolId>,
 }
 
 impl PartialEq for HotpatchModuleCache {
@@ -137,6 +139,8 @@ impl HotpatchModuleCache {
                                     },
                                     is_undefined,
                                     is_weak: false,
+                                    size: 0,
+                                    flags: SymbolFlags::None,
                                 },
                             );
                         }
@@ -155,6 +159,8 @@ impl HotpatchModuleCache {
                                     kind: SymbolKind::Data,
                                     is_undefined,
                                     is_weak: false,
+                                    size: 0,
+                                    flags: SymbolFlags::None,
                                 },
                             );
                         }
@@ -249,6 +255,15 @@ impl HotpatchModuleCache {
                 let symbol_table = obj
                     .symbols()
                     .filter_map(|s| {
+                        let flags = match s.flags() {
+                            SymbolFlags::None => SymbolFlags::None,
+                            SymbolFlags::Elf { st_info, st_other } => {
+                                SymbolFlags::Elf { st_info, st_other }
+                            }
+                            SymbolFlags::MachO { n_desc } => SymbolFlags::MachO { n_desc },
+                            _ => SymbolFlags::None,
+                        };
+
                         Some((
                             s.name().ok()?.to_string(),
                             CachedSymbol {
@@ -256,6 +271,8 @@ impl HotpatchModuleCache {
                                 is_undefined: s.is_undefined(),
                                 is_weak: s.is_weak(),
                                 kind: s.kind(),
+                                size: s.size(),
+                                flags,
                             },
                         ))
                     })
@@ -322,9 +339,9 @@ fn create_windows_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> Resul
         .context("failed to find 'main' symbol in patch")?;
 
     let aslr_reference = old_name_to_addr
-        .get("__aslr_reference")
+        .get("main")
         .map(|s| s.address)
-        .context("failed to find '_aslr_reference' symbol in original module")?;
+        .context("failed to find '_main' symbol in original module")?;
 
     Ok(JumpTable {
         lib: patch.to_path_buf(),
@@ -367,31 +384,15 @@ fn create_native_jump_table(
         }
     }
 
-    let new_base_address = match triple.operating_system {
-        // The symbol in the symtab is called "_main" but in the dysymtab it is called "main"
-        OperatingSystem::MacOSX(_) | OperatingSystem::Darwin(_) | OperatingSystem::IOS(_) => {
-            *new_name_to_addr
-                .get("_main")
-                .context("failed to find '_main' symbol in patch")?
-        }
-
-        // No distincation between the two on these platforms
-        OperatingSystem::Freebsd
-        | OperatingSystem::Openbsd
-        | OperatingSystem::Linux
-        | OperatingSystem::Windows => *new_name_to_addr
-            .get("main")
-            .context("failed to find 'main' symbol in patch")?,
-
-        // On wasm, it doesn't matter what the address is since the binary is PIC
-        _ => 0,
-    };
-
+    let sentinel = main_sentinel(triple);
+    let new_base_address = new_name_to_addr
+        .get(sentinel)
+        .cloned()
+        .context("failed to find 'main' symbol in base - are deubg symbols enabled?")?;
     let aslr_reference = old_name_to_addr
-        .get("___aslr_reference")
-        .or_else(|| old_name_to_addr.get("__aslr_reference"))
+        .get(sentinel)
         .map(|s| s.address)
-        .context("failed to find '___aslr_reference' symbol in original module")?;
+        .context("failed to find 'main' symbol in original module - are debug symbols enabled?")?;
 
     Ok(JumpTable {
         lib: patch.to_path_buf(),
@@ -414,7 +415,7 @@ fn create_native_jump_table(
 /// It doesn't seem like we can compile the base module to export these, sadly, so we're going
 /// to manually satisfy them here, removing their need to be imported.
 ///
-/// https://github.com/WebAssembly/tool-conventions/blob/main/DynamicLinking.md
+/// <https://github.com/WebAssembly/tool-conventions/blob/main/DynamicLinking.md>
 fn create_wasm_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> Result<JumpTable> {
     let name_to_ifunc_old = &cache.symbol_ifunc_map;
     let old = &cache.old_wasm;
@@ -827,22 +828,31 @@ pub fn create_undefined_symbol_stub(
         _ => {}
     }
 
-    let symbol_table = &cache.symbol_table;
+    // Get the offset from the main module and adjust the addresses by the slide;
+    let aslr_ref_address = cache
+        .symbol_table
+        .get(main_sentinel(triple))
+        .context("failed to find '_main' symbol in patch")?
+        .address;
 
-    // Get the offset from the main module and adjust the addresses by the slide
-    let aslr_ref_address = symbol_table
-        .get("___aslr_reference")
-        .or_else(|| symbol_table.get("__aslr_reference"))
-        .map(|s| s.address)
-        .context("Failed to find ___aslr_reference symbol")?;
+    if aslr_reference < aslr_ref_address {
+        return Err(PatchError::InvalidModule(
+            format!(
+            "ASLR reference is less than the main module's address - is there a `main`?. {:x} < {:x}", aslr_reference, aslr_ref_address )
+        ));
+    }
+
     let aslr_offset = aslr_reference - aslr_ref_address;
 
     // we need to assemble a PLT/GOT so direct calls to the patch symbols work
     // for each symbol we either write the address directly (as a symbol) or create a PLT/GOT entry
     let text_section = obj.section_id(StandardSection::Text);
     for name in undefined_symbols {
-        let Some(sym) = symbol_table.get(name.as_str().trim_start_matches("__imp_")) else {
-            tracing::error!("Symbol not found: {}", name);
+        let Some(sym) = cache
+            .symbol_table
+            .get(name.as_str().trim_start_matches("__imp_"))
+        else {
+            tracing::debug!("Symbol not found: {}", name);
             continue;
         };
 
@@ -895,7 +905,7 @@ pub fn create_undefined_symbol_stub(
                     kind: SymbolKind::Data, // Always Data for IAT entries
                     weak: false,
                     section: SymbolSection::Section(data_section),
-                    flags: object::SymbolFlags::None,
+                    flags: SymbolFlags::None,
                 });
             }
 
@@ -1015,7 +1025,6 @@ pub fn create_undefined_symbol_stub(
                         _ => return Err(PatchError::UnsupportedPlatform(triple.to_string())),
                     },
                 };
-
                 let offset = obj.append_section_data(text_section, &jump_asm, 8);
                 obj.add_symbol(Symbol {
                     name: name.as_bytes()[name_offset..].to_vec(),
@@ -1025,7 +1034,76 @@ pub fn create_undefined_symbol_stub(
                     kind: SymbolKind::Text,
                     weak: false,
                     section: SymbolSection::Section(text_section),
-                    flags: object::SymbolFlags::None,
+                    flags: SymbolFlags::None, // ignore for these stubs
+                });
+            }
+
+            // Rust code typically generates Tls accessors as functions (text), but they are referenced
+            // indirectly as data symbols. We end up handling this by adding the TLS symbol as a data
+            // symbol with the initializer as the address of the original tls initializer. That way
+            // if new TLS are added at runtime, they get initialized properly, but otherwise, the
+            // tls initialization check (cbz) properly skips re-initialization on patches.
+            //
+            // ```
+            // __ZN17crossbeam_channel5waker17current_thread_id9THREAD_ID29_$u7b$$u7b$constant$u7d$$u7d$28_$u7b$$u7b$closure$u7d$$u7d$17h33618d877d86bb77E:
+            //    stp     x20, x19, [sp, #-0x20]!
+            //    stp     x29, x30, [sp, #0x10]
+            //    add     x29, sp, #0x10
+            //    adrp    x19, 21603 ; 0x1054bd000
+            //    add     x19, x19, #0x998
+            //    ldr     x20, [x19]
+            //    mov     x0, x19
+            //    blr     x20
+            //    ldr     x8, [x0]
+            //    cbz     x8, 0x10005acc0
+            //    mov     x0, x19
+            //    blr     x20
+            //    ldp     x29, x30, [sp, #0x10]
+            //    ldp     x20, x19, [sp], #0x20
+            //    ret
+            //    mov     x0, x19
+            //    blr     x20
+            //    bl      __ZN3std3sys12thread_local6native4lazy20Storage$LT$T$C$D$GT$10initialize17h818476638edff4e6E
+            //    b       0x10005acac
+            // ```
+            SymbolKind::Tls => {
+                let tls_section = obj.section_id(StandardSection::Tls);
+
+                let pointer_width = match triple.pointer_width().unwrap() {
+                    PointerWidth::U16 => 2,
+                    PointerWidth::U32 => 4,
+                    PointerWidth::U64 => 8,
+                };
+
+                let size = if sym.size == 0 {
+                    pointer_width
+                } else {
+                    sym.size
+                };
+
+                let align = size.min(pointer_width).next_power_of_two();
+                let mut init = vec![0u8; size as usize];
+
+                // write the contents of the symbol to the init vec
+                init.iter_mut()
+                    .zip(match triple.endianness() {
+                        Ok(target_lexicon::Endianness::Little) => abs_addr.to_le_bytes(),
+                        Ok(target_lexicon::Endianness::Big) => abs_addr.to_be_bytes(),
+                        _ => return Err(PatchError::UnsupportedPlatform(triple.to_string())),
+                    })
+                    .for_each(|(b, v)| *b = v);
+
+                let offset = obj.append_section_data(tls_section, &init, align);
+
+                obj.add_symbol(Symbol {
+                    name: name.as_bytes()[name_offset..].to_vec(),
+                    value: offset, // offset inside .tdata
+                    size,
+                    scope: SymbolScope::Linkage,
+                    kind: SymbolKind::Tls,
+                    weak: false,
+                    section: SymbolSection::Section(tls_section),
+                    flags: SymbolFlags::None, // ignore for these stubs
                 });
             }
 
@@ -1036,6 +1114,15 @@ pub fn create_undefined_symbol_stub(
                     SymbolKind::Unknown => SymbolKind::Data,
                     k => k,
                 };
+
+                // plain linux *wants* these flags, but android doesn't.
+                // unsure what's going on here, but this is special cased for now.
+                // I think the more advanced linkers don't want these flags, but the default linux linker (ld) does.
+                let flags = match triple.environment {
+                    target_lexicon::Environment::Android => SymbolFlags::None,
+                    _ => sym.flags,
+                };
+
                 obj.add_symbol(Symbol {
                     name: name.as_bytes()[name_offset..].to_vec(),
                     value: abs_addr,
@@ -1044,7 +1131,7 @@ pub fn create_undefined_symbol_stub(
                     kind,
                     weak: sym.is_weak,
                     section: SymbolSection::Absolute,
-                    flags: object::SymbolFlags::None,
+                    flags,
                 });
             }
         }
@@ -1212,7 +1299,7 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
 ///
 /// Uses the heuristics from the wasm-bindgen source code itself:
 ///
-/// https://github.com/rustwasm/wasm-bindgen/blob/c35cc9369d5e0dc418986f7811a0dd702fb33ef9/crates/cli-support/src/wit/mod.rs#L1165
+/// <https://github.com/rustwasm/wasm-bindgen/blob/c35cc9369d5e0dc418986f7811a0dd702fb33ef9/crates/cli-support/src/wit/mod.rs#L1165>
 fn name_is_bindgen_symbol(name: &str) -> bool {
     name.contains("__wbindgen_describe")
         || name.contains("__wbindgen_externref")
@@ -1366,4 +1453,19 @@ fn parse_module_with_ids(bindgened: &[u8]) -> Result<ParsedModule> {
         ids,
         symbols,
     })
+}
+
+/// Get the main sentinel symbol for the given target triple
+///
+/// We need to special case darwin since `main` is the entrypoint but `_main` is the actual symbol.
+/// The entrypoint ends up outside the text section, seemingly, and breaks our aslr detection.
+fn main_sentinel(triple: &Triple) -> &'static str {
+    match triple.operating_system {
+        // The symbol in the symtab is called "_main" but in the dysymtab it is called "main"
+        OperatingSystem::MacOSX(_) | OperatingSystem::Darwin(_) | OperatingSystem::IOS(_) => {
+            "_main"
+        }
+
+        _ => "main",
+    }
 }

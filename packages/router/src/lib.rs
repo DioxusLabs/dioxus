@@ -10,13 +10,19 @@ pub mod routable;
 
 /// Components interacting with the router.
 pub mod components {
+    #[cfg(feature = "html")]
     mod default_errors;
+    #[cfg(feature = "html")]
     pub use default_errors::*;
 
+    #[cfg(feature = "html")]
     mod history_buttons;
+    #[cfg(feature = "html")]
     pub use history_buttons::*;
 
+    #[cfg(feature = "html")]
     mod link;
+    #[cfg(feature = "html")]
     pub use link::*;
 
     mod outlet;
@@ -60,10 +66,11 @@ pub use hooks::router;
 
 /// A collection of useful items most applications might need.
 pub mod prelude {
+    #[cfg(feature = "html")]
     pub use crate::components::{
-        GoBackButton, GoForwardButton, HistoryButtonProps, Link, LinkProps, Outlet, Router,
-        RouterProps,
+        GoBackButton, GoForwardButton, HistoryButtonProps, Link, LinkProps,
     };
+    pub use crate::components::{Outlet, Router, RouterProps};
     pub use crate::contexts::*;
     pub use crate::hooks::*;
     pub use crate::navigation::*;
@@ -89,5 +96,36 @@ mod utils {
 
 #[doc(hidden)]
 pub mod exports {
-    pub use urlencoding;
+    pub use crate::query_sets::*;
+    pub use percent_encoding;
+}
+
+pub(crate) mod query_sets {
+    //! Url percent encode sets defined [here](https://url.spec.whatwg.org/#percent-encoded-bytes)
+
+    use percent_encoding::AsciiSet;
+
+    /// The ASCII set that must be escaped in query strings.
+    pub const QUERY_ASCII_SET: &AsciiSet = &percent_encoding::CONTROLS
+        .add(b' ')
+        .add(b'"')
+        .add(b'#')
+        .add(b'<')
+        .add(b'>');
+
+    /// The ASCII set that must be escaped in path segments.
+    pub const PATH_ASCII_SET: &AsciiSet = &QUERY_ASCII_SET
+        .add(b'?')
+        .add(b'^')
+        .add(b'`')
+        .add(b'{')
+        .add(b'}');
+
+    /// The ASCII set that must be escaped in hash fragments.
+    pub const FRAGMENT_ASCII_SET: &AsciiSet = &percent_encoding::CONTROLS
+        .add(b' ')
+        .add(b'"')
+        .add(b'<')
+        .add(b'>')
+        .add(b'`');
 }

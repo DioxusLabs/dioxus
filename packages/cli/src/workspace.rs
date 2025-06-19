@@ -3,7 +3,7 @@ use crate::Result;
 use crate::{config::DioxusConfig, AndroidTools};
 use anyhow::Context;
 use ignore::gitignore::Gitignore;
-use krates::{semver::Version, KrateDetails, LockOptions};
+use krates::{semver::Version, KrateDetails};
 use krates::{Cmd, Krates, NodeId};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -34,12 +34,7 @@ impl Workspace {
             return Ok(ws.clone());
         }
 
-        let mut cmd = Cmd::new();
-        cmd.lock_opts(LockOptions {
-            offline: true,
-            frozen: false,
-            locked: false,
-        });
+        let cmd = Cmd::new();
         let mut builder = krates::Builder::new();
         builder.workspace(true);
         let krates = builder
@@ -112,16 +107,16 @@ impl Workspace {
     }
 
     pub fn is_release_profile(&self, profile: &str) -> bool {
+        if profile == "release" {
+            return true;
+        }
+
         // Check if the profile inherits from release by traversing the `inherits` chain
         let mut current_profile_name = profile;
 
         // Try to find the current profile in the custom profiles section
         while let Some(profile_settings) = self.cargo_toml.profile.custom.get(current_profile_name)
         {
-            if profile == "release" {
-                return true;
-            }
-
             // Check what this profile inherits from
             match &profile_settings.inherits {
                 // Otherwise, continue checking the profile it inherits from
@@ -130,6 +125,10 @@ impl Workspace {
                 // This profile doesn't explicitly inherit anything, so the chain ends here.
                 // Since it didn't lead to "release", return false.
                 None => break,
+            }
+
+            if current_profile_name == "release" {
+                return true;
             }
         }
 

@@ -8,12 +8,14 @@
 //! hot-patching Rust code through binary analysis and a custom linker. The [`builder`] module contains
 //! the management of the ongoing build and methods to open the build as a running app.
 
+mod assets;
 mod builder;
 mod context;
 mod patch;
 mod request;
 mod tools;
 
+pub(crate) use assets::*;
 pub(crate) use builder::*;
 pub(crate) use context::*;
 pub(crate) use patch::*;

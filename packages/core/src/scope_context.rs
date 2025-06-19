@@ -145,9 +145,13 @@ impl Scope {
             .expect("Scheduler to exist if scope exists");
     }
 
-    /// Create a subscription that schedules a future render for the reference component
+    /// Create a subscription that schedules a future render for the referenced component.
     ///
-    /// ## Notice: you should prefer using [`Self::schedule_update_any`] and [`Self::scope_id`]
+    /// Note: you should prefer using [`Self::schedule_update_any`] and [`Self::id`].
+    ///
+    /// Note: The function returned by this method will schedule an update for the current component even if it has already updated between when `schedule_update` was called and when the returned function is called.
+    /// If the desired behavior is to invalidate the current rendering of the current component (and no-op if already invalidated)
+    /// [`subscribe`](crate::reactive_context::ReactiveContext::subscribe) to the [`current`](crate::reactive_context::ReactiveContext::current) [`ReactiveContext`](crate::reactive_context::ReactiveContext) instead.
     pub fn schedule_update(&self) -> Arc<dyn Fn() + Send + Sync + 'static> {
         let (chan, id) = (self.sender(), self.id);
         Arc::new(move || drop(chan.unbounded_send(SchedulerMsg::Immediate(id))))
@@ -155,9 +159,12 @@ impl Scope {
 
     /// Schedule an update for any component given its [`ScopeId`].
     ///
-    /// A component's [`ScopeId`] can be obtained from `use_hook` or the [`current_scope_id`] method.
+    /// A component's [`ScopeId`] can be obtained from `use_hook` or the [`current_scope_id`](crate::prelude::current_scope_id) method.
     ///
-    /// This method should be used when you want to schedule an update for a component
+    /// This method should be used when you want to schedule an update for a component.
+    ///
+    /// Note: It does not matter when `schedule_update_any` is called: the returned function will invalidate what ever generation of the specified component is current when returned function is called.
+    /// If the desired behavior is to schedule invalidation of the current rendering of a component, use [`ReactiveContext`](crate::reactive_context::ReactiveContext) instead.
     pub fn schedule_update_any(&self) -> Arc<dyn Fn(ScopeId) + Send + Sync> {
         let chan = self.sender();
         Arc::new(move |id| {
@@ -233,7 +240,7 @@ impl Scope {
         }
     }
 
-    /// Inject a Box<dyn Any> into the context of this scope
+    /// Inject a `Box<dyn Any>` into the context of this scope
     pub(crate) fn provide_any_context(&self, mut value: Box<dyn Any>) {
         let mut contexts = self.shared_contexts.borrow_mut();
 
@@ -369,7 +376,7 @@ impl Scope {
     ///
     /// <div class="warning">
     ///
-    /// `use_hook` is not reactive. It just returns the value on every render. If you need state that will track changes, use [`use_signal`](dioxus::prelude::use_signal) instead.
+    /// `use_hook` is not reactive. It just returns the value on every render. If you need state that will track changes, use [`use_signal`](https://docs.rs/dioxus-hooks/latest/dioxus_hooks/fn.use_signal.html) instead.
     ///
     /// ❌ Don't use `use_hook` with `Rc<RefCell<T>>` for state. It will not update the UI and other hooks when the state changes.
     /// ```rust
@@ -587,7 +594,7 @@ impl ScopeId {
 
     /// Create a subscription that schedules a future render for the reference component. Unlike [`Self::needs_update`], this function will work outside of the dioxus runtime.
     ///
-    /// ## Notice: you should prefer using [`crate::prelude::schedule_update_any`]
+    /// ## Notice: you should prefer using [`crate::schedule_update_any`]
     pub fn schedule_update(&self) -> Arc<dyn Fn() + Send + Sync + 'static> {
         Runtime::with_scope(*self, |cx| cx.schedule_update()).unwrap()
     }
@@ -605,7 +612,7 @@ impl ScopeId {
             .on_scope(self, f)
     }
 
-    /// Throw a [`CapturedError`] into a scope. The error will bubble up to the nearest [`ErrorBoundary`] or the root of the app.
+    /// Throw a [`CapturedError`] into a scope. The error will bubble up to the nearest [`ErrorBoundary`](crate::prelude::ErrorBoundary) or the root of the app.
     ///
     /// # Examples
     /// ```rust, no_run

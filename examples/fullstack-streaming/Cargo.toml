@@ -12,7 +12,6 @@ serde = { workspace = true }
 futures = { workspace = true }
 tokio = { workspace = true, optional = true }
 futures-util.workspace = true
-once_cell = { workspace = true }
 
 [features]
 default = []
