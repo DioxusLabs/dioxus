@@ -107,7 +107,9 @@ impl Workspace {
     }
 
     pub fn is_release_profile(&self, profile: &str) -> bool {
-        if profile == "release" {
+        // If the profile is "release" or ends with "-release" like the default platform release profiles,
+        // always put it in the release category.
+        if profile == "release" || profile.ends_with("-release") {
             return true;
         }
 
