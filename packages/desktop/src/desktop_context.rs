@@ -5,14 +5,15 @@ use crate::{
     ipc::UserWindowEvent,
     query::QueryEngine,
     shortcut::{HotKey, HotKeyState, ShortcutHandle, ShortcutRegistryError},
-    webview::WebviewInstance,
+    webview::PendingWebview,
     AssetRequest, Config, WryEventHandler,
 };
-use dioxus_core::{
-    prelude::{Callback, ScopeId},
-    VirtualDom,
+use dioxus_core::{prelude::Callback, VirtualDom};
+use std::{
+    future::{Future, IntoFuture},
+    pin::Pin,
+    rc::{Rc, Weak},
 };
-use std::rc::{Rc, Weak};
 use tao::{
     event::Event,
     event_loop::EventLoopWindowTarget,
@@ -99,21 +100,39 @@ impl DesktopService {
         }
     }
 
-    /// Create a new window using the props and window builder
+    /// Start the creation of a new window using the props and window builder
     ///
-    /// Returns the webview handle for the new window.
-    ///
-    /// You can use this to control other windows from the current window.
+    /// Returns a future that resolves to the webview handle for the new window. You can use this
+    /// to control other windows from the current window once the new window is created.
     ///
     /// Be careful to not create a cycle of windows, or you might leak memory.
-    pub fn new_window(&self, dom: VirtualDom, cfg: Config) -> WeakDesktopContext {
-        let window = WebviewInstance::new(cfg, dom, self.shared.clone());
-
-        let cx = window.dom.in_runtime(|| {
-            ScopeId::ROOT
-                .consume_context::<Rc<DesktopService>>()
-                .unwrap()
-        });
+    ///
+    /// # Example
+    ///
+    /// ```rust, no_run
+    /// use dioxus::prelude::*;
+    /// fn popup() -> Element {
+    ///     rsx! {
+    ///         div { "This is a popup window!" }
+    ///     }
+    /// }
+    ///
+    /// // Create a new window with a component that will be rendered in the new window.
+    /// let dom = VirtualDom::new(popup);
+    /// // Create and wait for the window
+    /// let window = dioxus::desktop::window().new_window(dom, Default::default()).await;
+    /// // Fullscreen the new window
+    /// window.set_fullscreen(true);
+    /// ```
+    // Note: This method is asynchronous because webview2 does not support creating a new window from
+    // inside of an existing webview callback. Dioxus runs event handlers synchronously inside of a webview
+    // callback. See [this page](https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/threading-model#reentrancy) for more information.
+    //
+    // Related issues:
+    // - https://github.com/tauri-apps/wry/issues/583
+    // - https://github.com/DioxusLabs/dioxus/issues/3080
+    pub fn new_window(&self, dom: VirtualDom, cfg: Config) -> PendingDesktopContext {
+        let (window, context) = PendingWebview::new(dom, cfg);
 
         self.shared
             .proxy
@@ -122,7 +141,7 @@ impl DesktopService {
 
         self.shared.pending_webviews.borrow_mut().push(window);
 
-        Rc::downgrade(&cx)
+        context
     }
 
     /// trigger the drag-window event
@@ -299,4 +318,32 @@ fn is_main_thread() -> bool {
     let cls = Class::get("NSThread").unwrap();
     let result: BOOL = unsafe { msg_send![cls, isMainThread] };
     result != NO
+}
+
+/// A [`DesktopContext`] that is pending creation.
+///
+/// # Example
+/// ```rust
+/// // Create a new window asynchronously
+/// let pending_context = desktop_service.new_window(dom, config);
+/// // Wait for the context to be created
+/// let window = pending_context.await;
+/// window.set_fullscreen(true);
+/// ```
+pub struct PendingDesktopContext {
+    pub(crate) receiver: tokio::sync::oneshot::Receiver<DesktopContext>,
+}
+
+impl IntoFuture for PendingDesktopContext {
+    type Output = DesktopContext;
+
+    type IntoFuture = Pin<Box<dyn Future<Output = Self::Output>>>;
+
+    fn into_future(self) -> Self::IntoFuture {
+        let fut = async move {
+            let context = self.receiver.await.unwrap();
+            context
+        };
+        Box::pin(fut)
+    }
 }
