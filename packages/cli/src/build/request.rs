@@ -630,7 +630,7 @@ impl BuildRequest {
                         Architecture::Aarch64(_) if device => "aarch64-apple-ios".parse().unwrap(),
                         Architecture::Aarch64(_) => "aarch64-apple-ios-sim".parse().unwrap(),
                         _ if device => "x86_64-apple-ios".parse().unwrap(),
-                        _ => "x86_64-apple-ios-sim".parse().unwrap(),
+                        _ => "x86_64-apple-ios".parse().unwrap(),
                     }
                 }
 
