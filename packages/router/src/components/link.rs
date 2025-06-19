@@ -165,7 +165,7 @@ pub fn Link(props: LinkProps) -> Element {
     };
     // Add the history's prefix to internal hrefs for use in the rsx
     let full_href = match &to {
-        NavigationTarget::Internal(url) => router.prefix().unwrap_or_default() + &url,
+        NavigationTarget::Internal(url) => router.prefix().unwrap_or_default() + url,
         NavigationTarget::External(route) => route.clone(),
     };
 
