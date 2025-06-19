@@ -375,6 +375,7 @@ pub(crate) struct BuildRequest {
     pub(crate) package: String,
     pub(crate) main_target: String,
     pub(crate) features: Vec<String>,
+    pub(crate) rustflags: cargo_config2::Flags,
     pub(crate) extra_cargo_args: Vec<String>,
     pub(crate) extra_rustc_args: Vec<String>,
     pub(crate) no_default_features: bool,
@@ -645,16 +646,45 @@ impl BuildRequest {
 
         // Somethings we override are also present in the user's config.
         // If we can't get them by introspecting cargo, then we need to get them from the config
+        //
+        // This involves specificaly two fields:
+        // - The linker since we override it for Android and hotpatching
+        // - RUSTFLAGS since we also override it for Android and hotpatching
         let cargo_config = cargo_config2::Config::load().unwrap();
+        let mut custom_linker = cargo_config.linker(triple.to_string()).ok().flatten();
+        let mut rustflags = cargo_config2::Flags::default();
 
-        let mut custom_linker = if platform == Platform::Android {
-            Some(workspace.android_tools()?.android_cc(&triple))
-        } else {
-            None
-        };
+        if matches!(platform, Platform::Android) {
+            rustflags.flags.extend([
+                "-Clink-arg=-landroid".to_string(),
+                "-Clink-arg=-llog".to_string(),
+                "-Clink-arg=-lOpenSLES".to_string(),
+                "-Clink-arg=-Wl,--export-dynamic".to_string(),
+            ]);
+        }
 
-        if let Ok(Some(linker)) = cargo_config.linker(triple.to_string()) {
-            custom_linker = Some(linker);
+        // Make sure to take into account the RUSTFLAGS env var and the CARGO_TARGET_<triple>_RUSTFLAGS
+        for env in [
+            "RUSTFLAGS".to_string(),
+            format!("CARGO_TARGET_{triple}_RUSTFLAGS"),
+        ] {
+            if let Ok(flags) = std::env::var(env) {
+                rustflags
+                    .flags
+                    .extend(cargo_config2::Flags::from_space_separated(&flags).flags);
+            }
+        }
+
+        // Use the user's linker if the specify it at the target level
+        if let Ok(target) = cargo_config.target(triple.to_string()) {
+            if let Some(flags) = target.rustflags {
+                rustflags.flags.extend(flags.flags);
+            }
+        }
+
+        // If no custom linker is set, then android falls back to us as the linker
+        if custom_linker.is_none() && platform == Platform::Android {
+            custom_linker = Some(workspace.android_tools()?.android_cc(&triple));
         }
 
         let target_dir = std::env::var("CARGO_TARGET_DIR")
@@ -726,6 +756,7 @@ impl BuildRequest {
             release,
             package,
             main_target,
+            rustflags,
             skip_assets: args.skip_assets,
             base_path: args.base_path.clone(),
             wasm_split: args.wasm_split,
@@ -2245,6 +2276,36 @@ impl BuildRequest {
             env_vars.extend(self.android_env_vars()?);
         };
 
+        // If this is a release build, bake the base path and title into the binary with env vars.
+        // todo: should we even be doing this? might be better being a build.rs or something else.
+        if self.release {
+            if let Some(base_path) = self.base_path() {
+                env_vars.push((ASSET_ROOT_ENV, base_path.to_string()));
+            }
+            env_vars.push((APP_TITLE_ENV, self.config.web.app.title.clone()));
+        }
+
+        // Assemble the rustflags by peering into the `.cargo/config.toml` file
+        let mut rust_flags = self.rustflags.clone();
+
+        // Disable reference types on wasm when using hotpatching
+        // https://blog.rust-lang.org/2024/09/24/webassembly-targets-change-in-default-target-features/#disabling-on-by-default-webassembly-proposals
+        if self.platform == Platform::Web
+            && matches!(ctx.mode, BuildMode::Thin { .. } | BuildMode::Fat)
+        {
+            rust_flags.flags.push("-Ctarget-cpu=mvp".to_string());
+        }
+
+        // Set the rust flags for the build if they're not empty.
+        if !rust_flags.flags.is_empty() {
+            env_vars.push((
+                "RUSTFLAGS",
+                rust_flags
+                    .encode_space_separated()
+                    .context("Failed to encode RUSTFLAGS")?,
+            ));
+        }
+
         // If we're either zero-linking or using a custom linker, make `dx` itself do the linking.
         if self.custom_linker.is_some()
             || matches!(ctx.mode, BuildMode::Thin { .. } | BuildMode::Fat)
@@ -2256,27 +2317,6 @@ impl BuildRequest {
                 link_args_file: dunce::canonicalize(self.link_args_file.path())?,
             }
             .write_env_vars(&mut env_vars)?;
-        }
-
-        // Disable reference types on wasm when using hotpatching
-        // https://blog.rust-lang.org/2024/09/24/webassembly-targets-change-in-default-target-features/#disabling-on-by-default-webassembly-proposals
-        if self.platform == Platform::Web
-            && matches!(ctx.mode, BuildMode::Thin { .. } | BuildMode::Fat)
-        {
-            env_vars.push(("RUSTFLAGS", {
-                let mut rust_flags = std::env::var("RUSTFLAGS").unwrap_or_default();
-                rust_flags.push_str(" -Ctarget-cpu=mvp");
-                rust_flags
-            }));
-        }
-
-        // If this is a release build, bake the base path and title into the binary with env vars.
-        // todo: should we even be doing this? might be better being a build.rs or something else.
-        if self.release {
-            if let Some(base_path) = self.base_path() {
-                env_vars.push((ASSET_ROOT_ENV, base_path.to_string()));
-            }
-            env_vars.push((APP_TITLE_ENV, self.config.web.app.title.clone()));
         }
 
         Ok(env_vars)
@@ -2324,16 +2364,6 @@ impl BuildRequest {
                 .display()
                 .to_string(),
         ));
-
-        // Set the rust flags for android which get passed to *every* crate in the graph.
-        env_vars.push(("RUSTFLAGS", {
-            let mut rust_flags = std::env::var("RUSTFLAGS").unwrap_or_default();
-            rust_flags.push_str(" -Clink-arg=-landroid");
-            rust_flags.push_str(" -Clink-arg=-llog");
-            rust_flags.push_str(" -Clink-arg=-lOpenSLES");
-            rust_flags.push_str(" -Clink-arg=-Wl,--export-dynamic");
-            rust_flags
-        }));
 
         // todo(jon): the guide for openssl recommends extending the path to include the tools dir
         //            in practice I couldn't get this to work, but this might eventually become useful.
