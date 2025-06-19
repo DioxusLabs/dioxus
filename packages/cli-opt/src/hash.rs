@@ -145,7 +145,8 @@ pub fn add_hash_to_asset(asset: &mut BundledAsset) {
                 .map(|byte| format!("{byte:x}"))
                 .collect::<String>();
             let file_stem = source_path.file_stem().unwrap_or(file_name);
-            let mut bundled_path = PathBuf::from(format!("{}-{hash}", file_stem.to_string_lossy()));
+            let mut bundled_path =
+                PathBuf::from(format!("{}-dxh{hash}", file_stem.to_string_lossy()));
 
             if let Some(ext) = ext {
                 bundled_path.set_extension(ext);

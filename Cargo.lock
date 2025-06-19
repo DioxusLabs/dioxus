@@ -3788,8 +3788,6 @@ dependencies = [
 name = "dioxus-cli-config"
 version = "0.7.0-alpha.1"
 dependencies = [
- "serde",
- "serde_json",
  "wasm-bindgen",
 ]
 
