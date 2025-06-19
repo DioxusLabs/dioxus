@@ -497,8 +497,8 @@ fn test_file_name_looks_immutable() {
     assert!(file_name_looks_immutable("style-dxhabcdef.css"));
     assert!(!file_name_looks_immutable("index.html"));
     assert!(!file_name_looks_immutable("script.js"));
-    assert!(!file_name_looks_immutable("main-dxh1234abc.js"));
-    assert!(!file_name_looks_immutable("main-dxh12345678"));
+    assert!(!file_name_looks_immutable("main-dxh1234wyz.js"));
+    assert!(!file_name_looks_immutable("main-dxh12345678-invalid.js"));
 }
 
 fn path_components_to_route_lossy(path: &Path) -> String {
