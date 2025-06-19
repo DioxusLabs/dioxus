@@ -81,7 +81,7 @@ impl FileDialogRequest {
                 .as_deref()
                 .unwrap_or(".*")
                 .split(',')
-                .filter_map(|s| Filters::from_str(s).ok())
+                .filter_map(|s| Filters::from_str(s.trim()).ok())
                 .collect();
 
             let file_extensions: Vec<_> = filters
