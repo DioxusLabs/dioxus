@@ -97,21 +97,9 @@ impl DioxusCrate {
     /// is "distributed" after building an application (configurable in the
     /// `Dioxus.toml`).
     fn out_dir(&self) -> PathBuf {
-        // Resolve the out_dir based on the configuration or default
-        let out_dir_config = self.config.application.out_dir.clone();
-        // Resolve relative paths against the workspace root
-        let resolved_out_dir = if out_dir_config.is_relative() {
-            self.workspace_dir().join(out_dir_config)
-        } else {
-            out_dir_config
-        };
-
-        // Create the directory and handle potential errors
-        if let Err(e) = std::fs::create_dir_all(&resolved_out_dir) {
-            tracing::error!("Failed to create output directory: {}", e);
-        }
-
-        resolved_out_dir
+        let dir = self.workspace_dir().join("target").join("dx");
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
     }
 
     /// Create a workdir for the given platform

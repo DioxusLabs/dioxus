@@ -57,14 +57,10 @@ impl WasmBindgen {
         args.push(&self.out_name);
 
         // Out dir
-        let canonical_out_dir = self
+        let out_dir = self
             .out_dir
-            .canonicalize()
-            .expect("out_dir should resolve to a valid path");
-
-        let out_dir = canonical_out_dir
             .to_str()
-            .expect("out_dir should be valid UTF-8");
+            .expect("input_path should be valid utf8");
 
         args.push("--out-dir");
         args.push(out_dir);
@@ -346,9 +342,11 @@ impl WasmBindgenBuilder {
         }
     }
 
-    pub fn out_dir(mut self, out_dir: &Path) -> Self {
-        self.out_dir = out_dir.canonicalize().expect("Invalid out_dir path");
-        self
+    pub fn out_dir(self, out_dir: &Path) -> Self {
+        Self {
+            out_dir: out_dir.to_path_buf(),
+            ..self
+        }
     }
 
     pub fn out_name(self, out_name: &str) -> Self {
