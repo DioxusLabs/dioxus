@@ -16,3 +16,4 @@ thiserror = { workspace = true }
 rustc-hash = { workspace = true }
 lru  = { workspace = true }
 tracing = { workspace = true }
+walkdir = { workspace = true }

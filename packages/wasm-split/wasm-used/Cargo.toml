@@ -2,6 +2,12 @@
 name = "wasm-used"
 edition = "2021"
 version.workspace = true
+authors = ["Jonathan Kelley"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/DioxusLabs/dioxus/"
+homepage = "https://dioxuslabs.com"
+description = "wasm-used implementation for Rust"
+keywords = ["wasm", "wasm-used", "wasm-split", "dioxus" ]
 
 [dependencies]
 walrus = { workspace = true, features = ["parallel"] }

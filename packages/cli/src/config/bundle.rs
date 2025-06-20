@@ -16,6 +16,7 @@ pub(crate) struct BundleConfig {
     pub(crate) deb: Option<DebianSettings>,
     pub(crate) macos: Option<MacOsSettings>,
     pub(crate) windows: Option<WindowsSettings>,
+    pub(crate) android: Option<AndroidSettings>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -23,6 +24,9 @@ pub(crate) struct DebianSettings {
     // OS-specific settings:
     /// the list of debian dependencies.
     pub depends: Option<Vec<String>>,
+    /// the list of recommended debian dependencies.
+    #[serde(default)]
+    pub recommends: Option<Vec<String>>,
     /// the list of dependencies the package provides.
     pub provides: Option<Vec<String>>,
     /// the list of package conflicts.
@@ -76,7 +80,7 @@ pub(crate) struct WixSettings {
     pub(crate) fips_compliant: bool,
     /// MSI installer version in the format `major.minor.patch.build` (build is optional).
     ///
-    /// Because a valid version is required for MSI installer, it will be derived from [`PackageSettings::version`] if this field is not set.
+    /// Because a valid version is required for MSI installer, it will be derived from [`tauri_bundler::PackageSettings::version`] if this field is not set.
     ///
     /// The first field is the major version and has a maximum value of 255. The second field is the minor version and has a maximum value of 255.
     /// The third and fourth fields have a maximum value of 65,535.
@@ -96,6 +100,7 @@ pub(crate) struct WixSettings {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub(crate) struct MacOsSettings {
+    pub(crate) bundle_version: Option<String>,
     pub(crate) frameworks: Option<Vec<String>>,
     pub(crate) minimum_system_version: Option<String>,
     pub(crate) license: Option<String>,
@@ -179,6 +184,15 @@ impl Default for WebviewInstallMode {
     fn default() -> Self {
         Self::OfflineInstaller { silent: false }
     }
+}
+
+// Because all four fields must appear at the same time, there is no need for an Option
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub(crate) struct AndroidSettings {
+    pub(crate) jks_file: PathBuf,
+    pub(crate) jks_password: String,
+    pub(crate) key_alias: String,
+    pub(crate) key_password: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

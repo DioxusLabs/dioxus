@@ -1,6 +1,5 @@
 use super::*;
-use crate::TraceSrc;
-use crate::{metadata::crate_root, CliSettings};
+use crate::{CliSettings, TraceSrc, Workspace};
 
 /// Dioxus config file controls
 #[derive(Clone, Debug, Deserialize, Subcommand)]
@@ -14,10 +13,6 @@ pub(crate) enum Config {
         #[clap(long)]
         #[serde(default)]
         force: bool,
-
-        /// Project default platform
-        #[clap(long, default_value = "web")]
-        platform: String,
     },
 
     /// Format print Dioxus config.
@@ -75,14 +70,10 @@ impl From<BoolValue> for bool {
 }
 
 impl Config {
-    pub(crate) fn config(self) -> Result<StructuredOutput> {
-        let crate_root = crate_root()?;
+    pub(crate) async fn config(self) -> Result<StructuredOutput> {
+        let crate_root = Workspace::crate_root_from_path()?;
         match self {
-            Config::Init {
-                name,
-                force,
-                platform,
-            } => {
+            Config::Init { name, force } => {
                 let conf_path = crate_root.join("Dioxus.toml");
                 if conf_path.is_file() && !force {
                     tracing::warn!(
@@ -92,21 +83,18 @@ impl Config {
                 }
                 let mut file = File::create(conf_path)?;
                 let content = String::from(include_str!("../../assets/dioxus.toml"))
-                    .replace("{{project-name}}", &name)
-                    .replace("{{default-platform}}", &platform);
+                    .replace("{{project-name}}", &name);
                 file.write_all(content.as_bytes())?;
                 tracing::info!(dx_src = ?TraceSrc::Dev, "🚩 Init config file completed.");
             }
             Config::FormatPrint {} => {
-                tracing::info!(
-                    "{:#?}",
-                    crate::dioxus_crate::DioxusCrate::new(&TargetArgs::default())?.config
-                );
+                let workspace = Workspace::current().await?;
+                tracing::info!("{:#?}", workspace.settings);
             }
             Config::CustomHtml {} => {
                 let html_path = crate_root.join("index.html");
                 let mut file = File::create(html_path)?;
-                let content = include_str!("../../assets/web/index.html");
+                let content = include_str!("../../assets/web/dev.index.html");
                 file.write_all(content.as_bytes())?;
                 tracing::info!(dx_src = ?TraceSrc::Dev, "🚩 Create custom html file done.");
             }

@@ -78,14 +78,52 @@ impl AddAssign<Segment> for StringChain {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+/// The escape text enum is used to mark segments that should be escaped
+/// when rendering. This is used to prevent XSS attacks by escaping user input.
+pub(crate) enum EscapeText {
+    /// Always escape the text. This will be assigned if the text node is under
+    /// a normal tag like a div in the template
+    Escape,
+    /// Don't escape the text. This will be assigned if the text node is under
+    /// a script or style tag in the template
+    NoEscape,
+    /// Only escape the tag if this is rendered under a script or style tag in
+    /// the parent template. This will be assigned if the text node is a root
+    /// node in the template
+    ParentEscape,
+}
+
+impl EscapeText {
+    /// Check if the text should be escaped based on the parent's resolved
+    /// escape text value
+    pub fn should_escape(&self, parent_escaped: bool) -> bool {
+        match self {
+            EscapeText::Escape => true,
+            EscapeText::NoEscape => false,
+            EscapeText::ParentEscape => parent_escaped,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) enum Segment {
     /// A marker for where to insert an attribute with a given index
     Attr(usize),
     /// A marker for where to insert a node with a given index
-    Node(usize),
+    Node {
+        index: usize,
+        escape_text: EscapeText,
+    },
     /// Text that we know is static in the template that is pre-rendered
     PreRendered(String),
+    /// Text we know is static in the template that is pre-rendered that may or may not be escaped
+    PreRenderedMaybeEscaped {
+        /// The text to render
+        value: String,
+        /// Only render this text if the escaped value is this
+        renderer_if_escaped: bool,
+    },
     /// Anything between this and the segments at the index is only required for hydration. If you don't need to hydrate, you can safely skip to the section at the given index
     HydrationOnlySection(usize),
     /// A marker for where to insert a dynamic styles
@@ -127,7 +165,14 @@ impl StringCache {
         let mut cur_path = vec![];
 
         for (root_idx, root) in template.template.roots.iter().enumerate() {
-            from_template_recursive(root, &mut cur_path, root_idx, true, &mut chain)?;
+            from_template_recursive(
+                root,
+                &mut cur_path,
+                root_idx,
+                true,
+                EscapeText::ParentEscape,
+                &mut chain,
+            )?;
         }
 
         Ok(Self {
@@ -141,6 +186,7 @@ fn from_template_recursive(
     cur_path: &mut Vec<usize>,
     root_idx: usize,
     is_root: bool,
+    escape_text: EscapeText,
     chain: &mut StringChain,
 ) -> Result<(), std::fmt::Error> {
     match root {
@@ -171,10 +217,18 @@ fn from_template_recursive(
                             styles.push((name, value));
                         } else if BOOL_ATTRS.contains(name) {
                             if str_truthy(value) {
-                                write!(chain, " {name}=\"{value}\"",)?;
+                                write!(
+                                    chain,
+                                    " {name}=\"{}\"",
+                                    askama_escape::escape(value, askama_escape::Html)
+                                )?;
                             }
                         } else {
-                            write!(chain, " {name}=\"{value}\"")?;
+                            write!(
+                                chain,
+                                " {name}=\"{}\"",
+                                askama_escape::escape(value, askama_escape::Html)
+                            )?;
                         }
                     }
                     TemplateAttribute::Dynamic { id: index } => {
@@ -189,7 +243,11 @@ fn from_template_recursive(
             if !styles.is_empty() {
                 write!(chain, " style=\"")?;
                 for (name, value) in styles {
-                    write!(chain, "{name}:{value};")?;
+                    write!(
+                        chain,
+                        "{name}:{};",
+                        askama_escape::escape(value, askama_escape::Html)
+                    )?;
                 }
                 *chain += Segment::StyleMarker {
                     inside_style_tag: true,
@@ -226,8 +284,15 @@ fn from_template_recursive(
                     *chain += Segment::InnerHtmlMarker;
                 }
 
+                // Escape the text in children if this is not a style or script tag. If it is a style
+                // or script tag, we want to allow the user to write code inside the tag
+                let escape_text = match *tag {
+                    "style" | "script" => EscapeText::NoEscape,
+                    _ => EscapeText::Escape,
+                };
+
                 for child in *children {
-                    from_template_recursive(child, cur_path, root_idx, false, chain)?;
+                    from_template_recursive(child, cur_path, root_idx, false, escape_text, chain)?;
                 }
                 write!(chain, "</{tag}>")?;
             }
@@ -243,16 +308,45 @@ fn from_template_recursive(
                     std::fmt::Result::Ok(())
                 })?;
             }
-            write!(
-                chain,
-                "{}",
-                askama_escape::escape(text, askama_escape::Html)
-            )?;
+            match escape_text {
+                // If we know this is statically escaped we can just write it out
+                // rsx! { div { "hello" } }
+                EscapeText::Escape => {
+                    write!(
+                        chain,
+                        "{}",
+                        askama_escape::escape(text, askama_escape::Html)
+                    )?;
+                }
+                // If we know this is statically not escaped we can just write it out
+                // rsx! { script { "console.log('hello')" } }
+                EscapeText::NoEscape => {
+                    write!(chain, "{}", text)?;
+                }
+                // Otherwise, write out both versions and let the renderer decide which one to use
+                // at runtime
+                // rsx! { "console.log('hello')" }
+                EscapeText::ParentEscape => {
+                    *chain += Segment::PreRenderedMaybeEscaped {
+                        value: text.to_string(),
+                        renderer_if_escaped: false,
+                    };
+                    *chain += Segment::PreRenderedMaybeEscaped {
+                        value: askama_escape::escape(text, askama_escape::Html).to_string(),
+                        renderer_if_escaped: true,
+                    };
+                }
+            }
             if is_root {
                 chain.if_hydration_enabled(|chain| write!(chain, "<!--#-->"))?;
             }
         }
-        TemplateNode::Dynamic { id: idx } => *chain += Segment::Node(*idx),
+        TemplateNode::Dynamic { id: idx } => {
+            *chain += Segment::Node {
+                index: *idx,
+                escape_text,
+            }
+        }
     }
 
     Ok(())

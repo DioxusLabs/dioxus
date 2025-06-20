@@ -4,6 +4,14 @@ use dioxus_html as dioxus_elements;
 
 #[non_exhaustive]
 #[derive(Clone, Props, PartialEq)]
+pub struct OtherLinkProps {
+    pub rel: String,
+    #[props(extends = link, extends = GlobalAttributes)]
+    pub additional_attributes: Vec<Attribute>,
+}
+
+#[non_exhaustive]
+#[derive(Clone, Props, PartialEq)]
 pub struct LinkProps {
     pub rel: Option<String>,
     pub media: Option<String>,
@@ -22,6 +30,7 @@ pub struct LinkProps {
     pub blocking: Option<String>,
     #[props(extends = link, extends = GlobalAttributes)]
     pub additional_attributes: Vec<Attribute>,
+    pub onload: Option<String>,
 }
 
 impl LinkProps {
@@ -71,11 +80,14 @@ impl LinkProps {
         if let Some(blocking) = &self.blocking {
             attributes.push(("blocking", blocking.clone()));
         }
+        if let Some(onload) = &self.onload {
+            attributes.push(("onload", onload.clone()));
+        }
         attributes
     }
 }
 
-/// Render a [`link`](crate::elements::link) tag into the head of the page.
+/// Render a [`<link>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/link) tag into the head of the page.
 ///
 /// > The [Link](https://docs.rs/dioxus-router/latest/dioxus_router/components/fn.Link.html) component in dioxus router and this component are completely different.
 /// > This component links resources in the head of the page, while the router component creates clickable links in the body of the page.

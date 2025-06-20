@@ -58,9 +58,9 @@ jobs:
           - target: aarch64-apple-darwin
             os: macos-latest
           - target: x86_64-unknown-linux-gnu
-            os: ubuntu-22.04
-          # - target: aarch64-unknown-linux-gnu
-          #   os: ubuntu-latest
+            os: ubuntu-24.04
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-24.04-arm
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -73,10 +73,20 @@ jobs:
         if: ${{ matrix.platform.target == 'x86_64-pc-windows-msvc' }}
         uses: ilammy/setup-nasm@v1
 
+      - name: Free Disk Space
+        if: ${{ matrix.platform.os == 'ubuntu-24.04' || matrix.platform.os == 'ubuntu-24.04-arm' }}
+        uses: ./.github/actions/free-disk-space
+
+      - uses: awalsh128/cache-apt-pkgs-action@latest
+        if: ${{ matrix.platform.os == 'ubuntu-24.04' || matrix.platform.os == 'ubuntu-24.04-arm' }}
+        with:
+          packages: libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
+          version: 1.0
+
       - name: Install stable
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: "1.84.0"
+          toolchain: "1.86.0"
           targets: ${{ matrix.platform.target }}
 
       - uses: Swatinem/rust-cache@v2
@@ -98,11 +108,11 @@ jobs:
           bin: dx
           token: ${{ secrets.GITHUB_TOKEN }}
           target: ${{ matrix.platform.target }}
-          archive: $bin-$target-${{ env.RELEASE_TAG }}
+          archive: $bin-$target
           checksum: sha256
           manifest_path: packages/cli/Cargo.toml
           ref: refs/tags/${{ env.RELEASE_POST }}
-          features: optimizations
+          zip: "all"
 
   # todo: these things
   # Run benchmarks, which we'll use to display on the website

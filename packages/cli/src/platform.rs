@@ -160,7 +160,7 @@ impl Platform {
     pub(crate) fn autodetect_from_cargo_feature(feature: &str) -> Option<Self> {
         match feature {
             "web" => Some(Platform::Web),
-            "desktop" => {
+            "desktop" | "native" => {
                 #[cfg(target_os = "macos")]
                 {
                     Some(Platform::MacOS)
@@ -183,6 +183,23 @@ impl Platform {
             "liveview" => Some(Platform::Liveview),
             "server" => Some(Platform::Server),
             _ => None,
+        }
+    }
+
+    pub(crate) fn profile_name(&self, release: bool) -> String {
+        let base_profile = match self {
+            Platform::MacOS | Platform::Windows | Platform::Linux => "desktop",
+            Platform::Web => "web",
+            Platform::Ios => "ios",
+            Platform::Android => "android",
+            Platform::Server => "server",
+            Platform::Liveview => "liveview",
+        };
+
+        if release {
+            format!("{}-release", base_profile)
+        } else {
+            format!("{}-dev", base_profile)
         }
     }
 }

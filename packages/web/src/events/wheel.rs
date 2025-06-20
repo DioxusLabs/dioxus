@@ -5,9 +5,9 @@ use dioxus_html::{
         InteractionElementOffset, InteractionLocation, Modifiers, ModifiersInteraction,
         PointerInteraction,
     },
-    HasMouseData, HasScrollData, HasWheelData,
+    HasMouseData, HasWheelData,
 };
-use web_sys::{Event, WheelEvent};
+use web_sys::WheelEvent;
 
 use super::{Synthetic, WebEventExt};
 
@@ -80,21 +80,6 @@ impl PointerInteraction for Synthetic<WheelEvent> {
 
     fn trigger_button(&self) -> Option<MouseButton> {
         Some(MouseButton::from_web_code(self.event.button()))
-    }
-}
-
-impl HasScrollData for Synthetic<Event> {
-    fn as_any(&self) -> &dyn std::any::Any {
-        &self.event
-    }
-}
-
-impl WebEventExt for dioxus_html::ScrollData {
-    type WebEvent = web_sys::Event;
-
-    #[inline(always)]
-    fn try_as_web_event(&self) -> Option<Self::WebEvent> {
-        self.downcast::<web_sys::Event>().cloned()
     }
 }
 

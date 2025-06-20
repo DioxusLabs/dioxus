@@ -20,14 +20,14 @@ fn update_scroll(window: &Window, history: &History) {
     }
 }
 
-/// A [`HistoryProvider`] that integrates with a browser via the [History API](https://developer.mozilla.org/en-US/docs/Web/API/History_API).
+/// A [`dioxus_history::History`] provider that integrates with a browser via the [History API](https://developer.mozilla.org/en-US/docs/Web/API/History_API).
 ///
 /// # Prefix
-/// This [`HistoryProvider`] supports a prefix, which can be used for web apps that aren't located
+/// This [`dioxus_history::History`] supports a prefix, which can be used for web apps that aren't located
 /// at the root of their domain.
 ///
 /// Application developers are responsible for ensuring that right after the prefix comes a `/`. If
-/// that is not the case, this [`HistoryProvider`] will replace the first character after the prefix
+/// that is not the case, this [`dioxus_history::History`] will replace the first character after the prefix
 /// with one.
 ///
 /// Application developers are responsible for not rendering the router if the prefix is not present

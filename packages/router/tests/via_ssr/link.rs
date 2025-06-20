@@ -1,23 +1,22 @@
 use dioxus::prelude::*;
 use dioxus_history::{History, MemoryHistory};
 use dioxus_router::components::HistoryProvider;
-use std::{rc::Rc, str::FromStr};
+use std::rc::Rc;
 
-fn prepare<R: Routable>() -> String
-where
-    <R as FromStr>::Err: std::fmt::Display,
-{
+fn prepare<R: Routable>() -> String {
     prepare_at::<R>("/")
 }
 
-fn prepare_at<R: Routable>(at: impl ToString) -> String
-where
-    <R as FromStr>::Err: std::fmt::Display,
-{
+fn prepare_at<R: Routable>(at: impl ToString) -> String {
+    prepare_at_with_base_path::<R>(at, "")
+}
+
+fn prepare_at_with_base_path<R: Routable>(at: impl ToString, base_path: impl ToString) -> String {
     let mut vdom = VirtualDom::new_with_props(
         App,
         AppProps::<R> {
             at: at.to_string(),
+            base_path: base_path.to_string(),
             phantom: std::marker::PhantomData,
         },
     );
@@ -27,6 +26,7 @@ where
     #[derive(Props)]
     struct AppProps<R: Routable> {
         at: String,
+        base_path: String,
         phantom: std::marker::PhantomData<R>,
     }
 
@@ -34,6 +34,7 @@ where
         fn clone(&self) -> Self {
             Self {
                 at: self.at.clone(),
+                base_path: self.base_path.clone(),
                 phantom: std::marker::PhantomData,
             }
         }
@@ -46,14 +47,11 @@ where
     }
 
     #[allow(non_snake_case)]
-    fn App<R: Routable>(props: AppProps<R>) -> Element
-    where
-        <R as FromStr>::Err: std::fmt::Display,
-    {
+    fn App<R: Routable>(props: AppProps<R>) -> Element {
         rsx! {
             h1 { "App" }
             HistoryProvider {
-                history:  move |_| Rc::new(MemoryHistory::with_initial_path(props.at.clone())) as Rc<dyn History>,
+                history:  move |_| Rc::new(MemoryHistory::with_initial_path(props.at.clone()).with_prefix(props.base_path.clone())) as Rc<dyn History>,
                 Router::<R> {}
             }
         }
@@ -88,6 +86,15 @@ fn href_internal() {
     let expected = format!("<h1>App</h1><a {href}>Link</a>", href = r#"href="/test""#,);
 
     assert_eq!(prepare::<Route>(), expected);
+
+    // The base path should be added to the front of internal links
+    let base_path = "/deeply/nested/path";
+    let expected = format!(
+        "<h1>App</h1><a {href}>Link</a>",
+        href = r#"href="/deeply/nested/path/test""#,
+    );
+
+    assert_eq!(prepare_at_with_base_path::<Route>("/", base_path), expected);
 }
 
 #[test]
@@ -122,6 +129,11 @@ fn href_external() {
     );
 
     assert_eq!(prepare::<Route>(), expected);
+    // The base path should not effect external links
+    assert_eq!(
+        prepare_at_with_base_path::<Route>("/", "/deeply/nested/path"),
+        expected
+    );
 }
 
 #[test]

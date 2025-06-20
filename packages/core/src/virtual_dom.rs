@@ -239,14 +239,7 @@ impl VirtualDom {
     ///
     /// Note: the VirtualDom is not progressed, you must either "run_with_deadline" or use "rebuild" to progress it.
     pub fn new(app: fn() -> Element) -> Self {
-        Self::new_with_props(
-            move || {
-                use warnings::Warning;
-                // The root props don't come from a vcomponent so we need to manually rerun them sometimes
-                crate::properties::component_called_as_function::allow(app)
-            },
-            (),
-        )
+        Self::new_with_props(app, ())
     }
 
     /// Create a new VirtualDom with the given properties for the root component.
@@ -294,7 +287,7 @@ impl VirtualDom {
         root: impl ComponentFunction<P, M>,
         root_props: P,
     ) -> Self {
-        let render_fn = root.id();
+        let render_fn = root.fn_ptr();
         let props = VProps::new(root, |_, _| true, root_props, "Root");
         Self::new_with_component(VComponent {
             name: "root",
@@ -310,7 +303,7 @@ impl VirtualDom {
         dom
     }
 
-    /// Create a new VirtualDom from something that implements [`AnyProps`]
+    /// Create a new VirtualDom from a VComponent
     #[instrument(skip(root), level = "trace", name = "VirtualDom::new")]
     pub(crate) fn new_with_component(root: VComponent) -> Self {
         let (tx, rx) = futures_channel::mpsc::unbounded();
@@ -330,6 +323,9 @@ impl VirtualDom {
             "RootWrapper",
         );
         dom.new_scope(Box::new(root), "app");
+
+        #[cfg(debug_assertions)]
+        dom.register_subsecond_handler();
 
         dom
     }
@@ -373,6 +369,19 @@ impl VirtualDom {
     /// This method is useful for when you want to provide a context in your app without knowing its type
     pub fn insert_any_root_context(&mut self, context: Box<dyn Any>) {
         self.base_scope().state().provide_any_context(context);
+    }
+
+    /// Mark all scopes as dirty. Each scope will be re-rendered.
+    pub fn mark_all_dirty(&mut self) {
+        let mut orders = vec![];
+
+        for (_idx, scope) in self.scopes.iter() {
+            orders.push(ScopeOrder::new(scope.state().height(), scope.id()));
+        }
+
+        for order in orders {
+            self.queue_scope(order);
+        }
     }
 
     /// Manually mark a scope as requiring a re-render
@@ -458,6 +467,7 @@ impl VirtualDom {
                 self.mark_task_dirty(Task::from_id(id));
             }
             SchedulerMsg::EffectQueued => {}
+            SchedulerMsg::AllDirty => self.mark_all_dirty(),
         };
     }
 
@@ -469,6 +479,7 @@ impl VirtualDom {
                 SchedulerMsg::Immediate(id) => self.mark_dirty(id),
                 SchedulerMsg::TaskNotified(task) => self.mark_task_dirty(Task::from_id(task)),
                 SchedulerMsg::EffectQueued => {}
+                SchedulerMsg::AllDirty => self.mark_all_dirty(),
             }
         }
     }
@@ -743,6 +754,14 @@ impl VirtualDom {
     pub fn handle_event(&self, name: &str, event: Rc<dyn Any>, element: ElementId, bubbling: bool) {
         let event = crate::Event::new(event, bubbling);
         self.runtime().handle_event(name, event, element);
+    }
+
+    #[cfg(debug_assertions)]
+    fn register_subsecond_handler(&self) {
+        let sender = self.runtime().sender.clone();
+        subsecond::register_handler(std::sync::Arc::new(move || {
+            _ = sender.unbounded_send(SchedulerMsg::AllDirty);
+        }));
     }
 }
 

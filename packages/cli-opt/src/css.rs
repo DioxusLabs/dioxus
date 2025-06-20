@@ -1,6 +1,6 @@
-use std::path::Path;
+use std::{hash::Hasher, path::Path};
 
-use anyhow::Context;
+use anyhow::{anyhow, Context};
 use codemap::SpanLoc;
 use grass::OutputStyle;
 use lightningcss::{
@@ -8,7 +8,7 @@ use lightningcss::{
     stylesheet::{MinifyOptions, ParserOptions, StyleSheet},
     targets::{Browsers, Targets},
 };
-use manganis_core::CssAssetOptions;
+use manganis_core::{CssAssetOptions, CssModuleAssetOptions};
 
 pub(crate) fn process_css(
     css_options: &CssAssetOptions,
@@ -36,6 +36,74 @@ pub(crate) fn process_css(
     std::fs::write(output_path, css).with_context(|| {
         format!(
             "Failed to write css to output location: {}",
+            output_path.display()
+        )
+    })?;
+
+    Ok(())
+}
+
+pub(crate) fn process_css_module(
+    css_options: &CssModuleAssetOptions,
+    source: &Path,
+    final_path: &Path,
+    output_path: &Path,
+) -> anyhow::Result<()> {
+    let mut css = std::fs::read_to_string(source)?;
+
+    // Collect the file hash name.
+    let mut src_name = source
+        .file_name()
+        .and_then(|x| x.to_str())
+        .ok_or(anyhow!("Failed to read name of css module source file."))?
+        .strip_suffix(".css")
+        .unwrap()
+        .to_string();
+
+    src_name.push('-');
+
+    let out_name = final_path
+        .file_name()
+        .and_then(|x| x.to_str())
+        .ok_or(anyhow!("Failed to read name of css module output file."))?
+        .strip_suffix(".css")
+        .unwrap();
+
+    let hash = out_name
+        .strip_prefix(&src_name)
+        .ok_or(anyhow!("Failed to read hash of css module."))?;
+
+    // Rewrite CSS idents with ident+hash.
+    let (classes, ids) = manganis_core::collect_css_idents(&css);
+
+    for class in classes {
+        css = css.replace(&format!(".{class}"), &format!(".{class}{hash}"));
+    }
+
+    for id in ids {
+        css = css.replace(&format!("#{id}"), &format!("#{id}{hash}"));
+    }
+
+    // Minify CSS
+    let css = if css_options.minified() {
+        // Try to minify the css. If we fail, log the error and use the unminified css
+        match minify_css(&css) {
+            Ok(minified) => minified,
+            Err(err) => {
+                tracing::error!(
+                    "Failed to minify css module; Falling back to unminified css. Error: {}",
+                    err
+                );
+                css
+            }
+        }
+    } else {
+        css
+    };
+
+    std::fs::write(output_path, css).with_context(|| {
+        format!(
+            "Failed to write css module to output location: {}",
             output_path.display()
         )
     })?;
@@ -78,12 +146,11 @@ pub(crate) fn minify_css(css: &str) -> anyhow::Result<String> {
     Ok(res.code)
 }
 
-/// Process an scss/sass file into css.
-pub(crate) fn process_scss(
+/// Compile scss with grass
+pub(crate) fn compile_scss(
     scss_options: &CssAssetOptions,
     source: &Path,
-    output_path: &Path,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<String> {
     let style = match scss_options.minified() {
         true => OutputStyle::Compressed,
         false => OutputStyle::Expanded,
@@ -94,7 +161,18 @@ pub(crate) fn process_scss(
         .quiet(false)
         .logger(&ScssLogger {});
 
-    let css = grass::from_path(source, &options)?;
+    let css = grass::from_path(source, &options)
+        .with_context(|| format!("Failed to compile scss file: {}", source.display()))?;
+    Ok(css)
+}
+
+/// Process an scss/sass file into css.
+pub(crate) fn process_scss(
+    scss_options: &CssAssetOptions,
+    source: &Path,
+    output_path: &Path,
+) -> anyhow::Result<()> {
+    let css = compile_scss(scss_options, source)?;
     let minified = minify_css(&css)?;
 
     std::fs::write(output_path, minified).with_context(|| {
@@ -130,4 +208,20 @@ impl grass::Logger for ScssLogger {
             location.begin.column + 1
         );
     }
+}
+
+/// Hash the inputs to the scss file
+pub(crate) fn hash_scss(
+    scss_options: &CssAssetOptions,
+    source: &Path,
+    hasher: &mut impl Hasher,
+) -> anyhow::Result<()> {
+    // Grass doesn't expose the ast for us to traverse the imports in the file. Instead of parsing scss ourselves
+    // we just hash the expanded version of the file for now
+    let css = compile_scss(scss_options, source)?;
+
+    // Hash the compiled css
+    hasher.write(css.as_bytes());
+
+    Ok(())
 }

@@ -114,7 +114,7 @@ pub fn wasm_split(args: TokenStream, input: TokenStream) -> TokenStream {
 /// Create a lazy loader for a given function. Meant to be used in statics. Designed for libraries to
 /// integrate with.
 ///
-/// ```rust, no_run
+/// ```rust, ignore
 /// fn SomeFunction(args: Args) -> Ret {}
 ///
 /// static LOADER: wasm_split::LazyLoader<Args, Ret> = lazy_loader!(SomeFunction);

@@ -4,15 +4,16 @@ use crate::{
     file_upload::NativeFileHover,
     ipc::UserWindowEvent,
     query::QueryEngine,
-    shortcut::{HotKey, ShortcutHandle, ShortcutRegistryError},
-    webview::WebviewInstance,
+    shortcut::{HotKey, HotKeyState, ShortcutHandle, ShortcutRegistryError},
+    webview::PendingWebview,
     AssetRequest, Config, WindowCloseBehaviour, WryEventHandler,
 };
-use dioxus_core::{
-    prelude::{Callback, ScopeId},
-    VirtualDom,
+use dioxus_core::{prelude::Callback, VirtualDom};
+use std::{
+    future::{Future, IntoFuture},
+    pin::Pin,
+    rc::{Rc, Weak},
 };
-use std::rc::{Rc, Weak};
 use tao::{
     event::Event,
     event_loop::EventLoopWindowTarget,
@@ -42,7 +43,7 @@ pub type WeakDesktopContext = Weak<DesktopService>;
 
 /// An imperative interface to the current window.
 ///
-/// To get a handle to the current window, use the [`use_window`] hook.
+/// To get a handle to the current window, use the [`window`] function.
 ///
 ///
 /// # Example
@@ -99,21 +100,39 @@ impl DesktopService {
         }
     }
 
-    /// Create a new window using the props and window builder
+    /// Start the creation of a new window using the props and window builder
     ///
-    /// Returns the webview handle for the new window.
-    ///
-    /// You can use this to control other windows from the current window.
+    /// Returns a future that resolves to the webview handle for the new window. You can use this
+    /// to control other windows from the current window once the new window is created.
     ///
     /// Be careful to not create a cycle of windows, or you might leak memory.
-    pub fn new_window(&self, dom: VirtualDom, cfg: Config) -> WeakDesktopContext {
-        let window = WebviewInstance::new(cfg, dom, self.shared.clone());
-
-        let cx = window.dom.in_runtime(|| {
-            ScopeId::ROOT
-                .consume_context::<Rc<DesktopService>>()
-                .unwrap()
-        });
+    ///
+    /// # Example
+    ///
+    /// ```rust, no_run
+    /// use dioxus::prelude::*;
+    /// fn popup() -> Element {
+    ///     rsx! {
+    ///         div { "This is a popup window!" }
+    ///     }
+    /// }
+    ///
+    /// // Create a new window with a component that will be rendered in the new window.
+    /// let dom = VirtualDom::new(popup);
+    /// // Create and wait for the window
+    /// let window = dioxus::desktop::window().new_window(dom, Default::default()).await;
+    /// // Fullscreen the new window
+    /// window.set_fullscreen(true);
+    /// ```
+    // Note: This method is asynchronous because webview2 does not support creating a new window from
+    // inside of an existing webview callback. Dioxus runs event handlers synchronously inside of a webview
+    // callback. See [this page](https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/threading-model#reentrancy) for more information.
+    //
+    // Related issues:
+    // - https://github.com/tauri-apps/wry/issues/583
+    // - https://github.com/DioxusLabs/dioxus/issues/3080
+    pub fn new_window(&self, dom: VirtualDom, cfg: Config) -> PendingDesktopContext {
+        let (window, context) = PendingWebview::new(dom, cfg);
 
         self.shared
             .proxy
@@ -122,7 +141,7 @@ impl DesktopService {
 
         self.shared.pending_webviews.borrow_mut().push(window);
 
-        Rc::downgrade(&cx)
+        context
     }
 
     /// trigger the drag-window event
@@ -215,7 +234,7 @@ impl DesktopService {
     /// Create a wry event handler that listens for wry events.
     /// This event handler is scoped to the currently active window and will only receive events that are either global or related to the current window.
     ///
-    /// The id this function returns can be used to remove the event handler with [`DesktopContext::remove_wry_event_handler`]
+    /// The id this function returns can be used to remove the event handler with [`Self::remove_wry_event_handler`]
     pub fn create_wry_event_handler(
         &self,
         handler: impl FnMut(&Event<UserWindowEvent>, &EventLoopWindowTarget<UserWindowEvent>) + 'static,
@@ -223,7 +242,7 @@ impl DesktopService {
         self.shared.event_handlers.add(self.window.id(), handler)
     }
 
-    /// Remove a wry event handler created with [`DesktopContext::create_wry_event_handler`]
+    /// Remove a wry event handler created with [`Self::create_wry_event_handler`]
     pub fn remove_wry_event_handler(&self, id: WryEventHandler) {
         self.shared.event_handlers.remove(id)
     }
@@ -234,7 +253,7 @@ impl DesktopService {
     pub fn create_shortcut(
         &self,
         hotkey: HotKey,
-        callback: impl FnMut() + 'static,
+        callback: impl FnMut(HotKeyState) + 'static,
     ) -> Result<ShortcutHandle, ShortcutRegistryError> {
         self.shared
             .shortcut_manager
@@ -257,7 +276,7 @@ impl DesktopService {
     ///
     /// When the component is dropped, the handler is removed.
     ///
-    /// See [`use_asset_handle`](crate::use_asset_handle) for a convenient hook.
+    /// See [`crate::use_asset_handler`] for a convenient hook.
     pub fn register_asset_handler(
         &self,
         name: String,
@@ -319,4 +338,44 @@ fn is_main_thread() -> bool {
     let cls = Class::get("NSThread").unwrap();
     let result: BOOL = unsafe { msg_send![cls, isMainThread] };
     result != NO
+}
+
+/// A [`DesktopContext`] that is pending creation.
+///
+/// # Example
+/// ```rust
+/// // Create a new window asynchronously
+/// let pending_context = desktop_service.new_window(dom, config);
+/// // Wait for the context to be created
+/// let window = pending_context.await;
+/// window.set_fullscreen(true);
+/// ```
+pub struct PendingDesktopContext {
+    pub(crate) receiver: tokio::sync::oneshot::Receiver<DesktopContext>,
+}
+
+impl PendingDesktopContext {
+    /// Resolve the pending context into a [`DesktopContext`].
+    pub async fn resolve(self) -> DesktopContext {
+        self.try_resolve()
+            .await
+            .expect("Failed to resolve pending desktop context")
+    }
+
+    /// Try to resolve the pending context into a [`DesktopContext`].
+    pub async fn try_resolve(
+        self,
+    ) -> Result<DesktopContext, tokio::sync::oneshot::error::RecvError> {
+        self.receiver.await
+    }
+}
+
+impl IntoFuture for PendingDesktopContext {
+    type Output = DesktopContext;
+
+    type IntoFuture = Pin<Box<dyn Future<Output = Self::Output>>>;
+
+    fn into_future(self) -> Self::IntoFuture {
+        Box::pin(self.resolve())
+    }
 }

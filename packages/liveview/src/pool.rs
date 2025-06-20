@@ -119,9 +119,7 @@ pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), Li
     #[cfg(all(feature = "devtools", debug_assertions))]
     let mut hot_reload_rx = {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
-        if let Some(endpoint) = dioxus_cli_config::devserver_ws_endpoint() {
-            dioxus_devtools::connect(endpoint, move |template| _ = tx.send(template));
-        }
+        dioxus_devtools::connect(move |template| _ = tx.send(template));
         rx
     };
 
@@ -215,7 +213,7 @@ pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), Li
 
             Some(msg) = hot_reload_wait => {
                 #[cfg(all(feature = "devtools", debug_assertions))]
-                match msg{
+                match msg {
                     dioxus_devtools::DevserverMsg::HotReload(msg)=> {
                         dioxus_devtools::apply_changes(&vdom, &msg);
                     }
@@ -228,6 +226,7 @@ pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), Li
                         // usually only web gets this message - what are we supposed to do?
                         // Maybe we could just binary patch ourselves in place without losing window state?
                     },
+                    _ => {}
                 }
                 #[cfg(not(all(feature = "devtools", debug_assertions)))]
                 let () = msg;

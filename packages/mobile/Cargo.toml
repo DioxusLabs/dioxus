@@ -8,26 +8,25 @@ repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com/learn/0.6/getting_started"
 keywords = ["dom", "ui", "gui", "react"]
 license = "MIT OR Apache-2.0"
+rust-version = "1.71.1"
 
 [dependencies]
 dioxus-desktop = { workspace = true }
 dioxus-lib = { workspace = true }
 dioxus-cli-config = { workspace = true }
-libc = "0.2.159"
-once_cell.workspace = true
+libc = "0.2.170"
 
 [target.'cfg(target_os = "android")'.dependencies]
 jni = "0.21.1"
 
 [features]
-default = ["jnibindings", "tokio_runtime", "devtools", "exception"]
+default = ["jnibindings", "tokio_runtime", "devtools"]
 jnibindings = []
 tokio_runtime = ["dioxus-desktop/tokio_runtime"]
 fullscreen = ["dioxus-desktop/fullscreen"]
 transparent = ["dioxus-desktop/transparent"]
 devtools = ["dioxus-desktop/devtools"]
 gnu = ["dioxus-desktop/gnu"]
-exception = ["dioxus-desktop/exception"]
 
 
 [lib]
