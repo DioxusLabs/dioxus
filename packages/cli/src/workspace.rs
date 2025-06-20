@@ -348,10 +348,6 @@ impl Workspace {
         let mut ignore_builder = ignore::gitignore::GitignoreBuilder::new(workspace_dir);
         ignore_builder.add(workspace_dir.join(".gitignore"));
 
-        // todo!()
-        // let workspace_dir = self.workspace_dir();
-        // ignore_builder.add(workspace_dir.join(".gitignore"));
-
         for path in Self::default_ignore_list() {
             ignore_builder
                 .add_line(None, path)
