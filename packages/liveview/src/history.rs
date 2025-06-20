@@ -6,7 +6,7 @@ use std::rc::Rc;
 use std::sync::{Mutex, RwLock};
 use std::{collections::BTreeMap, sync::Arc};
 
-/// A [`HistoryProvider`] that evaluates history through JS.
+/// A [`History`] that evaluates history through JS.
 pub(crate) struct LiveviewHistory {
     action_tx: tokio::sync::mpsc::UnboundedSender<Action>,
     timeline: Arc<Mutex<Timeline>>,
@@ -320,7 +320,7 @@ impl History for LiveviewHistory {
         visited_indices
             .iter()
             .position(|&rhs| timeline.current_index == rhs)
-            .map_or(false, |index| {
+            .is_some_and(|index| {
                 index > 0 && visited_indices[index - 1] == timeline.current_index - 1
             })
     }
@@ -332,7 +332,7 @@ impl History for LiveviewHistory {
         visited_indices
             .iter()
             .rposition(|&rhs| timeline.current_index == rhs)
-            .map_or(false, |index| {
+            .is_some_and(|index| {
                 index < visited_indices.len() - 1
                     && visited_indices[index + 1] == timeline.current_index + 1
             })

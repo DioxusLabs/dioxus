@@ -25,12 +25,15 @@ macro_rules! impl_event {
                 #[doc(alias = $js_name)]
             )?
             #[inline]
-            pub fn $name<__Marker>(mut _f: impl ::dioxus_core::prelude::SuperInto<::dioxus_core::prelude::EventHandler<::dioxus_core::Event<$data>>, __Marker>) -> ::dioxus_core::Attribute {
+            pub fn $name<__Marker>(mut _f: impl ::dioxus_core::prelude::SuperInto<::dioxus_core::ListenerCallback<$data>, __Marker>) -> ::dioxus_core::Attribute {
                 let event_handler = _f.super_into();
                 ::dioxus_core::Attribute::new(
                     impl_event!(@name $name $($js_name)?),
                     ::dioxus_core::AttributeValue::listener(move |e: ::dioxus_core::Event<crate::PlatformEventData>| {
-                        event_handler.call(e.map(|e| e.into()));
+                        let event: ::dioxus_core::Event<$data> = e.map(|data| {
+                            data.into()
+                        });
+                        event_handler.call(event.into_any());
                     }),
                     None,
                     false,

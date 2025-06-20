@@ -1,18 +1,30 @@
 use proc_macro2::TokenStream;
-use quote::{quote, ToTokens, TokenStreamExt};
+use quote::{format_ident, quote, ToTokens, TokenStreamExt};
 use syn::parse::{Parse, ParseStream};
+use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
 use syn::*;
 
 pub struct ComponentBody {
     pub item_fn: ItemFn,
+    pub options: ComponentMacroOptions,
 }
 
 impl Parse for ComponentBody {
     fn parse(input: ParseStream) -> Result<Self> {
         let item_fn: ItemFn = input.parse()?;
         validate_component_fn(&item_fn)?;
-        Ok(Self { item_fn })
+        Ok(Self {
+            item_fn,
+            options: ComponentMacroOptions::default(),
+        })
+    }
+}
+
+impl ComponentBody {
+    pub fn with_options(mut self, options: ComponentMacroOptions) -> Self {
+        self.options = options;
+        self
     }
 }
 
@@ -44,10 +56,13 @@ impl ToTokens for ComponentBody {
             // Props declared, so we generate a props struct and then also attach the doc attributes to it
             false => {
                 let doc = format!("Properties for the [`{}`] component.", &comp_fn.sig.ident);
-                let props_struct = self.props_struct();
+                let (props_struct, props_impls) = self.props_struct();
                 quote! {
                     #[doc = #doc]
+                    #[allow(missing_docs)]
                     #props_struct
+
+                    #(#props_impls)*
                 }
             }
         };
@@ -83,7 +98,6 @@ impl ComponentBody {
 
         let Generics { where_clause, .. } = generics;
         let (_, impl_generics, _) = generics.split_for_impl();
-        let generics_turbofish = impl_generics.as_turbofish();
 
         // We generate a struct with the same name as the component but called `Props`
         let struct_ident = Ident::new(&format!("{fn_ident}Props"), fn_ident.span());
@@ -99,16 +113,96 @@ impl ComponentBody {
             quote! { #struct_ident { #(#struct_field_names),* }: #struct_ident #impl_generics }
         };
 
+        // Defer to the lazy_body if we're using lazy
+        let body: TokenStream = if self.options.lazy {
+            self.lazy_body(
+                &struct_ident,
+                generics,
+                &impl_generics,
+                fn_output,
+                where_clause,
+                &inlined_props_argument,
+                block,
+            )
+        } else {
+            quote! { #block }
+        };
+
+        // We need a props type to exist even if the inputs are empty with lazy components
+        let emit_props = if self.options.lazy {
+            if inputs.is_empty() {
+                quote! {props: ()}
+            } else {
+                quote!(props: #struct_ident #impl_generics)
+            }
+        } else {
+            inlined_props_argument
+        };
+
         // The extra nest is for the snake case warning to kick back in
         parse_quote! {
             #(#attrs)*
             #(#props_docs)*
             #[allow(non_snake_case)]
-            #vis fn #fn_ident #generics (#inlined_props_argument) #fn_output #where_clause {
+            #vis fn #fn_ident #generics (#emit_props) #fn_output #where_clause {
                 {
-                    // In debug mode we can detect if the user is calling the component like a function
-                    dioxus_core::internal::verify_component_called_as_component(#fn_ident #generics_turbofish);
-                    #block
+                    #body
+                }
+            }
+        }
+    }
+
+    /// Generate the body of the lazy component
+    ///
+    /// This extracts the body into a new component that is wrapped in a lazy loader
+    #[allow(clippy::too_many_arguments)]
+    fn lazy_body(
+        &self,
+        struct_ident: &Ident,
+        generics: &Generics,
+        impl_generics: &TypeGenerics,
+        fn_output: &ReturnType,
+        where_clause: &Option<WhereClause>,
+        inlined_props_argument: &TokenStream,
+        block: &Block,
+    ) -> TokenStream {
+        let fn_ident = &self.item_fn.sig.ident;
+        let inputs = &self.item_fn.sig.inputs;
+
+        let lazy_name = format_ident!("Lazy{fn_ident}");
+        let out_ty = match &self.item_fn.sig.output {
+            ReturnType::Default => quote! { () },
+            ReturnType::Type(_, ty) => quote! { #ty },
+        };
+        let props_ty = if inputs.is_empty() {
+            quote! { () }
+        } else {
+            quote! { #struct_ident #impl_generics }
+        };
+        let anon_props = if inputs.is_empty() {
+            quote! { props: () }
+        } else {
+            quote! { #inlined_props_argument}
+        };
+
+        quote! {
+            fn #lazy_name #generics (#anon_props) #fn_output #where_clause {
+                #block
+            }
+
+            dioxus::config_macros::maybe_wasm_split! {
+                if wasm_split {
+                    {
+                        static __MODULE: wasm_split::LazyLoader<#props_ty, #out_ty> =
+                            wasm_split::lazy_loader!(extern "lazy" fn #lazy_name(props: #props_ty,) -> #out_ty);
+
+                        use_resource(|| async move { __MODULE.load().await }).suspend()?;
+                        __MODULE.call(props).unwrap()
+                    }
+                } else {
+                    {
+                        #lazy_name(props)
+                    }
                 }
             }
         }
@@ -122,7 +216,7 @@ impl ComponentBody {
     ///
     /// We try our best to transfer over any declared doc attributes from the original function signature onto the
     /// props struct fields.
-    fn props_struct(&self) -> ItemStruct {
+    fn props_struct(&self) -> (ItemStruct, Vec<ItemImpl>) {
         let ItemFn { vis, sig, .. } = &self.item_fn;
         let Signature {
             inputs,
@@ -131,16 +225,56 @@ impl ComponentBody {
             ..
         } = sig;
 
+        let generic_arguments = if !generics.params.is_empty() {
+            let generic_arguments = generics
+                .params
+                .iter()
+                .map(make_prop_struct_generics)
+                .collect::<Punctuated<_, Token![,]>>();
+            quote! { <#generic_arguments> }
+        } else {
+            quote! {}
+        };
+        let where_clause = &generics.where_clause;
         let struct_fields = inputs.iter().map(move |f| make_prop_struct_field(f, vis));
+        let struct_field_idents = inputs
+            .iter()
+            .map(make_prop_struct_field_idents)
+            .collect::<Vec<_>>();
         let struct_ident = Ident::new(&format!("{ident}Props"), ident.span());
 
-        parse_quote! {
-            #[derive(Props, Clone, PartialEq)]
+        let item_struct = parse_quote! {
+            #[derive(Props)]
             #[allow(non_camel_case_types)]
-            #vis struct #struct_ident #generics {
+            #vis struct #struct_ident #generics #where_clause {
                 #(#struct_fields),*
             }
-        }
+        };
+
+        let item_impl_clone = parse_quote! {
+            impl #generics ::core::clone::Clone for #struct_ident #generic_arguments #where_clause {
+                #[inline]
+                fn clone(&self) -> Self {
+                    Self {
+                        #(#struct_field_idents: ::core::clone::Clone::clone(&self.#struct_field_idents)),*
+                    }
+                }
+            }
+        };
+
+        let item_impl_partial_eq = parse_quote! {
+            impl #generics ::core::cmp::PartialEq for #struct_ident #generic_arguments #where_clause {
+                #[inline]
+                fn eq(&self, other: &Self) -> bool {
+                    #(
+                        self.#struct_field_idents == other.#struct_field_idents &&
+                    )*
+                    true
+                }
+            }
+        };
+
+        (item_struct, vec![item_impl_clone, item_impl_partial_eq])
     }
 
     /// Convert a list of function arguments into a list of doc attributes for the props struct
@@ -399,6 +533,36 @@ fn make_prop_struct_field(f: &FnArg, vis: &Visibility) -> TokenStream {
     }
 }
 
+/// Get ident from a function arg
+fn make_prop_struct_field_idents(f: &FnArg) -> &Ident {
+    // There's no receivers (&self) allowed in the component body
+    let FnArg::Typed(pt) = f else { unreachable!() };
+
+    match pt.pat.as_ref() {
+        // rip off mutability
+        // todo: we actually don't want any of the extra bits of the field pattern
+        Pat::Ident(f) => &f.ident,
+        _ => unreachable!(),
+    }
+}
+
+fn make_prop_struct_generics(generics: &GenericParam) -> TokenStream {
+    match generics {
+        GenericParam::Type(ty) => {
+            let ident = &ty.ident;
+            quote! { #ident }
+        }
+        GenericParam::Lifetime(lifetime) => {
+            let lifetime = &lifetime.lifetime;
+            quote! { #lifetime }
+        }
+        GenericParam::Const(c) => {
+            let ident = &c.ident;
+            quote! { #ident }
+        }
+    }
+}
+
 fn rebind_mutability(f: &FnArg) -> TokenStream {
     // There's no receivers (&self) allowed in the component body
     let FnArg::Typed(pt) = f else { unreachable!() };
@@ -465,4 +629,36 @@ fn allow_camel_case_for_fn_ident(item_fn: &ItemFn) -> ItemFn {
     };
 
     clone
+}
+
+#[derive(Default)]
+pub struct ComponentMacroOptions {
+    pub lazy: bool,
+}
+
+impl Parse for ComponentMacroOptions {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let mut lazy_load = false;
+
+        while !input.is_empty() {
+            let ident = input.parse::<Ident>()?;
+            let ident_name = ident.to_string();
+            if ident_name == "lazy" {
+                lazy_load = true;
+            } else if ident_name == "no_case_check" {
+                // we used to have this?
+            } else {
+                return Err(Error::new(
+                    ident.span(),
+                    "Unknown option for component macro",
+                ));
+            }
+
+            if input.peek(Token![,]) {
+                input.parse::<Token![,]>()?;
+            }
+        }
+
+        Ok(Self { lazy: lazy_load })
+    }
 }

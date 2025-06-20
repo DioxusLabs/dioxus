@@ -4,6 +4,14 @@ use dioxus_html as dioxus_elements;
 
 #[non_exhaustive]
 #[derive(Clone, Props, PartialEq)]
+pub struct OtherLinkProps {
+    pub rel: String,
+    #[props(extends = link, extends = GlobalAttributes)]
+    pub additional_attributes: Vec<Attribute>,
+}
+
+#[non_exhaustive]
+#[derive(Clone, Props, PartialEq)]
 pub struct LinkProps {
     pub rel: Option<String>,
     pub media: Option<String>,
@@ -22,11 +30,14 @@ pub struct LinkProps {
     pub blocking: Option<String>,
     #[props(extends = link, extends = GlobalAttributes)]
     pub additional_attributes: Vec<Attribute>,
+    pub onload: Option<String>,
 }
 
 impl LinkProps {
-    pub(crate) fn attributes(&self) -> Vec<(&'static str, String)> {
+    /// Get all the attributes for the link tag
+    pub fn attributes(&self) -> Vec<(&'static str, String)> {
         let mut attributes = Vec::new();
+        extend_attributes(&mut attributes, &self.additional_attributes);
         if let Some(rel) = &self.rel {
             attributes.push(("rel", rel.clone()));
         }
@@ -69,11 +80,14 @@ impl LinkProps {
         if let Some(blocking) = &self.blocking {
             attributes.push(("blocking", blocking.clone()));
         }
+        if let Some(onload) = &self.onload {
+            attributes.push(("onload", onload.clone()));
+        }
         attributes
     }
 }
 
-/// Render a [`link`](crate::elements::link) tag into the head of the page.
+/// Render a [`<link>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/link) tag into the head of the page.
 ///
 /// > The [Link](https://docs.rs/dioxus-router/latest/dioxus_router/components/fn.Link.html) component in dioxus router and this component are completely different.
 /// > This component links resources in the head of the page, while the router component creates clickable links in the body of the page.
@@ -104,12 +118,18 @@ pub fn Link(props: LinkProps) -> Element {
     use_update_warning(&props, "Link {}");
 
     use_hook(|| {
+        let document = document();
+        let mut insert_link = document.create_head_component();
         if let Some(href) = &props.href {
             if !should_insert_link(href) {
-                return;
+                insert_link = false;
             }
         }
-        let document = document();
+
+        if !insert_link {
+            return;
+        }
+
         document.create_link(props);
     });
 

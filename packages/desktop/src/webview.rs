@@ -1,7 +1,7 @@
-use crate::document::DesktopDocument;
 use crate::element::DesktopElement;
 use crate::file_upload::DesktopFileDragEvent;
 use crate::menubar::DioxusMenu;
+use crate::PendingDesktopContext;
 use crate::{
     app::SharedContext,
     assets::AssetHandlerRegistry,
@@ -12,14 +12,16 @@ use crate::{
     waker::tao_waker,
     Config, DesktopContext, DesktopService,
 };
+use crate::{document::DesktopDocument, WeakDesktopContext};
+use base64::prelude::BASE64_STANDARD;
 use dioxus_core::{Runtime, ScopeId, VirtualDom};
 use dioxus_document::Document;
 use dioxus_history::{History, MemoryHistory};
 use dioxus_hooks::to_owned;
 use dioxus_html::{HasFileData, HtmlEvent, PlatformEventData};
 use futures_util::{pin_mut, FutureExt};
-use std::cell::OnceCell;
 use std::sync::Arc;
+use std::{cell::OnceCell, time::Duration};
 use std::{rc::Rc, task::Waker};
 use wry::{DragDropEvent, RequestAsyncResponder, WebContext, WebViewBuilder};
 
@@ -27,7 +29,7 @@ use wry::{DragDropEvent, RequestAsyncResponder, WebContext, WebViewBuilder};
 pub(crate) struct WebviewEdits {
     runtime: Rc<Runtime>,
     pub wry_queue: WryQueue,
-    desktop_context: Rc<OnceCell<DesktopContext>>,
+    desktop_context: Rc<OnceCell<WeakDesktopContext>>,
 }
 
 impl WebviewEdits {
@@ -39,7 +41,7 @@ impl WebviewEdits {
         }
     }
 
-    fn set_desktop_context(&self, context: DesktopContext) {
+    fn set_desktop_context(&self, context: WeakDesktopContext) {
         _ = self.desktop_context.set(context);
     }
 
@@ -48,7 +50,9 @@ impl WebviewEdits {
         request: wry::http::Request<Vec<u8>>,
         responder: wry::RequestAsyncResponder,
     ) {
-        let body = self.try_handle_event(request).unwrap_or_default();
+        let body = self
+            .try_handle_event(request)
+            .expect("Writing bodies to succeed");
         responder.respond(wry::http::Response::new(body))
     }
 
@@ -56,13 +60,27 @@ impl WebviewEdits {
         &self,
         request: wry::http::Request<Vec<u8>>,
     ) -> Result<Vec<u8>, serde_json::Error> {
-        let data_from_header = request
+        use serde::de::Error;
+
+        // todo(jon):
+        //
+        // I'm a small bit worried about the size of the header being too big on some platforms.
+        // It's unlikely we'll hit the 256k limit (from 2010 browsers...) but it's important to think about
+        // https://stackoverflow.com/questions/3326210/can-http-headers-be-too-big-for-browsers
+        //
+        // Also important to remember here that we don't pass a body from the JavaScript side of things
+        let data = request
             .headers()
             .get("dioxus-data")
-            .map(|f| f.as_bytes())
-            .expect("dioxus-data header is not a string");
+            .ok_or_else(|| Error::custom("dioxus-data header not set"))?;
 
-        let response = match serde_json::from_slice(data_from_header) {
+        let as_utf = std::str::from_utf8(data.as_bytes())
+            .map_err(|_| Error::custom("dioxus-data header is not a valid (utf-8) string"))?;
+
+        let data_from_header = base64::Engine::decode(&BASE64_STANDARD, as_utf)
+            .map_err(|_| Error::custom("dioxus-data header is not a base64 string"))?;
+
+        let response = match serde_json::from_slice(&data_from_header) {
             Ok(event) => {
                 // we need to wait for the mutex lock to let us munge the main thread..
                 let _lock = crate::android_sync_lock::android_runtime_lock();
@@ -79,15 +97,9 @@ impl WebviewEdits {
             }
         };
 
-        let body = match serde_json::to_vec(&response) {
-            Ok(body) => body,
-            Err(err) => {
-                tracing::error!("failed to serialize SynchronousEventResponse: {err:?}");
-                return Err(err);
-            }
-        };
-
-        Ok(body)
+        serde_json::to_vec(&response).inspect_err(|err| {
+            tracing::error!("failed to serialize SynchronousEventResponse: {err:?}");
+        })
     }
 
     pub fn handle_html_event(&self, event: HtmlEvent) -> SynchronousEventResponse {
@@ -103,6 +115,8 @@ impl WebviewEdits {
             );
             return Default::default();
         };
+
+        let desktop_context = desktop_context.upgrade().unwrap();
 
         let query = desktop_context.query.clone();
         let recent_file = desktop_context.file_hover.clone();
@@ -194,6 +208,7 @@ impl WebviewInstance {
 
         // https://developer.apple.com/documentation/appkit/nswindowcollectionbehavior/nswindowcollectionbehaviormanaged
         #[cfg(target_os = "macos")]
+        #[allow(deprecated)]
         {
             use cocoa::appkit::NSWindowCollectionBehavior;
             use cocoa::base::id;
@@ -202,6 +217,7 @@ impl WebviewInstance {
 
             unsafe {
                 let window: id = window.ns_window() as id;
+                #[allow(unexpected_cfgs)]
                 let _: () = msg_send![window, setCollectionBehavior: NSWindowCollectionBehavior::NSWindowCollectionBehaviorManaged];
             }
         }
@@ -314,14 +330,8 @@ impl WebviewInstance {
             WebViewBuilder::new_gtk(vbox)
         };
 
-        // Disable the webview default shortcuts to disable the reload shortcut
-        #[cfg(target_os = "windows")]
-        {
-            use wry::WebViewBuilderExtWindows;
-            webview = webview.with_browser_accelerator_keys(false);
-        }
-
         webview = webview
+            .with_web_context(&mut web_context)
             .with_bounds(wry::Rect {
                 position: wry::dpi::Position::Logical(wry::dpi::LogicalPosition::new(0.0, 0.0)),
                 size: wry::dpi::Size::Physical(wry::dpi::PhysicalSize::new(
@@ -338,15 +348,27 @@ impl WebviewInstance {
                 if var.starts_with("dioxus://") || var.starts_with("http://dioxus.") {
                     true
                 } else {
-                    if var.starts_with("http://") || var.starts_with("https://") {
-                        _ = webbrowser::open(&var);
+                    if var.starts_with("http://")
+                        || var.starts_with("https://")
+                        || var.starts_with("mailto:")
+                    {
+                        _ = open::that_detached(&var);
                     }
                     false
                 }
             }) // prevent all navigations
-            .with_asynchronous_custom_protocol(String::from("dioxus"), request_handler)
-            .with_web_context(&mut web_context)
-            .with_drag_drop_handler(file_drop_handler);
+            .with_asynchronous_custom_protocol(String::from("dioxus"), request_handler);
+
+        // Disable the webview default shortcuts to disable the reload shortcut
+        #[cfg(target_os = "windows")]
+        {
+            use wry::WebViewBuilderExtWindows;
+            webview = webview.with_browser_accelerator_keys(false);
+        }
+
+        if !cfg.disable_file_drop_handler {
+            webview = webview.with_drag_drop_handler(file_drop_handler);
+        }
 
         if let Some(color) = cfg.background_color {
             webview = webview.with_background_color(color);
@@ -380,8 +402,6 @@ impl WebviewInstance {
             webview = webview.with_devtools(true);
         }
 
-        let webview = webview.build().unwrap();
-
         let menu = if cfg!(not(any(target_os = "android", target_os = "ios"))) {
             let menu_option = cfg.menu.into();
             if let Some(menu) = &menu_option {
@@ -392,6 +412,7 @@ impl WebviewInstance {
             None
         };
 
+        let webview = webview.build().unwrap();
         let desktop_context = Rc::from(DesktopService::new(
             webview,
             window,
@@ -401,7 +422,7 @@ impl WebviewInstance {
         ));
 
         // Provide the desktop context to the virtual dom and edit handler
-        edits.set_desktop_context(desktop_context.clone());
+        edits.set_desktop_context(Rc::downgrade(&desktop_context));
         let provider: Rc<dyn Document> = Rc::new(DesktopDocument::new(desktop_context.clone()));
         let history_provider: Rc<dyn History> = Rc::new(MemoryHistory::default());
         dom.in_runtime(|| {
@@ -434,6 +455,8 @@ impl WebviewInstance {
             }
 
             {
+                // lock the hack-ed in lock sync wry has some thread-safety issues with event handlers and async tasks
+                let _lock = crate::android_sync_lock::android_runtime_lock();
                 let fut = self.dom.wait_for_work();
                 pin_mut!(fut);
 
@@ -462,6 +485,31 @@ impl WebviewInstance {
             .webview
             .evaluate_script("window.interpreter.kickAllStylesheetsOnPage()");
     }
+
+    /// Displays a toast to the developer.
+    pub(crate) fn show_toast(
+        &self,
+        header_text: &str,
+        message: &str,
+        level: &str,
+        duration: Duration,
+        after_reload: bool,
+    ) {
+        let as_ms = duration.as_millis();
+
+        let js_fn_name = match after_reload {
+            true => "scheduleDXToast",
+            false => "showDXToast",
+        };
+
+        _ = self.desktop_context.webview.evaluate_script(&format!(
+            r#"
+                if (typeof {js_fn_name} !== "undefined") {{
+                    window.{js_fn_name}("{header_text}", "{message}", "{level}", {as_ms});
+                }}
+                "#,
+        ));
+    }
 }
 
 /// A synchronous response to a browser event which may prevent the default browser's action
@@ -476,5 +524,35 @@ impl SynchronousEventResponse {
     #[allow(unused)]
     pub fn new(prevent_default: bool) -> Self {
         Self { prevent_default }
+    }
+}
+
+/// A webview that is queued to be created. We can't spawn webviews outside of the main event loop because it may
+/// block on windows so we queue them into the shared context and then create them when the main event loop is ready.
+pub(crate) struct PendingWebview {
+    dom: VirtualDom,
+    cfg: Config,
+    sender: tokio::sync::oneshot::Sender<DesktopContext>,
+}
+
+impl PendingWebview {
+    pub(crate) fn new(dom: VirtualDom, cfg: Config) -> (Self, PendingDesktopContext) {
+        let (sender, receiver) = tokio::sync::oneshot::channel();
+        let webview = Self { dom, cfg, sender };
+        let pending = PendingDesktopContext { receiver };
+        (webview, pending)
+    }
+
+    pub(crate) fn create_window(self, shared: &Rc<SharedContext>) -> WebviewInstance {
+        let window = WebviewInstance::new(self.cfg, self.dom, shared.clone());
+
+        let cx = window.dom.in_runtime(|| {
+            ScopeId::ROOT
+                .consume_context::<Rc<DesktopService>>()
+                .unwrap()
+        });
+        _ = self.sender.send(cx);
+
+        window
     }
 }

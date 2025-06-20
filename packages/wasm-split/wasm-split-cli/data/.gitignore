@@ -1,0 +1,4 @@
+# this folder contains the wasm output for the test harnessa, so ignore it
+
+*.wasm
+bindgen/

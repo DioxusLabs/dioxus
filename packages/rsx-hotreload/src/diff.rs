@@ -122,7 +122,10 @@ impl HotReloadResult {
         new: &TemplateBody,
         name: String,
     ) -> Option<Self> {
-        let full_rebuild_state = LastBuildState::new(full_rebuild_state, name);
+        // Normalize both the full rebuild state and the new state for rendering
+        let full_rebuild_state = full_rebuild_state.normalized();
+        let new = new.normalized();
+        let full_rebuild_state = LastBuildState::new(&full_rebuild_state, name);
         let mut s = Self {
             full_rebuild_state,
             templates: Default::default(),
@@ -131,7 +134,7 @@ impl HotReloadResult {
             literal_component_properties: Default::default(),
         };
 
-        s.hotreload_body::<Ctx>(new)?;
+        s.hotreload_body::<Ctx>(&new)?;
 
         Some(s)
     }

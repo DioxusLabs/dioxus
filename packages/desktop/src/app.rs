@@ -5,9 +5,10 @@ use crate::{
     ipc::{IpcMessage, UserWindowEvent},
     query::QueryResult,
     shortcut::ShortcutRegistry,
-    webview::WebviewInstance,
+    webview::{PendingWebview, WebviewInstance},
 };
-use dioxus_core::{ElementId, VirtualDom};
+use dioxus_core::{ElementId, ScopeId, VirtualDom};
+use dioxus_history::History;
 use dioxus_html::PlatformEventData;
 use std::{
     any::Any,
@@ -15,12 +16,13 @@ use std::{
     collections::HashMap,
     rc::Rc,
     sync::Arc,
+    time::Duration,
 };
 use tao::{
     dpi::PhysicalSize,
     event::Event,
     event_loop::{ControlFlow, EventLoop, EventLoopBuilder, EventLoopProxy, EventLoopWindowTarget},
-    window::WindowId,
+    window::{Window, WindowId},
 };
 
 /// The single top-level object that manages all the running windows, assets, shortcuts, etc
@@ -47,7 +49,7 @@ pub(crate) struct App {
 /// A bundle of state shared between all the windows, providing a way for us to communicate with running webview.
 pub(crate) struct SharedContext {
     pub(crate) event_handlers: WindowEventHandlers,
-    pub(crate) pending_webviews: RefCell<Vec<WebviewInstance>>,
+    pub(crate) pending_webviews: RefCell<Vec<PendingWebview>>,
     pub(crate) shortcut_manager: ShortcutRegistry,
     pub(crate) proxy: EventLoopProxy<UserWindowEvent>,
     pub(crate) target: EventLoopWindowTarget<UserWindowEvent>,
@@ -168,18 +170,17 @@ impl App {
 
     #[cfg(all(feature = "devtools", debug_assertions))]
     pub fn connect_hotreload(&self) {
-        if let Some(endpoint) = dioxus_cli_config::devserver_ws_endpoint() {
-            let proxy = self.shared.proxy.clone();
-            dioxus_devtools::connect(endpoint, move |msg| {
-                _ = proxy.send_event(UserWindowEvent::HotReloadEvent(msg));
-            })
-        }
+        let proxy = self.shared.proxy.clone();
+        dioxus_devtools::connect(move |msg| {
+            _ = proxy.send_event(UserWindowEvent::HotReloadEvent(msg));
+        })
     }
 
     pub fn handle_new_window(&mut self) {
-        for handler in self.shared.pending_webviews.borrow_mut().drain(..) {
-            let id = handler.desktop_context.window.id();
-            self.webviews.insert(id, handler);
+        for pending_webview in self.shared.pending_webviews.borrow_mut().drain(..) {
+            let window = pending_webview.create_window(&self.shared);
+            let id = window.desktop_context.window.id();
+            self.webviews.insert(id, window);
             _ = self.shared.proxy.send_event(UserWindowEvent::Poll(id));
         }
     }
@@ -198,11 +199,14 @@ impl App {
                 }
             }
 
+            LastWindowHides if self.webviews.len() > 1 => {
+                self.webviews.remove(&id);
+            }
+
             LastWindowHides => {
-                let Some(webview) = self.webviews.get(&id) else {
-                    return;
-                };
-                hide_app_window(&webview.desktop_context.webview);
+                if let Some(webview) = self.webviews.get(&id) {
+                    hide_last_window(&webview.desktop_context.window);
+                }
             }
 
             CloseWindow => {
@@ -223,39 +227,42 @@ impl App {
         }
     }
 
-    pub fn resize_window(&self, size: PhysicalSize<u32>) {
+    pub fn resize_window(&self, id: WindowId, size: PhysicalSize<u32>) {
         // TODO: the app layer should avoid directly manipulating the webview webview instance internals.
         // Window creation and modification is the responsibility of the webview instance so it makes sense to
         // encapsulate that there.
-        self.webviews.values().for_each(|webview_instance| {
+        if let Some(webview) = self.webviews.get(&id) {
             use wry::Rect;
 
-            webview_instance
-                .desktop_context
-                .webview
-                .set_bounds(Rect {
-                    position: wry::dpi::Position::Logical(wry::dpi::LogicalPosition::new(0.0, 0.0)),
-                    size: wry::dpi::Size::Physical(wry::dpi::PhysicalSize::new(
-                        size.width,
-                        size.height,
-                    )),
-                })
-                .unwrap();
-        });
+            _ = webview.desktop_context.webview.set_bounds(Rect {
+                position: wry::dpi::Position::Logical(wry::dpi::LogicalPosition::new(0.0, 0.0)),
+                size: wry::dpi::Size::Physical(wry::dpi::PhysicalSize::new(
+                    size.width,
+                    size.height,
+                )),
+            });
+        }
     }
 
     pub fn handle_start_cause_init(&mut self) {
-        let virtual_dom = self.unmounted_dom.take().unwrap();
-        let mut cfg = self.cfg.take().unwrap();
+        let virtual_dom = self
+            .unmounted_dom
+            .take()
+            .expect("Virtualdom should be set before initialization");
+        let mut cfg = self
+            .cfg
+            .take()
+            .expect("Config should be set before initialization");
 
         self.is_visible_before_start = cfg.window.window.visible;
         cfg.window = cfg.window.with_visible(false);
+        let explicit_window_size = cfg.window.window.inner_size;
+        let explicit_window_position = cfg.window.window.position;
 
         let webview = WebviewInstance::new(cfg, virtual_dom, self.shared.clone());
 
         // And then attempt to resume from state
-        #[cfg(debug_assertions)]
-        self.resume_from_state(&webview);
+        self.resume_from_state(&webview, explicit_window_size, explicit_window_position);
 
         let id = webview.desktop_context.window.id();
         self.webviews.insert(id, webview);
@@ -264,9 +271,10 @@ impl App {
     pub fn handle_browser_open(&mut self, msg: IpcMessage) {
         if let Some(temp) = msg.params().as_object() {
             if temp.contains_key("href") {
-                let open = webbrowser::open(temp["href"].as_str().unwrap());
-                if let Err(e) = open {
-                    tracing::error!("Open Browser error: {:?}", e);
+                if let Some(href) = temp.get("href").and_then(|v| v.as_str()) {
+                    if let Err(e) = open::that_detached(href) {
+                        tracing::error!("Open Browser error: {:?}", e);
+                    }
                 }
             }
         }
@@ -315,12 +323,25 @@ impl App {
 
     #[cfg(all(feature = "devtools", debug_assertions))]
     pub fn handle_hot_reload_msg(&mut self, msg: dioxus_devtools::DevserverMsg) {
+        use std::time::Duration;
+
         use dioxus_devtools::DevserverMsg;
+
+        // Amount of time that toats should be displayed.
+        const TOAST_TIMEOUT: Duration = Duration::from_secs(2);
+        const TOAST_TIMEOUT_LONG: Duration = Duration::from_secs(3600); // Duration::MAX is too long for JS.
 
         match msg {
             DevserverMsg::HotReload(hr_msg) => {
                 for webview in self.webviews.values_mut() {
-                    dioxus_devtools::apply_changes(&webview.dom, &hr_msg);
+                    {
+                        // This is a place where wry says it's threadsafe but it's actually not.
+                        // If we're patching the app, we want to make sure it's not going to progress in the interim.
+                        let lock = crate::android_sync_lock::android_runtime_lock();
+                        dioxus_devtools::apply_changes(&webview.dom, &hr_msg);
+                        drop(lock);
+                    }
+
                     webview.poll_vdom();
                 }
 
@@ -329,16 +350,67 @@ impl App {
                         webview.kick_stylsheets();
                     }
                 }
+
+                if hr_msg.jump_table.is_some()
+                    && hr_msg.for_build_id == Some(dioxus_cli_config::build_id())
+                {
+                    self.send_toast_to_all(
+                        "Hot-patch success!",
+                        &format!("App successfully patched in {} ms", hr_msg.ms_elapsed),
+                        "success",
+                        TOAST_TIMEOUT,
+                        false,
+                    );
+                }
             }
-            DevserverMsg::FullReloadCommand
-            | DevserverMsg::FullReloadStart
-            | DevserverMsg::FullReloadFailed => {
-                // usually only web gets this message - what are we supposed to do?
-                // Maybe we could just binary patch ourselves in place without losing window state?
+            DevserverMsg::FullReloadCommand => {
+                self.send_toast_to_all(
+                    "Successfully rebuilt.",
+                    "Your app was rebuilt successfully and without error.",
+                    "success",
+                    TOAST_TIMEOUT,
+                    true,
+                );
             }
+            DevserverMsg::FullReloadStart => self.send_toast_to_all(
+                "Your app is being rebuilt.",
+                "A non-hot-reloadable change occurred and we must rebuild.",
+                "info",
+                TOAST_TIMEOUT_LONG,
+                false,
+            ),
+            DevserverMsg::FullReloadFailed => self.send_toast_to_all(
+                "Oops! The build failed.",
+                "We tried to rebuild your app, but something went wrong.",
+                "error",
+                TOAST_TIMEOUT_LONG,
+                false,
+            ),
+            DevserverMsg::HotPatchStart => self.send_toast_to_all(
+                "Hot-patching app...",
+                "Hot-patching modified Rust code.",
+                "info",
+                TOAST_TIMEOUT_LONG,
+                false,
+            ),
             DevserverMsg::Shutdown => {
                 self.control_flow = ControlFlow::Exit;
             }
+            _ => {}
+        }
+    }
+
+    #[cfg(all(feature = "devtools", debug_assertions))]
+    fn send_toast_to_all(
+        &self,
+        header_text: &str,
+        message: &str,
+        level: &str,
+        duration: Duration,
+        after_reload: bool,
+    ) {
+        for webview in self.webviews.values() {
+            webview.show_toast(header_text, message, level, duration, after_reload);
         }
     }
 
@@ -358,7 +430,9 @@ impl App {
 
         let data = Rc::new(PlatformEventData::new(as_any));
 
-        let view = self.webviews.get_mut(&window).unwrap();
+        let Some(view) = self.webviews.get_mut(&window) else {
+            return;
+        };
 
         let event = dioxus_core::Event::new(data as Rc<dyn Any>, event_bubbles);
 
@@ -445,11 +519,20 @@ impl App {
 
     #[cfg(debug_assertions)]
     fn persist_window_state(&self) {
+        use dioxus_core::ScopeId;
+        use dioxus_history::History;
+
         if let Some(webview) = self.webviews.values().next() {
             let window = &webview.desktop_context.window;
 
-            let monitor = window.current_monitor().unwrap();
-            let position = window.outer_position().unwrap();
+            let Some(monitor) = window.current_monitor() else {
+                return;
+            };
+
+            let Ok(position) = window.outer_position() else {
+                return;
+            };
+
             let size = window.outer_size();
 
             let x = position.x;
@@ -464,12 +547,24 @@ impl App {
                 _ => 0,
             };
 
+            let Some(monitor_name) = monitor.name() else {
+                return;
+            };
+
+            let url = webview.dom.in_runtime(|| {
+                ScopeId::ROOT
+                    .consume_context::<Rc<dyn History>>()
+                    .unwrap()
+                    .current_route()
+            });
+
             let state = PreservedWindowState {
                 x,
                 y,
                 width: size.width.max(200),
                 height: size.height.saturating_sub(adjustment).max(200),
-                monitor: monitor.name().unwrap().to_string(),
+                monitor: monitor_name.to_string(),
+                url: Some(url),
             };
 
             // Yes... I know... we're loading a file that might not be ours... but it's a debug feature
@@ -480,15 +575,49 @@ impl App {
     }
 
     // Write this to the target dir so we can pick back up
-    #[cfg(debug_assertions)]
-    fn resume_from_state(&mut self, webview: &WebviewInstance) {
+    fn resume_from_state(
+        &mut self,
+        webview: &WebviewInstance,
+        explicit_inner_size: Option<tao::dpi::Size>,
+        explicit_window_position: Option<tao::dpi::Position>,
+    ) {
+        // We only want to do this on desktop
+        if cfg!(target_os = "android") || cfg!(target_os = "ios") {
+            return;
+        }
+
+        // We only want to do this in debug mode
+        if !cfg!(debug_assertions) {
+            return;
+        }
+
         if let Ok(state) = std::fs::read_to_string(restore_file()) {
             if let Ok(state) = serde_json::from_str::<PreservedWindowState>(&state) {
                 let window = &webview.desktop_context.window;
                 let position = (state.x, state.y);
                 let size = (state.width, state.height);
-                window.set_outer_position(tao::dpi::PhysicalPosition::new(position.0, position.1));
-                window.set_inner_size(tao::dpi::PhysicalSize::new(size.0, size.1));
+
+                // Only set the outer position if it wasn't explicitly set
+                if explicit_window_position.is_none() {
+                    window.set_outer_position(tao::dpi::PhysicalPosition::new(
+                        position.0, position.1,
+                    ));
+                }
+
+                // Only set the inner size if it wasn't explicitly set
+                if explicit_inner_size.is_none() {
+                    window.set_inner_size(tao::dpi::PhysicalSize::new(size.0, size.1));
+                }
+
+                // Set the url if it exists
+                webview.dom.in_runtime(|| {
+                    if let Some(url) = state.url {
+                        ScopeId::ROOT
+                            .consume_context::<Rc<dyn History>>()
+                            .unwrap()
+                            .replace(url);
+                    }
+                })
             }
         }
     }
@@ -512,7 +641,7 @@ impl App {
                         }
 
                         // give it a moment for the event to be processed
-                        std::thread::sleep(std::time::Duration::from_secs(1));
+                        std::thread::sleep(std::time::Duration::from_millis(100));
                     }
                 }
             });
@@ -527,11 +656,16 @@ struct PreservedWindowState {
     width: u32,
     height: u32,
     monitor: String,
+    url: Option<String>,
 }
 
-/// Different hide implementations per platform
+/// Hide the last window when using LastWindowHides.
+///
+/// On macOS, if we use `set_visibility(false)` on the window, it will hide the window but not show
+/// it again when the user switches back to the app. `NSApplication::hide:` has the correct behaviour,
+/// so we need to special case it.
 #[allow(unused)]
-pub fn hide_app_window(window: &wry::WebView) {
+fn hide_last_window(window: &Window) {
     #[cfg(target_os = "windows")]
     {
         use tao::platform::windows::WindowExtWindows;
@@ -551,6 +685,7 @@ pub fn hide_app_window(window: &wry::WebView) {
         // back to the app. `NSApplication::hide:` has the correct behaviour
         use objc::runtime::Object;
         use objc::{msg_send, sel, sel_impl};
+        #[allow(unexpected_cfgs)]
         objc::rc::autoreleasepool(|| unsafe {
             let app: *mut Object = msg_send![objc::class!(NSApplication), sharedApplication];
             let nil = std::ptr::null_mut::<Object>();
@@ -560,22 +695,7 @@ pub fn hide_app_window(window: &wry::WebView) {
 }
 
 /// Return the location of a tempfile with our window state in it such that we can restore it later
-#[cfg(debug_assertions)]
 fn restore_file() -> std::path::PathBuf {
-    /// Get the name of the program or default to "dioxus" so we can hash it
-    fn get_prog_name_or_default() -> Option<String> {
-        Some(
-            std::env::current_exe()
-                .ok()?
-                .file_name()?
-                .to_str()?
-                .to_string(),
-        )
-    }
-
-    let name = get_prog_name_or_default().unwrap_or_else(|| "dioxus".to_string());
-    let hashed_id = name.chars().map(|c| c as usize).sum::<usize>();
-    let mut path = std::env::temp_dir();
-    path.push(format!("{}-window-state.json", hashed_id));
-    path
+    let dir = dioxus_cli_config::session_cache_dir().unwrap_or_else(std::env::temp_dir);
+    dir.join("window-state.json")
 }

@@ -1,7 +1,31 @@
 use super::*;
-use crate::{AddressArguments, BuildArgs, DioxusCrate, Platform};
+use crate::{AddressArguments, BuildArgs, TraceController};
+use futures_util::FutureExt;
+use std::sync::OnceLock;
+use std::{backtrace::Backtrace, panic::AssertUnwindSafe};
 
 /// Serve the project
+///
+/// `dx serve` takes cargo args by default, except with a required `--platform` arg:
+///
+/// ```sh
+/// dx serve --example blah --target blah --platform android
+/// ```
+///
+/// A simple serve:
+/// ```sh
+/// dx serve --platform web
+/// ```
+///
+/// As of dioxus 0.7, `dx serve` allows independent customization of the client and server builds,
+/// allowing workspaces and removing any "magic" done to support ergonomic fullstack serving with
+/// an plain `dx serve`. These require specifying more arguments like features since they won't be autodetected.
+///
+/// ```sh
+/// dx serve \
+///     client --package frontend \
+///     server --package backend
+/// ```
 #[derive(Clone, Debug, Default, Parser)]
 #[command(group = clap::ArgGroup::new("release-incompatible").multiple(true).conflicts_with("release"))]
 pub(crate) struct ServeArgs {
@@ -26,10 +50,6 @@ pub(crate) struct ServeArgs {
     #[clap(long)]
     pub(crate) cross_origin_policy: bool,
 
-    /// Additional arguments to pass to the executable
-    #[clap(long)]
-    pub(crate) args: Vec<String>,
-
     /// Sets the interval in seconds that the CLI will poll for file changes on WSL.
     #[clap(long, default_missing_value = "2")]
     pub(crate) wsl_file_poll_interval: Option<u16>,
@@ -38,9 +58,33 @@ pub(crate) struct ServeArgs {
     #[arg(long, default_missing_value="true", num_args=0..=1, short = 'i')]
     pub(crate) interactive: Option<bool>,
 
-    /// Arguments for the build itself
+    /// Enable Rust hot-patching instead of full rebuilds [default: false]
+    ///
+    /// This is quite experimental and may lead to unexpected segfaults or crashes in development.
+    #[arg(long, default_value_t = false, alias = "hotpatch")]
+    pub(crate) hot_patch: bool,
+
+    /// Watch the filesystem for changes and trigger a rebuild [default: true]
+    #[clap(long, default_missing_value = "true")]
+    pub(crate) watch: Option<bool>,
+
+    /// This flag only applies to fullstack builds. By default fullstack builds will run the server and client builds in parallel. This flag will force the build to run the server build first, then the client build. [default: false]
+    #[clap(long)]
+    pub(crate) force_sequential: bool,
+
+    /// Platform-specific arguments for the build
     #[clap(flatten)]
-    pub(crate) build_arguments: BuildArgs,
+    pub(crate) platform_args: CommandWithPlatformOverrides<PlatformServeArgs>,
+}
+
+#[derive(Clone, Debug, Default, Parser)]
+pub(crate) struct PlatformServeArgs {
+    #[clap(flatten)]
+    pub(crate) targets: BuildArgs,
+
+    /// Additional arguments to pass to the executable
+    #[clap(long, default_value = "")]
+    pub(crate) args: String,
 }
 
 impl ServeArgs {
@@ -48,70 +92,98 @@ impl ServeArgs {
     ///
     /// Make sure not to do any intermediate logging since our tracing infra has now enabled much
     /// higher log levels
+    ///
+    /// We also set up proper panic handling since the TUI has a tendency to corrupt the terminal.
     pub(crate) async fn serve(self) -> Result<StructuredOutput> {
-        crate::serve::serve_all(self).await?;
-
-        Ok(StructuredOutput::Success)
-    }
-
-    pub(crate) async fn load_krate(&mut self) -> Result<DioxusCrate> {
-        let krate = DioxusCrate::new(&self.build_arguments.target_args)?;
-        self.resolve(&krate).await?;
-        Ok(krate)
-    }
-
-    pub(crate) async fn resolve(&mut self, krate: &DioxusCrate) -> Result<()> {
-        // Enable hot reload.
-        if self.hot_reload.is_none() {
-            self.hot_reload = Some(krate.settings.always_hot_reload.unwrap_or(true));
+        if std::env::var("RUST_BACKTRACE").is_err() {
+            std::env::set_var("RUST_BACKTRACE", "1");
         }
 
-        // Open browser.
-        if self.open.is_none() {
-            self.open = Some(krate.settings.always_open_browser.unwrap_or_default());
+        struct SavedLocation {
+            file: String,
+            line: u32,
+            column: u32,
+        }
+        static BACKTRACE: OnceLock<(Backtrace, Option<SavedLocation>)> = OnceLock::new();
+
+        // We *don't* want printing here, since it'll break the tui and log ordering.
+        //
+        // We *will* re-emit the panic after we've drained the tracer, so our panic hook will simply capture the panic
+        // and save it.
+        std::panic::set_hook(Box::new(move |panic_info| {
+            _ = BACKTRACE.set((
+                Backtrace::capture(),
+                panic_info.location().map(|l| SavedLocation {
+                    file: l.file().to_string(),
+                    line: l.line(),
+                    column: l.column(),
+                }),
+            ));
+        }));
+
+        let interactive = self.is_interactive_tty();
+
+        // Redirect all logging the cli logger - if there's any pending after a panic, we flush it
+        let mut tracer = TraceController::redirect(interactive);
+
+        let res = AssertUnwindSafe(crate::serve::serve_all(self, &mut tracer))
+            .catch_unwind()
+            .await;
+
+        // Kill the screen so we don't ruin the terminal
+        _ = crate::serve::Output::remote_shutdown(interactive);
+
+        // And drain the tracer as regular messages. All messages will be logged (including traces)
+        // and then we can print the panic message
+        if !matches!(res, Ok(Ok(_))) {
+            tracer.shutdown_panic();
         }
 
-        // Set WSL file poll interval.
-        if self.wsl_file_poll_interval.is_none() {
-            self.wsl_file_poll_interval = Some(krate.settings.wsl_file_poll_interval.unwrap_or(2));
+        match res {
+            Ok(Ok(_res)) => Ok(StructuredOutput::Success),
+            Ok(Err(e)) => Err(e),
+            Err(panic_err) => {
+                // And then print the panic itself.
+                let as_str = if let Some(p) = panic_err.downcast_ref::<String>() {
+                    p.as_ref()
+                } else if let Some(p) = panic_err.downcast_ref::<&str>() {
+                    p
+                } else {
+                    "<unknown panic>"
+                };
+
+                // Attempt to emulate the default panic hook
+                let message = BACKTRACE
+                    .get()
+                    .map(|(back, location)| {
+                        let location_display = location
+                            .as_ref()
+                            .map(|l| format!("{}:{}:{}", l.file, l.line, l.column))
+                            .unwrap_or_else(|| "<unknown>".to_string());
+
+                        let mut backtrace_display = back.to_string();
+
+                        // split at the line that ends with ___rust_try for short backtraces
+                        if std::env::var("RUST_BACKTRACE") == Ok("1".to_string()) {
+                            backtrace_display = backtrace_display
+                                .split(" ___rust_try\n")
+                                .next()
+                                .map(|f| format!("{f} ___rust_try"))
+                                .unwrap_or_default();
+                        }
+
+                        format!("dx serve panicked at {location_display}\n{as_str}\n{backtrace_display} ___rust_try")
+                    })
+                    .unwrap_or_else(|| format!("dx serve panicked: {as_str}"));
+
+                Err(crate::error::Error::CapturedPanic(message))
+            }
         }
-
-        // Set always-on-top for desktop.
-        if self.always_on_top.is_none() {
-            self.always_on_top = Some(krate.settings.always_on_top.unwrap_or(true))
-        }
-
-        // Resolve the build arguments
-        self.build_arguments.resolve(krate).await?;
-
-        Ok(())
     }
 
-    pub(crate) fn should_hotreload(&self) -> bool {
-        self.hot_reload.unwrap_or(true)
-    }
-
-    pub(crate) fn build_args(&self) -> BuildArgs {
-        self.build_arguments.clone()
-    }
-
+    /// Check if the server is running in interactive mode. This involves checking the terminal as well
     pub(crate) fn is_interactive_tty(&self) -> bool {
-        use crossterm::tty::IsTty;
-        std::io::stdout().is_tty() && self.interactive.unwrap_or(true)
-    }
-
-    pub(crate) fn should_proxy_build(&self) -> bool {
-        match self.build_arguments.platform() {
-            Platform::Server => true,
-            _ => self.build_arguments.fullstack,
-        }
-    }
-}
-
-impl std::ops::Deref for ServeArgs {
-    type Target = BuildArgs;
-
-    fn deref(&self) -> &Self::Target {
-        &self.build_arguments
+        use std::io::IsTerminal;
+        std::io::stdout().is_terminal() && self.interactive.unwrap_or(true)
     }
 }

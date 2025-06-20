@@ -21,7 +21,7 @@ fn app() -> Element {
 
 #[tokio::main]
 async fn main() {
-    pretty_env_logger::init();
+    dioxus::logger::initialize_default();
 
     let addr: std::net::SocketAddr = ([127, 0, 0, 1], 3030).into();
 

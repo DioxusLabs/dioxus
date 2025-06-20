@@ -19,13 +19,16 @@ syn = { workspace = true, features = ["extra-traits", "full"] }
 quote = { workspace = true }
 proc-macro2 = { workspace = true }
 slab = { workspace = true }
+base16 = { workspace = true }
+digest = { workspace = true }
+sha2 = { workspace = true }
 
 [dev-dependencies]
 dioxus = { workspace = true, features = ["router"] }
 
 [features]
 default = []
-web = []
+web = [] #todo(jon) remove this before releasing 0.7!
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]

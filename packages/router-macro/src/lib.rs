@@ -257,13 +257,15 @@ pub fn routable(input: TokenStream) -> TokenStream {
     let routable_impl = route_enum.routable_impl();
 
     (quote! {
-        #error_type
+        const _: () = {
+            #error_type
 
-        #display_impl
+            #display_impl
 
-        #routable_impl
+            #routable_impl
 
-        #parse_impl
+            #parse_impl
+        };
     })
     .into()
 }
@@ -473,80 +475,7 @@ impl RouteEnum {
             site_map,
         };
 
-        // If we're on the web, only the URL history is preserved between navigation. We need to warn the user that the segment is not present in the URL.
-        if cfg!(feature = "web") {
-            for variant in &data.variants {
-                for field in &variant.fields {
-                    if !myself.field_present_in_url(field.ident.as_ref().unwrap()) {
-                        return Err(syn::Error::new_spanned(
-                            field.ident.as_ref().unwrap(),
-                            format!("The `{}` field must be present in the url for the web history. You can include the field in the url by using the `#[route(\"/:{}\")]` attribute on the enum variant.", field.ident.as_ref().unwrap(), field.ident.as_ref().unwrap()),
-                        ));
-                    }
-                }
-            }
-        }
-
         Ok(myself)
-    }
-
-    fn field_present_in_url(&self, field: &Ident) -> bool {
-        let mut from_route = false;
-
-        for nest in &self.nests {
-            if nest.dynamic_segments_names().any(|i| &i == field) {
-                from_route = true
-            }
-        }
-        for route in &self.endpoints {
-            match route {
-                RouteEndpoint::Route(route) => match &route.ty {
-                    RouteType::Child(child) => {
-                        if let Some(child) = child.ident.as_ref() {
-                            if child == "child" {
-                                from_route = true
-                            }
-                        }
-                    }
-                    RouteType::Leaf { .. } => {
-                        for segment in &route.segments {
-                            if segment.name().as_ref() == Some(field) {
-                                from_route = true
-                            }
-                        }
-                        if let Some(query) = &route.query {
-                            if query.contains_ident(field) {
-                                from_route = true
-                            }
-                        }
-                        if let Some(hash) = &route.hash {
-                            if hash.contains_ident(field) {
-                                from_route = true
-                            }
-                        }
-                    }
-                },
-                RouteEndpoint::Redirect(redirect) => {
-                    for segment in &redirect.segments {
-                        if segment.name().as_ref() == Some(field) {
-                            from_route = true
-                        }
-                    }
-                    if let Some(query) = &redirect.query {
-                        if query.contains_ident(field) {
-                            from_route = true
-                        }
-                    }
-                    if let Some(hash) = &redirect.hash {
-                        if hash.contains_ident(field) {
-                            from_route = true
-                        }
-                    }
-                }
-            }
-        }
-
-        from_route
     }
 
     fn impl_display(&self) -> TokenStream2 {
@@ -602,9 +531,17 @@ impl RouteEnum {
                     // Remove any trailing slashes. We parse /route/ and /route in the same way
                     // Note: we don't use trim because it includes more code
                     let route = route.strip_suffix('/').unwrap_or(route);
-                    let query = dioxus_router::exports::urlencoding::decode(query).unwrap_or(query.into());
-                    let hash = dioxus_router::exports::urlencoding::decode(hash).unwrap_or(hash.into());
-                    let mut segments = route.split('/').map(|s| dioxus_router::exports::urlencoding::decode(s).unwrap_or(s.into()));
+                    let query = dioxus_router::exports::percent_encoding::percent_decode_str(query)
+                        .decode_utf8()
+                        .unwrap_or(query.into());
+                    let hash = dioxus_router::exports::percent_encoding::percent_decode_str(hash)
+                        .decode_utf8()
+                        .unwrap_or(hash.into());
+                    let mut segments = route.split('/').map(|s| {
+                        dioxus_router::exports::percent_encoding::percent_decode_str(s)
+                            .decode_utf8()
+                            .unwrap_or(s.into())
+                    });
                     // skip the first empty segment
                     if s.starts_with('/') {
                         let _ = segments.next();
@@ -735,7 +672,7 @@ impl RouteEnum {
         // Collect all routes matches
         for route in &self.endpoints {
             if let RouteEndpoint::Route(route) = route {
-                matches.push(route.routable_match(&self.layouts, &self.nests));
+                matches.push(route.routable_match(&self.layouts, &self.nests, name));
             }
         }
 

@@ -38,7 +38,7 @@ pub struct Create {
     #[clap(long)]
     subtemplate: Option<String>,
 
-    /// Pass <option>=<value> for the used template (e.g., `foo=bar`)
+    /// Pass `<option>=<value>` for the used template (e.g., `foo=bar`)
     #[clap(short, long)]
     option: Vec<String>,
 
@@ -58,6 +58,9 @@ impl Create {
         // If no template is specified, use the default one and set the branch to the latest release.
         resolve_template_and_branch(&mut self.template, &mut self.branch);
 
+        // cargo-generate requires the path to be created first.
+        std::fs::create_dir_all(&self.path)?;
+
         let args = GenerateArgs {
             define: self.option,
             destination: Some(self.path),
@@ -69,19 +72,29 @@ impl Create {
             init: true,
             name: self.name,
             silent: self.yes,
+            vcs: Some(cargo_generate::Vcs::Git),
             template_path: TemplatePath {
                 auto_path: self.template,
                 branch: self.branch,
                 revision: self.revision,
                 subfolder: self.subtemplate,
                 tag: self.tag,
+
                 ..Default::default()
             },
+            verbose: crate::logging::VERBOSITY
+                .get()
+                .map(|f| f.verbose)
+                .unwrap_or(false),
             ..Default::default()
         };
+
         restore_cursor_on_sigint();
+        tracing::debug!(dx_src = ?TraceSrc::Dev, "Creating new project with args: {args:#?}");
         let path = cargo_generate::generate(args)?;
+
         _ = post_create(&path);
+
         Ok(StructuredOutput::Success)
     }
 }
@@ -106,7 +119,7 @@ pub(crate) fn resolve_template_and_branch(
 /// Prevent hidden cursor if Ctrl+C is pressed when interacting
 /// with cargo-generate's prompts.
 ///
-/// See https://github.com/DioxusLabs/dioxus/pull/2603.
+/// See <https://github.com/DioxusLabs/dioxus/pull/2603>.
 pub(crate) fn restore_cursor_on_sigint() {
     ctrlc::set_handler(move || {
         if let Err(err) = console::Term::stdout().show_cursor() {
@@ -210,7 +223,7 @@ pub(crate) fn post_create(path: &Path) -> Result<()> {
     let mut file = std::fs::File::create(readme_path)?;
     file.write_all(new_readme.as_bytes())?;
 
-    tracing::info!(dx_src = ?TraceSrc::Dev, "Generated project at {}\n\n`cd` to your project and run `dx serve` to start developing.\nIf using Tailwind, make sure to run the Tailwind CLI.\nMore information is available in the generated `README.md`.\n\nBuild cool things! ✌️", path.display());
+    tracing::info!(dx_src = ?TraceSrc::Dev, "Generated project at {}\n\n`cd` to your project and run `dx serve` to start developing.\nMore information is available in the generated `README.md`.\n\nBuild cool things! ✌️", path.display());
 
     Ok(())
 }
@@ -231,14 +244,14 @@ fn remove_triple_newlines(string: &str) -> String {
 // #[cfg(test)]
 // pub(crate) mod tests {
 //     use escargot::{CargoBuild, CargoRun};
-//     use once_cell::sync::Lazy;
+//     use std::sync::LazyLock;
 //     use std::fs::{create_dir_all, read_to_string};
 //     use std::path::{Path, PathBuf};
 //     use std::process::Command;
 //     use tempfile::tempdir;
 //     use toml::Value;
 
-//     static BINARY: Lazy<CargoRun> = Lazy::new(|| {
+//     static BINARY: LazyLock<CargoRun> = LazyLock::new(|| {
 //         CargoBuild::new()
 //             .bin(env!("CARGO_BIN_NAME"))
 //             .current_release()

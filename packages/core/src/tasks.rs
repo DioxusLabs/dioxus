@@ -163,6 +163,16 @@ impl Runtime {
         task: impl Future<Output = ()> + 'static,
         ty: TaskType,
     ) -> Task {
+        self.spawn_task_of_type_inner(scope, Box::pin(task), ty)
+    }
+
+    // a non-momorphic version of spawn_task_of_type, helps with binari sizes
+    fn spawn_task_of_type_inner(
+        &self,
+        scope: ScopeId,
+        pinned_task: Pin<Box<dyn Future<Output = ()>>>,
+        ty: TaskType,
+    ) -> Task {
         // Insert the task, temporarily holding a borrow on the tasks map
         let (task, task_id) = {
             let mut tasks = self.tasks.borrow_mut();
@@ -176,7 +186,7 @@ impl Runtime {
                     scope,
                     active: Cell::new(true),
                     parent: self.current_task(),
-                    task: RefCell::new(Box::pin(task)),
+                    task: RefCell::new(pinned_task),
                     waker: futures_util::task::waker(Arc::new(LocalTaskHandle {
                         id: task_id.id,
                         tx: self.sender.clone(),
@@ -275,7 +285,6 @@ impl Runtime {
 
         // poll the future with the scope on the stack
         let poll_result = self.with_scope_on_stack(task.scope, || {
-            self.rendering.set(false);
             self.current_task.set(Some(id));
 
             let poll_result = task.task.borrow_mut().as_mut().poll(&mut cx);
@@ -293,7 +302,6 @@ impl Runtime {
 
             poll_result
         });
-        self.rendering.set(true);
         self.current_task.set(None);
 
         poll_result
@@ -372,6 +380,9 @@ impl TaskType {
 /// These messages control how the scheduler will process updates to the UI.
 #[derive(Debug)]
 pub(crate) enum SchedulerMsg {
+    /// All components have been marked as dirty, requiring a full render
+    AllDirty,
+
     /// Immediate updates from Components that mark them as dirty
     Immediate(ScopeId),
 

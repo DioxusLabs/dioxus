@@ -3,15 +3,13 @@
 //! 2. As we render the virtual dom initially, keep track of the server ids of the suspense boundaries
 //! 3. Register a callback for dx_hydrate(id, data) that takes some new data, reruns the suspense boundary with that new data and then rehydrates the node
 
-use std::fmt::Write;
-
 use crate::dom::WebsysDom;
-use crate::with_server_data;
-use crate::HTMLDataCursor;
 use dioxus_core::prelude::*;
 use dioxus_core::AttributeValue;
 use dioxus_core::{DynamicNode, ElementId};
+use dioxus_fullstack_protocol::HydrationContext;
 use futures_channel::mpsc::UnboundedReceiver;
+use std::fmt::Write;
 use RehydrationError::*;
 
 use super::SuspenseMessage;
@@ -63,7 +61,7 @@ impl SuspenseHydrationIdsNode {
 ///
 /// This struct keeps track of the order the suspense boundaries are discovered in on the client so we can map the id in the dom to the scope we need to rehydrate.
 ///
-/// Diagram: https://excalidraw.com/#json=4NxmW90g0207Y62lESxfF,vP_Yn6j7k23utq2HZIsuiw
+/// Diagram: <https://excalidraw.com/#json=4NxmW90g0207Y62lESxfF,vP_Yn6j7k23utq2HZIsuiw>
 #[derive(Default, Debug)]
 pub(crate) struct SuspenseHydrationIds {
     /// A dense mapping from traversal order to the scope id of the suspense boundary
@@ -113,6 +111,10 @@ impl WebsysDom {
         let SuspenseMessage {
             suspense_path,
             data,
+            #[cfg(debug_assertions)]
+            debug_types,
+            #[cfg(debug_assertions)]
+            debug_locations,
         } = message;
 
         let document = web_sys::window().unwrap().document().unwrap();
@@ -138,12 +140,17 @@ impl WebsysDom {
             self.interpreter.base().push_root(node);
         }
 
-        let server_data = HTMLDataCursor::from_serialized(&data);
+        #[cfg(not(debug_assertions))]
+        let debug_types = None;
+        #[cfg(not(debug_assertions))]
+        let debug_locations = None;
+
+        let server_data = HydrationContext::from_serialized(&data, debug_types, debug_locations);
         // If the server serialized an error into the suspense boundary, throw it on the client so that it bubbles up to the nearest error boundary
-        if let Some(error) = server_data.error() {
+        if let Some(error) = server_data.error_entry().get().ok().flatten() {
             dom.in_runtime(|| id.throw_error(error));
         }
-        with_server_data(server_data, || {
+        server_data.in_context(|| {
             // rerun the scope with the new data
             SuspenseBoundaryProps::resolve_suspense(
                 id,
@@ -205,15 +212,25 @@ impl WebsysDom {
         vdom: &VirtualDom,
     ) -> Result<UnboundedReceiver<SuspenseMessage>, RehydrationError> {
         let (mut tx, rx) = futures_channel::mpsc::unbounded();
-        let closure = move |path: Vec<u32>, data: js_sys::Uint8Array| {
-            let data = data.to_vec();
-            _ = tx.start_send(SuspenseMessage {
-                suspense_path: path,
-                data,
-            });
-        };
+        let closure =
+            move |path: Vec<u32>,
+                  data: js_sys::Uint8Array,
+                  #[allow(unused)] debug_types: Option<Vec<String>>,
+                  #[allow(unused)] debug_locations: Option<Vec<String>>| {
+                let data = data.to_vec();
+                _ = tx.start_send(SuspenseMessage {
+                    suspense_path: path,
+                    data,
+                    #[cfg(debug_assertions)]
+                    debug_types,
+                    #[cfg(debug_assertions)]
+                    debug_locations,
+                });
+            };
         let closure = wasm_bindgen::closure::Closure::new(closure);
-        dioxus_interpreter_js::minimal_bindings::register_rehydrate_chunk_for_streaming(&closure);
+        dioxus_interpreter_js::minimal_bindings::register_rehydrate_chunk_for_streaming_debug(
+            &closure,
+        );
         closure.forget();
 
         // Rehydrate the root scope that was rendered on the server. We will likely run into suspense boundaries.

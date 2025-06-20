@@ -39,22 +39,22 @@ env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: 0 # todo(jon): cargo-cache wipes incremental artifacts, but we eventually want to cache them
   RUST_BACKTRACE: 1
-  rust_nightly: nightly-2024-10-20
+  rust_nightly: nightly-2025-04-07
 
 jobs:
   check-msrv:
     if: github.event.pull_request.draft == false
     name: Check MSRV
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.79.0
+      - uses: dtolnay/rust-toolchain@1.86.0
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
       # https://github.com/foresterre/cargo-msrv/blob/4345edfe3f4fc91cc8ae6c7d6804c0748fae92ae/.github/workflows/msrv.yml
       - name: install_cargo_msrv
-        run: cargo install cargo-msrv --all-features
+        run: cargo install cargo-msrv --all-features --version 0.16.3 --locked
       - name: version_of_cargo_msrv
         run: cargo msrv --version
       - name: run_cargo_msrv
@@ -66,18 +66,16 @@ jobs:
   test:
     if: github.event.pull_request.draft == false
     name: Test Suite
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - name: Free Disk Space (Ubuntu)
-        uses: jlumbroso/free-disk-space@v1.3.1
-        with: # speed things up a bit
-          large-packages: false
-          docker-images: false
-          swap-storage: false
-      - run: sudo apt-get update
-      - run: sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
-      - uses: dtolnay/rust-toolchain@1.79.0
+      - name: Free Disk Space
+        uses: ./.github/actions/free-disk-space
+      - uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
+          version: 1.0
+      - uses: dtolnay/rust-toolchain@1.86.0
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
@@ -89,18 +87,16 @@ jobs:
   release-test:
     if: github.event.pull_request.draft == false
     name: Test Suite with Optimizations
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - name: Free Disk Space (Ubuntu)
-        uses: jlumbroso/free-disk-space@v1.3.1
-        with: # speed things up a bit
-          large-packages: false
-          docker-images: false
-          swap-storage: false
-      - run: sudo apt-get update
-      - run: sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
-      - uses: dtolnay/rust-toolchain@1.79.0
+      - name: Free Disk Space
+        uses: ./.github/actions/free-disk-space
+      - uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
+          version: 1.0
+      - uses: dtolnay/rust-toolchain@1.86.0
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
@@ -112,10 +108,10 @@ jobs:
   fmt:
     if: github.event.pull_request.draft == false
     name: Rustfmt
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.79.0
+      - uses: dtolnay/rust-toolchain@1.86.0
         with:
           components: rustfmt
       - uses: Swatinem/rust-cache@v2
@@ -126,11 +122,13 @@ jobs:
   docs:
     if: github.event.pull_request.draft == false
     name: Docs
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - run: sudo apt-get update
-      - run: sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
+      - uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
+          version: 1.0
       - name: Install Rust ${{ env.rust_nightly }}
         uses: dtolnay/rust-toolchain@nightly
         with:
@@ -141,22 +139,20 @@ jobs:
       - name: "doc --lib --all-features"
         run: |
           cargo doc --workspace --no-deps --all-features --document-private-items
-        # env:
-        #   RUSTFLAGS: --cfg docsrs
-        #   RUSTDOCFLAGS: --cfg docsrs
-        # todo: re-enable warnings, private items
-        # RUSTDOCFLAGS: --cfg docsrs -Dwarnings
-        #  --document-private-items
+        env:
+          RUSTDOCFLAGS: -Dwarnings --document-private-items
 
   check:
     if: github.event.pull_request.draft == false
     name: Check
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - run: sudo apt-get update
-      - run: sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
-      - uses: dtolnay/rust-toolchain@1.79.0
+      - uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
+          version: 1.0
+      - uses: dtolnay/rust-toolchain@1.86.0
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
@@ -165,12 +161,14 @@ jobs:
   clippy:
     if: github.event.pull_request.draft == false
     name: Clippy
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - run: sudo apt-get update
-      - run: sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev
-      - uses: dtolnay/rust-toolchain@1.79.0
+      - uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
+          version: 1.0
+      - uses: dtolnay/rust-toolchain@1.86.0
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
@@ -183,17 +181,20 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-24.04, macos-latest]
     steps:
       - uses: actions/checkout@v4
-      - uses: DeterminateSystems/nix-installer-action@main
-      - uses: DeterminateSystems/magic-nix-cache-action@main
+      - uses: nixbuild/nix-quick-install-action@master
+      - uses: nix-community/cache-nix-action@main
+        with:
+          primary-key: nix-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/*.nix', '**/flake.lock') }}
+          restore-prefixes-first-match: nix-${{ runner.os }}-${{ runner.arch }}
       - name: Install omnix
         run: nix --accept-flake-config profile install "github:juspay/omnix"
       - name: Build all flake outputs
         run: om ci
       - name: Ensure devShell has all build deps
-        run: nix develop -c cargo build -p dioxus-cli
+        run: nix develop -c cargo build -p dioxus-cli --features no-downloads
 
   playwright:
     if: github.event.pull_request.draft == false
@@ -202,32 +203,25 @@ jobs:
     steps:
       # Do our best to cache the toolchain and node install steps
       - uses: actions/checkout@v4
-      - name: Free Disk Space (Ubuntu)
-        uses: jlumbroso/free-disk-space@v1.3.1
-        with: # speed things up a bit
-          large-packages: false
-          docker-images: false
-          swap-storage: false
       - uses: actions/setup-node@v4
         with:
           node-version: 16
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@master
+        uses: dtolnay/rust-toolchain@1.86.0
         with:
           toolchain: stable
           targets: x86_64-unknown-linux-gnu,wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
-      - name: Prebuild CLI
-        run: |
-          cargo build --package dioxus-cli --release
+          cache-on-failure: "true"
       - name: Playwright
         working-directory: ./packages/playwright-tests
         run: |
           npm ci
           npm install -D @playwright/test
           npx playwright install --with-deps
+          rm -rf ./target/dx
           npx playwright test
       - uses: actions/upload-artifact@v4
         if: always()
@@ -247,7 +241,7 @@ jobs:
           - {
               target: aarch64-apple-darwin,
               os: macos-latest,
-              toolchain: "1.79.0",
+              toolchain: "1.86.0",
               cross: false,
               command: "test",
               args: "--all --tests",
@@ -255,7 +249,7 @@ jobs:
           - {
               target: x86_64-apple-darwin,
               os: macos-13,
-              toolchain: "1.79.0",
+              toolchain: "1.86.0",
               cross: false,
               command: "test",
               args: "--all --tests",
@@ -263,15 +257,31 @@ jobs:
           - {
               target: aarch64-apple-ios,
               os: macos-latest,
-              toolchain: "1.79.0",
+              toolchain: "1.86.0",
               cross: false,
               command: "build",
               args: "--package dioxus-mobile",
             }
           - {
+              target: x86_64-unknown-linux-gnu,
+              os: ubuntu-24.04,
+              toolchain: "1.86.0",
+              cross: false,
+              command: "build",
+              args: "--all --tests",
+            }
+          - {
+              target: aarch64-unknown-linux-gnu,
+              os: ubuntu-24.04-arm,
+              toolchain: "1.86.0",
+              cross: false,
+              command: "build",
+              args: "--all --tests",
+            }
+          - {
               target: aarch64-linux-android,
-              os: ubuntu-latest,
-              toolchain: "1.79.0",
+              os: ubuntu-24.04,
+              toolchain: "1.86.0",
               cross: true,
               command: "build",
               args: "--package dioxus-mobile",
@@ -279,13 +289,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      - name: Free Disk Space (Ubuntu)
-        if: ${{ matrix.platform.os == 'ubuntu-latest' }}
-        uses: jlumbroso/free-disk-space@v1.3.1
-        with: # speed things up a bit
-          large-packages: false
-          docker-images: false
-          swap-storage: false
       - name: install stable
         uses: dtolnay/rust-toolchain@master
         with:
@@ -296,6 +299,16 @@ jobs:
       - name: Install nasm for windows (tls)
         if: ${{ matrix.platform.target == 'x86_64-pc-windows-msvc' }}
         uses: ilammy/setup-nasm@v1
+
+      - name: Free Disk Space
+        if: ${{ matrix.platform.os == 'ubuntu-24.04' || matrix.platform.os == 'ubuntu-24.04-arm' }}
+        uses: ./.github/actions/free-disk-space
+
+      - uses: awalsh128/cache-apt-pkgs-action@latest
+        if: ${{ matrix.platform.os == 'ubuntu-24.04' || matrix.platform.os == 'ubuntu-24.04-arm' }}
+        with:
+          packages: libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
+          version: 1.0
 
       - name: Install cross
         if: ${{ matrix.platform.cross == true }}
@@ -319,15 +332,7 @@ jobs:
     name: "cargo test | windows"
     steps:
       - uses: actions/checkout@v4
-      - name: Create Dev Drive using ReFS
-        run: ${{ github.workspace }}/.github/workflows/setup-dev-drive.ps1
-
-      # actions/checkout does not let us clone into anywhere outside ${{ github.workspace }}, so we have to copy the clone...
-      - name: Copy Git Repo to Dev Drive
-        run: |
-          Copy-Item -Path "${{ github.workspace }}" -Destination "${{ env.UV_WORKSPACE }}" -Recurse
-
-      - uses: dtolnay/rust-toolchain@1.79.0
+      - uses: dtolnay/rust-toolchain@1.86.0
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
@@ -357,10 +362,10 @@ jobs:
   # semver:
   #   if: github.event.pull_request.draft == false && !contains(github.event.pull_request.labels.*.name, 'breaking')
   #   name: Semver Check
-  #   runs-on: ubuntu-latest
+  #   runs-on: ubuntu-24.04
   #   steps:
   #     - uses: actions/checkout@v4
-  #     - uses: dtolnay/rust-toolchain@1.79.0
+  #     - uses: dtolnay/rust-toolchain@1.86.0
   #     - uses: Swatinem/rust-cache@v2
   #       with:
   #         cache-all-crates: "true"

@@ -19,9 +19,11 @@ proc-macro2 = { workspace = true }
 quote = { workspace = true }
 syn = { workspace = true, features = ["full", "extra-traits"] }
 manganis-core = { workspace = true }
+dunce = { workspace = true }
+macro-string = { workspace = true }
 
 [features]
 default = []
 
 [dev-dependencies]
-manganis.workspace = true
+manganis = { workspace = true }

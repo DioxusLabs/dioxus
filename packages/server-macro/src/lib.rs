@@ -6,8 +6,8 @@
 //! See the [server_fn_macro] crate for more information.
 
 use proc_macro::TokenStream;
-use server_fn_macro::server_macro_impl;
-use syn::__private::ToTokens;
+use server_fn_macro::ServerFnCall;
+use syn::{__private::ToTokens, parse_quote};
 
 /// Declares that a function is a [server function](https://docs.rs/server_fn/).
 /// This means that its body will only run on the server, i.e., when the `ssr`
@@ -33,17 +33,17 @@ use syn::__private::ToTokens;
 ///
 /// You can use any combination of the following named arguments:
 /// - `name`: sets the identifier for the server function’s type, which is a struct created
-///    to hold the arguments (defaults to the function identifier in PascalCase).
-///    Example: `name = MyServerFunction`.
+///   to hold the arguments (defaults to the function identifier in PascalCase).
+///   Example: `name = MyServerFunction`.
 /// - `prefix`: a prefix at which the server function handler will be mounted (defaults to `/api`).
-///    Example: `prefix = "/my_api"`.
+///   Example: `prefix = "/my_api"`.
 /// - `endpoint`: specifies the exact path at which the server function handler will be mounted,
 ///   relative to the prefix (defaults to the function name followed by unique hash).
-///    Example: `endpoint = "my_fn"`.
+///   Example: `endpoint = "my_fn"`.
 /// - `input`: the encoding for the arguments (defaults to `PostUrl`).
 ///     - The `input` argument specifies how the function arguments are encoded for transmission.
 ///     - Acceptable values include:
-///       - `PostUrl`: A `POST` request with URL-encoded arguments, suitable for form-like submissions.  
+///       - `PostUrl`: A `POST` request with URL-encoded arguments, suitable for form-like submissions.
 ///       - `Json`: A `POST` request where the arguments are encoded as JSON. This is a common choice for modern APIs.
 ///       - `Cbor`: A `POST` request with CBOR-encoded arguments, useful for binary data transmission with compact encoding.
 ///       - `GetUrl`: A `GET` request with URL-encoded arguments, suitable for simple queries or when data fits in the URL.
@@ -64,7 +64,6 @@ use syn::__private::ToTokens;
 /// - `req` and `res`: specify the HTTP request and response types to be used on the server. These
 ///   are typically necessary if you are integrating with a custom server framework (other than Actix/Axum).
 ///   Example: `req = SomeRequestType`, `res = SomeResponseType`.
-/// 
 ///
 /// ## Advanced Usage of `input` and `output` Fields
 ///
@@ -109,8 +108,8 @@ use syn::__private::ToTokens;
 /// ```
 ///
 /// These examples illustrate how the `output` type impacts the bounds and expectations for your server function. Ensure your return types comply with these requirements.
-/// 
-/// 
+///
+///
 /// ```rust,ignore
 /// #[server(
 ///   name = SomeStructName,
@@ -205,31 +204,17 @@ use syn::__private::ToTokens;
 /// }
 /// ```
 #[proc_macro_attribute]
-pub fn server(args: proc_macro::TokenStream, s: TokenStream) -> TokenStream {
-    let default_prefix: &str = "/api";
-    let default_input: Option<syn::Path> = Some(syn::parse_quote!(server_fn));
-    let default_output: Option<syn::Type> = None;
-    let default_preset: Option<syn::Type> = None;
+pub fn server(args: proc_macro::TokenStream, body: TokenStream) -> TokenStream {
+    // If there is no input codec, use json as the default
+    let parsed = match ServerFnCall::parse("/api", args.into(), body.into()) {
+        Ok(parsed) => parsed,
+        Err(e) => return e.to_compile_error().into(),
+    };
 
-    match server_macro_impl(
-        args.into(),
-        s.into(),
-        default_input,
-        default_prefix,
-        default_output,
-        default_preset,
-    ) {
-        // Generate detailed error message with context when macro fails.
-        Err(e) => {
-            let detailed_error = format!(
-                "Failed to process the `server` macro. Check your arguments and function signature. Error: {}",
-                e
-            );
-            syn::Error::new(proc_macro2::Span::call_site(), detailed_error)
-                .to_compile_error()
-                .into()
-        }
-        // Successful case: return the generated token stream.
-        Ok(s) => s.to_token_stream().into(),
-    }
+    parsed
+        .default_input_encoding(Some(parse_quote!(server_fn::codec::Json)))
+        .default_output_encoding(Some(parse_quote!(server_fn::codec::Json)))
+        .default_server_fn_path(Some(parse_quote!(server_fn)))
+        .to_token_stream()
+        .into()
 }

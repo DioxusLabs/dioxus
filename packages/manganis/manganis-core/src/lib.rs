@@ -15,5 +15,3 @@ pub use js::*;
 
 mod asset;
 pub use asset::*;
-
-pub mod linker;

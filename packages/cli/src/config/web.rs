@@ -19,7 +19,7 @@ pub(crate) struct WebConfig {
     pub(crate) https: WebHttpsConfig,
 
     /// Whether to enable pre-compression of assets and wasm during a web build in release mode
-    #[serde(default = "true_bool")]
+    #[serde(default = "false_bool")]
     pub(crate) pre_compress: bool,
 
     /// The wasm-opt configuration
@@ -30,7 +30,7 @@ pub(crate) struct WebConfig {
 impl Default for WebConfig {
     fn default() -> Self {
         Self {
-            pre_compress: true_bool(),
+            pre_compress: false_bool(),
             app: Default::default(),
             https: Default::default(),
             wasm_opt: Default::default(),
@@ -58,13 +58,28 @@ pub(crate) struct WasmOptConfig {
     /// Keep debug symbols in the wasm file
     #[serde(default = "false_bool")]
     pub(crate) debug: bool,
+
+    /// Enable memory packing
+    #[serde(default = "false_bool")]
+    pub(crate) memory_packing: bool,
+
+    /// Extra arguments to pass to wasm-opt
+    ///
+    /// For example, to enable simd, you can set this to `["--enable-simd"]`.
+    ///
+    /// You can also disable features by prefixing them with `--disable-`, e.g. `["--disable-bulk-memory"]`.
+    ///
+    /// Currently only --enable and --disable flags are supported.
+    #[serde(default)]
+    pub(crate) extra_features: Vec<String>,
 }
 
-/// The wasm-opt level to use for release web builds [default: 4]
+/// The wasm-opt level to use for release web builds [default: Z]
 #[derive(Default, Debug, Copy, Clone, Serialize, Deserialize)]
 pub(crate) enum WasmOptLevel {
     /// Optimize aggressively for size
     #[serde(rename = "z")]
+    #[default]
     Z,
     /// Optimize for size
     #[serde(rename = "s")]
@@ -83,7 +98,6 @@ pub(crate) enum WasmOptLevel {
     Three,
     /// Optimize aggressively for speed
     #[serde(rename = "4")]
-    #[default]
     Four,
 }
 
@@ -92,22 +106,6 @@ pub(crate) struct WebAppConfig {
     #[serde(default = "default_title")]
     pub(crate) title: String,
     pub(crate) base_path: Option<String>,
-}
-
-impl WebAppConfig {
-    /// Get the normalized base path for the application with `/` trimmed from both ends. If the base path is not set, this will return `.`.
-    pub(crate) fn base_path(&self) -> &str {
-        let trimmed_path = self
-            .base_path
-            .as_deref()
-            .unwrap_or_default()
-            .trim_matches('/');
-        if trimmed_path.is_empty() {
-            "."
-        } else {
-            trimmed_path
-        }
-    }
 }
 
 impl Default for WebAppConfig {

@@ -17,18 +17,18 @@ dioxus-rsx = { workspace = true, optional = true }
 dioxus-html-internal-macro = { workspace = true }
 dioxus-hooks = { workspace = true }
 generational-box = { workspace = true }
-serde = { version = "1", features = ["derive"], optional = true }
-serde_repr = { version = "0.1", optional = true }
-js-sys = { version = "0.3.56", optional = true }
-euclid = "0.22.7"
-enumset = "1.1.2"
-keyboard-types = { version = "0.7", default-features = false }
-async-trait = { version = "0.1.58", optional = true }
+serde = { workspace = true, features = ["derive"], optional = true }
+serde_repr = { workspace = true, optional = true }
+js-sys = { workspace = true, optional = true }
+keyboard-types = { workspace = true, default-features = false }
+async-trait = { workspace = true }
 tokio = { workspace = true, features = ["fs", "io-util"], optional = true }
 futures-channel = { workspace = true }
-serde_json = { version = "1", optional = true }
-tracing.workspace = true
-rustversion = "1.0.17"
+serde_json = { workspace = true, optional = true }
+tracing = { workspace = true }
+rustversion = { workspace = true }
+euclid = "0.22.11"
+enumset = "1.1.5"
 
 [build-dependencies]
 lazy-js-bundle = { workspace = true }
@@ -41,7 +41,7 @@ tokio = { workspace = true, features = ["time"] }
 manganis = { workspace = true }
 
 [features]
-default = ["serialize", "mounted", "file_engine"]
+default = ["serialize"]
 serialize = [
     "dep:serde",
     "dep:serde_json",
@@ -50,10 +50,10 @@ serialize = [
     "keyboard-types/serde",
     "dioxus-core/serialize"
 ]
+# TODO: Remove the mounted feature flag in the next major release. It no longer activates any extra code
 mounted = []
-file_engine = [
-    "dep:async-trait",
-]
+# TODO: Remove the file engine feature flag in the next major release. It no longer activates any extra code
+file_engine = []
 hot-reload-context = ["dep:dioxus-rsx"]
 html-to-rsx = []
 

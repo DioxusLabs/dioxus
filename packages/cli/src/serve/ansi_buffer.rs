@@ -3,7 +3,7 @@ use std::fmt::{self, Display, Formatter};
 
 /// A buffer that can be rendered to and then dumped as raw ansi codes
 ///
-/// This is taken from a PR on the ratatui repo (https://github.com/ratatui/ratatui/pull/1065) and
+/// This is taken from a PR on the ratatui repo (<https://github.com/ratatui/ratatui/pull/1065>) and
 /// modified to be more appropriate for our use case.
 pub struct AnsiStringLine {
     buf: Buffer,
@@ -33,14 +33,17 @@ impl AnsiStringLine {
     fn trim_end(&mut self) {
         for y in 0..self.buf.area.height {
             let start_x = self.buf.area.width;
-            let mut first_non_empty = start_x - 1;
+            let mut first_non_empty = start_x;
             for x in (0..start_x).rev() {
                 if self.buf.get(x, y) != &buffer::Cell::EMPTY {
                     break;
                 }
                 first_non_empty = x;
             }
-            self.buf.get_mut(first_non_empty, y).set_symbol(SENTINEL);
+
+            if first_non_empty != start_x {
+                self.buf.get_mut(first_non_empty, y).set_symbol(SENTINEL);
+            }
         }
     }
 

@@ -63,7 +63,7 @@ macro_rules! html_to_rsx_attribute_mapping {
         $(#[$attr:meta])*
         $name:ident: $lit:literal;
     ) => {
-        if $matching == stringify!($lit) {
+        if $matching == $lit {
             return Some(stringify!($name));
         }
     };
@@ -72,7 +72,7 @@ macro_rules! html_to_rsx_attribute_mapping {
         $(#[$attr:meta])*
         $name:ident: $lit:literal in $ns:literal;
     ) => {
-        if $matching == stringify!($lit) {
+        if $matching == $lit {
             return Some(stringify!($name));
         }
     };
@@ -279,8 +279,6 @@ mod_methods! {
     /// <https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/contenteditable>
     contenteditable;
 
-    /// <https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/data>
-    data;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/dir>
     dir;

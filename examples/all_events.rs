@@ -25,6 +25,8 @@ fn app() -> Element {
         events.write().push_back(event);
     };
 
+    let random_text = "This is some random repeating text. ".repeat(1000);
+
     rsx! {
         document::Link { rel: "stylesheet", href: STYLE }
         div { id: "container",
@@ -46,6 +48,18 @@ fn app() -> Element {
                 onfocusout: move |event| log_event(event.data()),
 
                 "Hover, click, type or scroll to see the info down below"
+            }
+            div {
+                style: "padding: 50px;",
+                div {
+                    style: "text-align: center; padding: 20px; font-family: sans-serif; overflow: auto; height: 400px;",
+                    onscroll: move |event: Event<ScrollData>| {
+                        log_event(event.data());
+                    },
+                    div { style: "margin: 20px; padding: 15px; border: 1px solid #ccc; border-radius: 5px;",
+                        p { "{random_text}" }
+                    }
+                }
             }
             div { id: "log",
                 for event in events.read().iter() {

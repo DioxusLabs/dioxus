@@ -64,7 +64,7 @@ impl_event! {
     ///
     /// ## Example
     /// ```rust, ignore
-    /// rsx!( button { "click me", onclick: move |_| tracing::info!("Clicked!`") } )
+    /// rsx!( button { onclick: move |_| tracing::info!("Clicked!"), "click me" } )
     /// ```
     ///
     /// ## Reference

@@ -25,7 +25,12 @@ impl HashFragment {
     pub fn write(&self) -> TokenStream2 {
         let ident = &self.ident;
         quote! {
-            write!(f, "#{}", #ident)?;
+            {
+                let __hash = #ident.to_string();
+                if !__hash.is_empty() {
+                    write!(f, "#{}", dioxus_router::exports::percent_encoding::utf8_percent_encode(&__hash, dioxus_router::exports::FRAGMENT_ASCII_SET))?;
+                }
+            }
         }
     }
 

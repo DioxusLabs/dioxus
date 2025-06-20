@@ -11,10 +11,17 @@
 //!
 //! To use the dioxus logger in your app, simply call any of the tracing functions (info!(), warn!(), error!())
 
-use dioxus::logger::tracing::{debug, error, info, warn};
+use dioxus::logger::tracing::{debug, error, info, warn, Level};
 use dioxus::prelude::*;
 
 fn main() {
+    // `dioxus::logger::init` is optional and called automatically by `dioxus::launch`.
+    // In development mode, the `Debug` tracing level is set, and in release only the `Info` level is set.
+    // You can call it yourself manually in the cases you:
+    //   - want to customize behavior
+    //   - aren't using `dioxus::launch` (i.e. custom fullstack setups) but want the integration.
+    // The Tracing crate is the logging interface that the dioxus-logger uses.
+    dioxus::logger::init(Level::INFO).expect("Failed to initialize logger");
     dioxus::launch(app);
 }
 
@@ -31,7 +38,10 @@ fn app() -> Element {
                 "Error!"
             }
             button {
-                onclick: move |_| debug!("Here's a debug"),
+                onclick: move |_| {
+                    debug!("Here's a debug");
+                    warn!("The log level is set to info so there should not be a debug message")
+                },
                 "Debug!"
             }
             button {

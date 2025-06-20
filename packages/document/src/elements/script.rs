@@ -22,8 +22,10 @@ pub struct ScriptProps {
 }
 
 impl ScriptProps {
-    pub(crate) fn attributes(&self) -> Vec<(&'static str, String)> {
+    /// Get all the attributes for the script tag
+    pub fn attributes(&self) -> Vec<(&'static str, String)> {
         let mut attributes = Vec::new();
+        extend_attributes(&mut attributes, &self.additional_attributes);
         if let Some(defer) = &self.defer {
             attributes.push(("defer", defer.to_string()));
         }
@@ -59,7 +61,7 @@ impl ScriptProps {
     }
 }
 
-/// Render a [`script`](crate::elements::script) tag into the head of the page.
+/// Render a [`<script>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/script) tag into the head of the page.
 ///
 ///
 /// If present, the children of the script component must be a single static or formatted string. If there are more children or the children contain components, conditionals, loops, or fragments, the script will not be added.
@@ -90,13 +92,24 @@ pub fn Script(props: ScriptProps) -> Element {
     use_update_warning(&props, "Script {}");
 
     use_hook(|| {
+        let document = document();
+        let mut insert_script = document.create_head_component();
         if let Some(src) = &props.src {
             if !should_insert_script(src) {
-                return;
+                insert_script = false;
             }
         }
 
-        let document = document();
+        if !insert_script {
+            return;
+        }
+
+        // Make sure the props are in a valid form - they must either have a source or children
+        if let (None, Err(err)) = (&props.src, props.script_contents()) {
+            // If the script has neither contents nor src, log an error
+            err.log("Script")
+        }
+
         document.create_script(props);
     });
 

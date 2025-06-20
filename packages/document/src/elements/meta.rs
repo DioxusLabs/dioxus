@@ -11,13 +11,16 @@ pub struct MetaProps {
     pub charset: Option<String>,
     pub http_equiv: Option<String>,
     pub content: Option<String>,
+    pub data: Option<String>,
     #[props(extends = meta, extends = GlobalAttributes)]
     pub additional_attributes: Vec<Attribute>,
 }
 
 impl MetaProps {
-    pub(crate) fn attributes(&self) -> Vec<(&'static str, String)> {
+    /// Get all the attributes for the meta tag
+    pub fn attributes(&self) -> Vec<(&'static str, String)> {
         let mut attributes = Vec::new();
+        extend_attributes(&mut attributes, &self.additional_attributes);
         if let Some(property) = &self.property {
             attributes.push(("property", property.clone()));
         }
@@ -33,11 +36,14 @@ impl MetaProps {
         if let Some(content) = &self.content {
             attributes.push(("content", content.clone()));
         }
+        if let Some(data) = &self.data {
+            attributes.push(("data", data.clone()));
+        }
         attributes
     }
 }
 
-/// Render a [`meta`](crate::elements::meta) tag into the head of the page.
+/// Render a [`<meta>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/meta) tag into the head of the page.
 ///
 /// # Example
 ///
@@ -67,6 +73,12 @@ pub fn Meta(props: MetaProps) -> Element {
 
     use_hook(|| {
         let document = document();
+        let insert_link = document.create_head_component();
+
+        if !insert_link {
+            return;
+        }
+
         document.create_meta(props);
     });
 

@@ -37,3 +37,82 @@ test("hydration", async ({ page }) => {
   const mountedDiv = page.locator("div.onmounted-div");
   await expect(mountedDiv).toHaveText("onmounted was called 1 times");
 });
+
+test("document elements", async ({ page }) => {
+  await page.goto("http://localhost:3333");
+  // wait until the meta element is mounted
+  const meta = page.locator("meta#meta-head[name='testing']");
+  await meta.waitFor({ state: "attached" });
+  await expect(meta).toHaveAttribute("data", "dioxus-meta-element");
+
+  const link = page.locator("link#link-head[rel='stylesheet']");
+  await link.waitFor({ state: "attached" });
+  await expect(link).toHaveAttribute(
+    "href",
+    "https://fonts.googleapis.com/css?family=Roboto+Mono"
+  );
+
+  const stylesheet = page.locator("link#stylesheet-head[rel='stylesheet']");
+  await stylesheet.waitFor({ state: "attached" });
+  await expect(stylesheet).toHaveAttribute(
+    "href",
+    "https://fonts.googleapis.com/css?family=Roboto:300,300italic,700,700italic"
+  );
+
+  const script = page.locator("script#script-head");
+  await script.waitFor({ state: "attached" });
+  await expect(script).toHaveAttribute("async", "true");
+
+  const style = page.locator("style#style-head");
+  await style.waitFor({ state: "attached" });
+  const main = page.locator("#main");
+  await expect(main).toHaveCSS("font-family", "Roboto");
+});
+
+test("assets cache correctly", async ({ page }) => {
+  // Wait for the hashed image to be loaded
+  const hashedImageFuture = page.waitForResponse((resp) => {
+    console.log("Response URL:", resp.url());
+    return resp.url().includes("/assets/image-") && resp.status() === 200;
+  });
+
+  // Navigate to the page that includes the image.
+  await page.goto("http://localhost:3333");
+
+  const hashedImageResponse = await hashedImageFuture;
+
+  // Make sure the hashed image cache control header is set to immutable
+  const cacheControl = hashedImageResponse.headers()["cache-control"];
+  console.log("Cache-Control header:", cacheControl);
+  expect(cacheControl).toContain("immutable");
+
+  // TODO: raw assets support was removed and needs to be restored
+  // https://github.com/DioxusLabs/dioxus/issues/4115
+  // // Wait for the asset image to be loaded
+  // const assetImageResponse = await page.waitForResponse(
+  //   (resp) => resp.url().includes("/assets/image.png") && resp.status() === 200
+  // );
+  // // Make sure the asset image cache control header does not contain immutable
+  // const assetCacheControl = assetImageResponse.headers()["cache-control"];
+  // console.log("Cache-Control header:", assetCacheControl);
+  // expect(assetCacheControl).not.toContain("immutable");
+
+  // // Wait for the nested asset image to be loaded
+  // const nestedAssetImageResponse = await page.waitForResponse(
+  //   (resp) =>
+  //     resp.url().includes("/assets/nested/image.png") && resp.status() === 200
+  // );
+  // // Make sure the nested asset image cache control header does not contain immutable
+  // const nestedAssetCacheControl =
+  //   nestedAssetImageResponse.headers()["cache-control"];
+  // console.log("Cache-Control header:", nestedAssetCacheControl);
+  // expect(nestedAssetCacheControl).not.toContain("immutable");
+});
+
+test("websockets", async ({ page }) => {
+  await page.goto("http://localhost:3333");
+  // wait until the websocket div is mounted
+  const wsDiv = page.locator("div#websocket-div");
+  await expect(wsDiv).toHaveText("Received: HELLO WORLD");
+});
+

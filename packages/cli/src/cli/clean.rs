@@ -3,7 +3,7 @@ use crate::Result;
 
 /// Clean build artifacts.
 ///
-/// Simlpy runs `cargo clean`
+/// Simply runs `cargo clean`
 #[derive(Clone, Debug, Parser)]
 pub(crate) struct Clean {}
 
@@ -12,8 +12,6 @@ impl Clean {
     pub(crate) async fn clean(self) -> Result<StructuredOutput> {
         let output = tokio::process::Command::new("cargo")
             .arg("clean")
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
             .output()
             .await?;
 

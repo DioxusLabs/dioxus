@@ -58,6 +58,7 @@ impl From<DebianSettings> for tauri_bundler::DebianSettings {
             post_install_script: val.post_install_script,
             pre_remove_script: val.pre_remove_script,
             post_remove_script: val.post_remove_script,
+            recommends: val.recommends,
         }
     }
 }
@@ -112,6 +113,7 @@ impl From<MacOsSettings> for tauri_bundler::MacOsSettings {
             info_plist_path: val.info_plist_path,
             files: val.files,
             hardened_runtime: val.hardened_runtime,
+            bundle_version: val.bundle_version,
         }
     }
 }

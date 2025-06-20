@@ -1,6 +1,7 @@
 use crate::{Result, TraceSrc};
 use serde::{Deserialize, Serialize};
-use std::{fs, path::PathBuf};
+use std::sync::LazyLock;
+use std::{fs, path::PathBuf, sync::Arc};
 use tracing::{error, trace, warn};
 
 const GLOBAL_SETTINGS_FILE_NAME: &str = "dioxus/settings.toml";
@@ -23,12 +24,22 @@ pub(crate) struct CliSettings {
     /// Describes the interval in seconds that the CLI should poll for file changes on WSL.
     #[serde(default = "default_wsl_file_poll_interval")]
     pub(crate) wsl_file_poll_interval: Option<u16>,
+    /// Use tooling from path rather than downloading them.
+    pub(crate) no_downloads: Option<bool>,
+    /// Ignore updates for this version
+    pub(crate) ignore_version_update: Option<String>,
 }
 
 impl CliSettings {
     /// Load the settings from the local, global, or default config in that order
-    pub(crate) fn load() -> Self {
-        Self::from_global().unwrap_or_default()
+    pub(crate) fn load() -> Arc<Self> {
+        static SETTINGS: LazyLock<Arc<CliSettings>> =
+            LazyLock::new(|| Arc::new(CliSettings::global_or_default()));
+        SETTINGS.clone()
+    }
+
+    pub fn global_or_default() -> Self {
+        CliSettings::from_global().unwrap_or_default()
     }
 
     /// Get the current settings structure from global.
@@ -58,7 +69,7 @@ impl CliSettings {
 
     /// Save the current structure to the global settings toml.
     /// This does not save to project-level settings.
-    pub(crate) fn save(self) -> Result<Self> {
+    pub(crate) fn save(&self) -> Result<()> {
         let path = Self::get_settings_path().ok_or_else(|| {
             error!(dx_src = ?TraceSrc::Dev, "failed to get settings path");
             anyhow::anyhow!("failed to get settings path")
@@ -90,7 +101,7 @@ impl CliSettings {
             return Err(anyhow::anyhow!("failed to save global cli settings: {e}").into());
         }
 
-        Ok(self)
+        Ok(())
     }
 
     /// Get the path to the settings toml file.
@@ -103,13 +114,27 @@ impl CliSettings {
         Some(path.join(GLOBAL_SETTINGS_FILE_NAME))
     }
 
-    /// Modify the settings toml file
+    /// Modify the settings toml file - doesn't change the settings for this session
     pub(crate) fn modify_settings(with: impl FnOnce(&mut CliSettings)) -> Result<()> {
-        let mut settings = Self::load();
-        with(&mut settings);
+        let mut _settings = CliSettings::load();
+        let settings: &mut CliSettings = Arc::make_mut(&mut _settings);
+        with(settings);
         settings.save()?;
 
         Ok(())
+    }
+
+    /// Check if we should prefer to use the no-downloads feature
+    pub(crate) fn prefer_no_downloads() -> bool {
+        if cfg!(feature = "no-downloads") && !cfg!(debug_assertions) {
+            return true;
+        }
+
+        if crate::devcfg::no_downloads() {
+            return true;
+        }
+
+        CliSettings::load().no_downloads.unwrap_or_default()
     }
 }
 

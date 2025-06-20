@@ -1,21 +1,24 @@
+use std::rc::Rc;
+
 use dioxus_core::ElementId;
 use dioxus_html::{
     geometry::{PixelsRect, PixelsSize, PixelsVector2D},
     MountedResult, RenderedElementBacking,
 };
 
-use crate::{desktop_context::DesktopContext, query::QueryEngine};
+use crate::{desktop_context::DesktopContext, query::QueryEngine, WeakDesktopContext};
 
 #[derive(Clone)]
 /// A mounted element passed to onmounted events
 pub struct DesktopElement {
     id: ElementId,
-    webview: DesktopContext,
+    webview: WeakDesktopContext,
     query: QueryEngine,
 }
 
 impl DesktopElement {
     pub(crate) fn new(id: ElementId, webview: DesktopContext, query: QueryEngine) -> Self {
+        let webview = Rc::downgrade(&webview);
         Self { id, webview, query }
     }
 }
@@ -28,10 +31,13 @@ macro_rules! scripted_getter {
             Box<dyn futures_util::Future<Output = dioxus_html::MountedResult<$output_type>>>,
         > {
             let script = format!($script, id = self.id.0);
-
+            let webview = self
+                .webview
+                .upgrade()
+                .expect("Webview should be alive if the element is being queried");
             let fut = self
                 .query
-                .new_query::<Option<$output_type>>(&script, self.webview.clone())
+                .new_query::<Option<$output_type>>(&script, webview)
                 .resolve();
             Box::pin(async move {
                 match fut.await {
@@ -73,18 +79,48 @@ impl RenderedElementBacking for DesktopElement {
 
     fn scroll_to(
         &self,
-        behavior: dioxus_html::ScrollBehavior,
+        options: dioxus_html::ScrollToOptions,
     ) -> std::pin::Pin<Box<dyn futures_util::Future<Output = dioxus_html::MountedResult<()>>>> {
         let script = format!(
             "return window.interpreter.scrollTo({}, {});",
             self.id.0,
+            serde_json::to_string(&options).expect("Failed to serialize ScrollToOptions")
+        );
+        let webview = self
+            .webview
+            .upgrade()
+            .expect("Webview should be alive if the element is being queried");
+        let fut = self.query.new_query::<bool>(&script, webview).resolve();
+        Box::pin(async move {
+            match fut.await {
+                Ok(true) => Ok(()),
+                Ok(false) => MountedResult::Err(dioxus_html::MountedError::OperationFailed(
+                    Box::new(DesktopQueryError::FailedToQuery),
+                )),
+                Err(err) => {
+                    MountedResult::Err(dioxus_html::MountedError::OperationFailed(Box::new(err)))
+                }
+            }
+        })
+    }
+
+    fn scroll(
+        &self,
+        coordinates: PixelsVector2D,
+        behavior: dioxus_html::ScrollBehavior,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = MountedResult<()>>>> {
+        let script = format!(
+            "return window.interpreter.scroll({}, {}, {}, {});",
+            self.id.0,
+            coordinates.x,
+            coordinates.y,
             serde_json::to_string(&behavior).expect("Failed to serialize ScrollBehavior")
         );
-
-        let fut = self
-            .query
-            .new_query::<bool>(&script, self.webview.clone())
-            .resolve();
+        let webview = self
+            .webview
+            .upgrade()
+            .expect("Webview should be alive if the element is being queried");
+        let fut = self.query.new_query::<bool>(&script, webview).resolve();
         Box::pin(async move {
             match fut.await {
                 Ok(true) => Ok(()),
@@ -106,11 +142,11 @@ impl RenderedElementBacking for DesktopElement {
             "return window.interpreter.setFocus({}, {});",
             self.id.0, focus
         );
-
-        let fut = self
-            .query
-            .new_query::<bool>(&script, self.webview.clone())
-            .resolve();
+        let webview = self
+            .webview
+            .upgrade()
+            .expect("Webview should be alive if the element is being queried");
+        let fut = self.query.new_query::<bool>(&script, webview).resolve();
 
         Box::pin(async move {
             match fut.await {

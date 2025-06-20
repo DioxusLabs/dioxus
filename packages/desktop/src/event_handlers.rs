@@ -53,10 +53,10 @@ impl WindowEventHandlers {
         target: &EventLoopWindowTarget<UserWindowEvent>,
     ) {
         for (_, handler) in self.handlers.borrow_mut().iter_mut() {
-            // if this event does not apply to the window this listener cares about, return
+            // if this event does not apply to the window this listener cares about, continue
             if let Event::WindowEvent { window_id, .. } = event {
                 if *window_id != handler.window_id {
-                    return;
+                    continue;
                 }
             }
             (handler.handler)(event, target)

@@ -17,8 +17,10 @@ pub struct StyleProps {
 }
 
 impl StyleProps {
-    pub(crate) fn attributes(&self) -> Vec<(&'static str, String)> {
+    /// Get all the attributes for the style tag
+    pub fn attributes(&self) -> Vec<(&'static str, String)> {
         let mut attributes = Vec::new();
+        extend_attributes(&mut attributes, &self.additional_attributes);
         if let Some(href) = &self.href {
             attributes.push(("href", href.clone()));
         }
@@ -39,7 +41,7 @@ impl StyleProps {
     }
 }
 
-/// Render a [`style`](crate::elements::style) tag into the head of the page.
+/// Render a [`<style>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/style) or [`<link>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/link) tag into the head of the page.
 ///
 /// If present, the children of the style component must be a single static or formatted string. If there are more children or the children contain components, conditionals, loops, or fragments, the style will not be added.
 ///
@@ -57,6 +59,10 @@ impl StyleProps {
 ///                 }}
 ///             "#
 ///         }
+///         // You could also use a style with a href to load a stylesheet asset
+///         document::Style {
+///             href: asset!("/assets/style.css")
+///         }
 ///     }
 /// }
 /// ```
@@ -71,13 +77,46 @@ pub fn Style(props: StyleProps) -> Element {
     use_update_warning(&props, "Style {}");
 
     use_hook(|| {
+        let document = document();
+        let mut insert_style = document.create_head_component();
         if let Some(href) = &props.href {
             if !should_insert_style(href) {
-                return;
+                insert_style = false;
             }
         }
-        let document = document();
-        document.create_style(props);
+        if !insert_style {
+            return;
+        }
+        let mut attributes = props.attributes();
+        match (&props.href, props.style_contents()) {
+            // The style has inline contents, render it as a style tag
+            (_, Ok(_)) => document.create_style(props),
+            // The style has a src, render it as a link tag
+            (Some(_), _) => {
+                attributes.push(("type", "text/css".into()));
+                attributes.push(("rel", "stylesheet".into()));
+                document.create_link(LinkProps {
+                    media: props.media,
+                    title: props.title,
+                    r#type: Some("text/css".to_string()),
+                    additional_attributes: props.additional_attributes,
+                    href: props.href,
+                    rel: Some("stylesheet".to_string()),
+                    disabled: None,
+                    r#as: None,
+                    sizes: None,
+                    crossorigin: None,
+                    referrerpolicy: None,
+                    fetchpriority: None,
+                    hreflang: None,
+                    integrity: None,
+                    blocking: None,
+                    onload: None,
+                });
+            }
+            // The style has neither contents nor src, log an error
+            (None, Err(err)) => err.log("Style"),
+        };
     });
 
     VNode::empty()

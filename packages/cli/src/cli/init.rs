@@ -35,7 +35,7 @@ pub struct Init {
     #[clap(long)]
     subtemplate: Option<String>,
 
-    /// Pass <option>=<value> for the used template (e.g., `foo=bar`)
+    /// Pass `<option>=<value>` for the used template (e.g., `foo=bar`)
     #[clap(short, long)]
     option: Vec<String>,
 
@@ -55,12 +55,16 @@ impl Init {
         // If no template is specified, use the default one and set the branch to the latest release.
         create::resolve_template_and_branch(&mut self.template, &mut self.branch);
 
+        // cargo-generate requires the path to be created first.
+        std::fs::create_dir_all(&self.path)?;
+
         let args = GenerateArgs {
             define: self.option,
             destination: Some(self.path),
             init: true,
             name: self.name,
             silent: self.yes,
+            vcs: Some(cargo_generate::Vcs::Git),
             template_path: TemplatePath {
                 auto_path: self.template,
                 branch: self.branch,
