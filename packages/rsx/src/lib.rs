@@ -64,6 +64,7 @@ mod text_node;
 
 mod diagnostics;
 mod expr_node;
+mod expression_pool;
 mod ifmt;
 mod literal;
 mod location;
