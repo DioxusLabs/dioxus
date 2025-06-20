@@ -2,7 +2,7 @@
 
 use dioxus::prelude::*;
 
-const MONACO_FOLDER: Asset = asset!("/monaco-editor-0.52.2/package/min/vs");
+const MONACO_FOLDER: Asset = asset!("/monaco-editor/package/min/vs");
 const SOME_IMAGE: Asset = asset!("/images/toasts.png", ImageAssetOptions::new().with_avif());
 const SOME_IMAGE_WITH_THE_SAME_URL: Asset =
     asset!("/images/toasts.png", ImageAssetOptions::new().with_jpg());

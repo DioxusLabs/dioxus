@@ -69,6 +69,46 @@ test("document elements", async ({ page }) => {
   await expect(main).toHaveCSS("font-family", "Roboto");
 });
 
+test("assets cache correctly", async ({ page }) => {
+  // Wait for the hashed image to be loaded
+  const hashedImageFuture = page.waitForResponse((resp) => {
+    console.log("Response URL:", resp.url());
+    return resp.url().includes("/assets/image-") && resp.status() === 200;
+  });
+
+  // Navigate to the page that includes the image.
+  await page.goto("http://localhost:3333");
+
+  const hashedImageResponse = await hashedImageFuture;
+
+  // Make sure the hashed image cache control header is set to immutable
+  const cacheControl = hashedImageResponse.headers()["cache-control"];
+  console.log("Cache-Control header:", cacheControl);
+  expect(cacheControl).toContain("immutable");
+
+  // TODO: raw assets support was removed and needs to be restored
+  // https://github.com/DioxusLabs/dioxus/issues/4115
+  // // Wait for the asset image to be loaded
+  // const assetImageResponse = await page.waitForResponse(
+  //   (resp) => resp.url().includes("/assets/image.png") && resp.status() === 200
+  // );
+  // // Make sure the asset image cache control header does not contain immutable
+  // const assetCacheControl = assetImageResponse.headers()["cache-control"];
+  // console.log("Cache-Control header:", assetCacheControl);
+  // expect(assetCacheControl).not.toContain("immutable");
+
+  // // Wait for the nested asset image to be loaded
+  // const nestedAssetImageResponse = await page.waitForResponse(
+  //   (resp) =>
+  //     resp.url().includes("/assets/nested/image.png") && resp.status() === 200
+  // );
+  // // Make sure the nested asset image cache control header does not contain immutable
+  // const nestedAssetCacheControl =
+  //   nestedAssetImageResponse.headers()["cache-control"];
+  // console.log("Cache-Control header:", nestedAssetCacheControl);
+  // expect(nestedAssetCacheControl).not.toContain("immutable");
+});
+
 test("websockets", async ({ page }) => {
   await page.goto("http://localhost:3333");
   // wait until the websocket div is mounted
