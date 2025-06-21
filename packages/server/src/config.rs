@@ -157,7 +157,7 @@ impl ServeConfigBuilder {
     /// }
     ///
     /// #[server]
-    /// async fn read_context() -> Result<u32, ServerFnError> {
+    /// async fn read_context() -> ServerFnResult<u32> {
     ///     // You can extract values from the server context with the `extract` function
     ///     let FromContext(value) = extract().await?;
     ///     Ok(value)
@@ -224,7 +224,7 @@ impl ServeConfigBuilder {
     /// }
     ///
     /// #[server]
-    /// async fn read_context() -> Result<u32, ServerFnError> {
+    /// async fn read_context() -> ServerFnResult<u32> {
     ///     // You can extract values from the server context with the `extract` function
     ///     let FromContext(value) = extract().await?;
     ///     Ok(value)
@@ -284,7 +284,7 @@ impl ServeConfigBuilder {
     /// }
     ///
     /// #[server]
-    /// async fn read_context() -> Result<u32, ServerFnError> {
+    /// async fn read_context() -> ServerFnResult<u32> {
     ///     // You can extract values from the server context with the `extract` function
     ///     let FromContext(value) = extract().await?;
     ///     Ok(value)

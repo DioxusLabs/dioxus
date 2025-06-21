@@ -44,6 +44,6 @@ fn current_platform_features() -> Vec<String> {
 }
 
 #[server]
-async fn get_server_features() -> Result<Vec<String>, ServerFnError> {
+async fn get_server_features() -> ServerFnResult<Vec<String>> {
     Ok(current_platform_features())
 }

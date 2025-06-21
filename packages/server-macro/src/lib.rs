@@ -18,11 +18,11 @@ use syn::{__private::ToTokens, parse_quote};
 /// # use dioxus::prelude::*;
 /// # #[derive(serde::Deserialize, serde::Serialize)]
 /// # pub struct BlogPost;
-/// # async fn load_posts(category: &str) -> Result<Vec<BlogPost>, ServerFnError> { unimplemented!() }
+/// # async fn load_posts(category: &str) -> ServerFnResult<Vec<BlogPost>> { unimplemented!() }
 /// #[server]
 /// pub async fn blog_posts(
 ///     category: String,
-/// ) -> Result<Vec<BlogPost>, ServerFnError> {
+/// ) -> ServerFnResult<Vec<BlogPost>> {
 ///     let posts = load_posts(&category).await?;
 ///     // maybe do some other work
 ///     Ok(posts)
@@ -118,7 +118,7 @@ use syn::{__private::ToTokens, parse_quote};
 ///   input = Cbor,
 ///   output = Json
 /// )]
-/// pub async fn my_wacky_server_fn(input: Vec<String>) -> Result<usize, ServerFnError> {
+/// pub async fn my_wacky_server_fn(input: Vec<String>) -> ServerFnResult<usize> {
 ///   unimplemented!()
 /// }
 ///
@@ -155,7 +155,7 @@ use syn::{__private::ToTokens, parse_quote};
 /// #[server]
 /// // The TraceLayer will log all requests to the console
 /// #[middleware(tower_http::timeout::TimeoutLayer::new(std::time::Duration::from_secs(5)))]
-/// pub async fn my_wacky_server_fn(input: Vec<String>) -> Result<usize, ServerFnError> {
+/// pub async fn my_wacky_server_fn(input: Vec<String>) -> ServerFnResult<usize> {
 ///     unimplemented!()
 /// }
 /// ```
@@ -171,7 +171,7 @@ use syn::{__private::ToTokens, parse_quote};
 /// ```rust,ignore
 /// # use dioxus::prelude::*;
 /// #[server]
-/// pub async fn my_wacky_server_fn(input: Vec<String>) -> Result<String, ServerFnError> {
+/// pub async fn my_wacky_server_fn(input: Vec<String>) -> ServerFnResult<String> {
 ///     let headers: axum::http::header::HeaderMap = extract().await?;
 ///     Ok(format!("The server got a request with headers: {:?}", headers))
 /// }
@@ -198,7 +198,7 @@ use syn::{__private::ToTokens, parse_quote};
 /// }
 ///
 /// #[server]
-/// pub async fn my_wacky_server_fn(input: Vec<String>) -> Result<String, ServerFnError> {
+/// pub async fn my_wacky_server_fn(input: Vec<String>) -> ServerFnResult<String> {
 ///     let FromContext(pool): FromContext<DatabasePool> = extract().await?;
 ///     Ok(format!("The server read {:?} from the shared context", pool))
 /// }
