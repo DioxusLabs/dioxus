@@ -1,0 +1,16 @@
+[package]
+name = "use-js-macro"
+edition = "2024"
+version.workspace = true
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = "1.0"
+quote = "1.0"
+syn = { version = "2.0", features = ["full"] }
+swc_ecma_parser = "17"
+swc_ecma_ast = "13"
+swc_ecma_visit = "13"
+swc_common = "13"

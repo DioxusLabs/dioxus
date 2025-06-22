@@ -15491,6 +15491,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "use-js-macro"
+version = "0.7.0-alpha.1"
+
+[[package]]
 name = "usvg"
 version = "0.45.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

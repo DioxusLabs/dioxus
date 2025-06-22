@@ -72,6 +72,7 @@ members = [
     "packages/asset-resolver",
     "packages/depinfo",
     "packages/server",
+    "packages/use-js-macro",
 
     # Playwright tests
     "packages/playwright-tests/liveview",
