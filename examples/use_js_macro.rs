@@ -1,10 +1,10 @@
 use dioxus::prelude::*;
 
 // Generate the greeting function at compile time
-// use_js!("examples/assets/example.js"::greeting);
+use_js!("examples/assets/example.js"::greeting);
 
 // Or generate multiple functions:
-use_js!("examples/assets/example.js"::{greeting, add});
+// use_js!("examples/assets/example.js"::{greeting, add});
 
 // Or generate all exported functions:
 // use_js!("examples/assets/example.js"::*);
