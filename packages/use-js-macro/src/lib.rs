@@ -1,6 +1,6 @@
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
-use quote::quote;
+use quote::{format_ident, quote};
 use std::sync::Arc;
 use std::{fs, path::Path};
 use swc_common::SourceMap;
@@ -8,53 +8,69 @@ use swc_ecma_ast::{
     Decl, ExportDecl, ExportSpecifier, FnDecl, ModuleExportName, NamedExport, VarDeclarator,
 };
 use swc_ecma_parser::EsSyntax;
-use swc_ecma_parser::{Parser, StringInput, Syntax, lexer::Lexer};
+use swc_ecma_parser::{lexer::Lexer, Parser, StringInput, Syntax};
 use swc_ecma_visit::{Visit, VisitWith};
 use syn::{
-    Expr, ExprCall, LitStr, Result, Token,
     parse::{Parse, ParseStream},
-    parse_macro_input,
+    parse_macro_input, Ident, LitStr, Result, Token,
 };
 
-struct CallJsInput {
-    asset_path: LitStr,
-    function_call: ExprCall,
+#[derive(Debug, Clone)]
+enum ImportSpec {
+    /// *
+    All,
+    /// {greeting, other_func}
+    Named(Vec<String>),
+    /// greeting
+    Single(String),
 }
 
-impl Parse for CallJsInput {
+struct UseJsInput {
+    asset_path: LitStr,
+    import_spec: ImportSpec,
+}
+
+impl Parse for UseJsInput {
     fn parse(input: ParseStream) -> Result<Self> {
         let asset_path: LitStr = input.parse()?;
-        input.parse::<Token![,]>()?;
+        input.parse::<Token![::]>()?;
 
-        let function_call: ExprCall = input.parse()?;
+        let import_spec = if input.peek(Token![*]) {
+            input.parse::<Token![*]>()?;
+            ImportSpec::All
+        } else if input.peek(syn::token::Brace) {
+            let content;
+            syn::braced!(content in input);
+            let mut functions = Vec::new();
 
-        Ok(CallJsInput {
+            loop {
+                let ident: Ident = content.parse()?;
+                functions.push(ident.to_string());
+
+                if content.peek(Token![,]) {
+                    content.parse::<Token![,]>()?;
+                    if content.is_empty() {
+                        break;
+                    }
+                } else {
+                    break;
+                }
+            }
+
+            ImportSpec::Named(functions)
+        } else {
+            let ident: Ident = input.parse()?;
+            ImportSpec::Single(ident.to_string())
+        };
+
+        Ok(UseJsInput {
             asset_path,
-            function_call,
+            import_spec,
         })
     }
 }
 
-fn extract_function_name(call: &ExprCall) -> Result<String> {
-    match &*call.func {
-        Expr::Path(path) => {
-            if let Some(ident) = path.path.get_ident() {
-                Ok(ident.to_string())
-            } else {
-                Err(syn::Error::new_spanned(
-                    &path.path,
-                    "Function call must be a simple identifier",
-                ))
-            }
-        }
-        _ => Err(syn::Error::new_spanned(
-            &call.func,
-            "Function call must be a simple identifier",
-        )),
-    }
-}
-
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct FunctionInfo {
     name: String,
     param_count: usize,
@@ -193,59 +209,106 @@ fn parse_js_file(file_path: &Path) -> Result<Vec<FunctionInfo>> {
     Ok(visitor.functions)
 }
 
-fn validate_function_call(
+fn get_functions_to_generate(
     functions: &[FunctionInfo],
-    function_name: &str,
-    arg_count: usize,
-) -> Result<()> {
-    let function = functions
+    import_spec: &ImportSpec,
+) -> Result<Vec<FunctionInfo>> {
+    let exported_functions: Vec<_> = functions
         .iter()
-        .find(|f| f.name == function_name)
-        .ok_or_else(|| {
-            syn::Error::new(
-                proc_macro2::Span::call_site(),
-                format!("Function '{}' not found in JavaScript file", function_name),
-            )
-        })?;
+        .filter(|f| f.is_exported)
+        .cloned()
+        .collect();
 
-    if !function.is_exported {
-        return Err(syn::Error::new(
-            proc_macro2::Span::call_site(),
-            format!(
-                "Function '{}' is not exported from the JavaScript module",
-                function_name
-            ),
-        ));
+    match import_spec {
+        ImportSpec::All => Ok(exported_functions),
+        ImportSpec::Single(name) => {
+            let func = exported_functions
+                .iter()
+                .find(|f| &f.name == name)
+                .ok_or_else(|| {
+                    syn::Error::new(
+                        proc_macro2::Span::call_site(),
+                        format!(
+                            "Function '{}' not found or not exported in JavaScript file",
+                            name
+                        ),
+                    )
+                })?;
+            Ok(vec![func.clone()])
+        }
+        ImportSpec::Named(names) => {
+            let mut result = Vec::new();
+            for name in names {
+                let func = exported_functions
+                    .iter()
+                    .find(|f| &f.name == name)
+                    .ok_or_else(|| {
+                        syn::Error::new(
+                            proc_macro2::Span::call_site(),
+                            format!(
+                                "Function '{}' not found or not exported in JavaScript file",
+                                name
+                            ),
+                        )
+                    })?;
+                result.push(func.clone());
+            }
+            Ok(result)
+        }
     }
+}
 
-    if function.param_count != arg_count {
-        return Err(syn::Error::new(
-            proc_macro2::Span::call_site(),
-            format!(
-                "Function '{}' expects {} arguments, but {} were provided",
-                function_name, function.param_count, arg_count
-            ),
-        ));
+fn generate_function_wrapper(func: &FunctionInfo, asset_path: &LitStr) -> TokenStream2 {
+    let func_name = format_ident!("{}", func.name);
+    let js_func_name = &func.name;
+
+    let params: Vec<_> = (0..func.param_count)
+        .map(|i| format_ident!("arg{}", i))
+        .collect();
+
+    let send_calls: Vec<TokenStream2> = params
+        .iter()
+        .map(|param| quote! { eval.send(#param)?; })
+        .collect();
+
+    let mut js_format = format!(r#"const {{{{ {js_func_name} }}}} = await import("{{}}");"#);
+    for i in 0..func.param_count {
+        js_format.push_str(&format!("\nlet arg{} = await dioxus.recv();", i));
     }
+    js_format.push_str(&format!("\nreturn {}(", js_func_name));
+    for i in 0..func.param_count {
+        if i > 0 {
+            js_format.push_str(", ");
+        }
+        js_format.push_str(&format!("arg{}", i));
+    }
+    js_format.push_str(");");
 
-    Ok(())
+    let param_types: Vec<_> = (0..func.param_count)
+        .map(|i| {
+            let param = format_ident!("arg{}", i);
+            quote! { #param: impl serde::Serialize }
+        })
+        .collect();
+
+    quote! {
+        pub async fn #func_name(#(#param_types),*) -> Result<serde_json::Value, document::EvalError> {
+            const MODULE: Asset = asset!(#asset_path);
+            let js = format!(#js_format, MODULE);
+            let eval = document::eval(js.as_str());
+            #(#send_calls)*
+            eval.await
+        }
+    }
 }
 
 #[proc_macro]
-pub fn call_js(input: TokenStream) -> TokenStream {
-    // parse
-    let input = parse_macro_input!(input as CallJsInput);
+pub fn use_js(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as UseJsInput);
 
     let asset_path = &input.asset_path;
-    let function_call = &input.function_call;
+    let import_spec = &input.import_spec;
 
-    let function_name = match extract_function_name(function_call) {
-        Ok(name) => name,
-        Err(e) => return TokenStream::from(e.to_compile_error()),
-    };
-
-    // validate js call
-    let arg_count = function_call.args.len();
     let manifest_dir = match std::env::var("CARGO_MANIFEST_DIR") {
         Ok(dir) => dir,
         Err(_) => {
@@ -260,42 +323,24 @@ pub fn call_js(input: TokenStream) -> TokenStream {
     };
 
     let js_file_path = std::path::Path::new(&manifest_dir).join(asset_path.value());
-    let functions = match parse_js_file(&js_file_path) {
+
+    let all_functions = match parse_js_file(&js_file_path) {
         Ok(funcs) => funcs,
         Err(e) => return TokenStream::from(e.to_compile_error()),
     };
-    if let Err(e) = validate_function_call(&functions, &function_name, arg_count) {
-        return TokenStream::from(e.to_compile_error());
-    }
 
-    // expand
-    let send_calls: Vec<TokenStream2> = function_call
-        .args
+    let functions_to_generate = match get_functions_to_generate(&all_functions, import_spec) {
+        Ok(funcs) => funcs,
+        Err(e) => return TokenStream::from(e.to_compile_error()),
+    };
+
+    let function_wrappers: Vec<TokenStream2> = functions_to_generate
         .iter()
-        .map(|arg| quote! { eval.send(#arg)?; })
+        .map(|func| generate_function_wrapper(func, asset_path))
         .collect();
 
-    let mut js_format = format!(r#"const {{{{ {function_name} }}}} = await import("{{}}");"#,);
-    for i in 0..arg_count {
-        js_format.push_str(&format!("\nlet arg{} = await dioxus.recv();", i));
-    }
-    js_format.push_str(&format!("\nreturn {}(", function_name));
-    for i in 0..arg_count {
-        if i > 0 {
-            js_format.push_str(", ");
-        }
-        js_format.push_str(&format!("arg{}", i));
-    }
-    js_format.push_str(");");
-
     let expanded = quote! {
-        async move {
-            const MODULE: Asset = asset!(#asset_path);
-            let js = format!(#js_format, MODULE);
-            let eval = document::eval(js.as_str());
-            #(#send_calls)*
-            eval.await
-        }
+        #(#function_wrappers)*
     };
 
     TokenStream::from(expanded)
