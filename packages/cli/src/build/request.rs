@@ -383,7 +383,6 @@ pub(crate) struct BuildRequest {
     pub(crate) skip_assets: bool,
     pub(crate) wasm_split: bool,
     pub(crate) debug_symbols: bool,
-    pub(crate) inject_loading_scripts: bool,
     pub(crate) custom_linker: Option<PathBuf>,
     pub(crate) session_cache_dir: Arc<TempDir>,
     pub(crate) link_args_file: Arc<NamedTempFile>,
@@ -761,7 +760,6 @@ impl BuildRequest {
             base_path: args.base_path.clone(),
             wasm_split: args.wasm_split,
             debug_symbols: args.debug_symbols,
-            inject_loading_scripts: args.inject_loading_scripts,
         })
     }
 
@@ -3354,6 +3352,31 @@ impl BuildRequest {
             format!("wasm/{}", asset.file_name().unwrap().to_str().unwrap())
         };
 
+        // Load and initialize wasm without requiring a separate javascript file.
+        // This also allows using a strict Content-Security-Policy.
+        let mut js = std::fs::read(self.wasm_bindgen_js_output_file())?;
+        writeln!(
+            js,
+            r#"
+window.__wasm_split_main_initSync = initSync;
+
+// Actually perform the load
+__wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
+    // assign this module to be accessible globally
+    window.__dx_mainWasm = wasm;
+    window.__dx_mainInit = __wbg_init;
+    window.__dx_mainInitSync = initSync;
+    window.__dx___wbg_get_imports = __wbg_get_imports;
+
+    if (wasm.__wbindgen_start == undefined) {{
+        wasm.main();
+    }}
+}});
+"#,
+            self.base_path_or_default(),
+        )?;
+        std::fs::write(self.wasm_bindgen_js_output_file(), js)?;
+
         let js_path = if package_to_asset {
             // Register the main.js with the asset system so it bundles in the snippets and optimizes
             let name = assets.register_asset(
@@ -3843,9 +3866,6 @@ impl BuildRequest {
         // Inject any resources from the config into the html
         self.inject_resources(assets, wasm_path, &mut html)?;
 
-        // Inject loading scripts if they are not already present
-        self.inject_loading_scripts(&mut html);
-
         // Replace any special placeholders in the HTML with resolved values
         self.replace_template_placeholders(&mut html, wasm_path, js_path);
 
@@ -3936,47 +3956,11 @@ impl BuildRequest {
 
         // Manually inject the wasm file for preloading. WASM currently doesn't support preloading in the manganis asset system
         head_resources.push_str(&format!(
-            "<link rel=\"preload\" as=\"fetch\" type=\"application/wasm\" href=\"/{{base_path}}/assets/{wasm_path}\" crossorigin>"
+            "<link rel=\"preload\" as=\"fetch\" type=\"application/wasm\" href=\"/{{base_path}}/{wasm_path}\" crossorigin>"
         ));
         Self::replace_or_insert_before("{style_include}", "</head", &head_resources, html);
 
         Ok(())
-    }
-
-    /// Inject loading scripts if they are not already present
-    fn inject_loading_scripts(&self, html: &mut String) {
-        // If it looks like we are already loading wasm or the current build opted out of injecting loading scripts, don't inject anything
-        if !self.inject_loading_scripts || html.contains("__wbindgen_start") {
-            return;
-        }
-
-        // If not, insert the script
-        *html = html.replace(
-            "</body",
-r#" <script>
-  // We can't use a module script here because we need to start the script immediately when streaming
-  import("/{base_path}/{js_path}").then(
-    ({ default: init, initSync, __wbg_get_imports }) => {
-      // export initSync in case a split module needs to initialize
-      window.__wasm_split_main_initSync = initSync;
-
-      // Actually perform the load
-      init({module_or_path: "/{base_path}/{wasm_path}"}).then((wasm) => {
-        // assign this module to be accessible globally
-        window.__dx_mainWasm = wasm;
-        window.__dx_mainInit = init;
-        window.__dx_mainInitSync = initSync;
-        window.__dx___wbg_get_imports = __wbg_get_imports;
-
-        if (wasm.__wbindgen_start == undefined) {
-            wasm.main();
-        }
-      });
-    }
-  );
-  </script>
-            </body"#,
-        );
     }
 
     /// Replace any special placeholders in the HTML with resolved values

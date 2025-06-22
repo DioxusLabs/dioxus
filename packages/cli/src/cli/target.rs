@@ -70,10 +70,6 @@ pub(crate) struct TargetArgs {
     #[serde(default)]
     pub(crate) skip_assets: bool,
 
-    /// Inject scripts to load the wasm and js files for your dioxus app if they are not already present [default: true]
-    #[clap(long, default_value_t = true)]
-    pub(crate) inject_loading_scripts: bool,
-
     /// Experimental: Bundle split the wasm binary into multiple chunks based on `#[wasm_split]` annotations [default: false]
     #[clap(long, default_value_t = false)]
     pub(crate) wasm_split: bool,

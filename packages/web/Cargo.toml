@@ -58,6 +58,7 @@ features = [
     "History",
     "HtmlElement",
     "HtmlFormElement",
+    "HtmlHeadElement",
     "HtmlInputElement",
     "HtmlSelectElement",
     "HtmlTextAreaElement",

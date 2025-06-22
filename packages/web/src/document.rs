@@ -1,8 +1,7 @@
 use dioxus_core::prelude::queue_effect;
 use dioxus_core::ScopeId;
 use dioxus_document::{
-    create_element_in_head, Document, Eval, EvalError, Evaluator, LinkProps, MetaProps,
-    ScriptProps, StyleProps,
+    Document, Eval, EvalError, Evaluator, LinkProps, MetaProps, ScriptProps, StyleProps,
 };
 use dioxus_history::History;
 use futures_util::FutureExt;
@@ -97,41 +96,63 @@ impl Document for WebDocument {
 
     /// Create a new meta tag in the head
     fn create_meta(&self, props: MetaProps) {
-        let myself = self.clone();
         queue_effect(move || {
-            myself.eval(create_element_in_head("meta", &props.attributes(), None));
+            let window = web_sys::window().expect("no global `window` exists");
+            let document = window.document().expect("should have a document on window");
+            let head = document.head().expect("document should have a head");
+
+            let element = document.create_element("meta").unwrap();
+            for (name, value) in props.attributes() {
+                element.set_attribute(name, &value).unwrap();
+            }
+            head.append_child(&element).unwrap();
         });
     }
 
     /// Create a new script tag in the head
     fn create_script(&self, props: ScriptProps) {
-        let myself = self.clone();
         queue_effect(move || {
-            myself.eval(create_element_in_head(
-                "script",
-                &props.attributes(),
-                props.script_contents().ok(),
-            ));
+            let window = web_sys::window().expect("no global `window` exists");
+            let document = window.document().expect("should have a document on window");
+            let head = document.head().expect("document should have a head");
+
+            let element = document.create_element("script").unwrap();
+            for (name, value) in props.attributes() {
+                element.set_attribute(name, &value).unwrap();
+            }
+            element.set_text_content(props.script_contents().ok().as_deref());
+            head.append_child(&element).unwrap();
         });
     }
 
     /// Create a new style tag in the head
     fn create_style(&self, props: StyleProps) {
-        let myself = self.clone();
         queue_effect(move || {
-            myself.eval(create_element_in_head(
-                "style",
-                &props.attributes(),
-                props.style_contents().ok(),
-            ));
+            let window = web_sys::window().expect("no global `window` exists");
+            let document = window.document().expect("should have a document on window");
+            let head = document.head().expect("document should have a head");
+
+            let element = document.create_element("style").unwrap();
+            for (name, value) in props.attributes() {
+                element.set_attribute(name, &value).unwrap();
+            }
+            element.set_text_content(props.style_contents().ok().as_deref());
+            head.append_child(&element).unwrap();
         });
     }
 
     /// Create a new link tag in the head
     fn create_link(&self, props: LinkProps) {
-        let myself = self.clone();
         queue_effect(move || {
-            myself.eval(create_element_in_head("link", &props.attributes(), None));
+            let window = web_sys::window().expect("no global `window` exists");
+            let document = window.document().expect("should have a document on window");
+            let head = document.head().expect("document should have a head");
+
+            let element = document.create_element("link").unwrap();
+            for (name, value) in props.attributes() {
+                element.set_attribute(name, &value).unwrap();
+            }
+            head.append_child(&element).unwrap();
         });
     }
 }
