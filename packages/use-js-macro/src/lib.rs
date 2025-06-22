@@ -6,7 +6,8 @@ use swc_common::comments::{CommentKind, Comments};
 use swc_common::Spanned;
 use swc_common::{comments::SingleThreadedComments, SourceMap, Span};
 use swc_ecma_ast::{
-    Decl, ExportDecl, ExportSpecifier, FnDecl, ModuleExportName, NamedExport, VarDeclarator,
+    Decl, ExportDecl, ExportSpecifier, FnDecl, ModuleExportName, NamedExport, Param, Pat,
+    VarDeclarator,
 };
 use swc_ecma_parser::EsSyntax;
 use swc_ecma_parser::{lexer::Lexer, Parser, StringInput, Syntax};
@@ -74,7 +75,7 @@ impl Parse for UseJsInput {
 #[derive(Debug, Clone)]
 struct FunctionInfo {
     name: String,
-    param_count: usize,
+    params: Vec<String>,
     is_exported: bool,
     /// The stripped lines
     doc_comment: Vec<String>,
@@ -128,6 +129,33 @@ impl FunctionVisitor {
     }
 }
 
+fn function_params_to_names(params: &Vec<Param>) -> Vec<String> {
+    params
+        .iter()
+        .enumerate()
+        .map(|(i, param)| {
+            if let Some(ident) = param.pat.as_ident() {
+                ident.id.sym.to_string()
+            } else {
+                format!("arg{}", i)
+            }
+        })
+        .collect()
+}
+
+fn function_pat_to_names(pats: &Vec<Pat>) -> Vec<String> {
+    pats.iter()
+        .enumerate()
+        .map(|(i, pat)| {
+            if let Some(ident) = pat.as_ident() {
+                ident.id.sym.to_string()
+            } else {
+                format!("arg{}", i)
+            }
+        })
+        .collect()
+}
+
 impl Visit for FunctionVisitor {
     /// Visit function declarations: function foo() {}
     fn visit_fn_decl(&mut self, node: &FnDecl) {
@@ -135,7 +163,7 @@ impl Visit for FunctionVisitor {
 
         self.functions.push(FunctionInfo {
             name: node.ident.sym.to_string(),
-            param_count: node.function.params.len(),
+            params: function_params_to_names(&node.function.params),
             is_exported: false,
             doc_comment,
         });
@@ -152,7 +180,7 @@ impl Visit for FunctionVisitor {
                     swc_ecma_ast::Expr::Fn(fn_expr) => {
                         self.functions.push(FunctionInfo {
                             name: ident.id.sym.to_string(),
-                            param_count: fn_expr.function.params.len(),
+                            params: function_params_to_names(&fn_expr.function.params),
                             is_exported: false,
                             doc_comment,
                         });
@@ -160,7 +188,7 @@ impl Visit for FunctionVisitor {
                     swc_ecma_ast::Expr::Arrow(arrow_fn) => {
                         self.functions.push(FunctionInfo {
                             name: ident.id.sym.to_string(),
-                            param_count: arrow_fn.params.len(),
+                            params: function_pat_to_names(&arrow_fn.params),
                             is_exported: false,
                             doc_comment,
                         });
@@ -180,7 +208,7 @@ impl Visit for FunctionVisitor {
 
                 self.functions.push(FunctionInfo {
                     name: fn_decl.ident.sym.to_string(),
-                    param_count: fn_decl.function.params.len(),
+                    params: function_params_to_names(&fn_decl.function.params),
                     is_exported: true,
                     doc_comment,
                 });
@@ -308,31 +336,30 @@ fn generate_function_wrapper(func: &FunctionInfo, asset_path: &LitStr) -> TokenS
     let func_name = format_ident!("{}", func.name);
     let js_func_name = &func.name;
 
-    let params: Vec<_> = (0..func.param_count)
-        .map(|i| format_ident!("arg{}", i))
-        .collect();
-
-    let send_calls: Vec<TokenStream2> = params
+    let send_calls: Vec<TokenStream2> = func
+        .params
         .iter()
         .map(|param| quote! { eval.send(#param)?; })
         .collect();
 
     let mut js_format = format!(r#"const {{{{ {js_func_name} }}}} = await import("{{}}");"#);
-    for i in 0..func.param_count {
-        js_format.push_str(&format!("\nlet arg{} = await dioxus.recv();", i));
+    for param in func.params.iter() {
+        js_format.push_str(&format!("\nlet {} = await dioxus.recv();", param));
     }
     js_format.push_str(&format!("\nreturn {}(", js_func_name));
-    for i in 0..func.param_count {
+    for (i, param) in func.params.iter().enumerate() {
         if i > 0 {
             js_format.push_str(", ");
         }
-        js_format.push_str(&format!("arg{}", i));
+        js_format.push_str(param.as_str());
     }
     js_format.push_str(");");
 
-    let param_types: Vec<_> = (0..func.param_count)
-        .map(|i| {
-            let param = format_ident!("arg{}", i);
+    let param_types: Vec<_> = func
+        .params
+        .iter()
+        .map(|param| {
+            let param = format_ident!("{}", param);
             quote! { #param: impl serde::Serialize }
         })
         .collect();
