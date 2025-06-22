@@ -286,6 +286,10 @@ fn parse_js_file(file_path: &Path) -> Result<Vec<FunctionInfo>> {
     let mut visitor = FunctionVisitor::new(comments);
     module.visit_with(&mut visitor);
 
+    // Functions are added twice for some reason
+    visitor
+        .functions
+        .dedup_by(|e1, e2| e1.name.as_str() == e2.name.as_str());
     Ok(visitor.functions)
 }
 
@@ -372,8 +376,9 @@ fn generate_function_wrapper(func: &FunctionInfo, asset_path: &LitStr) -> TokenS
 
     let func_name = func
         .name_ident
-        .as_ref()
-        .expect("Function name should be set by the import spec");
+        .clone()
+        // Can not exist if `::*`
+        .unwrap_or_else(|| Ident::new(func.name.as_str(), proc_macro2::Span::call_site()));
     quote! {
         #doc_comment
         pub async fn #func_name(#(#param_types),*) -> Result<serde_json::Value, document::EvalError> {
