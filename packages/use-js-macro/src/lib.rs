@@ -131,7 +131,7 @@ impl FunctionVisitor {
     }
 }
 
-fn function_params_to_names(params: &Vec<Param>) -> Vec<String> {
+fn function_params_to_names(params: &[Param]) -> Vec<String> {
     params
         .iter()
         .enumerate()
@@ -145,7 +145,7 @@ fn function_params_to_names(params: &Vec<Param>) -> Vec<String> {
         .collect()
 }
 
-fn function_pat_to_names(pats: &Vec<Pat>) -> Vec<String> {
+fn function_pat_to_names(pats: &[Pat]) -> Vec<String> {
     pats.iter()
         .enumerate()
         .map(|(i, pat)| {
@@ -207,19 +207,16 @@ impl Visit for FunctionVisitor {
 
     /// Visit export declarations: export function foo() {}
     fn visit_export_decl(&mut self, node: &ExportDecl) {
-        match &node.decl {
-            Decl::Fn(fn_decl) => {
-                let doc_comment = self.extract_doc_comment(node.span());
+        if let Decl::Fn(fn_decl) = &node.decl {
+            let doc_comment = self.extract_doc_comment(node.span());
 
-                self.functions.push(FunctionInfo {
-                    name: fn_decl.ident.sym.to_string(),
-                    name_ident: None,
-                    params: function_params_to_names(&fn_decl.function.params),
-                    is_exported: true,
-                    doc_comment,
-                });
-            }
-            _ => {}
+            self.functions.push(FunctionInfo {
+                name: fn_decl.ident.sym.to_string(),
+                name_ident: None,
+                params: function_params_to_names(&fn_decl.function.params),
+                is_exported: true,
+                doc_comment,
+            });
         }
         node.visit_children_with(self);
     }
@@ -227,18 +224,15 @@ impl Visit for FunctionVisitor {
     /// Visit named exports: export { foo }
     fn visit_named_export(&mut self, node: &NamedExport) {
         for spec in &node.specifiers {
-            match spec {
-                ExportSpecifier::Named(named) => {
-                    let name = match &named.orig {
-                        ModuleExportName::Ident(ident) => ident.sym.to_string(),
-                        ModuleExportName::Str(str_lit) => str_lit.value.to_string(),
-                    };
+            if let ExportSpecifier::Named(named) = spec {
+                let name = match &named.orig {
+                    ModuleExportName::Ident(ident) => ident.sym.to_string(),
+                    ModuleExportName::Str(str_lit) => str_lit.value.to_string(),
+                };
 
-                    if let Some(func) = self.functions.iter_mut().find(|f| f.name == name) {
-                        func.is_exported = true;
-                    }
+                if let Some(func) = self.functions.iter_mut().find(|f| f.name == name) {
+                    func.is_exported = true;
                 }
-                _ => {}
             }
         }
         node.visit_children_with(self);
@@ -246,7 +240,7 @@ impl Visit for FunctionVisitor {
 }
 
 fn parse_js_file(file_path: &Path) -> Result<Vec<FunctionInfo>> {
-    let js_content = fs::read_to_string(&file_path).map_err(|e| {
+    let js_content = fs::read_to_string(file_path).map_err(|e| {
         syn::Error::new(
             proc_macro2::Span::call_site(),
             format!(
