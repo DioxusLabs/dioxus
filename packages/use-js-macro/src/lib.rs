@@ -1,9 +1,10 @@
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
-use std::sync::Arc;
 use std::{fs, path::Path};
-use swc_common::SourceMap;
+use swc_common::comments::{CommentKind, Comments};
+use swc_common::Spanned;
+use swc_common::{comments::SingleThreadedComments, SourceMap, Span};
 use swc_ecma_ast::{
     Decl, ExportDecl, ExportSpecifier, FnDecl, ModuleExportName, NamedExport, VarDeclarator,
 };
@@ -75,16 +76,54 @@ struct FunctionInfo {
     name: String,
     param_count: usize,
     is_exported: bool,
+    /// The stripped lines
+    doc_comment: Vec<String>,
 }
 
 struct FunctionVisitor {
     functions: Vec<FunctionInfo>,
+    comments: SingleThreadedComments,
 }
 
 impl FunctionVisitor {
-    fn new() -> Self {
+    fn new(comments: SingleThreadedComments) -> Self {
         Self {
             functions: Vec::new(),
+            comments,
+        }
+    }
+
+    fn extract_doc_comment(&self, span: Span) -> Vec<String> {
+        // Get leading comments for the span
+        let leading_comment = self.comments.get_leading(span.lo());
+
+        if let Some(comments) = leading_comment {
+            let mut doc_lines = Vec::new();
+
+            for comment in comments.iter() {
+                let comment_text = &comment.text;
+                match comment.kind {
+                    // Handle `///`. `//` is already stripped
+                    CommentKind::Line => {
+                        if let Some(content) = comment_text.strip_prefix("/") {
+                            let cleaned = content.trim_start();
+                            doc_lines.push(cleaned.to_string());
+                        }
+                    }
+                    // Handle `/*` `*/`. `/*` `*/` is already stripped
+                    CommentKind::Block => {
+                        for line in comment_text.lines() {
+                            if let Some(cleaned) = line.trim_start().strip_prefix("*") {
+                                doc_lines.push(cleaned.to_string());
+                            }
+                        }
+                    }
+                };
+            }
+
+            doc_lines
+        } else {
+            Vec::new()
         }
     }
 }
@@ -92,10 +131,13 @@ impl FunctionVisitor {
 impl Visit for FunctionVisitor {
     /// Visit function declarations: function foo() {}
     fn visit_fn_decl(&mut self, node: &FnDecl) {
+        let doc_comment = self.extract_doc_comment(node.span());
+
         self.functions.push(FunctionInfo {
             name: node.ident.sym.to_string(),
             param_count: node.function.params.len(),
             is_exported: false,
+            doc_comment,
         });
         node.visit_children_with(self);
     }
@@ -104,12 +146,15 @@ impl Visit for FunctionVisitor {
     fn visit_var_declarator(&mut self, node: &VarDeclarator) {
         if let swc_ecma_ast::Pat::Ident(ident) = &node.name {
             if let Some(init) = &node.init {
+                let doc_comment = self.extract_doc_comment(node.span());
+
                 match &**init {
                     swc_ecma_ast::Expr::Fn(fn_expr) => {
                         self.functions.push(FunctionInfo {
                             name: ident.id.sym.to_string(),
                             param_count: fn_expr.function.params.len(),
                             is_exported: false,
+                            doc_comment,
                         });
                     }
                     swc_ecma_ast::Expr::Arrow(arrow_fn) => {
@@ -117,6 +162,7 @@ impl Visit for FunctionVisitor {
                             name: ident.id.sym.to_string(),
                             param_count: arrow_fn.params.len(),
                             is_exported: false,
+                            doc_comment,
                         });
                     }
                     _ => {}
@@ -130,10 +176,13 @@ impl Visit for FunctionVisitor {
     fn visit_export_decl(&mut self, node: &ExportDecl) {
         match &node.decl {
             Decl::Fn(fn_decl) => {
+                let doc_comment = self.extract_doc_comment(node.span());
+
                 self.functions.push(FunctionInfo {
                     name: fn_decl.ident.sym.to_string(),
                     param_count: fn_decl.function.params.len(),
                     is_exported: true,
+                    doc_comment,
                 });
             }
             _ => {}
@@ -174,20 +223,17 @@ fn parse_js_file(file_path: &Path) -> Result<Vec<FunctionInfo>> {
         )
     })?;
 
-    let cm = Arc::new(SourceMap::default());
+    let cm = SourceMap::default();
     let fm = cm.new_source_file(
         swc_common::FileName::Custom(file_path.display().to_string()).into(),
         js_content.clone(),
     );
-
+    let comments = SingleThreadedComments::default();
     let lexer = Lexer::new(
-        Syntax::Es(EsSyntax {
-            jsx: true,
-            ..Default::default()
-        }),
+        Syntax::Es(EsSyntax::default()),
         Default::default(),
         StringInput::from(&*fm),
-        None,
+        Some(&comments),
     );
 
     let mut parser = Parser::new_from(lexer);
@@ -203,7 +249,7 @@ fn parse_js_file(file_path: &Path) -> Result<Vec<FunctionInfo>> {
         )
     })?;
 
-    let mut visitor = FunctionVisitor::new();
+    let mut visitor = FunctionVisitor::new(comments);
     module.visit_with(&mut visitor);
 
     Ok(visitor.functions)
@@ -291,7 +337,20 @@ fn generate_function_wrapper(func: &FunctionInfo, asset_path: &LitStr) -> TokenS
         })
         .collect();
 
+    // Generate documentation comment if available - preserve original JSDoc format
+    let doc_comment = if func.doc_comment.is_empty() {
+        quote! {}
+    } else {
+        let doc_lines: Vec<_> = func
+            .doc_comment
+            .iter()
+            .map(|line| quote! { #[doc = #line] })
+            .collect();
+        quote! { #(#doc_lines)* }
+    };
+
     quote! {
+        #doc_comment
         pub async fn #func_name(#(#param_types),*) -> Result<serde_json::Value, document::EvalError> {
             const MODULE: Asset = asset!(#asset_path);
             let js = format!(#js_format, MODULE);
