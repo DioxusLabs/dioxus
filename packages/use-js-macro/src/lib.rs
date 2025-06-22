@@ -327,7 +327,12 @@ fn generate_function_wrapper(func: &FunctionInfo, asset_path: &LitStr) -> TokenS
     let send_calls: Vec<TokenStream2> = func
         .params
         .iter()
-        .map(|param| quote! { eval.send(#param)?; })
+        .map(|param| {
+            let param = format_ident!("{}", param);
+            quote! {
+                eval.send(#param)?;
+            }
+        })
         .collect();
 
     let js_func_name = &func.name;
