@@ -85,4 +85,7 @@ impl_event! {
 
     /// ontoggle
     ontoggle
+
+    /// onbeforetoggle
+    onbeforetoggle
 }

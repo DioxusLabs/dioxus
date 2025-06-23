@@ -1,0 +1,60 @@
+* {
+    box-sizing: border-box;
+}
+
+html, body, main {
+    height: 100%;
+    font-family: system-ui, sans;
+    margin: 0;
+}
+
+main {
+    display: grid;
+    grid-template-rows: 100px 1fr;
+    grid-template-columns: 100%;
+    background: #f4e8d2;
+}
+
+#canvas-container {
+    display: grid;
+    opacity: 0.8;
+}
+
+header {
+    padding: 10px 40px;
+    background-color: white;
+    z-index: 100;
+}
+
+#overlay {
+    position: absolute;
+    width: 33%;
+    height: 100%;
+    right: 0;
+    z-index: 10;
+    background-color: rgba(0, 0, 0, 0.5);
+    padding-top: 40%;
+    padding-inline: 20px;
+    color: white;
+}
+
+#underlay {
+    position: absolute;
+    width: 33%;
+    height: 100%;
+    z-index: -10;
+    background-color: black;
+    padding-top: 40%;
+    padding-inline: 20px;
+    color: white;
+}
+
+.color-control {
+    display: flex;
+    gap: 12px;
+
+    > input {
+        width: 150px;
+        color: black;
+    }
+}

@@ -475,11 +475,7 @@ fn build_devserver_router(
             runner
                 .client()
                 .build
-                .config
-                .web
-                .app
-                .base_path
-                .as_deref()
+                .base_path()
                 .unwrap_or_default()
                 .trim_matches('/')
         );

@@ -152,7 +152,7 @@ impl Output {
         use std::io::IsTerminal;
 
         if !stdout().is_terminal() {
-            return io::Result::Err(io::Error::new(io::ErrorKind::Other, "Not a terminal"));
+            return io::Result::Err(io::Error::other("Not a terminal"));
         }
 
         enable_raw_mode()?;
@@ -655,7 +655,18 @@ impl Output {
 
         // todo(jon) should we write https ?
         let address = match state.server.displayed_address() {
-            Some(address) => format!("http://{}", address).blue(),
+            Some(address) => format!(
+                "http://{}{}",
+                address,
+                state
+                    .runner
+                    .client
+                    .build
+                    .base_path()
+                    .map(|f| format!("/{f}/"))
+                    .unwrap_or_default()
+            )
+            .blue(),
             None => "no server address".dark_gray(),
         };
 
