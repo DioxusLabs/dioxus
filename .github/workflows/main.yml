@@ -221,7 +221,7 @@ jobs:
           npm ci
           npm install -D @playwright/test
           npx playwright install --with-deps
-          rm -rf ./target/dx
+          rm -rf ../../target/dx
           npx playwright test
       - uses: actions/upload-artifact@v4
         if: always()
