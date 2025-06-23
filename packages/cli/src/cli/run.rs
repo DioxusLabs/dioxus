@@ -72,7 +72,7 @@ impl RunArgs {
                                 total,
                                 krate,
                             } => {
-                                tracing::info!(
+                                tracing::debug!(
                                     "[{platform}] ({current}/{total}) Compiling {krate} ",
                                 )
                             }
@@ -121,6 +121,7 @@ impl RunArgs {
                         }
                         BuilderUpdate::BuildFailed { err } => {
                             tracing::error!("Build failed: {}", err);
+                            return Err(err);
                         }
                         BuilderUpdate::StdoutReceived { msg } => {
                             tracing::info!("[{platform}] {msg}");
