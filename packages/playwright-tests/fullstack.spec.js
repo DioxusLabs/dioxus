@@ -86,27 +86,25 @@ test("assets cache correctly", async ({ page }) => {
   console.log("Cache-Control header:", cacheControl);
   expect(cacheControl).toContain("immutable");
 
-  // TODO: raw assets support was removed and needs to be restored
-  // https://github.com/DioxusLabs/dioxus/issues/4115
-  // // Wait for the asset image to be loaded
-  // const assetImageResponse = await page.waitForResponse(
-  //   (resp) => resp.url().includes("/assets/image.png") && resp.status() === 200
-  // );
-  // // Make sure the asset image cache control header does not contain immutable
-  // const assetCacheControl = assetImageResponse.headers()["cache-control"];
-  // console.log("Cache-Control header:", assetCacheControl);
-  // expect(assetCacheControl).not.toContain("immutable");
+  // Wait for the asset image to be loaded
+  const assetImageResponse = await page.waitForResponse(
+    (resp) => resp.url().includes("/assets/image.png") && resp.status() === 200
+  );
+  // Make sure the asset image cache control header does not contain immutable
+  const assetCacheControl = assetImageResponse.headers()["cache-control"];
+  console.log("Cache-Control header:", assetCacheControl);
+  expect(assetCacheControl).not.toContain("immutable");
 
-  // // Wait for the nested asset image to be loaded
-  // const nestedAssetImageResponse = await page.waitForResponse(
-  //   (resp) =>
-  //     resp.url().includes("/assets/nested/image.png") && resp.status() === 200
-  // );
-  // // Make sure the nested asset image cache control header does not contain immutable
-  // const nestedAssetCacheControl =
-  //   nestedAssetImageResponse.headers()["cache-control"];
-  // console.log("Cache-Control header:", nestedAssetCacheControl);
-  // expect(nestedAssetCacheControl).not.toContain("immutable");
+  // Wait for the nested asset image to be loaded
+  const nestedAssetImageResponse = await page.waitForResponse(
+    (resp) =>
+      resp.url().includes("/assets/nested/image.png") && resp.status() === 200
+  );
+  // Make sure the nested asset image cache control header does not contain immutable
+  const nestedAssetCacheControl =
+    nestedAssetImageResponse.headers()["cache-control"];
+  console.log("Cache-Control header:", nestedAssetCacheControl);
+  expect(nestedAssetCacheControl).not.toContain("immutable");
 });
 
 test("websockets", async ({ page }) => {
