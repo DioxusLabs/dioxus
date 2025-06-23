@@ -9,7 +9,7 @@ use wgpu::{Features, Limits};
 mod demo_renderer;
 
 // CSS Styles
-static STYLES: &str = include_str!("./styles.css");
+static STYLES: Asset = asset!("./src/styles.css");
 
 // WGPU settings required by this example
 const FEATURES: Features = Features::PUSH_CONSTANTS;
@@ -45,11 +45,11 @@ fn app() -> Element {
     use_effect(move || println!("{:?}", color().components));
 
     rsx!(
-        style { {STYLES} }
+        document::Link { rel: "stylesheet", href: STYLES }
         div { id:"overlay",
             h2 { "Control Panel" },
             button {
-                onclick: move |_| *show_cube.write() = !show_cube(),
+                onclick: move |_| show_cube.toggle(),
                 if show_cube() {
                     "Hide cube"
                 } else {
@@ -65,7 +65,7 @@ fn app() -> Element {
             p { "This underlay demonstrates that the custom WGPU content can be rendered above layers and blended with the content underneath" }
         }
         header {
-            h2 { "Blitz WGPU Demo" }
+            h1 { "Blitz WGPU Demo" }
         }
         if show_cube() {
             SpinningCube { color }
