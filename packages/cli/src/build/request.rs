@@ -1412,6 +1412,10 @@ impl BuildRequest {
         // Now extract the assets from the fat binary
         self.collect_assets(&self.patch_exe(artifacts.time_start), ctx)?;
 
+        // If this is a web build, reset the index.html file in case it was modified by SSG
+        self.write_index_html(&artifacts.assets)
+            .context("Failed to write index.html")?;
+
         // Clean up the temps manually
         // todo: we might want to keep them around for debugging purposes
         for file in object_files {
@@ -3202,7 +3206,6 @@ impl BuildRequest {
             || will_wasm_opt
             || ctx.mode == BuildMode::Fat;
         let keep_names = will_wasm_opt || ctx.mode == BuildMode::Fat;
-        let package_to_asset = self.release && !should_bundle_split;
         let demangle = false;
         let wasm_opt_options = WasmOptConfig {
             memory_packing: self.wasm_split,
@@ -3345,25 +3348,53 @@ impl BuildRequest {
 
         // In release mode, we make the wasm and bindgen files into assets so they get bundled with max
         // optimizations.
-        let wasm_path = if package_to_asset {
-            // Make sure to register the main wasm file with the asset system
-            let name = assets.register_asset(&post_bindgen_wasm, AssetOptions::Unknown)?;
-            format!("assets/{}", name.bundled_path())
-        } else {
-            let asset = self.wasm_bindgen_wasm_output_file();
-            format!("wasm/{}", asset.file_name().unwrap().to_str().unwrap())
-        };
-
-        let js_path = if package_to_asset {
+        if self.should_bundle_to_asset() {
             // Register the main.js with the asset system so it bundles in the snippets and optimizes
-            let name = assets.register_asset(
+            assets.register_asset(
                 &self.wasm_bindgen_js_output_file(),
                 AssetOptions::Js(JsAssetOptions::new().with_minify(true).with_preload(true)),
             )?;
+        }
+
+        if self.should_bundle_to_asset() {
+            // Make sure to register the main wasm file with the asset system
+            assets.register_asset(&post_bindgen_wasm, AssetOptions::Unknown)?;
+        }
+
+        // Write the index.html file with the pre-configured contents we got from pre-rendering
+        self.write_index_html(assets)?;
+
+        Ok(())
+    }
+
+    /// Write the index.html file to the output directory. This must be called after the wasm and js
+    /// assets are registered with the asset system if this is a release build.
+    pub(crate) fn write_index_html(&self, assets: &AssetManifest) -> Result<()> {
+        // Get the path to the wasm-bindgen output files. Either the direct file or the opitmized one depending on the build mode
+        let wasm_bindgen_wasm_out = self.wasm_bindgen_wasm_output_file();
+        let wasm_path = if self.should_bundle_to_asset() {
+            let name = assets
+                .get_first_asset_for_source(&wasm_bindgen_wasm_out)
+                .expect("The wasm source must exist before creating index.html");
             format!("assets/{}", name.bundled_path())
         } else {
-            let asset = self.wasm_bindgen_js_output_file();
-            format!("wasm/{}", asset.file_name().unwrap().to_str().unwrap())
+            format!(
+                "wasm/{}",
+                wasm_bindgen_wasm_out.file_name().unwrap().to_str().unwrap()
+            )
+        };
+
+        let wasm_bindgen_js_out = self.wasm_bindgen_js_output_file();
+        let js_path = if self.should_bundle_to_asset() {
+            let name = assets
+                .get_first_asset_for_source(&wasm_bindgen_js_out)
+                .expect("The js source must exist before creating index.html");
+            format!("assets/{}", name.bundled_path())
+        } else {
+            format!(
+                "wasm/{}",
+                wasm_bindgen_js_out.file_name().unwrap().to_str().unwrap()
+            )
         };
 
         // Write the index.html file with the pre-configured contents we got from pre-rendering
@@ -3371,7 +3402,6 @@ impl BuildRequest {
             self.root_dir().join("index.html"),
             self.prepare_html(assets, &wasm_path, &js_path).unwrap(),
         )?;
-
         Ok(())
     }
 
