@@ -1,13 +1,16 @@
 use super::*;
 use crate::{
     serve::{AppServer, ServeUpdate, WebServer},
-    BuilderUpdate, Platform, Result,
+    BuilderUpdate, Error, Platform, Result,
 };
 use dioxus_dx_wire_format::BuildStage;
 
 /// Run the project with the given arguments
 ///
 /// This is a shorthand for `dx serve` with interactive mode and hot-reload disabled.
+///
+/// Unlike `dx serve`, errors during build and run will cascade out as an error, rather than being
+/// handled by the TUI, making it more suitable for scripting, automation, or CI/CD pipelines.
 #[derive(Clone, Debug, Parser)]
 pub(crate) struct RunArgs {
     /// Information about the target to build
@@ -36,9 +39,6 @@ impl RunArgs {
             };
 
             match msg {
-                // Wait for logs from the build engine
-                // These will cause us to update the screen
-                // We also can check the status of the builds here in case we have multiple ongoing builds
                 ServeUpdate::BuilderUpdate { id, update } => {
                     let platform = builder.get_build(id).unwrap().build.platform;
 
@@ -72,7 +72,9 @@ impl RunArgs {
                                 total,
                                 krate,
                             } => {
-                                tracing::info!("[{platform}] Compiling {krate} ({current}/{total})",)
+                                tracing::info!(
+                                    "[{platform}] ({current}/{total}) Compiling {krate} ",
+                                )
                             }
                             BuildStage::RunningBindgen => {
                                 tracing::info!("[{platform}] Running WASM bindgen")
@@ -82,7 +84,7 @@ impl RunArgs {
                                 tracing::info!("[{platform}] Optimizing WASM with `wasm-opt`")
                             }
                             BuildStage::Linking => tracing::info!("Linking app"),
-                            BuildStage::Hotpatching => todo!(),
+                            BuildStage::Hotpatching => {}
                             BuildStage::CopyingAssets {
                                 current,
                                 total,
@@ -96,10 +98,22 @@ impl RunArgs {
                                 tracing::info!("[{platform}] Running Gradle")
                             }
                             BuildStage::Success => {}
-                            BuildStage::Failed => {}
-                            BuildStage::Aborted => {}
                             BuildStage::Restarting => {}
                             BuildStage::CompressingAssets => {}
+                            BuildStage::ExtractingAssets => {}
+                            BuildStage::Prerendering => {}
+                            BuildStage::Failed => {
+                                tracing::error!("[{platform}] Build failed");
+                                return Err(Error::Cargo(format!(
+                                    "Build failed for platform: {platform}"
+                                )));
+                            }
+                            BuildStage::Aborted => {
+                                tracing::error!("[{platform}] Build aborted");
+                                return Err(Error::Cargo(format!(
+                                    "Build aborted for platform: {platform}"
+                                )));
+                            }
                             _ => {}
                         },
                         BuilderUpdate::CompilerMessage { message } => {
@@ -119,14 +133,28 @@ impl RunArgs {
                                 tracing::error!(
                                     "Application [{platform}] exited with error: {status}"
                                 );
+                                return Err(Error::Runtime(format!(
+                                    "Application [{platform}] exited with error: {status}"
+                                )));
                             }
 
                             break;
                         }
-                        BuilderUpdate::ProcessWaitFailed { .. } => {}
+                        BuilderUpdate::ProcessWaitFailed { err } => {
+                            return Err(err.into());
+                        }
                     }
                 }
-                _ => {}
+                ServeUpdate::Exit { .. } => break,
+                ServeUpdate::NewConnection { .. } => {}
+                ServeUpdate::WsMessage { .. } => {}
+                ServeUpdate::FilesChanged { .. } => {}
+                ServeUpdate::OpenApp => {}
+                ServeUpdate::RequestRebuild => {}
+                ServeUpdate::ToggleShouldRebuild => {}
+                ServeUpdate::OpenDebugger { .. } => {}
+                ServeUpdate::Redraw => {}
+                ServeUpdate::TracingLog { .. } => {}
             }
         }
 
