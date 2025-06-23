@@ -30,14 +30,18 @@ test("optimized scripts run", async ({ page }) => {
   // Get the image src
   const src3 = await image3.getAttribute("src");
   // Expect the src to be without a hash
-  expect(src3).toEqual("/assets/toasts.png");
+  expect(src3).toEqual("/assets/toasts.avif");
 });
 
 test("unused external assets are bundled", async ({ page }) => {
+  await page.goto("http://localhost:8989");
+
   // Assert http://localhost:8989/assets/toasts.png is found even though it is not used in the page
-  await page.goto("http://localhost:8989/assets/toasts.png");
-  const response = await page.waitForResponse(
-    (response) => response.url().endsWith("/assets/toasts.png") && response.status() === 200
+  const response = await page.request.get(
+    "http://localhost:8989/assets/toasts.png"
   );
-  expect(response.ok()).toBeTruthy();
+  // Expect the response to be ok
+  expect(response.status()).toBe(200);
+  // make sure the response is an image
+  expect(response.headers()["content-type"]).toBe("image/png");
 });
