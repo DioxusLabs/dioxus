@@ -116,8 +116,8 @@ impl CssModuleAssetOptions {
     /// Minifying the css can make your site load faster by loading less data
     ///
     /// ```rust
-    /// # use manganis::{styles, CssModuleAssetOptions};
-    /// styles!(STYLES, "/assets/style.css", CssModuleAssetOptions::new().with_minify(false));
+    /// # use manganis::{css_module, CssModuleAssetOptions};
+    /// css_module!(StylesIdent = "/assets/style.css", CssModuleAssetOptions::new().with_minify(false));
     /// ```
     #[allow(unused)]
     pub const fn with_minify(self, minify: bool) -> Self {
@@ -134,8 +134,8 @@ impl CssModuleAssetOptions {
     /// Preloading css will make the image start to load as soon as possible. This is useful for css that is used soon after the page loads or css that may not be used immediately, but should start loading sooner
     ///
     /// ```rust
-    /// # use manganis::{asset, Asset, CssAssetOptions};
-    /// styles!("/assets/style.css", CssAssetOptions::new().with_preload(true));
+    /// # use manganis::{css_module, Asset, CssModuleAssetOptions};
+    /// css_module!(StylesIdent = "/assets/style.css", CssModuleAssetOptions::new().with_preload(true));
     /// ```
     #[allow(unused)]
     pub const fn with_preload(self, preload: bool) -> Self {
