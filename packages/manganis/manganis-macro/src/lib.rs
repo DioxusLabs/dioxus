@@ -151,7 +151,7 @@ pub fn asset(input: TokenStream) -> TokenStream {
 /// }
 ///
 /// .button {
-///     background-color: #373737;        
+///     background-color: #373737;
 /// }
 /// ```
 /// Then you can use the `css_module!()` macro in your Rust project:
@@ -163,9 +163,9 @@ pub fn asset(input: TokenStream) -> TokenStream {
 /// println!("{}", Styles::button);
 /// ```
 #[proc_macro]
+#[doc(hidden)]
 pub fn css_module(input: TokenStream) -> TokenStream {
     let style = parse_macro_input!(input as CssModuleParser);
-
     quote! { #style }.into_token_stream().into()
 }
 
