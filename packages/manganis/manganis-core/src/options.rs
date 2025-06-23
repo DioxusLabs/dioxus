@@ -44,7 +44,7 @@ impl AssetOptions {
     ///
     /// If you are using an asset outside of rust code where you know what the asset hash will be, you can disable
     /// the hash suffix and keep the asset in the binary even when it is unused in the rust code with the
-    /// [`external_asset!`](manganis::external_asset) macro.
+    /// `external_asset!` macro.
     pub const fn with_hash_suffix(mut self, add_hash: bool) -> Self {
         self.add_hash = add_hash;
         self
