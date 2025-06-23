@@ -67,7 +67,7 @@ impl CommandWithPlatformOverrides<BuildArgs> {
     pub async fn build(self) -> Result<StructuredOutput> {
         tracing::info!("Building project...");
 
-        let ssg = self.ssg;
+        let ssg = self.shared.ssg;
         let targets = self.into_targets().await?;
 
         AppBuilder::start(&targets.client, BuildMode::Base)?

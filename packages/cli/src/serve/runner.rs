@@ -139,7 +139,7 @@ impl AppServer {
         let (watcher_tx, watcher_rx) = futures_channel::mpsc::unbounded();
         let watcher = create_notify_watcher(watcher_tx.clone(), wsl_file_poll_interval as u64);
 
-        let ssg = args.targets.ssg;
+        let ssg = args.platform_args.shared.targets.ssg;
         let target_args = CommandWithPlatformOverrides {
             shared: args.platform_args.shared.targets,
             server: args.platform_args.server.map(|s| s.targets),

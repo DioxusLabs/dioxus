@@ -3375,8 +3375,7 @@ impl BuildRequest {
         let wasm_bindgen_wasm_out = self.wasm_bindgen_wasm_output_file();
         let wasm_path = if self.release {
             let name = assets
-                .assets
-                .get(&wasm_bindgen_wasm_out)
+                .get_first_asset_for_source(&wasm_bindgen_wasm_out)
                 .expect("The wasm source must exist before creating index.html");
             format!("assets/{}", name.bundled_path())
         } else {
@@ -3389,8 +3388,7 @@ impl BuildRequest {
         let wasm_bindgen_js_out = self.wasm_bindgen_js_output_file();
         let js_path = if self.release {
             let name = assets
-                .assets
-                .get(&wasm_bindgen_js_out)
+                .get_first_asset_for_source(&wasm_bindgen_js_out)
                 .expect("The js source must exist before creating index.html");
             format!("assets/{}", name.bundled_path())
         } else {
