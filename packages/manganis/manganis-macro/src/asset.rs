@@ -21,6 +21,10 @@ pub struct AssetParser {
 
     /// The source of the trailing options
     pub(crate) options: TokenStream2,
+
+    /// If this is an externally consumed asset, don't add a hash suffix
+    /// and always include the asset in the binary even if it is unused
+    pub(crate) external_asset: bool,
 }
 
 impl Parse for AssetParser {
@@ -53,6 +57,7 @@ impl Parse for AssetParser {
             path_expr,
             asset,
             options,
+            external_asset: false,
         })
     }
 }
@@ -84,9 +89,18 @@ impl ToTokens for AssetParser {
         asset_string.hash(&mut hash);
         let asset_hash = format!("{:016x}", hash.finish());
 
-        // Generate the link section for the asset
-        // The link section includes the source path and the output path of the asset
-        let link_section = crate::generate_link_section(quote!(__ASSET), &asset_hash);
+        // Generate the link section for the asset. The link section includes the source path and the
+        // output path of the asset. We force the asset to be included in the binary even if it is unused
+        // if the asset is unhashed
+        let link_section =
+            crate::generate_link_section(quote!(__ASSET), &asset_hash, self.external_asset);
+
+        // If this is a hashless asset, set the add_hash flag to false
+        let add_hash = if self.external_asset {
+            quote! { .with_hash_suffix(false) }
+        } else {
+            quote! {}
+        };
 
         // generate the asset::new method to deprecate the `./assets/blah.css` syntax
         let constructor = if asset.is_relative() {
@@ -96,7 +110,7 @@ impl ToTokens for AssetParser {
         };
 
         let options = if self.options.is_empty() {
-            quote! { manganis::AssetOptions::Unknown }
+            quote! { manganis::AssetVariant::Unknown }
         } else {
             self.options.clone()
         };
@@ -108,7 +122,7 @@ impl ToTokens for AssetParser {
                 // The options give the CLI info about how to process the asset
                 // Note: into_asset_options is not a trait, so we cannot accept the options directly
                 // in the constructor. Stable rust doesn't have support for constant functions in traits
-                const __ASSET_OPTIONS: manganis::AssetOptions = #options.into_asset_options();
+                const __ASSET_OPTIONS: manganis::AssetOptions = #options.into_asset_options()#add_hash;
                 // The input token hash is used to uniquely identify the link section for this asset
                 const __ASSET_HASH: &'static str = #asset_hash;
                 // Create the asset that the crate will use. This is used both in the return value and

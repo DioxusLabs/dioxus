@@ -65,6 +65,52 @@ pub fn asset(input: TokenStream) -> TokenStream {
     quote! { #asset }.into_token_stream().into()
 }
 
+/// Like the [`asset!`] macro, but collects an asset that may be used outside of the rust code. Unlike the `asset!` macro,
+/// this will not add a hash suffix to the asset path, and will always include the asset in the binary even if it is unused.
+///
+/// # Files
+///
+/// The file builder collects an arbitrary file. Relative paths are resolved relative to the package root
+/// ```rust
+/// # use manganis::{external_asset, Asset};
+/// const _: Asset = external_asset!("/assets/asset.txt"); // Bundled at /assets/asset.txt
+/// ```
+/// Macros like `concat!` and `env!` are supported in the asset path.
+/// ```rust
+/// # use manganis::{external_asset, Asset};
+/// const _: Asset = external_asset!(concat!("/assets/", env!("CARGO_CRATE_NAME"), ".dat")); // Bundled at /assets/your_crate_name.dat
+/// ```
+///
+/// # Images
+///
+/// You can collect images which will be automatically optimized with the image builder:
+/// ```rust
+/// # use manganis::{external_asset, Asset};
+/// const _: Asset = external_asset!("/assets/image.png"); // Bundled at /assets/image.png
+/// ```
+/// Resize the image at compile time to make the assets file size smaller:
+/// ```rust
+/// # use manganis::{external_asset, Asset, ImageAssetOptions, ImageSize};
+/// const _: Asset = external_asset!("/assets/image.png", ImageAssetOptions::new().with_size(ImageSize::Manual { width: 52, height: 52 })); // Bundled at /assets/image.png
+/// ```
+/// Or convert the image at compile time to a web friendly format:
+/// ```rust
+/// # use manganis::{external_asset, Asset, ImageAssetOptions, ImageSize, ImageFormat};
+/// const _: Asset = external_asset!("/assets/image.png", ImageAssetOptions::new().with_format(ImageFormat::Avif)); // Bundled at /assets/image.avif
+/// ```
+/// You can mark images as preloaded to make them load faster in your app
+/// ```rust
+/// # use manganis::{external_asset, Asset, ImageAssetOptions};
+/// const _: Asset = external_asset!("/assets/image.png", ImageAssetOptions::new().with_preload(true)); // Bundled at /assets/image.png
+/// ```
+#[proc_macro]
+pub fn external_asset(input: TokenStream) -> TokenStream {
+    let mut asset = parse_macro_input!(input as asset::AssetParser);
+    asset.external_asset = true;
+
+    quote! { #asset }.into_token_stream().into()
+}
+
 /// Generate type-safe and globally-unique CSS identifiers from a CSS module.
 ///
 /// CSS modules allow you to have unique, scoped and type-safe CSS identifiers. A CSS module is a CSS file with the `.module.css` file extension.

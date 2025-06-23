@@ -31,6 +31,6 @@ impl FolderAssetOptions {
 
     /// Convert the options into options for a generic asset
     pub const fn into_asset_options(self) -> AssetOptions {
-        AssetOptions::Folder(self)
+        AssetOptions::new(crate::AssetVariant::Folder(self))
     }
 }

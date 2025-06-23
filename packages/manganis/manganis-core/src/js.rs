@@ -73,6 +73,6 @@ impl JsAssetOptions {
 
     /// Convert the options into options for a generic asset
     pub const fn into_asset_options(self) -> AssetOptions {
-        AssetOptions::Js(self)
+        AssetOptions::new(crate::AssetVariant::Js(self))
     }
 }

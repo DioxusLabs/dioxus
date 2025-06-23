@@ -41,6 +41,7 @@ impl Parse for CssModuleParser {
             path_expr,
             asset,
             options,
+            external_asset: false,
         };
 
         Ok(Self {

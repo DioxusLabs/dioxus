@@ -23,4 +23,21 @@ test("optimized scripts run", async ({ page }) => {
 
   // Expect the urls to be different
   expect(src).not.toEqual(src2);
+
+  // Expect the page to contain an image with the id "some_image_without_hash"
+  const image3 = page.locator("#some_image_without_hash");
+  await expect(image3).toBeVisible();
+  // Get the image src
+  const src3 = await image3.getAttribute("src");
+  // Expect the src to be without a hash
+  expect(src3).toEqual("/assets/toasts.png");
+});
+
+test("unused external assets are bundled", async ({ page }) => {
+  // Assert http://localhost:8989/assets/toasts.png is found even though it is not used in the page
+  await page.goto("http://localhost:8989/assets/toasts.png");
+  const response = await page.waitForResponse(
+    (response) => response.url().endsWith("/assets/toasts.png") && response.status() === 200
+  );
+  expect(response.ok()).toBeTruthy();
 });
