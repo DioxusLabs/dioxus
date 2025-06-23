@@ -3206,7 +3206,6 @@ impl BuildRequest {
             || will_wasm_opt
             || ctx.mode == BuildMode::Fat;
         let keep_names = will_wasm_opt || ctx.mode == BuildMode::Fat;
-        let package_to_asset = self.release && !should_bundle_split;
         let demangle = false;
         let wasm_opt_options = WasmOptConfig {
             memory_packing: self.wasm_split,
@@ -3349,7 +3348,7 @@ impl BuildRequest {
 
         // In release mode, we make the wasm and bindgen files into assets so they get bundled with max
         // optimizations.
-        if package_to_asset {
+        if self.should_bundle_to_asset() {
             // Register the main.js with the asset system so it bundles in the snippets and optimizes
             assets.register_asset(
                 &self.wasm_bindgen_js_output_file(),
@@ -3357,7 +3356,7 @@ impl BuildRequest {
             )?;
         }
 
-        if package_to_asset {
+        if self.should_bundle_to_asset() {
             // Make sure to register the main wasm file with the asset system
             assets.register_asset(&post_bindgen_wasm, AssetOptions::Unknown)?;
         }
@@ -3373,7 +3372,7 @@ impl BuildRequest {
     pub(crate) fn write_index_html(&self, assets: &AssetManifest) -> Result<()> {
         // Get the path to the wasm-bindgen output files. Either the direct file or the opitmized one depending on the build mode
         let wasm_bindgen_wasm_out = self.wasm_bindgen_wasm_output_file();
-        let wasm_path = if self.release {
+        let wasm_path = if self.should_bundle_to_asset() {
             let name = assets
                 .get_first_asset_for_source(&wasm_bindgen_wasm_out)
                 .expect("The wasm source must exist before creating index.html");
@@ -3386,7 +3385,7 @@ impl BuildRequest {
         };
 
         let wasm_bindgen_js_out = self.wasm_bindgen_js_output_file();
-        let js_path = if self.release {
+        let js_path = if self.should_bundle_to_asset() {
             let name = assets
                 .get_first_asset_for_source(&wasm_bindgen_js_out)
                 .expect("The js source must exist before creating index.html");
