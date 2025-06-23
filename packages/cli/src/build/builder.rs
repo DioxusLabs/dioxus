@@ -483,6 +483,7 @@ impl AppBuilder {
         envs
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(crate) async fn open(
         &mut self,
         devserver_ip: SocketAddr,
