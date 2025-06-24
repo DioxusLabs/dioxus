@@ -16,6 +16,5 @@ pub use js::*;
 mod asset;
 pub use asset::*;
 
-pub mod linker;
-
-pub mod hash;
+mod css_module;
+pub use css_module::*;

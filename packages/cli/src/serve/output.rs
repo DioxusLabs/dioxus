@@ -1,7 +1,8 @@
 use crate::{
     serve::{ansi_buffer::AnsiStringLine, ServeUpdate, WebServer},
-    BuildStage, BuilderUpdate, Platform, TraceContent, TraceMsg, TraceSrc,
+    BuildId, BuildStage, BuilderUpdate, Platform, TraceContent, TraceMsg, TraceSrc,
 };
+use cargo_metadata::diagnostic::Diagnostic;
 use crossterm::{
     cursor::{Hide, Show},
     event::{
@@ -151,7 +152,7 @@ impl Output {
         use std::io::IsTerminal;
 
         if !stdout().is_terminal() {
-            return io::Result::Err(io::Error::new(io::ErrorKind::Other, "Not a terminal"));
+            return io::Result::Err(io::Error::other("Not a terminal"));
         }
 
         enable_raw_mode()?;
@@ -160,13 +161,6 @@ impl Output {
             .execute(EnableFocusChange)?
             .execute(EnableBracketedPaste)?;
 
-        Ok(())
-    }
-
-    /// Call the shutdown functions that might mess with the terminal settings - see the related code
-    /// in "startup" for more details about what we need to unset
-    pub(crate) fn shutdown(&self) -> io::Result<()> {
-        Self::remote_shutdown(self.interactive)?;
         Ok(())
     }
 
@@ -251,6 +245,16 @@ impl Output {
                 self.trace = !self.trace;
                 tracing::info!("Tracing is now {}", if self.trace { "on" } else { "off" });
             }
+            KeyCode::Char('D') => {
+                return Ok(Some(ServeUpdate::OpenDebugger {
+                    id: BuildId::SERVER,
+                }));
+            }
+            KeyCode::Char('d') => {
+                return Ok(Some(ServeUpdate::OpenDebugger {
+                    id: BuildId::CLIENT,
+                }));
+            }
 
             KeyCode::Char('c') => {
                 stdout()
@@ -301,10 +305,10 @@ impl Output {
         self.pending_logs.push_front(message);
     }
 
-    pub fn push_cargo_log(&mut self, message: cargo_metadata::CompilerMessage) {
+    pub fn push_cargo_log(&mut self, message: Diagnostic) {
         use cargo_metadata::diagnostic::DiagnosticLevel;
 
-        if self.trace || !matches!(message.message.level, DiagnosticLevel::Note) {
+        if self.trace || !matches!(message.level, DiagnosticLevel::Note) {
             self.push_log(TraceMsg::cargo(message));
         }
     }
@@ -546,6 +550,7 @@ impl Output {
             BuildStage::Linking => lines.push("Linking".yellow()),
             BuildStage::Hotpatching => lines.push("Hot-patching...".yellow()),
             BuildStage::ExtractingAssets => lines.push("Extracting assets".yellow()),
+            BuildStage::Prerendering => lines.push("Pre-rendering...".yellow()),
             _ => {}
         };
 
@@ -650,7 +655,18 @@ impl Output {
 
         // todo(jon) should we write https ?
         let address = match state.server.displayed_address() {
-            Some(address) => format!("http://{}", address).blue(),
+            Some(address) => format!(
+                "http://{}{}",
+                address,
+                state
+                    .runner
+                    .client
+                    .build
+                    .base_path()
+                    .map(|f| format!("/{f}/"))
+                    .unwrap_or_default()
+            )
+            .blue(),
             None => "no server address".dark_gray(),
         };
 
@@ -727,7 +743,13 @@ impl Output {
         frame.render_widget(
             Paragraph::new(Line::from(vec![
                 "Hotreload: ".gray(),
-                "rsx and assets".yellow(),
+                if !state.runner.automatic_rebuilds {
+                    "disabled".dark_gray()
+                } else if state.runner.use_hotpatch_engine {
+                    "hot-patching".yellow()
+                } else {
+                    "rsx and assets".yellow()
+                },
             ])),
             meta_list[3],
         );
@@ -931,7 +953,7 @@ impl Output {
         use chrono::Timelike;
 
         let rendered = match log.content {
-            TraceContent::Cargo(msg) => msg.message.rendered.unwrap_or_default(),
+            TraceContent::Cargo(msg) => msg.rendered.unwrap_or_default(),
             TraceContent::Text(text) => text,
         };
 
@@ -966,11 +988,23 @@ impl Output {
                                 " ".repeat(3usize.saturating_sub(log.source.to_string().len()))
                         ))
                         .style(match log.source {
-                            TraceSrc::App(_platform) => Style::new().blue(),
-                            TraceSrc::Dev => Style::new().magenta(),
-                            TraceSrc::Build => Style::new().yellow(),
-                            TraceSrc::Bundle => Style::new().magenta(),
+                            TraceSrc::App(_platform) => match log.level {
+                                Level::ERROR => Style::new().red(),
+                                Level::WARN => Style::new().yellow(),
+                                Level::INFO => Style::new().magenta(),
+                                Level::DEBUG => Style::new().magenta(),
+                                Level::TRACE => Style::new().magenta(),
+                            },
+                            TraceSrc::Dev => match log.level {
+                                Level::ERROR => Style::new().red(),
+                                Level::WARN => Style::new().yellow(),
+                                Level::INFO => Style::new().blue(),
+                                Level::DEBUG => Style::new().blue(),
+                                Level::TRACE => Style::new().blue(),
+                            },
                             TraceSrc::Cargo => Style::new().yellow(),
+                            TraceSrc::Build => Style::new().blue(),
+                            TraceSrc::Bundle => Style::new().blue(),
                             TraceSrc::Unknown => Style::new().gray(),
                         }),
                     );

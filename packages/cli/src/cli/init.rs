@@ -35,7 +35,7 @@ pub struct Init {
     #[clap(long)]
     subtemplate: Option<String>,
 
-    /// Pass <option>=<value> for the used template (e.g., `foo=bar`)
+    /// Pass `<option>=<value>` for the used template (e.g., `foo=bar`)
     #[clap(short, long)]
     option: Vec<String>,
 
@@ -64,6 +64,7 @@ impl Init {
             init: true,
             name: self.name,
             silent: self.yes,
+            vcs: Some(cargo_generate::Vcs::Git),
             template_path: TemplatePath {
                 auto_path: self.template,
                 branch: self.branch,

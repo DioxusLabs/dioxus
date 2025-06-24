@@ -87,8 +87,26 @@ module.exports = defineConfig({
     {
       cwd: path.join(process.cwd(), "web"),
       command:
-        'cargo run --package dioxus-cli --release -- serve --force-sequential --platform web --addr "127.0.0.1" --port 9999',
-      port: 9999,
+        'cargo run --package dioxus-cli --release -- run --verbose --force-sequential --platform web --addr "127.0.0.1" --port 9990',
+      port: 9990,
+      timeout: 50 * 60 * 1000,
+      reuseExistingServer: !process.env.CI,
+      stdout: "pipe",
+    },
+    {
+      cwd: path.join(process.cwd(), "web-routing"),
+      command:
+        'cargo run --package dioxus-cli --release -- run --verbose --force-sequential --platform web --addr "127.0.0.1" --port 2020',
+      port: 2020,
+      timeout: 50 * 60 * 1000,
+      reuseExistingServer: !process.env.CI,
+      stdout: "pipe",
+    },
+    {
+      cwd: path.join(process.cwd(), "web-hash-routing"),
+      command:
+        'cargo run --package dioxus-cli --release -- run --verbose --force-sequential --platform web --addr "127.0.0.1" --port 2021',
+      port: 2021,
       timeout: 50 * 60 * 1000,
       reuseExistingServer: !process.env.CI,
       stdout: "pipe",
@@ -96,7 +114,7 @@ module.exports = defineConfig({
     {
       cwd: path.join(process.cwd(), "fullstack"),
       command:
-        'cargo run --package dioxus-cli --release -- serve --force-sequential --platform web --addr "127.0.0.1" --port 3333',
+        'cargo run --package dioxus-cli --release -- run --verbose --force-sequential --platform web --addr "127.0.0.1" --port 3333',
       port: 3333,
       timeout: 50 * 60 * 1000,
       reuseExistingServer: !process.env.CI,
@@ -105,7 +123,7 @@ module.exports = defineConfig({
     {
       cwd: path.join(process.cwd(), "fullstack-mounted"),
       command:
-        'cargo run --package dioxus-cli --release -- serve --force-sequential --platform web --addr "127.0.0.1" --port 7777',
+        'cargo run --package dioxus-cli --release -- run --verbose --force-sequential --platform web --addr "127.0.0.1" --port 7777',
       port: 7777,
       timeout: 50 * 60 * 1000,
       reuseExistingServer: !process.env.CI,
@@ -114,7 +132,7 @@ module.exports = defineConfig({
     {
       cwd: path.join(process.cwd(), "fullstack-routing"),
       command:
-        'cargo run --package dioxus-cli --release -- serve --force-sequential --platform web --addr "127.0.0.1" --port 8888',
+        'cargo run --package dioxus-cli --release -- run --verbose --force-sequential --platform web --addr "127.0.0.1" --port 8888',
       port: 8888,
       timeout: 50 * 60 * 1000,
       reuseExistingServer: !process.env.CI,
@@ -123,7 +141,7 @@ module.exports = defineConfig({
     {
       cwd: path.join(process.cwd(), "suspense-carousel"),
       command:
-        'cargo run --package dioxus-cli --release -- serve --force-sequential --platform web --addr "127.0.0.1" --port 4040',
+        'cargo run --package dioxus-cli --release -- run --verbose --force-sequential --platform web --addr "127.0.0.1" --port 4040',
       port: 4040,
       timeout: 50 * 60 * 1000,
       reuseExistingServer: !process.env.CI,
@@ -132,27 +150,26 @@ module.exports = defineConfig({
     {
       cwd: path.join(process.cwd(), "nested-suspense"),
       command:
-        'cargo run --package dioxus-cli --release -- serve --force-sequential --platform web --addr "127.0.0.1" --port 5050',
+        'cargo run --package dioxus-cli --release -- run --verbose --force-sequential --platform web --addr "127.0.0.1" --port 5050',
       port: 5050,
       timeout: 50 * 60 * 1000,
       reuseExistingServer: !process.env.CI,
       stdout: "pipe",
     },
-    // currently disabled - we want ssg to be a "bundle" feature, not a serve feature.
-    // {
-    //   cwd: path.join(process.cwd(), "nested-suspense"),
-    //   command:
-    //     'cargo run --package dioxus-cli --release -- serve --bin nested-suspense-ssg --force-sequential --platform web --ssg --addr "127.0.0.1" --port 6060',
-    //   port: 6060,
-    //   timeout: 50 * 60 * 1000,
-    //   reuseExistingServer: !process.env.CI,
-    //   stdout: "pipe",
-    // },
+    {
+      cwd: path.join(process.cwd(), "nested-suspense"),
+      command:
+        'cargo run --package dioxus-cli --release -- run --verbose --bin nested-suspense-ssg --force-sequential --platform web --ssg --addr "127.0.0.1" --port 6060',
+      port: 6060,
+      timeout: 50 * 60 * 1000,
+      reuseExistingServer: !process.env.CI,
+      stdout: "pipe",
+    },
     {
       cwd: path.join(process.cwd(), "cli-optimization"),
       // Remove the cache folder for the cli-optimization build to force a full cache reset
       command:
-        'cargo run --package dioxus-cli --release --features optimizations -- serve --addr "127.0.0.1" --port 8989',
+        'cargo run --package dioxus-cli --release -- run --verbose --addr "127.0.0.1" --port 8989',
       port: 8989,
       timeout: 50 * 60 * 1000,
       reuseExistingServer: !process.env.CI,
@@ -161,7 +178,7 @@ module.exports = defineConfig({
     {
       cwd: path.join(process.cwd(), "wasm-split-harness"),
       command:
-        'cargo run --package dioxus-cli --release --features optimizations -- serve --bin wasm-split-harness --platform web --addr "127.0.0.1" --port 8001 --wasm-split --profile wasm-split-release',
+        'cargo run --package dioxus-cli --release -- run --verbose --bin wasm-split-harness --platform web --addr "127.0.0.1" --port 8001 --wasm-split --profile wasm-split-release',
       port: 8001,
       timeout: 50 * 60 * 1000,
       reuseExistingServer: !process.env.CI,
@@ -170,7 +187,7 @@ module.exports = defineConfig({
     {
       cwd: path.join(process.cwd(), "default-features-disabled"),
       command:
-        'cargo run --package dioxus-cli --release -- serve --force-sequential --addr "127.0.0.1" --port 8002',
+        'cargo run --package dioxus-cli --release -- run --verbose --force-sequential --addr "127.0.0.1" --port 8002',
       port: 8002,
       timeout: 50 * 60 * 1000,
       reuseExistingServer: !process.env.CI,
@@ -179,7 +196,7 @@ module.exports = defineConfig({
     {
       cwd: path.join(process.cwd(), "barebones-template"),
       command:
-        'cargo run --package dioxus-cli --release -- serve --force-sequential --addr "127.0.0.1" --port 8123',
+        'cargo run --package dioxus-cli --release -- run --verbose --force-sequential --addr "127.0.0.1" --port 8123',
       port: 8123,
       timeout: 50 * 60 * 1000,
       reuseExistingServer: !process.env.CI,

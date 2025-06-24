@@ -1,6 +1,7 @@
 use crate::element::DesktopElement;
 use crate::file_upload::DesktopFileDragEvent;
 use crate::menubar::DioxusMenu;
+use crate::PendingDesktopContext;
 use crate::{
     app::SharedContext,
     assets::AssetHandlerRegistry,
@@ -19,8 +20,8 @@ use dioxus_history::{History, MemoryHistory};
 use dioxus_hooks::to_owned;
 use dioxus_html::{HasFileData, HtmlEvent, PlatformEventData};
 use futures_util::{pin_mut, FutureExt};
-use std::cell::OnceCell;
 use std::sync::Arc;
+use std::{cell::OnceCell, time::Duration};
 use std::{rc::Rc, task::Waker};
 use wry::{DragDropEvent, RequestAsyncResponder, WebContext, WebViewBuilder};
 
@@ -207,6 +208,7 @@ impl WebviewInstance {
 
         // https://developer.apple.com/documentation/appkit/nswindowcollectionbehavior/nswindowcollectionbehaviormanaged
         #[cfg(target_os = "macos")]
+        #[allow(deprecated)]
         {
             use cocoa::appkit::NSWindowCollectionBehavior;
             use cocoa::base::id;
@@ -346,8 +348,11 @@ impl WebviewInstance {
                 if var.starts_with("dioxus://") || var.starts_with("http://dioxus.") {
                     true
                 } else {
-                    if var.starts_with("http://") || var.starts_with("https://") {
-                        _ = webbrowser::open(&var);
+                    if var.starts_with("http://")
+                        || var.starts_with("https://")
+                        || var.starts_with("mailto:")
+                    {
+                        _ = open::that_detached(&var);
                     }
                     false
                 }
@@ -480,6 +485,31 @@ impl WebviewInstance {
             .webview
             .evaluate_script("window.interpreter.kickAllStylesheetsOnPage()");
     }
+
+    /// Displays a toast to the developer.
+    pub(crate) fn show_toast(
+        &self,
+        header_text: &str,
+        message: &str,
+        level: &str,
+        duration: Duration,
+        after_reload: bool,
+    ) {
+        let as_ms = duration.as_millis();
+
+        let js_fn_name = match after_reload {
+            true => "scheduleDXToast",
+            false => "showDXToast",
+        };
+
+        _ = self.desktop_context.webview.evaluate_script(&format!(
+            r#"
+                if (typeof {js_fn_name} !== "undefined") {{
+                    window.{js_fn_name}("{header_text}", "{message}", "{level}", {as_ms});
+                }}
+                "#,
+        ));
+    }
 }
 
 /// A synchronous response to a browser event which may prevent the default browser's action
@@ -494,5 +524,35 @@ impl SynchronousEventResponse {
     #[allow(unused)]
     pub fn new(prevent_default: bool) -> Self {
         Self { prevent_default }
+    }
+}
+
+/// A webview that is queued to be created. We can't spawn webviews outside of the main event loop because it may
+/// block on windows so we queue them into the shared context and then create them when the main event loop is ready.
+pub(crate) struct PendingWebview {
+    dom: VirtualDom,
+    cfg: Config,
+    sender: tokio::sync::oneshot::Sender<DesktopContext>,
+}
+
+impl PendingWebview {
+    pub(crate) fn new(dom: VirtualDom, cfg: Config) -> (Self, PendingDesktopContext) {
+        let (sender, receiver) = tokio::sync::oneshot::channel();
+        let webview = Self { dom, cfg, sender };
+        let pending = PendingDesktopContext { receiver };
+        (webview, pending)
+    }
+
+    pub(crate) fn create_window(self, shared: &Rc<SharedContext>) -> WebviewInstance {
+        let window = WebviewInstance::new(self.cfg, self.dom, shared.clone());
+
+        let cx = window.dom.in_runtime(|| {
+            ScopeId::ROOT
+                .consume_context::<Rc<DesktopService>>()
+                .unwrap()
+        });
+        _ = self.sender.send(cx);
+
+        window
     }
 }

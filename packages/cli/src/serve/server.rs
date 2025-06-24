@@ -69,6 +69,7 @@ pub(crate) struct ConnectedWsClient {
     socket: WebSocket,
     build_id: Option<BuildId>,
     aslr_reference: Option<u64>,
+    pid: Option<u32>,
 }
 
 impl WebServer {
@@ -146,12 +147,13 @@ impl WebServer {
             new_hot_reload_socket = &mut new_hot_reload_socket => {
                 if let Some(new_socket) = new_hot_reload_socket {
                     let aslr_reference = new_socket.aslr_reference;
+                    let pid = new_socket.pid;
                     let id = new_socket.build_id.unwrap_or(BuildId::CLIENT);
 
                     drop(new_message);
                     self.hot_reload_sockets.push(new_socket);
 
-                    return ServeUpdate::NewConnection { aslr_reference, id };
+                    return ServeUpdate::NewConnection { aslr_reference, id, pid };
                 } else {
                     panic!("Could not receive a socket - the devtools could not boot - the port is likely already in use");
                 }
@@ -261,7 +263,12 @@ impl WebServer {
             BuilderUpdate::StdoutReceived { .. } => {}
             BuilderUpdate::StderrReceived { .. } => {}
             BuilderUpdate::ProcessExited { .. } => {}
+            BuilderUpdate::ProcessWaitFailed { .. } => {}
         }
+    }
+
+    pub(crate) fn has_hotreload_sockets(&self) -> bool {
+        !self.hot_reload_sockets.is_empty()
     }
 
     /// Sends hot reloadable changes to all clients.
@@ -297,12 +304,14 @@ impl WebServer {
         jump_table: JumpTable,
         time_taken: Duration,
         build: BuildId,
+        for_pid: Option<u32>,
     ) {
         let msg = DevserverMsg::HotReload(HotReloadMsg {
             jump_table: Some(jump_table),
             ms_elapsed: time_taken.as_millis() as u64,
             templates: vec![],
             assets: vec![],
+            for_pid,
             for_build_id: Some(build.0 as _),
         });
         self.send_devserver_message_to_all(msg).await;
@@ -466,11 +475,7 @@ fn build_devserver_router(
             runner
                 .client()
                 .build
-                .config
-                .web
-                .app
-                .base_path
-                .as_deref()
+                .base_path()
                 .unwrap_or_default()
                 .trim_matches('/')
         );
@@ -491,6 +496,7 @@ fn build_devserver_router(
     struct ConnectionQuery {
         aslr_reference: Option<u64>,
         build_id: Option<BuildId>,
+        pid: Option<u32>,
     }
 
     // Setup websocket endpoint - and pass in the extension layer immediately after
@@ -502,7 +508,7 @@ fn build_devserver_router(
                 get(
                     |ws: WebSocketUpgrade, ext: Extension<UnboundedSender<ConnectedWsClient>>, query: Query<ConnectionQuery>| async move {
                         tracing::debug!("New devtool websocket connection: {:?}", query);
-                        ws.on_upgrade(move |socket| async move { _ = ext.0.unbounded_send(ConnectedWsClient { socket, aslr_reference: query.aslr_reference, build_id: query.build_id }) })
+                        ws.on_upgrade(move |socket| async move { _ = ext.0.unbounded_send(ConnectedWsClient { socket, aslr_reference: query.aslr_reference, build_id: query.build_id, pid: query.pid }) })
                     },
                 ),
             )
@@ -511,7 +517,7 @@ fn build_devserver_router(
                 "/build_status",
                 get(
                     |ws: WebSocketUpgrade, ext: Extension<UnboundedSender<ConnectedWsClient>>| async move {
-                        ws.on_upgrade(move |socket| async move { _ = ext.0.unbounded_send(ConnectedWsClient { socket, aslr_reference: None, build_id: None }) })
+                        ws.on_upgrade(move |socket| async move { _ = ext.0.unbounded_send(ConnectedWsClient { socket, aslr_reference: None, build_id: None, pid: None }) })
                     },
                 ),
             )
@@ -552,10 +558,7 @@ fn build_serve_dir(runner: &AppServer) -> axum::routing::MethodRouter {
     let app = &runner.client;
     let cfg = &runner.client.build.config;
 
-    let out_dir = app
-        .build
-        .build_dir(Platform::Web, app.build.release)
-        .join("public");
+    let out_dir = app.build.root_dir();
     let index_on_404: bool = cfg.web.watcher.index_on_404;
 
     get_service(

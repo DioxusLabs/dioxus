@@ -22,6 +22,9 @@ export async function activate(context: vscode.ExtensionContext) {
 		vscode.commands.registerCommand('extension.formatRsxDocument', formatRsxDocument),
 		vscode.workspace.onWillSaveTextDocument(fmtDocumentOnSave)
 	);
+
+	context.subscriptions.push(vscode.window.registerUriHandler(new UriLaunchServer()));
+
 }
 
 function translate(component: boolean) {
@@ -169,5 +172,17 @@ function fmtDocument(document: vscode.TextDocument) {
 		}
 	} catch (error) {
 		vscode.window.showWarningMessage(`Errors occurred while formatting. Make sure you have the most recent Dioxus-CLI installed! \n${error}`);
+	}
+}
+
+class UriLaunchServer implements vscode.UriHandler {
+	handleUri(uri: vscode.Uri): vscode.ProviderResult<void> {
+		if (uri.path === '/debugger') {
+			let query = decodeURIComponent(uri.query);
+			let params = new URLSearchParams(query);
+			let route = params.get('uri');
+			vscode.window.showInformationMessage(`Opening Chrome debugger: ${route}`);
+			vscode.commands.executeCommand('extension.js-debug.debugLink', route);
+		}
 	}
 }

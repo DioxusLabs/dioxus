@@ -30,9 +30,14 @@ type ContextList = Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync>>;
 
 type BaseComp = fn() -> Element;
 
+/// Launch a fullstack app with the given root component.
+pub fn launch(root: BaseComp) -> ! {
+    launch_cfg(root, vec![], vec![])
+}
+
 /// Launch a fullstack app with the given root component, contexts, and config.
 #[allow(unused)]
-pub fn launch(root: BaseComp, contexts: ContextList, platform_config: Vec<Box<dyn Any>>) -> ! {
+pub fn launch_cfg(root: BaseComp, contexts: ContextList, platform_config: Vec<Box<dyn Any>>) -> ! {
     #[cfg(not(target_arch = "wasm32"))]
     tokio::runtime::Runtime::new()
         .unwrap()
@@ -51,11 +56,7 @@ async fn serve_server(
 ) {
     let (devtools_tx, mut devtools_rx) = futures_channel::mpsc::unbounded();
 
-    if let Some(endpoint) = dioxus_cli_config::devserver_ws_endpoint() {
-        dioxus_devtools::connect(endpoint, move |msg| {
-            _ = devtools_tx.unbounded_send(msg);
-        })
-    }
+    dioxus_devtools::connect(move |msg| _ = devtools_tx.unbounded_send(msg));
 
     let platform_config = platform_config
         .into_iter()
@@ -167,7 +168,7 @@ async fn serve_server(
                                 }
 
                                 let hot_root = subsecond::HotFn::current(original_root);
-                                let new_root_addr = hot_root.ptr_address() as usize as *const ();
+                                let new_root_addr = hot_root.ptr_address().0 as usize as *const ();
                                 let new_root = unsafe {
                                     std::mem::transmute::<*const (), fn() -> Element>(new_root_addr)
                                 };

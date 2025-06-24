@@ -102,14 +102,17 @@ macro_rules! read_env_config {
 /// For reference, the devserver typically lives on `127.0.0.1:8080` and serves the devserver websocket
 /// on `127.0.0.1:8080/_dioxus`.
 pub fn devserver_raw_addr() -> Option<SocketAddr> {
-    let ip = std::env::var(DEVSERVER_IP_ENV).ok()?;
-    let port = std::env::var(DEVSERVER_PORT_ENV).ok()?;
+    let port = std::env::var(DEVSERVER_PORT_ENV).ok();
 
     if cfg!(target_os = "android") {
         // Since `adb reverse` is used for Android, the 127.0.0.1 will always be
         // the correct IP address.
+        let port = port.unwrap_or("8080".to_string());
         return Some(format!("127.0.0.1:{}", port).parse().unwrap());
     }
+
+    let port = port?;
+    let ip = std::env::var(DEVSERVER_IP_ENV).ok()?;
 
     format!("{}:{}", ip, port).parse().ok()
 }

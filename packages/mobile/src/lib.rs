@@ -53,9 +53,9 @@ pub fn launch_cfg(
 ///
 /// If you look closely, you'll notice that we impl Send for this struct. This would normally be
 /// unsound. However, we know that the thread that created these objects ("main()" - see JNI_OnLoad)
-/// is finished once `start_app` is called. This is similar to how an Rc<T> is technically safe
-/// to move between threads if you can prove that no other thread is using the Rc<T> at the same time.
-/// Crates like https://crates.io/crates/sendable exist that build on this idea but with runtimk,
+/// is finished once `start_app` is called. This is similar to how an `Rc<T>` is technically safe
+/// to move between threads if you can prove that no other thread is using the `Rc<T>` at the same time.
+/// Crates like <https://crates.io/crates/sendable> exist that build on this idea but with runtime
 /// validation that the current thread is the one that created the object.
 ///
 /// Since `main()` completes, the only reader of this data will be `start_app`, so it's okay to
@@ -156,3 +156,24 @@ fn load_env_file_from_session_cache() {
         }
     }
 }
+
+// #![doc = include_str!("../README.md")]
+// #![doc(html_logo_url = "https://avatars.githubusercontent.com/u/79236386")]
+// #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
+
+// pub use dioxus_desktop::*;
+// use dioxus_lib::prelude::*;
+// use std::any::Any;
+
+// /// Launch via the binding API
+// pub fn launch(root: fn() -> Element) {
+//     launch_cfg(root, vec![], vec![]);
+// }
+
+// pub fn launch_cfg(
+//     root: fn() -> Element,
+//     contexts: Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync>>,
+//     platform_config: Vec<Box<dyn Any>>,
+// ) {
+//     dioxus_desktop::launch::launch_cfg(root, contexts, platform_config);
+// }

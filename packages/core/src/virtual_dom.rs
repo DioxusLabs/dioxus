@@ -16,7 +16,7 @@ use crate::{Task, VComponent};
 use futures_util::StreamExt;
 use slab::Slab;
 use std::collections::BTreeSet;
-use std::{any::Any, rc::Rc, sync::Arc};
+use std::{any::Any, rc::Rc};
 use tracing::instrument;
 
 /// A virtual node system that progresses user events and diffs UI trees.
@@ -239,14 +239,7 @@ impl VirtualDom {
     ///
     /// Note: the VirtualDom is not progressed, you must either "run_with_deadline" or use "rebuild" to progress it.
     pub fn new(app: fn() -> Element) -> Self {
-        Self::new_with_props(
-            move || {
-                use warnings::Warning;
-                // The root props don't come from a vcomponent so we need to manually rerun them sometimes
-                crate::properties::component_called_as_function::allow(app)
-            },
-            (),
-        )
+        Self::new_with_props(app, ())
     }
 
     /// Create a new VirtualDom with the given properties for the root component.
@@ -310,7 +303,7 @@ impl VirtualDom {
         dom
     }
 
-    /// Create a new VirtualDom from something that implements [`AnyProps`]
+    /// Create a new VirtualDom from a VComponent
     #[instrument(skip(root), level = "trace", name = "VirtualDom::new")]
     pub(crate) fn new_with_component(root: VComponent) -> Self {
         let (tx, rx) = futures_channel::mpsc::unbounded();
@@ -766,7 +759,7 @@ impl VirtualDom {
     #[cfg(debug_assertions)]
     fn register_subsecond_handler(&self) {
         let sender = self.runtime().sender.clone();
-        subsecond::register_handler(Arc::new(move || {
+        subsecond::register_handler(std::sync::Arc::new(move || {
             _ = sender.unbounded_send(SchedulerMsg::AllDirty);
         }));
     }

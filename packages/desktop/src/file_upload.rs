@@ -79,9 +79,9 @@ impl FileDialogRequest {
             let filters: Vec<_> = request
                 .accept
                 .as_deref()
-                .unwrap_or_default()
+                .unwrap_or(".*")
                 .split(',')
-                .filter_map(|s| Filters::from_str(s).ok())
+                .filter_map(|s| Filters::from_str(s.trim()).ok())
                 .collect();
 
             let file_extensions: Vec<_> = filters
@@ -89,7 +89,13 @@ impl FileDialogRequest {
                 .flat_map(|f| f.as_extensions().into_iter())
                 .collect();
 
-            dialog = dialog.add_filter("name", file_extensions.as_slice());
+            let filter_name = file_extensions
+                .iter()
+                .map(|extension| format!("*.{extension}"))
+                .collect::<Vec<_>>()
+                .join(", ");
+
+            dialog = dialog.add_filter(filter_name, file_extensions.as_slice());
 
             let files: Vec<_> = if request.multiple {
                 dialog.pick_files().into_iter().flatten().collect()

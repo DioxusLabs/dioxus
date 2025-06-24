@@ -74,9 +74,51 @@ pub use dioxus_logger as logger;
 #[cfg_attr(docsrs, doc(cfg(feature = "cli-config")))]
 pub use dioxus_cli_config as cli_config;
 
+#[cfg(feature = "server")]
+#[cfg_attr(docsrs, doc(cfg(feature = "server")))]
+pub use dioxus_server as server;
+
+#[cfg(feature = "devtools")]
+#[cfg_attr(docsrs, doc(cfg(feature = "devtools")))]
+pub use dioxus_devtools as devtools;
+
+#[cfg(feature = "web")]
+#[cfg_attr(docsrs, doc(cfg(feature = "web")))]
+pub use dioxus_web as web;
+
+#[cfg(feature = "router")]
+#[cfg_attr(docsrs, doc(cfg(feature = "router")))]
+pub use dioxus_router as router;
+
+#[cfg(feature = "fullstack")]
+#[cfg_attr(docsrs, doc(cfg(feature = "fullstack")))]
+pub use dioxus_fullstack as fullstack;
+
+#[cfg(feature = "desktop")]
+#[cfg_attr(docsrs, doc(cfg(feature = "desktop")))]
+pub use dioxus_desktop as desktop;
+
+#[cfg(feature = "mobile")]
+#[cfg_attr(docsrs, doc(cfg(feature = "mobile")))]
+pub use dioxus_mobile as mobile;
+
+#[cfg(feature = "liveview")]
+#[cfg_attr(docsrs, doc(cfg(feature = "liveview")))]
+pub use dioxus_liveview as liveview;
+
+#[cfg(feature = "ssr")]
+#[cfg_attr(docsrs, doc(cfg(feature = "ssr")))]
+pub use dioxus_ssr as ssr;
+
+#[cfg(feature = "warnings")]
+#[cfg_attr(docsrs, doc(cfg(feature = "warnings")))]
+pub use warnings;
+
+pub use dioxus_config_macros as config_macros;
+
 #[cfg(feature = "wasm-split")]
 #[cfg_attr(docsrs, doc(cfg(feature = "wasm-split")))]
-pub use wasm_split;
+pub use wasm_splitter as wasm_split;
 
 pub use subsecond;
 
@@ -144,39 +186,5 @@ pub mod prelude {
 
     #[cfg(feature = "wasm-split")]
     #[cfg_attr(docsrs, doc(cfg(feature = "wasm-split")))]
-    pub use wasm_split;
+    pub use wasm_splitter as wasm_split;
 }
-
-#[cfg(feature = "web")]
-#[cfg_attr(docsrs, doc(cfg(feature = "web")))]
-pub use dioxus_web as web;
-
-#[cfg(feature = "router")]
-#[cfg_attr(docsrs, doc(cfg(feature = "router")))]
-pub use dioxus_router as router;
-
-#[cfg(feature = "fullstack")]
-#[cfg_attr(docsrs, doc(cfg(feature = "fullstack")))]
-pub use dioxus_fullstack as fullstack;
-
-#[cfg(feature = "desktop")]
-#[cfg_attr(docsrs, doc(cfg(feature = "desktop")))]
-pub use dioxus_desktop as desktop;
-
-#[cfg(feature = "mobile")]
-#[cfg_attr(docsrs, doc(cfg(feature = "mobile")))]
-pub use dioxus_mobile as mobile;
-
-#[cfg(feature = "liveview")]
-#[cfg_attr(docsrs, doc(cfg(feature = "liveview")))]
-pub use dioxus_liveview as liveview;
-
-#[cfg(feature = "ssr")]
-#[cfg_attr(docsrs, doc(cfg(feature = "ssr")))]
-pub use dioxus_ssr as ssr;
-
-#[cfg(feature = "warnings")]
-#[cfg_attr(docsrs, doc(cfg(feature = "warnings")))]
-pub use warnings;
-
-pub use dioxus_config_macros as config_macros;

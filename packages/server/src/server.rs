@@ -8,10 +8,15 @@ use axum::{
     http::{Request, Response, StatusCode},
     response::IntoResponse,
 };
+
 use dioxus_lib::prelude::{Element, VirtualDom};
 use http::header::*;
 use server_fn::ServerFnTraitObj;
+use std::path::Path;
 use std::sync::Arc;
+use tower::util::MapResponse;
+use tower::ServiceExt;
+use tower_http::services::fs::ServeFileSystemResponseBody;
 
 /// A extension trait with utilities for integrating Dioxus with your Axum router.
 pub trait DioxusRouterExt<S>: DioxusRouterFnExt<S> {
@@ -21,7 +26,9 @@ pub trait DioxusRouterExt<S>: DioxusRouterFnExt<S> {
     /// ```rust, no_run
     /// # #![allow(non_snake_case)]
     /// # use dioxus_lib::prelude::*;
-    /// # use dioxus_fullstack::prelude::*;
+    /// # use dioxus_server::prelude::*;
+    /// use dioxus_server::{DioxusRouterExt, DioxusRouterFnExt};
+    ///
     /// #[tokio::main]
     /// async fn main() {
     ///     let addr = dioxus::cli_config::fullstack_address_or_localhost();
@@ -46,7 +53,9 @@ pub trait DioxusRouterExt<S>: DioxusRouterFnExt<S> {
     /// ```rust, no_run
     /// # #![allow(non_snake_case)]
     /// # use dioxus_lib::prelude::*;
-    /// # use dioxus_fullstack::prelude::*;
+    /// # use dioxus_server::prelude::*;
+    /// use dioxus_server::{DioxusRouterExt, DioxusRouterFnExt};
+    ///
     /// #[tokio::main]
     /// async fn main() {
     ///     let addr = dioxus::cli_config::fullstack_address_or_localhost();
@@ -72,9 +81,7 @@ impl<S> DioxusRouterExt<S> for Router<S>
 where
     S: Send + Sync + Clone + 'static,
 {
-    fn serve_static_assets(mut self) -> Self {
-        use tower_http::services::{ServeDir, ServeFile};
-
+    fn serve_static_assets(self) -> Self {
         let public_path = crate::public_path();
 
         if !public_path.exists() {
@@ -82,38 +89,7 @@ where
         }
 
         // Serve all files in public folder except index.html
-        let dir = std::fs::read_dir(&public_path).unwrap_or_else(|e| {
-            panic!(
-                "Couldn't read public directory at {:?}: {}",
-                &public_path, e
-            )
-        });
-
-        for entry in dir.flatten() {
-            let path = entry.path();
-            if path.ends_with("index.html") {
-                continue;
-            }
-            let route = path
-                .strip_prefix(&public_path)
-                .unwrap()
-                .iter()
-                .map(|segment| {
-                    segment.to_str().unwrap_or_else(|| {
-                        panic!("Failed to convert path segment {:?} to string", segment)
-                    })
-                })
-                .collect::<Vec<_>>()
-                .join("/");
-            let route = format!("/{}", route);
-            if path.is_dir() {
-                self = self.nest_service(&route, ServeDir::new(path).precompressed_br());
-            } else {
-                self = self.nest_service(&route, ServeFile::new(path).precompressed_br());
-            }
-        }
-
-        self
+        serve_dir_cached(self, &public_path, &public_path)
     }
 
     fn serve_dioxus_application(self, cfg: ServeConfig, app: fn() -> Element) -> Self {
@@ -138,7 +114,7 @@ pub trait DioxusRouterFnExt<S> {
     /// # Example
     /// ```rust, no_run
     /// # use dioxus_lib::prelude::*;
-    /// # use dioxus_fullstack::prelude::*;
+    /// # use dioxus_server::prelude::*;
     /// #[tokio::main]
     /// async fn main() {
     ///     let addr = dioxus::cli_config::fullstack_address_or_localhost();
@@ -163,7 +139,7 @@ pub trait DioxusRouterFnExt<S> {
     /// # Example
     /// ```rust, no_run
     /// # use dioxus_lib::prelude::*;
-    /// # use dioxus_fullstack::prelude::*;
+    /// # use dioxus_server::prelude::*;
     /// # use std::sync::Arc;
     /// #[tokio::main]
     /// async fn main() {
@@ -177,6 +153,33 @@ pub trait DioxusRouterFnExt<S> {
     /// }
     /// ```
     fn register_server_functions_with_context(self, context_providers: ContextProviders) -> Self;
+
+    /// Serves a Dioxus application without static assets.
+    /// Sets up server function routes and rendering endpoints only.
+    ///
+    /// Useful for WebAssembly environments or when static assets
+    /// are served by another system.
+    ///
+    /// # Example
+    /// ```rust, no_run
+    /// # use dioxus_lib::prelude::*;
+    /// # use dioxus_server::prelude::*;
+    /// # use dioxus_server::prelude::*;
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let router = axum::Router::new()
+    ///         .serve_api_application(ServeConfig::new().unwrap(), app)
+    ///         .into_make_service();
+    ///     // ...
+    /// }
+    ///
+    /// fn app() -> Element {
+    ///     rsx! { "Hello World" }
+    /// }
+    /// ```
+    fn serve_api_application(self, cfg: ServeConfig, app: fn() -> Element) -> Self
+    where
+        Self: Sized;
 }
 
 impl<S> DioxusRouterFnExt<S> for Router<S>
@@ -191,6 +194,20 @@ where
             self = register_server_fn_on_router(f, self, context_providers.clone());
         }
         self
+    }
+
+    fn serve_api_application(self, cfg: ServeConfig, app: fn() -> Element) -> Self
+    where
+        Self: Sized,
+    {
+        let server = self.register_server_functions_with_context(cfg.context_providers.clone());
+
+        let ssr_state = SSRState::new(&cfg);
+
+        server.fallback(
+            get(render_handler)
+                .with_state(RenderHandleState::new(cfg, app).with_ssr_state(ssr_state)),
+        )
     }
 }
 
@@ -296,7 +313,7 @@ pub(crate) fn add_server_context(
 pub struct RenderHandleState {
     config: ServeConfig,
     build_virtual_dom: Arc<dyn Fn() -> VirtualDom + Send + Sync>,
-    ssr_state: once_cell::sync::OnceCell<SSRState>,
+    ssr_state: std::sync::OnceLock<SSRState>,
 }
 
 impl RenderHandleState {
@@ -329,7 +346,7 @@ impl RenderHandleState {
 
     /// Set the [`SSRState`] for this [`RenderHandleState`]. Sharing a [`SSRState`] between multiple [`RenderHandleState`]s is more efficient than creating a new [`SSRState`] for each [`RenderHandleState`].
     pub fn with_ssr_state(mut self, ssr_state: SSRState) -> Self {
-        self.ssr_state = once_cell::sync::OnceCell::new();
+        self.ssr_state = std::sync::OnceLock::new();
         if self.ssr_state.set(ssr_state).is_err() {
             panic!("SSRState already set");
         }
@@ -350,6 +367,7 @@ impl RenderHandleState {
 ///
 /// use axum::routing::get;
 /// use dioxus::prelude::*;
+/// use dioxus_server::{RenderHandleState, render_handler, ServeConfig};
 ///
 /// fn app() -> Element {
 ///     rsx! {
@@ -433,4 +451,91 @@ fn report_err<E: std::fmt::Display>(e: E) -> Response<axum::body::Body> {
         .status(StatusCode::INTERNAL_SERVER_ERROR)
         .body(body::Body::new(format!("Error: {}", e)))
         .unwrap()
+}
+
+fn serve_dir_cached<S>(
+    mut router: Router<S>,
+    public_path: &std::path::Path,
+    directory: &std::path::Path,
+) -> Router<S>
+where
+    S: Send + Sync + Clone + 'static,
+{
+    use tower_http::services::ServeFile;
+
+    let dir = std::fs::read_dir(directory)
+        .unwrap_or_else(|e| panic!("Couldn't read public directory at {:?}: {}", &directory, e));
+
+    for entry in dir.flatten() {
+        let path = entry.path();
+        // Don't serve the index.html file. The SSR handler will generate it.
+        if path == public_path.join("index.html") {
+            continue;
+        }
+        let route = path.strip_prefix(public_path).unwrap();
+        let route = path_components_to_route_lossy(route);
+
+        if path.is_dir() {
+            router = serve_dir_cached(router, public_path, &path);
+        } else {
+            let serve_file = ServeFile::new(&path).precompressed_br();
+            // All cached assets are served at the root of the asset directory. If we know an asset
+            // is hashed for cache busting, we can cache the response on the client side forever. If
+            // the asset changes, the hash in the path will also change and the client will refetch it.
+            if file_name_looks_immutable(&route) {
+                router = router.nest_service(&route, cache_response_forever(serve_file))
+            } else {
+                router = router.nest_service(&route, serve_file)
+            }
+        }
+    }
+
+    router
+}
+
+fn file_name_looks_immutable(file_name: &str) -> bool {
+    // Check if the file name looks like a hash (e.g., "main-dxh12345678.js")
+    file_name.rsplit_once("-dxh").is_some_and(|(_, hash)| {
+        hash.chars()
+            .take_while(|c| *c != '.')
+            .all(|c| c.is_ascii_hexdigit())
+    })
+}
+
+#[test]
+fn test_file_name_looks_immutable() {
+    assert!(file_name_looks_immutable("main-dxh12345678.js"));
+    assert!(file_name_looks_immutable("style-dxhabcdef.css"));
+    assert!(!file_name_looks_immutable("index.html"));
+    assert!(!file_name_looks_immutable("script.js"));
+    assert!(!file_name_looks_immutable("main-dxh1234wyz.js"));
+    assert!(!file_name_looks_immutable("main-dxh12345678-invalid.js"));
+}
+
+fn path_components_to_route_lossy(path: &Path) -> String {
+    let route = path
+        .iter()
+        .map(|segment| segment.to_string_lossy())
+        .collect::<Vec<_>>()
+        .join("/");
+    format!("/{}", route)
+}
+
+type MappedAxumService<S> = MapResponse<
+    S,
+    fn(Response<ServeFileSystemResponseBody>) -> Response<ServeFileSystemResponseBody>,
+>;
+
+fn cache_response_forever<
+    S: ServiceExt<Request<Body>, Response = Response<ServeFileSystemResponseBody>>,
+>(
+    service: S,
+) -> MappedAxumService<S> {
+    service.map_response(|mut response: Response<ServeFileSystemResponseBody>| {
+        response.headers_mut().insert(
+            CACHE_CONTROL,
+            HeaderValue::from_static("public, max-age=31536000, immutable"),
+        );
+        response
+    })
 }

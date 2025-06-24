@@ -64,7 +64,17 @@
 //! Subsecond is only enabled when debug_assertions are enabled so you can safely ship your application
 //! with Subsecond enabled without worrying about the performance overhead.
 //!
-//! ## Globals and statics
+//! ## Workspace support
+//!
+//! Subsecond currently only patches the "tip" crate - ie the crate in which your `main.rs` is located.
+//! Changes to crates outside this crate will be ignored, which can be confusing. We plan to add full
+//! workspace support in the future, but for now be aware of this limitation. Crate setups that have
+//! a `main.rs` importing a `lib.rs` won't patch sensibly since the crate becomes a library for itself.
+//!
+//! This is due to limitations in rustc itself where the build-graph is non-deterministic and changes
+//! to functions that forward generics can cause a cascade of codegen changes.
+//!
+//! ## Globals, statics, and thread-locals
 //!
 //! Subsecond *does* support hot-reloading of globals, statics, and thread locals. However, there are several limitations:
 //!
@@ -75,6 +85,12 @@
 //! Subsecond purposefully handles statics this way since many libraries like Dioxus and Tokio rely
 //! on persistent global runtimes.
 //!
+//! HUGE WARNING: Currently, thread-locals in the "tip" crate (the one being patched) will seemingly
+//! reset to their initial value on new patches. This is because we don't currently bind thread-locals
+//! in the patches to their original addresses in the main program. If you rely on thread-locals heavily
+//! in your tip crate, you should be aware of this. Sufficiently complex setups might crash or even
+//! segfault. We plan to fix this in the future, but for now, you should be aware of this limitation.
+//!
 //! ## Struct layout and alignment
 //!
 //! Subsecond currently does not support hot-reloading of structs. This is because the generated code
@@ -84,13 +100,26 @@
 //! To mitigate this, framework authors can integrate with Subsecond to either dispose of the old struct
 //! or to re-allocate the struct in a way that is compatible with the new layout. This is called "re-instancing."
 //!
-//! Because Subsecond performs a safe panic if a stale function is called, you should never witness
-//! a crash due to a struct layout change. However, changing a struct's layout will likely cause a
-//! re-instantiation of the struct and potentially a loss of state.
+//! In practice, frameworks that implement subsecond patching properly will throw out the old state
+//! and thus you should never witness a segfault due to misalignment or size changes. Frameworks are
+//! encouraged to aggressively dispose of old state that might cause size and alignment changes.
 //!
 //! We'd like to lift this limitation in the future by providing utilities to re-instantiate structs,
 //! but for now it's up to the framework authors to handle this. For example, Dioxus apps simply throw
 //! out the old state and rebuild it from scratch.
+//!
+//! ## Pointer versioning
+//!
+//! Currently, Subsecond does not "version" function pointers. We have plans to provide this metadata
+//! so framework authors can safely memoize changes without much runtime overhead. Frameworks like
+//! Dioxus and Bevy circumvent this issue by using the TypeID of structs passed to hot functions as
+//! well as the `ptr_address` method on [`HotFn`] to determine if the function pointer has changed.
+//!
+//! Currently, the `ptr_address` method will always return the most up-to-date version of the function
+//! even if the function contents itself did not change. In essence, this is equivalent to a version
+//! of the function where every function is considered "new." This means that framework authors who
+//! integrate re-instancing in their apps might dispose of old state too aggressively. For now, this
+//! is the safer and more practical approach.
 //!
 //! ## Nesting Calls
 //!
@@ -284,6 +313,24 @@ pub struct HotFnPanic {
     _backtrace: backtrace::Backtrace,
 }
 
+/// A pointer to a hot patched function
+#[non_exhaustive]
+#[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
+pub struct HotFnPtr(pub u64);
+
+impl HotFnPtr {
+    /// Create a new [`HotFnPtr`].
+    ///
+    /// The safe way to get one is through [`HotFn::ptr_address`].
+    ///
+    /// # Safety
+    ///
+    /// The underlying `u64` must point to a valid function.
+    pub unsafe fn new(index: u64) -> Self {
+        Self(index)
+    }
+}
+
 /// A hot-reloadable function.
 ///
 /// To call this function, use the [`HotFn::call`] method. This will automatically use the latest
@@ -324,20 +371,20 @@ impl<A, M, F: HotFunction<A, M>> HotFn<A, M, F> {
     ///
     /// Note that Subsecond does not track this state over time, so it's up to the runtime integration
     /// to track this state and diff it.
-    pub fn ptr_address(&self) -> u64 {
+    pub fn ptr_address(&self) -> HotFnPtr {
         if size_of::<F>() == size_of::<fn() -> ()>() {
             let ptr: usize = unsafe { std::mem::transmute_copy(&self.inner) };
-            return ptr as u64;
+            return HotFnPtr(ptr as u64);
         }
 
         let known_fn_ptr = <F as HotFunction<A, M>>::call_it as *const () as usize;
         if let Some(jump_table) = get_jump_table() {
             if let Some(ptr) = jump_table.map.get(&(known_fn_ptr as u64)).cloned() {
-                return ptr;
+                return HotFnPtr(ptr);
             }
         }
 
-        known_fn_ptr as u64
+        HotFnPtr(known_fn_ptr as u64)
     }
 
     /// Attempt to call the function with the given arguments.
@@ -376,6 +423,46 @@ impl<A, M, F: HotFunction<A, M>> HotFn<A, M, F> {
             Ok(self.inner.call_it(args))
         }
     }
+
+    /// Attempt to call the function with the given arguments, using the given [`HotFnPtr`].
+    ///
+    /// You can get a [`HotFnPtr`] from [`Self::ptr_address`].
+    ///
+    /// If this function is stale and can't be updated in place (ie, changes occurred above this call),
+    /// then this function will emit an [`HotFnPanic`] which can be unwrapped and handled by next [`call`]
+    /// instance.
+    ///
+    /// # Safety
+    ///
+    /// The [`HotFnPtr`] must be to a function whose arguments layouts haven't changed.
+    pub unsafe fn try_call_with_ptr(
+        &mut self,
+        ptr: HotFnPtr,
+        args: A,
+    ) -> Result<F::Return, HotFnPanic> {
+        if !cfg!(debug_assertions) {
+            return Ok(self.inner.call_it(args));
+        }
+
+        unsafe {
+            // Try to handle known function pointers. This is *really really* unsafe, but due to how
+            // rust trait objects work, it's impossible to make an arbitrary usize-sized type implement Fn()
+            // since that would require a vtable pointer, pushing out the bounds of the pointer size.
+            if size_of::<F>() == size_of::<fn() -> ()>() {
+                return Ok(self.inner.call_as_ptr(args));
+            }
+
+            // Handle trait objects. This will occur for sizes other than usize. Normal rust functions
+            // become ZST's and thus their <T as SomeFn>::call becomes a function pointer to the function.
+            //
+            // For non-zst (trait object) types, then there might be an issue. The real call function
+            // will likely end up in the vtable and will never be hot-reloaded since signature takes self.
+            // The type sig of the cast should match the call_it function
+            // Technically function pointers need to be aligned, but that alignment is 1 so we're good
+            let call_it = transmute::<*const (), fn(&F, A) -> F::Return>(ptr.0 as _);
+            Ok(call_it(&self.inner, args))
+        }
+    }
 }
 
 /// Apply the patch using a given jump table.
@@ -408,10 +495,9 @@ pub unsafe fn apply_patch(mut table: JumpTable) -> Result<(), PatchError> {
             }
         }));
 
-        // Use the `__aslr_reference` symbol as a sentinel for the current executable. This is basically a
-        // cross-platform version of `__mh_execute_header` on macOS that sets a reference point for the
-        // jump table.
-        let old_offset = __aslr_reference() - table.aslr_reference as usize;
+        // Use the `main` symbol as a sentinel for the current executable. This is basically a
+        // cross-platform version of `__mh_execute_header` on macOS that we can use to base the executable.
+        let old_offset = aslr_reference() - table.aslr_reference as usize;
 
         // Use the `main` symbol as a sentinel for the loaded library. Might want to move away
         // from this at some point, or make it configurable
@@ -585,22 +671,49 @@ pub enum PatchError {
     AndroidMemfd(String),
 }
 
-/// This function returns its own address, providing a stable reference point for hot-patch engine
-/// to hook onto. If you were to write an object file for this function, it would amount to:
-///
-/// ```asm
-/// __aslr_reference:
-///         mov     rax, qword ptr [rip + __aslr_reference@GOTPCREL] // notice the @GOTPCREL relocation
-///         ret
-/// ```
+/// This function returns the address of the main function in the current executable. This is used as
+/// an anchor to reference the current executable's base address.
 ///
 /// The point here being that we have a stable address both at runtime and compile time, making it
 /// possible to calculate the ASLR offset from within the process to correct the jump table.
+///
+/// It should only be called from the main executable *first* and not from a shared library since it
+/// self-initializes.
 #[doc(hidden)]
-#[inline(never)]
-#[no_mangle]
-pub extern "C" fn __aslr_reference() -> usize {
-    __aslr_reference as *const () as usize
+pub fn aslr_reference() -> usize {
+    #[cfg(target_family = "wasm")]
+    return 0;
+
+    #[cfg(not(target_family = "wasm"))]
+    unsafe {
+        use std::ffi::c_void;
+
+        // The first call to this function should occur in the
+        static mut MAIN_PTR: *mut c_void = std::ptr::null_mut();
+
+        if MAIN_PTR.is_null() {
+            #[cfg(unix)]
+            {
+                MAIN_PTR = libc::dlsym(libc::RTLD_DEFAULT, c"main".as_ptr() as _);
+            }
+
+            #[cfg(windows)]
+            {
+                extern "system" {
+                    fn GetModuleHandleA(lpModuleName: *const i8) -> *mut std::ffi::c_void;
+                    fn GetProcAddress(
+                        hModule: *mut std::ffi::c_void,
+                        lpProcName: *const i8,
+                    ) -> *mut std::ffi::c_void;
+                }
+
+                MAIN_PTR =
+                    GetProcAddress(GetModuleHandleA(std::ptr::null()), c"main".as_ptr() as _) as _;
+            }
+        }
+
+        MAIN_PTR as usize
+    }
 }
 
 /// On Android, we can't dlopen libraries that aren't placed inside /data/data/<package_name>/lib/
@@ -756,8 +869,6 @@ macro_rules! impl_hot_function {
                 unsafe fn call_as_ptr(&mut self, args: ($($arg,)*)) -> Self::Return {
                     unsafe {
                         if let Some(jump_table) = get_jump_table() {
-
-
                             let real = std::mem::transmute_copy::<Self, Self::Real>(&self) as *const ();
 
                             // Android implements MTE / pointer tagging and we need to preserve the tag.
@@ -765,7 +876,7 @@ macro_rules! impl_hot_function {
                             // This is only implemented on 64-bit platforms since pointer tagging is not available on 32-bit platforms
                             // In dev, Dioxus disables MTE to work around this issue, but we still handle it anyways.
                             #[cfg(all(target_pointer_width = "64", target_os = "android"))] let nibble  = real as u64 & 0xFF00_0000_0000_0000;
-                            #[cfg(target_pointer_width = "64")] let real    = real as u64 & 0x00FFF_FFF_FFFF_FFFF;
+                            #[cfg(all(target_pointer_width = "64", target_os = "android"))] let real    = real as u64 & 0x00FFF_FFF_FFFF_FFFF;
 
                             #[cfg(target_pointer_width = "64")] let real  = real as u64;
 

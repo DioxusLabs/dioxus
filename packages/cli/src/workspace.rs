@@ -3,11 +3,11 @@ use crate::Result;
 use crate::{config::DioxusConfig, AndroidTools};
 use anyhow::Context;
 use ignore::gitignore::Gitignore;
-use krates::KrateDetails;
+use krates::{semver::Version, KrateDetails};
 use krates::{Cmd, Krates, NodeId};
-use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::{collections::HashSet, path::Path};
 use target_lexicon::Triple;
 use tokio::process::Command;
 
@@ -33,8 +33,6 @@ impl Workspace {
         if let Some(ws) = lock.as_ref() {
             return Ok(ws.clone());
         }
-
-        tracing::debug!("Loading workspace!");
 
         let cmd = Cmd::new();
         let mut builder = krates::Builder::new();
@@ -79,6 +77,23 @@ impl Workspace {
             android_tools,
         });
 
+        tracing::debug!(
+            r#"Initialized workspace:
+               • sysroot: {sysroot}
+               • rustc version: {rustc_version}
+               • workspace root: {workspace_root}
+               • dioxus versions: [{dioxus_versions:?}]"#,
+            sysroot = workspace.sysroot.display(),
+            rustc_version = workspace.rustc_version,
+            workspace_root = workspace.workspace_root().display(),
+            dioxus_versions = workspace
+                .dioxus_versions()
+                .iter()
+                .map(|v| v.to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+
         lock.replace(workspace.clone());
 
         Ok(workspace)
@@ -92,16 +107,18 @@ impl Workspace {
     }
 
     pub fn is_release_profile(&self, profile: &str) -> bool {
+        // If the profile is "release" or ends with "-release" like the default platform release profiles,
+        // always put it in the release category.
+        if profile == "release" || profile.ends_with("-release") {
+            return true;
+        }
+
         // Check if the profile inherits from release by traversing the `inherits` chain
         let mut current_profile_name = profile;
 
         // Try to find the current profile in the custom profiles section
         while let Some(profile_settings) = self.cargo_toml.profile.custom.get(current_profile_name)
         {
-            if profile == "release" {
-                return true;
-            }
-
             // Check what this profile inherits from
             match &profile_settings.inherits {
                 // Otherwise, continue checking the profile it inherits from
@@ -111,9 +128,57 @@ impl Workspace {
                 // Since it didn't lead to "release", return false.
                 None => break,
             }
+
+            if current_profile_name == "release" {
+                return true;
+            }
         }
 
         false
+    }
+
+    pub fn check_dioxus_version_against_cli(&self) {
+        let dx_semver = Version::parse(env!("CARGO_PKG_VERSION")).unwrap();
+        let dioxus_versions = self.dioxus_versions();
+
+        tracing::trace!("dx version: {}", dx_semver);
+        tracing::trace!("dioxus versions: {:?}", dioxus_versions);
+
+        // if there are no dioxus versions in the workspace, we don't need to check anything
+        // dx is meant to be compatible with non-dioxus projects too.
+        if dioxus_versions.is_empty() {
+            return;
+        }
+
+        let min = dioxus_versions.iter().min().unwrap();
+        let max = dioxus_versions.iter().max().unwrap();
+
+        // If the minimum dioxus version is greater than the current cli version, warn the user
+        if min > &dx_semver || max < &dx_semver {
+            tracing::error!(
+                r#"🚫dx and dioxus versions are incompatible!
+                  • dx version: {dx_semver}
+                  • dioxus versions: [{}]"#,
+                dioxus_versions
+                    .iter()
+                    .map(|v| v.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
+        }
+    }
+
+    /// Get all the versions of dioxus in the workspace
+    pub fn dioxus_versions(&self) -> Vec<Version> {
+        let mut versions = HashSet::new();
+        for krate in self.krates.krates() {
+            if krate.name == "dioxus" {
+                versions.insert(krate.version.clone());
+            }
+        }
+        let mut versions = versions.into_iter().collect::<Vec<_>>();
+        versions.sort();
+        versions
     }
 
     #[allow(unused)]
@@ -282,10 +347,6 @@ impl Workspace {
     pub fn workspace_gitignore(workspace_dir: &Path) -> Gitignore {
         let mut ignore_builder = ignore::gitignore::GitignoreBuilder::new(workspace_dir);
         ignore_builder.add(workspace_dir.join(".gitignore"));
-
-        // todo!()
-        // let workspace_dir = self.workspace_dir();
-        // ignore_builder.add(workspace_dir.join(".gitignore"));
 
         for path in Self::default_ignore_list() {
             ignore_builder

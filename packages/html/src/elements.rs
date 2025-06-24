@@ -758,9 +758,9 @@ builder_constructors! {
     /// element.
     ///
     /// # About
-    /// - The HTML <h1> element is found within the <body> tag.
+    /// - The HTML `<h1>` element is found within the `<body>` tag.
     /// - Headings can range from `<h1>` to `<h6>`.
-    /// - The most important heading is `<h1>`` and the least important heading is `<h6>`.
+    /// - The most important heading is `<h1>` and the least important heading is `<h6>`.
     /// - The `<h1>` heading is the first heading in the document.
     /// - The `<h1>` heading is usually a large bolded font.
     h3 None {};
@@ -820,7 +820,7 @@ builder_constructors! {
     /// - The `<div>` tag is easily styled by using the class or id attribute.
     /// - Any sort of content can be put inside the `<div>` tag!
     ///
-    /// Note: By default, browsers always place a line break before and after the <div> element.
+    /// Note: By default, browsers always place a line break before and after the `<div>` element.
     ///
     /// ## References:
     /// - <https://developer.mozilla.org/en-US/docs/Web/HTML/Element/div>
@@ -1236,8 +1236,8 @@ builder_constructors! {
     /// [`<script>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/script)
     /// element.
     ///
-    /// The [`script`] HTML element is used to embed executable code or data; this is typically used to embed or refer to
-    /// JavaScript code. The [`script`] element can also be used with other languages, such as WebGL's GLSL shader
+    /// The script HTML element is used to embed executable code or data; this is typically used to embed or refer to
+    /// JavaScript code. The script element can also be used with other languages, such as WebGL's GLSL shader
     /// programming language and JSON.
     script None {
         /// Normal script elements pass minimal information to the window.onerror for scripts which do not pass the

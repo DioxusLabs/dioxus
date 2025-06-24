@@ -127,7 +127,7 @@ impl<T> Clone for SerializeContextEntry<T> {
 }
 
 impl<T> SerializeContextEntry<T> {
-    /// Insert data into an entry that was created with [`SerializeContext::create_entry`]
+    /// Insert data into an entry that was created with [`HydrationContext::create_entry`]
     pub fn insert(self, value: &T, location: &'static std::panic::Location<'static>)
     where
         T: Serialize,
@@ -346,7 +346,15 @@ impl HTMLData {
             let body = list
                 .iter()
                 .map(|s| match s {
-                    Some(s) => format!(r#""{s}""#),
+                    Some(s) => {
+                        // Escape backslashes, quotes, and newlines
+                        let escaped = s
+                            .replace(r#"\"#, r#"\\"#)
+                            .replace("\n", r#"\n"#)
+                            .replace(r#"""#, r#"\""#);
+
+                        format!(r#""{escaped}""#)
+                    }
                     None => r#""unknown""#.to_string(),
                 })
                 .collect::<Vec<_>>()
