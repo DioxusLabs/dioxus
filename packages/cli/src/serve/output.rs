@@ -165,7 +165,7 @@ impl Output {
     }
 
     pub(crate) fn remote_shutdown(interactive: bool) -> io::Result<()> {
-        if interactive {
+        if interactive && crossterm::terminal::is_raw_mode_enabled().unwrap_or(true) {
             stdout()
                 .execute(Show)?
                 .execute(DisableFocusChange)?

@@ -2149,6 +2149,18 @@ impl BuildRequest {
         };
         cargo_args.push(self.executable_name().to_string());
 
+        // Set offline/locked/frozen
+        let lock_opts = crate::VERBOSITY.get().cloned().unwrap_or_default();
+        if lock_opts.frozen {
+            cargo_args.push("--frozen".to_string());
+        }
+        if lock_opts.locked {
+            cargo_args.push("--locked".to_string());
+        }
+        if lock_opts.offline {
+            cargo_args.push("--offline".to_string());
+        }
+
         // Merge in extra args. Order shouldn't really matter.
         cargo_args.extend(self.extra_cargo_args.clone());
         cargo_args.push("--".to_string());

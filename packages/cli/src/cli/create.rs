@@ -49,10 +49,15 @@ pub struct Create {
 }
 
 impl Create {
-    pub fn create(mut self) -> Result<StructuredOutput> {
+    pub async fn create(mut self) -> Result<StructuredOutput> {
         // Project name defaults to directory name.
         if self.name.is_none() {
             self.name = Some(create::name_from_path(&self.path)?);
+        }
+
+        // Perform a connectivity check so we just don't it around doing nothing if there's a network error
+        if self.template.is_none() {
+            connectivity_check().await?;
         }
 
         // If no template is specified, use the default one and set the branch to the latest release.
@@ -237,6 +242,31 @@ fn remove_triple_newlines(string: &str) -> String {
         new_string.push(char);
     }
     new_string
+}
+
+/// Perform a health check against github itself before we attempt to download any templates hosted
+/// on github.
+pub(crate) async fn connectivity_check() -> Result<()> {
+    use crate::styles::{GLOW_STYLE, LINK_STYLE};
+    let client = reqwest::Client::new();
+    for x in 1..=5 {
+        tokio::select! {
+            res = client.head("https://github.com/DioxusLabs/").header("User-Agent", "dioxus-cli").send() => {
+                if res.is_ok() {
+                    return Ok(());
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(2000)).await;
+            },
+            _ = tokio::time::sleep(std::time::Duration::from_millis(2000)) => {}
+        }
+        println!(
+            "{GLOW_STYLE}warning{GLOW_STYLE:#}: ({x}/5) Waiting for {LINK_STYLE}https://github.com/dioxuslabs{LINK_STYLE:#}..."
+        );
+    }
+
+    Err(Error::Network(
+        "Error connecting to template repository. Specify a template manually..".to_string(),
+    ))
 }
 
 // todo: re-enable these tests with better parallelization

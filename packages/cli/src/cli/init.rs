@@ -46,10 +46,15 @@ pub struct Init {
 }
 
 impl Init {
-    pub fn init(mut self) -> Result<StructuredOutput> {
+    pub async fn init(mut self) -> Result<StructuredOutput> {
         // Project name defaults to directory name.
         if self.name.is_none() {
             self.name = Some(create::name_from_path(&self.path)?);
+        }
+
+        // Perform a connectivity check so we just don't it around doing nothing if there's a network error
+        if self.template.is_none() {
+            create::connectivity_check().await?;
         }
 
         // If no template is specified, use the default one and set the branch to the latest release.
