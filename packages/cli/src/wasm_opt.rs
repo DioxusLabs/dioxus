@@ -125,6 +125,20 @@ impl WasmOpt {
 
 // Find the URL for the latest binaryen release that contains wasm-opt
 async fn find_latest_wasm_opt_download_url() -> anyhow::Result<String> {
+    // Find the platform identifier based on the current OS and architecture
+    // hardcoded for now to get around github api rate limits
+    if cfg!(all(target_os = "windows", target_arch = "x86_64")) {
+        return Ok("https://github.com/WebAssembly/binaryen/releases/download/version_123/binaryen-version_123-x86_64-windows.tar.gz".to_string());
+    } else if cfg!(all(target_os = "linux", target_arch = "x86_64")) {
+        return Ok("https://github.com/WebAssembly/binaryen/releases/download/version_123/binaryen-version_123-x86_64-linux.tar.gz".to_string());
+    } else if cfg!(all(target_os = "linux", target_arch = "aarch64")) {
+        return Ok("https://github.com/WebAssembly/binaryen/releases/download/version_123/binaryen-version_123-aarch64-linux.tar.gz".to_string());
+    } else if cfg!(all(target_os = "macos", target_arch = "x86_64")) {
+        return Ok("https://github.com/WebAssembly/binaryen/releases/download/version_123/binaryen-version_123-x86_64-macos.tar.gz".to_string());
+    } else if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
+        return Ok("https://github.com/WebAssembly/binaryen/releases/download/version_123/binaryen-version_123-arm64-macos.tar.gz".to_string());
+    };
+
     let url = "https://api.github.com/repos/WebAssembly/binaryen/releases/latest";
     let client = reqwest::Client::new();
     let response = client
@@ -167,7 +181,6 @@ async fn find_latest_wasm_opt_download_url() -> anyhow::Result<String> {
                 .get("name")
                 .and_then(|name| name.as_str())
                 .is_some_and(|name| name.contains(platform) && !name.ends_with("sha256"))
-                // .is_some_and(|name| name.contains(platform) && !name.ends_with("sha256"))
         })
         .ok_or_else(|| {
             anyhow::anyhow!(
