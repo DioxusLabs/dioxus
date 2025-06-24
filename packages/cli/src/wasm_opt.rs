@@ -134,6 +134,9 @@ async fn find_latest_wasm_opt_download_url() -> anyhow::Result<String> {
         .await?
         .json::<serde_json::Value>()
         .await?;
+
+    tracing::debug!("Response from GitHub: {:#?}", response);
+
     let assets = response
         .get("assets")
         .and_then(|assets| assets.as_array())
@@ -164,6 +167,7 @@ async fn find_latest_wasm_opt_download_url() -> anyhow::Result<String> {
                 .get("name")
                 .and_then(|name| name.as_str())
                 .is_some_and(|name| name.contains(platform) && !name.ends_with("sha256"))
+                // .is_some_and(|name| name.contains(platform) && !name.ends_with("sha256"))
         })
         .ok_or_else(|| {
             anyhow::anyhow!(
@@ -273,3 +277,9 @@ async fn install_github(install_dir: &Path) -> anyhow::Result<()> {
 
     Ok(())
 }
+
+// #[tokio::test]
+// async fn check_ci_url() {
+//     let res = find_latest_wasm_opt_download_url().await;
+//     dbg!(res);
+// }
