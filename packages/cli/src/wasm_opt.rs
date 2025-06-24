@@ -1,6 +1,7 @@
 use anyhow::{anyhow, Context};
 use flate2::read::GzDecoder;
 use tar::Archive;
+use tempfile::NamedTempFile;
 use tokio::fs;
 
 use crate::config::WasmOptLevel;
@@ -24,6 +25,7 @@ pub async fn optimize(input_path: &Path, output_path: &Path, cfg: &WasmOptConfig
 struct WasmOpt {
     path: PathBuf,
     input_path: PathBuf,
+    temporary_output_path: NamedTempFile,
     output_path: PathBuf,
     cfg: WasmOptConfig,
 }
@@ -38,6 +40,7 @@ impl WasmOpt {
         Ok(Self {
             path,
             input_path: input_path.to_path_buf(),
+            temporary_output_path: tempfile::NamedTempFile::new()?,
             output_path: output_path.to_path_buf(),
             cfg: cfg.clone(),
         })
@@ -80,12 +83,20 @@ impl WasmOpt {
             WasmOptLevel::Four => "-O4",
         };
 
+        tracing::debug!(
+            "Running wasm-opt: {} {} {} -o {} {}",
+            self.path.to_string_lossy(),
+            self.input_path.to_string_lossy(),
+            level,
+            self.temporary_output_path.path().to_string_lossy(),
+            args.join(" ")
+        );
         let mut command = tokio::process::Command::new(&self.path);
         command
             .arg(&self.input_path)
             .arg(level)
             .arg("-o")
-            .arg(&self.output_path)
+            .arg(self.temporary_output_path.path())
             .args(args);
         command
     }
@@ -96,7 +107,18 @@ impl WasmOpt {
 
         if !res.status.success() {
             let err = String::from_utf8_lossy(&res.stderr);
-            tracing::error!("wasm-opt failed with status code {}: {}", res.status, err);
+            tracing::error!(
+                "wasm-opt failed with status code {}\nstderr: {}\nstdout: {}",
+                res.status,
+                err,
+                String::from_utf8_lossy(&res.stdout)
+            );
+            // A failing wasm-opt execution may leave behind an empty file so copy the original file instead.
+            if self.input_path != self.output_path {
+                std::fs::copy(&self.input_path, &self.output_path).unwrap();
+            }
+        } else {
+            std::fs::copy(self.temporary_output_path.path(), &self.output_path).unwrap();
         }
 
         Ok(())
