@@ -46,6 +46,7 @@ pub struct HotReloadMsg {
     pub ms_elapsed: u64,
     pub jump_table: Option<JumpTable>,
     pub for_build_id: Option<u64>,
+    pub for_pid: Option<u32>,
 }
 
 impl HotReloadMsg {

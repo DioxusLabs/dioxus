@@ -1,6 +1,6 @@
 use crate::{
     serve::{ansi_buffer::AnsiStringLine, ServeUpdate, WebServer},
-    BuildStage, BuilderUpdate, Platform, TraceContent, TraceMsg, TraceSrc,
+    BuildId, BuildStage, BuilderUpdate, Platform, TraceContent, TraceMsg, TraceSrc,
 };
 use cargo_metadata::diagnostic::Diagnostic;
 use crossterm::{
@@ -152,7 +152,7 @@ impl Output {
         use std::io::IsTerminal;
 
         if !stdout().is_terminal() {
-            return io::Result::Err(io::Error::new(io::ErrorKind::Other, "Not a terminal"));
+            return io::Result::Err(io::Error::other("Not a terminal"));
         }
 
         enable_raw_mode()?;
@@ -244,6 +244,16 @@ impl Output {
             KeyCode::Char('t') => {
                 self.trace = !self.trace;
                 tracing::info!("Tracing is now {}", if self.trace { "on" } else { "off" });
+            }
+            KeyCode::Char('D') => {
+                return Ok(Some(ServeUpdate::OpenDebugger {
+                    id: BuildId::SERVER,
+                }));
+            }
+            KeyCode::Char('d') => {
+                return Ok(Some(ServeUpdate::OpenDebugger {
+                    id: BuildId::CLIENT,
+                }));
             }
 
             KeyCode::Char('c') => {
@@ -540,6 +550,7 @@ impl Output {
             BuildStage::Linking => lines.push("Linking".yellow()),
             BuildStage::Hotpatching => lines.push("Hot-patching...".yellow()),
             BuildStage::ExtractingAssets => lines.push("Extracting assets".yellow()),
+            BuildStage::Prerendering => lines.push("Pre-rendering...".yellow()),
             _ => {}
         };
 
@@ -644,7 +655,18 @@ impl Output {
 
         // todo(jon) should we write https ?
         let address = match state.server.displayed_address() {
-            Some(address) => format!("http://{}", address).blue(),
+            Some(address) => format!(
+                "http://{}{}",
+                address,
+                state
+                    .runner
+                    .client
+                    .build
+                    .base_path()
+                    .map(|f| format!("/{f}/"))
+                    .unwrap_or_default()
+            )
+            .blue(),
             None => "no server address".dark_gray(),
         };
 
@@ -721,7 +743,13 @@ impl Output {
         frame.render_widget(
             Paragraph::new(Line::from(vec![
                 "Hotreload: ".gray(),
-                "rsx and assets".yellow(),
+                if !state.runner.automatic_rebuilds {
+                    "disabled".dark_gray()
+                } else if state.runner.use_hotpatch_engine {
+                    "hot-patching".yellow()
+                } else {
+                    "rsx and assets".yellow()
+                },
             ])),
             meta_list[3],
         );

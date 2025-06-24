@@ -157,7 +157,7 @@ impl ServeConfigBuilder {
     /// }
     ///
     /// #[server]
-    /// async fn read_context() -> Result<u32, ServerFnError> {
+    /// async fn read_context() -> ServerFnResult<u32> {
     ///     // You can extract values from the server context with the `extract` function
     ///     let FromContext(value) = extract().await?;
     ///     Ok(value)
@@ -224,7 +224,7 @@ impl ServeConfigBuilder {
     /// }
     ///
     /// #[server]
-    /// async fn read_context() -> Result<u32, ServerFnError> {
+    /// async fn read_context() -> ServerFnResult<u32> {
     ///     // You can extract values from the server context with the `extract` function
     ///     let FromContext(value) = extract().await?;
     ///     Ok(value)
@@ -284,7 +284,7 @@ impl ServeConfigBuilder {
     /// }
     ///
     /// #[server]
-    /// async fn read_context() -> Result<u32, ServerFnError> {
+    /// async fn read_context() -> ServerFnResult<u32> {
     ///     // You can extract values from the server context with the `extract` function
     ///     let FromContext(value) = extract().await?;
     ///     Ok(value)
@@ -354,19 +354,18 @@ impl ServeConfigBuilder {
                 let index_path = self
                     .index_path
                     .unwrap_or_else(|| public_path.join("index.html"));
-                load_index_path(index_path)?
-                // load_index_path(index_path).unwrap_or_else(|_| {
-                //     r#"
-                //     <!DOCTYPE html>
-                //     <html>
-                //         <head> </head>
-                //         <body>
-                //             <div id="main"></div>
-                //         </body>
-                //     </html>
-                //     "#
-                //     .to_string()
-                // })
+                load_index_path(index_path).unwrap_or_else(|_| {
+                    r#"
+                    <!DOCTYPE html>
+                    <html>
+                        <head> </head>
+                        <body>
+                            <div id="main"></div>
+                        </body>
+                    </html>
+                    "#
+                    .to_string()
+                })
             }
         };
 

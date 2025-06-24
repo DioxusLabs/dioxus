@@ -5,7 +5,7 @@ use crate::{
     ipc::{IpcMessage, UserWindowEvent},
     query::QueryResult,
     shortcut::ShortcutRegistry,
-    webview::WebviewInstance,
+    webview::{PendingWebview, WebviewInstance},
 };
 use dioxus_core::{ElementId, ScopeId, VirtualDom};
 use dioxus_history::History;
@@ -49,7 +49,7 @@ pub(crate) struct App {
 /// A bundle of state shared between all the windows, providing a way for us to communicate with running webview.
 pub(crate) struct SharedContext {
     pub(crate) event_handlers: WindowEventHandlers,
-    pub(crate) pending_webviews: RefCell<Vec<WebviewInstance>>,
+    pub(crate) pending_webviews: RefCell<Vec<PendingWebview>>,
     pub(crate) shortcut_manager: ShortcutRegistry,
     pub(crate) proxy: EventLoopProxy<UserWindowEvent>,
     pub(crate) target: EventLoopWindowTarget<UserWindowEvent>,
@@ -177,9 +177,10 @@ impl App {
     }
 
     pub fn handle_new_window(&mut self) {
-        for handler in self.shared.pending_webviews.borrow_mut().drain(..) {
-            let id = handler.desktop_context.window.id();
-            self.webviews.insert(id, handler);
+        for pending_webview in self.shared.pending_webviews.borrow_mut().drain(..) {
+            let window = pending_webview.create_window(&self.shared);
+            let id = window.desktop_context.window.id();
+            self.webviews.insert(id, window);
             _ = self.shared.proxy.send_event(UserWindowEvent::Poll(id));
         }
     }
@@ -271,7 +272,7 @@ impl App {
         if let Some(temp) = msg.params().as_object() {
             if temp.contains_key("href") {
                 if let Some(href) = temp.get("href").and_then(|v| v.as_str()) {
-                    if let Err(e) = webbrowser::open(href) {
+                    if let Err(e) = open::that_detached(href) {
                         tracing::error!("Open Browser error: {:?}", e);
                     }
                 }

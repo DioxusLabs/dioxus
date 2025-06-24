@@ -125,7 +125,9 @@ impl Workspace {
     }
 
     pub fn is_release_profile(&self, profile: &str) -> bool {
-        if profile == "release" {
+        // If the profile is "release" or ends with "-release" like the default platform release profiles,
+        // always put it in the release category.
+        if profile == "release" || profile.ends_with("-release") {
             return true;
         }
 
@@ -363,10 +365,6 @@ impl Workspace {
     pub fn workspace_gitignore(workspace_dir: &Path) -> Gitignore {
         let mut ignore_builder = ignore::gitignore::GitignoreBuilder::new(workspace_dir);
         ignore_builder.add(workspace_dir.join(".gitignore"));
-
-        // todo!()
-        // let workspace_dir = self.workspace_dir();
-        // ignore_builder.add(workspace_dir.join(".gitignore"));
 
         for path in Self::default_ignore_list() {
             ignore_builder

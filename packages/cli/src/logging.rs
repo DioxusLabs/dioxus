@@ -18,7 +18,7 @@ use crate::{serve::ServeUpdate, Cli, Commands, Platform as TargetPlatform, Verbo
 use cargo_metadata::diagnostic::{Diagnostic, DiagnosticLevel};
 use clap::Parser;
 use futures_channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
-use once_cell::sync::OnceCell;
+use std::sync::OnceLock;
 use std::{
     collections::HashMap,
     env,
@@ -47,8 +47,8 @@ const LOG_FILE_NAME: &str = "dx.log";
 const DX_SRC_FLAG: &str = "dx_src";
 
 static TUI_ACTIVE: AtomicBool = AtomicBool::new(false);
-static TUI_TX: OnceCell<UnboundedSender<TraceMsg>> = OnceCell::new();
-pub static VERBOSITY: OnceCell<Verbosity> = OnceCell::new();
+static TUI_TX: OnceLock<UnboundedSender<TraceMsg>> = OnceLock::new();
+pub static VERBOSITY: OnceLock<Verbosity> = OnceLock::new();
 
 pub(crate) struct TraceController {
     pub(crate) tui_rx: UnboundedReceiver<TraceMsg>,
@@ -81,6 +81,11 @@ impl TraceController {
                 }
             ))
         };
+
+        #[cfg(feature = "tokio-console")]
+        let filter = filter
+            .add_directive("tokio=trace".parse().unwrap())
+            .add_directive("runtime=trace".parse().unwrap());
 
         let json_filter = tracing_subscriber::filter::filter_fn(move |meta| {
             if meta.fields().len() == 1 && meta.fields().iter().next().unwrap().name() == "json" {

@@ -8,6 +8,7 @@ pub(crate) mod config;
 pub(crate) mod create;
 pub(crate) mod init;
 pub(crate) mod link;
+pub(crate) mod platform_override;
 pub(crate) mod run;
 pub(crate) mod serve;
 pub(crate) mod target;
@@ -20,12 +21,13 @@ pub(crate) use serve::*;
 pub(crate) use target::*;
 pub(crate) use verbosity::*;
 
+use crate::platform_override::CommandWithPlatformOverrides;
 use crate::{error::Result, Error, StructuredOutput};
 use clap::builder::styling::{AnsiColor, Effects, Style, Styles};
 use clap::{Parser, Subcommand};
 use html_parser::Dom;
-use once_cell::sync::Lazy;
 use serde::Deserialize;
+use std::sync::LazyLock;
 use std::{
     fmt::Display,
     fs::File,
@@ -62,7 +64,7 @@ pub(crate) enum Commands {
 
     /// Build the Dioxus project and all of its assets.
     #[clap(name = "build")]
-    Build(build::BuildArgs),
+    Build(CommandWithPlatformOverrides<build::BuildArgs>),
 
     /// Run the project without any hotreloading.
     #[clap(name = "run")]
@@ -123,7 +125,7 @@ impl Display for Commands {
     }
 }
 
-pub(crate) static VERSION: Lazy<String> = Lazy::new(|| {
+pub(crate) static VERSION: LazyLock<String> = LazyLock::new(|| {
     format!(
         "{} ({})",
         crate::dx_build_info::PKG_VERSION,

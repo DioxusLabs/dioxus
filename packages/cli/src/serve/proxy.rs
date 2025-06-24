@@ -138,9 +138,10 @@ pub(crate) fn proxy_to(
         match res {
             Ok(res) => {
                 // log assets at a different log level
-                if uri.path().starts_with("/assets")
-                    || uri.path().starts_with("/_dioxus")
-                    || uri.path().starts_with("/public")
+                if uri.path().starts_with("/assets/")
+                    || uri.path().starts_with("/_dioxus/")
+                    || uri.path().starts_with("/public/")
+                    || uri.path().starts_with("/wasm/")
                 {
                     tracing::trace!(dx_src = ?TraceSrc::Dev, "[{}] {}", res.status().as_u16(), uri);
                 } else {

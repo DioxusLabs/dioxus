@@ -25,6 +25,6 @@ fn main() {
 }
 
 #[server(endpoint = "static_routes")]
-async fn static_routes() -> Result<Vec<String>, ServerFnError> {
+async fn static_routes() -> ServerFnResult<Vec<String>> {
     Ok(vec!["/".to_string()])
 }

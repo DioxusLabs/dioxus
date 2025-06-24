@@ -25,11 +25,12 @@ pub fn is_wrapping_rustc() -> bool {
 pub struct RustcArgs {
     pub args: Vec<String>,
     pub envs: Vec<(String, String)>,
+    pub link_args: Vec<String>,
 }
 
 /// Run rustc directly, but output the result to a file.
 ///
-/// https://doc.rust-lang.org/cargo/reference/config.html#buildrustc
+/// <https://doc.rust-lang.org/cargo/reference/config.html#buildrustc>
 pub async fn run_rustc() {
     // if we happen to be both a rustc wrapper and a linker, we want to run the linker if the arguments seem linker-y
     // this is a stupid hack
@@ -50,15 +51,26 @@ pub async fn run_rustc() {
     let rustc_args = RustcArgs {
         args: args().skip(1).collect::<Vec<_>>(),
         envs: vars().collect::<_>(),
+        link_args: Default::default(),
     };
 
-    std::fs::create_dir_all(var_file.parent().expect("Failed to get parent dir"))
-        .expect("Failed to create parent dir");
-    std::fs::write(
-        &var_file,
-        serde_json::to_string(&rustc_args).expect("Failed to serialize rustc args"),
-    )
-    .expect("Failed to write rustc args to file");
+    // Another terrible hack to avoid caching non-sensical args when
+    // a build is completely fresh (rustc is invoked with --crate-name ___)
+    if rustc_args
+        .args
+        .iter()
+        .skip_while(|arg| *arg != "--crate-name")
+        .nth(1)
+        .is_some_and(|name| name != "___")
+    {
+        std::fs::create_dir_all(var_file.parent().expect("Failed to get parent dir"))
+            .expect("Failed to create parent dir");
+        std::fs::write(
+            &var_file,
+            serde_json::to_string(&rustc_args).expect("Failed to serialize rustc args"),
+        )
+        .expect("Failed to write rustc args to file");
+    }
 
     // Run the actual rustc command
     // We want all stdout/stderr to be inherited, so the running process can see the output
