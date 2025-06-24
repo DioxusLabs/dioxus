@@ -17,43 +17,107 @@ use std::str::FromStr;
     clap::ValueEnum,
 )]
 #[non_exhaustive]
-pub(crate) enum Platform {
+pub(crate) enum PlatformArg {
     /// Targeting the web platform using WASM
     #[clap(name = "web")]
-    #[serde(rename = "web")]
     #[default]
     Web,
 
     /// Targeting macos desktop
-    /// When running on macos, you can also use `--platform desktop` to build for the desktop
-    #[cfg_attr(target_os = "macos", clap(alias = "desktop"))]
     #[clap(name = "macos")]
-    #[serde(rename = "macos")]
     MacOS,
 
     /// Targeting windows desktop
-    /// When running on windows, you can also use `--platform desktop` to build for the desktop
-    #[cfg_attr(target_os = "windows", clap(alias = "desktop"))]
     #[clap(name = "windows")]
-    #[serde(rename = "windows")]
     Windows,
 
     /// Targeting linux desktop
-    /// When running on linux, you can also use `--platform desktop` to build for the desktop
-    #[cfg_attr(target_os = "linux", clap(alias = "desktop"))]
     #[clap(name = "linux")]
-    #[serde(rename = "linux")]
     Linux,
 
     /// Targeting the ios platform
     ///
     /// Can't work properly if you're not building from an Apple device.
     #[clap(name = "ios")]
-    #[serde(rename = "ios")]
     Ios,
 
     /// Targeting the android platform
     #[clap(name = "android")]
+    Android,
+
+    /// Targeting the current platform with the "desktop" renderer
+    #[clap(name = "desktop")]
+    Desktop,
+
+    /// Targeting the current platform with the "native" renderer
+    #[clap(name = "native")]
+    Native,
+
+    /// Targeting the server platform using Axum and Dioxus-Fullstack
+    ///
+    /// This is implicitly passed if `fullstack` is enabled as a feature. Using this variant simply
+    /// means you're only building the server variant without the `.wasm` to serve.
+    #[clap(name = "server")]
+    Server,
+
+    /// Targeting the static generation platform using SSR and Dioxus-Fullstack
+    #[clap(name = "liveview")]
+    Liveview,
+}
+
+#[derive(
+    Copy,
+    Clone,
+    Hash,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Serialize,
+    Deserialize,
+    Debug,
+    clap::ValueEnum,
+)]
+#[non_exhaustive]
+pub(crate) enum ClientRenderer {
+    /// Targeting webview renderer
+    #[serde(rename = "webview")]
+    Webview,
+
+    /// Targeting native renderer
+    #[serde(rename = "native")]
+    Native,
+}
+
+#[derive(
+    Copy, Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Debug, Default,
+)]
+#[non_exhaustive]
+pub(crate) enum Platform {
+    /// Targeting the web platform using WASM
+    #[serde(rename = "web")]
+    #[default]
+    Web,
+
+    /// Targeting macos desktop
+    #[serde(rename = "macos")]
+    MacOS,
+
+    /// Targeting windows desktop
+    #[serde(rename = "windows")]
+    Windows,
+
+    /// Targeting linux desktop
+    #[serde(rename = "linux")]
+    Linux,
+
+    /// Targeting the ios platform
+    ///
+    /// Can't work properly if you're not building from an Apple device.
+    #[serde(rename = "ios")]
+    Ios,
+
+    /// Targeting the android platform
     #[serde(rename = "android")]
     Android,
 
@@ -61,12 +125,10 @@ pub(crate) enum Platform {
     ///
     /// This is implicitly passed if `fullstack` is enabled as a feature. Using this variant simply
     /// means you're only building the server variant without the `.wasm` to serve.
-    #[clap(name = "server")]
     #[serde(rename = "server")]
     Server,
 
     /// Targeting the static generation platform using SSR and Dioxus-Fullstack
-    #[clap(name = "liveview")]
     #[serde(rename = "liveview")]
     Liveview,
 }
@@ -113,18 +175,51 @@ impl Display for Platform {
     }
 }
 
+impl From<PlatformArg> for Platform {
+    fn from(value: PlatformArg) -> Self {
+        match value {
+            // Most values map 1:1
+            PlatformArg::Web => Platform::Web,
+            PlatformArg::MacOS => Platform::MacOS,
+            PlatformArg::Windows => Platform::Windows,
+            PlatformArg::Linux => Platform::Linux,
+            PlatformArg::Ios => Platform::Ios,
+            PlatformArg::Android => Platform::Android,
+            PlatformArg::Server => Platform::Server,
+            PlatformArg::Liveview => Platform::Liveview,
+
+            // The alias arguments
+            PlatformArg::Desktop | PlatformArg::Native => {
+                Platform::TARGET_PLATFORM.unwrap()
+            }
+        }
+    }
+}
+
 impl Platform {
-    /// Get the feature name for the platform in the dioxus crate
-    pub(crate) fn feature_name(&self) -> &str {
+    #[cfg(target_os = "macos")]
+    pub(crate) const TARGET_PLATFORM: Option<Self> = Some(Platform::MacOS);
+    #[cfg(target_os = "windows")]
+    pub(crate) const TARGET_PLATFORM: Option<Self> = Some(Platform::Windows);
+    #[cfg(target_os = "linux")]
+    pub(crate) const TARGET_PLATFORM: Option<Self> = Some(Platform::Linux);
+    #[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos")))]
+    pub(crate) const TARGET_PLATFORM: Option<Self> = None;
+
+    // /// Get the feature name for the platform in the dioxus crate
+    pub(crate) fn feature_name(&self, renderer: Option<ClientRenderer>) -> &str {
         match self {
             Platform::Web => "web",
-            Platform::MacOS => "desktop",
-            Platform::Windows => "desktop",
-            Platform::Linux => "desktop",
+            Platform::MacOS | Platform::Windows | Platform::Linux => match renderer {
+                None | Some(ClientRenderer::Webview) => "desktop",
+                Some(ClientRenderer::Native) => "native",
+            },
+            Platform::Ios | Platform::Android => match renderer {
+                None | Some(ClientRenderer::Webview) => "mobile",
+                Some(ClientRenderer::Native) => "native",
+            },
             Platform::Server => "server",
             Platform::Liveview => "liveview",
-            Platform::Ios => "mobile",
-            Platform::Android => "mobile",
         }
     }
 
@@ -160,25 +255,7 @@ impl Platform {
     pub(crate) fn autodetect_from_cargo_feature(feature: &str) -> Option<Self> {
         match feature {
             "web" => Some(Platform::Web),
-            "desktop" | "native" => {
-                #[cfg(target_os = "macos")]
-                {
-                    Some(Platform::MacOS)
-                }
-                #[cfg(target_os = "windows")]
-                {
-                    Some(Platform::Windows)
-                }
-                #[cfg(target_os = "linux")]
-                {
-                    Some(Platform::Linux)
-                }
-                // Possibly need a something for freebsd? Maybe default to Linux?
-                #[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos")))]
-                {
-                    None
-                }
-            }
+            "desktop" | "native" => Platform::TARGET_PLATFORM,
             "mobile" => None,
             "liveview" => Some(Platform::Liveview),
             "server" => Some(Platform::Server),
@@ -188,6 +265,7 @@ impl Platform {
 
     pub(crate) fn profile_name(&self, release: bool) -> String {
         let base_profile = match self {
+            // TODO: add native profile?
             Platform::MacOS | Platform::Windows | Platform::Linux => "desktop",
             Platform::Web => "web",
             Platform::Ios => "ios",

@@ -1,5 +1,5 @@
 use crate::{cli::*, AppBuilder, BuildRequest, Workspace};
-use crate::{BuildMode, Platform};
+use crate::{BuildMode, Platform, PlatformArg};
 
 use super::target::TargetArgs;
 
@@ -120,7 +120,7 @@ impl CommandWithPlatformOverrides<BuildArgs> {
             let main_target = client.main_target.clone();
             let mut server_args = server_args.clone();
             // The platform in the server build is always set to Server
-            server_args.platform = Some(Platform::Server);
+            server_args.platform = Some(PlatformArg::Server);
             server =
                 Some(BuildRequest::new(&server_args, Some(main_target), workspace.clone()).await?);
         }

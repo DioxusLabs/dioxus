@@ -1,5 +1,6 @@
 use crate::cli::*;
-use crate::Platform;
+use crate::ClientRenderer;
+use crate::PlatformArg;
 use target_lexicon::Triple;
 
 const HELP_HEADING: &str = "Target Options";
@@ -9,7 +10,11 @@ const HELP_HEADING: &str = "Target Options";
 pub(crate) struct TargetArgs {
     /// Build platform: support Web & Desktop [default: "default_platform"]
     #[clap(long, value_enum, help_heading = HELP_HEADING)]
-    pub(crate) platform: Option<Platform>,
+    pub(crate) platform: Option<PlatformArg>,
+
+    /// Build renderer: support Webview and Native [default: "webview"]
+    #[clap(long, value_enum, help_heading = HELP_HEADING)]
+    pub(crate) renderer: Option<ClientRenderer>,
 
     /// Build in release mode [default: false]
     #[clap(long, short, help_heading = HELP_HEADING)]
