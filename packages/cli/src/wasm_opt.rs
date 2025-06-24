@@ -84,7 +84,7 @@ impl WasmOpt {
         };
 
         tracing::debug!(
-            "{} {} {} -o {} {}",
+            "Running wasm-opt: {} {} {} -o {} {}",
             self.path.to_string_lossy(),
             self.input_path.to_string_lossy(),
             level,
@@ -96,7 +96,7 @@ impl WasmOpt {
             .arg(&self.input_path)
             .arg(level)
             .arg("-o")
-            .arg(&self.temporary_output_path.path())
+            .arg(self.temporary_output_path.path())
             .args(args);
         command
     }
