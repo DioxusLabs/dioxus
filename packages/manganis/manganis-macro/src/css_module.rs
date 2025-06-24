@@ -123,7 +123,7 @@ impl ToTokens for CssModuleParser {
             #[allow(missing_docs, non_snake_case)]
             mod #mod_name {
                 #[allow(unused_imports)]
-                use super::manganis::{self, CssModuleAssetOptions};
+                use manganis::{self, CssModuleAssetOptions};
 
                 #linker_tokens;
 

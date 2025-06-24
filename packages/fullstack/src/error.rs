@@ -135,6 +135,15 @@ impl ServerFnError {
     /// # Examples
     /// ```rust
     /// use dioxus::prelude::*;
+    /// use serde::{Serialize, Deserialize};
+    ///
+    /// #[derive(Serialize, Deserialize, Debug)]
+    /// struct MyCustomError;
+    /// impl std::fmt::Display for MyCustomError {
+    ///    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    ///       write!(f, "My custom error")
+    ///   }
+    /// }
     ///
     /// #[server]
     /// async fn server_function() -> ServerFnResult<String, MyCustomError> {
