@@ -163,7 +163,7 @@ async fn find_latest_wasm_opt_download_url() -> anyhow::Result<String> {
             asset
                 .get("name")
                 .and_then(|name| name.as_str())
-                .is_some_and(|name| name.contains(platform))
+                .is_some_and(|name| name.contains(platform) && !name.ends_with("sha256"))
         })
         .ok_or_else(|| {
             anyhow::anyhow!(
@@ -183,31 +183,30 @@ async fn find_latest_wasm_opt_download_url() -> anyhow::Result<String> {
 
 /// Get the path to the wasm-opt binary, downloading it if necessary
 async fn get_binary_path() -> anyhow::Result<PathBuf> {
-    let existing_path = which::which("wasm-opt");
+    let install_dir = install_dir();
+    let install_path = installed_bin_path(&install_dir);
 
-    match existing_path {
-        // If wasm-opt is already in the PATH, return its path
-        Ok(path) => Ok(path),
-        // If wasm-opt is not found in the path and we prefer no downloads, return an error
-        Err(_) if CliSettings::prefer_no_downloads() => Err(anyhow!("Missing wasm-opt")),
-        // Otherwise, try to install it
-        Err(_) => {
-            let install_dir = install_dir()?;
-            let install_path = installed_bin_path(&install_dir);
-            if !install_path.exists() {
-                tracing::info!("Installing wasm-opt");
-                install_github(&install_dir).await?;
-                tracing::info!("wasm-opt installed from Github");
-            }
-            Ok(install_path)
+    if install_path.exists() {
+        return Ok(install_path);
+    }
+
+    if CliSettings::prefer_no_downloads() {
+        if let Ok(existing) = which::which("wasm-opt") {
+            return Ok(existing);
+        } else {
+            return Err(anyhow!("Missing wasm-opt"));
         }
     }
+
+    tracing::info!("Installing wasm-opt");
+    install_github(&install_dir).await?;
+    tracing::info!("wasm-opt installed from Github");
+
+    Ok(install_path)
 }
 
-fn install_dir() -> anyhow::Result<PathBuf> {
-    let bindgen_dir = Workspace::dioxus_home_dir().join("binaryen");
-    std::fs::create_dir_all(&bindgen_dir)?;
-    Ok(bindgen_dir)
+fn install_dir() -> PathBuf {
+    Workspace::dioxus_home_dir().join("binaryen")
 }
 
 fn installed_bin_name() -> &'static str {
@@ -219,13 +218,14 @@ fn installed_bin_name() -> &'static str {
 }
 
 fn installed_bin_path(install_dir: &Path) -> PathBuf {
-    let bin_name = installed_bin_name();
-    install_dir.join("bin").join(bin_name)
+    install_dir.join("bin").join(installed_bin_name())
 }
 
 /// Install wasm-opt from GitHub releases into the specified directory
 async fn install_github(install_dir: &Path) -> anyhow::Result<()> {
     tracing::trace!("Attempting to install wasm-opt from GitHub");
+
+    std::fs::create_dir_all(install_dir)?;
 
     let url = find_latest_wasm_opt_download_url()
         .await
