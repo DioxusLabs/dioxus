@@ -126,6 +126,9 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &mut TraceController) -> 
                 // And then update the websocketed clients with the new build status in case they want it
                 devserver.new_build_update(&update).await;
 
+                // Start the SSG build if we need to
+                builder.new_build_update(&update, &devserver).await;
+
                 // And then open the app if it's ready
                 match update {
                     BuilderUpdate::Progress { .. } => {}
@@ -161,7 +164,7 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &mut TraceController) -> 
                         }
                         BuildMode::Base | BuildMode::Fat => {
                             _ = builder
-                                .open(bundle, &mut devserver)
+                                .open(&bundle, &mut devserver)
                                 .await
                                 .inspect_err(|e| tracing::error!("Failed to open app: {}", e));
                         }

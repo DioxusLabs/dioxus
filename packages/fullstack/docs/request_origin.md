@@ -23,7 +23,7 @@ fn PrintHtmlRequestInfo() -> Element {
 ```rust
 # use dioxus::prelude::*;
 #[server]
-async fn read_headers() -> Result<(), ServerFnError> {
+async fn read_headers() -> ServerFnResult {
     // Since we are calling this from a server function, the server context that is may be from the
     // initial request or a request from the client
     let context = server_context();

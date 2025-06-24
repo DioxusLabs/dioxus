@@ -8,7 +8,6 @@ use crate::BuildRequest;
 use anyhow::Context;
 use futures_util::{stream::FuturesUnordered, StreamExt};
 use std::path::Path;
-use walkdir::WalkDir;
 
 /// Check the Rust files in the project for issues.
 #[derive(Clone, Debug, Parser)]
@@ -19,7 +18,7 @@ pub(crate) struct Check {
 
     /// Information about the target to check
     #[clap(flatten)]
-    pub(crate) build_args: BuildArgs,
+    pub(crate) build_args: CommandWithPlatformOverrides<BuildArgs>,
 }
 
 impl Check {
@@ -125,8 +124,7 @@ async fn check_files_and_report(files_to_check: Vec<PathBuf>) -> Result<()> {
 }
 
 pub(crate) fn collect_rs_files(folder: &Path, files: &mut Vec<PathBuf>) {
-    let dir = WalkDir::new(folder).follow_links(true).into_iter();
-    for entry in dir.flatten() {
+    for entry in ignore::Walk::new(folder).flatten() {
         if entry.path().extension() == Some("rs".as_ref()) {
             files.push(entry.path().to_path_buf());
         }

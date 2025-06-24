@@ -215,6 +215,9 @@ jobs:
         with:
           cache-all-crates: "true"
           cache-on-failure: "true"
+      - name: Wipe dx cache
+        run: |
+          rm -rf ./target/dx
       - name: Playwright
         working-directory: ./packages/playwright-tests
         run: |

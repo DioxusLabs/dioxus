@@ -344,7 +344,6 @@ use std::{
 use target_lexicon::{OperatingSystem, Triple};
 use tempfile::TempDir;
 use tokio::{io::AsyncBufReadExt, process::Command};
-use toml_edit::Item;
 use uuid::Uuid;
 
 use super::HotpatchModuleCache;
@@ -374,7 +373,9 @@ pub(crate) struct BuildRequest {
     pub(crate) triple: Triple,
     pub(crate) device: bool,
     pub(crate) package: String,
+    pub(crate) main_target: String,
     pub(crate) features: Vec<String>,
+    pub(crate) rustflags: cargo_config2::Flags,
     pub(crate) extra_cargo_args: Vec<String>,
     pub(crate) extra_rustc_args: Vec<String>,
     pub(crate) no_default_features: bool,
@@ -438,10 +439,6 @@ pub struct BuildArtifacts {
     pub(crate) patch_cache: Option<Arc<HotpatchModuleCache>>,
 }
 
-pub(crate) static PROFILE_WASM: &str = "wasm-dev";
-pub(crate) static PROFILE_ANDROID: &str = "android-dev";
-pub(crate) static PROFILE_SERVER: &str = "server-dev";
-
 impl BuildRequest {
     /// Create a new build request.
     ///
@@ -460,7 +457,11 @@ impl BuildRequest {
     ///
     /// Note: Build requests are typically created only when the CLI is invoked or when significant
     /// changes are detected in the `Cargo.toml` (e.g., features added or removed).
-    pub(crate) async fn new(args: &TargetArgs, workspace: Arc<Workspace>) -> Result<Self> {
+    pub(crate) async fn new(
+        args: &TargetArgs,
+        main_target: Option<String>,
+        workspace: Arc<Workspace>,
+    ) -> Result<Self> {
         let crate_package = workspace.find_main_package(args.package.clone())?;
 
         let config = workspace
@@ -502,6 +503,10 @@ impl BuildRequest {
                 })
             })
             .unwrap_or(workspace.krates[crate_package].name.clone());
+
+        // Use the main_target for the client + server build if it is set, otherwise use the target name for this
+        // specific build
+        let main_target = main_target.unwrap_or(target_name.clone());
 
         let crate_target = main_package
             .targets
@@ -579,13 +584,7 @@ impl BuildRequest {
         // We might want to move some of these profiles into dioxus.toml and make them "virtual".
         let profile = match args.profile.clone() {
             Some(profile) => profile,
-            None if args.release => "release".to_string(),
-            None => match platform {
-                Platform::Android => PROFILE_ANDROID.to_string(),
-                Platform::Web => PROFILE_WASM.to_string(),
-                Platform::Server => PROFILE_SERVER.to_string(),
-                _ => "dev".to_string(),
-            },
+            None => platform.profile_name(args.release),
         };
 
         // Determining release mode is based on the profile, actually, so we need to check that
@@ -628,7 +627,7 @@ impl BuildRequest {
                         Architecture::Aarch64(_) if device => "aarch64-apple-ios".parse().unwrap(),
                         Architecture::Aarch64(_) => "aarch64-apple-ios-sim".parse().unwrap(),
                         _ if device => "x86_64-apple-ios".parse().unwrap(),
-                        _ => "x86_64-apple-ios-sim".parse().unwrap(),
+                        _ => "x86_64-apple-ios".parse().unwrap(),
                     }
                 }
 
@@ -644,16 +643,45 @@ impl BuildRequest {
 
         // Somethings we override are also present in the user's config.
         // If we can't get them by introspecting cargo, then we need to get them from the config
+        //
+        // This involves specifically two fields:
+        // - The linker since we override it for Android and hotpatching
+        // - RUSTFLAGS since we also override it for Android and hotpatching
         let cargo_config = cargo_config2::Config::load().unwrap();
+        let mut custom_linker = cargo_config.linker(triple.to_string()).ok().flatten();
+        let mut rustflags = cargo_config2::Flags::default();
 
-        let mut custom_linker = if platform == Platform::Android {
-            Some(workspace.android_tools()?.android_cc(&triple))
-        } else {
-            None
-        };
+        if matches!(platform, Platform::Android) {
+            rustflags.flags.extend([
+                "-Clink-arg=-landroid".to_string(),
+                "-Clink-arg=-llog".to_string(),
+                "-Clink-arg=-lOpenSLES".to_string(),
+                "-Clink-arg=-Wl,--export-dynamic".to_string(),
+            ]);
+        }
 
-        if let Ok(Some(linker)) = cargo_config.linker(triple.to_string()) {
-            custom_linker = Some(linker);
+        // Make sure to take into account the RUSTFLAGS env var and the CARGO_TARGET_<triple>_RUSTFLAGS
+        for env in [
+            "RUSTFLAGS".to_string(),
+            format!("CARGO_TARGET_{triple}_RUSTFLAGS"),
+        ] {
+            if let Ok(flags) = std::env::var(env) {
+                rustflags
+                    .flags
+                    .extend(cargo_config2::Flags::from_space_separated(&flags).flags);
+            }
+        }
+
+        // Use the user's linker if the specify it at the target level
+        if let Ok(target) = cargo_config.target(triple.to_string()) {
+            if let Some(flags) = target.rustflags {
+                rustflags.flags.extend(flags.flags);
+            }
+        }
+
+        // If no custom linker is set, then android falls back to us as the linker
+        if custom_linker.is_none() && platform == Platform::Android {
+            custom_linker = Some(workspace.android_tools()?.android_cc(&triple));
         }
 
         let target_dir = std::env::var("CARGO_TARGET_DIR")
@@ -702,6 +730,8 @@ impl BuildRequest {
             extra_cargo_args,
             release,
             package,
+            main_target,
+            rustflags,
             skip_assets: args.skip_assets,
             base_path: args.base_path.clone(),
             wasm_split: args.wasm_split,
@@ -1369,6 +1399,10 @@ impl BuildRequest {
         // Now extract the assets from the fat binary
         self.collect_assets(&self.patch_exe(artifacts.time_start), ctx)?;
 
+        // If this is a web build, reset the index.html file in case it was modified by SSG
+        self.write_index_html(&artifacts.assets)
+            .context("Failed to write index.html")?;
+
         // Clean up the temps manually
         // todo: we might want to keep them around for debugging purposes
         for file in object_files {
@@ -1483,6 +1517,7 @@ impl BuildRequest {
                         || arg.starts_with("-Wl,--target=")
                         || arg.starts_with("-Wl,-fuse-ld")
                         || arg.starts_with("-fuse-ld")
+                        || arg.contains("-ld-path")
                     {
                         out_args.push(arg.to_string());
                     }
@@ -1680,6 +1715,7 @@ impl BuildRequest {
 
                 let rlib_contents = std::fs::read(rlib)?;
                 let mut reader = ar::Archive::new(std::io::Cursor::new(rlib_contents));
+                let mut keep_linker_rlib = false;
                 while let Some(Ok(object_file)) = reader.next_entry() {
                     let name = std::str::from_utf8(object_file.header().identifier()).unwrap();
                     if name.ends_with(".rmeta") {
@@ -1691,23 +1727,29 @@ impl BuildRequest {
                     }
 
                     // rlibs might contain dlls/sos/lib files which we don't want to include
-                    if name.ends_with(".dll")
-                        || name.ends_with(".so")
-                        || name.ends_with(".lib")
-                        || name.ends_with(".dylib")
-                    {
-                        compiler_rlibs.push(rlib.to_owned());
+                    //
+                    // This catches .dylib, .so, .dll, .lib, .o, etc files that are not compatible with
+                    // our "fat archive" linking process.
+                    //
+                    // We only trust `.rcgu.o` files to make it into the --all_load archive.
+                    // This is a temporary stopgap to prevent issues with libraries that generate
+                    // object files that are not compatible with --all_load.
+                    // see https://github.com/DioxusLabs/dioxus/issues/4237
+                    if !(name.ends_with(".rcgu.o") || name.ends_with(".obj")) {
+                        keep_linker_rlib = true;
                         continue;
-                    }
-
-                    if !(name.ends_with(".o") || name.ends_with(".obj")) {
-                        tracing::debug!("Unknown object file in rlib: {:?}", name);
                     }
 
                     archive_has_contents = true;
                     out_ar
                         .append(&object_file.header().clone(), object_file)
                         .context("Failed to add object file to archive")?;
+                }
+
+                // Some rlibs contain weird artifacts that we don't want to include in the fat archive.
+                // However, we still want them around in the linker in case the regular linker can handle them.
+                if keep_linker_rlib {
+                    compiler_rlibs.push(rlib.clone());
                 }
             }
 
@@ -1785,8 +1827,7 @@ impl BuildRequest {
                 args.push("-Wl,--export-dynamic-symbol,main".to_string());
             }
             LinkerFlavor::Darwin => {
-                // `-all_load` is an extra step to ensure that all symbols are loaded (different than force_load)
-                args.push("-Wl,-all_load".to_string());
+                args.push("-Wl,-exported_symbol,_main".to_string());
             }
             LinkerFlavor::Msvc => {
                 // Prevent alsr from overflowing 32 bits
@@ -1926,20 +1967,6 @@ impl BuildRequest {
     /// cause issues with a custom linker setup. In theory, rust translates most flags to the right
     /// linker format.
     fn select_linker(&self) -> Result<PathBuf, Error> {
-        // Use a custom linker for non-crosscompile and crosscompile targets
-        if matches!(
-            self.triple.operating_system,
-            OperatingSystem::Darwin(_) | OperatingSystem::Linux | OperatingSystem::Windows
-        ) {
-            if let Ok(linker) = std::env::var("DX_HOST_LINKER") {
-                return Ok(PathBuf::from(linker));
-            }
-        }
-
-        if let Ok(linker) = std::env::var("DX_LINKER") {
-            return Ok(PathBuf::from(linker));
-        }
-
         if let Some(linker) = self.custom_linker.clone() {
             return Ok(linker);
         }
@@ -2070,6 +2097,9 @@ impl BuildRequest {
     #[allow(clippy::vec_init_then_push)]
     fn cargo_build_arguments(&self, ctx: &BuildContext) -> Vec<String> {
         let mut cargo_args = Vec::with_capacity(4);
+
+        // Set the `--config profile.{profile}.{key}={value}` flags for the profile, filling in adhoc profile
+        cargo_args.extend(self.profile_args());
 
         // Add required profile flags. --release overrides any custom profiles.
         cargo_args.push("--profile".to_string());
@@ -2237,6 +2267,36 @@ impl BuildRequest {
             env_vars.extend(self.android_env_vars()?);
         };
 
+        // If this is a release build, bake the base path and title into the binary with env vars.
+        // todo: should we even be doing this? might be better being a build.rs or something else.
+        if self.release {
+            if let Some(base_path) = self.base_path() {
+                env_vars.push((ASSET_ROOT_ENV, base_path.to_string()));
+            }
+            env_vars.push((APP_TITLE_ENV, self.config.web.app.title.clone()));
+        }
+
+        // Assemble the rustflags by peering into the `.cargo/config.toml` file
+        let mut rust_flags = self.rustflags.clone();
+
+        // Disable reference types on wasm when using hotpatching
+        // https://blog.rust-lang.org/2024/09/24/webassembly-targets-change-in-default-target-features/#disabling-on-by-default-webassembly-proposals
+        if self.platform == Platform::Web
+            && matches!(ctx.mode, BuildMode::Thin { .. } | BuildMode::Fat)
+        {
+            rust_flags.flags.push("-Ctarget-cpu=mvp".to_string());
+        }
+
+        // Set the rust flags for the build if they're not empty.
+        if !rust_flags.flags.is_empty() {
+            env_vars.push((
+                "RUSTFLAGS",
+                rust_flags
+                    .encode_space_separated()
+                    .context("Failed to encode RUSTFLAGS")?,
+            ));
+        }
+
         // If we're either zero-linking or using a custom linker, make `dx` itself do the linking.
         if self.custom_linker.is_some()
             || matches!(ctx.mode, BuildMode::Thin { .. } | BuildMode::Fat)
@@ -2248,27 +2308,6 @@ impl BuildRequest {
                 link_args_file: dunce::canonicalize(self.link_args_file())?,
             }
             .write_env_vars(&mut env_vars)?;
-        }
-
-        // Disable reference types on wasm when using hotpatching
-        // https://blog.rust-lang.org/2024/09/24/webassembly-targets-change-in-default-target-features/#disabling-on-by-default-webassembly-proposals
-        if self.platform == Platform::Web
-            && matches!(ctx.mode, BuildMode::Thin { .. } | BuildMode::Fat)
-        {
-            env_vars.push(("RUSTFLAGS", {
-                let mut rust_flags = std::env::var("RUSTFLAGS").unwrap_or_default();
-                rust_flags.push_str(" -Ctarget-cpu=mvp");
-                rust_flags
-            }));
-        }
-
-        // If this is a release build, bake the base path and title into the binary with env vars.
-        // todo: should we even be doing this? might be better being a build.rs or something else.
-        if self.release {
-            if let Some(base_path) = self.base_path() {
-                env_vars.push((ASSET_ROOT_ENV, base_path.to_string()));
-            }
-            env_vars.push((APP_TITLE_ENV, self.config.web.app.title.clone()));
         }
 
         Ok(env_vars)
@@ -2316,16 +2355,6 @@ impl BuildRequest {
                 .display()
                 .to_string(),
         ));
-
-        // Set the rust flags for android which get passed to *every* crate in the graph.
-        env_vars.push(("RUSTFLAGS", {
-            let mut rust_flags = std::env::var("RUSTFLAGS").unwrap_or_default();
-            rust_flags.push_str(" -Clink-arg=-landroid");
-            rust_flags.push_str(" -Clink-arg=-llog");
-            rust_flags.push_str(" -Clink-arg=-lOpenSLES");
-            rust_flags.push_str(" -Clink-arg=-Wl,--export-dynamic");
-            rust_flags
-        }));
 
         // todo(jon): the guide for openssl recommends extending the path to include the tools dir
         //            in practice I couldn't get this to work, but this might eventually become useful.
@@ -2743,7 +2772,7 @@ impl BuildRequest {
     /// target/dx/build/app/web/server.exe
     pub(crate) fn build_dir(&self, platform: Platform, release: bool) -> PathBuf {
         self.internal_out_dir()
-            .join(self.executable_name())
+            .join(&self.main_target)
             .join(if release { "release" } else { "debug" })
             .join(platform.build_folder_name())
     }
@@ -2754,7 +2783,7 @@ impl BuildRequest {
     /// target/dx/bundle/app/public/
     pub(crate) fn bundle_dir(&self, platform: Platform) -> PathBuf {
         self.internal_out_dir()
-            .join(self.executable_name())
+            .join(&self.main_target)
             .join("bundle")
             .join(platform.build_folder_name())
     }
@@ -2828,54 +2857,6 @@ impl BuildRequest {
             );
             fallback
         })
-    }
-
-    // The `opt-level=1` increases build times, but can noticeably decrease time
-    // between saving changes and being able to interact with an app (for wasm/web). The "overall"
-    // time difference (between having and not having the optimization) can be
-    // almost imperceptible (~1 s) but also can be very noticeable (~6 s) — depends
-    // on setup (hardware, OS, browser, idle load).
-    //
-    // Find or create the client and server profiles in the top-level Cargo.toml file
-    // todo(jon): we should/could make these optional by placing some defaults somewhere
-    pub(crate) fn initialize_profiles(&self) -> crate::Result<()> {
-        let config_path = self.workspace_dir().join("Cargo.toml");
-        let mut config = match std::fs::read_to_string(&config_path) {
-            Ok(config) => config.parse::<toml_edit::DocumentMut>().map_err(|e| {
-                crate::Error::Other(anyhow::anyhow!("Failed to parse Cargo.toml: {}", e))
-            })?,
-            Err(_) => Default::default(),
-        };
-
-        if let Item::Table(table) = config
-            .as_table_mut()
-            .entry("profile")
-            .or_insert(Item::Table(Default::default()))
-        {
-            if let toml_edit::Entry::Vacant(entry) = table.entry(PROFILE_WASM) {
-                let mut client = toml_edit::Table::new();
-                client.insert("inherits", Item::Value("dev".into()));
-                client.insert("opt-level", Item::Value(1.into()));
-                entry.insert(Item::Table(client));
-            }
-
-            if let toml_edit::Entry::Vacant(entry) = table.entry(PROFILE_SERVER) {
-                let mut server = toml_edit::Table::new();
-                server.insert("inherits", Item::Value("dev".into()));
-                entry.insert(Item::Table(server));
-            }
-
-            if let toml_edit::Entry::Vacant(entry) = table.entry(PROFILE_ANDROID) {
-                let mut android = toml_edit::Table::new();
-                android.insert("inherits", Item::Value("dev".into()));
-                entry.insert(Item::Table(android));
-            }
-        }
-
-        std::fs::write(config_path, config.to_string())
-            .context("Failed to write profiles to Cargo.toml")?;
-
-        Ok(())
     }
 
     /// Return the version of the wasm-bindgen crate if it exists
@@ -3216,8 +3197,7 @@ impl BuildRequest {
         //
         // We leave demangling to false since it's faster and these tools seem to prefer the raw symbols.
         // todo(jon): investigate if the chrome extension needs them demangled or demangles them automatically.
-        let will_wasm_opt = (self.release || self.wasm_split)
-            && (self.workspace.wasm_opt.is_some() || cfg!(feature = "optimizations"));
+        let will_wasm_opt = self.release || self.wasm_split;
         let keep_debug = self.config.web.wasm_opt.debug
             || self.debug_symbols
             || self.wasm_split
@@ -3225,7 +3205,6 @@ impl BuildRequest {
             || will_wasm_opt
             || ctx.mode == BuildMode::Fat;
         let keep_names = will_wasm_opt || ctx.mode == BuildMode::Fat;
-        let package_to_asset = self.release && !should_bundle_split;
         let demangle = false;
         let wasm_opt_options = WasmOptConfig {
             memory_packing: self.wasm_split,
@@ -3265,7 +3244,7 @@ impl BuildRequest {
 
             if !will_wasm_opt {
                 return Err(anyhow::anyhow!(
-                    "Bundle splitting requires wasm-opt to be installed or the CLI to be built with `--features optimizations`. Please install wasm-opt and try again."
+                    "Bundle splitting should automatically enable wasm-opt, but it was not enabled."
                 )
                 .into());
             }
@@ -3368,25 +3347,53 @@ impl BuildRequest {
 
         // In release mode, we make the wasm and bindgen files into assets so they get bundled with max
         // optimizations.
-        let wasm_path = if package_to_asset {
-            // Make sure to register the main wasm file with the asset system
-            let name = assets.register_asset(&post_bindgen_wasm, AssetOptions::Unknown)?;
-            format!("assets/{}", name.bundled_path())
-        } else {
-            let asset = self.wasm_bindgen_wasm_output_file();
-            format!("wasm/{}", asset.file_name().unwrap().to_str().unwrap())
-        };
-
-        let js_path = if package_to_asset {
+        if self.should_bundle_to_asset() {
             // Register the main.js with the asset system so it bundles in the snippets and optimizes
-            let name = assets.register_asset(
+            assets.register_asset(
                 &self.wasm_bindgen_js_output_file(),
                 AssetOptions::Js(JsAssetOptions::new().with_minify(true).with_preload(true)),
             )?;
+        }
+
+        if self.should_bundle_to_asset() {
+            // Make sure to register the main wasm file with the asset system
+            assets.register_asset(&post_bindgen_wasm, AssetOptions::Unknown)?;
+        }
+
+        // Write the index.html file with the pre-configured contents we got from pre-rendering
+        self.write_index_html(assets)?;
+
+        Ok(())
+    }
+
+    /// Write the index.html file to the output directory. This must be called after the wasm and js
+    /// assets are registered with the asset system if this is a release build.
+    pub(crate) fn write_index_html(&self, assets: &AssetManifest) -> Result<()> {
+        // Get the path to the wasm-bindgen output files. Either the direct file or the opitmized one depending on the build mode
+        let wasm_bindgen_wasm_out = self.wasm_bindgen_wasm_output_file();
+        let wasm_path = if self.should_bundle_to_asset() {
+            let name = assets
+                .get_first_asset_for_source(&wasm_bindgen_wasm_out)
+                .expect("The wasm source must exist before creating index.html");
             format!("assets/{}", name.bundled_path())
         } else {
-            let asset = self.wasm_bindgen_js_output_file();
-            format!("wasm/{}", asset.file_name().unwrap().to_str().unwrap())
+            format!(
+                "wasm/{}",
+                wasm_bindgen_wasm_out.file_name().unwrap().to_str().unwrap()
+            )
+        };
+
+        let wasm_bindgen_js_out = self.wasm_bindgen_js_output_file();
+        let js_path = if self.should_bundle_to_asset() {
+            let name = assets
+                .get_first_asset_for_source(&wasm_bindgen_js_out)
+                .expect("The js source must exist before creating index.html");
+            format!("assets/{}", name.bundled_path())
+        } else {
+            format!(
+                "wasm/{}",
+                wasm_bindgen_js_out.file_name().unwrap().to_str().unwrap()
+            )
         };
 
         // Write the index.html file with the pre-configured contents we got from pre-rendering
@@ -3394,7 +3401,6 @@ impl BuildRequest {
             self.root_dir().join("index.html"),
             self.prepare_html(assets, &wasm_path, &js_path).unwrap(),
         )?;
-
         Ok(())
     }
 
@@ -3686,10 +3692,6 @@ impl BuildRequest {
     pub(crate) async fn verify_tooling(&self, ctx: &BuildContext) -> Result<()> {
         ctx.status_installing_tooling();
 
-        self
-            .initialize_profiles()
-            .context("Failed to initialize profiles - dioxus can't build without them. You might need to initialize them yourself.")?;
-
         match self.platform {
             Platform::Web => self.verify_web_tooling().await?,
             Platform::Ios => self.verify_ios_tooling().await?,
@@ -3846,7 +3848,7 @@ impl BuildRequest {
         };
 
         // Inject any resources from the config into the html
-        self.inject_resources(assets, &mut html)?;
+        self.inject_resources(assets, wasm_path, &mut html)?;
 
         // Inject loading scripts if they are not already present
         self.inject_loading_scripts(&mut html);
@@ -3865,7 +3867,12 @@ impl BuildRequest {
     }
 
     // Inject any resources from the config into the html
-    fn inject_resources(&self, assets: &AssetManifest, html: &mut String) -> Result<()> {
+    fn inject_resources(
+        &self,
+        assets: &AssetManifest,
+        wasm_path: &str,
+        html: &mut String,
+    ) -> Result<()> {
         use std::fmt::Write;
 
         // Collect all resources into a list of styles and scripts
@@ -3935,19 +3942,10 @@ impl BuildRequest {
         }
 
         // Manually inject the wasm file for preloading. WASM currently doesn't support preloading in the manganis asset system
-        let wasm_source_path = self.wasm_bindgen_wasm_output_file();
-        if let Some(wasm_assets) = assets.get_assets_for_source(&wasm_source_path) {
-            let wasm_path = wasm_assets
-                .iter()
-                .next()
-                .expect("There should be exactly one optimized wasm asset");
-            let wasm_path = wasm_path.bundled_path();
-            head_resources.push_str(&format!(
-                    "<link rel=\"preload\" as=\"fetch\" type=\"application/wasm\" href=\"/{{base_path}}/assets/{wasm_path}\" crossorigin>"
-                ));
-
-            Self::replace_or_insert_before("{style_include}", "</head", &head_resources, html);
-        }
+        head_resources.push_str(&format!(
+            "<link rel=\"preload\" as=\"fetch\" type=\"application/wasm\" href=\"/{{base_path}}/assets/{wasm_path}\" crossorigin>"
+        ));
+        Self::replace_or_insert_before("{style_include}", "</head", &head_resources, html);
 
         Ok(())
     }
@@ -4123,7 +4121,7 @@ r#" <script>
                     .trim()
                     .into();
                 let path_to_sim = path_to_xcode.join("Applications").join("Simulator.app");
-                open::that(path_to_sim)?;
+                open::that_detached(path_to_sim)?;
             }
 
             Platform::Android => {
@@ -4167,5 +4165,68 @@ r#" <script>
         which::which("llvm-ranlib")
             .or_else(|_| which::which("ranlib"))
             .ok()
+    }
+
+    /// Assemble a series of `--config key=value` arguments for the build command.
+    ///
+    /// This adds adhoc profiles that dx uses to isolate builds from each other. Normally if you ran
+    /// `cargo build --feature desktop` and `cargo build --feature server`, then both binaries get
+    /// the same name and overwrite each other, causing thrashing and locking issues.
+    ///
+    /// By creating adhoc profiles, we can ensure that each build is isolated and doesn't interfere with each other.
+    ///
+    /// The user can also define custom profiles in their `Cargo.toml` file, which will be used instead
+    /// of the adhoc profiles.
+    ///
+    /// The names of the profiles are:
+    /// - web-dev
+    /// - web-release
+    /// - desktop-dev
+    /// - desktop-release
+    /// - server-dev
+    /// - server-release
+    /// - ios-dev
+    /// - ios-release
+    /// - android-dev
+    /// - android-release
+    /// - liveview-dev
+    /// - liveview-release
+    ///
+    /// Note how every platform gets its own profile, and each platform has a dev and release profile.
+    fn profile_args(&self) -> Vec<String> {
+        // If the user defined the profile in the Cargo.toml, we don't need to add it to our adhoc list
+        if self
+            .workspace
+            .cargo_toml
+            .profile
+            .custom
+            .contains_key(&self.profile)
+        {
+            return vec![];
+        }
+
+        // Otherwise, we need to add the profile arguments to make it adhoc
+        let mut args = Vec::new();
+
+        let profile = self.profile.as_str();
+        let inherits = if self.release { "release" } else { "dev" };
+
+        // Add the profile definition first.
+        args.push(format!(r#"profile.{profile}.inherits="{inherits}""#));
+
+        // The default dioxus experience is to lightly optimize the web build, both in debug and release
+        // Note that typically in release builds, you would strip debuginfo, but we actually choose to do
+        // that with wasm-opt tooling instead.
+        if matches!(self.platform, Platform::Web) {
+            match self.release {
+                true => args.push(r#"profile.web.opt-level="s""#.to_string()),
+                false => args.push(r#"profile.web.opt-level="1""#.to_string()),
+            }
+        }
+
+        // Prepend --config to each argument
+        args.into_iter()
+            .flat_map(|arg| ["--config".to_string(), arg])
+            .collect()
     }
 }

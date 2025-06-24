@@ -150,16 +150,9 @@ built = { version = "0.7.5", features = ["git2"] }
 [features]
 default = []
 plugin = []
-tokio-console = ["dep:console-subscriber"]
+tokio-console = ["dep:console-subscriber", "tokio/tracing"]
 bundle = []
 no-downloads = []
-
-# when releasing dioxus, we want to enable wasm-opt
-# and then also maybe developing it too.
-# making this optional cuts workspace deps down from 1000 to 500, so it's very nice for workspace adev
-optimizations = ["wasm-opt", "asset-opt"]
-asset-opt = []
-wasm-opt = ["dep:wasm-opt"]
 
 [[bin]]
 path = "src/main.rs"
