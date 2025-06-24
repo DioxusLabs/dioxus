@@ -1,8 +1,8 @@
 use super::{AppBuilder, ServeUpdate, WebServer};
 use crate::{
     platform_override::CommandWithPlatformOverrides, BuildArtifacts, BuildId, BuildMode,
-    BuildTargets, Error, HotpatchModuleCache, Platform, Result, ServeArgs, TailwindCli, TraceSrc,
-    Workspace,
+    BuildTargets, BuilderUpdate, Error, HotpatchModuleCache, Platform, Result, ServeArgs,
+    TailwindCli, TraceSrc, Workspace,
 };
 use anyhow::Context;
 use dioxus_core::internal::{
@@ -66,6 +66,7 @@ pub(crate) struct AppServer {
     pub(crate) _wsl_file_poll_interval: u16,
     pub(crate) always_on_top: bool,
     pub(crate) fullstack: bool,
+    pub(crate) ssg: bool,
     pub(crate) watch_fs: bool,
 
     // resolve args related to the webserver
@@ -138,6 +139,7 @@ impl AppServer {
         let (watcher_tx, watcher_rx) = futures_channel::mpsc::unbounded();
         let watcher = create_notify_watcher(watcher_tx.clone(), wsl_file_poll_interval as u64);
 
+        let ssg = args.platform_args.shared.targets.ssg;
         let target_args = CommandWithPlatformOverrides {
             shared: args.platform_args.shared.targets,
             server: args.platform_args.server.map(|s| s.targets),
@@ -150,7 +152,7 @@ impl AppServer {
         let fullstack = server.is_some();
         let should_proxy_port = match client.platform {
             Platform::Server => true,
-            _ => fullstack,
+            _ => fullstack && !ssg,
         };
 
         let proxied_port = should_proxy_port
@@ -204,6 +206,7 @@ impl AppServer {
             _force_sequential: force_sequential,
             cross_origin_policy,
             fullstack,
+            ssg,
             tw_watcher,
             server_args,
             client_args,
@@ -224,6 +227,27 @@ impl AppServer {
         }
 
         Ok(runner)
+    }
+
+    pub(crate) async fn rebuild_ssg(&mut self, devserver: &WebServer) {
+        if self.client.stage != BuildStage::Success {
+            return;
+        }
+        // Run SSG and cache static routes if the server build is done
+        if let Some(server) = self.server.as_mut() {
+            if !self.ssg || server.stage != BuildStage::Success {
+                return;
+            }
+            if let Err(err) = crate::pre_render_static_routes(
+                Some(devserver.devserver_address()),
+                server,
+                Some(&server.tx.clone()),
+            )
+            .await
+            {
+                tracing::error!("Failed to pre-render static routes: {err}");
+            }
+        }
     }
 
     pub(crate) async fn wait(&mut self) -> ServeUpdate {
@@ -291,6 +315,14 @@ impl AppServer {
                 ServeUpdate::FilesChanged { files }
             }
 
+        }
+    }
+
+    /// Handle an update from the builder
+    pub(crate) async fn new_build_update(&mut self, update: &BuilderUpdate, devserver: &WebServer) {
+        if let BuilderUpdate::BuildReady { .. } = update {
+            // If the build is ready, we need to check if we need to pre-render with ssg
+            self.rebuild_ssg(devserver).await;
         }
     }
 
@@ -488,7 +520,7 @@ impl AppServer {
     /// Finally "bundle" this app and return a handle to it
     pub(crate) async fn open(
         &mut self,
-        artifacts: BuildArtifacts,
+        artifacts: &BuildArtifacts,
         devserver: &mut WebServer,
     ) -> Result<()> {
         // Make sure to save artifacts regardless of if we're opening the app or not
@@ -555,7 +587,8 @@ impl AppServer {
         let displayed_address = devserver.displayed_address();
 
         // Always open the server first after the client has been built
-        if let Some(server) = self.server.as_mut() {
+        // Only open the server if it isn't prerendered
+        if let Some(server) = self.server.as_mut().filter(|_| !self.ssg) {
             tracing::debug!("Opening server build");
             server.soft_kill().await;
             server

@@ -20,11 +20,11 @@ fn app() -> Element {
         button { onclick: move |_| count -= 1, "Down low!" }
         button {
             onclick: move |_| async move {
-                if let Ok(data) = get_server_data().await {
-                    println!("Client received: {}", data);
-                    text.set(data.clone());
-                    post_server_data(data).await.unwrap();
-                }
+                let data = get_server_data().await?;
+                println!("Client received: {}", data);
+                text.set(data.clone());
+                post_server_data(data).await?;
+                Ok(())
             },
             "Run a server function!"
         }
@@ -33,14 +33,14 @@ fn app() -> Element {
 }
 
 #[server]
-async fn post_server_data(data: String) -> Result<(), ServerFnError> {
+async fn post_server_data(data: String) -> ServerFnResult {
     println!("Server received: {}", data);
 
     Ok(())
 }
 
 #[server]
-async fn get_server_data() -> Result<String, ServerFnError> {
+async fn get_server_data() -> ServerFnResult<String> {
     Ok(reqwest::get("https://httpbin.org/ip").await?.text().await?)
 }
 
