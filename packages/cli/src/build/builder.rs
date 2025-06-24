@@ -1180,7 +1180,7 @@ We checked the folder: {}
     ) -> Result<()> {
         let apk_path = self.build.debug_apk_path();
         let session_cache = self.build.session_cache_dir();
-        let full_mobile_app_name = self.build.full_mobile_app_name();
+        let application_id = self.build.bundle_identifier();
         let adb = self.build.workspace.android_tools()?.adb.clone();
 
         // Start backgrounded since .open() is called while in the arm of the top-level match
@@ -1261,7 +1261,7 @@ We checked the folder: {}
 
             // eventually, use the user's MainActivity, not our MainActivity
             // adb shell am start -n dev.dioxus.main/dev.dioxus.main.MainActivity
-            let activity_name = format!("{}/dev.dioxus.main.MainActivity", full_mobile_app_name,);
+            let activity_name = format!("{application_id}/dev.dioxus.main.MainActivity");
             let res = Command::new(&adb)
                 .arg("shell")
                 .arg("am")
