@@ -1,12 +1,10 @@
-use anyhow::{anyhow, Context};
-use flate2::read::GzDecoder;
-use tar::Archive;
-use tempfile::NamedTempFile;
-use tokio::fs;
-
 use crate::config::WasmOptLevel;
 use crate::{CliSettings, Result, WasmOptConfig, Workspace};
+use anyhow::{anyhow, Context};
+use flate2::read::GzDecoder;
 use std::path::{Path, PathBuf};
+use tar::Archive;
+use tempfile::NamedTempFile;
 
 /// Write these wasm bytes with a particular set of optimizations
 pub async fn write_wasm(bytes: &[u8], output_path: &Path, cfg: &WasmOptConfig) -> Result<()> {
@@ -16,7 +14,7 @@ pub async fn write_wasm(bytes: &[u8], output_path: &Path, cfg: &WasmOptConfig) -
 }
 
 pub async fn optimize(input_path: &Path, output_path: &Path, cfg: &WasmOptConfig) -> Result<()> {
-    let wasm_opt = WasmOpt::new(input_path, output_path, cfg).await?;
+    let wasm_opt = WasmOpt::new(input_path, output_path, cfg).await.unwrap();
     wasm_opt.optimize().await?;
 
     Ok(())
@@ -194,7 +192,7 @@ async fn get_binary_path() -> anyhow::Result<PathBuf> {
         Err(_) if CliSettings::prefer_no_downloads() => Err(anyhow!("Missing wasm-opt")),
         // Otherwise, try to install it
         Err(_) => {
-            let install_dir = install_dir().await?;
+            let install_dir = install_dir()?;
             let install_path = installed_bin_path(&install_dir);
             if !install_path.exists() {
                 tracing::info!("Installing wasm-opt");
@@ -206,9 +204,9 @@ async fn get_binary_path() -> anyhow::Result<PathBuf> {
     }
 }
 
-async fn install_dir() -> anyhow::Result<PathBuf> {
+fn install_dir() -> anyhow::Result<PathBuf> {
     let bindgen_dir = Workspace::dioxus_home_dir().join("binaryen");
-    fs::create_dir_all(&bindgen_dir).await?;
+    std::fs::create_dir_all(&bindgen_dir)?;
     Ok(bindgen_dir)
 }
 
