@@ -45,6 +45,9 @@ impl RunArgs {
                     // And then update the websocketed clients with the new build status in case they want it
                     devserver.new_build_update(&update).await;
 
+                    // Finally, we also want to update the builder with the new update
+                    builder.new_build_update(&update, &devserver).await;
+
                     // And then open the app if it's ready
                     match update {
                         BuilderUpdate::BuildReady { bundle } => {
@@ -101,7 +104,9 @@ impl RunArgs {
                             BuildStage::Restarting => {}
                             BuildStage::CompressingAssets => {}
                             BuildStage::ExtractingAssets => {}
-                            BuildStage::Prerendering => {}
+                            BuildStage::Prerendering => {
+                                tracing::info!("[{platform}] Prerendering app")
+                            }
                             BuildStage::Failed => {
                                 tracing::error!("[{platform}] Build failed");
                                 return Err(Error::Cargo(format!(
