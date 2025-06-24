@@ -31,7 +31,7 @@ pub use document::WebDocument;
 #[cfg(feature = "file_engine")]
 pub use file_engine::*;
 #[cfg(feature = "document")]
-pub use history::WebHistory;
+pub use history::{HashHistory, WebHistory};
 
 #[cfg(all(feature = "devtools", debug_assertions))]
 mod devtools;
@@ -51,6 +51,11 @@ pub use hydration::*;
 /// wasm_bindgen_futures::spawn_local(app_fut);
 /// ```
 pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
+    #[cfg(feature = "document")]
+    if let Some(history) = web_config.history.clone() {
+        virtual_dom.in_runtime(|| dioxus_core::ScopeId::ROOT.provide_context(history));
+    }
+
     #[cfg(feature = "document")]
     virtual_dom.in_runtime(document::init_document);
 
