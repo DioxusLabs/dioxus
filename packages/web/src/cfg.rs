@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use dioxus_core::LaunchConfig;
 use wasm_bindgen::JsCast as _;
 
@@ -13,6 +15,8 @@ use wasm_bindgen::JsCast as _;
 pub struct Config {
     pub(crate) hydrate: bool,
     pub(crate) root: ConfigRoot,
+    #[cfg(feature = "document")]
+    pub(crate) history: Option<Rc<dyn dioxus_history::History>>,
 }
 
 impl LaunchConfig for Config {}
@@ -67,6 +71,22 @@ impl Config {
         self.root = ConfigRoot::RootNode(node);
         self
     }
+
+    /// Set the history provider for the application.
+    ///
+    /// `dioxus-web` provides two history providers:
+    /// - `dioxus_history::WebHistory`: A history provider that uses the browser history API.
+    /// - `dioxus_history::HashHistory`: A history provider that uses the `#` url fragment.
+    ///
+    /// By default, `dioxus-web` uses the `WebHistory` provider, but this method can be used to configure
+    /// a different history provider.
+    pub fn history(mut self, history: Rc<dyn dioxus_history::History>) -> Self {
+        #[cfg(feature = "document")]
+        {
+            self.history = Some(history);
+        }
+        self
+    }
 }
 
 impl Default for Config {
@@ -74,6 +94,8 @@ impl Default for Config {
         Self {
             hydrate: false,
             root: ConfigRoot::RootName("main".to_string()),
+            #[cfg(feature = "document")]
+            history: None,
         }
     }
 }

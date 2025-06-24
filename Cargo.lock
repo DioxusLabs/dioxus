@@ -4373,6 +4373,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "dioxus-playwright-web-hash-routing-test"
+version = "0.0.1"
+dependencies = [
+ "dioxus",
+]
+
+[[package]]
 name = "dioxus-playwright-web-routing-test"
 version = "0.0.1"
 dependencies = [
