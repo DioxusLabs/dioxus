@@ -35,6 +35,10 @@ impl Workspace {
         }
 
         let krates_future = tokio::task::spawn_blocking(|| {
+            if let Ok(res) = std::env::var("SIMULATE_SLOW_NETWORK") {
+                std::thread::sleep(Duration::from_secs(res.parse().unwrap_or(5)));
+            }
+
             let cmd = Cmd::new();
             let mut builder = krates::Builder::new();
             builder.workspace(true);
@@ -45,18 +49,20 @@ impl Workspace {
 
         let spin_future = async move {
             tokio::time::sleep(Duration::from_millis(500)).await;
-            tracing::warn!("Waiting for cargo-metadata...");
-            loop {
-                tokio::time::sleep(Duration::from_millis(3000)).await;
-                tracing::warn!(
-                    "Taking a while, maybe your internet is down? Try again with --offline"
+            println!("Waiting for cargo-metadata...");
+            for x in 1..=5 {
+                tokio::time::sleep(Duration::from_millis(2000)).await;
+                println!(
+                    "({x}/5) Taking a while, maybe your internet is down? Try again with --offline"
                 );
             }
         };
 
         let krates = tokio::select! {
             f = krates_future => f.context("failed to run cargo metadata")??,
-            _ = spin_future => unreachable!()
+            _ = spin_future => return Err(crate::Error::Network(
+                "cargo metadata took too long to respond, try again with --offline".to_string(),
+            )),
         };
 
         let settings = CliSettings::global_or_default();

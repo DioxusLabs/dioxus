@@ -45,6 +45,9 @@ pub(crate) enum Error {
     #[error("Failed to render template: {0}")]
     TemplateParse(#[from] handlebars::RenderError),
 
+    #[error("Failed to connect to the network: {0}")]
+    Network(String),
+
     #[error(transparent)]
     Other(#[from] anyhow::Error),
 }

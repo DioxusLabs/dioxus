@@ -766,21 +766,23 @@ impl Output {
         let links_list: [_; 2] =
             Layout::vertical([Constraint::Length(1), Constraint::Length(1)]).areas(bottom);
 
-        frame.render_widget(
-            Paragraph::new(Line::from(vec![
-                "Read the docs: ".gray(),
-                "https://dioxuslabs.com/0.6/docs".blue(),
-            ])),
-            links_list[0],
-        );
+        if state.runner.client.build.using_dioxus_explicitly {
+            frame.render_widget(
+                Paragraph::new(Line::from(vec![
+                    "Read the docs: ".gray(),
+                    "https://dioxuslabs.com/0.6/docs".blue(),
+                ])),
+                links_list[0],
+            );
 
-        frame.render_widget(
-            Paragraph::new(Line::from(vec![
-                "Video tutorials: ".gray(),
-                "https://youtube.com/@DioxusLabs".blue(),
-            ])),
-            links_list[1],
-        );
+            frame.render_widget(
+                Paragraph::new(Line::from(vec![
+                    "Video tutorials: ".gray(),
+                    "https://youtube.com/@DioxusLabs".blue(),
+                ])),
+                links_list[1],
+            );
+        }
 
         let cmds = [
             "",

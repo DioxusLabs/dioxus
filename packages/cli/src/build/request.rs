@@ -390,6 +390,7 @@ pub(crate) struct BuildRequest {
     pub(crate) link_err_file: Arc<NamedTempFile>,
     pub(crate) rustc_wrapper_args_file: Arc<NamedTempFile>,
     pub(crate) base_path: Option<String>,
+    pub(crate) using_dioxus_explicitly: bool,
 }
 
 /// dx can produce different "modes" of a build. A "regular" build is a "base" build. The Fat and Thin
@@ -757,6 +758,7 @@ impl BuildRequest {
             package,
             main_target,
             rustflags,
+            using_dioxus_explicitly,
             skip_assets: args.skip_assets,
             base_path: args.base_path.clone(),
             wasm_split: args.wasm_split,
