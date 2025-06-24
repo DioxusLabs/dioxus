@@ -3802,7 +3802,7 @@ impl BuildRequest {
         Ok(())
     }
 
-    /// update the mtime of the "main" file to bust the fingerprint, forcing rustc to recompile it.
+    /// Blow away the fingerprint for this package, forcing rustc to recompile it.
     ///
     /// This prevents rustc from using the cached version of the binary, which can cause issues
     /// with our hotpatching setup since it uses linker interception.
@@ -3812,13 +3812,29 @@ impl BuildRequest {
     ///
     /// This might stop working if/when cargo stabilizes contents-based fingerprinting.
     fn bust_fingerprint(&self, ctx: &BuildContext) -> Result<()> {
-        if !matches!(ctx.mode, BuildMode::Thin { .. }) {
-            std::fs::File::open(&self.crate_target.src_path)?.set_modified(SystemTime::now())?;
+        if matches!(ctx.mode, BuildMode::Fat) {
+            // `dx` compiles everything with `--target` which ends up with a structure like:
+            // target/<triple>/<profile>/.fingerprint/<package_name>-<hash>
+            //
+            // normally you can't rely on this structure (ie with `cargo build`) but the explicit
+            // target arg guarantees this will work.
+            let fingerprint_dir = self
+                .target_dir
+                .join(self.triple.to_string())
+                .join(&self.profile)
+                .join(".fingerprint");
 
-            // read and write the file to update the mtime
-            if cfg!(target_os = "windows") {
-                let contents = std::fs::read_to_string(&self.crate_target.src_path)?;
-                _ = std::fs::write(&self.crate_target.src_path, contents);
+            // split at the last `-` used to separate the hash from the name
+            // This causes to more aggressively bust hashes for all combinations of features
+            // and fingerprints for this package since we're just ignoring the hash
+            for entry in std::fs::read_dir(&fingerprint_dir)?.flatten() {
+                if let Some(fname) = entry.file_name().to_str() {
+                    if let Some((name, _)) = fname.rsplit_once('-') {
+                        if name == self.package().name {
+                            _ = std::fs::remove_dir_all(entry.path());
+                        }
+                    }
+                }
             }
         }
         Ok(())
