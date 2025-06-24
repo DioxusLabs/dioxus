@@ -97,64 +97,57 @@ impl Document for WebDocument {
     /// Create a new meta tag in the head
     fn create_meta(&self, props: MetaProps) {
         queue_effect(move || {
-            let window = web_sys::window().expect("no global `window` exists");
-            let document = window.document().expect("should have a document on window");
-            let head = document.head().expect("document should have a head");
-
-            let element = document.create_element("meta").unwrap();
-            for (name, value) in props.attributes() {
-                element.set_attribute(name, &value).unwrap();
-            }
-            head.append_child(&element).unwrap();
+            append_element_to_head("meta", &props.attributes(), None);
         });
     }
 
     /// Create a new script tag in the head
     fn create_script(&self, props: ScriptProps) {
         queue_effect(move || {
-            let window = web_sys::window().expect("no global `window` exists");
-            let document = window.document().expect("should have a document on window");
-            let head = document.head().expect("document should have a head");
-
-            let element = document.create_element("script").unwrap();
-            for (name, value) in props.attributes() {
-                element.set_attribute(name, &value).unwrap();
-            }
-            element.set_text_content(props.script_contents().ok().as_deref());
-            head.append_child(&element).unwrap();
+            append_element_to_head(
+                "script",
+                &props.attributes(),
+                props.script_contents().ok().as_deref(),
+            );
         });
     }
 
     /// Create a new style tag in the head
     fn create_style(&self, props: StyleProps) {
         queue_effect(move || {
-            let window = web_sys::window().expect("no global `window` exists");
-            let document = window.document().expect("should have a document on window");
-            let head = document.head().expect("document should have a head");
-
-            let element = document.create_element("style").unwrap();
-            for (name, value) in props.attributes() {
-                element.set_attribute(name, &value).unwrap();
-            }
-            element.set_text_content(props.style_contents().ok().as_deref());
-            head.append_child(&element).unwrap();
+            append_element_to_head(
+                "style",
+                &props.attributes(),
+                props.style_contents().ok().as_deref(),
+            );
         });
     }
 
     /// Create a new link tag in the head
     fn create_link(&self, props: LinkProps) {
         queue_effect(move || {
-            let window = web_sys::window().expect("no global `window` exists");
-            let document = window.document().expect("should have a document on window");
-            let head = document.head().expect("document should have a head");
-
-            let element = document.create_element("link").unwrap();
-            for (name, value) in props.attributes() {
-                element.set_attribute(name, &value).unwrap();
-            }
-            head.append_child(&element).unwrap();
+            append_element_to_head("link", &props.attributes(), None);
         });
     }
+}
+
+fn append_element_to_head(
+    local_name: &str,
+    attributes: &Vec<(&'static str, String)>,
+    text_content: Option<&str>,
+) {
+    let window = web_sys::window().expect("no global `window` exists");
+    let document = window.document().expect("should have a document on window");
+    let head = document.head().expect("document should have a head");
+
+    let element = document.create_element(local_name).unwrap();
+    for (name, value) in attributes {
+        element.set_attribute(name, &value).unwrap();
+    }
+    if text_content.is_some() {
+        element.set_text_content(text_content);
+    }
+    head.append_child(&element).unwrap();
 }
 
 /// Required to avoid blocking the Rust WASM thread.
