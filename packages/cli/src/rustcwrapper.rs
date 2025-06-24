@@ -60,8 +60,7 @@ pub async fn run_rustc() {
         .args
         .iter()
         .skip_while(|arg| *arg != "--crate-name")
-        .skip(1)
-        .next()
+        .nth(1)
         .is_some_and(|name| name != "___")
     {
         std::fs::create_dir_all(var_file.parent().expect("Failed to get parent dir"))
