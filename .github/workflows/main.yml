@@ -73,7 +73,7 @@ jobs:
         uses: ./.github/actions/free-disk-space
       - uses: awalsh128/cache-apt-pkgs-action@latest
         with:
-          packages: libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
+          packages: libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev libglib2.0-dev
           version: 1.0
       - uses: dtolnay/rust-toolchain@1.86.0
         with:
@@ -94,7 +94,7 @@ jobs:
         uses: ./.github/actions/free-disk-space
       - uses: awalsh128/cache-apt-pkgs-action@latest
         with:
-          packages: libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
+          packages: libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev libglib2.0-dev
           version: 1.0
       - uses: dtolnay/rust-toolchain@1.86.0
         with:
@@ -127,7 +127,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: awalsh128/cache-apt-pkgs-action@latest
         with:
-          packages: libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
+          packages: libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev libglib2.0-dev
           version: 1.0
       - name: Install Rust ${{ env.rust_nightly }}
         uses: dtolnay/rust-toolchain@nightly
@@ -150,7 +150,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: awalsh128/cache-apt-pkgs-action@latest
         with:
-          packages: libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
+          packages: libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev libglib2.0-dev
           version: 1.0
       - uses: dtolnay/rust-toolchain@1.86.0
       - uses: Swatinem/rust-cache@v2
@@ -166,7 +166,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: awalsh128/cache-apt-pkgs-action@latest
         with:
-          packages: libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
+          packages: libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev libglib2.0-dev
           version: 1.0
       - uses: dtolnay/rust-toolchain@1.86.0
         with:
@@ -309,8 +309,8 @@ jobs:
       - uses: awalsh128/cache-apt-pkgs-action@latest
         if: ${{ matrix.platform.os == 'ubuntu-24.04' || matrix.platform.os == 'ubuntu-24.04-arm' }}
         with:
-          packages: libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
-          version: 1.0
+          packages: libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev libglib2.0-dev
+          version: ${{ matrix.platform.target }}-${{ matrix.platform.os }} # disambiguate since we're in a matrix and this caching action doesn't factor in these variables
 
       - name: Install cross
         if: ${{ matrix.platform.cross == true }}

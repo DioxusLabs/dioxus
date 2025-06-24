@@ -1,12 +1,10 @@
-use anyhow::{anyhow, Context};
-use flate2::read::GzDecoder;
-use tar::Archive;
-use tempfile::NamedTempFile;
-use tokio::fs;
-
 use crate::config::WasmOptLevel;
 use crate::{CliSettings, Result, WasmOptConfig, Workspace};
+use anyhow::{anyhow, Context};
+use flate2::read::GzDecoder;
 use std::path::{Path, PathBuf};
+use tar::Archive;
+use tempfile::NamedTempFile;
 
 /// Write these wasm bytes with a particular set of optimizations
 pub async fn write_wasm(bytes: &[u8], output_path: &Path, cfg: &WasmOptConfig) -> Result<()> {
@@ -16,7 +14,9 @@ pub async fn write_wasm(bytes: &[u8], output_path: &Path, cfg: &WasmOptConfig) -
 }
 
 pub async fn optimize(input_path: &Path, output_path: &Path, cfg: &WasmOptConfig) -> Result<()> {
-    let wasm_opt = WasmOpt::new(input_path, output_path, cfg).await?;
+    let wasm_opt = WasmOpt::new(input_path, output_path, cfg)
+        .await
+        .inspect_err(|err| tracing::error!("Failed to create wasm-opt instance: {}", err))?;
     wasm_opt.optimize().await?;
 
     Ok(())
@@ -127,6 +127,20 @@ impl WasmOpt {
 
 // Find the URL for the latest binaryen release that contains wasm-opt
 async fn find_latest_wasm_opt_download_url() -> anyhow::Result<String> {
+    // Find the platform identifier based on the current OS and architecture
+    // hardcoded for now to get around github api rate limits
+    if cfg!(all(target_os = "windows", target_arch = "x86_64")) {
+        return Ok("https://github.com/WebAssembly/binaryen/releases/download/version_123/binaryen-version_123-x86_64-windows.tar.gz".to_string());
+    } else if cfg!(all(target_os = "linux", target_arch = "x86_64")) {
+        return Ok("https://github.com/WebAssembly/binaryen/releases/download/version_123/binaryen-version_123-x86_64-linux.tar.gz".to_string());
+    } else if cfg!(all(target_os = "linux", target_arch = "aarch64")) {
+        return Ok("https://github.com/WebAssembly/binaryen/releases/download/version_123/binaryen-version_123-aarch64-linux.tar.gz".to_string());
+    } else if cfg!(all(target_os = "macos", target_arch = "x86_64")) {
+        return Ok("https://github.com/WebAssembly/binaryen/releases/download/version_123/binaryen-version_123-x86_64-macos.tar.gz".to_string());
+    } else if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
+        return Ok("https://github.com/WebAssembly/binaryen/releases/download/version_123/binaryen-version_123-arm64-macos.tar.gz".to_string());
+    };
+
     let url = "https://api.github.com/repos/WebAssembly/binaryen/releases/latest";
     let client = reqwest::Client::new();
     let response = client
@@ -136,6 +150,9 @@ async fn find_latest_wasm_opt_download_url() -> anyhow::Result<String> {
         .await?
         .json::<serde_json::Value>()
         .await?;
+
+    tracing::trace!("Response from GitHub: {:#?}", response);
+
     let assets = response
         .get("assets")
         .and_then(|assets| assets.as_array())
@@ -165,7 +182,7 @@ async fn find_latest_wasm_opt_download_url() -> anyhow::Result<String> {
             asset
                 .get("name")
                 .and_then(|name| name.as_str())
-                .is_some_and(|name| name.contains(platform))
+                .is_some_and(|name| name.contains(platform) && !name.ends_with("sha256"))
         })
         .ok_or_else(|| {
             anyhow::anyhow!(
@@ -185,31 +202,30 @@ async fn find_latest_wasm_opt_download_url() -> anyhow::Result<String> {
 
 /// Get the path to the wasm-opt binary, downloading it if necessary
 async fn get_binary_path() -> anyhow::Result<PathBuf> {
-    let existing_path = which::which("wasm-opt");
+    let install_dir = install_dir();
+    let install_path = installed_bin_path(&install_dir);
 
-    match existing_path {
-        // If wasm-opt is already in the PATH, return its path
-        Ok(path) => Ok(path),
-        // If wasm-opt is not found in the path and we prefer no downloads, return an error
-        Err(_) if CliSettings::prefer_no_downloads() => Err(anyhow!("Missing wasm-opt")),
-        // Otherwise, try to install it
-        Err(_) => {
-            let install_dir = install_dir().await?;
-            let install_path = installed_bin_path(&install_dir);
-            if !install_path.exists() {
-                tracing::info!("Installing wasm-opt");
-                install_github(&install_dir).await?;
-                tracing::info!("wasm-opt installed from Github");
-            }
-            Ok(install_path)
+    if install_path.exists() {
+        return Ok(install_path);
+    }
+
+    if CliSettings::prefer_no_downloads() {
+        if let Ok(existing) = which::which("wasm-opt") {
+            return Ok(existing);
+        } else {
+            return Err(anyhow!("Missing wasm-opt"));
         }
     }
+
+    tracing::info!("Installing wasm-opt");
+    install_github(&install_dir).await?;
+    tracing::info!("wasm-opt installed from Github");
+
+    Ok(install_path)
 }
 
-async fn install_dir() -> anyhow::Result<PathBuf> {
-    let bindgen_dir = Workspace::dioxus_home_dir().join("binaryen");
-    fs::create_dir_all(&bindgen_dir).await?;
-    Ok(bindgen_dir)
+fn install_dir() -> PathBuf {
+    Workspace::dioxus_home_dir().join("binaryen")
 }
 
 fn installed_bin_name() -> &'static str {
@@ -221,13 +237,14 @@ fn installed_bin_name() -> &'static str {
 }
 
 fn installed_bin_path(install_dir: &Path) -> PathBuf {
-    let bin_name = installed_bin_name();
-    install_dir.join("bin").join(bin_name)
+    install_dir.join("bin").join(installed_bin_name())
 }
 
 /// Install wasm-opt from GitHub releases into the specified directory
 async fn install_github(install_dir: &Path) -> anyhow::Result<()> {
     tracing::trace!("Attempting to install wasm-opt from GitHub");
+
+    std::fs::create_dir_all(install_dir)?;
 
     let url = find_latest_wasm_opt_download_url()
         .await
