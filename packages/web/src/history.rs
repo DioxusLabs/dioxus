@@ -1,20 +1,5 @@
-use scroll::ScrollPosition;
-use wasm_bindgen::JsCast;
-use wasm_bindgen::{prelude::Closure, JsValue};
-use web_sys::{window, Window};
-use web_sys::{Event, History, ScrollRestoration};
-
-mod scroll;
-
-fn base_path() -> Option<String> {
-    dioxus_cli_config::web_base_path()
-}
-
-#[allow(clippy::extra_unused_type_parameters)]
-fn update_scroll(window: &Window, history: &History) {
-    let scroll = ScrollPosition::of_window(window);
-    let _ = replace_state_with_url(history, &[scroll.x, scroll.y], None);
-}
+use wasm_bindgen::{prelude::Closure, JsCast, JsValue};
+use web_sys::{window, Event, History, ScrollRestoration, Window};
 
 /// A [`dioxus_history::History`] provider that integrates with a browser via the [History API](https://developer.mozilla.org/en-US/docs/Web/API/History_API).
 ///
@@ -71,7 +56,7 @@ impl WebHistory {
 
         let prefix = prefix
             // If there isn't a base path, try to grab one from the CLI
-            .or_else(base_path)
+            .or_else(dioxus_cli_config::web_base_path)
             // Normalize the prefix to start and end with no slashes
             .as_ref()
             .map(|prefix| prefix.trim_matches('/'))
@@ -104,9 +89,7 @@ impl WebHistory {
             self.window.scroll_to_with_x_and_y(0.0, 0.0)
         }
     }
-}
 
-impl WebHistory {
     fn route_from_location(&self) -> String {
         let location = self.window.location();
         let path = location.pathname().unwrap_or_else(|_| "/".into())
@@ -128,10 +111,6 @@ impl WebHistory {
             None => state.to_string(),
             Some(prefix) => format!("{prefix}{state}"),
         }
-    }
-
-    fn navigate_external(&self, url: String) -> bool {
-        self.window.location().set_href(&url).is_ok()
     }
 }
 
@@ -182,7 +161,7 @@ impl dioxus_history::History for WebHistory {
     }
 
     fn external(&self, url: String) -> bool {
-        self.navigate_external(url)
+        self.window.location().set_href(&url).is_ok()
     }
 
     fn updater(&self, callback: std::sync::Arc<dyn Fn() + Send + Sync>) {
@@ -207,40 +186,8 @@ impl dioxus_history::History for WebHistory {
     }
 }
 
-pub(crate) fn replace_state_with_url(
-    history: &History,
-    value: &[f64; 2],
-    url: Option<&str>,
-) -> Result<(), JsValue> {
-    let position = js_sys::Array::new();
-    position.push(&JsValue::from(value[0]));
-    position.push(&JsValue::from(value[1]));
-    history.replace_state_with_url(&position, "", url)
-}
-
-pub(crate) fn push_state_and_url(
-    history: &History,
-    value: &[f64; 2],
-    url: String,
-) -> Result<(), JsValue> {
-    let position = js_sys::Array::new();
-    position.push(&JsValue::from(value[0]));
-    position.push(&JsValue::from(value[1]));
-    history.push_state_with_url(&position, "", Some(&url))
-}
-
-pub(crate) fn get_current(history: &History) -> Option<[f64; 2]> {
-    use wasm_bindgen::JsCast;
-
-    history.state().ok().and_then(|state| {
-        let state = state.dyn_into::<js_sys::Array>().ok()?;
-        let x = state.get(0).as_f64()?;
-        let y = state.get(1).as_f64()?;
-        Some([x, y])
-    })
-}
-
-/// A [`dioxus_history::History`] provider that integrates with a browser via the [History API](https://developer.mozilla.org/en-US/docs/Web/API/History_API) but uses the url fragment for the route. This allows serving as a single html file or on a single url path.
+/// A [`dioxus_history::History`] provider that integrates with a browser via the [History API](https://developer.mozilla.org/en-US/docs/Web/API/History_API)
+/// but uses the url fragment for the route. This allows serving as a single html file or on a single url path.
 pub struct HashHistory {
     do_scroll_restoration: bool,
     history: History,
@@ -275,14 +222,13 @@ impl HashHistory {
     fn new_inner(do_scroll_restoration: bool) -> Self {
         let window = window().expect("access to `window`");
         let history = window.history().expect("`window` has access to `history`");
+        let pathname = window.location().pathname().unwrap();
 
         if do_scroll_restoration {
             history
                 .set_scroll_restoration(ScrollRestoration::Manual)
                 .expect("`history` can set scroll restoration");
         }
-
-        let pathname = window.location().pathname().unwrap();
 
         Self {
             do_scroll_restoration,
@@ -303,18 +249,6 @@ impl HashHistory {
         [scroll.x, scroll.y]
     }
 
-    fn route_from_location(&self) -> String {
-        let location = self.window.location();
-
-        let hash = location.hash().unwrap();
-        if hash.is_empty() {
-            // If the path is empty, parse the root route instead
-            "/".to_owned()
-        } else {
-            hash.trim_start_matches("#").to_owned()
-        }
-    }
-
     fn full_path(&self, state: &String) -> String {
         format!("{}#{state}", self.pathname)
     }
@@ -324,15 +258,19 @@ impl HashHistory {
             self.window.scroll_to_with_x_and_y(0.0, 0.0)
         }
     }
-
-    fn navigate_external(&self, url: String) -> bool {
-        self.window.location().set_href(&url).is_ok()
-    }
 }
 
 impl dioxus_history::History for HashHistory {
     fn current_route(&self) -> String {
-        self.route_from_location()
+        let location = self.window.location();
+
+        let hash = location.hash().unwrap();
+        if hash.is_empty() {
+            // If the path is empty, parse the root route instead
+            "/".to_owned()
+        } else {
+            hash.trim_start_matches("#").to_owned()
+        }
     }
 
     fn current_prefix(&self) -> Option<String> {
@@ -377,7 +315,7 @@ impl dioxus_history::History for HashHistory {
     }
 
     fn external(&self, url: String) -> bool {
-        self.navigate_external(url)
+        self.window.location().set_href(&url).is_ok()
     }
 
     fn updater(&self, callback: std::sync::Arc<dyn Fn() + Send + Sync>) {
@@ -400,4 +338,67 @@ impl dioxus_history::History for HashHistory {
             )
             .unwrap();
     }
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct ScrollPosition {
+    pub x: f64,
+    pub y: f64,
+}
+
+impl ScrollPosition {
+    pub(crate) fn of_window(window: &Window) -> Self {
+        Self {
+            x: window.scroll_x().unwrap_or_default(),
+            y: window.scroll_y().unwrap_or_default(),
+        }
+    }
+
+    pub(crate) fn scroll_to(&self, window: Window) {
+        let Self { x, y } = *self;
+        let f = Closure::wrap(
+            Box::new(move || window.scroll_to_with_x_and_y(x, y)) as Box<dyn FnMut()>
+        );
+        web_sys::window()
+            .expect("should be run in a context with a `Window` object (dioxus cannot be run from a web worker)")
+            .request_animation_frame(&f.into_js_value().unchecked_into())
+            .expect("should register `requestAnimationFrame` OK");
+    }
+}
+
+pub(crate) fn replace_state_with_url(
+    history: &History,
+    value: &[f64; 2],
+    url: Option<&str>,
+) -> Result<(), JsValue> {
+    let position = js_sys::Array::new();
+    position.push(&JsValue::from(value[0]));
+    position.push(&JsValue::from(value[1]));
+    history.replace_state_with_url(&position, "", url)
+}
+
+pub(crate) fn push_state_and_url(
+    history: &History,
+    value: &[f64; 2],
+    url: String,
+) -> Result<(), JsValue> {
+    let position = js_sys::Array::new();
+    position.push(&JsValue::from(value[0]));
+    position.push(&JsValue::from(value[1]));
+    history.push_state_with_url(&position, "", Some(&url))
+}
+
+pub(crate) fn get_current(history: &History) -> Option<[f64; 2]> {
+    use wasm_bindgen::JsCast;
+    history.state().ok().and_then(|state| {
+        let state = state.dyn_into::<js_sys::Array>().ok()?;
+        let x = state.get(0).as_f64()?;
+        let y = state.get(1).as_f64()?;
+        Some([x, y])
+    })
+}
+
+fn update_scroll(window: &Window, history: &History) {
+    let scroll = ScrollPosition::of_window(window);
+    let _ = replace_state_with_url(history, &[scroll.x, scroll.y], None);
 }
