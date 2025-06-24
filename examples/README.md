@@ -44,11 +44,7 @@ cargo run --example hello_world
 
 [form](./form.rs) - Handle form submission
 
-[inputs](./inputs.rs) - Input values
-
 [nested_listeners](./nested_listeners.rs) - Nested handlers and bubbling
-
-[textarea](textarea.rs) - Text area input
 
 ### State Management
 
@@ -59,8 +55,6 @@ cargo run --example hello_world
 [login_form](./login_form.rs) - Login endpoint example
 
 [suspense](./suspense.rs) - Render placeholders while data is loading
-
-[tasks](./tasks.rs) - Continuously run future
 
 ### SVG
 
