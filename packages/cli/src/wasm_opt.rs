@@ -14,7 +14,9 @@ pub async fn write_wasm(bytes: &[u8], output_path: &Path, cfg: &WasmOptConfig) -
 }
 
 pub async fn optimize(input_path: &Path, output_path: &Path, cfg: &WasmOptConfig) -> Result<()> {
-    let wasm_opt = WasmOpt::new(input_path, output_path, cfg).await.unwrap();
+    let wasm_opt = WasmOpt::new(input_path, output_path, cfg)
+        .await
+        .inspect_err(|err| tracing::error!("Failed to create wasm-opt instance: {}", err))?;
     wasm_opt.optimize().await?;
 
     Ok(())
@@ -149,7 +151,7 @@ async fn find_latest_wasm_opt_download_url() -> anyhow::Result<String> {
         .json::<serde_json::Value>()
         .await?;
 
-    tracing::debug!("Response from GitHub: {:#?}", response);
+    tracing::trace!("Response from GitHub: {:#?}", response);
 
     let assets = response
         .get("assets")
@@ -290,9 +292,3 @@ async fn install_github(install_dir: &Path) -> anyhow::Result<()> {
 
     Ok(())
 }
-
-// #[tokio::test]
-// async fn check_ci_url() {
-//     let res = find_latest_wasm_opt_download_url().await;
-//     dbg!(res);
-// }
