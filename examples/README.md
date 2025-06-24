@@ -50,6 +50,10 @@ cargo run --example hello_world
 
 [context_api](./context_api.rs) - Cross-component state sharing via Context API
 
+[counters](./counters.rs) - Mapping a `Signal<Vec<T>>` into UI elements
+
+[futures](./future.rs) - Handle async Rust with use_future, use_effect, and async event handlers
+
 ### Async
 
 [login_form](./login_form.rs) - Login endpoint example
@@ -85,6 +89,8 @@ cargo run --example hello_world
 [window_event](./window_event.rs) - Window decorations, fullscreen, minimization, etc.
 
 [window_zoom](./window_zoom.rs) – Zoom in or out
+
+[popup](./popup.rs) - Create a popup window and send data back to the main window
 
 ## Example Apps
 
