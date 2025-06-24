@@ -4,7 +4,6 @@ RUN apt update
 RUN apt install -y \
     libglib2.0-dev \
     libgtk-3-dev \
-    libgtk-4-dev \
     libsoup2.4-dev \
     libappindicator3-dev \
     libwebkit2gtk-4.0-dev \
