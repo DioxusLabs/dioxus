@@ -128,32 +128,8 @@ impl WebHistory {
         }
     }
 
-    fn handle_nav(&self, result: Result<(), JsValue>) {
-        match result {
-            Ok(_) => {
-                if self.do_scroll_restoration {
-                    self.window.scroll_to_with_x_and_y(0.0, 0.0)
-                }
-            }
-            Err(e) => {
-                web_sys::console::error_2(&JsValue::from_str("failed to change state: "), &e);
-            }
-        }
-    }
-
     fn navigate_external(&self, url: String) -> bool {
-        match self.window.location().set_href(&url) {
-            Ok(_) => true,
-            Err(e) => {
-                web_sys::console::error_4(
-                    &JsValue::from_str("failed to navigate to external url ("),
-                    &JsValue::from_str(&url),
-                    &JsValue::from_str("): "),
-                    &e,
-                );
-                false
-            }
-        }
+        self.window.location().set_href(&url).is_ok()
     }
 }
 
@@ -191,16 +167,20 @@ impl dioxus_history::History for WebHistory {
         update_scroll(&w, &h);
 
         let path = self.full_path(&state);
-
         let state: [f64; 2] = self.create_state();
-        self.handle_nav(push_state_and_url(&self.history, &state, path));
+        if push_state_and_url(&self.history, &state, path).is_ok() && self.do_scroll_restoration {
+            self.window.scroll_to_with_x_and_y(0.0, 0.0)
+        }
     }
 
     fn replace(&self, state: String) {
         let path = self.full_path(&state);
-
         let state = self.create_state();
-        self.handle_nav(replace_state_with_url(&self.history, &state, Some(&path)));
+        if replace_state_with_url(&self.history, &state, Some(&path)).is_ok()
+            && self.do_scroll_restoration
+        {
+            self.window.scroll_to_with_x_and_y(0.0, 0.0)
+        }
     }
 
     fn external(&self, url: String) -> bool {
@@ -237,7 +217,6 @@ pub(crate) fn replace_state_with_url(
     let position = js_sys::Array::new();
     position.push(&JsValue::from(value[0]));
     position.push(&JsValue::from(value[1]));
-
     history.replace_state_with_url(&position, "", url)
 }
 
@@ -249,7 +228,6 @@ pub(crate) fn push_state_and_url(
     let position = js_sys::Array::new();
     position.push(&JsValue::from(value[0]));
     position.push(&JsValue::from(value[1]));
-
     history.push_state_with_url(&position, "", Some(&url))
 }
 
@@ -330,9 +308,7 @@ impl HashHistory {
         let scroll = self.scroll_pos();
         [scroll.x, scroll.y]
     }
-}
 
-impl HashHistory {
     fn route_from_location(&self) -> String {
         let location = self.window.location();
 
@@ -349,32 +325,14 @@ impl HashHistory {
         format!("{}#{state}", self.pathname)
     }
 
-    fn handle_nav(&self, result: Result<(), JsValue>) {
-        match result {
-            Ok(_) => {
-                if self.do_scroll_restoration {
-                    self.window.scroll_to_with_x_and_y(0.0, 0.0)
-                }
-            }
-            Err(e) => {
-                web_sys::console::error_2(&JsValue::from_str("failed to change state: "), &e);
-            }
+    fn handle_nav(&self) {
+        if self.do_scroll_restoration {
+            self.window.scroll_to_with_x_and_y(0.0, 0.0)
         }
     }
 
     fn navigate_external(&self, url: String) -> bool {
-        match self.window.location().set_href(&url) {
-            Ok(_) => true,
-            Err(e) => {
-                web_sys::console::error_4(
-                    &JsValue::from_str("failed to navigate to external url ("),
-                    &JsValue::from_str(&url),
-                    &JsValue::from_str("): "),
-                    &e,
-                );
-                false
-            }
-        }
+        self.window.location().set_href(&url).is_ok()
     }
 }
 
@@ -411,17 +369,18 @@ impl dioxus_history::History for HashHistory {
         // update the scroll position before pushing the new state
         update_scroll(&w, &h);
 
-        let path = self.full_path(&state);
-
-        let state: [f64; 2] = self.create_state();
-        self.handle_nav(push_state_and_url(&self.history, &state, path));
+        if push_state_and_url(&self.history, &self.create_state(), self.full_path(&state)).is_ok() {
+            self.handle_nav();
+        }
     }
 
     fn replace(&self, state: String) {
         let path = self.full_path(&state);
 
         let state = self.create_state();
-        self.handle_nav(replace_state_with_url(&self.history, &state, Some(&path)));
+        if replace_state_with_url(&self.history, &state, Some(&path)).is_ok() {
+            self.handle_nav();
+        }
     }
 
     fn external(&self, url: String) -> bool {
