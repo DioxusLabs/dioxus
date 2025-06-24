@@ -353,6 +353,21 @@ impl AppServer {
 
         // We attempt to hotreload rsx blocks without a full rebuild
         for path in files {
+            // Check if the file is in an ejected asset directory
+            let path_str = path.to_string_lossy();
+            
+            // Check for ejected Android or iOS assets
+            let is_ejected_android = path_str.contains("/android/");
+            let is_ejected_ios = path_str.contains("/ios/");
+            
+            if is_ejected_android || is_ejected_ios {
+                tracing::info!("Detected change in ejected asset: {}", path.display());
+                // For ejected assets, we'll trigger a reload of the app
+                // This ensures changes to ejected assets are immediately visible
+                needs_full_rebuild = true;
+                break;
+            }
+            
             // for various assets that might be linked in, we just try to hotreloading them forcefully
             // That is, unless they appear in an include! macro, in which case we need to a full rebuild....
             let Some(ext) = path.extension().and_then(|v| v.to_str()) else {
@@ -933,6 +948,27 @@ impl AppServer {
             RecursiveMode::NonRecursive,
         ) {
             handle_notify_error(err);
+        }
+        
+        // Watch ejected asset directories for Android and iOS
+        let workspace_root = self.workspace.krates.workspace_root().as_std_path().to_path_buf();
+        
+        // Watch Android ejected assets directory
+        let android_ejected_dir = workspace_root.join("android");
+        if android_ejected_dir.exists() {
+            tracing::info!("Watching ejected Android assets directory: {}", android_ejected_dir.display());
+            if let Err(err) = self.watcher.watch(&android_ejected_dir, RecursiveMode::Recursive) {
+                handle_notify_error(err);
+            }
+        }
+        
+        // Watch iOS ejected assets directory
+        let ios_ejected_dir = workspace_root.join("ios");
+        if ios_ejected_dir.exists() {
+            tracing::info!("Watching ejected iOS assets directory: {}", ios_ejected_dir.display());
+            if let Err(err) = self.watcher.watch(&ios_ejected_dir, RecursiveMode::Recursive) {
+                handle_notify_error(err);
+            }
         }
     }
 
