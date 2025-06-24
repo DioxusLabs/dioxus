@@ -7,17 +7,13 @@ use web_sys::{Event, History, ScrollRestoration};
 mod scroll;
 
 fn base_path() -> Option<String> {
-    let base_path = dioxus_cli_config::web_base_path();
-    tracing::trace!("Using base_path from the CLI: {:?}", base_path);
-    base_path
+    dioxus_cli_config::web_base_path()
 }
 
 #[allow(clippy::extra_unused_type_parameters)]
 fn update_scroll(window: &Window, history: &History) {
     let scroll = ScrollPosition::of_window(window);
-    if let Err(err) = replace_state_with_url(history, &[scroll.x, scroll.y], None) {
-        web_sys::console::error_1(&err);
-    }
+    let _ = replace_state_with_url(history, &[scroll.x, scroll.y], None);
 }
 
 /// A [`dioxus_history::History`] provider that integrates with a browser via the [History API](https://developer.mozilla.org/en-US/docs/Web/API/History_API).
@@ -102,6 +98,12 @@ impl WebHistory {
         let scroll = self.scroll_pos();
         [scroll.x, scroll.y]
     }
+
+    fn handle_nav(&self) {
+        if self.do_scroll_restoration {
+            self.window.scroll_to_with_x_and_y(0.0, 0.0)
+        }
+    }
 }
 
 impl WebHistory {
@@ -143,15 +145,11 @@ impl dioxus_history::History for WebHistory {
     }
 
     fn go_back(&self) {
-        if let Err(e) = self.history.back() {
-            web_sys::console::error_2(&JsValue::from_str("failed to go back: "), &e);
-        }
+        let _ = self.history.back();
     }
 
     fn go_forward(&self) {
-        if let Err(e) = self.history.forward() {
-            web_sys::console::error_2(&JsValue::from_str("failed to go forward: "), &e);
-        }
+        let _ = self.history.forward();
     }
 
     fn push(&self, state: String) {
@@ -166,20 +164,20 @@ impl dioxus_history::History for WebHistory {
         // update the scroll position before pushing the new state
         update_scroll(&w, &h);
 
-        let path = self.full_path(&state);
-        let state: [f64; 2] = self.create_state();
-        if push_state_and_url(&self.history, &state, path).is_ok() && self.do_scroll_restoration {
-            self.window.scroll_to_with_x_and_y(0.0, 0.0)
+        if push_state_and_url(&self.history, &self.create_state(), self.full_path(&state)).is_ok() {
+            self.handle_nav();
         }
     }
 
     fn replace(&self, state: String) {
-        let path = self.full_path(&state);
-        let state = self.create_state();
-        if replace_state_with_url(&self.history, &state, Some(&path)).is_ok()
-            && self.do_scroll_restoration
+        if replace_state_with_url(
+            &self.history,
+            &self.create_state(),
+            Some(&self.full_path(&state)),
+        )
+        .is_ok()
         {
-            self.window.scroll_to_with_x_and_y(0.0, 0.0)
+            self.handle_nav();
         }
     }
 
@@ -234,11 +232,7 @@ pub(crate) fn push_state_and_url(
 pub(crate) fn get_current(history: &History) -> Option<[f64; 2]> {
     use wasm_bindgen::JsCast;
 
-    let state = history.state();
-    if let Err(err) = &state {
-        web_sys::console::error_1(err);
-    }
-    state.ok().and_then(|state| {
+    history.state().ok().and_then(|state| {
         let state = state.dyn_into::<js_sys::Array>().ok()?;
         let x = state.get(0).as_f64()?;
         let y = state.get(1).as_f64()?;
@@ -346,15 +340,11 @@ impl dioxus_history::History for HashHistory {
     }
 
     fn go_back(&self) {
-        if let Err(e) = self.history.back() {
-            web_sys::console::error_2(&JsValue::from_str("failed to go back: "), &e);
-        }
+        let _ = self.history.back();
     }
 
     fn go_forward(&self) {
-        if let Err(e) = self.history.forward() {
-            web_sys::console::error_2(&JsValue::from_str("failed to go forward: "), &e);
-        }
+        let _ = self.history.forward();
     }
 
     fn push(&self, state: String) {
@@ -375,10 +365,13 @@ impl dioxus_history::History for HashHistory {
     }
 
     fn replace(&self, state: String) {
-        let path = self.full_path(&state);
-
-        let state = self.create_state();
-        if replace_state_with_url(&self.history, &state, Some(&path)).is_ok() {
+        if replace_state_with_url(
+            &self.history,
+            &self.create_state(),
+            Some(&self.full_path(&state)),
+        )
+        .is_ok()
+        {
             self.handle_nav();
         }
     }
