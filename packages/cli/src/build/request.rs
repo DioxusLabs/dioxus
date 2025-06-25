@@ -316,8 +316,8 @@
 //! - xbuild: <https://github.com/rust-mobile/xbuild/blob/master/xbuild/src/command/build.rs>
 
 use crate::{
-    AndroidTools, BuildContext, DioxusConfig, Error, LinkAction, LinkerFlavor, Platform, Result,
-    RustcArgs, TargetArgs, TraceSrc, WasmBindgen, WasmOptConfig, Workspace,
+    AndroidTools, BuildContext, ClientRenderer, DioxusConfig, Error, LinkAction, LinkerFlavor,
+    Platform, Result, RustcArgs, TargetArgs, TraceSrc, WasmBindgen, WasmOptConfig, Workspace,
     DX_RUSTC_WRAPPER_ENV_VAR,
 };
 use anyhow::Context;
@@ -553,20 +553,25 @@ impl BuildRequest {
         let mut no_default_features = args.no_default_features;
 
         let platform: Platform = match args.platform {
-            Some(platform) => match enabled_platforms.len() {
-                0 => platform,
+            Some(platform_arg) => match enabled_platforms.len() {
+                0 => Platform::from(platform_arg),
 
                 // The user passed --platform XYZ but already has `default = ["ABC"]` in their Cargo.toml or dioxus = { features = ["abc"] }
                 // We want to strip out the default platform and use the one they passed, setting no-default-features
                 _ => {
                     features.extend(Self::platformless_features(main_package));
                     no_default_features = true;
-                    platform
+                    Platform::from(platform_arg)
                 }
             },
-            None if !using_dioxus_explicitly => Platform::autodetect_from_cargo_feature("desktop").unwrap(),
+            None if !using_dioxus_explicitly => Platform::TARGET_PLATFORM.unwrap(),
             None => match enabled_platforms.len() {
-                0 => return Err(anyhow::anyhow!("No platform specified and no platform marked as default in Cargo.toml. Try specifying a platform with `--platform`").into()),
+                0 => match args.renderer {
+                    Some(_) => Platform::TARGET_PLATFORM.unwrap(),
+                    None => Platform::TARGET_PLATFORM.unwrap(),
+                    // TODO: should we always have a default
+                    // None => return Err(anyhow::anyhow!("No platform specified and no platform marked as default in Cargo.toml. Try specifying a platform with `--platform`").into()),
+                },
                 1 => enabled_platforms[0],
                 _ => {
                     return Err(anyhow::anyhow!(
@@ -579,7 +584,11 @@ impl BuildRequest {
 
         // Add any features required to turn on the client
         if using_dioxus_explicitly {
-            features.push(Self::feature_for_platform(main_package, platform));
+            features.push(Self::feature_for_platform_and_renderer(
+                main_package,
+                platform,
+                args.renderer,
+            ));
         }
 
         // Set the profile of the build if it's not already set
@@ -2824,9 +2833,13 @@ impl BuildRequest {
     }
 
     /// Get the features required to build for the given platform
-    fn feature_for_platform(package: &krates::cm::Package, platform: Platform) -> String {
+    fn feature_for_platform_and_renderer(
+        package: &krates::cm::Package,
+        platform: Platform,
+        renderer: Option<ClientRenderer>,
+    ) -> String {
         // Try to find the feature that activates the dioxus feature for the given platform
-        let dioxus_feature = platform.feature_name();
+        let dioxus_feature = platform.feature_name(renderer);
 
         let res = package.features.iter().find_map(|(key, features)| {
             // if the feature is just the name of the platform, we use that
@@ -2852,7 +2865,7 @@ impl BuildRequest {
         });
 
         res.unwrap_or_else(|| {
-            let fallback = format!("dioxus/{}", platform.feature_name()) ;
+            let fallback = format!("dioxus/{}", dioxus_feature) ;
             tracing::debug!(
                 "Could not find explicit feature for platform {platform}, passing `fallback` instead"
             );
@@ -2910,6 +2923,7 @@ impl BuildRequest {
         };
 
         // we only trace features 1 level deep..
+        // TODO: trace all enabled features, not just default features
         for feature in default.iter() {
             // If the user directly specified a platform we can just use that.
             if feature.starts_with("dioxus/") {
