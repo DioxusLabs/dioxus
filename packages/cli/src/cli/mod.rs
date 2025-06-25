@@ -70,10 +70,6 @@ pub(crate) enum Commands {
     #[clap(name = "run")]
     Run(run::RunArgs),
 
-    /// Build the assets for a specific target.
-    #[clap(name = "assets")]
-    BuildAssets(build_assets::BuildAssets),
-
     /// Init a new project for Dioxus in the current directory (by default).
     /// Will attempt to keep your project in a good state.
     #[clap(name = "init")]
@@ -103,6 +99,18 @@ pub(crate) enum Commands {
     /// Update the Dioxus CLI to the latest version.
     #[clap(name = "self-update")]
     SelfUpdate(update::SelfUpdate),
+
+    /// Run a dioxus build tool. IE `build-assets`, etc
+    #[clap(name = "tools")]
+    #[clap(subcommand)]
+    Tools(BuildTools),
+}
+
+#[derive(Subcommand)]
+pub enum BuildTools {
+    /// Build the assets for a specific target.
+    #[clap(name = "assets")]
+    BuildAssets(build_assets::BuildAssets),
 }
 
 impl Display for Commands {
@@ -119,8 +127,8 @@ impl Display for Commands {
             Commands::Check(_) => write!(f, "check"),
             Commands::Bundle(_) => write!(f, "bundle"),
             Commands::Run(_) => write!(f, "run"),
-            Commands::BuildAssets(_) => write!(f, "assets"),
             Commands::SelfUpdate(_) => write!(f, "self-update"),
+            Commands::Tools(_) => write!(f, "tools"),
         }
     }
 }
