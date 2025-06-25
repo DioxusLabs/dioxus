@@ -62,14 +62,16 @@ impl Workspace {
         });
 
         let spin_future = async move {
-            tokio::time::sleep(Duration::from_millis(500)).await;
+            tokio::time::sleep(Duration::from_millis(1000)).await;
             println!("{GLOW_STYLE}warning{GLOW_STYLE:#}: Waiting for cargo-metadata...");
             tokio::time::sleep(Duration::from_millis(2000)).await;
-            for x in 1..=5 {
+            for x in 1..=100 {
                 tokio::time::sleep(Duration::from_millis(2000)).await;
-                println!(
-                    "{GLOW_STYLE}warning{GLOW_STYLE:#}: ({x}/5) Taking a while, maybe your internet is down?"
-                );
+                println!("{GLOW_STYLE}warning{GLOW_STYLE:#}: (Try {x}) Taking a while...");
+
+                if x % 10 == 0 {
+                    println!("{GLOW_STYLE}warning{GLOW_STYLE:#}: maybe check your network connection or build lock?");
+                }
             }
         };
 
