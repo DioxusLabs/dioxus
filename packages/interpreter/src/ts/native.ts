@@ -20,7 +20,7 @@ if (RawInterpreter !== undefined && RawInterpreter !== null) {
 export class NativeInterpreter extends JSChannel_ {
   intercept_link_redirects: boolean;
   ipc: any;
-  editsPath: string;
+  edits: WebSocket;
   eventsPath: string;
   kickStylesheets: boolean;
   queuedBytes: ArrayBuffer[] = [];
@@ -31,7 +31,7 @@ export class NativeInterpreter extends JSChannel_ {
 
   constructor(editsPath: string, eventsPath: string) {
     super();
-    this.editsPath = editsPath;
+    this.edits = new WebSocket(editsPath);
     this.eventsPath = eventsPath;
     this.kickStylesheets = false;
   }
@@ -388,23 +388,28 @@ export class NativeInterpreter extends JSChannel_ {
     if (headless) {
       // @ts-ignore
       this.run_from_bytes(bytes);
-      this.waitForRequest(headless);
+      this.markEditsFinished();
     } else {
       this.enqueueBytes(bytes);
       requestAnimationFrame(() => {
         this.flushQueuedBytes();
-        // With request animation frames, we use the next reqwest as a marker to know when the frame is done and it is safe to run effects
-        this.waitForRequest(headless);
+        this.markEditsFinished();
       });
     }
   }
 
   waitForRequest(headless: boolean) {
-    fetch(new Request(this.editsPath))
-      .then((response) => response.arrayBuffer())
-      .then((bytes) => {
-        this.rafEdits(headless, bytes);
-      });
+    this.edits.onmessage = (event) => {
+      if (event.data instanceof ArrayBuffer) {
+        this.rafEdits(headless, event.data);
+      }
+    };
+  }
+
+  markEditsFinished() {
+    // Send an empty ArrayBuffer to the edits websocket to signal that the edits are finished
+    // This is used to signal that the edits are done and the next request can be processed
+    this.edits.send(new ArrayBuffer(0));
   }
 
   kickAllStylesheetsOnPage() {
