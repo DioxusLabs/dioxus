@@ -3,8 +3,10 @@ use futures_channel::mpsc::UnboundedSender;
 use futures_channel::oneshot;
 use futures_util::{FutureExt, StreamExt};
 use pollster::FutureExt as _;
+use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
 use std::net::{TcpListener, TcpStream};
+use std::rc::Rc;
 use std::sync::atomic::AtomicU32;
 use std::thread::spawn;
 use std::{
@@ -81,11 +83,11 @@ impl WryWebsocket {
                     let mut connection = WebviewConnection::new(websocket);
                     let mut connections = connections.write().unwrap();
                     // If there are pending edits, send them to the new connection
-                    if let Some(state) = connections.remove(&location) {
-                        if let WebviewConnectionState::Pending(mut pending) = state {
-                            while let Some((edit, response_sender)) = pending.pop_front() {
-                                _ = connection.send_edits_with_response(edit, response_sender);
-                            }
+                    if let Some(WebviewConnectionState::Pending(mut pending)) =
+                        connections.remove(&location)
+                    {
+                        while let Some((edit, response_sender)) = pending.pop_front() {
+                            connection.send_edits_with_response(edit, response_sender);
                         }
                     }
                     connections.insert(location, WebviewConnectionState::from(connection));
@@ -108,7 +110,7 @@ impl WryWebsocket {
         let websocket = self.clone();
 
         WryQueue {
-            inner: Arc::new(RwLock::new(WryQueueInner {
+            inner: Rc::new(RefCell::new(WryQueueInner {
                 location,
                 websocket,
                 edits_in_progress: None,
@@ -241,7 +243,7 @@ impl WebviewWebsocketLocation {
 /// It will hold onto the requests until the interpreter is ready to handle them and hold onto any pending edits until a new request is made.
 #[derive(Clone)]
 pub(crate) struct WryQueue {
-    inner: Arc<RwLock<WryQueueInner>>,
+    inner: Rc<RefCell<WryQueueInner>>,
 }
 
 pub(crate) struct WryQueueInner {
@@ -257,13 +259,13 @@ impl WryQueue {
         &self,
         f: impl FnOnce(&mut MutationState) -> O,
     ) -> O {
-        let mut inner = self.inner.write().unwrap();
+        let mut inner = self.inner.borrow_mut();
         f(&mut inner.mutation_state)
     }
 
     /// Send a list of mutations to the webview
     pub(crate) fn send_edits(&self) {
-        let mut myself = self.inner.write().unwrap();
+        let mut myself = self.inner.borrow_mut();
         let serialized_edits = myself.mutation_state.export_memory();
         let edits = WebviewEditMessage {
             location: myself.location,
@@ -275,7 +277,7 @@ impl WryQueue {
 
     /// Wait until all pending edits have been rendered in the webview
     pub fn poll_edits_flushed(&self, cx: &mut std::task::Context<'_>) -> std::task::Poll<()> {
-        if let Some(receiver) = self.inner.write().unwrap().edits_in_progress.as_mut() {
+        if let Some(receiver) = self.inner.borrow_mut().edits_in_progress.as_mut() {
             receiver.poll_unpin(cx).map(|_| ())
         } else {
             std::task::Poll::Ready(())
@@ -284,6 +286,6 @@ impl WryQueue {
 
     /// Get the websocket path that the webview should connect to in order to receive edits
     pub fn edits_path(&self) -> String {
-        self.inner.read().unwrap().location.path()
+        self.inner.borrow().location.path()
     }
 }
