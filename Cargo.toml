@@ -341,7 +341,7 @@ shell-words = "1.1.0"
 color-eyre = "0.6.3"
 
 # native
-keyboard-types = { version = "0.8", default-features = false }
+keyboard-types = { version = "0.7", default-features = false }
 winit = { version = "0.30.2", features = ["rwh_06"] }
 
 [profile.dev]

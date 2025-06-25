@@ -109,6 +109,7 @@ pub(crate) struct MacOsSettings {
     pub(crate) provider_short_name: Option<String>,
     pub(crate) entitlements: Option<String>,
     pub(crate) info_plist_path: Option<PathBuf>,
+    pub(crate) bundle_name: Option<String>,
     /// List of custom files to add to the application bundle.
     /// Maps the path in the Contents directory in the app to the path of the file to include (relative to the current working directory).
     pub files: HashMap<PathBuf, PathBuf>,

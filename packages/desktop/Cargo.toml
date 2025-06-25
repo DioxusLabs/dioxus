@@ -19,7 +19,6 @@ dioxus-interpreter-js = { workspace = true, features = ["binary-protocol", "seri
 dioxus-cli-config = { workspace = true }
 dioxus-asset-resolver = { workspace = true }
 generational-box = { workspace = true }
-# hotreload only works on desktop platforms.... mobile is still wip
 dioxus-devtools = { workspace = true, optional = true }
 
 serde = "1.0.218"

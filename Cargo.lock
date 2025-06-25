@@ -1618,7 +1618,7 @@ dependencies = [
  "euclid",
  "html-escape",
  "image",
- "keyboard-types 0.7.0",
+ "keyboard-types",
  "markup5ever 0.16.2",
  "objc2 0.6.1",
  "parley",
@@ -1685,7 +1685,7 @@ dependencies = [
  "blitz-paint",
  "blitz-traits",
  "futures-util",
- "keyboard-types 0.7.0",
+ "keyboard-types",
  "tracing",
  "winit",
 ]
@@ -1700,7 +1700,7 @@ dependencies = [
  "bytes",
  "cursor-icon",
  "http 1.3.1",
- "keyboard-types 0.7.0",
+ "keyboard-types",
  "smol_str",
  "url",
 ]
@@ -4183,7 +4183,7 @@ dependencies = [
  "futures-channel",
  "generational-box",
  "js-sys",
- "keyboard-types 0.8.0",
+ "keyboard-types",
  "lazy-js-bundle",
  "manganis",
  "rustversion",
@@ -4323,7 +4323,7 @@ dependencies = [
  "dioxus-history",
  "dioxus-html",
  "futures-util",
- "keyboard-types 0.8.0",
+ "keyboard-types",
  "rustc-hash 2.1.1",
  "tokio",
  "tracing",
@@ -6398,7 +6398,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b9247516746aa8e53411a0db9b62b0e24efbcf6a76e0ba73e5a91b512ddabed7"
 dependencies = [
  "crossbeam-channel",
- "keyboard-types 0.7.0",
+ "keyboard-types",
  "objc2 0.6.1",
  "objc2-app-kit 0.3.1",
  "once_cell",
@@ -8055,16 +8055,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "keyboard-types"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fd6e0f18953c66af118a70064505bd3780a226d65b06553b7293fb8933067967"
-dependencies = [
- "bitflags 2.9.1",
- "serde",
-]
-
-[[package]]
 name = "khronos-egl"
 version = "6.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8985,7 +8975,7 @@ dependencies = [
  "crossbeam-channel",
  "dpi",
  "gtk",
- "keyboard-types 0.7.0",
+ "keyboard-types",
  "libxdo",
  "objc2 0.6.1",
  "objc2-app-kit 0.3.1",
@@ -9006,7 +8996,7 @@ dependencies = [
  "crossbeam-channel",
  "dpi",
  "gtk",
- "keyboard-types 0.7.0",
+ "keyboard-types",
  "libxdo",
  "objc2 0.6.1",
  "objc2-app-kit 0.3.1",

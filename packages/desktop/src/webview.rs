@@ -265,23 +265,17 @@ impl WebviewInstance {
 
         let file_drop_handler = {
             to_owned![file_hover];
-
-            #[cfg(windows)]
             let (proxy, window_id) = (shared.proxy.to_owned(), window.id());
-
             move |evt: DragDropEvent| {
-                // Update the most recent file drop event - when the event comes in from the webview we can use the
-                // most recent event to build a new event with the files in it.
-                #[cfg(not(windows))]
-                file_hover.set(evt);
-
-                // Windows webview blocks HTML-native events when the drop handler is provided.
-                // The problem is that the HTML-native events don't provide the file, so we need this.
-                // Solution: this glue code to mimic drag drop events.
-                #[cfg(windows)]
-                {
+                if cfg!(not(windows)) {
+                    // Update the most recent file drop event - when the event comes in from the webview we can use the
+                    // most recent event to build a new event with the files in it.
+                    file_hover.set(evt);
+                } else {
+                    // Windows webview blocks HTML-native events when the drop handler is provided.
+                    // The problem is that the HTML-native events don't provide the file, so we need this.
+                    // Solution: this glue code to mimic drag drop events.
                     file_hover.set(evt.clone());
-
                     match evt {
                         wry::DragDropEvent::Drop {
                             paths: _,
@@ -305,7 +299,7 @@ impl WebviewInstance {
             }
         };
 
-        let mut webview = WebViewBuilder::with_web_context(&mut web_context)
+        let mut webview = WebViewBuilder::new_with_web_context(&mut web_context)
             .with_bounds(wry::Rect {
                 position: wry::dpi::Position::Logical(wry::dpi::LogicalPosition::new(0.0, 0.0)),
                 size: wry::dpi::Size::Physical(wry::dpi::PhysicalSize::new(
