@@ -86,13 +86,14 @@ fn app() -> Element {
 
 - Cross-platform apps in three lines of code (web, desktop, mobile, server, and more)
 - [Ergonomic state management](https://dioxuslabs.com/blog/release-050) combines the best of React, Solid, and Svelte
-- Type-safe Routing and server functions to leverage Rust's powerful compile-time guarantees
+- Built-in featureful, type-safe, fullstack web framework
 - Integrated bundler for deploying to the web, macOS, Linux, and Windows
+- Subsecond Rust hot-patching and asset hot-reloading
 - And more! [Take a tour of Dioxus](https://dioxuslabs.com/learn/0.6/).
 
 ## Instant hot-reloading
 
-With one command, `dx serve` and your app is running. Edit your markup and styles and see the results in real time.
+With one command, `dx serve` and your app is running. Edit your markup, styles, and even Rust code and see changes in milliseconds.
 
 <div align="center">
   <img src="https://raw.githubusercontent.com/DioxusLabs/screenshots/refs/heads/main/blitz/hotreload-video.webp">
@@ -100,6 +101,36 @@ With one command, `dx serve` and your app is running. Edit your markup and style
   <!-- <video src="https://private-user-images.githubusercontent.com/10237910/386919031-6da371d5-3340-46da-84ff-628216851ba6.mov" width="500"></video> -->
 </div>
 
+## A pragmatic and productive fullstack web framework
+
+Directly call your backend from your frontend with our built-in type-safe RPC using [`server_fn`](http://crates.io/crates/server_fn). Supports streaming, suspense, bundle splitting, websockets, and more.
+
+```rust
+fn app() -> Element {
+  let mut fortune = use_signal(|| "Fetch a fortune!");
+  rsx! {
+    h1 { "{fortune}" }
+    button {
+      onclick: move |_| async move {
+        fortune.set(fetch_fortune().await.unwrap());
+      }
+    }
+  }
+}
+
+#[server]
+async fn fetch_fortune() -> ServerFnResult<String> {
+  "Dioxus is super productive!".to_string()
+}
+```
+
+## First-party primitive components
+
+Get started quickly with a complete set of primitives modeled after ShadCN and Radix-Primitives.
+
+<div align="center">
+  <img src="./notes/primitive-components.avif">
+</div>
 
 ## First-class Android and iOS support
 
