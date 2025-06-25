@@ -267,7 +267,7 @@ pub(crate) async fn connectivity_check() -> Result<()> {
 
     use crate::styles::{GLOW_STYLE, LINK_STYLE};
     let client = reqwest::Client::new();
-    for x in 1..=5 {
+    for x in 0..=5 {
         tokio::select! {
             res = client.head("https://github.com/DioxusLabs/").header("User-Agent", "dioxus-cli").send() => {
                 if res.is_ok() {
@@ -275,15 +275,19 @@ pub(crate) async fn connectivity_check() -> Result<()> {
                 }
                 tokio::time::sleep(std::time::Duration::from_millis(2000)).await;
             },
-            _ = tokio::time::sleep(std::time::Duration::from_millis(2000)) => {}
+            _ = tokio::time::sleep(std::time::Duration::from_millis(if x == 1 { 500 } else { 2000 })) => {}
         }
-        println!(
-            "{GLOW_STYLE}warning{GLOW_STYLE:#}: ({x}/5) Waiting for {LINK_STYLE}https://github.com/dioxuslabs{LINK_STYLE:#}..."
-        );
+        if x == 0 {
+            println!("{GLOW_STYLE}warning{GLOW_STYLE:#}: Waiting for {LINK_STYLE}https://github.com/dioxuslabs{LINK_STYLE:#}...")
+        } else {
+            println!(
+                "{GLOW_STYLE}warning{GLOW_STYLE:#}: ({x}/5) Taking a while, maybe your internet is down?"
+            );
+        }
     }
 
     Err(Error::Network(
-        "Error connecting to template repository. Specify a template manually..".to_string(),
+        "Error connecting to template repository. Try cloning the template manually or add `dioxus` to a `cargo new` project.".to_string(),
     ))
 }
 
