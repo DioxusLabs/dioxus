@@ -257,6 +257,14 @@ fn remove_triple_newlines(string: &str) -> String {
 /// Perform a health check against github itself before we attempt to download any templates hosted
 /// on github.
 pub(crate) async fn connectivity_check() -> Result<()> {
+    if crate::VERBOSITY
+        .get()
+        .map(|f| f.offline)
+        .unwrap_or_default()
+    {
+        return Ok(());
+    }
+
     use crate::styles::{GLOW_STYLE, LINK_STYLE};
     let client = reqwest::Client::new();
     for x in 1..=5 {
