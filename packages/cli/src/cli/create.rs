@@ -1,6 +1,6 @@
 use super::*;
 use crate::TraceSrc;
-use cargo_generate::{GenerateArgs, TemplatePath};
+use cargo_generate::{GenerateArgs, TemplatePath, Vcs};
 use std::path::Path;
 
 pub(crate) static DEFAULT_TEMPLATE: &str = "gh:dioxuslabs/dioxus-template";
@@ -46,6 +46,11 @@ pub struct Create {
     /// Default values can be overridden with `--option`
     #[clap(short, long)]
     yes: bool,
+
+    /// Specify the VCS used to initialize the generated template.
+    /// Options: `git`, `none`.
+    #[arg(long, value_parser)]
+    vcs: Option<Vcs>,
 }
 
 impl Create {
@@ -77,14 +82,13 @@ impl Create {
             init: true,
             name: self.name,
             silent: self.yes,
-            vcs: Some(cargo_generate::Vcs::Git),
+            vcs: self.vcs,
             template_path: TemplatePath {
                 auto_path: self.template,
                 branch: self.branch,
                 revision: self.revision,
                 subfolder: self.subtemplate,
                 tag: self.tag,
-
                 ..Default::default()
             },
             verbose: crate::logging::VERBOSITY
@@ -98,7 +102,7 @@ impl Create {
         tracing::debug!(dx_src = ?TraceSrc::Dev, "Creating new project with args: {args:#?}");
         let path = cargo_generate::generate(args)?;
 
-        _ = post_create(&path);
+        _ = post_create(&path, &self.vcs.unwrap_or(Vcs::Git));
 
         Ok(StructuredOutput::Success)
     }
@@ -150,7 +154,7 @@ pub(crate) fn name_from_path(path: &Path) -> Result<String> {
 }
 
 /// Post-creation actions for newly setup crates.
-pub(crate) fn post_create(path: &Path) -> Result<()> {
+pub(crate) fn post_create(path: &Path, vcs: &Vcs) -> Result<()> {
     let parent_dir = path.parent();
     let metadata = if parent_dir.is_none() {
         None
@@ -173,6 +177,7 @@ pub(crate) fn post_create(path: &Path) -> Result<()> {
 
     // 1. Add the new project to the workspace, if it exists.
     //    This must be executed first in order to run `cargo fmt` on the new project.
+    let is_workspace = metadata.is_some();
     metadata.and_then(|metadata| {
         let cargo_toml_path = &metadata.workspace_root.join("Cargo.toml");
         let cargo_toml_str = std::fs::read_to_string(cargo_toml_path).ok()?;
@@ -227,6 +232,11 @@ pub(crate) fn post_create(path: &Path) -> Result<()> {
     let new_readme = remove_triple_newlines(&readme);
     let mut file = std::fs::File::create(readme_path)?;
     file.write_all(new_readme.as_bytes())?;
+
+    // 5. Run git init
+    if !is_workspace {
+        vcs.initialize(path, Some("main"), true)?;
+    }
 
     tracing::info!(dx_src = ?TraceSrc::Dev, "Generated project at {}\n\n`cd` to your project and run `dx serve` to start developing.\nMore information is available in the generated `README.md`.\n\nBuild cool things! ✌️", path.display());
 

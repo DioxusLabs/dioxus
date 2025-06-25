@@ -1,5 +1,5 @@
 use super::*;
-use cargo_generate::{GenerateArgs, TemplatePath};
+use cargo_generate::{GenerateArgs, TemplatePath, Vcs};
 
 #[derive(Clone, Debug, Default, Deserialize, Parser)]
 #[clap(name = "init")]
@@ -43,6 +43,11 @@ pub struct Init {
     /// Default values can be overridden with `--option`
     #[clap(short, long)]
     yes: bool,
+
+    /// Specify the VCS used to initialize the generated template.
+    /// Options: `git`, `none`.
+    #[arg(long, value_parser)]
+    vcs: Option<Vcs>,
 }
 
 impl Init {
@@ -69,7 +74,7 @@ impl Init {
             init: true,
             name: self.name,
             silent: self.yes,
-            vcs: Some(cargo_generate::Vcs::Git),
+            vcs: self.vcs,
             template_path: TemplatePath {
                 auto_path: self.template,
                 branch: self.branch,
@@ -82,7 +87,7 @@ impl Init {
         };
         create::restore_cursor_on_sigint();
         let path = cargo_generate::generate(args)?;
-        _ = create::post_create(&path);
+        _ = create::post_create(&path, &self.vcs.unwrap_or(Vcs::Git));
         Ok(StructuredOutput::Success)
     }
 }
