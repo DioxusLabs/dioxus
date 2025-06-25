@@ -25,7 +25,7 @@ fn get_available_port(address: IpAddr) -> Option<u16> {
 }
 
 /// A message to send to the webview to apply edits.
-pub(crate) struct WebviewEditMessage {
+pub(crate) struct EditWebsocketMessage {
     /// The websocket location that the webview is connected to
     pub(crate) location: WebviewWebsocketLocation,
     /// The serialized edits to apply to the webview
@@ -36,13 +36,13 @@ pub(crate) struct WebviewEditMessage {
 /// is only one websocket listener per application even if there are multiple windows so we don't use all the
 /// open ports.
 #[derive(Clone)]
-pub(crate) struct WryWebsocket {
+pub(crate) struct EditWebsocket {
     port: u16,
     max_webview_id: Arc<AtomicU32>,
-    connections: Arc<RwLock<HashMap<WebviewWebsocketLocation, WebviewConnectionState>>>,
+    connections: Arc<RwLock<HashMap<u32, WebviewConnectionState>>>,
 }
 
-impl WryWebsocket {
+impl EditWebsocket {
     pub(crate) fn new() -> Self {
         let connections = Arc::new(RwLock::new(HashMap::new()));
 
@@ -84,13 +84,16 @@ impl WryWebsocket {
                     let mut connections = connections.write().unwrap();
                     // If there are pending edits, send them to the new connection
                     if let Some(WebviewConnectionState::Pending(mut pending)) =
-                        connections.remove(&location)
+                        connections.remove(&location.webview_id)
                     {
                         while let Some((edit, response_sender)) = pending.pop_front() {
                             connection.send_edits_with_response(edit, response_sender);
                         }
                     }
-                    connections.insert(location, WebviewConnectionState::from(connection));
+                    connections.insert(
+                        location.webview_id,
+                        WebviewConnectionState::from(connection),
+                    );
                 }
             }
         });
@@ -119,13 +122,17 @@ impl WryWebsocket {
         }
     }
 
-    fn send_edits(&mut self, edits: WebviewEditMessage) -> oneshot::Receiver<()> {
+    fn send_edits(&mut self, edits: EditWebsocketMessage) -> oneshot::Receiver<()> {
         let mut connections_mut = self.connections.write().unwrap();
-        let connection = connections_mut.entry(edits.location).or_default();
+        let connection = connections_mut
+            .entry(edits.location.webview_id)
+            .or_default();
         connection.send_edits(edits.edits)
     }
 }
 
+/// The state of a webview websocket connection. This may be pending while the webview is booting.
+/// If it is, we queue up edits until the webview is ready to receive them.
 enum WebviewConnectionState {
     Pending(VecDeque<(Vec<u8>, oneshot::Sender<()>)>),
     Connected(WebviewConnection),
@@ -158,6 +165,7 @@ impl WebviewConnectionState {
     }
 }
 
+/// An active connection to a webview that is used to send edits and receive responses.
 struct WebviewConnection {
     edits_outgoing: UnboundedSender<(Vec<u8>, oneshot::Sender<()>)>,
 }
@@ -219,6 +227,7 @@ impl WebviewConnection {
     }
 }
 
+/// The location of a webview websocket connection. This is used to identify the webview and the port it is connected to.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct WebviewWebsocketLocation {
     /// The port the websocket is on
@@ -248,7 +257,7 @@ pub(crate) struct WryQueue {
 
 pub(crate) struct WryQueueInner {
     location: WebviewWebsocketLocation,
-    websocket: WryWebsocket,
+    websocket: EditWebsocket,
     // If this webview is currently waiting for an edit to be flushed. We don't run the virtual dom while this is true to avoid running effects before the dom has been updated
     edits_in_progress: Option<oneshot::Receiver<()>>,
     mutation_state: MutationState,
@@ -267,7 +276,7 @@ impl WryQueue {
     pub(crate) fn send_edits(&self) {
         let mut myself = self.inner.borrow_mut();
         let serialized_edits = myself.mutation_state.export_memory();
-        let edits = WebviewEditMessage {
+        let edits = EditWebsocketMessage {
             location: myself.location,
             edits: serialized_edits,
         };
