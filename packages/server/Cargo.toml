@@ -92,6 +92,7 @@ full = [
     "dep:tower-layer",
     "dep:tokio-util",
     "dep:hyper-util",
+    "axum/default",
 ]
 core = [
     "server_fn/axum-no-default",

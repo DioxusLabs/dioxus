@@ -113,11 +113,13 @@ members = [
     "examples/fullstack-desktop",
     "examples/fullstack-auth",
     "examples/fullstack-websockets",
+    "examples/wgpu-texture",
 
     # Playwright tests
     "packages/playwright-tests/liveview",
     "packages/playwright-tests/web",
     "packages/playwright-tests/web-routing",
+    "packages/playwright-tests/web-hash-routing",
     "packages/playwright-tests/barebones-template",
     "packages/playwright-tests/fullstack",
     "packages/playwright-tests/fullstack-mounted",
@@ -135,7 +137,7 @@ version = "0.7.0-alpha.1"
 # dependencies that are shared across packages
 [workspace.dependencies]
 dioxus = { path = "packages/dioxus", version = "0.7.0-alpha.1" }
-dioxus-lib = { path = "packages/dioxus-lib", version = "0.7.0-alpha.1" }
+dioxus-lib = { path = "packages/dioxus-lib", version = "0.7.0-alpha.1", default-features = false }
 dioxus-core = { path = "packages/core", version = "0.7.0-alpha.1" }
 dioxus-core-types = { path = "packages/core-types", version = "0.7.0-alpha.1" }
 dioxus-core-macro = { path = "packages/core-macro", version = "0.7.0-alpha.1" }
@@ -224,10 +226,10 @@ html_parser = "0.7.0"
 thiserror = "2.0.12"
 prettyplease = { version = "0.2.30", features = ["verbatim"] }
 const_format = "0.2.34"
-cargo_toml = { version = "0.21.0" }
+cargo_toml = { version = "0.22.1" }
 tauri-utils = { version = "=2.5.0" }
 tauri-bundler = { version = "=2.5.0" }
-lru = "0.13.0"
+lru = "0.14.0"
 async-trait = "0.1.87"
 axum = { version = "0.8.1", default-features = false }
 axum-server = { version = "0.7.1", default-features = false }
@@ -262,8 +264,8 @@ ciborium = "0.2.2"
 base64 = "0.22.1"
 uuid = "1.15.1"
 convert_case = "0.8.0"
-tungstenite = { version = "0.26.2" }
-tokio-tungstenite = { version = "0.26.2" }
+tungstenite = { version = "0.27.0" }
+tokio-tungstenite = { version = "0.27.0" }
 gloo-timers = "0.3.0"
 fluent-uri = { version = "0.3.2", features = ["serde"] }
 internment = { version = "0.8.6" }
@@ -311,17 +313,16 @@ memmap2 = "0.9.5"
 memfd = "0.6.4"
 
 # desktop
-wry = { version = "0.51.0", default-features = false }
-tao = { version = "0.33.0", features = ["rwh_05"] }
-webbrowser = "1.0.3"
+wry = { version = "0.52.0", default-features = false }
+tao = { version = "0.34.0", features = ["rwh_05"] }
 infer = "0.19.0"
 dunce = "1.0.5"
 percent-encoding = "2.3.1"
 global-hotkey = "0.7.0"
 rfd = { version = "0.15.2", default-features = false }
-muda = "0.16.1"
+muda = "0.17.0"
 cocoa = "0.26"
-core-foundation = "0.10.0"
+core-foundation = "0.10.1"
 objc = { version = "0.2.7", features = ["exception"] }
 objc_id = "0.1.1"
 tray-icon = "0.20.0"
@@ -340,7 +341,7 @@ shell-words = "1.1.0"
 color-eyre = "0.6.3"
 
 # native
-keyboard-types = { version = "0.7", default-features = false }
+keyboard-types = { version = "0.8", default-features = false }
 winit = { version = "0.30.2", features = ["rwh_06"] }
 
 [profile.dev]

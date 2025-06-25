@@ -13,7 +13,8 @@ fn main() {
 fn app() -> Element {
     let mut count = use_signal(|| 0);
 
-    // use_future will run the future
+    // use_future is a non-reactive hook that simply runs a future in the background.
+    // You can use the UseFuture handle to pause, resume, restart, or cancel the future.
     use_future(move || async move {
         loop {
             sleep(std::time::Duration::from_millis(200)).await;
@@ -21,7 +22,11 @@ fn app() -> Element {
         }
     });
 
-    // We can also spawn futures from effects, handlers, or other futures
+    // use_effect is a reactive hook that runs a future when signals captured by its reactive context
+    // are modified. This is similar to use_effect in React and is useful for running side effects
+    // that depend on the state of your component.
+    //
+    // Generally, we recommend performing async work in event as a reaction to a user event.
     use_effect(move || {
         spawn(async move {
             sleep(std::time::Duration::from_secs(5)).await;
@@ -29,10 +34,16 @@ fn app() -> Element {
         });
     });
 
+    // You can run futures directly from event handlers as well. Note that if the event handler is
+    // fired multiple times, the future will be spawned multiple times.
     rsx! {
-        div {
-            h1 { "Current count: {count}" }
-            button { onclick: move |_| count.set(0), "Reset the count" }
+        h1 { "Current count: {count}" }
+        button {
+            onclick: move |_| async move {
+                sleep(std::time::Duration::from_millis(200)).await;
+                count.set(0);
+            },
+            "Slowly reset the count"
         }
     }
 }

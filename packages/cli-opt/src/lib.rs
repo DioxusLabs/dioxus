@@ -65,6 +65,13 @@ impl AssetManifest {
         self.assets.get(path)
     }
 
+    /// Get the first asset that matches the given source path
+    pub fn get_first_asset_for_source(&self, path: &Path) -> Option<&BundledAsset> {
+        self.assets
+            .get(path)
+            .and_then(|assets| assets.iter().next())
+    }
+
     /// Check if the manifest contains a specific asset
     pub fn contains(&self, asset: &BundledAsset) -> bool {
         self.assets
