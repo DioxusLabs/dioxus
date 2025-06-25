@@ -390,6 +390,7 @@ pub(crate) struct BuildRequest {
     pub(crate) link_err_file: Arc<NamedTempFile>,
     pub(crate) rustc_wrapper_args_file: Arc<NamedTempFile>,
     pub(crate) base_path: Option<String>,
+    pub(crate) using_dioxus_explicitly: bool,
 }
 
 /// dx can produce different "modes" of a build. A "regular" build is a "base" build. The Fat and Thin
@@ -757,6 +758,7 @@ impl BuildRequest {
             package,
             main_target,
             rustflags,
+            using_dioxus_explicitly,
             skip_assets: args.skip_assets,
             base_path: args.base_path.clone(),
             wasm_split: args.wasm_split,
@@ -1131,6 +1133,14 @@ impl BuildRequest {
         if self.platform == Platform::Server {
             return Ok(());
         }
+
+        // Run the tailwind build before bundling anything else
+        crate::TailwindCli::run_once(
+            self.package_manifest_dir(),
+            self.config.application.tailwind_input.clone(),
+            self.config.application.tailwind_output.clone(),
+        )
+        .await?;
 
         let asset_dir = self.asset_dir();
 
@@ -2146,6 +2156,18 @@ impl BuildRequest {
             _ => {}
         };
         cargo_args.push(self.executable_name().to_string());
+
+        // Set offline/locked/frozen
+        let lock_opts = crate::VERBOSITY.get().cloned().unwrap_or_default();
+        if lock_opts.frozen {
+            cargo_args.push("--frozen".to_string());
+        }
+        if lock_opts.locked {
+            cargo_args.push("--locked".to_string());
+        }
+        if lock_opts.offline {
+            cargo_args.push("--offline".to_string());
+        }
 
         // Merge in extra args. Order shouldn't really matter.
         cargo_args.extend(self.extra_cargo_args.clone());

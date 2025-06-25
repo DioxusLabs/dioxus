@@ -86,12 +86,8 @@ where
         let mut subcommand = matches.subcommand();
         while let Some((name, sub_matches)) = subcommand {
             match name {
-                "@client" => {
-                    client = Some(sub_matches);
-                }
-                "@server" => {
-                    server = Some(sub_matches);
-                }
+                "@client" => client = Some(sub_matches),
+                "@server" => server = Some(sub_matches),
                 _ => {}
             }
             subcommand = sub_matches.subcommand();
@@ -117,7 +113,6 @@ where
     }
 }
 
-/// Chain together multiple target commands
 #[derive(Debug, Subcommand, Clone)]
 #[command(subcommand_precedence_over_arg = true)]
 pub(crate) enum PlatformOverrides<T: Args> {
