@@ -1,13 +1,14 @@
+use crate::styles::GLOW_STYLE;
 use crate::CliSettings;
 use crate::Result;
 use crate::{config::DioxusConfig, AndroidTools};
 use anyhow::Context;
 use ignore::gitignore::Gitignore;
-use krates::{semver::Version, KrateDetails};
+use krates::{semver::Version, KrateDetails, LockOptions};
 use krates::{Cmd, Krates, NodeId};
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::{collections::HashSet, path::Path};
+use std::{path::PathBuf, time::Duration};
 use target_lexicon::Triple;
 use tokio::process::Command;
 
@@ -34,12 +35,50 @@ impl Workspace {
             return Ok(ws.clone());
         }
 
-        let cmd = Cmd::new();
-        let mut builder = krates::Builder::new();
-        builder.workspace(true);
-        let krates = builder
-            .build(cmd, |_| {})
-            .context("Failed to run cargo metadata")?;
+        let krates_future = tokio::task::spawn_blocking(|| {
+            let manifest_options = crate::logging::VERBOSITY.get().unwrap();
+            let lock_options = LockOptions {
+                frozen: manifest_options.frozen,
+                locked: manifest_options.locked,
+                offline: manifest_options.offline,
+            };
+
+            let mut cmd = Cmd::new();
+            cmd.lock_opts(lock_options);
+
+            let mut builder = krates::Builder::new();
+            builder.workspace(true);
+            let res = builder
+                .build(cmd, |_| {})
+                .context("Failed to run cargo metadata");
+
+            if !lock_options.offline {
+                if let Ok(res) = std::env::var("SIMULATE_SLOW_NETWORK") {
+                    std::thread::sleep(Duration::from_secs(res.parse().unwrap_or(5)));
+                }
+            }
+
+            res
+        });
+
+        let spin_future = async move {
+            tokio::time::sleep(Duration::from_millis(500)).await;
+            println!("{GLOW_STYLE}warning{GLOW_STYLE:#}: Waiting for cargo-metadata...");
+            tokio::time::sleep(Duration::from_millis(2000)).await;
+            for x in 1..=5 {
+                tokio::time::sleep(Duration::from_millis(2000)).await;
+                println!(
+                    "{GLOW_STYLE}warning{GLOW_STYLE:#}: ({x}/5) Taking a while, maybe your internet is down?"
+                );
+            }
+        };
+
+        let krates = tokio::select! {
+            f = krates_future => f.context("failed to run cargo metadata")??,
+            _ = spin_future => return Err(crate::Error::Network(
+                "cargo metadata took too long to respond, try again with --offline".to_string(),
+            )),
+        };
 
         let settings = CliSettings::global_or_default();
         let sysroot = Command::new("rustc")
