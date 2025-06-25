@@ -58,11 +58,9 @@ impl WryWebsocket {
                         // Try to parse the webview id from the path
                         if let Some(webview_id) = req.uri().path().strip_prefix('/') {
                             if let Ok(webview_id) = webview_id.parse::<u32>() {
-                                tracing::info!("Webview ID: {}", webview_id);
                                 location = Some(WebviewWebsocketLocation::new(port, webview_id));
                             }
                         }
-                        tracing::info!("WebSocket connection from: {}", req.uri());
                         Ok(res)
                     });
                     let websocket = match websocket {
@@ -86,7 +84,6 @@ impl WryWebsocket {
                     if let Some(state) = connections.remove(&location) {
                         if let WebviewConnectionState::Pending(mut pending) = state {
                             while let Some((edit, response_sender)) = pending.pop_front() {
-                                tracing::info!("flushing pending edits to new connection");
                                 _ = connection.send_edits_with_response(edit, response_sender);
                             }
                         }
@@ -121,7 +118,6 @@ impl WryWebsocket {
     }
 
     fn send_edits(&mut self, edits: WebviewEditMessage) -> oneshot::Receiver<()> {
-        tracing::info!("Sending edits to webview: {:?}", edits.location.webview_id);
         let mut connections_mut = self.connections.write().unwrap();
         let connection = connections_mut.entry(edits.location).or_default();
         connection.send_edits(edits.edits)
@@ -174,16 +170,13 @@ impl WebviewConnection {
                 let mut socket = socket;
                 // Wait until there are edits ready to send
                 while let Some((edits, response)) = edits_incoming.next().block_on() {
-                    tracing::info!("sending edits to webview");
                     // Send the edits to the webview
                     if let Err(e) = socket.send(tungstenite::Message::Binary(edits.into())) {
                         tracing::error!("Error sending edits to webview: {}", e);
                         break;
                     }
-                    tracing::info!("waiting for read");
                     // Wait for the webview to apply the edits
                     while let Ok(msg) = socket.read() {
-                        tracing::info!("received message from webview: {:?}", msg);
                         match msg {
                             tungstenite::Message::Binary(_) => {
                                 // We expect the webview to send a binary message when it has applied the edits

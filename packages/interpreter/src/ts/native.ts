@@ -400,8 +400,12 @@ export class NativeInterpreter extends JSChannel_ {
 
   waitForRequest(headless: boolean) {
     this.edits.onmessage = (event) => {
-      if (event.data instanceof ArrayBuffer) {
-        this.rafEdits(headless, event.data);
+      const data = event.data;
+      if (data instanceof Blob) {
+        // If the data is a blob, we need to convert it to an ArrayBuffer
+        data.arrayBuffer().then((buffer) => {
+          this.rafEdits(headless, buffer);
+        });
       }
     };
   }
