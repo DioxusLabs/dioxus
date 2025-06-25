@@ -227,8 +227,8 @@ thiserror = "2.0.12"
 prettyplease = { version = "0.2.30", features = ["verbatim"] }
 const_format = "0.2.34"
 cargo_toml = { version = "0.21.0" }
-tauri-utils = { version = "2.2.0" }
-tauri-bundler = { version = "=2.2.4" }
+tauri-utils = { version = "=2.4.0" }
+tauri-bundler = { version = "=2.4.0" }
 lru = "0.13.0"
 async-trait = "0.1.87"
 axum = { version = "0.8.1", default-features = false }
