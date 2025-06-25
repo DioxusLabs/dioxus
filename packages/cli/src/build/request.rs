@@ -1134,6 +1134,14 @@ impl BuildRequest {
             return Ok(());
         }
 
+        // Run the tailwind build before bundling anything else
+        crate::TailwindCli::run_once(
+            self.package_manifest_dir(),
+            self.config.application.tailwind_input.clone(),
+            self.config.application.tailwind_output.clone(),
+        )
+        .await?;
+
         let asset_dir = self.asset_dir();
 
         // First, clear the asset dir of any files that don't exist in the new manifest
