@@ -223,7 +223,7 @@ impl WebviewInstance {
         }
 
         let mut web_context = WebContext::new(cfg.data_dir.clone());
-        let edit_queue = WryQueue::default();
+        let edit_queue = shared.websocket.create_queue();
         let asset_handlers = AssetHandlerRegistry::new();
         let edits = WebviewEdits::new(dom.runtime(), edit_queue.clone());
         let file_hover = NativeFileHover::default();

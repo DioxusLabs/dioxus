@@ -3956,6 +3956,7 @@ dependencies = [
  "objc_id",
  "open",
  "percent-encoding",
+ "pollster",
  "rand 0.8.5",
  "reqwest 0.12.20",
  "rfd",
@@ -3968,9 +3969,9 @@ dependencies = [
  "tao",
  "thiserror 2.0.12",
  "tokio",
- "tokio-tungstenite 0.27.0",
  "tracing",
  "tray-icon",
+ "tungstenite 0.27.0",
  "wry",
 ]
 
@@ -14849,10 +14850,7 @@ checksum = "489a59b6730eda1b0171fcfda8b121f4bee2b35cba8645ca35c5f7ba3eb736c1"
 dependencies = [
  "futures-util",
  "log",
- "native-tls",
- "rustls 0.23.28",
  "tokio",
- "tokio-native-tls",
  "tungstenite 0.27.0",
 ]
 
@@ -15267,6 +15265,7 @@ dependencies = [
  "log",
  "native-tls",
  "rand 0.9.1",
+ "rustls 0.23.28",
  "sha1",
  "thiserror 2.0.12",
  "utf-8",

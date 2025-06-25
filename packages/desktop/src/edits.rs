@@ -1,45 +1,209 @@
-use std::{
-    collections::VecDeque,
-    sync::{Arc, RwLock},
-    task::Waker,
-};
-
 use dioxus_interpreter_js::MutationState;
+use futures_channel::mpsc::UnboundedSender;
+use futures_channel::oneshot;
+use futures_util::{FutureExt, StreamExt};
+use pollster::FutureExt as _;
+use std::collections::HashMap;
+use std::net::{TcpListener, TcpStream};
+use std::sync::atomic::AtomicU32;
+use std::thread::spawn;
+use std::{
+    net::IpAddr,
+    sync::{Arc, RwLock},
+};
+use tungstenite::handshake::server::Request;
+use tungstenite::{accept_hdr, WebSocket};
+
+/// Bind a listener to any port that is available on the given address.
+fn get_available_port(address: IpAddr) -> Option<u16> {
+    // Otherwise, try to bind to any port and return the first one we can
+    TcpListener::bind((address, 0))
+        .and_then(|listener| listener.local_addr().map(|f| f.port()))
+        .ok()
+}
+
+/// A message to send to the webview to apply edits.
+pub(crate) struct WebviewEditMessage {
+    /// The websocket location that the webview is connected to
+    pub(crate) location: WebviewWebsocketLocation,
+    /// The serialized edits to apply to the webview
+    pub(crate) edits: Vec<u8>,
+}
+
+/// The websocket listener that the webview will connect to in order to receive edits and send requests. There
+/// is only one websocket listener per application even if there are multiple windows so we don't use all the
+/// open ports.
+#[derive(Clone)]
+pub(crate) struct WryWebsocket {
+    port: u16,
+    max_webview_id: Arc<AtomicU32>,
+    connections: Arc<RwLock<HashMap<WebviewWebsocketLocation, WebsocketWebviewConnection>>>,
+}
+
+impl WryWebsocket {
+    pub(crate) fn new() -> Self {
+        let connections = Arc::new(RwLock::new(HashMap::new()));
+
+        let ip = IpAddr::from([127, 0, 0, 1]);
+        let port = get_available_port(ip).unwrap_or(9001);
+
+        let server = TcpListener::bind((ip, port)).unwrap();
+        spawn({
+            let connections = connections.clone();
+            move || {
+                for websocket in server.incoming().flatten() {
+                    let mut location = None;
+                    // Accept the websocket connection while reading the path
+                    let websocket = accept_hdr(websocket, |req: &Request, res| {
+                        // Try to parse the webview id from the path
+                        if let Some(webview_id) = req.uri().path().strip_prefix('/') {
+                            if let Ok(webview_id) = webview_id.parse::<u32>() {
+                                location = Some(WebviewWebsocketLocation::new(port, webview_id));
+                            }
+                        }
+                        Ok(res)
+                    });
+                    let websocket = match websocket {
+                        Ok(ws) => ws,
+                        Err(e) => {
+                            tracing::error!("Error accepting websocket connection: {}", e);
+                            continue;
+                        }
+                    };
+                    let location = match location {
+                        Some(loc) => loc,
+                        None => {
+                            tracing::error!("WebSocket connection without a valid webview ID");
+                            continue;
+                        }
+                    };
+                    // Handle the websocket connection in a separate thread
+                    let connection = WebsocketWebviewConnection::new(websocket);
+                    let mut connections = connections.write().unwrap();
+                    connections.insert(location, connection);
+                }
+            }
+        });
+
+        Self {
+            connections,
+            port,
+            max_webview_id: Default::default(),
+        }
+    }
+
+    pub(crate) fn create_queue(&self) -> WryQueue {
+        let webview_id = self
+            .max_webview_id
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let location = WebviewWebsocketLocation::new(self.port, webview_id);
+        let websocket = self.clone();
+
+        WryQueue {
+            inner: Arc::new(RwLock::new(WryQueueInner {
+                location,
+                websocket,
+                edits_in_progress: None,
+                mutation_state: MutationState::default(),
+            })),
+        }
+    }
+
+    fn send_edits(&mut self, edits: WebviewEditMessage) -> Option<oneshot::Receiver<()>> {
+        let mut connections_mut = self.connections.write().unwrap();
+        let connection = connections_mut.get_mut(&edits.location);
+        connection.map(|conn| conn.send_edits(edits.edits))
+    }
+}
+
+struct WebsocketWebviewConnection {
+    edits_outgoing: UnboundedSender<(Vec<u8>, oneshot::Sender<()>)>,
+}
+
+impl WebsocketWebviewConnection {
+    pub(crate) fn new(socket: WebSocket<TcpStream>) -> Self {
+        let (edits_outgoing, mut edits_incoming) =
+            futures_channel::mpsc::unbounded::<(Vec<u8>, oneshot::Sender<()>)>();
+        // Spawn a task to handle the websocket connection
+        spawn({
+            move || {
+                let mut socket = socket;
+                // Wait until there are edits ready to send
+                while let Some((edits, response)) = edits_incoming.next().block_on() {
+                    // Send the edits to the webview
+                    if let Err(e) = socket.write(tungstenite::Message::Binary(edits.into())) {
+                        tracing::error!("Error sending edits to webview: {}", e);
+                        break;
+                    }
+                    // Wait for the webview to apply the edits
+                    while let Ok(msg) = socket.read() {
+                        match msg {
+                            tungstenite::Message::Binary(_) => {
+                                // We expect the webview to send a binary message when it has applied the edits
+                                // This is a signal that we can continue processing
+                                break;
+                            }
+                            tungstenite::Message::Close(_) => {
+                                return;
+                            }
+                            _ => {}
+                        }
+                    }
+                    // Notify that the edits have been applied
+                    if response.send(()).is_err() {
+                        tracing::error!("Error sending edits applied notification");
+                    }
+                }
+            }
+        });
+
+        Self { edits_outgoing }
+    }
+
+    /// Send a message to the webview to apply edits
+    pub(crate) fn send_edits(&mut self, edits: Vec<u8>) -> oneshot::Receiver<()> {
+        let (response_sender, response_receiver) = oneshot::channel();
+        _ = self.edits_outgoing.unbounded_send((edits, response_sender));
+        response_receiver
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) struct WebviewWebsocketLocation {
+    /// The port the websocket is on
+    port: u16,
+    /// The id of the webview that this websocket is connected to
+    webview_id: u32,
+}
+
+impl WebviewWebsocketLocation {
+    pub(crate) fn new(port: u16, webview_id: u32) -> Self {
+        Self { port, webview_id }
+    }
+
+    /// Returns the websocket path for this webview
+    pub(crate) fn path(&self) -> String {
+        let Self { port, webview_id } = self;
+        format!("ws://localhost:{port}/{webview_id}")
+    }
+}
 
 /// This handles communication between the requests that the webview makes and the interpreter. The interpreter constantly makes long running requests to the webview to get any edits that should be made to the DOM almost like server side events.
 /// It will hold onto the requests until the interpreter is ready to handle them and hold onto any pending edits until a new request is made.
-#[derive(Default, Clone)]
+#[derive(Clone)]
 pub(crate) struct WryQueue {
     inner: Arc<RwLock<WryQueueInner>>,
 }
 
-#[derive(Default)]
 pub(crate) struct WryQueueInner {
-    edit_queue: VecDeque<Vec<u8>>,
-    edit_responder: Option<wry::RequestAsyncResponder>,
-    // Stores any futures waiting for edits to be applied to the webview
-    // NOTE: We don't use a Notify here because we need polling the notify to be cancel safe
-    waiting_for_edits_flushed: Vec<Waker>,
+    location: WebviewWebsocketLocation,
+    websocket: WryWebsocket,
     // If this webview is currently waiting for an edit to be flushed. We don't run the virtual dom while this is true to avoid running effects before the dom has been updated
-    edits_in_progress: bool,
+    edits_in_progress: Option<oneshot::Receiver<()>>,
     mutation_state: MutationState,
 }
 
 impl WryQueue {
-    pub fn handle_request(&self, responder: wry::RequestAsyncResponder) {
-        let mut myself = self.inner.write().unwrap();
-        if let Some(bytes) = myself.edit_queue.pop_back() {
-            responder.respond(wry::http::Response::new(bytes));
-        } else {
-            // There are now no edits that need to be applied to the webview
-            for waker in myself.waiting_for_edits_flushed.drain(..) {
-                waker.wake();
-            }
-            myself.edits_in_progress = false;
-            myself.edit_responder = Some(responder);
-        }
-    }
-
     pub fn with_mutation_state_mut<O: 'static>(
         &self,
         f: impl FnOnce(&mut MutationState) -> O,
@@ -52,28 +216,26 @@ impl WryQueue {
     pub(crate) fn send_edits(&self) {
         let mut myself = self.inner.write().unwrap();
         let serialized_edits = myself.mutation_state.export_memory();
-        // There are pending edits that need to be applied to the webview before we run futures
-        myself.edits_in_progress = true;
-        if let Some(responder) = myself.edit_responder.take() {
-            responder.respond(wry::http::Response::new(serialized_edits));
-        } else {
-            myself.edit_queue.push_front(serialized_edits);
+        let edits = WebviewEditMessage {
+            location: myself.location,
+            edits: serialized_edits,
+        };
+        if let Some(reciever) = myself.websocket.send_edits(edits) {
+            myself.edits_in_progress = Some(reciever);
         }
-    }
-
-    fn edits_in_progress(&self) -> bool {
-        self.inner.read().unwrap().edits_in_progress
     }
 
     /// Wait until all pending edits have been rendered in the webview
     pub fn poll_edits_flushed(&self, cx: &mut std::task::Context<'_>) -> std::task::Poll<()> {
-        if self.edits_in_progress() {
-            let mut myself = self.inner.write().unwrap();
-            let waker = cx.waker();
-            myself.waiting_for_edits_flushed.push(waker.clone());
-            std::task::Poll::Pending
+        if let Some(receiver) = self.inner.write().unwrap().edits_in_progress.as_mut() {
+            receiver.poll_unpin(cx).map(|_| ())
         } else {
             std::task::Poll::Ready(())
         }
+    }
+
+    /// Get the websocket path that the webview should connect to in order to receive edits
+    pub fn edits_path(&self) -> String {
+        self.inner.read().unwrap().location.path()
     }
 }

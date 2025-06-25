@@ -1,5 +1,6 @@
 use crate::{
     config::{Config, WindowCloseBehaviour},
+    edits::WryWebsocket,
     event_handlers::WindowEventHandlers,
     file_upload::{DesktopFileUploadForm, FileDialogRequest, NativeFileEngine},
     ipc::{IpcMessage, UserWindowEvent},
@@ -53,6 +54,7 @@ pub(crate) struct SharedContext {
     pub(crate) shortcut_manager: ShortcutRegistry,
     pub(crate) proxy: EventLoopProxy<UserWindowEvent>,
     pub(crate) target: EventLoopWindowTarget<UserWindowEvent>,
+    pub(crate) websocket: WryWebsocket,
 }
 
 impl App {
@@ -77,6 +79,7 @@ impl App {
                 shortcut_manager: ShortcutRegistry::new(),
                 proxy: event_loop.create_proxy(),
                 target: event_loop.clone(),
+                websocket: WryWebsocket::new(),
             }),
         };
 

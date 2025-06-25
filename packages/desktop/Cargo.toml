@@ -49,6 +49,7 @@ dioxus-history = { workspace = true }
 base64 = { workspace = true }
 open = { workspace = true }
 libc = "0.2.170"
+pollster = "0.4.0"
 
 [target.'cfg(unix)'.dependencies]
 signal-hook = "0.3.17"
@@ -70,7 +71,7 @@ objc_id = "0.1.1"
 
 # use rustls on android
 [target.'cfg(target_os = "android")'.dependencies]
-tokio-tungstenite = { workspace = true, optional = true, features = ["rustls"] }
+tungstenite = { workspace = true, features = ["rustls"] }
 jni = "0.21.1"
 ndk = { version = "0.9.0" }
 ndk-sys = { version = "0.6.0" }
@@ -78,7 +79,7 @@ ndk-context = { version = "0.1.1" }
 
 # use native tls on other platforms
 [target.'cfg(not(target_os = "android"))'.dependencies]
-tokio-tungstenite = { workspace = true, optional = true, features = ["native-tls"] }
+tungstenite = { workspace = true, features = ["native-tls"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 cocoa = "0.26.0"
