@@ -383,6 +383,7 @@ pub(crate) struct BuildRequest {
     pub(crate) skip_assets: bool,
     pub(crate) wasm_split: bool,
     pub(crate) debug_symbols: bool,
+    pub(crate) inject_loading_scripts: bool,
     pub(crate) custom_linker: Option<PathBuf>,
     pub(crate) session_cache_dir: Arc<TempDir>,
     pub(crate) link_args_file: Arc<NamedTempFile>,
@@ -762,6 +763,7 @@ impl BuildRequest {
             base_path: args.base_path.clone(),
             wasm_split: args.wasm_split,
             debug_symbols: args.debug_symbols,
+            inject_loading_scripts: args.inject_loading_scripts,
         })
     }
 
@@ -3946,6 +3948,9 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         // Inject any resources from the config into the html
         self.inject_resources(assets, wasm_path, &mut html)?;
 
+        // Inject loading scripts if they are not already present
+        self.inject_loading_scripts(assets, &mut html);
+
         // Replace any special placeholders in the HTML with resolved values
         self.replace_template_placeholders(&mut html, wasm_path, js_path);
 
@@ -4041,6 +4046,25 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         Self::replace_or_insert_before("{style_include}", "</head", &head_resources, html);
 
         Ok(())
+    }
+
+    /// Inject loading scripts if they are not already present
+    fn inject_loading_scripts(&self, assets: &AssetManifest, html: &mut String) {
+        // If the current build opted out of injecting loading scripts, don't inject anything
+        if !self.inject_loading_scripts {
+            return;
+        }
+
+        // If not, insert the script
+        *html = html.replace(
+            "</body",
+            &format!(
+                r#"<script type="module" async src="/{}/{}"></script>
+            </body"#,
+                self.base_path_or_default(),
+                self.bundled_js_path(assets)
+            ),
+        );
     }
 
     /// Replace any special placeholders in the HTML with resolved values

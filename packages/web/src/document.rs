@@ -142,7 +142,7 @@ fn append_element_to_head(
 
     let element = document.create_element(local_name).unwrap();
     for (name, value) in attributes {
-        element.set_attribute(name, &value).unwrap();
+        element.set_attribute(name, value).unwrap();
     }
     if text_content.is_some() {
         element.set_text_content(text_content);
