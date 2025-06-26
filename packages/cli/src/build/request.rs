@@ -3391,9 +3391,12 @@ impl BuildRequest {
 
         // Load and initialize wasm without requiring a separate javascript file.
         // This also allows using a strict Content-Security-Policy.
-        let mut js = std::fs::read(self.wasm_bindgen_js_output_file())?;
+        let mut js = std::fs::OpenOptions::new()
+            .append(true)
+            .open(self.wasm_bindgen_js_output_file())?;
+        let mut buf_writer = std::io::BufWriter::new(&mut js);
         writeln!(
-            js,
+            buf_writer,
             r#"
 window.__wasm_split_main_initSync = initSync;
 
@@ -3412,8 +3415,6 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
 "#,
             self.base_path_or_default(),
         )?;
-
-        std::fs::write(self.wasm_bindgen_js_output_file(), js)?;
 
         Ok(())
     }
