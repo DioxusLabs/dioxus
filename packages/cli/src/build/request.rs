@@ -327,7 +327,7 @@ use dioxus_cli_config::{APP_TITLE_ENV, ASSET_ROOT_ENV};
 use dioxus_cli_opt::{process_file_to, AssetManifest};
 use itertools::Itertools;
 use krates::{cm::TargetKind, NodeId};
-use manganis::JsAssetOptions;
+use manganis::{AssetOptions, JsAssetOptions};
 use manganis_core::AssetVariant;
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
@@ -3381,7 +3381,7 @@ impl BuildRequest {
 
         if self.should_bundle_to_asset() {
             // Make sure to register the main wasm file with the asset system
-            assets.register_asset(&post_bindgen_wasm, AssetOptions::Unknown)?;
+            assets.register_asset(&post_bindgen_wasm, AssetOptions::new(AssetVariant::Unknown))?;
         }
 
         // Write the index.html file with the pre-configured contents we got from pre-rendering
