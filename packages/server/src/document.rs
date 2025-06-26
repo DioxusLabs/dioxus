@@ -93,6 +93,7 @@ impl Document for ServerDocument {
                 http_equiv: props.http_equiv,
                 content: props.content,
                 property: props.property,
+                "data": props.data,
                 ..props.additional_attributes,
             }
         });

@@ -117,12 +117,14 @@ impl DesktopService {
     ///     }
     /// }
     ///
+    /// # async fn app() {
     /// // Create a new window with a component that will be rendered in the new window.
     /// let dom = VirtualDom::new(popup);
     /// // Create and wait for the window
     /// let window = dioxus::desktop::window().new_window(dom, Default::default()).await;
     /// // Fullscreen the new window
     /// window.set_fullscreen(true);
+    /// # }
     /// ```
     // Note: This method is asynchronous because webview2 does not support creating a new window from
     // inside of an existing webview callback. Dioxus runs event handlers synchronously inside of a webview
@@ -343,12 +345,21 @@ fn is_main_thread() -> bool {
 /// A [`DesktopContext`] that is pending creation.
 ///
 /// # Example
-/// ```rust
+/// ```rust, no_run
+/// # use dioxus::prelude::*;
+/// # async fn app() {
+/// // Create a new window with a component that will be rendered in the new window.
+/// let dom = VirtualDom::new(|| rsx!{ "popup!" });
+///
 /// // Create a new window asynchronously
-/// let pending_context = desktop_service.new_window(dom, config);
+/// let pending_context = dioxus::desktop::window().new_window(dom, Default::default());
+///
 /// // Wait for the context to be created
 /// let window = pending_context.await;
+///
+/// // Now control the window
 /// window.set_fullscreen(true);
+/// # }
 /// ```
 pub struct PendingDesktopContext {
     pub(crate) receiver: tokio::sync::oneshot::Receiver<DesktopContext>,

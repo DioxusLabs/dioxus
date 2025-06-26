@@ -5,12 +5,9 @@
 // - Hydration
 
 #![allow(non_snake_case)]
-use dioxus::{
-    prelude::{
-        server_fn::{codec::JsonEncoding, BoxedStream, Websocket},
-        *,
-    },
-    CapturedError,
+use dioxus::prelude::{
+    server_fn::{codec::JsonEncoding, BoxedStream, Websocket},
+    *,
 };
 use futures::{channel::mpsc, SinkExt, StreamExt};
 
@@ -85,7 +82,7 @@ async fn assert_server_context_provided() {
 }
 
 #[server(PostServerData)]
-async fn post_server_data(data: String) -> Result<(), ServerFnError> {
+async fn post_server_data(data: String) -> ServerFnResult {
     assert_server_context_provided().await;
     println!("Server received: {}", data);
 
@@ -93,7 +90,7 @@ async fn post_server_data(data: String) -> Result<(), ServerFnError> {
 }
 
 #[server(GetServerData)]
-async fn get_server_data() -> Result<String, ServerFnError> {
+async fn get_server_data() -> ServerFnResult<String> {
     assert_server_context_provided().await;
     Ok("Hello from the server!".to_string())
 }
@@ -101,14 +98,14 @@ async fn get_server_data() -> Result<String, ServerFnError> {
 // Make sure the default codec work with empty data structures
 // Regression test for https://github.com/DioxusLabs/dioxus/issues/2628
 #[server]
-async fn get_server_data_empty_vec(empty_vec: Vec<String>) -> Result<Vec<String>, ServerFnError> {
+async fn get_server_data_empty_vec(empty_vec: Vec<String>) -> ServerFnResult<Vec<String>> {
     assert_server_context_provided().await;
     assert!(empty_vec.is_empty());
     Ok(Vec::new())
 }
 
 #[server]
-async fn server_error() -> Result<String, ServerFnError> {
+async fn server_error() -> ServerFnResult<String> {
     assert_server_context_provided().await;
     tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
     Err(ServerFnError::new("the server threw an error!"))
@@ -142,9 +139,7 @@ fn Errors() -> Element {
 
 #[component]
 pub fn ThrowsError() -> Element {
-    use_server_future(server_error)?
-        .unwrap()
-        .map_err(CapturedError::from_display)?;
+    use_server_future(server_error)?.unwrap()?;
     rsx! {
         "success"
     }
@@ -187,7 +182,7 @@ fn Assets() -> Element {
 #[server(protocol = Websocket<JsonEncoding, JsonEncoding>)]
 async fn echo_ws(
     input: BoxedStream<String, ServerFnError>,
-) -> Result<BoxedStream<String, ServerFnError>, ServerFnError> {
+) -> ServerFnResult<BoxedStream<String, ServerFnError>> {
     let mut input = input;
 
     let (mut tx, rx) = mpsc::channel(1);
