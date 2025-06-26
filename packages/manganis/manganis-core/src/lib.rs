@@ -15,3 +15,6 @@ pub use js::*;
 
 mod asset;
 pub use asset::*;
+
+mod css_module;
+pub use css_module::*;

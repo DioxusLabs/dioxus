@@ -391,6 +391,7 @@ pub(crate) struct BuildRequest {
     pub(crate) link_err_file: Arc<NamedTempFile>,
     pub(crate) rustc_wrapper_args_file: Arc<NamedTempFile>,
     pub(crate) base_path: Option<String>,
+    pub(crate) using_dioxus_explicitly: bool,
 }
 
 /// dx can produce different "modes" of a build. A "regular" build is a "base" build. The Fat and Thin
@@ -758,6 +759,7 @@ impl BuildRequest {
             package,
             main_target,
             rustflags,
+            using_dioxus_explicitly,
             skip_assets: args.skip_assets,
             base_path: args.base_path.clone(),
             wasm_split: args.wasm_split,
@@ -1133,6 +1135,14 @@ impl BuildRequest {
             return Ok(());
         }
 
+        // Run the tailwind build before bundling anything else
+        crate::TailwindCli::run_once(
+            self.package_manifest_dir(),
+            self.config.application.tailwind_input.clone(),
+            self.config.application.tailwind_output.clone(),
+        )
+        .await?;
+
         let asset_dir = self.asset_dir();
 
         // First, clear the asset dir of any files that don't exist in the new manifest
@@ -1412,6 +1422,10 @@ impl BuildRequest {
 
         // Now extract the assets from the fat binary
         self.collect_assets(&self.patch_exe(artifacts.time_start), ctx)?;
+
+        // If this is a web build, reset the index.html file in case it was modified by SSG
+        self.write_index_html(&artifacts.assets)
+            .context("Failed to write index.html")?;
 
         // Clean up the temps manually
         // todo: we might want to keep them around for debugging purposes
@@ -2144,6 +2158,18 @@ impl BuildRequest {
         };
         cargo_args.push(self.executable_name().to_string());
 
+        // Set offline/locked/frozen
+        let lock_opts = crate::VERBOSITY.get().cloned().unwrap_or_default();
+        if lock_opts.frozen {
+            cargo_args.push("--frozen".to_string());
+        }
+        if lock_opts.locked {
+            cargo_args.push("--locked".to_string());
+        }
+        if lock_opts.offline {
+            cargo_args.push("--offline".to_string());
+        }
+
         // Merge in extra args. Order shouldn't really matter.
         cargo_args.extend(self.extra_cargo_args.clone());
         cargo_args.push("--".to_string());
@@ -2564,7 +2590,7 @@ impl BuildRequest {
             android_bundle: Option<crate::AndroidSettings>,
         }
         let hbs_data = AndroidHandlebarsObjects {
-            application_id: self.full_mobile_app_name(),
+            application_id: self.bundle_identifier(),
             app_name: self.bundled_app_name(),
             android_bundle: self.config.bundle.android.clone(),
         };
@@ -2976,30 +3002,26 @@ impl BuildRequest {
         kept_features
     }
 
-    pub(crate) fn mobile_org(&self) -> String {
-        let identifier = self.bundle_identifier();
-        let mut split = identifier.splitn(3, '.');
-        let sub = split
-            .next()
-            .expect("Identifier to have at least 3 periods like `com.example.app`");
-        let tld = split
-            .next()
-            .expect("Identifier to have at least 3 periods like `com.example.app`");
-        format!("{}.{}", sub, tld)
-    }
-
     pub(crate) fn bundled_app_name(&self) -> String {
         use convert_case::{Case, Casing};
         self.executable_name().to_case(Case::Pascal)
     }
 
-    pub(crate) fn full_mobile_app_name(&self) -> String {
-        format!("{}.{}", self.mobile_org(), self.bundled_app_name())
-    }
-
     pub(crate) fn bundle_identifier(&self) -> String {
-        if let Some(identifier) = self.config.bundle.identifier.clone() {
-            return identifier.clone();
+        if let Some(identifier) = &self.config.bundle.identifier {
+            if identifier.contains('.')
+                && !identifier.starts_with('.')
+                && !identifier.ends_with('.')
+                && !identifier.contains("..")
+            {
+                return identifier.clone();
+            } else {
+                // The original `mobile_org` function used `expect` directly.
+                // Maybe it's acceptable for the CLI to panic directly when this error occurs.
+                // And if we change it to a Result type, the `client_connected` function in serve/runner.rs does not return a Result and cannot call `?`,
+                // We also need to handle the error in place, otherwise it will expand the scope of modifications further.
+                panic!("Invalid bundle identifier: {identifier:?}. E.g. `com.example`, `com.example.app`");
+            }
         }
 
         format!("com.example.{}", self.bundled_app_name())
@@ -3203,7 +3225,6 @@ impl BuildRequest {
             || will_wasm_opt
             || ctx.mode == BuildMode::Fat;
         let keep_names = will_wasm_opt || ctx.mode == BuildMode::Fat;
-        let package_to_asset = self.release && !should_bundle_split;
         let demangle = false;
         let wasm_opt_options = WasmOptConfig {
             memory_packing: self.wasm_split,
@@ -3347,31 +3368,56 @@ impl BuildRequest {
 
         // In release mode, we make the wasm and bindgen files into assets so they get bundled with max
         // optimizations.
-        let wasm_path = if package_to_asset {
-            // Make sure to register the main wasm file with the asset system
-            let name = assets.register_asset(
-                &post_bindgen_wasm,
-                AssetVariant::Unknown.into_asset_options(),
-            )?;
-            format!("assets/{}", name.bundled_path())
-        } else {
-            let asset = self.wasm_bindgen_wasm_output_file();
-            format!("wasm/{}", asset.file_name().unwrap().to_str().unwrap())
-        };
-
-        let js_path = if package_to_asset {
+        if self.should_bundle_to_asset() {
             // Register the main.js with the asset system so it bundles in the snippets and optimizes
-            let name = assets.register_asset(
+            assets.register_asset(
                 &self.wasm_bindgen_js_output_file(),
                 JsAssetOptions::new()
                     .with_minify(true)
                     .with_preload(true)
                     .into_asset_options(),
             )?;
+        }
+
+        if self.should_bundle_to_asset() {
+            // Make sure to register the main wasm file with the asset system
+            assets.register_asset(&post_bindgen_wasm, AssetOptions::Unknown)?;
+        }
+
+        // Write the index.html file with the pre-configured contents we got from pre-rendering
+        self.write_index_html(assets)?;
+
+        Ok(())
+    }
+
+    /// Write the index.html file to the output directory. This must be called after the wasm and js
+    /// assets are registered with the asset system if this is a release build.
+    pub(crate) fn write_index_html(&self, assets: &AssetManifest) -> Result<()> {
+        // Get the path to the wasm-bindgen output files. Either the direct file or the opitmized one depending on the build mode
+        let wasm_bindgen_wasm_out = self.wasm_bindgen_wasm_output_file();
+        let wasm_path = if self.should_bundle_to_asset() {
+            let name = assets
+                .get_first_asset_for_source(&wasm_bindgen_wasm_out)
+                .expect("The wasm source must exist before creating index.html");
             format!("assets/{}", name.bundled_path())
         } else {
-            let asset = self.wasm_bindgen_js_output_file();
-            format!("wasm/{}", asset.file_name().unwrap().to_str().unwrap())
+            format!(
+                "wasm/{}",
+                wasm_bindgen_wasm_out.file_name().unwrap().to_str().unwrap()
+            )
+        };
+
+        let wasm_bindgen_js_out = self.wasm_bindgen_js_output_file();
+        let js_path = if self.should_bundle_to_asset() {
+            let name = assets
+                .get_first_asset_for_source(&wasm_bindgen_js_out)
+                .expect("The js source must exist before creating index.html");
+            format!("assets/{}", name.bundled_path())
+        } else {
+            format!(
+                "wasm/{}",
+                wasm_bindgen_js_out.file_name().unwrap().to_str().unwrap()
+            )
         };
 
         // Write the index.html file with the pre-configured contents we got from pre-rendering
@@ -3379,7 +3425,6 @@ impl BuildRequest {
             self.root_dir().join("index.html"),
             self.prepare_html(assets, &wasm_path, &js_path).unwrap(),
         )?;
-
         Ok(())
     }
 
@@ -3780,7 +3825,7 @@ impl BuildRequest {
         Ok(())
     }
 
-    /// update the mtime of the "main" file to bust the fingerprint, forcing rustc to recompile it.
+    /// Blow away the fingerprint for this package, forcing rustc to recompile it.
     ///
     /// This prevents rustc from using the cached version of the binary, which can cause issues
     /// with our hotpatching setup since it uses linker interception.
@@ -3790,13 +3835,29 @@ impl BuildRequest {
     ///
     /// This might stop working if/when cargo stabilizes contents-based fingerprinting.
     fn bust_fingerprint(&self, ctx: &BuildContext) -> Result<()> {
-        if !matches!(ctx.mode, BuildMode::Thin { .. }) {
-            std::fs::File::open(&self.crate_target.src_path)?.set_modified(SystemTime::now())?;
+        if matches!(ctx.mode, BuildMode::Fat) {
+            // `dx` compiles everything with `--target` which ends up with a structure like:
+            // target/<triple>/<profile>/.fingerprint/<package_name>-<hash>
+            //
+            // normally you can't rely on this structure (ie with `cargo build`) but the explicit
+            // target arg guarantees this will work.
+            let fingerprint_dir = self
+                .target_dir
+                .join(self.triple.to_string())
+                .join(&self.profile)
+                .join(".fingerprint");
 
-            // read and write the file to update the mtime
-            if cfg!(target_os = "windows") {
-                let contents = std::fs::read_to_string(&self.crate_target.src_path)?;
-                _ = std::fs::write(&self.crate_target.src_path, contents);
+            // split at the last `-` used to separate the hash from the name
+            // This causes to more aggressively bust hashes for all combinations of features
+            // and fingerprints for this package since we're just ignoring the hash
+            for entry in std::fs::read_dir(&fingerprint_dir)?.flatten() {
+                if let Some(fname) = entry.file_name().to_str() {
+                    if let Some((name, _)) = fname.rsplit_once('-') {
+                        if name == self.package().name {
+                            _ = std::fs::remove_dir_all(entry.path());
+                        }
+                    }
+                }
             }
         }
         Ok(())

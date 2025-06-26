@@ -3,7 +3,10 @@
 
 #[doc(hidden)]
 pub mod macro_helpers;
-pub use manganis_macro::{asset, css_module, external_asset};
+pub use manganis_macro::{asset, external_asset};
+
+#[doc(hidden)]
+pub use manganis_macro::css_module;
 
 pub use manganis_core::{
     Asset, AssetOptions, AssetVariant, BundledAsset, CssAssetOptions, CssModuleAssetOptions,

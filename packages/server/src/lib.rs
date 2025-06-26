@@ -34,7 +34,7 @@
 //! }
 //!
 //! fn app() -> Element {
-//!
+//!     let mut text = use_signal(|| "Click the button to run a server function".to_string());
 //!
 //!     rsx! {
 //!         button {

@@ -44,23 +44,21 @@ cargo run --example hello_world
 
 [form](./form.rs) - Handle form submission
 
-[inputs](./inputs.rs) - Input values
-
 [nested_listeners](./nested_listeners.rs) - Nested handlers and bubbling
-
-[textarea](textarea.rs) - Text area input
 
 ### State Management
 
 [context_api](./context_api.rs) - Cross-component state sharing via Context API
+
+[counters](./counters.rs) - Mapping a `Signal<Vec<T>>` into UI elements
+
+[futures](./future.rs) - Handle async Rust with use_future, use_effect, and async event handlers
 
 ### Async
 
 [login_form](./login_form.rs) - Login endpoint example
 
 [suspense](./suspense.rs) - Render placeholders while data is loading
-
-[tasks](./tasks.rs) - Continuously run future
 
 ### SVG
 
@@ -91,6 +89,8 @@ cargo run --example hello_world
 [window_event](./window_event.rs) - Window decorations, fullscreen, minimization, etc.
 
 [window_zoom](./window_zoom.rs) – Zoom in or out
+
+[popup](./popup.rs) - Create a popup window and send data back to the main window
 
 ## Example Apps
 

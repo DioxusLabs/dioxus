@@ -165,7 +165,7 @@ impl Output {
     }
 
     pub(crate) fn remote_shutdown(interactive: bool) -> io::Result<()> {
-        if interactive {
+        if interactive && crossterm::terminal::is_raw_mode_enabled().unwrap_or(true) {
             stdout()
                 .execute(Show)?
                 .execute(DisableFocusChange)?
@@ -550,6 +550,7 @@ impl Output {
             BuildStage::Linking => lines.push("Linking".yellow()),
             BuildStage::Hotpatching => lines.push("Hot-patching...".yellow()),
             BuildStage::ExtractingAssets => lines.push("Extracting assets".yellow()),
+            BuildStage::Prerendering => lines.push("Pre-rendering...".yellow()),
             _ => {}
         };
 
@@ -765,21 +766,23 @@ impl Output {
         let links_list: [_; 2] =
             Layout::vertical([Constraint::Length(1), Constraint::Length(1)]).areas(bottom);
 
-        frame.render_widget(
-            Paragraph::new(Line::from(vec![
-                "Read the docs: ".gray(),
-                "https://dioxuslabs.com/0.6/docs".blue(),
-            ])),
-            links_list[0],
-        );
+        if state.runner.client.build.using_dioxus_explicitly {
+            frame.render_widget(
+                Paragraph::new(Line::from(vec![
+                    "Read the docs: ".gray(),
+                    "https://dioxuslabs.com/0.6/docs".blue(),
+                ])),
+                links_list[0],
+            );
 
-        frame.render_widget(
-            Paragraph::new(Line::from(vec![
-                "Video tutorials: ".gray(),
-                "https://youtube.com/@DioxusLabs".blue(),
-            ])),
-            links_list[1],
-        );
+            frame.render_widget(
+                Paragraph::new(Line::from(vec![
+                    "Video tutorials: ".gray(),
+                    "https://youtube.com/@DioxusLabs".blue(),
+                ])),
+                links_list[1],
+            );
+        }
 
         let cmds = [
             "",

@@ -26,7 +26,9 @@ pub trait DioxusRouterExt<S>: DioxusRouterFnExt<S> {
     /// ```rust, no_run
     /// # #![allow(non_snake_case)]
     /// # use dioxus_lib::prelude::*;
-    /// # use dioxus_fullstack::prelude::*;
+    /// # use dioxus_server::prelude::*;
+    /// use dioxus_server::{DioxusRouterExt, DioxusRouterFnExt};
+    ///
     /// #[tokio::main]
     /// async fn main() {
     ///     let addr = dioxus::cli_config::fullstack_address_or_localhost();
@@ -51,7 +53,9 @@ pub trait DioxusRouterExt<S>: DioxusRouterFnExt<S> {
     /// ```rust, no_run
     /// # #![allow(non_snake_case)]
     /// # use dioxus_lib::prelude::*;
-    /// # use dioxus_fullstack::prelude::*;
+    /// # use dioxus_server::prelude::*;
+    /// use dioxus_server::{DioxusRouterExt, DioxusRouterFnExt};
+    ///
     /// #[tokio::main]
     /// async fn main() {
     ///     let addr = dioxus::cli_config::fullstack_address_or_localhost();
@@ -110,7 +114,7 @@ pub trait DioxusRouterFnExt<S> {
     /// # Example
     /// ```rust, no_run
     /// # use dioxus_lib::prelude::*;
-    /// # use dioxus_fullstack::prelude::*;
+    /// # use dioxus_server::prelude::*;
     /// #[tokio::main]
     /// async fn main() {
     ///     let addr = dioxus::cli_config::fullstack_address_or_localhost();
@@ -135,7 +139,7 @@ pub trait DioxusRouterFnExt<S> {
     /// # Example
     /// ```rust, no_run
     /// # use dioxus_lib::prelude::*;
-    /// # use dioxus_fullstack::prelude::*;
+    /// # use dioxus_server::prelude::*;
     /// # use std::sync::Arc;
     /// #[tokio::main]
     /// async fn main() {
@@ -159,7 +163,8 @@ pub trait DioxusRouterFnExt<S> {
     /// # Example
     /// ```rust, no_run
     /// # use dioxus_lib::prelude::*;
-    /// # use dioxus_fullstack::prelude::*;
+    /// # use dioxus_server::prelude::*;
+    /// # use dioxus_server::prelude::*;
     /// #[tokio::main]
     /// async fn main() {
     ///     let router = axum::Router::new()
@@ -167,6 +172,11 @@ pub trait DioxusRouterFnExt<S> {
     ///         .into_make_service();
     ///     // ...
     /// }
+    ///
+    /// fn app() -> Element {
+    ///     rsx! { "Hello World" }
+    /// }
+    /// ```
     fn serve_api_application(self, cfg: ServeConfig, app: fn() -> Element) -> Self
     where
         Self: Sized;
@@ -357,6 +367,7 @@ impl RenderHandleState {
 ///
 /// use axum::routing::get;
 /// use dioxus::prelude::*;
+/// use dioxus_server::{RenderHandleState, render_handler, ServeConfig};
 ///
 /// fn app() -> Element {
 ///     rsx! {

@@ -27,23 +27,26 @@ pub(crate) enum Error {
     #[error("Invalid proxy URL: {0}")]
     InvalidProxy(#[from] hyper::http::uri::InvalidUri),
 
-    #[error("Failed to establish proxy: {0}")]
+    #[error("Establishing proxy: {0}")]
     ProxySetup(String),
 
-    #[error("Failed to bundle project: {0}")]
+    #[error("Bundling project: {0}")]
     BundleFailed(#[from] tauri_bundler::Error),
 
-    #[error("Failed to perform hotpatch: {0}")]
+    #[error("Performing hotpatch: {0}")]
     PatchingFailed(#[from] crate::build::PatchError),
 
-    #[error("Failed to read object file: {0}")]
+    #[error("Reading object file: {0}")]
     ObjectReadFailed(#[from] object::Error),
 
     #[error("{0}")]
     CapturedPanic(String),
 
-    #[error("Failed to render template: {0}")]
+    #[error("Rendering template error: {0}")]
     TemplateParse(#[from] handlebars::RenderError),
+
+    #[error("Network connectivity error: {0}")]
+    Network(String),
 
     #[error(transparent)]
     Other(#[from] anyhow::Error),
