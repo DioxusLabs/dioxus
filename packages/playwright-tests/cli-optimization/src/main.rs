@@ -6,6 +6,10 @@ const MONACO_FOLDER: Asset = asset!("/monaco-editor/package/min/vs");
 const SOME_IMAGE: Asset = asset!("/images/toasts.png", ImageAssetOptions::new().with_avif());
 const SOME_IMAGE_WITH_THE_SAME_URL: Asset =
     asset!("/images/toasts.png", ImageAssetOptions::new().with_jpg());
+const SOME_IMAGE_WITHOUT_HASH: Asset =
+    external_asset!("/images/toasts.png", ImageAssetOptions::new().with_avif());
+// This asset is unused, but it should still be bundled because it is an external asset
+const _: Asset = external_asset!("/images/toasts.png", ImageAssetOptions::new());
 
 fn main() {
     dioxus::launch(App);
@@ -40,6 +44,10 @@ fn App() -> Element {
         img {
             id: "some_image_with_the_same_url",
             src: "{SOME_IMAGE_WITH_THE_SAME_URL}"
+        }
+        img {
+            id: "some_image_without_hash",
+            src: "{SOME_IMAGE_WITHOUT_HASH}"
         }
     }
 }

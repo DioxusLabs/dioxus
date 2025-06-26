@@ -328,6 +328,7 @@ use dioxus_cli_opt::{process_file_to, AssetManifest};
 use itertools::Itertools;
 use krates::{cm::TargetKind, NodeId};
 use manganis::{AssetOptions, JsAssetOptions};
+use manganis_core::AssetVariant;
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -3290,7 +3291,7 @@ impl BuildRequest {
                 writeln!(
                     glue, "export const __wasm_split_load_chunk_{idx} = makeLoad(\"/assets/{url}\", [], fusedImports);",
                     url = assets
-                        .register_asset(&path, AssetOptions::Unknown)?.bundled_path(),
+                        .register_asset(&path, AssetVariant::Unknown.into_asset_options())?.bundled_path(),
                 )?;
             }
 
@@ -3318,7 +3319,8 @@ impl BuildRequest {
 
                     // Again, register this wasm with the asset system
                     url = assets
-                        .register_asset(&path, AssetOptions::Unknown)?.bundled_path(),
+                        .register_asset(&path, AssetVariant::Unknown.into_asset_options())?
+                        .bundled_path(),
 
                     // This time, make sure to write the dependencies of this chunk
                     // The names here are again, hardcoded in wasm-split - fix this eventually.
@@ -3370,13 +3372,16 @@ impl BuildRequest {
             // Register the main.js with the asset system so it bundles in the snippets and optimizes
             assets.register_asset(
                 &self.wasm_bindgen_js_output_file(),
-                AssetOptions::Js(JsAssetOptions::new().with_minify(true).with_preload(true)),
+                JsAssetOptions::new()
+                    .with_minify(true)
+                    .with_preload(true)
+                    .into_asset_options(),
             )?;
         }
 
         if self.should_bundle_to_asset() {
             // Make sure to register the main wasm file with the asset system
-            assets.register_asset(&post_bindgen_wasm, AssetOptions::Unknown)?;
+            assets.register_asset(&post_bindgen_wasm, AssetOptions::new(AssetVariant::Unknown))?;
         }
 
         // Write the index.html file with the pre-configured contents we got from pre-rendering
@@ -3972,22 +3977,22 @@ impl BuildRequest {
         // Inject any resources from manganis into the head
         for asset in assets.assets() {
             let asset_path = asset.bundled_path();
-            match asset.options() {
-                AssetOptions::Css(css_options) => {
+            match asset.options().variant() {
+                AssetVariant::Css(css_options) => {
                     if css_options.preloaded() {
                         head_resources.push_str(&format!(
                             "<link rel=\"preload\" as=\"style\" href=\"/{{base_path}}/assets/{asset_path}\" crossorigin>"
                         ))
                     }
                 }
-                AssetOptions::Image(image_options) => {
+                AssetVariant::Image(image_options) => {
                     if image_options.preloaded() {
                         head_resources.push_str(&format!(
                             "<link rel=\"preload\" as=\"image\" href=\"/{{base_path}}/assets/{asset_path}\" crossorigin>"
                         ))
                     }
                 }
-                AssetOptions::Js(js_options) => {
+                AssetVariant::Js(js_options) => {
                     if js_options.preloaded() {
                         head_resources.push_str(&format!(
                             "<link rel=\"preload\" as=\"script\" href=\"/{{base_path}}/assets/{asset_path}\" crossorigin>"

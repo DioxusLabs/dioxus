@@ -212,7 +212,7 @@ impl ImageAssetOptions {
 
     /// Convert the options into options for a generic asset
     pub const fn into_asset_options(self) -> AssetOptions {
-        AssetOptions::Image(self)
+        AssetOptions::new(crate::AssetVariant::Image(self))
     }
 
     pub(crate) const fn extension(&self) -> Option<&'static str> {

@@ -17,9 +17,83 @@ use crate::{
     serde::Serialize,
     serde::Deserialize,
 )]
+#[non_exhaustive]
+pub struct AssetOptions {
+    /// If a hash should be added to the asset path
+    add_hash: bool,
+    /// The variant of the asset
+    variant: AssetVariant,
+}
+
+impl AssetOptions {
+    /// Create a new asset options with the given variant
+    pub const fn new(variant: AssetVariant) -> Self {
+        Self {
+            add_hash: true,
+            variant,
+        }
+    }
+
+    /// Set whether a hash should be added to the asset path. Manganis adds hashes to asset paths by default
+    /// for [cache busting](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Caching#cache_busting).
+    /// With hashed assets, you can serve the asset with a long expiration time, and when the asset changes,
+    /// the hash in the path will change, causing the browser to fetch the new version.
+    ///
+    /// This method will only effect if the hash is added to the bundled asset path. If you are using the asset
+    /// macro, the asset struct still needs to be used in your rust code to ensure the asset is included in the binary.
+    ///
+    /// If you are using an asset outside of rust code where you know what the asset hash will be, you can disable
+    /// the hash suffix and keep the asset in the binary even when it is unused in the rust code with the
+    /// `external_asset!` macro.
+    pub const fn with_hash_suffix(mut self, add_hash: bool) -> Self {
+        self.add_hash = add_hash;
+        self
+    }
+
+    /// Get the variant of the asset
+    pub const fn variant(&self) -> &AssetVariant {
+        &self.variant
+    }
+
+    /// Check if a hash should be added to the asset path
+    pub const fn hash_suffix(&self) -> bool {
+        self.add_hash
+    }
+
+    /// Try to get the extension for the asset. If the asset options don't define an extension, this will return None
+    pub const fn extension(&self) -> Option<&'static str> {
+        match self.variant {
+            AssetVariant::Image(image) => image.extension(),
+            AssetVariant::Css(_) => Some("css"),
+            AssetVariant::CssModule(_) => Some("css"),
+            AssetVariant::Js(_) => Some("js"),
+            AssetVariant::Folder(_) => None,
+            AssetVariant::Unknown => None,
+        }
+    }
+
+    /// Convert the options into options for a generic asset
+    pub const fn into_asset_options(self) -> AssetOptions {
+        self
+    }
+}
+
+/// Settings for a specific type of asset
+#[derive(
+    Debug,
+    Eq,
+    PartialEq,
+    PartialOrd,
+    Clone,
+    Copy,
+    Hash,
+    SerializeConst,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 #[repr(C, u8)]
 #[non_exhaustive]
-pub enum AssetOptions {
+pub enum AssetVariant {
     /// An image asset
     Image(ImageAssetOptions),
     /// A folder asset
@@ -34,21 +108,9 @@ pub enum AssetOptions {
     Unknown,
 }
 
-impl AssetOptions {
-    /// Try to get the extension for the asset. If the asset options don't define an extension, this will return None
-    pub const fn extension(&self) -> Option<&'static str> {
-        match self {
-            AssetOptions::Image(image) => image.extension(),
-            AssetOptions::Css(_) => Some("css"),
-            AssetOptions::CssModule(_) => Some("css"),
-            AssetOptions::Js(_) => Some("js"),
-            AssetOptions::Folder(_) => None,
-            AssetOptions::Unknown => None,
-        }
-    }
-
+impl AssetVariant {
     /// Convert the options into options for a generic asset
-    pub const fn into_asset_options(self) -> Self {
-        self
+    pub const fn into_asset_options(self) -> AssetOptions {
+        AssetOptions::new(self)
     }
 }

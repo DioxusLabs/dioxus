@@ -1,4 +1,4 @@
-use crate::AssetOptions;
+use crate::{AssetOptions, AssetVariant};
 use const_serialize::SerializeConst;
 
 /// Options for a css asset
@@ -72,6 +72,6 @@ impl CssAssetOptions {
 
     /// Convert the options into options for a generic asset
     pub const fn into_asset_options(self) -> AssetOptions {
-        AssetOptions::Css(self)
+        AssetOptions::new(AssetVariant::Css(self))
     }
 }

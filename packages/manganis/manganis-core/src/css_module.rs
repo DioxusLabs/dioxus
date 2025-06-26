@@ -1,4 +1,4 @@
-use crate::AssetOptions;
+use crate::{AssetOptions, AssetVariant};
 use const_serialize::SerializeConst;
 use std::collections::HashSet;
 
@@ -65,7 +65,7 @@ impl CssModuleAssetOptions {
 
     /// Convert the options into options for a generic asset
     pub const fn into_asset_options(self) -> AssetOptions {
-        AssetOptions::CssModule(self)
+        AssetOptions::new(AssetVariant::CssModule(self))
     }
 }
 
