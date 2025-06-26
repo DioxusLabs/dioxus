@@ -3364,8 +3364,14 @@ impl BuildRequest {
             wasm_opt::optimize(&post_bindgen_wasm, &post_bindgen_wasm, &wasm_opt_options).await?;
         }
 
-        // In release mode, we make the wasm and bindgen files into assets so they get bundled with max
-        // optimizations.
+        if self.should_bundle_to_asset() {
+            // Make sure to register the main wasm file with the asset system
+            assets.register_asset(&post_bindgen_wasm, AssetOptions::Unknown)?;
+        }
+
+        // Now that the wasm is registered as an asset, we can write the js glue shim
+        self.write_js_glue_shim(assets)?;
+
         if self.should_bundle_to_asset() {
             // Register the main.js with the asset system so it bundles in the snippets and optimizes
             assets.register_asset(
@@ -3374,13 +3380,41 @@ impl BuildRequest {
             )?;
         }
 
-        if self.should_bundle_to_asset() {
-            // Make sure to register the main wasm file with the asset system
-            assets.register_asset(&post_bindgen_wasm, AssetOptions::Unknown)?;
-        }
-
         // Write the index.html file with the pre-configured contents we got from pre-rendering
         self.write_index_html(assets)?;
+
+        Ok(())
+    }
+
+    fn write_js_glue_shim(&self, assets: &AssetManifest) -> Result<()> {
+        let wasm_path = self.bundled_wasm_path(assets);
+
+        // Load and initialize wasm without requiring a separate javascript file.
+        // This also allows using a strict Content-Security-Policy.
+        let mut js = std::fs::OpenOptions::new()
+            .append(true)
+            .open(self.wasm_bindgen_js_output_file())?;
+        let mut buf_writer = std::io::BufWriter::new(&mut js);
+        writeln!(
+            buf_writer,
+            r#"
+window.__wasm_split_main_initSync = initSync;
+
+// Actually perform the load
+__wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
+    // assign this module to be accessible globally
+    window.__dx_mainWasm = wasm;
+    window.__dx_mainInit = __wbg_init;
+    window.__dx_mainInitSync = initSync;
+    window.__dx___wbg_get_imports = __wbg_get_imports;
+
+    if (wasm.__wbindgen_start == undefined) {{
+        wasm.main();
+    }}
+}});
+"#,
+            self.base_path_or_default(),
+        )?;
 
         Ok(())
     }
@@ -3388,22 +3422,21 @@ impl BuildRequest {
     /// Write the index.html file to the output directory. This must be called after the wasm and js
     /// assets are registered with the asset system if this is a release build.
     pub(crate) fn write_index_html(&self, assets: &AssetManifest) -> Result<()> {
-        // Get the path to the wasm-bindgen output files. Either the direct file or the opitmized one depending on the build mode
-        let wasm_bindgen_wasm_out = self.wasm_bindgen_wasm_output_file();
-        let wasm_path = if self.should_bundle_to_asset() {
-            let name = assets
-                .get_first_asset_for_source(&wasm_bindgen_wasm_out)
-                .expect("The wasm source must exist before creating index.html");
-            format!("assets/{}", name.bundled_path())
-        } else {
-            format!(
-                "wasm/{}",
-                wasm_bindgen_wasm_out.file_name().unwrap().to_str().unwrap()
-            )
-        };
+        let wasm_path = self.bundled_wasm_path(assets);
+        let js_path = self.bundled_js_path(assets);
 
+        // Write the index.html file with the pre-configured contents we got from pre-rendering
+        std::fs::write(
+            self.root_dir().join("index.html"),
+            self.prepare_html(assets, &wasm_path, &js_path).unwrap(),
+        )?;
+
+        Ok(())
+    }
+
+    fn bundled_js_path(&self, assets: &AssetManifest) -> String {
         let wasm_bindgen_js_out = self.wasm_bindgen_js_output_file();
-        let js_path = if self.should_bundle_to_asset() {
+        if self.should_bundle_to_asset() {
             let name = assets
                 .get_first_asset_for_source(&wasm_bindgen_js_out)
                 .expect("The js source must exist before creating index.html");
@@ -3413,14 +3446,23 @@ impl BuildRequest {
                 "wasm/{}",
                 wasm_bindgen_js_out.file_name().unwrap().to_str().unwrap()
             )
-        };
+        }
+    }
 
-        // Write the index.html file with the pre-configured contents we got from pre-rendering
-        std::fs::write(
-            self.root_dir().join("index.html"),
-            self.prepare_html(assets, &wasm_path, &js_path).unwrap(),
-        )?;
-        Ok(())
+    /// Get the path to the wasm-bindgen output files. Either the direct file or the opitmized one depending on the build mode
+    fn bundled_wasm_path(&self, assets: &AssetManifest) -> String {
+        let wasm_bindgen_wasm_out = self.wasm_bindgen_wasm_output_file();
+        if self.should_bundle_to_asset() {
+            let name = assets
+                .get_first_asset_for_source(&wasm_bindgen_wasm_out)
+                .expect("The wasm source must exist before creating index.html");
+            format!("assets/{}", name.bundled_path())
+        } else {
+            format!(
+                "wasm/{}",
+                wasm_bindgen_wasm_out.file_name().unwrap().to_str().unwrap()
+            )
+        }
     }
 
     fn info_plist_contents(&self, platform: Platform) -> Result<String> {
@@ -3908,7 +3950,7 @@ impl BuildRequest {
         self.inject_resources(assets, wasm_path, &mut html)?;
 
         // Inject loading scripts if they are not already present
-        self.inject_loading_scripts(&mut html);
+        self.inject_loading_scripts(assets, &mut html);
 
         // Replace any special placeholders in the HTML with resolved values
         self.replace_template_placeholders(&mut html, wasm_path, js_path);
@@ -4000,7 +4042,7 @@ impl BuildRequest {
 
         // Manually inject the wasm file for preloading. WASM currently doesn't support preloading in the manganis asset system
         head_resources.push_str(&format!(
-            "<link rel=\"preload\" as=\"fetch\" type=\"application/wasm\" href=\"/{{base_path}}/assets/{wasm_path}\" crossorigin>"
+            "<link rel=\"preload\" as=\"fetch\" type=\"application/wasm\" href=\"/{{base_path}}/{wasm_path}\" crossorigin>"
         ));
         Self::replace_or_insert_before("{style_include}", "</head", &head_resources, html);
 
@@ -4008,38 +4050,21 @@ impl BuildRequest {
     }
 
     /// Inject loading scripts if they are not already present
-    fn inject_loading_scripts(&self, html: &mut String) {
-        // If it looks like we are already loading wasm or the current build opted out of injecting loading scripts, don't inject anything
-        if !self.inject_loading_scripts || html.contains("__wbindgen_start") {
+    fn inject_loading_scripts(&self, assets: &AssetManifest, html: &mut String) {
+        // If the current build opted out of injecting loading scripts, don't inject anything
+        if !self.inject_loading_scripts {
             return;
         }
 
         // If not, insert the script
         *html = html.replace(
             "</body",
-r#" <script>
-  // We can't use a module script here because we need to start the script immediately when streaming
-  import("/{base_path}/{js_path}").then(
-    ({ default: init, initSync, __wbg_get_imports }) => {
-      // export initSync in case a split module needs to initialize
-      window.__wasm_split_main_initSync = initSync;
-
-      // Actually perform the load
-      init({module_or_path: "/{base_path}/{wasm_path}"}).then((wasm) => {
-        // assign this module to be accessible globally
-        window.__dx_mainWasm = wasm;
-        window.__dx_mainInit = init;
-        window.__dx_mainInitSync = initSync;
-        window.__dx___wbg_get_imports = __wbg_get_imports;
-
-        if (wasm.__wbindgen_start == undefined) {
-            wasm.main();
-        }
-      });
-    }
-  );
-  </script>
+            &format!(
+                r#"<script type="module" async src="/{}/{}"></script>
             </body"#,
+                self.base_path_or_default(),
+                self.bundled_js_path(assets)
+            ),
         );
     }
 
