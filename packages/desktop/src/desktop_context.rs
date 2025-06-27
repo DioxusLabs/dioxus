@@ -6,7 +6,7 @@ use crate::{
     query::QueryEngine,
     shortcut::{HotKey, HotKeyState, ShortcutHandle, ShortcutRegistryError},
     webview::PendingWebview,
-    AssetRequest, Config, WryEventHandler,
+    AssetRequest, Config, WindowCloseBehaviour, WryEventHandler,
 };
 use dioxus_core::{prelude::Callback, VirtualDom};
 use std::{
@@ -179,6 +179,26 @@ impl DesktopService {
             .shared
             .proxy
             .send_event(UserWindowEvent::CloseWindow(id));
+    }
+
+    /// Change close behaviour of this window
+    pub fn change_close_behaviour(&self, behaviour: Option<WindowCloseBehaviour>) {
+        let _ = self
+            .shared
+            .proxy
+            .send_event(UserWindowEvent::CloseBehaviour(self.id(), behaviour));
+    }
+
+    /// Change close behaviour of a specific window, given its ID
+    pub fn change_window_close_behaviour(
+        &self,
+        id: WindowId,
+        behaviour: Option<WindowCloseBehaviour>,
+    ) {
+        let _ = self
+            .shared
+            .proxy
+            .send_event(UserWindowEvent::CloseBehaviour(id, behaviour));
     }
 
     /// change window to fullscreen
