@@ -336,7 +336,21 @@ pub(crate) fn extract_assets_from_file(path: impl AsRef<Path>) -> Result<AssetMa
         file.seek(std::io::SeekFrom::Start(offset))?;
         // Write the modified binary data back to the file
         file.write_all(new_data.as_ref())?;
+
+        // Assert the data is written correctly
+        let mut check_data = vec![0; BundledAsset::MEMORY_LAYOUT.size()];
+        file.seek(std::io::SeekFrom::Start(offset))?;
+        file.read_exact(&mut check_data)?;
+        let check_buffer = const_serialize::ConstReadBuffer::new(&check_data);
+        if let Some((_, check_asset)) =
+            const_serialize::deserialize_const!(BundledAsset, check_buffer)
+        {
+            tracing::debug!("Wrote asset at offset {offset}: {:?}", check_asset);
+        }
     }
+    // Ensure the file is flushed to disk
+    file.sync_all()
+        .context("Failed to sync file after writing assets")?;
 
     // If the file is a macos binary, we need to re-sign the modified binary
     if object_file.format() == object::BinaryFormat::MachO {
