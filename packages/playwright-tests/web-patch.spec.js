@@ -15,6 +15,7 @@ test("button click", async ({ page }) => {
   // Reset any changes made to the main.rs and style.css files.
   mainContent = mainContent.replace(/num \+= 2;/g, "num += 1;");
   mainContent = mainContent.replace("Click button! Count:", "Click me! Count:");
+  mainContent = mainContent.replace("asset!('/assets/alternative-style.css')", "asset!('/assets/style.css')");
   fs.writeFileSync(mainPath, mainContent);
   styleContent = styleContent.replace(
     "background-color: blue;",
