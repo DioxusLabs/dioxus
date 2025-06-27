@@ -315,6 +315,7 @@ pub(crate) fn extract_assets_from_file(path: impl AsRef<Path>) -> Result<AssetMa
 
         if let Some((_, bundled_asset)) = const_serialize::deserialize_const!(BundledAsset, buffer)
         {
+            tracing::debug!("Found asset at offset {offset}: {:?}", bundled_asset);
             assets.push(bundled_asset);
         } else {
             tracing::warn!("Found an asset at offset {offset} that could not be deserialized. This may be caused by a mismatch between your dioxus and dioxus-cli versions.");
@@ -328,6 +329,7 @@ pub(crate) fn extract_assets_from_file(path: impl AsRef<Path>) -> Result<AssetMa
 
     // Write back the assets to the binary file
     for (offset, asset) in offsets.into_iter().zip(&assets) {
+        tracing::debug!("Writing asset to offset {offset}: {:?}", asset);
         let new_data = ConstVec::new();
         let new_data = const_serialize::serialize_const(asset, new_data);
 
