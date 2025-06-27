@@ -30,6 +30,7 @@ dioxus-server = { workspace = true, optional = true }
 dioxus-ssr = { workspace = true, optional = true }
 dioxus-native = { workspace = true, optional = true }
 dioxus_server_macro = { workspace = true, optional = true }
+dioxus-use-js-macro = { workspace = true, optional = true }
 manganis = { workspace = true, features = ["dioxus"], optional = true }
 dioxus-logger = { workspace = true, optional = true }
 warnings = { workspace = true, optional = true }
@@ -58,7 +59,7 @@ default = [
 ]
 minimal = ["macro", "html", "signals", "hooks", "launch"]
 signals = ["dep:dioxus-signals"]
-macro = ["dep:dioxus-core-macro"]
+macro = ["dep:dioxus-core-macro", "dep:dioxus-use-js-macro"]
 html = ["dep:dioxus-html"]
 hooks = ["dep:dioxus-hooks"]
 devtools = ["dep:dioxus-devtools", "dioxus-web?/devtools", "dioxus-fullstack?/devtools"]

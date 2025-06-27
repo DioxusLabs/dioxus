@@ -150,6 +150,10 @@ pub mod prelude {
     #[allow(deprecated)]
     pub use dioxus_core_macro::{component, rsx, Props};
 
+    #[cfg(feature = "macro")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "macro")))]
+    pub use dioxus_use_js_macro::use_js;
+
     #[cfg(feature = "launch")]
     #[cfg_attr(docsrs, doc(cfg(feature = "launch")))]
     pub use dioxus_config_macro::*;

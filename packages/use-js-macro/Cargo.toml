@@ -1,0 +1,23 @@
+[package]
+name = "dioxus-use-js-macro"
+version = { workspace = true }
+authors = ["Dillon Henry McMahon"]
+edition = "2021"
+description = "javascript use bridge macro for Dioxus"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/DioxusLabs/dioxus/"
+homepage = "https://dioxuslabs.com"
+keywords = ["web", "desktop", "mobile", "gui", "wasm"]
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = "1.0"
+quote = "1.0"
+syn = { version = "2.0", features = ["full"] }
+swc_ecma_parser = { version = "=17.0.1", default-features = false }
+swc_ecma_ast = { version = "=13.0.0", default-features = false }
+swc_ecma_visit = { version = "=13.0.0", default-features = false }
+swc_common = { version = "=13.0.1", default-features = false }
+
