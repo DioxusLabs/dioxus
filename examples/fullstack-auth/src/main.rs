@@ -22,7 +22,7 @@ fn main() {
         use axum_session::SessionConfig;
         use axum_session::SessionStore;
         use axum_session_auth::AuthConfig;
-        use axum_session_auth::SessionSqlitePool;
+        use axum_session_sqlx::SessionSqlitePool;
         tokio::runtime::Runtime::new()
             .unwrap()
             .block_on(async move {
@@ -49,7 +49,7 @@ fn main() {
                         axum_session_auth::AuthSessionLayer::<
                             crate::auth::User,
                             i64,
-                            axum_session_auth::SessionSqlitePool,
+                            SessionSqlitePool,
                             sqlx::SqlitePool,
                         >::new(Some(pool))
                         .with_config(auth_config),
@@ -75,7 +75,8 @@ fn app() -> Element {
         div {
             button { onclick: move |_| {
                     async move {
-                        login().await.unwrap();
+                        login().await?;
+                        Ok(())
                     }
                 },
                 "Login Test User"
@@ -84,9 +85,9 @@ fn app() -> Element {
         div {
             button {
                 onclick: move |_| async move {
-                    if let Ok(data) = get_user_name().await {
-                        user_name.set(data);
-                    }
+                    let data = get_user_name().await?;
+                    user_name.set(data);
+                    Ok(())
                 },
                 "Get User Name"
             }
@@ -95,9 +96,9 @@ fn app() -> Element {
         div {
             button {
                 onclick: move |_| async move {
-                    if let Ok(data) = get_permissions().await {
-                        permissions.set(data);
-                    }
+                    let data = get_permissions().await?;
+                    permissions.set(data);
+                    Ok(())
                 },
                 "Get Permissions"
             }
@@ -107,20 +108,20 @@ fn app() -> Element {
 }
 
 #[server]
-pub async fn get_user_name() -> Result<String, ServerFnError> {
+pub async fn get_user_name() -> ServerFnResult<String> {
     let auth = auth::get_session().await?;
     Ok(auth.current_user.unwrap().username.to_string())
 }
 
 #[server]
-pub async fn login() -> Result<(), ServerFnError> {
+pub async fn login() -> ServerFnResult {
     let auth = auth::get_session().await?;
     auth.login_user(2);
     Ok(())
 }
 
 #[server]
-pub async fn get_permissions() -> Result<String, ServerFnError> {
+pub async fn get_permissions() -> ServerFnResult<String> {
     let method: axum::http::Method = extract().await?;
     let auth = auth::get_session().await?;
     let current_user = auth.current_user.clone().unwrap_or_default();

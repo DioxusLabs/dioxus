@@ -1,6 +1,6 @@
 use crate::{Result, TraceSrc};
-use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
+use std::sync::LazyLock;
 use std::{fs, path::PathBuf, sync::Arc};
 use tracing::{error, trace, warn};
 
@@ -26,14 +26,20 @@ pub(crate) struct CliSettings {
     pub(crate) wsl_file_poll_interval: Option<u16>,
     /// Use tooling from path rather than downloading them.
     pub(crate) no_downloads: Option<bool>,
+    /// Ignore updates for this version
+    pub(crate) ignore_version_update: Option<String>,
 }
 
 impl CliSettings {
     /// Load the settings from the local, global, or default config in that order
     pub(crate) fn load() -> Arc<Self> {
-        static SETTINGS: Lazy<Arc<CliSettings>> =
-            Lazy::new(|| Arc::new(CliSettings::from_global().unwrap_or_default()));
+        static SETTINGS: LazyLock<Arc<CliSettings>> =
+            LazyLock::new(|| Arc::new(CliSettings::global_or_default()));
         SETTINGS.clone()
+    }
+
+    pub fn global_or_default() -> Self {
+        CliSettings::from_global().unwrap_or_default()
     }
 
     /// Get the current settings structure from global.
@@ -120,11 +126,11 @@ impl CliSettings {
 
     /// Check if we should prefer to use the no-downloads feature
     pub(crate) fn prefer_no_downloads() -> bool {
-        if cfg!(feature = "no-downloads") {
+        if cfg!(feature = "no-downloads") && !cfg!(debug_assertions) {
             return true;
         }
 
-        if std::env::var("NO_DOWNLOADS").is_ok() {
+        if crate::devcfg::no_downloads() {
             return true;
         }
 

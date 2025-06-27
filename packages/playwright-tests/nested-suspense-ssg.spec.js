@@ -3,9 +3,9 @@ const { test, expect } = require("@playwright/test");
 
 test("nested suspense resolves", async ({ page }) => {
   // Wait for the dev server to reload
-  await page.goto("http://localhost:5050");
+  await page.goto("http://localhost:6060");
   // Then wait for the page to start loading
-  await page.goto("http://localhost:5050", { waitUntil: "commit" });
+  await page.goto("http://localhost:6060", { waitUntil: "commit" });
 
   // Expect the page to contain the suspense result from the server
   const mainMessageTitle = page.locator("#title-0");

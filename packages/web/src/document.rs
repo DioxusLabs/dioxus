@@ -1,8 +1,7 @@
 use dioxus_core::prelude::queue_effect;
 use dioxus_core::ScopeId;
 use dioxus_document::{
-    create_element_in_head, Document, Eval, EvalError, Evaluator, LinkProps, MetaProps,
-    ScriptProps, StyleProps,
+    Document, Eval, EvalError, Evaluator, LinkProps, MetaProps, ScriptProps, StyleProps,
 };
 use dioxus_history::History;
 use futures_util::FutureExt;
@@ -34,6 +33,17 @@ impl JSOwner {
 
 #[wasm_bindgen::prelude::wasm_bindgen(module = "/src/js/eval.js")]
 extern "C" {
+    pub type WeakDioxusChannel;
+
+    #[wasm_bindgen(method, js_name = "rustSend")]
+    pub fn rust_send(this: &WeakDioxusChannel, value: wasm_bindgen::JsValue);
+
+    #[wasm_bindgen(method, js_name = "rustRecv")]
+    pub async fn rust_recv(this: &WeakDioxusChannel) -> wasm_bindgen::JsValue;
+}
+
+#[wasm_bindgen::prelude::wasm_bindgen(module = "/src/js/eval.js")]
+extern "C" {
     pub type WebDioxusChannel;
 
     #[wasm_bindgen(constructor)]
@@ -54,13 +64,6 @@ extern "C" {
     #[wasm_bindgen(method)]
     pub fn weak(this: &WebDioxusChannel) -> WeakDioxusChannel;
 
-    pub type WeakDioxusChannel;
-
-    #[wasm_bindgen(method, js_name = "rustSend")]
-    pub fn rust_send(this: &WeakDioxusChannel, value: wasm_bindgen::JsValue);
-
-    #[wasm_bindgen(method, js_name = "rustRecv")]
-    pub async fn rust_recv(this: &WeakDioxusChannel) -> wasm_bindgen::JsValue;
 }
 
 /// Provides the Document through [`ScopeId::provide_context`].
@@ -93,49 +96,66 @@ impl Document for WebDocument {
 
     /// Create a new meta tag in the head
     fn create_meta(&self, props: MetaProps) {
-        let myself = self.clone();
         queue_effect(move || {
-            myself.eval(create_element_in_head("meta", &props.attributes(), None));
+            append_element_to_head("meta", &props.attributes(), None);
         });
     }
 
     /// Create a new script tag in the head
     fn create_script(&self, props: ScriptProps) {
-        let myself = self.clone();
         queue_effect(move || {
-            myself.eval(create_element_in_head(
+            append_element_to_head(
                 "script",
                 &props.attributes(),
-                props.script_contents().ok(),
-            ));
+                props.script_contents().ok().as_deref(),
+            );
         });
     }
 
     /// Create a new style tag in the head
     fn create_style(&self, props: StyleProps) {
-        let myself = self.clone();
         queue_effect(move || {
-            myself.eval(create_element_in_head(
+            append_element_to_head(
                 "style",
                 &props.attributes(),
-                props.style_contents().ok(),
-            ));
+                props.style_contents().ok().as_deref(),
+            );
         });
     }
 
     /// Create a new link tag in the head
     fn create_link(&self, props: LinkProps) {
-        let myself = self.clone();
         queue_effect(move || {
-            myself.eval(create_element_in_head("link", &props.attributes(), None));
+            append_element_to_head("link", &props.attributes(), None);
         });
     }
+}
+
+fn append_element_to_head(
+    local_name: &str,
+    attributes: &Vec<(&'static str, String)>,
+    text_content: Option<&str>,
+) {
+    let window = web_sys::window().expect("no global `window` exists");
+    let document = window.document().expect("should have a document on window");
+    let head = document.head().expect("document should have a head");
+
+    let element = document.create_element(local_name).unwrap();
+    for (name, value) in attributes {
+        element.set_attribute(name, value).unwrap();
+    }
+    if text_content.is_some() {
+        element.set_text_content(text_content);
+    }
+    head.append_child(&element).unwrap();
 }
 
 /// Required to avoid blocking the Rust WASM thread.
 const PROMISE_WRAPPER: &str = r#"
     return (async function(){
         {JS_CODE}
+
+        dioxus.close();
     })();
 "#;
 

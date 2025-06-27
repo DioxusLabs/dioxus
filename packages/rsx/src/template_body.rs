@@ -31,23 +31,23 @@
 //! This means you can't query the ID of any node "in a vacuum" - these are assigned once - but at
 //! least they're stable enough for the purposes of hotreloading
 //!
-//! ```rust, ignore
+//! ```text
 //! rsx! {
 //!     div {
 //!         class: "hello",
-//!         id: "node-{node_id}",    <--- {node_id} has the formatted segment id 0 in the literal pool
-//!         ..props,                 <--- spreads are not reloadable
+//!         id: "node-{node_id}",         <--- {node_id} has the formatted segment id 0 in the literal pool
+//!         ..props,                      <--- spreads are not reloadable
 //!
-//!         "Hello, world!           <--- not tracked but reloadable in the template since it's just a string
+//!         "Hello, world!"               <--- not tracked but reloadable in the template since it's just a string
 //!
-//!         for item in 0..10 {      <--- both 0 and 10 are technically reloadable, but we don't hot reload them today...
+//!         for item in 0..10 {           <--- both 0 and 10 are technically reloadable, but we don't hot reload them today...
 //!             div { "cool-{item}" }     <--- {item} has the formatted segment id 1 in the literal pool
 //!         }
 //!
 //!         Link {
-//!             to: "/home", <-- hotreloadable since its a component prop literal (with component literal id 0)
-//!             class: "link {is_ready}", <-- {is_ready} has the formatted segment id 2 in the literal pool and the property has the component literal id 1
-//!             "Home" <-- hotreloadable since its a component child (via template)
+//!             to: "/home",              <--- hotreloadable since its a component prop literal (with component literal id 0)
+//!             class: "link {is_ready}", <--- {is_ready} has the formatted segment id 2 in the literal pool and the property has the component literal id 1
+//!             "Home"                    <--- hotreloadable since its a component child (via template)
 //!         }
 //!     }
 //! }
@@ -188,6 +188,9 @@ impl ToTokens for TemplateBody {
                 // where the bindings are used
                 #expression_pool
 
+                // The key needs to be created before the dynamic nodes as it might depend on a borrowed value which gets moved into the dynamic nodes
+                #[cfg(not(debug_assertions))]
+                let __key = #key_tokens;
                 // These items are used in both the debug and release expansions of rsx. Pulling them out makes the expansion
                 // slightly smaller and easier to understand. Rust analyzer also doesn't autocomplete well when it sees an ident show up twice in the expansion
                 let __dynamic_nodes: [dioxus_core::DynamicNode; #dynamic_nodes_len] = [ #( #dynamic_nodes ),* ];
@@ -216,7 +219,7 @@ impl ToTokens for TemplateBody {
                     // NOTE: Allocating a temporary is important to make reads within rsx drop before the value is returned
                     #[allow(clippy::let_and_return)]
                     let __vnodes = dioxus_core::VNode::new(
-                        #key_tokens,
+                        __key,
                         ___TEMPLATE,
                         Box::new(__dynamic_nodes),
                         Box::new(__dynamic_attributes),
@@ -247,10 +250,12 @@ impl TemplateBody {
 
         // Assign paths to all nodes in the template
         body.assign_paths_inner(&nodes);
-        body.validate_key();
 
         // And then save the roots
         body.roots = nodes;
+
+        // Finally, validate the key
+        body.validate_key();
 
         body
     }

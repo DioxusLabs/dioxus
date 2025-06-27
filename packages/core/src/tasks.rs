@@ -380,6 +380,9 @@ impl TaskType {
 /// These messages control how the scheduler will process updates to the UI.
 #[derive(Debug)]
 pub(crate) enum SchedulerMsg {
+    /// All components have been marked as dirty, requiring a full render
+    AllDirty,
+
     /// Immediate updates from Components that mark them as dirty
     Immediate(ScopeId),
 

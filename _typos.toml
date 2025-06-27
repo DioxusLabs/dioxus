@@ -5,6 +5,11 @@ ratatui = "ratatui"
 lits = "lits"
 # https://developer.mozilla.org/en-US/docs/Web/API/HTMLMediaElement/seeked_event
 seeked = "seeked"
+# https://developer.apple.com/forums/thread/108953
+# udid = unique device identifier
+udid = "udid"
+# Part of Blitz's API
+unparented = "unparented"
 
 [files]
 extend-exclude = ["translations/*", "CHANGELOG.md", "*.js"]

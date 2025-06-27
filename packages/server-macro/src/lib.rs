@@ -6,12 +6,8 @@
 //! See the [server_fn_macro] crate for more information.
 
 use proc_macro::TokenStream;
-use quote::quote;
-use server_fn_macro::server_macro_impl;
-use syn::{
-    __private::ToTokens,
-    parse::{Parse, ParseStream},
-};
+use server_fn_macro::ServerFnCall;
+use syn::{__private::ToTokens, parse_quote};
 
 /// Declares that a function is a [server function](https://docs.rs/server_fn/).
 /// This means that its body will only run on the server, i.e., when the `ssr`
@@ -22,11 +18,11 @@ use syn::{
 /// # use dioxus::prelude::*;
 /// # #[derive(serde::Deserialize, serde::Serialize)]
 /// # pub struct BlogPost;
-/// # async fn load_posts(category: &str) -> Result<Vec<BlogPost>, ServerFnError> { unimplemented!() }
+/// # async fn load_posts(category: &str) -> ServerFnResult<Vec<BlogPost>> { unimplemented!() }
 /// #[server]
 /// pub async fn blog_posts(
 ///     category: String,
-/// ) -> Result<Vec<BlogPost>, ServerFnError> {
+/// ) -> ServerFnResult<Vec<BlogPost>> {
 ///     let posts = load_posts(&category).await?;
 ///     // maybe do some other work
 ///     Ok(posts)
@@ -35,23 +31,85 @@ use syn::{
 ///
 /// ## Named Arguments
 ///
-/// You can any combination of the following named arguments:
+/// You can use any combination of the following named arguments:
 /// - `name`: sets the identifier for the server function’s type, which is a struct created
-///    to hold the arguments (defaults to the function identifier in PascalCase)
-/// - `prefix`: a prefix at which the server function handler will be mounted (defaults to `/api`)
+///   to hold the arguments (defaults to the function identifier in PascalCase).
+///   Example: `name = MyServerFunction`.
+/// - `prefix`: a prefix at which the server function handler will be mounted (defaults to `/api`).
+///   Example: `prefix = "/my_api"`.
 /// - `endpoint`: specifies the exact path at which the server function handler will be mounted,
-///   relative to the prefix (defaults to the function name followed by unique hash)
-/// - `input`: the encoding for the arguments (defaults to `PostUrl`)
-/// - `output`: the encoding for the response (defaults to `Json`)
-/// - `client`: a custom `Client` implementation that will be used for this server fn
+///   relative to the prefix (defaults to the function name followed by unique hash).
+///   Example: `endpoint = "my_fn"`.
+/// - `input`: the encoding for the arguments (defaults to `PostUrl`).
+///     - The `input` argument specifies how the function arguments are encoded for transmission.
+///     - Acceptable values include:
+///       - `PostUrl`: A `POST` request with URL-encoded arguments, suitable for form-like submissions.
+///       - `Json`: A `POST` request where the arguments are encoded as JSON. This is a common choice for modern APIs.
+///       - `Cbor`: A `POST` request with CBOR-encoded arguments, useful for binary data transmission with compact encoding.
+///       - `GetUrl`: A `GET` request with URL-encoded arguments, suitable for simple queries or when data fits in the URL.
+///       - `GetCbor`: A `GET` request with CBOR-encoded arguments, useful for query-style APIs when the payload is binary.
+/// - `output`: the encoding for the response (defaults to `Json`).
+///     - The `output` argument specifies how the server should encode the response data.
+///     - Acceptable values include:
+///       - `Json`: A response encoded as JSON (default). This is ideal for most web applications.
+///       - `Cbor`: A response encoded in the CBOR format for efficient, binary-encoded data.
+/// - `client`: a custom `Client` implementation that will be used for this server function. This allows
+///   customization of the client-side behavior if needed.
 /// - `encoding`: (legacy, may be deprecated in future) specifies the encoding, which may be one
-///   of the following (not case sensitive)
+///   of the following (not case sensitive):
 ///     - `"Url"`: `POST` request with URL-encoded arguments and JSON response
 ///     - `"GetUrl"`: `GET` request with URL-encoded arguments and JSON response
 ///     - `"Cbor"`: `POST` request with CBOR-encoded arguments and response
 ///     - `"GetCbor"`: `GET` request with URL-encoded arguments and CBOR response
-/// - `req` and `res` specify the HTTP request and response types to be used on the server (these
-///   should usually only be necessary if you are integrating with a server other than Actix/Axum)
+/// - `req` and `res`: specify the HTTP request and response types to be used on the server. These
+///   are typically necessary if you are integrating with a custom server framework (other than Actix/Axum).
+///   Example: `req = SomeRequestType`, `res = SomeResponseType`.
+///
+/// ## Advanced Usage of `input` and `output` Fields
+///
+/// The `input` and `output` fields allow you to customize how arguments and responses are encoded and decoded.
+/// These fields impose specific trait bounds on the types you use. Here are detailed examples for different scenarios:
+///
+/// ### `output = StreamingJson`
+///
+/// Setting the `output` type to `StreamingJson` requires the return type to implement `From<JsonStream<T>>`,
+/// where `T` implements `serde::Serialize` and `serde::de::DeserializeOwned`.
+///
+/// ```rust,ignore
+/// #[server(output = StreamingJson)]
+/// pub async fn json_stream_fn() -> Result<JsonStream<String>, ServerFnError> {
+///     todo!()
+/// }
+/// ```
+///
+/// ### `output = StreamingText`
+///
+/// Setting the `output` type to `StreamingText` requires the return type to implement `From<TextStream>`.
+///
+/// ```rust,ignore
+/// #[server(output = StreamingText)]
+/// pub async fn text_stream_fn() -> Result<TextStream, ServerFnError> {
+///     todo!()
+/// }
+/// ```
+///
+/// ### `output = PostUrl`
+///
+/// Setting the `output` type to `PostUrl` requires the return type to implement `Serialize` and `Deserialize`.
+/// Note that this uses `serde_qs`, which imposes the following constraints:
+/// - The structure must be less than 5 levels deep.
+/// - The structure must not contain any `serde(flatten)` attributes.
+///
+/// ```rust,ignore
+/// #[server(output = PostUrl)]
+/// pub async fn form_fn() -> Result<TextStream, ServerFnError> {
+///     todo!()
+/// }
+/// ```
+///
+/// These examples illustrate how the `output` type impacts the bounds and expectations for your server function. Ensure your return types comply with these requirements.
+///
+///
 /// ```rust,ignore
 /// #[server(
 ///   name = SomeStructName,
@@ -60,7 +118,7 @@ use syn::{
 ///   input = Cbor,
 ///   output = Json
 /// )]
-/// pub async fn my_wacky_server_fn(input: Vec<String>) -> Result<usize, ServerFnError> {
+/// pub async fn my_wacky_server_fn(input: Vec<String>) -> ServerFnResult<usize> {
 ///   unimplemented!()
 /// }
 ///
@@ -97,7 +155,7 @@ use syn::{
 /// #[server]
 /// // The TraceLayer will log all requests to the console
 /// #[middleware(tower_http::timeout::TimeoutLayer::new(std::time::Duration::from_secs(5)))]
-/// pub async fn my_wacky_server_fn(input: Vec<String>) -> Result<usize, ServerFnError> {
+/// pub async fn my_wacky_server_fn(input: Vec<String>) -> ServerFnResult<usize> {
 ///     unimplemented!()
 /// }
 /// ```
@@ -113,7 +171,7 @@ use syn::{
 /// ```rust,ignore
 /// # use dioxus::prelude::*;
 /// #[server]
-/// pub async fn my_wacky_server_fn(input: Vec<String>) -> Result<String, ServerFnError> {
+/// pub async fn my_wacky_server_fn(input: Vec<String>) -> ServerFnResult<String> {
 ///     let headers: axum::http::header::HeaderMap = extract().await?;
 ///     Ok(format!("The server got a request with headers: {:?}", headers))
 /// }
@@ -140,113 +198,26 @@ use syn::{
 /// }
 ///
 /// #[server]
-/// pub async fn my_wacky_server_fn(input: Vec<String>) -> Result<String, ServerFnError> {
+/// pub async fn my_wacky_server_fn(input: Vec<String>) -> ServerFnResult<String> {
 ///     let FromContext(pool): FromContext<DatabasePool> = extract().await?;
 ///     Ok(format!("The server read {:?} from the shared context", pool))
 /// }
 /// ```
 #[proc_macro_attribute]
-pub fn server(args: proc_macro::TokenStream, s: TokenStream) -> TokenStream {
+pub fn server(args: proc_macro::TokenStream, body: TokenStream) -> TokenStream {
     // If there is no input codec, use json as the default
-    let args = default_json_codec(args);
-
-    match server_macro_impl(
-        args.into(),
-        s.into(),
-        Some(syn::parse_quote!(server_fn)),
-        "/api",
-        None,
-        None,
-    ) {
-        Err(e) => e.to_compile_error().into(),
-        Ok(s) => s.to_token_stream().into(),
-    }
-}
-
-fn default_json_codec(args: TokenStream) -> TokenStream {
-    // Try to parse the args
-    if let Err(err) = syn::parse::<ServerFnArgsMetadata>(args.clone()) {
-        return err.to_compile_error().into();
-    }
-    let Ok(args_metadata) = syn::parse::<ServerFnArgsMetadata>(args.clone()) else {
-        // If we fail to parse the args, forward them directly to the macro for diagnostics
-        return args;
+    let parsed = match ServerFnCall::parse("/api", args.into(), body.into()) {
+        Ok(parsed) => parsed,
+        Err(e) => return e.to_compile_error().into(),
     };
-    let mut new_tokens = args;
 
-    // Make sure the args always end with a comma
-    if args_metadata.requires_trailing_comma {
-        let default_comma: TokenStream = quote! {,}.into();
-        new_tokens.extend(default_comma);
-    }
-
-    // If the user didn't override the input codec, default to Json
-    if !args_metadata.manual_input {
-        let default_input: TokenStream = quote! {
-            input = server_fn::codec::Json,
-        }
-        .into();
-        new_tokens.extend(default_input);
-    }
-
-    // If the user didn't override the output codec, default to Json
-    if !args_metadata.manual_output {
-        let default_output: TokenStream = quote! {
-            output = server_fn::codec::Json,
-        }
-        .into();
-        new_tokens.extend(default_output);
-    }
-
-    new_tokens
-}
-
-struct ServerFnArgsMetadata {
-    manual_input: bool,
-    manual_output: bool,
-    requires_trailing_comma: bool,
-}
-
-impl Parse for ServerFnArgsMetadata {
-    fn parse(input: ParseStream) -> syn::Result<Self> {
-        let mut manual_input = false;
-        let mut manual_output = false;
-        let mut requires_trailing_comma = false;
-        let mut take_comma = |input: &ParseStream| {
-            let comma: Option<syn::Token![,]> = input.parse().ok();
-            requires_trailing_comma = comma.is_none();
-        };
-
-        while !input.is_empty() {
-            // Ignore legacy ident and string args
-            if input.peek(syn::Ident) && !input.peek2(syn::Token![=]) {
-                input.parse::<syn::Ident>()?;
-                take_comma(&input);
-                continue;
-            }
-            if input.peek(syn::LitStr) && !input.peek2(syn::Token![=]) {
-                input.parse::<syn::LitStr>()?;
-                take_comma(&input);
-                continue;
-            }
-
-            let ident: syn::Ident = input.parse()?;
-            let _: syn::Token![=] = input.parse()?;
-            let _: syn::Expr = input.parse()?;
-
-            if ident == "input" {
-                manual_input = true;
-            } else if ident == "output" {
-                manual_output = true;
-            }
-
-            take_comma(&input);
-        }
-
-        Ok(Self {
-            manual_input,
-            manual_output,
-            requires_trailing_comma,
-        })
-    }
+    parsed
+        .default_protocol(Some(
+            parse_quote!(server_fn::Http<server_fn::codec::Json, server_fn::codec::Json>),
+        ))
+        .default_input_encoding(Some(parse_quote!(server_fn::codec::Json)))
+        .default_output_encoding(Some(parse_quote!(server_fn::codec::Json)))
+        .default_server_fn_path(Some(parse_quote!(server_fn)))
+        .to_token_stream()
+        .into()
 }

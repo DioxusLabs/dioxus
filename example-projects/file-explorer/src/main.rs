@@ -36,7 +36,7 @@ fn app() -> Element {
             main {
                 for (dir_id, path) in files.read().path_names.iter().enumerate() {
                     {
-                        let path_end = path.components().last().map(|p|p.as_os_str()).unwrap_or(path.as_os_str()).to_string_lossy();
+                        let path_end = path.components().next_back().map(|p|p.as_os_str()).unwrap_or(path.as_os_str()).to_string_lossy();
                         let path = path.display();
                         rsx! {
                             div { class: "folder", key: "{path}",

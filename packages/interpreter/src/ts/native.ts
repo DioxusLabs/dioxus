@@ -106,10 +106,19 @@ export class NativeInterpreter extends JSChannel_ {
     return JSON.stringify({ method, params });
   }
 
-  scrollTo(id: NodeId, behavior: ScrollBehavior): boolean {
+  scrollTo(id: NodeId, options: ScrollIntoViewOptions): boolean {
     const node = this.nodes[id];
     if (node instanceof HTMLElement) {
-      node.scrollIntoView({ behavior });
+      node.scrollIntoView(options);
+      return true;
+    }
+    return false;
+  }
+
+  scroll(id: NodeId, x: number, y: number, behavior: ScrollBehavior): boolean {
+    const node = this.nodes[id];
+    if (node instanceof HTMLElement) {
+      node.scroll({ top: y, left: x, behavior });
       return true;
     }
     return false;
@@ -195,6 +204,9 @@ export class NativeInterpreter extends JSChannel_ {
   }
 
   handleWindowsDragOver(xPos, yPos) {
+    const displayScaleFactor = window.devicePixelRatio || 1;
+    xPos /= displayScaleFactor;
+    yPos /= displayScaleFactor;
     const element = document.elementFromPoint(xPos, yPos);
 
     if (element != window.dxDragLastElement) {

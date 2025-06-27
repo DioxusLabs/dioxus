@@ -11,6 +11,9 @@ use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 
 pub fn app() -> Element {
+    // Start streaming immediately
+    use_hook(commit_initial_chunk);
+
     rsx! {
         SuspenseBoundary {
             fallback: move |_| rsx! {},
@@ -80,7 +83,7 @@ pub struct Content {
 }
 
 #[server]
-async fn server_content(id: usize) -> Result<Content, ServerFnError> {
+async fn server_content(id: usize) -> ServerFnResult<Content> {
     let content_tree = [
         Content {
             title: "The robot says hello world".to_string(),

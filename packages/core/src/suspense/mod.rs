@@ -102,6 +102,7 @@ impl SuspenseContext {
                 id: Cell::new(ScopeId::ROOT),
                 suspended_nodes: Default::default(),
                 frozen: Default::default(),
+                after_suspense_resolved: Default::default(),
             }),
         }
     }
@@ -184,10 +185,26 @@ impl SuspenseContext {
             .find_map(|task| task.suspense_placeholder())
             .map(std::result::Result::Ok)
     }
+
+    /// Run a closure after suspense is resolved
+    pub fn after_suspense_resolved(&self, callback: impl FnOnce() + 'static) {
+        let mut closures = self.inner.after_suspense_resolved.borrow_mut();
+        closures.push(Box::new(callback));
+    }
+
+    /// Run all closures that were queued to run after suspense is resolved
+    pub(crate) fn run_resolved_closures(&self, runtime: &Runtime) {
+        runtime.while_not_rendering(|| {
+            self.inner
+                .after_suspense_resolved
+                .borrow_mut()
+                .drain(..)
+                .for_each(|f| f());
+        })
+    }
 }
 
 /// A boundary that will capture any errors from child components
-#[derive(Debug)]
 pub struct SuspenseBoundaryInner {
     suspended_tasks: RefCell<Vec<SuspendedFuture>>,
     id: Cell<ScopeId>,
@@ -195,6 +212,19 @@ pub struct SuspenseBoundaryInner {
     suspended_nodes: RefCell<Option<VNode>>,
     /// On the server, you can only resolve a suspense boundary once. This is used to track if the suspense boundary has been resolved and if it should be frozen
     frozen: Cell<bool>,
+    /// Closures queued to run after the suspense boundary is resolved
+    after_suspense_resolved: RefCell<Vec<Box<dyn FnOnce()>>>,
+}
+
+impl Debug for SuspenseBoundaryInner {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SuspenseBoundaryInner")
+            .field("suspended_tasks", &self.suspended_tasks)
+            .field("id", &self.id)
+            .field("suspended_nodes", &self.suspended_nodes)
+            .field("frozen", &self.frozen)
+            .finish()
+    }
 }
 
 /// Provides context methods to [`Result<T, RenderError>`] to show loading indicators for suspended results

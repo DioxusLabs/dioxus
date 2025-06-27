@@ -1,10 +1,10 @@
-use const_serialize::SerializeConst;
-
 use crate::AssetOptions;
+use const_serialize::SerializeConst;
 
 /// Options for a css asset
 #[derive(
     Debug,
+    Eq,
     PartialEq,
     PartialOrd,
     Clone,

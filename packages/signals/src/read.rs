@@ -263,7 +263,7 @@ pub trait Readable {
     }
 }
 
-/// An extension trait for Readable<Vec<T>> that provides some convenience methods.
+/// An extension trait for `Readable<Vec<T>>` that provides some convenience methods.
 pub trait ReadableVecExt<T: 'static>: Readable<Target = Vec<T>> {
     /// Returns the length of the inner vector.
     #[track_caller]
@@ -331,7 +331,7 @@ where
 {
 }
 
-/// An extension trait for Readable<Option<T>> that provides some convenience methods.
+/// An extension trait for `Readable<Option<T>>` that provides some convenience methods.
 pub trait ReadableOptionExt<T: 'static>: Readable<Target = Option<T>> {
     /// Unwraps the inner value and clones it.
     #[track_caller]
@@ -356,7 +356,7 @@ where
 {
 }
 
-/// An extension trait for Readable<Option<T>> that provides some convenience methods.
+/// An extension trait for `Readable<Option<T>>` that provides some convenience methods.
 pub trait ReadableResultExt<T: 'static, E: 'static>: Readable<Target = Result<T, E>> {
     /// Unwraps the inner value and clones it.
     #[track_caller]

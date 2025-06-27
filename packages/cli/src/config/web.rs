@@ -62,6 +62,16 @@ pub(crate) struct WasmOptConfig {
     /// Enable memory packing
     #[serde(default = "false_bool")]
     pub(crate) memory_packing: bool,
+
+    /// Extra arguments to pass to wasm-opt
+    ///
+    /// For example, to enable simd, you can set this to `["--enable-simd"]`.
+    ///
+    /// You can also disable features by prefixing them with `--disable-`, e.g. `["--disable-bulk-memory"]`.
+    ///
+    /// Currently only --enable and --disable flags are supported.
+    #[serde(default)]
+    pub(crate) extra_features: Vec<String>,
 }
 
 /// The wasm-opt level to use for release web builds [default: Z]
@@ -96,22 +106,6 @@ pub(crate) struct WebAppConfig {
     #[serde(default = "default_title")]
     pub(crate) title: String,
     pub(crate) base_path: Option<String>,
-}
-
-impl WebAppConfig {
-    /// Get the normalized base path for the application with `/` trimmed from both ends. If the base path is not set, this will return `.`.
-    pub(crate) fn base_path(&self) -> &str {
-        let trimmed_path = self
-            .base_path
-            .as_deref()
-            .unwrap_or_default()
-            .trim_matches('/');
-        if trimmed_path.is_empty() {
-            "."
-        } else {
-            trimmed_path
-        }
-    }
 }
 
 impl Default for WebAppConfig {
