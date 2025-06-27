@@ -62,7 +62,7 @@ fn manganis_symbols<'a, 'b, R: ReadRef<'a>>(
 }
 
 fn looks_like_manganis_symbol(name: &str) -> bool {
-    name.starts_with("__MANGANIS__")
+    name.contains("__MANGANIS__")
 }
 
 /// Find the offsets of any manganis symbols in the given file.
