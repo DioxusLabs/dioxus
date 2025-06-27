@@ -597,7 +597,7 @@ impl AppBuilder {
             }
 
             // If this is a new asset, insert it into the artifacts so we can track it when hot reloading
-            original_artifacts.assets.insert_asset(bundled.clone());
+            original_artifacts.assets.insert_asset(*bundled);
 
             let from = dunce::canonicalize(PathBuf::from(bundled.absolute_source_path()))?;
 

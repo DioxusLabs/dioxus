@@ -185,7 +185,7 @@ fn eval_walrus_global_expr(module: &walrus::Module, expr: &walrus::ConstExpr) ->
         walrus::ConstExpr::Global(id) => {
             let global = module.globals.get(*id);
             if let walrus::GlobalKind::Local(pointer) = &global.kind {
-                eval_walrus_global_expr(module, &pointer)
+                eval_walrus_global_expr(module, pointer)
             } else {
                 None
             }
