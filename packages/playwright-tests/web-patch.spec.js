@@ -1,0 +1,64 @@
+// @ts-check
+const { test, expect } = require("@playwright/test");
+
+test("button click", async ({ page }) => {
+  const fs = require('fs');
+  const mainPath = 'web-hot-patch-temp/src/main.rs';
+  const mainContent = fs.readFileSync(mainPath, 'utf8');
+  const stylePath = 'web-hot-patch-temp/assets/style.css';
+  const styleContent = fs.readFileSync(stylePath, 'utf8');
+
+  await page.goto("http://localhost:9980");
+
+  // ** First test make sure the initial fat build is working **
+  // Expect the page to contain the counter text.
+  const main = page.locator("#main");
+  await expect(main).toContainText("Click me! Count: 0");
+  
+  // Click the increment button.
+  let button = page.locator("button#increment-button");
+  await button.click();
+
+  // Expect the page to contain the updated counter text.
+  await expect(main).toContainText("Click me! Count: 1");
+
+  // Make sure the css is applied correctly.
+  await expect(main).toHaveCSS("background-color", "rgb(255, 0, 0)");
+
+  // ** Then make sure the hot patch is working **
+  // Then change the file to increment by 2.
+  const updatedContent = mainContent.replace(/num \+= 1;/g, 'num += 2;');
+  // Change the click me text to reflect the new increment.
+  const updatedContentWithText = updatedContent.replace("Click me! Count:", 'Click button! Count:');
+  fs.writeFileSync(mainPath, updatedContentWithText);
+
+  // Wait for the page to update and show the new text.
+  await expect(main).toContainText("Click button! Count: 1");
+
+  // Now click the button again.
+  await button.click();
+
+  // Expect the count to update by 2.
+  await expect(main).toContainText("Click button! Count: 3");
+
+  // Next change just the css file to change the background color to blue.
+  const updatedStyleContent = styleContent.replace("background-color: red;", "background-color: blue;");
+  fs.writeFileSync(stylePath, updatedStyleContent);
+
+  // Wait for the page to update the background color.
+  await expect(main).toHaveCSS("background-color", "rgb(0, 0, 255)");
+
+  // ** Then add a new asset to the page **
+  // Switch from style to alternative-style
+  const updatedContentWithAlternativeStyle = updatedContentWithText.replace(
+    'asset!("/assets/style.css")',
+    'asset!("/assets/alternative-style.css")'
+  );
+  fs.writeFileSync(mainPath, updatedContentWithAlternativeStyle);
+  
+  // Assert the page has the new alternative style applied.
+  const body = page.locator("body");
+  await expect(body).toHaveCSS("background-color", "rgb(100, 100, 100)", {
+    timeout: 1000 * 60 * 5 // 5 minutes
+  });
+});
