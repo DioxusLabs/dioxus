@@ -1,6 +1,7 @@
 use crate::{
     styles::{GLOW_STYLE, LINK_STYLE},
-    AppBuilder, BuildId, BuildMode, BuilderUpdate, Platform, Result, ServeArgs, TraceController,
+    AppBuilder, BuildId, BuildMode, BuilderUpdate, Error, Platform, Result, ServeArgs,
+    TraceController,
 };
 
 mod ansi_buffer;
@@ -11,6 +12,7 @@ mod runner;
 mod server;
 mod update;
 
+use dioxus_dx_wire_format::BuildStage;
 pub(crate) use output::*;
 pub(crate) use runner::*;
 pub(crate) use server::*;
@@ -38,6 +40,7 @@ pub(crate) use update::*;
 ///   to a dynamic one on the fly.
 pub(crate) async fn serve_all(args: ServeArgs, tracer: &mut TraceController) -> Result<()> {
     // Load the args into a plan, resolving all tooling, build dirs, arguments, decoding the multi-target, etc
+    let exit_on_error = args.exit_on_error;
     let mut builder = AppServer::start(args).await?;
     let mut devserver = WebServer::start(&builder)?;
     let mut screen = Output::start(builder.interactive).await?;
@@ -138,12 +141,33 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &mut TraceController) -> 
 
                 // And then open the app if it's ready
                 match update {
+                    BuilderUpdate::Progress {
+                        stage: BuildStage::Failed,
+                    } => {
+                        if exit_on_error {
+                            return Err(Error::Cargo(format!(
+                                "Build failed for platform: {platform}"
+                            )));
+                        }
+                    }
+                    BuilderUpdate::Progress {
+                        stage: BuildStage::Aborted,
+                    } => {
+                        if exit_on_error {
+                            return Err(Error::Cargo(format!(
+                                "Build aborted for platform: {platform}"
+                            )));
+                        }
+                    }
                     BuilderUpdate::Progress { .. } => {}
                     BuilderUpdate::CompilerMessage { message } => {
                         screen.push_cargo_log(message);
                     }
                     BuilderUpdate::BuildFailed { err } => {
                         tracing::error!("Build failed: {}", err);
+                        if exit_on_error {
+                            return Err(err);
+                        }
                     }
                     BuilderUpdate::BuildReady { bundle } => match bundle.mode {
                         BuildMode::Thin { ref cache, .. } => {
@@ -191,12 +215,20 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &mut TraceController) -> 
                             );
                         } else {
                             tracing::error!("Application [{platform}] exited with error: {status}");
+                            if exit_on_error {
+                                return Err(Error::Runtime(format!(
+                                    "Application [{platform}] exited with error: {status}"
+                                )));
+                            }
                         }
                     }
                     BuilderUpdate::ProcessWaitFailed { err } => {
                         tracing::warn!(
                             "Failed to wait for process - maybe it's hung or being debugged?: {err}"
                         );
+                        if exit_on_error {
+                            return Err(err.into());
+                        }
                     }
                 }
             }

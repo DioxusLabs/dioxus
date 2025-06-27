@@ -1420,7 +1420,7 @@ impl BuildRequest {
         }
 
         // Now extract the assets from the fat binary
-        self.collect_assets(&self.patch_exe(artifacts.time_start), ctx)?;
+        artifacts.assets = self.collect_assets(&self.patch_exe(artifacts.time_start), ctx)?;
 
         // If this is a web build, reset the index.html file in case it was modified by SSG
         self.write_index_html(&artifacts.assets)

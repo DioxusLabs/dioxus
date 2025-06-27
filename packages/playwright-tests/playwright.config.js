@@ -29,7 +29,7 @@ module.exports = defineConfig({
     // baseURL: 'http://127.0.0.1:3000',
 
     /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
-    trace: "on-first-retry",
+    trace: "retain-on-failure",
     // Increase the timeout for navigations to give dx time to build the project
     navigationTimeout: 50 * 60 * 1000,
   },
@@ -198,6 +198,14 @@ module.exports = defineConfig({
       command:
         'cargo run --package dioxus-cli --release -- run --verbose --force-sequential --addr "127.0.0.1" --port 8123',
       port: 8123,
+      timeout: 50 * 60 * 1000,
+      reuseExistingServer: !process.env.CI,
+      stdout: "pipe",
+    },
+    {
+      command:
+        'rm -rf ./web-hot-patch-temp && cp -r ./web-hot-patch ./web-hot-patch-temp && cd web-hot-patch-temp && cargo run --manifest-path ../../cli/Cargo.toml --release -- serve --verbose --force-sequential --platform web --addr "127.0.0.1" --port 9980 --hot-patch --exit-on-error',
+      port: 9980,
       timeout: 50 * 60 * 1000,
       reuseExistingServer: !process.env.CI,
       stdout: "pipe",
