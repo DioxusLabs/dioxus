@@ -68,5 +68,7 @@ test("button click", async ({ page }) => {
 
   // Assert the page has the new alternative style applied.
   const body = page.locator("body");
+  // Log the page content to debug if needed.
+  console.log(await page.content());
   await expect(body).toHaveCSS("background-color", "rgb(100, 100, 100)", hotPatchTimeout);
 });
