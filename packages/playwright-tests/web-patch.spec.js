@@ -8,9 +8,19 @@ const hotPatchTimeout = {
 test("button click", async ({ page }) => {
   const fs = require("fs");
   const mainPath = "web-hot-patch-temp/src/main.rs";
-  const mainContent = fs.readFileSync(mainPath, "utf8");
+  var mainContent = fs.readFileSync(mainPath, "utf8");
   const stylePath = "web-hot-patch-temp/assets/style.css";
-  const styleContent = fs.readFileSync(stylePath, "utf8");
+  var styleContent = fs.readFileSync(stylePath, "utf8");
+
+  // Reset any changes made to the main.rs and style.css files.
+  mainContent = mainContent.replace(/num \+= 2;/g, "num += 1;");
+  mainContent = mainContent.replace("Click button! Count:", "Click me! Count:");
+  fs.writeFileSync(mainPath, mainContent);
+  styleContent = styleContent.replace(
+    "background-color: blue;",
+    "background-color: red;"
+  );
+  fs.writeFileSync(stylePath, styleContent);
 
   await page.goto("http://localhost:9980");
 
@@ -56,7 +66,11 @@ test("button click", async ({ page }) => {
   fs.writeFileSync(stylePath, updatedStyleContent);
 
   // Wait for the page to update the background color.
-  await expect(main).toHaveCSS("background-color", "rgb(0, 0, 255)", hotPatchTimeout);
+  await expect(main).toHaveCSS(
+    "background-color",
+    "rgb(0, 0, 255)",
+    hotPatchTimeout
+  );
 
   // ** Then add a new asset to the page **
   // Switch from style to alternative-style
@@ -70,5 +84,9 @@ test("button click", async ({ page }) => {
   const body = page.locator("body");
   // Log the page content to debug if needed.
   console.log(await page.content());
-  await expect(body).toHaveCSS("background-color", "rgb(100, 100, 100)", hotPatchTimeout);
+  await expect(body).toHaveCSS(
+    "background-color",
+    "rgb(100, 100, 100)",
+    hotPatchTimeout
+  );
 });
