@@ -5,7 +5,6 @@
 pub use dioxus_desktop::*;
 use dioxus_lib::prelude::*;
 use std::any::Any;
-use std::sync::Mutex;
 
 pub mod launch_bindings {
 
@@ -33,46 +32,8 @@ pub fn launch_cfg(
     contexts: Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync>>,
     platform_config: Vec<Box<dyn Any>>,
 ) {
-    #[cfg(target_os = "android")]
-    {
-        *APP_OBJECTS.lock().unwrap() = Some(BoundLaunchObjects {
-            root,
-            contexts,
-            platform_config,
-        });
-    }
-
-    #[cfg(not(target_os = "android"))]
-    {
-        dioxus_desktop::launch::launch(root, contexts, platform_config);
-    }
+    dioxus_desktop::launch::launch(root, contexts, platform_config);
 }
-
-/// We need to store the root function and contexts in a static so that when the tao bindings call
-/// "start_app", that the original function arguments are still around.
-///
-/// If you look closely, you'll notice that we impl Send for this struct. This would normally be
-/// unsound. However, we know that the thread that created these objects ("main()" - see JNI_OnLoad)
-/// is finished once `start_app` is called. This is similar to how an `Rc<T>` is technically safe
-/// to move between threads if you can prove that no other thread is using the `Rc<T>` at the same time.
-/// Crates like <https://crates.io/crates/sendable> exist that build on this idea but with runtime
-/// validation that the current thread is the one that created the object.
-///
-/// Since `main()` completes, the only reader of this data will be `start_app`, so it's okay to
-/// impl this as Send/Sync.
-///
-/// Todo(jon): the visibility of functions in this module is too public. Make sure to hide them before
-/// releasing 0.7.
-struct BoundLaunchObjects {
-    root: fn() -> Element,
-    contexts: Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync>>,
-    platform_config: Vec<Box<dyn Any>>,
-}
-
-unsafe impl Send for BoundLaunchObjects {}
-unsafe impl Sync for BoundLaunchObjects {}
-
-static APP_OBJECTS: Mutex<Option<BoundLaunchObjects>> = Mutex::new(None);
 
 fn stop_unwind<F: FnOnce() -> T, T>(f: F) -> T {
     match std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)) {
@@ -106,20 +67,6 @@ pub fn root() {
         let main_fn: extern "C" fn() = std::mem::transmute(main_fn_ptr);
         main_fn();
     });
-
-    let app = APP_OBJECTS
-        .lock()
-        .expect("APP_FN_PTR lock failed")
-        .take()
-        .expect("Android to have set the app trampoline");
-
-    let BoundLaunchObjects {
-        root,
-        contexts,
-        platform_config,
-    } = app;
-
-    dioxus_desktop::launch::launch(root, contexts, platform_config);
 }
 
 /// Expose the `Java_dev_dioxus_main_WryActivity_create` function to the JNI layer.
