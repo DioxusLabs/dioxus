@@ -74,8 +74,39 @@ unsafe impl Sync for BoundLaunchObjects {}
 
 static APP_OBJECTS: Mutex<Option<BoundLaunchObjects>> = Mutex::new(None);
 
+fn stop_unwind<F: FnOnce() -> T, T>(f: F) -> T {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)) {
+        Ok(t) => t,
+        Err(err) => {
+            eprintln!("attempt to unwind out of `rust` with err: {:?}", err);
+            std::process::abort()
+        }
+    }
+}
+
 #[doc(hidden)]
 pub fn root() {
+    stop_unwind(|| unsafe {
+        let mut main_fn_ptr = libc::dlsym(libc::RTLD_DEFAULT, b"main\0".as_ptr() as _);
+
+        if main_fn_ptr.is_null() {
+            main_fn_ptr = libc::dlsym(libc::RTLD_DEFAULT, b"_main\0".as_ptr() as _);
+        }
+
+        if main_fn_ptr.is_null() {
+            panic!("Failed to find main symbol");
+        }
+
+        // Set the env vars that rust code might expect, passed off to us by the android app
+        // Doing this before main emulates the behavior of a regular executable
+        if cfg!(target_os = "android") && cfg!(debug_assertions) {
+            load_env_file_from_session_cache();
+        }
+
+        let main_fn: extern "C" fn() = std::mem::transmute(main_fn_ptr);
+        main_fn();
+    });
+
     let app = APP_OBJECTS
         .lock()
         .expect("APP_FN_PTR lock failed")
@@ -108,44 +139,10 @@ pub extern "C" fn start_app() {
     wry::android_binding!(dev_dioxus, main, wry);
 }
 
-/// Call our `main` function to initialize the rust runtime and set the launch binding trampoline
-#[cfg(target_os = "android")]
-#[no_mangle]
-#[inline(never)]
-pub extern "C" fn JNI_OnLoad(
-    _vm: *mut libc::c_void,
-    _reserved: *mut libc::c_void,
-) -> jni::sys::jint {
-    // we're going to find the `main` symbol using dlsym directly and call it
-    unsafe {
-        let mut main_fn_ptr = libc::dlsym(libc::RTLD_DEFAULT, b"main\0".as_ptr() as _);
-
-        if main_fn_ptr.is_null() {
-            main_fn_ptr = libc::dlsym(libc::RTLD_DEFAULT, b"_main\0".as_ptr() as _);
-        }
-
-        if main_fn_ptr.is_null() {
-            panic!("Failed to find main symbol");
-        }
-
-        // Set the env vars that rust code might expect, passed off to us by the android app
-        // Doing this before main emulates the behavior of a regular executable
-        if cfg!(target_os = "android") && cfg!(debug_assertions) {
-            load_env_file_from_session_cache();
-        }
-
-        let main_fn: extern "C" fn() = std::mem::transmute(main_fn_ptr);
-        main_fn();
-    };
-
-    jni::sys::JNI_VERSION_1_6
-}
-
 /// Load the env file from the session cache if we're in debug mode and on android
 ///
 /// This is a slightly hacky way of being able to use std::env::var code in android apps without
 /// going through their custom java-based system.
-#[cfg(target_os = "android")]
 fn load_env_file_from_session_cache() {
     let env_file = dioxus_cli_config::android_session_cache_dir().join(".env");
     if let Some(env_file) = std::fs::read_to_string(&env_file).ok() {
