@@ -145,7 +145,7 @@ pub extern "C" fn start_app() {
 /// going through their custom java-based system.
 fn load_env_file_from_session_cache() {
     let env_file = dioxus_cli_config::android_session_cache_dir().join(".env");
-    if let Some(env_file) = std::fs::read_to_string(&env_file).ok() {
+    if let Ok(env_file) = std::fs::read_to_string(&env_file) {
         for line in env_file.lines() {
             if let Some((key, value)) = line.trim().split_once('=') {
                 std::env::set_var(key, value);
