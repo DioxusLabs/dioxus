@@ -127,13 +127,15 @@ impl BundledAsset {
 /// ```
 #[derive(PartialEq, Clone, Copy)]
 pub struct Asset {
-    /// A pointer to the bundled asset. This will be resolved after the linker has run and
-    /// put into the lazy asset
+    /// A function that returns a pointer to the bundled asset. This will be resolved after the linker has run and
+    /// put into the lazy asset. We use a function instead of using the pointer directly to force the compiler to
+    /// read the static __REFERENCE_TO_LINK_SECTION at runtime which will be offset by the hot reloading engine instead
+    /// of at compile time which can't be offset
     ///
     /// WARNING: Don't read this directly. Reads can get optimized away at compile time before
     /// the data for this is filled in by the CLI after the binary is built. Instead, use
     /// [`std::ptr::read_volatile`] to read the data.
-    bundled: &'static [u8],
+    bundled: fn() -> &'static [u8],
 }
 
 impl Debug for Asset {
@@ -149,14 +151,15 @@ impl Asset {
     #[doc(hidden)]
     /// This should only be called from the macro
     /// Create a new asset from the bundled form of the asset and the link section
-    pub const fn new(bundled: &'static [u8]) -> Self {
+    pub const fn new(bundled: fn() -> &'static [u8]) -> Self {
         Self { bundled }
     }
 
     /// Get the bundled asset
     pub fn bundled(&self) -> BundledAsset {
-        let len = self.bundled.len();
-        let ptr = self.bundled as *const [u8] as *const u8;
+        let bundled = (self.bundled)();
+        let len = bundled.len();
+        let ptr = bundled as *const [u8] as *const u8;
         if ptr.is_null() {
             panic!("Tried to use an asset that was not bundled. Make sure you are compiling dx as the linker");
         }
@@ -164,7 +167,8 @@ impl Asset {
         for byte in 0..len {
             // SAFETY: We checked that the pointer was not null above. The pointer is valid for reads and
             // since we are reading a u8 there are no alignment requirements
-            bytes = bytes.push(unsafe { std::ptr::read_volatile(ptr.add(byte)) });
+            let byte = unsafe { std::ptr::read_volatile(ptr.add(byte)) };
+            bytes = bytes.push(byte);
         }
         let read = bytes.read();
         deserialize_const!(BundledAsset, read).expect("Failed to deserialize asset. Make sure you built with the matching version of the Dioxus CLI").1
