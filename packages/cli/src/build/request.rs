@@ -317,8 +317,8 @@
 
 use crate::{
     AndroidTools, BuildContext, ClientRenderer, DioxusConfig, Error, LinkAction, LinkerFlavor,
-    Platform, Result, RustcArgs, TargetArgs, TraceSrc, WasmBindgen, WasmOptConfig, Workspace,
-    DX_RUSTC_WRAPPER_ENV_VAR,
+    Platform, PlatformArg, Result, RustcArgs, TargetArgs, TraceSrc, WasmBindgen, WasmOptConfig,
+    Workspace, DX_RUSTC_WRAPPER_ENV_VAR,
 };
 use anyhow::Context;
 use cargo_metadata::diagnostic::Diagnostic;
@@ -552,6 +552,13 @@ impl BuildRequest {
             .iter()
             .any(|dep| dep.name == "dioxus");
 
+        // Infer the renderer from platform argument if the platform argument is "native" or "desktop"
+        let renderer = args.renderer.or(match args.platform {
+            Some(PlatformArg::Desktop) => Some(ClientRenderer::Webview),
+            Some(PlatformArg::Native) => Some(ClientRenderer::Native),
+            _ => None,
+        });
+
         let mut features = args.features.clone();
         let mut no_default_features = args.no_default_features;
 
@@ -569,7 +576,7 @@ impl BuildRequest {
             },
             None if !using_dioxus_explicitly => Platform::TARGET_PLATFORM.unwrap(),
             None => match enabled_platforms.len() {
-                0 => match args.renderer {
+                0 => match renderer {
                     Some(_) => Platform::TARGET_PLATFORM.unwrap(),
                     None => Platform::TARGET_PLATFORM.unwrap(),
                     // TODO: should we always have a default
@@ -590,7 +597,7 @@ impl BuildRequest {
             features.push(Self::feature_for_platform_and_renderer(
                 main_package,
                 platform,
-                args.renderer,
+                renderer,
             ));
         }
 

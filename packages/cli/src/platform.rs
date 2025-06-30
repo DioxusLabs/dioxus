@@ -189,9 +189,7 @@ impl From<PlatformArg> for Platform {
             PlatformArg::Liveview => Platform::Liveview,
 
             // The alias arguments
-            PlatformArg::Desktop | PlatformArg::Native => {
-                Platform::TARGET_PLATFORM.unwrap()
-            }
+            PlatformArg::Desktop | PlatformArg::Native => Platform::TARGET_PLATFORM.unwrap(),
         }
     }
 }
