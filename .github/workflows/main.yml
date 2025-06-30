@@ -204,7 +204,7 @@ jobs:
       matrix:
         platform:
           - { toolchain: 1.86.0 }
-          - { toolchain: nightly }
+          - { toolchain: beta }
     steps:
       # Do our best to cache the toolchain and node install steps
       - uses: actions/checkout@v4
