@@ -42,9 +42,21 @@ impl AssetOptions {
     /// This method will only effect if the hash is added to the bundled asset path. If you are using the asset
     /// macro, the asset struct still needs to be used in your rust code to ensure the asset is included in the binary.
     ///
-    /// If you are using an asset outside of rust code where you know what the asset hash will be, you can disable
-    /// the hash suffix and keep the asset in the binary even when it is unused in the rust code with the
-    /// `external_asset!` macro.
+    /// <div class="warning">
+    ///
+    /// If you are using an asset outside of rust code where you know what the asset hash will be, you must use the
+    /// `#[used]` attribute to ensure the asset is included in the binary even if it is not referenced in the code.
+    ///
+    /// ```rust
+    /// #[used]
+    /// static ASSET: manganis::Asset = manganis::asset!(
+    ///     "path/to/asset.png",
+    ///     AssetVariant::Unknown.into_asset_options()
+    ///         .with_hash_suffix(false)
+    /// );
+    /// ```
+    ///
+    /// </div>
     pub const fn with_hash_suffix(mut self, add_hash: bool) -> Self {
         self.add_hash = add_hash;
         self

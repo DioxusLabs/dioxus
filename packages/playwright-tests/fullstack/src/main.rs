@@ -164,8 +164,10 @@ fn DocumentElements() -> Element {
 /// Make sure assets in the assets folder are served correctly and hashed assets are cached forever
 #[component]
 fn Assets() -> Element {
-    const _: Asset = external_asset!("/assets/image.png");
-    const _: Asset = external_asset!("/assets/nested");
+    #[used]
+    static _ASSET: Asset = asset!("/assets/image.png");
+    #[used]
+    static _OTHER_ASSET: Asset = asset!("/assets/nested");
     rsx! {
         img {
             src: asset!("/assets/image.png"),
