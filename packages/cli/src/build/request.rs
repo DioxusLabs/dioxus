@@ -791,19 +791,12 @@ impl BuildRequest {
                 ctx.status_start_bundle();
 
                 self.write_executable(ctx, &artifacts.exe, &mut artifacts.assets)
-                    .await
-                    .context("Failed to write main executable")?;
-                self.write_frameworks(ctx, &artifacts.direct_rustc)
-                    .await
-                    .context("Failed to write frameworks")?;
-                self.write_assets(ctx, &artifacts.assets)
-                    .await
-                    .context("Failed to write assets")?;
+                    .await?;
+                self.write_frameworks(ctx, &artifacts.direct_rustc).await?;
+                self.write_assets(ctx, &artifacts.assets).await?;
                 self.write_metadata().await?;
                 self.optimize(ctx).await?;
-                self.assemble(ctx)
-                    .await
-                    .context("Failed to assemble app bundle")?;
+                self.assemble(ctx).await?;
 
                 tracing::debug!("Bundle created at {}", self.root_dir().display());
             }
@@ -1420,7 +1413,7 @@ impl BuildRequest {
         }
 
         // Now extract the assets from the fat binary
-        self.collect_assets(&self.patch_exe(artifacts.time_start), ctx)?;
+        artifacts.assets = self.collect_assets(&self.patch_exe(artifacts.time_start), ctx)?;
 
         // If this is a web build, reset the index.html file in case it was modified by SSG
         self.write_index_html(&artifacts.assets)

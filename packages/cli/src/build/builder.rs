@@ -587,13 +587,18 @@ impl AppBuilder {
         let original = self.build.main_exe();
         let new = self.build.patch_exe(res.time_start);
         let triple = self.build.triple.clone();
-        let original_artifacts = self.artifacts.as_ref().unwrap();
         let asset_dir = self.build.asset_dir();
 
         for bundled in res.assets.assets() {
+            let original_artifacts = self.artifacts.as_mut().unwrap();
+
             if original_artifacts.assets.contains(bundled) {
                 continue;
             }
+
+            // If this is a new asset, insert it into the artifacts so we can track it when hot reloading
+            original_artifacts.assets.insert_asset(*bundled);
+
             let from = dunce::canonicalize(PathBuf::from(bundled.absolute_source_path()))?;
 
             let to = asset_dir.join(bundled.bundled_path());
