@@ -82,23 +82,21 @@ test("button click", async ({ page }) => {
   // expect the attribute src to start with /assets/toasts-
   await expect(headerImage).toHaveAttribute("src", /\/assets\/toasts-/);
 
-  // TODO: WASM hot patching currently fails when changing exports. Once this is fixed we can hot reload
-  // new assets into the page.
-  // // ** Then add a new asset to the page **
-  // // Switch from style to alternative-style
-  // const updatedContentWithAlternativeStyle = updatedContentWithText.replace(
-  //   'asset!("/assets/style.css")',
-  //   'asset!("/assets/alternative-style.css")'
-  // );
-  // fs.writeFileSync(mainPath, updatedContentWithAlternativeStyle);
+  // ** Then add a new asset to the page **
+  // Switch from style to alternative-style
+  const updatedContentWithAlternativeStyle = updatedContentWithText.replace(
+    'asset!("/assets/style.css")',
+    'asset!("/assets/alternative-style.css")'
+  );
+  fs.writeFileSync(mainPath, updatedContentWithAlternativeStyle);
 
-  // // Assert the page has the new alternative style applied.
-  // const body = page.locator("body");
-  // // Log the page content to debug if needed.
-  // console.log(await page.content());
-  // await expect(body).toHaveCSS(
-  //   "background-color",
-  //   "rgb(100, 100, 100)",
-  //   hotPatchTimeout
-  // );
+  // Assert the page has the new alternative style applied.
+  const body = page.locator("body");
+  // Log the page content to debug if needed.
+  console.log(await page.content());
+  await expect(body).toHaveCSS(
+    "background-color",
+    "rgb(100, 100, 100)",
+    hotPatchTimeout
+  );
 });
