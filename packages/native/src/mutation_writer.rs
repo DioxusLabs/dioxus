@@ -149,8 +149,7 @@ impl WriteMutations for MutationWriter<'_> {
         // the stack and then "load_child" reads from the top of the stack.
         let new_node_ids = self.state.m_stack_nodes(m);
         let anchor_node_id = self.load_child(path);
-        self.docm
-            .replace_placeholder_with_nodes(anchor_node_id, &new_node_ids);
+        self.docm.replace_node_with(anchor_node_id, &new_node_ids);
     }
 
     fn remove_node(&mut self, id: ElementId) {

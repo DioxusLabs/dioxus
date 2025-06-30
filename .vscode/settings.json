@@ -9,6 +9,9 @@
   "[javascript]": {
     "editor.formatOnSave": false
   },
+  "[html]": {
+    "editor.formatOnSave": false
+  },
   "dioxus.formatOnSave": "disabled",
   // "rust-analyzer.check.workspace": true,
   // "rust-analyzer.check.workspace": false,
