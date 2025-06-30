@@ -203,7 +203,7 @@ jobs:
     strategy:
       matrix:
         platform:
-          - { toolchain: stable  }
+          - { toolchain: 1.86.0 }
           - { toolchain: nightly }
     steps:
       # Do our best to cache the toolchain and node install steps
@@ -212,7 +212,7 @@ jobs:
         with:
           node-version: 16
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@1.86.0
+        uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.platform.toolchain }}
           targets: x86_64-unknown-linux-gnu,wasm32-unknown-unknown
