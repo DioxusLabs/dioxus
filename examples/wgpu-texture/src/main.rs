@@ -102,7 +102,7 @@ fn SpinningCube(color: Memo<Color>) -> Element {
         div { id:"canvas-container",
             canvas {
                 id: "demo-canvas",
-                "data": paint_source_id
+                "src": paint_source_id
             }
         }
     )
