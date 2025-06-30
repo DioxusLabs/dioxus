@@ -3361,7 +3361,7 @@ impl BuildRequest {
 
         if self.should_bundle_to_asset() {
             // Make sure to register the main wasm file with the asset system
-            assets.register_asset(&post_bindgen_wasm, AssetOptions::Unknown)?;
+            assets.register_asset(&post_bindgen_wasm, AssetOptions::new(AssetVariant::Unknown))?;
         }
 
         // Now that the wasm is registered as an asset, we can write the js glue shim
