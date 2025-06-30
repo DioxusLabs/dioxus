@@ -1,6 +1,7 @@
 use dioxus::prelude::*;
 
 const CSS: Asset = asset!("/assets/style.css");
+const IMAGE: Asset = asset!("/assets/toasts.png");
 
 fn app() -> Element {
     let mut num = use_signal(|| 0);
@@ -9,6 +10,10 @@ fn app() -> Element {
         document::Link {
             href: CSS,
             rel: "stylesheet",
+        }
+        img {
+            id: "toasts",
+            src: IMAGE,
         }
         button {
             id: "increment-button",

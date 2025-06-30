@@ -40,6 +40,11 @@ test("button click", async ({ page }) => {
   // Make sure the css is applied correctly.
   await expect(main).toHaveCSS("background-color", "rgb(255, 0, 0)");
 
+  // Make sure the image is loaded.
+  const headerImage = page.locator("#toasts");
+  // expect the attribute src to start with /assets/toasts-
+  await expect(headerImage).toHaveAttribute("src", /\/assets\/toasts-/);
+
   // ** Then make sure the hot patch is working **
   // Then change the file to increment by 2.
   const updatedContent = mainContent.replace(/num \+= 1;/g, "num += 2;");
@@ -72,6 +77,10 @@ test("button click", async ({ page }) => {
     "rgb(0, 0, 255)",
     hotPatchTimeout
   );
+
+  // Make sure the image is still loaded.
+  // expect the attribute src to start with /assets/toasts-
+  await expect(headerImage).toHaveAttribute("src", /\/assets\/toasts-/);
 
   // TODO: WASM hot patching currently fails when changing exports. Once this is fixed we can hot reload
   // new assets into the page.
