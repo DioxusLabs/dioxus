@@ -27,9 +27,9 @@ fn get_available_port(address: IpAddr) -> Option<u16> {
 
 const KEY_SIZE: usize = 256;
 
-fn encode_key_string(key: [u8; KEY_SIZE]) -> String {
+fn encode_key_string(key: &[u8; KEY_SIZE]) -> String {
     // base64 encode the key to a string
-    base64::Engine::encode(&base64::engine::general_purpose::URL_SAFE, &key)
+    base64::Engine::encode(&base64::engine::general_purpose::URL_SAFE, key)
 }
 
 #[test]
@@ -38,7 +38,7 @@ fn test_key_encoding_length() {
     for _ in 0..100 {
         let mut key = [0u8; KEY_SIZE];
         rand.fill_bytes(&mut key);
-        let encoded = encode_key_string(key);
+        let encoded = encode_key_string(&key);
         // The encoded key length should be the same regardless of the value of the key
         assert_eq!(encoded.len(), 344);
     }
@@ -71,7 +71,7 @@ impl EditWebsocket {
         let mut secure_rng = assert_crypto_random(rand::rngs::StdRng::from_entropy());
         let mut expected_key = [0u8; KEY_SIZE];
         secure_rng.fill_bytes(&mut expected_key);
-        let hex_encoded_key = encode_key_string(expected_key);
+        let hex_encoded_key = encode_key_string(&expected_key);
 
         let server = TcpListener::bind((ip, port)).unwrap();
         spawn({
@@ -318,7 +318,7 @@ impl WebviewWebsocketLocation {
             webview_id,
             key,
         } = self;
-        let key_hex = encode_key_string(*key);
+        let key_hex = encode_key_string(key);
         format!("ws://127.0.0.1:{port}/{webview_id}/{key_hex}")
     }
 }
