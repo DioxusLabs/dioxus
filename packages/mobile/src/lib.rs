@@ -3,6 +3,9 @@
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 
 pub use dioxus_desktop::*;
+// intentionally shadow the launch module as it does not work on mobile.
+pub mod launch {}
+
 use dioxus_lib::prelude::*;
 use std::any::Any;
 
