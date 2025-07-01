@@ -10,7 +10,7 @@ use std::sync::Arc;
 use std::{collections::HashSet, path::Path};
 use std::{path::PathBuf, time::Duration};
 use target_lexicon::Triple;
-use tokio::process::Command;
+use tokio::{process::Command, task::JoinHandle};
 
 pub struct Workspace {
     pub(crate) krates: Krates,
@@ -35,7 +35,7 @@ impl Workspace {
             return Ok(ws.clone());
         }
 
-        let krates_future = tokio::task::spawn_blocking(|| {
+        let krates_future: JoinHandle<Result<Krates>> = tokio::task::spawn_blocking(|| {
             let manifest_options = crate::logging::VERBOSITY.get().unwrap();
             let lock_options = LockOptions {
                 frozen: manifest_options.frozen,
@@ -48,9 +48,7 @@ impl Workspace {
 
             let mut builder = krates::Builder::new();
             builder.workspace(true);
-            let res = builder
-                .build(cmd, |_| {})
-                .context("Failed to run cargo metadata");
+            let res = builder.build(cmd, |_| {})?;
 
             if !lock_options.offline {
                 if let Ok(res) = std::env::var("SIMULATE_SLOW_NETWORK") {
@@ -58,7 +56,7 @@ impl Workspace {
                 }
             }
 
-            res
+            Ok(res)
         });
 
         let spin_future = async move {

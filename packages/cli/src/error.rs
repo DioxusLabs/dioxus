@@ -48,6 +48,9 @@ pub(crate) enum Error {
     #[error("Network connectivity error: {0}")]
     Network(String),
 
+    #[error("Failed to run cargo metadata: {0}")]
+    Krates(#[from] krates::Error),
+
     #[error(transparent)]
     Other(#[from] anyhow::Error),
 }
