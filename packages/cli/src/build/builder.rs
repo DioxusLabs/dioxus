@@ -513,7 +513,22 @@ impl AppBuilder {
                 }
             }
 
-            Platform::Ios => self.open_ios_sim(envs).await?,
+            Platform::Ios => {
+                tracing::info!(
+                    "Opening iOS app on {}",
+                    if self.build.device {
+                        "device"
+                    } else {
+                        "simulator"
+                    }
+                );
+                if self.build.device {
+                    self.codesign_ios().await?;
+                    self.open_ios_device().await?
+                } else {
+                    self.open_ios_sim(envs).await?
+                }
+            }
 
             Platform::Android => {
                 self.open_android_sim(false, devserver_ip, envs).await?;
@@ -858,10 +873,10 @@ impl AppBuilder {
         use serde_json::Value;
         let app_path = self.build.root_dir();
 
-        install_app(&app_path).await?;
-
         // 2. Determine which device the app was installed to
         let device_uuid = get_device_uuid().await?;
+
+        // install_app(&app_path, &device_uuid).await?;
 
         // 3. Get the installation URL of the app
         let installation_url = get_installation_url(&device_uuid, &app_path).await?;
@@ -872,9 +887,14 @@ impl AppBuilder {
         // 5. Pick up the paused app and resume it
         resume_app(&device_uuid).await?;
 
-        async fn install_app(app_path: &PathBuf) -> Result<()> {
+        async fn install_app(app_path: &PathBuf, device_uuid: &str) -> Result<()> {
+            // xcrun devicectl device install app --device "${DEVICE_UUID}" "${APP_PATH}" --json-output target/xcrun.json
+
             let output = Command::new("xcrun")
-                .args(["simctl", "install", "booted"])
+                .args(["devicectl", "install", "app"])
+                .arg("--device")
+                .arg(device_uuid)
+                .arg("--path")
                 .arg(app_path)
                 .output()
                 .await?;
@@ -887,20 +907,22 @@ impl AppBuilder {
         }
 
         async fn get_device_uuid() -> Result<String> {
+            let tmpfile = tempfile::NamedTempFile::new()
+                .context("Failed to create temporary file for device list")?;
+
             let output = Command::new("xcrun")
                 .args([
-                    "devicectl",
-                    "list",
-                    "devices",
-                    "--json-output",
-                    "target/deviceid.json",
+                    "devicectl".to_string(),
+                    "list".to_string(),
+                    "devices".to_string(),
+                    "--json-output".to_string(),
+                    tmpfile.path().to_str().unwrap().to_string(),
                 ])
                 .output()
                 .await?;
 
-            let json: Value =
-                serde_json::from_str(&std::fs::read_to_string("target/deviceid.json")?)
-                    .context("Failed to parse xcrun output")?;
+            let json: Value = serde_json::from_str(&std::fs::read_to_string(tmpfile.path())?)
+                .context("Failed to parse xcrun output")?;
             let device_uuid = json["result"]["devices"][0]["identifier"]
                 .as_str()
                 .ok_or("Failed to extract device UUID")?
@@ -994,10 +1016,9 @@ impl AppBuilder {
             Ok(())
         }
 
-        unimplemented!("dioxus-cli doesn't support ios devices yet.")
+        Ok(())
     }
 
-    #[allow(unused)]
     async fn codesign_ios(&self) -> Result<()> {
         const CODESIGN_ERROR: &str = r#"This is likely because you haven't
 - Created a provisioning profile before
@@ -1011,7 +1032,7 @@ https://developer.apple.com/documentation/xcode/sharing-your-teams-signing-certi
 
         let profiles_folder = dirs::home_dir()
             .context("Your machine has no home-dir")?
-            .join("Library/MobileDevice/Provisioning Profiles");
+            .join("Library/Developer/Xcode/UserData/Provisioning Profiles");
 
         if !profiles_folder.exists() || profiles_folder.read_dir()?.next().is_none() {
             tracing::error!(
