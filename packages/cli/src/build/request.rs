@@ -327,7 +327,7 @@ use dioxus_cli_config::{APP_TITLE_ENV, ASSET_ROOT_ENV};
 use dioxus_cli_opt::{process_file_to, AssetManifest};
 use itertools::Itertools;
 use krates::{cm::TargetKind, NodeId};
-use manganis::{AssetOptions, JsAssetOptions};
+use manganis::AssetOptions;
 use manganis_core::AssetVariant;
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
@@ -3284,7 +3284,7 @@ impl BuildRequest {
                 writeln!(
                     glue, "export const __wasm_split_load_chunk_{idx} = makeLoad(\"/assets/{url}\", [], fusedImports);",
                     url = assets
-                        .register_asset(&path, AssetVariant::Unknown.into_asset_options())?.bundled_path(),
+                        .register_asset(&path, AssetOptions::builder().into_asset_options())?.bundled_path(),
                 )?;
             }
 
@@ -3312,7 +3312,7 @@ impl BuildRequest {
 
                     // Again, register this wasm with the asset system
                     url = assets
-                        .register_asset(&path, AssetVariant::Unknown.into_asset_options())?
+                        .register_asset(&path, AssetOptions::builder().into_asset_options())?
                         .bundled_path(),
 
                     // This time, make sure to write the dependencies of this chunk
@@ -3361,7 +3361,10 @@ impl BuildRequest {
 
         if self.should_bundle_to_asset() {
             // Make sure to register the main wasm file with the asset system
-            assets.register_asset(&post_bindgen_wasm, AssetOptions::new(AssetVariant::Unknown))?;
+            assets.register_asset(
+                &post_bindgen_wasm,
+                AssetOptions::builder().into_asset_options(),
+            )?;
         }
 
         // Now that the wasm is registered as an asset, we can write the js glue shim
@@ -3371,7 +3374,7 @@ impl BuildRequest {
             // Register the main.js with the asset system so it bundles in the snippets and optimizes
             assets.register_asset(
                 &self.wasm_bindgen_js_output_file(),
-                JsAssetOptions::new()
+                AssetOptions::js()
                     .with_minify(true)
                     .with_preload(true)
                     .into_asset_options(),

@@ -138,14 +138,14 @@ pub(crate) fn resolve_asset_options(source: &Path, options: &AssetVariant) -> Re
 
 fn resolve_unknown_asset_options(source: &Path) -> ResolvedAssetType {
     match source.extension().map(|e| e.to_string_lossy()).as_deref() {
-        Some("scss" | "sass") => ResolvedAssetType::Scss(CssAssetOptions::new()),
-        Some("css") => ResolvedAssetType::Css(CssAssetOptions::new()),
-        Some("js") => ResolvedAssetType::Js(JsAssetOptions::new()),
+        Some("scss" | "sass") => ResolvedAssetType::Scss(CssAssetOptions::default()),
+        Some("css") => ResolvedAssetType::Css(CssAssetOptions::default()),
+        Some("js") => ResolvedAssetType::Js(JsAssetOptions::default()),
         Some("json") => ResolvedAssetType::Json,
         Some("jpg" | "jpeg" | "png" | "webp" | "avif") => {
-            ResolvedAssetType::Image(ImageAssetOptions::new())
+            ResolvedAssetType::Image(ImageAssetOptions::default())
         }
-        _ if source.is_dir() => ResolvedAssetType::Folder(FolderAssetOptions::new()),
+        _ if source.is_dir() => ResolvedAssetType::Folder(FolderAssetOptions::default()),
         _ => ResolvedAssetType::File,
     }
 }

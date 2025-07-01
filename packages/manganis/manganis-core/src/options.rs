@@ -20,14 +20,94 @@ use crate::{
 #[non_exhaustive]
 pub struct AssetOptions {
     /// If a hash should be added to the asset path
-    add_hash: bool,
+    pub(crate) add_hash: bool,
     /// The variant of the asset
-    variant: AssetVariant,
+    pub(crate) variant: AssetVariant,
 }
 
 impl AssetOptions {
-    /// Create a new asset options with the given variant
-    pub const fn new(variant: AssetVariant) -> Self {
+    /// Create a new asset options builder
+    pub const fn builder() -> AssetOptionsBuilder<()> {
+        AssetOptionsBuilder::new()
+    }
+
+    /// Get the variant of the asset
+    pub const fn variant(&self) -> &AssetVariant {
+        &self.variant
+    }
+
+    /// Check if a hash should be added to the asset path
+    pub const fn hash_suffix(&self) -> bool {
+        self.add_hash
+    }
+
+    /// Try to get the extension for the asset. If the asset options don't define an extension, this will return None
+    pub const fn extension(&self) -> Option<&'static str> {
+        match self.variant {
+            AssetVariant::Image(image) => image.extension(),
+            AssetVariant::Css(_) => Some("css"),
+            AssetVariant::CssModule(_) => Some("css"),
+            AssetVariant::Js(_) => Some("js"),
+            AssetVariant::Folder(_) => None,
+            AssetVariant::Unknown => None,
+        }
+    }
+
+    /// Convert the options into options for a generic asset
+    pub const fn into_asset_options(self) -> AssetOptions {
+        self
+    }
+}
+
+/// A builder for [`AssetOptions`]
+///
+/// ```rust
+/// # use manganis::AssetOptionsBuilder;
+/// static ASSET: Asset = asset!(
+///     "image.png",
+///     AssetOptionsBuilder::new()
+///     .with_hash_suffix(false)
+/// );
+/// ```
+pub struct AssetOptionsBuilder<T> {
+    /// If a hash should be added to the asset path
+    pub(crate) add_hash: bool,
+    /// The variant of the asset
+    pub(crate) variant: T,
+}
+
+impl Default for AssetOptionsBuilder<()> {
+    fn default() -> Self {
+        Self::default()
+    }
+}
+
+impl AssetOptionsBuilder<()> {
+    /// Create a new asset options builder with an unknown variant
+    pub const fn new() -> Self {
+        Self {
+            add_hash: true,
+            variant: (),
+        }
+    }
+
+    /// Create a default asset options builder
+    pub const fn default() -> Self {
+        Self::new()
+    }
+
+    /// Convert the builder into asset options with the given variant
+    pub const fn into_asset_options(self) -> AssetOptions {
+        AssetOptions {
+            add_hash: self.add_hash,
+            variant: AssetVariant::Unknown,
+        }
+    }
+}
+
+impl<T> AssetOptionsBuilder<T> {
+    /// Create a new asset options builder with the given variant
+    pub(crate) const fn variant(variant: T) -> Self {
         Self {
             add_hash: true,
             variant,
@@ -61,33 +141,6 @@ impl AssetOptions {
         self.add_hash = add_hash;
         self
     }
-
-    /// Get the variant of the asset
-    pub const fn variant(&self) -> &AssetVariant {
-        &self.variant
-    }
-
-    /// Check if a hash should be added to the asset path
-    pub const fn hash_suffix(&self) -> bool {
-        self.add_hash
-    }
-
-    /// Try to get the extension for the asset. If the asset options don't define an extension, this will return None
-    pub const fn extension(&self) -> Option<&'static str> {
-        match self.variant {
-            AssetVariant::Image(image) => image.extension(),
-            AssetVariant::Css(_) => Some("css"),
-            AssetVariant::CssModule(_) => Some("css"),
-            AssetVariant::Js(_) => Some("js"),
-            AssetVariant::Folder(_) => None,
-            AssetVariant::Unknown => None,
-        }
-    }
-
-    /// Convert the options into options for a generic asset
-    pub const fn into_asset_options(self) -> AssetOptions {
-        self
-    }
 }
 
 /// Settings for a specific type of asset
@@ -118,11 +171,4 @@ pub enum AssetVariant {
     Js(JsAssetOptions),
     /// An unknown asset
     Unknown,
-}
-
-impl AssetVariant {
-    /// Convert the options into options for a generic asset
-    pub const fn into_asset_options(self) -> AssetOptions {
-        AssetOptions::new(self)
-    }
 }

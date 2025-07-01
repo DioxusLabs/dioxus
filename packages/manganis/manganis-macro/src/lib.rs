@@ -46,17 +46,17 @@ use linker::generate_link_section;
 /// Resize the image at compile time to make the assets file size smaller:
 /// ```rust
 /// # use manganis::{asset, Asset, ImageAssetOptions, ImageSize};
-/// const _: Asset = asset!("/assets/image.png", ImageAssetOptions::new().with_size(ImageSize::Manual { width: 52, height: 52 }));
+/// const _: Asset = asset!("/assets/image.png", AssetOptions::image().with_size(ImageSize::Manual { width: 52, height: 52 }));
 /// ```
 /// Or convert the image at compile time to a web friendly format:
 /// ```rust
 /// # use manganis::{asset, Asset, ImageAssetOptions, ImageSize, ImageFormat};
-/// const _: Asset = asset!("/assets/image.png", ImageAssetOptions::new().with_format(ImageFormat::Avif));
+/// const _: Asset = asset!("/assets/image.png", AssetOptions::image().with_format(ImageFormat::Avif));
 /// ```
 /// You can mark images as preloaded to make them load faster in your app
 /// ```rust
 /// # use manganis::{asset, Asset, ImageAssetOptions};
-/// const _: Asset = asset!("/assets/image.png", ImageAssetOptions::new().with_preload(true));
+/// const _: Asset = asset!("/assets/image.png", AssetOptions::image().with_preload(true));
 /// ```
 #[proc_macro]
 pub fn asset(input: TokenStream) -> TokenStream {
@@ -78,7 +78,7 @@ pub fn asset(input: TokenStream) -> TokenStream {
 /// - An optional `CssModuleAssetOptions` struct to configure the processing of your CSS module.
 ///
 /// ```rust
-/// css_module!(StylesIdent = "/my.module.css", CssModuleAssetOptions::new());
+/// css_module!(StylesIdent = "/my.module.css", AssetOptions::css_module());
 /// ```
 ///
 /// The styles struct can be made public by appending `pub` before the identifier.
@@ -131,7 +131,7 @@ pub fn asset(input: TokenStream) -> TokenStream {
 /// use manganis::CssModuleAssetOptions;
 ///
 /// css_module!(Styles = "/mycss.module.css",
-///     CssModuleAssetOptions::new()
+///     AssetOptions::css_module()
 ///         .with_minify(true)
 ///         .with_preload(false),
 /// );

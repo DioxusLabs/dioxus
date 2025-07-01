@@ -3,24 +3,19 @@
 use dioxus::prelude::*;
 
 const MONACO_FOLDER: Asset = asset!("/monaco-editor/package/min/vs");
-const SOME_IMAGE: Asset = asset!("/images/toasts.png", ImageAssetOptions::new().with_avif());
+const SOME_IMAGE: Asset = asset!("/images/toasts.png", AssetOptions::image().with_avif());
 const SOME_IMAGE_WITH_THE_SAME_URL: Asset =
-    asset!("/images/toasts.png", ImageAssetOptions::new().with_jpg());
+    asset!("/images/toasts.png", AssetOptions::image().with_jpg());
 #[used]
 static SOME_IMAGE_WITHOUT_HASH: Asset = asset!(
     "/images/toasts.png",
-    ImageAssetOptions::new()
-        .with_avif()
-        .into_asset_options()
-        .with_hash_suffix(false)
+    AssetOptions::image().with_avif().with_hash_suffix(false)
 );
 // This asset is unused, but it should still be bundled because it is an external asset
 #[used]
 static _ASSET: Asset = asset!(
     "/images/toasts.png",
-    ImageAssetOptions::new()
-        .into_asset_options()
-        .with_hash_suffix(false)
+    AssetOptions::builder().with_hash_suffix(false)
 );
 
 fn main() {

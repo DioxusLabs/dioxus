@@ -35,7 +35,7 @@ impl Parse for AssetParser {
     // ```
     // asset!(
     //     "/assets/myfile.png",
-    //      ImageAssetOptions::new()
+    //      AssetOptions::image()
     //        .format(ImageFormat::Jpg)
     //        .size(512, 512)
     // )
@@ -97,7 +97,7 @@ impl ToTokens for AssetParser {
         };
 
         let options = if self.options.is_empty() {
-            quote! { manganis::AssetVariant::Unknown }
+            quote! { manganis::AssetOptions::builder() }
         } else {
             self.options.clone()
         };
