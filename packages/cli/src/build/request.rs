@@ -330,6 +330,7 @@ use krates::{cm::TargetKind, NodeId};
 use manganis::{AssetOptions, JsAssetOptions};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
 use std::{
     collections::{BTreeMap, HashSet},
     io::Write,
@@ -2049,7 +2050,11 @@ impl BuildRequest {
                 cmd.env_remove("RUSTC_WORKSPACE_WRAPPER");
                 cmd.env_remove("RUSTC_WRAPPER");
                 cmd.env_remove(DX_RUSTC_WRAPPER_ENV_VAR);
-                cmd.envs(self.cargo_build_env_vars(ctx)?);
+                cmd.envs(
+                    self.cargo_build_env_vars(ctx)?
+                        .iter()
+                        .map(|(k, v)| (k.as_ref(), v)),
+                );
                 cmd.arg(format!("-Clinker={}", Workspace::path_to_dx()?.display()));
 
                 if self.platform == Platform::Web {
@@ -2083,7 +2088,11 @@ impl BuildRequest {
                     .arg("--message-format")
                     .arg("json-diagnostic-rendered-ansi")
                     .args(self.cargo_build_arguments(ctx))
-                    .envs(self.cargo_build_env_vars(ctx)?);
+                    .envs(
+                        self.cargo_build_env_vars(ctx)?
+                            .iter()
+                            .map(|(k, v)| (k.as_ref(), v)),
+                    );
 
                 if ctx.mode == BuildMode::Fat {
                     cmd.env(
@@ -2287,7 +2296,7 @@ impl BuildRequest {
         cargo_args
     }
 
-    fn cargo_build_env_vars(&self, ctx: &BuildContext) -> Result<Vec<(&'static str, String)>> {
+    fn cargo_build_env_vars(&self, ctx: &BuildContext) -> Result<Vec<(Cow<'static, str>, String)>> {
         let mut env_vars = vec![];
 
         // Make sure to set all the crazy android flags. Cross-compiling is hard, man.
@@ -2299,9 +2308,9 @@ impl BuildRequest {
         // todo: should we even be doing this? might be better being a build.rs or something else.
         if self.release {
             if let Some(base_path) = self.base_path() {
-                env_vars.push((ASSET_ROOT_ENV, base_path.to_string()));
+                env_vars.push((ASSET_ROOT_ENV.into(), base_path.to_string()));
             }
-            env_vars.push((APP_TITLE_ENV, self.config.web.app.title.clone()));
+            env_vars.push((APP_TITLE_ENV.into(), self.config.web.app.title.clone()));
         }
 
         // Assemble the rustflags by peering into the `.cargo/config.toml` file
@@ -2318,7 +2327,7 @@ impl BuildRequest {
         // Set the rust flags for the build if they're not empty.
         if !rust_flags.flags.is_empty() {
             env_vars.push((
-                "RUSTFLAGS",
+                "RUSTFLAGS".into(),
                 rust_flags
                     .encode_space_separated()
                     .context("Failed to encode RUSTFLAGS")?,
@@ -2341,8 +2350,8 @@ impl BuildRequest {
         Ok(env_vars)
     }
 
-    fn android_env_vars(&self) -> Result<Vec<(&'static str, String)>> {
-        let mut env_vars = vec![];
+    fn android_env_vars(&self) -> Result<Vec<(Cow<'static, str>, String)>> {
+        let mut env_vars: Vec<(Cow<'static, str>, String)> = vec![];
 
         let tools = self.workspace.android_tools()?;
         let linker = tools.android_cc(&self.triple);
@@ -2362,23 +2371,37 @@ impl BuildRequest {
             java_home: {java_home:?}
             "#
         );
-        env_vars.push(("ANDROID_NATIVE_API_LEVEL", min_sdk_version.to_string()));
-        env_vars.push(("TARGET_AR", ar_path.display().to_string()));
-        env_vars.push(("TARGET_CC", target_cc.display().to_string()));
-        env_vars.push(("TARGET_CXX", target_cxx.display().to_string()));
-        env_vars.push(("ANDROID_NDK_ROOT", ndk.display().to_string()));
+        env_vars.push((
+            "ANDROID_NATIVE_API_LEVEL".into(),
+            min_sdk_version.to_string(),
+        ));
+        env_vars.push(("TARGET_AR".into(), ar_path.display().to_string()));
+        env_vars.push(("TARGET_CC".into(), target_cc.display().to_string()));
+        env_vars.push(("TARGET_CXX".into(), target_cxx.display().to_string()));
+        env_vars.push((
+            format!(
+                "CARGO_TARGET_{}_LINKER",
+                self.triple
+                    .to_string()
+                    .to_ascii_uppercase()
+                    .replace("-", "_")
+            )
+            .into(),
+            linker.display().to_string(),
+        ));
+        env_vars.push(("ANDROID_NDK_ROOT".into(), ndk.display().to_string()));
 
         if let Some(java_home) = java_home {
             tracing::debug!("Setting JAVA_HOME to {java_home:?}");
-            env_vars.push(("JAVA_HOME", java_home.display().to_string()));
+            env_vars.push(("JAVA_HOME".into(), java_home.display().to_string()));
         }
 
         // Set the wry env vars - this is where wry will dump its kotlin files.
         // Their setup is really annyoing and requires us to hardcode `dx` to specific versions of tao/wry.
-        env_vars.push(("WRY_ANDROID_PACKAGE", "dev.dioxus.main".to_string()));
-        env_vars.push(("WRY_ANDROID_LIBRARY", "dioxusmain".to_string()));
+        env_vars.push(("WRY_ANDROID_PACKAGE".into(), "dev.dioxus.main".to_string()));
+        env_vars.push(("WRY_ANDROID_LIBRARY".into(), "dioxusmain".to_string()));
         env_vars.push((
-            "WRY_ANDROID_KOTLIN_FILES_OUT_DIR",
+            "WRY_ANDROID_KOTLIN_FILES_OUT_DIR".into(),
             self.wry_android_kotlin_files_out_dir()
                 .display()
                 .to_string(),
@@ -2446,7 +2469,11 @@ impl BuildRequest {
             .arg("-Z")
             .arg("unstable-options")
             .args(self.cargo_build_arguments(ctx))
-            .envs(self.cargo_build_env_vars(ctx)?)
+            .envs(
+                self.cargo_build_env_vars(ctx)?
+                    .iter()
+                    .map(|(k, v)| (k.as_ref(), v)),
+            )
             .output()
             .await?;
 
