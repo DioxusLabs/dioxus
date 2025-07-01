@@ -89,8 +89,8 @@ pub(crate) struct TargetArgs {
 
     /// Are we building for a device or just the simulator.
     /// If device is false, then we'll build for the simulator
-    #[clap(long, help_heading = HELP_HEADING)]
-    pub(crate) device: Option<bool>,
+    #[clap(long, default_value_t = false, help_heading = HELP_HEADING)]
+    pub(crate) device: bool,
 
     /// The base path the build will fetch assets relative to. This will override the
     /// base path set in the `dioxus` config.

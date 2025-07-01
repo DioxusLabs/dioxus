@@ -605,7 +605,7 @@ impl BuildRequest {
         // We usually use the simulator unless --device is passed *or* a device is detected by probing.
         // For now, though, since we don't have probing, it just defaults to false
         // Tools like xcrun/adb can detect devices
-        let device = args.device.unwrap_or(false);
+        let device = args.device;
 
         // We want a real triple to build with, so we'll autodetect it if it's not provided
         // The triple ends up being a source of truth for us later hence all this work to figure it out
