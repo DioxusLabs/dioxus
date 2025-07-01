@@ -34,7 +34,7 @@ impl Parse for CssModuleParser {
         // Optional options
         let mut options = input.parse::<TokenStream>()?;
         if options.is_empty() {
-            options = quote! { manganis::CssModuleAssetOptions::new() }
+            options = quote! { manganis::AssetOptions::css_module() }
         }
 
         let asset_parser = AssetParser {
@@ -123,7 +123,7 @@ impl ToTokens for CssModuleParser {
             #[allow(missing_docs, non_snake_case)]
             mod #mod_name {
                 #[allow(unused_imports)]
-                use super::manganis::{self, CssModuleAssetOptions};
+                use manganis::{self, CssModuleAssetOptions};
 
                 #linker_tokens;
 

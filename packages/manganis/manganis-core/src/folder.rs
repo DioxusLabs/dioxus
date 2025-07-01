@@ -1,6 +1,6 @@
 use const_serialize::SerializeConst;
 
-use crate::AssetOptions;
+use crate::{AssetOptions, AssetOptionsBuilder};
 
 /// The builder for a folder asset.
 #[derive(
@@ -19,18 +19,40 @@ pub struct FolderAssetOptions {}
 
 impl Default for FolderAssetOptions {
     fn default() -> Self {
-        Self::new()
+        Self::default()
     }
 }
 
 impl FolderAssetOptions {
-    /// Create a new folder asset using the builder
-    pub const fn new() -> Self {
-        Self {}
+    /// Create a new folder asset builder
+    pub const fn new() -> AssetOptionsBuilder<FolderAssetOptions> {
+        AssetOptions::folder()
     }
 
+    /// Create a default folder asset options
+    pub const fn default() -> Self {
+        Self {}
+    }
+}
+
+impl AssetOptions {
+    /// Create a new folder asset builder
+    ///
+    /// ```rust
+    /// # use manganis::{asset, Asset, AssetOptions};
+    /// const _: Asset = asset!("/assets", AssetOptions::folder());
+    /// ```
+    pub const fn folder() -> AssetOptionsBuilder<FolderAssetOptions> {
+        AssetOptionsBuilder::variant(FolderAssetOptions::default())
+    }
+}
+
+impl AssetOptionsBuilder<FolderAssetOptions> {
     /// Convert the options into options for a generic asset
     pub const fn into_asset_options(self) -> AssetOptions {
-        AssetOptions::Folder(self)
+        AssetOptions {
+            add_hash: false,
+            variant: crate::AssetVariant::Folder(self.variant),
+        }
     }
 }

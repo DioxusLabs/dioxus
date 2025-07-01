@@ -8,6 +8,7 @@ pub(crate) mod config;
 pub(crate) mod create;
 pub(crate) mod init;
 pub(crate) mod link;
+pub(crate) mod platform_override;
 pub(crate) mod run;
 pub(crate) mod serve;
 pub(crate) mod target;
@@ -20,6 +21,7 @@ pub(crate) use serve::*;
 pub(crate) use target::*;
 pub(crate) use verbosity::*;
 
+use crate::platform_override::CommandWithPlatformOverrides;
 use crate::{error::Result, Error, StructuredOutput};
 use clap::builder::styling::{AnsiColor, Effects, Style, Styles};
 use clap::{Parser, Subcommand};
@@ -62,15 +64,11 @@ pub(crate) enum Commands {
 
     /// Build the Dioxus project and all of its assets.
     #[clap(name = "build")]
-    Build(build::BuildArgs),
+    Build(CommandWithPlatformOverrides<build::BuildArgs>),
 
     /// Run the project without any hotreloading.
     #[clap(name = "run")]
     Run(run::RunArgs),
-
-    /// Build the assets for a specific target.
-    #[clap(name = "assets")]
-    BuildAssets(build_assets::BuildAssets),
 
     /// Init a new project for Dioxus in the current directory (by default).
     /// Will attempt to keep your project in a good state.
@@ -101,6 +99,18 @@ pub(crate) enum Commands {
     /// Update the Dioxus CLI to the latest version.
     #[clap(name = "self-update")]
     SelfUpdate(update::SelfUpdate),
+
+    /// Run a dioxus build tool. IE `build-assets`, etc
+    #[clap(name = "tools")]
+    #[clap(subcommand)]
+    Tools(BuildTools),
+}
+
+#[derive(Subcommand)]
+pub enum BuildTools {
+    /// Build the assets for a specific target.
+    #[clap(name = "assets")]
+    BuildAssets(build_assets::BuildAssets),
 }
 
 impl Display for Commands {
@@ -117,8 +127,8 @@ impl Display for Commands {
             Commands::Check(_) => write!(f, "check"),
             Commands::Bundle(_) => write!(f, "bundle"),
             Commands::Run(_) => write!(f, "run"),
-            Commands::BuildAssets(_) => write!(f, "assets"),
             Commands::SelfUpdate(_) => write!(f, "self-update"),
+            Commands::Tools(_) => write!(f, "tools"),
         }
     }
 }
@@ -154,8 +164,9 @@ pub mod styles {
     pub(crate) const INVALID: Style = AnsiColor::Yellow.on_default().effects(Effects::BOLD);
 
     // extra styles for styling logs
-    // we can style stuff using the ansi sequences like: "hotpatched in {GLOW_STYLE}{}{GLOW_STYLE:X}ms"
+    // we can style stuff using the ansi sequences like: "hotpatched in {GLOW_STYLE}{}{GLOW_STYLE:#}ms"
     pub(crate) const GLOW_STYLE: Style = AnsiColor::Yellow.on_default();
     pub(crate) const NOTE_STYLE: Style = AnsiColor::Green.on_default();
     pub(crate) const LINK_STYLE: Style = AnsiColor::Blue.on_default();
+    pub(crate) const ERROR_STYLE: Style = AnsiColor::Red.on_default();
 }

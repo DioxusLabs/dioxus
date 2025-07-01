@@ -113,11 +113,13 @@ members = [
     "examples/fullstack-desktop",
     "examples/fullstack-auth",
     "examples/fullstack-websockets",
+    "examples/wgpu-texture",
 
     # Playwright tests
     "packages/playwright-tests/liveview",
     "packages/playwright-tests/web",
     "packages/playwright-tests/web-routing",
+    "packages/playwright-tests/web-hash-routing",
     "packages/playwright-tests/barebones-template",
     "packages/playwright-tests/fullstack",
     "packages/playwright-tests/fullstack-mounted",
@@ -135,7 +137,7 @@ version = "0.7.0-alpha.1"
 # dependencies that are shared across packages
 [workspace.dependencies]
 dioxus = { path = "packages/dioxus", version = "0.7.0-alpha.1" }
-dioxus-lib = { path = "packages/dioxus-lib", version = "0.7.0-alpha.1" }
+dioxus-lib = { path = "packages/dioxus-lib", version = "0.7.0-alpha.1", default-features = false }
 dioxus-core = { path = "packages/core", version = "0.7.0-alpha.1" }
 dioxus-core-types = { path = "packages/core-types", version = "0.7.0-alpha.1" }
 dioxus-core-macro = { path = "packages/core-macro", version = "0.7.0-alpha.1" }
@@ -225,8 +227,8 @@ thiserror = "2.0.12"
 prettyplease = { version = "0.2.30", features = ["verbatim"] }
 const_format = "0.2.34"
 cargo_toml = { version = "0.21.0" }
-tauri-utils = { version = "2.2.0" }
-tauri-bundler = { version = "2.2.4" }
+tauri-utils = { version = "=2.4.0" }
+tauri-bundler = { version = "=2.4.0" }
 lru = "0.13.0"
 async-trait = "0.1.87"
 axum = { version = "0.8.1", default-features = false }
@@ -313,7 +315,6 @@ memfd = "0.6.4"
 # desktop
 wry = { version = "0.45.0", default-features = false }
 tao = { version = "0.33.0", features = ["rwh_05"] }
-webbrowser = "1.0.3"
 infer = "0.19.0"
 dunce = "1.0.5"
 percent-encoding = "2.3.1"

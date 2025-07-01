@@ -37,7 +37,6 @@ tokio = { workspace = true, features = [
   "fs",
   "io-util",
 ], optional = true }
-webbrowser = { workspace = true }
 infer = { workspace = true }
 dunce = { workspace = true }
 slab = { workspace = true }
@@ -49,6 +48,7 @@ async-trait = { workspace = true }
 tao = { workspace = true, features = ["rwh_05"] }
 dioxus-history = { workspace = true }
 base64 = { workspace = true }
+open = { workspace = true }
 libc = "0.2.170"
 
 [target.'cfg(unix)'.dependencies]

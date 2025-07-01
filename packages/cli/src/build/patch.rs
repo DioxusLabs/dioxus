@@ -597,17 +597,22 @@ fn create_wasm_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> Result<J
         {
             continue;
         }
+        let name = import.name.as_str().to_string();
 
         if let Some(table_idx) = name_to_ifunc_old.get(import.name.as_str()) {
-            let name = import.name.as_str().to_string();
             new.imports.delete(env_func_import);
             convert_import_to_ifunc_call(
                 &mut new,
                 ifunc_table_initializer,
                 func_id,
                 *table_idx,
-                name,
+                name.clone(),
             );
+        }
+
+        if name_is_bindgen_symbol(&name) {
+            new.imports.delete(env_func_import);
+            convert_import_to_ifunc_call(&mut new, ifunc_table_initializer, func_id, 0, name);
         }
     }
 
@@ -615,8 +620,18 @@ fn create_wasm_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> Result<J
     // imports from the patch.
     for import_id in wbg_funcs {
         let import = new.imports.get_mut(import_id);
+        let ImportKind::Function(func_id) = import.kind else {
+            continue;
+        };
+
         import.module = "env".into();
         import.name = format!("__saved_wbg_{}", import.name);
+
+        if name_is_bindgen_symbol(&import.name) {
+            let name = import.name.as_str().to_string();
+            new.imports.delete(import_id);
+            convert_import_to_ifunc_call(&mut new, ifunc_table_initializer, func_id, 0, name);
+        }
     }
 
     // Wipe away the unnecessary sections

@@ -87,9 +87,12 @@ export function setAttributeInner(
       setAttributeDefault(node, field, value);
       // reset the selected value whenever multiple changes
       // @ts-ignore
-      let options = node.options;
-      for (const option of options) {
-        option.selected = option.defaultSelected;
+      if (node.options !== null && node.options !== undefined) {
+        // @ts-ignore
+        let options = node.options;
+        for (const option of options) {
+          option.selected = option.defaultSelected;
+        }
       }
       break;
 

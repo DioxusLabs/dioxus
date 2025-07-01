@@ -9,13 +9,11 @@ repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com/learn/0.6/getting_started"
 keywords = ["dom", "ui", "gui", "react"]
 
-
 [features]
-default = ["accessibility", "hot-reload", "menu", "tracing", "net", "svg", "system-fonts"]
+default = ["accessibility", "hot-reload", "tracing", "net", "svg", "system-fonts"]
 svg = ["blitz-dom/svg", "blitz-paint/svg"]
 net = ["dep:tokio", "dep:blitz-net"]
 accessibility = ["blitz-shell/accessibility", "blitz-dom/accessibility"]
-menu = ["blitz-shell/menu"]
 tracing = ["dep:tracing", "blitz-shell/tracing", "blitz-dom/tracing"]
 hot-reload = ["dep:dioxus-cli-config", "dep:dioxus-devtools"]
 system-fonts = ["blitz-dom/system_fonts"]
@@ -23,13 +21,13 @@ autofocus = []
 
 [dependencies]
 # Blitz dependencies
-anyrender = { version = "0.1", default-features = false }
-anyrender_vello = { version = "0.1", default-features = false }
-blitz-dom = { version = "0.1.0-alpha.2", default-features = false }
-blitz-net = { version = "0.1.0-alpha.2", optional = true }
-blitz-paint = { version = "0.1.0-alpha.2", optional = true }
-blitz-traits = { version = "0.1.0-alpha.2" }
-blitz-shell = { version = "0.1.0-alpha.2", default-features = false }
+anyrender = { version = "0.3", default-features = false }
+anyrender_vello = { version = "0.3", default-features = false }
+blitz-dom = { version = "=0.1.0-alpha.4", default-features = false }
+blitz-net = { version = "=0.1.0-alpha.4", optional = true }
+blitz-paint = { version = "=0.1.0-alpha.4", optional = true }
+blitz-traits = { version = "=0.1.0-alpha.4" }
+blitz-shell = { version = "=0.1.0-alpha.4", default-features = false }
 
 # DioxusLabs dependencies
 dioxus-core = { workspace = true }

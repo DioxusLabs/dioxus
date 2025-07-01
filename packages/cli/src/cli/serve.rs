@@ -50,10 +50,6 @@ pub(crate) struct ServeArgs {
     #[clap(long)]
     pub(crate) cross_origin_policy: bool,
 
-    /// Additional arguments to pass to the executable
-    #[clap(long)]
-    pub(crate) args: Vec<String>,
-
     /// Sets the interval in seconds that the CLI will poll for file changes on WSL.
     #[clap(long, default_missing_value = "2")]
     pub(crate) wsl_file_poll_interval: Option<u16>,
@@ -76,8 +72,24 @@ pub(crate) struct ServeArgs {
     #[clap(long)]
     pub(crate) force_sequential: bool,
 
+    /// Exit the CLI after running into an error. This is mainly used to test hot patching internally
+    #[clap(long)]
+    #[clap(hide = true)]
+    pub(crate) exit_on_error: bool,
+
+    /// Platform-specific arguments for the build
+    #[clap(flatten)]
+    pub(crate) platform_args: CommandWithPlatformOverrides<PlatformServeArgs>,
+}
+
+#[derive(Clone, Debug, Default, Parser)]
+pub(crate) struct PlatformServeArgs {
     #[clap(flatten)]
     pub(crate) targets: BuildArgs,
+
+    /// Additional arguments to pass to the executable
+    #[clap(long, default_value = "")]
+    pub(crate) args: String,
 }
 
 impl ServeArgs {

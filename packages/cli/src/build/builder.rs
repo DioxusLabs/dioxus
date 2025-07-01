@@ -417,29 +417,20 @@ impl AppBuilder {
         }
     }
 
-    pub(crate) async fn open(
+    /// Create a list of environment variables that the child process will use
+    pub(crate) fn child_environment_variables(
         &mut self,
-        devserver_ip: SocketAddr,
-        open_address: Option<SocketAddr>,
+        devserver_ip: Option<SocketAddr>,
         start_fullstack_on_address: Option<SocketAddr>,
-        open_browser: bool,
         always_on_top: bool,
         build_id: BuildId,
-    ) -> Result<()> {
+    ) -> Vec<(&'static str, String)> {
         let krate = &self.build;
 
         // Set the env vars that the clients will expect
         // These need to be stable within a release version (ie 0.6.0)
         let mut envs = vec![
             (dioxus_cli_config::CLI_ENABLED_ENV, "true".to_string()),
-            (
-                dioxus_cli_config::DEVSERVER_IP_ENV,
-                devserver_ip.ip().to_string(),
-            ),
-            (
-                dioxus_cli_config::DEVSERVER_PORT_ENV,
-                devserver_ip.port().to_string(),
-            ),
             (
                 dioxus_cli_config::APP_TITLE_ENV,
                 krate.config.web.app.title.clone(),
@@ -454,6 +445,17 @@ impl AppBuilder {
                 always_on_top.to_string(),
             ),
         ];
+
+        if let Some(devserver_ip) = devserver_ip {
+            envs.push((
+                dioxus_cli_config::DEVSERVER_IP_ENV,
+                devserver_ip.ip().to_string(),
+            ));
+            envs.push((
+                dioxus_cli_config::DEVSERVER_PORT_ENV,
+                devserver_ip.port().to_string(),
+            ));
+        }
 
         if crate::VERBOSITY
             .get()
@@ -478,6 +480,27 @@ impl AppBuilder {
             envs.push((dioxus_cli_config::SERVER_PORT_ENV, addr.port().to_string()));
         }
 
+        envs
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) async fn open(
+        &mut self,
+        devserver_ip: SocketAddr,
+        open_address: Option<SocketAddr>,
+        start_fullstack_on_address: Option<SocketAddr>,
+        open_browser: bool,
+        always_on_top: bool,
+        build_id: BuildId,
+        args: &[String],
+    ) -> Result<()> {
+        let envs = self.child_environment_variables(
+            Some(devserver_ip),
+            start_fullstack_on_address,
+            always_on_top,
+            build_id,
+        );
+
         // We try to use stdin/stdout to communicate with the app
         match self.build.platform {
             // Unfortunately web won't let us get a proc handle to it (to read its stdout/stderr) so instead
@@ -490,7 +513,14 @@ impl AppBuilder {
                 }
             }
 
-            Platform::Ios => self.open_ios_sim(envs).await?,
+            Platform::Ios => {
+                if self.build.device {
+                    self.codesign_ios().await?;
+                    self.open_ios_device().await?
+                } else {
+                    self.open_ios_sim(envs).await?
+                }
+            }
 
             Platform::Android => {
                 self.open_android_sim(false, devserver_ip, envs).await?;
@@ -501,7 +531,7 @@ impl AppBuilder {
             | Platform::MacOS
             | Platform::Windows
             | Platform::Linux
-            | Platform::Liveview => self.open_with_main_exe(envs)?,
+            | Platform::Liveview => self.open_with_main_exe(envs, args)?,
         };
 
         self.builds_opened += 1;
@@ -564,13 +594,18 @@ impl AppBuilder {
         let original = self.build.main_exe();
         let new = self.build.patch_exe(res.time_start);
         let triple = self.build.triple.clone();
-        let original_artifacts = self.artifacts.as_ref().unwrap();
         let asset_dir = self.build.asset_dir();
 
         for bundled in res.assets.assets() {
+            let original_artifacts = self.artifacts.as_mut().unwrap();
+
             if original_artifacts.assets.contains(bundled) {
                 continue;
             }
+
+            // If this is a new asset, insert it into the artifacts so we can track it when hot reloading
+            original_artifacts.assets.insert_asset(*bundled);
+
             let from = dunce::canonicalize(PathBuf::from(bundled.absolute_source_path()))?;
 
             let to = asset_dir.join(bundled.bundled_path());
@@ -732,12 +767,13 @@ impl AppBuilder {
     /// paths right now, but they will when we start to enable things like swift integration.
     ///
     /// Server/liveview/desktop are all basically the same, though
-    fn open_with_main_exe(&mut self, envs: Vec<(&str, String)>) -> Result<()> {
+    fn open_with_main_exe(&mut self, envs: Vec<(&str, String)>, args: &[String]) -> Result<()> {
         let main_exe = self.app_exe();
 
         tracing::debug!("Opening app with main exe: {main_exe:?}");
 
         let mut child = Command::new(main_exe)
+            .args(args)
             .envs(envs)
             .env_remove("CARGO_MANIFEST_DIR") // running under `dx` shouldn't expose cargo-only :
             .stderr(Stdio::piped())
@@ -824,54 +860,35 @@ impl AppBuilder {
     ///
     /// Converting these commands shouldn't be too hard, but device support would imply we need
     /// better support for codesigning and entitlements.
-    #[allow(unused)]
     async fn open_ios_device(&self) -> Result<()> {
         use serde_json::Value;
-        let app_path = self.build.root_dir();
 
-        install_app(&app_path).await?;
-
-        // 2. Determine which device the app was installed to
+        // 1. Find an active device
         let device_uuid = get_device_uuid().await?;
 
-        // 3. Get the installation URL of the app
-        let installation_url = get_installation_url(&device_uuid, &app_path).await?;
+        // 2. Get the installation URL of the app
+        let installation_url = get_installation_url(&device_uuid, &self.build.root_dir()).await?;
 
-        // 4. Launch the app into the background, paused
+        // 3. Launch the app into the background, paused
         launch_app_paused(&device_uuid, &installation_url).await?;
 
-        // 5. Pick up the paused app and resume it
-        resume_app(&device_uuid).await?;
-
-        async fn install_app(app_path: &PathBuf) -> Result<()> {
-            let output = Command::new("xcrun")
-                .args(["simctl", "install", "booted"])
-                .arg(app_path)
-                .output()
-                .await?;
-
-            if !output.status.success() {
-                return Err(format!("Failed to install app: {:?}", output).into());
-            }
-
-            Ok(())
-        }
-
         async fn get_device_uuid() -> Result<String> {
-            let output = Command::new("xcrun")
+            let tmpfile = tempfile::NamedTempFile::new()
+                .context("Failed to create temporary file for device list")?;
+
+            Command::new("xcrun")
                 .args([
-                    "devicectl",
-                    "list",
-                    "devices",
-                    "--json-output",
-                    "target/deviceid.json",
+                    "devicectl".to_string(),
+                    "list".to_string(),
+                    "devices".to_string(),
+                    "--json-output".to_string(),
+                    tmpfile.path().to_str().unwrap().to_string(),
                 ])
                 .output()
                 .await?;
 
-            let json: Value =
-                serde_json::from_str(&std::fs::read_to_string("target/deviceid.json")?)
-                    .context("Failed to parse xcrun output")?;
+            let json: Value = serde_json::from_str(&std::fs::read_to_string(tmpfile.path())?)
+                .context("Failed to parse xcrun output")?;
             let device_uuid = json["result"]["devices"][0]["identifier"]
                 .as_str()
                 .ok_or("Failed to extract device UUID")?
@@ -881,6 +898,9 @@ impl AppBuilder {
         }
 
         async fn get_installation_url(device_uuid: &str, app_path: &Path) -> Result<String> {
+            let tmpfile = tempfile::NamedTempFile::new()
+                .context("Failed to create temporary file for device list")?;
+
             // xcrun devicectl device install app --device <uuid> --path <path> --json-output
             let output = Command::new("xcrun")
                 .args([
@@ -892,8 +912,8 @@ impl AppBuilder {
                     device_uuid,
                     &app_path.display().to_string(),
                     "--json-output",
-                    "target/xcrun.json",
                 ])
+                .arg(tmpfile.path())
                 .output()
                 .await?;
 
@@ -901,7 +921,7 @@ impl AppBuilder {
                 return Err(format!("Failed to install app: {:?}", output).into());
             }
 
-            let json: Value = serde_json::from_str(&std::fs::read_to_string("target/xcrun.json")?)
+            let json: Value = serde_json::from_str(&std::fs::read_to_string(tmpfile.path())?)
                 .context("Failed to parse xcrun output")?;
             let installation_url = json["result"]["installedApplications"][0]["installationURL"]
                 .as_str()
@@ -912,6 +932,9 @@ impl AppBuilder {
         }
 
         async fn launch_app_paused(device_uuid: &str, installation_url: &str) -> Result<()> {
+            let tmpfile = tempfile::NamedTempFile::new()
+                .context("Failed to create temporary file for device list")?;
+
             let output = Command::new("xcrun")
                 .args([
                     "devicectl",
@@ -924,8 +947,8 @@ impl AppBuilder {
                     device_uuid,
                     installation_url,
                     "--json-output",
-                    "target/launch.json",
                 ])
+                .arg(tmpfile.path())
                 .output()
                 .await?;
 
@@ -933,11 +956,7 @@ impl AppBuilder {
                 return Err(format!("Failed to launch app: {:?}", output).into());
             }
 
-            Ok(())
-        }
-
-        async fn resume_app(device_uuid: &str) -> Result<()> {
-            let json: Value = serde_json::from_str(&std::fs::read_to_string("target/launch.json")?)
+            let json: Value = serde_json::from_str(&std::fs::read_to_string(tmpfile.path())?)
                 .context("Failed to parse xcrun output")?;
 
             let status_pid = json["result"]["process"]["processIdentifier"]
@@ -965,10 +984,9 @@ impl AppBuilder {
             Ok(())
         }
 
-        unimplemented!("dioxus-cli doesn't support ios devices yet.")
+        Ok(())
     }
 
-    #[allow(unused)]
     async fn codesign_ios(&self) -> Result<()> {
         const CODESIGN_ERROR: &str = r#"This is likely because you haven't
 - Created a provisioning profile before
@@ -982,7 +1000,7 @@ https://developer.apple.com/documentation/xcode/sharing-your-teams-signing-certi
 
         let profiles_folder = dirs::home_dir()
             .context("Your machine has no home-dir")?
-            .join("Library/MobileDevice/Provisioning Profiles");
+            .join("Library/Developer/Xcode/UserData/Provisioning Profiles");
 
         if !profiles_folder.exists() || profiles_folder.read_dir()?.next().is_none() {
             tracing::error!(
@@ -1051,10 +1069,11 @@ We checked the folder: {}
         struct ProvisioningProfile {
             #[serde(rename = "TeamIdentifier")]
             team_identifier: Vec<String>,
-            #[serde(rename = "ApplicationIdentifierPrefix")]
-            application_identifier_prefix: Vec<String>,
             #[serde(rename = "Entitlements")]
             entitlements: Entitlements,
+            #[allow(dead_code)]
+            #[serde(rename = "ApplicationIdentifierPrefix")]
+            application_identifier_prefix: Vec<String>,
         }
 
         #[derive(serde::Deserialize, Debug)]
@@ -1156,7 +1175,7 @@ We checked the folder: {}
     ) -> Result<()> {
         let apk_path = self.build.debug_apk_path();
         let session_cache = self.build.session_cache_dir();
-        let full_mobile_app_name = self.build.full_mobile_app_name();
+        let application_id = self.build.bundle_identifier();
         let adb = self.build.workspace.android_tools()?.adb.clone();
 
         // Start backgrounded since .open() is called while in the arm of the top-level match
@@ -1237,7 +1256,7 @@ We checked the folder: {}
 
             // eventually, use the user's MainActivity, not our MainActivity
             // adb shell am start -n dev.dioxus.main/dev.dioxus.main.MainActivity
-            let activity_name = format!("{}/dev.dioxus.main.MainActivity", full_mobile_app_name,);
+            let activity_name = format!("{application_id}/dev.dioxus.main.MainActivity");
             let res = Command::new(&adb)
                 .arg("shell")
                 .arg("am")

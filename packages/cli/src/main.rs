@@ -51,8 +51,8 @@ async fn main() {
     let args = TraceController::initialize();
     let result = match args.action {
         Commands::Translate(opts) => opts.translate(),
-        Commands::New(opts) => opts.create(),
-        Commands::Init(opts) => opts.init(),
+        Commands::New(opts) => opts.create().await,
+        Commands::Init(opts) => opts.init().await,
         Commands::Config(opts) => opts.config().await,
         Commands::Autoformat(opts) => opts.autoformat().await,
         Commands::Check(opts) => opts.check().await,
@@ -61,8 +61,8 @@ async fn main() {
         Commands::Serve(opts) => opts.serve().await,
         Commands::Bundle(opts) => opts.bundle().await,
         Commands::Run(opts) => opts.run().await,
-        Commands::BuildAssets(opts) => opts.run().await,
         Commands::SelfUpdate(opts) => opts.self_update().await,
+        Commands::Tools(BuildTools::BuildAssets(opts)) => opts.run().await,
     };
 
     // Provide a structured output for third party tools that can consume the output of the CLI
@@ -71,7 +71,10 @@ async fn main() {
             tracing::debug!(json = ?output);
         }
         Err(err) => {
-            eprintln!("{err}");
+            eprintln!(
+                "{ERROR_STYLE}failed:{ERROR_STYLE:#} {err}",
+                ERROR_STYLE = styles::ERROR_STYLE
+            );
 
             tracing::error!(
                 json = ?StructuredOutput::Error {

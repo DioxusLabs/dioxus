@@ -179,6 +179,9 @@ impl ToTokens for TemplateBody {
                     vec![ #( #dynamic_text.to_string() ),* ],
                 );
 
+                // The key needs to be created before the dynamic nodes as it might depend on a borrowed value which gets moved into the dynamic nodes
+                #[cfg(not(debug_assertions))]
+                let __key = #key_tokens;
                 // These items are used in both the debug and release expansions of rsx. Pulling them out makes the expansion
                 // slightly smaller and easier to understand. Rust analyzer also doesn't autocomplete well when it sees an ident show up twice in the expansion
                 let __dynamic_nodes: [dioxus_core::DynamicNode; #dynamic_nodes_len] = [ #( #dynamic_nodes ),* ];
@@ -207,7 +210,7 @@ impl ToTokens for TemplateBody {
                     // NOTE: Allocating a temporary is important to make reads within rsx drop before the value is returned
                     #[allow(clippy::let_and_return)]
                     let __vnodes = dioxus_core::VNode::new(
-                        #key_tokens,
+                        __key,
                         ___TEMPLATE,
                         Box::new(__dynamic_nodes),
                         Box::new(__dynamic_attributes),
