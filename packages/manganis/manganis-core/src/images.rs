@@ -83,7 +83,6 @@ impl Default for ImageAssetOptions {
 
 impl ImageAssetOptions {
     /// Create a new builder for image asset options
-    #[deprecated(note = "Use `AssetOptions::image()` instead", since = "0.7.0")]
     pub const fn new() -> AssetOptionsBuilder<ImageAssetOptions> {
         AssetOptions::image()
     }

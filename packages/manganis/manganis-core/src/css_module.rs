@@ -30,7 +30,6 @@ impl Default for CssModuleAssetOptions {
 
 impl CssModuleAssetOptions {
     /// Create a new css asset using the builder
-    #[deprecated(note = "Use `AssetOptions::css_module()` instead", since = "0.7.0")]
     pub const fn new() -> AssetOptionsBuilder<CssModuleAssetOptions> {
         AssetOptions::css_module()
     }

@@ -25,7 +25,6 @@ impl Default for FolderAssetOptions {
 
 impl FolderAssetOptions {
     /// Create a new folder asset builder
-    #[deprecated(note = "Use `AssetOptions::folder()` instead", since = "0.7.0")]
     pub const fn new() -> AssetOptionsBuilder<FolderAssetOptions> {
         AssetOptions::folder()
     }

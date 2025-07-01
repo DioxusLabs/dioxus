@@ -28,7 +28,6 @@ impl Default for JsAssetOptions {
 
 impl JsAssetOptions {
     /// Create a new js asset options builder
-    #[deprecated(note = "Use `AssetOptions::js()` instead", since = "0.7.0")]
     pub const fn new() -> AssetOptionsBuilder<JsAssetOptions> {
         AssetOptions::js()
     }

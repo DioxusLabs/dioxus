@@ -27,7 +27,6 @@ impl Default for CssAssetOptions {
 
 impl CssAssetOptions {
     /// Create a new css asset using the builder
-    #[deprecated(note = "Use `AssetOptions::css()` instead", since = "0.7.0")]
     pub const fn new() -> AssetOptionsBuilder<CssAssetOptions> {
         AssetOptions::css()
     }
