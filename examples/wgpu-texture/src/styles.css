@@ -18,12 +18,14 @@ main {
 #canvas-container {
     display: grid;
     opacity: 0.8;
+    grid-row: 2;
 }
 
 header {
     padding: 10px 40px;
     background-color: white;
     z-index: 100;
+    grid-row: 1;
 }
 
 #overlay {
