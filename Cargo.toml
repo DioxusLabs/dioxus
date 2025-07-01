@@ -72,6 +72,7 @@ members = [
     "packages/asset-resolver",
     "packages/depinfo",
     "packages/server",
+    "packages/use-js-macro",
 
     # Playwright tests
     "packages/playwright-tests/liveview",
@@ -176,6 +177,7 @@ dioxus-logger = { path = "packages/logger", version = "0.7.0-alpha.1" }
 dioxus-native = { path = "packages/native", version = "0.7.0-alpha.1" }
 dioxus-asset-resolver = { path = "packages/asset-resolver", version = "0.7.0-alpha.1" }
 dioxus-config-macros = { path = "packages/config-macros", version = "0.7.0-alpha.1" }
+dioxus-use-js-macro = { path = "packages/use-js-macro", version = "0.7.0-alpha.1" }
 const-serialize = { path = "packages/const-serialize", version = "0.7.0-alpha.1" }
 const-serialize-macro = { path = "packages/const-serialize-macro", version = "0.7.0-alpha.1" }
 generational-box = { path = "packages/generational-box", version = "0.7.0-alpha.1" }
