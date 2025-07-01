@@ -132,5 +132,11 @@ fn app() -> Element {
                 pre { "{values:#?}" }
             }
         }
+        button {
+            onclick: move |_| {
+                println!("Values: {:#?}", values.read());
+            },
+            "Log values"
+        }
     }
 }

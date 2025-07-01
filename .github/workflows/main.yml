@@ -200,6 +200,11 @@ jobs:
     if: github.event.pull_request.draft == false
     name: Playwright Tests
     runs-on: macos-latest
+    strategy:
+      matrix:
+        platform:
+          - { toolchain: 1.86.0 }
+          - { toolchain: beta }
     steps:
       # Do our best to cache the toolchain and node install steps
       - uses: actions/checkout@v4
@@ -207,12 +212,13 @@ jobs:
         with:
           node-version: 16
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@1.86.0
+        uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: stable
+          toolchain: ${{ matrix.platform.toolchain }}
           targets: x86_64-unknown-linux-gnu,wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
         with:
+          key: "playwright-${{ matrix.platform.toolchain }}-${{ runner.os }}"
           cache-all-crates: "true"
           cache-on-failure: "true"
       - name: Wipe dx cache
@@ -220,6 +226,9 @@ jobs:
           rm -rf ./target/dx
       - name: Playwright
         working-directory: ./packages/playwright-tests
+        env:
+          # The hot patch test requires incremental compilation
+          CARGO_INCREMENTAL: 1
         run: |
           npm ci
           npm install -D @playwright/test
@@ -228,7 +237,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.platform.toolchain }}-${{ runner.os }}
           path: ./packages/playwright-tests/playwright-report/
           retention-days: 30
 

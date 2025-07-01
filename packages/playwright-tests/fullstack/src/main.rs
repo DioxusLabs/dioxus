@@ -164,18 +164,20 @@ fn DocumentElements() -> Element {
 /// Make sure assets in the assets folder are served correctly and hashed assets are cached forever
 #[component]
 fn Assets() -> Element {
+    #[used]
+    static _ASSET: Asset = asset!("/assets/image.png");
+    #[used]
+    static _OTHER_ASSET: Asset = asset!("/assets/nested");
     rsx! {
         img {
             src: asset!("/assets/image.png"),
         }
-        // TODO: raw assets support was removed and needs to be restored
-        // https://github.com/DioxusLabs/dioxus/issues/4115
-        // img {
-        //     src: "/assets/image.png",
-        // }
-        // img {
-        //     src: "/assets/nested/image.png",
-        // }
+        img {
+            src: "/assets/image.png",
+        }
+        img {
+            src: "/assets/nested/image.png",
+        }
     }
 }
 

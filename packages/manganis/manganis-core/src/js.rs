@@ -1,6 +1,6 @@
 use const_serialize::SerializeConst;
 
-use crate::AssetOptions;
+use crate::{AssetOptions, AssetOptionsBuilder, AssetVariant};
 
 /// Options for a javascript asset
 #[derive(
@@ -22,35 +22,60 @@ pub struct JsAssetOptions {
 
 impl Default for JsAssetOptions {
     fn default() -> Self {
-        Self::new()
+        Self::default()
     }
 }
 
 impl JsAssetOptions {
-    /// Create a new js asset builder
-    pub const fn new() -> Self {
+    /// Create a new js asset options builder
+    pub const fn new() -> AssetOptionsBuilder<JsAssetOptions> {
+        AssetOptions::js()
+    }
+
+    /// Create a default js asset options
+    pub const fn default() -> Self {
         Self {
-            minify: true,
             preload: false,
+            minify: true,
         }
     }
 
+    /// Check if the asset is preloaded
+    pub const fn preloaded(&self) -> bool {
+        self.preload
+    }
+
+    /// Check if the asset is minified
+    pub const fn minified(&self) -> bool {
+        self.minify
+    }
+}
+
+impl AssetOptions {
+    /// Create a new js asset builder
+    ///
+    /// ```rust
+    /// # use manganis::{asset, Asset, JsAssetOptions};
+    /// const _: Asset = asset!("/assets/script.js", AssetOptions::js());
+    /// ```
+    pub const fn js() -> AssetOptionsBuilder<JsAssetOptions> {
+        AssetOptionsBuilder::variant(JsAssetOptions::default())
+    }
+}
+
+impl AssetOptionsBuilder<JsAssetOptions> {
     /// Sets whether the js should be minified (default: true)
     ///
     /// Minifying the js can make your site load faster by loading less data
     ///
     /// ```rust
     /// # use manganis::{asset, Asset, JsAssetOptions};
-    /// const _: Asset = asset!("/assets/script.js", JsAssetOptions::new().with_minify(false));
+    /// const _: Asset = asset!("/assets/script.js", AssetOptions::js().with_minify(false));
     /// ```
     #[allow(unused)]
-    pub const fn with_minify(self, minify: bool) -> Self {
-        Self { minify, ..self }
-    }
-
-    /// Check if the asset is minified
-    pub const fn minified(&self) -> bool {
-        self.minify
+    pub const fn with_minify(mut self, minify: bool) -> Self {
+        self.variant.minify = minify;
+        self
     }
 
     /// Make the asset preloaded
@@ -59,20 +84,19 @@ impl JsAssetOptions {
     ///
     /// ```rust
     /// # use manganis::{asset, Asset, JsAssetOptions};
-    /// const _: Asset = asset!("/assets/script.js", JsAssetOptions::new().with_preload(true));
+    /// const _: Asset = asset!("/assets/script.js", AssetOptions::js().with_preload(true));
     /// ```
     #[allow(unused)]
-    pub const fn with_preload(self, preload: bool) -> Self {
-        Self { preload, ..self }
+    pub const fn with_preload(mut self, preload: bool) -> Self {
+        self.variant.preload = preload;
+        self
     }
 
-    /// Check if the asset is preloaded
-    pub const fn preloaded(&self) -> bool {
-        self.preload
-    }
-
-    /// Convert the options into options for a generic asset
+    /// Convert the builder into asset options with the given variant
     pub const fn into_asset_options(self) -> AssetOptions {
-        AssetOptions::Js(self)
+        AssetOptions {
+            add_hash: self.add_hash,
+            variant: AssetVariant::Js(self.variant),
+        }
     }
 }

@@ -327,9 +327,11 @@ use dioxus_cli_config::{APP_TITLE_ENV, ASSET_ROOT_ENV};
 use dioxus_cli_opt::{process_file_to, AssetManifest};
 use itertools::Itertools;
 use krates::{cm::TargetKind, NodeId};
-use manganis::{AssetOptions, JsAssetOptions};
+use manganis::AssetOptions;
+use manganis_core::AssetVariant;
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
 use std::{
     collections::{BTreeMap, HashSet},
     io::Write,
@@ -604,7 +606,7 @@ impl BuildRequest {
         // We usually use the simulator unless --device is passed *or* a device is detected by probing.
         // For now, though, since we don't have probing, it just defaults to false
         // Tools like xcrun/adb can detect devices
-        let device = args.device.unwrap_or(false);
+        let device = args.device;
 
         // We want a real triple to build with, so we'll autodetect it if it's not provided
         // The triple ends up being a source of truth for us later hence all this work to figure it out
@@ -791,19 +793,12 @@ impl BuildRequest {
                 ctx.status_start_bundle();
 
                 self.write_executable(ctx, &artifacts.exe, &mut artifacts.assets)
-                    .await
-                    .context("Failed to write main executable")?;
-                self.write_frameworks(ctx, &artifacts.direct_rustc)
-                    .await
-                    .context("Failed to write frameworks")?;
-                self.write_assets(ctx, &artifacts.assets)
-                    .await
-                    .context("Failed to write assets")?;
+                    .await?;
+                self.write_frameworks(ctx, &artifacts.direct_rustc).await?;
+                self.write_assets(ctx, &artifacts.assets).await?;
                 self.write_metadata().await?;
                 self.optimize(ctx).await?;
-                self.assemble(ctx)
-                    .await
-                    .context("Failed to assemble app bundle")?;
+                self.assemble(ctx).await?;
 
                 tracing::debug!("Bundle created at {}", self.root_dir().display());
             }
@@ -1420,7 +1415,7 @@ impl BuildRequest {
         }
 
         // Now extract the assets from the fat binary
-        self.collect_assets(&self.patch_exe(artifacts.time_start), ctx)?;
+        artifacts.assets = self.collect_assets(&self.patch_exe(artifacts.time_start), ctx)?;
 
         // If this is a web build, reset the index.html file in case it was modified by SSG
         self.write_index_html(&artifacts.assets)
@@ -2056,7 +2051,11 @@ impl BuildRequest {
                 cmd.env_remove("RUSTC_WORKSPACE_WRAPPER");
                 cmd.env_remove("RUSTC_WRAPPER");
                 cmd.env_remove(DX_RUSTC_WRAPPER_ENV_VAR);
-                cmd.envs(self.cargo_build_env_vars(ctx)?);
+                cmd.envs(
+                    self.cargo_build_env_vars(ctx)?
+                        .iter()
+                        .map(|(k, v)| (k.as_ref(), v)),
+                );
                 cmd.arg(format!("-Clinker={}", Workspace::path_to_dx()?.display()));
 
                 if self.platform == Platform::Web {
@@ -2090,7 +2089,11 @@ impl BuildRequest {
                     .arg("--message-format")
                     .arg("json-diagnostic-rendered-ansi")
                     .args(self.cargo_build_arguments(ctx))
-                    .envs(self.cargo_build_env_vars(ctx)?);
+                    .envs(
+                        self.cargo_build_env_vars(ctx)?
+                            .iter()
+                            .map(|(k, v)| (k.as_ref(), v)),
+                    );
 
                 if ctx.mode == BuildMode::Fat {
                     cmd.env(
@@ -2294,7 +2297,7 @@ impl BuildRequest {
         cargo_args
     }
 
-    fn cargo_build_env_vars(&self, ctx: &BuildContext) -> Result<Vec<(&'static str, String)>> {
+    fn cargo_build_env_vars(&self, ctx: &BuildContext) -> Result<Vec<(Cow<'static, str>, String)>> {
         let mut env_vars = vec![];
 
         // Make sure to set all the crazy android flags. Cross-compiling is hard, man.
@@ -2306,9 +2309,9 @@ impl BuildRequest {
         // todo: should we even be doing this? might be better being a build.rs or something else.
         if self.release {
             if let Some(base_path) = self.base_path() {
-                env_vars.push((ASSET_ROOT_ENV, base_path.to_string()));
+                env_vars.push((ASSET_ROOT_ENV.into(), base_path.to_string()));
             }
-            env_vars.push((APP_TITLE_ENV, self.config.web.app.title.clone()));
+            env_vars.push((APP_TITLE_ENV.into(), self.config.web.app.title.clone()));
         }
 
         // Assemble the rustflags by peering into the `.cargo/config.toml` file
@@ -2325,7 +2328,7 @@ impl BuildRequest {
         // Set the rust flags for the build if they're not empty.
         if !rust_flags.flags.is_empty() {
             env_vars.push((
-                "RUSTFLAGS",
+                "RUSTFLAGS".into(),
                 rust_flags
                     .encode_space_separated()
                     .context("Failed to encode RUSTFLAGS")?,
@@ -2348,8 +2351,8 @@ impl BuildRequest {
         Ok(env_vars)
     }
 
-    fn android_env_vars(&self) -> Result<Vec<(&'static str, String)>> {
-        let mut env_vars = vec![];
+    fn android_env_vars(&self) -> Result<Vec<(Cow<'static, str>, String)>> {
+        let mut env_vars: Vec<(Cow<'static, str>, String)> = vec![];
 
         let tools = self.workspace.android_tools()?;
         let linker = tools.android_cc(&self.triple);
@@ -2369,23 +2372,37 @@ impl BuildRequest {
             java_home: {java_home:?}
             "#
         );
-        env_vars.push(("ANDROID_NATIVE_API_LEVEL", min_sdk_version.to_string()));
-        env_vars.push(("TARGET_AR", ar_path.display().to_string()));
-        env_vars.push(("TARGET_CC", target_cc.display().to_string()));
-        env_vars.push(("TARGET_CXX", target_cxx.display().to_string()));
-        env_vars.push(("ANDROID_NDK_ROOT", ndk.display().to_string()));
+        env_vars.push((
+            "ANDROID_NATIVE_API_LEVEL".into(),
+            min_sdk_version.to_string(),
+        ));
+        env_vars.push(("TARGET_AR".into(), ar_path.display().to_string()));
+        env_vars.push(("TARGET_CC".into(), target_cc.display().to_string()));
+        env_vars.push(("TARGET_CXX".into(), target_cxx.display().to_string()));
+        env_vars.push((
+            format!(
+                "CARGO_TARGET_{}_LINKER",
+                self.triple
+                    .to_string()
+                    .to_ascii_uppercase()
+                    .replace("-", "_")
+            )
+            .into(),
+            linker.display().to_string(),
+        ));
+        env_vars.push(("ANDROID_NDK_ROOT".into(), ndk.display().to_string()));
 
         if let Some(java_home) = java_home {
             tracing::debug!("Setting JAVA_HOME to {java_home:?}");
-            env_vars.push(("JAVA_HOME", java_home.display().to_string()));
+            env_vars.push(("JAVA_HOME".into(), java_home.display().to_string()));
         }
 
         // Set the wry env vars - this is where wry will dump its kotlin files.
         // Their setup is really annyoing and requires us to hardcode `dx` to specific versions of tao/wry.
-        env_vars.push(("WRY_ANDROID_PACKAGE", "dev.dioxus.main".to_string()));
-        env_vars.push(("WRY_ANDROID_LIBRARY", "dioxusmain".to_string()));
+        env_vars.push(("WRY_ANDROID_PACKAGE".into(), "dev.dioxus.main".to_string()));
+        env_vars.push(("WRY_ANDROID_LIBRARY".into(), "dioxusmain".to_string()));
         env_vars.push((
-            "WRY_ANDROID_KOTLIN_FILES_OUT_DIR",
+            "WRY_ANDROID_KOTLIN_FILES_OUT_DIR".into(),
             self.wry_android_kotlin_files_out_dir()
                 .display()
                 .to_string(),
@@ -2453,7 +2470,11 @@ impl BuildRequest {
             .arg("-Z")
             .arg("unstable-options")
             .args(self.cargo_build_arguments(ctx))
-            .envs(self.cargo_build_env_vars(ctx)?)
+            .envs(
+                self.cargo_build_env_vars(ctx)?
+                    .iter()
+                    .map(|(k, v)| (k.as_ref(), v)),
+            )
             .output()
             .await?;
 
@@ -3295,7 +3316,7 @@ impl BuildRequest {
                 writeln!(
                     glue, "export const __wasm_split_load_chunk_{idx} = makeLoad(\"/assets/{url}\", [], fusedImports);",
                     url = assets
-                        .register_asset(&path, AssetOptions::Unknown)?.bundled_path(),
+                        .register_asset(&path, AssetOptions::builder().into_asset_options())?.bundled_path(),
                 )?;
             }
 
@@ -3323,7 +3344,8 @@ impl BuildRequest {
 
                     // Again, register this wasm with the asset system
                     url = assets
-                        .register_asset(&path, AssetOptions::Unknown)?.bundled_path(),
+                        .register_asset(&path, AssetOptions::builder().into_asset_options())?
+                        .bundled_path(),
 
                     // This time, make sure to write the dependencies of this chunk
                     // The names here are again, hardcoded in wasm-split - fix this eventually.
@@ -3369,19 +3391,26 @@ impl BuildRequest {
             wasm_opt::optimize(&post_bindgen_wasm, &post_bindgen_wasm, &wasm_opt_options).await?;
         }
 
-        // In release mode, we make the wasm and bindgen files into assets so they get bundled with max
-        // optimizations.
+        if self.should_bundle_to_asset() {
+            // Make sure to register the main wasm file with the asset system
+            assets.register_asset(
+                &post_bindgen_wasm,
+                AssetOptions::builder().into_asset_options(),
+            )?;
+        }
+
+        // Now that the wasm is registered as an asset, we can write the js glue shim
+        self.write_js_glue_shim(assets)?;
+
         if self.should_bundle_to_asset() {
             // Register the main.js with the asset system so it bundles in the snippets and optimizes
             assets.register_asset(
                 &self.wasm_bindgen_js_output_file(),
-                AssetOptions::Js(JsAssetOptions::new().with_minify(true).with_preload(true)),
+                AssetOptions::js()
+                    .with_minify(true)
+                    .with_preload(true)
+                    .into_asset_options(),
             )?;
-        }
-
-        if self.should_bundle_to_asset() {
-            // Make sure to register the main wasm file with the asset system
-            assets.register_asset(&post_bindgen_wasm, AssetOptions::Unknown)?;
         }
 
         // Write the index.html file with the pre-configured contents we got from pre-rendering
@@ -3390,25 +3419,57 @@ impl BuildRequest {
         Ok(())
     }
 
+    fn write_js_glue_shim(&self, assets: &AssetManifest) -> Result<()> {
+        let wasm_path = self.bundled_wasm_path(assets);
+
+        // Load and initialize wasm without requiring a separate javascript file.
+        // This also allows using a strict Content-Security-Policy.
+        let mut js = std::fs::OpenOptions::new()
+            .append(true)
+            .open(self.wasm_bindgen_js_output_file())?;
+        let mut buf_writer = std::io::BufWriter::new(&mut js);
+        writeln!(
+            buf_writer,
+            r#"
+window.__wasm_split_main_initSync = initSync;
+
+// Actually perform the load
+__wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
+    // assign this module to be accessible globally
+    window.__dx_mainWasm = wasm;
+    window.__dx_mainInit = __wbg_init;
+    window.__dx_mainInitSync = initSync;
+    window.__dx___wbg_get_imports = __wbg_get_imports;
+
+    if (wasm.__wbindgen_start == undefined) {{
+        wasm.main();
+    }}
+}});
+"#,
+            self.base_path_or_default(),
+        )?;
+
+        Ok(())
+    }
+
     /// Write the index.html file to the output directory. This must be called after the wasm and js
     /// assets are registered with the asset system if this is a release build.
     pub(crate) fn write_index_html(&self, assets: &AssetManifest) -> Result<()> {
-        // Get the path to the wasm-bindgen output files. Either the direct file or the opitmized one depending on the build mode
-        let wasm_bindgen_wasm_out = self.wasm_bindgen_wasm_output_file();
-        let wasm_path = if self.should_bundle_to_asset() {
-            let name = assets
-                .get_first_asset_for_source(&wasm_bindgen_wasm_out)
-                .expect("The wasm source must exist before creating index.html");
-            format!("assets/{}", name.bundled_path())
-        } else {
-            format!(
-                "wasm/{}",
-                wasm_bindgen_wasm_out.file_name().unwrap().to_str().unwrap()
-            )
-        };
+        let wasm_path = self.bundled_wasm_path(assets);
+        let js_path = self.bundled_js_path(assets);
 
+        // Write the index.html file with the pre-configured contents we got from pre-rendering
+        std::fs::write(
+            self.root_dir().join("index.html"),
+            self.prepare_html(assets, &wasm_path, &js_path).unwrap(),
+        )?;
+
+        Ok(())
+    }
+
+    fn bundled_js_path(&self, assets: &AssetManifest) -> String {
         let wasm_bindgen_js_out = self.wasm_bindgen_js_output_file();
-        let js_path = if self.should_bundle_to_asset() {
+        if self.should_bundle_to_asset() {
             let name = assets
                 .get_first_asset_for_source(&wasm_bindgen_js_out)
                 .expect("The js source must exist before creating index.html");
@@ -3418,14 +3479,23 @@ impl BuildRequest {
                 "wasm/{}",
                 wasm_bindgen_js_out.file_name().unwrap().to_str().unwrap()
             )
-        };
+        }
+    }
 
-        // Write the index.html file with the pre-configured contents we got from pre-rendering
-        std::fs::write(
-            self.root_dir().join("index.html"),
-            self.prepare_html(assets, &wasm_path, &js_path).unwrap(),
-        )?;
-        Ok(())
+    /// Get the path to the wasm-bindgen output files. Either the direct file or the opitmized one depending on the build mode
+    fn bundled_wasm_path(&self, assets: &AssetManifest) -> String {
+        let wasm_bindgen_wasm_out = self.wasm_bindgen_wasm_output_file();
+        if self.should_bundle_to_asset() {
+            let name = assets
+                .get_first_asset_for_source(&wasm_bindgen_wasm_out)
+                .expect("The wasm source must exist before creating index.html");
+            format!("assets/{}", name.bundled_path())
+        } else {
+            format!(
+                "wasm/{}",
+                wasm_bindgen_wasm_out.file_name().unwrap().to_str().unwrap()
+            )
+        }
     }
 
     fn info_plist_contents(&self, platform: Platform) -> Result<String> {
@@ -3913,7 +3983,7 @@ impl BuildRequest {
         self.inject_resources(assets, wasm_path, &mut html)?;
 
         // Inject loading scripts if they are not already present
-        self.inject_loading_scripts(&mut html);
+        self.inject_loading_scripts(assets, &mut html);
 
         // Replace any special placeholders in the HTML with resolved values
         self.replace_template_placeholders(&mut html, wasm_path, js_path);
@@ -3977,22 +4047,22 @@ impl BuildRequest {
         // Inject any resources from manganis into the head
         for asset in assets.assets() {
             let asset_path = asset.bundled_path();
-            match asset.options() {
-                AssetOptions::Css(css_options) => {
+            match asset.options().variant() {
+                AssetVariant::Css(css_options) => {
                     if css_options.preloaded() {
                         head_resources.push_str(&format!(
                             "<link rel=\"preload\" as=\"style\" href=\"/{{base_path}}/assets/{asset_path}\" crossorigin>"
                         ))
                     }
                 }
-                AssetOptions::Image(image_options) => {
+                AssetVariant::Image(image_options) => {
                     if image_options.preloaded() {
                         head_resources.push_str(&format!(
                             "<link rel=\"preload\" as=\"image\" href=\"/{{base_path}}/assets/{asset_path}\" crossorigin>"
                         ))
                     }
                 }
-                AssetOptions::Js(js_options) => {
+                AssetVariant::Js(js_options) => {
                     if js_options.preloaded() {
                         head_resources.push_str(&format!(
                             "<link rel=\"preload\" as=\"script\" href=\"/{{base_path}}/assets/{asset_path}\" crossorigin>"
@@ -4005,7 +4075,7 @@ impl BuildRequest {
 
         // Manually inject the wasm file for preloading. WASM currently doesn't support preloading in the manganis asset system
         head_resources.push_str(&format!(
-            "<link rel=\"preload\" as=\"fetch\" type=\"application/wasm\" href=\"/{{base_path}}/assets/{wasm_path}\" crossorigin>"
+            "<link rel=\"preload\" as=\"fetch\" type=\"application/wasm\" href=\"/{{base_path}}/{wasm_path}\" crossorigin>"
         ));
         Self::replace_or_insert_before("{style_include}", "</head", &head_resources, html);
 
@@ -4013,38 +4083,21 @@ impl BuildRequest {
     }
 
     /// Inject loading scripts if they are not already present
-    fn inject_loading_scripts(&self, html: &mut String) {
-        // If it looks like we are already loading wasm or the current build opted out of injecting loading scripts, don't inject anything
-        if !self.inject_loading_scripts || html.contains("__wbindgen_start") {
+    fn inject_loading_scripts(&self, assets: &AssetManifest, html: &mut String) {
+        // If the current build opted out of injecting loading scripts, don't inject anything
+        if !self.inject_loading_scripts {
             return;
         }
 
         // If not, insert the script
         *html = html.replace(
             "</body",
-r#" <script>
-  // We can't use a module script here because we need to start the script immediately when streaming
-  import("/{base_path}/{js_path}").then(
-    ({ default: init, initSync, __wbg_get_imports }) => {
-      // export initSync in case a split module needs to initialize
-      window.__wasm_split_main_initSync = initSync;
-
-      // Actually perform the load
-      init({module_or_path: "/{base_path}/{wasm_path}"}).then((wasm) => {
-        // assign this module to be accessible globally
-        window.__dx_mainWasm = wasm;
-        window.__dx_mainInit = init;
-        window.__dx_mainInitSync = initSync;
-        window.__dx___wbg_get_imports = __wbg_get_imports;
-
-        if (wasm.__wbindgen_start == undefined) {
-            wasm.main();
-        }
-      });
-    }
-  );
-  </script>
+            &format!(
+                r#"<script type="module" async src="/{}/{}"></script>
             </body"#,
+                self.base_path_or_default(),
+                self.bundled_js_path(assets)
+            ),
         );
     }
 

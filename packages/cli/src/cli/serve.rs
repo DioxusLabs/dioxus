@@ -72,6 +72,11 @@ pub(crate) struct ServeArgs {
     #[clap(long)]
     pub(crate) force_sequential: bool,
 
+    /// Exit the CLI after running into an error. This is mainly used to test hot patching internally
+    #[clap(long)]
+    #[clap(hide = true)]
+    pub(crate) exit_on_error: bool,
+
     /// Platform-specific arguments for the build
     #[clap(flatten)]
     pub(crate) platform_args: CommandWithPlatformOverrides<PlatformServeArgs>,

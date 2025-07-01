@@ -1,6 +1,6 @@
 use anyhow::Context;
-use manganis::{CssModuleAssetOptions, FolderAssetOptions};
-use manganis_core::{AssetOptions, CssAssetOptions, ImageAssetOptions, JsAssetOptions};
+use manganis::{AssetOptions, CssModuleAssetOptions, FolderAssetOptions};
+use manganis_core::{AssetVariant, CssAssetOptions, ImageAssetOptions, JsAssetOptions};
 use std::path::Path;
 
 use crate::css::{process_css_module, process_scss};
@@ -26,10 +26,10 @@ pub(crate) fn process_file_to_with_options(
     output_path: &Path,
     in_folder: bool,
 ) -> anyhow::Result<()> {
-    // If the file already exists, then we must have a file with the same hash
-    // already. The hash has the file contents and options, so if we find a file
-    // with the same hash, we probably already created this file in the past
-    if output_path.exists() {
+    // If the file already exists and this is a hashed asset, then we must have a file
+    // with the same hash already. The hash has the file contents and options, so if we
+    // find a file with the same hash, we probably already created this file in the past
+    if output_path.exists() && options.hash_suffix() {
         return Ok(());
     }
     if let Some(parent) = output_path.parent() {
@@ -48,7 +48,7 @@ pub(crate) fn process_file_to_with_options(
             .unwrap_or_default()
             .to_string_lossy()
     ));
-    let resolved_options = resolve_asset_options(source, options);
+    let resolved_options = resolve_asset_options(source, options.variant());
 
     match &resolved_options {
         ResolvedAssetType::Css(options) => {
@@ -86,6 +86,16 @@ pub(crate) fn process_file_to_with_options(
         }
     }
 
+    // Remove the existing output file if it exists
+    if output_path.exists() {
+        if output_path.is_file() {
+            std::fs::remove_file(output_path).context("Failed to remove previous output file")?;
+        } else if output_path.is_dir() {
+            std::fs::remove_dir_all(output_path)
+                .context("Failed to remove previous output file")?;
+        }
+    }
+
     // If everything was successful, rename the temp file to the final output path
     std::fs::rename(temp_path, output_path).context("Failed to rename output file")?;
 
@@ -111,14 +121,14 @@ pub(crate) enum ResolvedAssetType {
     File,
 }
 
-pub(crate) fn resolve_asset_options(source: &Path, options: &AssetOptions) -> ResolvedAssetType {
+pub(crate) fn resolve_asset_options(source: &Path, options: &AssetVariant) -> ResolvedAssetType {
     match options {
-        AssetOptions::Image(image) => ResolvedAssetType::Image(*image),
-        AssetOptions::Css(css) => ResolvedAssetType::Css(*css),
-        AssetOptions::CssModule(css) => ResolvedAssetType::CssModule(*css),
-        AssetOptions::Js(js) => ResolvedAssetType::Js(*js),
-        AssetOptions::Folder(folder) => ResolvedAssetType::Folder(*folder),
-        AssetOptions::Unknown => resolve_unknown_asset_options(source),
+        AssetVariant::Image(image) => ResolvedAssetType::Image(*image),
+        AssetVariant::Css(css) => ResolvedAssetType::Css(*css),
+        AssetVariant::CssModule(css) => ResolvedAssetType::CssModule(*css),
+        AssetVariant::Js(js) => ResolvedAssetType::Js(*js),
+        AssetVariant::Folder(folder) => ResolvedAssetType::Folder(*folder),
+        AssetVariant::Unknown => resolve_unknown_asset_options(source),
         _ => {
             tracing::warn!("Unknown asset options... you may need to update the Dioxus CLI. Defaulting to a generic file: {:?}", options);
             resolve_unknown_asset_options(source)
@@ -128,14 +138,14 @@ pub(crate) fn resolve_asset_options(source: &Path, options: &AssetOptions) -> Re
 
 fn resolve_unknown_asset_options(source: &Path) -> ResolvedAssetType {
     match source.extension().map(|e| e.to_string_lossy()).as_deref() {
-        Some("scss" | "sass") => ResolvedAssetType::Scss(CssAssetOptions::new()),
-        Some("css") => ResolvedAssetType::Css(CssAssetOptions::new()),
-        Some("js") => ResolvedAssetType::Js(JsAssetOptions::new()),
+        Some("scss" | "sass") => ResolvedAssetType::Scss(CssAssetOptions::default()),
+        Some("css") => ResolvedAssetType::Css(CssAssetOptions::default()),
+        Some("js") => ResolvedAssetType::Js(JsAssetOptions::default()),
         Some("json") => ResolvedAssetType::Json,
         Some("jpg" | "jpeg" | "png" | "webp" | "avif") => {
-            ResolvedAssetType::Image(ImageAssetOptions::new())
+            ResolvedAssetType::Image(ImageAssetOptions::default())
         }
-        _ if source.is_dir() => ResolvedAssetType::Folder(FolderAssetOptions::new()),
+        _ if source.is_dir() => ResolvedAssetType::Folder(FolderAssetOptions::default()),
         _ => ResolvedAssetType::File,
     }
 }

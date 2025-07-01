@@ -14,7 +14,16 @@ pub enum AssetServeError {
     ResponseError(#[from] http::Error),
 }
 
-pub fn serve_asset_from_raw_path(path: &str) -> Result<Response<Vec<u8>>, AssetServeError> {
+/// Serve an asset from the filesystem or a custom asset handler.
+///
+/// This method properly accesses the asset directory based on the platform and serves the asset
+/// wrapped in an HTTP response.
+///
+/// Platform specifics:
+/// - On the web, this returns AssetServerError since there's no filesystem access. Use `fetch` instead.
+/// - On Android, it attempts to load assets using the Android AssetManager.
+/// - On other platforms, it serves assets from the filesystem.
+pub fn serve_asset(path: &str) -> Result<Response<Vec<u8>>, AssetServeError> {
     // If the user provided a custom asset handler, then call it and return the response if the request was handled.
     // The path is the first part of the URI, so we need to trim the leading slash.
     let mut uri_path = PathBuf::from(
