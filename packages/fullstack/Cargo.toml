@@ -19,7 +19,7 @@ dioxus_server_macro = { workspace = true }
 axum = { workspace = true, optional = true }
 tower-http = { workspace = true, optional = true, features = ["fs"] }
 
-dioxus-lib = { workspace = true }
+dioxus-lib = { workspace = true, features = ["html"] }
 generational-box = { workspace = true }
 
 # Dioxus + SSR
@@ -41,7 +41,6 @@ dioxus-mobile = { workspace = true, optional = true }
 
 tracing = { workspace = true }
 tracing-futures = { workspace = true, optional = true }
-once_cell = { workspace = true }
 tokio-util = { workspace = true, features = ["rt"], optional = true }
 async-trait = { workspace = true, optional = true }
 

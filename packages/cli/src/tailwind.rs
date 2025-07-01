@@ -19,12 +19,41 @@ impl TailwindCli {
         Self { version }
     }
 
-    pub(crate) async fn serve(
+    pub(crate) async fn run_once(
         manifest_dir: PathBuf,
         input_path: Option<PathBuf>,
         output_path: Option<PathBuf>,
-    ) -> Result<tokio::task::JoinHandle<Result<()>>> {
-        Ok(tokio::spawn(async move {
+    ) -> Result<()> {
+        let Some(tailwind) = Self::autodetect(&manifest_dir) else {
+            return Ok(());
+        };
+
+        if !tailwind.get_binary_path()?.exists() {
+            tracing::info!("Installing tailwindcss@{}", tailwind.version);
+            tailwind.install_github().await?;
+        }
+
+        let output = tailwind
+            .run(&manifest_dir, input_path, output_path, false)?
+            .wait_with_output()
+            .await?;
+
+        if !output.stderr.is_empty() {
+            tracing::warn!(
+                "Warnings while running tailwind: {}",
+                String::from_utf8_lossy(&output.stdout)
+            );
+        }
+
+        Ok(())
+    }
+
+    pub(crate) fn serve(
+        manifest_dir: PathBuf,
+        input_path: Option<PathBuf>,
+        output_path: Option<PathBuf>,
+    ) -> tokio::task::JoinHandle<Result<()>> {
+        tokio::spawn(async move {
             let Some(tailwind) = Self::autodetect(&manifest_dir) else {
                 return Ok(());
             };
@@ -34,16 +63,24 @@ impl TailwindCli {
                 tailwind.install_github().await?;
             }
 
-            let proc = tailwind.watch(&manifest_dir, input_path, output_path)?;
-            proc.wait_with_output().await?;
+            // the tw watcher blocks on stdin, and `.wait()` will drop stdin
+            // unfortunately the tw watcher just deadlocks in this case, so we take the stdin manually
+            let mut proc = tailwind.run(&manifest_dir, input_path, output_path, true)?;
+            let stdin = proc.stdin.take();
+            proc.wait().await?;
+            drop(stdin);
 
             Ok(())
-        }))
+        })
     }
 
     /// Use the correct tailwind version based on the manifest directory.
+    ///
     /// - If `tailwind.config.js` or `tailwind.config.ts` exists, use v3.
     /// - If `tailwind.css` exists, use v4.
+    ///
+    /// Note that v3 still uses the tailwind.css file, but usually the accompanying js file indicates
+    /// that the project is using v3.
     pub(crate) fn autodetect(manifest_dir: &Path) -> Option<Self> {
         if manifest_dir.join("tailwind.config.js").exists() {
             return Some(Self::v3());
@@ -68,11 +105,12 @@ impl TailwindCli {
         Self::new(Self::V3_TAG.to_string())
     }
 
-    pub(crate) fn watch(
+    pub(crate) fn run(
         &self,
         manifest_dir: &Path,
         input_path: Option<PathBuf>,
         output_path: Option<PathBuf>,
+        watch: bool,
     ) -> Result<tokio::process::Child> {
         let binary_path = self.get_binary_path()?;
 
@@ -85,15 +123,28 @@ impl TailwindCli {
                 .context("failed to create tailwindcss output directory")?;
         }
 
+        tracing::debug!("Spawning tailwindcss@{} with args: {:?}", self.version, {
+            [
+                binary_path.to_string_lossy().to_string(),
+                "--input".to_string(),
+                input_path.to_string_lossy().to_string(),
+                "--output".to_string(),
+                output_path.to_string_lossy().to_string(),
+                "--watch".to_string(),
+            ]
+        });
+
         let mut cmd = Command::new(binary_path);
         let proc = cmd
             .arg("--input")
             .arg(input_path)
             .arg("--output")
             .arg(output_path)
-            .arg("--watch")
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
+            .args(watch.then_some("--watch"))
+            .kill_on_drop(true)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
             .spawn()?;
 
         Ok(proc)

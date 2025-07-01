@@ -18,11 +18,11 @@ pub fn app() -> Element {
         button { onclick: move |_| count -= 1, "Down low!" }
         button {
             onclick: move |_| async move {
-                if let Ok(data) = get_server_data().await {
-                    println!("Client received: {}", data);
-                    text.set(data.clone());
-                    post_server_data(data).await.unwrap();
-                }
+                let data = get_server_data().await?;
+                println!("Client received: {}", data);
+                text.set(data.clone());
+                post_server_data(data).await?;
+                Ok(())
             },
             "Run a server function"
         }
@@ -30,14 +30,14 @@ pub fn app() -> Element {
     }
 }
 
-#[server(PostServerData)]
-async fn post_server_data(data: String) -> Result<(), ServerFnError> {
+#[server]
+async fn post_server_data(data: String) -> ServerFnResult {
     println!("Server received: {}", data);
 
     Ok(())
 }
 
-#[server(GetServerData)]
-async fn get_server_data() -> Result<String, ServerFnError> {
+#[server]
+async fn get_server_data() -> ServerFnResult<String> {
     Ok("Hello from the server!".to_string())
 }

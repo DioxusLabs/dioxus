@@ -1,7 +1,7 @@
 use crate::Result;
 use anyhow::Context;
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::{borrow::Cow, path::PathBuf};
 use target_lexicon::Triple;
 
 /// `dx` can act as a linker in a few scenarios. Note that we don't *actually* implement the linker logic,
@@ -38,14 +38,14 @@ pub struct LinkAction {
 /// The linker flavor to use. This influences the argument style that gets passed to the linker.
 /// We're imitating the rustc linker flavors here.
 ///
-/// https://doc.rust-lang.org/beta/nightly-rustc/rustc_target/spec/enum.LinkerFlavor.html
+/// <https://doc.rust-lang.org/beta/nightly-rustc/rustc_target/spec/enum.LinkerFlavor.html>
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub enum LinkerFlavor {
     Gnu,
     Darwin,
     WasmLld,
-    Unix,
     Msvc,
+    Unsupported, // a catch-all for unsupported linkers, usually the stripped-down unix ones
 }
 
 impl LinkAction {
@@ -80,25 +80,31 @@ impl LinkAction {
         })
     }
 
-    pub(crate) fn write_env_vars(&self, env_vars: &mut Vec<(&str, String)>) -> Result<()> {
-        env_vars.push((Self::DX_LINK_ARG, "1".to_string()));
+    pub(crate) fn write_env_vars(
+        &self,
+        env_vars: &mut Vec<(Cow<'static, str>, String)>,
+    ) -> Result<()> {
+        env_vars.push((Self::DX_LINK_ARG.into(), "1".to_string()));
         env_vars.push((
-            Self::DX_ARGS_FILE,
+            Self::DX_ARGS_FILE.into(),
             dunce::canonicalize(&self.link_args_file)?
                 .to_string_lossy()
                 .to_string(),
         ));
         env_vars.push((
-            Self::DX_ERR_FILE,
+            Self::DX_ERR_FILE.into(),
             dunce::canonicalize(&self.link_err_file)?
                 .to_string_lossy()
                 .to_string(),
         ));
-        env_vars.push((Self::DX_LINK_TRIPLE, self.triple.to_string()));
+        env_vars.push((Self::DX_LINK_TRIPLE.into(), self.triple.to_string()));
         if let Some(linker) = &self.linker {
             env_vars.push((
-                Self::DX_LINK_CUSTOM_LINKER,
-                dunce::canonicalize(linker)?.to_string_lossy().to_string(),
+                Self::DX_LINK_CUSTOM_LINKER.into(),
+                dunce::canonicalize(linker)
+                    .unwrap_or(linker.clone())
+                    .to_string_lossy()
+                    .to_string(),
             ));
         }
 
@@ -129,18 +135,24 @@ impl LinkAction {
 
         handle_linker_command_file(&mut args);
 
+        if self.triple.environment == target_lexicon::Environment::Android {
+            args.retain(|arg| !arg.ends_with(".lib"));
+        }
+
         // Write the linker args to a file for the main process to read
         // todo: we might need to encode these as escaped shell words in case newlines are passed
-        std::fs::write(self.link_args_file, args.join("\n"))?;
+        std::fs::write(&self.link_args_file, args.join("\n"))?;
 
         // If there's a linker specified, we use that. Otherwise, we write a dummy object file to satisfy
         // any post-processing steps that rustc does.
         match self.linker {
             Some(linker) => {
-                let res = std::process::Command::new(linker)
-                    .args(args.iter().skip(1))
-                    .output()
-                    .expect("Failed to run linker");
+                let mut cmd = std::process::Command::new(linker);
+                match cfg!(target_os = "windows") {
+                    true => cmd.arg(format!("@{}", &self.link_args_file.display())),
+                    false => cmd.args(args.iter().skip(1)),
+                };
+                let res = cmd.output().expect("Failed to run linker");
 
                 if !res.stderr.is_empty() || !res.stdout.is_empty() {
                     _ = std::fs::create_dir_all(self.link_err_file.parent().unwrap());

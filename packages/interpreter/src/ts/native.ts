@@ -204,6 +204,9 @@ export class NativeInterpreter extends JSChannel_ {
   }
 
   handleWindowsDragOver(xPos, yPos) {
+    const displayScaleFactor = window.devicePixelRatio || 1;
+    xPos /= displayScaleFactor;
+    yPos /= displayScaleFactor;
     const element = document.elementFromPoint(xPos, yPos);
 
     if (element != window.dxDragLastElement) {
@@ -274,11 +277,14 @@ export class NativeInterpreter extends JSChannel_ {
       bubbles,
     };
 
-    // Run any prevent defaults the user might've set
-    // This is to support the prevent_default: "onclick" attribute that dioxus has had for a while, but is not necessary
-    // now that we expose preventDefault to the virtualdom on desktop
-    // Liveview will still need to use this
-    this.preventDefaults(event);
+    // This should:
+    // - prevent form submissions from navigating
+    // - prevent anchor tags from navigating
+    // - prevent buttons from submitting forms
+    // - let the virtualdom attempt to prevent the event
+    if (event.type === "submit") {
+      event.preventDefault();
+    }
 
     // liveview does not have synchronous event handling, so we need to send the event to the host
     if (this.liveview) {
@@ -326,28 +332,10 @@ export class NativeInterpreter extends JSChannel_ {
     }
   }
 
-  // This should:
-  // - prevent form submissions from navigating
-  // - prevent anchor tags from navigating
-  // - prevent buttons from submitting forms
-  // - let the virtualdom attempt to prevent the event
-  preventDefaults(event: Event) {
-    if (event.type === "submit") {
-      event.preventDefault();
-    }
-  }
-
   handleClickNavigate(event: Event, target: Element) {
     // todo call prevent default if it's the right type of event
     if (!this.intercept_link_redirects) {
       return;
-    }
-
-    // If the target is a form prevent the click event
-    // from submitting the form
-    let form = target.closest("form");
-    if (target.tagName === "BUTTON" && (event.type == "submit" || form)) {
-      event.preventDefault();
     }
 
     // If the target is an anchor tag, we want to intercept the click too, to prevent the browser from navigating

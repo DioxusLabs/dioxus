@@ -1,0 +1,14 @@
+name: Free Disk Space
+description: Free up disk space on the runner
+runs:
+  using: composite
+  steps:
+  - name: Free Disk Space (Ubuntu)
+    if: runner.os == 'Linux'
+    shell: bash
+    run: |
+      echo "Freeing up disk space..."
+      sudo rm -rf /opt/ghc
+      sudo rm -rf /usr/share/dotnet
+      sudo rm -rf /usr/local/lib/android
+      sudo rm -rf /usr/share/swift

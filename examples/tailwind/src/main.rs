@@ -25,7 +25,7 @@ fn app() -> Element {
                         a { class: "mr-5 hover:text-white", "Third Link" }
                         a { class: "mr-5 hover:text-white", "Fourth Link" }
                     }
-                    button { class: "inline-flex items-center bg-gray-800 border-0 py-1 px-3 focus:outline-none hover:bg-gray-700 rounded text-base mt-4 md:mt-0",
+                    button { class: "inline-flex items-center bg-gray-800 border-0 py-1 px-3 focus:outline-hidden hover:bg-gray-700 rounded-sm text-base mt-4 md:mt-0",
                         "Button"
                         RightArrowIcon {}
                     }
@@ -34,7 +34,7 @@ fn app() -> Element {
 
             section { class: "text-gray-400 bg-gray-900 body-font",
                 div { class: "container mx-auto flex px-5 py-24 md:flex-row flex-col items-center",
-                    div { class: "lg:flex-grow md:w-1/2 lg:pr-24 md:pr-16 flex flex-col md:items-start md:text-left mb-16 md:mb-0 items-center text-center",
+                    div { class: "lg:grow md:w-1/2 lg:pr-24 md:pr-16 flex flex-col md:items-start md:text-left mb-16 md:mb-0 items-center text-center",
                         h1 { class: "title-font sm:text-4xl text-3xl mb-4 font-medium text-white",
                             br { class: "hidden lg:inline-block" }
                             "Dioxus Sneak Peek"
@@ -46,17 +46,17 @@ fn app() -> Element {
                             on mobile and embedded platforms."
                         }
                         div { class: "flex justify-center",
-                            button { class: "inline-flex text-white bg-indigo-500 border-0 py-2 px-6 focus:outline-none hover:bg-indigo-600 rounded text-lg",
+                            button { class: "inline-flex text-white bg-indigo-500 border-0 py-2 px-6 focus:outline-hidden hover:bg-indigo-600 rounded-sm text-lg",
                                 "Learn more"
                             }
-                            button { class: "ml-4 inline-flex text-gray-400 bg-gray-800 border-0 py-2 px-6 focus:outline-none hover:bg-gray-700 hover:text-white rounded text-lg",
+                            button { class: "ml-4 inline-flex text-gray-400 bg-gray-800 border-0 py-2 px-6 focus:outline-hidden hover:bg-gray-700 hover:text-white rounded-sm text-lg",
                                 "Build an app"
                             }
                         }
                     }
                     div { class: "lg:max-w-lg lg:w-full md:w-1/2 w-5/6",
                         img {
-                            class: "object-cover object-center rounded",
+                            class: "object-cover object-center rounded-sm",
                             src: "https://i.imgur.com/oK6BLtw.png",
                             referrerpolicy: "no-referrer",
                             alt: "hero",

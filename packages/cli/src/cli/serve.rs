@@ -1,32 +1,27 @@
 use super::*;
 use crate::{AddressArguments, BuildArgs, TraceController};
 use futures_util::FutureExt;
-use once_cell::sync::OnceCell;
+use std::sync::OnceLock;
 use std::{backtrace::Backtrace, panic::AssertUnwindSafe};
 
 /// Serve the project
 ///
 /// `dx serve` takes cargo args by default, except with a required `--platform` arg:
 ///
-/// ```
+/// ```sh
 /// dx serve --example blah --target blah --platform android
 /// ```
 ///
 /// A simple serve:
-/// ```
+/// ```sh
 /// dx serve --platform web
-/// ```
-///
-/// A serve with customized arguments:
-///
-/// ```
 /// ```
 ///
 /// As of dioxus 0.7, `dx serve` allows independent customization of the client and server builds,
 /// allowing workspaces and removing any "magic" done to support ergonomic fullstack serving with
 /// an plain `dx serve`. These require specifying more arguments like features since they won't be autodetected.
 ///
-/// ```
+/// ```sh
 /// dx serve \
 ///     client --package frontend \
 ///     server --package backend
@@ -55,10 +50,6 @@ pub(crate) struct ServeArgs {
     #[clap(long)]
     pub(crate) cross_origin_policy: bool,
 
-    /// Additional arguments to pass to the executable
-    #[clap(long)]
-    pub(crate) args: Vec<String>,
-
     /// Sets the interval in seconds that the CLI will poll for file changes on WSL.
     #[clap(long, default_missing_value = "2")]
     pub(crate) wsl_file_poll_interval: Option<u16>,
@@ -81,8 +72,24 @@ pub(crate) struct ServeArgs {
     #[clap(long)]
     pub(crate) force_sequential: bool,
 
+    /// Exit the CLI after running into an error. This is mainly used to test hot patching internally
+    #[clap(long)]
+    #[clap(hide = true)]
+    pub(crate) exit_on_error: bool,
+
+    /// Platform-specific arguments for the build
+    #[clap(flatten)]
+    pub(crate) platform_args: CommandWithPlatformOverrides<PlatformServeArgs>,
+}
+
+#[derive(Clone, Debug, Default, Parser)]
+pub(crate) struct PlatformServeArgs {
     #[clap(flatten)]
     pub(crate) targets: BuildArgs,
+
+    /// Additional arguments to pass to the executable
+    #[clap(long, default_value = "")]
+    pub(crate) args: String,
 }
 
 impl ServeArgs {
@@ -102,7 +109,7 @@ impl ServeArgs {
             line: u32,
             column: u32,
         }
-        static BACKTRACE: OnceCell<(Backtrace, Option<SavedLocation>)> = OnceCell::new();
+        static BACKTRACE: OnceLock<(Backtrace, Option<SavedLocation>)> = OnceLock::new();
 
         // We *don't* want printing here, since it'll break the tui and log ordering.
         //

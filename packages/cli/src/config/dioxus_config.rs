@@ -9,9 +9,6 @@ pub(crate) struct DioxusConfig {
     pub(crate) web: WebConfig,
 
     #[serde(default)]
-    pub(crate) desktop: DesktopConfig,
-
-    #[serde(default)]
     pub(crate) bundle: BundleConfig,
 }
 
@@ -19,11 +16,14 @@ impl Default for DioxusConfig {
     fn default() -> Self {
         Self {
             application: ApplicationConfig {
-                asset_dir: None,
-                sub_package: None,
                 out_dir: None,
                 tailwind_input: None,
                 tailwind_output: None,
+                ios_info_plist: None,
+                android_manifest: None,
+                macos_info_plist: None,
+                ios_entitlements: None,
+                macos_entitlements: None,
             },
             web: WebConfig {
                 app: WebAppConfig {
@@ -46,10 +46,9 @@ impl Default for DioxusConfig {
                     key_path: None,
                     cert_path: None,
                 },
-                pre_compress: true,
+                pre_compress: false,
                 wasm_opt: Default::default(),
             },
-            desktop: DesktopConfig::default(),
             bundle: BundleConfig::default(),
         }
     }

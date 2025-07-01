@@ -1,4 +1,8 @@
-use crate::{AppBuilder, BuildId, BuildMode, BuilderUpdate, Result, ServeArgs, TraceController};
+use crate::{
+    styles::{GLOW_STYLE, LINK_STYLE},
+    AppBuilder, BuildId, BuildMode, BuilderUpdate, Error, Platform, Result, ServeArgs,
+    TraceController,
+};
 
 mod ansi_buffer;
 mod output;
@@ -8,6 +12,7 @@ mod runner;
 mod server;
 mod update;
 
+use dioxus_dx_wire_format::BuildStage;
 pub(crate) use output::*;
 pub(crate) use runner::*;
 pub(crate) use server::*;
@@ -35,6 +40,7 @@ pub(crate) use update::*;
 ///   to a dynamic one on the fly.
 pub(crate) async fn serve_all(args: ServeArgs, tracer: &mut TraceController) -> Result<()> {
     // Load the args into a plan, resolving all tooling, build dirs, arguments, decoding the multi-target, etc
+    let exit_on_error = args.exit_on_error;
     let mut builder = AppServer::start(args).await?;
     let mut devserver = WebServer::start(&builder)?;
     let mut screen = Output::start(builder.interactive).await?;
@@ -43,15 +49,21 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &mut TraceController) -> 
     // Also, these commands might not be the most important, but it's all we've got enabled right now
     tracing::info!(
         r#"-----------------------------------------------------------------
-                Serving your Dioxus app: {} 🚀
-                • Press `ctrl+c` to exit the server
-                • Press `r` to rebuild the app
-                • Press `p` to toggle automatic rebuilds
-                • Press `v` to toggle verbose logging
-                • Press `/` for more commands and shortcuts
-                Learn more at https://dioxuslabs.com/learn/0.6/getting_started
+                Serving your app: {binname}! 🚀
+                • Press {GLOW_STYLE}`ctrl+c`{GLOW_STYLE:#} to exit the server
+                • Press {GLOW_STYLE}`r`{GLOW_STYLE:#} to rebuild the app
+                • Press {GLOW_STYLE}`p`{GLOW_STYLE:#} to toggle automatic rebuilds
+                • Press {GLOW_STYLE}`v`{GLOW_STYLE:#} to toggle verbose logging
+                • Press {GLOW_STYLE}`/`{GLOW_STYLE:#} for more commands and shortcuts{extra}
                ----------------------------------------------------------------"#,
-        builder.app_name()
+        binname = builder.client.build.executable_name(),
+        extra = if builder.client.build.using_dioxus_explicitly {
+            format!(
+                "\n                Learn more at {LINK_STYLE}https://dioxuslabs.com/learn/0.7/getting_started{LINK_STYLE:#}"
+            )
+        } else {
+            String::new()
+        }
     );
 
     loop {
@@ -88,8 +100,11 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &mut TraceController) -> 
 
             // Run the server in the background
             // Waiting for updates here lets us tap into when clients are added/removed
-            ServeUpdate::NewConnection { id, aslr_reference } => {
-                // Send the client
+            ServeUpdate::NewConnection {
+                id,
+                aslr_reference,
+                pid,
+            } => {
                 devserver
                     .send_hotreload(builder.applied_hot_reload_changes(BuildId::CLIENT))
                     .await;
@@ -100,7 +115,7 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &mut TraceController) -> 
                         .await;
                 }
 
-                builder.client_connected(id, aslr_reference).await;
+                builder.client_connected(id, aslr_reference, pid).await;
             }
 
             // Received a message from the devtools server - currently we only use this for
@@ -121,21 +136,51 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &mut TraceController) -> 
                 // And then update the websocketed clients with the new build status in case they want it
                 devserver.new_build_update(&update).await;
 
+                // Start the SSG build if we need to
+                builder.new_build_update(&update, &devserver).await;
+
                 // And then open the app if it's ready
                 match update {
+                    BuilderUpdate::Progress {
+                        stage: BuildStage::Failed,
+                    } => {
+                        if exit_on_error {
+                            return Err(Error::Cargo(format!(
+                                "Build failed for platform: {platform}"
+                            )));
+                        }
+                    }
+                    BuilderUpdate::Progress {
+                        stage: BuildStage::Aborted,
+                    } => {
+                        if exit_on_error {
+                            return Err(Error::Cargo(format!(
+                                "Build aborted for platform: {platform}"
+                            )));
+                        }
+                    }
                     BuilderUpdate::Progress { .. } => {}
                     BuilderUpdate::CompilerMessage { message } => {
                         screen.push_cargo_log(message);
                     }
                     BuilderUpdate::BuildFailed { err } => {
-                        tracing::error!("Build failed: {:#?}", err);
+                        tracing::error!("Build failed: {}", err);
+                        if exit_on_error {
+                            return Err(err);
+                        }
                     }
                     BuilderUpdate::BuildReady { bundle } => match bundle.mode {
                         BuildMode::Thin { ref cache, .. } => {
                             let elapsed =
                                 bundle.time_end.duration_since(bundle.time_start).unwrap();
                             match builder.hotpatch(&bundle, id, cache).await {
-                                Ok(jumptable) => devserver.send_patch(jumptable, elapsed, id).await,
+                                Ok(jumptable) => {
+                                    let pid = match id {
+                                        BuildId::CLIENT => builder.client.pid,
+                                        _ => builder.server.as_ref().and_then(|s| s.pid),
+                                    };
+                                    devserver.send_patch(jumptable, elapsed, id, pid).await
+                                }
                                 Err(err) => {
                                     tracing::error!("Failed to hot-patch app: {err}");
 
@@ -150,7 +195,7 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &mut TraceController) -> 
                         }
                         BuildMode::Base | BuildMode::Fat => {
                             _ = builder
-                                .open(bundle, &mut devserver)
+                                .open(&bundle, &mut devserver)
                                 .await
                                 .inspect_err(|e| tracing::error!("Failed to open app: {}", e));
                         }
@@ -170,6 +215,19 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &mut TraceController) -> 
                             );
                         } else {
                             tracing::error!("Application [{platform}] exited with error: {status}");
+                            if exit_on_error {
+                                return Err(Error::Runtime(format!(
+                                    "Application [{platform}] exited with error: {status}"
+                                )));
+                            }
+                        }
+                    }
+                    BuilderUpdate::ProcessWaitFailed { err } => {
+                        tracing::warn!(
+                            "Failed to wait for process - maybe it's hung or being debugged?: {err}"
+                        );
+                        if exit_on_error {
+                            return Err(err.into());
                         }
                     }
                 }
@@ -179,11 +237,21 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &mut TraceController) -> 
                 screen.push_log(log);
             }
 
-            ServeUpdate::OpenApp => {
-                if let Err(err) = builder.open_all(&devserver, true).await {
-                    tracing::error!("Failed to open app: {err}")
+            ServeUpdate::OpenApp => match builder.use_hotpatch_engine {
+                true if !matches!(builder.client.build.platform, Platform::Web) => {
+                    tracing::warn!(
+                        "Opening a native app with hotpatching enabled requires a full rebuild..."
+                    );
+                    builder.full_rebuild().await;
+                    devserver.send_reload_start().await;
+                    devserver.start_build().await;
                 }
-            }
+                _ => {
+                    if let Err(err) = builder.open_all(&devserver, true).await {
+                        tracing::error!("Failed to open app: {err}")
+                    }
+                }
+            },
 
             ServeUpdate::Redraw => {
                 // simply returning will cause a redraw
@@ -201,10 +269,13 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &mut TraceController) -> 
                 )
             }
 
+            ServeUpdate::OpenDebugger { id } => {
+                builder.open_debugger(&devserver, id).await;
+            }
+
             ServeUpdate::Exit { error } => {
-                _ = builder.cleanup_all().await;
+                _ = builder.shutdown().await;
                 _ = devserver.shutdown().await;
-                _ = screen.shutdown();
 
                 match error {
                     Some(err) => return Err(anyhow::anyhow!("{}", err).into()),

@@ -1,8 +1,10 @@
 .dioxus
 /target
+/packages/playwright-tests/cli-optimization/monaco-editor-0.52.2
 /packages/playwright-tests/web/dist
 /packages/playwright-tests/fullstack/dist
 /packages/playwright-tests/test-results
+/packages/playwright-tests/web-hot-patch-temp
 /dist
 .DS_Store
 /examples/assets/test_video.mp4

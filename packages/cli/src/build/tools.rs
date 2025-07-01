@@ -8,9 +8,10 @@ use tokio::process::Command;
 
 /// The tools for Android (ndk, sdk, etc)
 ///
-/// https://gist.github.com/Pulimet/5013acf2cd5b28e55036c82c91bd56d8?permalink_comment_id=3678614
+/// <https://gist.github.com/Pulimet/5013acf2cd5b28e55036c82c91bd56d8?permalink_comment_id=3678614>
 #[derive(Debug, Clone)]
 pub(crate) struct AndroidTools {
+    pub(crate) sdk: Option<PathBuf>,
     pub(crate) ndk: PathBuf,
     pub(crate) adb: PathBuf,
     pub(crate) java_home: Option<PathBuf>,
@@ -114,6 +115,7 @@ pub fn get_android_tools() -> Option<Arc<AndroidTools>> {
         ndk,
         adb,
         java_home,
+        sdk,
     }))
 }
 
@@ -166,6 +168,18 @@ impl AndroidTools {
             self.min_sdk_version(),
             suffix
         ))
+    }
+
+    pub(crate) fn sdk(&self) -> PathBuf {
+        // /Users/jonathankelley/Library/Android/sdk/ndk/25.2/... (25.2 is the ndk here)
+        // /Users/jonathankelley/Library/Android/sdk/
+        self.sdk
+            .clone()
+            .unwrap_or_else(|| self.ndk.parent().unwrap().parent().unwrap().to_path_buf())
+    }
+
+    pub(crate) fn emulator(&self) -> PathBuf {
+        self.sdk().join("emulator").join("emulator")
     }
 
     // todo(jon): this should be configurable
@@ -230,8 +244,11 @@ impl AndroidTools {
                 "x86_64" => {
                     triple.architecture = Architecture::X86_64;
                 }
+                "" => {
+                    tracing::debug!("No device running - probably waiting for emulator");
+                }
                 other => {
-                    tracing::warn!("Unknown architecture from adb: {other}");
+                    tracing::debug!("Unknown architecture from adb: {other}");
                 }
             },
             Ok(Err(err)) => {
@@ -248,10 +265,9 @@ impl AndroidTools {
 
 fn var_or_debug(name: &str) -> Option<PathBuf> {
     use std::env::var;
-    use tracing::debug;
 
     var(name)
-        .inspect_err(|_| debug!("{name} not set"))
+        .inspect_err(|_| tracing::trace!("{name} not set"))
         .ok()
         .map(PathBuf::from)
 }

@@ -1,11 +1,12 @@
 use dioxus_core_types::DioxusFormattable;
 
+use crate::events::ListenerCallback;
 use crate::innerlude::VProps;
 use crate::prelude::RenderError;
 use crate::{any_props::BoxedAnyProps, innerlude::ScopeState};
 use crate::{arena::ElementId, Element, Event};
 use crate::{
-    innerlude::{ElementRef, EventHandler, MountId},
+    innerlude::{ElementRef, MountId},
     properties::ComponentFunction,
 };
 use crate::{Properties, ScopeId, VirtualDom};
@@ -154,29 +155,6 @@ impl AsVNode for Element {
 impl Default for VNode {
     fn default() -> Self {
         Self::placeholder()
-    }
-}
-
-impl Drop for VNode {
-    fn drop(&mut self) {
-        // FIXME:
-        // TODO:
-        //
-        // We have to add this drop *here* because we can't add a drop impl to AttributeValue and
-        // keep semver compatibility. Adding a drop impl means you can't destructure the value, which
-        // we need to do for enums.
-        //
-        // if dropping this will drop the last vnode (rc count is 1), then we need to drop the listeners
-        // in this template
-        if Rc::strong_count(&self.vnode) == 1 {
-            for attrs in self.vnode.dynamic_attrs.iter() {
-                for attr in attrs.iter() {
-                    if let AttributeValue::Listener(listener) = &attr.value {
-                        listener.callback.manually_drop();
-                    }
-                }
-            }
-        }
     }
 }
 
@@ -341,11 +319,8 @@ type StaticTemplateAttributeArray = &'static [TemplateAttribute];
 /// A static layout of a UI tree that describes a set of dynamic and static nodes.
 ///
 /// This is the core innovation in Dioxus. Most UIs are made of static nodes, yet participate in diffing like any
-/// dynamic node. This struct can be created at compile time. It promises that its name is unique, allow Dioxus to use
+/// dynamic node. This struct can be created at compile time. It promises that its pointer is unique, allow Dioxus to use
 /// its static description of the UI to skip immediately to the dynamic nodes during diffing.
-///
-/// For this to work properly, the [`Template::name`] *must* be unique across your entire project. This can be done via variety of
-/// ways, with the suggested approach being the unique code location (file, line, col, etc).
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, Copy, Eq, PartialOrd, Ord)]
 pub struct Template {
@@ -813,12 +788,7 @@ impl Attribute {
             name: self.name,
             namespace: self.namespace,
             volatile: self.volatile,
-            value: match &self.value {
-                AttributeValue::Listener(listener) => {
-                    AttributeValue::Listener(listener.leak_reference().unwrap())
-                }
-                value => value.clone(),
-            },
+            value: self.value.clone(),
         }
     }
 }
@@ -842,7 +812,7 @@ pub enum AttributeValue {
     Bool(bool),
 
     /// A listener, like "onclick"
-    Listener(ListenerCb),
+    Listener(ListenerCallback),
 
     /// An arbitrary value that implements PartialEq and is static
     Any(Rc<dyn AnyValue>),
@@ -855,16 +825,8 @@ impl AttributeValue {
     /// Create a new [`AttributeValue`] with the listener variant from a callback
     ///
     /// The callback must be confined to the lifetime of the ScopeState
-    pub fn listener<T: 'static>(mut callback: impl FnMut(Event<T>) + 'static) -> AttributeValue {
-        // TODO: maybe don't use the copy-variant of EventHandler here?
-        // Maybe, create an Owned variant so we are less likely to run into leaks
-        AttributeValue::Listener(EventHandler::leak(move |event: Event<dyn Any>| {
-            let data = event.data.downcast::<T>().unwrap();
-            callback(Event {
-                metadata: event.metadata.clone(),
-                data,
-            });
-        }))
+    pub fn listener<T: 'static>(callback: impl FnMut(Event<T>) + 'static) -> AttributeValue {
+        AttributeValue::Listener(ListenerCallback::new(callback).erase())
     }
 
     /// Create a new [`AttributeValue`] with a value that implements [`AnyValue`]
@@ -873,8 +835,6 @@ impl AttributeValue {
     }
 }
 
-pub type ListenerCb = EventHandler<Event<dyn Any>>;
-
 impl std::fmt::Debug for AttributeValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -882,7 +842,7 @@ impl std::fmt::Debug for AttributeValue {
             Self::Float(arg0) => f.debug_tuple("Float").field(arg0).finish(),
             Self::Int(arg0) => f.debug_tuple("Int").field(arg0).finish(),
             Self::Bool(arg0) => f.debug_tuple("Bool").field(arg0).finish(),
-            Self::Listener(listener) => f.debug_tuple("Listener").field(listener).finish(),
+            Self::Listener(_) => f.debug_tuple("Listener").finish(),
             Self::Any(_) => f.debug_tuple("Any").finish(),
             Self::None => write!(f, "None"),
         }
@@ -1197,6 +1157,12 @@ impl IntoAttributeValue for Arguments<'_> {
 impl IntoAttributeValue for Rc<dyn AnyValue> {
     fn into_value(self) -> AttributeValue {
         AttributeValue::Any(self)
+    }
+}
+
+impl<T> IntoAttributeValue for ListenerCallback<T> {
+    fn into_value(self) -> AttributeValue {
+        AttributeValue::Listener(self.erase())
     }
 }
 

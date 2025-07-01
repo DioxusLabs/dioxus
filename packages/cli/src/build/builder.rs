@@ -1,10 +1,11 @@
 use crate::{
-    BuildArtifacts, BuildRequest, BuildStage, BuilderUpdate, Platform, ProgressRx, ProgressTx,
-    Result, StructuredOutput,
+    serve::WebServer, BuildArtifacts, BuildRequest, BuildStage, BuilderUpdate, Platform,
+    ProgressRx, ProgressTx, Result, StructuredOutput,
 };
 use anyhow::Context;
 use dioxus_cli_opt::process_file_to;
-use futures_util::future::OptionFuture;
+use futures_util::{future::OptionFuture, pin_mut, FutureExt};
+use itertools::Itertools;
 use std::{
     env,
     time::{Duration, Instant, SystemTime},
@@ -91,6 +92,9 @@ pub(crate) struct AppBuilder {
     pub compile_end: Option<Instant>,
     pub bundle_start: Option<Instant>,
     pub bundle_end: Option<Instant>,
+
+    /// The debugger for the app - must be enabled with the `d` key
+    pub(crate) pid: Option<u32>,
 }
 
 impl AppBuilder {
@@ -156,6 +160,7 @@ impl AppBuilder {
             entropy_app_exe: None,
             artifacts: None,
             patch_cache: None,
+            pid: None,
         })
     }
 
@@ -183,12 +188,16 @@ impl AppBuilder {
                 StderrReceived {  msg }
             },
             Some(status) = OptionFuture::from(self.child.as_mut().map(|f| f.wait())) => {
-                // Panicking here is on purpose. If the task crashes due to a JoinError (a panic),
-                // we want to propagate that panic up to the serve controller.
-                let status = status.unwrap();
-                self.child = None;
-
-                ProcessExited { status }
+                match status {
+                    Ok(status) => {
+                        self.child = None;
+                        ProcessExited { status }
+                    },
+                    Err(err) => {
+                        let () = futures_util::future::pending().await;
+                        ProcessWaitFailed { err }
+                    }
+                }
             }
         };
 
@@ -208,12 +217,12 @@ impl AppBuilder {
                             self.bundling_progress = 0.0;
                         }
                         BuildStage::Starting { crate_count, .. } => {
-                            self.expected_crates = *crate_count;
+                            self.expected_crates = *crate_count.max(&1);
                         }
                         BuildStage::InstallingTooling => {}
                         BuildStage::Compiling { current, total, .. } => {
                             self.compiled_crates = *current;
-                            self.expected_crates = *total;
+                            self.expected_crates = *total.max(&1);
 
                             if self.compile_start.is_none() {
                                 self.compile_start = Some(Instant::now());
@@ -263,6 +272,7 @@ impl AppBuilder {
             StdoutReceived { .. } => {}
             StderrReceived { .. } => {}
             ProcessExited { .. } => {}
+            ProcessWaitFailed { .. } => {}
         }
 
         update
@@ -380,7 +390,7 @@ impl AppBuilder {
                     tracing::info!(json = ?StructuredOutput::BuildUpdate { stage: stage.clone() });
                 }
                 BuilderUpdate::CompilerMessage { message } => {
-                    tracing::info!(json = ?StructuredOutput::CargoOutput { message: message.clone() }, %message);
+                    tracing::info!(json = ?StructuredOutput::RustcOutput { message: message.clone() }, %message);
                 }
                 BuilderUpdate::BuildReady { bundle } => {
                     tracing::debug!(json = ?StructuredOutput::BuildFinished {
@@ -392,7 +402,7 @@ impl AppBuilder {
                     // Flush remaining compiler messages
                     while let Ok(Some(msg)) = self.rx.try_next() {
                         if let BuilderUpdate::CompilerMessage { message } = msg {
-                            tracing::info!(json = ?StructuredOutput::CargoOutput { message: message.clone() }, %message);
+                            tracing::info!(json = ?StructuredOutput::RustcOutput { message: message.clone() }, %message);
                         }
                     }
 
@@ -402,33 +412,25 @@ impl AppBuilder {
                 BuilderUpdate::StdoutReceived { .. } => {}
                 BuilderUpdate::StderrReceived { .. } => {}
                 BuilderUpdate::ProcessExited { .. } => {}
+                BuilderUpdate::ProcessWaitFailed { .. } => {}
             }
         }
     }
 
-    pub(crate) async fn open(
+    /// Create a list of environment variables that the child process will use
+    pub(crate) fn child_environment_variables(
         &mut self,
-        devserver_ip: SocketAddr,
-        open_address: Option<SocketAddr>,
+        devserver_ip: Option<SocketAddr>,
         start_fullstack_on_address: Option<SocketAddr>,
-        open_browser: bool,
         always_on_top: bool,
         build_id: BuildId,
-    ) -> Result<()> {
+    ) -> Vec<(&'static str, String)> {
         let krate = &self.build;
 
         // Set the env vars that the clients will expect
         // These need to be stable within a release version (ie 0.6.0)
         let mut envs = vec![
             (dioxus_cli_config::CLI_ENABLED_ENV, "true".to_string()),
-            (
-                dioxus_cli_config::DEVSERVER_IP_ENV,
-                devserver_ip.ip().to_string(),
-            ),
-            (
-                dioxus_cli_config::DEVSERVER_PORT_ENV,
-                devserver_ip.port().to_string(),
-            ),
             (
                 dioxus_cli_config::APP_TITLE_ENV,
                 krate.config.web.app.title.clone(),
@@ -442,11 +444,26 @@ impl AppBuilder {
                 dioxus_cli_config::ALWAYS_ON_TOP_ENV,
                 always_on_top.to_string(),
             ),
-            // unset the cargo dirs in the event we're running `dx` locally
-            // since the child process will inherit the env vars, we don't want to confuse the downstream process
-            ("CARGO_MANIFEST_DIR", "".to_string()),
-            ("RUST_BACKTRACE", "1".to_string()),
         ];
+
+        if let Some(devserver_ip) = devserver_ip {
+            envs.push((
+                dioxus_cli_config::DEVSERVER_IP_ENV,
+                devserver_ip.ip().to_string(),
+            ));
+            envs.push((
+                dioxus_cli_config::DEVSERVER_PORT_ENV,
+                devserver_ip.port().to_string(),
+            ));
+        }
+
+        if crate::VERBOSITY
+            .get()
+            .map(|f| f.verbose)
+            .unwrap_or_default()
+        {
+            envs.push(("RUST_BACKTRACE", "1".to_string()));
+        }
 
         if let Some(base_path) = krate.base_path() {
             envs.push((dioxus_cli_config::ASSET_ROOT_ENV, base_path.to_string()));
@@ -463,8 +480,29 @@ impl AppBuilder {
             envs.push((dioxus_cli_config::SERVER_PORT_ENV, addr.port().to_string()));
         }
 
+        envs
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) async fn open(
+        &mut self,
+        devserver_ip: SocketAddr,
+        open_address: Option<SocketAddr>,
+        start_fullstack_on_address: Option<SocketAddr>,
+        open_browser: bool,
+        always_on_top: bool,
+        build_id: BuildId,
+        args: &[String],
+    ) -> Result<()> {
+        let envs = self.child_environment_variables(
+            Some(devserver_ip),
+            start_fullstack_on_address,
+            always_on_top,
+            build_id,
+        );
+
         // We try to use stdin/stdout to communicate with the app
-        let running_process = match self.build.platform {
+        match self.build.platform {
             // Unfortunately web won't let us get a proc handle to it (to read its stdout/stderr) so instead
             // use use the websocket to communicate with it. I wish we could merge the concepts here,
             // like say, opening the socket as a subprocess, but alas, it's simpler to do that somewhere else.
@@ -473,15 +511,19 @@ impl AppBuilder {
                 if open_browser {
                     self.open_web(open_address.unwrap_or(devserver_ip));
                 }
-
-                None
             }
 
-            Platform::Ios => Some(self.open_ios_sim(envs).await?),
+            Platform::Ios => {
+                if self.build.device {
+                    self.codesign_ios().await?;
+                    self.open_ios_device().await?
+                } else {
+                    self.open_ios_sim(envs).await?
+                }
+            }
 
             Platform::Android => {
                 self.open_android_sim(false, devserver_ip, envs).await?;
-                None
             }
 
             // These are all just basically running the main exe, but with slightly different resource dir paths
@@ -489,17 +531,8 @@ impl AppBuilder {
             | Platform::MacOS
             | Platform::Windows
             | Platform::Linux
-            | Platform::Liveview => Some(self.open_with_main_exe(envs)?),
+            | Platform::Liveview => self.open_with_main_exe(envs, args)?,
         };
-
-        // If we have a running process, we need to attach to it and wait for its outputs
-        if let Some(mut child) = running_process {
-            let stdout = BufReader::new(child.stdout.take().unwrap());
-            let stderr = BufReader::new(child.stderr.take().unwrap());
-            self.stdout = Some(stdout.lines());
-            self.stderr = Some(stderr.lines());
-            self.child = Some(child);
-        }
 
         self.builds_opened += 1;
 
@@ -561,19 +594,23 @@ impl AppBuilder {
         let original = self.build.main_exe();
         let new = self.build.patch_exe(res.time_start);
         let triple = self.build.triple.clone();
-        let original_artifacts = self.artifacts.as_ref().unwrap();
         let asset_dir = self.build.asset_dir();
 
-        for (k, bundled) in res.assets.assets.iter() {
-            let k = dunce::canonicalize(k)?;
-            if original_artifacts.assets.assets.contains_key(k.as_path()) {
+        for bundled in res.assets.assets() {
+            let original_artifacts = self.artifacts.as_mut().unwrap();
+
+            if original_artifacts.assets.contains(bundled) {
                 continue;
             }
 
-            let from = k.clone();
+            // If this is a new asset, insert it into the artifacts so we can track it when hot reloading
+            original_artifacts.assets.insert_asset(*bundled);
+
+            let from = dunce::canonicalize(PathBuf::from(bundled.absolute_source_path()))?;
+
             let to = asset_dir.join(bundled.bundled_path());
 
-            tracing::debug!("Copying asset from patch: {}", k.display());
+            tracing::debug!("Copying asset from patch: {}", from.display());
             if let Err(e) = dioxus_cli_opt::process_file_to(bundled.options(), &from, &to) {
                 tracing::error!("Failed to copy asset: {e}");
                 continue;
@@ -581,13 +618,8 @@ impl AppBuilder {
 
             // If the emulator is android, we need to copy the asset to the device with `adb push asset /data/local/tmp/dx/assets/filename.ext`
             if self.build.platform == Platform::Android {
-                let changed_file = dunce::canonicalize(k).inspect_err(|e| {
-                    tracing::debug!("Failed to canonicalize hotreloaded asset: {e}")
-                })?;
                 let bundled_name = PathBuf::from(bundled.bundled_path());
-                _ = self
-                    .copy_file_to_android_tmp(&changed_file, &bundled_name)
-                    .await;
+                _ = self.copy_file_to_android_tmp(&from, &bundled_name).await;
             }
         }
 
@@ -617,13 +649,15 @@ impl AppBuilder {
             _ => vec![],
         };
 
+        use crate::styles::{GLOW_STYLE, NOTE_STYLE};
+
         let changed_file = changed_files.first().unwrap();
         tracing::info!(
-            "Hot-patching: {} took {:?}ms",
+            "Hot-patching: {NOTE_STYLE}{}{NOTE_STYLE:#} took {GLOW_STYLE}{:?}ms{GLOW_STYLE:#}",
             changed_file
-                .strip_prefix(std::env::current_dir().unwrap())
-                .unwrap_or(changed_file.as_path())
-                .display(),
+                .display()
+                .to_string()
+                .trim_start_matches(&self.build.crate_dir().display().to_string()),
             SystemTime::now()
                 .duration_since(res.time_start)
                 .unwrap()
@@ -644,10 +678,13 @@ impl AppBuilder {
     /// dir that the system simulator might be providing. We know this is the case for ios simulators
     /// and haven't yet checked for android.
     ///
-    /// This will return the bundled name of the asset such that we can send it to the clients letting
+    /// This will return the bundled name of the assets such that we can send it to the clients letting
     /// them know what to reload. It's not super important that this is robust since most clients will
     /// kick all stylsheets without necessarily checking the name.
-    pub(crate) async fn hotreload_bundled_asset(&self, changed_file: &PathBuf) -> Option<PathBuf> {
+    pub(crate) async fn hotreload_bundled_assets(
+        &self,
+        changed_file: &PathBuf,
+    ) -> Option<Vec<PathBuf>> {
         let artifacts = self.artifacts.as_ref()?;
 
         // Use the build dir if there's no runtime asset dir as the override. For the case of ios apps,
@@ -663,32 +700,36 @@ impl AppBuilder {
             .ok()?;
 
         // The asset might've been renamed thanks to the manifest, let's attempt to reload that too
-        let resource = artifacts.assets.assets.get(&changed_file)?;
-        let output_path = asset_dir.join(resource.bundled_path());
+        let resources = artifacts.assets.get_assets_for_source(&changed_file)?;
+        let mut bundled_names = Vec::new();
+        for resource in resources {
+            let output_path = asset_dir.join(resource.bundled_path());
 
-        tracing::debug!("Hotreloading asset {changed_file:?} in target {asset_dir:?}");
+            tracing::debug!("Hotreloading asset {changed_file:?} in target {asset_dir:?}");
 
-        // Remove the old asset if it exists
-        _ = std::fs::remove_file(&output_path);
+            // Remove the old asset if it exists
+            _ = std::fs::remove_file(&output_path);
 
-        // And then process the asset with the options into the **old** asset location. If we recompiled,
-        // the asset would be in a new location because the contents and hash have changed. Since we are
-        // hotreloading, we need to use the old asset location it was originally written to.
-        let options = *resource.options();
-        let res = process_file_to(&options, &changed_file, &output_path);
-        let bundled_name = PathBuf::from(resource.bundled_path());
-        if let Err(e) = res {
-            tracing::debug!("Failed to hotreload asset {e}");
+            // And then process the asset with the options into the **old** asset location. If we recompiled,
+            // the asset would be in a new location because the contents and hash have changed. Since we are
+            // hotreloading, we need to use the old asset location it was originally written to.
+            let options = *resource.options();
+            let res = process_file_to(&options, &changed_file, &output_path);
+            let bundled_name = PathBuf::from(resource.bundled_path());
+            if let Err(e) = res {
+                tracing::debug!("Failed to hotreload asset {e}");
+            }
+
+            // If the emulator is android, we need to copy the asset to the device with `adb push asset /data/local/tmp/dx/assets/filename.ext`
+            if self.build.platform == Platform::Android {
+                _ = self
+                    .copy_file_to_android_tmp(&changed_file, &bundled_name)
+                    .await;
+            }
+            bundled_names.push(bundled_name);
         }
 
-        // If the emulator is android, we need to copy the asset to the device with `adb push asset /data/local/tmp/dx/assets/filename.ext`
-        if self.build.platform == Platform::Android {
-            _ = self
-                .copy_file_to_android_tmp(&changed_file, &bundled_name)
-                .await;
-        }
-
-        Some(bundled_name)
+        Some(bundled_names)
     }
 
     /// Copy this file to the tmp folder on the android device, returning the path to the copied file
@@ -704,7 +745,7 @@ impl AppBuilder {
         let target = dioxus_cli_config::android_session_cache_dir().join(bundled_name);
         tracing::debug!("Pushing asset to device: {target:?}");
 
-        let res = tokio::process::Command::new(&self.build.workspace.android_tools()?.adb)
+        let res = Command::new(&self.build.workspace.android_tools()?.adb)
             .arg("push")
             .arg(changed_file)
             .arg(&target)
@@ -726,29 +767,37 @@ impl AppBuilder {
     /// paths right now, but they will when we start to enable things like swift integration.
     ///
     /// Server/liveview/desktop are all basically the same, though
-    fn open_with_main_exe(&mut self, envs: Vec<(&str, String)>) -> Result<Child> {
+    fn open_with_main_exe(&mut self, envs: Vec<(&str, String)>, args: &[String]) -> Result<()> {
         let main_exe = self.app_exe();
 
         tracing::debug!("Opening app with main exe: {main_exe:?}");
 
-        let child = Command::new(main_exe)
+        let mut child = Command::new(main_exe)
+            .args(args)
             .envs(envs)
+            .env_remove("CARGO_MANIFEST_DIR") // running under `dx` shouldn't expose cargo-only :
             .stderr(Stdio::piped())
             .stdout(Stdio::piped())
             .kill_on_drop(true)
             .spawn()?;
 
-        Ok(child)
+        let stdout = BufReader::new(child.stdout.take().unwrap());
+        let stderr = BufReader::new(child.stderr.take().unwrap());
+        self.stdout = Some(stdout.lines());
+        self.stderr = Some(stderr.lines());
+        self.child = Some(child);
+
+        Ok(())
     }
 
     /// Open the web app by opening the browser to the given address.
     /// Check if we need to use https or not, and if so, add the protocol.
     /// Go to the basepath if that's set too.
     fn open_web(&self, address: SocketAddr) {
-        let base_path = self.build.config.web.app.base_path.clone();
+        let base_path = self.build.base_path();
         let https = self.build.config.web.https.enabled.unwrap_or_default();
         let protocol = if https { "https" } else { "http" };
-        let base_path = match base_path.as_deref() {
+        let base_path = match base_path {
             Some(base_path) => format!("/{}", base_path.trim_matches('/')),
             None => "".to_owned(),
         };
@@ -763,7 +812,7 @@ impl AppBuilder {
     ///
     /// TODO(jon): we should probably check if there's a simulator running before trying to install,
     /// and open the simulator if we have to.
-    async fn open_ios_sim(&mut self, envs: Vec<(&str, String)>) -> Result<Child> {
+    async fn open_ios_sim(&mut self, envs: Vec<(&str, String)>) -> Result<()> {
         tracing::debug!("Installing app to simulator {:?}", self.build.root_dir());
 
         let res = Command::new("xcrun")
@@ -782,19 +831,26 @@ impl AppBuilder {
             .iter()
             .map(|(k, v)| (format!("SIMCTL_CHILD_{k}"), v.clone()));
 
-        let child = Command::new("xcrun")
+        let mut child = Command::new("xcrun")
             .arg("simctl")
             .arg("launch")
             .arg("--console")
             .arg("booted")
             .arg(self.build.bundle_identifier())
             .envs(ios_envs)
+            .env_remove("CARGO_MANIFEST_DIR")
             .stderr(Stdio::piped())
             .stdout(Stdio::piped())
             .kill_on_drop(true)
             .spawn()?;
 
-        Ok(child)
+        let stdout = BufReader::new(child.stdout.take().unwrap());
+        let stderr = BufReader::new(child.stderr.take().unwrap());
+        self.stdout = Some(stdout.lines());
+        self.stderr = Some(stderr.lines());
+        self.child = Some(child);
+
+        Ok(())
     }
 
     /// We have this whole thing figured out, but we don't actually use it yet.
@@ -804,54 +860,35 @@ impl AppBuilder {
     ///
     /// Converting these commands shouldn't be too hard, but device support would imply we need
     /// better support for codesigning and entitlements.
-    #[allow(unused)]
     async fn open_ios_device(&self) -> Result<()> {
         use serde_json::Value;
-        let app_path = self.build.root_dir();
 
-        install_app(&app_path).await?;
-
-        // 2. Determine which device the app was installed to
+        // 1. Find an active device
         let device_uuid = get_device_uuid().await?;
 
-        // 3. Get the installation URL of the app
-        let installation_url = get_installation_url(&device_uuid, &app_path).await?;
+        // 2. Get the installation URL of the app
+        let installation_url = get_installation_url(&device_uuid, &self.build.root_dir()).await?;
 
-        // 4. Launch the app into the background, paused
+        // 3. Launch the app into the background, paused
         launch_app_paused(&device_uuid, &installation_url).await?;
 
-        // 5. Pick up the paused app and resume it
-        resume_app(&device_uuid).await?;
-
-        async fn install_app(app_path: &PathBuf) -> Result<()> {
-            let output = Command::new("xcrun")
-                .args(["simctl", "install", "booted"])
-                .arg(app_path)
-                .output()
-                .await?;
-
-            if !output.status.success() {
-                return Err(format!("Failed to install app: {:?}", output).into());
-            }
-
-            Ok(())
-        }
-
         async fn get_device_uuid() -> Result<String> {
-            let output = Command::new("xcrun")
+            let tmpfile = tempfile::NamedTempFile::new()
+                .context("Failed to create temporary file for device list")?;
+
+            Command::new("xcrun")
                 .args([
-                    "devicectl",
-                    "list",
-                    "devices",
-                    "--json-output",
-                    "target/deviceid.json",
+                    "devicectl".to_string(),
+                    "list".to_string(),
+                    "devices".to_string(),
+                    "--json-output".to_string(),
+                    tmpfile.path().to_str().unwrap().to_string(),
                 ])
                 .output()
                 .await?;
 
-            let json: Value =
-                serde_json::from_str(&std::fs::read_to_string("target/deviceid.json")?)
-                    .context("Failed to parse xcrun output")?;
+            let json: Value = serde_json::from_str(&std::fs::read_to_string(tmpfile.path())?)
+                .context("Failed to parse xcrun output")?;
             let device_uuid = json["result"]["devices"][0]["identifier"]
                 .as_str()
                 .ok_or("Failed to extract device UUID")?
@@ -861,6 +898,9 @@ impl AppBuilder {
         }
 
         async fn get_installation_url(device_uuid: &str, app_path: &Path) -> Result<String> {
+            let tmpfile = tempfile::NamedTempFile::new()
+                .context("Failed to create temporary file for device list")?;
+
             // xcrun devicectl device install app --device <uuid> --path <path> --json-output
             let output = Command::new("xcrun")
                 .args([
@@ -872,8 +912,8 @@ impl AppBuilder {
                     device_uuid,
                     &app_path.display().to_string(),
                     "--json-output",
-                    "target/xcrun.json",
                 ])
+                .arg(tmpfile.path())
                 .output()
                 .await?;
 
@@ -881,7 +921,7 @@ impl AppBuilder {
                 return Err(format!("Failed to install app: {:?}", output).into());
             }
 
-            let json: Value = serde_json::from_str(&std::fs::read_to_string("target/xcrun.json")?)
+            let json: Value = serde_json::from_str(&std::fs::read_to_string(tmpfile.path())?)
                 .context("Failed to parse xcrun output")?;
             let installation_url = json["result"]["installedApplications"][0]["installationURL"]
                 .as_str()
@@ -892,6 +932,9 @@ impl AppBuilder {
         }
 
         async fn launch_app_paused(device_uuid: &str, installation_url: &str) -> Result<()> {
+            let tmpfile = tempfile::NamedTempFile::new()
+                .context("Failed to create temporary file for device list")?;
+
             let output = Command::new("xcrun")
                 .args([
                     "devicectl",
@@ -904,8 +947,8 @@ impl AppBuilder {
                     device_uuid,
                     installation_url,
                     "--json-output",
-                    "target/launch.json",
                 ])
+                .arg(tmpfile.path())
                 .output()
                 .await?;
 
@@ -913,11 +956,7 @@ impl AppBuilder {
                 return Err(format!("Failed to launch app: {:?}", output).into());
             }
 
-            Ok(())
-        }
-
-        async fn resume_app(device_uuid: &str) -> Result<()> {
-            let json: Value = serde_json::from_str(&std::fs::read_to_string("target/launch.json")?)
+            let json: Value = serde_json::from_str(&std::fs::read_to_string(tmpfile.path())?)
                 .context("Failed to parse xcrun output")?;
 
             let status_pid = json["result"]["process"]["processIdentifier"]
@@ -945,10 +984,9 @@ impl AppBuilder {
             Ok(())
         }
 
-        unimplemented!("dioxus-cli doesn't support ios devices yet.")
+        Ok(())
     }
 
-    #[allow(unused)]
     async fn codesign_ios(&self) -> Result<()> {
         const CODESIGN_ERROR: &str = r#"This is likely because you haven't
 - Created a provisioning profile before
@@ -962,7 +1000,7 @@ https://developer.apple.com/documentation/xcode/sharing-your-teams-signing-certi
 
         let profiles_folder = dirs::home_dir()
             .context("Your machine has no home-dir")?
-            .join("Library/MobileDevice/Provisioning Profiles");
+            .join("Library/Developer/Xcode/UserData/Provisioning Profiles");
 
         if !profiles_folder.exists() || profiles_folder.read_dir()?.next().is_none() {
             tracing::error!(
@@ -1031,10 +1069,11 @@ We checked the folder: {}
         struct ProvisioningProfile {
             #[serde(rename = "TeamIdentifier")]
             team_identifier: Vec<String>,
-            #[serde(rename = "ApplicationIdentifierPrefix")]
-            application_identifier_prefix: Vec<String>,
             #[serde(rename = "Entitlements")]
             entitlements: Entitlements,
+            #[allow(dead_code)]
+            #[serde(rename = "ApplicationIdentifierPrefix")]
+            application_identifier_prefix: Vec<String>,
         }
 
         #[derive(serde::Deserialize, Debug)]
@@ -1127,7 +1166,7 @@ We checked the folder: {}
     /// - If the app fails to launch, errors are logged for debugging purposes.
     ///
     /// # Resources:
-    /// - https://developer.android.com/studio/run/emulator-commandline
+    /// - <https://developer.android.com/studio/run/emulator-commandline>
     async fn open_android_sim(
         &self,
         root: bool,
@@ -1136,11 +1175,11 @@ We checked the folder: {}
     ) -> Result<()> {
         let apk_path = self.build.debug_apk_path();
         let session_cache = self.build.session_cache_dir();
-        let full_mobile_app_name = self.build.full_mobile_app_name();
+        let application_id = self.build.bundle_identifier();
         let adb = self.build.workspace.android_tools()?.adb.clone();
 
         // Start backgrounded since .open() is called while in the arm of the top-level match
-        tokio::task::spawn(async move {
+        let _handle: JoinHandle<Result<()>> = tokio::task::spawn(async move {
             // call `adb root` so we can push patches to the device
             if root {
                 if let Err(e) = Command::new(&adb).arg("root").output().await {
@@ -1159,54 +1198,79 @@ We checked the folder: {}
                 tracing::error!("failed to forward port {port}: {e}");
             }
 
+            // Wait for device to be ready
+            let cmd = Command::new(&adb)
+                .arg("wait-for-device")
+                .arg("shell")
+                .arg(r#"while [[ -z $(getprop sys.boot_completed) ]]; do sleep 1; done;"#)
+                .output();
+            let cmd_future = cmd.fuse();
+            pin_mut!(cmd_future);
+            tokio::select! {
+                _ = &mut cmd_future => {}
+                _ = tokio::time::sleep(Duration::from_millis(50)) => {
+                    tracing::info!("Waiting for android emulator to be ready...");
+                    _ = cmd_future.await;
+                }
+            }
+
             // Install
             // adb install -r app-debug.apk
-            if let Err(e) = Command::new(&adb)
+            let res = Command::new(&adb)
                 .arg("install")
                 .arg("-r")
                 .arg(apk_path)
                 .output()
-                .await
-            {
-                tracing::error!("Failed to install apk with `adb`: {e}");
-            };
+                .await?;
+            let std_err = String::from_utf8_lossy(&res.stderr);
+            if !std_err.is_empty() {
+                tracing::error!("Failed to install apk with `adb`: {std_err}");
+            }
+
+            // Clear the session cache dir on the device
+            Command::new(&adb)
+                .arg("shell")
+                .arg("rm")
+                .arg("-rf")
+                .arg(dioxus_cli_config::android_session_cache_dir())
+                .output()
+                .await?;
 
             // Write the env vars to a .env file in our session cache
             let env_file = session_cache.join(".env");
-            let contents: String = envs
-                .iter()
-                .map(|(key, value)| format!("{key}={value}"))
-                .collect::<Vec<_>>()
-                .join("\n");
-            _ = std::fs::write(&env_file, contents);
+            _ = std::fs::write(
+                &env_file,
+                envs.iter()
+                    .map(|(key, value)| format!("{key}={value}"))
+                    .collect::<Vec<_>>()
+                    .join("\n"),
+            );
 
             // Push the env file to the device
-            if let Err(e) = tokio::process::Command::new(&adb)
+            Command::new(&adb)
                 .arg("push")
                 .arg(env_file)
                 .arg(dioxus_cli_config::android_session_cache_dir().join(".env"))
                 .output()
-                .await
-                .context("Failed to push asset to device")
-            {
-                tracing::error!("Failed to push .env file to device: {e}");
-            }
+                .await?;
 
             // eventually, use the user's MainActivity, not our MainActivity
             // adb shell am start -n dev.dioxus.main/dev.dioxus.main.MainActivity
-            let activity_name = format!("{}/dev.dioxus.main.MainActivity", full_mobile_app_name,);
-
-            if let Err(e) = Command::new(&adb)
+            let activity_name = format!("{application_id}/dev.dioxus.main.MainActivity");
+            let res = Command::new(&adb)
                 .arg("shell")
                 .arg("am")
                 .arg("start")
                 .arg("-n")
                 .arg(activity_name)
                 .output()
-                .await
-            {
-                tracing::error!("Failed to start app with `adb`: {e}");
-            };
+                .await?;
+            let std_err = String::from_utf8_lossy(res.stderr.trim_ascii());
+            if !std_err.is_empty() {
+                tracing::error!("Failed to start app with `adb`: {std_err}");
+            }
+
+            Ok(())
         });
 
         Ok(())
@@ -1311,5 +1375,174 @@ We checked the folder: {}
     /// Check if the queued build is blocking hotreloads
     pub(crate) fn can_receive_hotreloads(&self) -> bool {
         matches!(&self.stage, BuildStage::Success | BuildStage::Failed)
+    }
+
+    pub(crate) async fn open_debugger(&mut self, server: &WebServer) -> Result<()> {
+        let url = match self.build.platform {
+            Platform::MacOS
+            | Platform::Windows
+            | Platform::Linux
+            | Platform::Server
+            | Platform::Liveview => {
+                let Some(Some(pid)) = self.child.as_mut().map(|f| f.id()) else {
+                    tracing::warn!("No process to attach debugger to");
+                    return Ok(());
+                };
+
+                format!(
+                    "vscode://vadimcn.vscode-lldb/launch/config?{{'request':'attach','pid':{}}}",
+                    pid
+                )
+            }
+
+            Platform::Web => {
+                // code --open-url "vscode://DioxusLabs.dioxus/debugger?uri=http://127.0.0.1:8080"
+                // todo - debugger could open to the *current* page afaik we don't have a way to have that info
+                let address = server.devserver_address();
+                let base_path = self.build.base_path();
+                let https = self.build.config.web.https.enabled.unwrap_or_default();
+                let protocol = if https { "https" } else { "http" };
+                let base_path = match base_path {
+                    Some(base_path) => format!("/{}", base_path.trim_matches('/')),
+                    None => "".to_owned(),
+                };
+                format!("vscode://DioxusLabs.dioxus/debugger?uri={protocol}://{address}{base_path}")
+            }
+
+            Platform::Ios => {
+                let Some(pid) = self.pid else {
+                    tracing::warn!("No process to attach debugger to");
+                    return Ok(());
+                };
+
+                format!(
+                    "vscode://vadimcn.vscode-lldb/launch/config?{{'request':'attach','pid':{pid}}}"
+                )
+            }
+
+            // https://stackoverflow.com/questions/53733781/how-do-i-use-lldb-to-debug-c-code-on-android-on-command-line/64997332#64997332
+            // https://android.googlesource.com/platform/development/+/refs/heads/main/scripts/gdbclient.py
+            // run lldbserver on the device and then connect
+            //
+            // # TODO: https://code.visualstudio.com/api/references/vscode-api#debug and
+            // #       https://code.visualstudio.com/api/extension-guides/debugger-extension and
+            // #       https://github.com/vadimcn/vscode-lldb/blob/6b775c439992b6615e92f4938ee4e211f1b060cf/extension/pickProcess.ts#L6
+            //
+            // res = {
+            //     "name": "(lldbclient.py) Attach {} (port: {})".format(binary_name.split("/")[-1], port),
+            //     "type": "lldb",
+            //     "request": "custom",
+            //     "relativePathBase": root,
+            //     "sourceMap": { "/b/f/w" : root, '': root, '.': root },
+            //     "initCommands": ['settings append target.exec-search-paths {}'.format(' '.join(solib_search_path))],
+            //     "targetCreateCommands": ["target create {}".format(binary_name),
+            //                              "target modules search-paths add / {}/".format(sysroot)],
+            //     "processCreateCommands": ["gdb-remote {}".format(str(port))]
+            // }
+            //
+            // https://github.com/vadimcn/codelldb/issues/213
+            //
+            // lots of pain to figure this out:
+            //
+            // (lldb) image add target/dx/tw6/debug/android/app/app/src/main/jniLibs/arm64-v8a/libdioxusmain.so
+            // (lldb) settings append target.exec-search-paths target/dx/tw6/debug/android/app/app/src/main/jniLibs/arm64-v8a/libdioxusmain.so
+            // (lldb) process handle SIGSEGV --pass true --stop false --notify true (otherwise the java threads cause crash)
+            //
+            Platform::Android => {
+                // adb push ./sdk/ndk/29.0.13113456/toolchains/llvm/prebuilt/darwin-x86_64/lib/clang/20/lib/linux/aarch64/lldb-server /tmp
+                // adb shell "/tmp/lldb-server --server --listen ..."
+                // "vscode://vadimcn.vscode-lldb/launch/config?{{'request':'connect','port': {}}}",
+                // format!(
+                //     "vscode://vadimcn.vscode-lldb/launch/config?{{'request':'attach','pid':{pid}}}"
+                // )
+                let tools = &self.build.workspace.android_tools()?;
+
+                // get the pid of the app
+                let pid = Command::new(&tools.adb)
+                    .arg("shell")
+                    .arg("pidof")
+                    .arg(self.build.bundle_identifier())
+                    .output()
+                    .await
+                    .ok()
+                    .and_then(|output| String::from_utf8(output.stdout).ok())
+                    .and_then(|s| s.trim().parse::<u32>().ok())
+                    .unwrap();
+
+                // copy the lldb-server to the device
+                let lldb_server = tools
+                    .android_tools_dir()
+                    .parent()
+                    .unwrap()
+                    .join("lib")
+                    .join("clang")
+                    .join("20")
+                    .join("lib")
+                    .join("linux")
+                    .join("aarch64")
+                    .join("lldb-server");
+
+                tracing::info!("Copying lldb-server to device: {lldb_server:?}");
+
+                _ = Command::new(&tools.adb)
+                    .arg("push")
+                    .arg(lldb_server)
+                    .arg("/tmp/lldb-server")
+                    .output()
+                    .await;
+
+                // Forward requests on 10086 to the device
+                _ = Command::new(&tools.adb)
+                    .arg("forward")
+                    .arg("tcp:10086")
+                    .arg("tcp:10086")
+                    .output()
+                    .await;
+
+                // start the server - running it multiple times will make the subsequent ones fail (which is fine)
+                _ = Command::new(&tools.adb)
+                    .arg("shell")
+                    .arg(r#"cd /tmp && ./lldb-server platform --server --listen '*:10086'"#)
+                    .kill_on_drop(false)
+                    .stdin(Stdio::null())
+                    .stdout(Stdio::piped())
+                    .stderr(Stdio::piped())
+                    .spawn();
+
+                let program_path = self.build.main_exe();
+                format!(
+                    r#"vscode://vadimcn.vscode-lldb/launch/config?{{
+                        'name':'Attach to Android',
+                        'type':'lldb',
+                        'request':'attach',
+                        'pid': '{pid}',
+                        'processCreateCommands': [
+                            'platform select remote-android',
+                            'platform connect connect://localhost:10086',
+                            'settings set target.inherit-env false',
+                            'settings set target.inline-breakpoint-strategy always',
+                            'settings set target.process.thread.step-avoid-regexp \"JavaBridge|JDWP|Binder|ReferenceQueueDaemon\"',
+                            'process handle SIGSEGV --pass true --stop false --notify true"',
+                            'settings append target.exec-search-paths {program_path}',
+                            'attach --pid {pid}',
+                            'continue'
+                        ]
+                    }}"#,
+                    program_path = program_path.display(),
+                )
+                .lines()
+                .map(|line| line.trim())
+                .join("")
+            }
+        };
+
+        tracing::info!("Opening debugger for [{}]: {url}", self.build.platform);
+
+        _ = tokio::process::Command::new("code")
+            .arg("--open-url")
+            .arg(url)
+            .spawn();
+
+        Ok(())
     }
 }
