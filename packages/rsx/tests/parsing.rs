@@ -110,6 +110,17 @@ fn complex_kitchen_sink() {
             }
         }
 
+        // No nesting
+        Component {
+            adsasd: "asd",
+            onclick: {
+                let a = 1;
+                move |_| {
+                    let blah = 120;
+                }
+            }
+        }
+
         // Component path
         my::thing::Component {
             adsasd: "asd",

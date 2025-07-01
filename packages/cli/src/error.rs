@@ -1,4 +1,4 @@
-use crate::metadata::CargoError;
+use std::fmt::Debug;
 use thiserror::Error as ThisError;
 
 pub(crate) type Result<T, E = Error> = std::result::Result<T, E>;
@@ -22,23 +22,31 @@ pub(crate) enum Error {
     Runtime(String),
 
     #[error("Cargo Error: {0}")]
-    Cargo(#[from] CargoError),
+    Cargo(String),
 
     #[error("Invalid proxy URL: {0}")]
     InvalidProxy(#[from] hyper::http::uri::InvalidUri),
 
-    #[error("Failed to establish proxy: {0}")]
+    #[error("Establishing proxy: {0}")]
     ProxySetup(String),
 
-    #[error("Failed to bundle project: {0}")]
+    #[error("Bundling project: {0}")]
     BundleFailed(#[from] tauri_bundler::Error),
 
-    #[allow(unused)]
-    #[error("Unsupported feature: {0}")]
-    UnsupportedFeature(String),
+    #[error("Performing hotpatch: {0}")]
+    PatchingFailed(#[from] crate::build::PatchError),
 
-    #[error("Failed to render template: {0}")]
+    #[error("Reading object file: {0}")]
+    ObjectReadFailed(#[from] object::Error),
+
+    #[error("{0}")]
+    CapturedPanic(String),
+
+    #[error("Rendering template error: {0}")]
     TemplateParse(#[from] handlebars::RenderError),
+
+    #[error("Network connectivity error: {0}")]
+    Network(String),
 
     #[error(transparent)]
     Other(#[from] anyhow::Error),

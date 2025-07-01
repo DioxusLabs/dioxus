@@ -11,6 +11,7 @@ pub struct MetaProps {
     pub charset: Option<String>,
     pub http_equiv: Option<String>,
     pub content: Option<String>,
+    pub data: Option<String>,
     #[props(extends = meta, extends = GlobalAttributes)]
     pub additional_attributes: Vec<Attribute>,
 }
@@ -35,11 +36,14 @@ impl MetaProps {
         if let Some(content) = &self.content {
             attributes.push(("content", content.clone()));
         }
+        if let Some(data) = &self.data {
+            attributes.push(("data", data.clone()));
+        }
         attributes
     }
 }
 
-/// Render a [`meta`](crate::elements::meta) tag into the head of the page.
+/// Render a [`<meta>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/meta) tag into the head of the page.
 ///
 /// # Example
 ///

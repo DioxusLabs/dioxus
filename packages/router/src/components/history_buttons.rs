@@ -13,12 +13,12 @@ pub struct HistoryButtonProps {
 
 /// A button to go back through the navigation history. Similar to a browsers back button.
 ///
-/// Only works as descendant of a [`Link`] component, otherwise it will be inactive.
+/// Only works as descendant of a [`super::Link`] component, otherwise it will be inactive.
 ///
 /// The button will disable itself if it is known that no prior history is available.
 ///
 /// # Panic
-/// - When the [`GoBackButton`] is not nested within a [`Link`] component
+/// - When the [`GoBackButton`] is not nested within a [`super::Link`] component
 ///   hook, but only in debug builds.
 ///
 /// # Example
@@ -86,12 +86,12 @@ pub fn GoBackButton(props: HistoryButtonProps) -> Element {
 
 /// A button to go forward through the navigation history. Similar to a browsers forward button.
 ///
-/// Only works as descendant of a [`Link`] component, otherwise it will be inactive.
+/// Only works as descendant of a [`super::Link`] component, otherwise it will be inactive.
 ///
 /// The button will disable itself if it is known that no later history is available.
 ///
 /// # Panic
-/// - When the [`GoForwardButton`] is not nested within a [`Link`] component
+/// - When the [`GoForwardButton`] is not nested within a [`super::Link`] component
 ///   hook, but only in debug builds.
 ///
 /// # Example

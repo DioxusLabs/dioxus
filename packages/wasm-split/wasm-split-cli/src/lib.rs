@@ -1361,12 +1361,12 @@ pub struct SplitPoint {
 ///
 /// These will be in the form of:
 ///
-/// __wasm_split_00<module>00_<import|export>_<hash>_<function>
+/// `__wasm_split_00<module>00_<import|export>_<hash>_<function>`
 ///
 /// For a function named `SomeRoute2` in the module `add_body_element`, the pairings would be:
 ///
-/// __wasm_split_00add_body_element00_import_abef5ee3ebe66ff17677c56ee392b4c2_SomeRoute2
-/// __wasm_split_00add_body_element00_export_abef5ee3ebe66ff17677c56ee392b4c2_SomeRoute2
+/// `__wasm_split_00add_body_element00_import_abef5ee3ebe66ff17677c56ee392b4c2_SomeRoute2`
+/// `__wasm_split_00add_body_element00_export_abef5ee3ebe66ff17677c56ee392b4c2_SomeRoute2`
 ///
 fn accumulate_split_points(module: &Module) -> Vec<SplitPoint> {
     let mut index = 0;

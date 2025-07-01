@@ -1,0 +1,10 @@
+[package]
+name = "subsecond-tls-harness"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+dioxus-devtools = { workspace = true }
+cross-tls-crate = { path = "../cross-tls-crate" }
+cross-tls-crate-dylib = { path = "../cross-tls-crate-dylib" }

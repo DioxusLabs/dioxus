@@ -65,9 +65,9 @@ impl LiveviewRouter for Router {
         // Add an extra catch all segment to the route
         let mut route = route.trim_matches('/').to_string();
         if route.is_empty() {
-            route = "/*route".to_string();
+            route = "/{*route}".to_string();
         } else {
-            route = format!("/{route}/*route");
+            route = format!("/{route}/{{*route}}");
         }
 
         self.route(

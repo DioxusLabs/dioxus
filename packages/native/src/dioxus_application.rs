@@ -1,35 +1,59 @@
-use blitz_renderer_vello::BlitzVelloRenderer;
-use blitz_shell::BlitzApplication;
-use dioxus_core::{ScopeId, VirtualDom};
+use blitz_shell::{BlitzApplication, View};
+use dioxus_core::ScopeId;
 use dioxus_history::{History, MemoryHistory};
-use std::{collections::HashSet, rc::Rc};
+use std::rc::Rc;
 use winit::application::ApplicationHandler;
 use winit::event::{StartCause, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, EventLoopProxy};
 use winit::window::WindowId;
 
+use crate::DioxusNativeWindowRenderer;
 use crate::{
-    assets::DioxusNativeNetProvider, contexts::DioxusNativeDocument,
-    mutation_writer::MutationWriter, BlitzShellEvent, DioxusDocument, DioxusNativeEvent,
-    WindowConfig,
+    contexts::DioxusNativeDocument, mutation_writer::MutationWriter, BlitzShellEvent,
+    DioxusDocument, WindowConfig,
 };
 
+/// Dioxus-native specific event type
+pub enum DioxusNativeEvent {
+    /// A hotreload event, basically telling us to update our templates.
+    #[cfg(all(
+        feature = "hot-reload",
+        debug_assertions,
+        not(target_os = "android"),
+        not(target_os = "ios")
+    ))]
+    DevserverEvent(dioxus_devtools::DevserverMsg),
+
+    /// Create a new head element from the Link and Title elements
+    ///
+    /// todo(jon): these should probabkly be synchronous somehow
+    CreateHeadElement {
+        window: WindowId,
+        name: String,
+        attributes: Vec<(String, String)>,
+        contents: Option<String>,
+    },
+}
+
 pub struct DioxusNativeApplication {
-    pending_vdom: Option<VirtualDom>,
-    inner: BlitzApplication<DioxusDocument, BlitzVelloRenderer>,
+    pending_window: Option<WindowConfig<DioxusNativeWindowRenderer>>,
+    inner: BlitzApplication<DioxusNativeWindowRenderer>,
     proxy: EventLoopProxy<BlitzShellEvent>,
 }
 
 impl DioxusNativeApplication {
-    pub fn new(proxy: EventLoopProxy<BlitzShellEvent>, vdom: VirtualDom) -> Self {
+    pub fn new(
+        proxy: EventLoopProxy<BlitzShellEvent>,
+        config: WindowConfig<DioxusNativeWindowRenderer>,
+    ) -> Self {
         Self {
-            pending_vdom: Some(vdom),
+            pending_window: Some(config),
             inner: BlitzApplication::new(proxy.clone()),
             proxy,
         }
     }
 
-    pub fn add_window(&mut self, window_config: WindowConfig<DioxusDocument, BlitzVelloRenderer>) {
+    pub fn add_window(&mut self, window_config: WindowConfig<DioxusNativeWindowRenderer>) {
         self.inner.add_window(window_config);
     }
 
@@ -48,7 +72,8 @@ impl DioxusNativeApplication {
             DioxusNativeEvent::DevserverEvent(event) => match event {
                 dioxus_devtools::DevserverMsg::HotReload(hotreload_message) => {
                     for window in self.inner.windows.values_mut() {
-                        dioxus_devtools::apply_changes(&window.doc.vdom, hotreload_message);
+                        let doc = window.downcast_doc_mut::<DioxusDocument>();
+                        dioxus_devtools::apply_changes(&doc.vdom, hotreload_message);
                         window.poll();
                     }
                 }
@@ -56,6 +81,7 @@ impl DioxusNativeApplication {
                 dioxus_devtools::DevserverMsg::FullReloadStart => {}
                 dioxus_devtools::DevserverMsg::FullReloadFailed => {}
                 dioxus_devtools::DevserverMsg::FullReloadCommand => {}
+                _ => {}
             },
 
             DioxusNativeEvent::CreateHeadElement {
@@ -65,7 +91,8 @@ impl DioxusNativeApplication {
                 window,
             } => {
                 if let Some(window) = self.inner.windows.get_mut(window) {
-                    window.doc.create_head_element(name, attributes, contents);
+                    let doc = window.downcast_doc_mut::<DioxusDocument>();
+                    doc.create_head_element(name, attributes, contents);
                     window.poll();
                 }
             }
@@ -88,52 +115,41 @@ impl DioxusNativeApplication {
 impl ApplicationHandler<BlitzShellEvent> for DioxusNativeApplication {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         tracing::debug!("Injecting document provider into all windows");
-        let vdom = self.pending_vdom.take().unwrap();
 
-        #[cfg(feature = "net")]
-        let net_provider = {
-            let proxy = self.proxy.clone();
-            let net_provider = DioxusNativeNetProvider::shared(proxy);
-            Some(net_provider)
-        };
+        if let Some(config) = self.pending_window.take() {
+            let mut window = View::init(config, event_loop, &self.proxy);
+            let renderer = window.renderer.clone();
+            let window_id = window.window_id();
+            let doc = window.downcast_doc_mut::<DioxusDocument>();
 
-        #[cfg(not(feature = "net"))]
-        let net_provider = None;
-
-        // Create document + window from the baked virtualdom
-        let doc = DioxusDocument::new(vdom, net_provider);
-        let window = WindowConfig::new(doc);
-
-        // little hack since View::init is not public - fix this once alpha-2 is out
-        let old_windows = self.inner.windows.keys().copied().collect::<HashSet<_>>();
-        self.add_window(window);
-        self.inner.resumed(event_loop);
-        let new_windows = self.inner.windows.keys().cloned().collect::<HashSet<_>>();
-
-        // todo(jon): we should actually mess with the pending windows instead of passing along the contexts
-        for window_id in new_windows.difference(&old_windows) {
-            let window = self.inner.windows.get_mut(window_id).unwrap();
-            window.doc.vdom.in_runtime(|| {
+            doc.vdom.in_runtime(|| {
                 let shared: Rc<dyn dioxus_document::Document> =
-                    Rc::new(DioxusNativeDocument::new(self.proxy.clone(), *window_id));
+                    Rc::new(DioxusNativeDocument::new(self.proxy.clone(), window_id));
                 ScopeId::ROOT.provide_context(shared);
             });
 
             // Add history
             let history_provider: Rc<dyn History> = Rc::new(MemoryHistory::default());
-            window
-                .doc
-                .vdom
-                .in_runtime(|| ScopeId::ROOT.provide_context(history_provider));
+            doc.vdom
+                .in_runtime(move || ScopeId::ROOT.provide_context(history_provider));
+
+            // Add renderer
+            doc.vdom
+                .in_runtime(move || ScopeId::ROOT.provide_context(renderer));
 
             // Queue rebuild
-            let mut writer = MutationWriter::new(&mut window.doc.inner, &mut window.doc.vdom_state);
-            window.doc.vdom.rebuild(&mut writer);
+            let mut writer = MutationWriter::new(&mut doc.inner, &mut doc.vdom_state);
+            doc.vdom.rebuild(&mut writer);
             drop(writer);
 
             // And then request redraw
             window.request_redraw();
+
+            // todo(jon): we should actually mess with the pending windows instead of passing along the contexts
+            self.inner.windows.insert(window_id, window);
         }
+
+        self.inner.resumed(event_loop);
     }
 
     fn suspended(&mut self, event_loop: &ActiveEventLoop) {

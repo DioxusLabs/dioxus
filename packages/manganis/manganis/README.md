@@ -21,9 +21,9 @@ pub const PNG_ASSET: Asset =
     asset!("/assets/image.png");
 // Resize the image at compile time to make the assets smaller
 pub const RESIZED_PNG_ASSET: Asset =
-    asset!("/assets/image.png", ImageAssetOptions::new().with_size(ImageSize::Manual { width: 52, height: 52 }));
+    asset!("/assets/image.png", AssetOptions::image().with_size(ImageSize::Manual { width: 52, height: 52 }));
 // Or convert the image at compile time to a web friendly format
-pub const AVIF_ASSET: Asset = asset!("/assets/image.png", ImageAssetOptions::new().with_format(ImageFormat::Avif));
+pub const AVIF_ASSET: Asset = asset!("/assets/image.png", AssetOptions::image().with_format(ImageFormat::Avif));
 ```
 
 ## Adding Support to Your CLI

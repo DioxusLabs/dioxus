@@ -268,6 +268,7 @@ impl ErrorContext {
     /// Clear all errors from this Error Boundary
     pub fn clear_errors(&self) {
         self.errors.borrow_mut().clear();
+        self.id.needs_update();
     }
 }
 
@@ -696,33 +697,46 @@ impl<
 ///
 /// ## Details
 ///
-/// Error boundaries handle errors within a specific part of your application. Any errors passed up from a child will be caught by the nearest error boundary.
+/// Error boundaries handle errors within a specific part of your application. They are similar to `try/catch` in JavaScript, but they only catch errors in the tree below them.
+/// Any errors passed up from a child will be caught by the nearest error boundary. Error boundaries are quick to implement, but it can be useful to individually handle errors
+/// in your components to provide a better user experience when you know that an error is likely to occur.
 ///
 /// ## Example
 ///
 /// ```rust, no_run
-/// # use dioxus::prelude::*;
+/// use dioxus::prelude::*;
+///
 /// fn App() -> Element {
+///     let mut multiplier = use_signal(|| String::from("2"));
 ///     rsx! {
+///         input {
+///             r#type: "text",
+///             value: multiplier,
+///             oninput: move |e| multiplier.set(e.value())
+///         }
 ///         ErrorBoundary {
-///             handle_error: |errors: ErrorContext| rsx! { "Oops, we encountered an error. Please report {errors:?} to the developer of this application" },
+///             handle_error: |errors: ErrorContext| {
+///                 rsx! {
+///                     div {
+///                         "Oops, we encountered an error. Please report {errors:?} to the developer of this application"
+///                     }
+///                 }
+///             },
 ///             Counter {
-///                 multiplier: "1234"
+///                 multiplier
 ///             }
 ///         }
 ///     }
 /// }
 ///
 /// #[component]
-/// fn Counter(multiplier: String) -> Element {
-///     // You can bubble up errors with `?` inside components
-///     let multiplier_parsed = multiplier.parse::<usize>()?;
+/// fn Counter(multiplier: ReadOnlySignal<String>) -> Element {
+///     let multiplier_parsed = multiplier().parse::<usize>()?;
 ///     let mut count = use_signal(|| multiplier_parsed);
 ///     rsx! {
 ///         button {
-///             // Or inside event handlers
 ///             onclick: move |_| {
-///                 let multiplier_parsed = multiplier.parse::<usize>()?;
+///                 let multiplier_parsed = multiplier().parse::<usize>()?;
 ///                 *count.write() *= multiplier_parsed;
 ///                 Ok(())
 ///             },
@@ -732,16 +746,69 @@ impl<
 /// }
 /// ```
 ///
-/// ## Usage
+/// ## Resetting the error boundary
 ///
-/// Error boundaries are an easy way to handle errors in your application.
-/// They are similar to `try/catch` in JavaScript, but they only catch errors in the tree below them.
-/// Error boundaries are quick to implement, but it can be useful to individually handle errors in your components to provide a better user experience when you know that an error is likely to occur.
+/// Once the error boundary catches an error, it will render the rsx returned from the handle_error function instead of the children. To reset the error boundary,
+/// you can call the [`ErrorContext::clear_errors`] method. This will clear all errors and re-render the children.
+///
+/// ```rust, no_run
+/// # use dioxus::prelude::*;
+/// fn App() -> Element {
+///     let mut multiplier = use_signal(|| String::new());
+///     rsx! {
+///         input {
+///             r#type: "text",
+///             value: multiplier,
+///             oninput: move |e| multiplier.set(e.value())
+///         }
+///         ErrorBoundary {
+///             handle_error: |errors: ErrorContext| {
+///                 rsx! {
+///                     div {
+///                         "Oops, we encountered an error. Please report {errors:?} to the developer of this application"
+///                     }
+///                     button {
+///                         onclick: move |_| {
+///                             errors.clear_errors();
+///                         },
+///                         "try again"
+///                     }
+///                 }
+///             },
+///             Counter {
+///                 multiplier
+///             }
+///         }
+///     }
+/// }
+///
+/// #[component]
+/// fn Counter(multiplier: ReadOnlySignal<String>) -> Element {
+///     let multiplier_parsed = multiplier().parse::<usize>()?;
+///     let mut count = use_signal(|| multiplier_parsed);
+///     rsx! {
+///         button {
+///             onclick: move |_| {
+///                 let multiplier_parsed = multiplier().parse::<usize>()?;
+///                 *count.write() *= multiplier_parsed;
+///                 Ok(())
+///             },
+///             "{count}x{multiplier}"
+///         }
+///     }
+/// }
+/// ```
 #[allow(non_upper_case_globals, non_snake_case)]
 pub fn ErrorBoundary(props: ErrorBoundaryProps) -> Element {
     let error_boundary = use_hook(provide_error_boundary);
     let errors = error_boundary.errors();
-    if errors.is_empty() {
+    let has_errors = !errors.is_empty();
+    // Drop errors before running user code that might borrow the error lock
+    drop(errors);
+
+    if has_errors {
+        (props.handle_error.0)(error_boundary.clone())
+    } else {
         std::result::Result::Ok({
             static TEMPLATE: Template = Template {
                 roots: &[TemplateNode::Dynamic { id: 0usize }],
@@ -755,9 +822,5 @@ pub fn ErrorBoundary(props: ErrorBoundaryProps) -> Element {
                 Default::default(),
             )
         })
-    } else {
-        tracing::trace!("scope id: {:?}", current_scope_id());
-        tracing::trace!("handling errors: {:?}", errors);
-        (props.handle_error.0)(error_boundary.clone())
     }
 }

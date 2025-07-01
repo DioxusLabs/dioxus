@@ -1,3 +1,4 @@
+use std::hash::Hasher;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -24,6 +25,8 @@ use swc_ecma_codegen::text_writer::JsWriter;
 use swc_ecma_loader::{resolvers::node::NodeModulesResolver, TargetEnv};
 use swc_ecma_parser::{parse_file_as_module, Syntax};
 
+use crate::hash::hash_file_contents;
+
 struct TracingEmitter;
 
 impl Emitter for TracingEmitter {
@@ -43,30 +46,32 @@ impl Emitter for TracingEmitter {
     }
 }
 
+/// Run a closure with the swc globals and handler set up
+fn inside_handler<O>(f: impl FnOnce(&Globals, Lrc<SourceMap>) -> O) -> O {
+    let globals = Globals::new();
+    let cm = Lrc::new(SourceMap::new(FilePathMapping::empty()));
+    let handler = Handler::with_emitter_and_flags(Box::new(TracingEmitter), Default::default());
+    GLOBALS.set(&globals, || HANDLER.set(&handler, || f(&globals, cm)))
+}
+
 fn bundle_js_to_writer(
     file: PathBuf,
     bundle: bool,
     minify: bool,
     write_to: &mut impl std::io::Write,
 ) -> anyhow::Result<()> {
-    let globals = Globals::new();
-    let handler = Handler::with_emitter_and_flags(Box::new(TracingEmitter), Default::default());
-    GLOBALS.set(&globals, || {
-        HANDLER.set(&handler, || {
-            bundle_js_to_writer_inside_handler(&globals, file, bundle, minify, write_to)
-        })
+    inside_handler(|globals, cm| {
+        bundle_js_to_writer_inside_handler(globals, cm, file, bundle, minify, write_to)
     })
 }
 
-fn bundle_js_to_writer_inside_handler(
+fn resolve_js_inside_handler(
     globals: &Globals,
     file: PathBuf,
     bundle: bool,
-    minify: bool,
-    write_to: &mut impl std::io::Write,
-) -> anyhow::Result<()> {
-    let cm = Lrc::new(SourceMap::new(FilePathMapping::empty()));
-    let mut module = if bundle {
+    cm: &Lrc<SourceMap>,
+) -> anyhow::Result<Module> {
+    if bundle {
         let node_resolver = NodeModulesResolver::new(TargetEnv::Browser, Default::default(), true);
         let mut bundler = Bundler::new(
             globals,
@@ -89,7 +94,7 @@ fn bundle_js_to_writer_inside_handler(
         let bundle = bundles
             .pop()
             .ok_or_else(|| anyhow::anyhow!("swc did not output any bundles"))?;
-        bundle.module
+        Ok(bundle.module)
     } else {
         let fm = cm.load_file(Path::new(&file)).expect("Failed to load file");
 
@@ -108,8 +113,19 @@ fn bundle_js_to_writer_inside_handler(
                 error.cancel();
                 anyhow::anyhow!("{}", error.message())
             })
-        })?
-    };
+        })
+    }
+}
+
+fn bundle_js_to_writer_inside_handler(
+    globals: &Globals,
+    cm: Lrc<SourceMap>,
+    file: PathBuf,
+    bundle: bool,
+    minify: bool,
+    write_to: &mut impl std::io::Write,
+) -> anyhow::Result<()> {
+    let mut module = resolve_js_inside_handler(globals, file, bundle, &cm)?;
 
     if minify {
         module = swc_ecma_minifier::optimize(
@@ -243,6 +259,37 @@ pub(crate) fn process_js(
             output_path.display()
         )
     })?;
+
+    Ok(())
+}
+
+fn hash_js_module(file: PathBuf, hasher: &mut impl Hasher, bundle: bool) -> anyhow::Result<()> {
+    inside_handler(|globals, cm| {
+        _ = resolve_js_inside_handler(globals, file, bundle, &cm)?;
+
+        for file in cm.files().iter() {
+            let hash = file.src_hash;
+            hasher.write(&hash.to_le_bytes());
+        }
+
+        Ok(())
+    })
+}
+
+pub(crate) fn hash_js(
+    js_options: &JsAssetOptions,
+    source: &Path,
+    hasher: &mut impl Hasher,
+    bundle: bool,
+) -> anyhow::Result<()> {
+    if js_options.minified() {
+        if let Err(err) = hash_js_module(source.to_path_buf(), hasher, bundle) {
+            tracing::error!("Failed to minify js. Falling back to non-minified: {err}");
+            hash_file_contents(source, hasher)?;
+        }
+    } else {
+        hash_file_contents(source, hasher)?;
+    }
 
     Ok(())
 }

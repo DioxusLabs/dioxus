@@ -1,12 +1,13 @@
 //! Run linting against the user's codebase.
 //!
 //! For reference, the rustfmt main.rs file
-//! https://github.com/rust-lang/rustfmt/blob/master/src/bin/main.rs
+//! <https://github.com/rust-lang/rustfmt/blob/master/src/bin/main.rs>
 
 use super::*;
-use crate::{metadata::collect_rs_files, DioxusCrate};
+use crate::BuildRequest;
 use anyhow::Context;
 use futures_util::{stream::FuturesUnordered, StreamExt};
+use std::path::Path;
 
 /// Check the Rust files in the project for issues.
 #[derive(Clone, Debug, Parser)]
@@ -17,19 +18,28 @@ pub(crate) struct Check {
 
     /// Information about the target to check
     #[clap(flatten)]
-    pub(crate) target_args: TargetArgs,
+    pub(crate) build_args: CommandWithPlatformOverrides<BuildArgs>,
 }
 
 impl Check {
     // Todo: check the entire crate
     pub(crate) async fn check(self) -> Result<StructuredOutput> {
+        let BuildTargets { client, server } = self.build_args.into_targets().await?;
+
         match self.file {
             // Default to checking the project
             None => {
-                let dioxus_crate = DioxusCrate::new(&self.target_args)?;
-                check_project_and_report(dioxus_crate)
+                check_project_and_report(&client)
                     .await
                     .context("error checking project")?;
+
+                if let Some(server) = server {
+                    if server.package != client.package {
+                        check_project_and_report(&server)
+                            .await
+                            .context("error checking project")?;
+                    }
+                }
             }
             Some(file) => {
                 check_file_and_report(file)
@@ -51,9 +61,16 @@ async fn check_file_and_report(path: PathBuf) -> Result<()> {
 /// Runs using Tokio for multithreading, so it should be really really fast
 ///
 /// Doesn't do mod-descending, so it will still try to check unreachable files. TODO.
-async fn check_project_and_report(dioxus_crate: DioxusCrate) -> Result<()> {
-    let mut files_to_check = vec![dioxus_crate.main_source_file()];
-    files_to_check.extend(collect_rs_files(dioxus_crate.crate_dir()));
+async fn check_project_and_report(build: &BuildRequest) -> Result<()> {
+    let dioxus_crate = build
+        .workspace
+        .find_main_package(Some(build.package.clone()))?;
+    let dioxus_crate = &build.workspace.krates[dioxus_crate];
+    let mut files_to_check = vec![];
+    collect_rs_files(
+        dioxus_crate.manifest_path.parent().unwrap().as_std_path(),
+        &mut files_to_check,
+    );
     check_files_and_report(files_to_check).await
 }
 
@@ -103,5 +120,13 @@ async fn check_files_and_report(files_to_check: Vec<PathBuf>) -> Result<()> {
         }
         1 => Err("1 issue found.".into()),
         _ => Err(format!("{} issues found.", total_issues).into()),
+    }
+}
+
+pub(crate) fn collect_rs_files(folder: &Path, files: &mut Vec<PathBuf>) {
+    for entry in ignore::Walk::new(folder).flatten() {
+        if entry.path().extension() == Some("rs".as_ref()) {
+            files.push(entry.path().to_path_buf());
+        }
     }
 }

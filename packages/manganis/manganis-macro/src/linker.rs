@@ -6,12 +6,9 @@ use quote::ToTokens;
 /// We force rust to store a serialized representation of the asset description
 /// inside a particular region of the binary, with the label "manganis".
 /// After linking, the "manganis" sections of the different object files will be merged.
-pub fn generate_link_section(asset: impl ToTokens) -> TokenStream2 {
+pub fn generate_link_section(asset: impl ToTokens, asset_hash: &str) -> TokenStream2 {
     let position = proc_macro2::Span::call_site();
-    let section_name = syn::LitStr::new(
-        manganis_core::linker::LinkSection::CURRENT.link_section,
-        position,
-    );
+    let export_name = syn::LitStr::new(&format!("__MANGANIS__{}", asset_hash), position);
 
     quote::quote! {
         // First serialize the asset into a constant sized buffer
@@ -22,12 +19,7 @@ pub fn generate_link_section(asset: impl ToTokens) -> TokenStream2 {
         const __LEN: usize = __BYTES.len();
 
         // Now that we have the size of the asset, copy the bytes into a static array
-        #[link_section = #section_name]
-        #[used]
-        static __LINK_SECTION: [u8; __LEN] = manganis::macro_helpers::copy_bytes(__BYTES);
-
-        fn __keep_link_section() -> u8 {
-            unsafe { std::ptr::read_volatile(__LINK_SECTION.as_ptr()) }
-        }
+        #[unsafe(export_name = #export_name)]
+        static __LINK_SECTION: [u8; __LEN]  = manganis::macro_helpers::copy_bytes(__BYTES);
     }
 }

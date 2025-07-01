@@ -1,12 +1,14 @@
 #![doc = include_str!("../README.md")]
 #![deny(missing_docs)]
 
-mod hash;
 #[doc(hidden)]
 pub mod macro_helpers;
-pub use manganis_macro::{asset, css_module};
+pub use manganis_macro::asset;
+
+#[doc(hidden)]
+pub use manganis_macro::css_module;
 
 pub use manganis_core::{
-    Asset, AssetOptions, BundledAsset, CssAssetOptions, CssModuleAssetOptions, FolderAssetOptions,
-    ImageAssetOptions, ImageFormat, ImageSize, JsAssetOptions,
+    Asset, AssetOptions, AssetVariant, BundledAsset, CssAssetOptions, CssModuleAssetOptions,
+    FolderAssetOptions, ImageAssetOptions, ImageFormat, ImageSize, JsAssetOptions,
 };

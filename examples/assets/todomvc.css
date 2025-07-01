@@ -255,6 +255,9 @@ body {
 }
 
 .footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
     color: #777;
     padding: 10px 15px;
     height: 20px;
@@ -276,6 +279,7 @@ body {
 .todo-count {
     float: left;
     text-align: left;
+    white-space-collapse: preserve;
 }
 
 .todo-count strong {
@@ -296,6 +300,7 @@ body {
 }
 
 .filters li a {
+    display: inline-block;
     color: inherit;
     margin: 3px;
     padding: 3px 7px;

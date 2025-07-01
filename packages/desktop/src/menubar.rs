@@ -18,7 +18,7 @@ pub fn init_menu_bar(menu: &DioxusMenu, window: &Window) {
 /// to further customize the menu bar and pass it to a [`WindowBuilder`](tao::window::WindowBuilder).
 /// > Note: The default menu bar enables macOS shortcuts like cut/copy/paste.
 /// > The menu bar differs per platform because of constraints introduced
-/// > by [`MenuItem`](tao::menu::MenuItem).
+/// > by [`MenuItem`](muda::MenuItem).
 #[allow(unused)]
 pub fn default_menu_bar() -> DioxusMenu {
     #[cfg(not(any(target_os = "ios", target_os = "android")))]
