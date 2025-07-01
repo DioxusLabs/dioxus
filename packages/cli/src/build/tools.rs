@@ -223,8 +223,7 @@ impl AndroidTools {
         let mut triple = "aarch64-linux-android".parse::<Triple>().unwrap();
         triple.operating_system = OperatingSystem::Linux;
         triple.environment = Environment::Android;
-        triple.architecture =
-            target_lexicon::Architecture::Aarch64(target_lexicon::Aarch64Architecture::Aarch64);
+        triple.architecture = target_lexicon::Architecture::Aarch64(Aarch64Architecture::Aarch64);
 
         // TODO: Wire this up with --device flag. (add `-s serial`` flag before `shell` arg)
         let output = Command::new(&self.adb)

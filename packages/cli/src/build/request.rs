@@ -721,13 +721,12 @@ impl BuildRequest {
 
         tracing::debug!(
             r#"Log Files:
-                • link_args_file: {},
-                • link_err_file: {},
-                • rustc_wrapper_args_file: {},
-                • session_cache_dir: {}
-                • linker: {:?}
-                • target_dir: {:?}
-                "#,
+               • link_args_file: {},
+               • link_err_file: {},
+               • rustc_wrapper_args_file: {},
+               • session_cache_dir: {}
+               • linker: {:?}
+               • target_dir: {:?}"#,
             link_args_file.path().display(),
             link_err_file.path().display(),
             rustc_wrapper_args_file.path().display(),
@@ -2364,13 +2363,12 @@ impl BuildRequest {
         let ndk = tools.ndk.clone();
         tracing::debug!(
             r#"Using android:
-            min_sdk_version: {min_sdk_version}
-            linker: {linker:?}
-            ar_path: {ar_path:?}
-            target_cc: {target_cc:?}
-            target_cxx: {target_cxx:?}
-            java_home: {java_home:?}
-            "#
+               • min_sdk_version: {min_sdk_version}
+               • linker: {linker:?}
+               • ar_path: {ar_path:?}
+               • target_cc: {target_cc:?}
+               • target_cxx: {target_cxx:?}
+               • java_home: {java_home:?}"#
         );
         env_vars.push((
             "ANDROID_NATIVE_API_LEVEL".into(),
@@ -2592,14 +2590,13 @@ impl BuildRequest {
 
         tracing::debug!(
             r#"Initialized android dirs:
-- gradle:              {wrapper:?}
-- app/                 {app:?}
-- app/src:             {app_main:?}
-- app/src/kotlin:      {app_kotlin:?}
-- app/src/jniLibs:     {app_jnilibs:?}
-- app/src/assets:      {app_assets:?}
-- app/src/kotlin/main: {app_kotlin_out:?}
-"#
+               • gradle:              {wrapper:?}
+               • app/                 {app:?}
+               • app/src:             {app_main:?}
+               • app/src/kotlin:      {app_kotlin:?}
+               • app/src/jniLibs:     {app_jnilibs:?}
+               • app/src/assets:      {app_assets:?}
+               • app/src/kotlin/main: {app_kotlin_out:?}"#
         );
 
         // handlebars
