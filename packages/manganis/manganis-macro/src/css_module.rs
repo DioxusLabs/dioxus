@@ -34,7 +34,7 @@ impl Parse for CssModuleParser {
         // Optional options
         let mut options = input.parse::<TokenStream>()?;
         if options.is_empty() {
-            options = quote! { manganis::CssModuleAssetOptions::new() }
+            options = quote! { manganis::AssetOptions::css_module() }
         }
 
         let asset_parser = AssetParser {

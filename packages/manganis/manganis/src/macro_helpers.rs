@@ -1,13 +1,12 @@
 pub use const_serialize;
-use const_serialize::{serialize_const, ConstStr, ConstVec, SerializeConst};
+use const_serialize::{serialize_const, ConstVec, SerializeConst};
 use manganis_core::{AssetOptions, BundledAsset};
 
-const PLACEHOLDER_HASH: ConstStr =
-    ConstStr::new("this is a placeholder path which will be replaced by the linker");
+const PLACEHOLDER_HASH: &str = "this is a placeholder path which will be replaced by the linker";
 
 /// Create a bundled asset from the input path, the content hash, and the asset options
 pub const fn create_bundled_asset(input_path: &str, asset_config: AssetOptions) -> BundledAsset {
-    BundledAsset::new_from_const(ConstStr::new(input_path), PLACEHOLDER_HASH, asset_config)
+    BundledAsset::new(input_path, PLACEHOLDER_HASH, asset_config)
 }
 
 /// Create a bundled asset from the input path, the content hash, and the asset options with a relative asset deprecation warning

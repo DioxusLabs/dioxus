@@ -1,6 +1,6 @@
 use const_serialize::SerializeConst;
 
-use crate::AssetOptions;
+use crate::{AssetOptions, AssetOptionsBuilder, AssetVariant};
 
 /// The type of an image. You can read more about the tradeoffs between image formats [here](https://developer.mozilla.org/en-US/docs/Web/Media/Formats/Image_types)
 #[derive(
@@ -77,13 +77,18 @@ pub struct ImageAssetOptions {
 
 impl Default for ImageAssetOptions {
     fn default() -> Self {
-        Self::new()
+        Self::default()
     }
 }
 
 impl ImageAssetOptions {
-    /// Create a new image asset options
-    pub const fn new() -> Self {
+    /// Create a new builder for image asset options
+    pub const fn new() -> AssetOptionsBuilder<ImageAssetOptions> {
+        AssetOptions::image()
+    }
+
+    /// Create a default image asset options
+    pub const fn default() -> Self {
         Self {
             ty: ImageFormat::Unknown,
             low_quality_preview: false,
@@ -92,21 +97,56 @@ impl ImageAssetOptions {
         }
     }
 
+    /// Check if the asset is preloaded
+    pub const fn preloaded(&self) -> bool {
+        self.preload
+    }
+
+    /// Get the format of the image
+    pub const fn format(&self) -> ImageFormat {
+        self.ty
+    }
+
+    /// Get the size of the image
+    pub const fn size(&self) -> ImageSize {
+        self.size
+    }
+
+    pub(crate) const fn extension(&self) -> Option<&'static str> {
+        match self.ty {
+            ImageFormat::Png => Some("png"),
+            ImageFormat::Jpg => Some("jpg"),
+            ImageFormat::Webp => Some("webp"),
+            ImageFormat::Avif => Some("avif"),
+            ImageFormat::Unknown => None,
+        }
+    }
+}
+
+impl AssetOptions {
+    /// Create a new image asset builder
+    ///
+    /// ```rust
+    /// # use manganis::{asset, Asset, ImageAssetOptions};
+    /// const _: Asset = asset!("/assets/image.png", AssetOptions::image());
+    /// ```
+    pub const fn image() -> AssetOptionsBuilder<ImageAssetOptions> {
+        AssetOptionsBuilder::variant(ImageAssetOptions::default())
+    }
+}
+
+impl AssetOptionsBuilder<ImageAssetOptions> {
     /// Make the asset preloaded
     ///
     /// Preloading an image will make the image start to load as soon as possible. This is useful for images that will be displayed soon after the page loads or images that may not be visible immediately, but should start loading sooner
     ///
     /// ```rust
     /// # use manganis::{asset, Asset, ImageAssetOptions};
-    /// const _: Asset = asset!("/assets/image.png", ImageAssetOptions::new().with_preload(true));
+    /// const _: Asset = asset!("/assets/image.png", AssetOptions::image().with_preload(true));
     /// ```
-    pub const fn with_preload(self, preload: bool) -> Self {
-        Self { preload, ..self }
-    }
-
-    /// Check if the asset is preloaded
-    pub const fn preloaded(&self) -> bool {
-        self.preload
+    pub const fn with_preload(mut self, preload: bool) -> Self {
+        self.variant.preload = preload;
+        self
     }
 
     /// Sets the format of the image
@@ -115,10 +155,11 @@ impl ImageAssetOptions {
     ///
     /// ```rust
     /// # use manganis::{asset, Asset, ImageAssetOptions, ImageFormat};
-    /// const _: Asset = asset!("/assets/image.png", ImageAssetOptions::new().with_format(ImageFormat::Webp));
+    /// const _: Asset = asset!("/assets/image.png", AssetOptions::image().with_format(ImageFormat::Webp));
     /// ```
-    pub const fn with_format(self, format: ImageFormat) -> Self {
-        Self { ty: format, ..self }
+    pub const fn with_format(mut self, format: ImageFormat) -> Self {
+        self.variant.ty = format;
+        self
     }
 
     /// Sets the format of the image to [`ImageFormat::Avif`]
@@ -128,7 +169,7 @@ impl ImageAssetOptions {
     ///
     /// ```rust
     /// # use manganis::{asset, Asset, ImageAssetOptions, ImageFormat};
-    /// const _: Asset = asset!("/assets/image.png", ImageAssetOptions::new().with_avif());
+    /// const _: Asset = asset!("/assets/image.png", AssetOptions::image().with_avif());
     /// ```
     pub const fn with_avif(self) -> Self {
         self.with_format(ImageFormat::Avif)
@@ -141,7 +182,7 @@ impl ImageAssetOptions {
     ///
     /// ```rust
     /// # use manganis::{asset, Asset, ImageAssetOptions, ImageFormat};
-    /// const _: Asset = asset!("/assets/image.png", ImageAssetOptions::new().with_webp());
+    /// const _: Asset = asset!("/assets/image.png", AssetOptions::image().with_webp());
     /// ```
     pub const fn with_webp(self) -> Self {
         self.with_format(ImageFormat::Webp)
@@ -153,7 +194,7 @@ impl ImageAssetOptions {
     ///
     /// ```rust
     /// # use manganis::{asset, Asset, ImageAssetOptions, ImageFormat};
-    /// const _: Asset = asset!("/assets/image.png", ImageAssetOptions::new().with_jpg());
+    /// const _: Asset = asset!("/assets/image.png", AssetOptions::image().with_jpg());
     /// ```
     pub const fn with_jpg(self) -> Self {
         self.with_format(ImageFormat::Jpg)
@@ -165,15 +206,10 @@ impl ImageAssetOptions {
     ///
     /// ```rust
     /// # use manganis::{asset, Asset, ImageAssetOptions, ImageFormat};
-    /// const _: Asset = asset!("/assets/image.png", ImageAssetOptions::new().with_png());
+    /// const _: Asset = asset!("/assets/image.png", AssetOptions::image().with_png());
     /// ```
     pub const fn with_png(self) -> Self {
         self.with_format(ImageFormat::Png)
-    }
-
-    /// Get the format of the image
-    pub const fn format(&self) -> ImageFormat {
-        self.ty
     }
 
     /// Sets the size of the image
@@ -182,46 +218,18 @@ impl ImageAssetOptions {
     ///
     /// ```rust
     /// # use manganis::{asset, Asset, ImageAssetOptions, ImageSize};
-    /// const _: Asset = asset!("/assets/image.png", ImageAssetOptions::new().with_size(ImageSize::Manual { width: 512, height: 512 }));
+    /// const _: Asset = asset!("/assets/image.png", AssetOptions::image().with_size(ImageSize::Manual { width: 512, height: 512 }));
     /// ```
-    pub const fn with_size(self, size: ImageSize) -> Self {
-        Self { size, ..self }
+    pub const fn with_size(mut self, size: ImageSize) -> Self {
+        self.variant.size = size;
+        self
     }
-
-    /// Get the size of the image
-    pub const fn size(&self) -> ImageSize {
-        self.size
-    }
-
-    // LQIP is currently disabled until we have the CLI set up to inject the low quality image preview after the crate is built through the linker
-    // /// Make the image use a low quality preview
-    // ///
-    // /// A low quality preview is a small version of the image that will load faster. This is useful for large images on mobile devices that may take longer to load
-    // ///
-    // /// ```rust
-    // /// # use manganis::{asset, Asset, ImageAssetOptions};
-    // /// const _: Asset = manganis::asset!("/assets/image.png", ImageAssetOptions::new().with_low_quality_image_preview());
-    // /// ```
-    //
-    // pub const fn with_low_quality_image_preview(self, low_quality_preview: bool) -> Self {
-    //     Self {
-    //         low_quality_preview,
-    //         ..self
-    //     }
-    // }
 
     /// Convert the options into options for a generic asset
     pub const fn into_asset_options(self) -> AssetOptions {
-        AssetOptions::Image(self)
-    }
-
-    pub(crate) const fn extension(&self) -> Option<&'static str> {
-        match self.ty {
-            ImageFormat::Png => Some("png"),
-            ImageFormat::Jpg => Some("jpg"),
-            ImageFormat::Webp => Some("webp"),
-            ImageFormat::Avif => Some("avif"),
-            ImageFormat::Unknown => None,
+        AssetOptions {
+            add_hash: self.add_hash,
+            variant: AssetVariant::Image(self.variant),
         }
     }
 }
