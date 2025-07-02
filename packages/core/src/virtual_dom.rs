@@ -722,8 +722,8 @@ impl VirtualDom {
                     if run_scope {
                         // If the scope is dirty, run the scope and get the mutations
                         self.runtime.clone().while_rendering(|| {
-                            todo!()
-                            // self.run_and_diff_scope(None::<&mut NoOpMutations>, scope_id);
+                            Fiber::new(&self.runtime.clone(), self, &mut NoOpMutations, false)
+                                .run_and_diff_scope(scope_id);
                         });
 
                         tracing::trace!("Ran scope {:?} during suspense", scope_id);
