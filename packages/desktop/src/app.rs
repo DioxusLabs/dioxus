@@ -79,7 +79,7 @@ impl App {
                 shortcut_manager: ShortcutRegistry::new(),
                 proxy: event_loop.create_proxy(),
                 target: event_loop.clone(),
-                websocket: EditWebsocket::new(),
+                websocket: EditWebsocket::start(),
             }),
         };
 
