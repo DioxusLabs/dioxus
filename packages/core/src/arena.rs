@@ -1,6 +1,3 @@
-use crate::innerlude::ScopeOrder;
-use crate::{virtual_dom::VirtualDom, ScopeId};
-
 /// An Element's unique identifier.
 ///
 /// `ElementId` is a `usize` that is unique across the entire VirtualDOM - but not unique across time. If a component is
@@ -54,42 +51,9 @@ pub struct ElementPath {
     pub(crate) path: &'static [u8],
 }
 
-impl VirtualDom {
-    pub(crate) fn next_element(&mut self) -> ElementId {
-        let mut elements = self.runtime.elements.borrow_mut();
-        ElementId(elements.insert(None))
-    }
-
-    pub(crate) fn reclaim(&mut self, el: ElementId) {
-        if !self.try_reclaim(el) {
-            tracing::error!("cannot reclaim {:?}", el);
-        }
-    }
-
-    pub(crate) fn try_reclaim(&mut self, el: ElementId) -> bool {
-        // We never reclaim the unmounted elements or the root element
-        if el.0 == 0 || el.0 == usize::MAX {
-            return true;
-        }
-
-        let mut elements = self.runtime.elements.borrow_mut();
-        elements.try_remove(el.0).is_some()
-    }
-
-    // Drop a scope without dropping its children
-    //
-    // Note: This will not remove any ids from the arena
-    pub(crate) fn drop_scope(&mut self, id: ScopeId) {
-        let height = {
-            let scope = self.scopes.remove(id.0);
-            let context = scope.state();
-            context.height
-        };
-
-        self.dirty_scopes.remove(&ScopeOrder::new(height, id));
-
-        // If this scope was a suspense boundary, remove it from the resolved scopes
-        self.resolved_scopes.retain(|s| s != &id);
+impl PartialEq<&[u8]> for ElementPath {
+    fn eq(&self, other: &&[u8]) -> bool {
+        self.path.eq(*other)
     }
 }
 
@@ -113,10 +77,4 @@ fn is_descendant() {
 
     assert!(!event_path.is_descendant(&[1, 2, 3, 4, 5, 6]));
     assert!(!event_path.is_descendant(&[2, 3, 4]));
-}
-
-impl PartialEq<&[u8]> for ElementPath {
-    fn eq(&self, other: &&[u8]) -> bool {
-        self.path.eq(*other)
-    }
 }

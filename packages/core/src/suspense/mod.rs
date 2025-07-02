@@ -84,7 +84,7 @@ impl SuspendedFuture {
 /// A context with information about suspended components
 #[derive(Debug, Clone)]
 pub struct SuspenseContext {
-    inner: Rc<SuspenseBoundaryInner>,
+    pub(crate) inner: Rc<SuspenseBoundaryInner>,
 }
 
 impl PartialEq for SuspenseContext {
@@ -206,14 +206,14 @@ impl SuspenseContext {
 
 /// A boundary that will capture any errors from child components
 pub struct SuspenseBoundaryInner {
-    suspended_tasks: RefCell<Vec<SuspendedFuture>>,
-    id: Cell<ScopeId>,
+    pub(crate) suspended_tasks: RefCell<Vec<SuspendedFuture>>,
+    pub(crate) id: Cell<ScopeId>,
     /// The nodes that are suspended under this boundary
-    suspended_nodes: RefCell<Option<VNode>>,
+    pub(crate) suspended_nodes: RefCell<Option<VNode>>,
     /// On the server, you can only resolve a suspense boundary once. This is used to track if the suspense boundary has been resolved and if it should be frozen
-    frozen: Cell<bool>,
+    pub(crate) frozen: Cell<bool>,
     /// Closures queued to run after the suspense boundary is resolved
-    after_suspense_resolved: RefCell<Vec<Box<dyn FnOnce()>>>,
+    pub(crate) after_suspense_resolved: RefCell<Vec<Box<dyn FnOnce()>>>,
 }
 
 impl Debug for SuspenseBoundaryInner {
