@@ -325,7 +325,7 @@ cocoa = "0.26"
 core-foundation = "0.10.1"
 objc = { version = "0.2.7", features = ["exception"] }
 objc_id = "0.1.1"
-tray-icon = "0.20.0"
+tray-icon = "0.21.0"
 open = "5.1.2"
 
 # web

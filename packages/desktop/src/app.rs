@@ -1,5 +1,5 @@
 use crate::{
-    config::{Config, DefaultWindowCloseBehaviour, WindowCloseBehaviour},
+    config::{Config, WindowCloseBehaviour},
     edits::EditWebsocket,
     event_handlers::WindowEventHandlers,
     file_upload::{DesktopFileUploadForm, FileDialogRequest, NativeFileEngine},
@@ -23,7 +23,7 @@ use tao::{
     dpi::PhysicalSize,
     event::Event,
     event_loop::{ControlFlow, EventLoop, EventLoopBuilder, EventLoopProxy, EventLoopWindowTarget},
-    window::{Window, WindowId},
+    window::WindowId,
 };
 
 /// The single top-level object that manages all the running windows, assets, shortcuts, etc
@@ -36,7 +36,7 @@ pub(crate) struct App {
     // Stuff we need mutable access to
     pub(crate) control_flow: ControlFlow,
     pub(crate) is_visible_before_start: bool,
-    pub(crate) default_window_close_behavior: DefaultWindowCloseBehaviour,
+    pub(crate) exit_on_last_window_close: bool,
     pub(crate) webviews: HashMap<WindowId, WebviewInstance>,
     pub(crate) float_all: bool,
     pub(crate) show_devtools: bool,
@@ -65,7 +65,7 @@ impl App {
             .unwrap_or_else(|| EventLoopBuilder::<UserWindowEvent>::with_user_event().build());
 
         let app = Self {
-            default_window_close_behavior: cfg.default_window_close_behaviour,
+            exit_on_last_window_close: cfg.exit_on_last_window_close,
             is_visible_before_start: true,
             webviews: HashMap::new(),
             control_flow: ControlFlow::Wait,
@@ -188,89 +188,37 @@ impl App {
         }
     }
 
-    pub fn change_window_close_behaviour(
-        &mut self,
-        id: WindowId,
-        behaviour: Option<WindowCloseBehaviour>,
-    ) {
-        if let Some(webview) = self.webviews.get_mut(&id) {
-            webview.close_behaviour = behaviour
-        }
-    }
-
     pub fn handle_close_requested(&mut self, id: WindowId) {
-        use DefaultWindowCloseBehaviour::*;
-        use WindowCloseBehaviour::*;
-
-        let mut remove = false;
-
-        if let Some(webview) = self.webviews.get(&id) {
-            if let Some(close_behaviour) = &webview.close_behaviour {
-                match close_behaviour {
-                    WindowExitsApp => {
-                        self.control_flow = ControlFlow::Exit;
-                        return;
-                    }
-                    WindowHides => {
-                        hide_window(&webview.desktop_context.window);
-                        return;
-                    }
-                    WindowCloses => {
-                        remove = true;
-                    }
-                }
-            }
-        }
-
-        // needed in case of `default_window_close_behavior WindowsHides | LastWindowHides` since they may not remove a window on `WindowCloses`
-        if remove {
-            #[cfg(debug_assertions)]
-            self.persist_window_state();
-
-            self.webviews.remove(&id);
-            if matches!(self.default_window_close_behavior, LastWindowExitsApp)
-                && self.webviews.is_empty()
-            {
-                self.control_flow = ControlFlow::Exit
-            }
+        let Some(window) = self.webviews.get(&id) else {
+            // If the window is not found, we can just return
             return;
-        }
+        };
 
-        match self.default_window_close_behavior {
-            LastWindowExitsApp => {
+        match window.desktop_context.close_behaviour.get() {
+            // If the window is just set to hide when closed, we can just hide it
+            WindowCloseBehaviour::WindowHides => {
+                window.desktop_context.window.set_visible(false);
+            }
+
+            // If the window is set to close, we can remove it from the list of webviews
+            // If the app is set to exit when the last window closes, we should also exit the app
+            WindowCloseBehaviour::WindowCloses => {
                 #[cfg(debug_assertions)]
                 self.persist_window_state();
 
                 self.webviews.remove(&id);
-                if self.webviews.is_empty() {
+
+                if self.exit_on_last_window_close && self.webviews.is_empty() {
                     self.control_flow = ControlFlow::Exit
                 }
             }
-
-            LastWindowHides if self.webviews.len() > 1 => {
-                self.webviews.remove(&id);
-            }
-
-            WindowsHides | LastWindowHides => {
-                if let Some(webview) = self.webviews.get(&id) {
-                    hide_window(&webview.desktop_context.window);
-                }
-            }
-
-            WindowsCloses => {
-                self.webviews.remove(&id);
-            }
-        }
+        };
     }
 
     pub fn window_destroyed(&mut self, id: WindowId) {
         self.webviews.remove(&id);
 
-        if matches!(
-            self.default_window_close_behavior,
-            DefaultWindowCloseBehaviour::LastWindowExitsApp
-        ) && self.webviews.is_empty()
-        {
+        if self.exit_on_last_window_close && self.webviews.is_empty() {
             self.control_flow = ControlFlow::Exit
         }
     }
@@ -721,41 +669,6 @@ struct PreservedWindowState {
     height: u32,
     monitor: String,
     url: Option<String>,
-}
-
-/// Hides a window.
-///
-/// On macOS, if we use `set_visibility(false)` on the window, it will hide the window but not show
-/// it again when the user switches back to the app. `NSApplication::hide:` has the correct behaviour,
-/// so we need to special case it.
-#[allow(unused)]
-fn hide_window(window: &Window) {
-    #[cfg(target_os = "windows")]
-    {
-        use tao::platform::windows::WindowExtWindows;
-        window.set_visible(false);
-    }
-
-    #[cfg(target_os = "linux")]
-    {
-        use tao::platform::unix::WindowExtUnix;
-        window.set_visible(false);
-    }
-
-    #[cfg(target_os = "macos")]
-    {
-        // window.set_visible(false); has the wrong behaviour on macOS
-        // It will hide the window but not show it again when the user switches
-        // back to the app. `NSApplication::hide:` has the correct behaviour
-        use objc::runtime::Object;
-        use objc::{msg_send, sel, sel_impl};
-        #[allow(unexpected_cfgs)]
-        objc::rc::autoreleasepool(|| unsafe {
-            let app: *mut Object = msg_send![objc::class!(NSApplication), sharedApplication];
-            let nil = std::ptr::null_mut::<Object>();
-            let _: () = msg_send![app, hide: nil];
-        });
-    }
 }
 
 /// Return the location of a tempfile with our window state in it such that we can restore it later

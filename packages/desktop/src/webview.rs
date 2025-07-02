@@ -161,7 +161,6 @@ pub(crate) struct WebviewInstance {
     pub edits: WebviewEdits,
     pub desktop_context: DesktopContext,
     pub waker: Waker,
-    pub close_behaviour: Option<WindowCloseBehaviour>,
 
     // Wry assumes the webcontext is alive for the lifetime of the webview.
     // We need to keep the webcontext alive, otherwise the webview will crash
@@ -414,6 +413,7 @@ impl WebviewInstance {
             shared.clone(),
             asset_handlers,
             file_hover,
+            WindowCloseBehaviour::WindowCloses,
         ));
 
         // Provide the desktop context to the virtual dom and edit handler
@@ -433,7 +433,6 @@ impl WebviewInstance {
             desktop_context,
             _menu: menu,
             _web_context: web_context,
-            close_behaviour: cfg.window_close_behaviour,
         }
     }
 

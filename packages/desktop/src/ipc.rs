@@ -1,8 +1,6 @@
 use serde::{Deserialize, Serialize};
 use tao::window::WindowId;
 
-use crate::WindowCloseBehaviour;
-
 #[non_exhaustive]
 #[derive(Debug, Clone)]
 pub enum UserWindowEvent {
@@ -18,8 +16,6 @@ pub enum UserWindowEvent {
 
     #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
     TrayMenuEvent(tray_icon::menu::MenuEvent),
-
-    CloseBehaviour(WindowId, Option<WindowCloseBehaviour>),
 
     /// Poll the virtualdom
     Poll(WindowId),
