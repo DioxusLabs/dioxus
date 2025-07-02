@@ -773,6 +773,9 @@ impl Drop for VirtualDom {
         for scope in scopes.into_iter().rev() {
             drop(scope);
         }
+
+        // Drop the mounts
+        self.runtime.mounts.borrow_mut().clear();
     }
 }
 
