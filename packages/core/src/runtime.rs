@@ -163,7 +163,6 @@ impl Runtime {
             }
         }
         self.scope_states.borrow_mut()[id.0].take();
-        self.mounts.borrow_mut().remove(id.0);
     }
 
     /// Get the current scope id
