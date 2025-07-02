@@ -1,7 +1,7 @@
 //! This example shows how to create a popup window and send data back to the parent window.
 //! Currently Dioxus doesn't support nested renderers, hence the need to create popups as separate windows.
 
-use dioxus::{mobile::use_window, prelude::*};
+use dioxus::prelude::*;
 use std::rc::Rc;
 
 fn main() {
@@ -43,7 +43,7 @@ fn app() -> Element {
 
 fn popup(send: Rc<dyn Fn(String)>) -> Element {
     let mut user_input = use_signal(String::new);
-    let window = use_window();
+    let window = dioxus::desktop::use_window();
 
     let close_window = move |_| {
         println!("Attempting to close Window B");
