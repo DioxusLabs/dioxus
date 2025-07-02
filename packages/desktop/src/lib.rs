@@ -47,7 +47,7 @@ pub mod trayicon;
 
 // Public exports
 pub use assets::AssetRequest;
-pub use config::{Config, WindowCloseBehaviour};
+pub use config::{Config, DefaultWindowCloseBehaviour, WindowCloseBehaviour};
 pub use desktop_context::{
     window, DesktopContext, DesktopService, PendingDesktopContext, WeakDesktopContext,
 };

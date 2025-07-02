@@ -1,5 +1,5 @@
 use crate::{
-    config::{Config, WindowCloseBehaviour},
+    config::{Config, DefaultWindowCloseBehaviour, WindowCloseBehaviour},
     edits::EditWebsocket,
     event_handlers::WindowEventHandlers,
     file_upload::{DesktopFileUploadForm, FileDialogRequest, NativeFileEngine},
@@ -36,7 +36,7 @@ pub(crate) struct App {
     // Stuff we need mutable access to
     pub(crate) control_flow: ControlFlow,
     pub(crate) is_visible_before_start: bool,
-    pub(crate) window_behavior: WindowCloseBehaviour,
+    pub(crate) default_window_close_behavior: DefaultWindowCloseBehaviour,
     pub(crate) webviews: HashMap<WindowId, WebviewInstance>,
     pub(crate) float_all: bool,
     pub(crate) show_devtools: bool,
@@ -65,7 +65,7 @@ impl App {
             .unwrap_or_else(|| EventLoopBuilder::<UserWindowEvent>::with_user_event().build());
 
         let app = Self {
-            window_behavior: cfg.last_window_close_behavior,
+            default_window_close_behavior: cfg.default_window_close_behaviour,
             is_visible_before_start: true,
             webviews: HashMap::new(),
             control_flow: ControlFlow::Wait,
@@ -188,10 +188,55 @@ impl App {
         }
     }
 
+    pub fn change_window_close_behaviour(
+        &mut self,
+        id: WindowId,
+        behaviour: Option<WindowCloseBehaviour>,
+    ) {
+        if let Some(webview) = self.webviews.get_mut(&id) {
+            webview.close_behaviour = behaviour
+        }
+    }
+
     pub fn handle_close_requested(&mut self, id: WindowId) {
+        use DefaultWindowCloseBehaviour::*;
         use WindowCloseBehaviour::*;
 
-        match self.window_behavior {
+        let mut remove = false;
+
+        if let Some(webview) = self.webviews.get(&id) {
+            if let Some(close_behaviour) = &webview.close_behaviour {
+                match close_behaviour {
+                    WindowExitsApp => {
+                        self.control_flow = ControlFlow::Exit;
+                        return;
+                    }
+                    WindowHides => {
+                        hide_window(&webview.desktop_context.window);
+                        return;
+                    }
+                    WindowCloses => {
+                        remove = true;
+                    }
+                }
+            }
+        }
+
+        // needed in case of `default_window_close_behavior WindowsHides | LastWindowHides` since they may not remove a window on `WindowCloses`
+        if remove {
+            #[cfg(debug_assertions)]
+            self.persist_window_state();
+
+            self.webviews.remove(&id);
+            if matches!(self.default_window_close_behavior, LastWindowExitsApp)
+                && self.webviews.is_empty()
+            {
+                self.control_flow = ControlFlow::Exit
+            }
+            return;
+        }
+
+        match self.default_window_close_behavior {
             LastWindowExitsApp => {
                 #[cfg(debug_assertions)]
                 self.persist_window_state();
@@ -206,13 +251,13 @@ impl App {
                 self.webviews.remove(&id);
             }
 
-            LastWindowHides => {
+            WindowsHides | LastWindowHides => {
                 if let Some(webview) = self.webviews.get(&id) {
-                    hide_last_window(&webview.desktop_context.window);
+                    hide_window(&webview.desktop_context.window);
                 }
             }
 
-            CloseWindow => {
+            WindowsCloses => {
                 self.webviews.remove(&id);
             }
         }
@@ -222,8 +267,8 @@ impl App {
         self.webviews.remove(&id);
 
         if matches!(
-            self.window_behavior,
-            WindowCloseBehaviour::LastWindowExitsApp
+            self.default_window_close_behavior,
+            DefaultWindowCloseBehaviour::LastWindowExitsApp
         ) && self.webviews.is_empty()
         {
             self.control_flow = ControlFlow::Exit
@@ -678,13 +723,13 @@ struct PreservedWindowState {
     url: Option<String>,
 }
 
-/// Hide the last window when using LastWindowHides.
+/// Hides a window.
 ///
 /// On macOS, if we use `set_visibility(false)` on the window, it will hide the window but not show
 /// it again when the user switches back to the app. `NSApplication::hide:` has the correct behaviour,
 /// so we need to special case it.
 #[allow(unused)]
-fn hide_last_window(window: &Window) {
+fn hide_window(window: &Window) {
     #[cfg(target_os = "windows")]
     {
         use tao::platform::windows::WindowExtWindows;
