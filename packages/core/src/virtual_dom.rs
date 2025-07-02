@@ -581,7 +581,7 @@ impl VirtualDom {
         self.scopes[ScopeId::ROOT.0].last_rendered_node = Some(new_nodes.clone());
 
         // Rebuilding implies we append the created elements to the root
-        let m = self.create_scope(Some(to), ScopeId::ROOT, new_nodes, None);
+        let m = self.create_scope(to, ScopeId::ROOT, new_nodes, None);
 
         to.append_children(ElementId(0), m);
     }
@@ -608,7 +608,7 @@ impl VirtualDom {
                 Work::RerunScope(scope) => {
                     // If the scope is dirty, run the scope and get the mutations
                     self.runtime.clone().while_rendering(|| {
-                        self.run_and_diff_scope(Some(to), scope.id);
+                        self.run_and_diff_scope(to, scope.id);
                     });
                 }
             }
@@ -717,7 +717,8 @@ impl VirtualDom {
                     if run_scope {
                         // If the scope is dirty, run the scope and get the mutations
                         self.runtime.clone().while_rendering(|| {
-                            self.run_and_diff_scope(None::<&mut NoOpMutations>, scope_id);
+                            todo!()
+                            // self.run_and_diff_scope(None::<&mut NoOpMutations>, scope_id);
                         });
 
                         tracing::trace!("Ran scope {:?} during suspense", scope_id);
