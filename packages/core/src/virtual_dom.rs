@@ -774,7 +774,9 @@ impl Drop for VirtualDom {
             drop(scope);
         }
 
-        // Drop the mounts
+        // Drop the mounts, tasks, and effects, releasing any `Rc<Runtime>` references
+        self.runtime.pending_effects.borrow_mut().clear();
+        self.runtime.tasks.borrow_mut().clear();
         self.runtime.mounts.borrow_mut().clear();
     }
 }
