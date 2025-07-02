@@ -1,4 +1,4 @@
-use crate::AssetOptions;
+use crate::{AssetOptions, AssetOptionsBuilder, AssetVariant};
 use const_serialize::SerializeConst;
 
 /// Options for a css asset
@@ -21,35 +21,59 @@ pub struct CssAssetOptions {
 
 impl Default for CssAssetOptions {
     fn default() -> Self {
-        Self::new()
+        Self::default()
     }
 }
 
 impl CssAssetOptions {
     /// Create a new css asset using the builder
-    pub const fn new() -> Self {
+    pub const fn new() -> AssetOptionsBuilder<CssAssetOptions> {
+        AssetOptions::css()
+    }
+
+    /// Create a default css asset options
+    pub const fn default() -> Self {
         Self {
             preload: false,
             minify: true,
         }
     }
 
+    /// Check if the asset is preloaded
+    pub const fn preloaded(&self) -> bool {
+        self.preload
+    }
+
+    /// Check if the asset is minified
+    pub const fn minified(&self) -> bool {
+        self.minify
+    }
+}
+
+impl AssetOptions {
+    /// Create a new css asset builder
+    ///
+    /// ```rust
+    /// # use manganis::{asset, Asset, CssAssetOptions};
+    /// const _: Asset = asset!("/assets/style.css", AssetOptions::css());
+    /// ```
+    pub const fn css() -> AssetOptionsBuilder<CssAssetOptions> {
+        AssetOptionsBuilder::variant(CssAssetOptions::default())
+    }
+}
+
+impl AssetOptionsBuilder<CssAssetOptions> {
     /// Sets whether the css should be minified (default: true)
     ///
     /// Minifying the css can make your site load faster by loading less data
     ///
     /// ```rust
     /// # use manganis::{asset, Asset, CssAssetOptions};
-    /// const _: Asset = asset!("/assets/style.css", CssAssetOptions::new().with_minify(false));
+    /// const _: Asset = asset!("/assets/style.css", AssetOptions::css().with_minify(false));
     /// ```
-    #[allow(unused)]
-    pub const fn with_minify(self, minify: bool) -> Self {
-        Self { minify, ..self }
-    }
-
-    /// Check if the asset is minified
-    pub const fn minified(&self) -> bool {
-        self.minify
+    pub const fn with_minify(mut self, minify: bool) -> Self {
+        self.variant.minify = minify;
+        self
     }
 
     /// Make the asset preloaded
@@ -58,20 +82,18 @@ impl CssAssetOptions {
     ///
     /// ```rust
     /// # use manganis::{asset, Asset, CssAssetOptions};
-    /// const _: Asset = asset!("/assets/style.css", CssAssetOptions::new().with_preload(true));
+    /// const _: Asset = asset!("/assets/style.css", AssetOptions::css().with_preload(true));
     /// ```
-    #[allow(unused)]
-    pub const fn with_preload(self, preload: bool) -> Self {
-        Self { preload, ..self }
-    }
-
-    /// Check if the asset is preloaded
-    pub const fn preloaded(&self) -> bool {
-        self.preload
+    pub const fn with_preload(mut self, preload: bool) -> Self {
+        self.variant.preload = preload;
+        self
     }
 
     /// Convert the options into options for a generic asset
     pub const fn into_asset_options(self) -> AssetOptions {
-        AssetOptions::Css(self)
+        AssetOptions {
+            add_hash: true,
+            variant: AssetVariant::Css(self.variant),
+        }
     }
 }

@@ -46,12 +46,12 @@ parse_quote! {
     }
     p {
         img {
-            src: asset!("/example-book/assets1/logo.png", ImageAssetOptions::new().with_avif()),
+            src: asset!("/example-book/assets1/logo.png", AssetOptions::image().with_avif()),
             alt: "some_local1",
             title: "",
         }
         img {
-            src: asset!("/example-book/assets2/logo.png", ImageAssetOptions::new().with_avif()),
+            src: asset!("/example-book/assets2/logo.png", AssetOptions::image().with_avif()),
             alt: "some_local2",
             title: "",
         }

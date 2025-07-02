@@ -29,7 +29,12 @@ fn app() -> Element {
 }
 
 fn popup() -> Element {
+    let mut count = use_signal(|| 0);
     rsx! {
-        div { "This is a popup window!" }
+        div {
+            h1 { "Popup Window" }
+            p { "Count: {count}" }
+            button { onclick: move |_| count += 1, "Increment" }
+        }
     }
 }

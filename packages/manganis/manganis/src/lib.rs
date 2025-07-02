@@ -9,6 +9,6 @@ pub use manganis_macro::asset;
 pub use manganis_macro::css_module;
 
 pub use manganis_core::{
-    Asset, AssetOptions, BundledAsset, CssAssetOptions, CssModuleAssetOptions, FolderAssetOptions,
-    ImageAssetOptions, ImageFormat, ImageSize, JsAssetOptions,
+    Asset, AssetOptions, AssetVariant, BundledAsset, CssAssetOptions, CssModuleAssetOptions,
+    FolderAssetOptions, ImageAssetOptions, ImageFormat, ImageSize, JsAssetOptions,
 };

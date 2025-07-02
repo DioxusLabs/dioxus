@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use tao::event_loop::{EventLoop, EventLoopWindowTarget};
 use tao::window::{Icon, WindowBuilder};
 use wry::http::{Request as HttpRequest, Response as HttpResponse};
-use wry::RequestAsyncResponder;
+use wry::{RequestAsyncResponder, WebViewId};
 
 use crate::ipc::UserWindowEvent;
 use crate::menubar::{default_menu_bar, DioxusMenu};
@@ -85,12 +85,12 @@ impl LaunchConfig for Config {}
 
 pub(crate) type WryProtocol = (
     String,
-    Box<dyn Fn(HttpRequest<Vec<u8>>) -> HttpResponse<Cow<'static, [u8]>> + 'static>,
+    Box<dyn Fn(WebViewId, HttpRequest<Vec<u8>>) -> HttpResponse<Cow<'static, [u8]>> + 'static>,
 );
 
 pub(crate) type AsyncWryProtocol = (
     String,
-    Box<dyn Fn(HttpRequest<Vec<u8>>, RequestAsyncResponder) + 'static>,
+    Box<dyn Fn(WebViewId, HttpRequest<Vec<u8>>, RequestAsyncResponder) + 'static>,
 );
 
 impl Config {
@@ -213,7 +213,7 @@ impl Config {
     /// Set a custom protocol
     pub fn with_custom_protocol<F>(mut self, name: impl ToString, handler: F) -> Self
     where
-        F: Fn(HttpRequest<Vec<u8>>) -> HttpResponse<Cow<'static, [u8]>> + 'static,
+        F: Fn(WebViewId, HttpRequest<Vec<u8>>) -> HttpResponse<Cow<'static, [u8]>> + 'static,
     {
         self.protocols.push((name.to_string(), Box::new(handler)));
         self
@@ -229,7 +229,7 @@ impl Config {
     /// #
     /// # fn main() {
     /// let cfg = Config::new()
-    ///     .with_asynchronous_custom_protocol("asset", |request, responder| {
+    ///     .with_asynchronous_custom_protocol("asset", |_webview_id, request, responder| {
     ///         tokio::spawn(async move {
     ///             responder.respond(
     ///                 HTTPResponse::builder()
@@ -247,7 +247,7 @@ impl Config {
     /// See [`wry`](wry::WebViewBuilder::with_asynchronous_custom_protocol) for more details on implementation
     pub fn with_asynchronous_custom_protocol<F>(mut self, name: impl ToString, handler: F) -> Self
     where
-        F: Fn(HttpRequest<Vec<u8>>, RequestAsyncResponder) + 'static,
+        F: Fn(WebViewId, HttpRequest<Vec<u8>>, RequestAsyncResponder) + 'static,
     {
         self.asynchronous_protocols
             .push((name.to_string(), Box::new(handler)));
