@@ -576,12 +576,7 @@ impl BuildRequest {
             },
             None if !using_dioxus_explicitly => Platform::TARGET_PLATFORM.unwrap(),
             None => match enabled_platforms.len() {
-                0 => match renderer {
-                    Some(_) => Platform::TARGET_PLATFORM.unwrap(),
-                    None => Platform::TARGET_PLATFORM.unwrap(),
-                    // TODO: should we always have a default
-                    // None => return Err(anyhow::anyhow!("No platform specified and no platform marked as default in Cargo.toml. Try specifying a platform with `--platform`").into()),
-                },
+                0 => Platform::TARGET_PLATFORM.unwrap(),
                 1 => enabled_platforms[0],
                 _ => {
                     return Err(anyhow::anyhow!(
