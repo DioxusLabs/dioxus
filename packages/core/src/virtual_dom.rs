@@ -2,7 +2,6 @@
 //!
 //! This module provides the primary mechanics to create a hook-based, concurrent VDOM for Rust.
 
-use crate::innerlude::Work;
 use crate::properties::RootProps;
 use crate::root_wrapper::RootScopeWrapper;
 use crate::{
@@ -12,6 +11,7 @@ use crate::{
     scopes::ScopeId,
     ComponentFunction, Element, Mutations,
 };
+use crate::{diff::Fiber, innerlude::Work};
 use crate::{Task, VComponent};
 use futures_util::StreamExt;
 use slab::Slab;
@@ -581,7 +581,11 @@ impl VirtualDom {
         self.scopes[ScopeId::ROOT.0].last_rendered_node = Some(new_nodes.clone());
 
         // Rebuilding implies we append the created elements to the root
-        let m = self.create_scope(to, ScopeId::ROOT, new_nodes, None);
+        let m = Fiber::new(&self.runtime.clone(), self, to, true).create_scope(
+            ScopeId::ROOT,
+            new_nodes,
+            None,
+        );
 
         to.append_children(ElementId(0), m);
     }
@@ -608,7 +612,8 @@ impl VirtualDom {
                 Work::RerunScope(scope) => {
                     // If the scope is dirty, run the scope and get the mutations
                     self.runtime.clone().while_rendering(|| {
-                        self.run_and_diff_scope(to, scope.id);
+                        Fiber::new(&self.runtime.clone(), self, to, true)
+                            .run_and_diff_scope(scope.id);
                     });
                 }
             }
