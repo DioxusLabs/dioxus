@@ -175,7 +175,7 @@ pub fn derive_parse(input: TokenStream) -> TokenStream {
                                     const_serialize::Layout::Struct(layout) => layout,
                                     _ => panic!("VariantStruct::MEMORY_LAYOUT must be a struct"),
                                 },
-                                std::mem::align_of::<VariantStruct>(),
+                                ::std::mem::align_of::<VariantStruct>(),
                             )
                         }
                     }
@@ -183,7 +183,7 @@ pub fn derive_parse(input: TokenStream) -> TokenStream {
                 quote! {
                     unsafe impl #impl_generics const_serialize::SerializeConst for #ty #ty_generics #where_clause {
                         const MEMORY_LAYOUT: const_serialize::Layout = const_serialize::Layout::Enum(const_serialize::EnumLayout::new(
-                            std::mem::size_of::<Self>(),
+                            ::std::mem::size_of::<Self>(),
                             const_serialize::PrimitiveLayout::new(
                                 #discriminant_size as usize,
                             ),

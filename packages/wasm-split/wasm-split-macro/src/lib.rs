@@ -25,10 +25,10 @@ pub fn wasm_split(args: TokenStream, input: TokenStream) -> TokenStream {
     desugard_async_sig.asyncness = None;
     desugard_async_sig.output = match &desugard_async_sig.output {
         ReturnType::Default => {
-            parse_quote! { -> std::pin::Pin<Box<dyn std::future::Future<Output = ()>>> }
+            parse_quote! { -> ::std::pin::Pin<Box<dyn ::std::future::Future<Output = ()>>> }
         }
         ReturnType::Type(_, ty) => {
-            parse_quote! { -> std::pin::Pin<Box<dyn std::future::Future<Output = #ty>>> }
+            parse_quote! { -> ::std::pin::Pin<Box<dyn ::std::future::Future<Output = #ty>>> }
         }
     };
 
