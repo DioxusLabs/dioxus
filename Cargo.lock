@@ -5636,12 +5636,27 @@ dependencies = [
  "dioxus-document",
  "dioxus-history",
  "dioxus-html",
+ "dioxus-native-dom",
  "futures-util",
  "keyboard-types",
  "rustc-hash 2.1.1",
  "tokio",
  "tracing",
  "winit",
+]
+
+[[package]]
+name = "dioxus-native-dom"
+version = "0.7.0-alpha.2"
+dependencies = [
+ "blitz-dom",
+ "blitz-traits",
+ "dioxus-core",
+ "dioxus-html",
+ "futures-util",
+ "keyboard-types",
+ "rustc-hash 2.1.1",
+ "tracing",
 ]
 
 [[package]]

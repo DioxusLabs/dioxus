@@ -12,25 +12,21 @@
 mod assets;
 mod contexts;
 mod dioxus_application;
-mod dioxus_document;
 mod dioxus_renderer;
-mod events;
-mod mutation_writer;
+
+#[doc(inline)]
+pub use dioxus_native_dom::*;
 
 pub use anyrender_vello::{
     wgpu_context::DeviceHandle, CustomPaintCtx, CustomPaintSource, TextureHandle,
 };
 use assets::DioxusNativeNetProvider;
-use blitz_dom::{ns, LocalName, Namespace, QualName};
 pub use dioxus_application::{DioxusNativeApplication, DioxusNativeEvent};
-pub use dioxus_document::DioxusDocument;
 pub use dioxus_renderer::{use_wgpu, DioxusNativeWindowRenderer, Features, Limits};
 
 use blitz_shell::{create_default_event_loop, BlitzShellEvent, Config, WindowConfig};
 use dioxus_core::{ComponentFunction, Element, VirtualDom};
 use std::any::Any;
-
-type NodeId = usize;
 
 /// Launch an interactive HTML/CSS renderer driven by the Dioxus virtualdom
 pub fn launch(app: fn() -> Element) {
@@ -135,36 +131,3 @@ pub fn launch_cfg_with_props<P: Clone + 'static, M: 'static>(
     // Run event loop
     event_loop.run_app(&mut application).unwrap();
 }
-
-pub(crate) fn qual_name(local_name: &str, namespace: Option<&str>) -> QualName {
-    QualName {
-        prefix: None,
-        ns: namespace.map(Namespace::from).unwrap_or(ns!(html)),
-        local: LocalName::from(local_name),
-    }
-}
-
-// Syntax sugar to make tracing calls less noisy in function below
-macro_rules! trace {
-    ($pattern:literal) => {{
-        #[cfg(feature = "tracing")]
-        tracing::info!($pattern);
-    }};
-    ($pattern:literal, $item1:expr) => {{
-        #[cfg(feature = "tracing")]
-        tracing::info!($pattern, $item1);
-    }};
-    ($pattern:literal, $item1:expr, $item2:expr) => {{
-        #[cfg(feature = "tracing")]
-        tracing::info!($pattern, $item1, $item2);
-    }};
-    ($pattern:literal, $item1:expr, $item2:expr, $item3:expr) => {{
-        #[cfg(feature = "tracing")]
-        tracing::info!($pattern, $item1, $item2);
-    }};
-    ($pattern:literal, $item1:expr, $item2:expr, $item3:expr, $item4:expr) => {{
-        #[cfg(feature = "tracing")]
-        tracing::info!($pattern, $item1, $item2, $item3, $item4);
-    }};
-}
-pub(crate) use trace;
