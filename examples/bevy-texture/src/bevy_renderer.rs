@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::bevy_scene_plugin::BevyScenePlugin;
 use bevy::{
     prelude::*,
@@ -5,12 +7,17 @@ use bevy::{
         camera::RenderTarget,
         render_asset::RenderAssetUsages,
         render_resource::{Extent3d, TextureDimension, TextureFormat, TextureUsages},
-        settings::{RenderCreation, WgpuSettings},
+        renderer::{
+            RenderAdapter, RenderAdapterInfo, RenderDevice, RenderInstance, RenderQueue,
+            WgpuWrapper,
+        },
+        settings::{RenderCreation, RenderResources},
         view::screenshot::{Screenshot, ScreenshotCaptured},
         RenderPlugin,
     },
 };
-use dioxus_native::{CustomPaintCtx, TextureHandle};
+use dioxus_native::{CustomPaintCtx, DeviceHandle, TextureHandle};
+use wgpu::Instance;
 
 #[derive(Resource, Default)]
 pub struct UIData {
@@ -29,16 +36,19 @@ pub struct BevyRenderer {
 }
 
 impl BevyRenderer {
-    pub fn new(device: &wgpu::Device, queue: &wgpu::Queue) -> Self {
+    pub fn new(instance: &Instance, device_handle: &DeviceHandle) -> Self {
         // Create a headless Bevy App
         let mut app = App::new();
         app.add_plugins(
             DefaultPlugins
                 .set(RenderPlugin {
-                    render_creation: RenderCreation::Automatic(WgpuSettings {
-                        backends: Some(wgpu::Backends::PRIMARY),
-                        ..default()
-                    }),
+                    render_creation: RenderCreation::Manual(RenderResources(
+                        RenderDevice::new(WgpuWrapper::new(device_handle.device.clone())),
+                        RenderQueue(Arc::new(WgpuWrapper::new(device_handle.queue.clone()))),
+                        RenderAdapterInfo(WgpuWrapper::new(device_handle.adapter.get_info())),
+                        RenderAdapter(Arc::new(WgpuWrapper::new(device_handle.adapter.clone()))),
+                        RenderInstance(Arc::new(WgpuWrapper::new(instance.clone()))),
+                    )),
                     synchronous_pipeline_compilation: true,
                     ..default()
                 })
@@ -80,8 +90,8 @@ impl BevyRenderer {
             app,
             texture_handle: None,
             wgpu_texture: None,
-            wgpu_device: device.clone(),
-            wgpu_queue: queue.clone(),
+            wgpu_device: device_handle.device.clone(),
+            wgpu_queue: device_handle.queue.clone(),
             last_texture_size: (0, 0),
         }
     }

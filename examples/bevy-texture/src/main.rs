@@ -1,8 +1,11 @@
+use std::any::Any;
+
 use color::{palette::css::WHITE, parse_color};
 use color::{OpaqueColor, Srgb};
 use demo_renderer::{DemoMessage, DemoPaintSource};
 use dioxus::prelude::*;
 use dioxus_native::use_wgpu;
+use wgpu::Limits;
 
 mod bevy_renderer;
 mod bevy_scene_plugin;
@@ -13,11 +16,19 @@ static STYLES: Asset = asset!("./src/styles.css");
 
 type Color = OpaqueColor<Srgb>;
 
+fn limits() -> Limits {
+    Limits {
+        max_storage_buffers_per_shader_stage: 12,
+        ..Limits::default()
+    }
+}
+
 fn main() {
     #[cfg(feature = "tracing")]
     tracing_subscriber::fmt::init();
 
-    dioxus_native::launch_cfg(app, Vec::new(), Vec::new());
+    let config: Vec<Box<dyn Any>> = vec![Box::new(limits())];
+    dioxus_native::launch_cfg(app, Vec::new(), config);
 }
 
 fn app() -> Element {

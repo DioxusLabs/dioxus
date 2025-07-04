@@ -1,8 +1,8 @@
 use crate::bevy_renderer::BevyRenderer;
 use crate::Color;
-use dioxus_native::{CustomPaintCtx, CustomPaintSource, TextureHandle};
+use dioxus_native::{CustomPaintCtx, CustomPaintSource, DeviceHandle, TextureHandle};
 use std::sync::mpsc::{channel, Receiver, Sender};
-use wgpu::{Device, Queue};
+use wgpu::Instance;
 
 pub enum DemoMessage {
     // Color in RGB format
@@ -71,8 +71,8 @@ impl DemoPaintSource {
 }
 
 impl CustomPaintSource for DemoPaintSource {
-    fn resume(&mut self, device: &Device, queue: &Queue) {
-        let active_state = BevyRenderer::new(device, queue);
+    fn resume(&mut self, instance: &Instance, device_handle: &DeviceHandle) {
+        let active_state = BevyRenderer::new(instance, device_handle);
         self.state = DemoRendererState::Active(Box::new(active_state));
     }
 
