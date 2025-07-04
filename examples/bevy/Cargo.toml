@@ -1,5 +1,5 @@
 [package]
-name = "bevy-texture"
+name = "bevy-example"
 version = "0.0.0"
 edition = "2021"
 license = "MIT"

@@ -114,7 +114,7 @@ members = [
     "examples/fullstack-auth",
     "examples/fullstack-websockets",
     "examples/wgpu-texture",
-    "examples/bevy-texture",
+    "examples/bevy",
 
     # Playwright tests
     "packages/playwright-tests/liveview",
