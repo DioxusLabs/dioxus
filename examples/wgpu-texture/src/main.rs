@@ -5,6 +5,8 @@ use dioxus::prelude::*;
 use dioxus_native::use_wgpu;
 use std::any::Any;
 use wgpu::{Features, Limits};
+use winit::dpi::LogicalSize;
+use winit::window::WindowAttributes;
 
 mod demo_renderer;
 
@@ -19,6 +21,13 @@ fn limits() -> Limits {
         ..Limits::default()
     }
 }
+fn window_attributes() -> WindowAttributes {
+    // You can also use a `<title>` element to set the window title
+    // but this demonstrates the use of `WindowAttributes`
+    WindowAttributes::default()
+        .with_title("WGPU Example")
+        .with_inner_size(LogicalSize::new(800, 600))
+}
 
 type Color = OpaqueColor<Srgb>;
 
@@ -26,7 +35,11 @@ fn main() {
     #[cfg(feature = "tracing")]
     tracing_subscriber::fmt::init();
 
-    let config: Vec<Box<dyn Any>> = vec![Box::new(FEATURES), Box::new(limits())];
+    let config: Vec<Box<dyn Any>> = vec![
+        Box::new(FEATURES),
+        Box::new(limits()),
+        Box::new(window_attributes()),
+    ];
     dioxus_native::launch_cfg(app, Vec::new(), config);
 }
 

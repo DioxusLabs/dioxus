@@ -27,6 +27,7 @@ pub use dioxus_renderer::{use_wgpu, DioxusNativeWindowRenderer, Features, Limits
 use blitz_shell::{create_default_event_loop, BlitzShellEvent, Config, WindowConfig};
 use dioxus_core::{ComponentFunction, Element, VirtualDom};
 use std::any::Any;
+use winit::window::WindowAttributes;
 
 type NodeId = usize;
 
@@ -70,10 +71,12 @@ pub fn launch_cfg_with_props<P: Clone + 'static, M: 'static>(
     // Read config values
     let mut features = None;
     let mut limits = None;
+    let mut window_attributes = None;
     let mut _config = None;
     for mut cfg in configs {
         cfg = try_read_config!(cfg, features, Features);
         cfg = try_read_config!(cfg, limits, Limits);
+        cfg = try_read_config!(cfg, window_attributes, WindowAttributes);
         cfg = try_read_config!(cfg, _config, Config);
         let _ = cfg;
     }
@@ -125,7 +128,11 @@ pub fn launch_cfg_with_props<P: Clone + 'static, M: 'static>(
     // Create document + window from the baked virtualdom
     let doc = DioxusDocument::new(vdom, net_provider);
     let renderer = DioxusNativeWindowRenderer::with_features_and_limits(features, limits);
-    let config = WindowConfig::new(Box::new(doc) as _, renderer.clone());
+    let config = WindowConfig::with_attributes(
+        Box::new(doc) as _,
+        renderer.clone(),
+        window_attributes.unwrap_or_default(),
+    );
 
     // Create application
     let mut application = DioxusNativeApplication::new(event_loop.create_proxy(), config);
