@@ -1,0 +1,27 @@
+# Copyright © SixtyFPS GmbH <info@slint.dev>
+# SPDX-License-Identifier: MIT
+
+[package]
+name = "native-headless"
+version = "0.0.0"
+edition = "2021"
+license = "MIT"
+publish = false
+
+[features]
+tracing = ["dep:tracing-subscriber", "dioxus-native/tracing"]
+
+[dependencies]
+dioxus-native = { path = "../../packages/native" }
+anyrender_vello = "0.4.1"
+vello = "0.5"
+rustc-hash = "1.1.0"
+blitz-paint = "0.1.0-alpha.5"
+blitz-traits = "0.1.0-alpha.5"
+blitz-dom = "0.1.0-alpha.5"
+futures-util = "0.3.30"
+dioxus = { workspace = true }
+tracing-subscriber = { workspace = true, optional = true }
+wgpu = "24"
+pollster = "0.4"
+bytemuck = "1"
