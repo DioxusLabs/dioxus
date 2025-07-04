@@ -21,7 +21,7 @@ autofocus = []
 
 [dependencies]
 # Blitz dependencies
-anyrender = {git = "https://github.com/DioxusLabs/blitz", rev = "e6cc25d2", default-features = false }
+anyrender = { git = "https://github.com/DioxusLabs/blitz", rev = "e6cc25d2", default-features = false }
 anyrender_vello = { git = "https://github.com/DioxusLabs/blitz", rev = "e6cc25d2", default-features = false }
 blitz-dom = { git = "https://github.com/DioxusLabs/blitz", rev = "e6cc25d2", default-features = false }
 blitz-net = { git = "https://github.com/DioxusLabs/blitz", rev = "e6cc25d2", optional = true }

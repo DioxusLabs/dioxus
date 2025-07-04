@@ -1,4 +1,4 @@
-use blitz_traits::{BlitzKeyEvent, BlitzMouseButtonEvent, MouseEventButton};
+use blitz_traits::events::{BlitzKeyEvent, BlitzMouseButtonEvent, MouseEventButton};
 use dioxus_html::{
     geometry::{ClientPoint, ElementPoint, PagePoint, ScreenPoint},
     input_data::{MouseButton, MouseButtonSet},
