@@ -108,7 +108,7 @@ impl BevyRenderer {
 
     fn create_texture(&mut self, mut ctx: CustomPaintCtx<'_>, width: u32, height: u32) {
         let current_size = (width, height);
-        if self.texture_handle.is_some() || self.last_texture_size == current_size {
+        if self.texture_handle.is_some() && self.last_texture_size == current_size {
             return;
         }
 
