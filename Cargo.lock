@@ -471,8 +471,9 @@ checksum = "d301b3b94cb4b2f23d7917810addbbaff90738e0ca2be692bd027e70d7e0330c"
 
 [[package]]
 name = "anyrender"
-version = "0.3.0"
-source = "git+https://github.com/DioxusLabs/blitz?rev=e6cc25d2#e6cc25d2b3b0dc980ef37e1c22e8b4df6fdbf570"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5baf0dedb4c2bcf3050f37452b11e5f8901ec52d2b4ea9651b67109d6c463575"
 dependencies = [
  "kurbo",
  "peniko",
@@ -481,8 +482,9 @@ dependencies = [
 
 [[package]]
 name = "anyrender_svg"
-version = "0.3.0"
-source = "git+https://github.com/DioxusLabs/blitz?rev=e6cc25d2#e6cc25d2b3b0dc980ef37e1c22e8b4df6fdbf570"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e4fd0a6115a859670256e430e70e20939c20ec2dfe818663ca8ebf5451122d76"
 dependencies = [
  "anyrender",
  "image",
@@ -494,8 +496,9 @@ dependencies = [
 
 [[package]]
 name = "anyrender_vello"
-version = "0.3.0"
-source = "git+https://github.com/DioxusLabs/blitz?rev=e6cc25d2#e6cc25d2b3b0dc980ef37e1c22e8b4df6fdbf570"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b8d3eb024ee5a62fd184dabc85cdbd827578941bfe050abe1d3ea3cb2ef50cdd"
 dependencies = [
  "anyrender",
  "futures-intrusive",
@@ -2791,8 +2794,9 @@ dependencies = [
 
 [[package]]
 name = "blitz-dom"
-version = "0.1.0-alpha.4"
-source = "git+https://github.com/DioxusLabs/blitz?rev=e6cc25d2#e6cc25d2b3b0dc980ef37e1c22e8b4df6fdbf570"
+version = "0.1.0-alpha.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "428233615df6116571f41c6cb6ebe7ecc41367177c6e224273149a7b7bdb09dc"
 dependencies = [
  "accesskit 0.17.1",
  "app_units",
@@ -2826,8 +2830,9 @@ dependencies = [
 
 [[package]]
 name = "blitz-net"
-version = "0.1.0-alpha.4"
-source = "git+https://github.com/DioxusLabs/blitz?rev=e6cc25d2#e6cc25d2b3b0dc980ef37e1c22e8b4df6fdbf570"
+version = "0.1.0-alpha.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "75d0a4c29d831daccb752dd55a2e017394356da11e0ed246216b4bfda239c3cc"
 dependencies = [
  "blitz-traits",
  "data-url 0.3.1",
@@ -2837,8 +2842,9 @@ dependencies = [
 
 [[package]]
 name = "blitz-paint"
-version = "0.1.0-alpha.4"
-source = "git+https://github.com/DioxusLabs/blitz?rev=e6cc25d2#e6cc25d2b3b0dc980ef37e1c22e8b4df6fdbf570"
+version = "0.1.0-alpha.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1597bca15e7eb885e34906d9241d2e3e39e0edcdba225afc85652f94122735df"
 dependencies = [
  "anyrender",
  "anyrender_svg",
@@ -2857,8 +2863,9 @@ dependencies = [
 
 [[package]]
 name = "blitz-shell"
-version = "0.1.0-alpha.4"
-source = "git+https://github.com/DioxusLabs/blitz?rev=e6cc25d2#e6cc25d2b3b0dc980ef37e1c22e8b4df6fdbf570"
+version = "0.1.0-alpha.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "16507db6a4db31693dee0f421146a93555afb7998b0fdab78fba93d6f9649e56"
 dependencies = [
  "accesskit 0.17.1",
  "accesskit_winit 0.23.1",
@@ -2875,8 +2882,9 @@ dependencies = [
 
 [[package]]
 name = "blitz-traits"
-version = "0.1.0-alpha.4"
-source = "git+https://github.com/DioxusLabs/blitz?rev=e6cc25d2#e6cc25d2b3b0dc980ef37e1c22e8b4df6fdbf570"
+version = "0.1.0-alpha.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dec1cf930b6013434896f63aab332a6dece6a068d40873f5a8cd861ac407bd63"
 dependencies = [
  "bitflags 2.9.1",
  "bytes",
@@ -15254,8 +15262,9 @@ checksum = "500f379645e8a87fd03fe88607a5edcb0d8e4e423baa74ba52db198a06a0c261"
 
 [[package]]
 name = "stylo_taffy"
-version = "0.1.0-alpha.4"
-source = "git+https://github.com/DioxusLabs/blitz?rev=e6cc25d2#e6cc25d2b3b0dc980ef37e1c22e8b4df6fdbf570"
+version = "0.1.0-alpha.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0ea77ce9f0efa0e18b375749879bf65b8b432e95e37ca7222a7818b0445ff78c"
 dependencies = [
  "stylo",
  "taffy 0.8.3",
