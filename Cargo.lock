@@ -4965,6 +4965,8 @@ name = "dioxus-autofmt"
 version = "0.7.0-alpha.2"
 dependencies = [
  "dioxus-rsx",
+ "itertools 0.14.0",
+ "lightningcss",
  "pretty_assertions",
  "prettyplease",
  "proc-macro2",
