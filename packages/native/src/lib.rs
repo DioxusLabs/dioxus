@@ -17,7 +17,9 @@ mod dioxus_renderer;
 mod events;
 mod mutation_writer;
 
-pub use anyrender_vello::{CustomPaintCtx, CustomPaintSource, TextureHandle};
+pub use anyrender_vello::{
+    wgpu_context::DeviceHandle, CustomPaintCtx, CustomPaintSource, TextureHandle,
+};
 use assets::DioxusNativeNetProvider;
 use blitz_dom::{ns, LocalName, Namespace, QualName};
 pub use dioxus_application::{DioxusNativeApplication, DioxusNativeEvent};
