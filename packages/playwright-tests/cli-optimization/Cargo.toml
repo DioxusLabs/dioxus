@@ -11,5 +11,5 @@ dioxus = { workspace = true, features = ["web"] }
 
 [build-dependencies]
 reqwest = { workspace = true, features = ["blocking"] }
-flate2 = "1.1.0"
+flate2 = "1.1.2"
 tar = "0.4.44"

@@ -17,7 +17,7 @@ tracing = ["dep:tracing-subscriber", "dioxus-native/tracing"]
 [dependencies]
 dioxus-native = { path = "../../packages/native" }
 dioxus = { workspace = true }
-wgpu = "24"
+wgpu = "25"
 bytemuck = "1"
 color = "0.3"
 tracing-subscriber = { workspace = true, optional = true }
