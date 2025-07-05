@@ -2061,6 +2061,11 @@ impl BuildRequest {
                 if self.platform == Platform::Web {
                     cmd.arg("-Crelocation-model=pic");
                 }
+                if self.build.platform() == Platform::Windows {
+                    let val = crate::winres::WindowsResource::from_dxconfig(self)
+                        .expect("Error occurred while compiling windows resource file.");
+                    cmd.arg("-- -L {} -l {}", val.path, val.lib);
+                }
 
                 tracing::debug!("Direct rustc: {:#?}", cmd);
 
