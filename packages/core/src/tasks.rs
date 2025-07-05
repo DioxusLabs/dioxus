@@ -405,3 +405,18 @@ impl ArcWake for LocalTaskHandle {
             .unbounded_send(SchedulerMsg::TaskNotified(arc_self.id));
     }
 }
+
+/// Create a waker that will call a  callback
+pub fn create_waker(callback: Box<dyn Fn() + 'static + Send + Sync>) -> std::task::Waker {
+    struct CallbackHandle {
+        callback: Box<dyn Fn() + 'static + Send + Sync>,
+    }
+
+    impl futures_util::task::ArcWake for CallbackHandle {
+        fn wake_by_ref(arc_self: &Arc<Self>) {
+            (arc_self.callback)()
+        }
+    }
+
+    futures_util::task::waker(Arc::new(CallbackHandle { callback }))
+}
