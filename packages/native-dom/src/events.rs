@@ -6,11 +6,11 @@ use dioxus_html::{
         InteractionElementOffset, InteractionLocation, ModifiersInteraction, PointerInteraction,
     },
     AnimationData, ClipboardData, CompositionData, DragData, FocusData, FormData, FormValue,
-    HasFileData, HasFormData, HasMouseData, HtmlEventConverter, ImageData, KeyboardData, MediaData,
-    MountedData, MouseData, PlatformEventData, PointerData, ResizeData, ScrollData, SelectionData,
-    ToggleData, TouchData, TransitionData, VisibleData, WheelData,
+    HasFileData, HasFocusData, HasFormData, HasKeyboardData, HasMouseData, HtmlEventConverter,
+    ImageData, KeyboardData, MediaData, MountedData, MouseData, PlatformEventData, PointerData,
+    ResizeData, ScrollData, SelectionData, ToggleData, TouchData, TransitionData, VisibleData,
+    WheelData,
 };
-use dioxus_html::{HasFocusData, HasKeyboardData};
 use keyboard_types::{Code, Key, Location, Modifiers};
 use std::any::Any;
 use std::collections::HashMap;

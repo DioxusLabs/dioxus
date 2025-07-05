@@ -1,9 +1,10 @@
 //! Integration between Dioxus and Blitz
-use blitz_dom::Attribute;
-use futures_util::{pin_mut, FutureExt};
-use std::ops::{Deref, DerefMut};
-use std::{any::Any, collections::HashMap, rc::Rc, sync::Arc};
+use crate::events::{BlitzKeyboardData, NativeClickData, NativeConverter, NativeFormData};
+use crate::mutation_writer::{DioxusState, MutationWriter};
+use crate::qual_name;
+use crate::NodeId;
 
+use blitz_dom::Attribute;
 use blitz_dom::{
     net::Resource, BaseDocument, Document, EventDriver, EventHandler, Node, DEFAULT_CSS,
 };
@@ -15,11 +16,9 @@ use blitz_traits::{
 
 use dioxus_core::{ElementId, Event, VirtualDom};
 use dioxus_html::{set_event_converter, PlatformEventData};
-
-use crate::events::{BlitzKeyboardData, NativeClickData, NativeConverter, NativeFormData};
-use crate::mutation_writer::{DioxusState, MutationWriter};
-use crate::qual_name;
-use crate::NodeId;
+use futures_util::{pin_mut, FutureExt};
+use std::ops::{Deref, DerefMut};
+use std::{any::Any, collections::HashMap, rc::Rc, sync::Arc};
 
 fn wrap_event_data<T: Any>(value: T) -> Rc<dyn Any> {
     Rc::new(PlatformEventData::new(Box::new(value)))
@@ -36,9 +35,9 @@ fn get_dioxus_id(node: &Node) -> Option<ElementId> {
 }
 
 pub struct DioxusDocument {
-    pub(crate) vdom: VirtualDom,
-    pub(crate) vdom_state: DioxusState,
-    pub(crate) inner: BaseDocument,
+    pub inner: BaseDocument,
+    pub vdom: VirtualDom,
+    pub vdom_state: DioxusState,
 
     #[allow(unused)]
     pub(crate) html_element_id: NodeId,

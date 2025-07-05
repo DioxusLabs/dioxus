@@ -8,10 +8,7 @@ use winit::event_loop::{ActiveEventLoop, EventLoopProxy};
 use winit::window::WindowId;
 
 use crate::DioxusNativeWindowRenderer;
-use crate::{
-    contexts::DioxusNativeDocument, mutation_writer::MutationWriter, BlitzShellEvent,
-    DioxusDocument, WindowConfig,
-};
+use crate::{contexts::DioxusNativeDocument, BlitzShellEvent, DioxusDocument, WindowConfig};
 
 /// Dioxus-native specific event type
 pub enum DioxusNativeEvent {
@@ -138,9 +135,7 @@ impl ApplicationHandler<BlitzShellEvent> for DioxusNativeApplication {
                 .in_runtime(move || ScopeId::ROOT.provide_context(renderer));
 
             // Queue rebuild
-            let mut writer = MutationWriter::new(&mut doc.inner, &mut doc.vdom_state);
-            doc.vdom.rebuild(&mut writer);
-            drop(writer);
+            doc.initial_build();
 
             // And then request redraw
             window.request_redraw();
