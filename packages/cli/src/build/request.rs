@@ -2420,13 +2420,13 @@ impl BuildRequest {
         // ./Configure android-arm64 -D__ANDROID_API__=29
         // make
         //
-        // let tools_dir = arch.android_tools_dir(&ndk);
-        // let extended_path = format!(
-        //     "{}:{}",
-        //     tools_dir.display(),
-        //     std::env::var("PATH").unwrap_or_default()
-        // );
-        // env_vars.push(("PATH", extended_path));
+        let tools_dir = tools.android_tools_dir();
+        let extended_path = format!(
+            "{}:{}",
+            tools_dir.display(),
+            std::env::var("PATH").unwrap_or_default()
+        );
+        env_vars.push(("PATH".into(), extended_path));
 
         Ok(env_vars)
     }
@@ -3574,7 +3574,8 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
                 .await?;
 
             if !output.status.success() {
-                return Err(anyhow::anyhow!("Failed to assemble apk: {output:?}").into());
+                let err = String::from_utf8_lossy(&output.stderr);
+                return Err(anyhow::anyhow!("Failed to assemble apk: {err}").into());
             }
         }
 
