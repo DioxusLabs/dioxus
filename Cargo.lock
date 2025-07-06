@@ -5616,6 +5616,7 @@ dependencies = [
  "dioxus-lib",
  "jni",
  "libc",
+ "openssl",
 ]
 
 [[package]]

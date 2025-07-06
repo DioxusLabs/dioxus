@@ -2428,6 +2428,12 @@ impl BuildRequest {
         );
         env_vars.push(("PATH".into(), extended_path));
 
+        // We try to set the OPENLSSL_DIR by autodetecting it here
+        if let Some(openssl_dir) = self.openssl_dir() {
+            tracing::debug!("Setting OPENSSL_DIR to {openssl_dir:?}");
+            env_vars.push(("OPENSSL_DIR".into(), openssl_dir.display().to_string()));
+        }
+
         Ok(env_vars)
     }
 
@@ -4347,5 +4353,11 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         args.into_iter()
             .flat_map(|arg| ["--config".to_string(), arg])
             .collect()
+    }
+
+    fn openssl_dir(&self) -> Option<PathBuf> {
+        // if cfg!(target_os = "macos") {}
+
+        None
     }
 }

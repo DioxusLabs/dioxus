@@ -19,9 +19,14 @@ libc = "0.2.170"
 [target.'cfg(target_os = "android")'.dependencies]
 jni = "0.21.1"
 
+# The `openssl` dependency generally does not know how to cross-compile for Android. To make the lives
+# of our users easier, we automatically enable the `openssl` feature when building for Android.
+# Feature are additive, so users will need to "subtract" this feature if they do not want it.
+openssl = { version = "0.10", features = ["vendored"], optional = true }
+
 [features]
-default = ["jnibindings", "tokio_runtime", "devtools"]
-jnibindings = []
+default = ["tokio_runtime", "devtools", "android-vendored-ssl"]
+android-vendored-ssl = ["openssl"]
 tokio_runtime = ["dioxus-desktop/tokio_runtime"]
 fullscreen = ["dioxus-desktop/fullscreen"]
 transparent = ["dioxus-desktop/transparent"]
