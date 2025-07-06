@@ -29,7 +29,7 @@ use tracing::Level;
 use super::AppServer;
 
 const TICK_RATE_MS: u64 = 100;
-const VIEWPORT_MAX_WIDTH: u16 = 100;
+const VIEWPORT_MAX_WIDTH: u16 = 90;
 const VIEWPORT_HEIGHT_SMALL: u16 = 5;
 const VIEWPORT_HEIGHT_BIG: u16 = 13;
 
