@@ -345,7 +345,7 @@ fn create_secure_key() -> EncodedKey {
         val
     }
 
-    let mut secure_rng = assert_crypto_random(rand::rngs::StdRng::from_entropy());
+    let mut secure_rng = assert_crypto_random(rand::rngs::StdRng::from_os_rng());
     let mut expected_key: EncodedKey = [0u8; KEY_SIZE];
     secure_rng.fill_bytes(&mut expected_key);
     expected_key
