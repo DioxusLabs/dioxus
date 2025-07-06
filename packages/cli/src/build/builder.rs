@@ -998,18 +998,27 @@ To accept the agreement, go to https://developer.apple.com/account
 To create a provisioning profile, follow the instructions here:
 https://developer.apple.com/documentation/xcode/sharing-your-teams-signing-certificates"#;
 
-        let profiles_folder = dirs::home_dir()
+        // Check the xcode 16 location first
+        let mut profiles_folder = dirs::home_dir()
             .context("Your machine has no home-dir")?
             .join("Library/Developer/Xcode/UserData/Provisioning Profiles");
+
+        // If it doesn't exist, check the old location
+        if !profiles_folder.exists() {
+            profiles_folder = dirs::home_dir()
+                .context("Your machine has no home-dir")?
+                .join("Library/MobileDevice/Provisioning Profiles");
+        }
 
         if !profiles_folder.exists() || profiles_folder.read_dir()?.next().is_none() {
             tracing::error!(
                 r#"No provisioning profiles found when trying to codesign the app.
-We checked the folder: {}
+We checked the folders:
+- XCode16: ~/Library/Developer/Xcode/UserData/Provisioning Profiles
+- XCode15: ~/Library/MobileDevice/Provisioning Profiles
 
 {CODESIGN_ERROR}
-"#,
-                profiles_folder.display()
+"#
             )
         }
 
