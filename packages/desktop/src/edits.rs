@@ -353,7 +353,7 @@ fn create_secure_key() -> EncodedKey {
 
 #[test]
 fn test_key_encoding_length() {
-    let mut rand = rand::rngs::StdRng::from_entropy();
+    let mut rand = rand::rngs::StdRng::from_os_rng();
     for _ in 0..100 {
         let mut key: EncodedKey = [0u8; KEY_SIZE];
         rand.fill_bytes(&mut key);
