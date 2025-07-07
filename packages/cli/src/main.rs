@@ -79,7 +79,7 @@ async fn main() {
 
             eprintln!(
                 "{ERROR_STYLE}Failed{ERROR_STYLE:#}: {}",
-                crate::error::log_stacktrace(&err),
+                crate::error::log_stacktrace(&err, 1),
                 ERROR_STYLE = crate::styles::ERROR_STYLE,
             );
 

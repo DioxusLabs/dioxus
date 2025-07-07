@@ -164,7 +164,7 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &mut TraceController) -> 
                     BuilderUpdate::BuildFailed { err } => {
                         tracing::error!(
                             "{ERROR_STYLE}Build failed{ERROR_STYLE:#}: {}",
-                            crate::error::log_stacktrace(&err),
+                            crate::error::log_stacktrace(&err, 15),
                             ERROR_STYLE = crate::styles::ERROR_STYLE,
                         );
 
@@ -253,7 +253,7 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &mut TraceController) -> 
                     if let Err(err) = builder.open_all(&devserver, true).await {
                         tracing::error!(
                             "Failed to open app: {}",
-                            crate::error::log_stacktrace(&err)
+                            crate::error::log_stacktrace(&err, 15)
                         )
                     }
                 }
