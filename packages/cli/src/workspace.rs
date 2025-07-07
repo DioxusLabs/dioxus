@@ -197,7 +197,10 @@ impl Workspace {
         let max = dioxus_versions.iter().max().unwrap();
 
         // If the minimum dioxus version is greater than the current cli version, warn the user
-        if min > &dx_semver || max < &dx_semver {
+        if min > &dx_semver
+            || max < &dx_semver
+            || dioxus_versions.iter().any(|f| f.pre != dx_semver.pre)
+        {
             tracing::error!(
                 r#"🚫dx and dioxus versions are incompatible!
                   • dx version: {dx_semver}

@@ -2426,13 +2426,13 @@ impl BuildRequest {
         // ./Configure android-arm64 -D__ANDROID_API__=29
         // make
         //
-        let tools_dir = tools.android_tools_dir();
-        let extended_path = format!(
-            "{}:{}",
-            tools_dir.display(),
-            std::env::var("PATH").unwrap_or_default()
-        );
-        env_vars.push(("PATH".into(), extended_path));
+        // let tools_dir = tools.android_tools_dir();
+        // let extended_path = format!(
+        //     "{}:{}",
+        //     tools_dir.display(),
+        //     std::env::var("PATH").unwrap_or_default()
+        // );
+        // env_vars.push(("PATH".into(), extended_path));
 
         // We try to set the OPENLSSL_DIR by autodetecting it here
         if let Some(openssl_dir) = self.openssl_dir() {
