@@ -18263,6 +18263,7 @@ dependencies = [
  "dioxus-native",
  "tracing-subscriber",
  "wgpu",
+ "winit",
 ]
 
 [[package]]
