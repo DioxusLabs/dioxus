@@ -454,13 +454,13 @@ impl Scope {
         self.hook_index.set(cur_hook + 1);
         let mut hooks = self.hooks.try_borrow_mut().expect("The hook list is already borrowed: This error is likely caused by trying to use a hook inside a hook which violates the rules of hooks.");
 
-        let existing_value = self.use_hook_inner::<State>(&mut *hooks, cur_hook);
+        let existing_value = self.use_hook_inner::<State>(&mut hooks, cur_hook);
 
         existing_value.unwrap_or_else(|| {
             Runtime::with(|rt| {
                 rt.while_not_rendering(|| {
                     let value = initializer();
-                    self.push_hook_value(rt, &mut *hooks, cur_hook, value)
+                    self.push_hook_value(rt, &mut hooks, cur_hook, value)
                 })
             })
             .unwrap()
@@ -469,11 +469,11 @@ impl Scope {
 
     /// Checks if we should allow the type of a hook to change after the initial value is set. After
     /// a hot patch, the type of the hook may be changed. If the app is hotpatched from
-    /// ````rust
+    /// ````rust, ignore
     /// use_hook(|| 0);
     /// ```
     /// to
-    /// ````rust
+    /// ```rust, ignore
     /// use_hook(|| false);
     /// ```
     /// We should just change the type and rerun the closure instead of logging an error
