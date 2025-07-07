@@ -43,10 +43,20 @@ fn app() -> Element {
 
 fn popup(send: Rc<dyn Fn(String)>) -> Element {
     let mut user_input = use_signal(String::new);
+    let window = dioxus::desktop::use_window();
+
+    let close_window = move |_| {
+        println!("Attempting to close Window B");
+        window.close();
+    };
 
     rsx! {
         div {
             h1 { "Compose a new email" }
+            button {
+                onclick: close_window,
+                "Close Window B (button)"
+            }
             button {
                 onclick: move |_| {
                     send(user_input.cloned());

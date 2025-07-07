@@ -1,45 +1,33 @@
+use std::any::Any;
+
 use color::{palette::css::WHITE, parse_color};
 use color::{OpaqueColor, Srgb};
 use demo_renderer::{DemoMessage, DemoPaintSource};
 use dioxus::prelude::*;
 use dioxus_native::use_wgpu;
-use std::any::Any;
-use wgpu::{Features, Limits};
-use winit::dpi::LogicalSize;
-use winit::window::WindowAttributes;
+use wgpu::Limits;
 
+mod bevy_renderer;
+mod bevy_scene_plugin;
 mod demo_renderer;
 
 // CSS Styles
 static STYLES: Asset = asset!("./src/styles.css");
 
-// WGPU settings required by this example
-const FEATURES: Features = Features::PUSH_CONSTANTS;
+type Color = OpaqueColor<Srgb>;
+
 fn limits() -> Limits {
     Limits {
-        max_push_constant_size: 16,
+        max_storage_buffers_per_shader_stage: 12,
         ..Limits::default()
     }
 }
-fn window_attributes() -> WindowAttributes {
-    // You can also use a `<title>` element to set the window title
-    // but this demonstrates the use of `WindowAttributes`
-    WindowAttributes::default()
-        .with_title("WGPU Example")
-        .with_inner_size(LogicalSize::new(800, 600))
-}
-
-type Color = OpaqueColor<Srgb>;
 
 fn main() {
     #[cfg(feature = "tracing")]
     tracing_subscriber::fmt::init();
 
-    let config: Vec<Box<dyn Any>> = vec![
-        Box::new(FEATURES),
-        Box::new(limits()),
-        Box::new(window_attributes()),
-    ];
+    let config: Vec<Box<dyn Any>> = vec![Box::new(limits())];
     dioxus_native::launch_cfg(app, Vec::new(), config);
 }
 
@@ -71,14 +59,14 @@ fn app() -> Element {
             }
             br {}
             ColorControl { label: "Color:", color_str },
-            p { "This overlay demonstrates that the custom WGPU content can be rendered beneath layers of HTML content" }
+            p { "This overlay demonstrates that the custom Bevy content can be rendered beneath layers of HTML content" }
         }
         div { id:"underlay",
             h2 { "Underlay" },
-            p { "This underlay demonstrates that the custom WGPU content can be rendered above layers and blended with the content underneath" }
+            p { "This underlay demonstrates that the custom Bevy content can be rendered above layers and blended with the content underneath" }
         }
         header {
-            h1 { "Blitz WGPU Demo" }
+            h1 { "Blitz Bevy Demo" }
         }
         if show_cube() {
             SpinningCube { color }

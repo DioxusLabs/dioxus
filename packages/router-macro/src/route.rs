@@ -180,8 +180,8 @@ impl Route {
                 let child = field.ident.as_ref().unwrap();
                 quote! {
                     Self::#name { #(#dynamic_segments,)* #child } => {
-                        use std::fmt::Display;
-                        use std::fmt::Write;
+                        use ::std::fmt::Display;
+                        use ::std::fmt::Write;
                         let mut route = String::new();
                         {
                             let f = &mut route;
@@ -334,8 +334,8 @@ impl Route {
                                         }
                                     }
 
-                                    impl<T: std::fmt::Display> std::fmt::Display for NoPartialEq<T> {
-                                        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                                    impl<T: ::std::fmt::Display> ::std::fmt::Display for NoPartialEq<T> {
+                                        fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
                                             self.0.fmt(f)
                                         }
                                     }

@@ -2,6 +2,7 @@ use crate::element::DesktopElement;
 use crate::file_upload::DesktopFileDragEvent;
 use crate::menubar::DioxusMenu;
 use crate::PendingDesktopContext;
+use crate::WindowCloseBehaviour;
 use crate::{
     app::SharedContext,
     assets::AssetHandlerRegistry,
@@ -23,7 +24,7 @@ use futures_util::{pin_mut, FutureExt};
 use std::sync::Arc;
 use std::{cell::OnceCell, time::Duration};
 use std::{rc::Rc, task::Waker};
-use wry::{DragDropEvent, RequestAsyncResponder, WebContext, WebViewBuilder};
+use wry::{DragDropEvent, RequestAsyncResponder, WebContext, WebViewBuilder, WebViewId};
 
 #[derive(Clone)]
 pub(crate) struct WebviewEdits {
@@ -223,7 +224,7 @@ impl WebviewInstance {
         }
 
         let mut web_context = WebContext::new(cfg.data_dir.clone());
-        let edit_queue = WryQueue::default();
+        let edit_queue = shared.websocket.create_queue();
         let asset_handlers = AssetHandlerRegistry::new();
         let edits = WebviewEdits::new(dom.runtime(), edit_queue.clone());
         let file_hover = NativeFileHover::default();
@@ -237,7 +238,7 @@ impl WebviewInstance {
                 asset_handlers,
                 edits
             ];
-            move |request, responder: RequestAsyncResponder| {
+            move |_id: WebViewId, request, responder: RequestAsyncResponder| {
                 protocol::desktop_handler(
                     request,
                     asset_handlers.clone(),
@@ -265,23 +266,17 @@ impl WebviewInstance {
 
         let file_drop_handler = {
             to_owned![file_hover];
-
-            #[cfg(windows)]
             let (proxy, window_id) = (shared.proxy.to_owned(), window.id());
-
             move |evt: DragDropEvent| {
-                // Update the most recent file drop event - when the event comes in from the webview we can use the
-                // most recent event to build a new event with the files in it.
-                #[cfg(not(windows))]
-                file_hover.set(evt);
-
-                // Windows webview blocks HTML-native events when the drop handler is provided.
-                // The problem is that the HTML-native events don't provide the file, so we need this.
-                // Solution: this glue code to mimic drag drop events.
-                #[cfg(windows)]
-                {
+                if cfg!(not(windows)) {
+                    // Update the most recent file drop event - when the event comes in from the webview we can use the
+                    // most recent event to build a new event with the files in it.
+                    file_hover.set(evt);
+                } else {
+                    // Windows webview blocks HTML-native events when the drop handler is provided.
+                    // The problem is that the HTML-native events don't provide the file, so we need this.
+                    // Solution: this glue code to mimic drag drop events.
                     file_hover.set(evt.clone());
-
                     match evt {
                         wry::DragDropEvent::Drop {
                             paths: _,
@@ -305,33 +300,7 @@ impl WebviewInstance {
             }
         };
 
-        #[cfg(any(
-            target_os = "windows",
-            target_os = "macos",
-            target_os = "ios",
-            target_os = "android"
-        ))]
-        let mut webview = if cfg.as_child_window {
-            WebViewBuilder::new_as_child(&window)
-        } else {
-            WebViewBuilder::new(&window)
-        };
-
-        #[cfg(not(any(
-            target_os = "windows",
-            target_os = "macos",
-            target_os = "ios",
-            target_os = "android"
-        )))]
-        let mut webview = {
-            use tao::platform::unix::WindowExtUnix;
-            use wry::WebViewBuilderExtUnix;
-            let vbox = window.default_vbox().unwrap();
-            WebViewBuilder::new_gtk(vbox)
-        };
-
-        webview = webview
-            .with_web_context(&mut web_context)
+        let mut webview = WebViewBuilder::new_with_web_context(&mut web_context)
             .with_bounds(wry::Rect {
                 position: wry::dpi::Position::Logical(wry::dpi::LogicalPosition::new(0.0, 0.0)),
                 size: wry::dpi::Size::Physical(wry::dpi::PhysicalSize::new(
@@ -412,13 +381,39 @@ impl WebviewInstance {
             None
         };
 
-        let webview = webview.build().unwrap();
+        #[cfg(any(
+            target_os = "windows",
+            target_os = "macos",
+            target_os = "ios",
+            target_os = "android"
+        ))]
+        let webview = if cfg.as_child_window {
+            webview.build_as_child(&window)
+        } else {
+            webview.build(&window)
+        };
+
+        #[cfg(not(any(
+            target_os = "windows",
+            target_os = "macos",
+            target_os = "ios",
+            target_os = "android"
+        )))]
+        let webview = {
+            use tao::platform::unix::WindowExtUnix;
+            use wry::WebViewBuilderExtUnix;
+            let vbox = window.default_vbox().unwrap();
+            webview.build_gtk(vbox)
+        };
+        let webview = webview.unwrap();
+
         let desktop_context = Rc::from(DesktopService::new(
             webview,
             window,
             shared.clone(),
             asset_handlers,
             file_hover,
+            WindowCloseBehaviour::WindowCloses,
         ));
 
         // Provide the desktop context to the virtual dom and edit handler
