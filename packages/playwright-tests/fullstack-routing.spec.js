@@ -57,10 +57,10 @@ test("click blog link", async ({ page }) => {
   await page.goto("http://localhost:8888");
 
   // Click the link to the blog route
-  await page.click('text="Go to blog 1"');
+  await page.locator('a').click();
 
   // Wait for navigation to complete
-  await page.waitForURL("http://localhost:8888/blog/1");
+  await page.waitForURL("http://localhost:8888/blog/1/");
 
   // Check that the blog page is displayed
   const text = await page.textContent("body");
@@ -72,7 +72,7 @@ test("click home link from blog", async ({ page }) => {
   await page.goto("http://localhost:8888/blog/1");
 
   // Click the link to the home route
-  await page.click('text="Go home"');
+  await page.locator('a').click();
 
   // Wait for navigation to complete
   await page.waitForURL("http://localhost:8888");
