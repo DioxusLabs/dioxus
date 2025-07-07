@@ -469,7 +469,7 @@ impl Scope {
 
     /// Checks if we should allow the type of a hook to change after the initial value is set. After
     /// a hot patch, the type of the hook may be changed. If the app is hotpatched from
-    /// ````rust, ignore
+    /// ```rust, ignore
     /// use_hook(|| 0);
     /// ```
     /// to
