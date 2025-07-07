@@ -1,10 +1,10 @@
 // Copyright © SixtyFPS GmbH <info@slint.dev>
 // SPDX-License-Identifier: MIT
 use crate::Color;
-use dioxus_native::{CustomPaintCtx, CustomPaintSource, TextureHandle};
+use dioxus_native::{CustomPaintCtx, CustomPaintSource, DeviceHandle, TextureHandle};
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::time::Instant;
-use wgpu::{Device, Queue};
+use wgpu::Instance;
 
 pub struct DemoPaintSource {
     state: DemoRendererState,
@@ -15,8 +15,10 @@ pub struct DemoPaintSource {
 }
 
 impl CustomPaintSource for DemoPaintSource {
-    fn resume(&mut self, device: &Device, queue: &Queue) {
-        // TODO: work out what to do about width/height
+    fn resume(&mut self, _instance: &Instance, device_handle: &DeviceHandle) {
+        // Extract device and queue from device_handle
+        let device = &device_handle.device;
+        let queue = &device_handle.queue;
         let active_state = ActiveDemoRenderer::new(device, queue);
         self.state = DemoRendererState::Active(Box::new(active_state));
     }
@@ -110,7 +112,7 @@ impl DemoPaintSource {
 }
 
 impl ActiveDemoRenderer {
-    pub(crate) fn new(device: &Device, queue: &Queue) -> Self {
+    pub(crate) fn new(device: &wgpu::Device, queue: &wgpu::Queue) -> Self {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
             source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!(
