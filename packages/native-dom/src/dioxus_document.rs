@@ -4,13 +4,9 @@ use crate::mutation_writer::{DioxusState, MutationWriter};
 use crate::qual_name;
 use crate::NodeId;
 use blitz_dom::{
-    net::Resource, Attribute, BaseDocument, Document, EventDriver, EventHandler, Node, DEFAULT_CSS,
+    Attribute, BaseDocument, Document, DocumentConfig, EventDriver, EventHandler, Node, DEFAULT_CSS,
 };
-use blitz_traits::{
-    events::{DomEvent, DomEventData, EventState, UiEvent},
-    net::NetProvider,
-    shell::{ColorScheme, Viewport},
-};
+use blitz_traits::events::{DomEvent, DomEventData, EventState, UiEvent};
 use dioxus_core::{ElementId, Event, VirtualDom};
 use dioxus_html::{set_event_converter, PlatformEventData};
 use futures_util::task::noop_waker;
@@ -18,7 +14,7 @@ use futures_util::{pin_mut, FutureExt};
 use std::ops::{Deref, DerefMut};
 use std::sync::LazyLock;
 use std::task::{Context as TaskContext, Waker};
-use std::{any::Any, collections::HashMap, rc::Rc, sync::Arc};
+use std::{any::Any, collections::HashMap, rc::Rc};
 
 fn wrap_event_data<T: Any>(value: T) -> Rc<dyn Any> {
     Rc::new(PlatformEventData::new(Box::new(value)))
@@ -75,17 +71,13 @@ pub struct DioxusDocument {
 
 impl DioxusDocument {
     /// Create a new [`DioxusDocument`] from a [`VirtualDom`].
-    pub fn new(vdom: VirtualDom, net_provider: Option<Arc<dyn NetProvider<Resource>>>) -> Self {
-        let viewport = Viewport::new(0, 0, 1.0, ColorScheme::Light);
-        let mut doc = BaseDocument::new(viewport);
-
-        // Set base_url
-        doc.set_base_url("dioxus://index.html");
-
-        // Set net provider
-        if let Some(net_provider) = net_provider {
-            doc.set_net_provider(net_provider);
-        }
+    pub fn new(vdom: VirtualDom, mut config: DocumentConfig) -> Self {
+        config.base_url = Some(
+            config
+                .base_url
+                .unwrap_or_else(|| String::from("dioxus://index.html")),
+        );
+        let mut doc = BaseDocument::new(config);
 
         // Include default stylesheet
         doc.add_user_agent_stylesheet(DEFAULT_CSS);
