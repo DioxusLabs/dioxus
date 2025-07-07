@@ -14,6 +14,7 @@ mod contexts;
 mod dioxus_application;
 mod dioxus_renderer;
 
+use blitz_dom::DocumentConfig;
 #[doc(inline)]
 pub use dioxus_native_dom::*;
 
@@ -124,7 +125,13 @@ pub fn launch_cfg_with_props<P: Clone + 'static, M: 'static>(
     let net_provider = None;
 
     // Create document + window from the baked virtualdom
-    let doc = DioxusDocument::new(vdom, net_provider);
+    let doc = DioxusDocument::new(
+        vdom,
+        DocumentConfig {
+            net_provider,
+            ..Default::default()
+        },
+    );
     let renderer = DioxusNativeWindowRenderer::with_features_and_limits(features, limits);
     let config = WindowConfig::with_attributes(
         Box::new(doc) as _,
