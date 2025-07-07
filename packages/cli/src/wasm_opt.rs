@@ -1,6 +1,6 @@
 use crate::config::WasmOptLevel;
 use crate::{CliSettings, Result, WasmOptConfig, Workspace};
-use anyhow::{anyhow, Context};
+use anyhow::{anyhow, bail, Context};
 use flate2::read::GzDecoder;
 use std::path::{Path, PathBuf};
 use tar::Archive;
@@ -16,8 +16,11 @@ pub async fn write_wasm(bytes: &[u8], output_path: &Path, cfg: &WasmOptConfig) -
 pub async fn optimize(input_path: &Path, output_path: &Path, cfg: &WasmOptConfig) -> Result<()> {
     let wasm_opt = WasmOpt::new(input_path, output_path, cfg)
         .await
-        .inspect_err(|err| tracing::error!("Failed to create wasm-opt instance: {}", err))?;
-    wasm_opt.optimize().await?;
+        .context("Failed to create wasm-opt instance")?;
+    wasm_opt
+        .optimize()
+        .await
+        .context("Failed to run wasm-opt")?;
 
     Ok(())
 }
@@ -170,9 +173,7 @@ async fn find_latest_wasm_opt_download_url() -> anyhow::Result<String> {
     } else if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
         "arm64-macos"
     } else {
-        return Err(anyhow::anyhow!(
-            "Unknown platform for wasm-opt installation. Please install wasm-opt manually from https://github.com/WebAssembly/binaryen/releases and add it to your PATH."
-        ));
+        bail!("Unknown platform for wasm-opt installation. Please install wasm-opt manually from https://github.com/WebAssembly/binaryen/releases and add it to your PATH.");
     };
 
     // Find the first asset with a name that contains the platform string
@@ -184,12 +185,10 @@ async fn find_latest_wasm_opt_download_url() -> anyhow::Result<String> {
                 .and_then(|name| name.as_str())
                 .is_some_and(|name| name.contains(platform) && !name.ends_with("sha256"))
         })
-        .ok_or_else(|| {
-            anyhow::anyhow!(
-                "No suitable wasm-opt binary found for platform: {}. Please install wasm-opt manually from https://github.com/WebAssembly/binaryen/releases and add it to your PATH.",
-                platform
-            )
-        })?;
+        .with_context(|| anyhow!(
+            "No suitable wasm-opt binary found for platform: {}. Please install wasm-opt manually from https://github.com/WebAssembly/binaryen/releases and add it to your PATH.",
+            platform
+        ))?;
 
     // Extract the download URL from the asset
     let download_url = asset

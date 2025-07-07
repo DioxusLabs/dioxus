@@ -1,3 +1,5 @@
+use anyhow::bail;
+
 use super::*;
 use crate::Result;
 
@@ -16,7 +18,7 @@ impl Clean {
             .await?;
 
         if !output.status.success() {
-            return Err(anyhow::anyhow!("Cargo clean failed.").into());
+            bail!("Cargo clean failed.");
         }
 
         Ok(StructuredOutput::Success)

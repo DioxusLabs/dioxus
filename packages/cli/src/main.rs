@@ -71,16 +71,13 @@ async fn main() {
             tracing::debug!(json = ?output);
         }
         Err(err) => {
-            eprintln!(
-                "{ERROR_STYLE}failed:{ERROR_STYLE:#} {err}",
-                ERROR_STYLE = styles::ERROR_STYLE
-            );
-
             tracing::error!(
                 json = ?StructuredOutput::Error {
                     message: format!("{err:?}"),
                 },
             );
+
+            eprintln!("{}", crate::error::log_stacktrace(&err));
 
             std::process::exit(1);
         }

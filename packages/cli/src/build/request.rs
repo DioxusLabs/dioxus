@@ -320,7 +320,7 @@ use crate::{
     RustcArgs, TargetArgs, TraceSrc, WasmBindgen, WasmOptConfig, Workspace,
     DX_RUSTC_WRAPPER_ENV_VAR,
 };
-use anyhow::Context;
+use anyhow::{bail, Context};
 use cargo_metadata::diagnostic::Diagnostic;
 use dioxus_cli_config::format_base_path_meta_element;
 use dioxus_cli_config::{APP_TITLE_ENV, ASSET_ROOT_ENV};
@@ -569,13 +569,10 @@ impl BuildRequest {
             },
             None if !using_dioxus_explicitly => Platform::autodetect_from_cargo_feature("desktop").unwrap(),
             None => match enabled_platforms.len() {
-                0 => return Err(anyhow::anyhow!("No platform specified and no platform marked as default in Cargo.toml. Try specifying a platform with `--platform`").into()),
+                0 => bail!("No platform specified and no platform marked as default in Cargo.toml. Try specifying a platform with `--platform`"),
                 1 => enabled_platforms[0],
                 _ => {
-                    return Err(anyhow::anyhow!(
-                        "Multiple platforms enabled in Cargo.toml. Please specify a platform with `--platform` or set a default platform in Cargo.toml"
-                    )
-                    .into())
+                    bail!("Multiple platforms enabled in Cargo.toml. Please specify a platform with `--platform` or set a default platform in Cargo.toml")
                 }
             },
         };
@@ -793,12 +790,24 @@ impl BuildRequest {
                 ctx.status_start_bundle();
 
                 self.write_executable(ctx, &artifacts.exe, &mut artifacts.assets)
-                    .await?;
-                self.write_frameworks(ctx, &artifacts.direct_rustc).await?;
-                self.write_assets(ctx, &artifacts.assets).await?;
-                self.write_metadata().await?;
-                self.optimize(ctx).await?;
-                self.assemble(ctx).await?;
+                    .await
+                    .context("Failed to write executable")?;
+
+                self.write_frameworks(ctx, &artifacts.direct_rustc)
+                    .await
+                    .context("Failed to write frameworks")?;
+                self.write_assets(ctx, &artifacts.assets)
+                    .await
+                    .context("Failed to write assets")?;
+                self.write_metadata()
+                    .await
+                    .context("Failed to write metadata")?;
+                self.optimize(ctx)
+                    .await
+                    .context("Failed to optimize build")?;
+                self.assemble(ctx)
+                    .await
+                    .context("Failed to assemble build")?;
 
                 tracing::debug!("Bundle created at {}", self.root_dir().display());
             }
@@ -916,10 +925,7 @@ impl BuildRequest {
                 //       since that is a really bad user experience.
                 Message::BuildFinished(finished) => {
                     if !finished.success {
-                        return Err(anyhow::anyhow!(
-                            "Cargo build failed, signaled by the compiler. Toggle tracing mode (press `t`) for more information."
-                        )
-                        .into());
+                        bail!("Cargo build failed, signaled by the compiler.")
                     }
                 }
                 _ => {}
@@ -1561,7 +1567,7 @@ impl BuildRequest {
             }
 
             LinkerFlavor::Unsupported => {
-                return Err(anyhow::anyhow!("Unsupported platform for thin linking").into())
+                bail!("Unsupported platform for thin linking")
             }
         }
 
@@ -2485,7 +2491,7 @@ impl BuildRequest {
             .await?;
 
         if !output.status.success() {
-            return Err(anyhow::anyhow!("Failed to get unit count").into());
+            bail!("Failed to get unit count");
         }
 
         let output_text = String::from_utf8(output.stdout).context("Failed to get unit count")?;
@@ -3297,10 +3303,7 @@ impl BuildRequest {
             ctx.status_splitting_bundle();
 
             if !will_wasm_opt {
-                return Err(anyhow::anyhow!(
-                    "Bundle splitting should automatically enable wasm-opt, but it was not enabled."
-                )
-                .into());
+                bail!("Bundle splitting should automatically enable wasm-opt, but it was not enabled.");
             }
 
             // Load the contents of these binaries since we need both of them
@@ -3555,7 +3558,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
                     },
                 )
                 .map_err(|e| e.into()),
-            _ => Err(anyhow::anyhow!("Unsupported platform for Info.plist").into()),
+            _ => Err(anyhow::anyhow!("Unsupported platform for Info.plist")),
         }
     }
 
@@ -3580,8 +3583,10 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
                 .await?;
 
             if !output.status.success() {
-                let err = String::from_utf8_lossy(&output.stderr);
-                return Err(anyhow::anyhow!("Failed to assemble apk: {err}").into());
+                bail!(
+                    "Failed to assemble apk: {}",
+                    String::from_utf8_lossy(&output.stderr)
+                );
             }
         }
 
@@ -3600,7 +3605,10 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
             .context("Failed to run gradle bundleRelease")?;
 
         if !output.status.success() {
-            return Err(anyhow::anyhow!("Failed to bundleRelease: {output:?}").into());
+            bail!(
+                "Failed to bundleRelease: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
         }
 
         let app_release = self
@@ -3695,7 +3703,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         });
 
         if let Err(e) = success.as_ref() {
-            return Err(format!("Failed to initialize build directory: {e}").into());
+            bail!("Failed to initialize build directory: {e}");
         }
 
         Ok(())
@@ -3823,9 +3831,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
 
         // Ensure target is installed.
         if !self.workspace.has_wasm32_unknown_unknown() {
-            return Err(Error::Other(anyhow::anyhow!(
-                "Missing target wasm32-unknown-unknown."
-            )));
+            bail!("Missing target wasm32-unknown-unknown.");
         }
 
         // Wasm bindgen
@@ -3891,9 +3897,9 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
             return Ok(());
         }
 
-        Err(anyhow::anyhow!(
-            "Android linker not found. Please set the `ANDROID_NDK_HOME` environment variable to the root of your NDK installation."
-        ).into())
+        bail!(
+            "Android linker not found at {linker:?}. Please set the `ANDROID_NDK_HOME` environment variable to the root of your NDK installation."
+        );
     }
 
     /// Ensure the right dependencies are installed for linux apps.

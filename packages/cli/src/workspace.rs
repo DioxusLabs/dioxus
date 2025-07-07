@@ -2,7 +2,7 @@ use crate::styles::GLOW_STYLE;
 use crate::CliSettings;
 use crate::Result;
 use crate::{config::DioxusConfig, AndroidTools};
-use anyhow::Context;
+use anyhow::{bail, Context};
 use ignore::gitignore::Gitignore;
 use krates::{semver::Version, KrateDetails, LockOptions};
 use krates::{Cmd, Krates, NodeId};
@@ -77,9 +77,7 @@ impl Workspace {
 
         let krates = tokio::select! {
             f = krates_future => f.context("failed to run cargo metadata")??,
-            _ = spin_future => return Err(crate::Error::Network(
-                "cargo metadata took too long to respond, try again with --offline".to_string(),
-            )),
+            _ = spin_future => bail!("cargo metadata took too long to respond, try again with --offline"),
         };
 
         let settings = CliSettings::global_or_default();
@@ -141,10 +139,10 @@ impl Workspace {
     }
 
     pub fn android_tools(&self) -> Result<Arc<AndroidTools>> {
-        Ok(self
+        self
             .android_tools
             .clone()
-            .context("Android not installed properly. Please set the `ANDROID_NDK_HOME` environment variable to the root of your NDK installation.")?)
+            .context("Android not installed properly. Please set the `ANDROID_NDK_HOME` environment variable to the root of your NDK installation.")
     }
 
     pub fn is_release_profile(&self, profile: &str) -> bool {
@@ -377,7 +375,7 @@ impl Workspace {
 
         toml::from_str::<DioxusConfig>(&std::fs::read_to_string(&dioxus_conf_file)?)
             .map_err(|err| {
-                anyhow::anyhow!("Failed to parse Dioxus.toml at {dioxus_conf_file:?}: {err}").into()
+                anyhow::anyhow!("Failed to parse Dioxus.toml at {dioxus_conf_file:?}: {err}")
             })
             .map(Some)
     }
@@ -459,17 +457,13 @@ impl Workspace {
                 }
                 None
             })
-            .ok_or_else(|| {
-                crate::Error::Cargo("Failed to find directory containing Cargo.toml".to_string())
-            })
+            .context("Failed to find directory containing Cargo.toml")
     }
 
     /// Returns the properly canonicalized path to the dx executable, used for linking and wrapping rustc
     pub(crate) fn path_to_dx() -> Result<PathBuf> {
-        Ok(
-            dunce::canonicalize(std::env::current_exe().context("Failed to find dx")?)
-                .context("Failed to find dx")?,
-        )
+        dunce::canonicalize(std::env::current_exe().context("Failed to find dx")?)
+            .context("Failed to find dx")
     }
 
     /// Returns the path to the dioxus home directory, used to install tools and other things

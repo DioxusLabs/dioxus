@@ -1,10 +1,10 @@
 use super::{AppBuilder, ServeUpdate, WebServer};
 use crate::{
     platform_override::CommandWithPlatformOverrides, BuildArtifacts, BuildId, BuildMode,
-    BuildTargets, BuilderUpdate, Error, HotpatchModuleCache, Platform, Result, ServeArgs,
-    TailwindCli, TraceSrc, Workspace,
+    BuildTargets, BuilderUpdate, HotpatchModuleCache, Platform, Result, ServeArgs, TailwindCli,
+    TraceSrc, Workspace,
 };
-use anyhow::Context;
+use anyhow::{bail, Context};
 use dioxus_core::internal::{
     HotReloadTemplateWithLocation, HotReloadedTemplate, TemplateGlobalKey,
 };
@@ -92,7 +92,7 @@ pub(crate) struct CachedFile {
 
 impl AppServer {
     /// Create the AppRunner and then initialize the filemap with the crate directory.
-    pub(crate) async fn start(args: ServeArgs) -> Result<Self> {
+    pub(crate) async fn new(args: ServeArgs) -> Result<Self> {
         let workspace = Workspace::current().await?;
 
         // Resolve the simpler args
@@ -115,7 +115,7 @@ impl AppServer {
 
         let open_browser = args
             .open
-            .unwrap_or_else(|| workspace.settings.always_open_browser.unwrap_or_default());
+            .unwrap_or_else(|| workspace.settings.always_open_browser.unwrap_or(true));
 
         let wsl_file_poll_interval = args
             .wsl_file_poll_interval
@@ -161,15 +161,9 @@ impl AppServer {
 
         let watch_fs = args.watch.unwrap_or(true);
         let use_hotpatch_engine = args.hot_patch;
-        let build_mode = match use_hotpatch_engine {
-            true => BuildMode::Fat,
-            false => BuildMode::Base,
-        };
 
-        let client = AppBuilder::start(&client, build_mode.clone())?;
-        let server = server
-            .map(|server| AppBuilder::start(&server, build_mode))
-            .transpose()?;
+        let client = AppBuilder::new(&client)?;
+        let server = server.map(|server| AppBuilder::new(&server)).transpose()?;
 
         let tw_watcher = TailwindCli::serve(
             client.build.package_manifest_dir(),
@@ -227,6 +221,18 @@ impl AppServer {
         }
 
         Ok(runner)
+    }
+
+    pub(crate) fn initialize(&mut self) {
+        let build_mode = match self.use_hotpatch_engine {
+            true => BuildMode::Fat,
+            false => BuildMode::Base,
+        };
+
+        self.client.start(build_mode.clone());
+        if let Some(server) = self.server.as_mut() {
+            server.start(build_mode);
+        }
     }
 
     pub(crate) async fn rebuild_ssg(&mut self, devserver: &WebServer) {
@@ -685,7 +691,7 @@ impl AppServer {
                     .hotpatch(res, cache)
                     .await
             }
-            _ => return Err(Error::Runtime("Invalid build id".into())),
+            _ => bail!("Invalid build id"),
         }?;
 
         if id == BuildId::CLIENT {

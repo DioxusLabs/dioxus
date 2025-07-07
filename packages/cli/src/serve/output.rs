@@ -204,7 +204,7 @@ impl Output {
                 Ok(Some(update)) => return update,
                 Err(ee) => {
                     return ServeUpdate::Exit {
-                        error: Some(Box::new(ee)),
+                        error: Some(anyhow::anyhow!(ee)),
                     }
                 }
                 Ok(None) => {}
