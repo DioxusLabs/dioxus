@@ -3,7 +3,7 @@
 //!
 //! (this example is not really intended to be run as-is, and requires you to fill
 //! in the missing pieces)
-use anyrender_vello::{wgpu_context::WGPUContext, VelloScenePainter};
+use anyrender_vello::{wgpu_context::WGPUContext, CustomPaintSource, VelloScenePainter};
 use blitz_dom::Document as _;
 use blitz_paint::paint_scene;
 use blitz_traits::{
@@ -11,7 +11,7 @@ use blitz_traits::{
     shell::{ColorScheme, Viewport},
 };
 use dioxus::prelude::*;
-use dioxus_native::{CustomPaintSource, DioxusDocument};
+use dioxus_native_dom::DioxusDocument;
 use pollster::FutureExt as _;
 use rustc_hash::FxHashMap;
 use std::sync::Arc;

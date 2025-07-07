@@ -10638,7 +10638,7 @@ dependencies = [
  "blitz-traits",
  "bytemuck",
  "dioxus",
- "dioxus-native",
+ "dioxus-native-dom",
  "futures-util",
  "pollster",
  "rustc-hash 1.1.0",

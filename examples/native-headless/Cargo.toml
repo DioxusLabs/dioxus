@@ -9,10 +9,11 @@ license = "MIT"
 publish = false
 
 [features]
-tracing = ["dep:tracing-subscriber", "dioxus-native/tracing"]
+tracing = ["dep:tracing-subscriber", "dioxus-native-dom/tracing"]
 
 [dependencies]
-dioxus-native = { path = "../../packages/native" }
+dioxus = { workspace = true, default-features = false, features = ["html", "hooks", "signals"] }
+dioxus-native-dom = { path = "../../packages/native-dom" }
 anyrender_vello = "0.4.1"
 vello = "0.5"
 rustc-hash = "1.1.0"
@@ -20,7 +21,6 @@ blitz-paint = "0.1.0-alpha.5"
 blitz-traits = "0.1.0-alpha.5"
 blitz-dom = "0.1.0-alpha.5"
 futures-util = "0.3.30"
-dioxus = { workspace = true }
 tracing-subscriber = { workspace = true, optional = true }
 wgpu = "24"
 pollster = "0.4"
