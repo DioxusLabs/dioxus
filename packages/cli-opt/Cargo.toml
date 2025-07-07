@@ -26,7 +26,7 @@ mozjpeg = { version = "0.10.13", default-features = false, features = [
     "parallel",
 ] }
 # - PNG
-imagequant = "4.3.4"
+imagequant = "4.4.0"
 png = "0.17.16"
 
 # Image format/conversion
@@ -42,7 +42,7 @@ codemap = "0.1.3"
 # Js minification - swc has introduces minor versions with breaking changes in the past so we pin all of their crates
 swc_allocator = { version = "=4.0.1", default-features = false }
 swc_atoms = { version = "=6.0.1", default-features = false }
-swc_bundler = { version = "=23.0.1", default-features = false }
+swc_bundler = { version = "=24.0.0", default-features = false }
 swc_cached = { version = "=2.0.0", default-features = false }
 swc_common = { version = "=13.0.4", features = ["tty-emitter"], default-features = false }
 swc_config = { version = "=3.1.1", default-features = false }
@@ -51,11 +51,11 @@ swc_ecma_ast = { version = "=13.0.1", default-features = false }
 swc_ecma_codegen = { version = "=15.0.2", default-features = false }
 swc_ecma_codegen_macros = { version = "=2.0.2", default-features = false }
 swc_ecma_loader = { version = "=13.0.0", features = ["cache", "node"], default-features = false }
-swc_ecma_minifier = { version = "=24.0.3", default-features = false }
-swc_ecma_parser = { version = "=18.0.2", default-features = false }
-swc_ecma_transforms_base = { version = "=19.0.2", default-features = false }
+swc_ecma_minifier = { version = "=25.0.0", default-features = false }
+swc_ecma_parser = { version = "=19.0.0", default-features = false }
+swc_ecma_transforms_base = { version = "=20.0.0", default-features = false }
 swc_ecma_transforms_macros = { version = "=1.0.1", default-features = false }
-swc_ecma_transforms_optimization = { version = "=20.0.1", default-features = false }
+swc_ecma_transforms_optimization = { version = "=21.0.0", default-features = false }
 swc_ecma_usage_analyzer = { version = "=19.0.2", default-features = false }
 swc_ecma_utils = { version = "=18.0.3", default-features = false }
 swc_ecma_visit = { version = "=13.0.0", default-features = false }
