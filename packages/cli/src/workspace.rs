@@ -48,9 +48,7 @@ impl Workspace {
 
             let mut builder = krates::Builder::new();
             builder.workspace(true);
-            let res = builder
-                .build(cmd, |_| {})
-                .context("Failed to run cargo metadata");
+            let res = builder.build(cmd, |_| {})?;
 
             if !lock_options.offline {
                 if let Ok(res) = std::env::var("SIMULATE_SLOW_NETWORK") {
@@ -58,7 +56,7 @@ impl Workspace {
                 }
             }
 
-            res
+            Ok(res) as Result<Krates, krates::Error>
         });
 
         let spin_future = async move {
@@ -76,7 +74,13 @@ impl Workspace {
         };
 
         let krates = tokio::select! {
-            f = krates_future => f.context("failed to run cargo metadata")??,
+            f = krates_future => {
+                let res = f?;
+                if let Err(krates::Error::Metadata(e)) = res {
+                    bail!("{e}");
+                }
+                res?
+            },
             _ = spin_future => bail!("cargo metadata took too long to respond, try again with --offline"),
         };
 

@@ -77,7 +77,11 @@ async fn main() {
                 },
             );
 
-            eprintln!("{}", crate::error::log_stacktrace(&err));
+            eprintln!(
+                "{ERROR_STYLE}Failed{ERROR_STYLE:#}: {}",
+                crate::error::log_stacktrace(&err),
+                ERROR_STYLE = crate::styles::ERROR_STYLE,
+            );
 
             std::process::exit(1);
         }

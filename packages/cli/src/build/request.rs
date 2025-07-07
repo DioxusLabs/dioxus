@@ -925,7 +925,7 @@ impl BuildRequest {
                 //       since that is a really bad user experience.
                 Message::BuildFinished(finished) => {
                     if !finished.success {
-                        bail!("Cargo build failed, signaled by the compiler.")
+                        bail!("cargo build finished with errors.")
                     }
                 }
                 _ => {}

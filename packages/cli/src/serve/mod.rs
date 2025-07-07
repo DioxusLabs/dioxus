@@ -162,7 +162,12 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &mut TraceController) -> 
                         screen.push_cargo_log(message);
                     }
                     BuilderUpdate::BuildFailed { err } => {
-                        tracing::error!("Build failed: {}", crate::error::log_stacktrace(&err));
+                        tracing::error!(
+                            "{ERROR_STYLE}Build failed{ERROR_STYLE:#}: {}",
+                            crate::error::log_stacktrace(&err),
+                            ERROR_STYLE = crate::styles::ERROR_STYLE,
+                        );
+
                         if exit_on_error {
                             return Err(err);
                         }
