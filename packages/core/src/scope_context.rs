@@ -451,45 +451,81 @@ impl Scope {
     /// ```
     pub fn use_hook<State: Clone + 'static>(&self, initializer: impl FnOnce() -> State) -> State {
         let cur_hook = self.hook_index.get();
+        self.hook_index.set(cur_hook + 1);
         let mut hooks = self.hooks.try_borrow_mut().expect("The hook list is already borrowed: This error is likely caused by trying to use a hook inside a hook which violates the rules of hooks.");
 
-        if cur_hook >= hooks.len() {
+        let existing_value = self.use_hook_inner::<State>(&mut *hooks, cur_hook);
+
+        existing_value.unwrap_or_else(|| {
             Runtime::with(|rt| {
                 rt.while_not_rendering(|| {
-                    hooks.push(Box::new(initializer()));
-                });
+                    let value = initializer();
+                    self.push_hook_value(rt, &mut *hooks, cur_hook, value)
+                })
             })
             .unwrap()
-        }
+        })
+    }
 
-        self.use_hook_inner::<State>(hooks, cur_hook)
+    /// Checks if we should allow the type of a hook to change after the initial value is set. After
+    /// a hot patch, the type of the hook may be changed. If the app is hotpatched from
+    /// ````rust
+    /// use_hook(|| 0);
+    /// ```
+    /// to
+    /// ````rust
+    /// use_hook(|| false);
+    /// ```
+    /// We should just change the type and rerun the closure instead of logging an error
+    /// about the rules of hooks
+    fn allow_hook_type_changes(&self, #[allow(unused)] rt: &Runtime) -> bool {
+        #[cfg(debug_assertions)]
+        if rt.after_hot_patch.load(std::sync::atomic::Ordering::SeqCst) {
+            return true;
+        }
+        false
+    }
+
+    /// Push a new hook value or insert the value into the existing slot, warning if this is not after a hot patch
+    fn push_hook_value<State: Clone + 'static>(
+        &self,
+        rt: &Runtime,
+        hooks: &mut Vec<Box<dyn std::any::Any>>,
+        cur_hook: usize,
+        value: State,
+    ) -> State {
+        // If this is a new hook
+        if cur_hook >= hooks.len() {
+            hooks.push(Box::new(value.clone()));
+        } else {
+            hooks[cur_hook] = Box::new(value.clone());
+
+            if !self.allow_hook_type_changes(rt) {
+                tracing::error!(
+                    r#"Unable to retrieve the hook that was initialized at this index.
+                    Consult the `rules of hooks` to understand how to use hooks properly.
+
+                    You likely used the hook in a conditional. Hooks rely on consistent ordering between renders.
+                    Functions prefixed with "use" should never be called conditionally.
+
+                    Help: Run `dx check` to look for check for some common hook errors."#
+                );
+            }
+        }
+        value
     }
 
     // The interior version that gets monoorphized by the `State` type but not the `initializer` type.
     // This helps trim down binary sizes
     fn use_hook_inner<State: Clone + 'static>(
         &self,
-        hooks: std::cell::RefMut<Vec<Box<dyn std::any::Any>>>,
+        hooks: &mut Vec<Box<dyn std::any::Any>>,
         cur_hook: usize,
-    ) -> State {
-        hooks
-            .get(cur_hook)
-            .and_then(|inn| {
-                self.hook_index.set(cur_hook + 1);
-                let raw_ref: &dyn Any = inn.as_ref();
-                raw_ref.downcast_ref::<State>().cloned()
-            })
-            .expect(
-                r#"
-                Unable to retrieve the hook that was initialized at this index.
-                Consult the `rules of hooks` to understand how to use hooks properly.
-
-                You likely used the hook in a conditional. Hooks rely on consistent ordering between renders.
-                Functions prefixed with "use" should never be called conditionally.
-
-                Help: Run `dx check` to look for check for some common hook errors.
-                "#,
-            )
+    ) -> Option<State> {
+        hooks.get(cur_hook).and_then(|inn| {
+            let raw_ref: &dyn Any = inn.as_ref();
+            raw_ref.downcast_ref::<State>().cloned()
+        })
     }
 
     pub fn push_before_render(&self, f: impl FnMut() + 'static) {
