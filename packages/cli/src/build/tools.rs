@@ -194,6 +194,21 @@ impl AndroidTools {
         24
     }
 
+    pub(crate) fn clang_folder(&self) -> PathBuf {
+        // The clang folder is usually located in the NDK under:
+        // "~/Library/Android/sdk/ndk/25.2.9519653/toolchains/llvm/prebuilt/darwin-x86_64/lib/clang/<version>"
+        // or similar, depending on the platform.
+        self.android_tools_dir()
+            .parent()
+            .unwrap()
+            .join("lib")
+            .join("clang")
+    }
+
+    pub(crate) fn ranlib(&self) -> PathBuf {
+        self.android_tools_dir().join("llvm-ranlib")
+    }
+
     pub(crate) fn ar_path(&self) -> PathBuf {
         self.android_tools_dir().join("llvm-ar")
     }

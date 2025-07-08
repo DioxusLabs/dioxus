@@ -331,7 +331,7 @@ use manganis::AssetOptions;
 use manganis_core::AssetVariant;
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
-use std::{borrow::Cow, ffi::OsString};
+use std::borrow::Cow;
 use std::{
     collections::{BTreeMap, HashSet},
     io::Write,
@@ -2381,9 +2381,27 @@ impl BuildRequest {
         Ok(env_vars)
     }
 
+    /// Set the environment variables required for building on Android.
+    ///
+    /// This involves setting sysroots, CC, CXX, AR, and other environment variables along with
+    /// vars that cc-rs uses for its C/C++ compilation.
+    ///
+    /// We pulled the environment setup from `cargo ndk` and attempt to mimic its behavior to retain
+    /// compatibility with existing crates that work with `cargo ndk`.
+    ///
+    /// https://github.com/bbqsrc/cargo-ndk/blob/1d1a6dc70a99b7f95bc71ed07bf893ef37966efc/src/cargo.rs#L97-L102
+    ///
+    /// cargo-ndk is MIT licensed.
+    ///
+    /// https://github.com/bbqsrc/cargo-ndk
     fn android_env_vars(&self) -> Result<Vec<(Cow<'static, str>, String)>> {
         // Derived from getenv_with_target_prefixes in `cc` crate.
         fn cc_env(var_base: &str, triple: &str) -> (String, Option<String>) {
+            #[inline]
+            fn env_var_with_key(key: String) -> Option<(String, String)> {
+                std::env::var(&key).map(|value| (key, value)).ok()
+            }
+
             let triple_u = triple.replace('-', "_");
             let most_specific_key = format!("{}_{}", var_base, triple);
 
@@ -2397,11 +2415,6 @@ impl BuildRequest {
 
         fn cargo_env_target_cfg(triple: &str, key: &str) -> String {
             format!("CARGO_TARGET_{}_{}", &triple.replace('-', "_"), key).to_uppercase()
-        }
-
-        #[inline]
-        fn env_var_with_key(key: String) -> Option<(String, String)> {
-            std::env::var(&key).map(|value| (key, value)).ok()
         }
 
         fn clang_target(rust_target: &str, api_level: u8) -> String {
@@ -2429,18 +2442,6 @@ impl BuildRequest {
             }) as _
         }
 
-        fn ndk_tool(arch: &str, tool: &str) -> PathBuf {
-            ["toolchains", "llvm", "prebuilt", arch, "bin", tool]
-                .iter()
-                .collect()
-        }
-
-        fn sysroot_suffix(arch: &str) -> PathBuf {
-            ["toolchains", "llvm", "prebuilt", arch, "sysroot"]
-                .iter()
-                .collect()
-        }
-
         let mut env_vars: Vec<(Cow<'static, str>, String)> = vec![];
 
         let tools = self.workspace.android_tools()?;
@@ -2461,41 +2462,11 @@ impl BuildRequest {
             java_home: {java_home:?}
             "#
         );
-        env_vars.push((
-            "ANDROID_NATIVE_API_LEVEL".into(),
-            min_sdk_version.to_string(),
-        ));
-        env_vars.push(("TARGET_AR".into(), ar_path.display().to_string()));
-        env_vars.push(("TARGET_CC".into(), target_cc.display().to_string()));
-        env_vars.push(("TARGET_CXX".into(), target_cxx.display().to_string()));
-        env_vars.push((
-            format!(
-                "CARGO_TARGET_{}_LINKER",
-                self.triple
-                    .to_string()
-                    .to_ascii_uppercase()
-                    .replace("-", "_")
-            )
-            .into(),
-            linker.display().to_string(),
-        ));
-        env_vars.push(("ANDROID_NDK_ROOT".into(), ndk_home.display().to_string()));
 
         if let Some(java_home) = java_home {
             tracing::debug!("Setting JAVA_HOME to {java_home:?}");
             env_vars.push(("JAVA_HOME".into(), java_home.display().to_string()));
         }
-
-        // Set the wry env vars - this is where wry will dump its kotlin files.
-        // Their setup is really annyoing and requires us to hardcode `dx` to specific versions of tao/wry.
-        env_vars.push(("WRY_ANDROID_PACKAGE".into(), "dev.dioxus.main".to_string()));
-        env_vars.push(("WRY_ANDROID_LIBRARY".into(), "dioxusmain".to_string()));
-        env_vars.push((
-            "WRY_ANDROID_KOTLIN_FILES_OUT_DIR".into(),
-            self.wry_android_kotlin_files_out_dir()
-                .display()
-                .to_string(),
-        ));
 
         let triple = self.triple.to_string();
 
@@ -2513,21 +2484,19 @@ impl BuildRequest {
         let bindgen_clang_args_key =
             format!("BINDGEN_EXTRA_CLANG_ARGS_{}", &triple.replace('-', "_"));
 
-        const ARCH: &str = "darwin-x86_64";
-
         let clang_target = clang_target(&self.triple.to_string(), min_sdk_version as _);
-        let target_cc = ndk_home.join(ndk_tool(ARCH, "clang"));
+        let target_cc = tools.target_cc();
         let target_cflags = match cflags_value {
             Some(v) => format!("{clang_target} {v}"),
             None => clang_target.to_string(),
         };
-        let target_cxx = ndk_home.join(ndk_tool(ARCH, "clang++"));
+        let target_cxx = tools.target_cxx();
         let target_cxxflags = match cxxflags_value {
             Some(v) => format!("{clang_target} {v}"),
             None => clang_target.to_string(),
         };
         let cargo_ndk_sysroot_path_key = "CARGO_NDK_SYSROOT_PATH";
-        let cargo_ndk_sysroot_path = ndk_home.join(sysroot_suffix(ARCH));
+        let cargo_ndk_sysroot_path = tools.sysroot();
         let cargo_ndk_sysroot_target_key = "CARGO_NDK_SYSROOT_TARGET";
         let cargo_ndk_sysroot_target = sysroot_target(&triple);
         let cargo_ndk_sysroot_libs_path_key = "CARGO_NDK_SYSROOT_LIBS_PATH";
@@ -2535,17 +2504,9 @@ impl BuildRequest {
             .join("usr")
             .join("lib")
             .join(cargo_ndk_sysroot_target);
-        let target_ar = ndk_home.join(ndk_tool(ARCH, "llvm-ar"));
-        let target_ranlib = ndk_home.join(ndk_tool(ARCH, "llvm-ranlib"));
-
-        //{}/toolchains/llvm/prebuilt/{ARCH}/lib/clang/{clang_version}
-        let clang_folder: PathBuf = ndk_home
-            .join("toolchains")
-            .join("llvm")
-            .join("prebuilt")
-            .join(ARCH)
-            .join("lib")
-            .join("clang");
+        let target_ar = tools.ar_path();
+        let target_ranlib = tools.ranlib();
+        let clang_folder = tools.clang_folder();
 
         // choose the clang target with the highest version
         // Should we filter for only numbers?
@@ -2565,6 +2526,12 @@ impl BuildRequest {
             "{}/usr/include/{}",
             &cargo_ndk_sysroot_path.display(),
             &cargo_ndk_sysroot_target
+        );
+
+        let bindgen_args = format!(
+            "--sysroot={} -I{}",
+            &cargo_ndk_sysroot_path.display(),
+            extra_include
         );
 
         for env in [
@@ -2588,14 +2555,42 @@ impl BuildRequest {
                 cargo_ndk_sysroot_target.into(),
             ),
             (cargo_rust_flags_key, clang_rt.into()),
+            (bindgen_clang_args_key, bindgen_args.into()),
+            (
+                "ANDROID_NATIVE_API_LEVEL".to_string(),
+                min_sdk_version.to_string().into(),
+            ),
+            (
+                format!(
+                    "CARGO_TARGET_{}_LINKER",
+                    self.triple
+                        .to_string()
+                        .to_ascii_uppercase()
+                        .replace("-", "_")
+                ),
+                linker.into_os_string(),
+            ),
+            ("ANDROID_NDK_ROOT".to_string(), ndk_home.into_os_string()),
+            // Set the wry env vars - this is where wry will dump its kotlin files.
+            // Their setup is really annyoing and requires us to hardcode `dx` to specific versions of tao/wry.
+            (
+                "WRY_ANDROID_PACKAGE".to_string(),
+                "dev.dioxus.main".to_string().into(),
+            ),
+            (
+                "WRY_ANDROID_LIBRARY".to_string(),
+                "dioxusmain".to_string().into(),
+            ),
+            (
+                "WRY_ANDROID_KOTLIN_FILES_OUT_DIR".to_string(),
+                self.wry_android_kotlin_files_out_dir().into_os_string(),
+            ),
             // Found this through a comment related to bindgen using the wrong clang for cross compiles
             //
             // https://github.com/rust-lang/rust-bindgen/issues/2962#issuecomment-2438297124
             //
             // https://github.com/KyleMayes/clang-sys?tab=readme-ov-file#environment-variables
             ("CLANG_PATH".into(), target_cc.with_extension("exe").into()),
-            // ("_CARGO_NDK_LINK_TARGET".into(), clang_target.into()), // Recognized by main() so we know when we're acting as a wrapper
-            // ("_CARGO_NDK_LINK_CLANG".into(), target_cc.into()),
         ] {
             env_vars.push((
                 env.0.into(),
@@ -2606,43 +2601,16 @@ impl BuildRequest {
             ));
         }
 
-        // if std::env::var("MSYSTEM").is_ok() || std::env::var("CYGWIN").is_ok() {
-        //     envs = envs
-        //         .into_iter()
-        //         .map(|(k, v)| {
-        //             (
-        //                 k,
-        //                 OsString::from(v.into_string().unwrap().replace('\\', "/")),
-        //             )
-        //         })
-        //         .collect();
-        // }
-
-        // todo(jon): the guide for openssl recommends extending the path to include the tools dir
-        //            in practice I couldn't get this to work, but this might eventually become useful.
-        //
-        // https://github.com/openssl/openssl/blob/master/NOTES-ANDROID.md#configuration
-        //
-        // They recommend a configuration like this:
-        //
-        // // export ANDROID_NDK_ROOT=/home/whoever/Android/android-sdk/ndk/20.0.5594570
-        // PATH=$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin:$ANDROID_NDK_ROOT/toolchains/arm-linux-androideabi-4.9/prebuilt/linux-x86_64/bin:$PATH
-        // ./Configure android-arm64 -D__ANDROID_API__=29
-        // make
-        //
-        // let tools_dir = tools.android_tools_dir();
-        // let extended_path = format!(
-        //     "{}:{}",
-        //     tools_dir.display(),
-        //     std::env::var("PATH").unwrap_or_default()
-        // );
-        // env_vars.push(("PATH".into(), extended_path));
+        if std::env::var("MSYSTEM").is_ok() || std::env::var("CYGWIN").is_ok() {
+            for var in env_vars.iter_mut() {
+                // Convert windows paths to unix-style paths
+                // This is a workaround for the fact that the `cc` crate expects unix-style paths
+                // and will fail if it encounters windows-style paths.
+                var.1 = var.1.replace('\\', "/");
+            }
+        }
 
         Ok(env_vars)
-        // Ok(env_vars
-        //     .into_iter()
-        //     .map(|(k, v)| (k.into(), v.to_str().unwrap().to_string().into()))
-        //     .collect())
     }
 
     /// Get an estimate of the number of units in the crate. If nightly rustc is not available, this
