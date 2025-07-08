@@ -331,7 +331,7 @@ use manganis::AssetOptions;
 use manganis_core::AssetVariant;
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
-use std::borrow::Cow;
+use std::{borrow::Cow, ffi::OsString};
 use std::{
     collections::{BTreeMap, HashSet},
     io::Write,
@@ -659,7 +659,14 @@ impl BuildRequest {
                 "-Clink-arg=-landroid".to_string(),
                 "-Clink-arg=-llog".to_string(),
                 "-Clink-arg=-lOpenSLES".to_string(),
+                "-Clink-arg=-lc++".to_string(),
+                "-Clink-arg=-static-libstdc++".to_string(),
+                "-Clink-arg=-lc++abi".to_string(),
                 "-Clink-arg=-Wl,--export-dynamic".to_string(),
+                format!(
+                    "-Clink-arg=-Wl,--sysroot={}",
+                    workspace.android_tools()?.sysroot().display()
+                ),
             ]);
         }
 
@@ -770,6 +777,9 @@ impl BuildRequest {
         // If we forget to do this, then we won't get the linker args since rust skips the full build
         // We need to make sure to not react to this though, so the filemap must cache it
         _ = self.bust_fingerprint(ctx);
+
+        // Run any pre-build steps like tailwind, etc
+        self.prebuild().await?;
 
         // Run the cargo build to produce our artifacts
         let mut artifacts = self.cargo_build(ctx).await?;
@@ -1112,6 +1122,12 @@ impl BuildRequest {
             }
         }
 
+        if self.platform == Platform::Android {
+            std::fs::copy("/Users/jonathankelley/Library/Android/sdk/ndk/29.0.13113456/toolchains/llvm/prebuilt/darwin-x86_64/sysroot/usr/lib/aarch64-linux-android/libc++_shared.so",
+                          framework_dir.join("libc++_shared.so"))
+                .with_context(|| "Failed to copy libc++_shared.so into bundle")?;
+        }
+
         Ok(())
     }
 
@@ -1121,6 +1137,13 @@ impl BuildRequest {
                 self.root_dir().join("Contents").join("Frameworks")
             }
             OperatingSystem::IOS(_) => self.root_dir().join("Frameworks"),
+            OperatingSystem::Linux if self.platform == Platform::Android => self
+                .root_dir()
+                .join("app")
+                .join("src")
+                .join("main")
+                .join("jniLibs")
+                .join("arm64-v8a"),
             OperatingSystem::Linux | OperatingSystem::Windows => self.root_dir(),
             _ => self.root_dir(),
         }
@@ -1134,14 +1157,6 @@ impl BuildRequest {
         if self.platform == Platform::Server {
             return Ok(());
         }
-
-        // Run the tailwind build before bundling anything else
-        crate::TailwindCli::run_once(
-            self.package_manifest_dir(),
-            self.config.application.tailwind_input.clone(),
-            self.config.application.tailwind_output.clone(),
-        )
-        .await?;
 
         let asset_dir = self.asset_dir();
 
@@ -2068,11 +2083,7 @@ impl BuildRequest {
                     cmd.arg("-Crelocation-model=pic");
                 }
 
-                tracing::debug!("Direct rustc: {:#?}", cmd);
-
                 cmd.envs(rustc_args.envs.iter().cloned());
-
-                // tracing::trace!("Setting env vars: {:#?}", rustc_args.envs);
 
                 Ok(cmd)
             }
@@ -2090,16 +2101,24 @@ impl BuildRequest {
             _ => {
                 let mut cmd = Command::new("cargo");
 
+                let env = self.cargo_build_env_vars(ctx)?;
+                let args = self.cargo_build_arguments(ctx);
+
+                tracing::trace!("Building with cargo rustc");
+                for e in env.iter() {
+                    tracing::trace!(": {}={}", e.0, e.1);
+                }
+
+                for a in args.iter() {
+                    tracing::trace!(": {}", a);
+                }
+
                 cmd.arg("rustc")
                     .current_dir(self.crate_dir())
                     .arg("--message-format")
                     .arg("json-diagnostic-rendered-ansi")
-                    .args(self.cargo_build_arguments(ctx))
-                    .envs(
-                        self.cargo_build_env_vars(ctx)?
-                            .iter()
-                            .map(|(k, v)| (k.as_ref(), v)),
-                    );
+                    .args(args)
+                    .envs(env.iter().map(|(k, v)| (k.as_ref(), v)));
 
                 if ctx.mode == BuildMode::Fat {
                     cmd.env(
@@ -2114,8 +2133,6 @@ impl BuildRequest {
                         Workspace::path_to_dx()?.display().to_string(),
                     );
                 }
-
-                tracing::debug!("Cargo: {:#?}", cmd);
 
                 Ok(cmd)
             }
@@ -2358,6 +2375,65 @@ impl BuildRequest {
     }
 
     fn android_env_vars(&self) -> Result<Vec<(Cow<'static, str>, String)>> {
+        // Derived from getenv_with_target_prefixes in `cc` crate.
+        fn cc_env(var_base: &str, triple: &str) -> (String, Option<String>) {
+            let triple_u = triple.replace('-', "_");
+            let most_specific_key = format!("{}_{}", var_base, triple);
+
+            env_var_with_key(most_specific_key.to_string())
+                .or_else(|| env_var_with_key(format!("{}_{}", var_base, triple_u)))
+                .or_else(|| env_var_with_key(format!("TARGET_{}", var_base)))
+                .or_else(|| env_var_with_key(var_base.to_string()))
+                .map(|(key, value)| (key, Some(value)))
+                .unwrap_or_else(|| (most_specific_key, None))
+        }
+
+        fn cargo_env_target_cfg(triple: &str, key: &str) -> String {
+            format!("CARGO_TARGET_{}_{}", &triple.replace('-', "_"), key).to_uppercase()
+        }
+
+        #[inline]
+        fn env_var_with_key(key: String) -> Option<(String, String)> {
+            std::env::var(&key).map(|value| (key, value)).ok()
+        }
+
+        fn clang_target(rust_target: &str, api_level: u8) -> String {
+            let target = match rust_target {
+                "arm-linux-androideabi" => "armv7a-linux-androideabi",
+                "armv7-linux-androideabi" => "armv7a-linux-androideabi",
+                _ => rust_target,
+            };
+            format!("--target={target}{api_level}")
+        }
+
+        fn sysroot_target(rust_target: &str) -> &str {
+            (match rust_target {
+                "armv7-linux-androideabi" => "arm-linux-androideabi",
+                _ => rust_target,
+            }) as _
+        }
+        fn rt_builtins(rust_target: &str) -> &str {
+            (match rust_target {
+                "armv7-linux-androideabi" => "arm",
+                "aarch64-linux-android" => "aarch64",
+                "i686-linux-android" => "i686",
+                "x86_64-linux-android" => "x86_64",
+                _ => rust_target,
+            }) as _
+        }
+
+        fn ndk_tool(arch: &str, tool: &str) -> PathBuf {
+            ["toolchains", "llvm", "prebuilt", arch, "bin", tool]
+                .iter()
+                .collect()
+        }
+
+        fn sysroot_suffix(arch: &str) -> PathBuf {
+            ["toolchains", "llvm", "prebuilt", arch, "sysroot"]
+                .iter()
+                .collect()
+        }
+
         let mut env_vars: Vec<(Cow<'static, str>, String)> = vec![];
 
         let tools = self.workspace.android_tools()?;
@@ -2367,7 +2443,7 @@ impl BuildRequest {
         let target_cc = tools.target_cc();
         let target_cxx = tools.target_cxx();
         let java_home = tools.java_home();
-        let ndk = tools.ndk.clone();
+        let ndk_home = tools.ndk.clone();
         tracing::debug!(
             r#"Using android:
             min_sdk_version: {min_sdk_version}
@@ -2396,7 +2472,7 @@ impl BuildRequest {
             .into(),
             linker.display().to_string(),
         ));
-        env_vars.push(("ANDROID_NDK_ROOT".into(), ndk.display().to_string()));
+        env_vars.push(("ANDROID_NDK_ROOT".into(), ndk_home.display().to_string()));
 
         if let Some(java_home) = java_home {
             tracing::debug!("Setting JAVA_HOME to {java_home:?}");
@@ -2413,6 +2489,128 @@ impl BuildRequest {
                 .display()
                 .to_string(),
         ));
+
+        let triple = self.triple.to_string();
+
+        // Environment variables for the `cc` crate
+        let (cc_key, _cc_value) = cc_env("CC", &triple);
+        let (cflags_key, cflags_value) = cc_env("CFLAGS", &triple);
+        let (cxx_key, _cxx_value) = cc_env("CXX", &triple);
+        let (cxxflags_key, cxxflags_value) = cc_env("CXXFLAGS", &triple);
+        let (ar_key, _ar_value) = cc_env("AR", &triple);
+        let (ranlib_key, _ranlib_value) = cc_env("RANLIB", &triple);
+
+        // Environment variables for cargo
+        let cargo_ar_key = cargo_env_target_cfg(&triple, "ar");
+        let cargo_linker_key = cargo_env_target_cfg(&triple, "linker");
+        let cargo_rust_flags_key = cargo_env_target_cfg(&triple, "rustflags");
+        let bindgen_clang_args_key =
+            format!("BINDGEN_EXTRA_CLANG_ARGS_{}", &triple.replace('-', "_"));
+
+        const ARCH: &str = "darwin-x86_64";
+
+        let clang_target = clang_target(&self.triple.to_string(), min_sdk_version as _);
+        let target_cc = ndk_home.join(ndk_tool(ARCH, "clang"));
+        let target_cflags = match cflags_value {
+            Some(v) => format!("{clang_target} {v}"),
+            None => clang_target.to_string(),
+        };
+        let target_cxx = ndk_home.join(ndk_tool(ARCH, "clang++"));
+        let target_cxxflags = match cxxflags_value {
+            Some(v) => format!("{clang_target} {v}"),
+            None => clang_target.to_string(),
+        };
+        let cargo_ndk_sysroot_path_key = "CARGO_NDK_SYSROOT_PATH";
+        let cargo_ndk_sysroot_path = ndk_home.join(sysroot_suffix(ARCH));
+        let cargo_ndk_sysroot_target_key = "CARGO_NDK_SYSROOT_TARGET";
+        let cargo_ndk_sysroot_target = sysroot_target(&triple);
+        let cargo_ndk_sysroot_libs_path_key = "CARGO_NDK_SYSROOT_LIBS_PATH";
+        let cargo_ndk_sysroot_libs_path = cargo_ndk_sysroot_path
+            .join("usr")
+            .join("lib")
+            .join(cargo_ndk_sysroot_target);
+        let target_ar = ndk_home.join(ndk_tool(ARCH, "llvm-ar"));
+        let target_ranlib = ndk_home.join(ndk_tool(ARCH, "llvm-ranlib"));
+
+        //{}/toolchains/llvm/prebuilt/{ARCH}/lib/clang/{clang_version}
+        let clang_folder: PathBuf = ndk_home
+            .join("toolchains")
+            .join("llvm")
+            .join("prebuilt")
+            .join(ARCH)
+            .join("lib")
+            .join("clang");
+
+        // choose the clang target with the highest version
+        // Should we filter for only numbers?
+        let clang_builtins_target = std::fs::read_dir(clang_folder)
+            .expect("Unable to get clang target directory")
+            .filter_map(|a| a.ok())
+            .max_by(|a, b| a.file_name().cmp(&b.file_name()))
+            .expect("Unable to get clang target")
+            .path();
+        let clang_rt = format!(
+            "-L{} -lstatic=clang_rt.builtins-{}-android",
+            clang_builtins_target.join("lib").join("linux").display(),
+            rt_builtins(&triple)
+        );
+
+        let extra_include: String = format!(
+            "{}/usr/include/{}",
+            &cargo_ndk_sysroot_path.display(),
+            &cargo_ndk_sysroot_target
+        );
+
+        for env in [
+            (cc_key, target_cc.clone().into_os_string()),
+            (cflags_key, target_cflags.into()),
+            (cxx_key, target_cxx.into_os_string()),
+            (cxxflags_key, target_cxxflags.into()),
+            (ar_key, target_ar.clone().into()),
+            (ranlib_key, target_ranlib.into_os_string()),
+            (cargo_ar_key, target_ar.into_os_string()),
+            (
+                cargo_ndk_sysroot_path_key.to_string(),
+                cargo_ndk_sysroot_path.clone().into_os_string(),
+            ),
+            (
+                cargo_ndk_sysroot_libs_path_key.to_string(),
+                cargo_ndk_sysroot_libs_path.into_os_string(),
+            ),
+            (
+                cargo_ndk_sysroot_target_key.to_string(),
+                cargo_ndk_sysroot_target.into(),
+            ),
+            (cargo_rust_flags_key, clang_rt.into()),
+            // Found this through a comment related to bindgen using the wrong clang for cross compiles
+            //
+            // https://github.com/rust-lang/rust-bindgen/issues/2962#issuecomment-2438297124
+            //
+            // https://github.com/KyleMayes/clang-sys?tab=readme-ov-file#environment-variables
+            ("CLANG_PATH".into(), target_cc.with_extension("exe").into()),
+            // ("_CARGO_NDK_LINK_TARGET".into(), clang_target.into()), // Recognized by main() so we know when we're acting as a wrapper
+            // ("_CARGO_NDK_LINK_CLANG".into(), target_cc.into()),
+        ] {
+            env_vars.push((
+                env.0.into(),
+                env.1
+                    .to_str()
+                    .expect("Failed to convert env var value to string")
+                    .to_string(),
+            ));
+        }
+
+        // if std::env::var("MSYSTEM").is_ok() || std::env::var("CYGWIN").is_ok() {
+        //     envs = envs
+        //         .into_iter()
+        //         .map(|(k, v)| {
+        //             (
+        //                 k,
+        //                 OsString::from(v.into_string().unwrap().replace('\\', "/")),
+        //             )
+        //         })
+        //         .collect();
+        // }
 
         // todo(jon): the guide for openssl recommends extending the path to include the tools dir
         //            in practice I couldn't get this to work, but this might eventually become useful.
@@ -2434,13 +2632,11 @@ impl BuildRequest {
         // );
         // env_vars.push(("PATH".into(), extended_path));
 
-        // We try to set the OPENLSSL_DIR by autodetecting it here
-        if let Some(openssl_dir) = self.openssl_dir() {
-            tracing::debug!("Setting OPENSSL_DIR to {openssl_dir:?}");
-            env_vars.push(("OPENSSL_DIR".into(), openssl_dir.display().to_string()));
-        }
-
         Ok(env_vars)
+        // Ok(env_vars
+        //     .into_iter()
+        //     .map(|(k, v)| (k.into(), v.to_str().unwrap().to_string().into()))
+        //     .collect())
     }
 
     /// Get an estimate of the number of units in the crate. If nightly rustc is not available, this
@@ -4361,9 +4557,19 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
             .collect()
     }
 
-    fn openssl_dir(&self) -> Option<PathBuf> {
-        // if cfg!(target_os = "macos") {}
+    async fn prebuild(&self) -> Result<()> {
+        if self.platform == Platform::Server {
+            return Ok(());
+        }
 
-        None
+        // Run the tailwind build before bundling anything else
+        crate::TailwindCli::run_once(
+            self.package_manifest_dir(),
+            self.config.application.tailwind_input.clone(),
+            self.config.application.tailwind_output.clone(),
+        )
+        .await?;
+
+        Ok(())
     }
 }

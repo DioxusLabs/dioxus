@@ -170,6 +170,13 @@ impl AndroidTools {
         ))
     }
 
+    pub(crate) fn sysroot(&self) -> PathBuf {
+        // The sysroot is usually located in the NDK under:
+        // "~/Library/Android/sdk/ndk/25.2.9519653/toolchains/llvm/prebuilt/darwin-x86_64/sysroot"
+        // or similar, depending on the platform.
+        self.android_tools_dir().parent().unwrap().join("sysroot")
+    }
+
     pub(crate) fn sdk(&self) -> PathBuf {
         // /Users/jonathankelley/Library/Android/sdk/ndk/25.2/... (25.2 is the ndk here)
         // /Users/jonathankelley/Library/Android/sdk/
