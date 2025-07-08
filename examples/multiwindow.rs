@@ -5,19 +5,14 @@
 //! own context, root elements, etc.
 
 use dioxus::prelude::*;
-use dioxus::{desktop::Config, desktop::WindowCloseBehaviour};
 
 fn main() {
-    dioxus::LaunchBuilder::desktop()
-        // We can choose the close behavior of the last window to hide. See WindowCloseBehaviour for more options.
-        .with_cfg(Config::new().with_close_behaviour(WindowCloseBehaviour::LastWindowHides))
-        .launch(app);
+    dioxus::launch(app);
 }
 
 fn app() -> Element {
     let onclick = move |_| {
-        let dom = VirtualDom::new(popup);
-        dioxus::desktop::window().new_window(dom, Default::default());
+        dioxus::desktop::window().new_window(VirtualDom::new(popup), Default::default());
     };
 
     rsx! {
@@ -26,7 +21,12 @@ fn app() -> Element {
 }
 
 fn popup() -> Element {
+    let mut count = use_signal(|| 0);
     rsx! {
-        div { "This is a popup window!" }
+        div {
+            h1 { "Popup Window" }
+            p { "Count: {count}" }
+            button { onclick: move |_| count += 1, "Increment" }
+        }
     }
 }

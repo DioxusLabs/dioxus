@@ -19,7 +19,6 @@ dioxus-interpreter-js = { workspace = true, features = ["binary-protocol", "seri
 dioxus-cli-config = { workspace = true }
 dioxus-asset-resolver = { workspace = true }
 generational-box = { workspace = true }
-# hotreload only works on desktop platforms.... mobile is still wip
 dioxus-devtools = { workspace = true, optional = true }
 
 serde = "1.0.218"
@@ -50,6 +49,9 @@ dioxus-history = { workspace = true }
 base64 = { workspace = true }
 open = { workspace = true }
 libc = "0.2.170"
+pollster = "0.4.0"
+rand = { workspace = true, features = ["std_rng"] }
+subtle = { version = "2.6", features = ["const-generics"] }
 
 [target.'cfg(unix)'.dependencies]
 signal-hook = "0.3.17"
@@ -71,7 +73,7 @@ objc_id = "0.1.1"
 
 # use rustls on android
 [target.'cfg(target_os = "android")'.dependencies]
-tokio-tungstenite = { workspace = true, optional = true, features = ["rustls"] }
+tungstenite = { workspace = true, features = ["rustls"] }
 jni = "0.21.1"
 ndk = { version = "0.9.0" }
 ndk-sys = { version = "0.6.0" }
@@ -79,7 +81,7 @@ ndk-context = { version = "0.1.1" }
 
 # use native tls on other platforms
 [target.'cfg(not(target_os = "android"))'.dependencies]
-tokio-tungstenite = { workspace = true, optional = true, features = ["native-tls"] }
+tungstenite = { workspace = true, features = ["native-tls"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 cocoa = "0.26.0"
@@ -119,7 +121,6 @@ reqwest = { workspace = true, features = ["json"] }
 http-range = { version = "0.1.5" }
 dioxus-ssr = { workspace = true, default-features = false }
 separator = "0.4.1"
-rand = { workspace = true, features = ["small_rng"] }
 
 # These tests need to be run on the main thread, so they cannot use rust's test harness.
 [[test]]

@@ -6,10 +6,11 @@ use crate::{
     query::QueryEngine,
     shortcut::{HotKey, HotKeyState, ShortcutHandle, ShortcutRegistryError},
     webview::PendingWebview,
-    AssetRequest, Config, WryEventHandler,
+    AssetRequest, Config, WindowCloseBehaviour, WryEventHandler,
 };
 use dioxus_core::{prelude::Callback, VirtualDom};
 use std::{
+    cell::Cell,
     future::{Future, IntoFuture},
     pin::Pin,
     rc::{Rc, Weak},
@@ -66,6 +67,7 @@ pub struct DesktopService {
     pub(super) query: QueryEngine,
     pub(crate) asset_handlers: AssetHandlerRegistry,
     pub(crate) file_hover: NativeFileHover,
+    pub(crate) close_behaviour: Rc<Cell<WindowCloseBehaviour>>,
 
     #[cfg(target_os = "ios")]
     pub(crate) views: Rc<std::cell::RefCell<Vec<*mut objc::runtime::Object>>>,
@@ -87,6 +89,7 @@ impl DesktopService {
         shared: Rc<SharedContext>,
         asset_handlers: AssetHandlerRegistry,
         file_hover: NativeFileHover,
+        close_behaviour: WindowCloseBehaviour,
     ) -> Self {
         Self {
             window,
@@ -94,6 +97,7 @@ impl DesktopService {
             shared,
             asset_handlers,
             file_hover,
+            close_behaviour: Rc::new(Cell::new(close_behaviour)),
             query: Default::default(),
             #[cfg(target_os = "ios")]
             views: Default::default(),
@@ -163,6 +167,14 @@ impl DesktopService {
     /// Toggle whether the window is maximized or not
     pub fn toggle_maximized(&self) {
         self.window.set_maximized(!self.window.is_maximized())
+    }
+
+    /// Set the close behavior of this window
+    ///
+    /// By default, windows close when the user clicks the close button.
+    /// If this is set to `WindowCloseBehaviour::WindowHides`, the window will hide instead of closing.
+    pub fn set_close_behavior(&self, behaviour: WindowCloseBehaviour) {
+        self.close_behaviour.set(behaviour);
     }
 
     /// Close this window

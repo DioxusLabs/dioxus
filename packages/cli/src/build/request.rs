@@ -2704,6 +2704,14 @@ impl BuildRequest {
             include_bytes!("../../assets/android/gen/app/src/main/res/values/styles.xml"),
         )?;
 
+        create_dir_all(res.join("xml"))?;
+        write(
+            res.join("xml").join("network_security_config.xml"),
+            include_bytes!(
+                "../../assets/android/gen/app/src/main/res/xml/network_security_config.xml"
+            ),
+        )?;
+
         create_dir_all(res.join("drawable"))?;
         write(
             res.join("drawable").join("ic_launcher_background.xml"),

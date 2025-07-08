@@ -2,10 +2,8 @@
 
 use std::cell::OnceCell;
 
-use dioxus_core::{
-    prelude::{generation, queue_effect},
-    schedule_update,
-};
+use dioxus_core::{prelude::queue_effect, schedule_update};
+use dioxus_fullstack_protocol::is_hydrating;
 use dioxus_history::History;
 
 // If we are currently in a scope and this is the first run then queue a rerender
@@ -14,7 +12,7 @@ fn match_hydration<O>(
     during_hydration: impl FnOnce() -> O,
     after_hydration: impl FnOnce() -> O,
 ) -> O {
-    if generation() == 0 {
+    if is_hydrating() {
         let update = schedule_update();
         queue_effect(move || update());
         during_hydration()
