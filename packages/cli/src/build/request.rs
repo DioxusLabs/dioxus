@@ -316,9 +316,9 @@
 //! - xbuild: <https://github.com/rust-mobile/xbuild/blob/master/xbuild/src/command/build.rs>
 
 use crate::{
-    AndroidTools, BuildContext, ClientRenderer, DioxusConfig, Error, LinkAction, LinkerFlavor,
-    Platform, PlatformArg, Result, RustcArgs, TargetArgs, TraceSrc, WasmBindgen, WasmOptConfig,
-    Workspace, DX_RUSTC_WRAPPER_ENV_VAR,
+    AndroidTools, BuildContext, BundleFormat, DioxusConfig, Error, LinkAction, LinkerFlavor,
+    Platform, PlatformArg, Renderer, Result, RustcArgs, TargetArgs, TraceSrc, WasmBindgen,
+    WasmOptConfig, Workspace, DX_RUSTC_WRAPPER_ENV_VAR,
 };
 use anyhow::Context;
 use cargo_metadata::diagnostic::Diagnostic;
@@ -370,8 +370,9 @@ pub(crate) struct BuildRequest {
     pub(crate) crate_target: krates::cm::Target,
     pub(crate) profile: String,
     pub(crate) release: bool,
-    pub(crate) platform: Platform,
-    pub(crate) enabled_platforms: Vec<Platform>,
+    pub(crate) renderer: Renderer,
+    pub(crate) bundle: BundleFormat,
+    pub(crate) enabled_renderers: Vec<Renderer>,
     pub(crate) triple: Triple,
     pub(crate) device: bool,
     pub(crate) package: String,
@@ -435,7 +436,7 @@ pub enum BuildMode {
 /// The patch cache is only populated on fat builds and then used for thin builds (see `BuildMode::Thin`).
 #[derive(Clone, Debug)]
 pub struct BuildArtifacts {
-    pub(crate) platform: Platform,
+    pub(crate) bundle: BundleFormat,
     pub(crate) exe: PathBuf,
     pub(crate) direct_rustc: RustcArgs,
     pub(crate) time_start: SystemTime,
@@ -554,8 +555,8 @@ impl BuildRequest {
 
         // Infer the renderer from platform argument if the platform argument is "native" or "desktop"
         let renderer = args.renderer.or(match args.platform {
-            Some(PlatformArg::Desktop) => Some(ClientRenderer::Webview),
-            Some(PlatformArg::Native) => Some(ClientRenderer::Native),
+            Some(PlatformArg::Desktop) => Some(Renderer::Webview),
+            Some(PlatformArg::Native) => Some(Renderer::Native),
             _ => None,
         });
 
@@ -569,7 +570,7 @@ impl BuildRequest {
                 // The user passed --platform XYZ but already has `default = ["ABC"]` in their Cargo.toml or dioxus = { features = ["abc"] }
                 // We want to strip out the default platform and use the one they passed, setting no-default-features
                 _ => {
-                    features.extend(Self::platformless_features(main_package));
+                    features.extend(Self::rendererless_features(main_package));
                     no_default_features = true;
                     Platform::from(platform_arg)
                 }
@@ -623,39 +624,7 @@ impl BuildRequest {
         // The triple ends up being a source of truth for us later hence all this work to figure it out
         let triple = match args.target.clone() {
             Some(target) => target,
-            None => match platform {
-                // Generally just use the host's triple for native executables unless specified otherwise
-                Platform::MacOS
-                | Platform::Windows
-                | Platform::Linux
-                | Platform::Server
-                | Platform::Liveview => target_lexicon::HOST,
-
-                // We currently assume unknown-unknown for web, but we might want to eventually
-                // support emscripten
-                Platform::Web => "wasm32-unknown-unknown".parse().unwrap(),
-
-                // For iOS we should prefer the actual architecture for the simulator, but in lieu of actually
-                // figuring that out, we'll assume aarch64 on m-series and x86_64 otherwise
-                Platform::Ios => {
-                    // use the host's architecture and sim if --device is passed
-                    use target_lexicon::{Architecture, HOST};
-                    match HOST.architecture {
-                        Architecture::Aarch64(_) if device => "aarch64-apple-ios".parse().unwrap(),
-                        Architecture::Aarch64(_) => "aarch64-apple-ios-sim".parse().unwrap(),
-                        _ if device => "x86_64-apple-ios".parse().unwrap(),
-                        _ => "x86_64-apple-ios".parse().unwrap(),
-                    }
-                }
-
-                // Same idea with android but we figure out the connected device using adb
-                Platform::Android => {
-                    workspace
-                        .android_tools()?
-                        .autodetect_android_device_triple()
-                        .await
-                }
-            },
+            None => platform.into_target(device, &workspace).await?,
         };
 
         // Somethings we override are also present in the user's config.
@@ -748,7 +717,7 @@ impl BuildRequest {
         );
 
         Ok(Self {
-            platform,
+            renderer,
             features,
             no_default_features,
             crate_package,
@@ -758,7 +727,7 @@ impl BuildRequest {
             device,
             workspace,
             config,
-            enabled_platforms,
+            enabled_renderers,
             target_dir,
             custom_linker,
             link_args_file,
@@ -1027,7 +996,7 @@ impl BuildRequest {
         exe: &Path,
         assets: &mut AssetManifest,
     ) -> Result<()> {
-        match self.platform {
+        match self.bundle {
             // Run wasm-bindgen on the wasm binary and set its output to be in the bundle folder
             // Also run wasm-opt on the wasm binary, and sets the index.html since that's also the "executable".
             //
@@ -1051,7 +1020,7 @@ impl BuildRequest {
             //                     assets/
             //                        logo.png
             // ```
-            Platform::Web => {
+            BundleFormat::Web => {
                 self.bundle_web(ctx, exe, assets).await?;
             }
 
@@ -1068,13 +1037,12 @@ impl BuildRequest {
             //
             // These are all super simple, just copy the exe into the folder
             // eventually, perhaps, maybe strip + encrypt the exe?
-            Platform::Android
-            | Platform::MacOS
-            | Platform::Windows
-            | Platform::Linux
-            | Platform::Ios
-            | Platform::Liveview
-            | Platform::Server => {
+            BundleFormat::Android
+            | BundleFormat::MacOS
+            | BundleFormat::Windows
+            | BundleFormat::Linux
+            | BundleFormat::Ios
+            | BundleFormat::Server => {
                 std::fs::create_dir_all(self.exe_dir())?;
                 std::fs::copy(exe, self.main_exe())?;
             }
@@ -1136,7 +1104,7 @@ impl BuildRequest {
     /// Should be the same on all platforms - just copy over the assets from the manifest into the output directory
     async fn write_assets(&self, ctx: &BuildContext, assets: &AssetManifest) -> Result<()> {
         // Server doesn't need assets - web will provide them
-        if self.platform == Platform::Server {
+        if self.bundle == BundleFormat::Server {
             return Ok(());
         }
 
@@ -1356,7 +1324,10 @@ impl BuildRequest {
         // Requiring the ASLR offset here is necessary but unfortunately might be flakey in practice.
         // Android apps can take a long time to open, and a hot patch might've been issued in the interim,
         // making this hotpatch a failure.
-        if self.platform != Platform::Web {
+        if !matches!(
+            self.triple.architecture,
+            target_lexicon::Architecture::Wasm32 | target_lexicon::Architecture::Wasm64
+        ) {
             let stub_bytes = crate::build::create_undefined_symbol_stub(
                 cache,
                 &object_files,
@@ -1884,7 +1855,10 @@ impl BuildRequest {
         }
 
         // We want to go through wasm-ld directly, so we need to remove the -flavor flag
-        if self.platform == Platform::Web {
+        if matches!(
+            self.triple.architecture,
+            target_lexicon::Architecture::Wasm32 | target_lexicon::Architecture::Wasm64
+        ) {
             let flavor_idx = args.iter().position(|arg| *arg == "-flavor").unwrap();
             args.remove(flavor_idx + 1);
             args.remove(flavor_idx);
@@ -2069,7 +2043,10 @@ impl BuildRequest {
                 );
                 cmd.arg(format!("-Clinker={}", Workspace::path_to_dx()?.display()));
 
-                if self.platform == Platform::Web {
+                if matches!(
+                    self.triple.architecture,
+                    target_lexicon::Architecture::Wasm32 | target_lexicon::Architecture::Wasm64
+                ) {
                     cmd.arg("-Crelocation-model=pic");
                 }
 
@@ -2190,7 +2167,7 @@ impl BuildRequest {
 
         // The bundle splitter needs relocation data to create a call-graph.
         // This will automatically be erased by wasm-opt during the optimization step.
-        if self.platform == Platform::Web && self.wasm_split {
+        if self.bundle == BundleFormat::Web && self.wasm_split {
             cargo_args.push("-Clink-args=--emit-relocs".to_string());
         }
 
@@ -2206,7 +2183,7 @@ impl BuildRequest {
 
         // for debuggability, we need to make sure android studio can properly understand our build
         // https://stackoverflow.com/questions/68481401/debugging-a-prebuilt-shared-library-in-android-studio
-        if self.platform == Platform::Android {
+        if self.bundle == BundleFormat::Android {
             cargo_args.push("-Clink-arg=-Wl,--build-id=sha1".to_string());
         }
 
@@ -2290,8 +2267,10 @@ impl BuildRequest {
             // https://blog.rust-lang.org/2024/09/24/webassembly-targets-change-in-default-target-features/#disabling-on-by-default-webassembly-proposals
             //
             // It's fine that these exist in the base module but not in the patch.
-            if self.platform == Platform::Web
-                || self.triple.operating_system == OperatingSystem::Wasi
+            if matches!(
+                self.triple.architecture,
+                target_lexicon::Architecture::Wasm32 | target_lexicon::Architecture::Wasm64
+            ) || self.triple.operating_system == OperatingSystem::Wasi
             {
                 cargo_args.push("-Ctarget-cpu=mvp".into());
                 cargo_args.push("-Clink-arg=--no-gc-sections".into());
@@ -2312,7 +2291,7 @@ impl BuildRequest {
         let mut env_vars = vec![];
 
         // Make sure to set all the crazy android flags. Cross-compiling is hard, man.
-        if self.platform == Platform::Android {
+        if self.bundle == BundleFormat::Android {
             env_vars.extend(self.android_env_vars()?);
         };
 
@@ -2330,8 +2309,10 @@ impl BuildRequest {
 
         // Disable reference types on wasm when using hotpatching
         // https://blog.rust-lang.org/2024/09/24/webassembly-targets-change-in-default-target-features/#disabling-on-by-default-webassembly-proposals
-        if self.platform == Platform::Web
-            && matches!(ctx.mode, BuildMode::Thin { .. } | BuildMode::Fat)
+        if matches!(
+            self.triple.architecture,
+            target_lexicon::Architecture::Wasm32 | target_lexicon::Architecture::Wasm64
+        ) && matches!(ctx.mode, BuildMode::Thin { .. } | BuildMode::Fat)
         {
             rust_flags.flags.push("-Ctarget-cpu=mvp".to_string());
         }
@@ -2534,43 +2515,41 @@ impl BuildRequest {
     pub(crate) fn root_dir(&self) -> PathBuf {
         let platform_dir = self.platform_dir();
 
-        match self.platform {
-            Platform::Web => platform_dir.join("public"),
-            Platform::Server => platform_dir.clone(), // ends up *next* to the public folder
+        match self.bundle {
+            BundleFormat::Web => platform_dir.join("public"),
+            BundleFormat::Server => platform_dir.clone(), // ends up *next* to the public folder
 
             // These might not actually need to be called `.app` but it does let us run these with `open`
-            Platform::MacOS => platform_dir.join(format!("{}.app", self.bundled_app_name())),
-            Platform::Ios => platform_dir.join(format!("{}.app", self.bundled_app_name())),
+            BundleFormat::MacOS => platform_dir.join(format!("{}.app", self.bundled_app_name())),
+            BundleFormat::Ios => platform_dir.join(format!("{}.app", self.bundled_app_name())),
 
             // in theory, these all could end up directly in the root dir
-            Platform::Android => platform_dir.join("app"), // .apk (after bundling)
-            Platform::Linux => platform_dir.join("app"),   // .appimage (after bundling)
-            Platform::Windows => platform_dir.join("app"), // .exe (after bundling)
-            Platform::Liveview => platform_dir.join("app"), // .exe (after bundling)
+            BundleFormat::Android => platform_dir.join("app"), // .apk (after bundling)
+            BundleFormat::Linux => platform_dir.join("app"),   // .appimage (after bundling)
+            BundleFormat::Windows => platform_dir.join("app"), // .exe (after bundling)
         }
     }
 
     fn platform_dir(&self) -> PathBuf {
-        self.build_dir(self.platform, self.release)
+        self.build_dir(self.bundle, self.release)
     }
 
     fn platform_exe_name(&self) -> String {
-        match self.platform {
-            Platform::MacOS => self.executable_name().to_string(),
-            Platform::Ios => self.executable_name().to_string(),
-            Platform::Server => self.executable_name().to_string(),
-            Platform::Liveview => self.executable_name().to_string(),
-            Platform::Windows => format!("{}.exe", self.executable_name()),
+        match self.bundle {
+            BundleFormat::MacOS => self.executable_name().to_string(),
+            BundleFormat::Ios => self.executable_name().to_string(),
+            BundleFormat::Server => self.executable_name().to_string(),
+            BundleFormat::Windows => format!("{}.exe", self.executable_name()),
 
             // from the apk spec, the root exe is a shared library
             // we include the user's rust code as a shared library with a fixed namespace
-            Platform::Android => "libdioxusmain.so".to_string(),
+            BundleFormat::Android => "libdioxusmain.so".to_string(),
 
             // this will be wrong, I think, but not important?
-            Platform::Web => format!("{}_bg.wasm", self.executable_name()),
+            BundleFormat::Web => format!("{}_bg.wasm", self.executable_name()),
 
             // todo: maybe this should be called AppRun?
-            Platform::Linux => self.executable_name().to_string(),
+            BundleFormat::Linux => self.executable_name().to_string(),
         }
     }
 
@@ -2825,22 +2804,22 @@ impl BuildRequest {
     /// target/dx/build/app/web/
     /// target/dx/build/app/web/public/
     /// target/dx/build/app/web/server.exe
-    pub(crate) fn build_dir(&self, platform: Platform, release: bool) -> PathBuf {
+    pub(crate) fn build_dir(&self, bundle: BundleFormat, release: bool) -> PathBuf {
         self.internal_out_dir()
             .join(&self.main_target)
             .join(if release { "release" } else { "debug" })
-            .join(platform.build_folder_name())
+            .join(bundle.build_folder_name())
     }
 
     /// target/dx/bundle/app/
     /// target/dx/bundle/app/blah.app
     /// target/dx/bundle/app/blah.exe
     /// target/dx/bundle/app/public/
-    pub(crate) fn bundle_dir(&self, platform: Platform) -> PathBuf {
+    pub(crate) fn bundle_dir(&self, bundle: BundleFormat) -> PathBuf {
         self.internal_out_dir()
             .join(&self.main_target)
             .join("bundle")
-            .join(platform.build_folder_name())
+            .join(bundle.build_folder_name())
     }
 
     /// Get the workspace directory for the crate
@@ -2880,11 +2859,11 @@ impl BuildRequest {
     /// Get the features required to build for the given platform
     fn feature_for_platform_and_renderer(
         package: &krates::cm::Package,
-        platform: Platform,
-        renderer: Option<ClientRenderer>,
+        triple: &Triple,
+        renderer: Renderer,
     ) -> String {
         // Try to find the feature that activates the dioxus feature for the given platform
-        let dioxus_feature = platform.feature_name(renderer);
+        let dioxus_feature = renderer.feature_name(triple);
 
         let res = package.features.iter().find_map(|(key, features)| {
             // if the feature is just the name of the platform, we use that
@@ -2912,7 +2891,7 @@ impl BuildRequest {
         res.unwrap_or_else(|| {
             let fallback = format!("dioxus/{}", dioxus_feature) ;
             tracing::debug!(
-                "Could not find explicit feature for platform {platform}, passing `fallback` instead"
+                "Could not find explicit feature for renderer {renderer}, passing `fallback` instead"
             );
             fallback
         })
@@ -2933,8 +2912,8 @@ impl BuildRequest {
     pub(crate) fn enabled_cargo_toml_platforms(
         package: &krates::cm::Package,
         no_default_features: bool,
-    ) -> Vec<Platform> {
-        let mut platforms = vec![];
+    ) -> Vec<Renderer> {
+        let mut renderers = vec![];
 
         // Attempt to discover the platform directly from the dioxus dependency
         //
@@ -2943,8 +2922,8 @@ impl BuildRequest {
         //
         if let Some(dxs) = package.dependencies.iter().find(|dep| dep.name == "dioxus") {
             for f in dxs.features.iter() {
-                if let Some(platform) = Platform::autodetect_from_cargo_feature(f) {
-                    platforms.push(platform);
+                if let Some(renderer) = Renderer::autodetect_from_cargo_feature(f) {
+                    renderers.push(renderer);
                 }
             }
         }
@@ -2960,11 +2939,11 @@ impl BuildRequest {
         // default = ["web"]
         // web = ["dioxus/web"]
         if no_default_features {
-            return platforms;
+            return renderers;
         }
 
         let Some(default) = package.features.get("default") else {
-            return platforms;
+            return renderers;
         };
 
         // we only trace features 1 level deep..
@@ -2973,9 +2952,9 @@ impl BuildRequest {
             // If the user directly specified a platform we can just use that.
             if feature.starts_with("dioxus/") {
                 let dx_feature = feature.trim_start_matches("dioxus/");
-                let auto = Platform::autodetect_from_cargo_feature(dx_feature);
+                let auto = Renderer::autodetect_from_cargo_feature(dx_feature);
                 if let Some(auto) = auto {
-                    platforms.push(auto);
+                    renderers.push(auto);
                 }
             }
 
@@ -2985,23 +2964,23 @@ impl BuildRequest {
                 for feature in internal_feature {
                     if feature.starts_with("dioxus/") {
                         let dx_feature = feature.trim_start_matches("dioxus/");
-                        let auto = Platform::autodetect_from_cargo_feature(dx_feature);
+                        let auto = Renderer::autodetect_from_cargo_feature(dx_feature);
                         if let Some(auto) = auto {
-                            platforms.push(auto);
+                            renderers.push(auto);
                         }
                     }
                 }
             }
         }
 
-        platforms.sort();
-        platforms.dedup();
+        renderers.sort();
+        renderers.dedup();
 
-        platforms
+        renderers
     }
 
     /// Gather the features that are enabled for the package
-    fn platformless_features(package: &krates::cm::Package) -> Vec<String> {
+    fn rendererless_features(package: &krates::cm::Package) -> Vec<String> {
         let Some(default) = package.features.get("default") else {
             return Vec::new();
         };
@@ -3014,7 +2993,7 @@ impl BuildRequest {
             // Don't keep features that point to a platform via dioxus/blah
             if feature.starts_with("dioxus/") {
                 let dx_feature = feature.trim_start_matches("dioxus/");
-                if Platform::autodetect_from_cargo_feature(dx_feature).is_some() {
+                if Renderer::autodetect_from_cargo_feature(dx_feature).is_some() {
                     continue 'top;
                 }
             }
@@ -3024,7 +3003,7 @@ impl BuildRequest {
                 for feature in internal_feature {
                     if feature.starts_with("dioxus/") {
                         let dx_feature = feature.trim_start_matches("dioxus/");
-                        if Platform::autodetect_from_cargo_feature(dx_feature).is_some() {
+                        if Renderer::autodetect_from_cargo_feature(dx_feature).is_some() {
                             continue 'top;
                         }
                     }
@@ -3136,36 +3115,35 @@ impl BuildRequest {
     /// todo(jon): use handlebars templates instead of these prebaked templates
     async fn write_metadata(&self) -> Result<()> {
         // write the Info.plist file
-        match self.platform {
-            Platform::MacOS => {
+        match self.bundle {
+            BundleFormat::MacOS => {
                 let dest = self.root_dir().join("Contents").join("Info.plist");
-                let plist = self.info_plist_contents(self.platform)?;
+                let plist = self.info_plist_contents(self.bundle)?;
                 std::fs::write(dest, plist)?;
             }
 
-            Platform::Ios => {
+            BundleFormat::Ios => {
                 let dest = self.root_dir().join("Info.plist");
-                let plist = self.info_plist_contents(self.platform)?;
+                let plist = self.info_plist_contents(self.bundle)?;
                 std::fs::write(dest, plist)?;
             }
 
             // AndroidManifest.xml
             // er.... maybe even all the kotlin/java/gradle stuff?
-            Platform::Android => {}
+            BundleFormat::Android => {}
 
             // Probably some custom format or a plist file (haha)
             // When we do the proper bundle, we'll need to do something with wix templates, I think?
-            Platform::Windows => {}
+            BundleFormat::Windows => {}
 
             // eventually we'll create the .appimage file, I guess?
-            Platform::Linux => {}
+            BundleFormat::Linux => {}
 
             // These are served as folders, not appimages, so we don't need to do anything special (I think?)
             // Eventually maybe write some secrets/.env files for the server?
             // We could also distribute them as a deb/rpm for linux and msi for windows
-            Platform::Web => {}
-            Platform::Server => {}
-            Platform::Liveview => {}
+            BundleFormat::Web => {}
+            BundleFormat::Server => {}
         }
 
         Ok(())
@@ -3173,8 +3151,8 @@ impl BuildRequest {
 
     /// Run the optimizers, obfuscators, minimizers, signers, etc
     async fn optimize(&self, ctx: &BuildContext) -> Result<()> {
-        match self.platform {
-            Platform::Web => {
+        match self.bundle {
+            BundleFormat::Web => {
                 // Compress the asset dir
                 // If pre-compressing is enabled, we can pre_compress the wasm-bindgen output
                 let pre_compress = self.should_pre_compress_web_assets(self.release);
@@ -3189,13 +3167,12 @@ impl BuildRequest {
                     .unwrap()?;
                 }
             }
-            Platform::MacOS => {}
-            Platform::Windows => {}
-            Platform::Linux => {}
-            Platform::Ios => {}
-            Platform::Android => {}
-            Platform::Server => {}
-            Platform::Liveview => {}
+            BundleFormat::MacOS
+            | BundleFormat::Windows
+            | BundleFormat::Linux
+            | BundleFormat::Ios
+            | BundleFormat::Android
+            | BundleFormat::Server => {}
         }
 
         Ok(())
@@ -3209,7 +3186,7 @@ impl BuildRequest {
 
     /// Check if the wasm output should be bundled to an asset type app.
     fn should_bundle_to_asset(&self) -> bool {
-        self.release && !self.wasm_split && self.platform == Platform::Web
+        self.release && !self.wasm_split && self.bundle == BundleFormat::Web
     }
 
     /// Bundle the web app
@@ -3509,7 +3486,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         }
     }
 
-    fn info_plist_contents(&self, platform: Platform) -> Result<String> {
+    fn info_plist_contents(&self, bundle: BundleFormat) -> Result<String> {
         #[derive(Serialize)]
         pub struct InfoPlistData {
             pub display_name: String,
@@ -3520,13 +3497,13 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
 
         // Attempt to use the user's manually specified
         let _app = &self.config.application;
-        match platform {
-            Platform::MacOS => {
+        match bundle {
+            BundleFormat::MacOS => {
                 if let Some(macos_info_plist) = _app.macos_info_plist.as_deref() {
                     return Ok(std::fs::read_to_string(macos_info_plist)?);
                 }
             }
-            Platform::Ios => {
+            BundleFormat::Ios => {
                 if let Some(macos_info_plist) = _app.ios_info_plist.as_deref() {
                     return Ok(std::fs::read_to_string(macos_info_plist)?);
                 }
@@ -3534,8 +3511,8 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
             _ => {}
         }
 
-        match platform {
-            Platform::MacOS => handlebars::Handlebars::new()
+        match bundle {
+            BundleFormat::MacOS => handlebars::Handlebars::new()
                 .render_template(
                     include_str!("../../assets/macos/mac.plist.hbs"),
                     &InfoPlistData {
@@ -3546,7 +3523,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
                     },
                 )
                 .map_err(|e| e.into()),
-            Platform::Ios => handlebars::Handlebars::new()
+            BundleFormat::Ios => handlebars::Handlebars::new()
                 .render_template(
                     include_str!("../../assets/ios/ios.plist.hbs"),
                     &InfoPlistData {
@@ -3565,7 +3542,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
     ///
     /// This might include codesigning, zipping, creating an appimage, etc
     async fn assemble(&self, ctx: &BuildContext) -> Result<()> {
-        if let Platform::Android = self.platform {
+        if self.bundle == BundleFormat::Android {
             ctx.status_running_gradle();
 
             // When the build mode is set to release and there is an Android signature configuration, use assembleRelease
@@ -3665,7 +3642,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         static INITIALIZED: OnceLock<Result<()>> = OnceLock::new();
 
         let success = INITIALIZED.get_or_init(|| {
-            if self.platform != Platform::Server {
+            if self.bundle != BundleFormat::Server {
                 _ = remove_dir_all(self.exe_dir());
             }
 
@@ -3688,7 +3665,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
             // we could download the templates from somewhere (github?) but after having banged my head against
             // cargo-mobile2 for ages, I give up with that. We're literally just going to hardcode the templates
             // by writing them here.
-            if let Platform::Android = self.platform {
+            if self.bundle == BundleFormat::Android {
                 self.build_android_app_dir()?;
             }
 
@@ -3703,14 +3680,14 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
     }
 
     pub(crate) fn asset_dir(&self) -> PathBuf {
-        match self.platform {
-            Platform::MacOS => self
+        match self.bundle {
+            BundleFormat::MacOS => self
                 .root_dir()
                 .join("Contents")
                 .join("Resources")
                 .join("assets"),
 
-            Platform::Android => self
+            BundleFormat::Android => self
                 .root_dir()
                 .join("app")
                 .join("src")
@@ -3718,12 +3695,11 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
                 .join("assets"),
 
             // everyone else is soooo normal, just app/assets :)
-            Platform::Web
-            | Platform::Ios
-            | Platform::Windows
-            | Platform::Linux
-            | Platform::Server
-            | Platform::Liveview => self.root_dir().join("assets"),
+            BundleFormat::Web
+            | BundleFormat::Ios
+            | BundleFormat::Windows
+            | BundleFormat::Linux
+            | BundleFormat::Server => self.root_dir().join("assets"),
         }
     }
 
@@ -3738,12 +3714,12 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
     ///
     /// todo(jon): investigate if we need to put .wasm in `wasm`. It kinda leaks implementation details, which ideally we don't want to do.
     fn exe_dir(&self) -> PathBuf {
-        match self.platform {
-            Platform::MacOS => self.root_dir().join("Contents").join("MacOS"),
-            Platform::Web => self.root_dir().join("wasm"),
+        match self.bundle {
+            BundleFormat::MacOS => self.root_dir().join("Contents").join("MacOS"),
+            BundleFormat::Web => self.root_dir().join("wasm"),
 
             // Android has a whole build structure to it
-            Platform::Android => self
+            BundleFormat::Android => self
                 .root_dir()
                 .join("app")
                 .join("src")
@@ -3752,11 +3728,10 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
                 .join(AndroidTools::android_jnilib(&self.triple)),
 
             // these are all the same, I think?
-            Platform::Windows
-            | Platform::Linux
-            | Platform::Ios
-            | Platform::Server
-            | Platform::Liveview => self.root_dir(),
+            BundleFormat::Windows
+            | BundleFormat::Linux
+            | BundleFormat::Ios
+            | BundleFormat::Server => self.root_dir(),
         }
     }
 
@@ -3797,12 +3772,12 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
     pub(crate) async fn verify_tooling(&self, ctx: &BuildContext) -> Result<()> {
         ctx.status_installing_tooling();
 
-        match self.platform {
-            Platform::Web => self.verify_web_tooling().await?,
-            Platform::Ios => self.verify_ios_tooling().await?,
-            Platform::Android => self.verify_android_tooling().await?,
-            Platform::Linux => self.verify_linux_tooling().await?,
-            Platform::MacOS | Platform::Windows | Platform::Server | Platform::Liveview => {}
+        match self.bundle {
+            BundleFormat::Web => self.verify_web_tooling().await?,
+            BundleFormat::Ios => self.verify_ios_tooling().await?,
+            BundleFormat::Android => self.verify_android_tooling().await?,
+            BundleFormat::Linux => self.verify_linux_tooling().await?,
+            BundleFormat::MacOS | BundleFormat::Windows | BundleFormat::Server => {}
         }
 
         Ok(())
@@ -3945,8 +3920,8 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
     }
 
     async fn create_patch_cache(&self, exe: &Path) -> Result<HotpatchModuleCache> {
-        let exe = match self.platform {
-            Platform::Web => self.wasm_bindgen_wasm_output_file(),
+        let exe = match self.bundle {
+            BundleFormat::Web => self.wasm_bindgen_wasm_output_file(),
             _ => exe.to_path_buf(),
         };
 
@@ -4151,7 +4126,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         self.base_path
             .as_deref()
             .or(self.config.web.app.base_path.as_deref())
-            .filter(|_| matches!(self.platform, Platform::Web | Platform::Server))
+            .filter(|_| matches!(self.bundle, BundleFormat::Web | BundleFormat::Server))
     }
 
     /// Get the normalized base path for the application with `/` trimmed from both ends. If the base path is not set, this will return `.`.
@@ -4179,13 +4154,13 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
             return Ok(());
         }
 
-        match self.platform {
+        match self.bundle {
             // Boot an iOS simulator if one is not already running.
             //
             // We always choose the most recently opened simulator based on the xcrun list.
             // Note that simulators can be running but the simulator app itself is not open.
             // Calling `open::that` is always fine, even on running apps, since apps are singletons.
-            Platform::Ios => {
+            BundleFormat::Ios => {
                 #[derive(Deserialize, Debug)]
                 struct XcrunListJson {
                     // "com.apple.CoreSimulator.SimRuntime.iOS-18-4": [{}, {}, {}]
@@ -4250,7 +4225,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
                 open::that_detached(path_to_sim)?;
             }
 
-            Platform::Android => {
+            BundleFormat::Android => {
                 let tools = self.workspace.android_tools()?;
                 tokio::spawn(async move {
                     let emulator = tools.emulator();
@@ -4343,7 +4318,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         // The default dioxus experience is to lightly optimize the web build, both in debug and release
         // Note that typically in release builds, you would strip debuginfo, but we actually choose to do
         // that with wasm-opt tooling instead.
-        if matches!(self.platform, Platform::Web) {
+        if matches!(self.bundle, BundleFormat::Web) {
             match self.release {
                 true => args.push(r#"profile.web.opt-level="s""#.to_string()),
                 false => args.push(r#"profile.web.opt-level="1""#.to_string()),

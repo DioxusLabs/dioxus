@@ -1,5 +1,5 @@
+use crate::BuildMode;
 use crate::{cli::*, AppBuilder, BuildRequest, Workspace};
-use crate::{BuildMode, Platform, PlatformArg};
 
 use super::target::TargetArgs;
 
@@ -48,7 +48,7 @@ impl BuildArgs {
         // This involves modifying the BuildRequest to add the client features and server features
         // only if we can properly detect that it's a fullstack build. Careful with this, since
         // we didn't build BuildRequest to be generally mutable.
-        let default_server = client.enabled_platforms.contains(&Platform::Server);
+        let default_server = client.enabled_renderers.contains(&crate::Renderer::Server);
 
         // Make sure we set the fullstack platform so we actually build the fullstack variant
         // Users need to enable "fullstack" in their default feature set.
@@ -119,8 +119,8 @@ impl CommandWithPlatformOverrides<BuildArgs> {
             // Copy the main target from the client to the server
             let main_target = client.main_target.clone();
             let mut server_args = server_args.clone();
-            // The platform in the server build is always set to Server
-            server_args.platform = Some(PlatformArg::Server);
+            // The renderer in the server build is always set to Server
+            server_args.renderer = Some(crate::Renderer::Server);
             server =
                 Some(BuildRequest::new(&server_args, Some(main_target), workspace.clone()).await?);
         }

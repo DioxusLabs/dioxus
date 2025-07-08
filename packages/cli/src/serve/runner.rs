@@ -1,7 +1,7 @@
 use super::{AppBuilder, ServeUpdate, WebServer};
 use crate::{
     platform_override::CommandWithPlatformOverrides, BuildArtifacts, BuildId, BuildMode,
-    BuildTargets, BuilderUpdate, Error, HotpatchModuleCache, Platform, Result, ServeArgs,
+    BuildTargets, BuilderUpdate, BundleFormat, Error, HotpatchModuleCache, Result, ServeArgs,
     TailwindCli, TraceSrc, Workspace,
 };
 use anyhow::Context;
@@ -150,8 +150,8 @@ impl AppServer {
         // All servers will end up behind us (the devserver) but on a different port
         // This is so we can serve a loading screen as well as devtools without anything particularly fancy
         let fullstack = server.is_some();
-        let should_proxy_port = match client.platform {
-            Platform::Server => true,
+        let should_proxy_port = match client.bundle {
+            BundleFormat::Server => true,
             _ => fullstack && !ssg,
         };
 
@@ -506,7 +506,8 @@ impl AppServer {
                 use crate::styles::NOTE_STYLE;
                 tracing::info!(dx_src = ?TraceSrc::Dev, "Hotreloading: {NOTE_STYLE}{}{NOTE_STYLE:#}", file);
 
-                if !server.has_hotreload_sockets() && self.client.build.platform != Platform::Web {
+                if !server.has_hotreload_sockets() && self.client.build.bundle != BundleFormat::Web
+                {
                     tracing::warn!("No clients to hotreload - try reloading the app!");
                 }
 
@@ -524,8 +525,8 @@ impl AppServer {
         devserver: &mut WebServer,
     ) -> Result<()> {
         // Make sure to save artifacts regardless of if we're opening the app or not
-        match artifacts.platform {
-            Platform::Server => {
+        match artifacts.bundle {
+            BundleFormat::Server => {
                 if let Some(server) = self.server.as_mut() {
                     server.artifacts = Some(artifacts.clone());
                 }
@@ -631,7 +632,7 @@ impl AppServer {
 
         // If the client is running on Android, we need to remove the port forwarding
         // todo: use the android tools "adb"
-        if matches!(self.client.build.platform, Platform::Android) {
+        if matches!(self.client.build.bundle, BundleFormat::Android) {
             if let Err(err) = Command::new(&self.workspace.android_tools()?.adb)
                 .arg("reverse")
                 .arg("--remove")
@@ -756,7 +757,7 @@ impl AppServer {
             BuildId::CLIENT => {
                 // multiple tabs on web can cause this to be called incorrectly, and it doesn't
                 // make any sense anyways
-                if self.client.build.platform != Platform::Web {
+                if self.client.build.bundle != BundleFormat::Web {
                     if let Some(aslr_reference) = aslr_reference {
                         self.client.aslr_reference = Some(aslr_reference);
                     }
@@ -774,7 +775,7 @@ impl AppServer {
         }
 
         // Assign the runtime asset dir to the runner
-        if self.client.build.platform == Platform::Ios {
+        if self.client.build.bundle == BundleFormat::Ios {
             // xcrun simctl get_app_container booted com.dioxuslabs
             let res = Command::new("xcrun")
                 .arg("simctl")
