@@ -268,6 +268,24 @@ impl AndroidTools {
 
         triple
     }
+
+    pub(crate) fn libcpp_shared(&self, triple: &Triple) -> PathBuf {
+        // The libc++_shared.so is usually located in the sysroot under:
+        // "~/Library/Android/sdk/ndk/25.2.9519653/toolchains/llvm/prebuilt/darwin-x86_64/sysroot/usr/lib/<arch>/libc++_shared.so"
+        // or similar, depending on the platform.
+        self.sysroot()
+            .join("usr")
+            .join("lib")
+            .join(Self::sysroot_target(&triple.to_string()))
+            .join("libc++_shared.so")
+    }
+
+    pub(crate) fn sysroot_target(rust_target: &str) -> &str {
+        (match rust_target {
+            "armv7-linux-androideabi" => "arm-linux-androideabi",
+            _ => rust_target,
+        }) as _
+    }
 }
 
 fn var_or_debug(name: &str) -> Option<PathBuf> {

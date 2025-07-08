@@ -660,7 +660,6 @@ impl BuildRequest {
                 "-Clink-arg=-llog".to_string(),
                 "-Clink-arg=-lOpenSLES".to_string(),
                 "-Clink-arg=-lc++".to_string(),
-                "-Clink-arg=-static-libstdc++".to_string(),
                 "-Clink-arg=-lc++abi".to_string(),
                 "-Clink-arg=-Wl,--export-dynamic".to_string(),
                 format!(
@@ -1095,6 +1094,7 @@ impl BuildRequest {
             // todo - how do we handle windows dlls? we don't want to bundle the system dlls
             // for now, we don't do anything with dlls, and only use .dylibs and .so files
 
+            // Write dylibs and dlls to the frameworks folder
             if arg.ends_with(".dylib") | arg.ends_with(".so") {
                 let from = PathBuf::from(arg);
                 let to = framework_dir.join(from.file_name().unwrap());
@@ -1120,12 +1120,16 @@ impl BuildRequest {
                     std::fs::copy(from, to)?;
                 }
             }
-        }
 
-        if self.platform == Platform::Android {
-            std::fs::copy("/Users/jonathankelley/Library/Android/sdk/ndk/29.0.13113456/toolchains/llvm/prebuilt/darwin-x86_64/sysroot/usr/lib/aarch64-linux-android/libc++_shared.so",
-                          framework_dir.join("libc++_shared.so"))
+            // On android, the c++_static flag means we need to copy the libc++_shared.so precompiled
+            // library to the jniLibs folder
+            if arg.contains("-lc++_static") && self.platform == Platform::Android {
+                std::fs::copy(
+                    self.workspace.android_tools()?.libcpp_shared(&self.triple),
+                    framework_dir.join("libc++_shared.so"),
+                )
                 .with_context(|| "Failed to copy libc++_shared.so into bundle")?;
+            }
         }
 
         Ok(())
@@ -1904,7 +1908,10 @@ impl BuildRequest {
         let linker = self.select_linker()?;
 
         tracing::trace!("Fat linking with args: {:?} {:#?}", linker, args);
-        tracing::trace!("Fat linking with env: {:#?}", rustc_args.envs);
+        tracing::trace!("Fat linking with env:");
+        for e in rustc_args.envs.iter() {
+            tracing::trace!("  {}={}", e.0, e.1);
+        }
 
         // Run the linker directly!
         let out_arg = match self.triple.operating_system {
@@ -2502,7 +2509,6 @@ impl BuildRequest {
 
         // Environment variables for cargo
         let cargo_ar_key = cargo_env_target_cfg(&triple, "ar");
-        let cargo_linker_key = cargo_env_target_cfg(&triple, "linker");
         let cargo_rust_flags_key = cargo_env_target_cfg(&triple, "rustflags");
         let bindgen_clang_args_key =
             format!("BINDGEN_EXTRA_CLANG_ARGS_{}", &triple.replace('-', "_"));
