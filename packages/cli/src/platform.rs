@@ -1,8 +1,8 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use std::str::FromStr;
-use target_lexicon::{Environment, OperatingSystem, Triple};
+use target_lexicon::{Architecture, Environment, OperatingSystem, Triple};
 
 use crate::Workspace;
 
@@ -116,6 +116,15 @@ impl Renderer {
             "liveview" => Some(Self::Liveview),
             "server" => Some(Self::Server),
             _ => None,
+        }
+    }
+
+    pub(crate) fn default_platform(&self) -> Platform {
+        match self {
+            Renderer::Webview | Renderer::Native | Renderer::Server | Renderer::Liveview => {
+                Platform::TARGET_PLATFORM.unwrap()
+            }
+            Renderer::Web => Platform::Wasm,
         }
     }
 }
@@ -271,6 +280,15 @@ impl Display for BundleFormat {
 }
 
 impl BundleFormat {
+    #[cfg(target_os = "macos")]
+    pub(crate) const TARGET_PLATFORM: Option<Self> = Some(Self::MacOS);
+    #[cfg(target_os = "windows")]
+    pub(crate) const TARGET_PLATFORM: Option<Self> = Some(Self::Windows);
+    #[cfg(target_os = "linux")]
+    pub(crate) const TARGET_PLATFORM: Option<Self> = Some(Self::Linux);
+    #[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos")))]
+    pub(crate) const TARGET_PLATFORM: Option<Self> = None;
+
     /// Get the name of the folder we need to generate for this platform
     ///
     /// Note that web and server share the same platform folder since we'll export the web folder as a bundle on its own
@@ -309,6 +327,35 @@ impl BundleFormat {
             Self::Ios => "Mobile iOS",
             Self::Android => "Mobile Android",
             Self::Server => "Server",
+        }
+    }
+
+    pub(crate) fn from_target(target: &Triple, renderer: Option<Renderer>) -> Result<BundleFormat> {
+        match (
+            renderer,
+            target.architecture,
+            target.environment,
+            target.operating_system,
+        ) {
+            // The server always uses the server bundle format
+            (Some(Renderer::Server), _, _, _) => Ok(BundleFormat::Server),
+            // The web renderer always uses the web bundle format
+            (Some(Renderer::Web), _, _, _) => Ok(BundleFormat::Web),
+            // Otherwise, guess it based on the target
+            // Assume any wasm32 or wasm64 target is a web target
+            (_, Architecture::Wasm32 | Architecture::Wasm64, _, _) => Ok(BundleFormat::Web),
+            // For native targets, we need to determine the bundle format based on the OS
+            (_, _, Environment::Android, _) => Ok(BundleFormat::Android),
+            (_, _, _, OperatingSystem::IOS(_)) => Ok(BundleFormat::Ios),
+            (_, _, _, OperatingSystem::MacOSX(_) | OperatingSystem::Darwin(_)) => {
+                Ok(BundleFormat::MacOS)
+            }
+            (_, _, _, OperatingSystem::Linux) => Ok(BundleFormat::Linux),
+            (_, _, _, OperatingSystem::Windows) => Ok(BundleFormat::Windows),
+            // If we don't recognize the target, default to desktop
+            _ => BundleFormat::TARGET_PLATFORM.context(
+                "failed to determine bundle format. Try setting the `--bundle` flag manually",
+            ),
         }
     }
 }

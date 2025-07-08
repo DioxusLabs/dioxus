@@ -317,8 +317,8 @@
 
 use crate::{
     AndroidTools, BuildContext, BundleFormat, DioxusConfig, Error, LinkAction, LinkerFlavor,
-    Platform, PlatformArg, Renderer, Result, RustcArgs, TargetArgs, TraceSrc, WasmBindgen,
-    WasmOptConfig, Workspace, DX_RUSTC_WRAPPER_ENV_VAR,
+    Platform, Renderer, Result, RustcArgs, TargetArgs, TraceSrc, WasmBindgen, WasmOptConfig,
+    Workspace, DX_RUSTC_WRAPPER_ENV_VAR,
 };
 use anyhow::Context;
 use cargo_metadata::diagnostic::Diagnostic;
@@ -370,7 +370,6 @@ pub(crate) struct BuildRequest {
     pub(crate) crate_target: krates::cm::Target,
     pub(crate) profile: String,
     pub(crate) release: bool,
-    pub(crate) renderer: Renderer,
     pub(crate) bundle: BundleFormat,
     pub(crate) enabled_renderers: Vec<Renderer>,
     pub(crate) triple: Triple,
@@ -546,39 +545,32 @@ impl BuildRequest {
 
         // The crate might enable multiple platforms or no platforms at
         // We collect all the platforms it enables first and then select based on the --platform arg
-        let enabled_platforms =
-            Self::enabled_cargo_toml_platforms(main_package, args.no_default_features);
+        let enabled_renderers =
+            Self::enabled_cargo_toml_renderers(main_package, args.no_default_features);
         let using_dioxus_explicitly = main_package
             .dependencies
             .iter()
             .any(|dep| dep.name == "dioxus");
 
-        // Infer the renderer from platform argument if the platform argument is "native" or "desktop"
-        let renderer = args.renderer.or(match args.platform {
-            Some(PlatformArg::Desktop) => Some(Renderer::Webview),
-            Some(PlatformArg::Native) => Some(Renderer::Native),
-            _ => None,
-        });
-
         let mut features = args.features.clone();
         let mut no_default_features = args.no_default_features;
 
-        let platform: Platform = match args.platform {
-            Some(platform_arg) => match enabled_platforms.len() {
-                0 => Platform::from(platform_arg),
+        let renderer: Option<Renderer> = match args.renderer {
+            Some(renderer) => match enabled_renderers.len() {
+                0 => Some(renderer),
 
                 // The user passed --platform XYZ but already has `default = ["ABC"]` in their Cargo.toml or dioxus = { features = ["abc"] }
                 // We want to strip out the default platform and use the one they passed, setting no-default-features
                 _ => {
                     features.extend(Self::rendererless_features(main_package));
                     no_default_features = true;
-                    Platform::from(platform_arg)
+                    Some(renderer)
                 }
             },
-            None if !using_dioxus_explicitly => Platform::TARGET_PLATFORM.unwrap(),
-            None => match enabled_platforms.len() {
-                0 => Platform::TARGET_PLATFORM.unwrap(),
-                1 => enabled_platforms[0],
+            None if !using_dioxus_explicitly => None,
+            None => match enabled_renderers.as_slice() {
+                [] => Renderer::Webview.into(), // Default to webview if no platform is specified and no dioxus features are enabled
+                [renderer] => Some(*renderer),
                 _ => {
                     return Err(anyhow::anyhow!(
                         "Multiple platforms enabled in Cargo.toml. Please specify a platform with `--platform` or set a default platform in Cargo.toml"
@@ -588,11 +580,41 @@ impl BuildRequest {
             },
         };
 
+        // We usually use the simulator unless --device is passed *or* a device is detected by probing.
+        // For now, though, since we don't have probing, it just defaults to false
+        // Tools like xcrun/adb can detect devices
+        let device = args.device;
+
+        // Resolve the platform args into a concrete platform
+        let mut platform: Option<Platform> = args.platform.map(|p| p.into());
+        // If the user didn't pass a platform, but we have a renderer, get the default platform for that renderer
+        if let (None, Some(renderer)) = (platform, renderer) {
+            platform = Some(renderer.default_platform());
+        };
+
+        // We want a real triple to build with, so we'll autodetect it if it's not provided
+        // The triple ends up being a source of truth for us later hence all this work to figure it out
+        let triple = match (args.target.clone(), platform) {
+            // If there is an explicit target, use it
+            (Some(target), _) => target,
+            // If there is a platform, use it to determine the target triple
+            (None, Some(platform)) => platform.into_target(device, &workspace).await?,
+            _ => Triple::host(),
+        };
+
+        // Resolve the bundle format based on the combination of the target triple and renderer
+        let bundle = match args.bundle {
+            // If there is an explicit bundle format, use it
+            Some(bundle) => bundle,
+            // Otherwise guess a bundle format based on the target triple and renderer
+            None => BundleFormat::from_target(&triple, renderer)?,
+        };
+
         // Add any features required to turn on the client
-        if using_dioxus_explicitly {
+        if let Some(renderer) = renderer {
             features.push(Self::feature_for_platform_and_renderer(
                 main_package,
-                platform,
+                &triple,
                 renderer,
             ));
         }
@@ -602,7 +624,7 @@ impl BuildRequest {
         // We might want to move some of these profiles into dioxus.toml and make them "virtual".
         let profile = match args.profile.clone() {
             Some(profile) => profile,
-            None => platform.profile_name(args.release),
+            None => bundle.profile_name(args.release),
         };
 
         // Determining release mode is based on the profile, actually, so we need to check that
@@ -615,18 +637,6 @@ impl BuildRequest {
             .clone()
             .unwrap_or_else(|| main_package.name.clone());
 
-        // We usually use the simulator unless --device is passed *or* a device is detected by probing.
-        // For now, though, since we don't have probing, it just defaults to false
-        // Tools like xcrun/adb can detect devices
-        let device = args.device;
-
-        // We want a real triple to build with, so we'll autodetect it if it's not provided
-        // The triple ends up being a source of truth for us later hence all this work to figure it out
-        let triple = match args.target.clone() {
-            Some(target) => target,
-            None => platform.into_target(device, &workspace).await?,
-        };
-
         // Somethings we override are also present in the user's config.
         // If we can't get them by introspecting cargo, then we need to get them from the config
         //
@@ -637,7 +647,7 @@ impl BuildRequest {
         let mut custom_linker = cargo_config.linker(triple.to_string()).ok().flatten();
         let mut rustflags = cargo_config2::Flags::default();
 
-        if matches!(platform, Platform::Android) {
+        if matches!(bundle, BundleFormat::Android) {
             rustflags.flags.extend([
                 "-Clink-arg=-landroid".to_string(),
                 "-Clink-arg=-llog".to_string(),
@@ -666,7 +676,7 @@ impl BuildRequest {
         }
 
         // If no custom linker is set, then android falls back to us as the linker
-        if custom_linker.is_none() && platform == Platform::Android {
+        if custom_linker.is_none() && bundle == BundleFormat::Android {
             custom_linker = Some(workspace.android_tools()?.android_cc(&triple));
         }
 
@@ -717,8 +727,8 @@ impl BuildRequest {
         );
 
         Ok(Self {
-            renderer,
             features,
+            bundle,
             no_default_features,
             crate_package,
             crate_target,
@@ -810,7 +820,7 @@ impl BuildRequest {
         ctx.status_starting_build(crate_count);
 
         let mut cmd = self.build_command(ctx)?;
-        tracing::debug!(dx_src = ?TraceSrc::Build, "Executing cargo for {} using {}", self.platform, self.triple);
+        tracing::debug!(dx_src = ?TraceSrc::Build, "Executing cargo for {} using {}", self.bundle, self.triple);
 
         let mut child = cmd
             .stdout(Stdio::piped())
@@ -950,7 +960,7 @@ impl BuildRequest {
         let assets = self.collect_assets(&exe, ctx)?;
         let time_end = SystemTime::now();
         let mode = ctx.mode.clone();
-        let platform = self.platform;
+        let bundle = self.bundle;
 
         tracing::debug!(
             "Build completed successfully in {}us: {:?}",
@@ -960,7 +970,7 @@ impl BuildRequest {
 
         Ok(BuildArtifacts {
             time_end,
-            platform,
+            bundle,
             exe,
             direct_rustc,
             time_start,
@@ -2909,7 +2919,7 @@ impl BuildRequest {
     /// Return the platforms that are enabled for the package
     ///
     /// Ideally only one platform is enabled but we need to be able to
-    pub(crate) fn enabled_cargo_toml_platforms(
+    pub(crate) fn enabled_cargo_toml_renderers(
         package: &krates::cm::Package,
         no_default_features: bool,
     ) -> Vec<Renderer> {
