@@ -22,6 +22,7 @@ export class NativeInterpreter extends JSChannel_ {
   ipc: any;
   edits: WebSocket;
   eventsPath: string;
+  editsPath: string;
   kickStylesheets: boolean;
   queuedBytes: ArrayBuffer[] = [];
 
@@ -31,7 +32,7 @@ export class NativeInterpreter extends JSChannel_ {
 
   constructor(editsPath: string, eventsPath: string) {
     super();
-    this.edits = new WebSocket(editsPath);
+    this.editsPath = editsPath;
     this.eventsPath = eventsPath;
     this.kickStylesheets = false;
   }
@@ -384,6 +385,12 @@ export class NativeInterpreter extends JSChannel_ {
   }
 
   waitForRequest(headless: boolean) {
+    this.edits = new WebSocket(this.editsPath);
+    // Reconnect if the websocket closes. This may happen on ios when the app is suspended
+    // in the background: https://github.com/DioxusLabs/dioxus/issues/4374
+    this.edits.onclose = () => {
+      this.waitForRequest(headless);
+    };
     this.edits.onmessage = (event) => {
       const data = event.data;
       if (data instanceof Blob) {

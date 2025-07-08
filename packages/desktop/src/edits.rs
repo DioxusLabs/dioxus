@@ -209,23 +209,40 @@ impl EditWebsocket {
             let (edits_outgoing, mut edits_incoming_rx) =
                 futures_channel::mpsc::unbounded::<MsgPair>();
 
+            let connections_ = connections.clone();
             // Spawn a task to handle the websocket connection
             std::thread::spawn(move || {
                 // Wait until there are edits ready to send
                 while let Some(msg) = edits_incoming_rx.next().block_on() {
                     // Send the edits to the webview
-                    if let Err(e) = websocket.send(tungstenite::Message::Binary(msg.edits.into())) {
+                    if let Err(e) =
+                        websocket.send(tungstenite::Message::Binary(msg.edits.clone().into()))
+                    {
                         tracing::error!("Error sending edits to webview: {}", e);
                         break;
                     }
 
                     // Wait for the webview to apply the edits
-                    while let Ok(msg) = websocket.read() {
-                        match msg {
+                    while let Ok(ws_msg) = websocket.read() {
+                        match ws_msg {
                             // We expect the webview to send a binary message when it has applied the edits
                             // This is a signal that we can continue processing
                             tungstenite::Message::Binary(_) => break,
-                            tungstenite::Message::Close(_) => return,
+                            // If the websocket closes, switch back to the pending state and
+                            // re-queue the edits that haven't been acknowledged yet
+                            tungstenite::Message::Close(_) => {
+                                tracing::trace!(
+                                    "Webview {} closed the connection",
+                                    location.webview_id
+                                );
+                                let mut connection = WebviewConnectionState::default();
+                                connection.add_message_pair(msg);
+                                connections_
+                                    .write()
+                                    .unwrap()
+                                    .insert(location.webview_id, connection);
+                                return;
+                            }
                             _ => {}
                         }
                     }
@@ -285,31 +302,8 @@ impl EditWebsocket {
 
     fn send_edits(&mut self, webview: u32, edits: Vec<u8>) -> oneshot::Receiver<()> {
         let mut connections_mut = self.connections.write().unwrap();
-        let connection =
-            connections_mut
-                .entry(webview)
-                .or_insert_with(|| WebviewConnectionState::Pending {
-                    pending: VecDeque::new(),
-                });
-
-        match connection {
-            WebviewConnectionState::Pending { pending: queue } => {
-                let (response_sender, response_receiver) = oneshot::channel();
-                queue.push_back(MsgPair {
-                    edits,
-                    response: response_sender,
-                });
-                response_receiver
-            }
-            WebviewConnectionState::Connected { edits_outgoing } => {
-                let (response_sender, response_receiver) = oneshot::channel();
-                _ = edits_outgoing.unbounded_send(MsgPair {
-                    edits,
-                    response: response_sender,
-                });
-                response_receiver
-            }
-        }
+        let connection = connections_mut.entry(webview).or_default();
+        connection.add_message(edits)
     }
 }
 
@@ -322,6 +316,37 @@ enum WebviewConnectionState {
     Connected {
         edits_outgoing: UnboundedSender<MsgPair>,
     },
+}
+
+impl Default for WebviewConnectionState {
+    fn default() -> Self {
+        WebviewConnectionState::Pending {
+            pending: VecDeque::new(),
+        }
+    }
+}
+
+impl WebviewConnectionState {
+    fn add_message(&mut self, edits: Vec<u8>) -> oneshot::Receiver<()> {
+        let (response_sender, response_receiver) = oneshot::channel();
+        let pair = MsgPair {
+            edits,
+            response: response_sender,
+        };
+        self.add_message_pair(pair);
+        response_receiver
+    }
+
+    fn add_message_pair(&mut self, pair: MsgPair) {
+        match self {
+            WebviewConnectionState::Pending { pending: queue } => {
+                queue.push_back(pair);
+            }
+            WebviewConnectionState::Connected { edits_outgoing } => {
+                _ = edits_outgoing.unbounded_send(pair);
+            }
+        }
+    }
 }
 
 struct MsgPair {
