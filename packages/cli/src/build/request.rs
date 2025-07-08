@@ -2651,7 +2651,7 @@ impl BuildRequest {
 
         let output = tokio::process::Command::new("cargo")
             .arg("+nightly")
-            .arg("build")
+            .arg("rustc")
             .arg("--unit-graph")
             .arg("-Z")
             .arg("unstable-options")
@@ -2665,6 +2665,10 @@ impl BuildRequest {
             .await?;
 
         if !output.status.success() {
+            tracing::trace!(
+                "Failed to get unit count: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
             bail!("Failed to get unit count");
         }
 

@@ -478,6 +478,11 @@ impl AppServer {
             }
         }
 
+        // If the client is in a failed state, any changes to rsx should trigger a rebuild/hotpatch
+        if self.client.stage == BuildStage::Failed && !templates.is_empty() {
+            needs_full_rebuild = true
+        }
+
         // todo - we need to distinguish between hotpatchable rebuilds and true full rebuilds.
         //        A full rebuild is required when the user modifies static initializers which we haven't wired up yet.
         if needs_full_rebuild {
