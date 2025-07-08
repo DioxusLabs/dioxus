@@ -260,6 +260,15 @@ impl Renderer {
             Renderer::Web => PlatformArg::Wasm,
         }
     }
+
+    pub(crate) fn from_target(triple: &Triple) -> Self {
+        match triple.architecture {
+            // Assume any wasm32 or wasm64 target is a web target
+            Architecture::Wasm32 | Architecture::Wasm64 => Self::Web,
+            // Otherwise, assume webview for native targets
+            _ => Self::Webview,
+        }
+    }
 }
 
 #[derive(Debug)]

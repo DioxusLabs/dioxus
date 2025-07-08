@@ -555,7 +555,7 @@ impl BuildRequest {
         let mut features = args.features.clone();
         let mut no_default_features = args.no_default_features;
 
-        let renderer: Option<Renderer> = match args.renderer.into() {
+        let mut renderer: Option<Renderer> = match args.renderer.into() {
             Some(renderer) => match enabled_renderers.len() {
                 0 => Some(renderer),
 
@@ -569,7 +569,7 @@ impl BuildRequest {
             },
             None if !using_dioxus_explicitly => None,
             None => match enabled_renderers.as_slice() {
-                [] => Renderer::Webview.into(), // Default to webview if no platform is specified and no dioxus features are enabled
+                [] => None, // Wait until we resolve everything else first then we will resolve it from the triple
                 [renderer] => Some(*renderer),
                 _ => {
                     return Err(anyhow::anyhow!(
@@ -600,6 +600,12 @@ impl BuildRequest {
             // If there is a platform, use it to determine the target triple
             (None, platform) => platform.into_target(device, &workspace).await?,
         };
+
+        // If the user didn't pass a renderer, and we didn't find a good default renderer, but they are using dioxus explicitly,
+        // then we can try to guess the renderer based on the target triple.
+        if renderer.is_none() && using_dioxus_explicitly {
+            renderer = Some(Renderer::from_target(&triple));
+        }
 
         // Resolve the bundle format based on the combination of the target triple and renderer
         let bundle = match args.bundle {
@@ -708,6 +714,13 @@ impl BuildRequest {
         let extra_cargo_args = shell_words::split(&args.cargo_args.clone().unwrap_or_default())
             .context("Failed to parse cargo args")?;
 
+        tracing::debug!(
+            r#"Target Info:
+                • features: {features:?}
+                • triple: {triple:?}
+                • bundle format: {bundle:?}
+                "#
+        );
         tracing::debug!(
             r#"Log Files:
                 • link_args_file: {},
