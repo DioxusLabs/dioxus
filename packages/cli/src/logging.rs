@@ -317,7 +317,7 @@ impl Visit for CollectVisitor {
         let name = field.name();
 
         let mut value_string = String::new();
-        write!(value_string, "{:?}", value).unwrap();
+        write!(value_string, "{value:?}").unwrap();
 
         if name == "message" {
             self.message = value_string;
@@ -337,8 +337,8 @@ impl Visit for CollectVisitor {
 fn format_field(field_name: &str, value: &dyn Debug) -> String {
     let mut out = String::new();
     match field_name {
-        "message" => write!(out, "{:?}", value),
-        _ => write!(out, "{}={:?}", field_name, value),
+        "message" => write!(out, "{value:?}"),
+        _ => write!(out, "{field_name}={value:?}"),
     }
     .unwrap();
 

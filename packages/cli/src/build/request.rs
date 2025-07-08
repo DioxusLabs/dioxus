@@ -531,10 +531,10 @@ impl BuildRequest {
                 filtered_packages.join(", ")};
                 if let Some(example) = &args.example {
                     let examples = target_of_kind(&TargetKind::Example);
-                    format!("Failed to find example {example}. \nAvailable examples are:\n{}", examples)
+                    format!("Failed to find example {example}. \nAvailable examples are:\n{examples}")
                 } else if let Some(bin) = &args.bin {
                     let binaries = target_of_kind(&TargetKind::Bin);
-                    format!("Failed to find binary {bin}. \nAvailable binaries are:\n{}", binaries)
+                    format!("Failed to find binary {bin}. \nAvailable binaries are:\n{binaries}")
                 } else {
                     format!("Failed to find target {target_name}. \nIt looks like you are trying to build dioxus in a library crate. \
                     You either need to run dx from inside a binary crate or build a specific example with the `--example` flag. \
@@ -2958,7 +2958,7 @@ impl BuildRequest {
         });
 
         res.unwrap_or_else(|| {
-            let fallback = format!("dioxus/{}", dioxus_feature);
+            let fallback = format!("dioxus/{dioxus_feature}");
             tracing::debug!(
                 "Could not find explicit feature for renderer {renderer}, passing `fallback` instead"
             );
@@ -3391,7 +3391,7 @@ impl BuildRequest {
                     .as_ref()
                     .context("generated bindgen module has no name?")?;
 
-                let path = bindgen_outdir.join(format!("module_{}_{}.wasm", idx, comp_name));
+                let path = bindgen_outdir.join(format!("module_{idx}_{comp_name}.wasm"));
                 wasm_opt::write_wasm(&module.bytes, &path, &wasm_opt_options).await?;
 
                 let hash_id = module

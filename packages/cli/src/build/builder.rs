@@ -179,7 +179,7 @@ impl AppBuilder {
                 match bundle {
                     Ok(Ok(bundle)) => BuilderUpdate::BuildReady { bundle },
                     Ok(Err(err)) => BuilderUpdate::BuildFailed { err },
-                    Err(err) => BuilderUpdate::BuildFailed { err: crate::Error::Runtime(format!("Build panicked! {:#?}", err)) },
+                    Err(err) => BuilderUpdate::BuildFailed { err: crate::Error::Runtime(format!("Build panicked! {err:#?}")) },
                 }
             },
             Some(Ok(Some(msg))) = OptionFuture::from(self.stdout.as_mut().map(|f| f.next_line())) => {
@@ -924,7 +924,7 @@ impl AppBuilder {
                 .await?;
 
             if !output.status.success() {
-                return Err(format!("Failed to install app: {:?}", output).into());
+                return Err(format!("Failed to install app: {output:?}").into());
             }
 
             let json: Value = serde_json::from_str(&std::fs::read_to_string(tmpfile.path())?)
@@ -959,7 +959,7 @@ impl AppBuilder {
                 .await?;
 
             if !output.status.success() {
-                return Err(format!("Failed to launch app: {:?}", output).into());
+                return Err(format!("Failed to launch app: {output:?}").into());
             }
 
             let json: Value = serde_json::from_str(&std::fs::read_to_string(tmpfile.path())?)
@@ -984,7 +984,7 @@ impl AppBuilder {
                 .await?;
 
             if !output.status.success() {
-                return Err(format!("Failed to resume app: {:?}", output).into());
+                return Err(format!("Failed to resume app: {output:?}").into());
             }
 
             Ok(())
@@ -1196,8 +1196,8 @@ We checked the folder: {}
             let port = devserver_socket.port();
             if let Err(e) = Command::new(&adb)
                 .arg("reverse")
-                .arg(format!("tcp:{}", port))
-                .arg(format!("tcp:{}", port))
+                .arg(format!("tcp:{port}"))
+                .arg(format!("tcp:{port}"))
                 .output()
                 .await
             {
@@ -1391,8 +1391,7 @@ We checked the folder: {}
                 };
 
                 format!(
-                    "vscode://vadimcn.vscode-lldb/launch/config?{{'request':'attach','pid':{}}}",
-                    pid
+                    "vscode://vadimcn.vscode-lldb/launch/config?{{'request':'attach','pid':{pid}}}"
                 )
             }
 

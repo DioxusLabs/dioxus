@@ -78,7 +78,7 @@ impl FromArgMatches for PlatformArg {
                 "desktop" => Ok(Self::Desktop),
                 _ => Err(clap::Error::raw(
                     clap::error::ErrorKind::InvalidValue,
-                    format!("Unknown platform: {}", platform),
+                    format!("Unknown platform: {platform}"),
                 )),
             }
         } else {
@@ -184,7 +184,7 @@ impl FromArgMatches for RendererArg {
                 }),
                 _ => Err(clap::Error::raw(
                     clap::error::ErrorKind::InvalidValue,
-                    format!("Unknown platform: {}", renderer),
+                    format!("Unknown platform: {renderer}"),
                 )),
             }
         } else {
@@ -198,9 +198,9 @@ impl FromArgMatches for RendererArg {
     }
 }
 
-impl Into<Option<Renderer>> for RendererArg {
-    fn into(self) -> Option<Renderer> {
-        self.renderer
+impl From<RendererArg> for Option<Renderer> {
+    fn from(val: RendererArg) -> Self {
+        val.renderer
     }
 }
 
@@ -423,7 +423,7 @@ impl BundleFormat {
 
         let opt_level = if release { "release" } else { "dev" };
 
-        format!("{}-{}", base_profile, opt_level)
+        format!("{base_profile}-{opt_level}")
     }
 
     pub(crate) fn expected_name(&self) -> &'static str {

@@ -124,7 +124,7 @@ impl RunArgs {
                             _ => {}
                         },
                         BuilderUpdate::CompilerMessage { message } => {
-                            print!("{}", message);
+                            print!("{message}");
                         }
                         BuilderUpdate::BuildFailed { err } => {
                             tracing::error!("Build failed: {}", err);

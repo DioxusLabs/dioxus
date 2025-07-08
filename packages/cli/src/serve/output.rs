@@ -755,7 +755,7 @@ impl Output {
         );
 
         let server_address = match state.server.server_address() {
-            Some(address) => format!("http://{}", address).yellow(),
+            Some(address) => format!("http://{address}").yellow(),
             None => "no address".dark_gray(),
         };
         frame.render_widget(

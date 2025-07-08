@@ -259,7 +259,7 @@ impl FromStr for PackageType {
             "appimage" => Ok(PackageType::AppImage),
             "dmg" => Ok(PackageType::Dmg),
             "updater" => Ok(PackageType::Updater),
-            _ => Err(format!("{} is not a valid package type", s)),
+            _ => Err(format!("{s} is not a valid package type")),
         }
     }
 }

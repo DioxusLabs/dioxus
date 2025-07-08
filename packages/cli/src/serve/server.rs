@@ -461,8 +461,7 @@ fn build_devserver_router(
                 Response::builder()
                     .status(StatusCode::INTERNAL_SERVER_ERROR)
                     .body(Body::from(format!(
-                        "Backend connection failed. The backend is likely still starting up. Please try again in a few seconds. Error: {:#?}",
-                        error
+                        "Backend connection failed. The backend is likely still starting up. Please try again in a few seconds. Error: {error:#?}"
                     )))
                     .unwrap()
             },
@@ -577,7 +576,7 @@ fn build_serve_dir(runner: &AppServer) -> axum::routing::MethodRouter {
     .handle_error(|error: Infallible| async move {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Unhandled internal error: {}", error),
+            format!("Unhandled internal error: {error}"),
         )
     })
 }

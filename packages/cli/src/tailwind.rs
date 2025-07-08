@@ -219,7 +219,7 @@ impl TailwindCli {
             _ => return None,
         };
 
-        Some(format!("tailwindcss-{}-{}", platform, arch))
+        Some(format!("tailwindcss-{platform}-{arch}"))
     }
 
     fn install_dir(&self) -> Result<PathBuf> {
