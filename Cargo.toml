@@ -308,7 +308,7 @@ url = "2.5.4"
 separator = "0.4.1"
 pretty_assertions = "1.4.1"
 serde_repr = "0.1"
-hyper-util = "0.1.14"
+hyper-util = "0.1.15"
 krates = { version = "0.17.5" }
 libloading = "0.8.8"
 libc = "0.2.174"
