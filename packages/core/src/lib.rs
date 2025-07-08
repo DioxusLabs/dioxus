@@ -95,7 +95,7 @@ pub mod prelude {
         consume_context, consume_context_from_scope, current_owner, current_scope_id,
         fc_to_builder, generation, has_context, needs_update, needs_update_any, parent_scope,
         provide_context, provide_error_boundary, provide_root_context, queue_effect, remove_future,
-        schedule_update, schedule_update_any, spawn, spawn_forever, spawn_isomorphic, suspend,
+        schedule_update, schedule_update_any, spawn, spawn_forever, spawn_in_scope, spawn_isomorphic, suspend,
         throw_error, try_consume_context, use_after_render, use_before_render, use_drop, use_hook,
         use_hook_with_cleanup, with_owner, AnyValue, Attribute, Callback, Component,
         ComponentFunction, Context, Element, ErrorBoundary, ErrorContext, Event, EventHandler,
