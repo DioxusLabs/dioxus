@@ -317,7 +317,7 @@
 
 use crate::{
     AndroidTools, BuildContext, BundleFormat, DioxusConfig, Error, LinkAction, LinkerFlavor,
-    Platform, Renderer, Result, RustcArgs, TargetArgs, TraceSrc, WasmBindgen, WasmOptConfig,
+    PlatformArg, Renderer, Result, RustcArgs, TargetArgs, TraceSrc, WasmBindgen, WasmOptConfig,
     Workspace, DX_RUSTC_WRAPPER_ENV_VAR,
 };
 use anyhow::Context;
@@ -555,7 +555,7 @@ impl BuildRequest {
         let mut features = args.features.clone();
         let mut no_default_features = args.no_default_features;
 
-        let renderer: Option<Renderer> = match args.renderer {
+        let renderer: Option<Renderer> = match args.renderer.into() {
             Some(renderer) => match enabled_renderers.len() {
                 0 => Some(renderer),
 
@@ -586,10 +586,10 @@ impl BuildRequest {
         let device = args.device;
 
         // Resolve the platform args into a concrete platform
-        let mut platform: Option<Platform> = args.platform.map(|p| p.into());
+        let mut platform = args.platform;
         // If the user didn't pass a platform, but we have a renderer, get the default platform for that renderer
-        if let (None, Some(renderer)) = (platform, renderer) {
-            platform = Some(renderer.default_platform());
+        if let (PlatformArg::Unknown, Some(renderer)) = (platform, renderer) {
+            platform = renderer.default_platform();
         };
 
         // We want a real triple to build with, so we'll autodetect it if it's not provided
@@ -598,8 +598,7 @@ impl BuildRequest {
             // If there is an explicit target, use it
             (Some(target), _) => target,
             // If there is a platform, use it to determine the target triple
-            (None, Some(platform)) => platform.into_target(device, &workspace).await?,
-            _ => Triple::host(),
+            (None, platform) => platform.into_target(device, &workspace).await?,
         };
 
         // Resolve the bundle format based on the combination of the target triple and renderer

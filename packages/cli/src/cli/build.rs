@@ -120,7 +120,7 @@ impl CommandWithPlatformOverrides<BuildArgs> {
             let main_target = client.main_target.clone();
             let mut server_args = server_args.clone();
             // The renderer in the server build is always set to Server
-            server_args.renderer = Some(crate::Renderer::Server);
+            server_args.renderer.renderer = Some(crate::Renderer::Server);
             server =
                 Some(BuildRequest::new(&server_args, Some(main_target), workspace.clone()).await?);
         }
