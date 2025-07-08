@@ -573,7 +573,7 @@ impl BuildRequest {
                 [renderer] => Some(*renderer),
                 _ => {
                     return Err(anyhow::anyhow!(
-                        "Multiple platforms enabled in Cargo.toml. Please specify a platform with `--platform` or set a default platform in Cargo.toml"
+                        "Multiple platforms enabled in Cargo.toml. Please specify a platform with `--web`, `--webview`, or `--native` or set a default platform in Cargo.toml"
                     )
                     .into())
                 }
@@ -717,7 +717,7 @@ impl BuildRequest {
         tracing::debug!(
             r#"Target Info:
                 • features: {features:?}
-                • triple: {triple:?}
+                • triple: {triple}
                 • bundle format: {bundle:?}
                 "#
         );
@@ -2898,20 +2898,34 @@ impl BuildRequest {
         let res = package.features.iter().find_map(|(key, features)| {
             // if the feature is just the name of the platform, we use that
             if key == dioxus_feature {
+                tracing::debug!("Found feature {key} for renderer {renderer}");
                 return Some(key.clone());
             }
 
-            // Otherwise look for the feature that starts with dioxus/ or dioxus?/ and matches the platform
+            // Otherwise look for the feature that starts with dioxus/ or dioxus?/ and matches just the single platform
+            // we are looking for.
+            let mut dioxus_renderers_enabled = Vec::new();
             for feature in features {
                 if let Some((_, after_dioxus)) = feature.split_once("dioxus") {
                     if let Some(dioxus_feature_enabled) =
                         after_dioxus.trim_start_matches('?').strip_prefix('/')
                     {
-                        // If that enables the feature we are looking for, return that feature
-                        if dioxus_feature_enabled == dioxus_feature {
-                            return Some(key.clone());
+                        if let Some(renderer) =
+                            Renderer::autodetect_from_cargo_feature(dioxus_feature_enabled)
+                        {
+                            dioxus_renderers_enabled.push(renderer);
                         }
                     }
+                }
+            }
+
+            // If there is exactly one renderer enabled by this feature, we can use it
+            if let [single_renderer] = dioxus_renderers_enabled.as_slice() {
+                if *single_renderer == renderer {
+                    tracing::debug!(
+                        "Found feature {key} for renderer {renderer} which enables dioxus/{renderer}"
+                    );
+                    return Some(key.clone());
                 }
             }
 
@@ -2919,7 +2933,7 @@ impl BuildRequest {
         });
 
         res.unwrap_or_else(|| {
-            let fallback = format!("dioxus/{}", dioxus_feature) ;
+            let fallback = format!("dioxus/{}", dioxus_feature);
             tracing::debug!(
                 "Could not find explicit feature for renderer {renderer}, passing `fallback` instead"
             );
@@ -3024,6 +3038,9 @@ impl BuildRequest {
             if feature.starts_with("dioxus/") {
                 let dx_feature = feature.trim_start_matches("dioxus/");
                 if Renderer::autodetect_from_cargo_feature(dx_feature).is_some() {
+                    tracing::debug!(
+                        "Dropping feature {feature} since it points to a platform renderer"
+                    );
                     continue 'top;
                 }
             }
@@ -3034,6 +3051,9 @@ impl BuildRequest {
                     if feature.starts_with("dioxus/") {
                         let dx_feature = feature.trim_start_matches("dioxus/");
                         if Renderer::autodetect_from_cargo_feature(dx_feature).is_some() {
+                            tracing::debug!(
+                                "Dropping feature {feature} since it points to a platform renderer transitively"
+                            );
                             continue 'top;
                         }
                     }

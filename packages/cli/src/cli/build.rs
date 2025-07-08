@@ -12,7 +12,11 @@ pub struct BuildArgs {
     /// Enable fullstack mode [default: false]
     ///
     /// This is automatically detected from `dx serve` if the "fullstack" feature is enabled by default.
-    #[clap(long)]
+    #[arg(
+        long,
+        default_missing_value = "true",
+        num_args = 0..=1,
+    )]
     pub(crate) fullstack: Option<bool>,
 
     /// Pre-render all routes returned from the app's `/static_routes` endpoint [default: false]
