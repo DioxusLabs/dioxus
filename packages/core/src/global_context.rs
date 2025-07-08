@@ -204,7 +204,14 @@ pub fn queue_effect(f: impl FnOnce() + 'static) {
 ///
 #[doc = include_str!("../docs/common_spawn_errors.md")]
 pub fn spawn_forever(fut: impl Future<Output = ()> + 'static) -> Option<Task> {
-    Runtime::with_scope(ScopeId::ROOT, |cx| cx.spawn(fut)).ok()
+    spawn_in_scope(ScopeId::ROOT, fut)
+}
+
+/// Spawns a future in the provided scope. This task will automatically be canceled when the component's scope is dropped.
+///
+#[doc = include_str!("../docs/common_spawn_errors.md")]
+pub fn spawn_in_scope(scope: ScopeId, fut: impl Future<Output = ()> + 'static) -> Option<Task> {
+    Runtime::with_scope(scope, |cx| cx.spawn(fut)).ok()
 }
 
 /// Informs the scheduler that this task is no longer needed and should be removed.
