@@ -115,7 +115,8 @@ impl AppServer {
 
         let open_browser = args
             .open
-            .unwrap_or_else(|| workspace.settings.always_open_browser.unwrap_or(true));
+            .unwrap_or_else(|| workspace.settings.always_open_browser.unwrap_or(true))
+            && interactive;
 
         let wsl_file_poll_interval = args
             .wsl_file_poll_interval
