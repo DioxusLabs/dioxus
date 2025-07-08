@@ -52,14 +52,26 @@ if [[ $# -gt 1 ]]; then
 fi
 
 if [ "$OS" = "Windows_NT" ]; then
-	target="x86_64-pc-windows-msvc"
+    target="x86_64-pc-windows-msvc"
 else
-	case $(uname -sm) in
-	"Darwin x86_64") target="x86_64-apple-darwin" ;;
-	"Darwin arm64") target="aarch64-apple-darwin" ;;
-	"Linux aarch64") target="aarch64-unknown-linux-gnu" ;;
-	*) target="x86_64-unknown-linux-gnu" ;;
-	esac
+    case $(uname -sm) in
+    "Darwin x86_64") target="x86_64-apple-darwin" ;;
+    "Darwin arm64") target="aarch64-apple-darwin" ;;
+    "Linux aarch64")
+        if [ -f /etc/alpine-release ]; then
+            target="aarch64-unknown-linux-musl"
+        else
+            target="aarch64-unknown-linux-gnu"
+        fi
+        ;;
+    *)
+        if [ -f /etc/alpine-release ]; then
+            target="x86_64-unknown-linux-musl"
+        else
+            target="x86_64-unknown-linux-gnu"
+        fi
+        ;;
+    esac
 fi
 
 GITHUB=${GITHUB-"https://github.com"}
