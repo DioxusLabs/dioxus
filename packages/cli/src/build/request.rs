@@ -2584,7 +2584,7 @@ impl BuildRequest {
         create_dir_all(&wrapper)?;
 
         // app
-        let app = root.join("app");
+        let app = self.android_app_dir();
         let app_main = app.join("src").join("main");
         let app_kotlin = app_main.join("kotlin");
         let app_jnilibs = app_main.join("jniLibs");
@@ -2854,10 +2854,22 @@ impl BuildRequest {
         Ok(())
     }
 
+    /// Helper method to get the Android app directory, handling ejected assets correctly
+    fn android_app_dir(&self) -> PathBuf {
+        let project_dir = self.workspace.workspace_root();
+        let ejected_android_dir = project_dir.join("android");
+        let using_ejected_assets = ejected_android_dir.exists();
+
+        if using_ejected_assets {
+            self.root_dir()
+        } else {
+            self.root_dir().join("app")
+        }
+    }
+
     fn wry_android_kotlin_files_out_dir(&self) -> PathBuf {
         let mut kotlin_dir = self
-            .root_dir()
-            .join("app")
+            .android_app_dir()
             .join("src")
             .join("main")
             .join("kotlin");
@@ -3692,8 +3704,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         }
 
         let app_release = self
-            .root_dir()
-            .join("app")
+            .android_app_dir()
             .join("build")
             .join("outputs")
             .join("bundle")
@@ -3728,8 +3739,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
     }
 
     pub(crate) fn debug_apk_path(&self) -> PathBuf {
-        self.root_dir()
-            .join("app")
+        self.android_app_dir()
             .join("build")
             .join("outputs")
             .join("apk")
@@ -3818,8 +3828,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
                 .join("assets"),
 
             Platform::Android => self
-                .root_dir()
-                .join("app")
+                .android_app_dir()
                 .join("src")
                 .join("main")
                 .join("assets"),
@@ -3851,8 +3860,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
 
             // Android has a whole build structure to it
             Platform::Android => self
-                .root_dir()
-                .join("app")
+                .android_app_dir()
                 .join("src")
                 .join("main")
                 .join("jniLibs")
