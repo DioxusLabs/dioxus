@@ -42,13 +42,14 @@ pub(crate) enum PlatformArg {
 
 impl Args for PlatformArg {
     fn augment_args(cmd: clap::Command) -> clap::Command {
-        cmd.arg(arg!(--wasm "The wasm target platform"))
-            .arg(arg!(--macos "The macos target platform"))
-            .arg(arg!(--windows "The windows target platform"))
-            .arg(arg!(--linux "The linux target platform"))
-            .arg(arg!(--ios "The ios target platform"))
-            .arg(arg!(--android "The android target platform"))
-            .arg(arg!(--desktop "The desktop target platform"))
+        const HELP_HEADING: &str = "Platform";
+        cmd.arg(arg!(--wasm "The wasm target platform").help_heading(HELP_HEADING))
+            .arg(arg!(--macos "The macos target platform").help_heading(HELP_HEADING))
+            .arg(arg!(--windows "The windows target platform").help_heading(HELP_HEADING))
+            .arg(arg!(--linux "The linux target platform").help_heading(HELP_HEADING))
+            .arg(arg!(--ios "The ios target platform").help_heading(HELP_HEADING))
+            .arg(arg!(--android "The android target platform").help_heading(HELP_HEADING))
+            .arg(arg!(--desktop "The desktop target platform").help_heading(HELP_HEADING))
             .group(
                 clap::ArgGroup::new("platform")
                     .args([
@@ -143,11 +144,12 @@ pub(crate) struct RendererArg {
 
 impl Args for RendererArg {
     fn augment_args(cmd: clap::Command) -> clap::Command {
-        cmd.arg(arg!(--web "Targeting the web renderer"))
-            .arg(arg!(--webview "Targeting the webview renderer"))
-            .arg(arg!(--native "Targeting the native renderer"))
-            .arg(arg!(--server "Targeting the server renderer"))
-            .arg(arg!(--liveview "Targeting the liveview renderer"))
+        const HELP_HEADING: &str = "Renderer";
+        cmd.arg(arg!(--web "Targeting the web renderer").help_heading(HELP_HEADING))
+            .arg(arg!(--webview "Targeting the webview renderer").help_heading(HELP_HEADING))
+            .arg(arg!(--native "Targeting the native renderer").help_heading(HELP_HEADING))
+            .arg(arg!(--server "Targeting the server renderer").help_heading(HELP_HEADING))
+            .arg(arg!(--liveview "Targeting the liveview renderer").help_heading(HELP_HEADING))
             .group(
                 clap::ArgGroup::new("renderer")
                     .args(["web", "webview", "native", "server", "liveview"])
