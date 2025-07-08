@@ -343,7 +343,7 @@ use std::{
     },
     time::{SystemTime, UNIX_EPOCH},
 };
-use target_lexicon::{OperatingSystem, Triple};
+use target_lexicon::{Environment, OperatingSystem, Triple};
 use tempfile::{NamedTempFile, TempDir};
 use tokio::{io::AsyncBufReadExt, process::Command};
 use uuid::Uuid;
@@ -570,7 +570,27 @@ impl BuildRequest {
             None if !using_dioxus_explicitly => None,
             None => match enabled_renderers.as_slice() {
                 [] => None, // Wait until we resolve everything else first then we will resolve it from the triple
-                [renderer] => Some(*renderer),
+                [(renderer, feature)] => {
+                    let targeting_mobile = match (&args.target, args.platform) {
+                        (_, PlatformArg::Android | PlatformArg::Ios) => true,
+                        (Some(target), _) => {
+                            matches!(
+                                (target.environment, target.operating_system),
+                                (Environment::Android, OperatingSystem::IOS(_))
+                            )
+                        }
+                        _ => false,
+                    };
+                    // The renderer usually maps directly to a feature flag, but the mobile crate is an exception.
+                    // If we see the `desktop` renderer in the default features, but the user is targeting mobile,
+                    // we should remove the default `desktop` feature, but still target webview. The feature selection
+                    // logic below will handle adding back in the `mobile` feature flag
+                    if targeting_mobile && feature == "desktop" {
+                        features.extend(Self::rendererless_features(main_package));
+                        no_default_features = true;
+                    }
+                    Some(*renderer)
+                },
                 _ => {
                     return Err(anyhow::anyhow!(
                         "Multiple platforms enabled in Cargo.toml. Please specify a platform with `--web`, `--webview`, or `--native` or set a default platform in Cargo.toml"
@@ -579,6 +599,12 @@ impl BuildRequest {
                 }
             },
         };
+
+        // Just grab the renderers from the enabled renderers and discard the feature names
+        let enabled_renderers = enabled_renderers
+            .into_iter()
+            .map(|(renderer, _)| renderer)
+            .collect::<Vec<_>>();
 
         // We usually use the simulator unless --device is passed *or* a device is detected by probing.
         // For now, though, since we don't have probing, it just defaults to false
@@ -2910,18 +2936,17 @@ impl BuildRequest {
                     if let Some(dioxus_feature_enabled) =
                         after_dioxus.trim_start_matches('?').strip_prefix('/')
                     {
-                        if let Some(renderer) =
-                            Renderer::autodetect_from_cargo_feature(dioxus_feature_enabled)
+                        if Renderer::autodetect_from_cargo_feature(dioxus_feature_enabled).is_some()
                         {
-                            dioxus_renderers_enabled.push(renderer);
+                            dioxus_renderers_enabled.push(dioxus_feature_enabled.to_string());
                         }
                     }
                 }
             }
 
             // If there is exactly one renderer enabled by this feature, we can use it
-            if let [single_renderer] = dioxus_renderers_enabled.as_slice() {
-                if *single_renderer == renderer {
+            if let [feature_name] = dioxus_renderers_enabled.as_slice() {
+                if feature_name == dioxus_feature {
                     tracing::debug!(
                         "Found feature {key} for renderer {renderer} which enables dioxus/{renderer}"
                     );
@@ -2956,7 +2981,7 @@ impl BuildRequest {
     pub(crate) fn enabled_cargo_toml_renderers(
         package: &krates::cm::Package,
         no_default_features: bool,
-    ) -> Vec<Renderer> {
+    ) -> Vec<(Renderer, String)> {
         let mut renderers = vec![];
 
         // Attempt to discover the platform directly from the dioxus dependency
@@ -2967,7 +2992,7 @@ impl BuildRequest {
         if let Some(dxs) = package.dependencies.iter().find(|dep| dep.name == "dioxus") {
             for f in dxs.features.iter() {
                 if let Some(renderer) = Renderer::autodetect_from_cargo_feature(f) {
-                    renderers.push(renderer);
+                    renderers.push((renderer, f.clone()));
                 }
             }
         }
@@ -2998,7 +3023,7 @@ impl BuildRequest {
                 let dx_feature = feature.trim_start_matches("dioxus/");
                 let auto = Renderer::autodetect_from_cargo_feature(dx_feature);
                 if let Some(auto) = auto {
-                    renderers.push(auto);
+                    renderers.push((auto, dx_feature.to_string()));
                 }
             }
 
@@ -3010,7 +3035,7 @@ impl BuildRequest {
                         let dx_feature = feature.trim_start_matches("dioxus/");
                         let auto = Renderer::autodetect_from_cargo_feature(dx_feature);
                         if let Some(auto) = auto {
-                            renderers.push(auto);
+                            renderers.push((auto, dx_feature.to_string()));
                         }
                     }
                 }
