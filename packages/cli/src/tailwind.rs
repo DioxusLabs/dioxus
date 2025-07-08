@@ -141,6 +141,7 @@ impl TailwindCli {
             .arg("--output")
             .arg(output_path)
             .args(watch.then_some("--watch"))
+            .current_dir(manifest_dir)
             .kill_on_drop(true)
             .stdin(Stdio::piped())
             .stdout(Stdio::null())
