@@ -322,6 +322,7 @@ use crate::{
 };
 use anyhow::{bail, Context};
 use cargo_metadata::diagnostic::Diagnostic;
+use depinfo::RustcDepInfo;
 use dioxus_cli_config::format_base_path_meta_element;
 use dioxus_cli_config::{APP_TITLE_ENV, ASSET_ROOT_ENV};
 use dioxus_cli_opt::{process_file_to, AssetManifest};
@@ -443,6 +444,7 @@ pub struct BuildArtifacts {
     pub(crate) assets: AssetManifest,
     pub(crate) mode: BuildMode,
     pub(crate) patch_cache: Option<Arc<HotpatchModuleCache>>,
+    pub(crate) depinfo: RustcDepInfo,
 }
 
 impl BuildRequest {
@@ -986,6 +988,7 @@ impl BuildRequest {
         let time_end = SystemTime::now();
         let mode = ctx.mode.clone();
         let platform = self.platform;
+        let depinfo = RustcDepInfo::from_file(&exe.with_extension("d")).unwrap_or_default();
 
         tracing::debug!(
             "Build completed successfully in {}us: {:?}",
@@ -1001,6 +1004,7 @@ impl BuildRequest {
             time_start,
             assets,
             mode,
+            depinfo,
             patch_cache: None,
         })
     }

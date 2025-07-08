@@ -607,8 +607,12 @@ impl AppBuilder {
         let triple = self.build.triple.clone();
         let asset_dir = self.build.asset_dir();
 
+        // Hotpatch asset!() calls
         for bundled in res.assets.assets() {
-            let original_artifacts = self.artifacts.as_mut().unwrap();
+            let original_artifacts = self
+                .artifacts
+                .as_mut()
+                .context("No artifacts to hotpatch")?;
 
             if original_artifacts.assets.contains(bundled) {
                 continue;
@@ -631,6 +635,18 @@ impl AppBuilder {
             if self.build.platform == Platform::Android {
                 let bundled_name = PathBuf::from(bundled.bundled_path());
                 _ = self.copy_file_to_android_tmp(&from, &bundled_name).await;
+            }
+        }
+
+        // Make sure to add `include!()` calls to the watcher so we can watch changes as they evolve
+        for file in res.depinfo.files.iter() {
+            let original_artifacts = self
+                .artifacts
+                .as_mut()
+                .context("No artifacts to hotpatch")?;
+
+            if !original_artifacts.depinfo.files.contains(file) {
+                original_artifacts.depinfo.files.push(file.clone());
             }
         }
 

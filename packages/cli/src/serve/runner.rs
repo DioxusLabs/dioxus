@@ -362,9 +362,10 @@ impl AppServer {
         for path in files {
             // for various assets that might be linked in, we just try to hotreloading them forcefully
             // That is, unless they appear in an include! macro, in which case we need to a full rebuild....
-            let Some(ext) = path.extension().and_then(|v| v.to_str()) else {
-                continue;
-            };
+            let ext = path
+                .extension()
+                .and_then(|v| v.to_str())
+                .unwrap_or_default();
 
             // If it's an asset, we want to hotreload it
             // todo(jon): don't hardcode this here
@@ -462,6 +463,16 @@ impl AppServer {
 
                         cached_file.templates.insert(key.clone(), template.clone());
                         templates.push(HotReloadTemplateWithLocation { template, key });
+                    }
+                }
+            }
+
+            // If it's not a rust file, then it might be depended on via include! or similar
+            if ext != "rs" {
+                if let Some(artifacts) = self.client.artifacts.as_ref() {
+                    if artifacts.depinfo.files.contains(path) {
+                        needs_full_rebuild = true;
+                        break;
                     }
                 }
             }
