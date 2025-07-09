@@ -13,6 +13,10 @@
 //! The code here generates a random key that the webview must use to connect to the websocket.
 //! We use the initialization script API to setup the websocket connection without leaking the key
 //! to the webview itself in case there's untrusted content in the webview.
+//!
+//! Some operating systems (like iOS) will kill the websocket connection when the device goes to sleep.
+//! If this happens, we will automatically switch to a new port and notify the webview of the new location
+//! and key. The webview will then reconnect to the new port and continue receiving edits.
 
 use dioxus_interpreter_js::MutationState;
 use futures_channel::mpsc::UnboundedSender;
@@ -71,8 +75,8 @@ impl WryQueue {
         }
     }
 
-    /// Wait until all pending edits have been rendered in the webview
-    pub(crate) fn poll_new_connection(
+    /// Check if there is a new location for the websocket edits server.
+    pub(crate) fn poll_new_edits_location(
         &self,
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<()> {
@@ -139,21 +143,19 @@ pub(crate) struct ServerLocation {
     server_key: [u8; KEY_SIZE],
 }
 
-impl ServerLocation {
-    /// Create a new server location with the given port and keys.
-    pub(crate) fn connect() -> (Self, TcpListener) {
-        let client_key = create_secure_key();
-        let server_key = create_secure_key();
-        let server = TcpListener::bind((IpAddr::from([127, 0, 0, 1]), 0))
-            .expect("Failed to bind local TCP listener for edit socket");
-        let port = server.local_addr().unwrap().port();
-        let location = Self {
-            port,
-            client_key,
-            server_key,
-        };
-        (location, server)
-    }
+/// Start a new server on an available port on localhost. Return the server location and the TCP listener that is bound to the port.
+pub(crate) fn start_server() -> (ServerLocation, TcpListener) {
+    let client_key = create_secure_key();
+    let server_key = create_secure_key();
+    let server = TcpListener::bind((IpAddr::from([127, 0, 0, 1]), 0))
+        .expect("Failed to bind local TCP listener for edit socket");
+    let port = server.local_addr().unwrap().port();
+    let location = ServerLocation {
+        port,
+        client_key,
+        server_key,
+    };
+    (location, server)
 }
 
 /// The websocket listener that the webview will connect to in order to receive edits and send requests. There
@@ -171,9 +173,8 @@ impl EditWebsocket {
     pub(crate) fn start() -> Self {
         let connections = Arc::new(RwLock::new(HashMap::new()));
 
-        let notify = Notify::new();
-        let notify = Arc::new(notify);
-        let (location, server) = ServerLocation::connect();
+        let notify = Arc::new(Notify::new());
+        let (location, server) = start_server();
         let current_location = Arc::new(Mutex::new(location));
 
         let connections_ = connections.clone();
@@ -213,14 +214,23 @@ impl EditWebsocket {
                         );
                     }
                     Err(e) => {
-                        tracing::error!("Error accepting websocket connection: {}", e);
+                        // We expect to hit ConnectionAborted and handle it gracefully so we don't
+                        // need to log it as an error.
+                        if std::io::ErrorKind::ConnectionAborted != e.kind() {
+                            tracing::error!("Error accepting websocket connection: {}", e);
+                        }
                         break;
                     }
                 }
             }
 
-            // Switch ports and reconnect on a different port
-            let (location, new_server) = ServerLocation::connect();
+            // Switch ports and reconnect on a different port if the server is killed by the OS. This
+            // will happen if an IOS device goes to sleep
+            //
+            // For security, it is important that the keys are also regenerated when the server is restarted.
+            // The client may try to reconnect to the old port that is now being used by an attacker who steals the client
+            // key and uses it to read the edits from the new port.
+            let (location, new_server) = start_server();
             notify.notify_waiters();
             *current_location.lock().unwrap() = location;
             server = new_server;
@@ -427,6 +437,8 @@ impl Default for WebviewConnectionState {
 }
 
 impl WebviewConnectionState {
+    /// Add a message to the active connection or queue and return a receiver that will be resolved
+    /// when the webview has applied the edits.
     fn add_message(&mut self, edits: Vec<u8>) -> oneshot::Receiver<()> {
         let (response_sender, response_receiver) = oneshot::channel();
         let pair = MsgPair {
@@ -437,6 +449,8 @@ impl WebviewConnectionState {
         response_receiver
     }
 
+    /// Add a message pair to the connection state. The receiver in the message pair will be resolved
+    /// when the webview has applied the edits.
     fn add_message_pair(&mut self, pair: MsgPair) {
         match self {
             WebviewConnectionState::Pending { pending: queue } => {

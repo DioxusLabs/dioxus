@@ -448,7 +448,7 @@ impl WebviewInstance {
             // find the socket has been closed, we create a new socket and send it to
             // the webview to continue on
             // https://github.com/DioxusLabs/dioxus/issues/4374
-            let new_connection_poll = self.edits.wry_queue.poll_new_connection(&mut cx);
+            let new_connection_poll = self.edits.wry_queue.poll_new_edits_location(&mut cx);
             if new_connection_poll.is_ready() {
                 let edits_path = self.edits.wry_queue.edits_path();
                 let expected_key = self.edits.wry_queue.required_server_key();
