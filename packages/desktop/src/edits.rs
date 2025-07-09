@@ -22,13 +22,17 @@ use pollster::FutureExt as _;
 use rand::{RngCore, SeedableRng};
 use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
-use std::net::TcpListener;
+use std::future::Future;
+use std::net::{TcpListener, TcpStream};
+use std::pin::Pin;
 use std::rc::Rc;
 use std::sync::atomic::AtomicU32;
+use std::sync::Mutex;
 use std::{
     net::IpAddr,
     sync::{Arc, RwLock},
 };
+use tokio::sync::Notify;
 
 /// This handles communication between the requests that the webview makes and the interpreter.
 #[derive(Clone)]
@@ -59,22 +63,49 @@ impl WryQueue {
         &self,
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<()> {
-        if let Some(receiver) = self.inner.borrow_mut().edits_in_progress.as_mut() {
+        let mut self_mut = self.inner.borrow_mut();
+        if let Some(receiver) = self_mut.edits_in_progress.as_mut() {
             receiver.poll_unpin(cx).map(|_| ())
         } else {
             std::task::Poll::Ready(())
         }
     }
 
+    /// Wait until all pending edits have been rendered in the webview
+    pub(crate) fn poll_new_connection(
+        &self,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<()> {
+        let mut self_mut = self.inner.borrow_mut();
+        let poll = self_mut
+            .server_location_changed_future
+            .as_mut()
+            .poll_unpin(cx);
+        if poll.is_ready() {
+            // If the future is ready, we need to reset it to wait for the next change
+            self_mut.server_location_changed_future =
+                owned_notify_future(self_mut.server_location_changed.clone());
+        }
+        poll
+    }
+
     /// Get the websocket path that the webview should connect to in order to receive edits
     pub(crate) fn edits_path(&self) -> String {
         let WebviewWebsocketLocation {
-            port,
-            webview_id,
-            key,
+            webview_id, server, ..
         } = &self.inner.borrow().location;
+        let server = server.lock().unwrap();
+        let port = server.port;
+        let key = &server.client_key;
         let key_hex = encode_key_string(key);
         format!("ws://127.0.0.1:{port}/{webview_id}/{key_hex}")
+    }
+
+    /// Get the key the client should expect from the server when connecting to the websocket.
+    pub(crate) fn required_server_key(&self) -> String {
+        let server = &self.inner.borrow().location.server;
+        let server = server.lock().unwrap();
+        encode_key_string(&server.server_key)
     }
 }
 
@@ -83,18 +114,46 @@ pub(crate) struct WryQueueInner {
     websocket: EditWebsocket,
     // If this webview is currently waiting for an edit to be flushed. We don't run the virtual dom while this is true to avoid running effects before the dom has been updated
     edits_in_progress: Option<oneshot::Receiver<()>>,
+    // The socket may be killed by the OS while running. If it does, this channel will receive the new server location
+    server_location_changed: Arc<Notify>,
+    server_location_changed_future: Pin<Box<dyn Future<Output = ()>>>,
     mutation_state: MutationState,
 }
 
 /// The location of a webview websocket connection. This is used to identify the webview and the port it is connected to.
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone)]
 pub(crate) struct WebviewWebsocketLocation {
-    /// The port the websocket is on
-    port: u16,
     /// The id of the webview that this websocket is connected to
     webview_id: u32,
-    /// The key that the webview will use to connect to the websocket
-    key: [u8; KEY_SIZE],
+    server: Arc<Mutex<ServerLocation>>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) struct ServerLocation {
+    /// The port the websocket is on
+    port: u16,
+    /// A key that every websocket connection that originates from this application will use to identify itself.
+    /// We use this to make sure no external applications can connect to our websocket and receive UI updates.
+    client_key: [u8; KEY_SIZE],
+    /// The key that the server must respond with for the client to connect to the websocket
+    server_key: [u8; KEY_SIZE],
+}
+
+impl ServerLocation {
+    /// Create a new server location with the given port and keys.
+    pub(crate) fn connect() -> (Self, TcpListener) {
+        let client_key = create_secure_key();
+        let server_key = create_secure_key();
+        let server = TcpListener::bind((IpAddr::from([127, 0, 0, 1]), 0))
+            .expect("Failed to bind local TCP listener for edit socket");
+        let port = server.local_addr().unwrap().port();
+        let location = Self {
+            port,
+            client_key,
+            server_key,
+        };
+        (location, server)
+    }
 }
 
 /// The websocket listener that the webview will connect to in order to receive edits and send requests. There
@@ -102,30 +161,33 @@ pub(crate) struct WebviewWebsocketLocation {
 /// open ports.
 #[derive(Clone)]
 pub(crate) struct EditWebsocket {
-    /// A key that every websocket connection that originates from this application will use to identify itself.
-    /// We use this to make sure no external applications can connect to our websocket and receive UI updates.
-    key: [u8; KEY_SIZE],
-    port: u16,
+    current_location: Arc<Mutex<ServerLocation>>,
     max_webview_id: Arc<AtomicU32>,
     connections: Arc<RwLock<HashMap<u32, WebviewConnectionState>>>,
+    server_location: Arc<Notify>,
 }
 
 impl EditWebsocket {
     pub(crate) fn start() -> Self {
-        let expected_key = create_secure_key();
         let connections = Arc::new(RwLock::new(HashMap::new()));
-        let connections_ = connections.clone();
-        let server = TcpListener::bind((IpAddr::from([127, 0, 0, 1]), 0))
-            .expect("Failed to bind local TCP listener for edit socket");
-        let port = server.local_addr().unwrap().port();
 
-        std::thread::spawn(move || Self::accept_loop(server, port, expected_key, connections_));
+        let notify = Notify::new();
+        let notify = Arc::new(notify);
+        let (location, server) = ServerLocation::connect();
+        let current_location = Arc::new(Mutex::new(location));
+
+        let connections_ = connections.clone();
+        let current_location_ = current_location.clone();
+        let notify_ = notify.clone();
+        std::thread::spawn(move || {
+            Self::accept_loop(notify_, server, current_location_, connections_)
+        });
 
         Self {
             connections,
-            port,
             max_webview_id: Default::default(),
-            key: expected_key,
+            current_location,
+            server_location: notify,
         }
     }
 
@@ -134,165 +196,203 @@ impl EditWebsocket {
     /// New sockets are accepted and then put in to a new thread to handle the connection.
     /// This is implemented using traditional sync code to allow us to be independent of the async runtime.
     fn accept_loop(
-        server: TcpListener,
-        port: u16,
-        expected_key: [u8; KEY_SIZE],
+        notify: Arc<Notify>,
+        mut server: TcpListener,
+        current_location: Arc<Mutex<ServerLocation>>,
+        connections: Arc<RwLock<HashMap<u32, WebviewConnectionState>>>,
+    ) {
+        loop {
+            // Accept connections until we hit an error
+            loop {
+                match server.accept() {
+                    Ok((stream, _)) => {
+                        Self::handle_connection(
+                            stream,
+                            current_location.clone(),
+                            connections.clone(),
+                        );
+                    }
+                    Err(e) => {
+                        tracing::error!("Error accepting websocket connection: {}", e);
+                        break;
+                    }
+                }
+            }
+
+            // Switch ports and reconnect on a different port
+            let (location, new_server) = ServerLocation::connect();
+            notify.notify_waiters();
+            *current_location.lock().unwrap() = location;
+            server = new_server;
+        }
+    }
+
+    fn handle_connection(
+        stream: TcpStream,
+        server_location: Arc<Mutex<ServerLocation>>,
         connections: Arc<RwLock<HashMap<u32, WebviewConnectionState>>>,
     ) {
         use tungstenite::handshake::server::{Request, Response};
 
-        let hex_encoded_key = encode_key_string(&expected_key);
-        while let Ok((stream, _)) = server.accept() {
-            let mut location = None;
+        let current_server_location = { server_location.lock().unwrap().clone() };
+        let hex_encoded_client_key = encode_key_string(&current_server_location.client_key);
+        let hex_encoded_server_key = encode_key_string(&current_server_location.server_key);
+        let mut location = None;
 
-            let on_request = |req: &Request, res| {
-                // Try to parse the webview id and key from the path
-                let path = req.uri().path();
+        let on_request = |req: &Request, res| {
+            // Try to parse the webview id and key from the path
+            let path = req.uri().path();
 
-                // The path should have two parts `/webview_id/key`
-                let mut segments = path.trim_matches('/').split('/');
-                let webview_id = segments
-                    .next()
-                    .and_then(|s| s.parse::<u32>().ok())
-                    .ok_or_else(|| {
-                        Response::builder()
-                            .status(400)
-                            .body(Some("Bad Request: Invalid webview ID".to_string()))
-                            .unwrap()
-                    })?;
-                let key = segments.next().ok_or_else(|| {
+            // The path should have two parts `/webview_id/key`
+            let mut segments = path.trim_matches('/').split('/');
+            let webview_id = segments
+                .next()
+                .and_then(|s| s.parse::<u32>().ok())
+                .ok_or_else(|| {
                     Response::builder()
                         .status(400)
-                        .body(Some("Bad Request: Missing key".to_string()))
+                        .body(Some("Bad Request: Invalid webview ID".to_string()))
                         .unwrap()
                 })?;
+            let key = segments.next().ok_or_else(|| {
+                Response::builder()
+                    .status(400)
+                    .body(Some("Bad Request: Missing key".to_string()))
+                    .unwrap()
+            })?;
 
-                // Make sure the key matches the expected key.
-                // VERY IMPORTANT: We cannot use normal string comparison here because it reveals information
-                // about the key based on timing information. Instead we use a constant time comparison method.
-                let key_matches: bool =
-                    subtle::ConstantTimeEq::ct_eq(hex_encoded_key.as_ref(), key.as_bytes()).into();
-                if !key_matches {
-                    return Err(Response::builder()
-                        .status(403)
-                        .body(Some("Forbidden: Invalid key".to_string()))
-                        .unwrap());
-                }
-
-                location = Some(WebviewWebsocketLocation {
-                    port,
-                    webview_id,
-                    key: expected_key,
-                });
-
-                Ok(res)
-            };
-
-            // Accept the websocket connection while reading the path and setting the location
-            let mut websocket = match tungstenite::accept_hdr(stream, on_request) {
-                Ok(ws) => ws,
-                Err(e) => {
-                    tracing::error!("Error accepting websocket connection: {}", e);
-                    continue;
-                }
-            };
-
-            let location = match location {
-                Some(loc) => loc,
-                None => {
-                    tracing::error!("WebSocket connection without a valid webview ID");
-                    continue;
-                }
-            };
-
-            // Handle the websocket connection in a separate thread
-            let (edits_outgoing, mut edits_incoming_rx) =
-                futures_channel::mpsc::unbounded::<MsgPair>();
-
-            let connections_ = connections.clone();
-            // Spawn a task to handle the websocket connection
-            std::thread::spawn(move || {
-                // Wait until there are edits ready to send
-                while let Some(msg) = edits_incoming_rx.next().block_on() {
-                    // Send the edits to the webview
-                    if let Err(e) =
-                        websocket.send(tungstenite::Message::Binary(msg.edits.clone().into()))
-                    {
-                        tracing::error!("Error sending edits to webview: {}", e);
-                        break;
-                    }
-
-                    // Wait for the webview to apply the edits
-                    while let Ok(ws_msg) = websocket.read() {
-                        match ws_msg {
-                            // We expect the webview to send a binary message when it has applied the edits
-                            // This is a signal that we can continue processing
-                            tungstenite::Message::Binary(_) => break,
-                            // If the websocket closes, switch back to the pending state and
-                            // re-queue the edits that haven't been acknowledged yet
-                            tungstenite::Message::Close(_) => {
-                                tracing::trace!(
-                                    "Webview {} closed the connection",
-                                    location.webview_id
-                                );
-                                let mut connection = WebviewConnectionState::default();
-                                connection.add_message_pair(msg);
-                                connections_
-                                    .write()
-                                    .unwrap()
-                                    .insert(location.webview_id, connection);
-                                return;
-                            }
-                            _ => {}
-                        }
-                    }
-
-                    // Notify that the edits have been applied
-                    if msg.response.send(()).is_err() {
-                        tracing::error!("Error sending edits applied notification");
-                    }
-                }
-            });
-
-            let mut connections = connections.write().unwrap();
-            match connections.remove(&location.webview_id) {
-                // If there are pending edits, send them to the new connection
-                Some(WebviewConnectionState::Pending { mut pending }) => {
-                    while let Some(pair) = pending.pop_front() {
-                        _ = edits_outgoing.unbounded_send(pair);
-                    }
-                }
-
-                // If the webview was already connected, never send edits from the old connection to
-                // the new connection. This should never happen
-                Some(WebviewConnectionState::Connected { .. }) => {
-                    tracing::error!(
-                        "Webview {} was already connected. Rejecting new connection.",
-                        location.webview_id
-                    );
-                    continue;
-                }
-
-                None => {}
+            // Make sure the key matches the expected key.
+            // VERY IMPORTANT: We cannot use normal string comparison here because it reveals information
+            // about the key based on timing information. Instead we use a constant time comparison method.
+            let key_matches: bool =
+                subtle::ConstantTimeEq::ct_eq(hex_encoded_client_key.as_ref(), key.as_bytes())
+                    .into();
+            if !key_matches {
+                return Err(Response::builder()
+                    .status(403)
+                    .body(Some("Forbidden: Invalid key".to_string()))
+                    .unwrap());
             }
 
-            connections.insert(
-                location.webview_id,
-                WebviewConnectionState::Connected { edits_outgoing },
-            );
+            location = Some(WebviewWebsocketLocation {
+                webview_id,
+                server: server_location,
+            });
+
+            Ok(res)
+        };
+
+        // Accept the websocket connection while reading the path and setting the location
+        let mut websocket = match tungstenite::accept_hdr(stream, on_request) {
+            Ok(ws) => ws,
+            Err(e) => {
+                tracing::error!("Error accepting websocket connection: {}", e);
+                return;
+            }
+        };
+
+        // Immediately send the key to authenticate the server
+        websocket
+            .send(tungstenite::Message::Text(hex_encoded_server_key.into()))
+            .unwrap();
+
+        let location = match location {
+            Some(loc) => loc,
+            None => {
+                tracing::error!("WebSocket connection without a valid webview ID");
+                return;
+            }
+        };
+
+        // Handle the websocket connection in a separate thread
+        let (edits_outgoing, mut edits_incoming_rx) = futures_channel::mpsc::unbounded::<MsgPair>();
+
+        let connections_ = connections.clone();
+        // Spawn a task to handle the websocket connection
+        std::thread::spawn(move || {
+            let mut queued_message = None;
+            // Wait until there are edits ready to send
+            'connection: while let Some(msg) = edits_incoming_rx.next().block_on() {
+                let data = msg.edits.clone();
+                queued_message = Some(msg);
+                // Send the edits to the webview
+                if let Err(e) = websocket.send(tungstenite::Message::Binary(data.into())) {
+                    tracing::error!("Error sending edits to webview: {}", e);
+                    break 'connection;
+                }
+
+                // Wait for the webview to apply the edits
+                while let Ok(ws_msg) = websocket.read() {
+                    match ws_msg {
+                        // We expect the webview to send a binary message when it has applied the edits
+                        // This is a signal that we can continue processing
+                        tungstenite::Message::Binary(_) => break,
+                        // If the websocket closes, switch back to the pending state and
+                        // re-queue the edits that haven't been acknowledged yet
+                        tungstenite::Message::Close(_) => {
+                            break 'connection;
+                        }
+                        _ => {}
+                    }
+                }
+
+                let msg = queued_message.take().expect("Message should be set here");
+
+                // Notify that the edits have been applied
+                if msg.response.send(()).is_err() {
+                    tracing::error!("Error sending edits applied notification");
+                }
+            }
+            tracing::trace!("Webview {} closed the connection", location.webview_id);
+            let mut connection = WebviewConnectionState::default();
+            if let Some(msg) = queued_message {
+                connection.add_message_pair(msg);
+            }
+            connections_
+                .write()
+                .unwrap()
+                .insert(location.webview_id, connection);
+        });
+
+        let mut connections = connections.write().unwrap();
+        match connections.remove(&location.webview_id) {
+            // If there are pending edits, send them to the new connection
+            Some(WebviewConnectionState::Pending { mut pending }) => {
+                while let Some(pair) = pending.pop_front() {
+                    _ = edits_outgoing.unbounded_send(pair);
+                }
+            }
+
+            // If the webview was already connected, never send edits from the old connection to
+            // the new connection. This should never happen
+            Some(WebviewConnectionState::Connected { .. }) => {
+                tracing::error!(
+                    "Webview {} was already connected. Rejecting new connection.",
+                    location.webview_id
+                );
+                return;
+            }
+
+            None => {}
         }
+
+        connections.insert(
+            location.webview_id,
+            WebviewConnectionState::Connected { edits_outgoing },
+        );
     }
 
     pub(crate) fn create_queue(&self) -> WryQueue {
+        let webview_id = self
+            .max_webview_id
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let server = self.current_location.clone();
+        let server_location = self.server_location.clone();
         WryQueue {
             inner: Rc::new(RefCell::new(WryQueueInner {
-                location: WebviewWebsocketLocation {
-                    webview_id: self
-                        .max_webview_id
-                        .fetch_add(1, std::sync::atomic::Ordering::SeqCst),
-                    port: self.port,
-                    key: self.key,
-                },
+                server_location_changed: server_location.clone(),
+                server_location_changed_future: owned_notify_future(server_location),
+                location: WebviewWebsocketLocation { webview_id, server },
                 websocket: self.clone(),
                 edits_in_progress: None,
                 mutation_state: MutationState::default(),
@@ -386,4 +486,19 @@ fn test_key_encoding_length() {
         // The encoded key length should be the same regardless of the value of the key
         assert_eq!(encoded.len(), 344);
     }
+}
+
+// Take an Arc<Notify> and create a future that waits for the notify to be triggered.
+fn owned_notify_future(notify: Arc<Notify>) -> Pin<Box<dyn Future<Output = ()>>> {
+    let mut notify_owned = Box::pin(async move {
+        let notified = notify.notified();
+
+        // The future should be after this statement once it is polled bellow
+        tokio::task::yield_now().await;
+        notified.await;
+    });
+
+    // Start tracking notify before the output future is polled
+    _ = (&mut notify_owned).now_or_never();
+    notify_owned
 }

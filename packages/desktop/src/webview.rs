@@ -443,6 +443,24 @@ impl WebviewInstance {
         // Wait for work will return Ready when it has edits to be sent to the webview
         // It will return Pending when it needs to be polled again - nothing is ready
         loop {
+            // Check if there is a new edit channel we need to send. On IOS,
+            // the websocket will be killed when the device is put into sleep. If we
+            // find the socket has been closed, we create a new socket and send it to
+            // the webview to continue on
+            // https://github.com/DioxusLabs/dioxus/issues/4374
+            let new_connection_poll = self.edits.wry_queue.poll_new_connection(&mut cx);
+            if new_connection_poll.is_ready() {
+                let edits_path = self.edits.wry_queue.edits_path();
+                let expected_key = self.edits.wry_queue.required_server_key();
+
+                if let Err(err) = self.desktop_context.webview.evaluate_script(&format!(
+                    "window.interpreter.waitForRequest(\"{}\", \"{}\");",
+                    edits_path, expected_key
+                )) {
+                    tracing::error!("Failed to reconnect edits channel for webview: {err}",);
+                }
+            }
+
             // If we're waiting for a render, wait for it to finish before we continue
             let edits_flushed_poll = self.edits.wry_queue.poll_edits_flushed(&mut cx);
             if edits_flushed_poll.is_pending() {
