@@ -19,8 +19,8 @@ autofocus = []
 
 [dependencies]
 # Blitz dependencies
-blitz-dom = { version = "=0.1.0-alpha.5", default-features = false }
-blitz-traits = { version = "=0.1.0-alpha.5" }
+blitz-dom = { path = "../../../blitz/packages/blitz-dom", default-features = false }
+blitz-traits = { path = "../../../blitz/packages/blitz-traits" }
 
 # DioxusLabs dependencies
 dioxus-core = { workspace = true }
