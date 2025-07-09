@@ -180,12 +180,8 @@ impl Bundle {
             };
 
             if windows_icon.is_none() {
-                let default = bundle
-                    .main_exe()
-                    .parent()
-                    .unwrap()
-                    .parent()
-                    .unwrap()
+                let default = krate
+                    .bundle_dir(build.platform)
                     .join("winres")
                     .join("icon.ico");
                 tracing::info!("Windows icon not set. Using default icon.");

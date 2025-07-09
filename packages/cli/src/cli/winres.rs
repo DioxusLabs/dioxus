@@ -335,9 +335,8 @@ impl WindowsResource {
     }
 
     pub(crate) fn from_dxconfig(build: &BuildRequest) -> io::Result<Linker> {
-
-        let bundle = &build.krate.config.bundle;
-        let package = build.krate.package();
+        let bundle = &build.config.bundle;
+        let package = build.package();
 
         let (version_str, version) = match bundle.version.as_ref() {
             Some(v) => (v, VersionInfo::version_from_str(v)),
@@ -355,9 +354,9 @@ impl WindowsResource {
             None => (version_str, version),
         };
 
-        let productname = match build.krate.config.application.name.as_ref() {
+        let productname = match build.config.application.name.as_ref() {
             Some(n) => n,
-            None => &build.krate.bundled_app_name(),
+            None => &build.bundled_app_name(),
         };
 
         let binding = package.description.clone().unwrap_or_default();
@@ -366,7 +365,7 @@ impl WindowsResource {
             None => bundle.long_description.as_ref().unwrap_or(&binding),
         };
 
-        let output_dir = build.platform_dir().join("winres");
+        let output_dir = build.bundle_dir(build.platform).join("winres");
         fs::create_dir_all(&output_dir)?;
 
         let mut winres = Self::new();
