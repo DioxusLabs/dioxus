@@ -55,7 +55,7 @@ impl Autoformat {
             // Format raw text.
             let indent = indentation_for(".", self.split_line_attributes)?;
             if let Some(inner) = dioxus_autofmt::fmt_block(&raw, 0, indent) {
-                println!("{}", inner);
+                println!("{inner}");
             } else {
                 return Err("error formatting codeblock".into());
             }
@@ -79,7 +79,7 @@ impl Autoformat {
             if let Err(e) =
                 autoformat_project(check, split_line_attributes, format_rust_code, crate_dir)
             {
-                return Err(format!("error formatting project: {}", e).into());
+                return Err(format!("error formatting project: {e}").into());
             }
         }
 
@@ -111,17 +111,17 @@ fn refactor_file(
     let Ok(Ok(edits)) =
         syn::parse_file(&s).map(|file| dioxus_autofmt::try_fmt_file(&s, &file, indent))
     else {
-        return Err(format!("failed to format file: {}", s).into());
+        return Err(format!("failed to format file: {s}").into());
     };
 
     let out = dioxus_autofmt::apply_formats(&s, edits);
 
     if file == "-" {
-        print!("{}", out);
+        print!("{out}");
     } else if let Err(e) = fs::write(&file, out) {
         tracing::error!("failed to write formatted content to file: {e}",);
     } else {
-        println!("formatted {}", file);
+        println!("formatted {file}");
     }
 
     Ok(())
@@ -135,8 +135,8 @@ fn format_file(
     let mut contents = fs::read_to_string(&path)?;
     let mut if_write = false;
     if format_rust_code {
-        let formatted = format_rust(&contents)
-            .map_err(|err| Error::Parse(format!("Syntax Error:\n{}", err)))?;
+        let formatted =
+            format_rust(&contents).map_err(|err| Error::Parse(format!("Syntax Error:\n{err}")))?;
         if contents != formatted {
             if_write = true;
             contents = formatted;
@@ -144,9 +144,9 @@ fn format_file(
     }
 
     let parsed = syn::parse_file(&contents)
-        .map_err(|err| Error::Parse(format!("Failed to parse file: {}", err)))?;
+        .map_err(|err| Error::Parse(format!("Failed to parse file: {err}")))?;
     let edits = dioxus_autofmt::try_fmt_file(&contents, &parsed, indent)
-        .map_err(|err| Error::Parse(format!("Failed to format file: {}", err)))?;
+        .map_err(|err| Error::Parse(format!("Failed to format file: {err}")))?;
     let len = edits.len();
 
     if !edits.is_empty() {
@@ -202,7 +202,7 @@ fn autoformat_project(
     let files_formatted: usize = counts.into_iter().flatten().sum();
 
     if files_formatted > 0 && check {
-        return Err(format!("{} files needed formatting", files_formatted).into());
+        return Err(format!("{files_formatted} files needed formatting").into());
     }
 
     Ok(())
@@ -268,8 +268,7 @@ fn format_syn_error(err: syn::Error) -> Error {
     let line = start.line;
     let column = start.column;
     Error::Parse(format!(
-        "Syntax Error in line {} column {}:\n{}",
-        line, column, err
+        "Syntax Error in line {line} column {column}:\n{err}"
     ))
 }
 
