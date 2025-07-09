@@ -39,6 +39,7 @@ pub(crate) struct DebianSettings {
     pub replaces: Option<Vec<String>>,
     /// List of custom files to add to the deb package.
     /// Maps the path on the debian package to the path of the file to include (relative to the current working directory).
+    #[serde(default)]
     pub files: HashMap<PathBuf, PathBuf>,
     /// Path to a custom desktop file Handlebars template.
     ///
@@ -116,11 +117,17 @@ pub(crate) struct MacOsSettings {
     pub(crate) bundle_name: Option<String>,
     /// List of custom files to add to the application bundle.
     /// Maps the path in the Contents directory in the app to the path of the file to include (relative to the current working directory).
+    #[serde(default)]
     pub files: HashMap<PathBuf, PathBuf>,
     /// Preserve the hardened runtime version flag, see <https://developer.apple.com/documentation/security/hardened_runtime>
     ///
     /// Settings this to `false` is useful when using an ad-hoc signature, making it less strict.
+    #[serde(default = "default_hardened_runtime")]
     pub hardened_runtime: bool,
+}
+
+fn default_hardened_runtime() -> bool {
+    true
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -128,11 +135,13 @@ pub(crate) struct WindowsSettings {
     pub(crate) digest_algorithm: Option<String>,
     pub(crate) certificate_thumbprint: Option<String>,
     pub(crate) timestamp_url: Option<String>,
+    #[serde(default)]
     pub(crate) tsp: bool,
     pub(crate) wix: Option<WixSettings>,
     pub(crate) icon_path: Option<PathBuf>,
     pub(crate) webview_install_mode: WebviewInstallMode,
     pub(crate) webview_fixed_runtime_path: Option<PathBuf>,
+    #[serde(default)]
     pub(crate) allow_downgrades: bool,
     pub(crate) nsis: Option<NsisSettings>,
     /// Specify a custom command to sign the binaries.
@@ -160,6 +169,7 @@ pub(crate) struct NsisSettings {
     pub(crate) install_mode: NSISInstallerMode,
     pub(crate) languages: Option<Vec<String>>,
     pub(crate) custom_language_files: Option<HashMap<String, PathBuf>>,
+    #[serde(default)]
     pub(crate) display_language_selector: bool,
     pub(crate) start_menu_folder: Option<String>,
     pub(crate) installer_hooks: Option<PathBuf>,

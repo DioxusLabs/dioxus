@@ -51,3 +51,33 @@ test("unknown route", async ({ request }) => {
 
   expect(response.status()).toBe(404);
 });
+
+// Clicking the link on the home page should navigate to the blog route
+test("click blog link", async ({ page }) => {
+  await page.goto("http://localhost:8888");
+
+  // Click the link to the blog route
+  await page.locator('a').click();
+
+  // Wait for navigation to complete
+  await page.waitForURL("http://localhost:8888/blog/1/");
+
+  // Check that the blog page is displayed
+  const text = await page.textContent("body");
+  expect(text).toContain("id: 1");
+});
+
+// Clicking the link on the blog page should navigate back to the home route
+test("click home link from blog", async ({ page }) => {
+  await page.goto("http://localhost:8888/blog/1");
+
+  // Click the link to the home route
+  await page.locator('a').click();
+
+  // Wait for navigation to complete
+  await page.waitForURL("http://localhost:8888");
+
+  // Check that the home page is displayed
+  const text = await page.textContent("body");
+  expect(text).toContain("Home");
+});
