@@ -314,6 +314,7 @@ libloading = "0.8.6"
 libc = "0.2.170"
 memmap2 = "0.9.5"
 memfd = "0.6.4"
+lightningcss = { version = "1.0.0-alpha.66", default-features = false }
 
 # desktop
 wry = { version = "0.52.1", default-features = false }

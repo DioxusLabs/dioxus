@@ -21,6 +21,8 @@ syn = { workspace = true, features = [
 ] }
 serde = { workspace = true, features = ["derive"] }
 prettyplease = { workspace = true }
+itertools = { workspace = true }
+lightningcss = { workspace = true }
 
 [dev-dependencies]
 pretty_assertions = { workspace = true }
