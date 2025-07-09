@@ -297,7 +297,7 @@ impl IntoKeyCode for dioxus_html::KeyCode {
             dioxus_html::KeyCode::BackSlash => Code::Backslash,
             dioxus_html::KeyCode::CloseBracket => Code::BracketRight,
             dioxus_html::KeyCode::SingleQuote => Code::Quote,
-            key => panic!("Failed to convert {:?} to tao::keyboard::KeyCode, try using tao::keyboard::KeyCode directly", key),
+            key => panic!("Failed to convert {key:?} to tao::keyboard::KeyCode, try using tao::keyboard::KeyCode directly"),
         }
     }
 }

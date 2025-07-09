@@ -17,15 +17,14 @@ fn use_inner_html(id: &'static str) -> Option<String> {
             tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 
             let res = document::eval(&format!(
-                r#"let element = document.getElementById('{}');
-                return element.innerHTML"#,
-                id
+                r#"let element = document.getElementById('{id}');
+                return element.innerHTML"#
             ))
             .await
             .unwrap();
 
             if let Some(html) = res.as_str() {
-                println!("html: {}", html);
+                println!("html: {html}");
                 value.set(Some(html.to_string()));
             }
         });
@@ -42,7 +41,7 @@ fn check_html_renders() -> Element {
     let desktop_context: DesktopContext = consume_context();
 
     if let Some(raw_html) = inner_html {
-        println!("{}", raw_html);
+        println!("{raw_html}");
         let fragment = &raw_html;
         let expected = EXPECTED_HTML;
         assert_eq!(raw_html, EXPECTED_HTML);

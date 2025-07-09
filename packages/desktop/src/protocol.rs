@@ -132,6 +132,7 @@ fn index_request(
 ///   multiple webviews in the same application, so that we can send edits to the correct one.
 fn module_loader(root_id: &str, headless: bool, edit_state: &WebviewEdits) -> String {
     let edits_path = edit_state.wry_queue.edits_path();
+    let expected_key = edit_state.wry_queue.required_server_key();
 
     format!(
         r#"
@@ -143,7 +144,7 @@ fn module_loader(root_id: &str, headless: bool, edit_state: &WebviewEdits) -> St
     {NATIVE_JS}
 
     // The native interpreter extends the sledgehammer interpreter with a few extra methods that we use for IPC
-    window.interpreter = new NativeInterpreter("{edits_path}", "{EVENTS_PATH}");
+    window.interpreter = new NativeInterpreter("{EVENTS_PATH}", {headless});
 
     // Wait for the page to load before sending the initialize message
     window.onload = function() {{
@@ -152,7 +153,7 @@ fn module_loader(root_id: &str, headless: bool, edit_state: &WebviewEdits) -> St
             window.interpreter.initialize(root_element);
             window.ipc.postMessage(window.interpreter.serializeIpcMessage("initialize"));
         }}
-        window.interpreter.waitForRequest({headless});
+        window.interpreter.waitForRequest("{edits_path}", "{expected_key}");
     }}
 </script>
 <script type="module">
