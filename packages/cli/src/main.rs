@@ -62,6 +62,7 @@ async fn main() {
         Commands::Bundle(opts) => opts.bundle().await,
         Commands::Run(opts) => opts.run().await,
         Commands::SelfUpdate(opts) => opts.self_update().await,
+        Commands::Eject(opts) => opts.eject().await,
         Commands::Tools(BuildTools::BuildAssets(opts)) => opts.run().await,
     };
 
