@@ -454,8 +454,7 @@ impl WebviewInstance {
                 let expected_key = self.edits.wry_queue.required_server_key();
 
                 if let Err(err) = self.desktop_context.webview.evaluate_script(&format!(
-                    "window.interpreter.waitForRequest(\"{}\", \"{}\");",
-                    edits_path, expected_key
+                    "window.interpreter.waitForRequest(\"{edits_path}\", \"{expected_key}\");"
                 )) {
                     tracing::error!("Failed to reconnect edits channel for webview: {err}",);
                 }

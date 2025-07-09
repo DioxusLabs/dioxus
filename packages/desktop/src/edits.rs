@@ -234,7 +234,7 @@ impl EditWebsocket {
     ) {
         use tungstenite::handshake::server::{Request, Response};
 
-        let current_server_location = { server_location.lock().unwrap().clone() };
+        let current_server_location = { *server_location.lock().unwrap() };
         let hex_encoded_client_key = encode_key_string(&current_server_location.client_key);
         let hex_encoded_server_key = encode_key_string(&current_server_location.server_key);
         let mut location = None;
