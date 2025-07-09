@@ -256,6 +256,7 @@ jobs:
               cross: false,
               command: "test",
               args: "--all --tests",
+              platform: "desktop"
             }
           - {
               target: x86_64-apple-darwin,
@@ -264,6 +265,7 @@ jobs:
               cross: false,
               command: "test",
               args: "--all --tests",
+              platform: "desktop"
             }
           - {
               target: aarch64-apple-ios,
@@ -272,6 +274,7 @@ jobs:
               cross: false,
               command: "build",
               args: "--package dioxus-mobile",
+              platform: "ios"
             }
           - {
               target: x86_64-unknown-linux-gnu,
@@ -280,6 +283,7 @@ jobs:
               cross: false,
               command: "build",
               args: "--all --tests",
+              platform: "desktop"
             }
           - {
               target: aarch64-unknown-linux-gnu,
@@ -288,6 +292,7 @@ jobs:
               cross: false,
               command: "build",
               args: "--all --tests",
+              platform: "desktop"
             }
           - {
               target: aarch64-linux-android,
@@ -296,6 +301,7 @@ jobs:
               cross: true,
               command: "build",
               args: "--package dioxus-mobile",
+              platform: "android"
             }
 
     steps:
@@ -333,6 +339,14 @@ jobs:
       - name: test
         run: |
           ${{ env.RUST_CARGO_COMMAND }} ${{ matrix.platform.command }} ${{ matrix.platform.args }} --target ${{ matrix.platform.target }}
+
+      - name: build-cli
+        run: |
+          ${{ env.RUST_CARGO_COMMAND }} build --package dioxus-cli
+
+      - name: bundle
+        run: |
+          ./target/debug/dx bundle --platform ${{ matrix.platform.platform }} --target ${{ matrix.platform.target }}
 
   # borrowed from uv
   # https://raw.githubusercontent.com/astral-sh/uv/refs/heads/main/.github/workflows/ci.yml

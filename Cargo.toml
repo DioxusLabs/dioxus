@@ -104,6 +104,7 @@ members = [
     "example-projects/ecommerce-site",
     "example-projects/bluetooth-scanner",
     "example-projects/file-explorer",
+    "example-projects/hotdog",
 
     # Simple examples that require a crate
     "examples/tailwind",
