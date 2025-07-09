@@ -102,7 +102,7 @@ members = [
     # Full project examples
     "example-projects/fullstack-hackernews",
     "example-projects/ecommerce-site",
-    "example-projects/wifi-scanner",
+    "example-projects/bluetooth-scanner",
     "example-projects/file-explorer",
 
     # Simple examples that require a crate
