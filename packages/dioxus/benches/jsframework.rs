@@ -37,7 +37,7 @@ fn create_rows(c: &mut Criterion) {
 }
 
 fn app() -> Element {
-    let mut rng = SmallRng::from_entropy();
+    let mut rng = SmallRng::from_os_rng();
 
     rsx! (
         table {

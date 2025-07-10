@@ -9,11 +9,22 @@ authors = ["Jonathan Kelley"]
 dioxus = { workspace = true, features = ["web", "router", "wasm-split"] }
 dioxus-router = { workspace = true, features = ["wasm-split"] }
 anyhow = { workspace = true }
-async-compression = { workspace = true, features = ["futures-io", "gzip", "brotli"] }
+async-compression = { workspace = true, features = [
+    "futures-io",
+    "gzip",
+    "brotli",
+] }
 futures = { workspace = true }
 js-sys = { workspace = true }
 wasm-bindgen = { workspace = true }
 wasm-bindgen-futures = { workspace = true }
-web-sys = { workspace = true, features = ["Document", "Window", "HtmlElement", "Text", "DomRectReadOnly", "console"] }
-getrandom = { workspace = true, features = ["js"] }
+web-sys = { workspace = true, features = [
+    "Document",
+    "Window",
+    "HtmlElement",
+    "Text",
+    "DomRectReadOnly",
+    "console",
+] }
+getrandom = { workspace = true, features = ["wasm_js"] }
 reqwest = { workspace = true, features = ["json"] }

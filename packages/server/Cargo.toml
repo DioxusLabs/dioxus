@@ -24,7 +24,7 @@ tower-http = { workspace = true, features = ["fs"], optional = true }
 tokio-util = { workspace = true, features = ["rt"], optional = true }
 tokio-stream = { workspace = true, features = ["sync"], optional = true }
 tower = { workspace = true, features = ["util"], optional = true}
-tower-layer = { version = "0.3.2", optional = true}
+tower-layer = { version = "0.3.3", optional = true}
 hyper-util = { workspace = true, features = ["full"], optional = true }
 hyper = { workspace = true, optional = true }
 http = { workspace = true }
@@ -41,7 +41,7 @@ tracing = { workspace = true }
 tracing-futures = { workspace = true }
 async-trait = { workspace = true }
 serde = { workspace = true }
-enumset = "1.1.5"
+enumset = "1.1.6"
 
 futures-util = { workspace = true }
 futures-channel = { workspace = true }
@@ -50,11 +50,11 @@ base64 = { workspace = true }
 rustls = { workspace = true, optional = true }
 hyper-rustls = { workspace = true, optional = true }
 
-pin-project = { version = "1.1.2" }
+pin-project = { version = "1.1.10" }
 thiserror = { workspace = true }
-bytes = "1.4.0"
+bytes = "1.10.1"
 parking_lot = { workspace = true, features = ["send_guard"] }
-web-sys = { version = "0.3.61", features = [
+web-sys = { version = "0.3.77", features = [
     "Window",
     "Document",
     "Element",
@@ -65,7 +65,7 @@ web-sys = { version = "0.3.61", features = [
 
 dioxus-cli-config = { workspace = true }
 dioxus-devtools = { workspace = true, optional = true }
-aws-lc-rs = { version = "1.8.1", optional = true }
+aws-lc-rs = { version = "1.13.1", optional = true }
 dioxus-history = { workspace = true }
 subsecond.workspace = true
 inventory = { workspace = true }

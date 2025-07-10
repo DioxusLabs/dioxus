@@ -14,7 +14,7 @@ rust-version = "1.71.1"
 dioxus-desktop = { workspace = true }
 dioxus-lib = { workspace = true }
 dioxus-cli-config = { workspace = true }
-libc = "0.2.170"
+libc = "0.2.174"
 
 [target.'cfg(target_os = "android")'.dependencies]
 jni = "0.21.1"

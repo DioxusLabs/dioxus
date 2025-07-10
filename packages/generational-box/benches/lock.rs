@@ -1,7 +1,8 @@
 #![allow(unused)]
 use generational_box::*;
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{criterion_group, criterion_main, Criterion};
+use std::hint::black_box;
 
 fn create<S: Storage<u32>>(owner: &Owner<S>) -> GenerationalBox<u32, S> {
     owner.insert(0)

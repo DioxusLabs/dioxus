@@ -2871,7 +2871,7 @@ impl BuildRequest {
 
     /// Get the type of executable we are compiling
     pub(crate) fn executable_type(&self) -> TargetKind {
-        self.crate_target.kind[0]
+        self.crate_target.kind[0].clone()
     }
 
     /// Get the features required to build for the given platform
