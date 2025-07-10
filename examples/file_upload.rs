@@ -79,11 +79,13 @@ fn app() -> Element {
                 hovered.set(true)
             },
             ondragleave: move |_| hovered.set(false),
-            ondrop: move |evt| async move {
+            ondrop: move |evt| {
                 evt.prevent_default();
                 hovered.set(false);
                 if let Some(file_engine) = evt.files() {
-                    read_files(file_engine).await;
+                    spawn(async move {
+                        read_files(file_engine).await;
+                    });
                 }
             },
             "Drop files here"
