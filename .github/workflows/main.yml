@@ -82,7 +82,7 @@ jobs:
         with:
           cache-all-crates: "true"
       - uses: browser-actions/setup-firefox@latest
-      - run: cargo test --lib --bins --tests --examples --workspace --exclude dioxus-desktop --exclude dioxus-mobile
+      - run: cargo test --lib --bins --tests --examples --workspace --exclude dioxus-desktop
 
   release-test:
     if: github.event.pull_request.draft == false
@@ -103,7 +103,7 @@ jobs:
         with:
           cache-all-crates: "true"
       - uses: browser-actions/setup-firefox@latest
-      - run: cargo test --lib --bins --tests --examples --workspace --exclude dioxus-desktop --exclude dioxus-mobile --profile release-unoptimized
+      - run: cargo test --lib --bins --tests --examples --workspace --exclude dioxus-desktop --profile release-unoptimized
 
   fmt:
     if: github.event.pull_request.draft == false
@@ -273,7 +273,7 @@ jobs:
               toolchain: "1.86.0",
               cross: false,
               command: "build",
-              args: "--package dioxus-mobile",
+              args: "--package dioxus-desktop",
               platform: "ios"
             }
           - {
@@ -300,7 +300,7 @@ jobs:
               toolchain: "1.86.0",
               cross: true,
               command: "build",
-              args: "--package dioxus-mobile",
+              args: "--package dioxus-desktop",
               platform: "android"
             }
 

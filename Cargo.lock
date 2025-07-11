@@ -5016,7 +5016,6 @@ dependencies = [
  "dioxus-html",
  "dioxus-liveview",
  "dioxus-logger",
- "dioxus-mobile",
  "dioxus-native",
  "dioxus-router",
  "dioxus-server",
@@ -5359,6 +5358,7 @@ dependencies = [
  "objc",
  "objc_id",
  "open",
+ "openssl",
  "percent-encoding",
  "pollster",
  "rand 0.8.5",
@@ -5491,7 +5491,6 @@ dependencies = [
  "dioxus-interpreter-js",
  "dioxus-isrg",
  "dioxus-lib",
- "dioxus-mobile",
  "dioxus-router",
  "dioxus-server",
  "dioxus-web",
@@ -5697,18 +5696,6 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "tracing-wasm",
-]
-
-[[package]]
-name = "dioxus-mobile"
-version = "0.7.0-alpha.2"
-dependencies = [
- "dioxus-cli-config",
- "dioxus-desktop",
- "dioxus-lib",
- "jni 0.21.1",
- "libc",
- "openssl",
 ]
 
 [[package]]

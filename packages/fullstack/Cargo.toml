@@ -36,9 +36,6 @@ dioxus-interpreter-js = { workspace = true, optional = true }
 # Desktop Integration
 dioxus-desktop = { workspace = true, optional = true }
 
-# Mobile Integration
-dioxus-mobile = { workspace = true, optional = true }
-
 tracing = { workspace = true }
 tracing-futures = { workspace = true, optional = true }
 tokio-util = { workspace = true, features = ["rt"], optional = true }

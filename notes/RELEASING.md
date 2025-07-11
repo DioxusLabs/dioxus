@@ -103,7 +103,7 @@ There are a number of crates that are part of the Dioxus ecosystem that we usual
 
 Verify everything works and is ready to go.
 - [ ] crates.io is up to date
-- [ ] docs.rs is up to date and has no failing builds for major crates (dioxus, dioxus-desktop, dioxus-mobile, etc)
+- [ ] docs.rs is up to date and has no failing builds for major crates (dioxus, dioxus-desktop, etc)
 - [ ] github release post is out
 - [ ] The relevant GitHub tag is created
 - [ ] Any fixes are backported to the relevant branches.
