@@ -1,13 +1,7 @@
 use dioxus::prelude::*;
 
 #[component]
-pub fn Explainer<'a>(
-    cx: Scope<'a>,
-    invert: bool,
-    title: &'static str,
-    content: Element,
-    flasher: Element,
-) -> Element {
+pub fn Explainer(invert: bool, title: &'static str, content: Element, flasher: Element) -> Element {
     // pt-5 sm:pt-24 lg:pt-24
 
     let mut right = rsx! {

@@ -170,6 +170,13 @@ impl AndroidTools {
         ))
     }
 
+    pub(crate) fn sysroot(&self) -> PathBuf {
+        // The sysroot is usually located in the NDK under:
+        // "~/Library/Android/sdk/ndk/25.2.9519653/toolchains/llvm/prebuilt/darwin-x86_64/sysroot"
+        // or similar, depending on the platform.
+        self.android_tools_dir().parent().unwrap().join("sysroot")
+    }
+
     pub(crate) fn sdk(&self) -> PathBuf {
         // /Users/jonathankelley/Library/Android/sdk/ndk/25.2/... (25.2 is the ndk here)
         // /Users/jonathankelley/Library/Android/sdk/
@@ -185,6 +192,21 @@ impl AndroidTools {
     // todo(jon): this should be configurable
     pub(crate) fn min_sdk_version(&self) -> u32 {
         24
+    }
+
+    pub(crate) fn clang_folder(&self) -> PathBuf {
+        // The clang folder is usually located in the NDK under:
+        // "~/Library/Android/sdk/ndk/25.2.9519653/toolchains/llvm/prebuilt/darwin-x86_64/lib/clang/<version>"
+        // or similar, depending on the platform.
+        self.android_tools_dir()
+            .parent()
+            .unwrap()
+            .join("lib")
+            .join("clang")
+    }
+
+    pub(crate) fn ranlib(&self) -> PathBuf {
+        self.android_tools_dir().join("llvm-ranlib")
     }
 
     pub(crate) fn ar_path(&self) -> PathBuf {
@@ -260,6 +282,24 @@ impl AndroidTools {
         };
 
         triple
+    }
+
+    pub(crate) fn libcpp_shared(&self, triple: &Triple) -> PathBuf {
+        // The libc++_shared.so is usually located in the sysroot under:
+        // "~/Library/Android/sdk/ndk/25.2.9519653/toolchains/llvm/prebuilt/darwin-x86_64/sysroot/usr/lib/<arch>/libc++_shared.so"
+        // or similar, depending on the platform.
+        self.sysroot()
+            .join("usr")
+            .join("lib")
+            .join(Self::sysroot_target(&triple.to_string()))
+            .join("libc++_shared.so")
+    }
+
+    pub(crate) fn sysroot_target(rust_target: &str) -> &str {
+        (match rust_target {
+            "armv7-linux-androideabi" => "arm-linux-androideabi",
+            _ => rust_target,
+        }) as _
     }
 }
 

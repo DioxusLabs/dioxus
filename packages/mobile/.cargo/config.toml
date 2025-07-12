@@ -1,5 +1,0 @@
-[build]
-target = [
-    "aarch64-apple-ios",
-    "aarch64-linux-android"
-]

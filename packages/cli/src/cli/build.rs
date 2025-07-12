@@ -70,7 +70,7 @@ impl CommandWithPlatformOverrides<BuildArgs> {
         let ssg = self.shared.ssg;
         let targets = self.into_targets().await?;
 
-        AppBuilder::start(&targets.client, BuildMode::Base)?
+        AppBuilder::started(&targets.client, BuildMode::Base)?
             .finish_build()
             .await?;
 
@@ -78,7 +78,7 @@ impl CommandWithPlatformOverrides<BuildArgs> {
 
         if let Some(server) = targets.server.as_ref() {
             // If the server is present, we need to build it as well
-            let mut server_build = AppBuilder::start(server, BuildMode::Base)?;
+            let mut server_build = AppBuilder::started(server, BuildMode::Base)?;
             server_build.finish_build().await?;
 
             // Run SSG and cache static routes

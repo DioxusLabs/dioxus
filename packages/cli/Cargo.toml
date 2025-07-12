@@ -149,9 +149,7 @@ built = { version = "0.7.5", features = ["git2"] }
 
 [features]
 default = []
-plugin = []
 tokio-console = ["dep:console-subscriber", "tokio/tracing"]
-bundle = []
 no-downloads = []
 
 [[bin]]

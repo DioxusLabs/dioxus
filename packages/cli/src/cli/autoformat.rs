@@ -1,6 +1,6 @@
 use super::{check::collect_rs_files, *};
 use crate::Workspace;
-use anyhow::Context;
+use anyhow::{bail, Context};
 use dioxus_autofmt::{IndentOptions, IndentType};
 use rayon::prelude::*;
 use std::{borrow::Cow, fs, path::Path};
@@ -54,11 +54,9 @@ impl Autoformat {
         } else if let Some(raw) = raw {
             // Format raw text.
             let indent = indentation_for(".", self.split_line_attributes)?;
-            if let Some(inner) = dioxus_autofmt::fmt_block(&raw, 0, indent) {
-                println!("{}", inner);
-            } else {
-                return Err("error formatting codeblock".into());
-            }
+            let formatted =
+                dioxus_autofmt::fmt_block(&raw, 0, indent).context("error formatting codeblock")?;
+            println!("{}", formatted);
         } else {
             // Default to formatting the project.
             let crate_dir = if let Some(package) = self.package {
@@ -76,11 +74,8 @@ impl Autoformat {
                 Cow::Borrowed(Path::new("."))
             };
 
-            if let Err(e) =
-                autoformat_project(check, split_line_attributes, format_rust_code, crate_dir)
-            {
-                return Err(format!("error formatting project: {}", e).into());
-            }
+            autoformat_project(check, split_line_attributes, format_rust_code, crate_dir)
+                .context("error autoformatting project")?;
         }
 
         Ok(StructuredOutput::Success)
@@ -100,19 +95,15 @@ fn refactor_file(
     } else {
         fs::read_to_string(&file)
     };
-    let Ok(mut s) = file_content else {
-        return Err(format!("failed to open file: {}", file_content.unwrap_err()).into());
-    };
+    let mut s = file_content.context("failed to open file")?;
 
     if format_rust_code {
         s = format_rust(&s)?;
     }
 
-    let Ok(Ok(edits)) =
-        syn::parse_file(&s).map(|file| dioxus_autofmt::try_fmt_file(&s, &file, indent))
-    else {
-        return Err(format!("failed to format file: {}", s).into());
-    };
+    let parsed = syn::parse_file(&s).context("failed to parse file")?;
+    let edits =
+        dioxus_autofmt::try_fmt_file(&s, &parsed, indent).context("failed to format file")?;
 
     let out = dioxus_autofmt::apply_formats(&s, edits);
 
@@ -135,18 +126,16 @@ fn format_file(
     let mut contents = fs::read_to_string(&path)?;
     let mut if_write = false;
     if format_rust_code {
-        let formatted = format_rust(&contents)
-            .map_err(|err| Error::Parse(format!("Syntax Error:\n{}", err)))?;
+        let formatted = format_rust(&contents).context("Syntax Error")?;
         if contents != formatted {
             if_write = true;
             contents = formatted;
         }
     }
 
-    let parsed = syn::parse_file(&contents)
-        .map_err(|err| Error::Parse(format!("Failed to parse file: {}", err)))?;
+    let parsed = syn::parse_file(&contents).context("Failed to parse file")?;
     let edits = dioxus_autofmt::try_fmt_file(&contents, &parsed, indent)
-        .map_err(|err| Error::Parse(format!("Failed to format file: {}", err)))?;
+        .context("Failed to format file")?;
     let len = edits.len();
 
     if !edits.is_empty() {
@@ -202,7 +191,7 @@ fn autoformat_project(
     let files_formatted: usize = counts.into_iter().flatten().sum();
 
     if files_formatted > 0 && check {
-        return Err(format!("{} files needed formatting", files_formatted).into());
+        bail!("{} files needed formatting", files_formatted);
     }
 
     Ok(())
@@ -220,9 +209,7 @@ fn indentation_for(
         .output()?;
 
     if !out.status.success() {
-        return Err(Error::Runtime(format!(
-            "cargo fmt failed with status: {out:?}"
-        )));
+        bail!("cargo fmt failed with status: {out:?}");
     }
 
     let config = String::from_utf8_lossy(&out.stdout);
@@ -232,18 +219,14 @@ fn indentation_for(
         .find(|line| line.starts_with("hard_tabs "))
         .and_then(|line| line.split_once('='))
         .map(|(_, value)| value.trim() == "true")
-        .ok_or_else(|| {
-            Error::Runtime("Could not find hard_tabs option in rustfmt config".into())
-        })?;
+        .context("Could not find hard_tabs option in rustfmt config")?;
     let tab_spaces = config
         .lines()
         .find(|line| line.starts_with("tab_spaces "))
         .and_then(|line| line.split_once('='))
         .map(|(_, value)| value.trim().parse::<usize>())
-        .ok_or_else(|| Error::Runtime("Could not find tab_spaces option in rustfmt config".into()))?
-        .map_err(|_| {
-            Error::Runtime("Could not parse tab_spaces option in rustfmt config".into())
-        })?;
+        .context("Could not find tab_spaces option in rustfmt config")?
+        .context("Could not parse tab_spaces option in rustfmt config")?;
 
     Ok(IndentOptions::new(
         if hard_tabs {
@@ -258,7 +241,9 @@ fn indentation_for(
 
 /// Format rust code using prettyplease
 fn format_rust(input: &str) -> Result<String> {
-    let syntax_tree = syn::parse_file(input).map_err(format_syn_error)?;
+    let syntax_tree = syn::parse_file(input)
+        .map_err(format_syn_error)
+        .context("Failed to parse Rust syntax")?;
     let output = prettyplease::unparse(&syntax_tree);
     Ok(output)
 }
@@ -267,10 +252,7 @@ fn format_syn_error(err: syn::Error) -> Error {
     let start = err.span().start();
     let line = start.line;
     let column = start.column;
-    Error::Parse(format!(
-        "Syntax Error in line {} column {}:\n{}",
-        line, column, err
-    ))
+    anyhow::anyhow!("Syntax Error in line {} column {}:\n{}", line, column, err)
 }
 
 #[tokio::test]

@@ -3,9 +3,9 @@ pub(crate) mod build;
 pub(crate) mod build_assets;
 pub(crate) mod bundle;
 pub(crate) mod check;
-pub(crate) mod clean;
 pub(crate) mod config;
 pub(crate) mod create;
+pub(crate) mod doctor;
 pub(crate) mod init;
 pub(crate) mod link;
 pub(crate) mod platform_override;
@@ -75,9 +75,9 @@ pub(crate) enum Commands {
     #[clap(name = "init")]
     Init(init::Init),
 
-    /// Clean output artifacts.
-    #[clap(name = "clean")]
-    Clean(clean::Clean),
+    /// Diagnose installed tools and system configuration.
+    #[clap(name = "doctor")]
+    Doctor(doctor::Doctor),
 
     /// Translate a source file into Dioxus code.
     #[clap(name = "translate")]
@@ -121,7 +121,6 @@ impl Display for Commands {
             Commands::Serve(_) => write!(f, "serve"),
             Commands::New(_) => write!(f, "create"),
             Commands::Init(_) => write!(f, "init"),
-            Commands::Clean(_) => write!(f, "clean"),
             Commands::Config(_) => write!(f, "config"),
             Commands::Autoformat(_) => write!(f, "fmt"),
             Commands::Check(_) => write!(f, "check"),
@@ -129,6 +128,7 @@ impl Display for Commands {
             Commands::Run(_) => write!(f, "run"),
             Commands::SelfUpdate(_) => write!(f, "self-update"),
             Commands::Tools(_) => write!(f, "tools"),
+            Commands::Doctor(_) => write!(f, "doctor"),
         }
     }
 }
@@ -169,4 +169,5 @@ pub mod styles {
     pub(crate) const NOTE_STYLE: Style = AnsiColor::Green.on_default();
     pub(crate) const LINK_STYLE: Style = AnsiColor::Blue.on_default();
     pub(crate) const ERROR_STYLE: Style = AnsiColor::Red.on_default();
+    pub(crate) const HINT_STYLE: Style = clap::builder::styling::Ansi256Color(244).on_default();
 }

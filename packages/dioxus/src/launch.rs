@@ -332,7 +332,7 @@ impl LaunchBuilder {
 
         #[cfg(feature = "mobile")]
         if matches!(platform, KnownPlatform::Mobile) {
-            return dioxus_mobile::launch_bindings::launch(app, contexts, configs);
+            return dioxus_desktop::launch::launch(app, contexts, configs);
         }
 
         #[cfg(feature = "desktop")]

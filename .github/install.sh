@@ -47,19 +47,31 @@ success() {
 command -v unzip >/dev/null ||
     error 'unzip is required to install dx'
 
-if [[ $# -gt 1 ]]; then
-    error 'Too many arguments, only 1 are allowed. The first can be a specific tag of dx to install. (e.g. "dx-v0.7.1")'
+if [[ $# -gt 2 ]]; then
+    error 'Too many arguments, only 2 are allowed. The first can be a specific tag of dx to install. (e.g. "dx-v0.7.1") or `nightly` or `pr <PR_NUMBER>` to install the latest nightly or PR build.'
 fi
 
 if [ "$OS" = "Windows_NT" ]; then
-	target="x86_64-pc-windows-msvc"
+    target="x86_64-pc-windows-msvc"
 else
-	case $(uname -sm) in
-	"Darwin x86_64") target="x86_64-apple-darwin" ;;
-	"Darwin arm64") target="aarch64-apple-darwin" ;;
-	"Linux aarch64") target="aarch64-unknown-linux-gnu" ;;
-	*) target="x86_64-unknown-linux-gnu" ;;
-	esac
+    case $(uname -sm) in
+    "Darwin x86_64") target="x86_64-apple-darwin" ;;
+    "Darwin arm64") target="aarch64-apple-darwin" ;;
+    "Linux aarch64")
+        if [ -f /etc/alpine-release ]; then
+            target="aarch64-unknown-linux-musl"
+        else
+            target="aarch64-unknown-linux-gnu"
+        fi
+        ;;
+    *)
+        if [ -f /etc/alpine-release ]; then
+            target="x86_64-unknown-linux-musl"
+        else
+            target="x86_64-unknown-linux-gnu"
+        fi
+        ;;
+    esac
 fi
 
 GITHUB=${GITHUB-"https://github.com"}
@@ -69,7 +81,23 @@ exe_name=dx
 if [[ $# = 0 ]]; then
     dx_uri=$github_repo/releases/latest/download/dx-$target.zip
 else
-    dx_uri=$github_repo/releases/download/$1/dx-$target.zip
+    if [[ $1 = "nightly" ]]; then
+        echo "Installing latest nightly build for target $target"
+
+        # get the artifact ID and then run id by grepping. There will be two results, one for the worfklow id and one for the artifact ID.
+
+        # list=$(curl --fail --location --progress-bar  -L "https://api.github.com/repos/dioxuslabs/dioxus/actions/artifacts?name=playwright-report-1.86.0-macOS")
+        list=$(curl --fail --location --progress-bar  -L "https://api.github.com/repos/dioxuslabs/dioxus/actions/artifacts?name=dx-$target-nightly")
+        artifact_id=$(echo $list | grep -o '"id": [0-9]*' | head -2 | cut -d' ' -f2 | head -1)
+        workflow_id=$(echo $list | grep -o '"id": [0-9]*' | head -2 | cut -d' ' -f2 | tail -1)
+        echo "Artifact ID: $artifact_id"
+        echo "Workflow ID: $workflow_id"
+
+        # https://github.com/DioxusLabs/dioxus/actions/runs/16174794892/artifacts/3497286082
+        dx_uri=$github_repo/actions/runs/$workflow_id/artifacts/$artifact_id
+    else
+        dx_uri=$github_repo/releases/download/$1/dx-$target.zip
+    fi
 fi
 
 dx_install="${DX_INSTALL:-$HOME/.dx}"

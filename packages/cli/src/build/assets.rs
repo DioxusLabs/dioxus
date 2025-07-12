@@ -34,7 +34,7 @@ use std::{
 };
 
 use crate::Result;
-use anyhow::Context;
+use anyhow::{bail, Context};
 use const_serialize::{ConstVec, SerializeConst};
 use dioxus_cli_opt::AssetManifest;
 use manganis::BundledAsset;
@@ -352,11 +352,10 @@ pub(crate) fn extract_assets_from_file(path: impl AsRef<Path>) -> Result<AssetMa
             .output()?;
 
         if !output.status.success() {
-            return Err(anyhow::anyhow!(
+            bail!(
                 "Failed to re-sign the binary with codesign after finalizing the assets: {}",
                 String::from_utf8_lossy(&output.stderr)
-            )
-            .into());
+            );
         }
     }
 

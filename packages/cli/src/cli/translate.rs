@@ -1,5 +1,6 @@
 use super::*;
 use crate::{Result, StructuredOutput};
+use anyhow::bail;
 use dioxus_rsx::{BodyNode, CallBody, TemplateBody};
 
 /// Translate some source file into Dioxus code
@@ -108,7 +109,7 @@ fn determine_input(file: Option<String>, raw: Option<String>) -> Result<String> 
 
     // Make sure not both are specified
     if file.is_some() && raw.is_some() {
-        return Err("Only one of --file or --raw should be specified.".into());
+        bail!("Only one of --file or --raw should be specified.");
     }
 
     if let Some(raw) = raw {
@@ -121,7 +122,7 @@ fn determine_input(file: Option<String>, raw: Option<String>) -> Result<String> 
 
     // If neither exist, we try to read from stdin
     if std::io::stdin().is_terminal() {
-        return Err(anyhow::anyhow!("No input file, source, or stdin to translate from.").into());
+        bail!("No input file, source, or stdin to translate from.");
     }
 
     let mut buffer = String::new();

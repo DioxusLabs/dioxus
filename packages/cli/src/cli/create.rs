@@ -1,5 +1,6 @@
 use super::*;
 use crate::TraceSrc;
+use anyhow::{bail, Context};
 use cargo_generate::{GenerateArgs, TemplatePath, Vcs};
 use std::path::Path;
 
@@ -147,9 +148,9 @@ pub(crate) fn name_from_path(path: &Path) -> Result<String> {
         .absolutize()?
         .to_path_buf()
         .file_name()
-        .ok_or("Current path does not include directory name".to_string())?
+        .context("Current path does not include directory name".to_string())?
         .to_str()
-        .ok_or("Current directory name is not a valid UTF-8 string".to_string())?
+        .context("Current directory name is not a valid UTF-8 string".to_string())?
         .to_string())
 }
 
@@ -167,10 +168,7 @@ pub(crate) fn post_create(path: &Path, vcs: &Vcs) -> Result<()> {
             // Only 1 error means that CWD isn't a cargo project.
             Err(cargo_metadata::Error::CargoMetadata { .. }) => None,
             Err(err) => {
-                return Err(Error::Other(anyhow::anyhow!(
-                    "Couldn't retrieve cargo metadata: {:?}",
-                    err
-                )));
+                anyhow::bail!("Couldn't retrieve cargo metadata: {:?}", err)
             }
         }
     };
@@ -286,9 +284,9 @@ pub(crate) async fn connectivity_check() -> Result<()> {
         }
     }
 
-    Err(Error::Network(
-        "Error connecting to template repository. Try cloning the template manually or add `dioxus` to a `cargo new` project.".to_string(),
-    ))
+    bail!(
+        "Error connecting to template repository. Try cloning the template manually or add `dioxus` to a `cargo new` project."
+    )
 }
 
 // todo: re-enable these tests with better parallelization

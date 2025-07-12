@@ -1,4 +1,4 @@
-# WiFi scanner app
+# Bluetooth scanner app
 
 This desktop app showcases the use of background threads.
 
