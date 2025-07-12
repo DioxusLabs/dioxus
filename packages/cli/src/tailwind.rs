@@ -151,7 +151,7 @@ impl TailwindCli {
         Ok(proc)
     }
 
-    fn get_binary_path(&self) -> anyhow::Result<PathBuf> {
+    pub fn get_binary_path(&self) -> anyhow::Result<PathBuf> {
         if CliSettings::prefer_no_downloads() {
             which::which("tailwindcss").map_err(|_| anyhow!("Missing tailwindcss@{}", self.version))
         } else {

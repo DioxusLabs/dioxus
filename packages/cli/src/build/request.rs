@@ -803,7 +803,6 @@ impl BuildRequest {
                 self.write_executable(ctx, &artifacts.exe, &mut artifacts.assets)
                     .await
                     .context("Failed to write executable")?;
-
                 self.write_frameworks(ctx, &artifacts.direct_rustc)
                     .await
                     .context("Failed to write frameworks")?;
@@ -3101,15 +3100,6 @@ impl BuildRequest {
         })
     }
 
-    /// Return the version of the wasm-bindgen crate if it exists
-    fn wasm_bindgen_version(&self) -> Option<String> {
-        self.workspace
-            .krates
-            .krates_by_name("wasm-bindgen")
-            .next()
-            .map(|krate| krate.krate.version.to_string())
-    }
-
     /// Return the platforms that are enabled for the package
     ///
     /// Ideally only one platform is enabled but we need to be able to
@@ -3414,6 +3404,7 @@ impl BuildRequest {
         let post_bindgen_wasm = self.wasm_bindgen_wasm_output_file();
         let should_bundle_split: bool = self.wasm_split;
         let bindgen_version = self
+            .workspace
             .wasm_bindgen_version()
             .expect("this should have been checked by tool verification");
 
@@ -4013,9 +4004,12 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         }
 
         // Wasm bindgen
-        let krate_bindgen_version = self.wasm_bindgen_version().ok_or(anyhow::anyhow!(
-            "failed to detect wasm-bindgen version, unable to proceed"
-        ))?;
+        let krate_bindgen_version =
+            self.workspace
+                .wasm_bindgen_version()
+                .ok_or(anyhow::anyhow!(
+                    "failed to detect wasm-bindgen version, unable to proceed"
+                ))?;
 
         WasmBindgen::verify_install(&krate_bindgen_version).await?;
 

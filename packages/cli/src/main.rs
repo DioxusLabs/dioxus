@@ -56,13 +56,13 @@ async fn main() {
         Commands::Config(opts) => opts.config().await,
         Commands::Autoformat(opts) => opts.autoformat().await,
         Commands::Check(opts) => opts.check().await,
-        Commands::Clean(opts) => opts.clean().await,
         Commands::Build(opts) => opts.build().await,
         Commands::Serve(opts) => opts.serve().await,
         Commands::Bundle(opts) => opts.bundle().await,
         Commands::Run(opts) => opts.run().await,
         Commands::SelfUpdate(opts) => opts.self_update().await,
         Commands::Tools(BuildTools::BuildAssets(opts)) => opts.run().await,
+        Commands::Doctor(opts) => opts.doctor().await,
     };
 
     // Provide a structured output for third party tools that can consume the output of the CLI

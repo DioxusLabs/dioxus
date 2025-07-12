@@ -200,7 +200,7 @@ async fn find_latest_wasm_opt_download_url() -> anyhow::Result<String> {
 }
 
 /// Get the path to the wasm-opt binary, downloading it if necessary
-async fn get_binary_path() -> anyhow::Result<PathBuf> {
+pub async fn get_binary_path() -> anyhow::Result<PathBuf> {
     let install_dir = install_dir();
     let install_path = installed_bin_path(&install_dir);
 
@@ -221,6 +221,25 @@ async fn get_binary_path() -> anyhow::Result<PathBuf> {
     tracing::info!("wasm-opt installed from Github");
 
     Ok(install_path)
+}
+
+pub fn installed_location() -> Option<PathBuf> {
+    let install_dir = install_dir();
+    let install_path = installed_bin_path(&install_dir);
+
+    if install_path.exists() {
+        return Some(install_path);
+    }
+
+    if CliSettings::prefer_no_downloads() {
+        if let Ok(existing) = which::which("wasm-opt") {
+            return Some(existing);
+        } else {
+            return None;
+        }
+    }
+
+    None
 }
 
 fn install_dir() -> PathBuf {

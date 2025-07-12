@@ -675,7 +675,7 @@ impl Output {
                 if client.build.platform == Platform::Web {
                     "Serving at: ".gray()
                 } else {
-                    "ServerFns at: ".gray()
+                    "Server at: ".gray()
                 },
                 address,
             ])),

@@ -21,6 +21,7 @@ pub struct Workspace {
     pub(crate) ignore: Gitignore,
     pub(crate) cargo_toml: cargo_toml::Manifest,
     pub(crate) android_tools: Option<Arc<AndroidTools>>,
+    pub(crate) xcode: Option<PathBuf>,
 }
 
 impl Workspace {
@@ -109,6 +110,13 @@ impl Workspace {
 
         let android_tools = crate::build::get_android_tools();
 
+        let xcode = Command::new("xcode-select")
+            .arg("-p")
+            .output()
+            .await
+            .ok()
+            .map(|s| String::from_utf8_lossy(&s.stdout).trim().to_string().into());
+
         let workspace = Arc::new(Self {
             krates,
             settings,
@@ -118,6 +126,7 @@ impl Workspace {
             ignore,
             cargo_toml,
             android_tools,
+            xcode,
         });
 
         tracing::debug!(
@@ -252,6 +261,14 @@ impl Workspace {
 
     pub fn wasm_ld(&self) -> PathBuf {
         self.gcc_ld_dir().join("wasm-ld")
+    }
+
+    /// Return the version of the wasm-bindgen crate if it exists
+    pub fn wasm_bindgen_version(&self) -> Option<String> {
+        self.krates
+            .krates_by_name("wasm-bindgen")
+            .next()
+            .map(|krate| krate.krate.version.to_string())
     }
 
     // wasm-ld: ./rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/wasm-ld
@@ -475,9 +492,7 @@ impl Workspace {
 
     /// Returns the path to the dioxus home directory, used to install tools and other things
     pub(crate) fn dioxus_home_dir() -> PathBuf {
-        dirs::data_local_dir()
-            .map(|f| f.join("dioxus/"))
-            .unwrap_or_else(|| dirs::home_dir().unwrap().join(".dioxus"))
+        dirs::home_dir().unwrap().join(".dioxus")
     }
 }
 
