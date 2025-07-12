@@ -332,7 +332,7 @@ use manganis::AssetOptions;
 use manganis_core::AssetVariant;
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
-use std::borrow::Cow;
+use std::{borrow::Cow, ffi::OsString};
 use std::{
     collections::{BTreeMap, HashSet},
     io::Write,
@@ -392,6 +392,7 @@ pub(crate) struct BuildRequest {
     pub(crate) link_args_file: Arc<NamedTempFile>,
     pub(crate) link_err_file: Arc<NamedTempFile>,
     pub(crate) rustc_wrapper_args_file: Arc<NamedTempFile>,
+    pub(crate) command_file: Arc<NamedTempFile>,
     pub(crate) base_path: Option<String>,
     pub(crate) using_dioxus_explicitly: bool,
 }
@@ -717,6 +718,9 @@ impl BuildRequest {
         let session_cache_dir = Arc::new(
             TempDir::new().context("Failed to create temporary directory for session cache")?,
         );
+        let command_file = Arc::new(
+            NamedTempFile::new().context("Failed to create temporary file for linker args")?,
+        );
 
         let extra_rustc_args = shell_words::split(&args.rustc_args.clone().unwrap_or_default())
             .context("Failed to parse rustc args")?;
@@ -757,6 +761,7 @@ impl BuildRequest {
             custom_linker,
             link_args_file,
             link_err_file,
+            command_file,
             session_cache_dir,
             rustc_wrapper_args_file,
             extra_rustc_args,
@@ -1407,15 +1412,25 @@ impl BuildRequest {
 
         tracing::trace!("Linking with {:?} using args: {:#?}", linker, object_files);
 
+        let mut out_args: Vec<OsString> = vec![];
+        out_args.extend(object_files.iter().map(Into::into));
+        out_args.extend(dylibs.iter().map(Into::into));
+        out_args.extend(self.thin_link_args(&args)?.iter().map(Into::into));
+        out_args.extend(out_arg.iter().map(Into::into));
+
+        if cfg!(windows) {
+            let cmd_contents: String = out_args.iter().map(|s| s.to_string_lossy()).join(" ");
+            std::fs::write(self.command_file.path(), cmd_contents)
+                .context("Failed to write linker command file")?;
+            out_args = vec![format!("@{}", self.command_file.path().display()).into()];
+        }
+
         // Run the linker directly!
         //
         // We dump its output directly into the patch exe location which is different than how rustc
         // does it since it uses llvm-objcopy into the `target/debug/` folder.
         let res = Command::new(linker)
-            .args(object_files.iter())
-            .args(dylibs.iter())
-            .args(self.thin_link_args(&args)?)
-            .args(out_arg)
+            .args(out_args)
             .env_clear()
             .envs(rustc_args.envs.iter().map(|(k, v)| (k, v)))
             .output()
@@ -1819,7 +1834,7 @@ impl BuildRequest {
         // And then remove the rest of the rlibs
         //
         // We also need to insert the -force_load flag to force the linker to load the archive
-        let mut args = rustc_args.link_args.clone();
+        let mut args: Vec<_> = rustc_args.link_args.iter().skip(1).cloned().collect();
         if let Some(last_object) = args.iter().rposition(|arg| arg.ends_with(".o")) {
             if archive_has_contents {
                 match self.linker_flavor() {
@@ -1907,6 +1922,12 @@ impl BuildRequest {
             args.remove(flavor_idx);
         }
 
+        // Set the output file
+        match self.triple.operating_system {
+            OperatingSystem::Windows => args.push(format!("/OUT:{}", exe.display())),
+            _ => args.extend(["-o".to_string(), exe.display().to_string()]),
+        }
+
         // And now we can run the linker with our new args
         let linker = self.select_linker()?;
 
@@ -1916,15 +1937,18 @@ impl BuildRequest {
             tracing::trace!("  {}={}", e.0, e.1);
         }
 
-        // Run the linker directly!
-        let out_arg = match self.triple.operating_system {
-            OperatingSystem::Windows => vec![format!("/OUT:{}", exe.display())],
-            _ => vec!["-o".to_string(), exe.display().to_string()],
-        };
+        // Handle windows command files
+        let mut out_args = args.clone();
+        if cfg!(windows) {
+            let cmd_contents: String = out_args.iter().join(" ");
+            std::fs::write(self.command_file.path(), cmd_contents)
+                .context("Failed to write linker command file")?;
+            out_args = vec![format!("@{}", self.command_file.path().display())];
+        }
 
+        // Run the linker directly!
         let res = Command::new(linker)
-            .args(args.iter().skip(1))
-            .args(out_arg)
+            .args(out_args)
             .env_clear()
             .envs(rustc_args.envs.iter().map(|(k, v)| (k, v)))
             .output()
