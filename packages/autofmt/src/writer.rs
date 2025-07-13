@@ -774,7 +774,36 @@ impl<'a> Writer<'a> {
         };
 
         let pretty_expr = self.retrieve_formatted_expr(&expr).to_string();
-        self.write_mulitiline_tokens(pretty_expr)?;
+        // Adding comments back
+        let source_text = src_span.source_text().unwrap_or_default();
+        let mut source_lines = source_text.lines().peekable();
+        let mut pretty_lines = pretty_expr.lines().peekable();
+        let mut pretty_line = pretty_lines.next();
+        let mut output = String::from("");
+        while let Some(source_line) = source_lines.next() {
+            let mut source_line = source_line.to_string();
+            if source_line.trim().starts_with("//") {
+                output.push_str(self.out.indent.indent_str());
+                output.push_str(source_line.trim());
+                output.push('\n');
+                continue;
+            }
+            while pretty_line.is_some() && source_line.contains(pretty_line.unwrap()) {
+                output.push_str(pretty_line.unwrap());
+                source_line = source_line.replace(pretty_line.unwrap(), "");
+                pretty_line = pretty_lines.next();
+            }
+            if source_line.trim().starts_with("//") {
+                output.push(' ');
+                output.push_str(source_line.trim());
+            }
+            if source_lines.peek().is_some() {
+                output.push('\n');
+            }
+        }
+
+        self.write_mulitiline_tokens(output)?;
+        self.write_inline_comments(src_span.end(), 0)?;
 
         Ok(())
     }
