@@ -340,13 +340,11 @@ jobs:
         run: |
           ${{ env.RUST_CARGO_COMMAND }} ${{ matrix.platform.command }} ${{ matrix.platform.args }} --target ${{ matrix.platform.target }}
 
-      - name: build-cli
-        run: |
-          ${{ env.RUST_CARGO_COMMAND }} build --package dioxus-cli
+      - name: build CLI
+        run: ${{ env.RUST_CARGO_COMMAND }} build --package dioxus-cli
 
       - name: bundle
-        run: |
-          ./target/debug/dx bundle --platform ${{ matrix.platform.platform }} --target ${{ matrix.platform.target }}
+        run: ./target/debug/dx bundle --platform ${{ matrix.platform.platform }} --target ${{ matrix.platform.target }}
 
   # borrowed from uv
   # https://raw.githubusercontent.com/astral-sh/uv/refs/heads/main/.github/workflows/ci.yml
@@ -459,7 +457,7 @@ jobs:
           cargo build --release --package dioxus-cli --target ${{ matrix.platform.target }}
 
       - name: Upload CLI binaries
-      - uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: dx-${{ matrix.platform.target }}-${{ github.event.number || "nightly" }}
