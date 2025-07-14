@@ -36,7 +36,7 @@ reqwest = { workspace = true }
 tracing-subscriber = { workspace = true, default-features = true }
 tracing-fluent-assertions = "0.3.0"
 pretty_assertions = { workspace = true }
-sysinfo = "0.33.1"
+sysinfo = "0.35.2"
 
 [dev-dependencies.web-sys]
 version = "0.3.77"

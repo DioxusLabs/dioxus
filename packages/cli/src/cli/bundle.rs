@@ -1,5 +1,5 @@
 use crate::{AppBuilder, BuildArgs, BuildMode, BuildRequest, Platform};
-use anyhow::{anyhow, Context};
+use anyhow::{bail, Context};
 use path_absolutize::Absolutize;
 use std::collections::HashMap;
 use tauri_bundler::{BundleBinary, BundleSettings, PackageSettings, SettingsBuilder};
@@ -39,7 +39,7 @@ impl Bundle {
 
         let BuildTargets { client, server } = self.args.into_targets().await?;
 
-        AppBuilder::start(&client, BuildMode::Base)?
+        AppBuilder::started(&client, BuildMode::Base)?
             .finish_build()
             .await?;
 
@@ -47,7 +47,7 @@ impl Bundle {
 
         if let Some(server) = server.as_ref() {
             // If the server is present, we need to build it as well
-            AppBuilder::start(server, BuildMode::Base)?
+            AppBuilder::started(server, BuildMode::Base)?
                 .finish_build()
                 .await?;
 
@@ -167,10 +167,10 @@ impl Bundle {
 
         // Check if required fields are provided instead of failing silently.
         if bundle_settings.identifier.is_none() {
-            return Err(anyhow!("\n\nBundle identifier was not provided in `Dioxus.toml`. Add it as:\n\n[bundle]\nidentifier = \"com.mycompany\"\n\n").into());
+            bail!("\n\nBundle identifier was not provided in `Dioxus.toml`. Add it as:\n\n[bundle]\nidentifier = \"com.mycompany\"\n\n");
         }
         if bundle_settings.publisher.is_none() {
-            return Err(anyhow!("\n\nBundle publisher was not provided in `Dioxus.toml`. Add it as:\n\n[bundle]\npublisher = \"MyCompany\"\n\n").into());
+            bail!("\n\nBundle publisher was not provided in `Dioxus.toml`. Add it as:\n\n[bundle]\npublisher = \"MyCompany\"\n\n");
         }
 
         if cfg!(windows) {

@@ -120,7 +120,7 @@ pub type ServerFnResult<T = (), E = String> = std::result::Result<T, ServerFnErr
 ///     )))
 /// }
 /// ```
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub enum ServerFnError<T = String> {
     /// An error running the server function
     ServerError(T),
