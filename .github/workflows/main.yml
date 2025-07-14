@@ -341,7 +341,7 @@ jobs:
           ${{ env.RUST_CARGO_COMMAND }} ${{ matrix.platform.command }} ${{ matrix.platform.args }} --target ${{ matrix.platform.target }}
 
       - name: build CLI
-        run: ${{ env.RUST_CARGO_COMMAND }} build --package dioxus-cli
+        run: cargo build --package dioxus-cli
 
       - name: bundle
         run: ./target/debug/dx bundle --platform ${{ matrix.platform.platform }} --target ${{ matrix.platform.target }}
@@ -388,8 +388,8 @@ jobs:
               os: windows-latest
             }
           - {
-            target: x86_64-apple-darwin,
-            os: macos-13
+              target: x86_64-apple-darwin,
+              os: macos-13
             }
           - {
               target: aarch64-apple-darwin,
