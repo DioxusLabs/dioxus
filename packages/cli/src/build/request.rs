@@ -662,7 +662,6 @@ impl BuildRequest {
                 "-Clink-arg=-landroid".to_string(),
                 "-Clink-arg=-llog".to_string(),
                 "-Clink-arg=-lOpenSLES".to_string(),
-                "-Clink-arg=-lc++".to_string(),
                 "-Clink-arg=-lc++abi".to_string(),
                 "-Clink-arg=-Wl,--export-dynamic".to_string(),
                 format!(
@@ -1129,9 +1128,9 @@ impl BuildRequest {
                 }
             }
 
-            // On android, the c++_static flag means we need to copy the libc++_shared.so precompiled
+            // On android, the c++_shared flag means we need to copy the libc++_shared.so precompiled
             // library to the jniLibs folder
-            if arg.contains("-lc++_static") && self.platform == Platform::Android {
+            if arg.contains("-lc++_shared") && self.platform == Platform::Android {
                 std::fs::copy(
                     self.workspace.android_tools()?.libcpp_shared(&self.triple),
                     framework_dir.join("libc++_shared.so"),
