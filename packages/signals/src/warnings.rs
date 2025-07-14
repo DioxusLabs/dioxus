@@ -77,7 +77,7 @@ pub fn signal_read_and_write_in_reactive_scope<
 ) {
     // Check if the write happened during a scope that the signal is also subscribed to. If it did, this will probably cause an infinite loop.
     if let Some(reactive_context) = dioxus_core::prelude::ReactiveContext::current() {
-        if let Ok(inner) = crate::Readable::try_read(&signal.inner) {
+        if let Ok(inner) = crate::ReadableExt::try_read(&signal.inner) {
             if let Ok(subscribers) = inner.subscribers.lock() {
                 for subscriber in subscribers.iter() {
                     if reactive_context == *subscriber {

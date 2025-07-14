@@ -2,12 +2,12 @@ use std::ops::{Deref, DerefMut, IndexMut};
 
 use generational_box::{AnyStorage, UnsyncStorage};
 
-use crate::{read::Readable, BoxedWritable, MappedMutSignal};
+use crate::{read::Readable, read::ReadableExt, MappedMutSignal, Write};
 
 /// A reference to a value that can be written to.
 #[allow(type_alias_bounds)]
 pub type WritableRef<'a, T: Writable, O = <T as Readable>::Target> =
-    Write<'a, O, <T as Readable>::Storage, <T as Writable>::WriteMetadata>;
+    WriteLock<'a, O, <T as Readable>::Storage, <T as Writable>::WriteMetadata>;
 
 /// A trait for states that can be written to like [`crate::Signal`]. You may choose to accept this trait as a parameter instead of the concrete type to allow for more flexibility in your API.
 ///
@@ -47,7 +47,7 @@ pub trait Writable: Readable {
     /// Try to get a mutable reference to the value.
     #[track_caller]
     fn try_write(&mut self) -> Result<WritableRef<'_, Self>, generational_box::BorrowMutError> {
-        self.try_write_unchecked().map(Write::downcast_lifetime)
+        self.try_write_unchecked().map(WriteLock::downcast_lifetime)
     }
 
     /// Try to get a mutable reference to the value without checking the lifetime. This will update any subscribers.
@@ -176,19 +176,19 @@ pub trait Writable: Readable {
 /// - T is the current type of the write
 /// - S is the storage type of the signal. This type determines if the signal is local to the current thread, or it can be shared across threads.
 /// - D is the additional data associated with the write reference. This is used by signals to track when the write is dropped
-pub struct Write<'a, T: ?Sized + 'static, S: AnyStorage = UnsyncStorage, D = ()> {
+pub struct WriteLock<'a, T: ?Sized + 'static, S: AnyStorage = UnsyncStorage, D = ()> {
     write: S::Mut<'a, T>,
     data: D,
 }
 
-impl<'a, T: ?Sized, S: AnyStorage> Write<'a, T, S> {
+impl<'a, T: ?Sized, S: AnyStorage> WriteLock<'a, T, S> {
     /// Create a new write referenc
     pub fn new(write: S::Mut<'a, T>) -> Self {
         Self { write, data: () }
     }
 }
 
-impl<'a, T: ?Sized, S: AnyStorage, D> Write<'a, T, S, D> {
+impl<'a, T: ?Sized, S: AnyStorage, D> WriteLock<'a, T, S, D> {
     /// Create a new write reference with additional data.
     pub fn new_with_metadata(write: S::Mut<'a, T>, data: D) -> Self {
         Self { write, data }
@@ -210,17 +210,20 @@ impl<'a, T: ?Sized, S: AnyStorage, D> Write<'a, T, S, D> {
     }
 
     /// Map the metadata of the write reference to a new type.
-    pub fn map_metadata<O>(self, f: impl FnOnce(D) -> O) -> Write<'a, T, S, O> {
-        Write {
+    pub fn map_metadata<O>(self, f: impl FnOnce(D) -> O) -> WriteLock<'a, T, S, O> {
+        WriteLock {
             write: self.write,
             data: f(self.data),
         }
     }
 
     /// Map the mutable reference to the signal's value to a new type.
-    pub fn map<O: ?Sized>(myself: Self, f: impl FnOnce(&mut T) -> &mut O) -> Write<'a, O, S, D> {
+    pub fn map<O: ?Sized>(
+        myself: Self,
+        f: impl FnOnce(&mut T) -> &mut O,
+    ) -> WriteLock<'a, O, S, D> {
         let Self { write, data, .. } = myself;
-        Write {
+        WriteLock {
             write: S::map_mut(write, f),
             data,
         }
@@ -230,27 +233,27 @@ impl<'a, T: ?Sized, S: AnyStorage, D> Write<'a, T, S, D> {
     pub fn filter_map<O: ?Sized>(
         myself: Self,
         f: impl FnOnce(&mut T) -> Option<&mut O>,
-    ) -> Option<Write<'a, O, S, D>> {
+    ) -> Option<WriteLock<'a, O, S, D>> {
         let Self { write, data, .. } = myself;
         let write = S::try_map_mut(write, f);
-        write.map(|write| Write { write, data })
+        write.map(|write| WriteLock { write, data })
     }
 
     /// Downcast the lifetime of the mutable reference to the signal's value.
     ///
     /// This function enforces the variance of the lifetime parameter `'a` in Mut.  Rust will typically infer this cast with a concrete type, but it cannot with a generic type.
-    pub fn downcast_lifetime<'b>(mut_: Self) -> Write<'b, T, S, D>
+    pub fn downcast_lifetime<'b>(mut_: Self) -> WriteLock<'b, T, S, D>
     where
         'a: 'b,
     {
-        Write {
+        WriteLock {
             write: S::downcast_lifetime_mut(mut_.write),
             data: mut_.data,
         }
     }
 }
 
-impl<'a, T, S, D> Deref for Write<'a, T, S, D>
+impl<'a, T, S, D> Deref for WriteLock<'a, T, S, D>
 where
     S: AnyStorage,
     T: ?Sized + 'static,
@@ -262,7 +265,7 @@ where
     }
 }
 
-impl<'a, T, S, D> DerefMut for Write<'a, T, S, D>
+impl<'a, T, S, D> DerefMut for WriteLock<'a, T, S, D>
 where
     S: AnyStorage,
     T: ?Sized + 'static,
@@ -342,7 +345,7 @@ pub trait WritableExt: Writable {
     where
         Self::Target: std::ops::IndexMut<I>,
     {
-        Write::map(self.write(), |v| v.index_mut(index))
+        WriteLock::map(self.write(), |v| v.index_mut(index))
     }
 
     /// Takes the value out of the Signal, leaving a Default in its place.
@@ -362,17 +365,26 @@ pub trait WritableExt: Writable {
     {
         self.with_mut(|v| std::mem::replace(v, value))
     }
-
-    /// Box the writable value into a trait object. This is useful for passing around writable values without knowing their concrete type.
-    fn boxed_mut(self) -> BoxedWritable<Self::Target, Self::Storage>
-    where
-        Self: Sized + 'static,
-    {
-        BoxedWritable::new(self)
-    }
 }
 
 impl<W: Writable + ?Sized> WritableExt for W {}
+
+/// An extension trait for [`Writable`] values that can be boxed into a trait object.
+pub trait WritableBoxedExt: Writable<Storage = UnsyncStorage> {
+    /// Box the writable value into a trait object. This is useful for passing around writable values without knowing their concrete type.
+    fn boxed_mut(self) -> Write<Self::Target>
+    where
+        Self: Sized + 'static,
+    {
+        Write::new(self)
+    }
+}
+
+impl<T: Writable<Storage = UnsyncStorage> + 'static> WritableBoxedExt for T {
+    fn boxed_mut(self) -> Write<Self::Target> {
+        Write::new(self)
+    }
+}
 
 /// An extension trait for [`Writable<Option<T>>`]` that provides some convenience methods.
 pub trait WritableOptionExt<T: 'static>: Writable<Target = Option<T>> {
@@ -388,16 +400,16 @@ pub trait WritableOptionExt<T: 'static>: Writable<Target = Option<T>> {
         let is_none = self.read().is_none();
         if is_none {
             self.with_mut(|v| *v = Some(default()));
-            Write::map(self.write(), |v| v.as_mut().unwrap())
+            WriteLock::map(self.write(), |v| v.as_mut().unwrap())
         } else {
-            Write::map(self.write(), |v| v.as_mut().unwrap())
+            WriteLock::map(self.write(), |v| v.as_mut().unwrap())
         }
     }
 
     /// Attempts to write the inner value of the Option.
     #[track_caller]
     fn as_mut(&mut self) -> Option<WritableRef<'_, Self, T>> {
-        Write::filter_map(self.write(), |v: &mut Option<T>| v.as_mut())
+        WriteLock::filter_map(self.write(), |v: &mut Option<T>| v.as_mut())
     }
 }
 
@@ -473,7 +485,7 @@ pub trait WritableVecExt<T: 'static>: Writable<Target = Vec<T>> {
     /// Try to mutably get an element from the vector.
     #[track_caller]
     fn get_mut(&mut self, index: usize) -> Option<WritableRef<'_, Self, T>> {
-        Write::filter_map(self.write(), |v: &mut Vec<T>| v.get_mut(index))
+        WriteLock::filter_map(self.write(), |v: &mut Vec<T>| v.get_mut(index))
     }
 
     /// Gets an iterator over the values of the vector.
@@ -501,11 +513,11 @@ impl<'a, T: 'static, R: Writable<Target = Vec<T>>> Iterator for WritableValueIte
     fn next(&mut self) -> Option<Self::Item> {
         let index = self.index;
         self.index += 1;
-        Write::filter_map(
+        WriteLock::filter_map(
             self.value.try_write_unchecked().unwrap(),
             |v: &mut Vec<T>| v.get_mut(index),
         )
-        .map(Write::downcast_lifetime)
+        .map(WriteLock::downcast_lifetime)
     }
 }
 

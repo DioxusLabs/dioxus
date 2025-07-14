@@ -449,6 +449,10 @@ impl<T> Readable for Resource<T> {
     ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> {
         self.value.try_peek_unchecked()
     }
+
+    fn subscribers(&self) -> Option<Subscribers> {
+        self.value.subscribers()
+    }
 }
 
 impl<T> IntoAttributeValue for Resource<T>

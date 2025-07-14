@@ -1,29 +1,62 @@
-use std::{any::Any, ops::Deref, rc::Rc};
+use std::{any::Any, ops::Deref};
 
 use dioxus_core::{prelude::IntoAttributeValue, IntoDynNode};
-use generational_box::{BorrowResult, Storage, UnsyncStorage};
+use generational_box::{BorrowResult, UnsyncStorage};
 
 use crate::{
     read_impls, write_impls, CopyValue, Global, InitializeFromFunction, MappedMutSignal,
-    MappedSignal, Memo, ReadOnlySignal, Readable, ReadableExt, ReadableRef, Signal, SignalData,
-    Writable, WritableExt,
+    MappedSignal, Memo, Readable, ReadableExt, ReadableRef, Signal, Writable, WritableExt,
 };
 
 /// A boxed version of [Readable] that can be used to store any readable type.
-pub struct BoxedReadable<T: ?Sized, S: ?Sized = UnsyncStorage> {
-    value: Rc<dyn Readable<Target = T, Storage = S>>,
+pub struct Read<T: ?Sized + 'static> {
+    value: CopyValue<Box<dyn Readable<Target = T, Storage = UnsyncStorage>>>,
 }
 
-impl<T: ?Sized, S: ?Sized> BoxedReadable<T, S> {
+impl<T: ?Sized + 'static> Read<T> {
     /// Create a new boxed readable value.
-    pub fn new(value: impl Readable<Target = T, Storage = S> + 'static) -> Self {
+    pub fn new(value: impl Readable<Target = T, Storage = UnsyncStorage> + 'static) -> Self {
         Self {
-            value: Rc::new(value),
+            value: CopyValue::new(Box::new(value)),
+        }
+    }
+
+    /// Point to another [Read]. This will subscribe the other [Read] to all subscribers of this [Read].
+    pub fn point_to(&self, other: Self) -> BorrowResult
+    where
+        T: Sized + 'static,
+    {
+        #[allow(clippy::mutable_key_type)]
+        let this_subscribers = self.subscribers();
+        let other_subscribers = other.subscribers();
+        if let (Some(this_subscribers), Some(other_subscribers)) =
+            (this_subscribers, other_subscribers)
+        {
+            let this_subscribers = this_subscribers.lock().unwrap();
+            for subscriber in this_subscribers.iter() {
+                subscriber.subscribe(other_subscribers.clone());
+            }
+        }
+        self.value.point_to(other.value)
+    }
+
+    #[doc(hidden)]
+    /// This is only used by the `props` macro.
+    /// Mark any readers of the signal as dirty
+    pub fn mark_dirty(&mut self) {
+        let subscribers = self.value.subscribers();
+        if let Some(subscribers) = subscribers {
+            let Ok(subscribers) = subscribers.try_lock() else {
+                return;
+            };
+            for subscriber in subscribers.iter() {
+                subscriber.mark_dirty();
+            }
         }
     }
 }
 
-impl<T: ?Sized, S: ?Sized> Clone for BoxedReadable<T, S> {
+impl<T: ?Sized + 'static> Clone for Read<T> {
     fn clone(&self) -> Self {
         Self {
             value: self.value.clone(),
@@ -31,35 +64,41 @@ impl<T: ?Sized, S: ?Sized> Clone for BoxedReadable<T, S> {
     }
 }
 
-impl<T: ?Sized, S: ?Sized> PartialEq for BoxedReadable<T, S> {
+impl<T: ?Sized + 'static> Copy for Read<T> {}
+
+impl<T: ?Sized + 'static> PartialEq for Read<T> {
     fn eq(&self, other: &Self) -> bool {
-        Rc::ptr_eq(&self.value, &other.value)
+        self.value == other.value
     }
 }
 
-read_impls!(BoxedReadable<T, S> where S: Storage<T>);
+impl<T: Default + 'static> Default for Read<T> {
+    fn default() -> Self {
+        Self::new(Signal::new(T::default()))
+    }
+}
 
-impl<T, S> IntoAttributeValue for BoxedReadable<T, S>
+read_impls!(Read<T>);
+
+impl<T> IntoAttributeValue for Read<T>
 where
     T: Clone + IntoAttributeValue + 'static,
-    S: Storage<T>,
 {
     fn into_value(self) -> dioxus_core::AttributeValue {
         self.with(|f| f.clone().into_value())
     }
 }
 
-impl<T, S> IntoDynNode for BoxedReadable<T, S>
+impl<T> IntoDynNode for Read<T>
 where
     T: Clone + IntoDynNode + 'static,
-    S: Storage<T>,
 {
     fn into_dyn_node(self) -> dioxus_core::DynamicNode {
         self.with(|f| f.clone().into_dyn_node())
     }
 }
 
-impl<T: Clone + 'static, S: Storage<T>> Deref for BoxedReadable<T, S> {
+impl<T: Clone + 'static> Deref for Read<T> {
     type Target = dyn Fn() -> T;
 
     fn deref(&self) -> &Self::Target {
@@ -67,92 +106,73 @@ impl<T: Clone + 'static, S: Storage<T>> Deref for BoxedReadable<T, S> {
     }
 }
 
-impl<T: 'static, S: Storage<T>> Readable for BoxedReadable<T, S> {
+impl<T: 'static> Readable for Read<T> {
     type Target = T;
-    type Storage = S;
+    type Storage = UnsyncStorage;
 
     #[track_caller]
     fn try_read_unchecked(
         &self,
     ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> {
-        self.value.try_read_unchecked()
+        self.value
+            .try_peek_unchecked()
+            .unwrap()
+            .try_read_unchecked()
     }
 
     #[track_caller]
     fn try_peek_unchecked(&self) -> BorrowResult<ReadableRef<'static, Self>> {
-        self.value.try_peek_unchecked()
+        self.value
+            .try_peek_unchecked()
+            .unwrap()
+            .try_peek_unchecked()
     }
 
-    fn read(&self) -> ReadableRef<Self> {
-        self.value.read()
-    }
-
-    fn try_read(&self) -> Result<ReadableRef<Self>, generational_box::BorrowError> {
-        self.value.try_read()
-    }
-
-    fn read_unchecked(&self) -> ReadableRef<'static, Self> {
-        self.value.read_unchecked()
-    }
-
-    fn peek(&self) -> ReadableRef<Self> {
-        self.value.peek()
-    }
-
-    fn try_peek(&self) -> Result<ReadableRef<Self>, generational_box::BorrowError> {
-        self.value.try_peek()
-    }
-
-    fn peek_unchecked(&self) -> ReadableRef<'static, Self> {
-        self.value.peek_unchecked()
+    fn subscribers(&self) -> Option<crate::Subscribers> {
+        self.value.subscribers()
     }
 }
 
-// We can't implement From<impl Readable<Target = T, Storage = S> + 'static> for BoxedReadable<T, S>
+// We can't implement From<impl Readable<Target = T, Storage = S> + 'static> for Read<T, S>
 // because it would conflict with the From<T> for T implementation, but we can implement it for
 // all specific readable types
-impl<T, S: Storage<SignalData<T>>> From<Signal<T, S>> for BoxedReadable<T, S> {
-    fn from(value: Signal<T, S>) -> Self {
+impl<T> From<Signal<T>> for Read<T> {
+    fn from(value: Signal<T>) -> Self {
         Self::new(value)
     }
 }
-impl<T, S: Storage<SignalData<T>>> From<ReadOnlySignal<T, S>> for BoxedReadable<T, S> {
-    fn from(value: ReadOnlySignal<T, S>) -> Self {
-        Self::new(value)
-    }
-}
-impl<T: PartialEq> From<Memo<T>> for BoxedReadable<T> {
+impl<T: PartialEq> From<Memo<T>> for Read<T> {
     fn from(value: Memo<T>) -> Self {
         Self::new(value)
     }
 }
-impl<T, S: Storage<T>> From<CopyValue<T, S>> for BoxedReadable<T, S> {
-    fn from(value: CopyValue<T, S>) -> Self {
+impl<T> From<CopyValue<T>> for Read<T> {
+    fn from(value: CopyValue<T>) -> Self {
         Self::new(value)
     }
 }
-impl<T: Clone + 'static, S, R: 'static> From<Global<T, R>> for BoxedReadable<R, S>
+impl<T: Clone + 'static, R: 'static> From<Global<T, R>> for Read<R>
 where
-    T: Readable<Target = R, Storage = S> + InitializeFromFunction<R>,
+    T: Readable<Target = R, Storage = UnsyncStorage> + InitializeFromFunction<R>,
 {
     fn from(value: Global<T, R>) -> Self {
         Self::new(value)
     }
 }
-impl<V, O, F> From<MappedSignal<O, V, F>> for BoxedReadable<O, V::Storage>
+impl<V, O, F> From<MappedSignal<O, V, F>> for Read<O>
 where
     O: ?Sized,
-    V: Readable + 'static,
+    V: Readable<Storage = UnsyncStorage> + 'static,
     F: Fn(&V::Target) -> &O + 'static,
 {
     fn from(value: MappedSignal<O, V, F>) -> Self {
         Self::new(value)
     }
 }
-impl<V, O, F, FMut> From<MappedMutSignal<O, V, F, FMut>> for BoxedReadable<O, V::Storage>
+impl<V, O, F, FMut> From<MappedMutSignal<O, V, F, FMut>> for Read<O>
 where
     O: ?Sized,
-    V: Readable + 'static,
+    V: Readable<Storage = UnsyncStorage> + 'static,
     F: Fn(&V::Target) -> &O + 'static,
     FMut: 'static,
 {
@@ -162,17 +182,19 @@ where
 }
 
 /// A boxed version of [Writable] that can be used to store any writable type.
-pub struct BoxedWritable<T: ?Sized, S: ?Sized = UnsyncStorage> {
-    value: Rc<dyn Writable<Target = T, Storage = S, WriteMetadata = Box<dyn Any>>>,
+pub struct Write<T: ?Sized + 'static> {
+    value: CopyValue<
+        Box<dyn Writable<Target = T, Storage = UnsyncStorage, WriteMetadata = Box<dyn Any>>>,
+    >,
 }
 
-impl<T: ?Sized, S: ?Sized> BoxedWritable<T, S> {
+impl<T: ?Sized> Write<T> {
     /// Create a new boxed writable value.
     pub fn new<M>(
-        value: impl Writable<Target = T, Storage = S, WriteMetadata = M> + 'static,
+        value: impl Writable<Target = T, Storage = UnsyncStorage, WriteMetadata = M> + 'static,
     ) -> Self {
         Self {
-            value: Rc::new(BoxWriteMetadata::new(value)),
+            value: CopyValue::new(Box::new(BoxWriteMetadata::new(value))),
         }
     }
 }
@@ -192,30 +214,6 @@ impl<W: Readable> Readable for BoxWriteMetadata<W> {
 
     type Storage = W::Storage;
 
-    fn read(&self) -> ReadableRef<Self> {
-        self.value.read()
-    }
-
-    fn try_read(&self) -> Result<ReadableRef<Self>, generational_box::BorrowError> {
-        self.value.try_read()
-    }
-
-    fn read_unchecked(&self) -> ReadableRef<'static, Self> {
-        self.value.read_unchecked()
-    }
-
-    fn peek(&self) -> ReadableRef<Self> {
-        self.value.peek()
-    }
-
-    fn try_peek(&self) -> Result<ReadableRef<Self>, generational_box::BorrowError> {
-        self.value.try_peek()
-    }
-
-    fn peek_unchecked(&self) -> ReadableRef<'static, Self> {
-        self.value.peek_unchecked()
-    }
-
     fn try_read_unchecked(
         &self,
     ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> {
@@ -226,6 +224,10 @@ impl<W: Readable> Readable for BoxWriteMetadata<W> {
         &self,
     ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> {
         self.value.try_peek_unchecked()
+    }
+
+    fn subscribers(&self) -> Option<crate::Subscribers> {
+        self.value.subscribers()
     }
 }
 
@@ -261,7 +263,7 @@ impl<W: Writable> Writable for BoxWriteMetadata<W> {
     }
 }
 
-impl<T: ?Sized, S: ?Sized> Clone for BoxedWritable<T, S> {
+impl<T: ?Sized> Clone for Write<T> {
     fn clone(&self) -> Self {
         Self {
             value: self.value.clone(),
@@ -269,36 +271,36 @@ impl<T: ?Sized, S: ?Sized> Clone for BoxedWritable<T, S> {
     }
 }
 
-impl<T: ?Sized, S: ?Sized> PartialEq for BoxedWritable<T, S> {
+impl<T: ?Sized> Copy for Write<T> {}
+
+impl<T: ?Sized> PartialEq for Write<T> {
     fn eq(&self, other: &Self) -> bool {
-        Rc::ptr_eq(&self.value, &other.value)
+        self.value == other.value
     }
 }
 
-read_impls!(BoxedWritable<T, S> where S: Storage<T>);
-write_impls!(BoxedWritable<T, S> where S: Storage<T>);
+read_impls!(Write<T>);
+write_impls!(Write<T>);
 
-impl<T, S> IntoAttributeValue for BoxedWritable<T, S>
+impl<T> IntoAttributeValue for Write<T>
 where
     T: Clone + IntoAttributeValue + 'static,
-    S: Storage<T>,
 {
     fn into_value(self) -> dioxus_core::AttributeValue {
         self.with(|f| f.clone().into_value())
     }
 }
 
-impl<T, S> IntoDynNode for BoxedWritable<T, S>
+impl<T> IntoDynNode for Write<T>
 where
     T: Clone + IntoDynNode + 'static,
-    S: Storage<T>,
 {
     fn into_dyn_node(self) -> dioxus_core::DynamicNode {
         self.with(|f| f.clone().into_dyn_node())
     }
 }
 
-impl<T: Clone + 'static, S: Storage<T>> Deref for BoxedWritable<T, S> {
+impl<T: Clone + 'static> Deref for Write<T> {
     type Target = dyn Fn() -> T;
 
     fn deref(&self) -> &Self::Target {
@@ -306,86 +308,75 @@ impl<T: Clone + 'static, S: Storage<T>> Deref for BoxedWritable<T, S> {
     }
 }
 
-impl<T: 'static, S: Storage<T>> Readable for BoxedWritable<T, S> {
+impl<T: 'static> Readable for Write<T> {
     type Target = T;
-    type Storage = S;
+    type Storage = UnsyncStorage;
 
     #[track_caller]
     fn try_read_unchecked(
         &self,
     ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> {
-        self.value.try_read_unchecked()
+        self.value
+            .try_peek_unchecked()
+            .unwrap()
+            .try_read_unchecked()
     }
 
     #[track_caller]
     fn try_peek_unchecked(&self) -> BorrowResult<ReadableRef<'static, Self>> {
-        self.value.try_peek_unchecked()
+        self.value
+            .try_peek_unchecked()
+            .unwrap()
+            .try_peek_unchecked()
     }
 
-    fn read(&self) -> ReadableRef<Self> {
-        self.value.read()
-    }
-
-    fn try_read(&self) -> Result<ReadableRef<Self>, generational_box::BorrowError> {
-        self.value.try_read()
-    }
-
-    fn read_unchecked(&self) -> ReadableRef<'static, Self> {
-        self.value.read_unchecked()
-    }
-
-    fn peek(&self) -> ReadableRef<Self> {
-        self.value.peek()
-    }
-
-    fn try_peek(&self) -> Result<ReadableRef<Self>, generational_box::BorrowError> {
-        self.value.try_peek()
-    }
-
-    fn peek_unchecked(&self) -> ReadableRef<'static, Self> {
-        self.value.peek_unchecked()
+    fn subscribers(&self) -> Option<crate::Subscribers> {
+        self.value.subscribers()
     }
 }
 
-impl<T: 'static, S: Storage<T>> Writable for BoxedWritable<T, S> {
+impl<T: 'static> Writable for Write<T> {
     type WriteMetadata = Box<dyn Any>;
 
     fn write_unchecked(&self) -> crate::WritableRef<'static, Self> {
-        self.value.write_unchecked()
+        self.value.try_peek_unchecked().unwrap().write_unchecked()
     }
 
     fn try_write_unchecked(
         &self,
     ) -> Result<crate::WritableRef<'static, Self>, generational_box::BorrowMutError> {
-        self.value.try_write_unchecked()
+        self.value
+            .try_peek_unchecked()
+            .unwrap()
+            .try_write_unchecked()
     }
 }
 
-// We can't implement From<impl Writable<Target = T, Storage = S> + 'static> for BoxedWritable<T, S>
+// We can't implement From<impl Writable<Target = T, Storage = S> + 'static> for Write<T, S>
 // because it would conflict with the From<T> for T implementation, but we can implement it for
 // all specific readable types
-impl<T, S: Storage<SignalData<T>>> From<Signal<T, S>> for BoxedWritable<T, S> {
-    fn from(value: Signal<T, S>) -> Self {
+impl<T> From<Signal<T>> for Write<T> {
+    fn from(value: Signal<T>) -> Self {
         Self::new(value)
     }
 }
-impl<T, S: Storage<T>> From<CopyValue<T, S>> for BoxedWritable<T, S> {
-    fn from(value: CopyValue<T, S>) -> Self {
+impl<T> From<CopyValue<T>> for Write<T> {
+    fn from(value: CopyValue<T>) -> Self {
         Self::new(value)
     }
 }
-impl<T: Clone + 'static, S, R: 'static> From<Global<T, R>> for BoxedWritable<R, S>
+impl<T: Clone + 'static, R: 'static> From<Global<T, R>> for Write<R>
 where
-    T: Writable<Target = R, Storage = S> + InitializeFromFunction<R>,
+    T: Writable<Target = R, Storage = UnsyncStorage> + InitializeFromFunction<R>,
 {
     fn from(value: Global<T, R>) -> Self {
         Self::new(value)
     }
 }
-impl<V, O, F, FMut> From<MappedMutSignal<O, V, F, FMut>> for BoxedWritable<O, V::Storage>
+impl<V, O, F, FMut> From<MappedMutSignal<O, V, F, FMut>> for Write<O>
 where
     O: ?Sized,
-    V: Writable + 'static,
+    V: Writable<Storage = UnsyncStorage> + 'static,
     F: Fn(&V::Target) -> &O + 'static,
     FMut: Fn(&mut V::Target) -> &mut O + 'static,
 {

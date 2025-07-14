@@ -33,7 +33,7 @@ fn app() -> Element {
 }
 
 #[component]
-fn Child(#[props(into)] count: BoxedWritable<i32>) -> Element {
+fn Child(#[props(into)] count: Write<i32>) -> Element {
     rsx! {
         div {
             button {

@@ -61,6 +61,10 @@ where
         let value = self.value.try_peek_unchecked()?;
         Ok(V::Storage::map(value, |v| (self.map_fn)(v)))
     }
+
+    fn subscribers(&self) -> Option<crate::Subscribers> {
+        self.value.subscribers()
+    }
 }
 
 impl<V, O, F> IntoAttributeValue for MappedSignal<O, V, F>

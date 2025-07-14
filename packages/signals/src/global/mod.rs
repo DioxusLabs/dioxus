@@ -61,6 +61,10 @@ where
     fn try_peek_unchecked(&self) -> BorrowResult<ReadableRef<'static, Self>> {
         self.resolve().try_peek_unchecked()
     }
+
+    fn subscribers(&self) -> Option<crate::Subscribers> {
+        self.resolve().subscribers()
+    }
 }
 
 impl<T: Clone + 'static, R: 'static> Writable for Global<T, R>

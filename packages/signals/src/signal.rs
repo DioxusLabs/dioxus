@@ -373,8 +373,8 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
     /// ```
     #[track_caller]
     #[deprecated = "This pattern is no longer recommended. Prefer `peek` or creating new signals instead."]
-    pub fn write_silent(&self) -> Write<'static, T, S> {
-        Write::map(self.inner.write_unchecked(), |inner: &mut SignalData<T>| {
+    pub fn write_silent(&self) -> WriteLock<'static, T, S> {
+        WriteLock::map(self.inner.write_unchecked(), |inner: &mut SignalData<T>| {
             &mut inner.value
         })
     }
@@ -405,6 +405,10 @@ impl<T, S: Storage<SignalData<T>>> Readable for Signal<T, S> {
             .try_read_unchecked()
             .map(|inner| S::map(inner, |v| &v.value))
     }
+
+    fn subscribers(&self) -> Option<Subscribers> {
+        Some(self.inner.read().subscribers.clone())
+    }
 }
 
 impl<T: 'static, S: Storage<SignalData<T>>> Writable for Signal<T, S> {
@@ -418,7 +422,7 @@ impl<T: 'static, S: Storage<SignalData<T>>> Writable for Signal<T, S> {
         let origin = std::panic::Location::caller();
         self.inner.try_write_unchecked().map(|inner| {
             let borrow = S::map_mut(inner.into_inner(), |v| &mut v.value);
-            Write::new_with_metadata(
+            WriteLock::new_with_metadata(
                 borrow,
                 Box::new(SignalSubscriberDrop {
                     signal: *self,

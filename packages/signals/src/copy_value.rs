@@ -14,7 +14,7 @@ use crate::Writable;
 use crate::WritableRef;
 use crate::{default_impl, write_impls, WritableExt};
 use crate::{read_impls, ReadableExt};
-use crate::{Readable, Write};
+use crate::{Readable, WriteLock};
 
 /// CopyValue is a wrapper around a value to make the value mutable and Copy.
 ///
@@ -155,6 +155,10 @@ impl<T: 'static, S: Storage<T>> Readable for CopyValue<T, S> {
         crate::warnings::copy_value_hoisted(self, std::panic::Location::caller());
         self.value.try_read()
     }
+
+    fn subscribers(&self) -> Option<crate::Subscribers> {
+        None
+    }
 }
 
 impl<T: 'static, S: Storage<T>> Writable for CopyValue<T, S> {
@@ -165,7 +169,7 @@ impl<T: 'static, S: Storage<T>> Writable for CopyValue<T, S> {
         &self,
     ) -> Result<WritableRef<'static, Self>, generational_box::BorrowMutError> {
         crate::warnings::copy_value_hoisted(self, std::panic::Location::caller());
-        self.value.try_write().map(Write::new)
+        self.value.try_write().map(WriteLock::new)
     }
 }
 

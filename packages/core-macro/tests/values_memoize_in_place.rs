@@ -121,7 +121,7 @@ fn TakesEventHandler(click: EventHandler<usize>, number: usize) -> Element {
 }
 
 #[component]
-fn TakesSignal(sig: ReadOnlySignal<usize>, number: usize) -> Element {
+fn TakesSignal(sig: Read<usize>, number: usize) -> Element {
     let first_render_sig = use_hook(move || sig);
     if generation() > 0 {
         // Make sure the signal is memoized in place and never gets dropped
@@ -185,12 +185,12 @@ fn cloning_read_only_signal_components_work() {
     struct NonCloneable<T>(T);
 
     #[component]
-    fn TakesReadOnlySignalNum(sig: ReadOnlySignal<i32>) -> Element {
+    fn TakesReadOnlySignalNum(sig: Read<i32>) -> Element {
         rsx! {}
     }
 
     #[component]
-    fn TakesReadOnlySignalNonClone(sig: ReadOnlySignal<NonCloneable<i32>>) -> Element {
+    fn TakesReadOnlySignalNonClone(sig: Read<NonCloneable<i32>>) -> Element {
         rsx! {}
     }
 

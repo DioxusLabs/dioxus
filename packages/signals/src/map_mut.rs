@@ -2,7 +2,7 @@ use std::ops::Deref;
 
 use crate::{
     read_impls, write_impls, Readable, ReadableExt, ReadableRef, Writable, WritableExt,
-    WritableRef, Write,
+    WritableRef, WriteLock,
 };
 use dioxus_core::prelude::*;
 use generational_box::{AnyStorage, BorrowResult};
@@ -73,6 +73,10 @@ where
         let value = self.value.try_peek_unchecked()?;
         Ok(V::Storage::map(value, |v| (self.map_fn)(v)))
     }
+
+    fn subscribers(&self) -> Option<crate::Subscribers> {
+        self.value.subscribers()
+    }
 }
 
 impl<V, O, F, FMut> Writable for MappedMutSignal<O, V, F, FMut>
@@ -88,7 +92,7 @@ where
         &self,
     ) -> Result<WritableRef<'static, Self>, generational_box::BorrowMutError> {
         let value = self.value.try_write_unchecked()?;
-        Ok(Write::map(value, |v| (self.map_fn_mut)(v)))
+        Ok(WriteLock::map(value, |v| (self.map_fn_mut)(v)))
     }
 }
 

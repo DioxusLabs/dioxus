@@ -503,9 +503,9 @@ fn type_from_inside_option(ty: &Type) -> Option<&Type> {
     let seg = path.segments.last()?;
 
     // If the segment is a supported optional type, provide the inner type.
-    // Return the inner type if the pattern is `Option<T>` or `ReadOnlySignal<Option<T>>``
-    if seg.ident == "ReadOnlySignal" {
-        // Get the inner type. E.g. the `u16` in `ReadOnlySignal<u16>` or `Option` in `ReadOnlySignal<Option<bool>>`
+    // Return the inner type if the pattern is `Option<T>` or `Read<Option<T>>``
+    if seg.ident == "ReadOnlySignal" || seg.ident == "Read" {
+        // Get the inner type. E.g. the `u16` in `Read<u16>` or `Option` in `Read<Option<bool>>`
         let inner_type = extract_inner_type_from_segment(seg)?;
         let Type::Path(inner_path) = inner_type else {
             // If it isn't a path, the inner type isn't option
@@ -614,13 +614,13 @@ mod struct_info {
             generics
         }
 
-        /// Checks if the props have any fields that should be owned by the child. For example, when converting T to `ReadOnlySignal<T>`, the new signal should be owned by the child
+        /// Checks if the props have any fields that should be owned by the child. For example, when converting T to `Read<T>`, the new signal should be owned by the child
         fn has_child_owned_fields(&self) -> bool {
             self.fields.iter().any(|f| child_owned_type(f.ty))
         }
 
         fn memoize_impl(&self) -> Result<TokenStream, Error> {
-            // First check if there are any ReadOnlySignal fields, if there are not, we can just use the partialEq impl
+            // First check if there are any Read fields, if there are not, we can just use the partialEq impl
             let signal_fields: Vec<_> = self
                 .included_fields()
                 .filter(|f| looks_like_signal_type(f.ty))
@@ -1745,6 +1745,9 @@ fn looks_like_signal_type(ty: &Type) -> bool {
             path_without_generics == parse_quote!(dioxus_core::prelude::ReadOnlySignal)
                 || path_without_generics == parse_quote!(prelude::ReadOnlySignal)
                 || path_without_generics == parse_quote!(ReadOnlySignal)
+                || path_without_generics == parse_quote!(dioxus_core::prelude::Read)
+                || path_without_generics == parse_quote!(prelude::Read)
+                || path_without_generics == parse_quote!(Read)
         }
         None => false,
     }
@@ -1776,6 +1779,15 @@ fn test_looks_like_type() {
     ));
     assert!(looks_like_signal_type(&parse_quote!(
         ReadOnlySignal<Option<i32>, UnsyncStorage>
+    )));
+
+    assert!(!looks_like_signal_type(&parse_quote!(Option<Read<i32>>)));
+    assert!(looks_like_signal_type(&parse_quote!(Read<i32>)));
+    assert!(looks_like_signal_type(
+        &parse_quote!(Read<i32, SyncStorage>)
+    ));
+    assert!(looks_like_signal_type(&parse_quote!(
+        Read<Option<i32>, UnsyncStorage>
     )));
 
     assert!(looks_like_callback_type(&parse_quote!(

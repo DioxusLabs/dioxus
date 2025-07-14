@@ -1,4 +1,4 @@
-use dioxus_signals::{Readable, WritableExt};
+use dioxus_signals::{ReadableExt, WritableExt};
 
 use crate::use_signal;
 

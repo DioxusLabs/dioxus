@@ -180,6 +180,10 @@ impl Readable for UseFuture {
     ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> {
         self.state.try_peek_unchecked()
     }
+
+    fn subscribers(&self) -> Option<dioxus_signals::Subscribers> {
+        self.state.subscribers()
+    }
 }
 
 /// Allow calling a signal with signal() syntax

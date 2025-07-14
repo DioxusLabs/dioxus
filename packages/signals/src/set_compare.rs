@@ -1,7 +1,6 @@
-use crate::write::Writable;
+use crate::{write::Writable, ReadableExt};
 use std::hash::Hash;
 
-use crate::read::Readable;
 use dioxus_core::prelude::*;
 use futures_util::StreamExt;
 use generational_box::{Storage, UnsyncStorage};
@@ -66,9 +65,11 @@ impl<R: Eq + Hash, S: Storage<SignalData<bool>>> SetCompare<R, S> {
 
         SetCompare { subscribers }
     }
+}
 
+impl<R: Eq + Hash> SetCompare<R> {
     /// Returns a signal which is true when the value is equal to the value passed to this function.
-    pub fn equal(&mut self, value: R) -> ReadOnlySignal<bool, S> {
+    pub fn equal(&mut self, value: R) -> ReadOnlySignal<bool> {
         let subscribers = self.subscribers.write();
 
         match subscribers.get(&value) {

@@ -1,7 +1,7 @@
 use crate::write::Writable;
+use crate::CopyValue;
 use crate::{read::Readable, ReadableRef, Signal};
 use crate::{read_impls, GlobalMemo, ReadableExt, WritableExt};
-use crate::{CopyValue, ReadOnlySignal};
 use std::{
     cell::RefCell,
     ops::Deref,
@@ -24,15 +24,6 @@ struct UpdateInformation<T> {
 pub struct Memo<T: 'static> {
     inner: Signal<T>,
     update: CopyValue<UpdateInformation<T>>,
-}
-
-impl<T> From<Memo<T>> for ReadOnlySignal<T>
-where
-    T: PartialEq,
-{
-    fn from(val: Memo<T>) -> Self {
-        ReadOnlySignal::new(val.inner)
-    }
 }
 
 impl<T: 'static> Memo<T> {
@@ -200,6 +191,10 @@ where
     #[track_caller]
     fn try_peek_unchecked(&self) -> BorrowResult<ReadableRef<'static, Self>> {
         self.inner.try_peek_unchecked()
+    }
+
+    fn subscribers(&self) -> Option<crate::Subscribers> {
+        self.inner.subscribers()
     }
 }
 

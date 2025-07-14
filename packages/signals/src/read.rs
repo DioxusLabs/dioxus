@@ -1,8 +1,14 @@
-use std::{mem::MaybeUninit, ops::Index};
+use std::{
+    collections::HashSet,
+    mem::MaybeUninit,
+    ops::Index,
+    sync::{Arc, Mutex},
+};
 
-use generational_box::AnyStorage;
+use dioxus_core::prelude::ReactiveContext;
+use generational_box::{AnyStorage, UnsyncStorage};
 
-use crate::{BoxedReadable, MappedSignal};
+use crate::{MappedSignal, Read};
 
 /// A reference to a value that can be read from.
 #[allow(type_alias_bounds)]
@@ -41,6 +47,30 @@ pub trait Readable {
     /// The type of the storage this readable uses.
     type Storage: AnyStorage;
 
+    /// Try to get a reference to the value without checking the lifetime. This will subscribe the current scope to the signal.
+    ///
+    /// NOTE: This method is completely safe because borrow checking is done at runtime.
+    fn try_read_unchecked(
+        &self,
+    ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError>;
+
+    /// Try to peek the current value of the signal without subscribing to updates. If the value has
+    /// been dropped, this will return an error.
+    ///
+    /// NOTE: This method is completely safe because borrow checking is done at runtime.
+    fn try_peek_unchecked(
+        &self,
+    ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError>;
+
+    /// Get the underlying subscriber list for this readable. This is used to track when the value changes and notify subscribers.
+    fn subscribers(&self) -> Option<Subscribers>;
+}
+
+/// A list of [ReactiveContext]s that are subscribed to this readable. This is used to notify subscribers when the value changes.
+pub type Subscribers = Arc<Mutex<HashSet<ReactiveContext>>>;
+
+/// An extension trait for `Readable` types that provides some convenience methods.
+pub trait ReadableExt: Readable {
     /// Get the current value of the state. If this is a signal, this will subscribe the current scope to the signal.
     /// If the value has been dropped, this will panic. Calling this on a Signal is the same as
     /// using the signal() syntax to read and subscribe to its value
@@ -63,13 +93,6 @@ pub trait Readable {
     fn read_unchecked(&self) -> ReadableRef<'static, Self> {
         self.try_read_unchecked().unwrap()
     }
-
-    /// Try to get a reference to the value without checking the lifetime. This will subscribe the current scope to the signal.
-    ///
-    /// NOTE: This method is completely safe because borrow checking is done at runtime.
-    fn try_read_unchecked(
-        &self,
-    ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError>;
 
     /// Get the current value of the state without subscribing to updates. If the value has been dropped, this will panic.
     ///
@@ -126,17 +149,6 @@ pub trait Readable {
         self.try_peek_unchecked().unwrap()
     }
 
-    /// Try to peek the current value of the signal without subscribing to updates. If the value has
-    /// been dropped, this will return an error.
-    ///
-    /// NOTE: This method is completely safe because borrow checking is done at runtime.
-    fn try_peek_unchecked(
-        &self,
-    ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError>;
-}
-
-/// An extension trait for `Readable` types that provides some convenience methods.
-pub trait ReadableExt: Readable {
     /// Map the readable type to a new type. This lets you provide a view into a readable type without needing to clone the inner value.
     ///
     /// Anything that subscribes to the readable value will be rerun whenever the original value changes, even if the view does not change. If you want to memorize the view, you can use a [`crate::Memo`] instead.
@@ -199,14 +211,6 @@ pub trait ReadableExt: Readable {
         <Self::Storage as AnyStorage>::map(self.read(), |v| v.index(index))
     }
 
-    /// Box the readable value into a trait object. This is useful for passing around readable values without knowing their concrete type.
-    fn boxed(self) -> BoxedReadable<Self::Target, Self::Storage>
-    where
-        Self: Sized + 'static,
-    {
-        BoxedReadable::new(self)
-    }
-
     /// SAFETY: You must call this function directly with `self` as the argument.
     /// This function relies on the size of the object you return from the deref
     /// being the same as the object you pass in
@@ -249,6 +253,17 @@ pub trait ReadableExt: Readable {
 }
 
 impl<R: Readable + ?Sized> ReadableExt for R {}
+
+/// An extension trait for `Readable` types that can be boxed into a trait object.
+pub trait ReadableBoxExt: Readable<Storage = UnsyncStorage> {
+    /// Box the readable value into a trait object. This is useful for passing around readable values without knowing their concrete type.
+    fn boxed(self) -> Read<Self::Target>
+    where
+        Self: Sized + 'static,
+    {
+        Read::new(self)
+    }
+}
 
 /// An extension trait for `Readable<Vec<T>>` that provides some convenience methods.
 pub trait ReadableVecExt<T: 'static>: Readable<Target = Vec<T>> {
