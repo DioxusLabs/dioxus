@@ -36,7 +36,7 @@ impl FromStr for Size {
 }
 
 #[component]
-pub fn product_page(product_id: ReadOnlySignal<usize>) -> Element {
+pub fn product_page(product_id: Read<usize>) -> Element {
     let mut quantity = use_signal(|| 1);
     let mut size = use_signal(Size::default);
 

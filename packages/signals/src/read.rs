@@ -15,7 +15,7 @@ use crate::{MappedSignal, Read};
 pub type ReadableRef<'a, T: Readable, O = <T as Readable>::Target> =
     <T::Storage as AnyStorage>::Ref<'a, O>;
 
-/// A trait for states that can be read from like [`crate::Signal`], [`crate::GlobalSignal`], or [`crate::ReadOnlySignal`]. You may choose to accept this trait as a parameter instead of the concrete type to allow for more flexibility in your API. For example, instead of creating two functions, one that accepts a [`crate::Signal`] and one that accepts a [`crate::GlobalSignal`], you can create one function that accepts a [`Readable`] type.
+/// A trait for states that can be read from like [`crate::Signal`], [`crate::GlobalSignal`], or [`crate::Read`]. You may choose to accept this trait as a parameter instead of the concrete type to allow for more flexibility in your API. For example, instead of creating two functions, one that accepts a [`crate::Signal`] and one that accepts a [`crate::GlobalSignal`], you can create one function that accepts a [`Readable`] type.
 ///
 /// # Example
 /// ```rust
@@ -27,7 +27,7 @@ pub type ReadableRef<'a, T: Readable, O = <T as Readable>::Target> =
 /// static COUNT: GlobalSignal<i32> = Signal::global(|| 0);
 ///
 /// fn MyComponent(count: Signal<i32>) -> Element {
-///     // Since we defined the function in terms of the readable trait, we can use it with any readable type (Signal, GlobalSignal, ReadOnlySignal, etc)
+///     // Since we defined the function in terms of the readable trait, we can use it with any readable type (Signal, GlobalSignal, Read, etc)
 ///     let doubled = use_memo(move || double(&count));
 ///     let global_count_doubled = use_memo(|| double(&COUNT));
 ///     rsx! {

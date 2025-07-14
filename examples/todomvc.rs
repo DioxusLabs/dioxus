@@ -209,7 +209,7 @@ fn TodoEntry(mut todos: Signal<HashMap<u32, TodoItem>>, id: u32) -> Element {
 #[component]
 fn ListFooter(
     mut todos: Signal<HashMap<u32, TodoItem>>,
-    active_todo_count: ReadOnlySignal<usize>,
+    active_todo_count: Read<usize>,
     mut filter: Signal<FilterState>,
 ) -> Element {
     // We use a memoized signal to calculate whether we should show the "Clear completed" button.

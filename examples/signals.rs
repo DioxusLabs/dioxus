@@ -3,7 +3,7 @@
 //! This simple example implements a counter that can be incremented, decremented, and paused. It also demonstrates
 //! that background tasks in use_futures can modify the value as well.
 //!
-//! Most signals implement Into<ReadOnlySignal<T>>, making ReadOnlySignal a good default type when building new
+//! Most signals implement Into<Read<T>>, making Read a good default type when building new
 //! library components that don't need to modify their values.
 
 use async_std::task::sleep;
@@ -81,7 +81,7 @@ fn app() -> Element {
 }
 
 #[component]
-fn Child(mut count: ReadOnlySignal<i32>) -> Element {
+fn Child(mut count: Read<i32>) -> Element {
     println!("rendering child with count {count}");
 
     rsx! {

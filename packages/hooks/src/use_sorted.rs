@@ -2,12 +2,10 @@ use std::cmp::Ordering;
 use std::ops::DerefMut;
 
 use crate::use_memo;
-use dioxus_signals::{ReadOnlySignal, Signal};
+use dioxus_signals::{Read, Signal};
 
-pub fn use_sorted<V: 'static, T: PartialEq>(
-    collection: impl FnMut() -> Signal<V>,
-) -> ReadOnlySignal<Vec<T>>
-// pub fn use_sorted<S, I, T>(iterable: impl FnMut() -> Signal<V>) -> ReadOnlySignal<T>
+pub fn use_sorted<V: 'static, T: PartialEq>(collection: impl FnMut() -> Signal<V>) -> Read<Vec<T>>
+// pub fn use_sorted<S, I, T>(iterable: impl FnMut() -> Signal<V>) -> Read<T>
 // where
 //     S: Into<MaybeSignal<I>>,
 //     T: Ord,

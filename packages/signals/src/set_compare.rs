@@ -5,7 +5,7 @@ use dioxus_core::prelude::*;
 use futures_util::StreamExt;
 use generational_box::{Storage, UnsyncStorage};
 
-use crate::{CopyValue, ReadOnlySignal, Signal, SignalData};
+use crate::{CopyValue, Read, Signal, SignalData};
 use rustc_hash::FxHashMap;
 
 /// An object that can efficiently compare a value to a set of values.
@@ -69,7 +69,7 @@ impl<R: Eq + Hash, S: Storage<SignalData<bool>>> SetCompare<R, S> {
 
 impl<R: Eq + Hash> SetCompare<R> {
     /// Returns a signal which is true when the value is equal to the value passed to this function.
-    pub fn equal(&mut self, value: R) -> ReadOnlySignal<bool> {
+    pub fn equal(&mut self, value: R) -> Read<bool> {
         let subscribers = self.subscribers.write();
 
         match subscribers.get(&value) {

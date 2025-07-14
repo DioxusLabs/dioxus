@@ -81,7 +81,7 @@ impl FromStr for State {
 }
 
 #[component]
-fn Home(url_hash: ReadOnlySignal<State>) -> Element {
+fn Home(url_hash: Read<State>) -> Element {
     // The initial state of the state comes from the url hash
     let mut state = use_signal(&*url_hash);
 
