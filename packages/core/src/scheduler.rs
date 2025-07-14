@@ -17,7 +17,7 @@
 //! }
 //!
 //! #[component]
-//! fn ChildComponent(signal: Signal<Option<i32>>) -> Element {
+//! fn ChildComponent(signal: Write<Option<i32>>) -> Element {
 //!     // It feels safe to assume that signal is some because the parent component checked that it was some
 //!     rsx! { "{signal.read().unwrap()}" }
 //! }

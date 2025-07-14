@@ -288,16 +288,19 @@ pub trait WritableExt: Writable {
     ///     rsx! {
     ///         for index in 0..list.len() {
     ///             // We can use the `map` method to provide a view into the single item in the list that the child component will render
-    ///             Item { item: list.map(move |v| &v[index]) }
+    ///             Item { item: list.map_mut(move |v| &v[index], |v| &mut v[index]) }
     ///         }
     ///     }
     /// }
     ///
     /// // The child component doesn't need to know that the mapped value is coming from a list
     /// #[component]
-    /// fn Item(item: MappedSignal<i32>) -> Element {
+    /// fn Item(item: Write<i32>) -> Element {
     ///     rsx! {
-    ///         div { "Item: {item}" }
+    ///         button {
+    ///             onclick: move |_| *item.write() += 1,
+    ///             "{item}"
+    ///         }
     ///     }
     /// }
     /// ```

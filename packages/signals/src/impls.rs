@@ -30,6 +30,10 @@
 ///     ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> {
 ///         self.value.try_read_unchecked()
 ///     }
+///
+///     fn subscribers(&self) -> Subscribers {
+///         self.value.subscribers()
+///     }
 /// }
 ///
 /// default_impl!(MyCopyValue<T, S: Storage<T>>);
@@ -91,6 +95,10 @@ macro_rules! default_impl {
 ///         &self,
 ///     ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> {
 ///         self.value.try_read_unchecked()
+///     }
+///
+///     fn subscribers(&self) -> Subscribers {
+///         self.value.subscribers()
 ///     }
 /// }
 ///
@@ -164,6 +172,10 @@ macro_rules! read_impls {
 ///         &self,
 ///     ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> {
 ///         self.value.try_read_unchecked()
+///     }
+///
+///     fn subscribers(&self) -> Subscribers {
+///         self.value.subscribers()
 ///     }
 /// }
 ///
@@ -241,6 +253,10 @@ macro_rules! fmt_impls {
 ///     ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> {
 ///         self.value.try_read_unchecked()
 ///     }
+///
+///     fn subscribers(&self) -> Subscribers {
+///         self.value.subscribers()
+///     }
 /// }
 ///
 /// eq_impls!(MyCopyValue<T, S: Storage<T>>);
@@ -307,8 +323,7 @@ macro_rules! eq_impls {
 ///         &self,
 ///     ) -> Result<WritableRef<'static, Self>, generational_box::BorrowMutError> {
 ///         self.value.try_write_unchecked()
-///
-///      }
+///     }
 ///
 ///     //...
 /// }

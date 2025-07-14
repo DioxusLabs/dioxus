@@ -60,7 +60,7 @@ fn app() -> Element {
 }
 
 #[component]
-fn BreedPic(breed: Signal<String>) -> Element {
+fn BreedPic(breed: Write<String>) -> Element {
     // This resource will restart whenever the breed changes
     let mut fut = use_resource(move || async move {
         #[derive(serde::Deserialize, Debug)]
