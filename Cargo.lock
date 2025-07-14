@@ -5316,7 +5316,6 @@ dependencies = [
  "ndk-sys 0.6.0+11769913",
  "objc",
  "objc_id",
- "open",
  "openssl",
  "percent-encoding",
  "pollster",
