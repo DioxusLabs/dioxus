@@ -256,7 +256,7 @@ jobs:
               cross: false,
               command: "test",
               args: "--all --tests",
-              platform: "desktop"
+              platform: "desktop",
             }
           - {
               target: x86_64-apple-darwin,
@@ -265,7 +265,7 @@ jobs:
               cross: false,
               command: "test",
               args: "--all --tests",
-              platform: "desktop"
+              platform: "desktop",
             }
           - {
               target: aarch64-apple-ios,
@@ -274,7 +274,7 @@ jobs:
               cross: false,
               command: "build",
               args: "--package dioxus-desktop",
-              platform: "ios"
+              platform: "ios",
             }
           - {
               target: x86_64-unknown-linux-gnu,
@@ -283,7 +283,7 @@ jobs:
               cross: false,
               command: "build",
               args: "--all --tests",
-              platform: "desktop"
+              platform: "desktop",
             }
           - {
               target: aarch64-unknown-linux-gnu,
@@ -292,7 +292,7 @@ jobs:
               cross: false,
               command: "build",
               args: "--all --tests",
-              platform: "desktop"
+              platform: "desktop",
             }
           - {
               target: aarch64-linux-android,
@@ -301,7 +301,7 @@ jobs:
               cross: true,
               command: "build",
               args: "--package dioxus-desktop",
-              platform: "android"
+              platform: "android",
             }
 
     steps:
@@ -376,28 +376,43 @@ jobs:
 
   # Releases for the CLI on a per-branch basis
   nightly-cli:
-    permissions:
-      contents: write
+    if: github.event.pull_request.draft == false
     runs-on: ${{ matrix.platform.os }}
     strategy:
       matrix:
         platform:
-          - target: x86_64-pc-windows-msvc
-            os: windows-latest
-          - target: aarch64-pc-windows-msvc
-            os: windows-latest
-          - target: x86_64-apple-darwin
+          - {
+              target: x86_64-pc-windows-msvc,
+              os: windows-latest
+            }
+          - {
+              target: aarch64-pc-windows-msvc,
+              os: windows-latest
+            }
+          - {
+            target: x86_64-apple-darwin,
             os: macos-13
-          - target: aarch64-apple-darwin
-            os: macos-latest
-          - target: x86_64-unknown-linux-gnu
-            os: ubuntu-24.04
-          - target: aarch64-unknown-linux-gnu
-            os: ubuntu-24.04-arm
-          - target: x86_64-unknown-linux-musl
-            os: ubuntu-24.04
-          - target: aarch64-unknown-linux-musl
-            os: ubuntu-24.04-arm
+            }
+          - {
+              target: aarch64-apple-darwin,
+              os: macos-latest
+            }
+          - {
+              target: x86_64-unknown-linux-gnu,
+              os: ubuntu-24.04
+            }
+          - {
+              target: aarch64-unknown-linux-gnu,
+              os: ubuntu-24.04-arm
+            }
+          - {
+              target: x86_64-unknown-linux-musl,
+              os: ubuntu-24.04
+            }
+          - {
+              target: aarch64-unknown-linux-musl,
+              os: ubuntu-24.04-arm
+            }
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -454,30 +469,3 @@ jobs:
 
       - name: Output artifact ID
         run:  echo 'Artifact ID is ${{ steps.artifact-upload-step.outputs.artifact-id }}'
-
-  # Only run semver checks if the PR is not a draft and does not have the breaking label
-  # Breaking PRs don't need to follow semver since they are breaking changes
-  # However, this means we won't attempt to backport them, so you should be careful about using this label, as it will
-  # likely make future backporting difficult
-  #
-  # todo: fix this so even if breaking changes have been merged, the fix can be backported
-  #
-  # This will stop working once the first breaking change has been merged, so we should really try to just backport the fix
-  # and *then* run the semver checks. Basically "would backporting this PR cause a breaking change on stable?"
-  #
-  # semver:
-  #   if: github.event.pull_request.draft == false && !contains(github.event.pull_request.labels.*.name, 'breaking')
-  #   name: Semver Check
-  #   runs-on: ubuntu-24.04
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - uses: dtolnay/rust-toolchain@1.86.0
-  #     - uses: Swatinem/rust-cache@v2
-  #       with:
-  #         cache-all-crates: "true"
-  #         cache-on-failure: "true"
-  #     - name: Check semver
-  #       uses: obi1kenobi/cargo-semver-checks-action@v2
-  #       with:
-  #         manifest-path: ./Cargo.toml
-  #         exclude: "dioxus-cli, dioxus-ext"
