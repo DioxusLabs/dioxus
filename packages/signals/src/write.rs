@@ -368,8 +368,7 @@ pub trait WritableExt: Writable {
     where
         Self: Sized + 'static,
     {
-        // BoxedWritable::new(self)
-        todo!()
+        BoxedWritable::new(self)
     }
 }
 
