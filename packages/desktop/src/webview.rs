@@ -321,7 +321,7 @@ impl WebviewInstance {
                         || var.starts_with("https://")
                         || var.starts_with("mailto:")
                     {
-                        _ = crate::mobile_opener::open_url(&var);
+                        _ = webbrowser::open(&var);
                     }
                     false
                 }

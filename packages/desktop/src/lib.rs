@@ -19,7 +19,6 @@ mod hooks;
 mod ipc;
 mod menubar;
 mod mobile;
-mod mobile_opener;
 mod protocol;
 mod query;
 mod shortcut;
