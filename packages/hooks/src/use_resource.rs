@@ -411,7 +411,7 @@ impl<T> Resource<T> {
     }
 
     /// Suspend the resource's future and only continue rendering when the future is ready
-    pub fn suspend(&self) -> std::result::Result<MappedSignal<T>, RenderError> {
+    pub fn suspend(&self) -> std::result::Result<MappedSignal<T, Signal<Option<T>>>, RenderError> {
         match self.state.cloned() {
             UseResourceState::Stopped | UseResourceState::Paused | UseResourceState::Pending => {
                 let task = self.task();

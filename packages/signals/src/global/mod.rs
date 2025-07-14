@@ -69,14 +69,14 @@ where
 {
     type Mut<'a, Read: ?Sized + 'static> = T::Mut<'a, Read>;
 
-    fn map_mut<I: ?Sized, U: ?Sized + 'static, F: FnOnce(&mut I) -> &mut U>(
+    fn map_ref_mut<I: ?Sized, U: ?Sized + 'static, F: FnOnce(&mut I) -> &mut U>(
         ref_: Self::Mut<'_, I>,
         f: F,
     ) -> Self::Mut<'_, U> {
-        T::map_mut(ref_, f)
+        T::map_ref_mut(ref_, f)
     }
 
-    fn try_map_mut<
+    fn try_map_ref_mut<
         I: ?Sized + 'static,
         U: ?Sized + 'static,
         F: FnOnce(&mut I) -> Option<&mut U>,
@@ -84,7 +84,7 @@ where
         ref_: Self::Mut<'_, I>,
         f: F,
     ) -> Option<Self::Mut<'_, U>> {
-        T::try_map_mut(ref_, f)
+        T::try_map_ref_mut(ref_, f)
     }
 
     fn downcast_lifetime_mut<'a: 'b, 'b, Read: ?Sized + 'static>(

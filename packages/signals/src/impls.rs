@@ -332,6 +332,10 @@ macro_rules! write_impls {
         $(, $gen $(: $gen_bound)?)*
         > std::ops::Add<T>
             for $ty<T $(, $gen)*>
+            $(
+                where
+                    $($extra_bound_ty: $extra_bound,)*
+            )?
         {
             type Output = T;
 
@@ -345,6 +349,10 @@ macro_rules! write_impls {
         $(, $gen $(: $gen_bound)?)*
         > std::ops::AddAssign<T>
             for $ty<T $(, $gen)*>
+            $(
+                where
+                    $($extra_bound_ty: $extra_bound,)*
+            )?
         {
             #[track_caller]
             fn add_assign(&mut self, rhs: T) {
@@ -356,6 +364,10 @@ macro_rules! write_impls {
         $(, $gen $(: $gen_bound)?)*
         > std::ops::SubAssign<T>
             for $ty<T $(, $gen)*>
+            $(
+                where
+                    $($extra_bound_ty: $extra_bound,)*
+            )?
         {
             #[track_caller]
             fn sub_assign(&mut self, rhs: T) {
@@ -367,6 +379,10 @@ macro_rules! write_impls {
         $(, $gen $(: $gen_bound)?)*
         > std::ops::Sub<T>
             for $ty<T $(, $gen)*>
+            $(
+                where
+                    $($extra_bound_ty: $extra_bound,)*
+            )?
         {
             type Output = T;
 
@@ -380,6 +396,10 @@ macro_rules! write_impls {
         $(, $gen $(: $gen_bound)?)*
         > std::ops::MulAssign<T>
             for $ty<T $(, $gen)*>
+            $(
+                where
+                    $($extra_bound_ty: $extra_bound,)*
+            )?
         {
             #[track_caller]
             fn mul_assign(&mut self, rhs: T) {
@@ -391,6 +411,10 @@ macro_rules! write_impls {
         $(, $gen $(: $gen_bound)?)*
         > std::ops::Mul<T>
             for $ty<T $(, $gen)*>
+            $(
+                where
+                    $($extra_bound_ty: $extra_bound,)*
+            )?
         {
             type Output = T;
 
@@ -404,6 +428,10 @@ macro_rules! write_impls {
         $(, $gen $(: $gen_bound)?)*
         > std::ops::DivAssign<T>
             for $ty<T $(, $gen)*>
+            $(
+                where
+                    $($extra_bound_ty: $extra_bound,)*
+            )?
         {
             #[track_caller]
             fn div_assign(&mut self, rhs: T) {
@@ -415,6 +443,10 @@ macro_rules! write_impls {
         $(, $gen $(: $gen_bound)?)*
         > std::ops::Div<T>
             for $ty<T $(, $gen)*>
+            $(
+                where
+                    $($extra_bound_ty: $extra_bound,)*
+            )?
         {
             type Output = T;
 

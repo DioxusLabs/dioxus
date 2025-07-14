@@ -412,14 +412,14 @@ impl<T, S: Storage<SignalData<T>>> Readable for Signal<T, S> {
 impl<T: 'static, S: Storage<SignalData<T>>> Writable for Signal<T, S> {
     type Mut<'a, R: ?Sized + 'static> = Write<'a, R, S>;
 
-    fn map_mut<I: ?Sized, U: ?Sized + 'static, F: FnOnce(&mut I) -> &mut U>(
+    fn map_ref_mut<I: ?Sized, U: ?Sized + 'static, F: FnOnce(&mut I) -> &mut U>(
         ref_: Self::Mut<'_, I>,
         f: F,
     ) -> Self::Mut<'_, U> {
         Write::map(ref_, f)
     }
 
-    fn try_map_mut<
+    fn try_map_ref_mut<
         I: ?Sized + 'static,
         U: ?Sized + 'static,
         F: FnOnce(&mut I) -> Option<&mut U>,

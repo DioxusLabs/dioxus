@@ -1,6 +1,6 @@
 use std::ops::{DerefMut, IndexMut};
 
-use crate::read::Readable;
+use crate::{read::Readable, MappedMutSignal};
 
 /// A reference to a value that can be read from.
 #[allow(type_alias_bounds)]
@@ -36,16 +36,50 @@ pub trait Writable: Readable {
     type Mut<'a, R: ?Sized + 'static>: DerefMut<Target = R>;
 
     /// Map the reference to a new type.
-    fn map_mut<I: ?Sized, U: ?Sized, F: FnOnce(&mut I) -> &mut U>(
+    fn map_ref_mut<I: ?Sized, U: ?Sized, F: FnOnce(&mut I) -> &mut U>(
         ref_: Self::Mut<'_, I>,
         f: F,
     ) -> Self::Mut<'_, U>;
 
     /// Try to map the reference to a new type.
-    fn try_map_mut<I: ?Sized, U: ?Sized, F: FnOnce(&mut I) -> Option<&mut U>>(
+    fn try_map_ref_mut<I: ?Sized, U: ?Sized, F: FnOnce(&mut I) -> Option<&mut U>>(
         ref_: Self::Mut<'_, I>,
         f: F,
     ) -> Option<Self::Mut<'_, U>>;
+
+    /// Map the readable type to a new type. This lets you provide a view into a readable type without needing to clone the inner value.
+    ///
+    /// Anything that subscribes to the readable value will be rerun whenever the original value changes, even if the view does not change. If you want to memorize the view, you can use a [`crate::Memo`] instead.
+    ///
+    /// # Example
+    /// ```rust
+    /// # use dioxus::prelude::*;
+    /// fn List(list: Signal<Vec<i32>>) -> Element {
+    ///     rsx! {
+    ///         for index in 0..list.len() {
+    ///             // We can use the `map` method to provide a view into the single item in the list that the child component will render
+    ///             Item { item: list.map(move |v| &v[index]) }
+    ///         }
+    ///     }
+    /// }
+    ///
+    /// // The child component doesn't need to know that the mapped value is coming from a list
+    /// #[component]
+    /// fn Item(item: MappedSignal<i32>) -> Element {
+    ///     rsx! {
+    ///         div { "Item: {item}" }
+    ///     }
+    /// }
+    /// ```
+    fn map_mut<O, F, FMut>(self, f: F, f_mut: FMut) -> MappedMutSignal<O, Self, F, FMut>
+    where
+        Self: Clone + Sized + 'static,
+        O: ?Sized + 'static,
+        F: Fn(&Self::Target) -> &O + 'static,
+        FMut: Fn(&mut Self::Target) -> &mut O + 'static,
+    {
+        MappedMutSignal::new(self, f, f_mut)
+    }
 
     /// Downcast a mutable reference in a RefMut to a more specific lifetime
     ///
@@ -115,7 +149,7 @@ pub trait Writable: Readable {
     where
         Self::Target: std::ops::IndexMut<I>,
     {
-        Self::map_mut(self.write(), |v| v.index_mut(index))
+        Self::map_ref_mut(self.write(), |v| v.index_mut(index))
     }
 
     /// Takes the value out of the Signal, leaving a Default in its place.
@@ -151,16 +185,16 @@ pub trait WritableOptionExt<T: 'static>: Writable<Target = Option<T>> {
         let is_none = self.read().is_none();
         if is_none {
             self.with_mut(|v| *v = Some(default()));
-            Self::map_mut(self.write(), |v| v.as_mut().unwrap())
+            Self::map_ref_mut(self.write(), |v| v.as_mut().unwrap())
         } else {
-            Self::map_mut(self.write(), |v| v.as_mut().unwrap())
+            Self::map_ref_mut(self.write(), |v| v.as_mut().unwrap())
         }
     }
 
     /// Attempts to write the inner value of the Option.
     #[track_caller]
     fn as_mut(&mut self) -> Option<WritableRef<'_, Self, T>> {
-        Self::try_map_mut(self.write(), |v: &mut Option<T>| v.as_mut())
+        Self::try_map_ref_mut(self.write(), |v: &mut Option<T>| v.as_mut())
     }
 }
 
@@ -236,7 +270,7 @@ pub trait WritableVecExt<T: 'static>: Writable<Target = Vec<T>> {
     /// Try to mutably get an element from the vector.
     #[track_caller]
     fn get_mut(&mut self, index: usize) -> Option<WritableRef<'_, Self, T>> {
-        Self::try_map_mut(self.write(), |v: &mut Vec<T>| v.get_mut(index))
+        Self::try_map_ref_mut(self.write(), |v: &mut Vec<T>| v.get_mut(index))
     }
 
     /// Gets an iterator over the values of the vector.
@@ -264,7 +298,7 @@ impl<'a, T: 'static, R: Writable<Target = Vec<T>>> Iterator for WritableValueIte
     fn next(&mut self) -> Option<Self::Item> {
         let index = self.index;
         self.index += 1;
-        R::try_map_mut(
+        R::try_map_ref_mut(
             self.value.try_write_unchecked().unwrap(),
             |v: &mut Vec<T>| v.get_mut(index),
         )

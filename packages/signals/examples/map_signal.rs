@@ -33,7 +33,7 @@ fn app() -> Element {
 }
 
 #[component]
-fn Child(count: MappedSignal<i32>) -> Element {
+fn Child(count: MappedSignal<i32, Signal<Vec<i32>>>) -> Element {
     use_memo({
         to_owned![count];
         move || {

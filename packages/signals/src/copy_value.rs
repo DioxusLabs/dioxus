@@ -160,14 +160,14 @@ impl<T: 'static, S: Storage<T>> Readable for CopyValue<T, S> {
 impl<T: 'static, S: Storage<T>> Writable for CopyValue<T, S> {
     type Mut<'a, R: ?Sized + 'static> = S::Mut<'a, R>;
 
-    fn map_mut<I: ?Sized, U: ?Sized, F: FnOnce(&mut I) -> &mut U>(
+    fn map_ref_mut<I: ?Sized, U: ?Sized, F: FnOnce(&mut I) -> &mut U>(
         mut_: Self::Mut<'_, I>,
         f: F,
     ) -> Self::Mut<'_, U> {
         S::map_mut(mut_, f)
     }
 
-    fn try_map_mut<I: ?Sized, U: ?Sized, F: FnOnce(&mut I) -> Option<&mut U>>(
+    fn try_map_ref_mut<I: ?Sized, U: ?Sized, F: FnOnce(&mut I) -> Option<&mut U>>(
         mut_: Self::Mut<'_, I>,
         f: F,
     ) -> Option<Self::Mut<'_, U>> {

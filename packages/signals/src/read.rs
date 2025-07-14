@@ -1,4 +1,4 @@
-use std::{mem::MaybeUninit, ops::Index, rc::Rc};
+use std::{mem::MaybeUninit, ops::Index};
 
 use generational_box::AnyStorage;
 
@@ -65,38 +65,12 @@ pub trait Readable {
     ///     }
     /// }
     /// ```
-    fn map<O>(self, f: impl Fn(&Self::Target) -> &O + 'static) -> MappedSignal<O, Self::Storage>
+    fn map<F, O>(self, f: F) -> MappedSignal<O, Self, F>
     where
         Self: Clone + Sized + 'static,
+        F: Fn(&Self::Target) -> &O + 'static,
     {
-        let mapping = Rc::new(f);
-        let try_read = Rc::new({
-            let self_ = self.clone();
-            let mapping = mapping.clone();
-            move || {
-                self_
-                    .try_read_unchecked()
-                    .map(|ref_| <Self::Storage as AnyStorage>::map(ref_, |r| mapping(r)))
-            }
-        })
-            as Rc<
-                dyn Fn() -> Result<ReadableRef<'static, Self, O>, generational_box::BorrowError>
-                    + 'static,
-            >;
-        let try_peek = Rc::new({
-            let self_ = self.clone();
-            let mapping = mapping.clone();
-            move || {
-                self_
-                    .try_peek_unchecked()
-                    .map(|ref_| <Self::Storage as AnyStorage>::map(ref_, |r| mapping(r)))
-            }
-        })
-            as Rc<
-                dyn Fn() -> Result<ReadableRef<'static, Self, O>, generational_box::BorrowError>
-                    + 'static,
-            >;
-        MappedSignal::new(try_read, try_peek)
+        MappedSignal::new(self, f)
     }
 
     /// Get the current value of the state. If this is a signal, this will subscribe the current scope to the signal.

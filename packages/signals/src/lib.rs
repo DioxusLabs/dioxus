@@ -16,6 +16,9 @@ pub use read_only_signal::*;
 mod map;
 pub use map::*;
 
+mod map_mut;
+pub use map_mut::*;
+
 mod set_compare;
 pub use set_compare::*;
 
