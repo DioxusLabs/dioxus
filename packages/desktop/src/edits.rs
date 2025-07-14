@@ -204,24 +204,8 @@ impl EditWebsocket {
     ) {
         loop {
             // Accept connections until we hit an error
-            loop {
-                match server.accept() {
-                    Ok((stream, _)) => {
-                        Self::handle_connection(
-                            stream,
-                            current_location.clone(),
-                            connections.clone(),
-                        );
-                    }
-                    Err(e) => {
-                        // We expect to hit ConnectionAborted and handle it gracefully so we don't
-                        // need to log it as an error.
-                        if std::io::ErrorKind::ConnectionAborted != e.kind() {
-                            tracing::error!("Error accepting websocket connection: {}", e);
-                        }
-                        break;
-                    }
-                }
+            while let Ok((stream, _)) = server.accept() {
+                Self::handle_connection(stream, current_location.clone(), connections.clone());
             }
 
             // Switch ports and reconnect on a different port if the server is killed by the OS. This
