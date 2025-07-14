@@ -1419,7 +1419,10 @@ impl BuildRequest {
         out_args.extend(out_arg.iter().map(Into::into));
 
         if cfg!(windows) {
-            let cmd_contents: String = out_args.iter().map(|s| s.to_string_lossy()).join(" ");
+            let cmd_contents: String = out_args
+                .iter()
+                .map(|s| format!("\"{}\"", s.to_string_lossy()))
+                .join(" ");
             std::fs::write(self.command_file.path(), cmd_contents)
                 .context("Failed to write linker command file")?;
             out_args = vec![format!("@{}", self.command_file.path().display()).into()];
@@ -1940,7 +1943,7 @@ impl BuildRequest {
         // Handle windows command files
         let mut out_args = args.clone();
         if cfg!(windows) {
-            let cmd_contents: String = out_args.iter().join(" ");
+            let cmd_contents: String = out_args.iter().map(|f| format!("\"{f}\"")).join(" ");
             std::fs::write(self.command_file.path(), cmd_contents)
                 .context("Failed to write linker command file")?;
             out_args = vec![format!("@{}", self.command_file.path().display())];

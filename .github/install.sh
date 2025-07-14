@@ -81,23 +81,7 @@ exe_name=dx
 if [[ $# = 0 ]]; then
     dx_uri=$github_repo/releases/latest/download/dx-$target.zip
 else
-    if [[ $1 = "nightly" ]]; then
-        echo "Installing latest nightly build for target $target"
-
-        # get the artifact ID and then run id by grepping. There will be two results, one for the worfklow id and one for the artifact ID.
-
-        # list=$(curl --fail --location --progress-bar  -L "https://api.github.com/repos/dioxuslabs/dioxus/actions/artifacts?name=playwright-report-1.86.0-macOS")
-        list=$(curl --fail --location --progress-bar  -L "https://api.github.com/repos/dioxuslabs/dioxus/actions/artifacts?name=dx-$target-nightly")
-        artifact_id=$(echo $list | grep -o '"id": [0-9]*' | head -2 | cut -d' ' -f2 | head -1)
-        workflow_id=$(echo $list | grep -o '"id": [0-9]*' | head -2 | cut -d' ' -f2 | tail -1)
-        echo "Artifact ID: $artifact_id"
-        echo "Workflow ID: $workflow_id"
-
-        # https://github.com/DioxusLabs/dioxus/actions/runs/16174794892/artifacts/3497286082
-        dx_uri=$github_repo/actions/runs/$workflow_id/artifacts/$artifact_id
-    else
-        dx_uri=$github_repo/releases/download/$1/dx-$target.zip
-    fi
+    dx_uri=$github_repo/releases/download/$1/dx-$target.zip
 fi
 
 dx_install="${DX_INSTALL:-$HOME/.dx}"
