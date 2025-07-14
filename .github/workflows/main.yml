@@ -340,12 +340,6 @@ jobs:
         run: |
           ${{ env.RUST_CARGO_COMMAND }} ${{ matrix.platform.command }} ${{ matrix.platform.args }} --target ${{ matrix.platform.target }}
 
-      # - name: build CLI
-      #   run: cargo build --package dioxus-cli
-
-      # - name: bundle
-      #   run: ./target/debug/dx bundle --platform ${{ matrix.platform.platform }} --target ${{ matrix.platform.target }} --package hotdog
-
   # borrowed from uv
   # https://raw.githubusercontent.com/astral-sh/uv/refs/heads/main/.github/workflows/ci.yml
   cargo-test-windows:
@@ -371,6 +365,33 @@ jobs:
         working-directory: ${{ env.UV_WORKSPACE }}
         run: |
           cargo test --workspace --tests
+
+  # Only run semver checks if the PR is not a draft and does not have the breaking label
+  # Breaking PRs don't need to follow semver since they are breaking changes
+  # However, this means we won't attempt to backport them, so you should be careful about using this label, as it will
+  # likely make future backporting difficult
+  #
+  # todo: fix this so even if breaking changes have been merged, the fix can be backported
+  #
+  # This will stop working once the first breaking change has been merged, so we should really try to just backport the fix
+  # and *then* run the semver checks. Basically "would backporting this PR cause a breaking change on stable?"
+  #
+  # semver:
+  #   if: github.event.pull_request.draft == false && !contains(github.event.pull_request.labels.*.name, 'breaking')
+  #   name: Semver Check
+  #   runs-on: ubuntu-24.04
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: dtolnay/rust-toolchain@1.86.0
+  #     - uses: Swatinem/rust-cache@v2
+  #       with:
+  #         cache-all-crates: "true"
+  #         cache-on-failure: "true"
+  #     - name: Check semver
+  #       uses: obi1kenobi/cargo-semver-checks-action@v2
+  #       with:
+  #         manifest-path: ./Cargo.toml
+  #         exclude: "dioxus-cli, dioxus-ext"
 
   # Releases for the CLI on a per-branch basis
   # nightly-cli:
