@@ -2416,11 +2416,11 @@ impl BuildRequest {
     /// We pulled the environment setup from `cargo ndk` and attempt to mimic its behavior to retain
     /// compatibility with existing crates that work with `cargo ndk`.
     ///
-    /// https://github.com/bbqsrc/cargo-ndk/blob/1d1a6dc70a99b7f95bc71ed07bf893ef37966efc/src/cargo.rs#L97-L102
+    /// <https://github.com/bbqsrc/cargo-ndk/blob/1d1a6dc70a99b7f95bc71ed07bf893ef37966efc/src/cargo.rs#L97-L102>
     ///
     /// cargo-ndk is MIT licensed.
     ///
-    /// https://github.com/bbqsrc/cargo-ndk
+    /// <https://github.com/bbqsrc/cargo-ndk>
     fn android_env_vars(&self) -> Result<Vec<(Cow<'static, str>, String)>> {
         // Derived from getenv_with_target_prefixes in `cc` crate.
         fn cc_env(var_base: &str, triple: &str) -> (String, Option<String>) {
