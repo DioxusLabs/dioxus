@@ -321,7 +321,7 @@ impl WebviewInstance {
                         || var.starts_with("https://")
                         || var.starts_with("mailto:")
                     {
-                        _ = open::that_detached(&var);
+                        _ = webbrowser::open(&var);
                     }
                     false
                 }

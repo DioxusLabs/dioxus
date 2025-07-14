@@ -47,11 +47,11 @@ async-trait = { workspace = true }
 tao = { workspace = true, features = ["rwh_05"] }
 dioxus-history = { workspace = true }
 base64 = { workspace = true }
-open = { workspace = true }
 libc = "0.2.174"
 pollster = "0.4.0"
 rand = { workspace = true, features = ["std_rng"] }
 subtle = { version = "2.6", features = ["const-generics"] }
+webbrowser = { version = "1.0" }
 
 [target.'cfg(unix)'.dependencies]
 signal-hook = "0.3.18"
