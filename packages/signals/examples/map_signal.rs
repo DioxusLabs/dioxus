@@ -34,17 +34,13 @@ fn app() -> Element {
 
 #[component]
 fn Child(#[props(into)] count: BoxedWritable<i32>) -> Element {
-    use_memo({
-        to_owned![count];
-        move || {
-            let value = count.read();
-            println!("Child value: {value}");
-        }
-    });
-
     rsx! {
         div {
-            "Child: {count}"
+            button {
+                onclick: move |_| *count.write() += 1,
+                "+"
+            }
+            "{count}"
         }
     }
 }
