@@ -158,54 +158,53 @@ impl Doctor {
         // -
         use crate::styles::*;
         println!(
-            r#"|
-| {LINK_STYLE}Setup{LINK_STYLE:#}
-|  {GLOW_STYLE}Web{GLOW_STYLE:#}: wasm-bindgen, wasm-opt, and TailwindCSS are downloaded automatically
-|  {GLOW_STYLE}iOS{GLOW_STYLE:#}: Install iOS SDK and developer tools and through XCode
-|  {GLOW_STYLE}Android{GLOW_STYLE:#}: Install Android Studio, NDK, and then set ANDROID_HOME and ANDROID_NDK_HOME
-|  {GLOW_STYLE}macOS{GLOW_STYLE:#}: all tools should be installed by default
-|  {GLOW_STYLE}Windows{GLOW_STYLE:#}: install the webview2 binary
-|  {GLOW_STYLE}Linux{GLOW_STYLE:#}: Install libwebkit2gtk-4.1-dev libgtk-3-dev libasound2-dev libudev-dev libayatana-appindicator3-dev libxdo-dev libglib2.0-dev
-|
-| {LINK_STYLE}Rust{LINK_STYLE:#}
-|  Rustc version: {HINT_STYLE}{rustc_version}{HINT_STYLE:#}
-|  Rustc sysroot: {HINT_STYLE}{rustc_sysroot}{HINT_STYLE:#}
-|
-| {LINK_STYLE}Devtools{LINK_STYLE:#}
-|  VSCode Extension: {HINT_STYLE}{vscode_ext_msg}{HINT_STYLE:#}
-|  Cursor Extension: {HINT_STYLE}{cursor_ext_msg}{HINT_STYLE:#}
-|  TailwindCSS: {HINT_STYLE}{tailwindcss}{HINT_STYLE:#}
-|
-| {LINK_STYLE}Web{LINK_STYLE:#}
-|  wasm-opt: {HINT_STYLE}{wasm_opt_message}{HINT_STYLE:#}
-|  wasm-bindgen: {HINT_STYLE}{wasm_bindgen_location}{HINT_STYLE:#}
-|  wasm-bindgen version: {HINT_STYLE}{wbg_version_msg}{HINT_STYLE:#}
-|
-| {LINK_STYLE}iOS{LINK_STYLE:#}
-|  XCode: {HINT_STYLE}{xcode_install}{HINT_STYLE:#}
-|  Simulator: {HINT_STYLE}{simulator_location}{HINT_STYLE:#}
-|
-| {LINK_STYLE}Android{LINK_STYLE:#}
-|  sdk: {HINT_STYLE}{sdk}{HINT_STYLE:#}
-|  ndk: {HINT_STYLE}{ndk}{HINT_STYLE:#}
-|  adb: {HINT_STYLE}{adb}{HINT_STYLE:#}
-|  emulator: {HINT_STYLE}{emulator}{HINT_STYLE:#}
-|  java_home: {HINT_STYLE}{java_home}{HINT_STYLE:#}
-|
-| {LINK_STYLE}Toolchains{LINK_STYLE:#}
-|  {HINT_STYLE}{has_wasm32_unknown_unknown}{HINT_STYLE:#} wasm32-unknown-unknown {HINT_STYLE}(web){HINT_STYLE:#}
-|  {HINT_STYLE}{has_aarch64_android_linux}{HINT_STYLE:#} aarch64-android-linux {HINT_STYLE}(android){HINT_STYLE:#}
-|  {HINT_STYLE}{has_i686_linux_android}{HINT_STYLE:#} i686-linux-android {HINT_STYLE}(android){HINT_STYLE:#}
-|  {HINT_STYLE}{has_armv7_linux_androideabi}{HINT_STYLE:#} armv7-linux-androideabi {HINT_STYLE}(android){HINT_STYLE:#}
-|  {HINT_STYLE}{has_x86_64_android_linux}{HINT_STYLE:#} x86_64-android-linux {HINT_STYLE}(android){HINT_STYLE:#}
-|  {HINT_STYLE}{has_x86_64_apple_ios}{HINT_STYLE:#} x86_64-apple-ios {HINT_STYLE}(iOS){HINT_STYLE:#}
-|  {HINT_STYLE}{has_aarch64_apple_ios}{HINT_STYLE:#} aarch64-apple-ios {HINT_STYLE}(iOS){HINT_STYLE:#}
-|  {HINT_STYLE}{has_aarch64_apple_ios_sim}{HINT_STYLE:#} aarch64-apple-ios-sim {HINT_STYLE}(iOS){HINT_STYLE:#}
-|  {HINT_STYLE}{has_aarch64_apple_darwin}{HINT_STYLE:#} aarch64-apple-darwin {HINT_STYLE}(iOS){HINT_STYLE:#}
-|
-| Get help: {LINK_STYLE}https://discord.gg/XgGxMSkvUM{LINK_STYLE:#}
-| More info: {LINK_STYLE}https://dioxuslabs.com/learn/0.6/{LINK_STYLE:#}
-|"#
+            r#"{LINK_STYLE}Setup{LINK_STYLE:#}
+ {GLOW_STYLE}Web{GLOW_STYLE:#}: wasm-bindgen, wasm-opt, and TailwindCSS are downloaded automatically
+ {GLOW_STYLE}iOS{GLOW_STYLE:#}: Install iOS SDK and developer tools and through XCode
+ {GLOW_STYLE}Android{GLOW_STYLE:#}: Install Android Studio, NDK, and then set ANDROID_HOME and ANDROID_NDK_HOME
+ {GLOW_STYLE}macOS{GLOW_STYLE:#}: all tools should be installed by default
+ {GLOW_STYLE}Windows{GLOW_STYLE:#}: install the webview2 binary
+ {GLOW_STYLE}Linux{GLOW_STYLE:#}: Install libwebkit2gtk-4.1-dev libgtk-3-dev libasound2-dev libudev-dev libayatana-appindicator3-dev libxdo-dev libglib2.0-dev
+
+{LINK_STYLE}Rust{LINK_STYLE:#}
+ Rustc version: {HINT_STYLE}{rustc_version}{HINT_STYLE:#}
+ Rustc sysroot: {HINT_STYLE}{rustc_sysroot}{HINT_STYLE:#}
+
+{LINK_STYLE}Devtools{LINK_STYLE:#}
+ VSCode Extension: {HINT_STYLE}{vscode_ext_msg}{HINT_STYLE:#}
+ Cursor Extension: {HINT_STYLE}{cursor_ext_msg}{HINT_STYLE:#}
+ TailwindCSS: {HINT_STYLE}{tailwindcss}{HINT_STYLE:#}
+
+{LINK_STYLE}Web{LINK_STYLE:#}
+ wasm-opt: {HINT_STYLE}{wasm_opt_message}{HINT_STYLE:#}
+ wasm-bindgen: {HINT_STYLE}{wasm_bindgen_location}{HINT_STYLE:#}
+ wasm-bindgen version: {HINT_STYLE}{wbg_version_msg}{HINT_STYLE:#}
+
+{LINK_STYLE}iOS{LINK_STYLE:#}
+ XCode: {HINT_STYLE}{xcode_install}{HINT_STYLE:#}
+ Simulator: {HINT_STYLE}{simulator_location}{HINT_STYLE:#}
+
+{LINK_STYLE}Android{LINK_STYLE:#}
+ sdk: {HINT_STYLE}{sdk}{HINT_STYLE:#}
+ ndk: {HINT_STYLE}{ndk}{HINT_STYLE:#}
+ adb: {HINT_STYLE}{adb}{HINT_STYLE:#}
+ emulator: {HINT_STYLE}{emulator}{HINT_STYLE:#}
+ java_home: {HINT_STYLE}{java_home}{HINT_STYLE:#}
+
+{LINK_STYLE}Toolchains{LINK_STYLE:#}
+ {HINT_STYLE}{has_wasm32_unknown_unknown}{HINT_STYLE:#} wasm32-unknown-unknown {HINT_STYLE}(web){HINT_STYLE:#}
+ {HINT_STYLE}{has_aarch64_android_linux}{HINT_STYLE:#} aarch64-android-linux {HINT_STYLE}(android){HINT_STYLE:#}
+ {HINT_STYLE}{has_i686_linux_android}{HINT_STYLE:#} i686-linux-android {HINT_STYLE}(android){HINT_STYLE:#}
+ {HINT_STYLE}{has_armv7_linux_androideabi}{HINT_STYLE:#} armv7-linux-androideabi {HINT_STYLE}(android){HINT_STYLE:#}
+ {HINT_STYLE}{has_x86_64_android_linux}{HINT_STYLE:#} x86_64-android-linux {HINT_STYLE}(android){HINT_STYLE:#}
+ {HINT_STYLE}{has_x86_64_apple_ios}{HINT_STYLE:#} x86_64-apple-ios {HINT_STYLE}(iOS){HINT_STYLE:#}
+ {HINT_STYLE}{has_aarch64_apple_ios}{HINT_STYLE:#} aarch64-apple-ios {HINT_STYLE}(iOS){HINT_STYLE:#}
+ {HINT_STYLE}{has_aarch64_apple_ios_sim}{HINT_STYLE:#} aarch64-apple-ios-sim {HINT_STYLE}(iOS){HINT_STYLE:#}
+ {HINT_STYLE}{has_aarch64_apple_darwin}{HINT_STYLE:#} aarch64-apple-darwin {HINT_STYLE}(iOS){HINT_STYLE:#}
+
+Get help: {LINK_STYLE}https://discord.gg/XgGxMSkvUM{LINK_STYLE:#}
+More info: {LINK_STYLE}https://dioxuslabs.com/learn/0.6/{LINK_STYLE:#}
+"#
         );
 
         Ok(StructuredOutput::Success)
