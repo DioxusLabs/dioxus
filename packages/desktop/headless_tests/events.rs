@@ -63,7 +63,7 @@ fn test_mounted() -> Element {
             height: "100px",
             onmounted: move |evt| async move {
                 let rect = evt.get_client_rect().await.unwrap();
-                println!("rect: {:?}", rect);
+                println!("rect: {rect:?}");
                 assert_eq!(rect.width(), 100.0);
                 assert_eq!(rect.height(), 100.0);
                 RECEIVED_EVENTS.with_mut(|x| *x += 1);
@@ -481,7 +481,7 @@ fn test_form_input() -> Element {
                     values.set(ev.values());
                 },
                 onsubmit: move |ev| {
-                    println!("{:?}", ev);
+                    println!("{ev:?}");
                 },
                 input {
                     r#type: "text",

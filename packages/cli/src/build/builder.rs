@@ -2,7 +2,7 @@ use crate::{
     serve::WebServer, BuildArtifacts, BuildRequest, BuildStage, BuilderUpdate, BundleFormat,
     ProgressRx, ProgressTx, Result, StructuredOutput,
 };
-use anyhow::Context;
+use anyhow::{bail, Context};
 use dioxus_cli_opt::process_file_to;
 use futures_util::{future::OptionFuture, pin_mut, FutureExt};
 use itertools::Itertools;
@@ -123,25 +123,13 @@ impl AppBuilder {
     ///   updates (e.g., `wait`, `finish_build`).
     /// - The build process is designed to be cancellable and restartable using methods like `abort_all`
     ///   or `rebuild`.
-    pub(crate) fn start(request: &BuildRequest, mode: BuildMode) -> Result<Self> {
+    pub(crate) fn new(request: &BuildRequest) -> Result<Self> {
         let (tx, rx) = futures_channel::mpsc::unbounded();
 
         Ok(Self {
             build: request.clone(),
             stage: BuildStage::Initializing,
-            build_task: tokio::spawn({
-                let request = request.clone();
-                let tx = tx.clone();
-                async move {
-                    let ctx = BuildContext {
-                        mode,
-                        tx: tx.clone(),
-                    };
-                    request.verify_tooling(&ctx).await?;
-                    request.prepare_build_dir()?;
-                    request.build(&ctx).await
-                }
-            }),
+            build_task: tokio::task::spawn(std::future::pending()),
             tx,
             rx,
             patches: vec![],
@@ -165,6 +153,29 @@ impl AppBuilder {
         })
     }
 
+    /// Create a new `AppBuilder` and immediately start a build process.
+    pub fn started(request: &BuildRequest, mode: BuildMode) -> Result<Self> {
+        let mut builder = Self::new(request)?;
+        builder.start(mode);
+        Ok(builder)
+    }
+
+    pub(crate) fn start(&mut self, mode: BuildMode) {
+        self.build_task = tokio::spawn({
+            let request = self.build.clone();
+            let tx = self.tx.clone();
+            async move {
+                let ctx = BuildContext {
+                    mode,
+                    tx: tx.clone(),
+                };
+                request.verify_tooling(&ctx).await?;
+                request.prepare_build_dir()?;
+                request.build(&ctx).await
+            }
+        });
+    }
+
     /// Wait for any new updates to the builder - either it completed or gave us a message etc
     pub(crate) async fn wait(&mut self) -> BuilderUpdate {
         use futures_util::StreamExt;
@@ -179,7 +190,7 @@ impl AppBuilder {
                 match bundle {
                     Ok(Ok(bundle)) => BuilderUpdate::BuildReady { bundle },
                     Ok(Err(err)) => BuilderUpdate::BuildFailed { err },
-                    Err(err) => BuilderUpdate::BuildFailed { err: crate::Error::Runtime(format!("Build panicked! {err:#?}")) },
+                    Err(err) => BuilderUpdate::BuildFailed { err: anyhow::anyhow!("Build panicked! {err:#?}") },
                 }
             },
             Some(Ok(Some(msg))) = OptionFuture::from(self.stdout.as_mut().map(|f| f.next_line())) => {
@@ -602,8 +613,12 @@ impl AppBuilder {
         let triple = self.build.triple.clone();
         let asset_dir = self.build.asset_dir();
 
+        // Hotpatch asset!() calls
         for bundled in res.assets.assets() {
-            let original_artifacts = self.artifacts.as_mut().unwrap();
+            let original_artifacts = self
+                .artifacts
+                .as_mut()
+                .context("No artifacts to hotpatch")?;
 
             if original_artifacts.assets.contains(bundled) {
                 continue;
@@ -626,6 +641,18 @@ impl AppBuilder {
             if self.build.bundle == BundleFormat::Android {
                 let bundled_name = PathBuf::from(bundled.bundled_path());
                 _ = self.copy_file_to_android_tmp(&from, &bundled_name).await;
+            }
+        }
+
+        // Make sure to add `include!()` calls to the watcher so we can watch changes as they evolve
+        for file in res.depinfo.files.iter() {
+            let original_artifacts = self
+                .artifacts
+                .as_mut()
+                .context("No artifacts to hotpatch")?;
+
+            if !original_artifacts.depinfo.files.contains(file) {
+                original_artifacts.depinfo.files.push(file.clone());
             }
         }
 
@@ -897,7 +924,7 @@ impl AppBuilder {
                 .context("Failed to parse xcrun output")?;
             let device_uuid = json["result"]["devices"][0]["identifier"]
                 .as_str()
-                .ok_or("Failed to extract device UUID")?
+                .context("Failed to extract device UUID")?
                 .to_string();
 
             Ok(device_uuid)
@@ -924,14 +951,14 @@ impl AppBuilder {
                 .await?;
 
             if !output.status.success() {
-                return Err(format!("Failed to install app: {output:?}").into());
+                bail!("Failed to install app: {output:?}");
             }
 
             let json: Value = serde_json::from_str(&std::fs::read_to_string(tmpfile.path())?)
                 .context("Failed to parse xcrun output")?;
             let installation_url = json["result"]["installedApplications"][0]["installationURL"]
                 .as_str()
-                .ok_or("Failed to extract installation URL")?
+                .context("Failed to extract installation URL from xcrun output")?
                 .to_string();
 
             Ok(installation_url)
@@ -959,7 +986,7 @@ impl AppBuilder {
                 .await?;
 
             if !output.status.success() {
-                return Err(format!("Failed to launch app: {output:?}").into());
+                bail!("Failed to launch app: {output:?}");
             }
 
             let json: Value = serde_json::from_str(&std::fs::read_to_string(tmpfile.path())?)
@@ -967,7 +994,7 @@ impl AppBuilder {
 
             let status_pid = json["result"]["process"]["processIdentifier"]
                 .as_u64()
-                .ok_or("Failed to extract process identifier")?;
+                .context("Failed to extract process identifier")?;
 
             let output = Command::new("xcrun")
                 .args([
@@ -984,7 +1011,7 @@ impl AppBuilder {
                 .await?;
 
             if !output.status.success() {
-                return Err(format!("Failed to resume app: {output:?}").into());
+                bail!("Failed to resume app: {output:?}");
             }
 
             Ok(())
@@ -1004,18 +1031,27 @@ To accept the agreement, go to https://developer.apple.com/account
 To create a provisioning profile, follow the instructions here:
 https://developer.apple.com/documentation/xcode/sharing-your-teams-signing-certificates"#;
 
-        let profiles_folder = dirs::home_dir()
+        // Check the xcode 16 location first
+        let mut profiles_folder = dirs::home_dir()
             .context("Your machine has no home-dir")?
             .join("Library/Developer/Xcode/UserData/Provisioning Profiles");
+
+        // If it doesn't exist, check the old location
+        if !profiles_folder.exists() {
+            profiles_folder = dirs::home_dir()
+                .context("Your machine has no home-dir")?
+                .join("Library/MobileDevice/Provisioning Profiles");
+        }
 
         if !profiles_folder.exists() || profiles_folder.read_dir()?.next().is_none() {
             tracing::error!(
                 r#"No provisioning profiles found when trying to codesign the app.
-We checked the folder: {}
+We checked the folders:
+- XCode16: ~/Library/Developer/Xcode/UserData/Provisioning Profiles
+- XCode15: ~/Library/MobileDevice/Provisioning Profiles
 
 {CODESIGN_ERROR}
-"#,
-                profiles_folder.display()
+"#
             )
         }
 
@@ -1131,8 +1167,10 @@ We checked the folder: {}
             .context("Failed to codesign the app")?;
 
         if !output.status.success() {
-            let stderr = String::from_utf8(output.stderr).unwrap_or_default();
-            return Err(format!("Failed to codesign the app: {stderr}").into());
+            bail!(
+                "Failed to codesign the app: {}",
+                String::from_utf8(output.stderr).unwrap_or_default()
+            );
         }
 
         Ok(())

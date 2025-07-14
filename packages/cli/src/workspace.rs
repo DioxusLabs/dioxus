@@ -2,7 +2,7 @@ use crate::styles::GLOW_STYLE;
 use crate::CliSettings;
 use crate::Result;
 use crate::{config::DioxusConfig, AndroidTools};
-use anyhow::Context;
+use anyhow::{bail, Context};
 use ignore::gitignore::Gitignore;
 use krates::{semver::Version, KrateDetails, LockOptions};
 use krates::{Cmd, Krates, NodeId};
@@ -21,6 +21,7 @@ pub struct Workspace {
     pub(crate) ignore: Gitignore,
     pub(crate) cargo_toml: cargo_toml::Manifest,
     pub(crate) android_tools: Option<Arc<AndroidTools>>,
+    pub(crate) xcode: Option<PathBuf>,
 }
 
 impl Workspace {
@@ -56,7 +57,7 @@ impl Workspace {
                 }
             }
 
-            Ok(res)
+            Ok(res) as Result<Krates, krates::Error>
         });
 
         let spin_future = async move {
@@ -74,10 +75,14 @@ impl Workspace {
         };
 
         let krates = tokio::select! {
-            f = krates_future => f.context("failed to run cargo metadata")??,
-            _ = spin_future => return Err(crate::Error::Network(
-                "cargo metadata took too long to respond, try again with --offline".to_string(),
-            )),
+            f = krates_future => {
+                let res = f?;
+                if let Err(krates::Error::Metadata(e)) = res {
+                    bail!("{e}");
+                }
+                res?
+            },
+            _ = spin_future => bail!("cargo metadata took too long to respond, try again with --offline"),
         };
 
         let settings = CliSettings::global_or_default();
@@ -105,6 +110,13 @@ impl Workspace {
 
         let android_tools = crate::build::get_android_tools();
 
+        let xcode = Command::new("xcode-select")
+            .arg("-p")
+            .output()
+            .await
+            .ok()
+            .map(|s| String::from_utf8_lossy(&s.stdout).trim().to_string().into());
+
         let workspace = Arc::new(Self {
             krates,
             settings,
@@ -114,6 +126,7 @@ impl Workspace {
             ignore,
             cargo_toml,
             android_tools,
+            xcode,
         });
 
         tracing::debug!(
@@ -139,10 +152,10 @@ impl Workspace {
     }
 
     pub fn android_tools(&self) -> Result<Arc<AndroidTools>> {
-        Ok(self
+        self
             .android_tools
             .clone()
-            .context("Android not installed properly. Please set the `ANDROID_NDK_HOME` environment variable to the root of your NDK installation.")?)
+            .context("Android not installed properly. Please set the `ANDROID_NDK_HOME` environment variable to the root of your NDK installation.")
     }
 
     pub fn is_release_profile(&self, profile: &str) -> bool {
@@ -193,7 +206,10 @@ impl Workspace {
         let max = dioxus_versions.iter().max().unwrap();
 
         // If the minimum dioxus version is greater than the current cli version, warn the user
-        if min > &dx_semver || max < &dx_semver {
+        if min > &dx_semver
+            || max < &dx_semver
+            || dioxus_versions.iter().any(|f| f.pre != dx_semver.pre)
+        {
             tracing::error!(
                 r#"🚫dx and dioxus versions are incompatible!
                   • dx version: {dx_semver}
@@ -245,6 +261,14 @@ impl Workspace {
 
     pub fn wasm_ld(&self) -> PathBuf {
         self.gcc_ld_dir().join("wasm-ld")
+    }
+
+    /// Return the version of the wasm-bindgen crate if it exists
+    pub fn wasm_bindgen_version(&self) -> Option<String> {
+        self.krates
+            .krates_by_name("wasm-bindgen")
+            .next()
+            .map(|krate| krate.krate.version.to_string())
     }
 
     // wasm-ld: ./rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/wasm-ld
@@ -375,7 +399,7 @@ impl Workspace {
 
         toml::from_str::<DioxusConfig>(&std::fs::read_to_string(&dioxus_conf_file)?)
             .map_err(|err| {
-                anyhow::anyhow!("Failed to parse Dioxus.toml at {dioxus_conf_file:?}: {err}").into()
+                anyhow::anyhow!("Failed to parse Dioxus.toml at {dioxus_conf_file:?}: {err}")
             })
             .map(Some)
     }
@@ -457,24 +481,18 @@ impl Workspace {
                 }
                 None
             })
-            .ok_or_else(|| {
-                crate::Error::Cargo("Failed to find directory containing Cargo.toml".to_string())
-            })
+            .context("Failed to find directory containing Cargo.toml")
     }
 
     /// Returns the properly canonicalized path to the dx executable, used for linking and wrapping rustc
     pub(crate) fn path_to_dx() -> Result<PathBuf> {
-        Ok(
-            dunce::canonicalize(std::env::current_exe().context("Failed to find dx")?)
-                .context("Failed to find dx")?,
-        )
+        dunce::canonicalize(std::env::current_exe().context("Failed to find dx")?)
+            .context("Failed to find dx")
     }
 
     /// Returns the path to the dioxus home directory, used to install tools and other things
     pub(crate) fn dioxus_home_dir() -> PathBuf {
-        dirs::data_local_dir()
-            .map(|f| f.join("dioxus/"))
-            .unwrap_or_else(|| dirs::home_dir().unwrap().join(".dioxus"))
+        dirs::home_dir().unwrap().join(".dioxus")
     }
 }
 

@@ -29,7 +29,7 @@ use tracing::Level;
 use super::AppServer;
 
 const TICK_RATE_MS: u64 = 100;
-const VIEWPORT_MAX_WIDTH: u16 = 100;
+const VIEWPORT_MAX_WIDTH: u16 = 90;
 const VIEWPORT_HEIGHT_SMALL: u16 = 5;
 const VIEWPORT_HEIGHT_BIG: u16 = 13;
 
@@ -204,7 +204,7 @@ impl Output {
                 Ok(Some(update)) => return update,
                 Err(ee) => {
                     return ServeUpdate::Exit {
-                        error: Some(Box::new(ee)),
+                        error: Some(anyhow::anyhow!(ee)),
                     }
                 }
                 Ok(None) => {}
@@ -675,7 +675,7 @@ impl Output {
                 if client.build.bundle == BundleFormat::Web {
                     "Serving at: ".gray()
                 } else {
-                    "ServerFns at: ".gray()
+                    "Server at: ".gray()
                 },
                 address,
             ])),

@@ -3,6 +3,7 @@ use crate::{
     serve::{AppServer, ServeUpdate, WebServer},
     BuilderUpdate, BundleFormat, Error, Result,
 };
+use anyhow::bail;
 use dioxus_dx_wire_format::BuildStage;
 
 /// Run the project with the given arguments
@@ -29,8 +30,10 @@ impl RunArgs {
         self.args.hot_reload = Some(false);
         self.args.watch = Some(false);
 
-        let mut builder = AppServer::start(self.args).await?;
+        let mut builder = AppServer::new(self.args).await?;
         let mut devserver = WebServer::start(&builder)?;
+
+        builder.initialize();
 
         loop {
             let msg = tokio::select! {
@@ -111,15 +114,11 @@ impl RunArgs {
                             }
                             BuildStage::Failed => {
                                 tracing::error!("[{bundle_format}] Build failed");
-                                return Err(Error::Cargo(format!(
-                                    "Build failed for bundle: {bundle_format}"
-                                )));
+                                bail!("Build failed for platform: {bundle_format}");
                             }
                             BuildStage::Aborted => {
                                 tracing::error!("[{bundle_format}] Build aborted");
-                                return Err(Error::Cargo(format!(
-                                    "Build aborted for bundle: {bundle_format}"
-                                )));
+                                bail!("Build aborted for platform: {bundle_format}");
                             }
                             _ => {}
                         },
@@ -127,7 +126,7 @@ impl RunArgs {
                             print!("{message}");
                         }
                         BuilderUpdate::BuildFailed { err } => {
-                            tracing::error!("Build failed: {}", err);
+                            tracing::error!("❌ Build failed: {}", err);
                             return Err(err);
                         }
                         BuilderUpdate::StdoutReceived { msg } => {
@@ -141,9 +140,7 @@ impl RunArgs {
                                 tracing::error!(
                                     "Application [{bundle_format}] exited with error: {status}"
                                 );
-                                return Err(Error::Runtime(format!(
-                                    "Application [{bundle_format}] exited with error: {status}"
-                                )));
+                                bail!("Application [{bundle_format}] exited with error: {status}");
                             }
 
                             break;

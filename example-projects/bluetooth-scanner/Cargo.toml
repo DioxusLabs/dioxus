@@ -1,5 +1,5 @@
 [package]
-name = "wifi-scanner"
+name = "bluetooth-scanner"
 version = "0.1.1"
 edition = "2018"
 publish = false
@@ -11,4 +11,4 @@ tokio = { workspace = true, features = ["full"] }
 dioxus = { workspace = true, features = ["desktop"] }
 futures-channel = { workspace = true }
 futures = { workspace = true }
-wifiscanner = "0.5.1"
+btleplug = "0.11.8"

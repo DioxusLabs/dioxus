@@ -61,7 +61,6 @@ jobs:
           repository-name: dioxuslabs/docsite
           clean: false
           token: ${{ secrets.DEPLOY_KEY }}
-
 # Attempt to backport a merged pull request to the latest stable release
 #
 # If the backported PR is succesfully merged
@@ -87,5 +86,3 @@ jobs:
 #       uses: codecov/codecov-action@v2
 #       with:
 #         fail_ci_if_error: false
-
-

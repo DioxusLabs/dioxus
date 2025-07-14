@@ -222,9 +222,9 @@ function serializeTouchEvent(event: TouchEvent): SerializedEvent {
     ctrl_key: event.ctrlKey,
     meta_key: event.metaKey,
     shift_key: event.shiftKey,
-    changed_touches: event.changedTouches,
-    target_touches: event.targetTouches,
-    touches: event.touches,
+    changed_touches: serializeTouchList(event.changedTouches),
+    target_touches: serializeTouchList(event.targetTouches),
+    touches: serializeTouchList(event.touches),
   };
 }
 
@@ -253,6 +253,27 @@ function serializePointerEvent(event: PointerEvent): SerializedEvent {
     pointer_type: event.pointerType,
     is_primary: event.isPrimary,
   };
+}
+
+function serializeTouchList(touchList: TouchList) {
+  const serializedTouches = [];
+  for (let i = 0; i < touchList.length; i++) {
+    const touch = touchList[i];
+    serializedTouches.push({
+      identifier: touch.identifier,
+      client_x: touch.clientX,
+      client_y: touch.clientY,
+      page_x: touch.pageX,
+      page_y: touch.pageY,
+      screen_x: touch.screenX,
+      screen_y: touch.screenY,
+      radius_x: (touch as any).radiusX,
+      radius_y: (touch as any).radiusY,
+      rotation_angle: (touch as any).rotationAngle,
+      force: (touch as any).force,
+    });
+  }
+  return serializedTouches;
 }
 
 function serializeMouseEvent(event: MouseEvent): SerializedEvent {

@@ -1,0 +1,8 @@
+[application]
+
+# App (Project) Name
+name = "hot_dog"
+
+[bundle]
+identifier = "com.dioxuslabs"
+publisher = "Dioxus Labs"
