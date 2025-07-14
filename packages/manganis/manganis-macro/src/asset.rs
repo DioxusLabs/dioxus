@@ -120,9 +120,9 @@ impl ToTokens for AssetParser {
 
                 static __REFERENCE_TO_LINK_SECTION: &'static [u8] = &__LINK_SECTION;
 
-                manganis::Asset::new(
-                    || __REFERENCE_TO_LINK_SECTION
-                )
+
+
+                manganis::Asset::new(|| unsafe { std::ptr::read_volatile(&__REFERENCE_TO_LINK_SECTION) })
             }
         })
     }
