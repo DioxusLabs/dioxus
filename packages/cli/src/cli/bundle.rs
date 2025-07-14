@@ -1,5 +1,5 @@
 use crate::{AppBuilder, BuildArgs, BuildMode, BuildRequest, BundleFormat};
-use anyhow::{anyhow, Context};
+use anyhow::{bail, Context};
 use path_absolutize::Absolutize;
 use std::collections::HashMap;
 use tauri_bundler::{BundleBinary, BundleSettings, PackageSettings, SettingsBuilder};

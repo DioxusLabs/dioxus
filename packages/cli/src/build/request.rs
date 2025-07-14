@@ -595,10 +595,9 @@ impl BuildRequest {
                     Some(*renderer)
                 }
                 _ => {
-                    return Err(anyhow::anyhow!(
+                    return bail!(
                         "Multiple platforms enabled in Cargo.toml. Please specify a platform with `--web`, `--webview`, or `--native` or set a default platform in Cargo.toml"
-                    )
-                    .into());
+                    );
                     // None if !using_dioxus_explicitly => Platform::autodetect_from_cargo_feature("desktop").unwrap(),
                     // None => match enabled_platforms.len() {
                     //     0 => bail!("No platform specified and no platform marked as default in Cargo.toml. Try specifying a platform with `--platform`"),
@@ -1168,7 +1167,7 @@ impl BuildRequest {
 
             // On android, the c++_static flag means we need to copy the libc++_shared.so precompiled
             // library to the jniLibs folder
-            if arg.contains("-lc++_static") && self.platform == Platform::Android {
+            if arg.contains("-lc++_static") && self.bundle == BundleFormat::Android {
                 std::fs::copy(
                     self.workspace.android_tools()?.libcpp_shared(&self.triple),
                     framework_dir.join("libc++_shared.so"),
@@ -1186,7 +1185,7 @@ impl BuildRequest {
                 self.root_dir().join("Contents").join("Frameworks")
             }
             OperatingSystem::IOS(_) => self.root_dir().join("Frameworks"),
-            OperatingSystem::Linux if self.platform == Platform::Android => self
+            OperatingSystem::Linux if self.bundle == BundleFormat::Android => self
                 .root_dir()
                 .join("app")
                 .join("src")
@@ -4629,7 +4628,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
     }
 
     async fn prebuild(&self) -> Result<()> {
-        if self.platform == Platform::Server {
+        if self.bundle == BundleFormat::Server {
             return Ok(());
         }
 

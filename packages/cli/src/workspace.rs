@@ -36,29 +36,30 @@ impl Workspace {
             return Ok(ws.clone());
         }
 
-        let krates_future: JoinHandle<Result<Krates>> = tokio::task::spawn_blocking(|| {
-            let manifest_options = crate::logging::VERBOSITY.get().unwrap();
-            let lock_options = LockOptions {
-                frozen: manifest_options.frozen,
-                locked: manifest_options.locked,
-                offline: manifest_options.offline,
-            };
+        let krates_future: JoinHandle<Result<Krates, krates::Error>> =
+            tokio::task::spawn_blocking(|| {
+                let manifest_options = crate::logging::VERBOSITY.get().unwrap();
+                let lock_options = LockOptions {
+                    frozen: manifest_options.frozen,
+                    locked: manifest_options.locked,
+                    offline: manifest_options.offline,
+                };
 
-            let mut cmd = Cmd::new();
-            cmd.lock_opts(lock_options);
+                let mut cmd = Cmd::new();
+                cmd.lock_opts(lock_options);
 
-            let mut builder = krates::Builder::new();
-            builder.workspace(true);
-            let res = builder.build(cmd, |_| {})?;
+                let mut builder = krates::Builder::new();
+                builder.workspace(true);
+                let res = builder.build(cmd, |_| {})?;
 
-            if !lock_options.offline {
-                if let Ok(res) = std::env::var("SIMULATE_SLOW_NETWORK") {
-                    std::thread::sleep(Duration::from_secs(res.parse().unwrap_or(5)));
+                if !lock_options.offline {
+                    if let Ok(res) = std::env::var("SIMULATE_SLOW_NETWORK") {
+                        std::thread::sleep(Duration::from_secs(res.parse().unwrap_or(5)));
+                    }
                 }
-            }
 
-            Ok(res) as Result<Krates, krates::Error>
-        });
+                Ok(res) as Result<Krates, krates::Error>
+            });
 
         let spin_future = async move {
             tokio::time::sleep(Duration::from_millis(1000)).await;

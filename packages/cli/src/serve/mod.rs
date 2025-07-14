@@ -1,6 +1,6 @@
 use crate::{
     styles::{GLOW_STYLE, LINK_STYLE},
-    AppBuilder, BuildId, BuildMode, BuilderUpdate, BundleFormat, Error, Result, ServeArgs,
+    AppBuilder, BuildId, BuildMode, BuilderUpdate, BundleFormat, Result, ServeArgs,
     TraceController,
 };
 

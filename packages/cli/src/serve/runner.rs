@@ -1,8 +1,8 @@
 use super::{AppBuilder, ServeUpdate, WebServer};
 use crate::{
     platform_override::CommandWithPlatformOverrides, BuildArtifacts, BuildId, BuildMode,
-    BuildTargets, BuilderUpdate, BundleFormat, Error, HotpatchModuleCache, Result, ServeArgs,
-    TailwindCli, TraceSrc, Workspace,
+    BuildTargets, BuilderUpdate, BundleFormat, HotpatchModuleCache, Result, ServeArgs, TailwindCli,
+    TraceSrc, Workspace,
 };
 use anyhow::{bail, Context};
 use dioxus_core::internal::{
