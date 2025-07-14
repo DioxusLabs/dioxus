@@ -167,7 +167,7 @@ pub trait ReadableExt: Readable {
     ///
     /// // The child component doesn't need to know that the mapped value is coming from a list
     /// #[component]
-    /// fn Item(item: MappedSignal<i32>) -> Element {
+    /// fn Item(item: Read<i32>) -> Element {
     ///     rsx! {
     ///         div { "Item: {item}" }
     ///     }

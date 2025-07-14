@@ -288,7 +288,7 @@ pub trait WritableExt: Writable {
     ///     rsx! {
     ///         for index in 0..list.len() {
     ///             // We can use the `map` method to provide a view into the single item in the list that the child component will render
-    ///             Item { item: list.map_mut(move |v| &v[index], |v| &mut v[index]) }
+    ///             Item { item: list.map_mut(move |v| &v[index], move |v| &mut v[index]) }
     ///         }
     ///     }
     /// }
