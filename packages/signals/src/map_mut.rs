@@ -1,7 +1,8 @@
 use std::ops::Deref;
 
 use crate::{
-    read_impls, write_impls, Readable, ReadableExt, ReadableRef, Writable, WritableExt, WritableRef,
+    read_impls, write_impls, Readable, ReadableExt, ReadableRef, Writable, WritableExt,
+    WritableRef, Write,
 };
 use dioxus_core::prelude::*;
 use generational_box::{AnyStorage, BorrowResult};
@@ -81,13 +82,13 @@ where
     F: Fn(&V::Target) -> &O,
     FMut: Fn(&mut V::Target) -> &mut O,
 {
-    type Mut = V::Mut;
+    type WriteMetadata = V::WriteMetadata;
 
     fn try_write_unchecked(
         &self,
     ) -> Result<WritableRef<'static, Self>, generational_box::BorrowMutError> {
         let value = self.value.try_write_unchecked()?;
-        Ok(V::map_ref_mut(value, |v| (self.map_fn_mut)(v)))
+        Ok(Write::map(value, |v| (self.map_fn_mut)(v)))
     }
 }
 

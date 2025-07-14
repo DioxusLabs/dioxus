@@ -1,13 +1,13 @@
-use std::ops::{DerefMut, IndexMut};
+use std::ops::{Deref, DerefMut, IndexMut};
 
-use generational_box::AnyStorage;
+use generational_box::{AnyStorage, UnsyncStorage};
 
 use crate::{read::Readable, BoxedWritable, MappedMutSignal};
 
-/// A reference to a value that can be read from.
+/// A reference to a value that can be written to.
 #[allow(type_alias_bounds)]
 pub type WritableRef<'a, T: Writable, O = <T as Readable>::Target> =
-    <T::Mut as WriteRefStorage>::Mut<'a, O>;
+    Write<'a, O, <T as Readable>::Storage, <T as Writable>::WriteMetadata>;
 
 /// A trait for states that can be written to like [`crate::Signal`]. You may choose to accept this trait as a parameter instead of the concrete type to allow for more flexibility in your API.
 ///
@@ -35,8 +35,8 @@ pub type WritableRef<'a, T: Writable, O = <T as Readable>::Target> =
 /// }
 /// ```
 pub trait Writable: Readable {
-    /// The type of the mutable reference storage.
-    type Mut: WriteRefStorage;
+    /// Additional data associated with the write reference.
+    type WriteMetadata: 'static;
 
     /// Get a mutable reference to the value. If the value has been dropped, this will panic.
     #[track_caller]
@@ -47,7 +47,7 @@ pub trait Writable: Readable {
     /// Try to get a mutable reference to the value.
     #[track_caller]
     fn try_write(&mut self) -> Result<WritableRef<'_, Self>, generational_box::BorrowMutError> {
-        self.try_write_unchecked().map(Self::downcast_lifetime_mut)
+        self.try_write_unchecked().map(Write::downcast_lifetime)
     }
 
     /// Try to get a mutable reference to the value without checking the lifetime. This will update any subscribers.
@@ -66,83 +66,214 @@ pub trait Writable: Readable {
     }
 }
 
-/// The storage implementation for the writable reference used in the [`Writable`] trait. This trait can
-/// be used to map the reference to a new type.
-pub trait WriteRefStorage {
-    /// The type of the reference.
-    type Mut<'a, R: ?Sized + 'static>: DerefMut<Target = R>;
-
-    /// Map the reference to a new type.
-    fn map_ref_mut<I: ?Sized, U: ?Sized, F: FnOnce(&mut I) -> &mut U>(
-        ref_: Self::Mut<'_, I>,
-        f: F,
-    ) -> Self::Mut<'_, U>;
-
-    /// Try to map the reference to a new type.
-    fn try_map_ref_mut<I: ?Sized, U: ?Sized, F: FnOnce(&mut I) -> Option<&mut U>>(
-        ref_: Self::Mut<'_, I>,
-        f: F,
-    ) -> Option<Self::Mut<'_, U>>;
-
-    /// Downcast a mutable reference in a RefMut to a more specific lifetime
-    ///
-    /// This function enforces the variance of the lifetime parameter `'a` in Ref.
-    fn downcast_lifetime_mut<'a: 'b, 'b, T: ?Sized + 'static>(
-        mut_: Self::Mut<'a, T>,
-    ) -> Self::Mut<'b, T>;
+/// A mutable reference to a writable value. This reference acts similarly to [`std::cell::RefMut`], but it has extra debug information
+/// and integrates with the reactive system to automatically update dependents.
+///
+/// [`Write`] implements [`DerefMut`] which means you can call methods on the inner value just like you would on a mutable reference
+/// to the inner value. If you need to get the inner reference directly, you can call [`Write::deref_mut`].
+///
+/// # Example
+/// ```rust
+/// # use dioxus::prelude::*;
+/// fn app() -> Element {
+///     let mut value = use_signal(|| String::from("hello"));
+///     
+///     rsx! {
+///         button {
+///             onclick: move |_| {
+///                 let mut mutable_reference = value.write();
+///
+///                 // You call methods like `push_str` on the reference just like you would with the inner String
+///                 mutable_reference.push_str("world");
+///             },
+///             "Click to add world to the string"
+///         }
+///         div { "{value}" }
+///     }
+/// }
+/// ```
+///
+/// ## Matching on Write
+///
+/// You need to get the inner mutable reference with [`Write::deref_mut`] before you match the inner value. If you try to match
+/// without calling [`Write::deref_mut`], you will get an error like this:
+///
+/// ```compile_fail
+/// # use dioxus::prelude::*;
+/// #[derive(Debug)]
+/// enum Colors {
+///     Red(u32),
+///     Green
+/// }
+/// fn app() -> Element {
+///     let mut value = use_signal(|| Colors::Red(0));
+///
+///     rsx! {
+///         button {
+///             onclick: move |_| {
+///                 let mut mutable_reference = value.write();
+///
+///                 match mutable_reference {
+///                     // Since we are matching on the `Write` type instead of &mut Colors, we can't match on the enum directly
+///                     Colors::Red(brightness) => *brightness += 1,
+///                     Colors::Green => {}
+///                 }
+///             },
+///             "Click to add brightness to the red color"
+///         }
+///         div { "{value:?}" }
+///     }
+/// }
+/// ```
+///
+/// ```text
+/// error[E0308]: mismatched types
+///   --> src/main.rs:18:21
+///    |
+/// 16 |                 match mutable_reference {
+///    |                       ----------------- this expression has type `dioxus::prelude::Write<'_, Colors>`
+/// 17 |                     // Since we are matching on the `Write` t...
+/// 18 |                     Colors::Red(brightness) => *brightness += 1,
+///    |                     ^^^^^^^^^^^^^^^^^^^^^^^ expected `Write<'_, Colors>`, found `Colors`
+///    |
+///    = note: expected struct `dioxus::prelude::Write<'_, Colors, >`
+///                found enum `Colors`
+/// ```
+///
+/// Instead, you need to call deref mut on the reference to get the inner value **before** you match on it:
+///
+/// ```rust
+/// use std::ops::DerefMut;
+/// # use dioxus::prelude::*;
+/// #[derive(Debug)]
+/// enum Colors {
+///     Red(u32),
+///     Green
+/// }
+/// fn app() -> Element {
+///     let mut value = use_signal(|| Colors::Red(0));
+///
+///     rsx! {
+///         button {
+///             onclick: move |_| {
+///                 let mut mutable_reference = value.write();
+///
+///                 // DerefMut converts the `Write` into a `&mut Colors`
+///                 match mutable_reference.deref_mut() {
+///                     // Now we can match on the inner value
+///                     Colors::Red(brightness) => *brightness += 1,
+///                     Colors::Green => {}
+///                 }
+///             },
+///             "Click to add brightness to the red color"
+///         }
+///         div { "{value:?}" }
+///     }
+/// }
+/// ```
+///
+/// ## Generics
+/// - T is the current type of the write
+/// - S is the storage type of the signal. This type determines if the signal is local to the current thread, or it can be shared across threads.
+/// - D is the additional data associated with the write reference. This is used by signals to track when the write is dropped
+pub struct Write<'a, T: ?Sized + 'static, S: AnyStorage = UnsyncStorage, D = ()> {
+    write: S::Mut<'a, T>,
+    data: D,
 }
 
-impl<S: AnyStorage> WriteRefStorage for S {
-    type Mut<'a, R: ?Sized + 'static> = S::Mut<'a, R>;
+impl<'a, T: ?Sized, S: AnyStorage> Write<'a, T, S> {
+    /// Create a new write referenc
+    pub fn new(write: S::Mut<'a, T>) -> Self {
+        Self { write, data: () }
+    }
+}
 
-    fn map_ref_mut<I: ?Sized, U: ?Sized, F: FnOnce(&mut I) -> &mut U>(
-        ref_: Self::Mut<'_, I>,
-        f: F,
-    ) -> Self::Mut<'_, U> {
-        <S as AnyStorage>::map_mut(ref_, f)
+impl<'a, T: ?Sized, S: AnyStorage, D> Write<'a, T, S, D> {
+    /// Create a new write reference with additional data.
+    pub fn new_with_metadata(write: S::Mut<'a, T>, data: D) -> Self {
+        Self { write, data }
     }
 
-    fn try_map_ref_mut<I: ?Sized, U: ?Sized, F: FnOnce(&mut I) -> Option<&mut U>>(
-        ref_: Self::Mut<'_, I>,
-        f: F,
-    ) -> Option<Self::Mut<'_, U>> {
-        <S as AnyStorage>::try_map_mut(ref_, f)
+    /// Get the inner value of the write reference.
+    pub fn into_inner(self) -> S::Mut<'a, T> {
+        self.write
     }
 
-    fn downcast_lifetime_mut<'a: 'b, 'b, T: ?Sized + 'static>(
-        mut_: Self::Mut<'a, T>,
-    ) -> Self::Mut<'b, T> {
-        <S as AnyStorage>::downcast_lifetime_mut(mut_)
+    /// Get the additional data associated with the write reference.
+    pub fn data(&self) -> &D {
+        &self.data
+    }
+
+    /// Split into the inner value and the additional data.
+    pub fn into_parts(self) -> (S::Mut<'a, T>, D) {
+        (self.write, self.data)
+    }
+
+    /// Map the metadata of the write reference to a new type.
+    pub fn map_metadata<O>(self, f: impl FnOnce(D) -> O) -> Write<'a, T, S, O> {
+        Write {
+            write: self.write,
+            data: f(self.data),
+        }
+    }
+
+    /// Map the mutable reference to the signal's value to a new type.
+    pub fn map<O: ?Sized>(myself: Self, f: impl FnOnce(&mut T) -> &mut O) -> Write<'a, O, S, D> {
+        let Self { write, data, .. } = myself;
+        Write {
+            write: S::map_mut(write, f),
+            data,
+        }
+    }
+
+    /// Try to map the mutable reference to the signal's value to a new type
+    pub fn filter_map<O: ?Sized>(
+        myself: Self,
+        f: impl FnOnce(&mut T) -> Option<&mut O>,
+    ) -> Option<Write<'a, O, S, D>> {
+        let Self { write, data, .. } = myself;
+        let write = S::try_map_mut(write, f);
+        write.map(|write| Write { write, data })
+    }
+
+    /// Downcast the lifetime of the mutable reference to the signal's value.
+    ///
+    /// This function enforces the variance of the lifetime parameter `'a` in Mut.  Rust will typically infer this cast with a concrete type, but it cannot with a generic type.
+    pub fn downcast_lifetime<'b>(mut_: Self) -> Write<'b, T, S, D>
+    where
+        'a: 'b,
+    {
+        Write {
+            write: S::downcast_lifetime_mut(mut_.write),
+            data: mut_.data,
+        }
+    }
+}
+
+impl<'a, T, S, D> Deref for Write<'a, T, S, D>
+where
+    S: AnyStorage,
+    T: ?Sized + 'static,
+{
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.write
+    }
+}
+
+impl<'a, T, S, D> DerefMut for Write<'a, T, S, D>
+where
+    S: AnyStorage,
+    T: ?Sized + 'static,
+{
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.write
     }
 }
 
 /// An extension trait for [`Writable`] that provides some convenience methods.
 pub trait WritableExt: Writable {
-    /// Map the reference to a new type.
-    fn map_ref_mut<I: ?Sized, U: ?Sized, F: FnOnce(&mut I) -> &mut U>(
-        ref_: <Self::Mut as WriteRefStorage>::Mut<'_, I>,
-        f: F,
-    ) -> <Self::Mut as WriteRefStorage>::Mut<'_, U> {
-        <Self::Mut as WriteRefStorage>::map_ref_mut(ref_, f)
-    }
-
-    /// Try to map the reference to a new type.
-    fn try_map_ref_mut<I: ?Sized, U: ?Sized, F: FnOnce(&mut I) -> Option<&mut U>>(
-        ref_: <Self::Mut as WriteRefStorage>::Mut<'_, I>,
-        f: F,
-    ) -> Option<<Self::Mut as WriteRefStorage>::Mut<'_, U>> {
-        <Self::Mut as WriteRefStorage>::try_map_ref_mut(ref_, f)
-    }
-
-    /// Downcast a mutable reference in a RefMut to a more specific lifetime
-    ///
-    /// This function enforces the variance of the lifetime parameter `'a` in Ref.
-    fn downcast_lifetime_mut<'a: 'b, 'b, T: ?Sized + 'static>(
-        mut_: <Self::Mut as WriteRefStorage>::Mut<'a, T>,
-    ) -> <Self::Mut as WriteRefStorage>::Mut<'b, T> {
-        <Self::Mut as WriteRefStorage>::downcast_lifetime_mut(mut_)
-    }
-
     /// Map the readable type to a new type. This lets you provide a view into a readable type without needing to clone the inner value.
     ///
     /// Anything that subscribes to the readable value will be rerun whenever the original value changes, even if the view does not change. If you want to memorize the view, you can use a [`crate::Memo`] instead.
@@ -211,7 +342,7 @@ pub trait WritableExt: Writable {
     where
         Self::Target: std::ops::IndexMut<I>,
     {
-        Self::map_ref_mut(self.write(), |v| v.index_mut(index))
+        Write::map(self.write(), |v| v.index_mut(index))
     }
 
     /// Takes the value out of the Signal, leaving a Default in its place.
@@ -233,11 +364,12 @@ pub trait WritableExt: Writable {
     }
 
     /// Box the writable value into a trait object. This is useful for passing around writable values without knowing their concrete type.
-    fn boxed_mut(self) -> BoxedWritable<Self::Target, Self::Storage, Self::Mut>
+    fn boxed_mut(self) -> BoxedWritable<Self::Target, Self::Storage>
     where
         Self: Sized + 'static,
     {
-        BoxedWritable::new(self)
+        // BoxedWritable::new(self)
+        todo!()
     }
 }
 
@@ -257,16 +389,16 @@ pub trait WritableOptionExt<T: 'static>: Writable<Target = Option<T>> {
         let is_none = self.read().is_none();
         if is_none {
             self.with_mut(|v| *v = Some(default()));
-            Self::map_ref_mut(self.write(), |v| v.as_mut().unwrap())
+            Write::map(self.write(), |v| v.as_mut().unwrap())
         } else {
-            Self::map_ref_mut(self.write(), |v| v.as_mut().unwrap())
+            Write::map(self.write(), |v| v.as_mut().unwrap())
         }
     }
 
     /// Attempts to write the inner value of the Option.
     #[track_caller]
     fn as_mut(&mut self) -> Option<WritableRef<'_, Self, T>> {
-        Self::try_map_ref_mut(self.write(), |v: &mut Option<T>| v.as_mut())
+        Write::filter_map(self.write(), |v: &mut Option<T>| v.as_mut())
     }
 }
 
@@ -342,7 +474,7 @@ pub trait WritableVecExt<T: 'static>: Writable<Target = Vec<T>> {
     /// Try to mutably get an element from the vector.
     #[track_caller]
     fn get_mut(&mut self, index: usize) -> Option<WritableRef<'_, Self, T>> {
-        Self::try_map_ref_mut(self.write(), |v: &mut Vec<T>| v.get_mut(index))
+        Write::filter_map(self.write(), |v: &mut Vec<T>| v.get_mut(index))
     }
 
     /// Gets an iterator over the values of the vector.
@@ -370,11 +502,11 @@ impl<'a, T: 'static, R: Writable<Target = Vec<T>>> Iterator for WritableValueIte
     fn next(&mut self) -> Option<Self::Item> {
         let index = self.index;
         self.index += 1;
-        R::try_map_ref_mut(
+        Write::filter_map(
             self.value.try_write_unchecked().unwrap(),
             |v: &mut Vec<T>| v.get_mut(index),
         )
-        .map(R::downcast_lifetime_mut)
+        .map(Write::downcast_lifetime)
     }
 }
 

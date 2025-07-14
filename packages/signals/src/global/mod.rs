@@ -67,7 +67,7 @@ impl<T: Clone + 'static, R: 'static> Writable for Global<T, R>
 where
     T: Writable<Target = R> + InitializeFromFunction<R>,
 {
-    type Mut = T::Mut;
+    type WriteMetadata = T::WriteMetadata;
 
     #[track_caller]
     fn try_write_unchecked(

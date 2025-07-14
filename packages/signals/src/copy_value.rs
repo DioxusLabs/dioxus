@@ -9,12 +9,12 @@ use dioxus_core::prelude::*;
 
 use generational_box::{GenerationalBox, Storage};
 
-use crate::Readable;
 use crate::ReadableRef;
 use crate::Writable;
 use crate::WritableRef;
 use crate::{default_impl, write_impls, WritableExt};
 use crate::{read_impls, ReadableExt};
+use crate::{Readable, Write};
 
 /// CopyValue is a wrapper around a value to make the value mutable and Copy.
 ///
@@ -158,14 +158,14 @@ impl<T: 'static, S: Storage<T>> Readable for CopyValue<T, S> {
 }
 
 impl<T: 'static, S: Storage<T>> Writable for CopyValue<T, S> {
-    type Mut = S;
+    type WriteMetadata = ();
 
     #[track_caller]
     fn try_write_unchecked(
         &self,
     ) -> Result<WritableRef<'static, Self>, generational_box::BorrowMutError> {
         crate::warnings::copy_value_hoisted(self, std::panic::Location::caller());
-        self.value.try_write()
+        self.value.try_write().map(Write::new)
     }
 }
 
