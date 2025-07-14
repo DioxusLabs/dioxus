@@ -1,4 +1,4 @@
-pub(crate) fn cross_open(url: &str) -> Result<(), Box<dyn std::error::Error>> {
+pub(crate) fn open_url(url: &str) -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(target_os = "ios")]
     {
         return open_url_ios(url);

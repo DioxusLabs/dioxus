@@ -268,7 +268,7 @@ impl App {
         if let Some(temp) = msg.params().as_object() {
             if temp.contains_key("href") {
                 if let Some(href) = temp.get("href").and_then(|v| v.as_str()) {
-                    if let Err(err) = crate::mobile_opener::cross_open(href) {
+                    if let Err(err) = crate::mobile_opener::open_url(href) {
                         tracing::error!("Failed to open URL: {}", err);
                     }
                 }
