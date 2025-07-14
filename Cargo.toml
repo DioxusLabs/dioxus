@@ -19,7 +19,6 @@ members = [
     "packages/web",
     "packages/ssr",
     "packages/desktop",
-    "packages/mobile",
     "packages/interpreter",
     "packages/liveview",
     "packages/autofmt",
@@ -48,7 +47,6 @@ members = [
     "packages/interpreter",
     "packages/lazy-js-bundle",
     "packages/liveview",
-    "packages/mobile",
     "packages/router-macro",
     "packages/router",
     "packages/rsx-hotreload",
@@ -102,8 +100,9 @@ members = [
     # Full project examples
     "example-projects/fullstack-hackernews",
     "example-projects/ecommerce-site",
-    "example-projects/wifi-scanner",
+    "example-projects/bluetooth-scanner",
     "example-projects/file-explorer",
+    "example-projects/hotdog",
 
     # Simple examples that require a crate
     "examples/tailwind",
@@ -155,7 +154,6 @@ dioxus-web = { path = "packages/web", version = "0.7.0-alpha.2", default-feature
 dioxus-isrg = { path = "packages/isrg", version = "0.7.0-alpha.2" }
 dioxus-ssr = { path = "packages/ssr", version = "0.7.0-alpha.2", default-features = false }
 dioxus-desktop = { path = "packages/desktop", version = "0.7.0-alpha.2", default-features = false }
-dioxus-mobile = { path = "packages/mobile", version = "0.7.0-alpha.2" }
 dioxus-interpreter-js = { path = "packages/interpreter", version = "0.7.0-alpha.2" }
 dioxus-liveview = { path = "packages/liveview", version = "0.7.0-alpha.2" }
 dioxus-autofmt = { path = "packages/autofmt", version = "0.7.0-alpha.2" }

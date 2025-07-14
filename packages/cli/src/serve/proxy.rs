@@ -2,7 +2,7 @@ use crate::config::WebProxyConfig;
 use crate::TraceSrc;
 use crate::{Error, Result};
 
-use anyhow::{anyhow, Context};
+use anyhow::{bail, Context};
 use axum::body::Body;
 use axum::http::request::Parts;
 use axum::{body::Body as MyBody, response::IntoResponse};
@@ -47,7 +47,7 @@ impl ProxyClient {
         self.inner
             .request(req)
             .await
-            .map_err(|err| crate::error::Error::Other(anyhow!(err)))
+            .context("Failed to send proxy request")
     }
 }
 
@@ -64,11 +64,11 @@ pub(crate) fn add_proxy(mut router: Router, proxy: &WebProxyConfig) -> Result<Ro
     let trimmed_path = path.trim_start_matches('/');
 
     if trimmed_path.is_empty() {
-        return Err(crate::Error::ProxySetup(format!(
+        bail!(
             "Proxy backend URL must have a non-empty path, e.g. {}/api instead of {}",
             proxy.backend.trim_end_matches('/'),
             proxy.backend
-        )));
+        );
     }
 
     let method_router = proxy_to(url, false, handle_proxy_error);
@@ -267,22 +267,5 @@ mod test {
     #[tokio::test]
     async fn add_proxy_trailing_slash() {
         test_proxy_requests("/api/".to_string()).await;
-    }
-
-    #[test]
-    fn add_proxy_empty_path() {
-        let config = WebProxyConfig {
-            backend: "http://localhost:8000".to_string(),
-        };
-        let router = super::add_proxy(Router::new(), &config);
-        match router.unwrap_err() {
-            crate::Error::ProxySetup(e) => {
-                assert_eq!(
-                    e,
-                    "Proxy backend URL must have a non-empty path, e.g. http://localhost:8000/api instead of http://localhost:8000"
-                );
-            }
-            e => panic!("Unexpected error type: {}", e),
-        }
     }
 }

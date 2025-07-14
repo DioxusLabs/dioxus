@@ -1,4 +1,5 @@
 use crate::{Result, TraceSrc};
+use anyhow::bail;
 use serde::{Deserialize, Serialize};
 use std::sync::LazyLock;
 use std::{fs, path::PathBuf, sync::Arc};
@@ -89,16 +90,14 @@ impl CliSettings {
                 ?path,
                 "failed to create directories for settings file"
             );
-            return Err(
-                anyhow::anyhow!("failed to create directories for settings file: {e}").into(),
-            );
+            bail!("failed to create directories for settings file: {e}");
         }
 
         // Write the data.
         let result = fs::write(&path, data.clone());
         if let Err(e) = result {
             error!(?data, ?path, "failed to save global cli settings");
-            return Err(anyhow::anyhow!("failed to save global cli settings: {e}").into());
+            bail!("failed to save global cli settings: {e}");
         }
 
         Ok(())

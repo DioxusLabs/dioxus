@@ -18,6 +18,7 @@ mod file_upload;
 mod hooks;
 mod ipc;
 mod menubar;
+mod mobile;
 mod protocol;
 mod query;
 mod shortcut;
