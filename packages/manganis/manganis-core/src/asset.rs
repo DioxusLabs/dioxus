@@ -120,7 +120,7 @@ impl Asset {
     #[doc(hidden)]
     /// This should only be called from the macro
     /// Create a new asset from the bundled form of the asset and the link section
-    pub const fn new(bundled: fn() -> &'static [u8]) -> Self {
+    pub const fn new(bundled: extern "Rust" fn() -> &'static [u8]) -> Self {
         Self { bundled }
     }
 

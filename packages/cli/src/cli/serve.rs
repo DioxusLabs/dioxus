@@ -181,7 +181,7 @@ impl ServeArgs {
                     })
                     .unwrap_or_else(|| format!("dx serve panicked: {as_str}"));
 
-                Err(crate::error::Error::CapturedPanic(message))
+                Err(anyhow::anyhow!(message))
             }
         }
     }

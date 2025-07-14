@@ -1,4 +1,0 @@
-{
-    "rust-analyzer.inlayHints.enable": true,
-    "rust-analyzer.checkOnSave.allTargets": true,
-}

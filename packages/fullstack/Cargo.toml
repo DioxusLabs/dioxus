@@ -36,9 +36,6 @@ dioxus-interpreter-js = { workspace = true, optional = true }
 # Desktop Integration
 dioxus-desktop = { workspace = true, optional = true }
 
-# Mobile Integration
-dioxus-mobile = { workspace = true, optional = true }
-
 tracing = { workspace = true }
 tracing-futures = { workspace = true, optional = true }
 tokio-util = { workspace = true, features = ["rt"], optional = true }
@@ -55,7 +52,7 @@ hyper-rustls = { workspace = true, optional = true }
 
 pin-project = { version = "1.1.10", optional = true }
 thiserror = { workspace = true, optional = true }
-bytes = "1.10.0"
+bytes = "1.10.1"
 tower = { workspace = true, features = ["util"], optional = true }
 tower-layer = { version = "0.3.3", optional = true }
 parking_lot = { workspace = true, features = ["send_guard"], optional = true }
@@ -71,7 +68,7 @@ web-sys = { version = "0.3.77", optional = true, features = [
 dioxus-cli-config = { workspace = true, optional = true }
 
 dioxus-devtools = { workspace = true, optional = true }
-aws-lc-rs = { version = "1.12.5", optional = true }
+aws-lc-rs = { version = "1.13.1", optional = true }
 dioxus-history = { workspace = true }
 
 [dev-dependencies]

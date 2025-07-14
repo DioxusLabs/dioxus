@@ -5,7 +5,7 @@
 
 use super::*;
 use crate::BuildRequest;
-use anyhow::Context;
+use anyhow::{anyhow, Context};
 use futures_util::{stream::FuturesUnordered, StreamExt};
 use std::path::Path;
 
@@ -118,8 +118,8 @@ async fn check_files_and_report(files_to_check: Vec<PathBuf>) -> Result<()> {
             tracing::info!("No issues found.");
             Ok(())
         }
-        1 => Err("1 issue found.".into()),
-        _ => Err(format!("{} issues found.", total_issues).into()),
+        1 => Err(anyhow!("1 issue found.")),
+        _ => Err(anyhow!("{} issues found.", total_issues)),
     }
 }
 
