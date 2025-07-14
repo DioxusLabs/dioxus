@@ -307,8 +307,8 @@ export class NativeInterpreter extends JSChannel_ {
         event.preventDefault();
       } else {
         // Attempt to intercept if the event is a click and the default action was not prevented
-        if (target instanceof Element && event.type === "click") {
-          this.handleClickNavigate(event, target);
+        if (target instanceof Element && (event.type === "click" || event.type === "touch")) {
+          this.handleClickNavigate(event, target as any);
         }
       }
 
