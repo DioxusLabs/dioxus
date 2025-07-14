@@ -2157,12 +2157,6 @@ impl BuildRequest {
                     .args(args)
                     .envs(env.iter().map(|(k, v)| (k.as_ref(), v)));
 
-                if self.platform == Platform::Windows {
-                    let val = crate::winres::WindowsResource::from_dxconfig(self)
-                        .expect("Error occurred while compiling windows resource file.");
-                    cmd.args(["-L", val.path.as_str(), "-l", val.lib.as_str()]);
-                }
-
                 if ctx.mode == BuildMode::Fat {
                     cmd.env(
                         DX_RUSTC_WRAPPER_ENV_VAR,
@@ -2278,6 +2272,11 @@ impl BuildRequest {
                 cargo_args.push("-Clink-arg=-Wl,-rpath,$ORIGIN".to_string());
             }
             _ => {}
+        }
+
+        if self.triple.operating_system == OperatingSystem::Windows {
+            let icon = self.winres_icon_path();
+            cargo_args.extend(["-L".to_string(), icon.path, "-l".to_string(), icon.lib]);
         }
 
         // Our fancy hot-patching engine needs a lot of customization to work properly.
@@ -4580,5 +4579,111 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         .await?;
 
         Ok(())
+    }
+
+    fn winres_icon_path(&self) -> crate::winres::WindowsResourceLinker {
+        todo!()
+    }
+
+    fn write_winres_icon(&self) -> Result<crate::winres::WindowsResourceLinker> {
+        use crate::winres::*;
+        let bundle = &self.config.bundle;
+        let package = self.package();
+
+        let (version_str, version) = match bundle.version.as_ref() {
+            Some(v) => (v, VersionInfo::version_from_str(v)),
+            None => (
+                &format!(
+                    "{}.{}.{}",
+                    package.version.major, package.version.minor, package.version.patch
+                ),
+                VersionInfo::version_from_krate(&package.version),
+            ),
+        };
+
+        let (file_version_str, file_version) = match bundle.file_version.as_ref() {
+            Some(v) => (v, VersionInfo::version_from_str(v)),
+            None => (version_str, version),
+        };
+
+        let productname = match self.config.application.name.as_ref() {
+            Some(n) => n,
+            None => &self.bundled_app_name(),
+        };
+
+        let binding = package.description.clone().unwrap_or_default();
+        let description = match bundle.short_description.as_ref() {
+            Some(val) => val,
+            None => bundle.long_description.as_ref().unwrap_or(&binding),
+        };
+
+        let output_dir = self.bundle_dir(self.platform).join("winres");
+        std::fs::create_dir_all(&output_dir)?;
+
+        let mut winres = WindowsResource::new();
+        winres
+            .set_link(false)
+            .set_output_directory(output_dir.to_str().unwrap())
+            .set_assets_path(Some(self.asset_dir().to_string_lossy().to_string()))
+            .set_version_info(VersionInfo::PRODUCTVERSION, version)
+            .set_version_info(VersionInfo::FILEVERSION, file_version)
+            .set("ProductVersion", version_str)
+            .set("FileVersion", file_version_str)
+            .set("ProductName", productname)
+            .set("FileDescription", description);
+
+        if let Some(value) = &bundle.original_file_name {
+            winres.set("OriginalFilename", value);
+        }
+
+        if let Some(value) = &bundle.copyright {
+            winres.set("LegalCopyright", value);
+        }
+        if let Some(value) = &bundle.trademark {
+            winres.set("LegalTrademark", value);
+        }
+
+        if let Some(value) = &bundle.publisher {
+            winres.set("CompanyName", value);
+        }
+
+        if let Some(value) = &bundle.category {
+            winres.set("Category", value);
+        }
+
+        let mut default = false;
+        if let Some(windows) = bundle.windows.as_ref() {
+            if let Some(path) = windows.icon_path.as_ref() {
+                winres.set_icon(path.to_str().unwrap());
+                default = true;
+            }
+        };
+
+        if let Some(icons) = bundle.icon.as_ref() {
+            for (id, icon) in icons.iter().enumerate() {
+                if icon.ends_with(".ico") {
+                    if !default {
+                        winres.set_icon(icon);
+                        default = true;
+                    } else {
+                        winres.set_icon_with_id(icon, &id.to_string());
+                    };
+                }
+            }
+        }
+
+        if !default {
+            const DEFAULT_ICON: &[u8] = include_bytes!("../../assets/icon.ico");
+
+            let icon = output_dir.join("icon.ico");
+            winres.linker.default_icon = Some(icon.to_string_lossy().to_string());
+            let mut file = std::fs::File::create(&icon)?;
+            file.write_all(DEFAULT_ICON)?;
+            winres.set_icon(icon.to_str().unwrap());
+        }
+
+        winres.compile()?;
+
+        Ok(winres.linker)
     }
 }
