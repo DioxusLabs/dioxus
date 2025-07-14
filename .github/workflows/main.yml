@@ -460,7 +460,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: dx-${{ matrix.platform.target }}-${{ github.event.number || "nightly" }}
+          name: dx-${{ matrix.platform.target }}-${{ github.event.number || github.ref_name }}
           path: ./target/${{ matrix.platform.target }}/release/dx
           retention-days: ${{ github.ref == 'refs/heads/main' && 90 || 30 }}
           overwrite: true
