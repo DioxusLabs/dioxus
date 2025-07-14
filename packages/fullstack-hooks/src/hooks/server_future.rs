@@ -1,6 +1,6 @@
 use dioxus_core::prelude::{suspend, use_hook, RenderError};
 use dioxus_hooks::*;
-use dioxus_signals::Readable;
+use dioxus_signals::ReadableExt;
 use serde::{de::DeserializeOwned, Serialize};
 use std::future::Future;
 

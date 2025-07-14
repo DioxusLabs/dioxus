@@ -1,6 +1,8 @@
 use std::ops::Deref;
 
-use crate::{read_impls, write_impls, Readable, ReadableRef, Writable, WritableRef};
+use crate::{
+    read_impls, write_impls, Readable, ReadableExt, ReadableRef, Writable, WritableExt, WritableRef,
+};
 use dioxus_core::prelude::*;
 use generational_box::{AnyStorage, BorrowResult};
 
@@ -79,27 +81,7 @@ where
     F: Fn(&V::Target) -> &O,
     FMut: Fn(&mut V::Target) -> &mut O,
 {
-    type Mut<'a, R: ?Sized + 'static> = WritableRef<'a, V, R>;
-
-    fn map_ref_mut<I: ?Sized, U: ?Sized, F_: FnOnce(&mut I) -> &mut U>(
-        ref_: Self::Mut<'_, I>,
-        f: F_,
-    ) -> Self::Mut<'_, U> {
-        V::map_ref_mut(ref_, f)
-    }
-
-    fn try_map_ref_mut<I: ?Sized, U: ?Sized, F_: FnOnce(&mut I) -> Option<&mut U>>(
-        ref_: Self::Mut<'_, I>,
-        f: F_,
-    ) -> Option<Self::Mut<'_, U>> {
-        V::try_map_ref_mut(ref_, f)
-    }
-
-    fn downcast_lifetime_mut<'a: 'b, 'b, T: ?Sized + 'static>(
-        mut_: Self::Mut<'a, T>,
-    ) -> Self::Mut<'b, T> {
-        V::downcast_lifetime_mut(mut_)
-    }
+    type Mut = V::Mut;
 
     fn try_write_unchecked(
         &self,
@@ -147,7 +129,7 @@ where
     type Target = dyn Fn() -> O;
 
     fn deref(&self) -> &Self::Target {
-        unsafe { Readable::deref_impl(self) }
+        unsafe { ReadableExt::deref_impl(self) }
     }
 }
 

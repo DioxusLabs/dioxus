@@ -1,5 +1,5 @@
 use dioxus_core::prelude::try_consume_context;
-use dioxus_signals::{Readable, Signal, Writable};
+use dioxus_signals::{Readable, Signal, WritableExt};
 
 /// The status of the streaming response
 #[derive(Clone, Copy, Debug, PartialEq)]

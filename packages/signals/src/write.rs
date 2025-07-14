@@ -1,10 +1,13 @@
 use std::ops::{DerefMut, IndexMut};
 
-use crate::{read::Readable, MappedMutSignal};
+use generational_box::AnyStorage;
+
+use crate::{read::Readable, BoxedWritable, MappedMutSignal};
 
 /// A reference to a value that can be read from.
 #[allow(type_alias_bounds)]
-pub type WritableRef<'a, T: Writable, O = <T as Readable>::Target> = T::Mut<'a, O>;
+pub type WritableRef<'a, T: Writable, O = <T as Readable>::Target> =
+    <T::Mut as WriteRefStorage>::Mut<'a, O>;
 
 /// A trait for states that can be written to like [`crate::Signal`]. You may choose to accept this trait as a parameter instead of the concrete type to allow for more flexibility in your API.
 ///
@@ -32,6 +35,40 @@ pub type WritableRef<'a, T: Writable, O = <T as Readable>::Target> = T::Mut<'a, 
 /// }
 /// ```
 pub trait Writable: Readable {
+    /// The type of the mutable reference storage.
+    type Mut: WriteRefStorage;
+
+    /// Get a mutable reference to the value. If the value has been dropped, this will panic.
+    #[track_caller]
+    fn write(&mut self) -> WritableRef<'_, Self> {
+        self.try_write().unwrap()
+    }
+
+    /// Try to get a mutable reference to the value.
+    #[track_caller]
+    fn try_write(&mut self) -> Result<WritableRef<'_, Self>, generational_box::BorrowMutError> {
+        self.try_write_unchecked().map(Self::downcast_lifetime_mut)
+    }
+
+    /// Try to get a mutable reference to the value without checking the lifetime. This will update any subscribers.
+    ///
+    /// NOTE: This method is completely safe because borrow checking is done at runtime.
+    fn try_write_unchecked(
+        &self,
+    ) -> Result<WritableRef<'static, Self>, generational_box::BorrowMutError>;
+
+    /// Get a mutable reference to the value without checking the lifetime. This will update any subscribers.
+    ///
+    /// NOTE: This method is completely safe because borrow checking is done at runtime.
+    #[track_caller]
+    fn write_unchecked(&self) -> WritableRef<'static, Self> {
+        self.try_write_unchecked().unwrap()
+    }
+}
+
+/// The storage implementation for the writable reference used in the [`Writable`] trait. This trait can
+/// be used to map the reference to a new type.
+pub trait WriteRefStorage {
     /// The type of the reference.
     type Mut<'a, R: ?Sized + 'static>: DerefMut<Target = R>;
 
@@ -46,6 +83,65 @@ pub trait Writable: Readable {
         ref_: Self::Mut<'_, I>,
         f: F,
     ) -> Option<Self::Mut<'_, U>>;
+
+    /// Downcast a mutable reference in a RefMut to a more specific lifetime
+    ///
+    /// This function enforces the variance of the lifetime parameter `'a` in Ref.
+    fn downcast_lifetime_mut<'a: 'b, 'b, T: ?Sized + 'static>(
+        mut_: Self::Mut<'a, T>,
+    ) -> Self::Mut<'b, T>;
+}
+
+impl<S: AnyStorage> WriteRefStorage for S {
+    type Mut<'a, R: ?Sized + 'static> = S::Mut<'a, R>;
+
+    fn map_ref_mut<I: ?Sized, U: ?Sized, F: FnOnce(&mut I) -> &mut U>(
+        ref_: Self::Mut<'_, I>,
+        f: F,
+    ) -> Self::Mut<'_, U> {
+        <S as AnyStorage>::map_mut(ref_, f)
+    }
+
+    fn try_map_ref_mut<I: ?Sized, U: ?Sized, F: FnOnce(&mut I) -> Option<&mut U>>(
+        ref_: Self::Mut<'_, I>,
+        f: F,
+    ) -> Option<Self::Mut<'_, U>> {
+        <S as AnyStorage>::try_map_mut(ref_, f)
+    }
+
+    fn downcast_lifetime_mut<'a: 'b, 'b, T: ?Sized + 'static>(
+        mut_: Self::Mut<'a, T>,
+    ) -> Self::Mut<'b, T> {
+        <S as AnyStorage>::downcast_lifetime_mut(mut_)
+    }
+}
+
+/// An extension trait for [`Writable`] that provides some convenience methods.
+pub trait WritableExt: Writable {
+    /// Map the reference to a new type.
+    fn map_ref_mut<I: ?Sized, U: ?Sized, F: FnOnce(&mut I) -> &mut U>(
+        ref_: <Self::Mut as WriteRefStorage>::Mut<'_, I>,
+        f: F,
+    ) -> <Self::Mut as WriteRefStorage>::Mut<'_, U> {
+        <Self::Mut as WriteRefStorage>::map_ref_mut(ref_, f)
+    }
+
+    /// Try to map the reference to a new type.
+    fn try_map_ref_mut<I: ?Sized, U: ?Sized, F: FnOnce(&mut I) -> Option<&mut U>>(
+        ref_: <Self::Mut as WriteRefStorage>::Mut<'_, I>,
+        f: F,
+    ) -> Option<<Self::Mut as WriteRefStorage>::Mut<'_, U>> {
+        <Self::Mut as WriteRefStorage>::try_map_ref_mut(ref_, f)
+    }
+
+    /// Downcast a mutable reference in a RefMut to a more specific lifetime
+    ///
+    /// This function enforces the variance of the lifetime parameter `'a` in Ref.
+    fn downcast_lifetime_mut<'a: 'b, 'b, T: ?Sized + 'static>(
+        mut_: <Self::Mut as WriteRefStorage>::Mut<'a, T>,
+    ) -> <Self::Mut as WriteRefStorage>::Mut<'b, T> {
+        <Self::Mut as WriteRefStorage>::downcast_lifetime_mut(mut_)
+    }
 
     /// Map the readable type to a new type. This lets you provide a view into a readable type without needing to clone the inner value.
     ///
@@ -79,40 +175,6 @@ pub trait Writable: Readable {
         FMut: Fn(&mut Self::Target) -> &mut O + 'static,
     {
         MappedMutSignal::new(self, f, f_mut)
-    }
-
-    /// Downcast a mutable reference in a RefMut to a more specific lifetime
-    ///
-    /// This function enforces the variance of the lifetime parameter `'a` in Ref.
-    fn downcast_lifetime_mut<'a: 'b, 'b, T: ?Sized + 'static>(
-        mut_: Self::Mut<'a, T>,
-    ) -> Self::Mut<'b, T>;
-
-    /// Get a mutable reference to the value. If the value has been dropped, this will panic.
-    #[track_caller]
-    fn write(&mut self) -> WritableRef<'_, Self> {
-        self.try_write().unwrap()
-    }
-
-    /// Try to get a mutable reference to the value.
-    #[track_caller]
-    fn try_write(&mut self) -> Result<WritableRef<'_, Self>, generational_box::BorrowMutError> {
-        self.try_write_unchecked().map(Self::downcast_lifetime_mut)
-    }
-
-    /// Try to get a mutable reference to the value without checking the lifetime. This will update any subscribers.
-    ///
-    /// NOTE: This method is completely safe because borrow checking is done at runtime.
-    fn try_write_unchecked(
-        &self,
-    ) -> Result<WritableRef<'static, Self>, generational_box::BorrowMutError>;
-
-    /// Get a mutable reference to the value without checking the lifetime. This will update any subscribers.
-    ///
-    /// NOTE: This method is completely safe because borrow checking is done at runtime.
-    #[track_caller]
-    fn write_unchecked(&self) -> WritableRef<'static, Self> {
-        self.try_write_unchecked().unwrap()
     }
 
     /// Run a function with a mutable reference to the value. If the value has been dropped, this will panic.
@@ -169,7 +231,17 @@ pub trait Writable: Readable {
     {
         self.with_mut(|v| std::mem::replace(v, value))
     }
+
+    /// Box the writable value into a trait object. This is useful for passing around writable values without knowing their concrete type.
+    fn boxed_mut(self) -> BoxedWritable<Self::Target, Self::Storage, Self::Mut>
+    where
+        Self: Sized + 'static,
+    {
+        BoxedWritable::new(self)
+    }
 }
+
+impl<W: Writable + ?Sized> WritableExt for W {}
 
 /// An extension trait for [`Writable<Option<T>>`]` that provides some convenience methods.
 pub trait WritableOptionExt<T: 'static>: Writable<Target = Option<T>> {

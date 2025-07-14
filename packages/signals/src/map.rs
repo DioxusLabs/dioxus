@@ -1,6 +1,6 @@
 use std::ops::Deref;
 
-use crate::{read::Readable, read_impls, ReadableRef};
+use crate::{read::Readable, read_impls, ReadableExt, ReadableRef};
 use dioxus_core::prelude::*;
 use generational_box::{AnyStorage, BorrowResult};
 
@@ -97,7 +97,7 @@ where
     type Target = dyn Fn() -> O;
 
     fn deref(&self) -> &Self::Target {
-        unsafe { Readable::deref_impl(self) }
+        unsafe { ReadableExt::deref_impl(self) }
     }
 }
 

@@ -1,6 +1,6 @@
 use crate::write::Writable;
 use crate::{read::Readable, ReadableRef, Signal};
-use crate::{read_impls, GlobalMemo};
+use crate::{read_impls, GlobalMemo, ReadableExt, WritableExt};
 use crate::{CopyValue, ReadOnlySignal};
 use std::{
     cell::RefCell,
@@ -234,7 +234,7 @@ where
     type Target = dyn Fn() -> T;
 
     fn deref(&self) -> &Self::Target {
-        unsafe { Readable::deref_impl(self) }
+        unsafe { ReadableExt::deref_impl(self) }
     }
 }
 

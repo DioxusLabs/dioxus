@@ -410,31 +410,7 @@ impl<T, S: Storage<SignalData<T>>> Readable for Signal<T, S> {
 }
 
 impl<T: 'static, S: Storage<SignalData<T>>> Writable for Signal<T, S> {
-    type Mut<'a, R: ?Sized + 'static> = Write<'a, R, S>;
-
-    fn map_ref_mut<I: ?Sized, U: ?Sized + 'static, F: FnOnce(&mut I) -> &mut U>(
-        ref_: Self::Mut<'_, I>,
-        f: F,
-    ) -> Self::Mut<'_, U> {
-        Write::map(ref_, f)
-    }
-
-    fn try_map_ref_mut<
-        I: ?Sized + 'static,
-        U: ?Sized + 'static,
-        F: FnOnce(&mut I) -> Option<&mut U>,
-    >(
-        ref_: Self::Mut<'_, I>,
-        f: F,
-    ) -> Option<Self::Mut<'_, U>> {
-        Write::filter_map(ref_, f)
-    }
-
-    fn downcast_lifetime_mut<'a: 'b, 'b, R: ?Sized + 'static>(
-        mut_: Self::Mut<'a, R>,
-    ) -> Self::Mut<'b, R> {
-        Write::downcast_lifetime(mut_)
-    }
+    type Mut = SignalWriteStorage<S>;
 
     #[track_caller]
     fn try_write_unchecked(
@@ -489,7 +465,7 @@ impl<T: Clone, S: Storage<SignalData<T>> + 'static> Deref for Signal<T, S> {
     type Target = dyn Fn() -> T;
 
     fn deref(&self) -> &Self::Target {
-        unsafe { Readable::deref_impl(self) }
+        unsafe { ReadableExt::deref_impl(self) }
     }
 }
 
@@ -508,6 +484,39 @@ impl<'de, T: serde::Deserialize<'de> + 'static, Store: Storage<SignalData<T>>>
 {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         Ok(Self::new_maybe_sync(T::deserialize(deserializer)?))
+    }
+}
+
+/// The [WriteRefStorage] implementation for [`Signal`]. This allows you to map the mutable reference to the signal's value to a new type
+pub struct SignalWriteStorage<S> {
+    phantom: std::marker::PhantomData<S>,
+}
+
+impl<S: AnyStorage> WriteRefStorage for SignalWriteStorage<S> {
+    type Mut<'a, R: ?Sized + 'static> = Write<'a, R, S>;
+
+    fn map_ref_mut<I: ?Sized, U: ?Sized + 'static, F: FnOnce(&mut I) -> &mut U>(
+        ref_: Self::Mut<'_, I>,
+        f: F,
+    ) -> Self::Mut<'_, U> {
+        Write::map(ref_, f)
+    }
+
+    fn try_map_ref_mut<
+        I: ?Sized + 'static,
+        U: ?Sized + 'static,
+        F: FnOnce(&mut I) -> Option<&mut U>,
+    >(
+        ref_: Self::Mut<'_, I>,
+        f: F,
+    ) -> Option<Self::Mut<'_, U>> {
+        Write::filter_map(ref_, f)
+    }
+
+    fn downcast_lifetime_mut<'a: 'b, 'b, R: ?Sized + 'static>(
+        mut_: Self::Mut<'a, R>,
+    ) -> Self::Mut<'b, R> {
+        Write::downcast_lifetime(mut_)
     }
 }
 

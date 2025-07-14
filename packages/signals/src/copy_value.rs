@@ -9,12 +9,12 @@ use dioxus_core::prelude::*;
 
 use generational_box::{GenerationalBox, Storage};
 
-use crate::read_impls;
 use crate::Readable;
 use crate::ReadableRef;
 use crate::Writable;
 use crate::WritableRef;
-use crate::{default_impl, write_impls};
+use crate::{default_impl, write_impls, WritableExt};
+use crate::{read_impls, ReadableExt};
 
 /// CopyValue is a wrapper around a value to make the value mutable and Copy.
 ///
@@ -158,27 +158,7 @@ impl<T: 'static, S: Storage<T>> Readable for CopyValue<T, S> {
 }
 
 impl<T: 'static, S: Storage<T>> Writable for CopyValue<T, S> {
-    type Mut<'a, R: ?Sized + 'static> = S::Mut<'a, R>;
-
-    fn map_ref_mut<I: ?Sized, U: ?Sized, F: FnOnce(&mut I) -> &mut U>(
-        mut_: Self::Mut<'_, I>,
-        f: F,
-    ) -> Self::Mut<'_, U> {
-        S::map_mut(mut_, f)
-    }
-
-    fn try_map_ref_mut<I: ?Sized, U: ?Sized, F: FnOnce(&mut I) -> Option<&mut U>>(
-        mut_: Self::Mut<'_, I>,
-        f: F,
-    ) -> Option<Self::Mut<'_, U>> {
-        S::try_map_mut(mut_, f)
-    }
-
-    fn downcast_lifetime_mut<'a: 'b, 'b, R: ?Sized + 'static>(
-        mut_: Self::Mut<'a, R>,
-    ) -> Self::Mut<'b, R> {
-        S::downcast_lifetime_mut(mut_)
-    }
+    type Mut = S;
 
     #[track_caller]
     fn try_write_unchecked(
@@ -186,12 +166,6 @@ impl<T: 'static, S: Storage<T>> Writable for CopyValue<T, S> {
     ) -> Result<WritableRef<'static, Self>, generational_box::BorrowMutError> {
         crate::warnings::copy_value_hoisted(self, std::panic::Location::caller());
         self.value.try_write()
-    }
-
-    #[track_caller]
-    fn set(&mut self, value: T) {
-        crate::warnings::copy_value_hoisted(self, std::panic::Location::caller());
-        self.value.set(value);
     }
 }
 
@@ -206,7 +180,7 @@ impl<T: Copy, S: Storage<T>> Deref for CopyValue<T, S> {
     type Target = dyn Fn() -> T;
 
     fn deref(&self) -> &Self::Target {
-        unsafe { Readable::deref_impl(self) }
+        unsafe { ReadableExt::deref_impl(self) }
     }
 }
 

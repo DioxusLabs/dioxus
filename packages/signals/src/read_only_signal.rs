@@ -1,4 +1,4 @@
-use crate::{read::Readable, ReadableRef, Signal, SignalData};
+use crate::{read::Readable, ReadableExt, ReadableRef, Signal, SignalData};
 use dioxus_core::IntoDynNode;
 use std::ops::Deref;
 
@@ -127,7 +127,7 @@ impl<T: Clone, S: Storage<SignalData<T>> + 'static> Deref for ReadOnlySignal<T, 
     type Target = dyn Fn() -> T;
 
     fn deref(&self) -> &Self::Target {
-        unsafe { Readable::deref_impl(self) }
+        unsafe { ReadableExt::deref_impl(self) }
     }
 }
 

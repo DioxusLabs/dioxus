@@ -2,7 +2,7 @@ use std::{mem::MaybeUninit, ops::Index};
 
 use generational_box::AnyStorage;
 
-use crate::MappedSignal;
+use crate::{BoxedReadable, MappedSignal};
 
 /// A reference to a value that can be read from.
 #[allow(type_alias_bounds)]
@@ -40,38 +40,6 @@ pub trait Readable {
 
     /// The type of the storage this readable uses.
     type Storage: AnyStorage;
-
-    /// Map the readable type to a new type. This lets you provide a view into a readable type without needing to clone the inner value.
-    ///
-    /// Anything that subscribes to the readable value will be rerun whenever the original value changes, even if the view does not change. If you want to memorize the view, you can use a [`crate::Memo`] instead.
-    ///
-    /// # Example
-    /// ```rust
-    /// # use dioxus::prelude::*;
-    /// fn List(list: Signal<Vec<i32>>) -> Element {
-    ///     rsx! {
-    ///         for index in 0..list.len() {
-    ///             // We can use the `map` method to provide a view into the single item in the list that the child component will render
-    ///             Item { item: list.map(move |v| &v[index]) }
-    ///         }
-    ///     }
-    /// }
-    ///
-    /// // The child component doesn't need to know that the mapped value is coming from a list
-    /// #[component]
-    /// fn Item(item: MappedSignal<i32>) -> Element {
-    ///     rsx! {
-    ///         div { "Item: {item}" }
-    ///     }
-    /// }
-    /// ```
-    fn map<F, O>(self, f: F) -> MappedSignal<O, Self, F>
-    where
-        Self: Clone + Sized + 'static,
-        F: Fn(&Self::Target) -> &O + 'static,
-    {
-        MappedSignal::new(self, f)
-    }
 
     /// Get the current value of the state. If this is a signal, this will subscribe the current scope to the signal.
     /// If the value has been dropped, this will panic. Calling this on a Signal is the same as
@@ -165,6 +133,41 @@ pub trait Readable {
     fn try_peek_unchecked(
         &self,
     ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError>;
+}
+
+/// An extension trait for `Readable` types that provides some convenience methods.
+pub trait ReadableExt: Readable {
+    /// Map the readable type to a new type. This lets you provide a view into a readable type without needing to clone the inner value.
+    ///
+    /// Anything that subscribes to the readable value will be rerun whenever the original value changes, even if the view does not change. If you want to memorize the view, you can use a [`crate::Memo`] instead.
+    ///
+    /// # Example
+    /// ```rust
+    /// # use dioxus::prelude::*;
+    /// fn List(list: Signal<Vec<i32>>) -> Element {
+    ///     rsx! {
+    ///         for index in 0..list.len() {
+    ///             // We can use the `map` method to provide a view into the single item in the list that the child component will render
+    ///             Item { item: list.map(move |v| &v[index]) }
+    ///         }
+    ///     }
+    /// }
+    ///
+    /// // The child component doesn't need to know that the mapped value is coming from a list
+    /// #[component]
+    /// fn Item(item: MappedSignal<i32>) -> Element {
+    ///     rsx! {
+    ///         div { "Item: {item}" }
+    ///     }
+    /// }
+    /// ```
+    fn map<F, O>(self, f: F) -> MappedSignal<O, Self, F>
+    where
+        Self: Clone + Sized + 'static,
+        F: Fn(&Self::Target) -> &O + 'static,
+    {
+        MappedSignal::new(self, f)
+    }
 
     /// Clone the inner value and return it. If the value has been dropped, this will panic.
     #[track_caller]
@@ -194,6 +197,14 @@ pub trait Readable {
         Self::Target: std::ops::Index<I>,
     {
         <Self::Storage as AnyStorage>::map(self.read(), |v| v.index(index))
+    }
+
+    /// Box the readable value into a trait object. This is useful for passing around readable values without knowing their concrete type.
+    fn boxed(self) -> BoxedReadable<Self::Target, Self::Storage>
+    where
+        Self: Sized + 'static,
+    {
+        BoxedReadable::new(self)
     }
 
     /// SAFETY: You must call this function directly with `self` as the argument.
@@ -236,6 +247,8 @@ pub trait Readable {
         reference_to_closure as &_
     }
 }
+
+impl<R: Readable + ?Sized> ReadableExt for R {}
 
 /// An extension trait for `Readable<Vec<T>>` that provides some convenience methods.
 pub trait ReadableVecExt<T: 'static>: Readable<Target = Vec<T>> {

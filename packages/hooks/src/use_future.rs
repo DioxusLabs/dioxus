@@ -189,6 +189,6 @@ impl Deref for UseFuture {
     type Target = dyn Fn() -> UseFutureState;
 
     fn deref(&self) -> &Self::Target {
-        unsafe { Readable::deref_impl(self) }
+        unsafe { ReadableExt::deref_impl(self) }
     }
 }

@@ -27,13 +27,13 @@ fn app() -> Element {
         }
 
         for i in 0..vec.len() {
-            Child { count: vec.map(move |v| &v[i]) }
+            Child { count: vec.map_mut(move |v| &v[i], move |v| &mut v[i]) }
         }
     }
 }
 
 #[component]
-fn Child(count: MappedSignal<i32, Signal<Vec<i32>>>) -> Element {
+fn Child(#[props(into)] count: BoxedWritable<i32>) -> Element {
     use_memo({
         to_owned![count];
         move || {

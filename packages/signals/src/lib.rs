@@ -44,3 +44,6 @@ mod props;
 pub use props::*;
 
 pub mod warnings;
+
+mod boxed;
+pub use boxed::*;
