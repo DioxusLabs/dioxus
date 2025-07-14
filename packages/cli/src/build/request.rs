@@ -595,7 +595,7 @@ impl BuildRequest {
                     Some(*renderer)
                 }
                 _ => {
-                    return bail!(
+                    bail!(
                         "Multiple platforms enabled in Cargo.toml. Please specify a platform with `--web`, `--webview`, or `--native` or set a default platform in Cargo.toml"
                     );
                     // None if !using_dioxus_explicitly => Platform::autodetect_from_cargo_feature("desktop").unwrap(),
