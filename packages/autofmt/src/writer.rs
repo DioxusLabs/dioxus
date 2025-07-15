@@ -806,6 +806,7 @@ impl<'a> Writer<'a> {
         let mut pretty_lines = pretty_expr.lines().peekable();
         let mut pretty_line = pretty_lines.next();
         let mut output = String::from("");
+
         if source_lines.peek().is_none() {
             output = pretty_expr;
         } else {
@@ -830,9 +831,9 @@ impl<'a> Writer<'a> {
                     output.push_str(source_line.trim());
                     continue;
                 }
+
                 // If our current source line contains one of the newly formatted lines,
-                // add them to the output. If the source line also contains a comment, add
-                // it too
+                // add them to the output. If the source line also contains a comment, add it too
                 while let Some(line) = pretty_line {
                     // Remove characters that the formatter might have added, so they don't interfere
                     // when comparing the formatted and source lines
@@ -840,24 +841,26 @@ impl<'a> Writer<'a> {
                     if trimmed_line.ends_with("{") && trimmed_line != "{" {
                         trimmed_line = trimmed_line.strip_suffix("{").unwrap().to_string();
                     }
-                    if trimmed_source_line.contains(&trimmed_line) {
-                        if !output.is_empty() {
-                            output.push('\n');
-                        }
-                        output.push_str(line);
-                        if let Some(captures) = comment_regex.captures(&source_line) {
-                            if let Some(comment) = captures.get(1) {
-                                output.push_str(" // ");
-                                output.push_str(comment.as_str().replace("//", "").trim());
-                                source_line = source_line.replace(comment.as_str(), "");
-                            }
-                        }
-                        pretty_line = pretty_lines.next();
-                    } else {
+
+                    if !trimmed_source_line.contains(&trimmed_line) {
                         break;
                     }
+
+                    if !output.is_empty() {
+                        output.push('\n');
+                    }
+                    output.push_str(line);
+                    if let Some(captures) = comment_regex.captures(&source_line) {
+                        if let Some(comment) = captures.get(1) {
+                            output.push_str(" // ");
+                            output.push_str(comment.as_str().replace("//", "").trim());
+                            source_line = source_line.replace(comment.as_str(), "");
+                        }
+                    }
+                    pretty_line = pretty_lines.next();
                 }
             }
+
             // Add any remaining formatted lines after we run out of source lines
             while let Some(line) = pretty_line {
                 if !output.is_empty() {
