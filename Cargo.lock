@@ -10646,7 +10646,7 @@ dependencies = [
  "dioxus-native-dom",
  "futures-util",
  "pollster",
- "rustc-hash 2.1.1",
+ "rustc-hash 1.1.0",
  "tracing-subscriber",
  "vello",
  "wgpu",

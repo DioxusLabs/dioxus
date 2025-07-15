@@ -13,7 +13,7 @@ dioxus = { workspace = true, default-features = false, features = ["html", "hook
 dioxus-native-dom = { path = "../../packages/native-dom" }
 anyrender_vello = "0.4.1"
 vello = "0.5"
-rustc-hash = { workspace = true }
+rustc-hash = "1"
 futures-util = { workspace = true }
 tracing-subscriber = { workspace = true, optional = true }
 wgpu = { workspace = true }
