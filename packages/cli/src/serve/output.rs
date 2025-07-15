@@ -1,5 +1,5 @@
 use crate::{
-    serve::{ansi_buffer::AnsiStringLine, ServeUpdate, WebServer},
+    serve::{ansi_buffer::ansi_string_to_line, ServeUpdate, WebServer},
     BuildId, BuildStage, BuilderUpdate, Platform, TraceContent, TraceMsg, TraceSrc,
 };
 use cargo_metadata::diagnostic::Diagnostic;
@@ -1023,12 +1023,7 @@ impl Output {
                 }
 
                 // Create the ansi -> raw string line with a width of either the viewport width or the max width
-                let line_length = line.styled_graphemes(Style::default()).count();
-                if line_length < u16::MAX as usize {
-                    lines.push(AnsiStringLine::new(line_length as _).render(&line));
-                } else {
-                    lines.push(line.to_string())
-                }
+                lines.push(ansi_string_to_line(line));
             }
         }
 
