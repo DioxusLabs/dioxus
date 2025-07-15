@@ -3,7 +3,7 @@
 //! This mostly just defers to the root TemplateBody with some additional tooling to provide better errors.
 //! Currently the additional tooling doesn't do much.
 
-use proc_macro2::TokenStream as TokenStream2;
+use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::ToTokens;
 use std::{cell::Cell, fmt::Debug};
 use syn::{
@@ -26,12 +26,15 @@ use crate::{BodyNode, TemplateBody};
 pub struct CallBody {
     pub body: TemplateBody,
     pub template_idx: Cell<usize>,
+    pub span: Option<Span>,
 }
 
 impl Parse for CallBody {
     fn parse(input: ParseStream) -> Result<Self> {
         // Defer to the `new` method such that we can wire up hotreload information
-        Ok(CallBody::new(input.parse()?))
+        let mut body = CallBody::new(input.parse()?);
+        body.span = Some(input.span());
+        Ok(body)
     }
 }
 
@@ -49,6 +52,7 @@ impl CallBody {
         let body = CallBody {
             body,
             template_idx: Cell::new(0),
+            span: None,
         };
 
         body.body.template_idx.set(body.next_template_idx());
