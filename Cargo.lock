@@ -5319,7 +5319,6 @@ dependencies = [
  "objc_id",
  "openssl",
  "percent-encoding",
- "pollster",
  "rand 0.9.1",
  "reqwest 0.12.22",
  "rfd",
