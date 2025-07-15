@@ -22,7 +22,6 @@ dioxus-hooks = { workspace = true, optional = true }
 dioxus-signals = { workspace = true, optional = true }
 dioxus-router = { workspace = true, optional = true }
 dioxus-web = { workspace = true, default-features = false, optional = true }
-dioxus-mobile = { workspace = true, optional = true }
 dioxus-desktop = { workspace = true, default-features = true, optional = true }
 dioxus-fullstack = { workspace = true, default-features = true, optional = true }
 dioxus-liveview = { workspace = true, optional = true }
@@ -80,7 +79,7 @@ router = ["dep:dioxus-router"]
 # Platforms
 fullstack = ["dep:dioxus-fullstack", "dioxus-config-macro/fullstack", "dep:serde"]
 desktop = ["dep:dioxus-desktop", "dioxus-fullstack?/desktop", "dioxus-config-macro/desktop"]
-mobile = ["dep:dioxus-mobile", "dep:dioxus-desktop", "dioxus-fullstack?/mobile", "dioxus-config-macro/mobile"]
+mobile = ["dep:dioxus-desktop", "dioxus-fullstack?/mobile", "dioxus-config-macro/mobile"]
 web = [
   "dep:dioxus-web",
   "dioxus-fullstack?/web",

@@ -22,6 +22,7 @@ export class NativeInterpreter extends JSChannel_ {
   ipc: any;
   edits: WebSocket;
   eventsPath: string;
+  headless: boolean;
   kickStylesheets: boolean;
   queuedBytes: ArrayBuffer[] = [];
 
@@ -29,11 +30,11 @@ export class NativeInterpreter extends JSChannel_ {
   // however, for now we need to support it since WebSockets in fullstack doesn't exist yet
   liveview: boolean;
 
-  constructor(editsPath: string, eventsPath: string) {
+  constructor(eventsPath: string, headless: boolean) {
     super();
-    this.edits = new WebSocket(editsPath);
     this.eventsPath = eventsPath;
     this.kickStylesheets = false;
+    this.headless = headless;
   }
 
   initialize(root: HTMLElement): void {
@@ -368,9 +369,9 @@ export class NativeInterpreter extends JSChannel_ {
   }
 
   // Run the edits the next animation frame
-  rafEdits(headless: boolean, bytes: ArrayBuffer) {
+  rafEdits(bytes: ArrayBuffer) {
     // In headless mode, the requestAnimationFrame callback is never called, so we need to run the bytes directly
-    if (headless) {
+    if (this.headless) {
       // @ts-ignore
       this.run_from_bytes(bytes);
       this.markEditsFinished();
@@ -383,14 +384,37 @@ export class NativeInterpreter extends JSChannel_ {
     }
   }
 
-  waitForRequest(headless: boolean) {
+  waitForRequest(editsPath: string, required_server_key: string) {
+    this.edits = new WebSocket(editsPath);
+    // Only trust the websocket once it sends us the required server key
+    let authenticated = false;
+    // Reconnect if the websocket closes. This may happen on ios when the app is suspended
+    // in the background: https://github.com/DioxusLabs/dioxus/issues/4374
+    this.edits.onclose = () => {
+      setTimeout(() => {
+        // If the edits path has changed, we don't want to reconnect to the old one
+        if (this.edits.url != editsPath) {
+          return;
+        }
+        this.waitForRequest(editsPath, required_server_key);
+      }, 100);
+    };
     this.edits.onmessage = (event) => {
       const data = event.data;
       if (data instanceof Blob) {
+        if (!authenticated) {
+          return;
+        }
         // If the data is a blob, we need to convert it to an ArrayBuffer
         data.arrayBuffer().then((buffer) => {
-          this.rafEdits(headless, buffer);
+          this.rafEdits(buffer);
         });
+      } else if (typeof data === "string") {
+        if (data === required_server_key) {
+          // If the data is the required server key, we can trust the websocket
+          authenticated = true;
+          return;
+        }
       }
     };
   }
