@@ -2,6 +2,7 @@ use crate::{buffer::Buffer, IndentOptions};
 use dioxus_rsx::*;
 use proc_macro2::{LineColumn, Span};
 use quote::ToTokens;
+use regex::Regex;
 use std::{
     borrow::Cow,
     collections::{HashMap, VecDeque},
@@ -774,31 +775,72 @@ impl<'a> Writer<'a> {
         };
 
         let pretty_expr = self.retrieve_formatted_expr(&expr).to_string();
-        // Adding comments back
+
+        // Adding comments back to the formatted expression
         let source_text = src_span.source_text().unwrap_or_default();
         let mut source_lines = source_text.lines().peekable();
         let mut pretty_lines = pretty_expr.lines().peekable();
         let mut pretty_line = pretty_lines.next();
         let mut output = String::from("");
-        while let Some(source_line) = source_lines.next() {
-            let mut source_line = source_line.to_string();
-            if source_line.trim().starts_with("//") {
-                output.push_str(self.out.indent.indent_str());
-                output.push_str(source_line.trim());
-                output.push('\n');
-                continue;
+        if source_lines.peek().is_none() {
+            output = pretty_expr;
+        } else {
+            let comment_regex = Regex::new("\"[^\"]*\"|(//.*)").unwrap();
+            for source_line in source_lines {
+                let mut source_line = source_line.to_string();
+                let trimmed_source_line = source_line.replace(" ", "").replace(",", "");
+
+                // If this is a full-line comment, add it to the output
+                if source_line.trim().starts_with("//") {
+                    if !output.is_empty() {
+                        output.push('\n');
+                    }
+                    if let Some(line) = pretty_line {
+                        if trimmed_source_line.contains(&line.replace(" ", "")) {
+                            output.push_str(line);
+                            pretty_line = pretty_lines.next();
+                            continue;
+                        }
+                    }
+                    output.push_str(self.out.indent.indent_str());
+                    output.push_str(source_line.trim());
+                    continue;
+                }
+                // If our current source line contains one of the newly formatted lines,
+                // add them to the output. If the source line also contains a comment, add
+                // it too
+                while let Some(line) = pretty_line {
+                    // Remove characters that the formatter might have added, so they don't interfere
+                    // when comparing the formatted and source lines
+                    let mut trimmed_line = line.replace(" ", "").replace(",", "");
+                    if trimmed_line.ends_with("{") && trimmed_line != "{" {
+                        trimmed_line = trimmed_line.strip_suffix("{").unwrap().to_string();
+                    }
+                    if trimmed_source_line.contains(&trimmed_line) {
+                        if !output.is_empty() {
+                            output.push('\n');
+                        }
+                        output.push_str(line);
+                        if let Some(captures) = comment_regex.captures(&source_line) {
+                            if let Some(comment) = captures.get(1) {
+                                output.push_str(" // ");
+                                output.push_str(comment.as_str().replace("//", "").trim());
+                                source_line = source_line.replace(comment.as_str(), "");
+                            }
+                        }
+                        pretty_line = pretty_lines.next();
+                    } else {
+                        break;
+                    }
+                }
             }
-            while pretty_line.is_some() && source_line.contains(pretty_line.unwrap()) {
-                output.push_str(pretty_line.unwrap());
-                source_line = source_line.replace(pretty_line.unwrap(), "");
+            // Add any remaining formatted lines after we run out of source lines
+            while let Some(line) = pretty_line {
+                if !output.is_empty() {
+                    output.push('\n');
+                }
+                output.push_str(line);
                 pretty_line = pretty_lines.next();
-            }
-            if source_line.trim().starts_with("//") {
-                output.push(' ');
-                output.push_str(source_line.trim());
-            }
-            if source_lines.peek().is_some() {
-                output.push('\n');
             }
         }
 
