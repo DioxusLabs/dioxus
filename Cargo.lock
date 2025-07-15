@@ -2822,6 +2822,7 @@ dependencies = [
  "tracing",
  "url",
  "usvg",
+ "woff",
 ]
 
 [[package]]
@@ -10630,6 +10631,25 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "12fcfa1bd49e0342ec1d07ed2be83b59963e7acbeb9310e1bb2c07b69dadd959"
 dependencies = [
  "jobserver",
+]
+
+[[package]]
+name = "native-headless"
+version = "0.0.0"
+dependencies = [
+ "anyrender_vello",
+ "blitz-dom",
+ "blitz-paint",
+ "blitz-traits",
+ "bytemuck",
+ "dioxus",
+ "dioxus-native-dom",
+ "futures-util",
+ "pollster",
+ "rustc-hash 1.1.0",
+ "tracing-subscriber",
+ "vello",
+ "wgpu",
 ]
 
 [[package]]
@@ -19175,6 +19195,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6f42320e61fe2cfd34354ecb597f86f413484a798ba44a8ca1165c58d42da6c1"
 dependencies = [
  "bitflags 2.9.1",
+]
+
+[[package]]
+name = "woff"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2e229335e006d138b1c318e83b99eaa3e1ab03e08c4ced4967e46705e6e9d1cf"
+dependencies = [
+ "cc",
+ "libc",
 ]
 
 [[package]]
