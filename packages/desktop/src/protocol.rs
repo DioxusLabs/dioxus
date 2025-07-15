@@ -143,10 +143,6 @@ fn module_loader(root_id: &str, headless: bool, edit_state: &WebviewEdits) -> St
     // And then extend it with our native bindings
     {NATIVE_JS}
 
-    // Navigate to the no reload page to prevent reloads. Our navigation handler will deny navigating to
-    // this page if the browser tries to reload for something like a form navigation
-    window.history.replaceState(null, null, '/no_reload');
-
     // The native interpreter extends the sledgehammer interpreter with a few extra methods that we use for IPC
     window.interpreter = new NativeInterpreter("{EVENTS_PATH}", {headless});
 

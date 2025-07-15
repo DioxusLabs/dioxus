@@ -5335,7 +5335,6 @@ dependencies = [
  "tracing",
  "tray-icon",
  "tungstenite 0.27.0",
- "url",
  "webbrowser",
  "wry",
 ]
