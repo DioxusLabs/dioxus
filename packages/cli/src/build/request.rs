@@ -415,7 +415,11 @@ pub(crate) struct BuildRequest {
 #[derive(Clone, Debug, PartialEq)]
 pub enum BuildMode {
     /// A normal build generated using `cargo rustc`
-    Base,
+    ///
+    /// "run" indicates whether this build is intended to be run immediately after building.
+    /// This means we try to capture the build environment, saving vars like `CARGO_MANIFEST_DIR`
+    /// for the running executable.
+    Base { run: bool },
 
     /// A "Fat" build generated with cargo rustc and dx as a custom linker without -Wl,-dead-strip
     Fat,
@@ -810,7 +814,7 @@ impl BuildRequest {
                     .await?;
             }
 
-            BuildMode::Base | BuildMode::Fat => {
+            BuildMode::Base { .. } | BuildMode::Fat => {
                 ctx.status_start_bundle();
 
                 self.write_executable(ctx, &artifacts.exe, &mut artifacts.assets)
@@ -2165,7 +2169,7 @@ impl BuildRequest {
                     .args(args)
                     .envs(env.iter().map(|(k, v)| (k.as_ref(), v)));
 
-                if ctx.mode == BuildMode::Fat {
+                if matches!(ctx.mode, BuildMode::Fat | BuildMode::Base { run: true }) {
                     cmd.env(
                         DX_RUSTC_WRAPPER_ENV_VAR,
                         dunce::canonicalize(self.rustc_wrapper_args_file.path())
@@ -4166,7 +4170,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
     ///
     /// This might stop working if/when cargo stabilizes contents-based fingerprinting.
     fn bust_fingerprint(&self, ctx: &BuildContext) -> Result<()> {
-        if matches!(ctx.mode, BuildMode::Fat) {
+        if matches!(ctx.mode, BuildMode::Fat | BuildMode::Base { run: true }) {
             // `dx` compiles everything with `--target` which ends up with a structure like:
             // target/<triple>/<profile>/.fingerprint/<package_name>-<hash>
             //

@@ -227,7 +227,7 @@ impl AppServer {
     pub(crate) fn initialize(&mut self) {
         let build_mode = match self.use_hotpatch_engine {
             true => BuildMode::Fat,
-            false => BuildMode::Base,
+            false => BuildMode::Base { run: true },
         };
 
         self.client.start(build_mode.clone());
@@ -495,9 +495,9 @@ impl AppServer {
                 self.clear_cached_rsx();
                 server.send_patch_start().await;
             } else {
-                self.client.start_rebuild(BuildMode::Base);
+                self.client.start_rebuild(BuildMode::Base { run: true });
                 if let Some(server) = self.server.as_mut() {
-                    server.start_rebuild(BuildMode::Base);
+                    server.start_rebuild(BuildMode::Base { run: true });
                 }
                 self.clear_hot_reload_changes();
                 self.clear_cached_rsx();
@@ -680,7 +680,7 @@ impl AppServer {
     pub(crate) async fn full_rebuild(&mut self) {
         let build_mode = match self.use_hotpatch_engine {
             true => BuildMode::Fat,
-            false => BuildMode::Base,
+            false => BuildMode::Base { run: true },
         };
 
         self.client.start_rebuild(build_mode.clone());
