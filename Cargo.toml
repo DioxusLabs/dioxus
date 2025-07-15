@@ -202,6 +202,14 @@ wasm-used = { path = "packages/wasm-split/wasm-used", version = "0.7.0-alpha.2" 
 depinfo = { path = "packages/depinfo", version = "0.7.0-alpha.2" }
 warnings = { version = "0.2.1" }
 
+# blitz
+blitz-dom = { version = "=0.1.0-alpha.5", default-features = false }
+blitz-net = { version = "=0.1.0-alpha.5" }
+blitz-paint = { version = "=0.1.0-alpha.5" }
+blitz-traits = { version = "=0.1.0-alpha.5" }
+blitz-shell = { version = "=0.1.0-alpha.5", default-features = false }
+wgpu = { version = "24.0" }
+
 # a fork of pretty please for tests - let's get off of this if we can!
 prettier-please = { version = "0.3.0", features = ["verbatim"] }
 anyhow = "1.0.98"
@@ -413,7 +421,7 @@ reqwest = { workspace = true, features = ["json"], optional = true }
 ciborium = { workspace = true, optional = true }
 base64 = { workspace = true, optional = true }
 http-range = { version = "0.1.5", optional = true }
-wgpu = { version = "24.0", optional = true }
+wgpu = { workspace = true, optional = true }
 ouroboros = { version = "*", optional = true }
 wasm-splitter = { workspace = true, package = "wasm-split" }
 

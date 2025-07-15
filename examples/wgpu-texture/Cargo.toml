@@ -1,6 +1,3 @@
-# Copyright © SixtyFPS GmbH <info@slint.dev>
-# SPDX-License-Identifier: MIT
-
 [package]
 name = "wgpu-texture"
 version = "0.0.0"
@@ -17,7 +14,7 @@ tracing = ["dep:tracing-subscriber", "dioxus-native/tracing"]
 [dependencies]
 dioxus-native = { path = "../../packages/native" }
 dioxus = { workspace = true }
-wgpu = "24"
+wgpu = { workspace = true }
 winit = "0.30"
 bytemuck = "1"
 color = "0.3"
