@@ -15,6 +15,6 @@ tracing = ["dep:tracing-subscriber", "dioxus-native/tracing"]
 bevy = { version = "0.16" }
 dioxus-native = { path = "../../packages/native" }
 dioxus = { workspace = true }
-wgpu = "24"
+wgpu = { workspace = true }
 color = "0.3"
 tracing-subscriber = { workspace = true, optional = true }
