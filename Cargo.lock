@@ -10649,7 +10649,7 @@ dependencies = [
  "rustc-hash 1.1.0",
  "tracing-subscriber",
  "vello",
- "wgpu 24.0.5",
+ "wgpu",
 ]
 
 [[package]]
