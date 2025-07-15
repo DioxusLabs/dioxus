@@ -119,7 +119,7 @@ async fn check_files_and_report(files_to_check: Vec<PathBuf>) -> Result<()> {
             Ok(())
         }
         1 => Err(anyhow!("1 issue found.")),
-        _ => Err(anyhow!("{} issues found.", total_issues)),
+        _ => Err(anyhow!("{total_issues} issues found.")),
     }
 }
 

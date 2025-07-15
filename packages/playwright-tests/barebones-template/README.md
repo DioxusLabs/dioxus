@@ -18,8 +18,8 @@ Run the following command in the root of your project to start developing with t
 dx serve
 ```
 
-To run for a different platform, use the `--platform platform` flag. E.g.
-```bash
-dx serve --platform desktop
-```
+To run for a different platform, use the `--webview`, `--native`, or `--web` flags. E.g.
 
+```bash
+dx serve --webview
+```

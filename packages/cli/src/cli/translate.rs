@@ -41,7 +41,7 @@ impl Translate {
         // instead we should be printing as json (or maybe even a different format) if we're not interactive
         match self.output {
             Some(output) => std::fs::write(output, &html)?,
-            None => print!("{}", html),
+            None => print!("{html}"),
         }
 
         Ok(StructuredOutput::HtmlTranslate { html })
