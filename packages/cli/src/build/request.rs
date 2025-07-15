@@ -593,6 +593,15 @@ impl BuildRequest {
             None => platform.profile_name(args.release),
         };
 
+        // Warn if the user is trying to build with strip and using manganis
+        Self::warn_manganis_strip(
+            &workspace.krates,
+            &workspace.cargo_toml,
+            main_package,
+            &profile,
+            args.release,
+        );
+
         // Determining release mode is based on the profile, actually, so we need to check that
         let release = workspace.is_release_profile(&profile);
 
@@ -3124,6 +3133,44 @@ impl BuildRequest {
             );
             fallback
         })
+    }
+
+    /// Return the platforms that are enabled for the package
+    ///
+    /// Ideally only one platform is enabled but we need to be able to
+    pub(crate) fn warn_manganis_strip(
+        krates: &krates::Krates,
+        cargo_toml: &cargo_toml::Manifest,
+        main_package: &krates::cm::Package,
+        profile: &str,
+        release: bool,
+    ) {
+        let Some(id) = krates.nid_for_kid(&main_package.id.clone().into()) else {
+            return;
+        };
+        let dependencies = krates.direct_dependencies(id);
+        if !dependencies.iter().any(|dep| dep.krate.name == "manganis") {
+            return;
+        }
+
+        let (profile_name, profile) = match (cargo_toml.profile.custom.get(profile), release) {
+            (Some(custom_profile), _) => (profile, Some(custom_profile)),
+            (_, true) => ("release", cargo_toml.profile.release.as_ref()),
+            (_, false) => ("dev", cargo_toml.profile.dev.as_ref()),
+        };
+
+        let Some(profile) = profile else { return };
+
+        let Some(strip) = profile.strip.as_ref() else {
+            // If the profile doesn't have a strip option, we don't need to warn
+            return;
+        };
+
+        if matches!(strip, cargo_toml::StripSetting::Symbols) {
+            tracing::warn!(
+                "The `strip` option is enabled in the `{profile_name}` profile. This may cause manganis assets to be stripped from the final binary.",
+            );
+        }
     }
 
     /// Return the platforms that are enabled for the package
