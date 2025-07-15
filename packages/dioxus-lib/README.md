@@ -122,7 +122,7 @@ We can compose these function components to build a complex app. Each new
 component we design must take some Properties. For components with no explicit
 properties we can omit the type altogether.
 
-In Dioxus, all properties are memoized by default, and this implement both Clone and PartialEq. For props you can't clone, simply wrap the fields in a Read and Dioxus will handle the wrapping for you.
+In Dioxus, all properties are memoized by default, and this implement both Clone and PartialEq. For props you can't clone, simply wrap the fields in a ReadSignal and Dioxus will handle the wrapping for you.
 
 ```rust, ignore
 #[component]

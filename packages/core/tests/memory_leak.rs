@@ -44,7 +44,7 @@ async fn test_for_memory_leaks() {
     #[component]
     fn AcceptsEventHandlerAndReadOnlySignal(
         event_handler: EventHandler<MouseEvent>,
-        signal: Read<i32>,
+        signal: ReadSignal<i32>,
     ) -> Element {
         rsx! {
             div {

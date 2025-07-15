@@ -9,11 +9,11 @@ use crate::{
 };
 
 /// A boxed version of [Readable] that can be used to store any readable type.
-pub struct Read<T: ?Sized + 'static> {
+pub struct ReadSignal<T: ?Sized + 'static> {
     value: CopyValue<Box<dyn Readable<Target = T, Storage = UnsyncStorage>>>,
 }
 
-impl<T: ?Sized + 'static> Read<T> {
+impl<T: ?Sized + 'static> ReadSignal<T> {
     /// Create a new boxed readable value.
     pub fn new(value: impl Readable<Target = T, Storage = UnsyncStorage> + 'static) -> Self {
         Self {
@@ -21,7 +21,7 @@ impl<T: ?Sized + 'static> Read<T> {
         }
     }
 
-    /// Point to another [Read]. This will subscribe the other [Read] to all subscribers of this [Read].
+    /// Point to another [ReadSignal]. This will subscribe the other [ReadSignal] to all subscribers of this [ReadSignal].
     pub fn point_to(&self, other: Self) -> BorrowResult
     where
         T: Sized + 'static,
@@ -56,7 +56,7 @@ impl<T: ?Sized + 'static> Read<T> {
     }
 }
 
-impl<T: ?Sized + 'static> Clone for Read<T> {
+impl<T: ?Sized + 'static> Clone for ReadSignal<T> {
     fn clone(&self) -> Self {
         Self {
             value: self.value.clone(),
@@ -64,23 +64,23 @@ impl<T: ?Sized + 'static> Clone for Read<T> {
     }
 }
 
-impl<T: ?Sized + 'static> Copy for Read<T> {}
+impl<T: ?Sized + 'static> Copy for ReadSignal<T> {}
 
-impl<T: ?Sized + 'static> PartialEq for Read<T> {
+impl<T: ?Sized + 'static> PartialEq for ReadSignal<T> {
     fn eq(&self, other: &Self) -> bool {
         self.value == other.value
     }
 }
 
-impl<T: Default + 'static> Default for Read<T> {
+impl<T: Default + 'static> Default for ReadSignal<T> {
     fn default() -> Self {
         Self::new(Signal::new(T::default()))
     }
 }
 
-read_impls!(Read<T>);
+read_impls!(ReadSignal<T>);
 
-impl<T> IntoAttributeValue for Read<T>
+impl<T> IntoAttributeValue for ReadSignal<T>
 where
     T: Clone + IntoAttributeValue + 'static,
 {
@@ -89,7 +89,7 @@ where
     }
 }
 
-impl<T> IntoDynNode for Read<T>
+impl<T> IntoDynNode for ReadSignal<T>
 where
     T: Clone + IntoDynNode + 'static,
 {
@@ -98,7 +98,7 @@ where
     }
 }
 
-impl<T: Clone + 'static> Deref for Read<T> {
+impl<T: Clone + 'static> Deref for ReadSignal<T> {
     type Target = dyn Fn() -> T;
 
     fn deref(&self) -> &Self::Target {
@@ -106,7 +106,7 @@ impl<T: Clone + 'static> Deref for Read<T> {
     }
 }
 
-impl<T: 'static> Readable for Read<T> {
+impl<T: 'static> Readable for ReadSignal<T> {
     type Target = T;
     type Storage = UnsyncStorage;
 
@@ -133,25 +133,25 @@ impl<T: 'static> Readable for Read<T> {
     }
 }
 
-// We can't implement From<impl Readable<Target = T, Storage = S> + 'static> for Read<T, S>
+// We can't implement From<impl Readable<Target = T, Storage = S> + 'static> for ReadSignal<T, S>
 // because it would conflict with the From<T> for T implementation, but we can implement it for
 // all specific readable types
-impl<T> From<Signal<T>> for Read<T> {
+impl<T> From<Signal<T>> for ReadSignal<T> {
     fn from(value: Signal<T>) -> Self {
         Self::new(value)
     }
 }
-impl<T: PartialEq> From<Memo<T>> for Read<T> {
+impl<T: PartialEq> From<Memo<T>> for ReadSignal<T> {
     fn from(value: Memo<T>) -> Self {
         Self::new(value)
     }
 }
-impl<T> From<CopyValue<T>> for Read<T> {
+impl<T> From<CopyValue<T>> for ReadSignal<T> {
     fn from(value: CopyValue<T>) -> Self {
         Self::new(value)
     }
 }
-impl<T: Clone + 'static, R: 'static> From<Global<T, R>> for Read<R>
+impl<T: Clone + 'static, R: 'static> From<Global<T, R>> for ReadSignal<R>
 where
     T: Readable<Target = R, Storage = UnsyncStorage> + InitializeFromFunction<R>,
 {
@@ -159,7 +159,7 @@ where
         Self::new(value)
     }
 }
-impl<V, O, F> From<MappedSignal<O, V, F>> for Read<O>
+impl<V, O, F> From<MappedSignal<O, V, F>> for ReadSignal<O>
 where
     O: ?Sized,
     V: Readable<Storage = UnsyncStorage> + 'static,
@@ -169,7 +169,7 @@ where
         Self::new(value)
     }
 }
-impl<V, O, F, FMut> From<MappedMutSignal<O, V, F, FMut>> for Read<O>
+impl<V, O, F, FMut> From<MappedMutSignal<O, V, F, FMut>> for ReadSignal<O>
 where
     O: ?Sized,
     V: Readable<Storage = UnsyncStorage> + 'static,
@@ -182,13 +182,13 @@ where
 }
 
 /// A boxed version of [Writable] that can be used to store any writable type.
-pub struct Write<T: ?Sized + 'static> {
+pub struct WriteSignal<T: ?Sized + 'static> {
     value: CopyValue<
         Box<dyn Writable<Target = T, Storage = UnsyncStorage, WriteMetadata = Box<dyn Any>>>,
     >,
 }
 
-impl<T: ?Sized> Write<T> {
+impl<T: ?Sized> WriteSignal<T> {
     /// Create a new boxed writable value.
     pub fn new<M>(
         value: impl Writable<Target = T, Storage = UnsyncStorage, WriteMetadata = M> + 'static,
@@ -263,7 +263,7 @@ impl<W: Writable> Writable for BoxWriteMetadata<W> {
     }
 }
 
-impl<T: ?Sized> Clone for Write<T> {
+impl<T: ?Sized> Clone for WriteSignal<T> {
     fn clone(&self) -> Self {
         Self {
             value: self.value.clone(),
@@ -271,18 +271,18 @@ impl<T: ?Sized> Clone for Write<T> {
     }
 }
 
-impl<T: ?Sized> Copy for Write<T> {}
+impl<T: ?Sized> Copy for WriteSignal<T> {}
 
-impl<T: ?Sized> PartialEq for Write<T> {
+impl<T: ?Sized> PartialEq for WriteSignal<T> {
     fn eq(&self, other: &Self) -> bool {
         self.value == other.value
     }
 }
 
-read_impls!(Write<T>);
-write_impls!(Write<T>);
+read_impls!(WriteSignal<T>);
+write_impls!(WriteSignal<T>);
 
-impl<T> IntoAttributeValue for Write<T>
+impl<T> IntoAttributeValue for WriteSignal<T>
 where
     T: Clone + IntoAttributeValue + 'static,
 {
@@ -291,7 +291,7 @@ where
     }
 }
 
-impl<T> IntoDynNode for Write<T>
+impl<T> IntoDynNode for WriteSignal<T>
 where
     T: Clone + IntoDynNode + 'static,
 {
@@ -300,7 +300,7 @@ where
     }
 }
 
-impl<T: Clone + 'static> Deref for Write<T> {
+impl<T: Clone + 'static> Deref for WriteSignal<T> {
     type Target = dyn Fn() -> T;
 
     fn deref(&self) -> &Self::Target {
@@ -308,7 +308,7 @@ impl<T: Clone + 'static> Deref for Write<T> {
     }
 }
 
-impl<T: 'static> Readable for Write<T> {
+impl<T: 'static> Readable for WriteSignal<T> {
     type Target = T;
     type Storage = UnsyncStorage;
 
@@ -335,7 +335,7 @@ impl<T: 'static> Readable for Write<T> {
     }
 }
 
-impl<T: 'static> Writable for Write<T> {
+impl<T: 'static> Writable for WriteSignal<T> {
     type WriteMetadata = Box<dyn Any>;
 
     fn write_unchecked(&self) -> crate::WritableRef<'static, Self> {
@@ -355,17 +355,17 @@ impl<T: 'static> Writable for Write<T> {
 // We can't implement From<impl Writable<Target = T, Storage = S> + 'static> for Write<T, S>
 // because it would conflict with the From<T> for T implementation, but we can implement it for
 // all specific readable types
-impl<T> From<Signal<T>> for Write<T> {
+impl<T> From<Signal<T>> for WriteSignal<T> {
     fn from(value: Signal<T>) -> Self {
         Self::new(value)
     }
 }
-impl<T> From<CopyValue<T>> for Write<T> {
+impl<T> From<CopyValue<T>> for WriteSignal<T> {
     fn from(value: CopyValue<T>) -> Self {
         Self::new(value)
     }
 }
-impl<T: Clone + 'static, R: 'static> From<Global<T, R>> for Write<R>
+impl<T: Clone + 'static, R: 'static> From<Global<T, R>> for WriteSignal<R>
 where
     T: Writable<Target = R, Storage = UnsyncStorage> + InitializeFromFunction<R>,
 {
@@ -373,7 +373,7 @@ where
         Self::new(value)
     }
 }
-impl<V, O, F, FMut> From<MappedMutSignal<O, V, F, FMut>> for Write<O>
+impl<V, O, F, FMut> From<MappedMutSignal<O, V, F, FMut>> for WriteSignal<O>
 where
     O: ?Sized,
     V: Writable<Storage = UnsyncStorage> + 'static,

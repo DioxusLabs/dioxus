@@ -33,7 +33,7 @@ fn app() -> Element {
 }
 
 #[component]
-fn Child(count: Write<i32>) -> Element {
+fn Child(count: WriteSignal<i32>) -> Element {
     rsx! {
         div {
             button {

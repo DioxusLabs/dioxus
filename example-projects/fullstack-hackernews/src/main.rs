@@ -32,7 +32,7 @@ pub fn App() -> Element {
 }
 
 #[component]
-fn Homepage(story: Read<PreviewState>) -> Element {
+fn Homepage(story: ReadSignal<PreviewState>) -> Element {
     rsx! {
         document::Link { rel: "stylesheet", href: asset!("/assets/hackernews.css") }
         div { display: "flex", flex_direction: "row", width: "100%",
@@ -84,7 +84,7 @@ fn Stories() -> Element {
 }
 
 #[component]
-fn StoryListing(story: Read<i64>) -> Element {
+fn StoryListing(story: ReadSignal<i64>) -> Element {
     let story = use_server_future(move || get_story(story()))?;
 
     let StoryItem {
@@ -167,7 +167,7 @@ impl Display for PreviewState {
 }
 
 #[component]
-fn Preview(story: Read<PreviewState>) -> Element {
+fn Preview(story: ReadSignal<PreviewState>) -> Element {
     let PreviewState {
         active_story: Some(id),
     } = story()

@@ -152,12 +152,12 @@ impl UseFuture {
     }
 
     /// Get the current state of the future.
-    pub fn state(&self) -> Read<UseFutureState> {
+    pub fn state(&self) -> ReadSignal<UseFutureState> {
         self.state.into()
     }
 }
 
-impl From<UseFuture> for Read<UseFutureState> {
+impl From<UseFuture> for ReadSignal<UseFutureState> {
     fn from(val: UseFuture) -> Self {
         val.state.into()
     }

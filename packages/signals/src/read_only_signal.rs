@@ -1,7 +1,4 @@
-use crate::Read;
+use crate::ReadSignal;
 
 /// A signal that can only be read from.
-pub type ReadOnlySignal<T> = Read<T>;
-
-/// A signal that can only be read from.
-pub type ReadSignal<T> = ReadOnlySignal<T>;
+pub type ReadOnlySignal<T> = ReadSignal<T>;

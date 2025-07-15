@@ -52,13 +52,13 @@ mod test_default_into {
 
         // Test default values for signals
         #[props(default)]
-        read_only_w_default: Read<bool>,
+        read_only_w_default: ReadSignal<bool>,
 
         #[props(default = true)]
-        read_only_w_default_val: Read<bool>,
+        read_only_w_default_val: ReadSignal<bool>,
 
-        #[props(default = Read::new(Signal::new(true)))]
-        read_only_w_default_val_explicit: Read<bool>,
+        #[props(default = ReadSignal::new(Signal::new(true)))]
+        read_only_w_default_val_explicit: ReadSignal<bool>,
 
         // Test default values for callbacks/event handlers
         #[props(default)]
@@ -108,7 +108,7 @@ mod test_optional_signals {
     fn UsesComponents() -> Element {
         rsx! {
             PropsStruct {
-                regular_read_signal: Read::new(Signal::new(1234)),
+                regular_read_signal: ReadSignal::new(Signal::new(1234)),
             }
             PropsStruct {
                 optional_read_signal: 1234,
@@ -126,8 +126,8 @@ mod test_optional_signals {
     // Test props as struct param.
     #[derive(Props, Clone, PartialEq)]
     struct MyTestProps {
-        pub optional_read_signal: Read<Option<u16>>,
-        pub regular_read_signal: Read<u16>,
+        pub optional_read_signal: ReadSignal<Option<u16>>,
+        pub regular_read_signal: ReadSignal<u16>,
     }
 
     #[component]
@@ -137,7 +137,7 @@ mod test_optional_signals {
 
     // Test props as params.
     #[component]
-    fn PropParams(opt_read_sig: Read<Option<u16>>) -> Element {
+    fn PropParams(opt_read_sig: ReadSignal<Option<u16>>) -> Element {
         rsx! { "hi!" }
     }
 

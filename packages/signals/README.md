@@ -119,7 +119,7 @@ fn App() -> Element {
 }
 
 #[component]
-fn Child(signal: Read<usize>) -> Element {
+fn Child(signal: ReadSignal<usize>) -> Element {
     rsx! {
         "{signal}"
     }

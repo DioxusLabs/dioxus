@@ -22,7 +22,7 @@ fn app() -> Element {
 }
 
 #[component]
-fn Child(count: Read<i32>, children: Element) -> Element {
+fn Child(count: ReadSignal<i32>, children: Element) -> Element {
     rsx! {
         div { "Count: {count}" }
         {children}

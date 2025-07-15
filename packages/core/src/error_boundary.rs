@@ -730,7 +730,7 @@ impl<
 /// }
 ///
 /// #[component]
-/// fn Counter(multiplier: Read<String>) -> Element {
+/// fn Counter(multiplier: ReadSignal<String>) -> Element {
 ///     let multiplier_parsed = multiplier().parse::<usize>()?;
 ///     let mut count = use_signal(|| multiplier_parsed);
 ///     rsx! {
@@ -783,7 +783,7 @@ impl<
 /// }
 ///
 /// #[component]
-/// fn Counter(multiplier: Read<String>) -> Element {
+/// fn Counter(multiplier: ReadSignal<String>) -> Element {
 ///     let multiplier_parsed = multiplier().parse::<usize>()?;
 ///     let mut count = use_signal(|| multiplier_parsed);
 ///     rsx! {

@@ -345,7 +345,7 @@ impl<T> Resource<T> {
         )
     }
 
-    /// Get the current state of the resource's future. This method returns a [`Read`] which can be read to get the current state of the resource or passed to other hooks and components.
+    /// Get the current state of the resource's future. This method returns a [`ReadSignal`] which can be read to get the current state of the resource or passed to other hooks and components.
     ///
     /// ## Example
     /// ```rust, no_run
@@ -375,11 +375,11 @@ impl<T> Resource<T> {
     ///     }
     /// }
     /// ```
-    pub fn state(&self) -> Read<UseResourceState> {
+    pub fn state(&self) -> ReadSignal<UseResourceState> {
         self.state.into()
     }
 
-    /// Get the current value of the resource's future.  This method returns a [`Read`] which can be read to get the current value of the resource or passed to other hooks and components.
+    /// Get the current value of the resource's future.  This method returns a [`ReadSignal`] which can be read to get the current value of the resource or passed to other hooks and components.
     ///
     /// ## Example
     ///
@@ -406,7 +406,7 @@ impl<T> Resource<T> {
     ///     }
     /// }
     /// ```
-    pub fn value(&self) -> Read<Option<T>> {
+    pub fn value(&self) -> ReadSignal<Option<T>> {
         self.value.into()
     }
 
@@ -426,7 +426,7 @@ impl<T> Resource<T> {
     }
 }
 
-impl<T> From<Resource<T>> for Read<Option<T>> {
+impl<T> From<Resource<T>> for ReadSignal<Option<T>> {
     fn from(val: Resource<T>) -> Self {
         val.value.into()
     }

@@ -2,7 +2,7 @@ use std::ops::{Deref, DerefMut, IndexMut};
 
 use generational_box::{AnyStorage, UnsyncStorage};
 
-use crate::{read::Readable, read::ReadableExt, MappedMutSignal, Write};
+use crate::{read::Readable, read::ReadableExt, MappedMutSignal, WriteSignal};
 
 /// A reference to a value that can be written to.
 #[allow(type_alias_bounds)]
@@ -69,8 +69,8 @@ pub trait Writable: Readable {
 /// A mutable reference to a writable value. This reference acts similarly to [`std::cell::RefMut`], but it has extra debug information
 /// and integrates with the reactive system to automatically update dependents.
 ///
-/// [`Write`] implements [`DerefMut`] which means you can call methods on the inner value just like you would on a mutable reference
-/// to the inner value. If you need to get the inner reference directly, you can call [`Write::deref_mut`].
+/// [`WriteLock`] implements [`DerefMut`] which means you can call methods on the inner value just like you would on a mutable reference
+/// to the inner value. If you need to get the inner reference directly, you can call [`WriteLock::deref_mut`].
 ///
 /// # Example
 /// ```rust
@@ -93,7 +93,7 @@ pub trait Writable: Readable {
 /// }
 /// ```
 ///
-/// ## Matching on Write
+/// ## Matching on WriteLock
 ///
 /// You need to get the inner mutable reference with [`Write::deref_mut`] before you match the inner value. If you try to match
 /// without calling [`Write::deref_mut`], you will get an error like this:
@@ -375,17 +375,17 @@ impl<W: Writable + ?Sized> WritableExt for W {}
 /// An extension trait for [`Writable`] values that can be boxed into a trait object.
 pub trait WritableBoxedExt: Writable<Storage = UnsyncStorage> {
     /// Box the writable value into a trait object. This is useful for passing around writable values without knowing their concrete type.
-    fn boxed_mut(self) -> Write<Self::Target>
+    fn boxed_mut(self) -> WriteSignal<Self::Target>
     where
         Self: Sized + 'static,
     {
-        Write::new(self)
+        WriteSignal::new(self)
     }
 }
 
 impl<T: Writable<Storage = UnsyncStorage> + 'static> WritableBoxedExt for T {
-    fn boxed_mut(self) -> Write<Self::Target> {
-        Write::new(self)
+    fn boxed_mut(self) -> WriteSignal<Self::Target> {
+        WriteSignal::new(self)
     }
 }
 
