@@ -59,4 +59,69 @@ rsx! {
         // please dont eat me 3
         abc: 123,
     }
+
+    div {
+        // I am just a comment
+    }
+
+    div {
+        "text"
+        // I am just a comment
+    }
+
+    div {
+        div {}
+        // I am just a comment
+    }
+
+    div {
+        {some_expr()}
+        // I am just a comment
+    }
+
+    div {
+        "text" // I am just a comment
+    }
+
+    div {
+        div {} // I am just a comment
+    }
+
+    div {
+        {some_expr()} // I am just a comment
+    }
+
+    div {
+        // Please dont eat me 1
+        div {
+            // Please dont eat me 2
+        }
+        // Please dont eat me 3
+    }
+
+    div {
+        "hi"
+        // Please dont eat me 1
+    }
+    div {
+        "hi" // Please dont eat me 1
+        // Please dont eat me 2
+    }
+
+    // Please dont eat me 2
+    Component {}
+
+    // Please dont eat me 1
+    Component {
+        // Please dont eat me 2
+    }
+
+    // Please dont eat me 1
+    Component {
+        // Please dont eat me 2
+    }
+
+    // Please dont eat me 1
+    //
+    // Please dont eat me 2
 }
