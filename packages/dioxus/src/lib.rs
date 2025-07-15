@@ -32,6 +32,8 @@ pub use dioxus_core::{CapturedError, Ok, Result};
 #[cfg_attr(docsrs, doc(cfg(feature = "launch")))]
 mod launch;
 
+pub use dioxus_core as core;
+
 #[cfg(feature = "launch")]
 #[cfg_attr(docsrs, doc(cfg(feature = "launch")))]
 pub use crate::launch::*;
@@ -143,8 +145,6 @@ pub mod prelude {
     #[cfg_attr(docsrs, doc(cfg(feature = "signals")))]
     pub use dioxus_signals::*;
 
-    pub use dioxus_core::prelude::*;
-
     #[cfg(feature = "macro")]
     #[cfg_attr(docsrs, doc(cfg(feature = "macro")))]
     #[allow(deprecated)]
@@ -187,4 +187,11 @@ pub mod prelude {
     #[cfg(feature = "wasm-split")]
     #[cfg_attr(docsrs, doc(cfg(feature = "wasm-split")))]
     pub use wasm_splitter as wasm_split;
+
+    pub use dioxus_core::{
+        consume_context, provide_context, spawn, suspend, try_consume_context, use_hook, Attribute,
+        Callback, Component, Element, ErrorBoundary, ErrorContext, Event, EventHandler, Fragment,
+        HasAttributes, IntoDynNode, RenderError, ScopeId, SuspenseBoundary, SuspenseContext, VNode,
+        VirtualDom,
+    };
 }

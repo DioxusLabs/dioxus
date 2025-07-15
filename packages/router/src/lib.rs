@@ -85,7 +85,7 @@ pub mod prelude {
         type Props;
     }
 
-    impl<P> HasProps for dioxus_lib::prelude::Component<P> {
+    impl<P> HasProps for dioxus_lib::core::Component<P> {
         type Props = P;
     }
 }

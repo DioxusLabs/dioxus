@@ -1,6 +1,6 @@
 #![allow(missing_docs)]
 use crate::{use_callback, use_hook_did_run, use_signal};
-use dioxus_core::prelude::*;
+use dioxus_core::{use_hook, Callback, Task};
 use dioxus_signals::*;
 use std::future::Future;
 use std::ops::Deref;
@@ -50,7 +50,7 @@ where
 
     let callback = use_callback(move |_| {
         let fut = future();
-        spawn(async move {
+        dioxus_core::spawn(async move {
             state.set(UseFutureState::Pending);
             fut.await;
             state.set(UseFutureState::Ready);

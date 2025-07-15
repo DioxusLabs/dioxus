@@ -1,5 +1,6 @@
 use dioxus::dioxus_core::{ElementId, Mutation::*};
 use dioxus::prelude::*;
+use dioxus_core::generation;
 
 /// As we clean up old templates, the ID for the node should cycle
 #[test]

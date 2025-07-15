@@ -1,9 +1,4 @@
-use crate::{
-    prelude::{current_scope_id, ScopeId},
-    scope_context::Scope,
-    tasks::SchedulerMsg,
-    Runtime,
-};
+use crate::{current_scope_id, scope_context::Scope, tasks::SchedulerMsg, Runtime, ScopeId};
 use futures_channel::mpsc::UnboundedReceiver;
 use generational_box::{BorrowMutError, GenerationalBox, SyncStorage};
 use std::{

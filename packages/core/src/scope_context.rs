@@ -1,8 +1,7 @@
-use crate::runtime::RuntimeError;
-use crate::{innerlude::SchedulerMsg, Runtime, ScopeId, Task};
 use crate::{
-    innerlude::{throw_into, CapturedError},
-    prelude::SuspenseContext,
+    innerlude::{throw_into, CapturedError, SchedulerMsg, SuspenseContext},
+    runtime::RuntimeError,
+    Runtime, ScopeId, Task,
 };
 use generational_box::{AnyStorage, Owner};
 use rustc_hash::FxHashSet;

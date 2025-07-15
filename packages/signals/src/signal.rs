@@ -1,7 +1,7 @@
 use crate::{default_impl, fmt_impls, write_impls, Global};
 use crate::{read::*, write::*, CopyValue, GlobalMemo, GlobalSignal, ReadableRef};
 use crate::{Memo, WritableRef};
-use dioxus_core::prelude::*;
+use dioxus_core::{IntoAttributeValue, IntoDynNode, ReactiveContext, ScopeId};
 use generational_box::{AnyStorage, BorrowResult, Storage, SyncStorage, UnsyncStorage};
 use std::sync::Arc;
 use std::{
@@ -522,7 +522,7 @@ impl<'de, T: serde::Deserialize<'de> + 'static, Store: Storage<SignalData<T>>>
 /// # use dioxus::prelude::*;
 /// fn app() -> Element {
 ///     let mut value = use_signal(|| String::from("hello"));
-///     
+///
 ///     rsx! {
 ///         button {
 ///             onclick: move |_| {

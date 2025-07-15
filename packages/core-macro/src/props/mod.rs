@@ -544,7 +544,7 @@ fn extract_inner_type_from_segment(segment: &PathSegment) -> Option<&Type> {
 mod struct_info {
     use convert_case::{Case, Casing};
     use proc_macro2::TokenStream;
-    use quote::quote;
+    use quote::{quote, ToTokens};
     use syn::parse::Error;
     use syn::punctuated::Punctuated;
     use syn::spanned::Spanned;
@@ -884,7 +884,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                     _phantom: (#( #phantom_generics ),*),
                 }
 
-                impl #impl_generics dioxus_core::prelude::Properties for #name #ty_generics
+                impl #impl_generics dioxus_core::Properties for #name #ty_generics
                 #b_generics_where
                 {
                     type Builder = #builder_name #generics_with_empty;
@@ -1024,12 +1024,12 @@ Finally, call `.build()` to create the instance of `{name}`.
 
             Ok(quote! {
                 #[allow(dead_code, non_camel_case_types, missing_docs)]
-                impl #impl_generics dioxus_core::prelude::HasAttributes for #builder_name < #( #ty_generics ),* > #where_clause {
+                impl #impl_generics dioxus_core::HasAttributes for #builder_name < #( #ty_generics ),* > #where_clause {
                     fn push_attribute<L>(
                         mut self,
                         ____name: &'static str,
                         ____ns: Option<&'static str>,
-                        ____attr: impl dioxus_core::prelude::IntoAttributeValue<L>,
+                        ____attr: impl dioxus_core::IntoAttributeValue<L>,
                         ____volatile: bool
                     ) -> Self {
                         let ( #(#descructuring,)* ) = self.fields;
@@ -1037,7 +1037,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                             dioxus_core::Attribute::new(
                                 ____name,
                                 {
-                                    use dioxus_core::prelude::IntoAttributeValue;
+                                    use dioxus_core::IntoAttributeValue;
                                     ____attr.into_value()
                                 },
                                 ____ns,
@@ -1150,16 +1150,16 @@ Finally, call `.build()` to create the instance of `{name}`.
                 let marker_ident = syn::Ident::new("__Marker", proc_macro2::Span::call_site());
                 marker = Some(marker_ident.clone());
                 (
-                    quote!(impl dioxus_core::prelude::SuperInto<#arg_type, #marker_ident>),
+                    quote!(impl dioxus_core::SuperInto<#arg_type, #marker_ident>),
                     // If this looks like a signal type, we automatically convert it with SuperInto and use the props struct as the owner
-                    quote!(with_owner(self.owner.clone(), move || dioxus_core::prelude::SuperInto::super_into(#field_name))),
+                    quote!(dioxus_core::with_owner(self.owner.clone(), move || dioxus_core::SuperInto::super_into(#field_name))),
                 )
             } else if field.builder_attr.auto_into || field.builder_attr.strip_option {
                 let marker_ident = syn::Ident::new("__Marker", proc_macro2::Span::call_site());
                 marker = Some(marker_ident.clone());
                 (
-                    quote!(impl dioxus_core::prelude::SuperInto<#arg_type, #marker_ident>),
-                    quote!(dioxus_core::prelude::SuperInto::super_into(#field_name)),
+                    quote!(impl dioxus_core::SuperInto<#arg_type, #marker_ident>),
+                    quote!(dioxus_core::SuperInto::super_into(#field_name)),
                 )
             } else if field.builder_attr.from_displayable {
                 (
@@ -1419,24 +1419,27 @@ Finally, call `.build()` to create the instance of `{name}`.
                     // If this is a signal type, we use super_into and the props struct as the owner
                     let is_child_owned_type = child_owned_type(field.ty);
 
-                    let mut into = quote!{};
 
-                    if !is_default {
+                    let body = if !is_default {
                         if is_child_owned_type {
-                            into = quote!{ .super_into() }
+                            quote!{ dioxus_core::SuperInto::super_into(#default) }
                         } else if field.builder_attr.auto_into {
-                            into = quote!{ .into() }
+                            quote!{ (#default).into() }
                         } else if field.builder_attr.auto_to_string {
-                            into = quote!{ .to_string() }
+                            quote!{ (#default).to_string() }
+                        } else {
+                            default.to_token_stream()
                         }
-                    }
+                    } else {
+                        default.to_token_stream()
+                    };
 
                     if field.builder_attr.skip {
-                        quote!(let #name = #default #into;)
+                        quote!(let #name = #body;)
                     } else if is_child_owned_type {
-                        quote!(let #name = #helper_trait_name::into_value(#name, || with_owner(self.owner.clone(), move || (#default) #into));)
+                        quote!(let #name = #helper_trait_name::into_value(#name, || dioxus_core::with_owner(self.owner.clone(), move || #body));)
                     } else {
-                        quote!(let #name = #helper_trait_name::into_value(#name, || #default #into);)
+                        quote!(let #name = #helper_trait_name::into_value(#name, || #body);)
                     }
                 } else {
                     quote!(let #name = #name.0;)
@@ -1484,15 +1487,15 @@ Finally, call `.build()` to create the instance of `{name}`.
                         /// Create a component from the props.
                         pub fn into_vcomponent<M: 'static>(
                             self,
-                            render_fn: impl dioxus_core::prelude::ComponentFunction<#original_name #ty_generics, M>,
+                            render_fn: impl dioxus_core::ComponentFunction<#original_name #ty_generics, M>,
                         ) -> dioxus_core::VComponent {
-                            use dioxus_core::prelude::ComponentFunction;
+                            use dioxus_core::ComponentFunction;
                             let component_name = ::std::any::type_name_of_val(&render_fn);
                             dioxus_core::VComponent::new(move |wrapper: Self| render_fn.rebuild(wrapper.inner), self, component_name)
                         }
                     }
 
-                    impl #original_impl_generics dioxus_core::prelude::Properties for #name #ty_generics #where_clause {
+                    impl #original_impl_generics dioxus_core::Properties for #name #ty_generics #where_clause {
                         type Builder = ();
                         fn builder() -> Self::Builder {
                             unreachable!()
@@ -1742,7 +1745,7 @@ fn child_owned_type(ty: &Type) -> bool {
 fn looks_like_signal_type(ty: &Type) -> bool {
     match extract_base_type_without_generics(ty) {
         Some(path_without_generics) => {
-            path_without_generics == parse_quote!(dioxus_core::prelude::ReadOnlySignal)
+            path_without_generics == parse_quote!(dioxus_core::ReadOnlySignal)
                 || path_without_generics == parse_quote!(prelude::ReadOnlySignal)
                 || path_without_generics == parse_quote!(ReadOnlySignal)
         }
@@ -1754,10 +1757,10 @@ fn looks_like_callback_type(ty: &Type) -> bool {
     let type_without_option = remove_option_wrapper(ty.clone());
     match extract_base_type_without_generics(&type_without_option) {
         Some(path_without_generics) => {
-            path_without_generics == parse_quote!(dioxus_core::prelude::EventHandler)
+            path_without_generics == parse_quote!(dioxus_core::EventHandler)
                 || path_without_generics == parse_quote!(prelude::EventHandler)
                 || path_without_generics == parse_quote!(EventHandler)
-                || path_without_generics == parse_quote!(dioxus_core::prelude::Callback)
+                || path_without_generics == parse_quote!(dioxus_core::Callback)
                 || path_without_generics == parse_quote!(prelude::Callback)
                 || path_without_generics == parse_quote!(Callback)
         }

@@ -10,7 +10,7 @@ pub use anyrender_vello::{
 };
 
 pub fn use_wgpu<T: CustomPaintSource>(create_source: impl FnOnce() -> T) -> u64 {
-    use dioxus_core::prelude::{consume_context, use_hook_with_cleanup};
+    use dioxus_core::{consume_context, use_hook_with_cleanup};
 
     let (_renderer, id) = use_hook_with_cleanup(
         || {

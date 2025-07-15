@@ -1,4 +1,4 @@
-use dioxus_core::{prelude::provide_root_context, prelude::try_consume_context, use_hook};
+use dioxus_core::{provide_root_context, try_consume_context, use_hook};
 
 /// Try to get a value from the root of the virtual dom, if it doesn't exist, create a new one with the closure provided.
 ///

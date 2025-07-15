@@ -100,8 +100,8 @@ impl ToTokens for Component {
 
                 // todo: ensure going through the trait actually works
                 // we want to avoid importing traits
-                // use dioxus_core::prelude::Properties;
-                use dioxus_core::prelude::Properties;
+                // use dioxus_core::Properties;
+                use dioxus_core::Properties;
                 let __comp = ({
                     #props
                 }).into_vcomponent(
@@ -223,7 +223,7 @@ impl Component {
             // we only want to span the name and generics, not the `fc_to_builder` call so jump-to-def
             // only finds the single entry (#name)
             let spanned = quote_spanned! { self.name.span() => #name #generics };
-            quote! { fc_to_builder(#spanned) }
+            quote! { dioxus_core::fc_to_builder(#spanned) }
         };
 
         tokens.append_all(self.add_fields_to_builder(
@@ -306,7 +306,19 @@ impl Component {
                             "Custom attributes are not supported for components that are spread",
                         ).emit_as_expr_tokens());
                     } else {
-                        tokens.append_all(quote! { .push_attribute(#name, None, #value, false) })
+                        // tokens = quote! {
+                        //     dioxus_core::HasAttributes::push_attribute(
+                        //         #tokens,
+                        //         #name,
+                        //         None,
+                        //         #value,
+                        //         false
+                        //     )
+                        // };
+
+                        tokens.append_all(quote! {
+                            .push_attribute(#name, None, #value, false)
+                        })
                     }
                 }
                 // spreads are handled elsewhere

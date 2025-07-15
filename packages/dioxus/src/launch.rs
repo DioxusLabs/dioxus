@@ -1,7 +1,7 @@
 #![allow(clippy::new_without_default)]
 #![allow(unused)]
 use dioxus_config_macro::*;
-use dioxus_core::LaunchConfig;
+use dioxus_core::{Element, LaunchConfig};
 use std::any::Any;
 
 use crate::prelude::*;

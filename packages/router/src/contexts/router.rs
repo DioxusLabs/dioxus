@@ -6,7 +6,7 @@ use std::{
 };
 
 use dioxus_history::history;
-use dioxus_lib::prelude::*;
+use dioxus_lib::{core::ReactiveContext, prelude::*};
 
 use crate::{
     components::child_router::consume_child_route_mapping, navigation::NavigationTarget,
@@ -268,7 +268,7 @@ impl RouterContext {
         match route {
             Ok(route) => route,
             Err(err) => {
-                throw_error(ParseRouteError { message: err });
+                dioxus_core::throw_error(ParseRouteError { message: err });
                 "/".parse().unwrap_or_else(|err| panic!("{err}"))
             }
         }
