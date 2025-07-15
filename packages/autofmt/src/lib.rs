@@ -149,7 +149,7 @@ pub fn try_fmt_file(
 /// that passed partial expansion but failed to parse.
 pub fn write_block_out(body: &CallBody) -> Option<String> {
     let mut buf = Writer::new("", IndentOptions::default());
-    buf.write_rsx_call(&body).ok()?;
+    buf.write_rsx_call(body).ok()?;
     buf.consume()
 }
 
