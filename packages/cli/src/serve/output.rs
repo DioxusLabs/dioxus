@@ -1022,7 +1022,6 @@ impl Output {
                     line = line.dark_gray();
                 }
 
-                // Create the ansi -> raw string line with a width of either the viewport width or the max width
                 lines.push(ansi_string_to_line(line));
             }
         }
