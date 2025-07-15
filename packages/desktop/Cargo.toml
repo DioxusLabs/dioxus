@@ -21,7 +21,7 @@ dioxus-asset-resolver = { workspace = true }
 generational-box = { workspace = true }
 dioxus-devtools = { workspace = true, optional = true }
 
-serde = "1.0.218"
+serde = "1.0.219"
 serde_json = "1.0.140"
 thiserror = { workspace = true }
 tracing = { workspace = true }
@@ -47,21 +47,21 @@ async-trait = { workspace = true }
 tao = { workspace = true, features = ["rwh_05"] }
 dioxus-history = { workspace = true }
 base64 = { workspace = true }
-open = { workspace = true }
-libc = "0.2.170"
+libc = "0.2.174"
 pollster = "0.4.0"
 rand = { workspace = true, features = ["std_rng"] }
 subtle = { version = "2.6", features = ["const-generics"] }
+webbrowser = { version = "1.0" }
 
 [target.'cfg(unix)'.dependencies]
-signal-hook = "0.3.17"
+signal-hook = "0.3.18"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 wry = { workspace = true, features = ["os-webview", "protocol", "drag-drop", "linux-body"] }
 
 [target.'cfg(any(target_os = "windows",target_os = "macos",target_os = "linux",target_os = "dragonfly", target_os = "freebsd", target_os = "netbsd", target_os = "openbsd"))'.dependencies]
 global-hotkey = "0.7.0"
-rfd = { version = "0.15.2", default-features = false, features = ["xdg-portal", "tokio"] }
+rfd = { version = "0.15.3", default-features = false, features = ["xdg-portal", "tokio"] }
 muda = { workspace = true }
 
 [target.'cfg(any(target_os = "windows",target_os = "macos",target_os = "linux"))'.dependencies]
@@ -79,24 +79,30 @@ ndk = { version = "0.9.0" }
 ndk-sys = { version = "0.6.0" }
 ndk-context = { version = "0.1.1" }
 
+# The `openssl` dependency generally does not know how to cross-compile for Android. To make the lives
+# of our users easier, we automatically enable the `openssl` feature when building for Android.
+# Feature are additive, so users will need to "subtract" this feature if they do not want it.
+openssl = { version = "0.10", features = ["vendored"], optional = true }
+
 # use native tls on other platforms
 [target.'cfg(not(target_os = "android"))'.dependencies]
 tungstenite = { workspace = true, features = ["native-tls"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
-cocoa = "0.26.0"
-core-foundation = "0.10.0"
+cocoa = "0.26.1"
+core-foundation = "0.10.1"
 objc = "0.2.7"
 
 [build-dependencies]
 lazy-js-bundle = { workspace = true }
 
 [features]
-default = ["tokio_runtime", "transparent", "devtools"]
+default = ["tokio_runtime", "transparent", "devtools", "openssl-vendored-android"]
 tokio_runtime = ["dep:tokio"]
 fullscreen = ["wry/fullscreen"]
 devtools = ["wry/devtools", "dep:dioxus-devtools", "dioxus-signals"]
 transparent = ["wry/transparent"]
+openssl-vendored-android = ["openssl"]
 gnu = []
 
 [package.metadata.docs.rs]

@@ -9,7 +9,7 @@ fn random_ns() -> Option<&'static str> {
     match namespace {
         0 => None,
         1 => Some(Box::leak(
-            format!("ns{}", rand::random::<usize>()).into_boxed_str(),
+            format!("ns{}", rand::random::<u8>()).into_boxed_str(),
         )),
         _ => unreachable!(),
     }
@@ -18,8 +18,8 @@ fn random_ns() -> Option<&'static str> {
 fn create_random_attribute(attr_idx: &mut usize) -> TemplateAttribute {
     match rand::random::<u8>() % 2 {
         0 => TemplateAttribute::Static {
-            name: Box::leak(format!("attr{}", rand::random::<usize>()).into_boxed_str()),
-            value: Box::leak(format!("value{}", rand::random::<usize>()).into_boxed_str()),
+            name: Box::leak(format!("attr{}", rand::random::<u8>()).into_boxed_str()),
+            value: Box::leak(format!("value{}", rand::random::<u8>()).into_boxed_str()),
             namespace: random_ns(),
         },
         1 => TemplateAttribute::Dynamic {
@@ -42,20 +42,20 @@ fn create_random_template_node(
     match rand::random::<u8>() % 4 {
         0 => {
             let attrs = {
-                let attrs: Vec<_> = (0..(rand::random::<usize>() % 10))
+                let attrs: Vec<_> = (0..(rand::random::<u8>() % 10))
                     .map(|_| create_random_attribute(attr_idx))
                     .collect();
                 Box::leak(attrs.into_boxed_slice())
             };
             TemplateNode::Element {
-                tag: Box::leak(format!("tag{}", rand::random::<usize>()).into_boxed_str()),
+                tag: Box::leak(format!("tag{}", rand::random::<u8>()).into_boxed_str()),
                 namespace: random_ns(),
                 attrs,
                 children: {
                     if depth > 4 {
                         &[]
                     } else {
-                        let children: Vec<_> = (0..(rand::random::<usize>() % 3))
+                        let children: Vec<_> = (0..(rand::random::<u8>() % 3))
                             .map(|_| {
                                 create_random_template_node(
                                     dynamic_node_types,
@@ -71,7 +71,7 @@ fn create_random_template_node(
             }
         }
         1 => TemplateNode::Text {
-            text: Box::leak(format!("{}", rand::random::<usize>()).into_boxed_str()),
+            text: Box::leak(format!("{}", rand::random::<u8>()).into_boxed_str()),
         },
         2 => TemplateNode::Dynamic {
             id: {
@@ -127,11 +127,11 @@ enum DynamicNodeType {
     Other,
 }
 
-fn create_random_template(depth: usize) -> (Template, Box<[DynamicNode]>) {
+fn create_random_template(depth: u8) -> (Template, Box<[DynamicNode]>) {
     let mut dynamic_node_types = Vec::new();
     let mut template_idx = 0;
     let mut attr_idx = 0;
-    let roots = (0..(1 + rand::random::<usize>() % 5))
+    let roots = (0..(1 + rand::random::<u8>() % 5))
         .map(|_| {
             create_random_template_node(
                 &mut dynamic_node_types,
@@ -166,7 +166,7 @@ fn create_random_template(depth: usize) -> (Template, Box<[DynamicNode]>) {
         .iter()
         .map(|ty| match ty {
             DynamicNodeType::Text => {
-                DynamicNode::Text(VText::new(format!("{}", rand::random::<usize>())))
+                DynamicNode::Text(VText::new(format!("{}", rand::random::<u8>())))
             }
             DynamicNodeType::Other => create_random_dynamic_node(depth + 1),
         })
@@ -174,7 +174,7 @@ fn create_random_template(depth: usize) -> (Template, Box<[DynamicNode]>) {
     (Template { roots, node_paths, attr_paths }, dynamic_nodes)
 }
 
-fn create_random_dynamic_node(depth: usize) -> DynamicNode {
+fn create_random_dynamic_node(depth: u8) -> DynamicNode {
     let range = if depth > 5 { 1 } else { 3 };
     match rand::random::<u8>() % range {
         0 => DynamicNode::Placeholder(Default::default()),
@@ -207,11 +207,11 @@ fn create_random_dynamic_node(depth: usize) -> DynamicNode {
 
 fn create_random_dynamic_attr() -> Attribute {
     let value = match rand::random::<u8>() % 7 {
-        0 => AttributeValue::Text(format!("{}", rand::random::<usize>())),
+        0 => AttributeValue::Text(format!("{}", rand::random::<u8>())),
         1 => AttributeValue::Float(rand::random()),
         2 => AttributeValue::Int(rand::random()),
         3 => AttributeValue::Bool(rand::random()),
-        4 => AttributeValue::any_value(rand::random::<usize>()),
+        4 => AttributeValue::any_value(rand::random::<u8>()),
         5 => AttributeValue::None,
         6 => {
             let value = AttributeValue::listener(|e: Event<String>| println!("{:?}", e));
@@ -220,7 +220,7 @@ fn create_random_dynamic_attr() -> Attribute {
         _ => unreachable!(),
     };
     Attribute::new(
-        Box::leak(format!("attr{}", rand::random::<usize>()).into_boxed_str()),
+        Box::leak(format!("attr{}", rand::random::<u8>()).into_boxed_str()),
         value,
         random_ns(),
         rand::random(),
@@ -229,17 +229,17 @@ fn create_random_dynamic_attr() -> Attribute {
 
 #[derive(PartialEq, Props, Clone)]
 struct DepthProps {
-    depth: usize,
+    depth: u8,
     root: bool,
 }
 
 fn create_random_element(cx: DepthProps) -> Element {
     let last_template = use_hook(|| Rc::new(RefCell::new(None)));
-    if rand::random::<usize>() % 10 == 0 {
+    if rand::random::<u8>() % 10 == 0 {
         needs_update();
     }
     let range = if cx.root { 2 } else { 3 };
-    let node = match rand::random::<usize>() % range {
+    let node = match rand::random::<u8>() % range {
         // Change both the template and the dynamic nodes
         0 => {
             let (template, dynamic_nodes) = create_random_template(cx.depth + 1);

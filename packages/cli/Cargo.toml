@@ -52,8 +52,8 @@ rayon = { workspace = true }
 futures-channel = { workspace = true }
 krates = { workspace = true }
 regex = "1.11.1"
-console = "0.15.11"
-ctrlc = "3.4.5"
+console = "0.16.0"
+ctrlc = "3.4.7"
 
 axum = { workspace = true, default-features = true, features = ["ws"] }
 axum-server = { workspace = true, features = ["tls-rustls"] }
@@ -67,7 +67,7 @@ syn = { workspace = true, features = [
     "visit-mut",
 ] }
 
-headers = "0.4.0"
+headers = "0.4.1"
 walkdir = "2"
 dunce = { workspace = true }
 
@@ -77,24 +77,30 @@ reqwest = { workspace = true, features = ["rustls-tls", "trust-dns", "json"] }
 tower = { workspace = true }
 
 # path lookup
-which = { version = "7.0.2" }
+which = { version = "8.0.0" }
 
 # plugin packages
 open = { workspace = true }
 cargo-generate = "0.23.3"
-toml_edit = "0.22.24"
+toml_edit = "0.22.27"
 
 # formatting
 # syn = { workspace = true }
 prettyplease = { workspace = true }
 
 # Assets
-brotli = "7.0.0"
+brotli = "8.0.1"
 ignore = "0.4.23"
 env_logger = { workspace = true }
 const-serialize = { workspace = true, features = ["serde"] }
 
-tracing-subscriber = { version = "0.3.19", features = ["std", "env-filter", "json", "registry", "fmt"] }
+tracing-subscriber = { version = "0.3.19", features = [
+    "std",
+    "env-filter",
+    "json",
+    "registry",
+    "fmt",
+] }
 console-subscriber = { version = "0.4.1", optional = true }
 tracing = { workspace = true }
 wasm-opt = { version = "0.116.1", optional = true }
@@ -109,11 +115,11 @@ shell-words = { workspace = true }
 log = { version = "0.4", features = ["max_level_off", "release_max_level_off"] }
 
 # link intercept
-tempfile = "3.13"
+tempfile = "3.19.1"
 manganis = { workspace = true }
 manganis-core = { workspace = true }
 target-lexicon = { version = "0.13.2", features = ["serde", "serde_support"] }
-wasm-encoder = "0.229.0"
+wasm-encoder = "0.235.0"
 
 # Extracting data from an executable
 object = { workspace = true, features = ["all"] }
@@ -121,37 +127,40 @@ tokio-util = { workspace = true, features = ["full"] }
 itertools = { workspace = true }
 throbber-widgets-tui = "0.8.0"
 unicode-segmentation = "1.12.0"
-handlebars = "6.3.1"
+handlebars = "6.3.2"
 strum = { version = "0.27.1", features = ["derive"] }
 memmap = "0.7.0"
-walrus = { workspace = true, features = ["parallel"]}
+walrus = { workspace = true, features = ["parallel"] }
 wasmparser = { workspace = true }
 
 tauri-utils = { workspace = true }
 tauri-bundler = { workspace = true }
 include_dir = "0.7.4"
-flate2 = "1.1.0"
+flate2 = "1.1.2"
 tar = "0.4.44"
-local-ip-address = "0.6.3"
+local-ip-address = "0.6.5"
 dircpy = "0.3.19"
-plist = "1.7.0"
+plist = "1.7.4"
 memoize = "0.5.1"
 backtrace = "0.3.74"
 ar = "0.9.0"
 wasm-bindgen-externref-xform = "0.2.100"
 pdb = "0.8.0"
-self_update = { version = "0.42.0", features = ["archive-tar", "archive-zip", "compression-flate2", "compression-zip-deflate"] }
+self_update = { version = "0.42.0", features = [
+    "archive-tar",
+    "archive-zip",
+    "compression-flate2",
+    "compression-zip-deflate",
+] }
 self-replace = "1.5.0"
 cargo-config2 = { workspace = true }
 
 [build-dependencies]
-built = { version = "0.7.5", features = ["git2"] }
+built = { version = "0.8.0", features = ["git2"] }
 
 [features]
 default = []
-plugin = []
 tokio-console = ["dep:console-subscriber", "tokio/tracing"]
-bundle = []
 no-downloads = []
 
 [[bin]]

@@ -1,6 +1,6 @@
 use super::*;
 use crate::{Result, Workspace};
-use anyhow::Context;
+use anyhow::{bail, Context};
 use itertools::Itertools;
 use self_update::cargo_crate_version;
 
@@ -93,7 +93,7 @@ impl SelfUpdate {
             } else if cfg!(target_arch = "aarch64") {
                 "aarch64"
             } else {
-                return Err(Error::Unique("Unsupported architecture".to_string()));
+                bail!("Unsupported architecture");
             };
 
             let cur_os = if cfg!(target_os = "windows") {
@@ -103,7 +103,7 @@ impl SelfUpdate {
             } else if cfg!(target_os = "macos") {
                 "darwin"
             } else {
-                return Err(Error::Unique("Unsupported OS".to_string()));
+                bail!("Unsupported OS");
             };
 
             let zip_ext = "zip";
@@ -118,7 +118,7 @@ impl SelfUpdate {
                         && a.name.contains(cur_arch)
                         && a.name.ends_with(zip_ext)
                 })
-                .ok_or_else(|| Error::Unique("No suitable release found found".to_string()))?;
+                .context("No suitable asset found")?;
 
             let install_dir = Workspace::dioxus_home_dir().join("self-update");
             std::fs::create_dir_all(&install_dir).context("Failed to create install directory")?;
@@ -161,10 +161,7 @@ impl SelfUpdate {
 
             let executable = install_dir.join("dx");
             if !executable.exists() {
-                return Err(Error::Unique(format!(
-                    "Executable not found in {}",
-                    install_dir.display()
-                )));
+                bail!("Executable not found in {}", install_dir.display());
             }
 
             tracing::info!(

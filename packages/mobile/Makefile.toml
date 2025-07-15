@@ -1,7 +1,0 @@
-[tasks.test]
-command = "cargo"
-args = [
-  "test",
-  "--no-run",
-]
-
