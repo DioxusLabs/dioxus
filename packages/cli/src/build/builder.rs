@@ -1,6 +1,6 @@
 use crate::{
     serve::WebServer, BuildArtifacts, BuildRequest, BuildStage, BuilderUpdate, Platform,
-    ProgressRx, ProgressTx, Result, StructuredOutput,
+    ProgressRx, ProgressTx, Result, RustcArgs, StructuredOutput,
 };
 use anyhow::{bail, Context};
 use dioxus_cli_opt::process_file_to;
@@ -429,41 +429,50 @@ impl AppBuilder {
     }
 
     /// Create a list of environment variables that the child process will use
+    ///
+    /// We try to emulate running under `cargo` as much as possible, carrying over vars like `CARGO_MANIFEST_DIR`.
+    /// Previously, we didn't want to emulate this behavior, but now we do in order to be a good
+    /// citizen of the Rust ecosystem and allow users to use `cargo` features like `CARGO_MANIFEST_DIR`.
+    ///
+    /// Note that Dioxus apps *should not* rely on this vars being set, but libraries like Bevy do.
     pub(crate) fn child_environment_variables(
         &mut self,
         devserver_ip: Option<SocketAddr>,
         start_fullstack_on_address: Option<SocketAddr>,
         always_on_top: bool,
         build_id: BuildId,
-    ) -> Vec<(&'static str, String)> {
+    ) -> Vec<(String, String)> {
         let krate = &self.build;
 
         // Set the env vars that the clients will expect
         // These need to be stable within a release version (ie 0.6.0)
-        let mut envs = vec![
-            (dioxus_cli_config::CLI_ENABLED_ENV, "true".to_string()),
+        let mut envs: Vec<(String, String)> = vec![
             (
-                dioxus_cli_config::APP_TITLE_ENV,
+                dioxus_cli_config::CLI_ENABLED_ENV.into(),
+                "true".to_string(),
+            ),
+            (
+                dioxus_cli_config::APP_TITLE_ENV.into(),
                 krate.config.web.app.title.clone(),
             ),
             (
-                dioxus_cli_config::SESSION_CACHE_DIR,
+                dioxus_cli_config::SESSION_CACHE_DIR.into(),
                 self.build.session_cache_dir().display().to_string(),
             ),
-            (dioxus_cli_config::BUILD_ID, build_id.0.to_string()),
+            (dioxus_cli_config::BUILD_ID.into(), build_id.0.to_string()),
             (
-                dioxus_cli_config::ALWAYS_ON_TOP_ENV,
+                dioxus_cli_config::ALWAYS_ON_TOP_ENV.into(),
                 always_on_top.to_string(),
             ),
         ];
 
         if let Some(devserver_ip) = devserver_ip {
             envs.push((
-                dioxus_cli_config::DEVSERVER_IP_ENV,
+                dioxus_cli_config::DEVSERVER_IP_ENV.into(),
                 devserver_ip.ip().to_string(),
             ));
             envs.push((
-                dioxus_cli_config::DEVSERVER_PORT_ENV,
+                dioxus_cli_config::DEVSERVER_PORT_ENV.into(),
                 devserver_ip.port().to_string(),
             ));
         }
@@ -473,22 +482,42 @@ impl AppBuilder {
             .map(|f| f.verbose)
             .unwrap_or_default()
         {
-            envs.push(("RUST_BACKTRACE", "1".to_string()));
+            envs.push(("RUST_BACKTRACE".into(), "1".to_string()));
         }
 
         if let Some(base_path) = krate.base_path() {
-            envs.push((dioxus_cli_config::ASSET_ROOT_ENV, base_path.to_string()));
+            envs.push((
+                dioxus_cli_config::ASSET_ROOT_ENV.into(),
+                base_path.to_string(),
+            ));
         }
 
         if let Some(env_filter) = env::var_os("RUST_LOG").and_then(|e| e.into_string().ok()) {
-            envs.push(("RUST_LOG", env_filter));
+            envs.push(("RUST_LOG".into(), env_filter));
         }
 
         // Launch the server if we were given an address to start it on, and the build includes a server. After we
         // start the server, consume its stdout/stderr.
         if let Some(addr) = start_fullstack_on_address {
-            envs.push((dioxus_cli_config::SERVER_IP_ENV, addr.ip().to_string()));
-            envs.push((dioxus_cli_config::SERVER_PORT_ENV, addr.port().to_string()));
+            envs.push((
+                dioxus_cli_config::SERVER_IP_ENV.into(),
+                addr.ip().to_string(),
+            ));
+            envs.push((
+                dioxus_cli_config::SERVER_PORT_ENV.into(),
+                addr.port().to_string(),
+            ));
+        }
+
+        // If there's any CARGO vars in the rustc_wrapper files, push those too
+        if let Ok(res) = std::fs::read_to_string(self.build.rustc_wrapper_args_file.path()) {
+            if let Ok(res) = serde_json::from_str::<RustcArgs>(&res) {
+                for (key, value) in res.envs {
+                    if key.starts_with("CARGO_") {
+                        envs.push((key, value));
+                    }
+                }
+            }
         }
 
         envs
@@ -794,7 +823,7 @@ impl AppBuilder {
     /// paths right now, but they will when we start to enable things like swift integration.
     ///
     /// Server/liveview/desktop are all basically the same, though
-    fn open_with_main_exe(&mut self, envs: Vec<(&str, String)>, args: &[String]) -> Result<()> {
+    fn open_with_main_exe(&mut self, envs: Vec<(String, String)>, args: &[String]) -> Result<()> {
         let main_exe = self.app_exe();
 
         tracing::debug!("Opening app with main exe: {main_exe:?}");
@@ -802,7 +831,6 @@ impl AppBuilder {
         let mut child = Command::new(main_exe)
             .args(args)
             .envs(envs)
-            .env_remove("CARGO_MANIFEST_DIR") // running under `dx` shouldn't expose cargo-only :
             .stderr(Stdio::piped())
             .stdout(Stdio::piped())
             .kill_on_drop(true)
@@ -839,7 +867,7 @@ impl AppBuilder {
     ///
     /// TODO(jon): we should probably check if there's a simulator running before trying to install,
     /// and open the simulator if we have to.
-    async fn open_ios_sim(&mut self, envs: Vec<(&str, String)>) -> Result<()> {
+    async fn open_ios_sim(&mut self, envs: Vec<(String, String)>) -> Result<()> {
         tracing::debug!("Installing app to simulator {:?}", self.build.root_dir());
 
         let res = Command::new("xcrun")
@@ -865,7 +893,6 @@ impl AppBuilder {
             .arg("booted")
             .arg(self.build.bundle_identifier())
             .envs(ios_envs)
-            .env_remove("CARGO_MANIFEST_DIR")
             .stderr(Stdio::piped())
             .stdout(Stdio::piped())
             .kill_on_drop(true)
@@ -1209,7 +1236,7 @@ We checked the folders:
         &self,
         root: bool,
         devserver_socket: SocketAddr,
-        envs: Vec<(&'static str, String)>,
+        envs: Vec<(String, String)>,
     ) -> Result<()> {
         let apk_path = self.build.debug_apk_path();
         let session_cache = self.build.session_cache_dir();
