@@ -46,6 +46,8 @@ pub mod extensions {
     pub use crate::elements::extensions::*;
 }
 
+pub use prelude::*;
+
 pub mod prelude {
     pub use crate::attribute_groups::{GlobalAttributesExtension, SvgAttributesExtension};
     pub use crate::elements::extensions::*;

@@ -76,19 +76,6 @@ pub(crate) mod innerlude {
     pub type Component<P = ()> = fn(P) -> Element;
 }
 
-// pub use crate::innerlude::{
-//     fc_to_builder, generation, schedule_update, schedule_update_any, use_hook, vdom_is_rendering,
-//     AnyValue, Attribute, AttributeValue, CapturedError, Component, ComponentFunction, DynamicNode,
-//     Element, ElementId, Event, Fragment, HasAttributes, IntoDynNode, LaunchConfig,
-//     ListenerCallback, MarkerWrapper, Mutation, Mutations, NoOpMutations, Ok, Properties, Result,
-//     Runtime, ScopeId, ScopeState, SpawnIfAsync, Task, Template, TemplateAttribute, TemplateNode,
-//     VComponent, VNode, VNodeInner, VPlaceholder, VText, VirtualDom, WriteMutations,
-// };
-
-/// The purpose of this module is to alleviate imports of many common types
-///
-/// This includes types like [`Element`], and [`Component`].
-// pub mod prelude {
 pub use crate::innerlude::{
     consume_context, consume_context_from_scope, current_owner, current_scope_id, fc_to_builder,
     force_all_dirty, generation, has_context, needs_update, needs_update_any, parent_scope,
@@ -105,5 +92,5 @@ pub use crate::innerlude::{
     Task, Template, TemplateAttribute, TemplateNode, VComponent, VNode, VNodeInner, VPlaceholder,
     VText, VirtualDom, WriteMutations,
 };
-// }
+
 pub use const_format;
