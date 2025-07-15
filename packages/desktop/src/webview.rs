@@ -315,7 +315,12 @@ impl WebviewInstance {
                 // We don't want to allow any navigation
                 // We only want to serve the index file and assets
                 if var.starts_with("dioxus://") || var.starts_with("http://dioxus.") {
-                    true
+                    let Ok(url) = url::Url::parse(&var) else {
+                        return false;
+                    };
+                    // After the page loads it navigates to `/no_reload` to prevent reloads
+                    // If the page is on `/no_reload`, don't allow the page to reload for form navigation
+                    !url.path().starts_with("/no_reload")
                 } else {
                     if var.starts_with("http://")
                         || var.starts_with("https://")
