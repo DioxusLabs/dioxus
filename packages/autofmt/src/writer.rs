@@ -869,7 +869,6 @@ impl<'a> Writer<'a> {
         }
 
         self.write_mulitiline_tokens(output)?;
-        self.write_inline_comments(src_span.end(), 0)?;
 
         Ok(())
     }
