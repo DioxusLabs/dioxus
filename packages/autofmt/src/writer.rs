@@ -36,20 +36,35 @@ impl<'a> Writer<'a> {
         Some(self.out.buf)
     }
 
-    pub fn write_rsx_call(&mut self, body: &TemplateBody) -> Result {
-        if body.roots.is_empty() {
+    pub fn write_rsx_call(&mut self, body: &CallBody) -> Result {
+        if body.body.roots.is_empty() {
             return Ok(());
         }
 
-        if Self::is_short_rsx_call(&body.roots) {
+        if Self::is_short_rsx_call(&body.body.roots) {
             write!(self.out, " ")?;
-            self.write_ident(&body.roots[0])?;
+            self.write_ident(&body.body.roots[0])?;
             write!(self.out, " ")?;
         } else {
             self.out.new_line()?;
-            self.write_body_indented(&body.roots)?
+            self.write_body_indented(&body.body.roots)?;
+            self.write_trailing_body_comments(body)?;
         }
 
+        Ok(())
+    }
+
+    fn write_trailing_body_comments(&mut self, body: &CallBody) -> Result {
+        if let Some(span) = body.span {
+            self.out.indent_level += 1;
+            let comments = self.accumulate_comments(span.span().end());
+            if !comments.is_empty() {
+                self.out.new_line()?;
+                self.apply_comments(comments)?;
+                self.out.buf.pop(); // remove the trailing newline, forcing us to end at the end of the comment
+            }
+            self.out.indent_level -= 1;
+        }
         Ok(())
     }
 
@@ -301,7 +316,8 @@ impl<'a> Writer<'a> {
         let children_len = self
             .is_short_children(children)
             .map_err(|_| std::fmt::Error)?;
-        let is_small_children = children_len.is_some();
+        let has_trailing_comments = self.has_trailing_comments(children, brace);
+        let is_small_children = children_len.is_some() && !has_trailing_comments;
 
         // if we have one long attribute and a lot of children, place the attrs on top
         if is_short_attr_list && !is_small_children {
@@ -310,7 +326,11 @@ impl<'a> Writer<'a> {
 
         // even if the attr is long, it should be put on one line
         // However if we have childrne we need to just spread them out for readability
-        if !is_short_attr_list && attributes.len() <= 1 && spreads.is_empty() {
+        if !is_short_attr_list
+            && attributes.len() <= 1
+            && spreads.is_empty()
+            && !has_trailing_comments
+        {
             if children.is_empty() {
                 opt_level = ShortOptimization::Oneliner;
             } else {
@@ -328,7 +348,11 @@ impl<'a> Writer<'a> {
         }
 
         // If there's nothing at all, empty optimization
-        if attributes.is_empty() && children.is_empty() && spreads.is_empty() {
+        if attributes.is_empty()
+            && children.is_empty()
+            && spreads.is_empty()
+            && !has_trailing_comments
+        {
             opt_level = ShortOptimization::Empty;
 
             // Write comments if they exist
@@ -932,9 +956,8 @@ impl<'a> Writer<'a> {
     }
 
     fn final_span_of_node(node: &BodyNode) -> Span {
-        // Write the trailing comments if there are any
         // Get the ending span of the node
-        let span = match node {
+        match node {
             BodyNode::Element(el) => el
                 .brace
                 .as_ref()
@@ -952,8 +975,7 @@ impl<'a> Writer<'a> {
                 Some(b) => b.span.span(),
                 None => i.then_brace.span.span(),
             },
-        };
-        span
+        }
     }
 
     fn final_span_of_attr(&self, attr: &Attribute) -> Span {
@@ -968,5 +990,46 @@ impl<'a> Writer<'a> {
                 .map(|v| v.span())
                 .unwrap_or_else(|| ex.then_value.span()),
         }
+    }
+
+    fn has_trailing_comments(&self, children: &[BodyNode], brace: &Brace) -> bool {
+        let brace_span = brace.span.span();
+
+        let Some(last_node) = children.last() else {
+            return false;
+        };
+
+        // Check for any comments after the last node between the last brace
+        let final_span = Self::final_span_of_node(last_node);
+        let final_span = final_span.end();
+        let mut line = final_span.line;
+        let mut column = final_span.column;
+        loop {
+            let Some(src_line) = self.src.get(line - 1) else {
+                return false;
+            };
+
+            // the line might contain emoji or other unicode characters - this will cause issues
+            let Some(mut whitespace) = src_line.get(column..).map(|s| s.trim()) else {
+                return false;
+            };
+
+            let offset = 0;
+            whitespace = whitespace[offset..].trim();
+
+            if whitespace.starts_with("//") {
+                return true;
+            }
+
+            if line == brace_span.end().line {
+                // If we reached the end of the brace span, stop
+                break;
+            }
+
+            line += 1;
+            column = 0; // reset column to the start of the next line
+        }
+
+        false
     }
 }
