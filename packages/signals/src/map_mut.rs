@@ -36,6 +36,14 @@ where
     }
 }
 
+impl<V, O, F, FMut> Copy for MappedMutSignal<O, V, F, FMut>
+where
+    V: Readable + Copy,
+    F: Copy,
+    FMut: Copy,
+{
+}
+
 impl<V, O, F, FMut> MappedMutSignal<O, V, F, FMut>
 where
     O: ?Sized,

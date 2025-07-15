@@ -25,6 +25,13 @@ where
     }
 }
 
+impl<V, O, F> Copy for MappedSignal<O, V, F>
+where
+    V: Readable + Copy,
+    F: Copy,
+{
+}
+
 impl<V, O, F> MappedSignal<O, V, F>
 where
     O: ?Sized,
