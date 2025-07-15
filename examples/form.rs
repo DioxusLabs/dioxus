@@ -37,8 +37,6 @@ fn app() -> Element {
 
                     // On desktop/liveview, the form will not navigate the page - the expectation is that you handle
                     // The form event.
-                    // However, if your form doesn't have a submit handler, it might navigate the page depending on the webview.
-                    // We suggest always attaching a submit handler to the form.
                     onsubmit: move |ev| {
                         println!("Submit event: {:#?}", ev);
                         submitted_values.set(ev.values());

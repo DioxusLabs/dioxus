@@ -93,6 +93,9 @@ export class NativeInterpreter extends JSChannel_ {
       }
     });
 
+    // Prevent form submissions from navigating on desktop and webview. Form submissions
+    startBlockingForms();
+
     // @ts-ignore - wry gives us this
     this.ipc = window.ipc;
 
@@ -277,15 +280,6 @@ export class NativeInterpreter extends JSChannel_ {
       element: realId,
       bubbles,
     };
-
-    // This should:
-    // - prevent form submissions from navigating
-    // - prevent anchor tags from navigating
-    // - prevent buttons from submitting forms
-    // - let the virtualdom attempt to prevent the event
-    if (event.type === "submit") {
-      event.preventDefault();
-    }
 
     // liveview does not have synchronous event handling, so we need to send the event to the host
     if (this.liveview) {
@@ -539,4 +533,46 @@ function getTargetId(target: EventTarget): NodeId | null {
   }
 
   return parseInt(realId);
+}
+
+/**
+ * Block form submissions globally. Submitting forms reloads the page which will break the edit stream.
+ */
+function startBlockingForms(): void {
+  const attachBlocker = (form: HTMLFormElement): void => {
+    // If we already have a listener attached, don't attach another one
+    if ((form as any).__submissionsBlocked) return;
+    form.addEventListener("submit", (evt) => {
+      evt.preventDefault();
+    });
+    (form as any).__submissionsBlocked = true;
+  };
+
+  // Prevent form submissions on all forms that are already on the page
+  document.querySelectorAll<HTMLFormElement>("form").forEach(attachBlocker);
+
+  // Listen for any new forms that are added to the page by the interpreter
+  // or javascript through eval or other libraries
+  const observer = new MutationObserver((mutations) => {
+    for (const m of mutations) {
+      // Look through each added node
+      m.addedNodes.forEach((node) => {
+        if (node.nodeType !== Node.ELEMENT_NODE) return;
+
+        const el = node as Element;
+        // Prevent the default form submission if the element is a form
+        if (el.tagName === "FORM") {
+          attachBlocker(el as HTMLFormElement);
+        }
+        // If the element contains forms, attach the blocker to each form
+        el.querySelectorAll<HTMLFormElement>("form").forEach(attachBlocker);
+      });
+    }
+  });
+
+  // Observe any changes in the document's body
+  observer.observe(document.body, {
+    childList: true,
+    subtree: true,
+  });
 }
