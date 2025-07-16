@@ -1,13 +1,14 @@
-use crate::{default_impl, fmt_impls, write_impls, Global};
-use crate::{read::*, write::*, CopyValue, GlobalMemo, GlobalSignal, ReadableRef};
-use crate::{Memo, WritableRef};
+use crate::{
+    default_impl, fmt_impls, read::*, write::*, write_impls, CopyValue, Global, GlobalMemo,
+    GlobalSignal, Memo, ReadableRef, WritableRef,
+};
 use dioxus_core::{IntoAttributeValue, IntoDynNode, ReactiveContext, ScopeId};
 use generational_box::{AnyStorage, BorrowResult, Storage, SyncStorage, UnsyncStorage};
-use std::sync::Arc;
 use std::{
     any::Any,
     collections::HashSet,
     ops::{Deref, DerefMut},
+    sync::Arc,
     sync::Mutex,
 };
 

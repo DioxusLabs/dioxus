@@ -1,7 +1,7 @@
 use crate::dom::WebsysDom;
-
-use dioxus_core::{AttributeValue, ElementId, TemplateAttribute, TemplateNode};
-use dioxus_core::{Template, WriteMutations};
+use dioxus_core::{
+    AttributeValue, ElementId, Template, TemplateAttribute, TemplateNode, WriteMutations,
+};
 use dioxus_core_types::event_bubbles;
 use dioxus_interpreter_js::minimal_bindings;
 use wasm_bindgen::JsCast;
