@@ -126,7 +126,7 @@ mod server_fn_impl {
             }
         }
 
-        /// Clone a value from the shared server context. If you are using [`DioxusRouterExt`](crate::prelude::DioxusRouterExt), any values you insert into
+        /// Clone a value from the shared server context. If you are using [`DioxusRouterExt`](crate::DioxusRouterExt), any values you insert into
         /// the launch context will also be available in the server context.
         ///
         /// Example:
