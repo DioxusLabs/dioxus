@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use dioxus::prelude::*;
 use dioxus_stores::use_store;
 
@@ -51,8 +53,11 @@ fn Child(value: WriteSignal<u32>) -> Element {
 }
 
 #[derive(Store)]
-struct Value {
+struct Value<D>
+where
+    D: Display
+{
     #[store(foreign)]
-    count: u32,
-    values: Vec<Value>,
+    count: D,
+    values: Vec<Value<D>>,
 }
