@@ -26,13 +26,13 @@ pub fn store(input: TokenStream) -> TokenStream {
 fn derive_store(input: DeriveInput) -> syn::Result<TokenStream2> {
     match &input.data {
         syn::Data::Struct(data_struct) => derive_store_struct(&input, data_struct),
-        syn::Data::Enum(data_enum) => {
+        syn::Data::Enum(_) => {
             return Err(syn::Error::new(
                 input.span(),
-                "Store macro does not support enums",
+                "Store macro does not yet support enums",
             ))
         }
-        syn::Data::Union(data_union) => {
+        syn::Data::Union(_) => {
             return Err(syn::Error::new(
                 input.span(),
                 "Store macro does not support unions",

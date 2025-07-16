@@ -5,6 +5,18 @@ fn main() {
     dioxus::launch(app);
 }
 
+#[derive(Store)]
+struct Value {
+    count: DoubleCount,
+    values: Vec<Value>,
+}
+
+#[derive(Store, Default)]
+struct DoubleCount {
+    #[store(foreign)]
+    count: i32,
+}
+
 fn app() -> Element {
     let value = use_store(|| Value {
         count: Default::default(),
@@ -22,16 +34,9 @@ fn app() -> Element {
 }
 
 #[component]
-fn Tree(#[props(into)] value: Store<Value>) -> Element {
-    let count = value.count();
-    use_effect(move || {
-        // This effect will run whenever the value changes
-        println!("Child component value changed: {}", count.count().read());
-    });
+fn Tree(value: Store<Value>) -> Element {
     rsx! {
-        h2 { "Child component with count {count.count().read()}" }
-        button { onclick: move |_| *count.count().write() += 1, "Increment" }
-        button { onclick: move |_| *count.count().write() -= 1, "Decrement" }
+        Counter { count: value.count().count().boxed_mut() }
         button { onclick: move |_| value.values().push(Value{ count: Default::default(), values: Vec::new() }), "Push child" }
         ul {
             for child in value.values().iter() {
@@ -43,14 +48,13 @@ fn Tree(#[props(into)] value: Store<Value>) -> Element {
     }
 }
 
-#[derive(Store)]
-struct Value {
-    count: DoubleCount,
-    values: Vec<Value>,
-}
+#[component]
+fn Counter(count: WriteSignal<i32>) -> Element {
+    println!("Child counter run: {}", count);
 
-#[derive(Store, Default)]
-struct DoubleCount {
-    #[store(foreign)]
-    count: i32,
+    rsx! {
+        h2 { "Child component with count {count}" }
+        button { onclick: move |_| count += 1, "Increment" }
+        button { onclick: move |_| count -= 1, "Decrement" }
+    }
 }
