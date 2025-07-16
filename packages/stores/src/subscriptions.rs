@@ -1,13 +1,11 @@
+use crate::SelectorStorage;
+use dioxus_core::prelude::ReactiveContext;
+use dioxus_signals::{CopyValue, ReadableExt, Subscribers, UnsyncStorage, Writable};
 use std::{
     collections::{HashMap, HashSet},
     ops::Deref,
     sync::{Arc, Mutex},
 };
-
-use dioxus_core::prelude::ReactiveContext;
-use dioxus_signals::{CopyValue, ReadableExt, Subscribers, UnsyncStorage, Writable};
-
-use crate::SelectorStorage;
 
 #[derive(Clone, Default)]
 pub(crate) struct SelectorNode {
@@ -34,13 +32,12 @@ impl SelectorNode {
     }
 
     fn visit_depth_first(&self, f: &mut dyn FnMut(&SelectorNode)) {
-        f(self);
         for child in self.root.values() {
-            child.visit_depth_first(&mut *f);
+            child.visit_depth_first(f);
         }
     }
 
-    fn write(&self, path: &[u32]) {
+    fn mark_children_dirty(&self, path: &[u32]) {
         let Some(node) = self.find(path) else {
             return;
         };
@@ -49,6 +46,21 @@ impl SelectorNode {
         node.visit_depth_first(&mut |node| {
             node.mark_dirty();
         });
+    }
+
+    fn mark_dirty_at_and_after_index(&self, path: &[u32], index: usize) {
+        let Some(node) = self.find(path) else {
+            return;
+        };
+
+        // Mark the nodes before the index as dirty
+        for (i, child) in node.root.iter() {
+            if *i as usize >= index {
+                child.visit_depth_first(&mut |node| {
+                    node.mark_dirty();
+                });
+            }
+        }
     }
 
     fn mark_dirty_shallow(&self, path: &[u32]) {
@@ -139,11 +151,15 @@ impl<S: SelectorStorage> StoreSubscriptions<S> {
     }
 
     pub(crate) fn mark_dirty(&self, key: &[u32]) {
-        self.root.read().write(key);
+        self.root.read().mark_children_dirty(key);
     }
 
     pub(crate) fn mark_dirty_shallow(&self, key: &[u32]) {
         self.root.read().mark_dirty_shallow(key);
+    }
+
+    pub(crate) fn mark_dirty_at_and_after_index(&self, key: &[u32], index: usize) {
+        self.root.read().mark_dirty_at_and_after_index(key, index);
     }
 
     pub(crate) fn subscribers(&self, key: &[u32]) -> Option<Subscribers> {

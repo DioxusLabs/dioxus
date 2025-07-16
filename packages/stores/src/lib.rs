@@ -1,5 +1,6 @@
 #![allow(clippy::type_complexity)]
 
+use crate::subscriptions::{SelectorNode, StoreSubscriptions, TinyVec};
 use dioxus_core::use_hook;
 use dioxus_signals::{
     BorrowError, BorrowMutError, CopyValue, MappedMutSignal, Readable, ReadableRef, Storage,
@@ -7,12 +8,9 @@ use dioxus_signals::{
 };
 
 mod foreign;
+pub use foreign::*;
 mod subscriptions;
 mod vec;
-
-pub use foreign::*;
-
-use crate::subscriptions::{SelectorNode, StoreSubscriptions, TinyVec};
 
 // Re-exported for the macro
 #[doc(hidden)]
@@ -81,8 +79,16 @@ impl<W, S: SelectorStorage> SelectorScope<W, S> {
         self.store.track(&self.path);
     }
 
+    fn mark_dirty(&self) {
+        self.store.mark_dirty(&self.path);
+    }
+
     fn mark_dirty_shallow(&self) {
         self.store.mark_dirty_shallow(&self.path);
+    }
+
+    fn mark_dirty_at_and_after_index(&self, index: usize) {
+        self.store.mark_dirty_at_and_after_index(&self.path, index);
     }
 
     /// Map the writer to a new type.
@@ -112,7 +118,7 @@ impl<W: Readable, S: SelectorStorage> SelectorScope<W, S> {
 
 impl<W: Writable, S: SelectorStorage> SelectorScope<W, S> {
     fn try_write_unchecked(&self) -> Result<WritableRef<'static, W>, BorrowMutError> {
-        self.store.mark_dirty(&self.path);
+        self.mark_dirty();
         self.write.try_write_unchecked()
     }
 }

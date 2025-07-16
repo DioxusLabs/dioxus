@@ -39,7 +39,7 @@ fn Tree(value: Store<Value>) -> Element {
         Counter { count: value.count().count().boxed_mut() }
         button { onclick: move |_| value.values().push(Value{ count: Default::default(), values: Vec::new() }), "Push child" }
         ul {
-            for child in value.values().iter() {
+            for child in value.values().into_iter() {
                 li {
                     Tree { value: child }
                 }

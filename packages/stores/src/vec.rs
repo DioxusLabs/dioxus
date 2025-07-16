@@ -1,8 +1,6 @@
-use std::marker::PhantomData;
-
-use dioxus_signals::{MappedMutSignal, ReadableExt, UnsyncStorage, Writable};
-
 use crate::{CreateSelector, SelectorScope, SelectorStorage, Storable, Store};
+use dioxus_signals::{MappedMutSignal, ReadableExt, UnsyncStorage, Writable};
+use std::marker::PhantomData;
 
 impl<T> Storable for Vec<T> {
     type Store<View, S: SelectorStorage> = VecSelector<View, T, S>;
@@ -75,7 +73,7 @@ impl<
         self.selector.write.read().is_empty()
     }
 
-    pub fn iter(
+    pub fn into_iter(
         self,
     ) -> impl Iterator<
         Item = Store<
@@ -95,5 +93,42 @@ impl<
     pub fn push(self, value: T) {
         self.selector.mark_dirty_shallow();
         self.selector.write.write_unchecked().push(value);
+    }
+
+    pub fn remove(self, index: u32) -> T {
+        self.selector.mark_dirty_shallow();
+        self.selector.mark_dirty_at_and_after_index(index as usize);
+        self.selector.write.write_unchecked().remove(index as usize)
+    }
+
+    pub fn insert(self, index: u32, value: T) {
+        self.selector.mark_dirty_shallow();
+        self.selector.mark_dirty_at_and_after_index(index as usize);
+        self.selector
+            .write
+            .write_unchecked()
+            .insert(index as usize, value);
+    }
+
+    pub fn clear(self) {
+        self.selector.mark_dirty();
+        self.selector.write.write_unchecked().clear();
+    }
+
+    pub fn retain(self, mut f: impl FnMut(&T) -> bool) {
+        let mut index = 0;
+        let mut first_removed_index = None;
+        self.selector.write.write_unchecked().retain(|item| {
+            let keep = f(item);
+            if !keep {
+                first_removed_index = first_removed_index.or(Some(index));
+            }
+            index += 1;
+            keep
+        });
+        if let Some(index) = first_removed_index {
+            self.selector.mark_dirty_shallow();
+            self.selector.mark_dirty_at_and_after_index(index);
+        }
     }
 }
