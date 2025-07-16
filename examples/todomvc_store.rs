@@ -4,6 +4,7 @@ use dioxus::prelude::{
     dioxus_stores::{use_store, Store},
     *,
 };
+use std::collections::HashMap;
 
 const STYLE: Asset = asset!("/examples/assets/todomvc.css");
 
@@ -15,7 +16,7 @@ fn app() -> Element {
     // We store the todos in a HashMap in a Signal.
     // Each key is the id of the todo, and the value is the todo itself.
     let todos = use_store(|| TodoState {
-        todos: Vec::new(),
+        todos: HashMap::new(),
         filter: FilterState::All,
     });
 
@@ -26,7 +27,7 @@ fn app() -> Element {
     // Whenever the todos change, the active_todo_count will be recalculated.
     let active_todo_count = use_memo(move || {
         todo_list
-            .iter()
+            .values()
             .filter(|item| !item.checked().cloned())
             .count()
     });
@@ -37,7 +38,6 @@ fn app() -> Element {
     let filtered_todos = use_memo(move || {
         todo_list
             .iter()
-            .enumerate()
             .filter(|(_, item)| match filter() {
                 FilterState::All => true,
                 FilterState::Active => !item.checked().cloned(),
@@ -51,7 +51,7 @@ fn app() -> Element {
     // If all todos are checked, uncheck them all. If any are unchecked, check them all.
     let toggle_all = move |_| {
         let check = active_todo_count() != 0;
-        for item in todo_list.iter() {
+        for item in todo_list.values() {
             item.checked().set(check);
         }
     };
@@ -143,7 +143,7 @@ fn TodoHeader(mut todos: Store<TodoState>) -> Element {
 fn TodoEntry(mut todos: Store<TodoState>, id: u32) -> Element {
     let mut is_editing = use_signal(|| false);
 
-    let entry = todos.todos().index(id as usize);
+    let entry = todos.todos().get(id);
     let checked = entry.checked();
     let contents = entry.contents();
 
@@ -173,7 +173,7 @@ fn TodoEntry(mut todos: Store<TodoState>, id: u32) -> Element {
                     class: "destroy",
                     onclick: move |evt| {
                         evt.prevent_default();
-                        todos.todos().remove(id as usize);
+                        todos.todos().remove(&id);
                     },
                 }
             }
@@ -203,7 +203,7 @@ fn ListFooter(mut todos: Store<TodoState>, active_todo_count: ReadSignal<usize>)
     // We use a memoized signal to calculate whether we should show the "Clear completed" button.
     // This will recompute whenever the todos change, and if the value is true, the button will be shown.
     let show_clear_completed =
-        use_memo(move || todos.todos().iter().any(|todo| todo.checked().cloned()));
+        use_memo(move || todos.todos().values().any(|todo| todo.checked().cloned()));
     let mut filter = todos.filter();
 
     rsx! {
@@ -240,7 +240,7 @@ fn ListFooter(mut todos: Store<TodoState>, active_todo_count: ReadSignal<usize>)
             if show_clear_completed() {
                 button {
                     class: "clear-completed",
-                    onclick: move |_| todos.todos().retain(|todo| !todo.checked),
+                    onclick: move |_| todos.todos().retain(|_, todo| !todo.checked),
                     "Clear completed"
                 }
             }
@@ -250,7 +250,7 @@ fn ListFooter(mut todos: Store<TodoState>, active_todo_count: ReadSignal<usize>)
 
 #[derive(Store, PartialEq, Clone)]
 struct TodoState {
-    todos: Vec<TodoItem>,
+    todos: HashMap<u32, TodoItem>,
     #[store(foreign)]
     filter: FilterState,
 }

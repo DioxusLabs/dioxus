@@ -1,8 +1,10 @@
 use crate::SelectorStorage;
 use dioxus_core::prelude::ReactiveContext;
 use dioxus_signals::{CopyValue, ReadableExt, Subscribers, UnsyncStorage, Writable};
+use std::hash::{BuildHasher, Hasher};
 use std::{
     collections::{HashMap, HashSet},
+    hash::Hash,
     ops::Deref,
     sync::{Arc, Mutex},
 };
@@ -121,8 +123,14 @@ impl Deref for TinyVec {
 }
 
 #[derive(Default)]
+pub(crate) struct StoreSubscriptionsInner {
+    root: SelectorNode,
+    hasher: std::collections::hash_map::RandomState,
+}
+
+#[derive(Default)]
 pub(crate) struct StoreSubscriptions<S: SelectorStorage = UnsyncStorage> {
-    root: CopyValue<SelectorNode, S>,
+    inner: CopyValue<StoreSubscriptionsInner, S>,
 }
 
 impl<S: SelectorStorage> Clone for StoreSubscriptions<S> {
@@ -135,36 +143,48 @@ impl<S: SelectorStorage> Copy for StoreSubscriptions<S> {}
 
 impl<S: SelectorStorage> PartialEq for StoreSubscriptions<S> {
     fn eq(&self, other: &Self) -> bool {
-        self.root == other.root
+        self.inner == other.inner
     }
 }
 
 impl<S: SelectorStorage> StoreSubscriptions<S> {
     pub(crate) fn new() -> Self {
         Self {
-            root: CopyValue::new_maybe_sync(SelectorNode::default()),
+            inner: CopyValue::new_maybe_sync(StoreSubscriptionsInner {
+                root: SelectorNode::default(),
+                hasher: std::collections::hash_map::RandomState::new(),
+            }),
         }
     }
 
+    pub(crate) fn hash(&self, index: impl Hash) -> u32 {
+        let mut hasher = self.inner.write_unchecked().hasher.build_hasher();
+        index.hash(&mut hasher);
+        hasher.finish() as u32
+    }
+
     pub(crate) fn track(&self, key: &[u32]) {
-        self.root.write_unchecked().read(key);
+        self.inner.write_unchecked().root.read(key);
     }
 
     pub(crate) fn mark_dirty(&self, key: &[u32]) {
-        self.root.read().mark_children_dirty(key);
+        self.inner.read().root.mark_children_dirty(key);
     }
 
     pub(crate) fn mark_dirty_shallow(&self, key: &[u32]) {
-        self.root.read().mark_dirty_shallow(key);
+        self.inner.read().root.mark_dirty_shallow(key);
     }
 
     pub(crate) fn mark_dirty_at_and_after_index(&self, key: &[u32], index: usize) {
-        self.root.read().mark_dirty_at_and_after_index(key, index);
+        self.inner
+            .read()
+            .root
+            .mark_dirty_at_and_after_index(key, index);
     }
 
     pub(crate) fn subscribers(&self, key: &[u32]) -> Option<Subscribers> {
-        let read = self.root.read();
-        let node = read.find(key)?;
+        let read = self.inner.read();
+        let node = read.root.find(key)?;
         Some(node.subscribers.clone())
     }
 }

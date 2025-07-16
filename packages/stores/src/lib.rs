@@ -1,6 +1,8 @@
 #![allow(clippy::type_complexity)]
 
-use crate::subscriptions::{SelectorNode, StoreSubscriptions, TinyVec};
+use std::hash::Hash;
+
+use crate::subscriptions::{StoreSubscriptions, StoreSubscriptionsInner, TinyVec};
 use dioxus_core::use_hook;
 use dioxus_signals::{
     BorrowError, BorrowMutError, CopyValue, MappedMutSignal, Readable, ReadableRef, Storage,
@@ -9,8 +11,11 @@ use dioxus_signals::{
 
 mod foreign;
 pub use foreign::*;
+mod hashmap;
 mod subscriptions;
 mod vec;
+pub use hashmap::*;
+pub use vec::*;
 
 // Re-exported for the macro
 #[doc(hidden)]
@@ -19,8 +24,8 @@ pub mod macro_helpers {
 }
 
 #[allow(private_bounds)]
-pub trait SelectorStorage: Storage<SelectorNode> {}
-impl<S: Storage<SelectorNode>> SelectorStorage for S {}
+pub trait SelectorStorage: Storage<StoreSubscriptionsInner> {}
+impl<S: Storage<StoreSubscriptionsInner>> SelectorStorage for S {}
 
 pub struct SelectorScope<W, S: SelectorStorage = UnsyncStorage> {
     path: TinyVec,
@@ -52,6 +57,21 @@ impl<W, S: SelectorStorage> Copy for SelectorScope<W, S> where W: Copy {}
 impl<W, S: SelectorStorage> SelectorScope<W, S> {
     fn new(path: TinyVec, store: StoreSubscriptions<S>, write: W) -> Self {
         Self { path, store, write }
+    }
+
+    pub fn hash_scope<U: 'static, F, FMut>(
+        self,
+        index: impl Hash,
+        map: F,
+        map_mut: FMut,
+    ) -> SelectorScope<MappedMutSignal<U, W, F, FMut>, S>
+    where
+        W: Writable<Storage = S> + Copy + 'static,
+        F: Fn(&W::Target) -> &U + Copy + 'static,
+        FMut: Fn(&mut W::Target) -> &mut U + Copy + 'static,
+    {
+        let hash = self.store.hash(index);
+        self.scope(hash, map, map_mut)
     }
 
     pub fn scope<U: 'static, F, FMut>(
