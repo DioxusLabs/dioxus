@@ -141,7 +141,7 @@ fn derive_store_struct(input: &DeriveInput, structure: &DataStruct) -> syn::Resu
             Ok::<_, syn::Error>(quote! {
                 fn #function_name(
                     self,
-                ) -> <#foreign_type as dioxus_stores::Selectable>::Selector<
+                ) -> <#foreign_type as dioxus_stores::Storable>::Store<
                     dioxus_stores::macro_helpers::dioxus_signals::MappedMutSignal<#field_type, __W>,
                     __S,
                 > {
@@ -159,8 +159,8 @@ fn derive_store_struct(input: &DeriveInput, structure: &DataStruct) -> syn::Resu
 
     // Generate the store implementation
     let expanded = quote! {
-        impl #impl_generics dioxus_stores::Selectable for #struct_name #ty_generics #where_clause {
-            type Selector<__W, __S: dioxus_stores::SelectorStorage> = #selector_name #selector_ty_generics;
+        impl #impl_generics dioxus_stores::Storable for #struct_name #ty_generics #where_clause {
+            type Store<__W, __S: dioxus_stores::SelectorStorage> = #selector_name #selector_ty_generics;
         }
 
         struct #selector_name #selector_generics #selector_where_clause {

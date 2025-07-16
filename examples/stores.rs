@@ -1,4 +1,4 @@
-use dioxus::prelude::{dioxus_stores::Selector, *};
+use dioxus::prelude::{dioxus_stores::Store, *};
 use dioxus_stores::use_store;
 
 fn main() {
@@ -22,8 +22,8 @@ fn app() -> Element {
 }
 
 #[component]
-fn Tree(#[props(into)] value: Selector<Value>) -> Element {
-    let mut count = value.count();
+fn Tree(#[props(into)] value: Store<Value>) -> Element {
+    let count = value.count();
     use_effect(move || {
         // This effect will run whenever the value changes
         println!("Child component value changed: {}", count.count().read());

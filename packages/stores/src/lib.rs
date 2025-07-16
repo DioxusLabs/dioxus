@@ -340,11 +340,11 @@ impl<W: Writable, S: SelectorStorage> SelectorScope<W, S> {
     }
 }
 
-pub type Selector<T, W = WriteSignal<T>, S = UnsyncStorage> = <T as Selectable>::Selector<W, S>;
+pub type Store<T, W = WriteSignal<T>, S = UnsyncStorage> = <T as Storable>::Store<W, S>;
 
-pub fn create_maybe_sync_store<T: Selectable, S: SelectorStorage + Storage<T>>(
+pub fn create_maybe_sync_store<T: Storable, S: SelectorStorage + Storage<T>>(
     value: T,
-) -> Selector<T, MappedMutSignal<T, CopyValue<T, S>>, S> {
+) -> Store<T, MappedMutSignal<T, CopyValue<T, S>>, S> {
     let store = StoreSubscriptions::new();
     let value = CopyValue::new_maybe_sync(value);
 
@@ -355,33 +355,31 @@ pub fn create_maybe_sync_store<T: Selectable, S: SelectorStorage + Storage<T>>(
         path,
         write: value.map_mut(map, map_mut),
     };
-    T::Selector::new(selector)
+    T::Store::new(selector)
 }
 
-pub fn use_maybe_sync_store<T: Selectable, S: SelectorStorage + Storage<T>>(
+pub fn use_maybe_sync_store<T: Storable, S: SelectorStorage + Storage<T>>(
     init: impl Fn() -> T,
-) -> Selector<T, MappedMutSignal<T, CopyValue<T, S>>, S>
+) -> Store<T, MappedMutSignal<T, CopyValue<T, S>>, S>
 where
-    Selector<T, MappedMutSignal<T, CopyValue<T, S>>, S>: Clone,
+    Store<T, MappedMutSignal<T, CopyValue<T, S>>, S>: Clone,
 {
     use_hook(move || create_maybe_sync_store(init()))
 }
 
-pub fn create_store<T: Selectable>(value: T) -> Selector<T, MappedMutSignal<T, CopyValue<T>>> {
+pub fn create_store<T: Storable>(value: T) -> Store<T, MappedMutSignal<T, CopyValue<T>>> {
     create_maybe_sync_store::<T, UnsyncStorage>(value)
 }
 
-pub fn use_store<T: Selectable>(
-    init: impl Fn() -> T,
-) -> Selector<T, MappedMutSignal<T, CopyValue<T>>>
+pub fn use_store<T: Storable>(init: impl Fn() -> T) -> Store<T, MappedMutSignal<T, CopyValue<T>>>
 where
-    Selector<T, MappedMutSignal<T, CopyValue<T>>>: Clone,
+    Store<T, MappedMutSignal<T, CopyValue<T>>>: Clone,
 {
     use_hook(move || create_store(init()))
 }
 
-pub trait Selectable {
-    type Selector<View, S: SelectorStorage>: CreateSelector<View = View, Storage = S>;
+pub trait Storable {
+    type Store<View, S: SelectorStorage>: CreateSelector<View = View, Storage = S>;
 }
 
 pub trait CreateSelector {
@@ -391,8 +389,8 @@ pub trait CreateSelector {
     fn new(selector: SelectorScope<Self::View, Self::Storage>) -> Self;
 }
 
-impl<T> Selectable for Vec<T> {
-    type Selector<View, S: SelectorStorage> = VecSelector<View, T, S>;
+impl<T> Storable for Vec<T> {
+    type Store<View, S: SelectorStorage> = VecSelector<View, T, S>;
 }
 
 pub struct VecSelector<W, T, S: SelectorStorage = UnsyncStorage> {
@@ -428,14 +426,14 @@ impl<W, T, S: SelectorStorage> CreateSelector for VecSelector<W, T, S> {
 
 impl<
         W: Writable<Target = Vec<T>, Storage = S> + Copy + 'static,
-        T: Selectable + 'static,
+        T: Storable + 'static,
         S: SelectorStorage,
     > VecSelector<W, T, S>
 {
     pub fn index(
         self,
         index: u32,
-    ) -> T::Selector<
+    ) -> T::Store<
         MappedMutSignal<
             T,
             W,
@@ -444,7 +442,7 @@ impl<
         >,
         S,
     > {
-        T::Selector::new(self.selector.scope(
+        T::Store::new(self.selector.scope(
             index,
             move |value| &value[index as usize],
             move |value| &mut value[index as usize],
@@ -464,7 +462,7 @@ impl<
     pub fn iter(
         self,
     ) -> impl Iterator<
-        Item = T::Selector<
+        Item = T::Store<
             MappedMutSignal<
                 T,
                 W,
@@ -487,8 +485,8 @@ pub struct ForeignType<T, S: SelectorStorage = UnsyncStorage> {
     phantom: PhantomData<(T, S)>,
 }
 
-impl<T, S: SelectorStorage> Selectable for ForeignType<T, S> {
-    type Selector<View, St: SelectorStorage> = TSelector<View, T, St>;
+impl<T, S: SelectorStorage> Storable for ForeignType<T, S> {
+    type Store<View, St: SelectorStorage> = TSelector<View, T, St>;
 }
 
 pub struct TSelector<W, T, S: SelectorStorage = UnsyncStorage> {
