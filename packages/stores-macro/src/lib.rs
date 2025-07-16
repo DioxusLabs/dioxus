@@ -50,6 +50,62 @@ fn derive_store_struct(input: &DeriveInput, structure: &DataStruct) -> syn::Resu
     let generics = &input.generics;
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
+    // Extend the original generics with a view and storage type for the selector generics
+    let mut selector_generics = generics.clone();
+    selector_generics.params.push(parse_quote!(__W));
+    selector_generics
+        .params
+        .push(parse_quote!(__S: dioxus_stores::SelectorStorage = dioxus_stores::macro_helpers::dioxus_signals::UnsyncStorage));
+
+    let (selector_impl_generics, selector_ty_generics, selector_where_clause) =
+        selector_generics.split_for_impl();
+
+    let mut selector_map_bounds: Punctuated<syn::WherePredicate, syn::Token![,]> =
+        Punctuated::new();
+    selector_map_bounds.push(
+        parse_quote!(__W: dioxus_stores::macro_helpers::dioxus_signals::Writable<Target = #struct_name #ty_generics, Storage = __S> + Copy + 'static),
+    );
+    for generic in generics.type_params() {
+        let ident = &generic.ident;
+        selector_map_bounds.push(parse_quote!(#ident: 'static));
+    }
+    let selector_map_where_clause = if let Some(mut clause) = generics.where_clause.clone() {
+        clause.predicates.extend(selector_map_bounds);
+        clause.into_token_stream()
+    } else {
+        quote! { where #selector_map_bounds }
+    };
+
+    let mut selector_clone_bounds: Punctuated<syn::WherePredicate, syn::Token![+]> =
+        Punctuated::new();
+    selector_clone_bounds.push(parse_quote!(__W: ::std::clone::Clone));
+    let selector_clone_where_clause = if let Some(mut clause) = generics.where_clause.clone() {
+        clause.predicates.extend(selector_clone_bounds);
+        clause.into_token_stream()
+    } else {
+        quote! { where #selector_clone_bounds }
+    };
+
+    let mut selector_copy_bounds: Punctuated<syn::WherePredicate, syn::Token![+]> =
+        Punctuated::new();
+    selector_copy_bounds.push(parse_quote!(__W: ::std::marker::Copy));
+    let selector_copy_where_clause = if let Some(mut clause) = generics.where_clause.clone() {
+        clause.predicates.extend(selector_copy_bounds);
+        clause.into_token_stream()
+    } else {
+        quote! { where #selector_copy_bounds }
+    };
+
+    let mut selector_partial_eq_bounds: Punctuated<syn::WherePredicate, syn::Token![+]> =
+        Punctuated::new();
+    selector_partial_eq_bounds.push(parse_quote!(__W: ::std::cmp::PartialEq));
+    let selector_partial_eq_where_clause = if let Some(mut clause) = generics.where_clause.clone() {
+        clause.predicates.extend(selector_partial_eq_bounds);
+        clause.into_token_stream()
+    } else {
+        quote! { where #selector_partial_eq_bounds }
+    };
+
     let fields = fields.iter().enumerate().map(|(i, field)| {
         let field_name = &field.ident;
         let parsed_attributes = field
@@ -82,7 +138,8 @@ fn derive_store_struct(input: &DeriveInput, structure: &DataStruct) -> syn::Resu
             fn #function_name(
                 self,
             ) -> <#foreign_type as dioxus_stores::Selectable>::Selector<
-                impl dioxus_stores::macro_helpers::dioxus_signals::Writable<Target = #field_type, Storage = __S> + Copy + 'static,
+                // impl dioxus_stores::macro_helpers::dioxus_signals::Writable<Target = #field_type, Storage = __S> + Copy + 'static,
+                dioxus_stores::macro_helpers::dioxus_signals::MappedMutSignal<#field_type, __W, impl Fn(&#struct_name #ty_generics) -> &#field_type + Copy + 'static, impl Fn(&mut #struct_name #ty_generics) -> &mut #field_type + Copy + 'static>,
                 __S,
             > {
                 dioxus_stores::CreateSelector::new(self.selector.scope(
@@ -94,32 +151,6 @@ fn derive_store_struct(input: &DeriveInput, structure: &DataStruct) -> syn::Resu
         })
     }).collect::<syn::Result<Vec<_>>>()?;
 
-    // Extend the original generics with a view and storage type for the selector generics
-    let mut selector_generics = generics.clone();
-    selector_generics.params.push(parse_quote!(__W));
-    selector_generics
-        .params
-        .push(parse_quote!(__S: dioxus_stores::SelectorStorage = dioxus_stores::macro_helpers::dioxus_signals::UnsyncStorage));
-
-    let (selector_impl_generics, selector_ty_generics, selector_where_clause) =
-        selector_generics.split_for_impl();
-
-    let mut selector_map_bounds: Punctuated<syn::WherePredicate, syn::Token![,]> =
-        Punctuated::new();
-    selector_map_bounds.push(
-        parse_quote!(__W: dioxus_stores::macro_helpers::dioxus_signals::Writable<Target = #struct_name #ty_generics, Storage = __S> + Copy + 'static),
-    );
-    for generic in generics.type_params() {
-        let ident = &generic.ident;
-        selector_map_bounds.push(parse_quote!(#ident: 'static));
-    }
-    let selector_map_where_clause = if let Some(mut clause) = generics.where_clause.clone() {
-        clause.predicates.extend(selector_map_bounds);
-        clause.into_token_stream()
-    } else {
-        quote! { where #selector_map_bounds }
-    };
-
     // Generate the store implementation
     let expanded = quote! {
         impl #impl_generics dioxus_stores::Selectable for #struct_name #ty_generics #where_clause {
@@ -129,6 +160,23 @@ fn derive_store_struct(input: &DeriveInput, structure: &DataStruct) -> syn::Resu
         struct #selector_name #selector_generics #selector_where_clause {
             selector: dioxus_stores::SelectorScope<__W, __S>,
             _phantom: std::marker::PhantomData<#struct_name #ty_generics>,
+        }
+
+        impl #selector_impl_generics std::clone::Clone for #selector_name #selector_ty_generics #selector_clone_where_clause {
+            fn clone(&self) -> Self {
+                Self {
+                    selector: self.selector.clone(),
+                    _phantom: std::marker::PhantomData,
+                }
+            }
+        }
+
+        impl #selector_impl_generics std::marker::Copy for #selector_name #selector_ty_generics #selector_copy_where_clause {}
+
+        impl #selector_impl_generics std::cmp::PartialEq for #selector_name #selector_ty_generics #selector_partial_eq_where_clause {
+            fn eq(&self, other: &Self) -> bool {
+                self.selector == other.selector
+            }
         }
 
         impl #selector_impl_generics dioxus_stores::CreateSelector for #selector_name #selector_ty_generics #selector_where_clause {
@@ -145,6 +193,15 @@ fn derive_store_struct(input: &DeriveInput, structure: &DataStruct) -> syn::Resu
                 #fields
             )*
         }
+
+        // impl #selector_impl_generics From<#selector_name #selector_ty_generics> for #selector_name #selector_ty_generics {
+        //     fn from(value: #selector_name #selector_ty_generics) -> Self {
+        //         Self {
+        //             selector: value.selector.map(|w| w.into()),
+        //             _phantom: std::marker::PhantomData
+        //         }
+        //     }
+        // }
     };
 
     Ok(expanded)

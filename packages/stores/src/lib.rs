@@ -15,8 +15,8 @@ use std::{
 
 use dioxus_core::{prelude::ReactiveContext, use_hook};
 use dioxus_signals::{
-    BorrowError, BorrowMutError, CopyValue, Readable, ReadableExt, ReadableRef, Storage,
-    Subscribers, UnsyncStorage, Writable, WritableExt, WritableRef,
+    BorrowError, BorrowMutError, CopyValue, MappedMutSignal, Readable, ReadableExt, ReadableRef,
+    Storage, Subscribers, UnsyncStorage, Writable, WritableExt, WritableRef, WriteSignal,
 };
 
 // Re-exported for the macro
@@ -207,6 +207,12 @@ struct SelectionPath<S: SelectorStorage = UnsyncStorage> {
     store: StoreSubscriptions<S>,
 }
 
+impl<S: SelectorStorage> PartialEq for SelectionPath<S> {
+    fn eq(&self, other: &Self) -> bool {
+        self.path == other.path && self.store == other.store
+    }
+}
+
 impl<S: SelectorStorage> Clone for SelectionPath<S> {
     fn clone(&self) -> Self {
         Self {
@@ -248,6 +254,12 @@ pub struct SelectorScope<W, S: SelectorStorage = UnsyncStorage> {
     write: W,
 }
 
+impl<W: PartialEq, S: SelectorStorage> PartialEq for SelectorScope<W, S> {
+    fn eq(&self, other: &Self) -> bool {
+        self.path == other.path && self.write == other.write
+    }
+}
+
 impl<W, S: SelectorStorage> Clone for SelectorScope<W, S>
 where
     W: Clone,
@@ -270,11 +282,19 @@ impl<W, S: SelectorStorage> SelectorScope<W, S> {
     pub fn scope<U: 'static>(
         self,
         index: u32,
-        map: impl FnOnce(&W::Target) -> &U + Copy + 'static,
-        map_mut: impl FnOnce(&mut W::Target) -> &mut U + Copy + 'static,
-    ) -> SelectorScope<impl Writable<Target = U, Storage = W::Storage> + Copy + 'static, S>
+        map: impl Fn(&W::Target) -> &U + Copy + 'static,
+        map_mut: impl Fn(&mut W::Target) -> &mut U + Copy + 'static,
+    ) -> SelectorScope<
+        MappedMutSignal<
+            U,
+            W,
+            impl Fn(&W::Target) -> &U + Copy + 'static,
+            impl Fn(&mut W::Target) -> &mut U + Copy + 'static,
+        >,
+        S,
+    >
     where
-        W: Writable + Copy + 'static,
+        W: Writable<Storage = S> + Copy + 'static,
     {
         let Self { mut path, write } = self;
         path.path.push(index);
@@ -292,6 +312,14 @@ impl<W, S: SelectorStorage> SelectorScope<W, S> {
 
     fn mark_dirty_shallow(&self) {
         self.path.mark_dirty_shallow();
+    }
+
+    /// Map the writer to a new type.
+    pub fn map<W2>(self, map: impl FnOnce(W) -> W2) -> SelectorScope<W2, S> {
+        SelectorScope {
+            path: self.path,
+            write: map(self.write),
+        }
     }
 }
 
@@ -316,6 +344,8 @@ impl<W: Writable, S: SelectorStorage> SelectorScope<W, S> {
         self.write.try_write_unchecked()
     }
 }
+
+pub type Selector<T, W = WriteSignal<T>, S = UnsyncStorage> = <T as Selectable>::Selector<W, S>;
 
 pub struct Store<T: 'static, S: SelectorStorage + Storage<T> = UnsyncStorage> {
     store: StoreSubscriptions<S>,
@@ -395,7 +425,7 @@ pub fn create_maybe_sync_store<T: Selectable, S: SelectorStorage + Storage<T>>(
 }
 
 pub fn use_maybe_sync_store<T: Selectable, S: SelectorStorage + Storage<T>>(
-    init: impl FnOnce() -> T,
+    init: impl Fn() -> T,
 ) -> Store<T, S> {
     use_hook(move || create_maybe_sync_store(init()))
 }
@@ -404,7 +434,7 @@ pub fn create_store<T: Selectable>(value: T) -> Store<T, UnsyncStorage> {
     create_maybe_sync_store::<T, UnsyncStorage>(value)
 }
 
-pub fn use_store<T: Selectable>(init: impl FnOnce() -> T) -> Store<T, UnsyncStorage> {
+pub fn use_store<T: Selectable>(init: impl Fn() -> T) -> Store<T, UnsyncStorage> {
     use_hook(move || create_store(init()))
 }
 
@@ -463,7 +493,15 @@ impl<
     pub fn index(
         self,
         index: u32,
-    ) -> T::Selector<impl Writable<Target = T, Storage = S> + Copy + 'static, S> {
+    ) -> T::Selector<
+        MappedMutSignal<
+            T,
+            W,
+            impl Fn(&Vec<T>) -> &T + Copy + 'static,
+            impl Fn(&mut Vec<T>) -> &mut T + Copy + 'static,
+        >,
+        S,
+    > {
         T::Selector::new(self.selector.scope(
             index,
             move |value| &value[index as usize],
@@ -483,8 +521,17 @@ impl<
 
     pub fn iter(
         self,
-    ) -> impl Iterator<Item = T::Selector<impl Writable<Target = T, Storage = S> + Copy + 'static, S>>
-    {
+    ) -> impl Iterator<
+        Item = T::Selector<
+            MappedMutSignal<
+                T,
+                W,
+                impl Fn(&Vec<T>) -> &T + Copy + 'static,
+                impl Fn(&mut Vec<T>) -> &mut T + Copy + 'static,
+            >,
+            S,
+        >,
+    > {
         (0..self.len()).map(move |i| self.index(i as u32))
     }
 
