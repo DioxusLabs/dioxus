@@ -1,6 +1,8 @@
 use crate::runtime::RuntimeError;
-use crate::SuspenseContext;
-use crate::{innerlude::SuspendedFuture, runtime::Runtime, CapturedError, Element, ScopeId, Task};
+use crate::{
+    innerlude::SuspendedFuture, runtime::Runtime, CapturedError, Element, ScopeId, SuspenseContext,
+    Task,
+};
 use std::future::Future;
 use std::sync::Arc;
 
@@ -18,7 +20,7 @@ pub fn vdom_is_rendering() -> bool {
     Runtime::with(|rt| rt.rendering.get()).unwrap_or_default()
 }
 
-/// Throw a [`CapturedError`] into the current scope. The error will bubble up to the nearest [`crate::prelude::ErrorBoundary()`] or the root of the app.
+/// Throw a [`CapturedError`] into the current scope. The error will bubble up to the nearest [`crate::ErrorBoundary()`] or the root of the app.
 ///
 /// # Examples
 /// ```rust, no_run
