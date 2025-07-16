@@ -97,7 +97,7 @@ pub fn try_fmt_file(
 
         // TESTME
         // Writing *should* not fail but it's possible that it does
-        if writer.write_rsx_call(&body.body).is_err() {
+        if writer.write_rsx_call(&body).is_err() {
             let span = writer.invalid_exprs.pop().unwrap_or_else(Span::call_site);
             return Err(syn::Error::new(span, "Failed emit valid rsx - likely due to partially complete expressions in the rsx! macro"));
         }
@@ -149,7 +149,7 @@ pub fn try_fmt_file(
 /// that passed partial expansion but failed to parse.
 pub fn write_block_out(body: &CallBody) -> Option<String> {
     let mut buf = Writer::new("", IndentOptions::default());
-    buf.write_rsx_call(&body.body).ok()?;
+    buf.write_rsx_call(body).ok()?;
     buf.consume()
 }
 
@@ -158,7 +158,7 @@ pub fn fmt_block(block: &str, indent_level: usize, indent: IndentOptions) -> Opt
 
     let mut buf = Writer::new(block, indent);
     buf.out.indent_level = indent_level;
-    buf.write_rsx_call(&body.body).ok()?;
+    buf.write_rsx_call(&body).ok()?;
 
     // writing idents leaves the final line ended at the end of the last ident
     if buf.out.buf.contains('\n') {

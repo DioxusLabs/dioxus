@@ -148,6 +148,7 @@ fn app() -> Element {
                 value: format!("{:02}", timer.read().seconds),
                 oninput: move |e| {
                     timer.write().seconds = e.value().parse().unwrap_or(0);
+                    // A comment inside an expression
                 },
             }
         }

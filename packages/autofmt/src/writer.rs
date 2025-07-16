@@ -2,6 +2,7 @@ use crate::{buffer::Buffer, IndentOptions};
 use dioxus_rsx::*;
 use proc_macro2::{LineColumn, Span};
 use quote::ToTokens;
+use regex::Regex;
 use std::{
     borrow::Cow,
     collections::{HashMap, VecDeque},
@@ -36,20 +37,35 @@ impl<'a> Writer<'a> {
         Some(self.out.buf)
     }
 
-    pub fn write_rsx_call(&mut self, body: &TemplateBody) -> Result {
-        if body.roots.is_empty() {
+    pub fn write_rsx_call(&mut self, body: &CallBody) -> Result {
+        if body.body.roots.is_empty() {
             return Ok(());
         }
 
-        if Self::is_short_rsx_call(&body.roots) {
+        if Self::is_short_rsx_call(&body.body.roots) {
             write!(self.out, " ")?;
-            self.write_ident(&body.roots[0])?;
+            self.write_ident(&body.body.roots[0])?;
             write!(self.out, " ")?;
         } else {
             self.out.new_line()?;
-            self.write_body_indented(&body.roots)?
+            self.write_body_indented(&body.body.roots)?;
+            self.write_trailing_body_comments(body)?;
         }
 
+        Ok(())
+    }
+
+    fn write_trailing_body_comments(&mut self, body: &CallBody) -> Result {
+        if let Some(span) = body.span {
+            self.out.indent_level += 1;
+            let comments = self.accumulate_comments(span.span().end());
+            if !comments.is_empty() {
+                self.out.new_line()?;
+                self.apply_comments(comments)?;
+                self.out.buf.pop(); // remove the trailing newline, forcing us to end at the end of the comment
+            }
+            self.out.indent_level -= 1;
+        }
         Ok(())
     }
 
@@ -301,7 +317,8 @@ impl<'a> Writer<'a> {
         let children_len = self
             .is_short_children(children)
             .map_err(|_| std::fmt::Error)?;
-        let is_small_children = children_len.is_some();
+        let has_trailing_comments = self.has_trailing_comments(children, brace);
+        let is_small_children = children_len.is_some() && !has_trailing_comments;
 
         // if we have one long attribute and a lot of children, place the attrs on top
         if is_short_attr_list && !is_small_children {
@@ -310,7 +327,11 @@ impl<'a> Writer<'a> {
 
         // even if the attr is long, it should be put on one line
         // However if we have childrne we need to just spread them out for readability
-        if !is_short_attr_list && attributes.len() <= 1 && spreads.is_empty() {
+        if !is_short_attr_list
+            && attributes.len() <= 1
+            && spreads.is_empty()
+            && !has_trailing_comments
+        {
             if children.is_empty() {
                 opt_level = ShortOptimization::Oneliner;
             } else {
@@ -328,7 +349,11 @@ impl<'a> Writer<'a> {
         }
 
         // If there's nothing at all, empty optimization
-        if attributes.is_empty() && children.is_empty() && spreads.is_empty() {
+        if attributes.is_empty()
+            && children.is_empty()
+            && spreads.is_empty()
+            && !has_trailing_comments
+        {
             opt_level = ShortOptimization::Empty;
 
             // Write comments if they exist
@@ -773,8 +798,95 @@ impl<'a> Writer<'a> {
             return Err(std::fmt::Error);
         };
 
+        thread_local! {
+            static COMMENT_REGEX: Regex = Regex::new("\"[^\"]*\"|(//.*)").unwrap();
+        }
+
         let pretty_expr = self.retrieve_formatted_expr(&expr).to_string();
-        self.write_mulitiline_tokens(pretty_expr)?;
+
+        // Adding comments back to the formatted expression
+        let source_text = src_span.source_text().unwrap_or_default();
+        let mut source_lines = source_text.lines().peekable();
+        let mut output = String::from("");
+        let mut printed_empty_line = false;
+
+        if source_lines.peek().is_none() {
+            output = pretty_expr;
+        } else {
+            for line in pretty_expr.lines() {
+                let compacted_pretty_line = line.replace(" ", "").replace(",", "");
+                let trimmed_pretty_line = line.trim();
+
+                // Nested expressions might have comments already. We handle writing all of those
+                // at the outer level, so we skip them here
+                if trimmed_pretty_line.starts_with("//") {
+                    continue;
+                }
+
+                if !output.is_empty() {
+                    output.push('\n');
+                }
+
+                // pull down any source lines with whitespace until we hit a line that matches our current line.
+                while let Some(src) = source_lines.peek() {
+                    let trimmed_src = src.trim();
+
+                    // Write comments and empty lines as they are
+                    if trimmed_src.starts_with("//") || trimmed_src.is_empty() {
+                        if !trimmed_src.is_empty() {
+                            // Match the whitespace of the incoming source line
+                            for s in line.chars().take_while(|c| c.is_whitespace()) {
+                                output.push(s);
+                            }
+
+                            // Bump out the indent level if the line starts with a closing brace (ie we're at the end of a block)
+                            if matches!(trimmed_pretty_line.chars().next(), Some(')' | '}' | ']')) {
+                                output.push_str(self.out.indent.indent_str());
+                            }
+
+                            printed_empty_line = false;
+                            output.push_str(trimmed_src);
+                            output.push('\n');
+                        } else if !printed_empty_line {
+                            output.push('\n');
+                            printed_empty_line = true;
+                        }
+
+                        _ = source_lines.next();
+                        continue;
+                    }
+
+                    let compacted_src_line = src.replace(" ", "").replace(",", "");
+
+                    // If this source line matches our pretty line, we stop pulling down
+                    if compacted_src_line.contains(&compacted_pretty_line) {
+                        break;
+                    }
+
+                    // Otherwise, consume this source line and keep going
+                    _ = source_lines.next();
+                }
+
+                // Once all whitespace is written, write the pretty line
+                output.push_str(line);
+                printed_empty_line = false;
+
+                // And then pull the corresponding source line
+                let source_line = source_lines.next();
+
+                // And then write any inline comments
+                if let Some(source_line) = source_line {
+                    if let Some(captures) = COMMENT_REGEX.with(|f| f.captures(source_line)) {
+                        if let Some(comment) = captures.get(1) {
+                            output.push_str(" // ");
+                            output.push_str(comment.as_str().replace("//", "").trim());
+                        }
+                    }
+                }
+            }
+        }
+
+        self.write_mulitiline_tokens(output)?;
 
         Ok(())
     }
@@ -791,7 +903,10 @@ impl<'a> Writer<'a> {
             writeln!(self.out, "{first}")?;
 
             while let Some(line) = lines.next() {
-                self.out.tab()?;
+                if !line.trim().is_empty() {
+                    self.out.tab()?;
+                }
+
                 write!(self.out, "{line}")?;
                 if lines.peek().is_none() {
                     write!(self.out, "")?;
@@ -932,9 +1047,8 @@ impl<'a> Writer<'a> {
     }
 
     fn final_span_of_node(node: &BodyNode) -> Span {
-        // Write the trailing comments if there are any
         // Get the ending span of the node
-        let span = match node {
+        match node {
             BodyNode::Element(el) => el
                 .brace
                 .as_ref()
@@ -952,8 +1066,7 @@ impl<'a> Writer<'a> {
                 Some(b) => b.span.span(),
                 None => i.then_brace.span.span(),
             },
-        };
-        span
+        }
     }
 
     fn final_span_of_attr(&self, attr: &Attribute) -> Span {
@@ -968,5 +1081,46 @@ impl<'a> Writer<'a> {
                 .map(|v| v.span())
                 .unwrap_or_else(|| ex.then_value.span()),
         }
+    }
+
+    fn has_trailing_comments(&self, children: &[BodyNode], brace: &Brace) -> bool {
+        let brace_span = brace.span.span();
+
+        let Some(last_node) = children.last() else {
+            return false;
+        };
+
+        // Check for any comments after the last node between the last brace
+        let final_span = Self::final_span_of_node(last_node);
+        let final_span = final_span.end();
+        let mut line = final_span.line;
+        let mut column = final_span.column;
+        loop {
+            let Some(src_line) = self.src.get(line - 1) else {
+                return false;
+            };
+
+            // the line might contain emoji or other unicode characters - this will cause issues
+            let Some(mut whitespace) = src_line.get(column..).map(|s| s.trim()) else {
+                return false;
+            };
+
+            let offset = 0;
+            whitespace = whitespace[offset..].trim();
+
+            if whitespace.starts_with("//") {
+                return true;
+            }
+
+            if line == brace_span.end().line {
+                // If we reached the end of the brace span, stop
+                break;
+            }
+
+            line += 1;
+            column = 0; // reset column to the start of the next line
+        }
+
+        false
     }
 }

@@ -101,13 +101,7 @@ impl WebsysDom {
 
                 // Prevent the default action if the user set prevent default on the event
                 let prevent_default = !event.default_action_enabled();
-                // Prevent forms from submitting and redirecting
-                if name == "submit" {
-                    // On forms the default behavior is not to submit, if prevent default is set then we submit the form
-                    if !prevent_default {
-                        web_sys_event.prevent_default();
-                    }
-                } else if prevent_default {
+                if prevent_default {
                     web_sys_event.prevent_default();
                 }
             }

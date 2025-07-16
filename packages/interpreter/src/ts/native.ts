@@ -278,15 +278,6 @@ export class NativeInterpreter extends JSChannel_ {
       bubbles,
     };
 
-    // This should:
-    // - prevent form submissions from navigating
-    // - prevent anchor tags from navigating
-    // - prevent buttons from submitting forms
-    // - let the virtualdom attempt to prevent the event
-    if (event.type === "submit") {
-      event.preventDefault();
-    }
-
     // liveview does not have synchronous event handling, so we need to send the event to the host
     if (this.liveview) {
       // Okay, so the user might've requested some files to be read
