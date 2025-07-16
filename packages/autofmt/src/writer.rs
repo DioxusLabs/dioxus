@@ -804,77 +804,248 @@ impl<'a> Writer<'a> {
         let source_text = src_span.source_text().unwrap_or_default();
         let mut source_lines = source_text.lines().peekable();
         let mut pretty_lines = pretty_expr.lines().peekable();
-        let mut pretty_line = pretty_lines.next();
+        let comment_regex = Regex::new("\"[^\"]*\"|(//.*)").unwrap();
         let mut output = String::from("");
 
         if source_lines.peek().is_none() {
             output = pretty_expr;
         } else {
-            let comment_regex = Regex::new("\"[^\"]*\"|(//.*)").unwrap();
-            for source_line in source_lines {
-                let mut source_line = source_line.to_string();
-                let trimmed_source_line = source_line.replace(" ", "").replace(",", "");
+            let mut printed_empty_line = false;
 
-                // If this is a full-line comment, add it to the output
-                if source_line.trim().starts_with("//") {
-                    if !output.is_empty() {
-                        output.push('\n');
-                    }
-                    if let Some(line) = pretty_line {
-                        if trimmed_source_line.contains(&line.replace(" ", "")) {
-                            output.push_str(line);
-                            pretty_line = pretty_lines.next();
-                            continue;
-                        }
-                    }
-                    output.push_str(self.out.indent.indent_str());
-                    output.push_str(source_line.trim());
-                    continue;
+            for line in pretty_lines {
+                if !output.is_empty() {
+                    output.push('\n');
                 }
 
-                // If our current source line contains one of the newly formatted lines,
-                // add them to the output. If the source line also contains a comment, add it too
-                while let Some(line) = pretty_line {
-                    // Remove characters that the formatter might have added, so they don't interfere
-                    // when comparing the formatted and source lines
-                    let mut trimmed_line = line.replace(" ", "").replace(",", "");
-                    if trimmed_line.ends_with("{") && trimmed_line != "{" {
-                        trimmed_line = trimmed_line.strip_suffix("{").unwrap().to_string();
+                let compacted_pretty_line = line.replace(" ", "").replace(",", "");
+                let trimmed_pretty_line = line.trim();
+
+                // pull down any source lines with whitespace until we hit a line that matches our current line.
+                while let Some(src) = source_lines.peek() {
+                    let trimmed_src = src.trim();
+
+                    // Write comments and empty lines as they are
+                    if trimmed_src.starts_with("//") || trimmed_src.is_empty() {
+                        if !trimmed_src.is_empty() {
+                            // Match the whitespace of the incoming source line
+                            for s in line.chars().take_while(|c| c.is_whitespace()) {
+                                output.push(s);
+                            }
+
+                            // Bump out the indent level if the line starts with a closing brace (ie we're at the end of a block)
+                            if matches!(trimmed_pretty_line.chars().next(), Some(')' | '}' | ']')) {
+                                output.push_str(self.out.indent.indent_str());
+                            }
+
+                            printed_empty_line = false;
+                            output.push_str(trimmed_src);
+                            output.push('\n');
+                        } else if !printed_empty_line {
+                            output.push('\n');
+                            printed_empty_line = true;
+                        }
+
+                        _ = source_lines.next();
+                        continue;
                     }
 
-                    if !trimmed_source_line.contains(&trimmed_line) {
+                    let compacted_src_line = src.replace(" ", "").replace(",", "");
+
+                    // If this source line matches our pretty line, we stop pulling down
+                    if compacted_src_line.contains(&compacted_pretty_line) {
                         break;
                     }
 
-                    if !output.is_empty() {
-                        output.push('\n');
-                    }
-                    output.push_str(line);
+                    // Otherwise, consume this source line and keep going
+                    _ = source_lines.next();
+                }
+
+                // Once all whitespace is written, write the pretty line
+                output.push_str(line);
+                printed_empty_line = false;
+
+                // And then pull the corresponding source line
+                let source_line = source_lines.next();
+
+                // And then write any inline comments
+                if let Some(source_line) = source_line {
                     if let Some(captures) = comment_regex.captures(&source_line) {
                         if let Some(comment) = captures.get(1) {
                             output.push_str(" // ");
                             output.push_str(comment.as_str().replace("//", "").trim());
-                            source_line = source_line.replace(comment.as_str(), "");
                         }
                     }
-                    pretty_line = pretty_lines.next();
                 }
             }
 
-            // Add any remaining formatted lines after we run out of source lines
-            while let Some(line) = pretty_line {
-                if !output.is_empty() {
-                    output.push('\n');
-                }
-                output.push_str(line);
-                pretty_line = pretty_lines.next();
-            }
+            // while let Some(trailing) = source_lines.next() {
+            //     output.push('\n');
+            //     output.push_str(self.out.indent.indent_str());
+            //     output.push_str(trailing.trim());
+            // }
+
+            // let comment_regex = Regex::new("\"[^\"]*\"|(//.*)").unwrap();
+            // for source_line in source_lines {
+            //     let mut source_line = source_line.to_string();
+            //     let trimmed_source_line = source_line.replace(" ", "").replace(",", "");
+
+            //     // If this is a full-line comment, add it to the output
+            //     if source_line.trim().starts_with("//") {
+            //         if !output.is_empty() {
+            //             output.push('\n');
+            //         }
+            //         if let Some(line) = pretty_line {
+            //             if trimmed_source_line.contains(&line.replace(" ", "")) {
+            //                 output.push_str(line);
+            //                 pretty_line = pretty_lines.next();
+            //                 continue;
+            //             }
+            //         }
+            //         output.push_str(self.out.indent.indent_str());
+            //         output.push_str(source_line.trim());
+            //         continue;
+            //     }
+
+            //     // If our current source line contains one of the newly formatted lines,
+            //     // add them to the output. If the source line also contains a comment, add it too
+            //     while let Some(line) = pretty_line {
+            //         // Remove characters that the formatter might have added, so they don't interfere
+            //         // when comparing the formatted and source lines
+            //         let mut trimmed_line = line.replace(" ", "").replace(",", "");
+            //         if trimmed_line.ends_with("{") && trimmed_line != "{" {
+            //             trimmed_line = trimmed_line.strip_suffix("{").unwrap().to_string();
+            //         }
+
+            //         if !trimmed_source_line.contains(&trimmed_line) {
+            //             break;
+            //         }
+
+            //         if !output.is_empty() {
+            //             output.push('\n');
+            //         }
+            //         output.push_str(line);
+            //         if let Some(captures) = comment_regex.captures(&source_line) {
+            //             if let Some(comment) = captures.get(1) {
+            //                 output.push_str(" // ");
+            //                 output.push_str(comment.as_str().replace("//", "").trim());
+            //                 source_line = source_line.replace(comment.as_str(), "");
+            //             }
+            //         }
+            //         pretty_line = pretty_lines.next();
+            //     }
+            // }
+
+            // // Add any remaining formatted lines after we run out of source lines
+            // while let Some(line) = pretty_line {
+            //     if !output.is_empty() {
+            //         output.push('\n');
+            //     }
+            //     output.push_str(line);
+            //     pretty_line = pretty_lines.next();
+            // }
         }
 
         self.write_mulitiline_tokens(output)?;
 
         Ok(())
     }
+
+    // fn write_partial_expr(&mut self, expr: syn::Result<Expr>, src_span: Span) -> Result {
+    //     let Ok(expr) = expr else {
+    //         self.invalid_exprs.push(src_span);
+    //         return Err(std::fmt::Error);
+    //     };
+
+    //     let pretty_expr = self.retrieve_formatted_expr(&expr).to_string();
+
+    //     // Adding comments back to the formatted expression
+    //     let source_text = src_span.source_text().unwrap_or_default();
+    //     let mut source_lines = source_text.lines().peekable();
+    //     let mut pretty_lines = pretty_expr.lines().peekable();
+    //     let mut pretty_line = pretty_lines.next();
+    //     let mut output = String::from("");
+
+    //     if source_lines.peek().is_none() {
+    //         output = pretty_expr;
+    //     } else {
+    //         let comment_regex = Regex::new("\"[^\"]*\"|(//.*)").unwrap();
+    //         // for source_line in source_lines {
+    //         //     let mut source_line = source_line.to_string();
+    //         //     let trimmed_source_line = source_line.replace(" ", "").replace(",", "");
+
+    //         //     // If this is a full-line comment, add it to the output
+    //         //     if source_line.trim().starts_with("//") {
+    //         //         if !output.is_empty() {
+    //         //             output.push('\n');
+    //         //         }
+
+    //         //         output.push_str(self.out.indent.indent_str());
+
+    //         //         output.push_str(source_line.trim());
+    //         //         continue;
+    //         //     }
+
+    //         //     //    if let Some(line) = pretty_line {
+    //         //     //     if trimmed_source_line.contains(&line.replace(" ", "")) {
+    //         //     //         output.push_str(line);
+    //         //     //         pretty_line = pretty_lines.next();
+    //         //     //         continue;
+    //         //     //     }
+    //         //     // }
+
+    //         //     // // if the next pretty line is a closing block, then we push out another indent
+    //         //     // if let Some(next_line) = pretty_line.as_ref() {
+    //         //     //     if next_line.trim().starts_with('}')
+    //         //     //         || next_line.trim().starts_with(']')
+    //         //     //         || next_line.trim().starts_with(')')
+    //         //     //     {
+    //         //     //         output.push_str(self.out.indent.indent_str());
+    //         //     //     }
+    //         //     // }
+
+    //         //     // If our current source line contains one of the newly formatted lines,
+    //         //     // add them to the output. If the source line also contains a comment, add it too
+    //         //     while let Some(line) = pretty_line {
+    //         //         // Remove characters that the formatter might have added, so they don't interfere
+    //         //         // when comparing the formatted and source lines
+    //         //         let mut trimmed_line = line.replace(" ", "").replace(",", "");
+    //         //         if trimmed_line.ends_with("{") && trimmed_line != "{" {
+    //         //             trimmed_line = trimmed_line.strip_suffix("{").unwrap().to_string();
+    //         //         }
+
+    //         //         if !trimmed_source_line.contains(&trimmed_line) {
+    //         //             break;
+    //         //         }
+
+    //         //         if !output.is_empty() {
+    //         //             output.push('\n');
+    //         //         }
+    //         //         output.push_str(line);
+    //         //         if let Some(captures) = comment_regex.captures(&source_line) {
+    //         //             if let Some(comment) = captures.get(1) {
+    //         //                 output.push_str(" // ");
+    //         //                 output.push_str(comment.as_str().replace("//", "").trim());
+    //         //                 source_line = source_line.replace(comment.as_str(), "");
+    //         //             }
+    //         //         }
+    //         //         pretty_line = pretty_lines.next();
+    //         //     }
+    //         }
+
+    //         // Add any remaining formatted lines after we run out of source lines
+    //         while let Some(line) = pretty_line {
+    //             if !output.is_empty() {
+    //                 output.push('\n');
+    //             }
+    //             output.push_str(line);
+    //             pretty_line = pretty_lines.next();
+    //         }
+    //     }
+
+    //     self.write_mulitiline_tokens(output)?;
+
+    //     Ok(())
+    // }
 
     fn write_mulitiline_tokens(&mut self, out: String) -> Result {
         let mut lines = out.split('\n').peekable();
@@ -888,7 +1059,10 @@ impl<'a> Writer<'a> {
             writeln!(self.out, "{first}")?;
 
             while let Some(line) = lines.next() {
-                self.out.tab()?;
+                if !line.trim().is_empty() {
+                    self.out.tab()?;
+                }
+
                 write!(self.out, "{line}")?;
                 if lines.peek().is_none() {
                     write!(self.out, "")?;
