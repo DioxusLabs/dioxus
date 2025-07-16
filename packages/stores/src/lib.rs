@@ -7,6 +7,7 @@
 
 use std::{
     collections::{HashMap, HashSet},
+    convert::identity,
     marker::PhantomData,
     mem::MaybeUninit,
     ops::Deref,
@@ -341,94 +342,41 @@ impl<W: Writable, S: SelectorStorage> SelectorScope<W, S> {
 
 pub type Selector<T, W = WriteSignal<T>, S = UnsyncStorage> = <T as Selectable>::Selector<W, S>;
 
-pub struct Store<T: 'static, S: SelectorStorage + Storage<T> = UnsyncStorage> {
-    store: StoreSubscriptions<S>,
-    value: CopyValue<T, S>,
-}
-
-impl<T: 'static, S: SelectorStorage + Storage<T>> PartialEq for Store<T, S> {
-    fn eq(&self, other: &Self) -> bool {
-        self.store == other.store && self.value == other.value
-    }
-}
-
-impl<T, S: SelectorStorage + Storage<T>> Clone for Store<T, S> {
-    fn clone(&self) -> Self {
-        Self {
-            store: self.store.clone(),
-            value: self.value.clone(),
-        }
-    }
-}
-
-impl<T, S: SelectorStorage + Storage<T>> Copy for Store<T, S> where T: 'static {}
-
-impl<T: Selectable, S: SelectorStorage + Storage<T>> Store<T, S> {
-    fn select(&self) -> T::Selector<CopyValue<T, S>, S> {
-        let path = SelectionPath::new(self.store.clone());
-        let selector = SelectorScope {
-            path,
-            write: self.value,
-        };
-        T::Selector::new(selector)
-    }
-}
-
-impl<T: Selectable, S: SelectorStorage + Storage<T>> Deref for Store<T, S> {
-    type Target = dyn Fn() -> T::Selector<CopyValue<T, S>, S>;
-
-    fn deref(&self) -> &Self::Target {
-        // https://github.com/dtolnay/case-studies/tree/master/callable-types
-
-        // First we create a closure that captures something with the Same in memory layout as Self (MaybeUninit<Self>).
-        let uninit_callable = MaybeUninit::<Self>::uninit();
-        // Then move that value into the closure. We assume that the closure now has a in memory layout of Self.
-        let uninit_closure = move || Self::select(unsafe { &*uninit_callable.as_ptr() });
-
-        // Check that the size of the closure is the same as the size of Self in case the compiler changed the layout of the closure.
-        let size_of_closure = std::mem::size_of_val(&uninit_closure);
-        assert_eq!(size_of_closure, std::mem::size_of::<Self>());
-
-        // Then cast the lifetime of the closure to the lifetime of &self.
-        fn cast_lifetime<'a, T>(_a: &T, b: &'a T) -> &'a T {
-            b
-        }
-        let reference_to_closure = cast_lifetime(
-            {
-                // The real closure that we will never use.
-                &uninit_closure
-            },
-            #[allow(clippy::missing_transmute_annotations)]
-            // We transmute self into a reference to the closure. This is safe because we know that the closure has the same memory layout as Self so &Closure == &Self.
-            unsafe {
-                std::mem::transmute(self)
-            },
-        );
-
-        // Cast the closure to a trait object.
-        reference_to_closure as &_
-    }
-}
-
 pub fn create_maybe_sync_store<T: Selectable, S: SelectorStorage + Storage<T>>(
     value: T,
-) -> Store<T, S> {
+) -> Selector<T, MappedMutSignal<T, CopyValue<T, S>>, S> {
     let store = StoreSubscriptions::new();
     let value = CopyValue::new_maybe_sync(value);
-    Store { store, value }
+
+    let path = SelectionPath::new(store.clone());
+    let map: fn(&T) -> &T = |value| value;
+    let map_mut: fn(&mut T) -> &mut T = |value| value;
+    let selector = SelectorScope {
+        path,
+        write: value.map_mut(map, map_mut),
+    };
+    T::Selector::new(selector)
 }
 
 pub fn use_maybe_sync_store<T: Selectable, S: SelectorStorage + Storage<T>>(
     init: impl Fn() -> T,
-) -> Store<T, S> {
+) -> Selector<T, MappedMutSignal<T, CopyValue<T, S>>, S>
+where
+    Selector<T, MappedMutSignal<T, CopyValue<T, S>>, S>: Clone,
+{
     use_hook(move || create_maybe_sync_store(init()))
 }
 
-pub fn create_store<T: Selectable>(value: T) -> Store<T, UnsyncStorage> {
+pub fn create_store<T: Selectable>(value: T) -> Selector<T, MappedMutSignal<T, CopyValue<T>>> {
     create_maybe_sync_store::<T, UnsyncStorage>(value)
 }
 
-pub fn use_store<T: Selectable>(init: impl Fn() -> T) -> Store<T, UnsyncStorage> {
+pub fn use_store<T: Selectable>(
+    init: impl Fn() -> T,
+) -> Selector<T, MappedMutSignal<T, CopyValue<T>>>
+where
+    Selector<T, MappedMutSignal<T, CopyValue<T>>>: Clone,
+{
     use_hook(move || create_store(init()))
 }
 

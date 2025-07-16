@@ -220,9 +220,9 @@ fn derive_store_struct_into_boxed(
     impl_generics
         .params
         .push(parse_quote!(__F: Fn(&__W::Target) -> &#struct_name #ty_generics + 'static));
-    impl_generics
-        .params
-        .push(parse_quote!(__FMut: Fn(&mut __W::Target) -> &mut #struct_name #ty_generics + 'static));
+    impl_generics.params.push(
+        parse_quote!(__FMut: Fn(&mut __W::Target) -> &mut #struct_name #ty_generics + 'static),
+    );
     let (impl_generics, _, where_clause) = impl_generics.split_for_impl();
 
     let general_selector_ty_generics: Option<AngleBracketedGenericArguments> =
