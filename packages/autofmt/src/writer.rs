@@ -798,12 +798,15 @@ impl<'a> Writer<'a> {
             return Err(std::fmt::Error);
         };
 
+        thread_local! {
+            static COMMENT_REGEX: Regex = Regex::new("\"[^\"]*\"|(//.*)").unwrap();
+        }
+
         let pretty_expr = self.retrieve_formatted_expr(&expr).to_string();
 
         // Adding comments back to the formatted expression
         let source_text = src_span.source_text().unwrap_or_default();
         let mut source_lines = source_text.lines().peekable();
-        let comment_regex = Regex::new("\"[^\"]*\"|(//.*)").unwrap();
         let mut output = String::from("");
         let mut printed_empty_line = false;
 
@@ -873,7 +876,7 @@ impl<'a> Writer<'a> {
 
                 // And then write any inline comments
                 if let Some(source_line) = source_line {
-                    if let Some(captures) = comment_regex.captures(source_line) {
+                    if let Some(captures) = COMMENT_REGEX.with(|f| f.captures(source_line)) {
                         if let Some(comment) = captures.get(1) {
                             output.push_str(" // ");
                             output.push_str(comment.as_str().replace("//", "").trim());

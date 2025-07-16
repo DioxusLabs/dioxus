@@ -9,6 +9,7 @@ impl Writer<'_> {
     }
 }
 
+// we use weird unicode alternatives to avoid conflicts with the actual rsx! macro
 const MARKER: &str = "𝕣𝕤𝕩";
 const MARKER_REPLACE: &str = "𝕣𝕤𝕩! {}";
 
@@ -42,7 +43,6 @@ pub fn unparse_expr(expr: &Expr, src: &str, cfg: &IndentOptions) -> String {
                 }
                 .unwrap();
 
-                // always push out the rsx to require a new line
                 i.path = syn::parse_str(MARKER).unwrap();
                 i.tokens = Default::default();
 
