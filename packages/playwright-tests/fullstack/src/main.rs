@@ -5,13 +5,8 @@
 // - Hydration
 
 #![allow(non_snake_case)]
-use dioxus::{
-    fullstack::{
-        commit_initial_chunk,
-        server_fn::{codec::JsonEncoding, BoxedStream, Websocket},
-    },
-    prelude::*,
-};
+use dioxus::fullstack::{codec::JsonEncoding, commit_initial_chunk, BoxedStream, Websocket};
+use dioxus::prelude::*;
 use futures::{channel::mpsc, SinkExt, StreamExt};
 
 fn main() {
