@@ -34,6 +34,7 @@ impl SelectorNode {
     }
 
     fn visit_depth_first(&self, f: &mut dyn FnMut(&SelectorNode)) {
+        f(self);
         for child in self.root.values() {
             child.visit_depth_first(f);
         }

@@ -122,24 +122,22 @@ impl<W, S: SelectorStorage> SelectorScope<W, S> {
 }
 
 impl<W: Readable, S: SelectorStorage> SelectorScope<W, S> {
-    fn try_read_unchecked(&self) -> Result<ReadableRef<'static, W>, BorrowError> {
-        println!("SelectorScope::try_read_unchecked path={:?}", &*self.path);
+    pub fn try_read_unchecked(&self) -> Result<ReadableRef<'static, W>, BorrowError> {
         self.track();
         self.write.try_read_unchecked()
     }
 
-    fn try_peek_unchecked(&self) -> Result<ReadableRef<'static, W>, BorrowError> {
+    pub fn try_peek_unchecked(&self) -> Result<ReadableRef<'static, W>, BorrowError> {
         self.write.try_peek_unchecked()
     }
 
-    fn subscribers(&self) -> Option<Subscribers> {
+    pub fn subscribers(&self) -> Option<Subscribers> {
         self.store.subscribers(&self.path)
     }
 }
 
 impl<W: Writable, S: SelectorStorage> SelectorScope<W, S> {
-    fn try_write_unchecked(&self) -> Result<WritableRef<'static, W>, BorrowMutError> {
-        println!("SelectorScope::try_write_unchecked path={:?}", &*self.path);
+    pub fn try_write_unchecked(&self) -> Result<WritableRef<'static, W>, BorrowMutError> {
         self.mark_dirty();
         self.write.try_write_unchecked()
     }
