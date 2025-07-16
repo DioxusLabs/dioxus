@@ -59,18 +59,3 @@ struct Value<D> {
     count: D,
     values: Vec<Value<D>>,
 }
-
-impl<D, V, F, FMut> From<ValueSelector<D, MappedMutSignal<Value<D>, V, F, FMut>>>
-    for ValueSelector<D, WriteSignal<Value<D>>>
-where
-    V: Writable<Storage = UnsyncStorage> + 'static,
-    F: Fn(&V::Target) -> &Value<D> + 'static,
-    FMut: Fn(&mut V::Target) -> &mut Value<D> + 'static,
-{
-    fn from(value: ValueSelector<D, MappedMutSignal<Value<D>, V, F, FMut>>) -> Self {
-        ValueSelector {
-            selector: value.selector.map(|s| s.into()),
-            _phantom: std::marker::PhantomData,
-        }
-    }
-}

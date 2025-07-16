@@ -3,7 +3,7 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote, ToTokens};
 use syn::{
     parse::Parse, parse_macro_input, parse_quote, punctuated::Punctuated, spanned::Spanned,
-    DataStruct, DeriveInput, Index,
+    AngleBracketedGenericArguments, DataStruct, DeriveInput, Ident, Index,
 };
 
 #[proc_macro_derive(Store, attributes(store))]
@@ -76,7 +76,7 @@ fn derive_store_struct(input: &DeriveInput, structure: &DataStruct) -> syn::Resu
         quote! { where #selector_map_bounds }
     };
 
-    let mut selector_clone_bounds: Punctuated<syn::WherePredicate, syn::Token![+]> =
+    let mut selector_clone_bounds: Punctuated<syn::WherePredicate, syn::Token![,]> =
         Punctuated::new();
     selector_clone_bounds.push(parse_quote!(__W: ::std::clone::Clone));
     let selector_clone_where_clause = if let Some(mut clause) = generics.where_clause.clone() {
@@ -96,7 +96,7 @@ fn derive_store_struct(input: &DeriveInput, structure: &DataStruct) -> syn::Resu
         quote! { where #selector_copy_bounds }
     };
 
-    let mut selector_partial_eq_bounds: Punctuated<syn::WherePredicate, syn::Token![+]> =
+    let mut selector_partial_eq_bounds: Punctuated<syn::WherePredicate, syn::Token![,]> =
         Punctuated::new();
     selector_partial_eq_bounds.push(parse_quote!(__W: ::std::cmp::PartialEq));
     let selector_partial_eq_where_clause = if let Some(mut clause) = generics.where_clause.clone() {
@@ -106,50 +106,56 @@ fn derive_store_struct(input: &DeriveInput, structure: &DataStruct) -> syn::Resu
         quote! { where #selector_partial_eq_bounds }
     };
 
-    let fields = fields.iter().enumerate().map(|(i, field)| {
-        let field_name = &field.ident;
-        let parsed_attributes = field
-            .attrs
-            .iter()
-            .filter_map(StoreAttribute::from_attribute)
-            .collect::<Result<Vec<_>, _>>()?;
-        let foreign = parsed_attributes
-            .iter()
-            .any(|attr| matches!(attr, StoreAttribute::Foreign));
-        let field_accessor = field_name.as_ref().map_or_else(
-            || Index::from(i).to_token_stream(),
-            |name| name.to_token_stream(),
-        );
-        let function_name = field_name.as_ref().map_or_else(
-            || format_ident!("field_{i}"),
-            |name| name.clone(),
-        );
-        let field_type = &field.ty;
+    let store_struct_into_boxed = derive_store_struct_into_boxed(input, &selector_name)?;
 
-        let foreign_type = if foreign {
-            quote! { dioxus_stores::ForeignType<#field_type> }
-        } else {
-            quote! { #field_type }
-        };
+    let fields = fields
+        .iter()
+        .enumerate()
+        .map(|(i, field)| {
+            let field_name = &field.ident;
+            let parsed_attributes = field
+                .attrs
+                .iter()
+                .filter_map(StoreAttribute::from_attribute)
+                .collect::<Result<Vec<_>, _>>()?;
+            let foreign = parsed_attributes
+                .iter()
+                .any(|attr| matches!(attr, StoreAttribute::Foreign));
+            let field_accessor = field_name.as_ref().map_or_else(
+                || Index::from(i).to_token_stream(),
+                |name| name.to_token_stream(),
+            );
+            let function_name = field_name
+                .as_ref()
+                .map_or_else(|| format_ident!("field_{i}"), |name| name.clone());
+            let field_type = &field.ty;
 
-        let ordinal = i as u32;
+            let foreign_type = if foreign {
+                quote! { dioxus_stores::ForeignType<#field_type> }
+            } else {
+                quote! { #field_type }
+            };
 
-        Ok::<_, syn::Error>(quote! {
-            fn #function_name(
-                self,
-            ) -> <#foreign_type as dioxus_stores::Selectable>::Selector<
-                // impl dioxus_stores::macro_helpers::dioxus_signals::Writable<Target = #field_type, Storage = __S> + Copy + 'static,
-                dioxus_stores::macro_helpers::dioxus_signals::MappedMutSignal<#field_type, __W, impl Fn(&#struct_name #ty_generics) -> &#field_type + Copy + 'static, impl Fn(&mut #struct_name #ty_generics) -> &mut #field_type + Copy + 'static>,
-                __S,
-            > {
-                dioxus_stores::CreateSelector::new(self.selector.scope(
-                    #ordinal,
-                    |value| &value.#field_accessor,
-                    |value| &mut value.#field_accessor,
-                ))
-            }
+            let ordinal = i as u32;
+
+            Ok::<_, syn::Error>(quote! {
+                fn #function_name(
+                    self,
+                ) -> <#foreign_type as dioxus_stores::Selectable>::Selector<
+                    dioxus_stores::macro_helpers::dioxus_signals::MappedMutSignal<#field_type, __W>,
+                    __S,
+                > {
+                    let __map_field: fn(&#struct_name #ty_generics) -> &#field_type = |value| &value.#field_accessor;
+                    let __map_mut_field: fn(&mut #struct_name #ty_generics) -> &mut #field_type = |value| &mut value.#field_accessor;
+                    dioxus_stores::CreateSelector::new(self.selector.scope(
+                        #ordinal,
+                        __map_field,
+                        __map_mut_field,
+                    ))
+                }
+            })
         })
-    }).collect::<syn::Result<Vec<_>>>()?;
+        .collect::<syn::Result<Vec<_>>>()?;
 
     // Generate the store implementation
     let expanded = quote! {
@@ -194,17 +200,66 @@ fn derive_store_struct(input: &DeriveInput, structure: &DataStruct) -> syn::Resu
             )*
         }
 
-        // impl #selector_impl_generics From<#selector_name #selector_ty_generics> for #selector_name #selector_ty_generics {
-        //     fn from(value: #selector_name #selector_ty_generics) -> Self {
-        //         Self {
-        //             selector: value.selector.map(|w| w.into()),
-        //             _phantom: std::marker::PhantomData
-        //         }
-        //     }
-        // }
+        #store_struct_into_boxed
     };
 
     Ok(expanded)
+}
+
+fn derive_store_struct_into_boxed(
+    input: &DeriveInput,
+    selector_name: &Ident,
+) -> syn::Result<TokenStream2> {
+    let struct_name = &input.ident;
+
+    let (_, ty_generics, _) = input.generics.split_for_impl();
+    let mut impl_generics = input.generics.clone();
+    impl_generics
+        .params
+        .push(parse_quote!(__W: Writable<Storage = UnsyncStorage> + 'static));
+    impl_generics
+        .params
+        .push(parse_quote!(__F: Fn(&__W::Target) -> &#struct_name #ty_generics + 'static));
+    impl_generics
+        .params
+        .push(parse_quote!(__FMut: Fn(&mut __W::Target) -> &mut #struct_name #ty_generics + 'static));
+    let (impl_generics, _, where_clause) = impl_generics.split_for_impl();
+
+    let general_selector_ty_generics: Option<AngleBracketedGenericArguments> =
+        syn::parse2(ty_generics.to_token_stream()).ok();
+    let extra = parse_quote!(dioxus_stores::macro_helpers::dioxus_signals::MappedMutSignal<#struct_name #ty_generics, __W, __F, __FMut>);
+    let general_selector_ty_generics = match general_selector_ty_generics {
+        Some(mut args) => {
+            args.args.push(extra);
+            args
+        }
+        None => parse_quote! {<#extra>},
+    };
+
+    let boxed_selector_ty_generics: Option<AngleBracketedGenericArguments> =
+        syn::parse2(ty_generics.to_token_stream()).ok();
+    let extra = parse_quote!(dioxus_stores::macro_helpers::dioxus_signals::WriteSignal<#struct_name #ty_generics>);
+    let boxed_selector_ty_generics = match boxed_selector_ty_generics {
+        Some(mut args) => {
+            args.args.push(extra);
+            args
+        }
+        None => parse_quote! {<#extra>},
+    };
+
+    Ok(quote! {
+        impl #impl_generics ::std::convert::From<#selector_name #general_selector_ty_generics>
+            for #selector_name #boxed_selector_ty_generics
+            #where_clause
+        {
+            fn from(value: #selector_name #general_selector_ty_generics) -> Self {
+                ValueSelector {
+                    selector: value.selector.map(::std::convert::Into::into),
+                    _phantom: std::marker::PhantomData,
+                }
+            }
+        }
+    })
 }
 
 enum StoreAttribute {

@@ -279,26 +279,20 @@ impl<W, S: SelectorStorage> SelectorScope<W, S> {
         Self { path, write }
     }
 
-    pub fn scope<U: 'static>(
+    pub fn scope<U: 'static, F, FMut>(
         self,
         index: u32,
-        map: impl Fn(&W::Target) -> &U + Copy + 'static,
-        map_mut: impl Fn(&mut W::Target) -> &mut U + Copy + 'static,
-    ) -> SelectorScope<
-        MappedMutSignal<
-            U,
-            W,
-            impl Fn(&W::Target) -> &U + Copy + 'static,
-            impl Fn(&mut W::Target) -> &mut U + Copy + 'static,
-        >,
-        S,
-    >
+        map: F,
+        map_mut: FMut,
+    ) -> SelectorScope<MappedMutSignal<U, W, F, FMut>, S>
     where
         W: Writable<Storage = S> + Copy + 'static,
+        F: Fn(&W::Target) -> &U + Copy + 'static,
+        FMut: Fn(&mut W::Target) -> &mut U + Copy + 'static,
     {
         let Self { mut path, write } = self;
         path.path.push(index);
-        let write = write.map_mut(move |value| map(value), move |value| map_mut(value));
+        let write = write.map_mut(map, map_mut);
         SelectorScope::new(path, write)
     }
 
