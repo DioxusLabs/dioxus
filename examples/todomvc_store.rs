@@ -36,7 +36,7 @@ fn app() -> Element {
     // Whenever the todos or filter change, the filtered_todos will be recalculated.
     // Note that we're only storing the IDs of the todos, not the todos themselves.
     let filtered_todos = use_memo(move || {
-        todo_list
+        let mut filtered_todos = todo_list
             .iter()
             .filter(|(_, item)| match filter() {
                 FilterState::All => true,
@@ -44,7 +44,11 @@ fn app() -> Element {
                 FilterState::Completed => item.checked().cloned(),
             })
             .map(|(i, _)| i as u32)
-            .collect::<Vec<_>>()
+            .collect::<Vec<_>>();
+
+        filtered_todos.sort_unstable();
+
+        filtered_todos
     });
 
     // Toggle all the todos to the opposite of the current state.
