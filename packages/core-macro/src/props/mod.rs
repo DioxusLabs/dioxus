@@ -1036,10 +1036,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                         self.#field_name.push(
                             dioxus_core::Attribute::new(
                                 ____name,
-                                {
-                                    use dioxus_core::IntoAttributeValue;
-                                    ____attr.into_value()
-                                },
+                                dioxus_core::IntoAttributeValue::<L>::into_value(____attr),
                                 ____ns,
                                 ____volatile,
                             )

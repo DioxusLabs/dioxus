@@ -100,7 +100,6 @@ impl ToTokens for Component {
 
                 // todo: ensure going through the trait actually works
                 // we want to avoid importing traits
-                // use dioxus_core::Properties;
                 use dioxus_core::Properties;
                 let __comp = ({
                     #props
@@ -365,8 +364,7 @@ fn normalize_path(name: &mut syn::Path) -> Option<AngleBracketedGenericArguments
     };
 
     if let Some(generics) = generics.as_mut() {
-        use syn::Token;
-        generics.colon2_token = Some(Token![::](proc_macro2::Span::call_site()));
+        generics.colon2_token = Some(syn::Token![::](proc_macro2::Span::call_site()));
     }
 
     generics
