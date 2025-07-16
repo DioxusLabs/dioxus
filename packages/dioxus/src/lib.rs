@@ -187,4 +187,12 @@ pub mod prelude {
     #[cfg(feature = "wasm-split")]
     #[cfg_attr(docsrs, doc(cfg(feature = "wasm-split")))]
     pub use wasm_splitter as wasm_split;
+
+    #[cfg(feature = "stores")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "stores")))]
+    pub use dioxus_stores;
+
+    #[cfg(feature = "stores")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "stores")))]
+    pub use dioxus_stores_macro::Store;
 }
