@@ -1,5 +1,5 @@
-use crate::prelude::*;
 use crate::utils::use_router_internal::use_router_internal;
+use crate::Routable;
 
 /// A hook that provides access to information about the current routing location.
 ///

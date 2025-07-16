@@ -1,4 +1,4 @@
-use crate::prelude::{outlet::OutletContext, *};
+use crate::{outlet::OutletContext, *};
 use dioxus_lib::prelude::*;
 
 /// An outlet for the current content.

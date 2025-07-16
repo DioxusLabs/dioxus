@@ -1,4 +1,4 @@
-use crate::prelude::{ExternalNavigationFailure, NavigationTarget, RouterContext};
+use crate::{ExternalNavigationFailure, NavigationTarget, RouterContext};
 
 /// Acquire the navigator without subscribing to updates.
 ///

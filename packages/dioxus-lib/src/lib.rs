@@ -12,8 +12,8 @@ pub use dioxus_hooks as hooks;
 pub use dioxus_signals as signals;
 
 pub mod events {
-    #[cfg(feature = "html")]
-    pub use dioxus_html::prelude::*;
+    // #[cfg(feature = "html")]
+    // pub use dioxus_html::prelude::*;
 }
 
 #[cfg(feature = "html")]
@@ -56,7 +56,7 @@ pub mod prelude {
     pub use dioxus_html as dioxus_elements;
 
     #[cfg(feature = "html")]
-    pub use dioxus_elements::{global_attributes, prelude::*, svg_attributes};
+    pub use dioxus_elements::{events::*, global_attributes, svg_attributes, traits::*};
 
     pub use dioxus_core;
 

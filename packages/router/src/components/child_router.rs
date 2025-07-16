@@ -2,7 +2,7 @@
 /// to the child router that maps child routes to root routes and vice versa.
 use dioxus_lib::prelude::*;
 
-use crate::prelude::Routable;
+use crate::Routable;
 
 /// Maps a child route into the root router and vice versa
 // NOTE: Currently child routers only support simple static prefixes, but this

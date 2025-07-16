@@ -1,6 +1,5 @@
+use crate::RouterContext;
 use dioxus_lib::core::{try_consume_context, use_hook};
-
-use crate::prelude::*;
 
 /// A private hook to subscribe to the router.
 ///

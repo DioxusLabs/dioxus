@@ -10,7 +10,7 @@ use dioxus_lib::{core::ReactiveContext, prelude::*};
 
 use crate::{
     components::child_router::consume_child_route_mapping, navigation::NavigationTarget,
-    prelude::SiteMapSegment, routable::Routable, router_cfg::RouterConfig,
+    routable::Routable, router_cfg::RouterConfig, SiteMapSegment,
 };
 
 /// An error that is thrown when the router fails to parse a route

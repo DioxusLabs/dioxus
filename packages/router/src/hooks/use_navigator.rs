@@ -1,6 +1,6 @@
 use dioxus_lib::core::{try_consume_context, use_hook};
 
-use crate::prelude::{Navigator, RouterContext};
+use crate::{Navigator, RouterContext};
 
 /// A hook that provides access to the navigator to change the router history.
 ///

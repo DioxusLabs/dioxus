@@ -41,17 +41,17 @@ pub use elements::*;
 pub use events::*;
 pub use render_template::*;
 
+pub use crate::attribute_groups::{GlobalAttributesExtension, SvgAttributesExtension};
+pub use crate::elements::extensions::*;
+pub use crate::point_interaction::*;
+pub use keyboard_types::{self, Code, Key, Location, Modifiers};
+
+pub mod traits {
+    pub use crate::events::*;
+    pub use crate::point_interaction::*;
+}
+
 pub mod extensions {
     pub use crate::attribute_groups::{GlobalAttributesExtension, SvgAttributesExtension};
     pub use crate::elements::extensions::*;
-}
-
-pub use prelude::*;
-
-pub mod prelude {
-    pub use crate::attribute_groups::{GlobalAttributesExtension, SvgAttributesExtension};
-    pub use crate::elements::extensions::*;
-    pub use crate::events::*;
-    pub use crate::point_interaction::*;
-    pub use keyboard_types::{self, Code, Key, Location, Modifiers};
 }

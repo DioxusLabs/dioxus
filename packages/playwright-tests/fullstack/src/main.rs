@@ -5,9 +5,12 @@
 // - Hydration
 
 #![allow(non_snake_case)]
-use dioxus::prelude::{
-    server_fn::{codec::JsonEncoding, BoxedStream, Websocket},
-    *,
+use dioxus::{
+    fullstack::{
+        commit_initial_chunk,
+        server_fn::{codec::JsonEncoding, BoxedStream, Websocket},
+    },
+    prelude::*,
 };
 use futures::{channel::mpsc, SinkExt, StreamExt};
 
@@ -77,6 +80,7 @@ fn DefaultServerFnCodec() -> Element {
 
 #[cfg(feature = "server")]
 async fn assert_server_context_provided() {
+    use dioxus::server::{extract, FromContext};
     let FromContext(i): FromContext<u32> = extract().await.unwrap();
     assert_eq!(i, 1234u32);
 }

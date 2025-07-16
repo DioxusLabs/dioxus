@@ -1,4 +1,4 @@
-use crate::{prelude::RouterContext, utils::use_router_internal::use_router_internal};
+use crate::{utils::use_router_internal::use_router_internal, RouterContext};
 
 #[deprecated = "prefer the `router()` function or `use_route` functions"]
 #[must_use]

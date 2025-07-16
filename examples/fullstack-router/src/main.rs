@@ -8,10 +8,11 @@ use dioxus::prelude::*;
 
 fn main() {
     dioxus::LaunchBuilder::new()
-        .with_cfg(server_only!(ServeConfig::builder().incremental(
-            IncrementalRendererConfig::default()
-                .invalidate_after(std::time::Duration::from_secs(120)),
-        )))
+        .with_cfg(server_only!(dioxus::fullstack::ServeConfig::builder()
+            .incremental(
+                dioxus::fullstack::IncrementalRendererConfig::default()
+                    .invalidate_after(std::time::Duration::from_secs(120)),
+            )))
         .launch(app);
 }
 

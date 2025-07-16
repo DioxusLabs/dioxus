@@ -49,7 +49,7 @@ pub use dioxus_signals as signals;
 pub mod events {
     #[cfg(feature = "html")]
     #[cfg_attr(docsrs, doc(cfg(feature = "html")))]
-    pub use dioxus_html::prelude::*;
+    pub use dioxus_html::events::*;
 }
 
 #[cfg(feature = "document")]
@@ -160,7 +160,10 @@ pub mod prelude {
 
     #[cfg(feature = "html")]
     #[cfg_attr(docsrs, doc(cfg(feature = "html")))]
-    pub use dioxus_elements::{global_attributes, prelude::*, svg_attributes};
+    pub use dioxus_elements::{
+        events::*, extensions::*, global_attributes, keyboard_types, svg_attributes, traits::*,
+        Code, GlobalAttributesExtension, Key, Location, Modifiers, SvgAttributesExtension,
+    };
 
     #[cfg(feature = "devtools")]
     #[cfg_attr(docsrs, doc(cfg(feature = "devtools")))]
@@ -170,7 +173,15 @@ pub mod prelude {
 
     #[cfg(feature = "fullstack")]
     #[cfg_attr(docsrs, doc(cfg(feature = "fullstack")))]
-    pub use dioxus_fullstack::prelude::*;
+    pub use dioxus_fullstack::{
+        server, server_fn, use_server_cached, use_server_future, ServerFnError, ServerFnResult,
+    };
+
+    #[cfg(feature = "server")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
+    pub use dioxus_server::{
+        extract, DioxusRouterExt, DioxusRouterFnExt, FromContext, ServeConfig,
+    };
 
     #[cfg(feature = "router")]
     #[cfg_attr(docsrs, doc(cfg(feature = "router")))]
@@ -178,7 +189,10 @@ pub mod prelude {
 
     #[cfg(feature = "router")]
     #[cfg_attr(docsrs, doc(cfg(feature = "router")))]
-    pub use dioxus_router::prelude::*;
+    pub use dioxus_router::{
+        hooks::*, navigator, use_navigator, GoBackButton, GoForwardButton, Link, NavigationTarget,
+        Outlet, Routable, Router,
+    };
 
     #[cfg(feature = "asset")]
     #[cfg_attr(docsrs, doc(cfg(feature = "asset")))]
