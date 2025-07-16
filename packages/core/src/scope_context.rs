@@ -158,7 +158,7 @@ impl Scope {
 
     /// Schedule an update for any component given its [`ScopeId`].
     ///
-    /// A component's [`ScopeId`] can be obtained from `use_hook` or the [`current_scope_id`](crate::prelude::current_scope_id) method.
+    /// A component's [`ScopeId`] can be obtained from `use_hook` or the [`current_scope_id`](crate::current_scope_id) method.
     ///
     /// This method should be used when you want to schedule an update for a component.
     ///
