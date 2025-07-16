@@ -1,6 +1,9 @@
 //! The typical TodoMVC app, implemented in Dioxus.
 
-use dioxus::prelude::*;
+use dioxus::prelude::{
+    dioxus_stores::{use_store, Store},
+    *,
+};
 use std::collections::HashMap;
 
 const STYLE: Asset = asset!("/examples/assets/todomvc.css");
@@ -9,43 +12,38 @@ fn main() {
     dioxus::launch(app);
 }
 
-#[derive(PartialEq, Eq, Clone, Copy)]
-enum FilterState {
-    All,
-    Active,
-    Completed,
-}
-
-struct TodoItem {
-    checked: bool,
-    contents: String,
-}
-
 fn app() -> Element {
     // We store the todos in a HashMap in a Signal.
     // Each key is the id of the todo, and the value is the todo itself.
-    let mut todos = use_signal(HashMap::<u32, TodoItem>::new);
+    let todos = use_store(|| TodoState {
+        todos: HashMap::new(),
+        filter: FilterState::All,
+    });
 
-    let filter = use_signal(|| FilterState::All);
+    let todo_list = todos.todos();
+    let filter = todos.filter();
 
     // We use a simple memoized signal to calculate the number of active todos.
     // Whenever the todos change, the active_todo_count will be recalculated.
-    let active_todo_count =
-        use_memo(move || todos.read().values().filter(|item| !item.checked).count());
+    let active_todo_count = use_memo(move || {
+        todo_list
+            .values()
+            .filter(|item| !item.checked().cloned())
+            .count()
+    });
 
     // We use a memoized signal to filter the todos based on the current filter state.
     // Whenever the todos or filter change, the filtered_todos will be recalculated.
     // Note that we're only storing the IDs of the todos, not the todos themselves.
     let filtered_todos = use_memo(move || {
-        let mut filtered_todos = todos
-            .read()
+        let mut filtered_todos = todo_list
             .iter()
             .filter(|(_, item)| match filter() {
                 FilterState::All => true,
-                FilterState::Active => !item.checked,
-                FilterState::Completed => item.checked,
+                FilterState::Active => !item.checked().cloned(),
+                FilterState::Completed => item.checked().cloned(),
             })
-            .map(|f| *f.0)
+            .map(|(i, _)| i as u32)
             .collect::<Vec<_>>();
 
         filtered_todos.sort_unstable();
@@ -57,8 +55,8 @@ fn app() -> Element {
     // If all todos are checked, uncheck them all. If any are unchecked, check them all.
     let toggle_all = move |_| {
         let check = active_todo_count() != 0;
-        for (_, item) in todos.write().iter_mut() {
-            item.checked = check;
+        for item in todo_list.values() {
+            item.checked().set(check);
         }
     };
 
@@ -67,7 +65,7 @@ fn app() -> Element {
         section { class: "todoapp",
             TodoHeader { todos }
             section { class: "main",
-                if !todos.read().is_empty() {
+                if !todo_list.is_empty() {
                     input {
                         id: "toggle-all",
                         class: "toggle-all",
@@ -88,8 +86,8 @@ fn app() -> Element {
                 }
 
                 // We only show the footer if there are todos.
-                if !todos.read().is_empty() {
-                    ListFooter { active_todo_count, todos, filter }
+                if !todo_list.is_empty() {
+                    ListFooter { active_todo_count, todos }
                 }
             }
         }
@@ -110,7 +108,7 @@ fn app() -> Element {
 }
 
 #[component]
-fn TodoHeader(mut todos: WriteSignal<HashMap<u32, TodoItem>>) -> Element {
+fn TodoHeader(mut todos: Store<TodoState>) -> Element {
     let mut draft = use_signal(|| "".to_string());
     let mut todo_id = use_signal(|| 0);
 
@@ -121,7 +119,7 @@ fn TodoHeader(mut todos: WriteSignal<HashMap<u32, TodoItem>>) -> Element {
                 checked: false,
                 contents: draft.to_string(),
             };
-            todos.write().insert(id, todo);
+            todos.todos().insert(id, todo);
             todo_id += 1;
             draft.set("".to_string());
         }
@@ -146,14 +144,12 @@ fn TodoHeader(mut todos: WriteSignal<HashMap<u32, TodoItem>>) -> Element {
 /// This takes the ID of the todo and the todos signal as props
 /// We can use these together to memoize the todo contents and checked state
 #[component]
-fn TodoEntry(mut todos: WriteSignal<HashMap<u32, TodoItem>>, id: u32) -> Element {
+fn TodoEntry(mut todos: Store<TodoState>, id: u32) -> Element {
     let mut is_editing = use_signal(|| false);
 
-    // To avoid re-rendering this component when the todo list changes, we isolate our reads to memos
-    // This way, the component will only re-render when the contents of the todo change, or when the editing state changes.
-    // This does involve taking a local clone of the todo contents, but it allows us to prevent this component from re-rendering
-    let checked = use_memo(move || todos.read().get(&id).unwrap().checked);
-    let contents = use_memo(move || todos.read().get(&id).unwrap().contents.clone());
+    let entry = todos.todos().get(id);
+    let checked = entry.checked();
+    let contents = entry.contents();
 
     rsx! {
         li {
@@ -169,7 +165,7 @@ fn TodoEntry(mut todos: WriteSignal<HashMap<u32, TodoItem>>, id: u32) -> Element
                     r#type: "checkbox",
                     id: "cbg-{id}",
                     checked: "{checked}",
-                    oninput: move |evt| todos.write().get_mut(&id).unwrap().checked = evt.checked()
+                    oninput: move |evt| entry.checked().set(evt.checked())
                 }
                 label {
                     r#for: "cbg-{id}",
@@ -181,7 +177,7 @@ fn TodoEntry(mut todos: WriteSignal<HashMap<u32, TodoItem>>, id: u32) -> Element
                     class: "destroy",
                     onclick: move |evt| {
                         evt.prevent_default();
-                        todos.write().remove(&id);
+                        todos.todos().remove(&id);
                     },
                 }
             }
@@ -191,7 +187,7 @@ fn TodoEntry(mut todos: WriteSignal<HashMap<u32, TodoItem>>, id: u32) -> Element
                 input {
                     class: "edit",
                     value: "{contents}",
-                    oninput: move |evt| todos.write().get_mut(&id).unwrap().contents = evt.value(),
+                    oninput: move |evt| entry.contents().set(evt.value()),
                     autofocus: "true",
                     onfocusout: move |_| is_editing.set(false),
                     onkeydown: move |evt| {
@@ -207,14 +203,12 @@ fn TodoEntry(mut todos: WriteSignal<HashMap<u32, TodoItem>>, id: u32) -> Element
 }
 
 #[component]
-fn ListFooter(
-    mut todos: WriteSignal<HashMap<u32, TodoItem>>,
-    active_todo_count: ReadSignal<usize>,
-    mut filter: WriteSignal<FilterState>,
-) -> Element {
+fn ListFooter(mut todos: Store<TodoState>, active_todo_count: ReadSignal<usize>) -> Element {
     // We use a memoized signal to calculate whether we should show the "Clear completed" button.
     // This will recompute whenever the todos change, and if the value is true, the button will be shown.
-    let show_clear_completed = use_memo(move || todos.read().values().any(|todo| todo.checked));
+    let show_clear_completed =
+        use_memo(move || todos.todos().values().any(|todo| todo.checked().cloned()));
+    let mut filter = todos.filter();
 
     rsx! {
         footer { class: "footer",
@@ -250,10 +244,32 @@ fn ListFooter(
             if show_clear_completed() {
                 button {
                     class: "clear-completed",
-                    onclick: move |_| todos.write().retain(|_, todo| !todo.checked),
+                    onclick: move |_| todos.todos().retain(|_, todo| !todo.checked),
                     "Clear completed"
                 }
             }
         }
     }
+}
+
+#[derive(Store, PartialEq, Clone)]
+struct TodoState {
+    todos: HashMap<u32, TodoItem>,
+    #[store(foreign)]
+    filter: FilterState,
+}
+
+#[derive(PartialEq, Eq, Clone, Copy)]
+enum FilterState {
+    All,
+    Active,
+    Completed,
+}
+
+#[derive(Store, PartialEq, Clone)]
+struct TodoItem {
+    #[store(foreign)]
+    checked: bool,
+    #[store(foreign)]
+    contents: String,
 }

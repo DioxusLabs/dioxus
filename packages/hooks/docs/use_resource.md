@@ -111,7 +111,7 @@ println!("{:?}", double_count.read()); // Prints "Some(8)"
 
 ## With non-reactive dependencies
 
-`use_resource` can determine dependencies automatically with any reactive value ([`Signal`]s, [`ReadOnlySignal`]s, [`Memo`]s, [`Resource`]s, etc). If you need to rerun the future when a normal rust value changes, you can add it as a dependency with the [`crate::use_reactive()`] hook:
+`use_resource` can determine dependencies automatically with any reactive value ([`Signal`]s, [`ReadSignal`]s, [`Memo`]s, [`Resource`]s, etc). If you need to rerun the future when a normal rust value changes, you can add it as a dependency with the [`crate::use_reactive()`] hook:
 
 ```rust
 # use dioxus::prelude::*;
@@ -128,9 +128,9 @@ fn Comp(count: u32) -> Element {
 }
 
 // If your value is already reactive, you never need to call `use_reactive` manually
-// Instead of manually adding count to the dependencies list, you can make your prop reactive by wrapping it in `ReadOnlySignal`
+// Instead of manually adding count to the dependencies list, you can make your prop reactive by wrapping it in `ReadSignal`
 #[component]
-fn ReactiveComp(count: ReadOnlySignal<u32>) -> Element {
+fn ReactiveComp(count: ReadSignal<u32>) -> Element {
     // Because `count` is reactive, the resource knows to rerun when `count` changes automatically
     let new_count = use_resource(move || async move {
         sleep(100).await;

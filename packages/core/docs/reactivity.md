@@ -92,9 +92,9 @@ fn MyComponent(state: i32) -> Element {
     todo!()
 }
 
-// ✅ Wrap your props in ReadOnlySignal to make them reactive
+// ✅ Wrap your props in ReadSignal to make them reactive
 #[component]
-fn MyReactiveComponent(state: ReadOnlySignal<i32>) -> Element {
+fn MyReactiveComponent(state: ReadSignal<i32>) -> Element {
     let doubled = use_memo(move || state() * 2);
     todo!()
 }

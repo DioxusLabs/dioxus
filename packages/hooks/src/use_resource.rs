@@ -345,7 +345,7 @@ impl<T> Resource<T> {
         )
     }
 
-    /// Get the current state of the resource's future. This method returns a [`ReadOnlySignal`] which can be read to get the current state of the resource or passed to other hooks and components.
+    /// Get the current state of the resource's future. This method returns a [`ReadSignal`] which can be read to get the current state of the resource or passed to other hooks and components.
     ///
     /// ## Example
     /// ```rust, no_run
@@ -375,11 +375,11 @@ impl<T> Resource<T> {
     ///     }
     /// }
     /// ```
-    pub fn state(&self) -> ReadOnlySignal<UseResourceState> {
+    pub fn state(&self) -> ReadSignal<UseResourceState> {
         self.state.into()
     }
 
-    /// Get the current value of the resource's future.  This method returns a [`ReadOnlySignal`] which can be read to get the current value of the resource or passed to other hooks and components.
+    /// Get the current value of the resource's future.  This method returns a [`ReadSignal`] which can be read to get the current value of the resource or passed to other hooks and components.
     ///
     /// ## Example
     ///
@@ -406,12 +406,12 @@ impl<T> Resource<T> {
     ///     }
     /// }
     /// ```
-    pub fn value(&self) -> ReadOnlySignal<Option<T>> {
+    pub fn value(&self) -> ReadSignal<Option<T>> {
         self.value.into()
     }
 
     /// Suspend the resource's future and only continue rendering when the future is ready
-    pub fn suspend(&self) -> std::result::Result<MappedSignal<T>, RenderError> {
+    pub fn suspend(&self) -> std::result::Result<MappedSignal<T, Signal<Option<T>>>, RenderError> {
         match self.state.cloned() {
             UseResourceState::Stopped | UseResourceState::Paused | UseResourceState::Pending => {
                 let task = self.task();
@@ -426,7 +426,7 @@ impl<T> Resource<T> {
     }
 }
 
-impl<T> From<Resource<T>> for ReadOnlySignal<Option<T>> {
+impl<T> From<Resource<T>> for ReadSignal<Option<T>> {
     fn from(val: Resource<T>) -> Self {
         val.value.into()
     }
@@ -448,6 +448,10 @@ impl<T> Readable for Resource<T> {
         &self,
     ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> {
         self.value.try_peek_unchecked()
+    }
+
+    fn subscribers(&self) -> Option<Subscribers> {
+        self.value.subscribers()
     }
 }
 
@@ -476,6 +480,6 @@ impl<T: Clone> Deref for Resource<T> {
     type Target = dyn Fn() -> Option<T>;
 
     fn deref(&self) -> &Self::Target {
-        unsafe { Readable::deref_impl(self) }
+        unsafe { ReadableExt::deref_impl(self) }
     }
 }
