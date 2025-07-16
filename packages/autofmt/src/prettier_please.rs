@@ -9,8 +9,8 @@ impl Writer<'_> {
     }
 }
 
-const MARKER: &str = "dioxus_autofmt_block__________";
-const MARKER_REPLACE: &str = "dioxus_autofmt_block__________! {}";
+const MARKER: &str = "𝕣𝕤𝕩";
+const MARKER_REPLACE: &str = "𝕣𝕤𝕩! {}";
 
 pub fn unparse_expr(expr: &Expr, src: &str, cfg: &IndentOptions) -> String {
     struct ReplaceMacros<'a> {
@@ -84,7 +84,7 @@ pub fn unparse_expr(expr: &Expr, src: &str, cfg: &IndentOptions) -> String {
 
     // now we can replace the macros with the formatted blocks
     for fmted in replacer.formatted_stack.drain(..) {
-        let is_multiline = fmted.contains('{');
+        let is_multiline = fmted.ends_with('}') || fmted.contains('\n');
         let is_empty = fmted.trim().is_empty();
 
         let mut out_fmt = String::from("rsx! {");

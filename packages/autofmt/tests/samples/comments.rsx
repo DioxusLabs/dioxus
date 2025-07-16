@@ -167,7 +167,7 @@ rsx! {
         {
             let a = "123 // boo 123";
             // boo // boo
-            rsx!{ "{a}" }
+            rsx! { "{a}" }
         }
     }
 
@@ -207,6 +207,20 @@ rsx! {
                 // A comment inside an expression
             },
         }
+    }
+
+    {
+        rsx! { "{a}" }
+    }
+
+    {
+        rsx! { "one" }
+    }
+
+    div {}
+
+    {
+        rsx! { "one two three" }
     }
 
 
