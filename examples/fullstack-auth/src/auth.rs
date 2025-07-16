@@ -9,7 +9,7 @@ use axum_session::{SessionConfig, SessionLayer, SessionStore};
 use axum_session_auth::*;
 use axum_session_sqlx::SessionSqlitePool;
 use core::pin::Pin;
-use dioxus_fullstack::prelude::*;
+use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePool, SqlitePoolOptions};
 use std::error::Error;

@@ -29,10 +29,9 @@
 //! };
 //!```
 
-use dioxus_core::prelude::*;
-use std::{fmt::Write, ops::AddAssign};
-
 use crate::renderer::{str_truthy, BOOL_ATTRS};
+use dioxus_core::{TemplateAttribute, TemplateNode, VNode};
+use std::{fmt::Write, ops::AddAssign};
 
 #[derive(Debug)]
 pub(crate) struct StringCache {

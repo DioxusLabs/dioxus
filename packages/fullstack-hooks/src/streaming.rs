@@ -1,4 +1,4 @@
-use dioxus_core::prelude::try_consume_context;
+use dioxus_core::try_consume_context;
 use dioxus_signals::{Readable, Signal, Writable};
 
 /// The status of the streaming response

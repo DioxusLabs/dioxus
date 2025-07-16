@@ -1,6 +1,6 @@
 use crate::{use_context_provider, use_future, UseFuture};
-use dioxus_core::prelude::{consume_context, use_hook};
 use dioxus_core::Task;
+use dioxus_core::{consume_context, use_hook};
 use dioxus_signals::*;
 pub use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use std::future::Future;

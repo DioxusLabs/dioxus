@@ -4,10 +4,7 @@ use crate::{
     assets::*, ipc::UserWindowEvent, shortcut::IntoAccelerator, window, DesktopContext,
     HotKeyState, ShortcutHandle, ShortcutRegistryError, WryEventHandler,
 };
-use dioxus_core::{
-    prelude::{consume_context, use_hook_with_cleanup},
-    use_hook, Runtime,
-};
+use dioxus_core::{consume_context, use_hook, use_hook_with_cleanup, Runtime};
 
 use dioxus_hooks::use_callback;
 use tao::{event::Event, event_loop::EventLoopWindowTarget};
@@ -22,7 +19,7 @@ pub fn use_window() -> DesktopContext {
 pub fn use_wry_event_handler(
     mut handler: impl FnMut(&Event<UserWindowEvent>, &EventLoopWindowTarget<UserWindowEvent>) + 'static,
 ) -> WryEventHandler {
-    use dioxus_core::prelude::current_scope_id;
+    use dioxus_core::current_scope_id;
 
     // Capture the current runtime and scope ID.
     let runtime = Runtime::current().unwrap();

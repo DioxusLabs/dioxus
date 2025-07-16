@@ -2,7 +2,7 @@
 
 use std::cell::OnceCell;
 
-use dioxus_core::{prelude::queue_effect, schedule_update};
+use dioxus_core::{queue_effect, schedule_update};
 use dioxus_fullstack_protocol::is_hydrating;
 use dioxus_history::History;
 

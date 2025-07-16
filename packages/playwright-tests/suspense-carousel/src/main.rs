@@ -5,7 +5,7 @@
 // - Server futures
 
 #![allow(non_snake_case, unused)]
-use dioxus::prelude::*;
+use dioxus::{fullstack::commit_initial_chunk, prelude::*};
 use serde::{Deserialize, Serialize};
 
 fn app() -> Element {

@@ -6,12 +6,16 @@ use crate::{
 };
 use dioxus_cli_config::base_path;
 use dioxus_fullstack_hooks::history::FullstackHistory;
-use dioxus_fullstack_hooks::prelude::{StreamingContext, StreamingStatus};
+use dioxus_fullstack_hooks::{StreamingContext, StreamingStatus};
 use dioxus_fullstack_protocol::{HydrationContext, SerializedHydrationData};
 use dioxus_isrg::{CachedRender, IncrementalRendererError, RenderFreshness};
-use dioxus_lib::document::Document;
-use dioxus_lib::prelude::dioxus_core::DynamicNode;
-use dioxus_router::prelude::ParseRouteError;
+use dioxus_lib::{
+    core::{
+        has_context, provide_error_boundary, DynamicNode, ErrorContext, SuspenseContext, VirtualDom,
+    },
+    document::Document,
+};
+use dioxus_router::ParseRouteError;
 use dioxus_ssr::Renderer;
 use futures_channel::mpsc::Sender;
 use futures_util::{Stream, StreamExt};

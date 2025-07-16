@@ -1,3 +1,5 @@
+use dioxus_core::generation;
+
 #[tokio::test]
 async fn memo_updates() {
     use std::cell::RefCell;

@@ -114,7 +114,7 @@ impl ServeConfigBuilder {
     }
 
     /// Provide context to the root and server functions. You can use this context while rendering with [`consume_context`](dioxus_lib::prelude::consume_context)
-    /// or in server functions with [`FromContext`](crate::prelude::FromContext).
+    /// or in server functions with [`FromContext`](crate::FromContext).
     ///
     ///
     /// The context providers passed into this method will be called when the context type is requested which may happen many times in the lifecycle of the application.
@@ -183,7 +183,7 @@ impl ServeConfigBuilder {
     }
 
     /// Provide context to the root and server functions. You can use this context
-    /// while rendering with [`consume_context`](dioxus_lib::prelude::consume_context) or in server functions with [`FromContext`](crate::prelude::FromContext).
+    /// while rendering with [`consume_context`](dioxus_lib::prelude::consume_context) or in server functions with [`FromContext`](crate::FromContext).
     ///
     ///
     /// The context providers passed into this method will be called when the context type is requested which may happen many times in the lifecycle of the application.
@@ -247,7 +247,7 @@ impl ServeConfigBuilder {
     }
 
     /// Provide context to the root and server functions. You can use this context while rendering with [`consume_context`](dioxus_lib::prelude::consume_context)
-    /// or in server functions with [`FromContext`](crate::prelude::FromContext).
+    /// or in server functions with [`FromContext`](crate::FromContext).
     ///
     /// Context will be forwarded from the LaunchBuilder if it is provided.
     ///

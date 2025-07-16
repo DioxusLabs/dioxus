@@ -30,7 +30,9 @@ impl RouteSegment {
                     write!(f, "/{}", dioxus_router::exports::percent_encoding::utf8_percent_encode(&as_string, dioxus_router::exports::PATH_ASCII_SET))?;
                 }
             },
-            Self::CatchAll(ident, _) => quote! { #ident.display_route_segments(f)?; },
+            Self::CatchAll(ident, _) => quote! {
+                dioxus_router::ToRouteSegments::display_route_segments(#ident,f)?;
+            },
         }
     }
 

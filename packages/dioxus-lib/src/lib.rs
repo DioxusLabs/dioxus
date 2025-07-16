@@ -3,6 +3,8 @@
 #![doc(html_logo_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 
+pub use dioxus_core as core;
+
 #[cfg(feature = "hooks")]
 pub use dioxus_hooks as hooks;
 
@@ -10,8 +12,8 @@ pub use dioxus_hooks as hooks;
 pub use dioxus_signals as signals;
 
 pub mod events {
-    #[cfg(feature = "html")]
-    pub use dioxus_html::prelude::*;
+    // #[cfg(feature = "html")]
+    // pub use dioxus_html::prelude::*;
 }
 
 #[cfg(feature = "html")]
@@ -43,8 +45,6 @@ pub mod prelude {
     #[cfg(feature = "signals")]
     pub use dioxus_signals::*;
 
-    pub use dioxus_core::prelude::*;
-
     #[cfg(feature = "macro")]
     #[allow(deprecated)]
     pub use dioxus_core_macro::{component, rsx, Props};
@@ -56,7 +56,14 @@ pub mod prelude {
     pub use dioxus_html as dioxus_elements;
 
     #[cfg(feature = "html")]
-    pub use dioxus_elements::{global_attributes, prelude::*, svg_attributes};
+    pub use dioxus_elements::{events::*, global_attributes, svg_attributes, traits::*};
 
     pub use dioxus_core;
+
+    pub use dioxus_core::{
+        consume_context, provide_context, spawn, suspend, try_consume_context, use_hook, Attribute,
+        Callback, Component, Context, Element, ErrorBoundary, ErrorContext, Event, EventHandler,
+        Fragment, HasAttributes, IntoDynNode, RenderError, ScopeId, SuspenseBoundary,
+        SuspenseContext, SuspenseExtension, VNode, VirtualDom,
+    };
 }

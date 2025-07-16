@@ -1,6 +1,7 @@
 //! we should properly bubble up errors from components
 
 use dioxus::prelude::*;
+use dioxus_core::generation;
 
 fn app() -> Element {
     let raw = match generation() % 2 {

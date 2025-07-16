@@ -1,8 +1,7 @@
-use crate::runtime::RuntimeError;
-use crate::{innerlude::SchedulerMsg, Runtime, ScopeId, Task};
 use crate::{
-    innerlude::{throw_into, CapturedError},
-    prelude::SuspenseContext,
+    innerlude::{throw_into, CapturedError, SchedulerMsg, SuspenseContext},
+    runtime::RuntimeError,
+    Runtime, ScopeId, Task,
 };
 use generational_box::{AnyStorage, Owner};
 use rustc_hash::FxHashSet;
@@ -159,7 +158,7 @@ impl Scope {
 
     /// Schedule an update for any component given its [`ScopeId`].
     ///
-    /// A component's [`ScopeId`] can be obtained from `use_hook` or the [`current_scope_id`](crate::prelude::current_scope_id) method.
+    /// A component's [`ScopeId`] can be obtained from `use_hook` or the [`current_scope_id`](crate::current_scope_id) method.
     ///
     /// This method should be used when you want to schedule an update for a component.
     ///
@@ -612,7 +611,7 @@ impl ScopeId {
             .on_scope(self, f)
     }
 
-    /// Throw a [`CapturedError`] into a scope. The error will bubble up to the nearest [`ErrorBoundary`](crate::prelude::ErrorBoundary) or the root of the app.
+    /// Throw a [`CapturedError`] into a scope. The error will bubble up to the nearest [`ErrorBoundary`](crate::ErrorBoundary) or the root of the app.
     ///
     /// # Examples
     /// ```rust, no_run

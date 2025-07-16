@@ -4,8 +4,7 @@
 
 ```rust, no_run
 # tokio::runtime::Runtime::new().unwrap().block_on(async {
-use dioxus_core::prelude::*;
-use dioxus_core::*;
+use dioxus_core::{VirtualDom, Event, Element, Mutations};
 
 let mut vdom = VirtualDom::new(app);
 let real_dom = SomeRenderer::new();
