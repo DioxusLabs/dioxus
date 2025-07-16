@@ -11,6 +11,15 @@ pub struct VecSelector<W, T, S: SelectorStorage = UnsyncStorage> {
     _phantom: std::marker::PhantomData<T>,
 }
 
+impl<W, T, S: SelectorStorage> PartialEq for VecSelector<W, T, S>
+where
+    W: PartialEq,
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.selector == other.selector
+    }
+}
+
 impl<W, T, S: SelectorStorage> Clone for VecSelector<W, T, S>
 where
     W: Clone,
@@ -45,7 +54,7 @@ impl<
 {
     pub fn index(
         self,
-        index: u32,
+        index: usize,
     ) -> Store<
         T,
         MappedMutSignal<
@@ -57,9 +66,9 @@ impl<
         S,
     > {
         T::Store::new(self.selector.scope(
-            index,
-            move |value| &value[index as usize],
-            move |value| &mut value[index as usize],
+            index as u32,
+            move |value| &value[index],
+            move |value| &mut value[index],
         ))
     }
 
@@ -73,7 +82,7 @@ impl<
         self.selector.write.read().is_empty()
     }
 
-    pub fn into_iter(
+    pub fn iter(
         self,
     ) -> impl Iterator<
         Item = Store<
@@ -87,7 +96,7 @@ impl<
             S,
         >,
     > {
-        (0..self.len()).map(move |i| self.index(i as u32))
+        (0..self.len()).map(move |i| self.index(i))
     }
 
     pub fn push(self, value: T) {
@@ -95,15 +104,15 @@ impl<
         self.selector.write.write_unchecked().push(value);
     }
 
-    pub fn remove(self, index: u32) -> T {
+    pub fn remove(self, index: usize) -> T {
         self.selector.mark_dirty_shallow();
-        self.selector.mark_dirty_at_and_after_index(index as usize);
-        self.selector.write.write_unchecked().remove(index as usize)
+        self.selector.mark_dirty_at_and_after_index(index);
+        self.selector.write.write_unchecked().remove(index)
     }
 
-    pub fn insert(self, index: u32, value: T) {
+    pub fn insert(self, index: usize, value: T) {
         self.selector.mark_dirty_shallow();
-        self.selector.mark_dirty_at_and_after_index(index as usize);
+        self.selector.mark_dirty_at_and_after_index(index);
         self.selector
             .write
             .write_unchecked()

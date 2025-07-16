@@ -103,6 +103,7 @@ impl<W, S: SelectorStorage> SelectorScope<W, S> {
 
 impl<W: Readable, S: SelectorStorage> SelectorScope<W, S> {
     fn try_read_unchecked(&self) -> Result<ReadableRef<'static, W>, BorrowError> {
+        println!("SelectorScope::try_read_unchecked path={:?}", &*self.path);
         self.track();
         self.write.try_read_unchecked()
     }
@@ -118,6 +119,7 @@ impl<W: Readable, S: SelectorStorage> SelectorScope<W, S> {
 
 impl<W: Writable, S: SelectorStorage> SelectorScope<W, S> {
     fn try_write_unchecked(&self) -> Result<WritableRef<'static, W>, BorrowMutError> {
+        println!("SelectorScope::try_write_unchecked path={:?}", &*self.path);
         self.mark_dirty();
         self.write.try_write_unchecked()
     }
