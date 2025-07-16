@@ -21,6 +21,7 @@ syn = { workspace = true, features = [
 ] }
 serde = { workspace = true, features = ["derive"] }
 prettyplease = { workspace = true }
+regex = "1.11.1"
 
 [dev-dependencies]
 pretty_assertions = { workspace = true }

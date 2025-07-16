@@ -5022,6 +5022,7 @@ dependencies = [
  "prettyplease",
  "proc-macro2",
  "quote",
+ "regex",
  "serde",
  "syn 2.0.104",
 ]
