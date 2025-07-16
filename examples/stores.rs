@@ -7,9 +7,9 @@ fn main() {
 
 fn app() -> Element {
     let value = use_store(|| Value {
-        count: 0,
+        count: Default::default(),
         values: vec![Value {
-            count: 0,
+            count: Default::default(),
             values: Vec::new(),
         }],
     });
@@ -22,17 +22,17 @@ fn app() -> Element {
 }
 
 #[component]
-fn Tree(#[props(into)] value: Selector<Value<i32>>) -> Element {
+fn Tree(#[props(into)] value: Selector<Value>) -> Element {
     let mut count = value.count();
     use_effect(move || {
         // This effect will run whenever the value changes
-        println!("Child component value changed: {}", count.read());
+        println!("Child component value changed: {}", count.count().read());
     });
     rsx! {
-        h2 { "Child component with count {count.read()}" }
-        button { onclick: move |_| *count.write() += 1, "Increment" }
-        button { onclick: move |_| *count.write() -= 1, "Decrement" }
-        button { onclick: move |_| value.values().push(Value{ count: 0, values: Vec::new() }), "Push child" }
+        h2 { "Child component with count {count.count().read()}" }
+        button { onclick: move |_| *count.count().write() += 1, "Increment" }
+        button { onclick: move |_| *count.count().write() -= 1, "Decrement" }
+        button { onclick: move |_| value.values().push(Value{ count: Default::default(), values: Vec::new() }), "Push child" }
         ul {
             for child in value.values().iter() {
                 li {
@@ -44,8 +44,13 @@ fn Tree(#[props(into)] value: Selector<Value<i32>>) -> Element {
 }
 
 #[derive(Store)]
-struct Value<D> {
+struct Value {
+    count: DoubleCount,
+    values: Vec<Value>,
+}
+
+#[derive(Store, Default)]
+struct DoubleCount {
     #[store(foreign)]
-    count: D,
-    values: Vec<Value<D>>,
+    count: i32,
 }

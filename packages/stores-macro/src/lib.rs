@@ -253,7 +253,7 @@ fn derive_store_struct_into_boxed(
             #where_clause
         {
             fn from(value: #selector_name #general_selector_ty_generics) -> Self {
-                ValueSelector {
+                #selector_name {
                     selector: value.selector.map(::std::convert::Into::into),
                     _phantom: std::marker::PhantomData,
                 }
