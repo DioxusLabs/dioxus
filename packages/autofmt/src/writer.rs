@@ -807,83 +807,119 @@ impl<'a> Writer<'a> {
         // Adding comments back to the formatted expression
         let source_text = src_span.source_text().unwrap_or_default();
         let mut source_lines = source_text.lines().peekable();
+        let mut pretty_lines = pretty_expr.lines().peekable();
         let mut output = String::from("");
         let mut printed_empty_line = false;
 
         if source_lines.peek().is_none() {
             output = pretty_expr;
         } else {
-            for line in pretty_expr.lines() {
-                let compacted_pretty_line = line.replace(" ", "").replace(",", "");
-                let trimmed_pretty_line = line.trim();
+            // a rather weird strategy...
+            // we flatten the source line, removing things like commas, spaces, braces, etc
+            // this ends up with code on one line and whitespace on other lines
+            /*
 
-                // Nested expressions might have comments already. We handle writing all of those
-                // at the outer level, so we skip them here
-                if trimmed_pretty_line.starts_with("//") {
+               // a whitespace
+               some code { that is a { sequence of tokens }}
+               // b whitespace
+            */
+            // and then we write the pretty lines that match the current source line, removing the matched sequence as we go
+            // once the match no longer occurs, we write the source lines
+            let mut match_buffer = String::new();
+            while let Some(source_line) = source_lines.next() {
+                // Fill the buffer until we hit a comment or empty line
+                let trimmed_src = source_line.trim();
+
+                // Don't print empty lines for now...
+                if trimmed_src.is_empty() {
                     continue;
                 }
 
-                if !output.is_empty() {
-                    output.push('\n');
-                }
+                // If the next line is a comment or empty, then we need to unload the current match buffer
+                if trimmed_src.starts_with("//") {
+                    loop {
+                        // pull down all the pretty lines, removing entries from the match buffer as we go
+                        let Some(pretty_line) = pretty_lines.peek() else {
+                            break;
+                        };
 
-                // pull down any source lines with whitespace until we hit a line that matches our current line.
-                while let Some(src) = source_lines.peek() {
-                    let trimmed_src = src.trim();
+                        println!("testing pretty line: {pretty_line}");
 
-                    // Write comments and empty lines as they are
-                    if trimmed_src.starts_with("//") || trimmed_src.is_empty() {
-                        if !trimmed_src.is_empty() {
-                            // Match the whitespace of the incoming source line
-                            for s in line.chars().take_while(|c| c.is_whitespace()) {
-                                output.push(s);
+                        let compacted_trimmed_pretty_line = pretty_line
+                            .replace(['{', '}', '(', ')', ',', ';'], "")
+                            .replace(' ', "");
+
+                        if !compacted_trimmed_pretty_line.is_empty() {
+                            if let Some((l, remainder)) =
+                                match_buffer.split_once(&compacted_trimmed_pretty_line)
+                            {
+                                output.push_str(pretty_line);
+                                output.push_str("\n");
+                                match_buffer = remainder.to_string();
+                                pretty_lines.next();
+                                continue;
                             }
-
-                            // Bump out the indent level if the line starts with a closing brace (ie we're at the end of a block)
-                            if matches!(trimmed_pretty_line.chars().next(), Some(')' | '}' | ']')) {
-                                output.push_str(self.out.indent.indent_str());
-                            }
-
-                            printed_empty_line = false;
-                            output.push_str(trimmed_src);
-                            output.push('\n');
-                        } else if !printed_empty_line {
-                            output.push('\n');
-                            printed_empty_line = true;
                         }
 
-                        _ = source_lines.next();
-                        continue;
-                    }
+                        // if matches!(pretty_line.trim(), "}" | ")" | ",") {
+                        //     output.push_str(pretty_line);
+                        //     output.push_str("\n");
+                        //     pretty_lines.next();
+                        //     continue;
+                        // }
 
-                    let compacted_src_line = src.replace(" ", "").replace(",", "");
-
-                    // If this source line matches our pretty line, we stop pulling down
-                    if compacted_src_line.contains(&compacted_pretty_line) {
                         break;
                     }
 
-                    // Otherwise, consume this source line and keep going
-                    _ = source_lines.next();
+                    if !trimmed_src.is_empty() {
+                        if let Some(pretty) = pretty_lines.peek() {
+                            for c in pretty.chars().take_while(|c| c.is_whitespace()) {
+                                output.push(c);
+                            }
+                        }
+
+                        output.push_str(trimmed_src);
+                    }
+
+                    output.push('\n');
+                    match_buffer.clear();
+                    continue;
                 }
 
-                // Once all whitespace is written, write the pretty line
-                output.push_str(line);
-                printed_empty_line = false;
+                let compacted_trimmed_src = trimmed_src
+                    .replace(['{', '}', '(', ')', ',', ';'], "")
+                    .replace(' ', "");
+                match_buffer.push_str(&compacted_trimmed_src);
+            }
 
-                // And then pull the corresponding source line
-                let source_line = source_lines.next();
+            while let Some(pretty) = pretty_lines.next() {
+                if pretty.trim().starts_with("//") {
+                    continue;
+                }
 
-                // And then write any inline comments
-                if let Some(source_line) = source_line {
-                    if let Some(captures) = COMMENT_REGEX.with(|f| f.captures(source_line)) {
-                        if let Some(comment) = captures.get(1) {
-                            output.push_str(" // ");
-                            output.push_str(comment.as_str().replace("//", "").trim());
-                        }
-                    }
+                output.push_str(pretty);
+                if pretty_lines.peek().is_some() {
+                    output.push('\n');
                 }
             }
+
+            // loop {
+            //     let Some(src_line) = source_lines.peek() else {
+            //         break;
+            //     };
+
+            //     // Write whitespace
+            //     let trimmed_src = src_line.trim();
+            //     if trimmed_src.starts_with("//") || trimmed_src.is_empty() {
+            //         output.push_str(trimmed_src);
+            //         output.push('\n');
+            //         match_buffer.clear();
+            //         source_lines.next();
+            //         continue;
+            //     }
+
+            //     while let Some(source_line) = source_lines.next() {}
+            // }
         }
 
         self.write_mulitiline_tokens(output)?;
@@ -1124,3 +1160,267 @@ impl<'a> Writer<'a> {
         false
     }
 }
+
+// fn write_partial_expr(&mut self, expr: syn::Result<Expr>, src_span: Span) -> Result {
+//     let Ok(expr) = expr else {
+//         self.invalid_exprs.push(src_span);
+//         return Err(std::fmt::Error);
+//     };
+
+//     thread_local! {
+//         static COMMENT_REGEX: Regex = Regex::new("\"[^\"]*\"|(//.*)").unwrap();
+//     }
+
+//     let pretty_expr = self.retrieve_formatted_expr(&expr).to_string();
+
+//     // Adding comments back to the formatted expression
+//     let source_text = src_span.source_text().unwrap_or_default();
+//     let mut source_lines = source_text.lines().peekable();
+//     let mut pretty_lines = pretty_expr.lines().peekable();
+//     let mut output = String::from("");
+//     let mut printed_empty_line = false;
+
+//     if source_lines.peek().is_none() {
+//         output = pretty_expr;
+//     } else {
+//         while let Some(pretty_line) = pretty_lines.next() {
+//             let trimmed_pretty_line = pretty_line.trim();
+
+//             // Nested expressions might have comments already. We handle writing all of those
+//             // at the outer level, so we skip them here
+//             if trimmed_pretty_line.starts_with("//") {
+//                 continue;
+//             }
+
+//             if !output.is_empty() {
+//                 output.push('\n');
+//             }
+
+//             // pull down whitespace
+//             while let Some(src_line) = source_lines.peek() {
+//                 println!("testing src line: {src_line}");
+//                 let trimmed_src = src_line.trim();
+
+//                 // If it's not a comment or empty line, we stop pulling down
+//                 if !(trimmed_src.starts_with("//") || trimmed_src.is_empty()) {
+//                     break;
+//                 }
+
+//                 if !trimmed_src.is_empty() {
+//                     // Match the whitespace of the incoming source line
+//                     for s in pretty_line.chars().take_while(|c| c.is_whitespace()) {
+//                         output.push(s);
+//                     }
+
+//                     // Bump out the indent level if the line starts with a closing brace (ie we're at the end of a block)
+//                     if matches!(trimmed_pretty_line.chars().next(), Some(')' | '}' | ']')) {
+//                         output.push_str(self.out.indent.indent_str());
+//                     }
+
+//                     printed_empty_line = false;
+//                     output.push_str(trimmed_src);
+//                     output.push('\n');
+//                 } else if !printed_empty_line {
+//                     output.push('\n');
+//                     printed_empty_line = true;
+//                 }
+
+//                 _ = source_lines.next();
+//             }
+
+//             // Pull off non-whitespace while they match the current pretty line
+//             printed_empty_line = false;
+//             output.push_str(pretty_line);
+
+//             if let Some(source_line) = source_lines.peek() {
+//                 // And then write any inline comments
+//                 if let Some(captures) = COMMENT_REGEX.with(|f| f.captures(source_line)) {
+//                     if let Some(comment) = captures.get(1) {
+//                         output.push_str(" // ");
+//                         output.push_str(comment.as_str().replace("//", "").trim());
+//                     }
+//                 }
+
+//                 let trimmed_src = source_line.trim();
+//                 let compacted_src = trimmed_src.replace(" ", "").replace(",", "");
+
+//                 while let Some(pretty) = pretty_lines.peek() {
+//                     let trimmed_pretty = pretty.trim();
+//                     let compacted_pretty = trimmed_pretty.replace(" ", "").replace(",", "");
+
+//                     if compacted_src.contains(&compacted_pretty)
+//                         || compacted_pretty.contains(&compacted_src)
+//                     {
+//                         output.push('\n');
+//                         output.push_str(pretty);
+//                         pretty_lines.next();
+//                         continue;
+//                     }
+
+//                     break;
+//                 }
+
+//                 // let trimmed_src = source_line.trim();
+//                 // let compacted_src_line = trimmed_src.replace(" ", "").replace(",", "");
+
+//                 // //                 let mut compacted_pretty_line =
+//                 // // trimmed_pretty_line.replace(" ", "").replace(",", "");
+
+//                 // if !(compacted_src_line.contains(&compacted_pretty_line)
+//                 //     || compacted_pretty_line.contains(&compacted_src_line))
+//                 // {
+//                 // }
+
+//                 // Multiple pretty lines might be needed to match the source line
+//                 // We need to keep pull the pretty lines down until they no longer
+//                 // loop {
+
+//                 // }
+//                 // if let Some(next_pretty) = pretty_lines.peek() {}
+//                 // if source_line
+//             }
+
+//             // if let Some(src_line) = source_lines.next() {
+//             // }
+
+//             // while let Some(pretty_line) = pretty_lines.peek() {}
+
+//             //     // Otherwise, consume this source line and keep going
+//             //     let Some(trimmed_src) = source_lines.next() else {
+//             //         // If we run out of source lines, we just write the pretty line
+//             //         output.push_str(line);
+//             //         printed_empty_line = false;
+//             //         break;
+//             //     };
+
+//             //     let compacted_src_line = trimmed_src.replace(" ", "").replace(",", "");
+
+//             //     // If this source line matches our pretty line, we stop pulling down
+//             //     // We two a two-way check to accomodate lines that get split when formatted
+//             //     if compacted_src_line.contains(&compacted_pretty_line)
+//             //         || compacted_pretty_line.contains(&compacted_src_line)
+//             //     {
+//             //         break;
+//             //     }
+
+//             //     // Once all whitespace is written, write the pretty line
+//             //     output.push_str(line);
+//             //     printed_empty_line = false;
+//         }
+//     }
+
+//     self.write_mulitiline_tokens(output)?;
+
+//     Ok(())
+// }
+
+// for line in source_lines {
+//     if !output.is_empty() {
+//         output.push('\n');
+//     }
+
+//     if line.trim().starts_with("//") {
+//         output.push_str(line);
+//     } else {
+//         let next = pretty_lines.next();
+//         if let Some(next_line) = next {
+//             output.push_str(next_line);
+//         }
+//     }
+// }
+// for line in pretty_expr.lines() {
+//     let compacted_pretty_line = line.replace(" ", "").replace(",", "");
+//     let trimmed_pretty_line = line.trim();
+
+//     // Nested expressions might have comments already. We handle writing all of those
+//     // at the outer level, so we skip them here
+//     if trimmed_pretty_line.starts_with("//") {
+//         continue;
+//     }
+
+//     if !output.is_empty() {
+//         output.push('\n');
+//     }
+
+//     // pull down any source lines with whitespace until we hit a line that matches our current line.
+//     while let Some(src) = source_lines.peek() {
+//         let trimmed_src = src.trim();
+
+//         // Write comments and empty lines as they are
+//         if trimmed_src.starts_with("//") || trimmed_src.is_empty() {
+//             if !trimmed_src.is_empty() {
+//                 // Match the whitespace of the incoming source line
+//                 for s in line.chars().take_while(|c| c.is_whitespace()) {
+//                     output.push(s);
+//                 }
+
+//                 // Bump out the indent level if the line starts with a closing brace (ie we're at the end of a block)
+//                 if matches!(trimmed_pretty_line.chars().next(), Some(')' | '}' | ']')) {
+//                     output.push_str(self.out.indent.indent_str());
+//                 }
+
+//                 printed_empty_line = false;
+//                 output.push_str(trimmed_src);
+//                 output.push('\n');
+//             } else if !printed_empty_line {
+//                 output.push('\n');
+//                 printed_empty_line = true;
+//             }
+
+//             _ = source_lines.next();
+//             continue;
+//         }
+
+//         let compacted_src_line = src.replace(" ", "").replace(",", "");
+
+//         // If this source line matches our pretty line, we stop pulling down
+//         if compacted_src_line.contains(&compacted_pretty_line) {
+//             break;
+//         }
+
+//         // Otherwise, consume this source line and keep going
+//         _ = source_lines.next();
+//     }
+
+//     // Once all whitespace is written, write the pretty line
+//     output.push_str(line);
+//     printed_empty_line = false;
+
+//     // And then pull the corresponding source line
+//     let mut source_line = source_lines.next();
+
+//     // And then write any inline comments
+//     if let Some(source_line) = source_line.as_ref() {
+//         if let Some(captures) = COMMENT_REGEX.with(|f| f.captures(source_line)) {
+//             if let Some(comment) = captures.get(1) {
+//                 output.push_str(" // ");
+//                 output.push_str(comment.as_str().replace("//", "").trim());
+//             }
+//         }
+//     }
+
+//     while let Some(lookahead) = source_lines.peek() {
+//         let trimmed = lookahead.trim();
+//         if trimmed.is_empty() || trimmed.starts_with("//") {
+//             break;
+//         }
+//         source_lines.next();
+//     }
+
+//     // // And then write more source lines as long as they match the pretty line
+//     // while let Some(src) = source_line.take() {
+//     //     // let trimmed = src.trim();
+//     //     // if trimmed.is_empty() || trimmed.starts_with("//") {
+//     //     //     break;
+//     //     // };
+
+//     //     // let compacted_src_line = trimmed.replace(" ", "").replace(",", "");
+
+//     //     // if !compacted_src_line.contains(&compacted_pretty_line) {
+//     //     //     // If the source line matches our pretty line, we stop pulling down
+//     //     //     break;
+//     //     // }
+
+//     //     source_line = source_lines.next();
+//     // }
+// }
