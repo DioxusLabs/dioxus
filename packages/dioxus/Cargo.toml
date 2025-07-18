@@ -41,11 +41,15 @@ dioxus-devtools = { workspace = true, optional = true }
 
 [features]
 default = [
+  "launch",
+  "lib"
+]
+# All default features without the launch api for use in libraries
+lib = [
   "macro",
   "html",
   "signals",
   "hooks",
-  "launch",
   "mounted",
   "file_engine",
   "document",
@@ -55,6 +59,7 @@ default = [
   "warnings",
   "cli-config",
 ]
+# The minimal set of features required to use dioxus renderers for minimal binary size
 minimal = ["macro", "html", "signals", "hooks", "launch"]
 signals = ["dep:dioxus-signals"]
 macro = ["dep:dioxus-core-macro"]
