@@ -42,9 +42,11 @@ dioxus-devtools = { workspace = true, optional = true }
 [features]
 default = [
   "launch",
+  "devtools",
+  "logger",
   "lib"
 ]
-# All default features without the launch api for use in libraries
+# All features recommended for use in libraries
 lib = [
   "macro",
   "html",
@@ -54,8 +56,6 @@ lib = [
   "file_engine",
   "document",
   "asset",
-  "devtools",
-  "logger",
   "warnings",
   "cli-config",
 ]
