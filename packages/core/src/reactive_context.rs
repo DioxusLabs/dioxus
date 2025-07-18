@@ -158,6 +158,7 @@ impl ReactiveContext {
     ///
     /// ```rust, no_run
     /// # use dioxus::prelude::*;
+    /// # use dioxus_core::ReactiveContext;
     /// # use futures_util::StreamExt;
     /// fn use_simplified_memo(mut closure: impl FnMut() -> i32 + 'static) -> Signal<i32> {
     ///     use_hook(|| {

@@ -332,6 +332,7 @@ impl Scope {
     ///
     /// ```rust, no_run
     /// # use dioxus::prelude::*;
+    /// # use dioxus_core::spawn_isomorphic;
     /// // ❌ Do not do requests in isomorphic tasks. It may resolve at a different time on the server and client, causing hydration issues.
     /// let mut state = use_signal(|| None);
     /// spawn_isomorphic(async move {
