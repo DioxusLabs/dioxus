@@ -53,7 +53,7 @@ impl<R: Routable> PartialEq for ChildRouterProps<R> {
     }
 }
 
-/// A component that provides a [`History`] to a child router. The `#[child]` attribute on the router macro will insert this automatically.
+/// A component that provides a [`History`](dioxus_history::History) to a child router. The `#[child]` attribute on the router macro will insert this automatically.
 #[component]
 #[allow(missing_docs)]
 pub fn ChildRouter<R: Routable>(props: ChildRouterProps<R>) -> Element {
