@@ -97,7 +97,8 @@ pub(crate) fn process_file_to_with_options(
     }
 
     // If everything was successful, rename the temp file to the final output path
-    std::fs::rename(temp_path, output_path).context("Failed to rename output file")?;
+    std::fs::rename(temp_path, output_path)
+        .with_context(|| format!("Failed to rename output file to: {}", output_path.display()))?;
 
     Ok(())
 }

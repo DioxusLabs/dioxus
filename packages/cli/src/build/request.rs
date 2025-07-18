@@ -1189,7 +1189,7 @@ impl BuildRequest {
 
         // Create a set of all the paths that new files will be bundled to
         let mut keep_bundled_output_paths: HashSet<_> = assets
-            .assets()
+            .unique_assets()
             .map(|a| asset_dir.join(a.bundled_path()))
             .collect();
 
@@ -1228,7 +1228,7 @@ impl BuildRequest {
         let mut assets_to_transfer = vec![];
 
         // Queue the bundled assets
-        for bundled in assets.assets() {
+        for bundled in assets.unique_assets() {
             let from = PathBuf::from(bundled.absolute_source_path());
             let to = asset_dir.join(bundled.bundled_path());
 
@@ -4310,7 +4310,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         }
 
         // Inject any resources from manganis into the head
-        for asset in assets.assets() {
+        for asset in assets.unique_assets() {
             let asset_path = asset.bundled_path();
             match asset.options().variant() {
                 AssetVariant::Css(css_options) => {
