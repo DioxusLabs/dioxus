@@ -23,20 +23,45 @@ impl SelectorNode {
         self.root.get(first).and_then(|child| child.find(rest))
     }
 
-    fn read(&mut self, path: &[u32]) {
+    fn get_mut_or_default(&mut self, path: &[u32]) -> &mut SelectorNode {
         let [first, rest @ ..] = path else {
-            if let Some(rc) = ReactiveContext::current() {
-                rc.subscribe(self.subscribers.clone());
-            }
-            return;
+            return self;
         };
-        self.root.entry(*first).or_default().read(rest);
+        self.root
+            .entry(*first)
+            .or_default()
+            .get_mut_or_default(rest)
+    }
+
+    fn read(&mut self, path: &[u32]) {
+        let node = self.get_mut_or_default(path);
+        node.track();
+    }
+
+    fn track(&mut self) {
+        if let Some(rc) = ReactiveContext::current() {
+            rc.subscribe(self.subscribers.clone());
+        }
+    }
+
+    fn read_nested(&mut self, path: &[u32]) {
+        let node = self.get_mut_or_default(path);
+        node.visit_depth_first_mut(&mut |n| {
+            n.track();
+        });
     }
 
     fn visit_depth_first(&self, f: &mut dyn FnMut(&SelectorNode)) {
         f(self);
         for child in self.root.values() {
             child.visit_depth_first(f);
+        }
+    }
+
+    fn visit_depth_first_mut(&mut self, f: &mut dyn FnMut(&mut SelectorNode)) {
+        f(self);
+        for child in self.root.values_mut() {
+            child.visit_depth_first_mut(f);
         }
     }
 
@@ -166,6 +191,10 @@ impl<S: SelectorStorage> StoreSubscriptions<S> {
 
     pub(crate) fn track(&self, key: &[u32]) {
         self.inner.write_unchecked().root.read(key);
+    }
+
+    pub(crate) fn track_nested(&self, key: &[u32]) {
+        self.inner.write_unchecked().root.read_nested(key);
     }
 
     pub(crate) fn mark_dirty(&self, key: &[u32]) {

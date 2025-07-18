@@ -252,24 +252,30 @@ fn ListFooter(mut todos: Store<TodoState>, active_todo_count: ReadSignal<usize>)
     }
 }
 
-#[derive(Store, PartialEq, Clone)]
+#[derive(Store, PartialEq, Clone, Debug)]
 struct TodoState {
     todos: HashMap<u32, TodoItem>,
     #[store(foreign)]
     filter: FilterState,
 }
 
-#[derive(PartialEq, Eq, Clone, Copy)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
 enum FilterState {
     All,
     Active,
     Completed,
 }
 
-#[derive(Store, PartialEq, Clone)]
+#[derive(Store, PartialEq, Clone, Debug)]
 struct TodoItem {
     #[store(foreign)]
     checked: bool,
     #[store(foreign)]
     contents: String,
+}
+
+impl TodoItem {
+    fn new(checked: bool, contents: String) -> Self {
+        Self { checked, contents }
+    }
 }

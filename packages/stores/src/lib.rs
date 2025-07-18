@@ -99,6 +99,10 @@ impl<W, S: SelectorStorage> SelectorScope<W, S> {
         self.store.track(&self.path);
     }
 
+    fn track_nested(&self) {
+        self.store.track_nested(&self.path);
+    }
+
     fn mark_dirty(&self) {
         self.store.mark_dirty(&self.path);
     }
@@ -123,7 +127,7 @@ impl<W, S: SelectorStorage> SelectorScope<W, S> {
 
 impl<W: Readable, S: SelectorStorage> SelectorScope<W, S> {
     pub fn try_read_unchecked(&self) -> Result<ReadableRef<'static, W>, BorrowError> {
-        self.track();
+        self.track_nested();
         self.write.try_read_unchecked()
     }
 

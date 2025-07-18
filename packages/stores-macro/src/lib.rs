@@ -107,6 +107,8 @@ fn derive_store_struct(input: &DeriveInput, structure: &DataStruct) -> syn::Resu
     };
 
     let store_struct_into_boxed = derive_store_struct_into_boxed(input, &selector_name)?;
+    let store_struct_readable = derive_store_struct_readable(input, &selector_name)?;
+    let store_struct_writable = derive_store_struct_writable(input, &selector_name)?;
 
     let fields = fields
         .iter()
@@ -201,6 +203,10 @@ fn derive_store_struct(input: &DeriveInput, structure: &DataStruct) -> syn::Resu
         }
 
         #store_struct_into_boxed
+
+        #store_struct_readable
+
+        #store_struct_writable
     };
 
     Ok(expanded)
@@ -257,6 +263,77 @@ fn derive_store_struct_into_boxed(
                     selector: value.selector.map(::std::convert::Into::into),
                     _phantom: std::marker::PhantomData,
                 }
+            }
+        }
+    })
+}
+
+fn derive_store_struct_readable(
+    input: &DeriveInput,
+    selector_name: &Ident,
+) -> syn::Result<TokenStream2> {
+    let struct_name = &input.ident;
+
+    let (_, original_ty_generics, _) = input.generics.split_for_impl();
+    let mut generics = input.generics.clone();
+    generics
+        .params
+        .push(parse_quote!(__W: dioxus_stores::macro_helpers::dioxus_signals::Readable<Target = #struct_name #original_ty_generics, Storage = __S>));
+    generics
+        .params
+        .push(parse_quote!(__S: dioxus_stores::SelectorStorage));
+
+    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+
+    Ok(quote! {
+        impl #impl_generics dioxus_stores::macro_helpers::dioxus_signals::Readable
+            for #selector_name #ty_generics
+            #where_clause
+        {
+            type Storage = __S;
+            type Target = #struct_name #original_ty_generics;
+
+            fn try_read_unchecked(&self) -> Result<dioxus_stores::macro_helpers::dioxus_signals::ReadableRef<'static, Self>, dioxus_stores::macro_helpers::dioxus_signals::BorrowError> {
+                self.selector.try_read_unchecked()
+            }
+
+            fn try_peek_unchecked(&self) -> Result<dioxus_stores::macro_helpers::dioxus_signals::ReadableRef<'static, Self>, dioxus_stores::macro_helpers::dioxus_signals::BorrowError> {
+                self.selector.try_peek_unchecked()
+            }
+
+            fn subscribers(&self) -> Option<Subscribers> {
+                self.selector.subscribers()
+            }
+        }
+    })
+}
+
+fn derive_store_struct_writable(
+    input: &DeriveInput,
+    selector_name: &Ident,
+) -> syn::Result<TokenStream2> {
+    let struct_name = &input.ident;
+
+    let (_, original_ty_generics, _) = input.generics.split_for_impl();
+    let mut generics = input.generics.clone();
+    generics
+        .params
+        .push(parse_quote!(__W: dioxus_stores::macro_helpers::dioxus_signals::Writable<Target = #struct_name #original_ty_generics, Storage = __S>));
+    generics
+        .params
+        .push(parse_quote!(__S: dioxus_stores::SelectorStorage));
+
+    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+
+    Ok(quote! {
+        impl #impl_generics dioxus_stores::macro_helpers::dioxus_signals::Writable
+            for #selector_name #ty_generics
+            #where_clause
+        {
+            type WriteMetadata = <__W as dioxus_stores::macro_helpers::dioxus_signals::Writable>::WriteMetadata;
+
+            fn try_write_unchecked(&self) -> Result<dioxus_stores::macro_helpers::dioxus_signals::WritableRef<'static, Self>, dioxus_stores::macro_helpers::dioxus_signals::BorrowMutError> {
+                self.selector.try_write_unchecked()
             }
         }
     })
