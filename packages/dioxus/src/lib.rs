@@ -26,6 +26,7 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 pub use dioxus_core;
+#[doc(inline)]
 pub use dioxus_core::{CapturedError, Ok, Result};
 
 #[cfg(feature = "launch")]
@@ -127,27 +128,33 @@ pub use subsecond;
 pub mod prelude {
     #[cfg(feature = "document")]
     #[cfg_attr(docsrs, doc(cfg(feature = "document")))]
+    #[doc(inline)]
     pub use dioxus_document as document;
 
     #[cfg(feature = "document")]
     #[cfg_attr(docsrs, doc(cfg(feature = "document")))]
+    #[doc(inline)]
     pub use dioxus_history::{history, History};
 
     #[cfg(feature = "launch")]
     #[cfg_attr(docsrs, doc(cfg(feature = "launch")))]
+    #[doc(inline)]
     pub use crate::launch::*;
 
     #[cfg(feature = "hooks")]
     #[cfg_attr(docsrs, doc(cfg(feature = "hooks")))]
+    #[doc(inline)]
     pub use crate::hooks::*;
 
     #[cfg(feature = "signals")]
     #[cfg_attr(docsrs, doc(cfg(feature = "signals")))]
+    #[doc(inline)]
     pub use dioxus_signals::*;
 
     #[cfg(feature = "macro")]
     #[cfg_attr(docsrs, doc(cfg(feature = "macro")))]
     #[allow(deprecated)]
+    #[doc(inline)]
     pub use dioxus_core_macro::{component, rsx, Props};
 
     #[cfg(feature = "launch")]
@@ -160,9 +167,15 @@ pub mod prelude {
 
     #[cfg(feature = "html")]
     #[cfg_attr(docsrs, doc(cfg(feature = "html")))]
+    #[doc(inline)]
+    pub use dioxus_elements::{Code, Key, Location, Modifiers};
+
+    #[cfg(feature = "html")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "html")))]
+    #[doc(no_inline)]
     pub use dioxus_elements::{
         events::*, extensions::*, global_attributes, keyboard_types, svg_attributes, traits::*,
-        Code, GlobalAttributesExtension, Key, Location, Modifiers, SvgAttributesExtension,
+        GlobalAttributesExtension, SvgAttributesExtension,
     };
 
     #[cfg(feature = "devtools")]
@@ -173,12 +186,14 @@ pub mod prelude {
 
     #[cfg(feature = "fullstack")]
     #[cfg_attr(docsrs, doc(cfg(feature = "fullstack")))]
+    #[doc(inline)]
     pub use dioxus_fullstack::{
         server, server_fn, use_server_cached, use_server_future, ServerFnError, ServerFnResult,
     };
 
     #[cfg(feature = "server")]
     #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
+    #[doc(inline)]
     pub use dioxus_server::{
         extract, DioxusRouterExt, DioxusRouterFnExt, FromContext, ServeConfig,
     };
@@ -189,6 +204,7 @@ pub mod prelude {
 
     #[cfg(feature = "router")]
     #[cfg_attr(docsrs, doc(cfg(feature = "router")))]
+    #[doc(inline)]
     pub use dioxus_router::{
         hooks::*, navigator, use_navigator, GoBackButton, GoForwardButton, Link, NavigationTarget,
         Outlet, Routable, Router,
@@ -196,12 +212,14 @@ pub mod prelude {
 
     #[cfg(feature = "asset")]
     #[cfg_attr(docsrs, doc(cfg(feature = "asset")))]
+    #[doc(inline)]
     pub use manganis::{self, *};
 
     #[cfg(feature = "wasm-split")]
     #[cfg_attr(docsrs, doc(cfg(feature = "wasm-split")))]
     pub use wasm_splitter as wasm_split;
 
+    #[doc(inline)]
     pub use dioxus_core::{
         consume_context, provide_context, spawn, suspend, try_consume_context, use_hook, Attribute,
         Callback, Component, Context, Element, ErrorBoundary, ErrorContext, Event, EventHandler,
