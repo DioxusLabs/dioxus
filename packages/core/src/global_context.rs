@@ -109,6 +109,7 @@ pub fn suspend(task: Task) -> Element {
 ///
 /// ```rust, no_run
 /// # use dioxus::prelude::*;
+/// # use dioxus_core::spawn_isomorphic;
 /// // ❌ Do not do requests in isomorphic tasks. It may resolve at a different time on the server and client, causing hydration issues.
 /// let mut state = use_signal(|| None);
 /// spawn_isomorphic(async move {
@@ -171,6 +172,7 @@ pub fn queue_effect(f: impl FnOnce() + 'static) {
 ///
 /// ```rust
 /// use dioxus::prelude::*;
+/// use dioxus_core::spawn_forever;
 ///
 /// // The parent component can create and destroy children dynamically
 /// fn App() -> Element {
@@ -373,6 +375,7 @@ pub fn schedule_update_any() -> Arc<dyn Fn(ScopeId) + Send + Sync> {
 /// Example:
 /// ```rust
 /// use dioxus::prelude::*;
+/// use dioxus_core::use_drop;
 ///
 /// fn app() -> Element {
 ///     let mut state = use_signal(|| true);

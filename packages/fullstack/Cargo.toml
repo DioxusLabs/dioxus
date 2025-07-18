@@ -74,6 +74,7 @@ dioxus-history = { workspace = true }
 
 [dev-dependencies]
 dioxus = { workspace = true, features = ["fullstack"] }
+tokio = { workspace = true, features = ["full"] }
 
 [features]
 default = ["devtools", "document", "file_engine", "mounted"]

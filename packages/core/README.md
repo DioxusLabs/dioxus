@@ -4,7 +4,7 @@
 
 ```rust, no_run
 # tokio::runtime::Runtime::new().unwrap().block_on(async {
-use dioxus_core::{VirtualDom, Event, Element, Mutations};
+use dioxus_core::{VirtualDom, Event, Element, Mutations, VNode, ElementId};
 
 let mut vdom = VirtualDom::new(app);
 let real_dom = SomeRenderer::new();
@@ -59,7 +59,7 @@ The `dioxus` crate exports the `rsx` macro which transforms a helpful, simpler s
 First, start with your app:
 
 ```rust
-# use dioxus::dioxus_core::Mutations;
+# use dioxus::dioxus_core::{Mutations, VirtualDom};
 use dioxus::prelude::*;
 
 // First, declare a root component

@@ -27,7 +27,6 @@ pub struct HistoryButtonProps {
 /// # Example
 /// ```rust
 /// # use dioxus::prelude::*;
-/// # use dioxus_router::prelude::*;
 /// #[derive(Clone, Routable)]
 /// enum Route {
 ///     #[route("/")]
@@ -100,7 +99,6 @@ pub fn GoBackButton(props: HistoryButtonProps) -> Element {
 /// # Example
 /// ```rust
 /// # use dioxus::prelude::*;
-/// # use dioxus_router::prelude::*;
 /// #[derive(Clone, Routable)]
 /// enum Route {
 ///     #[route("/")]

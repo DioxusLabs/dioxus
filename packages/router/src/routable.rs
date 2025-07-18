@@ -308,6 +308,7 @@ impl<T: ToQueryArgument<M>, M> Display for DisplayQueryArgument<'_, T, M> {
 ///
 /// ```rust
 /// use dioxus::prelude::*;
+/// use dioxus_router::FromHashFragment;
 ///
 /// #[derive(Routable, Clone)]
 /// #[rustfmt::skip]
@@ -475,6 +476,7 @@ fn full_circle() {
 ///
 /// ```rust
 /// use dioxus::prelude::*;
+/// use dioxus_router::{ToRouteSegments, FromRouteSegments};
 ///
 /// #[derive(Routable, Clone, PartialEq, Debug)]
 /// enum Route {
@@ -566,6 +568,7 @@ fn to_route_segments() {
 ///
 /// ```rust
 /// use dioxus::prelude::*;
+/// use dioxus_router::{ToRouteSegments, FromRouteSegments};
 ///
 /// #[derive(Routable, Clone, PartialEq, Debug)]
 /// enum Route {
@@ -735,7 +738,6 @@ pub trait Routable: FromStr<Err: Display> + Display + Clone + 'static {
     ///
     /// # Example
     /// ```rust
-    /// use dioxus_router::prelude::*;
     /// use dioxus::prelude::*;
     ///
     /// #[component]
@@ -803,7 +805,6 @@ pub trait Routable: FromStr<Err: Display> + Display + Clone + 'static {
     ///
     /// # Example
     /// ```rust
-    /// use dioxus_router::prelude::*;
     /// use dioxus::prelude::*;
     ///
     /// #[component]

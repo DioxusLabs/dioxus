@@ -144,7 +144,7 @@ jobs:
 
   test-docs:
     if: github.event.pull_request.draft == false
-    name: Docs
+    name: Test Docs
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4

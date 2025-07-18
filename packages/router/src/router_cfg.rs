@@ -6,8 +6,8 @@ use std::sync::Arc;
 ///
 /// This implements [`Default`] and follows the builder pattern, so you can use it like this:
 /// ```rust,no_run
-/// # use dioxus_router::prelude::*;
 /// # use dioxus::prelude::*;
+/// # use dioxus_router::RouterConfig;
 /// # #[component]
 /// # fn Index() -> Element {
 /// #     VNode::empty()

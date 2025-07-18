@@ -10,8 +10,7 @@ use serde::{de::DeserializeOwned, Serialize};
 ///
 /// # Example
 /// ```rust
-/// use dioxus_lib::prelude::*;
-/// use dioxus_fullstack::prelude::*;
+/// use dioxus::prelude::*;
 ///
 /// fn app() -> Element {
 ///    let state1 = use_server_cached(|| {

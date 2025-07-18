@@ -15,7 +15,6 @@ use dioxus_core::Element;
 /// # Example
 /// ```rust
 /// # use dioxus::prelude::*;
-/// # use dioxus_router::prelude::*;
 /// #[derive(Clone, Routable)]
 /// #[rustfmt::skip]
 /// enum Route {

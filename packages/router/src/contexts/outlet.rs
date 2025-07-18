@@ -75,8 +75,8 @@ impl<R> OutletContext<R> {
 /// # Examples
 ///
 /// ```rust, no_run
-/// # use dioxus_lib::prelude::*;
-/// # use dioxus_router::prelude::{use_outlet_context,Routable};
+/// # use dioxus::prelude::*;
+/// # use dioxus_router::use_outlet_context;
 ///
 /// # #[derive(Routable,Clone,PartialEq)]
 /// # enum MyRouter {

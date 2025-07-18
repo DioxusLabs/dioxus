@@ -8,7 +8,6 @@ use crate::{Navigator, RouterContext};
 ///
 /// ```rust
 /// # use dioxus::prelude::*;
-/// # use dioxus_router::prelude::*;
 /// #[derive(Clone, Routable)]
 /// enum Route {
 ///     #[route("/")]
