@@ -33,7 +33,7 @@ pub type ServerFnResult<T = (), E = String> = std::result::Result<T, ServerFnErr
 ///
 /// You can use the [`ServerFnError`] type in the Error type of your server function result or use the [`ServerFnResult`]
 /// type as the return type of your server function. When you call the server function, you can handle the error directly
-/// or convert it into a [`CapturedError`] to throw into the nearest [`ErrorBoundary`](dioxus::prelude::ErrorBoundary).
+/// or convert it into a [`CapturedError`] to throw into the nearest [`ErrorBoundary`](dioxus_core::ErrorBoundary).
 ///
 /// ```rust
 /// use dioxus::prelude::*;
