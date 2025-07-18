@@ -15,7 +15,7 @@
 //! ```
 
 use super::literal::HotLiteral;
-use crate::{innerlude::*, partial_closure::PartialClosure};
+use crate::{expression_pool::OutOfOrderExpression, innerlude::*, partial_closure::PartialClosure};
 
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, quote_spanned, ToTokens, TokenStreamExt};
@@ -57,6 +57,10 @@ pub struct Attribute {
     /// The element name of this attribute if it is bound to an element.
     /// When parsed for components or freestanding, this will be None
     pub el_name: Option<ElementName>,
+
+    /// The value temporary binding in the expression pool. We quote this value
+    /// instead the value to keep a depth first expression execution order
+    attribute_binding: OutOfOrderExpression,
 }
 
 impl Parse for Attribute {
@@ -73,6 +77,7 @@ impl Parse for Attribute {
                 comma,
                 dyn_idx: DynIdx::default(),
                 el_name: None,
+                attribute_binding: Default::default(),
             });
         }
 
@@ -92,29 +97,32 @@ impl Parse for Attribute {
 
         let comma = content.parse::<Token![,]>().ok();
 
-        let attr = Attribute {
-            name,
-            value,
-            colon,
-            comma,
-            dyn_idx: DynIdx::default(),
-            el_name: None,
-        };
-
-        Ok(attr)
+        Ok(Self::from_parts(name, colon, value, comma, None))
     }
 }
 
 impl Attribute {
     /// Create a new attribute from a name and value
     pub fn from_raw(name: AttributeName, value: AttributeValue) -> Self {
+        Self::from_parts(name, None, value, None, None)
+    }
+
+    /// Create a new attribute from parts
+    pub(crate) fn from_parts(
+        name: AttributeName,
+        colon: Option<Token![:]>,
+        value: AttributeValue,
+        comma: Option<Token![,]>,
+        el_name: Option<ElementName>,
+    ) -> Self {
         Self {
             name,
-            colon: Default::default(),
+            colon,
             value,
-            comma: Default::default(),
+            comma,
+            el_name,
             dyn_idx: Default::default(),
-            el_name: None,
+            attribute_binding: Default::default(),
         }
     }
 
@@ -126,6 +134,17 @@ impl Attribute {
     /// Get the dynamic index of this attribute
     pub fn get_dyn_idx(&self) -> usize {
         self.dyn_idx.get()
+    }
+
+    /// Insert the expression binding into an expression pool. This must be called before
+    /// [`Self::rendered_as_dynamic_attr`]
+    pub(crate) fn set_value_expression_binding(&self, ident: Ident) {
+        self.attribute_binding.insert(ident);
+    }
+
+    /// Get the expression binding of this attribute
+    pub fn get_value_expression_binding(&self) -> Option<&Ident> {
+        self.attribute_binding.get()
     }
 
     pub fn span(&self) -> proc_macro2::Span {
@@ -167,7 +186,7 @@ impl Attribute {
         self.as_static_str_literal().is_some()
     }
 
-    pub fn rendered_as_dynamic_attr(&self) -> TokenStream2 {
+    pub(crate) fn rendered_as_dynamic_attr(&self) -> TokenStream2 {
         // Shortcut out with spreads
         if let AttributeName::Spread(_) = self.name {
             let AttributeValue::AttrExpr(expr) = &self.value else {
@@ -223,7 +242,6 @@ impl Attribute {
                     let ns = ns(name);
                     let volatile = volatile(name);
                     let attribute = attribute(name);
-                    let value = quote! { #value };
 
                     quote! {
                         dioxus_core::Attribute::new(
