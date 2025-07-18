@@ -115,13 +115,9 @@ fn TodoHeader(mut todos: Store<TodoState>) -> Element {
     let onkeydown = move |evt: KeyboardEvent| {
         if evt.key() == Key::Enter && !draft.read().is_empty() {
             let id = todo_id();
-            let todo = TodoItem {
-                checked: false,
-                contents: draft.to_string(),
-            };
+            let todo = TodoItem::new(draft.take());
             todos.todos().insert(id, todo);
             todo_id += 1;
-            draft.set("".to_string());
         }
     };
 
@@ -275,7 +271,10 @@ struct TodoItem {
 }
 
 impl TodoItem {
-    fn new(checked: bool, contents: String) -> Self {
-        Self { checked, contents }
+    fn new(contents: impl ToString) -> Self {
+        Self {
+            checked: false,
+            contents: contents.to_string(),
+        }
     }
 }
