@@ -637,7 +637,7 @@ impl AppBuilder {
         let asset_dir = self.build.asset_dir();
 
         // Hotpatch asset!() calls
-        for bundled in res.assets.assets() {
+        for bundled in res.assets.unique_assets() {
             let original_artifacts = self
                 .artifacts
                 .as_mut()
