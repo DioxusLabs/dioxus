@@ -21,7 +21,6 @@ dioxus-history.workspace = true
 
 [dev-dependencies]
 dioxus-fullstack = { workspace = true }
-dioxus-lib = { workspace = true }
 dioxus = { workspace = true }
 
 [features]

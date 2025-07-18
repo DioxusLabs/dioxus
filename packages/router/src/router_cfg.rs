@@ -1,5 +1,5 @@
 use crate::{GenericRouterContext, NavigationTarget, Routable, RoutingCallback};
-use dioxus_lib::core::Element;
+use dioxus_core::Element;
 use std::sync::Arc;
 
 /// Global configuration options for the router.

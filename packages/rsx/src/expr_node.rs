@@ -25,9 +25,9 @@ impl Parse for ExprNode {
 
 impl ToTokens for ExprNode {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
-        let expr = &self.expr;
+        let expr = &self.expr.expr;
         tokens.append_all(quote! {
-            { let ___nodes = (#expr).into_dyn_node(); ___nodes }
+            { let ___nodes = dioxus_core::IntoDynNode::into_dyn_node(#expr); ___nodes }
         })
     }
 }

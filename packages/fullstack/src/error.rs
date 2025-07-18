@@ -4,7 +4,7 @@ use std::{
     str::FromStr,
 };
 
-use dioxus_lib::core::{CapturedError, RenderError};
+use dioxus_core::{CapturedError, RenderError};
 use serde::{de::DeserializeOwned, Serialize};
 use server_fn::{
     codec::JsonEncoding,

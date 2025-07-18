@@ -1,7 +1,7 @@
 //! Configuration for how to serve a Dioxus application
 #![allow(non_snake_case)]
 
-use dioxus_lib::prelude::dioxus_core::LaunchConfig;
+use dioxus_core::LaunchConfig;
 use std::any::Any;
 use std::fs::File;
 use std::io::Read;

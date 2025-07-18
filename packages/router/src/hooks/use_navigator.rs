@@ -1,4 +1,4 @@
-use dioxus_lib::core::{try_consume_context, use_hook};
+use dioxus_core::{try_consume_context, use_hook};
 
 use crate::{Navigator, RouterContext};
 

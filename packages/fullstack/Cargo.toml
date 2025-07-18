@@ -19,7 +19,8 @@ dioxus_server_macro = { workspace = true }
 axum = { workspace = true, optional = true }
 tower-http = { workspace = true, optional = true, features = ["fs"] }
 
-dioxus-lib = { workspace = true, features = ["html"] }
+dioxus-core = { workspace = true }
+dioxus-document = { workspace = true }
 generational-box = { workspace = true }
 
 # Dioxus + SSR

@@ -1,4 +1,4 @@
-use dioxus_lib::core::{provide_context, try_consume_context, use_hook, Element, VNode};
+use dioxus_core::{provide_context, try_consume_context, use_hook, Element, VNode};
 
 use crate::{routable::Routable, utils::use_router_internal::use_router_internal};
 

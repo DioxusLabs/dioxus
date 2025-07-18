@@ -49,7 +49,7 @@ impl ToTokens for ForLoop {
         // the temporary is important so we create a lifetime binding
         tokens.append_all(quote! {
             {
-                let ___nodes = (#expr).into_iter().map(|#pat| { #body }).into_dyn_node();
+                let ___nodes = dioxus_core::IntoDynNode::into_dyn_node((#expr).into_iter().map(|#pat| { #body }));
                 ___nodes
             }
         });

@@ -1,7 +1,7 @@
 #![allow(non_snake_case)]
 //! # Routable
 
-use dioxus_lib::core::Element;
+use dioxus_core::Element;
 use std::iter::FlatMap;
 use std::slice::Iter;
 use std::{fmt::Display, str::FromStr};

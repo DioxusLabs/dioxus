@@ -1,5 +1,5 @@
 use crate::{outlet::OutletContext, *};
-use dioxus_lib::prelude::*;
+use dioxus_core::Element;
 
 /// An outlet for the current content.
 ///

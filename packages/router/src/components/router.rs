@@ -1,6 +1,7 @@
-use dioxus_lib::prelude::*;
-
 use crate::{provide_router_context, routable::Routable, router_cfg::RouterConfig, Outlet};
+use dioxus_core::{provide_context, use_hook, Callback, Element};
+use dioxus_core_macro::{rsx, Props};
+use dioxus_signals::{GlobalSignal, Owner, Readable};
 
 /// The props for [`Router`].
 #[derive(Props)]
@@ -41,7 +42,7 @@ pub fn Router<R: Routable + Clone>(props: RouterProps<R>) -> Element {
     });
 
     #[cfg(feature = "streaming")]
-    use_after_suspense_resolved(|| {
+    dioxus_hooks::use_after_suspense_resolved(|| {
         dioxus_fullstack_hooks::commit_initial_chunk();
     });
 

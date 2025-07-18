@@ -2,7 +2,6 @@
 resolver = "2"
 members = [
     "packages/dioxus",
-    "packages/dioxus-lib",
     "packages/core",
     "packages/core-types",
     "packages/cli",
@@ -32,7 +31,6 @@ members = [
     "packages/desktop",
     "packages/devtools-types",
     "packages/devtools",
-    "packages/dioxus-lib",
     "packages/dioxus",
     "packages/document",
     "packages/extension",
@@ -139,7 +137,6 @@ version = "0.7.0-alpha.3"
 # dependencies that are shared across packages
 [workspace.dependencies]
 dioxus = { path = "packages/dioxus", version = "0.7.0-alpha.3" }
-dioxus-lib = { path = "packages/dioxus-lib", version = "0.7.0-alpha.3", default-features = false }
 dioxus-core = { path = "packages/core", version = "0.7.0-alpha.3" }
 dioxus-core-types = { path = "packages/core-types", version = "0.7.0-alpha.3" }
 dioxus-core-macro = { path = "packages/core-macro", version = "0.7.0-alpha.3" }
