@@ -758,9 +758,12 @@ impl VirtualDom {
 
     #[cfg(debug_assertions)]
     fn register_subsecond_handler(&self) {
-        let sender = self.runtime().sender.clone();
+        let runtime = self.runtime();
+        let sender = runtime.sender.clone();
+        let after_hot_patch = runtime.after_hot_patch.clone();
         subsecond::register_handler(std::sync::Arc::new(move || {
             _ = sender.unbounded_send(SchedulerMsg::AllDirty);
+            after_hot_patch.store(true, std::sync::atomic::Ordering::SeqCst);
         }));
     }
 }
