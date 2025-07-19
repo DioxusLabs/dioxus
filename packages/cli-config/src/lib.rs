@@ -64,6 +64,7 @@ pub const DEVSERVER_PORT_ENV: &str = "DIOXUS_DEVSERVER_PORT";
 pub const ALWAYS_ON_TOP_ENV: &str = "DIOXUS_ALWAYS_ON_TOP";
 pub const ASSET_ROOT_ENV: &str = "DIOXUS_ASSET_ROOT";
 pub const APP_TITLE_ENV: &str = "DIOXUS_APP_TITLE";
+pub const BUNDLED_APP_NAME_ENV: &str = "DIOXUS_BUNDLED_APP_NAME";
 
 #[deprecated(since = "0.6.0", note = "The CLI currently does not set this.")]
 #[doc(hidden)]
@@ -191,6 +192,13 @@ pub fn fullstack_address_or_localhost() -> SocketAddr {
 /// This is used to set the title of the desktop window if the app itself doesn't set it.
 pub fn app_title() -> Option<String> {
     read_env_config!("DIOXUS_APP_TITLE")
+}
+
+/// Get the product name of the application, as generated at build time during bundling.
+///
+/// This is used to generate the asset root path on Linux desktop builds.
+pub fn bundled_app_name() -> Option<String> {
+    read_env_config!("DIOXUS_BUNDLED_APP_NAME")
 }
 
 /// Check if the application should forced to "float" on top of other windows.
