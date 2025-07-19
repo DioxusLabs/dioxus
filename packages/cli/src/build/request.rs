@@ -324,7 +324,7 @@ use anyhow::{bail, Context};
 use cargo_metadata::diagnostic::Diagnostic;
 use depinfo::RustcDepInfo;
 use dioxus_cli_config::format_base_path_meta_element;
-use dioxus_cli_config::{APP_TITLE_ENV, ASSET_ROOT_ENV};
+use dioxus_cli_config::{APP_TITLE_ENV, ASSET_ROOT_ENV, BUNDLED_APP_NAME_ENV};
 use dioxus_cli_opt::{process_file_to, AssetManifest};
 use itertools::Itertools;
 use krates::{cm::TargetKind, NodeId};
@@ -2372,10 +2372,17 @@ impl BuildRequest {
     fn cargo_build_env_vars(&self, ctx: &BuildContext) -> Result<Vec<(Cow<'static, str>, String)>> {
         let mut env_vars = vec![];
 
-        // Make sure to set all the crazy android flags. Cross-compiling is hard, man.
-        if self.platform == Platform::Android {
-            env_vars.extend(self.android_env_vars()?);
-        };
+        match self.platform {
+            Platform::Android => {
+                // Make sure to set all the crazy android flags. Cross-compiling is hard, man.
+                env_vars.extend(self.android_env_vars()?);
+            }
+            Platform::Linux => {
+                // This is needed to ensure we can generate the asset root path at runtime.
+                env_vars.push((BUNDLED_APP_NAME_ENV.into(), self.bundled_app_name()));
+            }
+            _ => (),
+        }
 
         // If this is a release build, bake the base path and title into the binary with env vars.
         // todo: should we even be doing this? might be better being a build.rs or something else.

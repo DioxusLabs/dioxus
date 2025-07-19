@@ -79,8 +79,8 @@ pub fn serve_asset(path: &str) -> Result<Response<Vec<u8>>, AssetServeError> {
 /// - [x] iOS
 /// - [x] Windows
 /// - [x] Linux (appimage)
+/// - [x] Linux (deb)
 /// - [ ] Linux (rpm)
-/// - [ ] Linux (deb)
 /// - [ ] Android
 #[allow(unreachable_code)]
 fn get_asset_root() -> PathBuf {
@@ -94,6 +94,19 @@ fn get_asset_root() -> PathBuf {
             .parent()
             .unwrap()
             .join("Resources");
+    }
+
+    #[cfg(all(target_os = "linux", not(debug_assertions)))]
+    {
+        // For both Linux .AppImage and .deb packages, the assets are on the path
+        // `../lib/<app_name>` relative to the executable.
+        return cur_exe
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .join("lib")
+            .join(dioxus_cli_config::bundled_app_name().unwrap());
     }
 
     // For all others, the structure looks like this:
