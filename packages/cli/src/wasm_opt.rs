@@ -243,7 +243,7 @@ pub fn installed_location() -> Option<PathBuf> {
 }
 
 fn install_dir() -> PathBuf {
-    Workspace::dioxus_home_dir().join("binaryen")
+    Workspace::dioxus_data_dir().join("binaryen")
 }
 
 fn installed_bin_name() -> &'static str {
