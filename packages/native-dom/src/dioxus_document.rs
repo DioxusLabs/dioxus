@@ -53,7 +53,6 @@ fn get_dioxus_id(node: &Node) -> Option<ElementId> {
 ///
 /// You can just push events into the [`DioxusDocument`] with [`doc.handle_ui_event(..)`](Self::handle_ui_event)
 /// and then flush the changes with [`doc.poll(..)`](Self::poll)
-
 pub struct DioxusDocument {
     pub inner: BaseDocument,
     pub vdom: VirtualDom,
@@ -72,6 +71,9 @@ pub struct DioxusDocument {
 impl DioxusDocument {
     /// Create a new [`DioxusDocument`] from a [`VirtualDom`].
     pub fn new(vdom: VirtualDom, mut config: DocumentConfig) -> Self {
+        // Only really needs to happen once
+        set_event_converter(Box::new(NativeConverter {}));
+
         config.base_url = Some(
             config
                 .base_url
@@ -198,7 +200,6 @@ impl Document for DioxusDocument {
     }
 
     fn handle_ui_event(&mut self, event: UiEvent) {
-        set_event_converter(Box::new(NativeConverter {}));
         let handler = DioxusEventHandler {
             vdom: &mut self.vdom,
             vdom_state: &mut self.vdom_state,
