@@ -240,6 +240,14 @@ impl EventHandler for DioxusEventHandler<'_> {
         mutr: &mut blitz_dom::DocumentMutator<'_>,
         event_state: &mut EventState,
     ) {
+        // As an optimisation we maintain a count of the total number event handlers of a given type
+        // If this count is zero then we can skip handling that kind of event entirely.
+        let event_kind_idx = event.data.discriminant() as usize;
+        let event_kind_count = self.vdom_state.event_handler_counts[event_kind_idx];
+        if event_kind_count == 0 {
+            return;
+        }
+
         let event_data = match &event.data {
             DomEventData::MouseMove(mevent)
             | DomEventData::MouseDown(mevent)
