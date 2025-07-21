@@ -471,17 +471,6 @@ checksum = "d301b3b94cb4b2f23d7917810addbbaff90738e0ca2be692bd027e70d7e0330c"
 
 [[package]]
 name = "anyrender"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "26bfc8499b47c819e1f2fdbd04b1b85ca34a6e02eca996a58d750644cd847d0d"
-dependencies = [
- "kurbo",
- "peniko",
- "raw-window-handle 0.6.2",
-]
-
-[[package]]
-name = "anyrender"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e6d136c78cf4c024f4433e2f775048c72c4912df168f9534652c5389217ee3bd"
@@ -497,7 +486,7 @@ version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6811ea5c49d3ebad565d14d82564d21e24462cb81a2480818b9b57ce599eca1a"
 dependencies = [
- "anyrender 0.5.0",
+ "anyrender",
  "image",
  "kurbo",
  "peniko",
@@ -507,28 +496,11 @@ dependencies = [
 
 [[package]]
 name = "anyrender_vello"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7b39c05cc1c08be92d300e09a55cc9d32ffdd5b88a41e55677c75506f35b2180"
-dependencies = [
- "anyrender 0.4.1",
- "futures-intrusive",
- "kurbo",
- "peniko",
- "pollster",
- "raw-window-handle 0.6.2",
- "rustc-hash 1.1.0",
- "vello",
- "wgpu",
-]
-
-[[package]]
-name = "anyrender_vello"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3baba14afab3466d9c2cb61afc8d27810e2209807affd945295ec6d47c2166c3"
 dependencies = [
- "anyrender 0.5.0",
+ "anyrender",
  "futures-intrusive",
  "kurbo",
  "peniko",
@@ -2871,7 +2843,7 @@ version = "0.1.0-rc.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6b26d3c0645d2b502ec7b3984354b3c42a2af7e4bde92ed5d189ac160e4e1f5"
 dependencies = [
- "anyrender 0.5.0",
+ "anyrender",
  "anyrender_svg",
  "blitz-dom",
  "blitz-traits",
@@ -2895,7 +2867,7 @@ dependencies = [
  "accesskit 0.17.1",
  "accesskit_winit 0.23.1",
  "android-activity",
- "anyrender 0.5.0",
+ "anyrender",
  "blitz-dom",
  "blitz-paint",
  "blitz-traits",
@@ -5674,8 +5646,8 @@ dependencies = [
 name = "dioxus-native"
 version = "0.7.0-alpha.3"
 dependencies = [
- "anyrender 0.5.0",
- "anyrender_vello 0.5.0",
+ "anyrender",
+ "anyrender_vello",
  "blitz-dom",
  "blitz-net",
  "blitz-paint",
@@ -10657,7 +10629,7 @@ dependencies = [
 name = "native-headless"
 version = "0.0.0"
 dependencies = [
- "anyrender_vello 0.4.1",
+ "anyrender_vello",
  "blitz-dom",
  "blitz-paint",
  "blitz-traits",

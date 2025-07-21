@@ -10,8 +10,8 @@ tracing = ["dep:tracing-subscriber", "dioxus-native-dom/tracing"]
 
 [dependencies]
 dioxus = { workspace = true, default-features = false, features = ["html", "hooks", "signals"] }
-dioxus-native-dom = { path = "../../packages/native-dom" }
-anyrender_vello = "0.4.1"
+dioxus-native-dom = { workspace = true }
+anyrender_vello = { workspace = true }
 vello = "0.5"
 rustc-hash = "1"
 futures-util = { workspace = true }
