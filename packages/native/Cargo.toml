@@ -21,13 +21,13 @@ autofocus = []
 
 [dependencies]
 # Blitz dependencies
-anyrender = { version = "0.4", default-features = false }
-anyrender_vello = { version = "0.4", default-features = false }
-blitz-dom = { workspace = true, default-features = false }
+anyrender = { workspace = true }
+anyrender_vello = { workspace = true }
+blitz-dom = { workspace = true }
 blitz-net = { workspace = true, optional = true }
 blitz-paint = { workspace = true, optional = true }
 blitz-traits = { workspace = true }
-blitz-shell = { workspace = true, default-features = false }
+blitz-shell = { workspace = true }
 
 # DioxusLabs dependencies
 dioxus-core = { workspace = true }
