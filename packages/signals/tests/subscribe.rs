@@ -1,6 +1,6 @@
 #![allow(unused, non_upper_case_globals, non_snake_case)]
 
-use dioxus_core::NoOpMutations;
+use dioxus_core::{current_scope_id, generation, NoOpMutations};
 use std::collections::HashMap;
 use std::rc::Rc;
 

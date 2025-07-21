@@ -39,7 +39,7 @@ impl Bundle {
 
         let BuildTargets { client, server } = self.args.into_targets().await?;
 
-        AppBuilder::started(&client, BuildMode::Base)?
+        AppBuilder::started(&client, BuildMode::Base { run: false })?
             .finish_build()
             .await?;
 
@@ -47,7 +47,7 @@ impl Bundle {
 
         if let Some(server) = server.as_ref() {
             // If the server is present, we need to build it as well
-            AppBuilder::started(server, BuildMode::Base)?
+            AppBuilder::started(server, BuildMode::Base { run: false })?
                 .finish_build()
                 .await?;
 

@@ -1,6 +1,10 @@
+use dioxus_core::Element;
+use dioxus_core_macro::rsx;
+use dioxus_html as dioxus_elements;
+use dioxus_signals::{GlobalSignal, Readable};
+
 #[allow(deprecated)]
 use crate::hooks::use_router;
-use dioxus_lib::prelude::*;
 
 /// The default component to render when an external navigation fails.
 #[allow(non_snake_case)]

@@ -127,7 +127,7 @@ impl AssetOptions {
     /// Create a new image asset builder
     ///
     /// ```rust
-    /// # use manganis::{asset, Asset, ImageAssetOptions};
+    /// # use manganis::{asset, Asset, AssetOptions};
     /// const _: Asset = asset!("/assets/image.png", AssetOptions::image());
     /// ```
     pub const fn image() -> AssetOptionsBuilder<ImageAssetOptions> {
@@ -141,7 +141,7 @@ impl AssetOptionsBuilder<ImageAssetOptions> {
     /// Preloading an image will make the image start to load as soon as possible. This is useful for images that will be displayed soon after the page loads or images that may not be visible immediately, but should start loading sooner
     ///
     /// ```rust
-    /// # use manganis::{asset, Asset, ImageAssetOptions};
+    /// # use manganis::{asset, Asset, AssetOptions};
     /// const _: Asset = asset!("/assets/image.png", AssetOptions::image().with_preload(true));
     /// ```
     pub const fn with_preload(mut self, preload: bool) -> Self {
@@ -154,7 +154,7 @@ impl AssetOptionsBuilder<ImageAssetOptions> {
     /// Choosing the right format can make your site load much faster. Webp and avif images tend to be a good default for most images
     ///
     /// ```rust
-    /// # use manganis::{asset, Asset, ImageAssetOptions, ImageFormat};
+    /// # use manganis::{asset, Asset, AssetOptions, ImageFormat};
     /// const _: Asset = asset!("/assets/image.png", AssetOptions::image().with_format(ImageFormat::Webp));
     /// ```
     pub const fn with_format(mut self, format: ImageFormat) -> Self {
@@ -168,7 +168,7 @@ impl AssetOptionsBuilder<ImageAssetOptions> {
     /// they compress images well
     ///
     /// ```rust
-    /// # use manganis::{asset, Asset, ImageAssetOptions, ImageFormat};
+    /// # use manganis::{asset, Asset, AssetOptions, ImageFormat};
     /// const _: Asset = asset!("/assets/image.png", AssetOptions::image().with_avif());
     /// ```
     pub const fn with_avif(self) -> Self {
@@ -181,7 +181,7 @@ impl AssetOptionsBuilder<ImageAssetOptions> {
     /// they compress images well
     ///
     /// ```rust
-    /// # use manganis::{asset, Asset, ImageAssetOptions, ImageFormat};
+    /// # use manganis::{asset, Asset, AssetOptions, ImageFormat};
     /// const _: Asset = asset!("/assets/image.png", AssetOptions::image().with_webp());
     /// ```
     pub const fn with_webp(self) -> Self {
@@ -193,7 +193,7 @@ impl AssetOptionsBuilder<ImageAssetOptions> {
     /// Jpeg images compress much better than [`ImageFormat::Png`], but worse than [`ImageFormat::Webp`] or [`ImageFormat::Avif`]
     ///
     /// ```rust
-    /// # use manganis::{asset, Asset, ImageAssetOptions, ImageFormat};
+    /// # use manganis::{asset, Asset, AssetOptions, ImageFormat};
     /// const _: Asset = asset!("/assets/image.png", AssetOptions::image().with_jpg());
     /// ```
     pub const fn with_jpg(self) -> Self {
@@ -205,7 +205,7 @@ impl AssetOptionsBuilder<ImageAssetOptions> {
     /// Png images don't compress very well, so they are not recommended for large images
     ///
     /// ```rust
-    /// # use manganis::{asset, Asset, ImageAssetOptions, ImageFormat};
+    /// # use manganis::{asset, Asset, AssetOptions, ImageFormat};
     /// const _: Asset = asset!("/assets/image.png", AssetOptions::image().with_png());
     /// ```
     pub const fn with_png(self) -> Self {
@@ -217,7 +217,7 @@ impl AssetOptionsBuilder<ImageAssetOptions> {
     /// If you only use the image in one place, you can set the size of the image to the size it will be displayed at. This will make the image load faster
     ///
     /// ```rust
-    /// # use manganis::{asset, Asset, ImageAssetOptions, ImageSize};
+    /// # use manganis::{asset, Asset, AssetOptions, ImageSize};
     /// const _: Asset = asset!("/assets/image.png", AssetOptions::image().with_size(ImageSize::Manual { width: 512, height: 512 }));
     /// ```
     pub const fn with_size(mut self, size: ImageSize) -> Self {

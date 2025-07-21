@@ -199,7 +199,7 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &mut TraceController) -> 
                                 }
                             }
                         }
-                        BuildMode::Base | BuildMode::Fat => {
+                        BuildMode::Base { .. } | BuildMode::Fat => {
                             _ = builder
                                 .open(&bundle, &mut devserver)
                                 .await

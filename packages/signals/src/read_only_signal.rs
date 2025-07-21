@@ -3,7 +3,7 @@ use dioxus_core::IntoDynNode;
 use std::ops::Deref;
 
 use crate::{default_impl, read_impls};
-use dioxus_core::{prelude::IntoAttributeValue, ScopeId};
+use dioxus_core::{IntoAttributeValue, ScopeId};
 use generational_box::{BorrowResult, Storage, UnsyncStorage};
 
 /// A signal that can only be read from.

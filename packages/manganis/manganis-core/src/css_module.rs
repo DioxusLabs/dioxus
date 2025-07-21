@@ -57,7 +57,7 @@ impl AssetOptions {
     /// Create a new css module asset builder
     ///
     /// ```rust
-    /// # use manganis::{asset, Asset, CssModuleAssetOptions};
+    /// # use manganis::{asset, Asset, AssetOptions};
     /// const _: Asset = asset!("/assets/style.css", AssetOptions::css_module());
     /// ```
     pub const fn css_module() -> AssetOptionsBuilder<CssModuleAssetOptions> {

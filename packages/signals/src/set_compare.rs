@@ -2,7 +2,7 @@ use crate::write::Writable;
 use std::hash::Hash;
 
 use crate::read::Readable;
-use dioxus_core::prelude::*;
+use dioxus_core::ReactiveContext;
 use futures_util::StreamExt;
 use generational_box::{Storage, UnsyncStorage};
 
@@ -54,7 +54,7 @@ impl<R: Eq + Hash, S: Storage<SignalData<bool>>> SetCompare<R, S> {
             *previous = Some(current);
         };
         let (rc, mut changed) = ReactiveContext::new();
-        spawn(async move {
+        dioxus_core::spawn(async move {
             loop {
                 // Recompute the value
                 rc.reset_and_run_in(&mut recompute);

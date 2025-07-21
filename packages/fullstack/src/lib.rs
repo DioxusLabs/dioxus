@@ -12,19 +12,16 @@ mod error;
 #[cfg(all(feature = "web", feature = "document"))]
 pub use web::FullstackWebDocument;
 
-#[cfg(feature = "server")]
-pub use dioxus_server::*;
-
 pub use dioxus_fullstack_hooks::history::FullstackHistory;
 
-/// A prelude of commonly used items in dioxus-fullstack.
-pub mod prelude {
-    pub use dioxus_fullstack_hooks::prelude::*;
-
-    pub use crate::error::{ServerFnError, ServerFnResult};
-    pub use dioxus_server_macro::*;
-    pub use server_fn::{self, ServerFn as _};
-
-    #[cfg(feature = "server")]
-    pub use dioxus_server::prelude::*;
-}
+pub use crate::error::{ServerFnError, ServerFnResult};
+pub use dioxus_fullstack_hooks::*;
+#[cfg(feature = "server")]
+pub use dioxus_server::*;
+pub use dioxus_server_macro::*;
+pub use server_fn::{
+    self, client,
+    client::{get_server_url, set_server_url},
+    codec, server, BoxedStream, ContentType, Decodes, Encodes, Format, FormatType, ServerFn as _,
+    ServerFn, Websocket,
+};

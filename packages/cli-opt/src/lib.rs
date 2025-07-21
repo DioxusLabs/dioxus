@@ -79,9 +79,14 @@ impl AssetManifest {
             .is_some_and(|assets| assets.contains(asset))
     }
 
-    /// Iterate over all the assets in the manifest
-    pub fn assets(&self) -> impl Iterator<Item = &BundledAsset> {
-        self.assets.values().flat_map(|assets| assets.iter())
+    /// Iterate over all the assets with unique output paths in the manifest. This will not include
+    /// assets that have different source paths, but the same file contents.
+    pub fn unique_assets(&self) -> impl Iterator<Item = &BundledAsset> {
+        let mut seen = HashSet::new();
+        self.assets
+            .values()
+            .flat_map(|assets| assets.iter())
+            .filter(move |asset| seen.insert(asset.bundled_path()))
     }
 
     pub fn load_from_file(path: &Path) -> anyhow::Result<Self> {

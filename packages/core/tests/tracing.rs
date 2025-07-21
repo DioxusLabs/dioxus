@@ -1,6 +1,6 @@
 use dioxus::html::SerializedHtmlEventConverter;
 use dioxus::prelude::*;
-use dioxus_core::ElementId;
+use dioxus_core::{ElementId, Event};
 use std::{any::Any, rc::Rc};
 use tracing_fluent_assertions::{AssertionRegistry, AssertionsLayer};
 use tracing_subscriber::{layer::SubscriberExt, Registry};

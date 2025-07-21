@@ -1,5 +1,5 @@
 use dioxus::prelude::*;
-use dioxus_core::{AttributeValue, ElementId, Mutation};
+use dioxus_core::{generation, AttributeValue, ElementId, Mutation};
 use pretty_assertions::assert_eq;
 use std::future::poll_fn;
 use std::task::Poll;

@@ -139,6 +139,11 @@ path = "headless_tests/rendering.rs"
 harness = false
 
 [[test]]
+name = "check_forms"
+path = "headless_tests/forms.rs"
+harness = false
+
+[[test]]
 name = "check_eval"
 path = "headless_tests/eval.rs"
 harness = false

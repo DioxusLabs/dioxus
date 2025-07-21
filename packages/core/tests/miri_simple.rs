@@ -1,4 +1,5 @@
 use dioxus::prelude::*;
+use dioxus_core::generation;
 
 #[test]
 fn app_drops() {
