@@ -46,8 +46,7 @@ fn get_dioxus_id(node: &Node) -> Option<ElementId> {
 ///    let vdom = VirtualDom::new(app);
 ///    let mut doc = DioxusDocument::new(vdom, None);
 ///    doc.set_viewport(Viewport::new(WIDTH, HEIGHT, SCALE_FACTOR, COLOR_SCHEME));
-///    doc.inital_build();
-///
+///    doc.initial_build();
 /// }
 /// ```
 ///
