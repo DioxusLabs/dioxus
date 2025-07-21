@@ -1,7 +1,8 @@
 use crate::cli::*;
 use crate::BundleFormat;
-use crate::PlatformArg;
+use crate::Platform;
 use crate::RendererArg;
+use crate::TargetAlias;
 use target_lexicon::Triple;
 
 const HELP_HEADING: &str = "Target Options";
@@ -9,17 +10,27 @@ const HELP_HEADING: &str = "Target Options";
 /// A single target to build for
 #[derive(Clone, Debug, Default, Deserialize, Parser)]
 pub(crate) struct TargetArgs {
-    /// Build platform: support Web & Desktop [default: "default_platform"]
+    /// The target alias to use for this build. Supports wasm, macos, windows, linux, ios, android, and host [default: "host"]
     #[clap(flatten)]
-    pub(crate) platform: PlatformArg,
+    pub(crate) target_alias: TargetAlias,
 
-    /// Build bundle: supports web, macos, windows, linux, ios, android, and server [default: "web"]
+    /// Build renderer: supports web, webview, native, server, and liveview
+    #[clap(flatten)]
+    pub(crate) renderer: RendererArg,
+
+    /// Build bundle: supports web, macos, windows, linux, ios, android, and server
     #[clap(long, value_enum, help_heading = HELP_HEADING)]
     pub(crate) bundle: Option<BundleFormat>,
 
-    /// Build renderer: support Webview and Native [default: "webview"]
-    #[clap(flatten)]
-    pub(crate) renderer: RendererArg,
+    /// Build platform: supports Web, MacOS, Windows, Linux, iOS, Android, and Server
+    ///
+    /// The platform implies a combination of the target alias, renderer, and bundle format flags.
+    ///
+    /// You should generally prefer to use the `--web`, `--webview`, or `--native` flags to set the renderer
+    /// or the `--wasm`, `--macos`, `--windows`, `--linux`, `--ios`, or `--android` flags to set the target alias
+    /// instead of this flag. The renderer, target alias, and bundle format will be inferred if you only pass one.
+    #[clap(long, value_enum, help_heading = HELP_HEADING)]
+    pub(crate) platform: Option<Platform>,
 
     /// Build in release mode [default: false]
     #[clap(long, short, help_heading = HELP_HEADING)]

@@ -317,7 +317,7 @@
 
 use crate::{
     AndroidTools, BuildContext, BundleFormat, DioxusConfig, Error, LinkAction, LinkerFlavor,
-    PlatformArg, Renderer, Result, RustcArgs, TargetArgs, TraceSrc, WasmBindgen, WasmOptConfig,
+    Renderer, Result, RustcArgs, TargetAlias, TargetArgs, TraceSrc, WasmBindgen, WasmOptConfig,
     Workspace, DX_RUSTC_WRAPPER_ENV_VAR,
 };
 use anyhow::{bail, Context};
@@ -558,7 +558,18 @@ impl BuildRequest {
         let mut features = args.features.clone();
         let mut no_default_features = args.no_default_features;
 
-        let mut renderer: Option<Renderer> = match args.renderer.into() {
+        // Apply the platform alias if present
+        let mut target_alias = args.target_alias;
+        let mut renderer = args.renderer;
+        let mut bundle = args.bundle;
+        if let Some(platform) = args.platform {
+            let (default_target, default_renderer, default_bundle) = platform.into_triple();
+            target_alias = target_alias.or(default_target);
+            renderer.renderer = Some(renderer.renderer.unwrap_or(default_renderer));
+            bundle = Some(bundle.unwrap_or(default_bundle));
+        }
+
+        let mut renderer: Option<Renderer> = match renderer.into() {
             Some(renderer) => match enabled_renderers.len() {
                 0 => Some(renderer),
 
@@ -574,8 +585,8 @@ impl BuildRequest {
             None => match enabled_renderers.as_slice() {
                 [] => None, // Wait until we resolve everything else first then we will resolve it from the triple
                 [(renderer, feature)] => {
-                    let targeting_mobile = match (&args.target, args.platform) {
-                        (_, PlatformArg::Android | PlatformArg::Ios) => true,
+                    let targeting_mobile = match (&args.target, target_alias) {
+                        (_, TargetAlias::Android | TargetAlias::Ios) => true,
                         (Some(target), _) => {
                             matches!(
                                 (target.environment, target.operating_system),
@@ -619,16 +630,15 @@ impl BuildRequest {
         // Tools like xcrun/adb can detect devices
         let device = args.device;
 
-        // Resolve the platform args into a concrete platform
-        let mut platform = args.platform;
+        // Resolve the target alias and renderer into a concrete target alias.
         // If the user didn't pass a platform, but we have a renderer, get the default platform for that renderer
-        if let (PlatformArg::Unknown, Some(renderer)) = (platform, renderer) {
-            platform = renderer.default_platform();
+        if let (TargetAlias::Unknown, Some(renderer)) = (target_alias, renderer) {
+            target_alias = renderer.default_platform();
         };
 
         // We want a real triple to build with, so we'll autodetect it if it's not provided
         // The triple ends up being a source of truth for us later hence all this work to figure it out
-        let triple = match (args.target.clone(), platform) {
+        let triple = match (args.target.clone(), target_alias) {
             // If there is an explicit target, use it
             (Some(target), _) => target,
             // If there is a platform, use it to determine the target triple
@@ -642,7 +652,7 @@ impl BuildRequest {
         }
 
         // Resolve the bundle format based on the combination of the target triple and renderer
-        let bundle = match args.bundle {
+        let bundle = match bundle {
             // If there is an explicit bundle format, use it
             Some(bundle) => bundle,
             // Otherwise guess a bundle format based on the target triple and renderer
@@ -1175,7 +1185,7 @@ impl BuildRequest {
 
             // On android, the c++_shared flag means we need to copy the libc++_shared.so precompiled
             // library to the jniLibs folder
-            if arg.contains("-lc++_shared") && self.platform == Platform::Android {
+            if arg.contains("-lc++_shared") && self.bundle == BundleFormat::Android {
                 std::fs::copy(
                     self.workspace.android_tools()?.libcpp_shared(&self.triple),
                     framework_dir.join("libc++_shared.so"),
@@ -3240,7 +3250,7 @@ impl BuildRequest {
     /// Return the platforms that are enabled for the package
     ///
     /// Ideally only one platform is enabled but we need to be able to
-    pub(crate) fn enabled_cargo_toml_platforms(
+    pub(crate) fn enabled_cargo_toml_renderers(
         package: &krates::cm::Package,
         no_default_features: bool,
     ) -> Vec<(Renderer, String)> {

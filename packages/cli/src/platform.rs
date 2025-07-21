@@ -11,7 +11,7 @@ use crate::Workspace;
     Copy, Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Debug, Default,
 )]
 #[non_exhaustive]
-pub(crate) enum PlatformArg {
+pub(crate) enum TargetAlias {
     /// Targeting the WASM architecture
     Wasm,
 
@@ -32,28 +32,28 @@ pub(crate) enum PlatformArg {
     /// Targeting the android platform
     Android,
 
-    /// Targeting the current platform with the "desktop" renderer
-    Desktop,
+    /// Targeting the current target
+    Host,
 
     /// An unknown target platform
     #[default]
     Unknown,
 }
 
-impl Args for PlatformArg {
+impl Args for TargetAlias {
     fn augment_args(cmd: clap::Command) -> clap::Command {
-        const HELP_HEADING: &str = "Platform";
-        cmd.arg(arg!(--wasm "The wasm target platform").help_heading(HELP_HEADING))
-            .arg(arg!(--macos "The macos target platform").help_heading(HELP_HEADING))
-            .arg(arg!(--windows "The windows target platform").help_heading(HELP_HEADING))
-            .arg(arg!(--linux "The linux target platform").help_heading(HELP_HEADING))
-            .arg(arg!(--ios "The ios target platform").help_heading(HELP_HEADING))
-            .arg(arg!(--android "The android target platform").help_heading(HELP_HEADING))
-            .arg(arg!(--desktop "The desktop target platform").help_heading(HELP_HEADING))
+        const HELP_HEADING: &str = "Target Alias";
+        cmd.arg(arg!(--wasm "The wasm target").help_heading(HELP_HEADING))
+            .arg(arg!(--macos "The macos target").help_heading(HELP_HEADING))
+            .arg(arg!(--windows "The windows target").help_heading(HELP_HEADING))
+            .arg(arg!(--linux "The linux target").help_heading(HELP_HEADING))
+            .arg(arg!(--ios "The ios target").help_heading(HELP_HEADING))
+            .arg(arg!(--android "The android target").help_heading(HELP_HEADING))
+            .arg(arg!(--host "The host target").help_heading(HELP_HEADING))
             .group(
-                clap::ArgGroup::new("platform")
+                clap::ArgGroup::new("target_alias")
                     .args([
-                        "wasm", "macos", "windows", "linux", "ios", "android", "desktop",
+                        "wasm", "macos", "windows", "linux", "ios", "android", "host",
                     ])
                     .multiple(false)
                     .required(false),
@@ -65,9 +65,9 @@ impl Args for PlatformArg {
     }
 }
 
-impl FromArgMatches for PlatformArg {
+impl FromArgMatches for TargetAlias {
     fn from_arg_matches(matches: &ArgMatches) -> Result<Self, clap::Error> {
-        if let Some(platform) = matches.get_one::<clap::Id>("platform") {
+        if let Some(platform) = matches.get_one::<clap::Id>("target_alias") {
             match platform.as_str() {
                 "wasm" => Ok(Self::Wasm),
                 "macos" => Ok(Self::MacOS),
@@ -75,10 +75,10 @@ impl FromArgMatches for PlatformArg {
                 "linux" => Ok(Self::Linux),
                 "ios" => Ok(Self::Ios),
                 "android" => Ok(Self::Android),
-                "desktop" => Ok(Self::Desktop),
+                "host" => Ok(Self::Host),
                 _ => Err(clap::Error::raw(
                     clap::error::ErrorKind::InvalidValue,
-                    format!("Unknown platform: {platform}"),
+                    format!("Unknown target alias: {platform}"),
                 )),
             }
         } else {
@@ -91,7 +91,7 @@ impl FromArgMatches for PlatformArg {
     }
 }
 
-impl PlatformArg {
+impl TargetAlias {
     #[cfg(target_os = "macos")]
     pub(crate) const TARGET_PLATFORM: Option<Self> = Some(Self::MacOS);
     #[cfg(target_os = "windows")]
@@ -104,7 +104,7 @@ impl PlatformArg {
     pub(crate) async fn into_target(self, device: bool, workspace: &Workspace) -> Result<Triple> {
         match self {
             // Generally just use the host's triple for native executables unless specified otherwise
-            Self::MacOS | Self::Windows | Self::Linux | Self::Desktop | Self::Unknown => {
+            Self::MacOS | Self::Windows | Self::Linux | Self::Host | Self::Unknown => {
                 Ok(Triple::host())
             }
 
@@ -131,6 +131,14 @@ impl PlatformArg {
                 .android_tools()?
                 .autodetect_android_device_triple()
                 .await),
+        }
+    }
+
+    pub(crate) fn or(self, other: Self) -> Self {
+        if self == Self::Unknown {
+            other
+        } else {
+            self
         }
     }
 }
@@ -252,12 +260,12 @@ impl Renderer {
         }
     }
 
-    pub(crate) fn default_platform(&self) -> PlatformArg {
+    pub(crate) fn default_platform(&self) -> TargetAlias {
         match self {
             Renderer::Webview | Renderer::Native | Renderer::Server | Renderer::Liveview => {
-                PlatformArg::TARGET_PLATFORM.unwrap()
+                TargetAlias::TARGET_PLATFORM.unwrap()
             }
-            Renderer::Web => PlatformArg::Wasm,
+            Renderer::Web => TargetAlias::Wasm,
         }
     }
 
@@ -463,6 +471,94 @@ impl BundleFormat {
             // If we don't recognize the target, default to desktop
             _ => BundleFormat::TARGET_PLATFORM.context(
                 "failed to determine bundle format. Try setting the `--bundle` flag manually",
+            ),
+        }
+    }
+}
+
+#[derive(
+    Copy,
+    Clone,
+    Hash,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Serialize,
+    Deserialize,
+    Debug,
+    Default,
+    clap::ValueEnum,
+)]
+#[non_exhaustive]
+pub(crate) enum Platform {
+    /// Alias for `--wasm --web --bundle-format web`
+    #[clap(name = "web")]
+    #[serde(rename = "web")]
+    #[default]
+    Web,
+
+    /// Alias for `--macos --webview --bundle-format macos`
+    #[cfg_attr(target_os = "macos", clap(alias = "desktop"))]
+    #[clap(name = "macos")]
+    #[serde(rename = "macos")]
+    MacOS,
+
+    /// Alias for `--windows --webview --bundle-format windows`
+    #[cfg_attr(target_os = "windows", clap(alias = "desktop"))]
+    #[clap(name = "windows")]
+    #[serde(rename = "windows")]
+    Windows,
+
+    /// Alias for `--linux --webview --bundle-format linux`
+    #[cfg_attr(target_os = "linux", clap(alias = "desktop"))]
+    #[clap(name = "linux")]
+    #[serde(rename = "linux")]
+    Linux,
+
+    /// Alias for `--ios --webview --bundle-format ios`
+    #[clap(name = "ios")]
+    #[serde(rename = "ios")]
+    Ios,
+
+    /// Alias for `--android --webview --bundle-format android`
+    #[clap(name = "android")]
+    #[serde(rename = "android")]
+    Android,
+
+    /// Alias for `--host --server --bundle-format server`
+    #[clap(name = "server")]
+    #[serde(rename = "server")]
+    Server,
+
+    /// Alias for `--host --liveview --bundle-format host`
+    #[clap(name = "liveview")]
+    #[serde(rename = "liveview")]
+    Liveview,
+}
+
+impl Platform {
+    pub(crate) fn into_triple(self) -> (TargetAlias, Renderer, BundleFormat) {
+        match self {
+            Platform::Web => (TargetAlias::Wasm, Renderer::Web, BundleFormat::Web),
+            Platform::MacOS => (TargetAlias::MacOS, Renderer::Webview, BundleFormat::MacOS),
+            Platform::Windows => (
+                TargetAlias::Windows,
+                Renderer::Webview,
+                BundleFormat::Windows,
+            ),
+            Platform::Linux => (TargetAlias::Linux, Renderer::Webview, BundleFormat::Linux),
+            Platform::Ios => (TargetAlias::Ios, Renderer::Webview, BundleFormat::Ios),
+            Platform::Android => (
+                TargetAlias::Android,
+                Renderer::Webview,
+                BundleFormat::Android,
+            ),
+            Platform::Server => (TargetAlias::Host, Renderer::Server, BundleFormat::Server),
+            Platform::Liveview => (
+                TargetAlias::Host,
+                Renderer::Liveview,
+                BundleFormat::TARGET_PLATFORM.unwrap(),
             ),
         }
     }
