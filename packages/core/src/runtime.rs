@@ -448,6 +448,7 @@ impl Runtime {
 ///
 /// ```rust
 /// use dioxus::prelude::*;
+/// use dioxus_core::{Runtime, RuntimeGuard};
 ///
 /// fn main() {
 ///     let virtual_dom = VirtualDom::new(app);

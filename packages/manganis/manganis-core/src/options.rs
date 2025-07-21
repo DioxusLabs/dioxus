@@ -62,10 +62,10 @@ impl AssetOptions {
 /// A builder for [`AssetOptions`]
 ///
 /// ```rust
-/// # use manganis::AssetOptionsBuilder;
+/// # use manganis::{AssetOptions, Asset, asset};
 /// static ASSET: Asset = asset!(
-///     "image.png",
-///     AssetOptionsBuilder::new()
+///     "/assets/style.css",
+///     AssetOptions::builder()
 ///     .with_hash_suffix(false)
 /// );
 /// ```
@@ -130,8 +130,8 @@ impl<T> AssetOptionsBuilder<T> {
     /// ```rust
     /// #[used]
     /// static ASSET: manganis::Asset = manganis::asset!(
-    ///     "path/to/asset.png",
-    ///     AssetVariant::Unknown.into_asset_options()
+    ///     "/assets/style.css",
+    ///     manganis::AssetOptions::builder()
     ///         .with_hash_suffix(false)
     /// );
     /// ```

@@ -1,4 +1,4 @@
-use dioxus_core::prelude::spawn;
+use dioxus_core::spawn;
 use dioxus_document::Eval;
 use dioxus_history::History;
 use serde::{Deserialize, Serialize};

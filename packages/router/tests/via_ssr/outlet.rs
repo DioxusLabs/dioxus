@@ -5,7 +5,6 @@ use std::rc::Rc;
 use dioxus::prelude::*;
 use dioxus_history::{History, MemoryHistory};
 use dioxus_router::components::HistoryProvider;
-use dioxus_router::prelude::*;
 
 fn prepare(path: impl Into<String>) -> VirtualDom {
     let mut vdom = VirtualDom::new_with_props(

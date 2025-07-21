@@ -1,10 +1,7 @@
-use dioxus_lib::prelude::*;
-
-use crate::{
-    prelude::{provide_router_context, Outlet},
-    routable::Routable,
-    router_cfg::RouterConfig,
-};
+use crate::{provide_router_context, routable::Routable, router_cfg::RouterConfig, Outlet};
+use dioxus_core::{provide_context, use_hook, Callback, Element};
+use dioxus_core_macro::{rsx, Props};
+use dioxus_signals::{GlobalSignal, Owner, Readable};
 
 /// The props for [`Router`].
 #[derive(Props)]
@@ -38,15 +35,15 @@ impl<R: Clone> PartialEq for RouterProps<R> {
 
 /// A component that renders the current route.
 pub fn Router<R: Routable + Clone>(props: RouterProps<R>) -> Element {
-    use crate::prelude::{outlet::OutletContext, RouterContext};
+    use crate::{outlet::OutletContext, RouterContext};
 
     use_hook(|| {
         provide_router_context(RouterContext::new(props.config.call(())));
     });
 
     #[cfg(feature = "streaming")]
-    use_after_suspense_resolved(|| {
-        dioxus_fullstack_hooks::prelude::commit_initial_chunk();
+    dioxus_hooks::use_after_suspense_resolved(|| {
+        dioxus_fullstack_hooks::commit_initial_chunk();
     });
 
     use_hook(|| {

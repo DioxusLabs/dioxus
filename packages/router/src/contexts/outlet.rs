@@ -1,4 +1,4 @@
-use dioxus_lib::prelude::*;
+use dioxus_core::{provide_context, try_consume_context, use_hook, Element, VNode};
 
 use crate::{routable::Routable, utils::use_router_internal::use_router_internal};
 
@@ -75,8 +75,8 @@ impl<R> OutletContext<R> {
 /// # Examples
 ///
 /// ```rust, no_run
-/// # use dioxus_lib::prelude::*;
-/// # use dioxus_router::prelude::{use_outlet_context,Routable};
+/// # use dioxus::prelude::*;
+/// # use dioxus_router::use_outlet_context;
 ///
 /// # #[derive(Routable,Clone,PartialEq)]
 /// # enum MyRouter {

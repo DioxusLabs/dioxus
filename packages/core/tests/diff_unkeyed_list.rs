@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use dioxus::dioxus_core::{ElementId, Mutation::*};
 use dioxus::prelude::*;
-use dioxus_core::Mutation;
+use dioxus_core::{generation, Mutation};
 use pretty_assertions::assert_eq;
 
 #[test]

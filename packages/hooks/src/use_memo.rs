@@ -1,5 +1,5 @@
 use crate::use_callback;
-use dioxus_core::prelude::*;
+use dioxus_core::use_hook;
 use dioxus_signals::Memo;
 
 #[doc = include_str!("../docs/derived_state.md")]

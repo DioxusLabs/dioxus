@@ -152,7 +152,10 @@ pub fn add_hash_to_asset(asset: &mut BundledAsset) {
             };
 
             if let Some(ext) = ext {
-                bundled_path.set_extension(ext);
+                // Push the extension to the bundled path. There may be multiple extensions (e.g. .js.map)
+                // with one left after the file_stem is extracted above so we need to push the extension
+                // instead of setting it
+                bundled_path.as_mut_os_string().push(format!(".{ext}"));
             }
 
             let bundled_path = bundled_path.to_string_lossy().to_string();

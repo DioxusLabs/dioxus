@@ -2,7 +2,7 @@ use dioxus_core::Event;
 use keyboard_types::Modifiers;
 
 use crate::geometry::*;
-use crate::prelude::{InteractionLocation, ModifiersInteraction};
+use crate::{InteractionLocation, ModifiersInteraction};
 
 pub type TouchEvent = Event<TouchData>;
 pub struct TouchData {

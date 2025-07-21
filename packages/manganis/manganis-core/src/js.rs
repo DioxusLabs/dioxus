@@ -55,7 +55,7 @@ impl AssetOptions {
     /// Create a new js asset builder
     ///
     /// ```rust
-    /// # use manganis::{asset, Asset, JsAssetOptions};
+    /// # use manganis::{asset, Asset, AssetOptions};
     /// const _: Asset = asset!("/assets/script.js", AssetOptions::js());
     /// ```
     pub const fn js() -> AssetOptionsBuilder<JsAssetOptions> {
@@ -69,7 +69,7 @@ impl AssetOptionsBuilder<JsAssetOptions> {
     /// Minifying the js can make your site load faster by loading less data
     ///
     /// ```rust
-    /// # use manganis::{asset, Asset, JsAssetOptions};
+    /// # use manganis::{asset, Asset, AssetOptions};
     /// const _: Asset = asset!("/assets/script.js", AssetOptions::js().with_minify(false));
     /// ```
     #[allow(unused)]
@@ -83,7 +83,7 @@ impl AssetOptionsBuilder<JsAssetOptions> {
     /// Preloading the javascript will make the javascript start to load as soon as possible. This is useful for javascript that will be used soon after the page loads or javascript that may not be used immediately, but should start loading sooner
     ///
     /// ```rust
-    /// # use manganis::{asset, Asset, JsAssetOptions};
+    /// # use manganis::{asset, Asset, AssetOptions};
     /// const _: Asset = asset!("/assets/script.js", AssetOptions::js().with_preload(true));
     /// ```
     #[allow(unused)]

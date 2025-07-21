@@ -1,7 +1,6 @@
 //! This module contains the `launch` function, which is the main entry point for dioxus web
-
 pub use crate::Config;
-use dioxus_core::prelude::*;
+use dioxus_core::{Element, VirtualDom};
 use std::any::Any;
 
 /// Launch the web application with the given root component, context and config

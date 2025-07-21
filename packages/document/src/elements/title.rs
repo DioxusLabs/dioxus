@@ -1,3 +1,5 @@
+use dioxus_core::{use_hook, VNode};
+
 use crate::document;
 
 use super::*;

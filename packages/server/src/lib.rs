@@ -74,6 +74,7 @@ pub use context::{
     extract, server_context, with_server_context, DioxusServerContext, FromContext,
     FromServerContext, ProvideServerContext,
 };
+pub use dioxus_isrg::{IncrementalRenderer, IncrementalRendererConfig};
 pub use document::ServerDocument;
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -81,18 +82,3 @@ mod launch;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub use launch::{launch, launch_cfg};
-
-/// Re-export commonly used items
-pub mod prelude {
-    pub use crate::config::{ServeConfig, ServeConfigBuilder};
-    pub use crate::context::Axum;
-    pub use crate::context::{
-        extract, server_context, with_server_context, DioxusServerContext, FromContext,
-        FromServerContext, ProvideServerContext,
-    };
-    pub use crate::render::{FullstackHTMLTemplate, SSRState};
-    pub use crate::server::*;
-    pub use dioxus_isrg::{IncrementalRenderer, IncrementalRendererConfig};
-}
-
-pub use dioxus_isrg::{IncrementalRenderer, IncrementalRendererConfig};

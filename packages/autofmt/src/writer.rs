@@ -2,6 +2,7 @@ use crate::{buffer::Buffer, IndentOptions};
 use dioxus_rsx::*;
 use proc_macro2::{LineColumn, Span};
 use quote::ToTokens;
+use regex::Regex;
 use std::{
     borrow::Cow,
     collections::{HashMap, VecDeque},
@@ -797,8 +798,95 @@ impl<'a> Writer<'a> {
             return Err(std::fmt::Error);
         };
 
+        thread_local! {
+            static COMMENT_REGEX: Regex = Regex::new("\"[^\"]*\"|(//.*)").unwrap();
+        }
+
         let pretty_expr = self.retrieve_formatted_expr(&expr).to_string();
-        self.write_mulitiline_tokens(pretty_expr)?;
+
+        // Adding comments back to the formatted expression
+        let source_text = src_span.source_text().unwrap_or_default();
+        let mut source_lines = source_text.lines().peekable();
+        let mut output = String::from("");
+        let mut printed_empty_line = false;
+
+        if source_lines.peek().is_none() {
+            output = pretty_expr;
+        } else {
+            for line in pretty_expr.lines() {
+                let compacted_pretty_line = line.replace(" ", "").replace(",", "");
+                let trimmed_pretty_line = line.trim();
+
+                // Nested expressions might have comments already. We handle writing all of those
+                // at the outer level, so we skip them here
+                if trimmed_pretty_line.starts_with("//") {
+                    continue;
+                }
+
+                if !output.is_empty() {
+                    output.push('\n');
+                }
+
+                // pull down any source lines with whitespace until we hit a line that matches our current line.
+                while let Some(src) = source_lines.peek() {
+                    let trimmed_src = src.trim();
+
+                    // Write comments and empty lines as they are
+                    if trimmed_src.starts_with("//") || trimmed_src.is_empty() {
+                        if !trimmed_src.is_empty() {
+                            // Match the whitespace of the incoming source line
+                            for s in line.chars().take_while(|c| c.is_whitespace()) {
+                                output.push(s);
+                            }
+
+                            // Bump out the indent level if the line starts with a closing brace (ie we're at the end of a block)
+                            if matches!(trimmed_pretty_line.chars().next(), Some(')' | '}' | ']')) {
+                                output.push_str(self.out.indent.indent_str());
+                            }
+
+                            printed_empty_line = false;
+                            output.push_str(trimmed_src);
+                            output.push('\n');
+                        } else if !printed_empty_line {
+                            output.push('\n');
+                            printed_empty_line = true;
+                        }
+
+                        _ = source_lines.next();
+                        continue;
+                    }
+
+                    let compacted_src_line = src.replace(" ", "").replace(",", "");
+
+                    // If this source line matches our pretty line, we stop pulling down
+                    if compacted_src_line.contains(&compacted_pretty_line) {
+                        break;
+                    }
+
+                    // Otherwise, consume this source line and keep going
+                    _ = source_lines.next();
+                }
+
+                // Once all whitespace is written, write the pretty line
+                output.push_str(line);
+                printed_empty_line = false;
+
+                // And then pull the corresponding source line
+                let source_line = source_lines.next();
+
+                // And then write any inline comments
+                if let Some(source_line) = source_line {
+                    if let Some(captures) = COMMENT_REGEX.with(|f| f.captures(source_line)) {
+                        if let Some(comment) = captures.get(1) {
+                            output.push_str(" // ");
+                            output.push_str(comment.as_str().replace("//", "").trim());
+                        }
+                    }
+                }
+            }
+        }
+
+        self.write_mulitiline_tokens(output)?;
 
         Ok(())
     }
@@ -815,7 +903,10 @@ impl<'a> Writer<'a> {
             writeln!(self.out, "{first}")?;
 
             while let Some(line) = lines.next() {
-                self.out.tab()?;
+                if !line.trim().is_empty() {
+                    self.out.tab()?;
+                }
+
                 write!(self.out, "{line}")?;
                 if lines.peek().is_none() {
                     write!(self.out, "")?;

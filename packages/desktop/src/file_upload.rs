@@ -11,8 +11,8 @@ use dioxus_html::{
     point_interaction::{
         InteractionElementOffset, InteractionLocation, ModifiersInteraction, PointerInteraction,
     },
-    prelude::{SerializedMouseData, SerializedPointInteraction},
-    FileEngine, HasDragData, HasFileData, HasFormData, HasMouseData,
+    FileEngine, HasDragData, HasFileData, HasFormData, HasMouseData, SerializedMouseData,
+    SerializedPointInteraction,
 };
 
 use serde::Deserialize;
@@ -233,7 +233,7 @@ impl InteractionElementOffset for DesktopFileDragEvent {
 }
 
 impl ModifiersInteraction for DesktopFileDragEvent {
-    fn modifiers(&self) -> dioxus_html::prelude::Modifiers {
+    fn modifiers(&self) -> dioxus_html::Modifiers {
         self.mouse.modifiers()
     }
 }

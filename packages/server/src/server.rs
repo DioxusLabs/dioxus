@@ -9,7 +9,7 @@ use axum::{
     response::IntoResponse,
 };
 
-use dioxus_lib::prelude::{Element, VirtualDom};
+use dioxus_core::{Element, VirtualDom};
 use http::header::*;
 use server_fn::ServerFnTraitObj;
 use std::path::Path;
@@ -25,8 +25,7 @@ pub trait DioxusRouterExt<S>: DioxusRouterFnExt<S> {
     /// # Example
     /// ```rust, no_run
     /// # #![allow(non_snake_case)]
-    /// # use dioxus_lib::prelude::*;
-    /// # use dioxus_server::prelude::*;
+    /// # use dioxus::prelude::*;
     /// use dioxus_server::{DioxusRouterExt, DioxusRouterFnExt};
     ///
     /// #[tokio::main]
@@ -52,9 +51,8 @@ pub trait DioxusRouterExt<S>: DioxusRouterFnExt<S> {
     /// # Example
     /// ```rust, no_run
     /// # #![allow(non_snake_case)]
-    /// # use dioxus_lib::prelude::*;
-    /// # use dioxus_server::prelude::*;
-    /// use dioxus_server::{DioxusRouterExt, DioxusRouterFnExt};
+    /// # use dioxus::prelude::*;
+    /// use dioxus_server::{DioxusRouterExt, DioxusRouterFnExt, ServeConfig};
     ///
     /// #[tokio::main]
     /// async fn main() {
@@ -113,8 +111,8 @@ pub trait DioxusRouterFnExt<S> {
     ///
     /// # Example
     /// ```rust, no_run
-    /// # use dioxus_lib::prelude::*;
-    /// # use dioxus_server::prelude::*;
+    /// # use dioxus::prelude::*;
+    /// # use dioxus_server::DioxusRouterFnExt;
     /// #[tokio::main]
     /// async fn main() {
     ///     let addr = dioxus::cli_config::fullstack_address_or_localhost();
@@ -138,8 +136,8 @@ pub trait DioxusRouterFnExt<S> {
     ///
     /// # Example
     /// ```rust, no_run
-    /// # use dioxus_lib::prelude::*;
-    /// # use dioxus_server::prelude::*;
+    /// # use dioxus::prelude::*;
+    /// # use dioxus_server::DioxusRouterFnExt;
     /// # use std::sync::Arc;
     /// #[tokio::main]
     /// async fn main() {
@@ -162,9 +160,8 @@ pub trait DioxusRouterFnExt<S> {
     ///
     /// # Example
     /// ```rust, no_run
-    /// # use dioxus_lib::prelude::*;
-    /// # use dioxus_server::prelude::*;
-    /// # use dioxus_server::prelude::*;
+    /// # use dioxus::prelude::*;
+    /// # use dioxus_server::{DioxusRouterFnExt, ServeConfig};
     /// #[tokio::main]
     /// async fn main() {
     ///     let router = axum::Router::new()

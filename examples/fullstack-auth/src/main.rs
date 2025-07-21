@@ -4,7 +4,6 @@
 mod auth;
 
 use dioxus::prelude::*;
-use dioxus_fullstack::prelude::*;
 use serde::{Deserialize, Serialize};
 
 fn main() {

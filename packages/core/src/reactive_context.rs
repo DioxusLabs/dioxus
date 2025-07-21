@@ -1,9 +1,4 @@
-use crate::{
-    prelude::{current_scope_id, ScopeId},
-    scope_context::Scope,
-    tasks::SchedulerMsg,
-    Runtime,
-};
+use crate::{current_scope_id, scope_context::Scope, tasks::SchedulerMsg, Runtime, ScopeId};
 use futures_channel::mpsc::UnboundedReceiver;
 use generational_box::{BorrowMutError, GenerationalBox, SyncStorage};
 use std::{
@@ -163,6 +158,7 @@ impl ReactiveContext {
     ///
     /// ```rust, no_run
     /// # use dioxus::prelude::*;
+    /// # use dioxus_core::ReactiveContext;
     /// # use futures_util::StreamExt;
     /// fn use_simplified_memo(mut closure: impl FnMut() -> i32 + 'static) -> Signal<i32> {
     ///     use_hook(|| {

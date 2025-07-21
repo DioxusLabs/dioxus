@@ -1,4 +1,4 @@
-use dioxus_core::prelude::queue_effect;
+use dioxus_core::queue_effect;
 use dioxus_core::ScopeId;
 use dioxus_document::{
     create_element_in_head, Document, Eval, EvalError, Evaluator, LinkProps, MetaProps,

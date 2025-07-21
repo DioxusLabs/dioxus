@@ -61,10 +61,10 @@ jobs:
             os: ubuntu-24.04
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-24.04-arm
-          - target: x86_64-unknown-linux-musl
-            os: ubuntu-24.04
-          - target: aarch64-unknown-linux-musl
-            os: ubuntu-24.04-arm
+          # - target: x86_64-unknown-linux-musl
+          #   os: ubuntu-24.04
+          # - target: aarch64-unknown-linux-musl
+          #   os: ubuntu-24.04-arm
     steps:
       - name: Checkout
         uses: actions/checkout@v4

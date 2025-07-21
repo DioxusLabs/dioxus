@@ -6,6 +6,7 @@
 
 use dioxus::dioxus_core::{ElementId, Mutation::*};
 use dioxus::prelude::*;
+use dioxus_core::generation;
 
 /// Should result in moves, but not removals or additions
 #[test]

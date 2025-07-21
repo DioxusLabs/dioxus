@@ -1,5 +1,6 @@
 use dioxus::dioxus_core::{ElementId, Mutation::*};
 use dioxus::prelude::*;
+use dioxus_core::generation;
 use pretty_assertions::assert_eq;
 
 #[test]

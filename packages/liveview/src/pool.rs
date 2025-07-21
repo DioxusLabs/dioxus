@@ -5,7 +5,8 @@ use crate::{
     query::{QueryEngine, QueryResult},
     LiveViewError,
 };
-use dioxus_core::prelude::*;
+
+use dioxus_core::{provide_context, Element, Event, ScopeId, VirtualDom};
 use dioxus_html::{EventData, HtmlEvent, PlatformEventData};
 use dioxus_interpreter_js::MutationState;
 use futures_util::{pin_mut, SinkExt, StreamExt};
