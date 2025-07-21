@@ -247,7 +247,7 @@ pub(crate) fn process_js(
     let mut writer = std::io::BufWriter::new(std::fs::File::create(output_path)?);
     if js_options.minified() {
         if let Err(err) = bundle_js_to_writer(source.to_path_buf(), bundle, true, &mut writer) {
-            tracing::error!("Failed to minify js. Falling back to non-minified: {err}");
+            tracing::error!("Failed to minify js. Falling back to non-minified: {err:?}");
         } else {
             return Ok(());
         }
@@ -284,7 +284,7 @@ pub(crate) fn hash_js(
 ) -> anyhow::Result<()> {
     if js_options.minified() {
         if let Err(err) = hash_js_module(source.to_path_buf(), hasher, bundle) {
-            tracing::error!("Failed to minify js. Falling back to non-minified: {err}");
+            tracing::error!("Failed to minify js. Falling back to non-minified: {err:?}");
             hash_file_contents(source, hasher)?;
         }
     } else {

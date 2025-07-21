@@ -384,6 +384,7 @@ pub(crate) struct BuildRequest {
     pub(crate) no_default_features: bool,
     pub(crate) target_dir: PathBuf,
     pub(crate) skip_assets: bool,
+    pub(crate) bundle_wasm_bindgen_js: bool,
     pub(crate) wasm_split: bool,
     pub(crate) debug_symbols: bool,
     pub(crate) inject_loading_scripts: bool,
@@ -784,6 +785,7 @@ impl BuildRequest {
             rustflags,
             using_dioxus_explicitly,
             skip_assets: args.skip_assets,
+            bundle_wasm_bindgen_js: args.bundle_wasm_bindgen_js,
             base_path: args.base_path.clone(),
             wasm_split: args.wasm_split,
             debug_symbols: args.debug_symbols,
@@ -1283,7 +1285,7 @@ impl BuildRequest {
         .map_err(|e| anyhow::anyhow!("A task failed while trying to copy assets: {e}"))??;
 
         // Remove the wasm dir if we packaged it to an "asset"-type app
-        if self.should_bundle_to_asset() {
+        if self.should_optimize_wasm_bindgen_to_asset() {
             _ = std::fs::remove_dir_all(self.wasm_bindgen_out_dir());
         }
 
@@ -3457,7 +3459,7 @@ impl BuildRequest {
     }
 
     /// Check if the wasm output should be bundled to an asset type app.
-    fn should_bundle_to_asset(&self) -> bool {
+    fn should_optimize_wasm_bindgen_to_asset(&self) -> bool {
         self.release && !self.wasm_split && self.platform == Platform::Web
     }
 
@@ -3649,7 +3651,7 @@ impl BuildRequest {
             wasm_opt::optimize(&post_bindgen_wasm, &post_bindgen_wasm, &wasm_opt_options).await?;
         }
 
-        if self.should_bundle_to_asset() {
+        if self.should_optimize_wasm_bindgen_to_asset() {
             // Make sure to register the main wasm file with the asset system
             assets.register_asset(
                 &post_bindgen_wasm,
@@ -3660,15 +3662,25 @@ impl BuildRequest {
         // Now that the wasm is registered as an asset, we can write the js glue shim
         self.write_js_glue_shim(assets)?;
 
-        if self.should_bundle_to_asset() {
-            // Register the main.js with the asset system so it bundles in the snippets and optimizes
-            assets.register_asset(
-                &self.wasm_bindgen_js_output_file(),
-                AssetOptions::js()
-                    .with_minify(true)
-                    .with_preload(true)
-                    .into_asset_options(),
-            )?;
+        // Register the main.js with the asset system so it bundles in the snippets and optimizes
+        if self.should_optimize_wasm_bindgen_to_asset() {
+            if self.bundle_wasm_bindgen_js {
+                // If bundling is enabled, we will only copy the main.js file and bundle everything into it
+                assets.register_asset(
+                    &self.wasm_bindgen_js_output_file(),
+                    AssetOptions::js()
+                        .with_minify(true)
+                        .with_preload(true)
+                        .into_asset_options(),
+                )?;
+            } else {
+                // If bundling is disabled, copy the whole wasm-bindgen output folder
+                // to the assets folder so it can be served as a folder.
+                assets.register_asset(
+                    &self.wasm_bindgen_out_dir(),
+                    AssetOptions::builder().into_asset_options(),
+                )?;
+            }
         }
 
         // Write the index.html file with the pre-configured contents we got from pre-rendering
@@ -3725,9 +3737,25 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         Ok(())
     }
 
+    /// Get the path to the bundled wasm-bindgen js output folder. This will return Some
+    /// if [`TargetArgs::bundle_wasm_bindgen_js`] is false which causes the js to be bundled
+    /// into a folder instead of a single file.
+    fn bundled_wasm_bindgen_folder(&self, assets: &AssetManifest) -> Option<String> {
+        assets
+            .get_first_asset_for_source(&self.wasm_bindgen_out_dir())
+            .map(|p| p.bundled_path().to_string())
+    }
+
     fn bundled_js_path(&self, assets: &AssetManifest) -> String {
         let wasm_bindgen_js_out = self.wasm_bindgen_js_output_file();
-        if self.should_bundle_to_asset() {
+        if self.should_optimize_wasm_bindgen_to_asset() {
+            if let Some(folder) = self.bundled_wasm_bindgen_folder(assets) {
+                // If we are bundling the wasm-bindgen output to a folder, we can just use that
+                return format!(
+                    "assets/{folder}/{}",
+                    self.wasm_bindgen_js_root().to_string_lossy()
+                );
+            }
             let name = assets
                 .get_first_asset_for_source(&wasm_bindgen_js_out)
                 .expect("The js source must exist before creating index.html");
@@ -3743,7 +3771,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
     /// Get the path to the wasm-bindgen output files. Either the direct file or the opitmized one depending on the build mode
     fn bundled_wasm_path(&self, assets: &AssetManifest) -> String {
         let wasm_bindgen_wasm_out = self.wasm_bindgen_wasm_output_file();
-        if self.should_bundle_to_asset() {
+        if self.should_optimize_wasm_bindgen_to_asset() {
             let name = assets
                 .get_first_asset_for_source(&wasm_bindgen_wasm_out)
                 .expect("The wasm source must exist before creating index.html");
@@ -4018,11 +4046,15 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         self.root_dir().join("wasm")
     }
 
+    /// Get the root of the wasm_bindgen js file
+    fn wasm_bindgen_js_root(&self) -> PathBuf {
+        PathBuf::from(self.executable_name()).with_extension("js")
+    }
+
     /// Get the path to the wasm bindgen javascript output file
     pub(crate) fn wasm_bindgen_js_output_file(&self) -> PathBuf {
         self.wasm_bindgen_out_dir()
-            .join(self.executable_name())
-            .with_extension("js")
+            .join(self.wasm_bindgen_js_root())
     }
 
     /// Get the path to the wasm bindgen wasm output file
