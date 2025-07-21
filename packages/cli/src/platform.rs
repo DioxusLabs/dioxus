@@ -43,13 +43,13 @@ pub(crate) enum TargetAlias {
 impl Args for TargetAlias {
     fn augment_args(cmd: clap::Command) -> clap::Command {
         const HELP_HEADING: &str = "Target Alias";
-        cmd.arg(arg!(--wasm "The wasm target").help_heading(HELP_HEADING))
-            .arg(arg!(--macos "The macos target").help_heading(HELP_HEADING))
-            .arg(arg!(--windows "The windows target").help_heading(HELP_HEADING))
-            .arg(arg!(--linux "The linux target").help_heading(HELP_HEADING))
-            .arg(arg!(--ios "The ios target").help_heading(HELP_HEADING))
-            .arg(arg!(--android "The android target").help_heading(HELP_HEADING))
-            .arg(arg!(--host "The host target").help_heading(HELP_HEADING))
+        cmd.arg(arg!(--wasm "Target the wasm triple").help_heading(HELP_HEADING))
+            .arg(arg!(--macos "Target the macos triple").help_heading(HELP_HEADING))
+            .arg(arg!(--windows "Target the windows triple").help_heading(HELP_HEADING))
+            .arg(arg!(--linux "Target the linux triple").help_heading(HELP_HEADING))
+            .arg(arg!(--ios "Target the ios triple").help_heading(HELP_HEADING))
+            .arg(arg!(--android "Target the android triple").help_heading(HELP_HEADING))
+            .arg(arg!(--host "Target the host triple").help_heading(HELP_HEADING))
             .group(
                 clap::ArgGroup::new("target_alias")
                     .args([
@@ -153,11 +153,11 @@ pub(crate) struct RendererArg {
 impl Args for RendererArg {
     fn augment_args(cmd: clap::Command) -> clap::Command {
         const HELP_HEADING: &str = "Renderer";
-        cmd.arg(arg!(--web "Targeting the web renderer").help_heading(HELP_HEADING))
-            .arg(arg!(--webview "Targeting the webview renderer").help_heading(HELP_HEADING))
-            .arg(arg!(--native "Targeting the native renderer").help_heading(HELP_HEADING))
-            .arg(arg!(--server "Targeting the server renderer").help_heading(HELP_HEADING))
-            .arg(arg!(--liveview "Targeting the liveview renderer").help_heading(HELP_HEADING))
+        cmd.arg(arg!(--web "Enable the dioxus web renderer").help_heading(HELP_HEADING))
+            .arg(arg!(--webview "Enable the dioxus webview renderer").help_heading(HELP_HEADING))
+            .arg(arg!(--native "Enable the dioxus native renderer").help_heading(HELP_HEADING))
+            .arg(arg!(--server "Enable the dioxus server renderer").help_heading(HELP_HEADING))
+            .arg(arg!(--liveview "Enable the dioxus liveview renderer").help_heading(HELP_HEADING))
             .group(
                 clap::ArgGroup::new("renderer")
                     .args(["web", "webview", "native", "server", "liveview"])

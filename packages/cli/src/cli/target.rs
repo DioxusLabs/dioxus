@@ -18,7 +18,7 @@ pub(crate) struct TargetArgs {
     #[clap(flatten)]
     pub(crate) renderer: RendererArg,
 
-    /// Build bundle: supports web, macos, windows, linux, ios, android, and server
+    /// The bundle format to target for the build: supports web, macos, windows, linux, ios, android, and server
     #[clap(long, value_enum, help_heading = HELP_HEADING)]
     pub(crate) bundle: Option<BundleFormat>,
 
