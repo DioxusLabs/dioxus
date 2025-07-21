@@ -8,6 +8,7 @@
 mod web;
 
 mod error;
+pub mod mock_client;
 
 #[cfg(all(feature = "web", feature = "document"))]
 pub use web::FullstackWebDocument;

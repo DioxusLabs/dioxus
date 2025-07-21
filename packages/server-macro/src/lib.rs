@@ -206,10 +206,21 @@ use syn::{__private::ToTokens, parse_quote};
 #[proc_macro_attribute]
 pub fn server(args: proc_macro::TokenStream, body: TokenStream) -> TokenStream {
     // If there is no input codec, use json as the default
-    let parsed = match ServerFnCall::parse("/api", args.into(), body.into()) {
+    let mut parsed = match ServerFnCall::parse("/api", args.into(), body.into()) {
         Ok(parsed) => parsed,
         Err(e) => return e.to_compile_error().into(),
     };
+
+    #[cfg(not(any(feature = "browser", feature = "reqwest")))]
+    {
+        let client = &mut parsed.get_args_mut().client;
+        // If no client is enabled, use the mock client
+        if client.is_none() {
+            *client = Some(parse_quote!(
+                dioxus::fullstack::mock_client::MockServerFnClient
+            ));
+        }
+    }
 
     parsed
         .default_protocol(Some(
