@@ -5675,6 +5675,7 @@ version = "0.7.0-alpha.3"
 dependencies = [
  "blitz-dom",
  "blitz-traits",
+ "dioxus",
  "dioxus-core",
  "dioxus-html",
  "futures-util",

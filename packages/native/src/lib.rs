@@ -14,7 +14,6 @@ mod contexts;
 mod dioxus_application;
 mod dioxus_renderer;
 
-use blitz_dom::DocumentConfig;
 #[doc(inline)]
 pub use dioxus_native_dom::*;
 

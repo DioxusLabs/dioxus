@@ -12,6 +12,7 @@
 mod dioxus_document;
 mod events;
 mod mutation_writer;
+pub use blitz_dom::DocumentConfig;
 pub use dioxus_document::DioxusDocument;
 
 use blitz_dom::{ns, LocalName, Namespace, QualName};
