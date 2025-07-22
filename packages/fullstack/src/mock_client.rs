@@ -11,6 +11,12 @@ use server_fn::{request::ClientReq, response::ClientRes};
 #[non_exhaustive]
 pub struct MockServerFnClient {}
 
+impl Default for MockServerFnClient {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MockServerFnClient {
     /// Create a new mock server function client
     pub fn new() -> Self {
@@ -25,15 +31,12 @@ impl<Error, InputStreamError, OutputStreamError>
 
     type Response = MockServerFnClientResponse;
 
-    fn send(_: Self::Request) -> impl Future<Output = Result<Self::Response, Error>> + Send {
-        async move { unimplemented!() }
-    }
+    async fn send(_: Self::Request) -> Result<Self::Response, Error> { unimplemented!() }
 
     #[allow(unreachable_code)]
-    fn open_websocket(
+    async fn open_websocket(
         _: &str,
-    ) -> impl futures_util::Future<
-        Output = Result<
+    ) -> Result<
             (
                 impl Stream<Item = Result<server_fn::Bytes, server_fn::Bytes>>
                     + std::marker::Send
@@ -41,18 +44,15 @@ impl<Error, InputStreamError, OutputStreamError>
                 impl futures_util::Sink<server_fn::Bytes> + std::marker::Send + 'static,
             ),
             Error,
-        >,
-    > + std::marker::Send {
-        async move {
-            unimplemented!()
-                as Result<
-                    (
-                        futures_util::stream::Once<futures_util::future::Pending<_>>,
-                        futures_util::sink::Drain<server_fn::Bytes>,
-                    ),
-                    _,
-                >
-        }
+        > {
+        unimplemented!()
+            as Result<
+                (
+                    futures_util::stream::Once<futures_util::future::Pending<_>>,
+                    futures_util::sink::Drain<server_fn::Bytes>,
+                ),
+                _,
+            >
     }
 
     fn spawn(_: impl Future<Output = ()> + Send + 'static) {
@@ -119,13 +119,9 @@ impl<E> ClientReq<E> for MockServerFnClientRequest {
 pub struct MockServerFnClientResponse;
 
 impl<E> ClientRes<E> for MockServerFnClientResponse {
-    fn try_into_string(self) -> impl Future<Output = Result<String, E>> + Send {
-        async move { unimplemented!() }
-    }
+    async fn try_into_string(self) -> Result<String, E> { unimplemented!() }
 
-    fn try_into_bytes(self) -> impl Future<Output = Result<bytes::Bytes, E>> + Send {
-        async move { unimplemented!() }
-    }
+    async fn try_into_bytes(self) -> Result<bytes::Bytes, E> { unimplemented!() }
 
     #[allow(unreachable_code)]
     fn try_into_stream(
