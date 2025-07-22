@@ -613,12 +613,6 @@ impl BuildRequest {
                     bail!(
                         "Multiple platforms enabled in Cargo.toml. Please specify a platform with `--web`, `--webview`, or `--native` or set a default platform in Cargo.toml"
                     );
-                    // None if !using_dioxus_explicitly => Platform::autodetect_from_cargo_feature("desktop").unwrap(),
-                    // None => match enabled_platforms.len() {
-                    //     0 => bail!("No platform specified and no platform marked as default in Cargo.toml. Try specifying a platform with `--platform`"),
-                    //     1 => enabled_platforms[0],
-                    //     _ => {
-                    //         bail!("Multiple platforms enabled in Cargo.toml. Please specify a platform with `--platform` or set a default platform in Cargo.toml")
                 }
             },
         };
@@ -783,8 +777,7 @@ impl BuildRequest {
             r#"Target Info:
                 • features: {features:?}
                 • triple: {triple}
-                • bundle format: {bundle:?}
-                "#
+                • bundle format: {bundle:?}"#
         );
         tracing::debug!(
             r#"Log Files:
@@ -793,8 +786,7 @@ impl BuildRequest {
                 • rustc_wrapper_args_file: {},
                 • session_cache_dir: {}
                 • linker: {:?}
-                • target_dir: {:?}
-                "#,
+                • target_dir: {:?}"#,
             link_args_file.path().display(),
             link_err_file.path().display(),
             rustc_wrapper_args_file.path().display(),
@@ -1050,7 +1042,6 @@ impl BuildRequest {
         let time_end = SystemTime::now();
         let mode = ctx.mode.clone();
         let bundle = self.bundle;
-        // let platform = self.platform;
         let depinfo = RustcDepInfo::from_file(&exe.with_extension("d")).unwrap_or_default();
 
         tracing::debug!(
@@ -1436,10 +1427,7 @@ impl BuildRequest {
         // Requiring the ASLR offset here is necessary but unfortunately might be flakey in practice.
         // Android apps can take a long time to open, and a hot patch might've been issued in the interim,
         // making this hotpatch a failure.
-        if !matches!(
-            self.triple.architecture,
-            target_lexicon::Architecture::Wasm32 | target_lexicon::Architecture::Wasm64
-        ) {
+        if !self.is_wasm_or_wasi() {
             let stub_bytes = crate::build::create_undefined_symbol_stub(
                 cache,
                 &object_files,
@@ -1980,10 +1968,7 @@ impl BuildRequest {
         }
 
         // We want to go through wasm-ld directly, so we need to remove the -flavor flag
-        if matches!(
-            self.triple.architecture,
-            target_lexicon::Architecture::Wasm32 | target_lexicon::Architecture::Wasm64
-        ) {
+        if self.is_wasm_or_wasi() {
             let flavor_idx = args.iter().position(|arg| *arg == "-flavor").unwrap();
             args.remove(flavor_idx + 1);
             args.remove(flavor_idx);
@@ -2180,10 +2165,7 @@ impl BuildRequest {
                 );
                 cmd.arg(format!("-Clinker={}", Workspace::path_to_dx()?.display()));
 
-                if matches!(
-                    self.triple.architecture,
-                    target_lexicon::Architecture::Wasm32 | target_lexicon::Architecture::Wasm64
-                ) {
+                if self.is_wasm_or_wasi() {
                     cmd.arg("-Crelocation-model=pic");
                 }
 
@@ -2448,11 +2430,7 @@ impl BuildRequest {
 
         // Disable reference types on wasm when using hotpatching
         // https://blog.rust-lang.org/2024/09/24/webassembly-targets-change-in-default-target-features/#disabling-on-by-default-webassembly-proposals
-        if matches!(
-            self.triple.architecture,
-            target_lexicon::Architecture::Wasm32 | target_lexicon::Architecture::Wasm64
-        ) && matches!(ctx.mode, BuildMode::Thin { .. } | BuildMode::Fat)
-        {
+        if self.is_wasm_or_wasi() && matches!(ctx.mode, BuildMode::Thin { .. } | BuildMode::Fat) {
             rust_flags.flags.push("-Ctarget-cpu=mvp".to_string());
         }
 
@@ -3398,6 +3376,13 @@ impl BuildRequest {
     /// todo(jon): we should name the app properly instead of making up the exe name. It's kinda okay for dev mode, but def not okay for prod
     pub(crate) fn main_exe(&self) -> PathBuf {
         self.exe_dir().join(self.platform_exe_name())
+    }
+
+    fn is_wasm_or_wasi(&self) -> bool {
+        matches!(
+            self.triple.architecture,
+            target_lexicon::Architecture::Wasm32 | target_lexicon::Architecture::Wasm64
+        ) || self.triple.operating_system == target_lexicon::OperatingSystem::Wasi
     }
 
     /// Does the app specify:
