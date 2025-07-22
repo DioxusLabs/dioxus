@@ -206,6 +206,7 @@ use syn::{__private::ToTokens, parse_quote};
 #[proc_macro_attribute]
 pub fn server(args: proc_macro::TokenStream, body: TokenStream) -> TokenStream {
     // If there is no input codec, use json as the default
+    #[allow(unused_mut)]
     let mut parsed = match ServerFnCall::parse("/api", args.into(), body.into()) {
         Ok(parsed) => parsed,
         Err(e) => return e.to_compile_error().into(),
