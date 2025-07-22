@@ -31,20 +31,20 @@ impl<Error, InputStreamError, OutputStreamError>
 
     type Response = MockServerFnClientResponse;
 
-    async fn send(_: Self::Request) -> Result<Self::Response, Error> { unimplemented!() }
+    async fn send(_: Self::Request) -> Result<Self::Response, Error> {
+        unimplemented!()
+    }
 
     #[allow(unreachable_code)]
     async fn open_websocket(
         _: &str,
     ) -> Result<
-            (
-                impl Stream<Item = Result<server_fn::Bytes, server_fn::Bytes>>
-                    + std::marker::Send
-                    + 'static,
-                impl futures_util::Sink<server_fn::Bytes> + std::marker::Send + 'static,
-            ),
-            Error,
-        > {
+        (
+            impl Stream<Item = Result<server_fn::Bytes, server_fn::Bytes>> + std::marker::Send + 'static,
+            impl futures_util::Sink<server_fn::Bytes> + std::marker::Send + 'static,
+        ),
+        Error,
+    > {
         unimplemented!()
             as Result<
                 (
@@ -119,9 +119,13 @@ impl<E> ClientReq<E> for MockServerFnClientRequest {
 pub struct MockServerFnClientResponse;
 
 impl<E> ClientRes<E> for MockServerFnClientResponse {
-    async fn try_into_string(self) -> Result<String, E> { unimplemented!() }
+    async fn try_into_string(self) -> Result<String, E> {
+        unimplemented!()
+    }
 
-    async fn try_into_bytes(self) -> Result<bytes::Bytes, E> { unimplemented!() }
+    async fn try_into_bytes(self) -> Result<bytes::Bytes, E> {
+        unimplemented!()
+    }
 
     #[allow(unreachable_code)]
     fn try_into_stream(
