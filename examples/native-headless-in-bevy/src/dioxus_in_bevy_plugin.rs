@@ -17,7 +17,7 @@ use bevy::{
 };
 
 use anyrender_vello::{CustomPaintSource, VelloScenePainter};
-use blitz_dom::Document as _;
+use blitz_dom::{Document as _, DocumentConfig};
 use blitz_paint::paint_scene;
 use blitz_traits::events::{
     BlitzKeyEvent, BlitzMouseButtonEvent, KeyState, MouseEventButton, MouseEventButtons, UiEvent,
@@ -49,7 +49,7 @@ impl<UIProps: std::marker::Send + std::marker::Sync + std::clone::Clone + 'stati
         // The viewport will be set in setup_ui after we get the window size
         let vdom = VirtualDom::new_with_props(self.ui, self.props.clone());
         // FIXME add a NetProvider
-        let mut dioxus_doc = DioxusDocument::new(vdom, None);
+        let mut dioxus_doc = DioxusDocument::new(vdom, DocumentConfig::default());
         dioxus_doc.initial_build();
         dioxus_doc.resolve();
 
@@ -258,7 +258,7 @@ fn update_ui(
     if let (Some(texture), Some(mut vello_renderer)) = ((*cached_texture).as_ref(), vello_renderer)
     {
         // Poll the vdom
-        dioxus_doc.poll(std::task::Context::from_waker(&waker));
+        dioxus_doc.poll(Some(std::task::Context::from_waker(&waker)));
 
         // Refresh the document
         dioxus_doc.resolve();
@@ -383,7 +383,7 @@ fn handle_mouse_events(
     for cursor_event in cursor_moved.read() {
         mouse_state.x = cursor_event.position.x;
         mouse_state.y = cursor_event.position.y;
-        dioxus_doc.handle_event(UiEvent::MouseMove(BlitzMouseButtonEvent {
+        dioxus_doc.handle_ui_event(UiEvent::MouseMove(BlitzMouseButtonEvent {
             x: mouse_state.x,
             y: mouse_state.y,
             button: Default::default(),
@@ -408,7 +408,7 @@ fn handle_mouse_events(
         match event.state {
             ButtonState::Pressed => {
                 mouse_state.buttons |= buttons_blitz;
-                dioxus_doc.handle_event(UiEvent::MouseDown(BlitzMouseButtonEvent {
+                dioxus_doc.handle_ui_event(UiEvent::MouseDown(BlitzMouseButtonEvent {
                     x: mouse_state.x,
                     y: mouse_state.y,
                     button: button_blitz,
@@ -418,7 +418,7 @@ fn handle_mouse_events(
             }
             ButtonState::Released => {
                 mouse_state.buttons &= !buttons_blitz;
-                dioxus_doc.handle_event(UiEvent::MouseUp(BlitzMouseButtonEvent {
+                dioxus_doc.handle_ui_event(UiEvent::MouseUp(BlitzMouseButtonEvent {
                     x: mouse_state.x,
                     y: mouse_state.y,
                     button: button_blitz,
@@ -495,10 +495,10 @@ fn handle_keyboard_events(
 
         match key_state {
             KeyState::Pressed => {
-                dioxus_doc.handle_event(UiEvent::KeyDown(blitz_key_event));
+                dioxus_doc.handle_ui_event(UiEvent::KeyDown(blitz_key_event));
             }
             KeyState::Released => {
-                dioxus_doc.handle_event(UiEvent::KeyUp(blitz_key_event));
+                dioxus_doc.handle_ui_event(UiEvent::KeyUp(blitz_key_event));
             }
         }
     }

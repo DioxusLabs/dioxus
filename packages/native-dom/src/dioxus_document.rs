@@ -35,6 +35,8 @@ fn get_dioxus_id(node: &Node) -> Option<ElementId> {
 /// ### Example
 ///
 /// ```rust
+/// use blitz_traits::shell::{Viewport, ColorScheme};
+///
 /// // Example Dioxus app
 /// fn app() -> Element {
 ///     rsx! {
@@ -45,7 +47,7 @@ fn get_dioxus_id(node: &Node) -> Option<ElementId> {
 /// fn main() {
 ///    let vdom = VirtualDom::new(app);
 ///    let mut doc = DioxusDocument::new(vdom, None);
-///    doc.set_viewport(Viewport::new(WIDTH, HEIGHT, SCALE_FACTOR, COLOR_SCHEME));
+///    doc.set_viewport(Viewport::new(800, 600, 1.0, ColorScheme::Light));
 ///    doc.initial_build();
 /// }
 /// ```
