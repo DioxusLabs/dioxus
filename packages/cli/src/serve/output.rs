@@ -770,7 +770,7 @@ impl Output {
             frame.render_widget(
                 Paragraph::new(Line::from(vec![
                     "Read the docs: ".gray(),
-                    "https://dioxuslabs.com/0.6/docs".blue(),
+                    "https://dioxuslabs.com/learn/0.7/".blue(),
                 ])),
                 links_list[0],
             );

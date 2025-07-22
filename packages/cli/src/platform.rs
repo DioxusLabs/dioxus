@@ -441,11 +441,11 @@ impl BundleFormat {
     pub(crate) fn expected_name(&self) -> &'static str {
         match self {
             Self::Web => "Web",
-            Self::MacOS => "Desktop MacOS",
-            Self::Windows => "Desktop Windows",
-            Self::Linux => "Desktop Linux",
-            Self::Ios => "Mobile iOS",
-            Self::Android => "Mobile Android",
+            Self::MacOS => "MacOS",
+            Self::Windows => "Windows",
+            Self::Linux => "Linux",
+            Self::Ios => "iOS",
+            Self::Android => "Android",
             Self::Server => "Server",
         }
     }

@@ -32,7 +32,6 @@ Dioxus is crossplatform app framework that empowers developer to build beautiful
 ## Quick start
 
 To get started with Dioxus, you'll want to grab the dioxus-cli tool: `dx`. We distribute `dx` with `cargo-binstall` - if you already have binstall skip this step.
-
 ```shell
 # skip if you already have cargo-binstall
 cargo install cargo-binstall
@@ -44,7 +43,7 @@ cargo binstall dioxus-cli
 dx new my-app && cd my-app
 
 # and then serve!
-dx serve --webview
+dx serve --desktop
 ```
 
 ## Your first app
