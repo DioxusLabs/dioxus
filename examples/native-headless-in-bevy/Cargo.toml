@@ -12,18 +12,18 @@ publish = false
 tracing = ["dep:tracing-subscriber", "dioxus-native-dom/tracing"]
 
 [dependencies]
-anyrender_vello = "0.4.1"
-async-std = "1.13"
-bevy = { version = "0.16" }
+dioxus = { workspace = true }
+dioxus-native-dom = { workspace = true }
 blitz-dom = { workspace = true, default-features = true }
 blitz-paint = { workspace = true, default-features = true }
 blitz-traits = { workspace = true, default-features = true }
+anyrender_vello = { workspace = true }
+wgpu = { workspace = true }
+tracing-subscriber = { workspace = true, optional = true }
+bevy = { version = "0.16" }
+async-std = "1.13"
 crossbeam-channel = "0.5"
-dioxus = { workspace = true }
-dioxus-native-dom = { path = "../../packages/native-dom" }
 paste = "1.0"
 rustc-hash = "1"
-tracing-subscriber = { workspace = true, optional = true }
 vello = "0.5"
-wgpu = { workspace = true }
 
