@@ -5663,6 +5663,7 @@ dependencies = [
  "dioxus-native-dom",
  "futures-util",
  "keyboard-types",
+ "openssl",
  "rustc-hash 2.1.1",
  "tokio",
  "tracing",
@@ -14254,9 +14255,9 @@ dependencies = [
 
 [[package]]
 name = "serde_qs"
-version = "0.14.0"
+version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8b417bedc008acbdf6d6b4bc482d29859924114bbe2650b7921fb68a261d0aa6"
+checksum = "f3faaf9e727533a19351a43cc5a8de957372163c7d35cc48c90b75cdda13c352"
 dependencies = [
  "percent-encoding",
  "serde",
@@ -14351,9 +14352,9 @@ dependencies = [
 
 [[package]]
 name = "server_fn"
-version = "0.8.2"
+version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "09b0f92b9d3a62c73f238ac21f7a09f15bad335a9d1651514d9da80d2eaf8d4c"
+checksum = "9c27fbd25ecc066481e383e2ed62ab2480e708aa3fe46cba36e95f58e61dfd04"
 dependencies = [
  "axum 0.8.4",
  "base64 0.22.1",
@@ -14368,7 +14369,6 @@ dependencies = [
  "hyper 1.6.0",
  "inventory",
  "js-sys",
- "once_cell",
  "pin-project-lite",
  "reqwest 0.12.22",
  "rustc_version",
@@ -14381,7 +14381,7 @@ dependencies = [
  "thiserror 2.0.12",
  "throw_error",
  "tokio",
- "tokio-tungstenite 0.26.2",
+ "tokio-tungstenite 0.27.0",
  "tower 0.5.2",
  "tower-layer",
  "url",
@@ -14394,9 +14394,9 @@ dependencies = [
 
 [[package]]
 name = "server_fn_macro"
-version = "0.8.2"
+version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "341dd1087afe9f3e546c5979a4f0b6d55ac072e1201313f86e7fe364223835ac"
+checksum = "b9d530c872590473016016679c94e3bddf47372941fc924f687ffd11a1778a71"
 dependencies = [
  "const_format",
  "convert_case 0.8.0",
@@ -14409,9 +14409,9 @@ dependencies = [
 
 [[package]]
 name = "server_fn_macro_default"
-version = "0.8.2"
+version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bc5ab934f581482a66da82f2b57b15390ad67c9ab85bd9a6c54bb65060fb1380"
+checksum = "ca7abc92ed696648275ed9ff171131a83d571af11748593dc2e6eb6a4e22a5b9"
 dependencies = [
  "server_fn_macro",
  "syn 2.0.104",
@@ -16650,7 +16650,6 @@ checksum = "7a9daff607c6d2bf6c16fd681ccb7eecc83e4e2cdc1ca067ffaadfca5de7f084"
 dependencies = [
  "futures-util",
  "log",
- "rustls 0.23.29",
  "tokio",
  "tungstenite 0.26.2",
 ]
@@ -16663,6 +16662,7 @@ checksum = "489a59b6730eda1b0171fcfda8b121f4bee2b35cba8645ca35c5f7ba3eb736c1"
 dependencies = [
  "futures-util",
  "log",
+ "rustls 0.23.29",
  "tokio",
  "tungstenite 0.27.0",
 ]

@@ -240,8 +240,8 @@ lru = "0.16.0"
 async-trait = "0.1.88"
 axum = { version = "0.8.4", default-features = false }
 axum-server = { version = "0.7.2", default-features = false }
-server_fn = { version = "0.8.2", default-features = false }
-server_fn_macro = { version = "0.8.2" }
+server_fn = { version = "=0.8.3", default-features = false }
+server_fn_macro = { version = "=0.8.3" }
 tower = "0.5.2"
 http = "1.3.1"
 notify = { version = "8.1.0" }
