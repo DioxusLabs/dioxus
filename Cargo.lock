@@ -10645,6 +10645,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "native-headless-in-bevy"
+version = "0.0.0"
+dependencies = [
+ "anyrender_vello",
+ "async-std",
+ "bevy",
+ "blitz-dom",
+ "blitz-paint",
+ "blitz-traits",
+ "crossbeam-channel",
+ "dioxus",
+ "dioxus-native-dom",
+ "paste",
+ "rustc-hash 1.1.0",
+ "tracing-subscriber",
+ "vello",
+ "wgpu",
+]
+
+[[package]]
 name = "native-tls"
 version = "0.2.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"

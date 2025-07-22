@@ -113,6 +113,7 @@ members = [
     "examples/fullstack-websockets",
     "examples/wgpu-texture",
     "examples/native-headless",
+    "examples/native-headless-in-bevy",
     "examples/bevy",
 
     # Playwright tests
