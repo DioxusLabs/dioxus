@@ -215,7 +215,7 @@ pub(crate) struct WindowsSettings {
     pub sign_command: Option<CustomSignCommandSettings>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct NsisSettings {
     #[serde(default)]
     pub(crate) template: Option<PathBuf>,
