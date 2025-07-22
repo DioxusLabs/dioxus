@@ -1,7 +1,6 @@
-use std::hash::Hash;
-
-use dioxus_core::prelude::*;
+use dioxus_core::use_hook;
 use dioxus_signals::{ReadOnlySignal, SetCompare};
+use std::hash::Hash;
 
 /// Creates a new SetCompare which efficiently tracks when a value changes to check if it is equal to a set of values.
 ///

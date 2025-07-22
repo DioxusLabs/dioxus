@@ -4,9 +4,10 @@
 //! 3. Register a callback for dx_hydrate(id, data) that takes some new data, reruns the suspense boundary with that new data and then rehydrates the node
 
 use crate::dom::WebsysDom;
-use dioxus_core::prelude::*;
-use dioxus_core::AttributeValue;
-use dioxus_core::{DynamicNode, ElementId};
+use dioxus_core::{
+    AttributeValue, DynamicNode, ElementId, ScopeId, ScopeState, SuspenseBoundaryProps,
+    SuspenseContext, TemplateNode, VNode, VirtualDom,
+};
 use dioxus_fullstack_protocol::HydrationContext;
 use futures_channel::mpsc::UnboundedReceiver;
 use std::fmt::Write;
@@ -61,7 +62,7 @@ impl SuspenseHydrationIdsNode {
 ///
 /// This struct keeps track of the order the suspense boundaries are discovered in on the client so we can map the id in the dom to the scope we need to rehydrate.
 ///
-/// Diagram: https://excalidraw.com/#json=4NxmW90g0207Y62lESxfF,vP_Yn6j7k23utq2HZIsuiw
+/// Diagram: <https://excalidraw.com/#json=4NxmW90g0207Y62lESxfF,vP_Yn6j7k23utq2HZIsuiw>
 #[derive(Default, Debug)]
 pub(crate) struct SuspenseHydrationIds {
     /// A dense mapping from traversal order to the scope id of the suspense boundary

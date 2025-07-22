@@ -30,4 +30,9 @@ impl<'a> ConstReadBuffer<'a> {
     pub const fn as_ref(&self) -> &[u8] {
         self.memory
     }
+
+    /// Get a slice of the buffer from the current location to the end of the buffer
+    pub const fn remaining(&self) -> &[u8] {
+        self.memory.split_at(self.location).1
+    }
 }

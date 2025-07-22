@@ -9,7 +9,7 @@ use dioxus::prelude::*;
 fn main() {
     dioxus::LaunchBuilder::new()
         .with_cfg(server_only!(ServeConfig::builder().incremental(
-            IncrementalRendererConfig::default()
+            dioxus::fullstack::IncrementalRendererConfig::default()
                 .invalidate_after(std::time::Duration::from_secs(120)),
         )))
         .launch(app);
@@ -52,34 +52,34 @@ fn Home() -> Element {
     let mut text = use_signal(|| "...".to_string());
 
     rsx! {
-    Link { to: Route::Blog { id: count() }, "Go to blog" }
-    div {
-        h1 { "High-Five counter: {count}" }
-        button { onclick: move |_| count += 1, "Up high!" }
-        button { onclick: move |_| count -= 1, "Down low!" }
-        button {
-            onclick: move |_| async move {
-                if let Ok(data) = get_server_data().await {
+        Link { to: Route::Blog { id: count() }, "Go to blog" }
+        div {
+            h1 { "High-Five counter: {count}" }
+            button { onclick: move |_| count += 1, "Up high!" }
+            button { onclick: move |_| count -= 1, "Down low!" }
+            button {
+                onclick: move |_| async move {
+                    let data = get_server_data().await?;
                     println!("Client received: {}", data);
                     text.set(data.clone());
-                    post_server_data(data).await.unwrap();
-                }
-            },
-            "Run server function!"
+                    post_server_data(data).await?;
+                    Ok(())
+                },
+                "Run server function!"
+            }
+            "Server said: {text}"
         }
-        "Server said: {text}"
-                    }
-                }
+    }
 }
 
 #[server(PostServerData)]
-async fn post_server_data(data: String) -> Result<(), ServerFnError> {
+async fn post_server_data(data: String) -> ServerFnResult {
     println!("Server received: {}", data);
 
     Ok(())
 }
 
 #[server(GetServerData)]
-async fn get_server_data() -> Result<String, ServerFnError> {
+async fn get_server_data() -> ServerFnResult<String> {
     Ok("Hello from the server!".to_string())
 }

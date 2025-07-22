@@ -24,7 +24,6 @@ impl MemoryHistory {
     /// Create a [`MemoryHistory`] starting at `path`.
     ///
     /// ```rust
-    /// # use dioxus_router::prelude::*;
     /// # use dioxus::prelude::*;
     /// # #[component]
     /// # fn Index() -> Element { VNode::empty() }

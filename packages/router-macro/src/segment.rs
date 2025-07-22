@@ -27,10 +27,12 @@ impl RouteSegment {
             Self::Dynamic(ident, _) => quote! {
                 {
                     let as_string = #ident.to_string();
-                    write!(f, "/{}", dioxus_router::exports::urlencoding::encode(&as_string))?;
+                    write!(f, "/{}", dioxus_router::exports::percent_encoding::utf8_percent_encode(&as_string, dioxus_router::exports::PATH_ASCII_SET))?;
                 }
             },
-            Self::CatchAll(ident, _) => quote! { #ident.display_route_segments(f)?; },
+            Self::CatchAll(ident, _) => quote! {
+                dioxus_router::ToRouteSegments::display_route_segments(#ident,f)?;
+            },
         }
     }
 
@@ -314,14 +316,14 @@ pub(crate) fn create_error_type(
             #(#error_variants,)*
         }
 
-        impl std::fmt::Debug for #error_name {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        impl ::std::fmt::Debug for #error_name {
+            fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
                 write!(f, "{}({})", stringify!(#error_name), self)
             }
         }
 
-        impl std::fmt::Display for #error_name {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        impl ::std::fmt::Display for #error_name {
+            fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
                 match self {
                     Self::ExtraSegments(segments) => {
                         write!(f, "Found additional trailing segments: {}", segments)?

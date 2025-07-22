@@ -8,12 +8,6 @@ use wry::{
 };
 
 #[cfg(any(target_os = "android", target_os = "windows"))]
-const EDITS_PATH: &str = "http://dioxus.index.html/__edits";
-
-#[cfg(not(any(target_os = "android", target_os = "windows")))]
-const EDITS_PATH: &str = "dioxus://index.html/__edits";
-
-#[cfg(any(target_os = "android", target_os = "windows"))]
 const EVENTS_PATH: &str = "http://dioxus.index.html/__events";
 
 #[cfg(not(any(target_os = "android", target_os = "windows")))]
@@ -42,17 +36,19 @@ pub(super) fn desktop_handler(
     headless: bool,
 ) {
     // Try to serve the index file first
-    if let Some(index_bytes) =
-        index_request(&request, custom_head, custom_index, root_name, headless)
-    {
+    if let Some(index_bytes) = index_request(
+        &request,
+        custom_head,
+        custom_index,
+        root_name,
+        headless,
+        edit_state,
+    ) {
         return responder.respond(index_bytes);
     }
 
     // If the request is asking for edits (ie binary protocol streaming), do that
     let trimmed_uri = request.uri().path().trim_matches('/');
-    if trimmed_uri == "__edits" {
-        return edit_state.wry_queue.handle_request(responder);
-    }
 
     // If the request is asking for an event response, do that
     if trimmed_uri == "__events" {
@@ -67,7 +63,7 @@ pub(super) fn desktop_handler(
         }
     }
 
-    match dioxus_asset_resolver::serve_asset_from_raw_path(request.uri().path()) {
+    match dioxus_asset_resolver::serve_asset(request.uri().path()) {
         Ok(res) => responder.respond(res),
         Err(_e) => responder.respond(
             Response::builder()
@@ -93,6 +89,7 @@ fn index_request(
     custom_index: Option<String>,
     root_name: &str,
     headless: bool,
+    edit_state: &WebviewEdits,
 ) -> Option<Response<Vec<u8>>> {
     // If the request is for the root, we'll serve the index.html file.
     if request.uri().path() != "/" {
@@ -114,7 +111,7 @@ fn index_request(
     // Might want to document this
     index.insert_str(
         index.find("</body>").expect("Body element to exist"),
-        &module_loader(root_name, headless),
+        &module_loader(root_name, headless, edit_state),
     );
 
     Response::builder()
@@ -130,7 +127,13 @@ fn index_request(
 /// - root_name: the root element (by Id) that we stream edits into
 /// - headless: is this page being loaded but invisible? Important because not all windows are visible and the
 ///   interpreter can't connect until the window is ready.
-fn module_loader(root_id: &str, headless: bool) -> String {
+/// - port: the port that the websocket server is listening on for edits
+/// - webview_id: the id of the webview that we're loading this into. This is used to differentiate between
+///   multiple webviews in the same application, so that we can send edits to the correct one.
+fn module_loader(root_id: &str, headless: bool, edit_state: &WebviewEdits) -> String {
+    let edits_path = edit_state.wry_queue.edits_path();
+    let expected_key = edit_state.wry_queue.required_server_key();
+
     format!(
         r#"
 <script type="module">
@@ -141,7 +144,7 @@ fn module_loader(root_id: &str, headless: bool) -> String {
     {NATIVE_JS}
 
     // The native interpreter extends the sledgehammer interpreter with a few extra methods that we use for IPC
-    window.interpreter = new NativeInterpreter("{EDITS_PATH}", "{EVENTS_PATH}");
+    window.interpreter = new NativeInterpreter("{EVENTS_PATH}", {headless});
 
     // Wait for the page to load before sending the initialize message
     window.onload = function() {{
@@ -150,7 +153,7 @@ fn module_loader(root_id: &str, headless: bool) -> String {
             window.interpreter.initialize(root_element);
             window.ipc.postMessage(window.interpreter.serializeIpcMessage("initialize"));
         }}
-        window.interpreter.waitForRequest({headless});
+        window.interpreter.waitForRequest("{edits_path}", "{expected_key}");
     }}
 </script>
 <script type="module">

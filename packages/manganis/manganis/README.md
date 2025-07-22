@@ -12,7 +12,7 @@ const AVIF_ASSET: Asset = manganis::asset!("/assets/image.png");
 AVIF_ASSET will be set to a new file name that will be served by some CLI. That file can be collected by any package that depends on the component library.
 
 ```rust
-use manganis::{ImageFormat, ImageAssetOptions, Asset, asset, ImageSize};
+use manganis::{ImageFormat, Asset, asset, ImageSize, AssetOptions};
 // You can collect arbitrary files. Absolute paths are resolved relative to the package root
 const _: Asset = asset!("/assets/script.js");
 
@@ -21,9 +21,9 @@ pub const PNG_ASSET: Asset =
     asset!("/assets/image.png");
 // Resize the image at compile time to make the assets smaller
 pub const RESIZED_PNG_ASSET: Asset =
-    asset!("/assets/image.png", ImageAssetOptions::new().with_size(ImageSize::Manual { width: 52, height: 52 }));
+    asset!("/assets/image.png", AssetOptions::image().with_size(ImageSize::Manual { width: 52, height: 52 }));
 // Or convert the image at compile time to a web friendly format
-pub const AVIF_ASSET: Asset = asset!("/assets/image.png", ImageAssetOptions::new().with_format(ImageFormat::Avif));
+pub const AVIF_ASSET: Asset = asset!("/assets/image.png", AssetOptions::image().with_format(ImageFormat::Avif));
 ```
 
 ## Adding Support to Your CLI

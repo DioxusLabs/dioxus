@@ -20,8 +20,9 @@ if (RawInterpreter !== undefined && RawInterpreter !== null) {
 export class NativeInterpreter extends JSChannel_ {
   intercept_link_redirects: boolean;
   ipc: any;
-  editsPath: string;
+  edits: WebSocket;
   eventsPath: string;
+  headless: boolean;
   kickStylesheets: boolean;
   queuedBytes: ArrayBuffer[] = [];
 
@@ -29,11 +30,11 @@ export class NativeInterpreter extends JSChannel_ {
   // however, for now we need to support it since WebSockets in fullstack doesn't exist yet
   liveview: boolean;
 
-  constructor(editsPath: string, eventsPath: string) {
+  constructor(eventsPath: string, headless: boolean) {
     super();
-    this.editsPath = editsPath;
     this.eventsPath = eventsPath;
     this.kickStylesheets = false;
+    this.headless = headless;
   }
 
   initialize(root: HTMLElement): void {
@@ -204,6 +205,9 @@ export class NativeInterpreter extends JSChannel_ {
   }
 
   handleWindowsDragOver(xPos, yPos) {
+    const displayScaleFactor = window.devicePixelRatio || 1;
+    xPos /= displayScaleFactor;
+    yPos /= displayScaleFactor;
     const element = document.elementFromPoint(xPos, yPos);
 
     if (element != window.dxDragLastElement) {
@@ -274,12 +278,6 @@ export class NativeInterpreter extends JSChannel_ {
       bubbles,
     };
 
-    // Run any prevent defaults the user might've set
-    // This is to support the prevent_default: "onclick" attribute that dioxus has had for a while, but is not necessary
-    // now that we expose preventDefault to the virtualdom on desktop
-    // Liveview will still need to use this
-    this.preventDefaults(event);
-
     // liveview does not have synchronous event handling, so we need to send the event to the host
     if (this.liveview) {
       // Okay, so the user might've requested some files to be read
@@ -326,28 +324,10 @@ export class NativeInterpreter extends JSChannel_ {
     }
   }
 
-  // This should:
-  // - prevent form submissions from navigating
-  // - prevent anchor tags from navigating
-  // - prevent buttons from submitting forms
-  // - let the virtualdom attempt to prevent the event
-  preventDefaults(event: Event) {
-    if (event.type === "submit") {
-      event.preventDefault();
-    }
-  }
-
   handleClickNavigate(event: Event, target: Element) {
     // todo call prevent default if it's the right type of event
     if (!this.intercept_link_redirects) {
       return;
-    }
-
-    // If the target is a form prevent the click event
-    // from submitting the form
-    let form = target.closest("form");
-    if (target.tagName === "BUTTON" && (event.type == "submit" || form)) {
-      event.preventDefault();
     }
 
     // If the target is an anchor tag, we want to intercept the click too, to prevent the browser from navigating
@@ -380,28 +360,60 @@ export class NativeInterpreter extends JSChannel_ {
   }
 
   // Run the edits the next animation frame
-  rafEdits(headless: boolean, bytes: ArrayBuffer) {
+  rafEdits(bytes: ArrayBuffer) {
     // In headless mode, the requestAnimationFrame callback is never called, so we need to run the bytes directly
-    if (headless) {
+    if (this.headless) {
       // @ts-ignore
       this.run_from_bytes(bytes);
-      this.waitForRequest(headless);
+      this.markEditsFinished();
     } else {
       this.enqueueBytes(bytes);
       requestAnimationFrame(() => {
         this.flushQueuedBytes();
-        // With request animation frames, we use the next reqwest as a marker to know when the frame is done and it is safe to run effects
-        this.waitForRequest(headless);
+        this.markEditsFinished();
       });
     }
   }
 
-  waitForRequest(headless: boolean) {
-    fetch(new Request(this.editsPath))
-      .then((response) => response.arrayBuffer())
-      .then((bytes) => {
-        this.rafEdits(headless, bytes);
-      });
+  waitForRequest(editsPath: string, required_server_key: string) {
+    this.edits = new WebSocket(editsPath);
+    // Only trust the websocket once it sends us the required server key
+    let authenticated = false;
+    // Reconnect if the websocket closes. This may happen on ios when the app is suspended
+    // in the background: https://github.com/DioxusLabs/dioxus/issues/4374
+    this.edits.onclose = () => {
+      setTimeout(() => {
+        // If the edits path has changed, we don't want to reconnect to the old one
+        if (this.edits.url != editsPath) {
+          return;
+        }
+        this.waitForRequest(editsPath, required_server_key);
+      }, 100);
+    };
+    this.edits.onmessage = (event) => {
+      const data = event.data;
+      if (data instanceof Blob) {
+        if (!authenticated) {
+          return;
+        }
+        // If the data is a blob, we need to convert it to an ArrayBuffer
+        data.arrayBuffer().then((buffer) => {
+          this.rafEdits(buffer);
+        });
+      } else if (typeof data === "string") {
+        if (data === required_server_key) {
+          // If the data is the required server key, we can trust the websocket
+          authenticated = true;
+          return;
+        }
+      }
+    };
+  }
+
+  markEditsFinished() {
+    // Send an empty ArrayBuffer to the edits websocket to signal that the edits are finished
+    // This is used to signal that the edits are done and the next request can be processed
+    this.edits.send(new ArrayBuffer(0));
   }
 
   kickAllStylesheetsOnPage() {

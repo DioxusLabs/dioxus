@@ -5,12 +5,15 @@ use crate::{
     DioxusServerContext,
 };
 use dioxus_cli_config::base_path;
+use dioxus_core::{
+    has_context, provide_error_boundary, DynamicNode, ErrorContext, ScopeId, SuspenseContext,
+    VNode, VirtualDom,
+};
+use dioxus_fullstack_hooks::history::FullstackHistory;
 use dioxus_fullstack_hooks::{StreamingContext, StreamingStatus};
 use dioxus_fullstack_protocol::{HydrationContext, SerializedHydrationData};
 use dioxus_isrg::{CachedRender, IncrementalRendererError, RenderFreshness};
-use dioxus_lib::document::Document;
-use dioxus_lib::prelude::dioxus_core::DynamicNode;
-use dioxus_router::prelude::ParseRouteError;
+use dioxus_router::ParseRouteError;
 use dioxus_ssr::Renderer;
 use futures_channel::mpsc::Sender;
 use futures_util::{Stream, StreamExt};
@@ -18,7 +21,6 @@ use std::{collections::HashMap, fmt::Write, future::Future, rc::Rc, sync::Arc, s
 use tokio::task::JoinHandle;
 
 use crate::StreamingMode;
-use dioxus_lib::prelude::*;
 
 /// A suspense boundary that is pending with a placeholder in the client
 struct PendingSuspenseBoundary {
@@ -200,10 +202,12 @@ impl SsrRendererPool {
             } else {
                 history = dioxus_history::MemoryHistory::with_initial_path(&route);
             }
+            // Wrap the memory history in a fullstack history provider to provide the initial route for hydration
+            let history = FullstackHistory::new_server(history);
 
             let streaming_context = in_root_scope(&virtual_dom, StreamingContext::new);
             virtual_dom.provide_root_context(Rc::new(history) as Rc<dyn dioxus_history::History>);
-            virtual_dom.provide_root_context(document.clone() as Rc<dyn Document>);
+            virtual_dom.provide_root_context(document.clone() as Rc<dyn dioxus_document::Document>);
             virtual_dom.provide_root_context(streaming_context);
 
             // rebuild the virtual dom

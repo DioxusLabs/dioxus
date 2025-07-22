@@ -328,7 +328,7 @@ impl<T, const MAX_SIZE: usize> ConstVec<T, MAX_SIZE> {
 }
 
 impl<const MAX_SIZE: usize> ConstVec<u8, MAX_SIZE> {
-    /// Convert the [`ConstVec`] into a [`ConstReadBuffer`](crate::ConstReadBuffer)
+    /// Convert the [`ConstVec`] into a [`ConstReadBuffer`]
     ///
     /// # Example
     /// ```rust
@@ -419,4 +419,18 @@ fn test_const_vec_remove() {
     let (vec, value) = vec.remove(0);
     assert_eq!(value, Some(5678));
     assert_eq!(vec.as_ref(), &[]);
+}
+
+#[test]
+fn test_const_vec_extend() {
+    const VEC: ConstVec<u32> = {
+        let mut vec = ConstVec::new();
+        vec = vec.push(1234);
+        vec = vec.push(5678);
+        vec = vec.extend(&[91011, 1213]);
+        vec
+    };
+    let vec = VEC;
+    println!("{:?}", vec);
+    assert_eq!(vec.as_ref(), &[1234, 5678, 91011, 1213]);
 }

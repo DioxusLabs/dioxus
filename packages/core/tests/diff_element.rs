@@ -1,6 +1,7 @@
 use dioxus::dioxus_core::Mutation::*;
 use dioxus::dioxus_core::{AttributeValue, ElementId, NoOpMutations};
 use dioxus::prelude::*;
+use dioxus_core::generation;
 
 #[test]
 fn text_diff() {

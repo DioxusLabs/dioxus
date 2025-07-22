@@ -27,7 +27,6 @@ expressiveness.
 
 ```rust, no_run
 use dioxus::prelude::*;
-use dioxus_router::prelude::*;
 use std::str::FromStr;
 
 #[rustfmt::skip]

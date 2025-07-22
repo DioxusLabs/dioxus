@@ -1,5 +1,6 @@
 use super::*;
 use crate::document;
+use dioxus_core::{use_hook, VNode};
 use dioxus_html as dioxus_elements;
 
 #[non_exhaustive]
@@ -41,7 +42,7 @@ impl StyleProps {
     }
 }
 
-/// Render a [`style`](crate::elements::style) or [`link`](crate::elements::link) tag into the head of the page.
+/// Render a [`<style>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/style) or [`<link>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/link) tag into the head of the page.
 ///
 /// If present, the children of the style component must be a single static or formatted string. If there are more children or the children contain components, conditionals, loops, or fragments, the style will not be added.
 ///
@@ -111,6 +112,7 @@ pub fn Style(props: StyleProps) -> Element {
                     hreflang: None,
                     integrity: None,
                     blocking: None,
+                    onload: None,
                 });
             }
             // The style has neither contents nor src, log an error

@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use tao::event_loop::{EventLoop, EventLoopWindowTarget};
 use tao::window::{Icon, WindowBuilder};
 use wry::http::{Request as HttpRequest, Response as HttpResponse};
-use wry::RequestAsyncResponder;
+use wry::{RequestAsyncResponder, WebViewId};
 
 use crate::ipc::UserWindowEvent;
 use crate::menubar::{default_menu_bar, DioxusMenu};
@@ -17,16 +17,15 @@ type CustomEventHandler = Box<
         ),
 >;
 
-/// The behaviour of the application when the last window is closed.
-#[derive(Copy, Clone, Eq, PartialEq)]
+/// The closing behaviour of specific application window.
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 #[non_exhaustive]
 pub enum WindowCloseBehaviour {
-    /// Default behaviour, closing the last window exits the app
-    LastWindowExitsApp,
-    /// Closing the last window will not actually close it, just hide it
-    LastWindowHides,
-    /// Closing the last window will close it but the app will keep running so that new windows can be opened
-    CloseWindow,
+    /// Window will hide instead of closing
+    WindowHides,
+
+    /// Window will close
+    WindowCloses,
 }
 
 /// The state of the menu builder. We need to keep track of if the state is default
@@ -61,7 +60,8 @@ pub struct Config {
     pub(crate) custom_index: Option<String>,
     pub(crate) root_name: String,
     pub(crate) background_color: Option<(u8, u8, u8, u8)>,
-    pub(crate) last_window_close_behavior: WindowCloseBehaviour,
+    pub(crate) exit_on_last_window_close: bool,
+    pub(crate) window_close_behavior: WindowCloseBehaviour,
     pub(crate) custom_event_handler: Option<CustomEventHandler>,
     pub(crate) disable_file_drop_handler: bool,
 }
@@ -70,12 +70,12 @@ impl LaunchConfig for Config {}
 
 pub(crate) type WryProtocol = (
     String,
-    Box<dyn Fn(HttpRequest<Vec<u8>>) -> HttpResponse<Cow<'static, [u8]>> + 'static>,
+    Box<dyn Fn(WebViewId, HttpRequest<Vec<u8>>) -> HttpResponse<Cow<'static, [u8]>> + 'static>,
 );
 
 pub(crate) type AsyncWryProtocol = (
     String,
-    Box<dyn Fn(HttpRequest<Vec<u8>>, RequestAsyncResponder) + 'static>,
+    Box<dyn Fn(WebViewId, HttpRequest<Vec<u8>>, RequestAsyncResponder) + 'static>,
 );
 
 impl Config {
@@ -107,7 +107,8 @@ impl Config {
             custom_index: None,
             root_name: "main".to_string(),
             background_color: None,
-            last_window_close_behavior: WindowCloseBehaviour::LastWindowExitsApp,
+            exit_on_last_window_close: true,
+            window_close_behavior: WindowCloseBehaviour::WindowCloses,
             custom_event_handler: None,
             disable_file_drop_handler: false,
         }
@@ -169,9 +170,19 @@ impl Config {
         self
     }
 
+    /// When the last window is closed, the application will exit.
+    ///
+    /// This is the default behaviour.
+    ///
+    /// If the last window is hidden, the application will not exit.
+    pub fn with_exits_when_last_window_closes(mut self, exit: bool) -> Self {
+        self.exit_on_last_window_close = exit;
+        self
+    }
+
     /// Sets the behaviour of the application when the last window is closed.
     pub fn with_close_behaviour(mut self, behaviour: WindowCloseBehaviour) -> Self {
-        self.last_window_close_behavior = behaviour;
+        self.window_close_behavior = behaviour;
         self
     }
 
@@ -188,7 +199,7 @@ impl Config {
     /// Set a custom protocol
     pub fn with_custom_protocol<F>(mut self, name: impl ToString, handler: F) -> Self
     where
-        F: Fn(HttpRequest<Vec<u8>>) -> HttpResponse<Cow<'static, [u8]>> + 'static,
+        F: Fn(WebViewId, HttpRequest<Vec<u8>>) -> HttpResponse<Cow<'static, [u8]>> + 'static,
     {
         self.protocols.push((name.to_string(), Box::new(handler)));
         self
@@ -204,7 +215,7 @@ impl Config {
     /// #
     /// # fn main() {
     /// let cfg = Config::new()
-    ///     .with_asynchronous_custom_protocol("asset", |request, responder| {
+    ///     .with_asynchronous_custom_protocol("asset", |_webview_id, request, responder| {
     ///         tokio::spawn(async move {
     ///             responder.respond(
     ///                 HTTPResponse::builder()
@@ -222,7 +233,7 @@ impl Config {
     /// See [`wry`](wry::WebViewBuilder::with_asynchronous_custom_protocol) for more details on implementation
     pub fn with_asynchronous_custom_protocol<F>(mut self, name: impl ToString, handler: F) -> Self
     where
-        F: Fn(HttpRequest<Vec<u8>>, RequestAsyncResponder) + 'static,
+        F: Fn(WebViewId, HttpRequest<Vec<u8>>, RequestAsyncResponder) + 'static,
     {
         self.asynchronous_protocols
             .push((name.to_string(), Box::new(handler)));

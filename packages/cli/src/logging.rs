@@ -82,6 +82,11 @@ impl TraceController {
             ))
         };
 
+        #[cfg(feature = "tokio-console")]
+        let filter = filter
+            .add_directive("tokio=trace".parse().unwrap())
+            .add_directive("runtime=trace".parse().unwrap());
+
         let json_filter = tracing_subscriber::filter::filter_fn(move |meta| {
             if meta.fields().len() == 1 && meta.fields().iter().next().unwrap().name() == "json" {
                 return args.verbosity.json_output;

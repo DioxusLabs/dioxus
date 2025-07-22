@@ -1,8 +1,7 @@
-use std::{ops::Deref, rc::Rc};
-
 use crate::{read::Readable, read_impls, ReadableRef};
-use dioxus_core::prelude::*;
+use dioxus_core::IntoAttributeValue;
 use generational_box::{AnyStorage, BorrowResult, UnsyncStorage};
+use std::{ops::Deref, rc::Rc};
 
 /// A read only signal that has been mapped to a new type.
 pub struct MappedSignal<O: ?Sized + 'static, S: AnyStorage = UnsyncStorage> {

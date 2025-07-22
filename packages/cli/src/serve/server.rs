@@ -2,7 +2,7 @@ use crate::{
     config::WebHttpsConfig, serve::ServeUpdate, BuildId, BuildStage, BuilderUpdate, Platform,
     Result, TraceSrc,
 };
-use anyhow::Context;
+use anyhow::{bail, Context};
 use axum::{
     body::Body,
     extract::{
@@ -475,11 +475,7 @@ fn build_devserver_router(
             runner
                 .client()
                 .build
-                .config
-                .web
-                .app
-                .base_path
-                .as_deref()
+                .base_path()
                 .unwrap_or_default()
                 .trim_matches('/')
         );
@@ -639,8 +635,7 @@ async fn get_rustls(web_config: &WebHttpsConfig) -> Result<(String, String)> {
         {
             return Ok((cert, key));
         } else {
-            // missing cert or key
-            return Err("https is enabled but cert or key path is missing".into());
+            bail!("https is enabled but cert or key path is missing");
         }
     }
 
@@ -686,7 +681,7 @@ async fn get_rustls(web_config: &WebHttpsConfig) -> Result<(String, String)> {
                     tracing::error!(dx_src = ?TraceSrc::Dev, "An error occurred while generating mkcert certificates: {}", e.to_string())
                 }
             };
-            return Err("failed to generate mkcert certificates".into());
+            bail!("failed to generate mkcert certificates");
         }
         Ok(mut cmd) => {
             cmd.wait().await?;

@@ -1,5 +1,6 @@
 use dioxus::dioxus_core::{ElementId, Mutation};
 use dioxus::prelude::*;
+use dioxus_core::IntoAttributeValue;
 use pretty_assertions::assert_eq;
 
 fn basic_syntax_is_a_template() -> Element {

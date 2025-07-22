@@ -16,7 +16,7 @@ use crate::{Task, VComponent};
 use futures_util::StreamExt;
 use slab::Slab;
 use std::collections::BTreeSet;
-use std::{any::Any, rc::Rc, sync::Arc};
+use std::{any::Any, rc::Rc};
 use tracing::instrument;
 
 /// A virtual node system that progresses user events and diffs UI trees.
@@ -303,7 +303,7 @@ impl VirtualDom {
         dom
     }
 
-    /// Create a new VirtualDom from something that implements [`AnyProps`]
+    /// Create a new VirtualDom from a VComponent
     #[instrument(skip(root), level = "trace", name = "VirtualDom::new")]
     pub(crate) fn new_with_component(root: VComponent) -> Self {
         let (tx, rx) = futures_channel::mpsc::unbounded();
@@ -759,7 +759,7 @@ impl VirtualDom {
     #[cfg(debug_assertions)]
     fn register_subsecond_handler(&self) {
         let sender = self.runtime().sender.clone();
-        subsecond::register_handler(Arc::new(move || {
+        subsecond::register_handler(std::sync::Arc::new(move || {
             _ = sender.unbounded_send(SchedulerMsg::AllDirty);
         }));
     }
@@ -773,6 +773,11 @@ impl Drop for VirtualDom {
         for scope in scopes.into_iter().rev() {
             drop(scope);
         }
+
+        // Drop the mounts, tasks, and effects, releasing any `Rc<Runtime>` references
+        self.runtime.pending_effects.borrow_mut().clear();
+        self.runtime.tasks.borrow_mut().clear();
+        self.runtime.mounts.borrow_mut().clear();
     }
 }
 

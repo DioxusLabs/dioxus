@@ -64,7 +64,7 @@
 </div>
 <br>
 <p align="center">
-  <a href="https://dioxuslabs.com/blog/release-060/">✨ Dioxus 0.6 is released - check it out here! ✨</a>
+  <a href="https://github.com/DioxusLabs/dioxus/releases/tag/v0.7.0-alpha.0">✨ Dioxus 0.7 is in alpha - test it out! ✨</a>
 </p>
 <br>
 
@@ -86,13 +86,14 @@ fn app() -> Element {
 
 - Cross-platform apps in three lines of code (web, desktop, mobile, server, and more)
 - [Ergonomic state management](https://dioxuslabs.com/blog/release-050) combines the best of React, Solid, and Svelte
-- Type-safe Routing and server functions to leverage Rust's powerful compile-time guarantees
+- Built-in featureful, type-safe, fullstack web framework
 - Integrated bundler for deploying to the web, macOS, Linux, and Windows
+- Subsecond Rust hot-patching and asset hot-reloading
 - And more! [Take a tour of Dioxus](https://dioxuslabs.com/learn/0.6/).
 
 ## Instant hot-reloading
 
-With one command, `dx serve` and your app is running. Edit your markup and styles and see the results in real time.
+With one command, `dx serve` and your app is running. Edit your markup, styles, and even Rust code and see changes in milliseconds.
 
 <div align="center">
   <img src="https://raw.githubusercontent.com/DioxusLabs/screenshots/refs/heads/main/blitz/hotreload-video.webp">
@@ -100,6 +101,36 @@ With one command, `dx serve` and your app is running. Edit your markup and style
   <!-- <video src="https://private-user-images.githubusercontent.com/10237910/386919031-6da371d5-3340-46da-84ff-628216851ba6.mov" width="500"></video> -->
 </div>
 
+## Productive, typesafe, fullstack web framework
+
+Directly call your backend from your frontend with our built-in type-safe RPC using [`server_fn`](http://crates.io/crates/server_fn). Supports streaming, suspense, bundle splitting, websockets, and more.
+
+```rust
+fn app() -> Element {
+  let mut fortune = use_signal(|| "Fetch a fortune!");
+  rsx! {
+    h1 { "{fortune}" }
+    button {
+      onclick: move |_| async move {
+        fortune.set(fetch_fortune().await.unwrap());
+      }
+    }
+  }
+}
+
+#[server]
+async fn fetch_fortune() -> ServerFnResult<String> {
+  "Dioxus is super productive!".to_string()
+}
+```
+
+## First-party primitive components
+
+Get started quickly with a complete set of primitives modeled after shadcn/ui and Radix-Primitives.
+
+<div align="center">
+  <img src="./notes/primitive-components.avif">
+</div>
 
 ## First-class Android and iOS support
 
@@ -244,7 +275,7 @@ Tauri is a framework for building desktop mobile apps where your frontend is wri
 
 Leptos is a library for building fullstack web-apps, similar to SolidJS and SolidStart. The two libraries share similar goals on the web, but have several key differences:
 
-- **Reactivity model**: Leptos uses signals to drive both reactivity and rendering, while Dioxus uses signals just for reactivity. For managing re-renders, Dioxus uses a highly optimized VirtualDOM to support desktop and mobile architectures. Both Dioxus and Leptos are extremely fast.
+- **Reactivity model**: Leptos uses signals to drive both reactivity and rendering, while Dioxus uses signals just for reactivity. For managing re-renders, Dioxus uses a highly optimized VirtualDOM to support desktop and mobile architectures. Both Dioxus and Leptos are extremely fast and comparable to the fastest web frameworks.
 
 - **Different scopes**: Dioxus provides renderers for web, desktop, mobile, LiveView, and more. We also maintain community libraries and a cross-platform SDK. Leptos has a tighter focus on the fullstack web with features that Dioxus doesn't have like islands, `<Form />` components, and other web-specific utilities.
 
@@ -271,13 +302,13 @@ view! {
 
 ### Dioxus vs Yew
 
-Yew is a framework for building single-page web apps and initially served as an inspiration for Dioxus. Unfortunately, the architecture of Yew didn't support the various features we wanted, and thus Dioxus was born.
+Yew is a framework for building reactive web apps that initially served as an inspiration for Dioxus. Yew is tightly integrated with the web but has limited utilities for server-side-rendering or alternative rendering engines. Dioxus was built as a redesign of Yew with a focus on cross-platform support, fantastic developer tooling, improved ergonomics, and a complete full-stack web story.
 
-- **Single-page apps**: Yew is designed exclusively for single-page web apps and is intrinsically tied to the web platform. Dioxus is fullstack and cross-platform, making it suitable for building web, desktop, mobile, and server apps.
+- **Full-stack capabilities**: Yew was initially designed for SPAs and remains deeply integrated with the web platform. Dioxus, in contrast, was built from the ground up for fullstack and cross-platform development, enabling seamless app creation across web, desktop, mobile, and server applications.
 
-- **Developer Tooling**: Dioxus provides a number of utilities like autoformatting, hot-reloading, and a bundler.
+- **Developer Tooling**: Dioxus offers a richer set of built-in developer tools, such as autoformatting, hot-reloading, and an integrated bundler, helping streamline the development experience.
 
-- **Ongoing support**: Dioxus is very actively maintained with new features and bug fixes being added on a daily basis.
+- **Ongoing support**: Dioxus is very actively maintained, with new features and bug fixes being fixed on a daily or weekly basis.
 
 ### Dioxus vs egui
 

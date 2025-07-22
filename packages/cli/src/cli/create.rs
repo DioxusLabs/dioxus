@@ -1,6 +1,7 @@
 use super::*;
 use crate::TraceSrc;
-use cargo_generate::{GenerateArgs, TemplatePath};
+use anyhow::{bail, Context};
+use cargo_generate::{GenerateArgs, TemplatePath, Vcs};
 use std::path::Path;
 
 pub(crate) static DEFAULT_TEMPLATE: &str = "gh:dioxuslabs/dioxus-template";
@@ -38,7 +39,7 @@ pub struct Create {
     #[clap(long)]
     subtemplate: Option<String>,
 
-    /// Pass <option>=<value> for the used template (e.g., `foo=bar`)
+    /// Pass `<option>=<value>` for the used template (e.g., `foo=bar`)
     #[clap(short, long)]
     option: Vec<String>,
 
@@ -46,13 +47,23 @@ pub struct Create {
     /// Default values can be overridden with `--option`
     #[clap(short, long)]
     yes: bool,
+
+    /// Specify the VCS used to initialize the generated template.
+    /// Options: `git`, `none`.
+    #[arg(long, value_parser)]
+    vcs: Option<Vcs>,
 }
 
 impl Create {
-    pub fn create(mut self) -> Result<StructuredOutput> {
+    pub async fn create(mut self) -> Result<StructuredOutput> {
         // Project name defaults to directory name.
         if self.name.is_none() {
             self.name = Some(create::name_from_path(&self.path)?);
+        }
+
+        // Perform a connectivity check so we just don't it around doing nothing if there's a network error
+        if self.template.is_none() {
+            connectivity_check().await?;
         }
 
         // If no template is specified, use the default one and set the branch to the latest release.
@@ -72,14 +83,13 @@ impl Create {
             init: true,
             name: self.name,
             silent: self.yes,
-            vcs: Some(cargo_generate::Vcs::Git),
+            vcs: self.vcs,
             template_path: TemplatePath {
                 auto_path: self.template,
                 branch: self.branch,
                 revision: self.revision,
                 subfolder: self.subtemplate,
                 tag: self.tag,
-
                 ..Default::default()
             },
             verbose: crate::logging::VERBOSITY
@@ -93,7 +103,7 @@ impl Create {
         tracing::debug!(dx_src = ?TraceSrc::Dev, "Creating new project with args: {args:#?}");
         let path = cargo_generate::generate(args)?;
 
-        _ = post_create(&path);
+        _ = post_create(&path, &self.vcs.unwrap_or(Vcs::Git));
 
         Ok(StructuredOutput::Success)
     }
@@ -119,7 +129,7 @@ pub(crate) fn resolve_template_and_branch(
 /// Prevent hidden cursor if Ctrl+C is pressed when interacting
 /// with cargo-generate's prompts.
 ///
-/// See https://github.com/DioxusLabs/dioxus/pull/2603.
+/// See <https://github.com/DioxusLabs/dioxus/pull/2603>.
 pub(crate) fn restore_cursor_on_sigint() {
     ctrlc::set_handler(move || {
         if let Err(err) = console::Term::stdout().show_cursor() {
@@ -138,14 +148,14 @@ pub(crate) fn name_from_path(path: &Path) -> Result<String> {
         .absolutize()?
         .to_path_buf()
         .file_name()
-        .ok_or("Current path does not include directory name".to_string())?
+        .context("Current path does not include directory name".to_string())?
         .to_str()
-        .ok_or("Current directory name is not a valid UTF-8 string".to_string())?
+        .context("Current directory name is not a valid UTF-8 string".to_string())?
         .to_string())
 }
 
 /// Post-creation actions for newly setup crates.
-pub(crate) fn post_create(path: &Path) -> Result<()> {
+pub(crate) fn post_create(path: &Path, vcs: &Vcs) -> Result<()> {
     let parent_dir = path.parent();
     let metadata = if parent_dir.is_none() {
         None
@@ -158,16 +168,14 @@ pub(crate) fn post_create(path: &Path) -> Result<()> {
             // Only 1 error means that CWD isn't a cargo project.
             Err(cargo_metadata::Error::CargoMetadata { .. }) => None,
             Err(err) => {
-                return Err(Error::Other(anyhow::anyhow!(
-                    "Couldn't retrieve cargo metadata: {:?}",
-                    err
-                )));
+                anyhow::bail!("Couldn't retrieve cargo metadata: {:?}", err)
             }
         }
     };
 
     // 1. Add the new project to the workspace, if it exists.
     //    This must be executed first in order to run `cargo fmt` on the new project.
+    let is_workspace = metadata.is_some();
     metadata.and_then(|metadata| {
         let cargo_toml_path = &metadata.workspace_root.join("Cargo.toml");
         let cargo_toml_str = std::fs::read_to_string(cargo_toml_path).ok()?;
@@ -223,6 +231,11 @@ pub(crate) fn post_create(path: &Path) -> Result<()> {
     let mut file = std::fs::File::create(readme_path)?;
     file.write_all(new_readme.as_bytes())?;
 
+    // 5. Run git init
+    if !is_workspace {
+        vcs.initialize(path, Some("main"), true)?;
+    }
+
     tracing::info!(dx_src = ?TraceSrc::Dev, "Generated project at {}\n\n`cd` to your project and run `dx serve` to start developing.\nMore information is available in the generated `README.md`.\n\nBuild cool things! ✌️", path.display());
 
     Ok(())
@@ -237,6 +250,43 @@ fn remove_triple_newlines(string: &str) -> String {
         new_string.push(char);
     }
     new_string
+}
+
+/// Perform a health check against github itself before we attempt to download any templates hosted
+/// on github.
+pub(crate) async fn connectivity_check() -> Result<()> {
+    if crate::VERBOSITY
+        .get()
+        .map(|f| f.offline)
+        .unwrap_or_default()
+    {
+        return Ok(());
+    }
+
+    use crate::styles::{GLOW_STYLE, LINK_STYLE};
+    let client = reqwest::Client::new();
+    for x in 0..=5 {
+        tokio::select! {
+            res = client.head("https://github.com/DioxusLabs/").header("User-Agent", "dioxus-cli").send() => {
+                if res.is_ok() {
+                    return Ok(());
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(2000)).await;
+            },
+            _ = tokio::time::sleep(std::time::Duration::from_millis(if x == 1 { 500 } else { 2000 })) => {}
+        }
+        if x == 0 {
+            println!("{GLOW_STYLE}warning{GLOW_STYLE:#}: Waiting for {LINK_STYLE}https://github.com/dioxuslabs{LINK_STYLE:#}...")
+        } else {
+            println!(
+                "{GLOW_STYLE}warning{GLOW_STYLE:#}: ({x}/5) Taking a while, maybe your internet is down?"
+            );
+        }
+    }
+
+    bail!(
+        "Error connecting to template repository. Try cloning the template manually or add `dioxus` to a `cargo new` project."
+    )
 }
 
 // todo: re-enable these tests with better parallelization

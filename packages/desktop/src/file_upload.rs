@@ -11,8 +11,8 @@ use dioxus_html::{
     point_interaction::{
         InteractionElementOffset, InteractionLocation, ModifiersInteraction, PointerInteraction,
     },
-    prelude::{SerializedMouseData, SerializedPointInteraction},
-    FileEngine, HasDragData, HasFileData, HasFormData, HasMouseData,
+    FileEngine, HasDragData, HasFileData, HasFormData, HasMouseData, SerializedMouseData,
+    SerializedPointInteraction,
 };
 
 use serde::Deserialize;
@@ -79,9 +79,9 @@ impl FileDialogRequest {
             let filters: Vec<_> = request
                 .accept
                 .as_deref()
-                .unwrap_or_default()
+                .unwrap_or(".*")
                 .split(',')
-                .filter_map(|s| Filters::from_str(s).ok())
+                .filter_map(|s| Filters::from_str(s.trim()).ok())
                 .collect();
 
             let file_extensions: Vec<_> = filters
@@ -89,7 +89,13 @@ impl FileDialogRequest {
                 .flat_map(|f| f.as_extensions().into_iter())
                 .collect();
 
-            dialog = dialog.add_filter("name", file_extensions.as_slice());
+            let filter_name = file_extensions
+                .iter()
+                .map(|extension| format!("*.{extension}"))
+                .collect::<Vec<_>>()
+                .join(", ");
+
+            dialog = dialog.add_filter(filter_name, file_extensions.as_slice());
 
             let files: Vec<_> = if request.multiple {
                 dialog.pick_files().into_iter().flatten().collect()
@@ -227,7 +233,7 @@ impl InteractionElementOffset for DesktopFileDragEvent {
 }
 
 impl ModifiersInteraction for DesktopFileDragEvent {
-    fn modifiers(&self) -> dioxus_html::prelude::Modifiers {
+    fn modifiers(&self) -> dioxus_html::Modifiers {
         self.mouse.modifiers()
     }
 }

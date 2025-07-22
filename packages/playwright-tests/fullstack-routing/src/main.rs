@@ -29,10 +29,16 @@ enum Route {
 
     #[route("/error")]
     ThrowsError,
+
+    #[route("/can-go-back")]
+    HydrateCanGoBack,
 }
 
 #[component]
 fn Blog(id: i32) -> Element {
+    let route: Route = use_route();
+    assert_eq!(route, Route::Blog { id });
+
     rsx! {
         Link { to: Route::Home {}, "Go home" }
         "id: {id}"
@@ -48,7 +54,47 @@ fn ThrowsError() -> Element {
 
 #[component]
 fn Home() -> Element {
+    let route: Route = use_route();
+    assert_eq!(route, Route::Home);
+
     rsx! {
         "Home"
+        Link { to: Route::Blog { id: 1 }, "Go to blog 1" }
+    }
+}
+
+#[component]
+pub fn HydrateCanGoBack() -> Element {
+    let navigator = use_navigator();
+    let mut count = use_signal(|| 0);
+    rsx! {
+        header {
+            class:"flex justify-start items-center app-bg-color-primary px-5 py-2 space-x-4",
+            if navigator.can_go_back() {
+                button  {
+                    class: "app-button-circle item-navbar",
+                    onclick: move |_| {
+                        count += 1;
+                    },
+                    "{count}"
+                },
+            }
+            else {
+                div {
+                    Link  {
+                        class: "app-button-circle item-navbar",
+                        to: Route::Home,
+                        "Go to home"
+                    },
+                    button  {
+                        class: "app-button-circle item-navbar",
+                        onclick: move |_| {
+                            count += 1;
+                        },
+                        "{count}"
+                    },
+                }
+            }
+        },
     }
 }

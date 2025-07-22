@@ -4,7 +4,13 @@
 
 use std::cell::RefCell;
 
-use dioxus_lib::{document::*, prelude::*};
+use dioxus_core::Element;
+use dioxus_core_macro::rsx;
+use dioxus_document::{
+    Document, Eval, LinkProps, MetaProps, NoOpDocument, ScriptProps, StyleProps,
+};
+use dioxus_html as dioxus_elements;
+use dioxus_signals::{GlobalSignal, Readable};
 use dioxus_ssr::Renderer;
 use parking_lot::RwLock;
 use std::sync::LazyLock;
@@ -93,6 +99,7 @@ impl Document for ServerDocument {
                 http_equiv: props.http_equiv,
                 content: props.content,
                 property: props.property,
+                "data": props.data,
                 ..props.additional_attributes,
             }
         });

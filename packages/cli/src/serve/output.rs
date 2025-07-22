@@ -1,5 +1,5 @@
 use crate::{
-    serve::{ansi_buffer::AnsiStringLine, ServeUpdate, WebServer},
+    serve::{ansi_buffer::ansi_string_to_line, ServeUpdate, WebServer},
     BuildId, BuildStage, BuilderUpdate, Platform, TraceContent, TraceMsg, TraceSrc,
 };
 use cargo_metadata::diagnostic::Diagnostic;
@@ -29,7 +29,7 @@ use tracing::Level;
 use super::AppServer;
 
 const TICK_RATE_MS: u64 = 100;
-const VIEWPORT_MAX_WIDTH: u16 = 100;
+const VIEWPORT_MAX_WIDTH: u16 = 90;
 const VIEWPORT_HEIGHT_SMALL: u16 = 5;
 const VIEWPORT_HEIGHT_BIG: u16 = 13;
 
@@ -152,7 +152,7 @@ impl Output {
         use std::io::IsTerminal;
 
         if !stdout().is_terminal() {
-            return io::Result::Err(io::Error::new(io::ErrorKind::Other, "Not a terminal"));
+            return io::Result::Err(io::Error::other("Not a terminal"));
         }
 
         enable_raw_mode()?;
@@ -165,7 +165,7 @@ impl Output {
     }
 
     pub(crate) fn remote_shutdown(interactive: bool) -> io::Result<()> {
-        if interactive {
+        if interactive && crossterm::terminal::is_raw_mode_enabled().unwrap_or(true) {
             stdout()
                 .execute(Show)?
                 .execute(DisableFocusChange)?
@@ -204,7 +204,7 @@ impl Output {
                 Ok(Some(update)) => return update,
                 Err(ee) => {
                     return ServeUpdate::Exit {
-                        error: Some(Box::new(ee)),
+                        error: Some(anyhow::anyhow!(ee)),
                     }
                 }
                 Ok(None) => {}
@@ -550,6 +550,7 @@ impl Output {
             BuildStage::Linking => lines.push("Linking".yellow()),
             BuildStage::Hotpatching => lines.push("Hot-patching...".yellow()),
             BuildStage::ExtractingAssets => lines.push("Extracting assets".yellow()),
+            BuildStage::Prerendering => lines.push("Pre-rendering...".yellow()),
             _ => {}
         };
 
@@ -654,7 +655,18 @@ impl Output {
 
         // todo(jon) should we write https ?
         let address = match state.server.displayed_address() {
-            Some(address) => format!("http://{}", address).blue(),
+            Some(address) => format!(
+                "http://{}{}",
+                address,
+                state
+                    .runner
+                    .client
+                    .build
+                    .base_path()
+                    .map(|f| format!("/{f}/"))
+                    .unwrap_or_default()
+            )
+            .blue(),
             None => "no server address".dark_gray(),
         };
 
@@ -663,7 +675,7 @@ impl Output {
                 if client.build.platform == Platform::Web {
                     "Serving at: ".gray()
                 } else {
-                    "ServerFns at: ".gray()
+                    "Server at: ".gray()
                 },
                 address,
             ])),
@@ -754,21 +766,23 @@ impl Output {
         let links_list: [_; 2] =
             Layout::vertical([Constraint::Length(1), Constraint::Length(1)]).areas(bottom);
 
-        frame.render_widget(
-            Paragraph::new(Line::from(vec![
-                "Read the docs: ".gray(),
-                "https://dioxuslabs.com/0.6/docs".blue(),
-            ])),
-            links_list[0],
-        );
+        if state.runner.client.build.using_dioxus_explicitly {
+            frame.render_widget(
+                Paragraph::new(Line::from(vec![
+                    "Read the docs: ".gray(),
+                    "https://dioxuslabs.com/0.6/docs".blue(),
+                ])),
+                links_list[0],
+            );
 
-        frame.render_widget(
-            Paragraph::new(Line::from(vec![
-                "Video tutorials: ".gray(),
-                "https://youtube.com/@DioxusLabs".blue(),
-            ])),
-            links_list[1],
-        );
+            frame.render_widget(
+                Paragraph::new(Line::from(vec![
+                    "Video tutorials: ".gray(),
+                    "https://youtube.com/@DioxusLabs".blue(),
+                ])),
+                links_list[1],
+            );
+        }
 
         let cmds = [
             "",
@@ -1008,13 +1022,7 @@ impl Output {
                     line = line.dark_gray();
                 }
 
-                // Create the ansi -> raw string line with a width of either the viewport width or the max width
-                let line_length = line.styled_graphemes(Style::default()).count();
-                if line_length < u16::MAX as usize {
-                    lines.push(AnsiStringLine::new(line_length as _).render(&line));
-                } else {
-                    lines.push(line.to_string())
-                }
+                lines.push(ansi_string_to_line(line));
             }
         }
 

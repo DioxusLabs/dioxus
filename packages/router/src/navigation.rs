@@ -30,7 +30,6 @@ pub enum NavigationTarget<R = String> {
     ///
     /// ```rust
     /// # use dioxus::prelude::*;
-    /// # use dioxus_router::prelude::*;
     /// # use dioxus_router::navigation::NavigationTarget;
     /// # #[component]
     /// # fn Index() -> Element {
@@ -50,7 +49,6 @@ pub enum NavigationTarget<R = String> {
     ///
     /// ```rust
     /// # use dioxus::prelude::*;
-    /// # use dioxus_router::prelude::*;
     /// # use dioxus_router::navigation::NavigationTarget;
     /// # #[component]
     /// # fn Index() -> Element {

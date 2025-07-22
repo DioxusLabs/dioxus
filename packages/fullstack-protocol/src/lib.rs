@@ -127,7 +127,7 @@ impl<T> Clone for SerializeContextEntry<T> {
 }
 
 impl<T> SerializeContextEntry<T> {
-    /// Insert data into an entry that was created with [`SerializeContext::create_entry`]
+    /// Insert data into an entry that was created with [`HydrationContext::create_entry`]
     pub fn insert(self, value: &T, location: &'static std::panic::Location<'static>)
     where
         T: Serialize,
@@ -141,6 +141,19 @@ impl<T> SerializeContextEntry<T> {
         T: serde::de::DeserializeOwned,
     {
         self.context.get(self.index)
+    }
+}
+
+/// Check if the client is currently rendering a component for hydration. Always returns true on the server.
+pub fn is_hydrating() -> bool {
+    #[cfg(feature = "web")]
+    {
+        // On the client, we can check if the context is set
+        CONTEXT.with(|context| context.borrow().is_some())
+    }
+    #[cfg(not(feature = "web"))]
+    {
+        true
     }
 }
 
@@ -161,8 +174,8 @@ pub fn serialize_context() -> HydrationContext {
     #[cfg(not(feature = "web"))]
     {
         // On the server each scope creates the context lazily
-        dioxus_core::prelude::has_context()
-            .unwrap_or_else(|| dioxus_core::prelude::provide_context(HydrationContext::default()))
+        dioxus_core::has_context()
+            .unwrap_or_else(|| dioxus_core::provide_context(HydrationContext::default()))
     }
 }
 
@@ -346,7 +359,15 @@ impl HTMLData {
             let body = list
                 .iter()
                 .map(|s| match s {
-                    Some(s) => format!(r#""{s}""#),
+                    Some(s) => {
+                        // Escape backslashes, quotes, and newlines
+                        let escaped = s
+                            .replace(r#"\"#, r#"\\"#)
+                            .replace("\n", r#"\n"#)
+                            .replace(r#"""#, r#"\""#);
+
+                        format!(r#""{escaped}""#)
+                    }
                     None => r#""unknown""#.to_string(),
                 })
                 .collect::<Vec<_>>()

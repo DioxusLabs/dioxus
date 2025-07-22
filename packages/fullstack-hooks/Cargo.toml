@@ -17,11 +17,11 @@ dioxus-hooks = { workspace = true }
 dioxus-fullstack-protocol = { workspace = true }
 futures-channel = { workspace = true }
 serde = { workspace = true }
+dioxus-history.workspace = true
 
 [dev-dependencies]
 dioxus-fullstack = { workspace = true }
-dioxus-lib = { workspace = true }
-dioxus = { workspace = true }
+dioxus = { workspace = true, features = ["fullstack"] }
 
 [features]
 web = []

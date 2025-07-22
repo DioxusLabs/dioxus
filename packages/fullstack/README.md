@@ -58,7 +58,7 @@ fn App() -> Element {
 }
 
 #[server]
-async fn get_meaning(of: String) -> Result<Option<u32>, ServerFnError> {
+async fn get_meaning(of: String) -> ServerFnResult<Option<u32>> {
     Ok(of.contains("life").then(|| 42))
 }
 ```
@@ -86,6 +86,7 @@ Then we can set up dioxus with the axum server:
 ```rust, no_run
 #![allow(non_snake_case)]
 use dioxus::prelude::*;
+use dioxus_fullstack::ServeConfig;
 
 // The entry point for the server
 #[cfg(feature = "server")]
@@ -99,7 +100,7 @@ async fn main() {
     let router = axum::Router::new()
         // You can add a dioxus application to the router with the `serve_dioxus_application` method
         // This will add a fallback route to the router that will serve your component and server functions
-        .serve_dioxus_application(ServeConfigBuilder::default(), App);
+        .serve_dioxus_application(ServeConfig::new().unwrap(), App);
 
     // Finally, we can launch the server
     let router = router.into_make_service();
@@ -131,7 +132,7 @@ fn App() -> Element {
 }
 
 #[server]
-async fn get_meaning(of: String) -> Result<Option<u32>, ServerFnError> {
+async fn get_meaning(of: String) -> ServerFnResult<Option<u32>> {
     Ok(of.contains("life").then(|| 42))
 }
 ```

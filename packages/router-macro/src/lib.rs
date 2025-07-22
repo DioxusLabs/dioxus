@@ -491,7 +491,7 @@ impl RouteEnum {
 
         quote! {
             impl std::fmt::Display for #name {
-                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
                     #[allow(unused)]
                     match self {
                         #(#display_match)*
@@ -513,15 +513,15 @@ impl RouteEnum {
         });
 
         quote! {
-            impl<'a> core::convert::TryFrom<&'a str> for #name {
-                type Error = <Self as std::str::FromStr>::Err;
+            impl<'a> ::core::convert::TryFrom<&'a str> for #name {
+                type Error = <Self as ::std::str::FromStr>::Err;
 
                 fn try_from(s: &'a str) -> ::std::result::Result<Self, Self::Error> {
                     s.parse()
                 }
             }
 
-            impl std::str::FromStr for #name {
+            impl ::std::str::FromStr for #name {
                 type Err = dioxus_router::routable::RouteParseError<#error_name>;
 
                 fn from_str(s: &str) -> ::std::result::Result<Self, Self::Err> {
@@ -531,9 +531,17 @@ impl RouteEnum {
                     // Remove any trailing slashes. We parse /route/ and /route in the same way
                     // Note: we don't use trim because it includes more code
                     let route = route.strip_suffix('/').unwrap_or(route);
-                    let query = dioxus_router::exports::urlencoding::decode(query).unwrap_or(query.into());
-                    let hash = dioxus_router::exports::urlencoding::decode(hash).unwrap_or(hash.into());
-                    let mut segments = route.split('/').map(|s| dioxus_router::exports::urlencoding::decode(s).unwrap_or(s.into()));
+                    let query = dioxus_router::exports::percent_encoding::percent_decode_str(query)
+                        .decode_utf8()
+                        .unwrap_or(query.into());
+                    let hash = dioxus_router::exports::percent_encoding::percent_decode_str(hash)
+                        .decode_utf8()
+                        .unwrap_or(hash.into());
+                    let mut segments = route.split('/').map(|s| {
+                        dioxus_router::exports::percent_encoding::percent_decode_str(s)
+                            .decode_utf8()
+                            .unwrap_or(s.into())
+                    });
                     // skip the first empty segment
                     if s.starts_with('/') {
                         let _ = segments.next();
@@ -638,14 +646,14 @@ impl RouteEnum {
                 #(#error_variants),*
             }
 
-            impl std::fmt::Debug for #match_error_name {
-                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            impl ::std::fmt::Debug for #match_error_name {
+                fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
                     write!(f, "{}({})", stringify!(#match_error_name), self)
                 }
             }
 
-            impl std::fmt::Display for #match_error_name {
-                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            impl ::std::fmt::Display for #match_error_name {
+                fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
                     match self {
                         #(#display_match),*
                     }

@@ -19,6 +19,35 @@ impl TailwindCli {
         Self { version }
     }
 
+    pub(crate) async fn run_once(
+        manifest_dir: PathBuf,
+        input_path: Option<PathBuf>,
+        output_path: Option<PathBuf>,
+    ) -> Result<()> {
+        let Some(tailwind) = Self::autodetect(&manifest_dir) else {
+            return Ok(());
+        };
+
+        if !tailwind.get_binary_path()?.exists() {
+            tracing::info!("Installing tailwindcss@{}", tailwind.version);
+            tailwind.install_github().await?;
+        }
+
+        let output = tailwind
+            .run(&manifest_dir, input_path, output_path, false)?
+            .wait_with_output()
+            .await?;
+
+        if !output.stderr.is_empty() {
+            tracing::warn!(
+                "Warnings while running tailwind: {}",
+                String::from_utf8_lossy(&output.stdout)
+            );
+        }
+
+        Ok(())
+    }
+
     pub(crate) fn serve(
         manifest_dir: PathBuf,
         input_path: Option<PathBuf>,
@@ -36,7 +65,7 @@ impl TailwindCli {
 
             // the tw watcher blocks on stdin, and `.wait()` will drop stdin
             // unfortunately the tw watcher just deadlocks in this case, so we take the stdin manually
-            let mut proc = tailwind.watch(&manifest_dir, input_path, output_path)?;
+            let mut proc = tailwind.run(&manifest_dir, input_path, output_path, true)?;
             let stdin = proc.stdin.take();
             proc.wait().await?;
             drop(stdin);
@@ -76,11 +105,12 @@ impl TailwindCli {
         Self::new(Self::V3_TAG.to_string())
     }
 
-    pub(crate) fn watch(
+    pub(crate) fn run(
         &self,
         manifest_dir: &Path,
         input_path: Option<PathBuf>,
         output_path: Option<PathBuf>,
+        watch: bool,
     ) -> Result<tokio::process::Child> {
         let binary_path = self.get_binary_path()?;
 
@@ -110,7 +140,8 @@ impl TailwindCli {
             .arg(input_path)
             .arg("--output")
             .arg(output_path)
-            .arg("--watch")
+            .args(watch.then_some("--watch"))
+            .current_dir(manifest_dir)
             .kill_on_drop(true)
             .stdin(Stdio::piped())
             .stdout(Stdio::null())
@@ -120,7 +151,7 @@ impl TailwindCli {
         Ok(proc)
     }
 
-    fn get_binary_path(&self) -> anyhow::Result<PathBuf> {
+    pub fn get_binary_path(&self) -> anyhow::Result<PathBuf> {
         if CliSettings::prefer_no_downloads() {
             which::which("tailwindcss").map_err(|_| anyhow!("Missing tailwindcss@{}", self.version))
         } else {

@@ -9,7 +9,7 @@ use axum_session::{SessionConfig, SessionLayer, SessionStore};
 use axum_session_auth::*;
 use axum_session_sqlx::SessionSqlitePool;
 use core::pin::Pin;
-use dioxus_fullstack::prelude::*;
+use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePool, SqlitePoolOptions};
 use std::error::Error;
@@ -196,7 +196,7 @@ pub async fn connect_to_database() -> SqlitePool {
 pub type Session =
     axum_session_auth::AuthSession<crate::auth::User, i64, SessionSqlitePool, sqlx::SqlitePool>;
 
-pub async fn get_session() -> Result<Session, ServerFnError> {
+pub async fn get_session() -> ServerFnResult<Session> {
     extract::<Session, _>()
         .await
         .map_err(|_| ServerFnError::new("AuthSessionLayer was not found"))

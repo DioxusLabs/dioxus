@@ -41,7 +41,7 @@ impl LiveviewRouter for Router {
     fn with_virtual_dom(
         self,
         route: &str,
-        app: impl Fn() -> dioxus_core::prelude::VirtualDom + Send + Sync + 'static,
+        app: impl Fn() -> dioxus_core::VirtualDom + Send + Sync + 'static,
     ) -> Self {
         let view = crate::LiveViewPool::new();
 

@@ -10,10 +10,9 @@ use crate::{
         VComponent, WriteMutations,
     },
     nodes::{AsVNode, VNode},
-    prelude::SuspenseContext,
     scopes::ScopeId,
     virtual_dom::VirtualDom,
-    Element,
+    Element, SuspenseContext,
 };
 
 impl VirtualDom {
@@ -62,7 +61,7 @@ impl VirtualDom {
         })
     }
 
-    /// Create a new [`ScopeState`] for a component that has been created with [`VirtualDom::create_scope`]
+    /// Create a new [`Scope`](crate::scope_context::Scope) for a component.
     ///
     /// Returns the number of nodes created on the stack
     #[tracing::instrument(skip(self, to), level = "trace", name = "VirtualDom::create_scope")]
@@ -178,7 +177,7 @@ impl VNode {
         dom.remove_component_node(to, true, scope, Some(m));
     }
 
-    /// Create a new component (if it doesn't already exist) node and then mount the [`ScopeState`] for a component
+    /// Create a new component (if it doesn't already exist) node and then mount the [`crate::ScopeState`] for a component
     ///
     /// Returns the number of nodes created on the stack
     pub(super) fn create_component_node(

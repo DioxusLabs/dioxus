@@ -52,18 +52,18 @@ fn main() {
     telemetry::main(async {
         let result = match TraceController::initialize() {
             Commands::Translate(opts) => opts.translate(),
-            Commands::New(opts) => opts.create(),
-            Commands::Init(opts) => opts.init(),
+            Commands::New(opts) => opts.create().await,
+            Commands::Init(opts) => opts.init().await,
             Commands::Config(opts) => opts.config().await,
             Commands::Autoformat(opts) => opts.autoformat().await,
             Commands::Check(opts) => opts.check().await,
-            Commands::Clean(opts) => opts.clean().await,
             Commands::Build(opts) => opts.build().await,
             Commands::Serve(opts) => opts.serve().await,
             Commands::Bundle(opts) => opts.bundle().await,
             Commands::Run(opts) => opts.run().await,
-            Commands::BuildAssets(opts) => opts.run().await,
             Commands::SelfUpdate(opts) => opts.self_update().await,
+            Commands::Tools(BuildTools::BuildAssets(opts)) => opts.run().await,
+            Commands::Doctor(opts) => opts.doctor().await,
         };
 
         // Provide a structured output for third party tools that can consume the output of the CLI
@@ -72,16 +72,20 @@ fn main() {
                 tracing::debug!(json = ?output);
             }
             Err(err) => {
-                eprintln!("{err}");
-
                 tracing::error!(
                     json = ?StructuredOutput::Error {
                         message: format!("{err:?}"),
                     },
                 );
-            }
-        };
 
-        result
+                eprintln!(
+                    "{ERROR_STYLE}Failed{ERROR_STYLE:#}: {}",
+                    crate::error::log_stacktrace(&err, 1),
+                    ERROR_STYLE = crate::styles::ERROR_STYLE,
+                );
+
+                std::process::exit(1);
+            }
+        }
     });
 }

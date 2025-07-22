@@ -40,7 +40,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: sudo apt-get update
-      - run: sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
+      - run: sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev libglib2.0-dev
       - uses: dtolnay/rust-toolchain@nightly
         with:
           toolchain: nightly-2024-02-01
@@ -61,7 +61,6 @@ jobs:
           repository-name: dioxuslabs/docsite
           clean: false
           token: ${{ secrets.DEPLOY_KEY }}
-
 # Attempt to backport a merged pull request to the latest stable release
 #
 # If the backported PR is succesfully merged
@@ -87,5 +86,3 @@ jobs:
 #       uses: codecov/codecov-action@v2
 #       with:
 #         fail_ci_if_error: false
-
-

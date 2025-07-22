@@ -1,4 +1,4 @@
-use dioxus_core::prelude::spawn;
+use dioxus_core::spawn;
 use dioxus_document::Eval;
 use dioxus_history::History;
 use serde::{Deserialize, Serialize};
@@ -6,7 +6,7 @@ use std::rc::Rc;
 use std::sync::{Mutex, RwLock};
 use std::{collections::BTreeMap, sync::Arc};
 
-/// A [`HistoryProvider`] that evaluates history through JS.
+/// A [`History`] that evaluates history through JS.
 pub(crate) struct LiveviewHistory {
     action_tx: tokio::sync::mpsc::UnboundedSender<Action>,
     timeline: Arc<Mutex<Timeline>>,

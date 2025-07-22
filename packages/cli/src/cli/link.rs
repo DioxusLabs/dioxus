@@ -1,7 +1,7 @@
 use crate::Result;
 use anyhow::Context;
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::{borrow::Cow, path::PathBuf};
 use target_lexicon::Triple;
 
 /// `dx` can act as a linker in a few scenarios. Note that we don't *actually* implement the linker logic,
@@ -38,7 +38,7 @@ pub struct LinkAction {
 /// The linker flavor to use. This influences the argument style that gets passed to the linker.
 /// We're imitating the rustc linker flavors here.
 ///
-/// https://doc.rust-lang.org/beta/nightly-rustc/rustc_target/spec/enum.LinkerFlavor.html
+/// <https://doc.rust-lang.org/beta/nightly-rustc/rustc_target/spec/enum.LinkerFlavor.html>
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub enum LinkerFlavor {
     Gnu,
@@ -80,25 +80,31 @@ impl LinkAction {
         })
     }
 
-    pub(crate) fn write_env_vars(&self, env_vars: &mut Vec<(&str, String)>) -> Result<()> {
-        env_vars.push((Self::DX_LINK_ARG, "1".to_string()));
+    pub(crate) fn write_env_vars(
+        &self,
+        env_vars: &mut Vec<(Cow<'static, str>, String)>,
+    ) -> Result<()> {
+        env_vars.push((Self::DX_LINK_ARG.into(), "1".to_string()));
         env_vars.push((
-            Self::DX_ARGS_FILE,
+            Self::DX_ARGS_FILE.into(),
             dunce::canonicalize(&self.link_args_file)?
                 .to_string_lossy()
                 .to_string(),
         ));
         env_vars.push((
-            Self::DX_ERR_FILE,
+            Self::DX_ERR_FILE.into(),
             dunce::canonicalize(&self.link_err_file)?
                 .to_string_lossy()
                 .to_string(),
         ));
-        env_vars.push((Self::DX_LINK_TRIPLE, self.triple.to_string()));
+        env_vars.push((Self::DX_LINK_TRIPLE.into(), self.triple.to_string()));
         if let Some(linker) = &self.linker {
             env_vars.push((
-                Self::DX_LINK_CUSTOM_LINKER,
-                dunce::canonicalize(linker)?.to_string_lossy().to_string(),
+                Self::DX_LINK_CUSTOM_LINKER.into(),
+                dunce::canonicalize(linker)
+                    .unwrap_or(linker.clone())
+                    .to_string_lossy()
+                    .to_string(),
             ));
         }
 

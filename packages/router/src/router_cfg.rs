@@ -1,13 +1,13 @@
-use crate::{components::FailureExternalNavigation, prelude::*};
-use dioxus_lib::prelude::*;
+use crate::{GenericRouterContext, NavigationTarget, Routable, RoutingCallback};
+use dioxus_core::Element;
 use std::sync::Arc;
 
 /// Global configuration options for the router.
 ///
 /// This implements [`Default`] and follows the builder pattern, so you can use it like this:
 /// ```rust,no_run
-/// # use dioxus_router::prelude::*;
 /// # use dioxus::prelude::*;
+/// # use dioxus_router::RouterConfig;
 /// # #[component]
 /// # fn Index() -> Element {
 /// #     VNode::empty()
@@ -31,10 +31,21 @@ pub struct RouterConfig<R> {
     pub(crate) on_update: Option<RoutingCallback<R>>,
 }
 
+#[cfg(not(feature = "html"))]
 impl<R> Default for RouterConfig<R> {
     fn default() -> Self {
         Self {
-            failure_external_navigation: FailureExternalNavigation,
+            failure_external_navigation: || VNode::empty(),
+            on_update: None,
+        }
+    }
+}
+
+#[cfg(feature = "html")]
+impl<R> Default for RouterConfig<R> {
+    fn default() -> Self {
+        Self {
+            failure_external_navigation: crate::components::FailureExternalNavigation,
             on_update: None,
         }
     }
@@ -69,7 +80,10 @@ where
 
     /// A component to render when an external navigation fails.
     ///
-    /// Defaults to a router-internal component called [`FailureExternalNavigation`]
+    #[cfg_attr(
+        feature = "html",
+        doc = "Defaults to [`crate::components::FailureExternalNavigation`]."
+    )]
     pub fn failure_external_navigation(self, component: fn() -> Element) -> Self {
         Self {
             failure_external_navigation: component,
