@@ -173,6 +173,7 @@ dioxus_server_macro = { path = "packages/server-macro", version = "0.7.0-alpha.3
 dioxus-dx-wire-format = { path = "packages/dx-wire-format", version = "0.7.0-alpha.3" }
 dioxus-logger = { path = "packages/logger", version = "0.7.0-alpha.3" }
 dioxus-native = { path = "packages/native", version = "0.7.0-alpha.3" }
+dioxus-native-dom = { path = "packages/native-dom", version = "0.7.0-alpha.3" }
 dioxus-asset-resolver = { path = "packages/asset-resolver", version = "0.7.0-alpha.3" }
 dioxus-config-macros = { path = "packages/config-macros", version = "0.7.0-alpha.3" }
 
