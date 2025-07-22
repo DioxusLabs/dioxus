@@ -227,6 +227,7 @@ pub(crate) struct NsisSettings {
     pub(crate) sidebar_image: Option<PathBuf>,
     #[serde(default)]
     pub(crate) installer_icon: Option<PathBuf>,
+    #[serde(default)]
     pub(crate) install_mode: NSISInstallerMode,
     #[serde(default)]
     pub(crate) languages: Option<Vec<String>>,
@@ -245,8 +246,9 @@ pub(crate) struct NsisSettings {
     pub minimum_webview2_version: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub(crate) enum NSISInstallerMode {
+    #[default]
     CurrentUser,
     PerMachine,
     Both,
