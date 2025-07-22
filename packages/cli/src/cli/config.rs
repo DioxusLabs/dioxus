@@ -24,6 +24,9 @@ pub(crate) enum Config {
     /// Print the location of the CLI log file.
     LogFile {},
 
+    /// Print the location of the CLI telemetry file.
+    TelemetryFile {},
+
     /// Set CLI settings.
     #[command(subcommand)]
     Set(Setting),
@@ -104,6 +107,10 @@ impl Config {
             Config::LogFile {} => {
                 let log_path = crate::logging::FileAppendLayer::log_path();
                 tracing::info!(dx_src = ?TraceSrc::Dev, "Log file is located at {}", log_path.display());
+            }
+            Config::TelemetryFile {} => {
+                let telemetry_path = Workspace::telemetry_file();
+                tracing::info!(dx_src = ?TraceSrc::Dev, "Telemetry file is located at {}", telemetry_path.display());
             }
             // Handle CLI settings.
             Config::Set(setting) => {

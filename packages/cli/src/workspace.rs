@@ -496,7 +496,7 @@ impl Workspace {
     }
 
     pub(crate) fn telemetry_file() -> PathBuf {
-        Self::dioxus_home_dir().join("telemetry.log")
+        Self::dioxus_home_dir().join("telemetry.json")
     }
 }
 

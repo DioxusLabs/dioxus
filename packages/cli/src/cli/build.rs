@@ -1,4 +1,4 @@
-use crate::{cli::*, AppBuilder, BuildRequest, Workspace};
+use crate::{cli::*, telemetry, AppBuilder, BuildRequest, Workspace};
 use crate::{BuildMode, Platform};
 
 use super::target::TargetArgs;
@@ -88,6 +88,9 @@ impl CommandWithPlatformOverrides<BuildArgs> {
 
             tracing::info!(path = ?targets.client.root_dir(), "Server build completed successfully! 🚀");
         }
+
+        // Flush the telemetry queue to the file
+        telemetry::flush_telemetry_to_file();
 
         Ok(StructuredOutput::BuildsFinished {
             client: targets.client.root_dir(),

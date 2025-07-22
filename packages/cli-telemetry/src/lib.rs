@@ -30,18 +30,32 @@
 
 use std::{collections::HashMap, time::SystemTime};
 
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
+/// We only store non-pii information in telemetry to track issues and performance
+/// across the CLI. This includes:
+/// - device triple (OS, arch, etc)
+/// - whether the CLI is running in CI
+/// - the CLI version
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct TelemetryPayload {
-    pub device_id: String,
+    pub device_triple: String,
     pub is_ci: bool,
     pub cli_version: String,
-    pub events: Vec<TelemetryEvent>,
 }
 
-/// An event, correspnding roughly to a trace!()
+impl TelemetryPayload {
+    pub fn new(device_triple: String, is_ci: bool, cli_version: String) -> Self {
+        Self {
+            device_triple,
+            is_ci,
+            cli_version,
+        }
+    }
+}
+
+/// An event, corresponding roughly to a trace!()
 ///
 /// This can be something like a build, bundle, translate, etc
 /// We collect the phases of the build in a list of events to get a better sense of how long
@@ -61,4 +75,21 @@ pub struct TelemetryEvent {
     pub stage: String,
     pub time: DateTime<Utc>,
     pub values: HashMap<String, String>,
+}
+
+impl TelemetryEvent {
+    pub fn new(name: impl ToString, message: impl ToString, stage: impl ToString) -> Self {
+        Self {
+            name: name.to_string(),
+            message: message.to_string(),
+            stage: stage.to_string(),
+            time: DateTime::<Utc>::from(SystemTime::now()),
+            values: HashMap::new(),
+        }
+    }
+
+    pub fn with_value<K: ToString, V: ToString>(mut self, key: K, value: V) -> Self {
+        self.values.insert(key.to_string(), value.to_string());
+        self
+    }
 }

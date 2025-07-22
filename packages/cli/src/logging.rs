@@ -14,9 +14,11 @@
 //! 3. Build CLI layer for routing tracing logs to the TUI.
 //! 4. Build fmt layer for non-interactive logging with a custom writer that prevents output during interactive mode.
 
+use crate::telemetry::send_telemetry_event;
 use crate::{serve::ServeUpdate, Cli, Commands, Platform as TargetPlatform, Verbosity};
 use cargo_metadata::diagnostic::{Diagnostic, DiagnosticLevel};
 use clap::Parser;
+use dioxus_cli_telemetry::TelemetryEvent;
 use futures_channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
 use std::sync::OnceLock;
 use std::{
@@ -126,7 +128,8 @@ impl TraceController {
             .with(filter)
             .with(json_filter)
             .with(FileAppendLayer::new())
-            .with(CLILayer {})
+            .with(CLILayer)
+            .with(TelemetryLayer)
             .with(fmt_layer.with_filter(print_fmts_filter));
 
         #[cfg(feature = "tokio-console")]
@@ -290,6 +293,48 @@ where
             .get()
             .unwrap()
             .unbounded_send(TraceMsg::text(visitor.source, *level, final_msg));
+    }
+}
+
+/// This is our "subscriber" (layer) that records structured data for telemetry errors.
+struct TelemetryLayer;
+
+impl<S> Layer<S> for TelemetryLayer
+where
+    S: Subscriber + for<'a> LookupSpan<'a>,
+{
+    // Subscribe to user
+    fn on_event(
+        &self,
+        event: &tracing::Event<'_>,
+        _ctx: tracing_subscriber::layer::Context<'_, S>,
+    ) {
+        let mut visitor = CollectVisitor::new();
+        event.record(&mut visitor);
+
+        let meta = event.metadata();
+        let level = meta.level();
+
+        // Only keep errors
+        if *level != Level::ERROR {
+            return;
+        }
+        let stage = match visitor.source {
+            // Don't keep any app logs
+            TraceSrc::Cargo | TraceSrc::App(_) => return,
+            TraceSrc::Dev => "dev",
+            TraceSrc::Build => "build",
+            TraceSrc::Bundle => "bundle",
+            TraceSrc::Unknown => "unknown",
+        };
+
+        let mut event = TelemetryEvent::new(meta.name(), visitor.message, stage);
+
+        for (field, value) in visitor.fields.iter() {
+            event = event.with_value(field, value);
+        }
+
+        send_telemetry_event(event);
     }
 }
 

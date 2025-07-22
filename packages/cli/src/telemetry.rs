@@ -1,13 +1,15 @@
 use std::{
     backtrace::Backtrace,
     future::Future,
-    sync::{LazyLock, Mutex, OnceLock},
+    io::BufReader,
+    sync::{Mutex, OnceLock},
 };
 
 use crate::{Result, Workspace};
 use dioxus_cli_telemetry::TelemetryEvent;
 use dioxus_dx_wire_format::StructuredOutput;
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
+use posthog_rs::ClientOptions;
 
 static TELEMETRY_TX: OnceLock<UnboundedSender<TelemetryEvent>> = OnceLock::new();
 static TELEMETRY_RX: OnceLock<Mutex<UnboundedReceiver<TelemetryEvent>>> = OnceLock::new();
@@ -17,29 +19,94 @@ static TELEMETRY_RX: OnceLock<Mutex<UnboundedReceiver<TelemetryEvent>>> = OnceLo
 /// As the app runs, we simply fire off messages into the TelemetryTx handle.
 ///
 /// Once the session is over, or the tx is flushed manually, we then log to a file.
-/// This prevents any performance issues from building up during long sesssion.
-/// For `dx serve`, we asyncronously flush after full rebuilds are *completed*.
+/// This prevents any performance issues from building up during long session.
+/// For `dx serve`, we asynchronously flush after full rebuilds are *completed*.
 pub fn main(app: impl Future<Output = Result<StructuredOutput>>) {
-    // let rt = tokio::runtime::Runtime::new().unwrap();
-    // let _guard = rt.enter();
+    let (mut tx, rx) = futures_channel::mpsc::unbounded();
+    TELEMETRY_TX.set(tx).expect("Failed to set telemetry tx");
+    TELEMETRY_RX
+        .set(Mutex::new(rx))
+        .expect("Failed to set telemetry rx");
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .expect("Failed building the Runtime")
+        .block_on(async move {
+            check_flush_file().await;
+            let result = app.await;
+            flush_telemetry_to_file();
+        });
+}
 
-    // let res = rt.block_on(tokio::spawn(async move {}));
-    manually_flush();
+pub fn send_telemetry_event(event: TelemetryEvent) {
+    let Some(tx) = TELEMETRY_TX.get() else {
+        tracing::warn!("Telemetry TX is not set, cannot send telemetry.");
+        return;
+    };
+    let _ = tx.unbounded_send(event);
 }
 
 /// Manually flush the telemetry queue so not as
-pub fn manually_flush() -> tokio::task::JoinHandle<()> {
-    tokio::task::spawn(async move {
-        let mut log_file = std::fs::File::options()
-            .append(true)
-            .open(Workspace::telemetry_file())
-            .unwrap();
+pub fn flush_telemetry_to_file() {
+    let Some(rx) = TELEMETRY_RX.get() else {
+        tracing::warn!("Telemetry RX is not set, cannot flush telemetry.");
+        return;
+    };
+    let Ok(mut rx) = rx.lock() else {
+        tracing::warn!("Failed to lock telemetry RX");
+        return;
+    };
+    let mut log_file = std::fs::File::options()
+        .create(true)
+        .append(true)
+        .open(Workspace::telemetry_file())
+        .unwrap();
 
-        let mut rx = TELEMETRY_RX.get().unwrap().lock().unwrap();
-        while let Ok(Some(msg)) = rx.try_next() {
-            _ = serde_json::to_writer(&mut log_file, &msg);
+    while let Ok(Some(msg)) = rx.try_next() {
+        _ = serde_json::to_writer(&mut log_file, &msg);
+    }
+}
+
+const KEY: &str = "phc_OTBMYjklqT5Dw4EKWGFrKy2jFOV1jd4MmiSe96TKjLz";
+
+async fn check_flush_file() {
+    let file = Workspace::telemetry_file();
+    let file_contents =
+        std::fs::File::open(&file).expect("Failed to open telemetry file for flushing");
+    let mut iter = serde_json::Deserializer::from_reader(BufReader::new(file_contents))
+        .into_iter::<TelemetryEvent>()
+        .peekable();
+    // If the no events exist or the first event was logged less than 30 seconds ago, we don't need to flush.
+    {
+        let Some(Ok(event)) = iter.peek() else {
+            return;
+        };
+        let time = event.time.naive_local();
+        let now = chrono::Utc::now().naive_local();
+        let elapsed = now.signed_duration_since(time).num_seconds();
+        println!("Telemetry file is {} seconds old", elapsed);
+        if elapsed < 30 {
+            println!("Telemetry file is recent, skipping flush.");
+            return;
         }
-    })
+    }
+
+    let mut events = Vec::new();
+    for event in iter.flatten() {
+        let event: TelemetryEvent = event;
+        let mut posthog_event = posthog_rs::Event::new_anon(event.name);
+        _ = posthog_event.insert_prop("message", event.message);
+        _ = posthog_event.insert_prop("stage", event.stage);
+        _ = posthog_event.insert_prop("timestamp", event.time);
+        for (key, value) in event.values {
+            _ = posthog_event.insert_prop(key, value);
+        }
+        events.push(posthog_event);
+    }
+    let client = posthog_rs::client(ClientOptions::from(KEY)).await;
+    _ = client.capture_batch(events).await;
+    // Remove the file
+    std::fs::remove_file(file).unwrap();
 }
 
 /// Set the backtrace, and then initiate a rollup upload of any pending logs.
