@@ -60,8 +60,12 @@ impl RunArgs {
                                 .inspect_err(|e| tracing::error!("Failed to open app: {}", e));
 
                             if platform == Platform::Web {
+                                let base_path = match builder.client.build.base_path() {
+                                    Some(base_path) => format!("/{}", base_path.trim_matches('/')),
+                                    None => "".to_owned(),
+                                };
                                 tracing::info!(
-                                    "Serving app at http://{}:{}",
+                                    "Serving app at http://{}:{}{base_path}",
                                     builder.devserver_bind_ip,
                                     builder.devserver_port
                                 );
