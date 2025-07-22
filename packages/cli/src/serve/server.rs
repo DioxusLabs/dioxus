@@ -1,6 +1,6 @@
 use crate::{
-    config::WebHttpsConfig, serve::ServeUpdate, BuildId, BuildStage, BuilderUpdate, Platform,
-    Result, TraceSrc,
+    config::WebHttpsConfig, serve::ServeUpdate, telemetry::send_telemetry_event, BuildId,
+    BuildStage, BuilderUpdate, Platform, Result, TraceSrc,
 };
 use anyhow::{bail, Context};
 use axum::{
@@ -18,6 +18,7 @@ use axum::{
     routing::{get, get_service},
     Extension, Router,
 };
+use dioxus_cli_telemetry::TelemetryEvent;
 use dioxus_devtools_types::{DevserverMsg, HotReloadMsg};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::{
@@ -61,6 +62,7 @@ pub(crate) struct WebServer {
     new_hot_reload_sockets: UnboundedReceiver<ConnectedWsClient>,
     new_build_status_sockets: UnboundedReceiver<ConnectedWsClient>,
     build_status: SharedStatus,
+    last_build_status_identifier: &'static str,
     application_name: String,
     platform: Platform,
 }
@@ -119,6 +121,7 @@ impl WebServer {
 
         Ok(Self {
             build_status,
+            last_build_status_identifier: "",
             proxied_port,
             devserver_bind_ip,
             devserver_exposed_ip,
@@ -221,6 +224,17 @@ impl WebServer {
         match update {
             BuilderUpdate::Progress { stage } => {
                 // Todo(miles): wire up more messages into the splash screen UI
+                let identifier = stage.identifier();
+                // Only log the event if the identifier has changed
+                if self.last_build_status_identifier != identifier {
+                    self.last_build_status_identifier = identifier;
+                    send_telemetry_event(TelemetryEvent::new(
+                        "build_stage",
+                        None,
+                        "Build stage update",
+                        identifier,
+                    ));
+                }
                 match stage {
                     BuildStage::Success => {}
                     BuildStage::Failed => self.send_reload_failed().await,

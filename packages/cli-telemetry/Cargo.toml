@@ -7,3 +7,4 @@ description = "Wire format for the dioxus CLI telemetry type"
 [dependencies]
 serde = { workspace = true, features = ["derive"] }
 chrono = { workspace = true, features = ["serde"] }
+rand.workspace = true

@@ -93,3 +93,30 @@ pub enum BuildStage {
     CompressingAssets,
     Prerendering,
 }
+
+impl BuildStage {
+    /// Returns the identifier for this stage
+    pub fn identifier(&self) -> &'static str {
+        match self {
+            BuildStage::Initializing => "initializing",
+            BuildStage::Starting { .. } => "starting",
+            BuildStage::InstallingTooling => "installing_tooling",
+            BuildStage::Compiling { .. } => "compiling",
+            BuildStage::RunningBindgen => "running_bindgen",
+            BuildStage::SplittingBundle => "splitting_bundle",
+            BuildStage::OptimizingWasm => "optimizing_wasm",
+            BuildStage::Linking => "linking",
+            BuildStage::Hotpatching => "hotpatching",
+            BuildStage::ExtractingAssets => "extracting_assets",
+            BuildStage::CopyingAssets { .. } => "copying_assets",
+            BuildStage::Bundling => "bundling",
+            BuildStage::RunningGradle => "running_gradle",
+            BuildStage::Success => "success",
+            BuildStage::Failed => "failed",
+            BuildStage::Aborted => "aborted",
+            BuildStage::Restarting => "restarting",
+            BuildStage::CompressingAssets => "compressing_assets",
+            BuildStage::Prerendering => "prerendering",
+        }
+    }
+}

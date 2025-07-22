@@ -22,7 +22,7 @@ static TELEMETRY_RX: OnceLock<Mutex<UnboundedReceiver<TelemetryEvent>>> = OnceLo
 /// This prevents any performance issues from building up during long session.
 /// For `dx serve`, we asynchronously flush after full rebuilds are *completed*.
 pub fn main(app: impl Future<Output = Result<StructuredOutput>>) {
-    let (mut tx, rx) = futures_channel::mpsc::unbounded();
+    let (tx, rx) = futures_channel::mpsc::unbounded();
     TELEMETRY_TX.set(tx).expect("Failed to set telemetry tx");
     TELEMETRY_RX
         .set(Mutex::new(rx))
@@ -95,8 +95,9 @@ async fn check_flush_file() {
     let mut events = Vec::new();
     for event in iter.flatten() {
         let event: TelemetryEvent = event;
-        let mut posthog_event = posthog_rs::Event::new_anon(event.name);
+        let mut posthog_event = posthog_rs::Event::new(event.name, event.session_id.to_string());
         _ = posthog_event.insert_prop("message", event.message);
+        _ = posthog_event.insert_prop("module", event.module);
         _ = posthog_event.insert_prop("stage", event.stage);
         _ = posthog_event.insert_prop("timestamp", event.time);
         for (key, value) in event.values {

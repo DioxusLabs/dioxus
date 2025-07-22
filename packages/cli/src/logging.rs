@@ -328,7 +328,12 @@ where
             TraceSrc::Unknown => "unknown",
         };
 
-        let mut event = TelemetryEvent::new(meta.name(), visitor.message, stage);
+        let mut event = TelemetryEvent::new(
+            meta.name(),
+            meta.module_path().map(ToString::to_string),
+            visitor.message,
+            stage,
+        );
 
         for (field, value) in visitor.fields.iter() {
             event = event.with_value(field, value);

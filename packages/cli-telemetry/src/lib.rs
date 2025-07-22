@@ -28,7 +28,7 @@
 //! - setting TELEMETRY=false in your env
 //! - setting `dx settings --disable-telemtry`
 
-use std::{collections::HashMap, time::SystemTime};
+use std::{collections::HashMap, sync::OnceLock, time::SystemTime};
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -55,6 +55,12 @@ impl TelemetryPayload {
     }
 }
 
+static SESSION_ID: OnceLock<u128> = OnceLock::new();
+
+fn session_id() -> u128 {
+    *SESSION_ID.get_or_init(|| rand::random::<u128>())
+}
+
 /// An event, corresponding roughly to a trace!()
 ///
 /// This can be something like a build, bundle, translate, etc
@@ -71,19 +77,28 @@ impl TelemetryPayload {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct TelemetryEvent {
     pub name: String,
+    pub module: Option<String>,
     pub message: String,
     pub stage: String,
     pub time: DateTime<Utc>,
+    pub session_id: u128,
     pub values: HashMap<String, String>,
 }
 
 impl TelemetryEvent {
-    pub fn new(name: impl ToString, message: impl ToString, stage: impl ToString) -> Self {
+    pub fn new(
+        name: impl ToString,
+        module: Option<String>,
+        message: impl ToString,
+        stage: impl ToString,
+    ) -> Self {
         Self {
             name: name.to_string(),
+            module,
             message: message.to_string(),
             stage: stage.to_string(),
             time: DateTime::<Utc>::from(SystemTime::now()),
+            session_id: session_id(),
             values: HashMap::new(),
         }
     }
