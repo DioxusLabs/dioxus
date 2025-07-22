@@ -137,6 +137,14 @@ impl TraceController {
 
         sub.init();
 
+        // Send the type of command we are running to the telemetry collector
+        send_telemetry_event(TelemetryEvent::new(
+            "cli_command",
+            None,
+            args.action.to_string(),
+            "start",
+        ));
+
         args.action
     }
 
