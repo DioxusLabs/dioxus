@@ -50,10 +50,11 @@ impl Args for TargetAlias {
             .arg(arg!(--ios "Target the ios triple").help_heading(HELP_HEADING))
             .arg(arg!(--android "Target the android triple").help_heading(HELP_HEADING))
             .arg(arg!(--host "Target the host triple").help_heading(HELP_HEADING))
+            .arg(arg!(--desktop "Target the host triple").help_heading(HELP_HEADING))
             .group(
                 clap::ArgGroup::new("target_alias")
                     .args([
-                        "wasm", "macos", "windows", "linux", "ios", "android", "host",
+                        "wasm", "macos", "windows", "linux", "ios", "android", "host", "host",
                     ])
                     .multiple(false)
                     .required(false),
@@ -327,14 +328,17 @@ pub(crate) enum BundleFormat {
     Web,
 
     /// Targeting the macos desktop bundle structure
+    #[cfg_attr(target_os = "macos", serde(alias = "desktop"))]
     #[serde(rename = "macos")]
     MacOS,
 
     /// Targeting the windows desktop bundle structure
+    #[cfg_attr(target_os = "windows", serde(alias = "desktop"))]
     #[serde(rename = "windows")]
     Windows,
 
     /// Targeting the linux desktop bundle structure
+    #[cfg_attr(target_os = "linux", serde(alias = "desktop"))]
     #[serde(rename = "linux")]
     Linux,
 
