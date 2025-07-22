@@ -1,16 +1,20 @@
+//! A mock [`server_fn::client::Client`] implementation used when no client feature is enabled.
+
 use std::future::Future;
 
-use futures_util::{Sink, Stream, TryFuture};
+use futures_util::Stream;
 use server_fn::{request::ClientReq, response::ClientRes};
 
-pub struct MockServerFnClient {
-    _priv: (),
-}
+/// A placeholder [`server_fn::client::Client`] used when no client feature is enabled. The
+/// [`server_fn::client::browser::BrowserClient`] is used on web clients, and [`server_fn::client::reqwest::ReqwestClient`]
+/// is used on native clients
+#[non_exhaustive]
+pub struct MockServerFnClient {}
 
 impl MockServerFnClient {
     /// Create a new mock server function client
     pub fn new() -> Self {
-        Self { _priv: () }
+        Self {}
     }
 }
 
@@ -56,7 +60,9 @@ impl<Error, InputStreamError, OutputStreamError>
     }
 }
 
-pub struct MockServerFnClientRequest;
+/// A placeholder [`ClientReq`] used when no client feature is enabled.
+#[non_exhaustive]
+pub struct MockServerFnClientRequest {}
 
 impl<E> ClientReq<E> for MockServerFnClientRequest {
     type FormData = ();
@@ -109,6 +115,7 @@ impl<E> ClientReq<E> for MockServerFnClientRequest {
     }
 }
 
+/// A placeholder [`ClientRes`] used when no client feature is enabled.
 pub struct MockServerFnClientResponse;
 
 impl<E> ClientRes<E> for MockServerFnClientResponse {
