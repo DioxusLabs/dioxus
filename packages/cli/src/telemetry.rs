@@ -71,8 +71,9 @@ const KEY: &str = "phc_OTBMYjklqT5Dw4EKWGFrKy2jFOV1jd4MmiSe96TKjLz";
 
 async fn check_flush_file() {
     let file = Workspace::telemetry_file();
-    let file_contents =
-        std::fs::File::open(&file).expect("Failed to open telemetry file for flushing");
+    let Ok(file_contents) = std::fs::File::open(&file) else {
+        return;
+    };
     let mut iter = serde_json::Deserializer::from_reader(BufReader::new(file_contents))
         .into_iter::<TelemetryEvent>()
         .peekable();
