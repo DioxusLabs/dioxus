@@ -49,8 +49,8 @@ fn main() {
     }
 
     // Run under the telemetry collector so we can log errors/panics.
-    telemetry::main(async {
-        let result = match TraceController::initialize() {
+    let result = telemetry::main(async {
+        match TraceController::initialize() {
             Commands::Translate(opts) => opts.translate(),
             Commands::New(opts) => opts.create().await,
             Commands::Init(opts) => opts.init().await,
@@ -64,30 +64,28 @@ fn main() {
             Commands::SelfUpdate(opts) => opts.self_update().await,
             Commands::Tools(BuildTools::BuildAssets(opts)) => opts.run().await,
             Commands::Doctor(opts) => opts.doctor().await,
-        };
-
-        // Provide a structured output for third party tools that can consume the output of the CLI
-        match result.as_ref() {
-            Ok(output) => {
-                tracing::debug!(json = ?output);
-            }
-            Err(err) => {
-                tracing::error!(
-                    json = ?StructuredOutput::Error {
-                        message: format!("{err:?}"),
-                    },
-                );
-
-                eprintln!(
-                    "{ERROR_STYLE}Failed{ERROR_STYLE:#}: {}",
-                    crate::error::log_stacktrace(&err, 1),
-                    ERROR_STYLE = crate::styles::ERROR_STYLE,
-                );
-
-                std::process::exit(1);
-            }
         }
-
-        result
     });
+
+    // Provide a structured output for third party tools that can consume the output of the CLI
+    match result.as_ref() {
+        Ok(output) => {
+            tracing::debug!(json = ?output);
+        }
+        Err(err) => {
+            tracing::error!(
+                json = ?StructuredOutput::Error {
+                    message: format!("{err:?}"),
+                },
+            );
+
+            eprintln!(
+                "{ERROR_STYLE}Failed{ERROR_STYLE:#}: {}",
+                crate::error::log_stacktrace(&err, 1),
+                ERROR_STYLE = crate::styles::ERROR_STYLE,
+            );
+
+            std::process::exit(1);
+        }
+    }
 }

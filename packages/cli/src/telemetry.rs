@@ -2,6 +2,7 @@ use std::{
     backtrace::Backtrace,
     future::Future,
     io::BufReader,
+    panic::AssertUnwindSafe,
     sync::{Mutex, OnceLock},
 };
 
@@ -9,6 +10,7 @@ use crate::{Result, Workspace};
 use dioxus_cli_telemetry::TelemetryEvent;
 use dioxus_dx_wire_format::StructuredOutput;
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
+use futures_util::FutureExt;
 use posthog_rs::ClientOptions;
 
 static TELEMETRY_TX: OnceLock<UnboundedSender<TelemetryEvent>> = OnceLock::new();
@@ -21,7 +23,7 @@ static TELEMETRY_RX: OnceLock<Mutex<UnboundedReceiver<TelemetryEvent>>> = OnceLo
 /// Once the session is over, or the tx is flushed manually, we then log to a file.
 /// This prevents any performance issues from building up during long session.
 /// For `dx serve`, we asynchronously flush after full rebuilds are *completed*.
-pub fn main(app: impl Future<Output = Result<StructuredOutput>>) {
+pub fn main(app: impl Future<Output = Result<StructuredOutput>>) -> Result<StructuredOutput> {
     let (tx, rx) = futures_channel::mpsc::unbounded();
     TELEMETRY_TX.set(tx).expect("Failed to set telemetry tx");
     TELEMETRY_RX
@@ -33,9 +35,11 @@ pub fn main(app: impl Future<Output = Result<StructuredOutput>>) {
         .expect("Failed building the Runtime")
         .block_on(async move {
             check_flush_file().await;
-            let result = app.await;
+            capture_panics();
+            let result = AssertUnwindSafe(app).catch_unwind().await;
             flush_telemetry_to_file();
-        });
+            handle_panic(result)
+        })
 }
 
 pub fn send_telemetry_event(event: TelemetryEvent) {
@@ -111,16 +115,15 @@ async fn check_flush_file() {
     std::fs::remove_file(file).unwrap();
 }
 
+struct SavedLocation {
+    file: String,
+    line: u32,
+    column: u32,
+}
+static BACKTRACE: OnceLock<(Backtrace, Option<SavedLocation>)> = OnceLock::new();
+
 /// Set the backtrace, and then initiate a rollup upload of any pending logs.
-pub(crate) fn initialize() {
-    struct SavedLocation {
-        file: String,
-        line: u32,
-        column: u32,
-    }
-
-    static BACKTRACE: OnceLock<(Backtrace, Option<SavedLocation>)> = OnceLock::new();
-
+pub(crate) fn capture_panics() {
     // We *don't* want printing here, since it'll break the tui and log ordering.
     //
     // We *will* re-emit the panic after we've drained the tracer, so our panic hook will simply capture the panic
@@ -137,4 +140,47 @@ pub(crate) fn initialize() {
     }));
 }
 
-pub(crate) fn log_result(result: &Result<StructuredOutput>) {}
+fn handle_panic(
+    result: Result<anyhow::Result<StructuredOutput>, Box<dyn std::any::Any + Send>>,
+) -> Result<StructuredOutput> {
+    match result {
+        Ok(Ok(_res)) => Ok(StructuredOutput::Success),
+        Ok(Err(e)) => Err(e),
+        Err(panic_err) => {
+            // And then print the panic itself.
+            let as_str = if let Some(p) = panic_err.downcast_ref::<String>() {
+                p.as_ref()
+            } else if let Some(p) = panic_err.downcast_ref::<&str>() {
+                p
+            } else {
+                "<unknown panic>"
+            };
+
+            // Attempt to emulate the default panic hook
+            let message = BACKTRACE
+                    .get()
+                    .map(|(back, location)| {
+                        let location_display = location
+                            .as_ref()
+                            .map(|l| format!("{}:{}:{}", l.file, l.line, l.column))
+                            .unwrap_or_else(|| "<unknown>".to_string());
+
+                        let mut backtrace_display = back.to_string();
+
+                        // split at the line that ends with ___rust_try for short backtraces
+                        if std::env::var("RUST_BACKTRACE") == Ok("1".to_string()) {
+                            backtrace_display = backtrace_display
+                                .split(" ___rust_try\n")
+                                .next()
+                                .map(|f| format!("{f} ___rust_try"))
+                                .unwrap_or_default();
+                        }
+
+                        format!("dx serve panicked at {location_display}\n{as_str}\n{backtrace_display} ___rust_try")
+                    })
+                    .unwrap_or_else(|| format!("dx serve panicked: {as_str}"));
+
+            Err(anyhow::anyhow!(message))
+        }
+    }
+}
