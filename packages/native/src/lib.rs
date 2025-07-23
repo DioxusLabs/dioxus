@@ -18,9 +18,7 @@ mod link_handler;
 #[doc(inline)]
 pub use dioxus_native_dom::*;
 
-pub use anyrender_vello::{
-    wgpu_context::DeviceHandle, CustomPaintCtx, CustomPaintSource, TextureHandle,
-};
+pub use anyrender_vello::{CustomPaintCtx, CustomPaintSource, DeviceHandle, TextureHandle};
 use assets::DioxusNativeNetProvider;
 pub use dioxus_application::{DioxusNativeApplication, DioxusNativeEvent};
 pub use dioxus_renderer::{use_wgpu, DioxusNativeWindowRenderer, Features, Limits};

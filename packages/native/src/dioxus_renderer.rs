@@ -6,7 +6,7 @@ use anyrender::WindowRenderer;
 
 pub use anyrender_vello::{
     wgpu::{Features, Limits},
-    CustomPaintSource, VelloWindowRenderer as InnerRenderer,
+    CustomPaintSource, VelloRendererOptions, VelloWindowRenderer as InnerRenderer,
 };
 
 pub fn use_wgpu<T: CustomPaintSource>(create_source: impl FnOnce() -> T) -> u64 {
@@ -45,7 +45,11 @@ impl DioxusNativeWindowRenderer {
     }
 
     pub fn with_features_and_limits(features: Option<Features>, limits: Option<Limits>) -> Self {
-        let vello_renderer = InnerRenderer::with_features_and_limits(features, limits);
+        let vello_renderer = InnerRenderer::with_options(VelloRendererOptions {
+            features,
+            limits,
+            ..Default::default()
+        });
         Self::with_inner_renderer(vello_renderer)
     }
 
