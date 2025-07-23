@@ -100,7 +100,13 @@ fn get_asset_root() -> PathBuf {
     {
         // In linux bundles, the assets are placed in the lib/$product_name directory
         if let Some(product_name) = dioxus_cli_config::product_name() {
-            return cur_exe.parent().unwrap().join("lib").join(product_name);
+            return cur_exe
+                .parent()
+                .unwrap()
+                .parent()
+                .unwrap()
+                .join("lib")
+                .join(product_name);
         }
     }
 
