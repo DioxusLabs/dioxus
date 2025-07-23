@@ -331,5 +331,5 @@ pub fn build_id() -> u64 {
 
 /// The product name of the bundled application.
 pub fn product_name() -> Option<String> {
-    read_env_config!(PRODUCT_NAME_ENV)
+    read_env_config!("DIOXUS_PRODUCT_NAME")
 }
