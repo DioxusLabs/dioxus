@@ -64,7 +64,7 @@
 </div>
 <br>
 <p align="center">
-  <a href="https://github.com/DioxusLabs/dioxus/releases/tag/v0.7.0-alpha.0">✨ Dioxus 0.7 is in alpha - test it out! ✨</a>
+  <a href="https://github.com/DioxusLabs/dioxus/releases/tag/v0.7.0-alpha.3">✨ Dioxus 0.7 is in alpha - test it out! ✨</a>
 </p>
 <br>
 
