@@ -485,45 +485,28 @@ impl Scope {
         cur_hook: usize,
         value: State,
     ) -> State {
-        // If this is a new hook
+        // If this is a new hook, push it
         if cur_hook >= hooks.len() {
             hooks.push(Box::new(value.clone()));
-        } else {
-            hooks[cur_hook] = Box::new(value.clone());
+            return value;
+        }
 
-            if !self.allow_hook_type_changes() {
-                tracing::error!(
-                    r#"Unable to retrieve the hook that was initialized at this index.
+        // If we're in dev mode, we allow swapping hook values if the hook was initialized at this index
+        if cfg!(debug_assertions) && subsecond::get_jump_table().is_some() {
+            hooks[cur_hook] = Box::new(value.clone());
+            return value;
+        }
+
+        // Otherwise, panic
+        panic!(
+            r#"Unable to retrieve the hook that was initialized at this index.
                     Consult the `rules of hooks` to understand how to use hooks properly.
 
                     You likely used the hook in a conditional. Hooks rely on consistent ordering between renders.
                     Functions prefixed with "use" should never be called conditionally.
 
                     Help: Run `dx check` to look for check for some common hook errors."#
-                );
-            }
-        }
-        value
-    }
-
-    /// Checks if we should allow the type of a hook to change after the initial value is set. After
-    /// a hot patch, the type of the hook may be changed. If the app is hotpatched from
-    /// ```rust, ignore
-    /// use_hook(|| 0);
-    /// ```
-    /// to
-    /// ```rust, ignore
-    /// use_hook(|| false);
-    /// ```
-    /// We should just change the type and rerun the closure instead of logging an error
-    /// about the rules of hooks
-    #[inline]
-    fn allow_hook_type_changes(&self) -> bool {
-        #[cfg(debug_assertions)]
-        if subsecond::get_jump_table().is_some() {
-            return true;
-        }
-        false
+        );
     }
 
     pub fn push_before_render(&self, f: impl FnMut() + 'static) {
