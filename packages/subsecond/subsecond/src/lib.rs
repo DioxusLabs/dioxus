@@ -290,7 +290,14 @@ pub fn register_handler(handler: Arc<dyn Fn() + Send + Sync + 'static>) {
 /// Get the current jump table, if it exists.
 ///
 /// This will return `None` if no jump table has been set yet.
-pub fn get_jump_table() -> Option<&'static JumpTable> {
+///
+/// # Safety
+///
+/// The `JumpTable` returned here is a pointer into a leaked box. While technically this reference is
+/// valid, we might change the implementation to invalidate the pointer between hotpatches.
+///
+/// You should only use this lifetime in temporary contexts - not *across* hotpatches!
+pub unsafe fn get_jump_table() -> Option<&'static JumpTable> {
     let ptr = APP_JUMP_TABLE.load(std::sync::atomic::Ordering::Relaxed);
     if ptr.is_null() {
         return None;
@@ -387,7 +394,7 @@ impl<A, M, F: HotFunction<A, M>> HotFn<A, M, F> {
         }
 
         let known_fn_ptr = <F as HotFunction<A, M>>::call_it as *const () as usize;
-        if let Some(jump_table) = get_jump_table() {
+        if let Some(jump_table) = unsafe { get_jump_table() } {
             if let Some(ptr) = jump_table.map.get(&(known_fn_ptr as u64)).cloned() {
                 return HotFnPtr(ptr);
             }

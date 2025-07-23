@@ -452,9 +452,13 @@ impl Scope {
     pub fn use_hook<State: Clone + 'static>(&self, initializer: impl FnOnce() -> State) -> State {
         let cur_hook = self.hook_index.get();
 
+        // The hook list works by keeping track of the current hook index and pushing the index forward
+        // while retrieving the hook value.
         self.hook_index.set(cur_hook + 1);
 
-        let mut hooks = self.hooks.try_borrow_mut().expect("The hook list is already borrowed: This error is likely caused by trying to use a hook inside a hook which violates the rules of hooks.");
+        let mut hooks = self.hooks
+            .try_borrow_mut()
+            .expect("The hook list is already borrowed: This error is likely caused by trying to use  hook inside a hook which violates the rules of hooks.");
 
         // Try and retrieve the hook value if it exists
         if let Some(existing) = self.use_hook_inner::<State>(&mut hooks, cur_hook) {
@@ -492,7 +496,7 @@ impl Scope {
         }
 
         // If we're in dev mode, we allow swapping hook values if the hook was initialized at this index
-        if cfg!(debug_assertions) && subsecond::get_jump_table().is_some() {
+        if cfg!(debug_assertions) && unsafe { subsecond::get_jump_table().is_some() } {
             hooks[cur_hook] = Box::new(value.clone());
             return value;
         }
