@@ -15,11 +15,13 @@
 //! 4. Build fmt layer for non-interactive logging with a custom writer that prevents output during interactive mode.
 
 use crate::telemetry::send_telemetry_event;
-use crate::{serve::ServeUpdate, Cli, Commands, Platform as TargetPlatform, Verbosity};
+use crate::BundleFormat;
+use crate::{serve::ServeUpdate, Cli, Commands, Verbosity};
 use cargo_metadata::diagnostic::{Diagnostic, DiagnosticLevel};
 use clap::Parser;
 use dioxus_cli_telemetry::TelemetryEvent;
 use futures_channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
+use std::str::FromStr;
 use std::sync::OnceLock;
 use std::{
     collections::HashMap,
@@ -380,7 +382,7 @@ impl Visit for CollectVisitor {
         let name = field.name();
 
         let mut value_string = String::new();
-        write!(value_string, "{:?}", value).unwrap();
+        write!(value_string, "{value:?}").unwrap();
 
         if name == "message" {
             self.message = value_string;
@@ -400,8 +402,8 @@ impl Visit for CollectVisitor {
 fn format_field(field_name: &str, value: &dyn Debug) -> String {
     let mut out = String::new();
     match field_name {
-        "message" => write!(out, "{:?}", value),
-        _ => write!(out, "{}={:?}", field_name, value),
+        "message" => write!(out, "{value:?}"),
+        _ => write!(out, "{field_name}={value:?}"),
     }
     .unwrap();
 
@@ -456,7 +458,7 @@ impl TraceMsg {
 
 #[derive(Clone, PartialEq)]
 pub enum TraceSrc {
-    App(TargetPlatform),
+    App(BundleFormat),
     Dev,
     Build,
     Bundle,
@@ -477,12 +479,9 @@ impl From<String> for TraceSrc {
             "dev" => Self::Dev,
             "bld" => Self::Build,
             "cargo" => Self::Cargo,
-            "app" => Self::App(TargetPlatform::Web),
-            "windows" => Self::App(TargetPlatform::Windows),
-            "macos" => Self::App(TargetPlatform::MacOS),
-            "linux" => Self::App(TargetPlatform::Linux),
-            "server" => Self::App(TargetPlatform::Server),
-            _ => Self::Unknown,
+            other => BundleFormat::from_str(other)
+                .map(Self::App)
+                .unwrap_or_else(|_| Self::Unknown),
         }
     }
 }
@@ -490,16 +489,7 @@ impl From<String> for TraceSrc {
 impl Display for TraceSrc {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::App(platform) => match platform {
-                TargetPlatform::Web => write!(f, "web"),
-                TargetPlatform::MacOS => write!(f, "macos"),
-                TargetPlatform::Windows => write!(f, "windows"),
-                TargetPlatform::Linux => write!(f, "linux"),
-                TargetPlatform::Server => write!(f, "server"),
-                TargetPlatform::Ios => write!(f, "ios"),
-                TargetPlatform::Android => write!(f, "android"),
-                TargetPlatform::Liveview => write!(f, "liveview"),
-            },
+            Self::App(bundle) => write!(f, "{bundle}"),
             Self::Dev => write!(f, "dev"),
             Self::Build => write!(f, "build"),
             Self::Cargo => write!(f, "cargo"),

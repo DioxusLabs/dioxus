@@ -1,6 +1,6 @@
 use crate::{
     config::WebHttpsConfig, serve::ServeUpdate, telemetry::send_telemetry_event, BuildId,
-    BuildStage, BuilderUpdate, Platform, Result, TraceSrc,
+    BuildStage, BuilderUpdate, BundleFormat, Result, TraceSrc,
 };
 use anyhow::{bail, Context};
 use axum::{
@@ -64,7 +64,7 @@ pub(crate) struct WebServer {
     build_status: SharedStatus,
     last_build_status_identifier: &'static str,
     application_name: String,
-    platform: Platform,
+    bundle: BundleFormat,
 }
 
 pub(crate) struct ConnectedWsClient {
@@ -131,7 +131,7 @@ impl WebServer {
             new_hot_reload_sockets: hot_reload_sockets_rx,
             new_build_status_sockets: build_status_sockets_rx,
             application_name: runner.app_name().to_string(),
-            platform: runner.client.build.platform,
+            bundle: runner.client.build.bundle,
         })
     }
 
@@ -166,7 +166,7 @@ impl WebServer {
                     drop(new_message);
 
                     // Update the socket with project info and current build status
-                    let project_info = SharedStatus::new(Status::ClientInit { application_name: self.application_name.clone(), platform: self.platform });
+                    let project_info = SharedStatus::new(Status::ClientInit { application_name: self.application_name.clone(), bundle: self.bundle });
                     if project_info.send_to(&mut new_socket.socket).await.is_ok() {
                         _ = self.build_status.send_to(&mut new_socket.socket).await;
                         self.build_status_sockets.push(new_socket);
@@ -178,7 +178,7 @@ impl WebServer {
             }
             Some((idx, message)) = new_message.next() => {
                 match message {
-                    Some(Ok(msg)) => return ServeUpdate::WsMessage { msg, platform: Platform::Web },
+                    Some(Ok(msg)) => return ServeUpdate::WsMessage { msg, bundle: BundleFormat::Web },
                     _ => {
                         drop(new_message);
                         _ = self.hot_reload_sockets.remove(idx);
@@ -389,8 +389,8 @@ impl WebServer {
     }
 
     pub fn server_address(&self) -> Option<SocketAddr> {
-        match self.platform {
-            Platform::Web | Platform::Server => Some(self.devserver_address()),
+        match self.bundle {
+            BundleFormat::Web | BundleFormat::Server => Some(self.devserver_address()),
             _ => self.proxied_server_address(),
         }
     }
@@ -475,8 +475,7 @@ fn build_devserver_router(
                 Response::builder()
                     .status(StatusCode::INTERNAL_SERVER_ERROR)
                     .body(Body::from(format!(
-                        "Backend connection failed. The backend is likely still starting up. Please try again in a few seconds. Error: {:#?}",
-                        error
+                        "Backend connection failed. The backend is likely still starting up. Please try again in a few seconds. Error: {error:#?}"
                     )))
                     .unwrap()
             },
@@ -591,7 +590,7 @@ fn build_serve_dir(runner: &AppServer) -> axum::routing::MethodRouter {
     .handle_error(|error: Infallible| async move {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Unhandled internal error: {}", error),
+            format!("Unhandled internal error: {error}"),
         )
     })
 }
@@ -744,7 +743,7 @@ struct SharedStatus(Arc<RwLock<Status>>);
 enum Status {
     ClientInit {
         application_name: String,
-        platform: Platform,
+        bundle: BundleFormat,
     },
     Building {
         progress: f64,

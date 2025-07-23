@@ -2,15 +2,15 @@ use super::*;
 use crate::{AddressArguments, BuildArgs, TraceController};
 /// Serve the project
 ///
-/// `dx serve` takes cargo args by default, except with a required `--platform` arg:
+/// `dx serve` takes cargo args by default with additional renderer args like `--web`, `--webview`, and `--native`:
 ///
 /// ```sh
-/// dx serve --example blah --target blah --platform android
+/// dx serve --example blah --target blah --android
 /// ```
 ///
 /// A simple serve:
 /// ```sh
-/// dx serve --platform web
+/// dx serve --web
 /// ```
 ///
 /// As of dioxus 0.7, `dx serve` allows independent customization of the client and server builds,

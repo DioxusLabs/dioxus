@@ -1,6 +1,7 @@
 use crate::{
     styles::{GLOW_STYLE, LINK_STYLE},
-    AppBuilder, BuildId, BuildMode, BuilderUpdate, Platform, Result, ServeArgs, TraceController,
+    AppBuilder, BuildId, BuildMode, BuilderUpdate, BundleFormat, Result, ServeArgs,
+    TraceController,
 };
 
 mod ansi_buffer;
@@ -122,15 +123,15 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &mut TraceController) -> 
 
             // Received a message from the devtools server - currently we only use this for
             // logging, so we just forward it the tui
-            ServeUpdate::WsMessage { msg, platform } => {
-                screen.push_ws_message(platform, &msg);
+            ServeUpdate::WsMessage { msg, bundle } => {
+                screen.push_ws_message(bundle, &msg);
             }
 
             // Wait for logs from the build engine
             // These will cause us to update the screen
             // We also can check the status of the builds here in case we have multiple ongoing builds
             ServeUpdate::BuilderUpdate { id, update } => {
-                let platform = builder.get_build(id).unwrap().build.platform;
+                let bundle_format = builder.get_build(id).unwrap().build.bundle;
 
                 // Queue any logs to be printed if need be
                 screen.new_build_update(&update);
@@ -147,14 +148,14 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &mut TraceController) -> 
                         stage: BuildStage::Failed,
                     } => {
                         if exit_on_error {
-                            bail!("Build failed for platform: {platform}");
+                            bail!("Build failed for platform: {bundle_format}");
                         }
                     }
                     BuilderUpdate::Progress {
                         stage: BuildStage::Aborted,
                     } => {
                         if exit_on_error {
-                            bail!("Build aborted for platform: {platform}");
+                            bail!("Build aborted for platform: {bundle_format}");
                         }
                     }
                     BuilderUpdate::Progress { .. } => {}
@@ -206,22 +207,24 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &mut TraceController) -> 
                         }
                     },
                     BuilderUpdate::StdoutReceived { msg } => {
-                        screen.push_stdio(platform, msg, tracing::Level::INFO);
+                        screen.push_stdio(bundle_format, msg, tracing::Level::INFO);
                     }
                     BuilderUpdate::StderrReceived { msg } => {
-                        screen.push_stdio(platform, msg, tracing::Level::ERROR);
+                        screen.push_stdio(bundle_format, msg, tracing::Level::ERROR);
                     }
                     BuilderUpdate::ProcessExited { status } => {
                         if status.success() {
                             tracing::info!(
-                                r#"Application [{platform}] exited gracefully.
+                                r#"Application [{bundle_format}] exited gracefully.
                • To restart the app, press `r` to rebuild or `o` to open
                • To exit the server, press `ctrl+c`"#
                             );
                         } else {
-                            tracing::error!("Application [{platform}] exited with error: {status}");
+                            tracing::error!(
+                                "Application [{bundle_format}] exited with error: {status}"
+                            );
                             if exit_on_error {
-                                bail!("Application [{platform}] exited with error: {status}");
+                                bail!("Application [{bundle_format}] exited with error: {status}");
                             }
                         }
                     }
@@ -241,7 +244,7 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &mut TraceController) -> 
             }
 
             ServeUpdate::OpenApp => match builder.use_hotpatch_engine {
-                true if !matches!(builder.client.build.platform, Platform::Web) => {
+                true if !matches!(builder.client.build.bundle, BundleFormat::Web) => {
                     tracing::warn!(
                         "Opening a native app with hotpatching enabled requires a full rebuild..."
                     );
