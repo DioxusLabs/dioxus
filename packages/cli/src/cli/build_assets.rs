@@ -28,7 +28,7 @@ impl BuildAssets {
                 destination_path.display(),
                 asset
             );
-            process_file_to(asset.options(), &source_path, &destination_path)?;
+            process_file_to(asset.options(), &source_path, &destination_path, true)?;
         }
 
         Ok(StructuredOutput::Success)

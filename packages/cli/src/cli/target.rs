@@ -72,13 +72,6 @@ pub(crate) struct TargetArgs {
     #[serde(default)]
     pub(crate) skip_assets: bool,
 
-    /// Bundle the wasm-bindgen js into a single file with swc bundler [default: true]
-    ///
-    /// The SWC bundler does not support links to external files. If your project includes wasm-bindgen
-    /// js that links to externally bundled files, you will need to disable this option.
-    #[clap(long, default_value_t = true, action = clap::ArgAction::Set, help_heading = HELP_HEADING)]
-    pub(crate) bundle_wasm_bindgen_js: bool,
-
     /// Inject scripts to load the wasm and js files for your dioxus app if they are not already present [default: true]
     #[clap(long, default_value_t = true, help_heading = HELP_HEADING)]
     pub(crate) inject_loading_scripts: bool,

@@ -179,7 +179,7 @@ module.exports = defineConfig({
       cwd: path.join(process.cwd(), "external-wasm-bindgen-link"),
       // Remove the cache folder for the cli-optimization build to force a full cache reset
       command:
-        'cargo run --package dioxus-cli --release -- run --verbose --addr "127.0.0.1" --port 9898 --bundle-wasm-bindgen-js false',
+        'cargo run --package dioxus-cli --release -- run --verbose --addr "127.0.0.1" --port 9898',
       port: 9898,
       timeout: 50 * 60 * 1000,
       reuseExistingServer: !process.env.CI,

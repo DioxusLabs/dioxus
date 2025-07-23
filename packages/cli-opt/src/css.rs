@@ -14,6 +14,7 @@ pub(crate) fn process_css(
     css_options: &CssAssetOptions,
     source: &Path,
     output_path: &Path,
+    allow_fallback: bool,
 ) -> anyhow::Result<()> {
     let css = std::fs::read_to_string(source)?;
 
@@ -22,10 +23,18 @@ pub(crate) fn process_css(
         match minify_css(&css) {
             Ok(minified) => minified,
             Err(err) => {
-                tracing::error!(
-                    "Failed to minify css; Falling back to unminified css. Error: {}",
-                    err
-                );
+                if allow_fallback {
+                    tracing::error!(
+                        "Failed to minify css; Falling back to unminified css. Error: {}",
+                        err
+                    );
+                } else {
+                    return Err(anyhow::anyhow!(
+                        "Failed to minify css from {}: {}",
+                        source.display(),
+                        err
+                    ));
+                }
                 css
             }
         }
@@ -48,6 +57,7 @@ pub(crate) fn process_css_module(
     source: &Path,
     final_path: &Path,
     output_path: &Path,
+    allow_fallback: bool,
 ) -> anyhow::Result<()> {
     let mut css = std::fs::read_to_string(source)?;
 
@@ -90,10 +100,18 @@ pub(crate) fn process_css_module(
         match minify_css(&css) {
             Ok(minified) => minified,
             Err(err) => {
-                tracing::error!(
-                    "Failed to minify css module; Falling back to unminified css. Error: {}",
-                    err
-                );
+                if allow_fallback {
+                    tracing::error!(
+                        "Failed to minify css module; Falling back to unminified css. Error: {}",
+                        err
+                    );
+                } else {
+                    return Err(anyhow::anyhow!(
+                        "Failed to minify css module from {}: {}",
+                        source.display(),
+                        err
+                    ));
+                }
                 css
             }
         }

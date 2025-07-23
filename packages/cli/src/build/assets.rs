@@ -323,9 +323,11 @@ pub(crate) fn extract_assets_from_file(path: impl AsRef<Path>) -> Result<AssetMa
     }
 
     // Add the hash to each asset in parallel
-    assets
-        .par_iter_mut()
-        .for_each(dioxus_cli_opt::add_hash_to_asset);
+    assets.par_iter_mut().for_each(|asset| {
+        if let Err(err) = dioxus_cli_opt::add_hash_to_asset(asset, true) {
+            tracing::error!("Failed to add hash to asset: {err}");
+        }
+    });
 
     // Write back the assets to the binary file
     for (offset, asset) in offsets.into_iter().zip(&assets) {

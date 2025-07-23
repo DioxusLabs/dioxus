@@ -19,6 +19,21 @@ mod json;
 pub use file::process_file_to;
 pub use hash::add_hash_to_asset;
 
+pub fn create_asset(
+    asset_path: &Path,
+    options: AssetOptions,
+    allow_fallback: bool,
+) -> anyhow::Result<BundledAsset> {
+    let output_path_str = asset_path
+        .to_str()
+        .ok_or(anyhow::anyhow!("Failed to convert asset path to string"))?;
+
+    let mut bundled_asset = manganis::macro_helpers::create_bundled_asset(output_path_str, options);
+    add_hash_to_asset(&mut bundled_asset, allow_fallback)?;
+
+    Ok(bundled_asset)
+}
+
 /// A manifest of all assets collected from dependencies
 ///
 /// This will be filled in primarily by incremental compilation artifacts.
@@ -35,13 +50,7 @@ impl AssetManifest {
         asset_path: &Path,
         options: manganis::AssetOptions,
     ) -> anyhow::Result<BundledAsset> {
-        let output_path_str = asset_path.to_str().ok_or(anyhow::anyhow!(
-            "Failed to convert wasm bindgen output path to string"
-        ))?;
-
-        let mut bundled_asset =
-            manganis::macro_helpers::create_bundled_asset(output_path_str, options);
-        add_hash_to_asset(&mut bundled_asset);
+        let bundled_asset = create_asset(asset_path, options, true)?;
 
         self.assets
             .entry(asset_path.to_path_buf())
@@ -113,7 +122,7 @@ pub fn optimize_all_assets(
                 on_optimization_start(from, to, options);
             }
 
-            let res = process_file_to(options, from, to);
+            let res = process_file_to(options, from, to, true);
             if let Err(err) = res.as_ref() {
                 tracing::error!("Failed to copy asset {from:?}: {err}");
             }
