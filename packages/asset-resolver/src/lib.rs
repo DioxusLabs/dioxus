@@ -105,14 +105,11 @@ fn get_asset_root() -> PathBuf {
         //   $product_name/
         //     assets/
         if let Some(product_name) = dioxus_cli_config::product_name() {
-            let asset_dir = cur_exe
-                .parent()
-                .unwrap()
-                .parent()
-                .unwrap()
-                .join("lib")
-                .join(product_name);
-            if asset_dir.exists() {
+            let lib_asset_path = || {
+                let path = cur_exe.parent()?.parent()?.join("lib").join(product_name);
+                path.exists().then_some(path)
+            };
+            if let Some(asset_dir) = lib_asset_path() {
                 return asset_dir;
             }
         }
