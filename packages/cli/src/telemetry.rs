@@ -7,11 +7,12 @@ use std::{
 };
 
 use crate::{Result, Workspace};
-use dioxus_cli_telemetry::TelemetryEvent;
+use dioxus_cli_telemetry::{set_identity, TelemetryEvent};
 use dioxus_dx_wire_format::StructuredOutput;
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::FutureExt;
 use posthog_rs::ClientOptions;
+use target_lexicon::Triple;
 
 static TELEMETRY_TX: OnceLock<UnboundedSender<TelemetryEvent>> = OnceLock::new();
 static TELEMETRY_RX: OnceLock<Mutex<UnboundedReceiver<TelemetryEvent>>> = OnceLock::new();
@@ -29,6 +30,12 @@ pub fn main(app: impl Future<Output = Result<StructuredOutput>>) -> Result<Struc
     TELEMETRY_RX
         .set(Mutex::new(rx))
         .expect("Failed to set telemetry rx");
+    set_identity(
+        Triple::host().to_string(),
+        std::env::var("CI").is_ok(),
+        crate::VERSION.to_string(),
+    );
+
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
@@ -100,7 +107,11 @@ async fn check_flush_file() {
     let mut events = Vec::new();
     for event in iter.flatten() {
         let event: TelemetryEvent = event;
-        let mut posthog_event = posthog_rs::Event::new(event.name, event.session_id.to_string());
+        let mut posthog_event =
+            posthog_rs::Event::new(event.name, event.identity.session_id.to_string());
+        _ = posthog_event.insert_prop("device_triple", event.identity.device_triple);
+        _ = posthog_event.insert_prop("is_ci", event.identity.is_ci);
+        _ = posthog_event.insert_prop("cli_version", event.identity.cli_version);
         _ = posthog_event.insert_prop("message", event.message);
         _ = posthog_event.insert_prop("module", event.module);
         _ = posthog_event.insert_prop("stage", event.stage);

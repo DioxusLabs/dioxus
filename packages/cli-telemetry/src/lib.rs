@@ -39,26 +39,37 @@ use serde::{Deserialize, Serialize};
 /// - whether the CLI is running in CI
 /// - the CLI version
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct TelemetryPayload {
+pub struct Identity {
     pub device_triple: String,
     pub is_ci: bool,
     pub cli_version: String,
+    pub session_id: u128,
 }
 
-impl TelemetryPayload {
-    pub fn new(device_triple: String, is_ci: bool, cli_version: String) -> Self {
+impl Identity {
+    pub fn new(device_triple: String, is_ci: bool, cli_version: String, session_id: u128) -> Self {
         Self {
             device_triple,
             is_ci,
             cli_version,
+            session_id,
         }
     }
 }
 
-static SESSION_ID: OnceLock<u128> = OnceLock::new();
+static IDENTITY: OnceLock<Identity> = OnceLock::new();
 
-fn session_id() -> u128 {
-    *SESSION_ID.get_or_init(|| rand::random::<u128>())
+pub fn set_identity(device_triple: String, is_ci: bool, cli_version: String) {
+    _ = IDENTITY.set(Identity::new(
+        device_triple,
+        is_ci,
+        cli_version,
+        rand::random::<u128>(),
+    ));
+}
+
+fn identity() -> Identity {
+    IDENTITY.get().unwrap().clone()
 }
 
 /// An event, corresponding roughly to a trace!()
@@ -76,12 +87,12 @@ fn session_id() -> u128 {
 /// the stage as a marker.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct TelemetryEvent {
+    pub identity: Identity,
     pub name: String,
     pub module: Option<String>,
     pub message: String,
     pub stage: String,
     pub time: DateTime<Utc>,
-    pub session_id: u128,
     pub values: HashMap<String, serde_json::Value>,
 }
 
@@ -93,12 +104,12 @@ impl TelemetryEvent {
         stage: impl ToString,
     ) -> Self {
         Self {
+            identity: identity(),
             name: strip_paths(&name.to_string()),
             module: module.map(|m| strip_paths(&m)),
             message: strip_paths(&message.to_string()),
             stage: strip_paths(&stage.to_string()),
             time: DateTime::<Utc>::from(SystemTime::now()),
-            session_id: session_id(),
             values: HashMap::new(),
         }
     }
@@ -111,11 +122,25 @@ impl TelemetryEvent {
     }
 }
 
-// If the CLI is compiled locally, it can contain backtraces which contain
-fn strip_paths(backtrace: &str) -> String {
+// If the CLI is compiled locally, it can contain backtraces which contain the home path with the username in it.
+fn strip_paths(string: &str) -> String {
     // Strip the home path from any paths in the backtrace
     let home_dir = dirs::home_dir().unwrap_or_default();
-    backtrace.replace(&*home_dir.to_string_lossy(), "~")
+    // Strip every path between the current path and the home directory
+    let mut cwd = std::env::current_dir().unwrap_or_default();
+    let mut string = string.to_string();
+    loop {
+        string = string.replace(&*cwd.to_string_lossy(), "<stripped>");
+        let Some(parent) = cwd.parent() else {
+            break;
+        };
+        cwd = parent.to_path_buf();
+        if cwd == home_dir {
+            break;
+        }
+    }
+    // Finally, strip the home directory itself (in case the cwd is outside the home directory)
+    string.replace(&*home_dir.to_string_lossy(), "~")
 }
 
 fn strip_paths_value(value: &mut serde_json::Value) {
