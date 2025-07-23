@@ -11,6 +11,7 @@
 </div>
 
 ---
+
 Dioxus is a framework for building cross-platform apps in Rust. With one codebase, you can build web, desktop, and mobile apps with fullstack server functions. Dioxus is designed to be easy to learn for developers familiar with web technologies like HTML, CSS, and JavaScript.
 
 <div align="center">
@@ -42,7 +43,7 @@ cargo binstall dioxus-cli
 dx new my-app && cd my-app
 
 # and then serve!
-dx serve --platform desktop
+dx serve --desktop
 ```
 
 ## Your first app

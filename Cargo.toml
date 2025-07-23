@@ -106,6 +106,7 @@ members = [
     "examples/fullstack-websockets",
     "examples/wgpu-texture",
     "examples/native-headless",
+    "examples/native-headless-in-bevy",
     "examples/bevy",
 
     # Playwright tests
@@ -194,11 +195,13 @@ depinfo = { path = "packages/depinfo", version = "0.7.0-alpha.3" }
 warnings = { version = "0.2.1" }
 
 # blitz
-blitz-dom = { version = "=0.1.0-alpha.5", default-features = false }
-blitz-net = { version = "=0.1.0-alpha.5" }
-blitz-paint = { version = "=0.1.0-alpha.5" }
-blitz-traits = { version = "=0.1.0-alpha.5" }
-blitz-shell = { version = "=0.1.0-alpha.5", default-features = false }
+blitz-dom = { version = "=0.1.0-rc.1", default-features = false }
+blitz-net = { version = "=0.1.0-rc.1" }
+blitz-paint = { version = "=0.1.0-rc.1" }
+blitz-traits = { version = "=0.1.0-rc.1" }
+blitz-shell = { version = "=0.1.0-rc.1", default-features = false }
+anyrender = { version = "0.5", default-features = false }
+anyrender_vello = { version = "0.5", default-features = false }
 wgpu = { version = "24.0" }
 
 # a fork of pretty please for tests - let's get off of this if we can!
@@ -234,8 +237,8 @@ lru = "0.16.0"
 async-trait = "0.1.88"
 axum = { version = "0.8.4", default-features = false }
 axum-server = { version = "0.7.2", default-features = false }
-server_fn = { version = "0.8.2", default-features = false }
-server_fn_macro = { version = "0.8.2" }
+server_fn = { version = "=0.8.3", default-features = false }
+server_fn_macro = { version = "=0.8.3" }
 tower = "0.5.2"
 http = "1.3.1"
 notify = { version = "8.1.0" }

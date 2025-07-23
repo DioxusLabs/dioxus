@@ -163,8 +163,7 @@ pub(crate) fn handle_proxy_error(e: Error) -> axum::http::Response<axum::body::B
     axum::http::Response::builder()
         .status(axum::http::StatusCode::INTERNAL_SERVER_ERROR)
         .body(axum::body::Body::from(format!(
-            "Proxy connection failed: {:#?}",
-            e
+            "Proxy connection failed: {e:#?}"
         )))
         .unwrap()
 }
@@ -229,7 +228,7 @@ mod test {
         let server_addr = setup_servers(config).await;
 
         assert_eq!(
-            reqwest::get(format!("http://{}/api", server_addr))
+            reqwest::get(format!("http://{server_addr}/api"))
                 .await
                 .unwrap()
                 .text()
@@ -239,7 +238,7 @@ mod test {
         );
 
         assert_eq!(
-            reqwest::get(format!("http://{}/api/", server_addr))
+            reqwest::get(format!("http://{server_addr}/api/"))
                 .await
                 .unwrap()
                 .text()

@@ -197,8 +197,8 @@ impl<T: FromStr> FromStr for ServerFnError<T> {
 impl<T: Display> Display for ServerFnError<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ServerFnError::ServerError(err) => write!(f, "Server error: {}", err),
-            ServerFnError::CommunicationError(err) => write!(f, "Communication error: {}", err),
+            ServerFnError::ServerError(err) => write!(f, "Server error: {err}"),
+            ServerFnError::CommunicationError(err) => write!(f, "Communication error: {err}"),
         }
     }
 }
