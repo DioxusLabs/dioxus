@@ -6,7 +6,7 @@ use std::{
     sync::{Mutex, OnceLock},
 };
 
-use crate::{Result, Workspace};
+use crate::{CliSettings, Result, TraceSrc, Workspace};
 use dioxus_cli_telemetry::{set_identity, TelemetryEvent};
 use dioxus_dx_wire_format::StructuredOutput;
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
@@ -51,6 +51,10 @@ pub fn main(app: impl Future<Output = Result<StructuredOutput>>) -> Result<Struc
 }
 
 pub fn send_telemetry_event(event: TelemetryEvent) {
+    if CliSettings::telemetry_disabled() {
+        return;
+    }
+
     let Some(tx) = TELEMETRY_TX.get() else {
         tracing::warn!("Telemetry TX is not set, cannot send telemetry.");
         return;
@@ -89,17 +93,15 @@ async fn check_flush_file() {
     let mut iter = serde_json::Deserializer::from_reader(BufReader::new(file_contents))
         .into_iter::<TelemetryEvent>()
         .peekable();
-    // If the no events exist or the first event was logged less than 30 seconds ago, we don't need to flush.
+    // If the no events exist or the first event was logged less than 7 days ago, we don't need to flush.
     {
         let Some(Ok(event)) = iter.peek() else {
             return;
         };
         let time = event.time.naive_local();
         let now = chrono::Utc::now().naive_local();
-        let elapsed = now.signed_duration_since(time).num_seconds();
-        println!("Telemetry file is {} seconds old", elapsed);
-        if elapsed < 30 {
-            println!("Telemetry file is recent, skipping flush.");
+        let elapsed = now.signed_duration_since(time).num_weeks();
+        if elapsed < 7 {
             return;
         }
     }
@@ -121,10 +123,19 @@ async fn check_flush_file() {
         }
         events.push(posthog_event);
     }
-    let client = posthog_rs::client(ClientOptions::from(KEY)).await;
-    _ = client.capture_batch(events).await;
     // Remove the file
     std::fs::remove_file(file).unwrap();
+    // Send the events in the background
+    tokio::spawn(async move {
+        let client = posthog_rs::client(ClientOptions::from(KEY)).await;
+        if let Err(error) = client.capture_batch(events).await {
+            tracing::trace!(
+                dx_src = ?TraceSrc::Dev,
+                "Failed to send telemetry events: {}",
+                error
+            );
+        }
+    });
 }
 
 struct SavedLocation {

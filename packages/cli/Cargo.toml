@@ -165,6 +165,7 @@ built = { version = "0.8.0", features = ["git2"] }
 default = []
 tokio-console = ["dep:console-subscriber", "tokio/tracing"]
 no-downloads = []
+disable-telemetry = []
 
 [[bin]]
 path = "src/main.rs"

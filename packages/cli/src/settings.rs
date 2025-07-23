@@ -137,6 +137,19 @@ impl CliSettings {
 
         CliSettings::load().no_downloads.unwrap_or_default()
     }
+
+    /// Check if telemetry is disabled
+    pub(crate) fn telemetry_disabled() -> bool {
+        if cfg!(feature = "disable-telemetry") {
+            return true;
+        }
+
+        if crate::devcfg::disable_telemetry() {
+            return true;
+        }
+
+        CliSettings::load().disable_telemetry.unwrap_or_default()
+    }
 }
 
 fn default_wsl_file_poll_interval() -> Option<u16> {

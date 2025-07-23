@@ -14,19 +14,17 @@
 //! - transparent
 //! - easy to disable
 //!
-//! We don't send events on every command, but instead perform roll-ups on a daily basis during the
-//! first week of installation, and then weekly after that. If you don't run the CLI, then we won't
-//! send any data - rollups are not done in background processes. Rollups are also capped in size to
-//! a max of 10mb weekly to prevent DDOS of the dioxus telemetry endpoint.
+//! We don't send events on every command, but instead perform roll-ups weekly. If you don't run the CLI,
+//! then we won't send any data - rollups are not done in background processes.
 //!
-//! Note that we do collect a hash of your system's entropy during installation. This lets us aggregate
+//! Note that we do collect the target triple of your system. This lets us aggregate
 //! logs across time about a given installation, IE if your machine is a particular linux distribution,
 //! what types of panics or performance issues do you encounter?
 //!
 //! In the CLI, you can disable this by using any of the methods
 //! - installing with the "disable-telemetry" feature flag
 //! - setting TELEMETRY=false in your env
-//! - setting `dx settings --disable-telemtry`
+//! - setting `dx config set disable-telemetry true`
 
 use std::{collections::HashMap, sync::OnceLock, time::SystemTime};
 
