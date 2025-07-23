@@ -64,11 +64,6 @@ pub struct Runtime {
     // We need to store this information on the virtual dom so that we know what nodes are mounted where when we bubble events
     // Each mount is associated with a whole rsx block. [`VirtualDom::elements`] link to a specific node in the block
     pub(crate) mounts: RefCell<Slab<VNodeMount>>,
-
-    /// Keeps track if this app has been hot patched. We relax the rules of hooks during hot patching to allow
-    /// more apps to be hot patched
-    #[cfg(debug_assertions)]
-    pub(crate) after_hot_patch: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl Runtime {
@@ -90,8 +85,6 @@ impl Runtime {
             dirty_tasks: Default::default(),
             elements: RefCell::new(elements),
             mounts: Default::default(),
-            #[cfg(debug_assertions)]
-            after_hot_patch: Default::default(),
         })
     }
 

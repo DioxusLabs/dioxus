@@ -278,10 +278,19 @@ pub fn call<O>(mut f: impl FnMut() -> O) -> O {
 // multithreading, it might become an issue.
 static APP_JUMP_TABLE: AtomicPtr<JumpTable> = AtomicPtr::new(std::ptr::null_mut());
 static HOTRELOAD_HANDLERS: Mutex<Vec<Arc<dyn Fn() + Send + Sync>>> = Mutex::new(Vec::new());
+
+/// Register a function that will be called whenever a patch is applied.
+///
+/// This handler will be run immediately after the patch library is loaded into the process and the
+/// JumpTable has been set.
 pub fn register_handler(handler: Arc<dyn Fn() + Send + Sync + 'static>) {
     HOTRELOAD_HANDLERS.lock().unwrap().push(handler);
 }
-fn get_jump_table() -> Option<&'static JumpTable> {
+
+/// Get the current jump table, if it exists.
+///
+/// This will return `None` if no jump table has been set yet.
+pub fn get_jump_table() -> Option<&'static JumpTable> {
     let ptr = APP_JUMP_TABLE.load(std::sync::atomic::Ordering::Relaxed);
     if ptr.is_null() {
         return None;

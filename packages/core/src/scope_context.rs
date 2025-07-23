@@ -451,45 +451,36 @@ impl Scope {
     /// ```
     pub fn use_hook<State: Clone + 'static>(&self, initializer: impl FnOnce() -> State) -> State {
         let cur_hook = self.hook_index.get();
+
         self.hook_index.set(cur_hook + 1);
+
         let mut hooks = self.hooks.try_borrow_mut().expect("The hook list is already borrowed: This error is likely caused by trying to use a hook inside a hook which violates the rules of hooks.");
 
-        let existing_value = self.use_hook_inner::<State>(&mut hooks, cur_hook);
+        // Try and retrieve the hook value if it exists
+        if let Some(existing) = self.use_hook_inner::<State>(&mut hooks, cur_hook) {
+            return existing;
+        }
 
-        existing_value.unwrap_or_else(|| {
-            Runtime::with(|rt| {
-                rt.while_not_rendering(|| {
-                    let value = initializer();
-                    self.push_hook_value(rt, &mut hooks, cur_hook, value)
-                })
-            })
-            .unwrap()
-        })
+        // Otherwise, initialize the hook value. In debug mode, we allow hook types to change after a hot patch
+        self.push_hook_value(&mut hooks, cur_hook, initializer())
     }
 
-    /// Checks if we should allow the type of a hook to change after the initial value is set. After
-    /// a hot patch, the type of the hook may be changed. If the app is hotpatched from
-    /// ```rust, ignore
-    /// use_hook(|| 0);
-    /// ```
-    /// to
-    /// ```rust, ignore
-    /// use_hook(|| false);
-    /// ```
-    /// We should just change the type and rerun the closure instead of logging an error
-    /// about the rules of hooks
-    fn allow_hook_type_changes(&self, #[allow(unused)] rt: &Runtime) -> bool {
-        #[cfg(debug_assertions)]
-        if rt.after_hot_patch.load(std::sync::atomic::Ordering::SeqCst) {
-            return true;
-        }
-        false
+    // The interior version that gets monomorphized by the `State` type but not the `initializer` type.
+    // This helps trim down binary sizes
+    fn use_hook_inner<State: Clone + 'static>(
+        &self,
+        hooks: &mut Vec<Box<dyn std::any::Any>>,
+        cur_hook: usize,
+    ) -> Option<State> {
+        hooks.get(cur_hook).and_then(|inn| {
+            let raw_ref: &dyn Any = inn.as_ref();
+            raw_ref.downcast_ref::<State>().cloned()
+        })
     }
 
     /// Push a new hook value or insert the value into the existing slot, warning if this is not after a hot patch
     fn push_hook_value<State: Clone + 'static>(
         &self,
-        rt: &Runtime,
         hooks: &mut Vec<Box<dyn std::any::Any>>,
         cur_hook: usize,
         value: State,
@@ -500,7 +491,7 @@ impl Scope {
         } else {
             hooks[cur_hook] = Box::new(value.clone());
 
-            if !self.allow_hook_type_changes(rt) {
+            if !self.allow_hook_type_changes() {
                 tracing::error!(
                     r#"Unable to retrieve the hook that was initialized at this index.
                     Consult the `rules of hooks` to understand how to use hooks properly.
@@ -515,17 +506,24 @@ impl Scope {
         value
     }
 
-    // The interior version that gets monoorphized by the `State` type but not the `initializer` type.
-    // This helps trim down binary sizes
-    fn use_hook_inner<State: Clone + 'static>(
-        &self,
-        hooks: &mut Vec<Box<dyn std::any::Any>>,
-        cur_hook: usize,
-    ) -> Option<State> {
-        hooks.get(cur_hook).and_then(|inn| {
-            let raw_ref: &dyn Any = inn.as_ref();
-            raw_ref.downcast_ref::<State>().cloned()
-        })
+    /// Checks if we should allow the type of a hook to change after the initial value is set. After
+    /// a hot patch, the type of the hook may be changed. If the app is hotpatched from
+    /// ```rust, ignore
+    /// use_hook(|| 0);
+    /// ```
+    /// to
+    /// ```rust, ignore
+    /// use_hook(|| false);
+    /// ```
+    /// We should just change the type and rerun the closure instead of logging an error
+    /// about the rules of hooks
+    #[inline]
+    fn allow_hook_type_changes(&self) -> bool {
+        #[cfg(debug_assertions)]
+        if subsecond::get_jump_table().is_some() {
+            return true;
+        }
+        false
     }
 
     pub fn push_before_render(&self, f: impl FnMut() + 'static) {
