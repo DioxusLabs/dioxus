@@ -2939,13 +2939,18 @@ impl BuildRequest {
         )?;
 
         // Write the main activity manually since tao dropped support for it
-        write(
-            self.wry_android_kotlin_files_out_dir()
-                .join("MainActivity.kt"),
-            hbs.render_template(
+        let main_activity = match self.config.application.android_main_activity.as_deref() {
+            Some(activity) => std::fs::read_to_string(self.package_manifest_dir().join(activity))
+                .context("Failed to locate custom MainActivity.kt")?,
+            _ => hbs.render_template(
                 include_str!("../../assets/android/MainActivity.kt.hbs"),
                 &hbs_data,
             )?,
+        };
+        write(
+            self.wry_android_kotlin_files_out_dir()
+                .join("MainActivity.kt"),
+            main_activity,
         )?;
 
         // Write the res folder, containing stuff like default icons, colors, and menubars.
