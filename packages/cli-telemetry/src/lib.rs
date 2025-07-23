@@ -82,7 +82,7 @@ pub struct TelemetryEvent {
     pub stage: String,
     pub time: DateTime<Utc>,
     pub session_id: u128,
-    pub values: HashMap<String, String>,
+    pub values: HashMap<String, serde_json::Value>,
 }
 
 impl TelemetryEvent {
@@ -93,18 +93,40 @@ impl TelemetryEvent {
         stage: impl ToString,
     ) -> Self {
         Self {
-            name: name.to_string(),
-            module,
-            message: message.to_string(),
-            stage: stage.to_string(),
+            name: strip_paths(&name.to_string()),
+            module: module.map(|m| strip_paths(&m)),
+            message: strip_paths(&message.to_string()),
+            stage: strip_paths(&stage.to_string()),
             time: DateTime::<Utc>::from(SystemTime::now()),
             session_id: session_id(),
             values: HashMap::new(),
         }
     }
 
-    pub fn with_value<K: ToString, V: ToString>(mut self, key: K, value: V) -> Self {
-        self.values.insert(key.to_string(), value.to_string());
+    pub fn with_value<K: ToString, V: serde::Serialize>(mut self, key: K, value: V) -> Self {
+        let mut value = serde_json::to_value(value).unwrap();
+        strip_paths_value(&mut value);
+        self.values.insert(key.to_string(), value);
         self
+    }
+}
+
+// If the CLI is compiled locally, it can contain backtraces which contain
+fn strip_paths(backtrace: &str) -> String {
+    // Strip the home path from any paths in the backtrace
+    let home_dir = dirs::home_dir().unwrap_or_default();
+    backtrace.replace(&*home_dir.to_string_lossy(), "~")
+}
+
+fn strip_paths_value(value: &mut serde_json::Value) {
+    match value {
+        serde_json::Value::String(s) => *s = strip_paths(s),
+        serde_json::Value::Object(map) => {
+            map.values_mut().for_each(strip_paths_value);
+        }
+        serde_json::Value::Array(arr) => {
+            arr.iter_mut().for_each(strip_paths_value);
+        }
+        _ => {}
     }
 }

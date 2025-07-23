@@ -5226,8 +5226,10 @@ name = "dioxus-cli-telemetry"
 version = "0.7.0-alpha.3"
 dependencies = [
  "chrono",
+ "dirs 6.0.0",
  "rand 0.9.1",
  "serde",
+ "serde_json",
 ]
 
 [[package]]

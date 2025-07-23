@@ -8,3 +8,5 @@ description = "Wire format for the dioxus CLI telemetry type"
 serde = { workspace = true, features = ["derive"] }
 chrono = { workspace = true, features = ["serde"] }
 rand.workspace = true
+serde_json.workspace = true
+dirs.workspace = true

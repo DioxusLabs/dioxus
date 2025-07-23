@@ -37,8 +37,9 @@ pub fn main(app: impl Future<Output = Result<StructuredOutput>>) -> Result<Struc
             check_flush_file().await;
             capture_panics();
             let result = AssertUnwindSafe(app).catch_unwind().await;
+            let result = handle_panic(result);
             flush_telemetry_to_file();
-            handle_panic(result)
+            result
         })
 }
 
@@ -140,12 +141,44 @@ pub(crate) fn capture_panics() {
     }));
 }
 
+fn fatal_error(error: &anyhow::Error) -> TelemetryEvent {
+    let mut telemetry_event = TelemetryEvent::new("fatal_error", None, error.to_string(), "error");
+    let backtrace = error.backtrace();
+    if backtrace.status() == std::backtrace::BacktraceStatus::Captured {
+        telemetry_event = telemetry_event.with_value("backtrace", clean_backtrace(&backtrace));
+    }
+    let chain = error.chain();
+    telemetry_event.with_value(
+        "error_chain",
+        chain.map(|e| format!("{e}")).collect::<Vec<_>>(),
+    )
+}
+
+fn clean_backtrace(backtrace: &Backtrace) -> String {
+    let mut backtrace_display = backtrace.to_string();
+
+    // split at the line that ends with ___rust_try for short backtraces
+    if std::env::var("RUST_BACKTRACE") == Ok("1".to_string()) {
+        backtrace_display = backtrace_display
+            .split(" ___rust_try\n")
+            .next()
+            .map(|f| format!("{f} ___rust_try"))
+            .unwrap_or_default();
+    }
+
+    backtrace_display
+}
+
 fn handle_panic(
     result: Result<anyhow::Result<StructuredOutput>, Box<dyn std::any::Any + Send>>,
 ) -> Result<StructuredOutput> {
     match result {
         Ok(Ok(_res)) => Ok(StructuredOutput::Success),
-        Ok(Err(e)) => Err(e),
+        Ok(Err(e)) => {
+            // Add the fatal error to the telemetry
+            send_telemetry_event(fatal_error(&e));
+            Err(e)
+        }
         Err(panic_err) => {
             // And then print the panic itself.
             let as_str = if let Some(p) = panic_err.downcast_ref::<String>() {
@@ -157,28 +190,31 @@ fn handle_panic(
             };
 
             // Attempt to emulate the default panic hook
-            let message = BACKTRACE
-                    .get()
-                    .map(|(back, location)| {
-                        let location_display = location
-                            .as_ref()
-                            .map(|l| format!("{}:{}:{}", l.file, l.line, l.column))
-                            .unwrap_or_else(|| "<unknown>".to_string());
+            let message = match BACKTRACE.get() {
+                Some((back, location)) => {
+                    let location_display = location
+                        .as_ref()
+                        .map(|l| format!("{}:{}:{}", l.file, l.line, l.column))
+                        .unwrap_or_else(|| "<unknown>".to_string());
 
-                        let mut backtrace_display = back.to_string();
+                    let backtrace_display = clean_backtrace(back);
 
-                        // split at the line that ends with ___rust_try for short backtraces
-                        if std::env::var("RUST_BACKTRACE") == Ok("1".to_string()) {
-                            backtrace_display = backtrace_display
-                                .split(" ___rust_try\n")
-                                .next()
-                                .map(|f| format!("{f} ___rust_try"))
-                                .unwrap_or_default();
-                        }
+                    // Add the fatal error to the telemetry
+                    send_telemetry_event(TelemetryEvent::new(
+                        "panic",
+                        Some(location_display.clone()),
+                        &backtrace_display,
+                        "error",
+                    ));
 
-                        format!("dx serve panicked at {location_display}\n{as_str}\n{backtrace_display} ___rust_try")
-                    })
-                    .unwrap_or_else(|| format!("dx serve panicked: {as_str}"));
+                    format!("dx serve panicked at {location_display}\n{as_str}\n{backtrace_display} ___rust_try")
+                }
+                None => {
+                    // Add the fatal error to the telemetry
+                    send_telemetry_event(TelemetryEvent::new("panic", None, as_str, "error"));
+                    format!("dx serve panicked: {as_str}")
+                }
+            };
 
             Err(anyhow::anyhow!(message))
         }
