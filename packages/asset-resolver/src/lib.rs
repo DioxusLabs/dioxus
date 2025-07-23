@@ -99,6 +99,11 @@ fn get_asset_root() -> PathBuf {
     #[cfg(target_os = "linux")]
     {
         // In linux bundles, the assets are placed in the lib/$product_name directory
+        // bin/
+        //   main
+        // lib/
+        //   $product_name/
+        //     assets/
         if let Some(product_name) = dioxus_cli_config::product_name() {
             let asset_dir = cur_exe
                 .parent()
