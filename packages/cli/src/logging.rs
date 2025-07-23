@@ -336,12 +336,19 @@ where
             TraceSrc::Unknown => "unknown",
         };
 
+        let location = meta
+            .file()
+            .and_then(|f| Some((f, meta.line()?)))
+            .map(|(file, line)| format!("{file}:{line}"))
+            .unwrap_or_else(|| "<unknown>".to_string());
+
         let mut event = TelemetryEvent::new(
-            meta.name(),
+            "tracing error",
             meta.module_path().map(ToString::to_string),
             visitor.message,
             stage,
-        );
+        )
+        .with_value("location", location);
 
         for (field, value) in visitor.fields.iter() {
             event = event.with_value(field, value);
