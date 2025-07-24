@@ -649,12 +649,12 @@ impl AppBuilder {
                 .as_mut()
                 .context("No artifacts to hotpatch")?;
 
-            if original_artifacts.assets.manganis.contains(bundled) {
+            if original_artifacts.assets.manifest.contains(bundled) {
                 continue;
             }
 
             // If this is a new asset, insert it into the artifacts so we can track it when hot reloading
-            original_artifacts.assets.manganis.insert_asset(*bundled);
+            original_artifacts.assets.manifest.insert_asset(*bundled);
 
             let from = dunce::canonicalize(PathBuf::from(bundled.absolute_source_path()))?;
 
@@ -764,7 +764,7 @@ impl AppBuilder {
         // The asset might've been renamed thanks to the manifest, let's attempt to reload that too
         let resources = artifacts
             .assets
-            .manganis
+            .manifest
             .get_assets_for_source(&changed_file)?;
         let mut bundled_names = Vec::new();
         for resource in resources {

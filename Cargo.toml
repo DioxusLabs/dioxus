@@ -70,6 +70,7 @@ members = [
     "packages/depinfo",
     "packages/server",
 
+
     # manganis
     "packages/manganis/manganis",
     "packages/manganis/manganis-core",

@@ -316,9 +316,9 @@
 //! - xbuild: <https://github.com/rust-mobile/xbuild/blob/master/xbuild/src/command/build.rs>
 
 use crate::{
-    AndroidTools, BuildContext, BundleFormat, DioxusConfig, Error, LinkAction, LinkerFlavor,
-    Renderer, Result, RustcArgs, TargetAlias, TargetArgs, TraceSrc, WasmBindgen, WasmOptConfig,
-    Workspace, DX_RUSTC_WRAPPER_ENV_VAR,
+    AndroidTools, BuildAssets, BuildContext, BundleFormat, DioxusConfig, Error, LinkAction,
+    LinkerFlavor, Renderer, Result, RustcArgs, TargetAlias, TargetArgs, TraceSrc, WasmBindgen,
+    WasmOptConfig, Workspace, DX_RUSTC_WRAPPER_ENV_VAR,
 };
 use anyhow::{bail, Context};
 use cargo_metadata::diagnostic::Diagnostic;
@@ -328,7 +328,7 @@ use dioxus_cli_config::{APP_TITLE_ENV, ASSET_ROOT_ENV};
 use dioxus_cli_opt::{create_bundled_asset, process_file_to, AssetManifest};
 use itertools::Itertools;
 use krates::{cm::TargetKind, NodeId};
-use manganis::{AssetOptions, BundledAsset};
+use manganis::AssetOptions;
 use manganis_core::AssetVariant;
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
@@ -431,47 +431,6 @@ pub enum BuildMode {
         aslr_reference: u64,
         cache: Arc<HotpatchModuleCache>,
     },
-}
-
-#[derive(Clone, Debug)]
-pub(crate) struct BuildAssets {
-    pub manganis: AssetManifest,
-    pub wasm_js_bundled: bool,
-    pub wasm_bindgen_js: Option<BundledAsset>,
-}
-
-impl BuildAssets {
-    /// Create a new set of build assets.
-    pub fn new(manganis: AssetManifest) -> Self {
-        Self {
-            manganis,
-            wasm_js_bundled: false,
-            wasm_bindgen_js: None,
-        }
-    }
-
-    /// Set the wasm-bindgen JS asset.
-    pub fn set_wasm_bindgen_js(&mut self, asset: BundledAsset, bundled: bool) {
-        self.wasm_bindgen_js = Some(asset);
-        self.wasm_js_bundled = bundled;
-    }
-
-    /// Get the wasm-bindgen JS asset.
-    pub fn wasm_bindgen_js(&self) -> Option<&BundledAsset> {
-        self.wasm_bindgen_js.as_ref()
-    }
-
-    /// Check if the wasm-bindgen JS asset is bundled.
-    pub fn wasm_js_bundled(&self) -> bool {
-        self.wasm_js_bundled
-    }
-
-    /// Iterate over all unique assets in the manifest.
-    pub fn unique_assets(&self) -> impl Iterator<Item = &BundledAsset> {
-        self.manganis
-            .unique_assets()
-            .chain(self.wasm_bindgen_js.iter())
-    }
 }
 
 /// The end result of a build.
@@ -1552,7 +1511,7 @@ impl BuildRequest {
         }
 
         // Now extract the assets from the fat binary
-        artifacts.assets.manganis =
+        artifacts.assets.manifest =
             self.collect_assets(&self.patch_exe(artifacts.time_start), ctx)?;
 
         // If this is a web build, reset the index.html file in case it was modified by SSG
@@ -3687,7 +3646,7 @@ impl BuildRequest {
                 writeln!(
                     glue, "export const __wasm_split_load_chunk_{idx} = makeLoad(\"/assets/{url}\", [], fusedImports);",
                     url = assets
-                    .manganis
+                    .manifest
                         .register_asset(&path, AssetOptions::builder().into_asset_options())?.bundled_path(),
                 )?;
             }
@@ -3716,7 +3675,7 @@ impl BuildRequest {
 
                     // Again, register this wasm with the asset system
                     url = assets
-                        .manganis
+                        .manifest
                         .register_asset(&path, AssetOptions::builder().into_asset_options())?
                         .bundled_path(),
 
@@ -3766,7 +3725,7 @@ impl BuildRequest {
 
         if self.should_optimize_wasm_bindgen_to_asset() {
             // Make sure to register the main wasm file with the asset system
-            assets.manganis.register_asset(
+            assets.manifest.register_asset(
                 &post_bindgen_wasm,
                 AssetOptions::builder().into_asset_options(),
             )?;
@@ -3899,7 +3858,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         let wasm_bindgen_wasm_out = self.wasm_bindgen_wasm_output_file();
         if self.should_optimize_wasm_bindgen_to_asset() {
             let name = assets
-                .manganis
+                .manifest
                 .get_first_asset_for_source(&wasm_bindgen_wasm_out)
                 .expect("The wasm source must exist before creating index.html");
             format!("assets/{}", name.bundled_path())
