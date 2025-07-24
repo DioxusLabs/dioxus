@@ -143,15 +143,15 @@ pub(crate) fn proxy_to(
                     || uri.path().starts_with("/public/")
                     || uri.path().starts_with("/wasm/")
                 {
-                    tracing::trace!(dx_src = ?TraceSrc::Dev, "[{}] {}", res.status().as_u16(), uri);
+                    tracing::trace!(dx_src = ?TraceSrc::App(crate::BundleFormat::Server), "[{}] {}", res.status().as_u16(), uri);
                 } else {
-                    tracing::info!(dx_src = ?TraceSrc::Dev, "[{}] {}", res.status().as_u16(), uri);
+                    tracing::info!(dx_src = ?TraceSrc::App(crate::BundleFormat::Server), "[{}] {}", res.status().as_u16(), uri);
                 }
 
                 Ok(res.into_response())
             }
             Err(err) => {
-                tracing::error!(dx_src = ?TraceSrc::Dev, "[{}] {}", err.status().as_u16(), uri);
+                tracing::error!(dx_src = ?TraceSrc::App(crate::BundleFormat::Server), "[{}] {}", err.status().as_u16(), uri);
                 Err(err)
             }
         }

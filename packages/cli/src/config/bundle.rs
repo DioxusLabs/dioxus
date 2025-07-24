@@ -288,7 +288,7 @@ pub struct CustomSignCommandSettings {
     pub args: Vec<String>,
 }
 
-#[derive(Clone, Copy, Debug, clap::ValueEnum)]
+#[derive(Clone, Copy, Debug, clap::ValueEnum, Serialize)]
 pub(crate) enum PackageType {
     /// The macOS application bundle (.app).
     #[clap(name = "macos")]

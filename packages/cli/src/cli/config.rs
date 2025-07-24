@@ -1,3 +1,6 @@
+use serde::Serialize;
+use serde_json::json;
+
 use super::*;
 use crate::{CliSettings, TraceSrc, Workspace};
 
@@ -24,6 +27,9 @@ pub(crate) enum Config {
     /// Print the location of the CLI log file.
     LogFile {},
 
+    /// Print the location of the CLI telemetry file.
+    TelemetryFile {},
+
     /// Set CLI settings.
     #[command(subcommand)]
     Set(Setting),
@@ -39,6 +45,8 @@ pub(crate) enum Setting {
     AlwaysOnTop { value: BoolValue },
     /// Set the interval that file changes are polled on WSL for hot reloading.
     WSLFilePollInterval { value: u16 },
+    /// Disable the built-in telemetry for the CLI
+    DisableTelemetry { value: BoolValue },
 }
 
 impl Display for Setting {
@@ -48,13 +56,27 @@ impl Display for Setting {
             Self::AlwaysOpenBrowser { value: _ } => write!(f, "always-open-browser"),
             Self::AlwaysOnTop { value: _ } => write!(f, "always-on-top"),
             Self::WSLFilePollInterval { value: _ } => write!(f, "wsl-file-poll-interval"),
+            Self::DisableTelemetry { value: _ } => write!(f, "disable-telemetry"),
         }
+    }
+}
+
+impl Setting {
+    pub(crate) fn anonymized(&self) -> (String, Value) {
+        let args = match self {
+            Self::AlwaysHotReload { value } => json!({ "value": value }),
+            Self::AlwaysOpenBrowser { value } => json!({ "value": value }),
+            Self::AlwaysOnTop { value } => json!({ "value": value }),
+            Self::WSLFilePollInterval { value } => json!({ "value": value }),
+            Self::DisableTelemetry { value } => json!({ "value": value }),
+        };
+        (format!("config set {}", self), args)
     }
 }
 
 // Clap complains if we use a bool directly and I can't find much info about it.
 // "Argument 'value` is positional and it must take a value but action is SetTrue"
-#[derive(Debug, Clone, Copy, Deserialize, clap::ValueEnum)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, clap::ValueEnum)]
 pub(crate) enum BoolValue {
     True,
     False,
@@ -102,6 +124,10 @@ impl Config {
                 let log_path = crate::logging::FileAppendLayer::log_path();
                 tracing::info!(dx_src = ?TraceSrc::Dev, "Log file is located at {}", log_path.display());
             }
+            Config::TelemetryFile {} => {
+                let telemetry_path = Workspace::telemetry_file();
+                tracing::info!(dx_src = ?TraceSrc::Dev, "Telemetry file is located at {}", telemetry_path.display());
+            }
             // Handle CLI settings.
             Config::Set(setting) => {
                 CliSettings::modify_settings(|settings| match setting {
@@ -115,11 +141,30 @@ impl Config {
                     Setting::WSLFilePollInterval { value } => {
                         settings.wsl_file_poll_interval = Some(value)
                     }
+                    Setting::DisableTelemetry { value } => {
+                        settings.disable_telemetry = Some(value.into());
+                    }
                 })?;
                 tracing::info!(dx_src = ?TraceSrc::Dev, "🚩 CLI setting `{setting}` has been set.");
             }
         }
 
         Ok(StructuredOutput::Success)
+    }
+
+    pub(crate) fn command_anonymized(&self) -> (String, Value) {
+        match self {
+            Config::Init { force, .. } => {
+                let args = json!({
+                    "force": force,
+                });
+                ("config init".to_string(), args)
+            }
+            Config::FormatPrint {} => ("config format-print".to_string(), json!({})),
+            Config::CustomHtml {} => ("config custom-html".to_string(), json!({})),
+            Config::LogFile {} => ("config log-file".to_string(), json!({})),
+            Config::TelemetryFile {} => ("config telemetry-file".to_string(), json!({})),
+            Config::Set(setting) => setting.anonymized(),
+        }
     }
 }

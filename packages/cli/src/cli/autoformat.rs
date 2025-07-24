@@ -80,6 +80,18 @@ impl Autoformat {
 
         Ok(StructuredOutput::Success)
     }
+
+    pub(crate) fn command_anonymized(&self) -> (String, Value) {
+        let args = serde_json::json!({
+            "all_code": self.all_code,
+            "check": self.check,
+            "raw": self.raw.is_some(),
+            "file": self.file.is_some(),
+            "split_line_attributes": self.split_line_attributes,
+            "package": self.package.is_some(),
+        });
+        ("fmt".to_string(), args)
+    }
 }
 
 fn refactor_file(

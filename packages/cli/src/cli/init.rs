@@ -1,5 +1,6 @@
 use super::*;
 use cargo_generate::{GenerateArgs, TemplatePath, Vcs};
+use serde_json::json;
 
 #[derive(Clone, Debug, Default, Deserialize, Parser)]
 #[clap(name = "init")]
@@ -89,6 +90,20 @@ impl Init {
         let path = cargo_generate::generate(args)?;
         _ = create::post_create(&path, &self.vcs.unwrap_or(Vcs::Git));
         Ok(StructuredOutput::Success)
+    }
+
+    pub(crate) fn command_anonymized(&self) -> (String, Value) {
+        let command = "new".to_string();
+        let args = json!({
+            "subtemplate": self.subtemplate,
+            "option": self.option,
+            "yes": self.yes,
+            "vcs": self.vcs.map(|v| match v {
+                Vcs::Git => "git",
+                Vcs::None => "none",
+            }),
+        });
+        (command, args)
     }
 }
 

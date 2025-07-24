@@ -14,10 +14,12 @@
 //! 3. Build CLI layer for routing tracing logs to the TUI.
 //! 4. Build fmt layer for non-interactive logging with a custom writer that prevents output during interactive mode.
 
+use crate::telemetry::send_telemetry_event;
 use crate::BundleFormat;
 use crate::{serve::ServeUpdate, Cli, Commands, Verbosity};
 use cargo_metadata::diagnostic::{Diagnostic, DiagnosticLevel};
 use clap::Parser;
+use dioxus_cli_telemetry::TelemetryEvent;
 use futures_channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
 use std::str::FromStr;
 use std::sync::OnceLock;
@@ -58,7 +60,7 @@ pub(crate) struct TraceController {
 
 impl TraceController {
     /// Initialize the CLI and set up the tracing infrastructure
-    pub fn initialize() -> Cli {
+    pub fn initialize() -> Commands {
         let args = Cli::parse();
 
         VERBOSITY
@@ -128,7 +130,8 @@ impl TraceController {
             .with(filter)
             .with(json_filter)
             .with(FileAppendLayer::new())
-            .with(CLILayer {})
+            .with(CLILayer)
+            .with(TelemetryLayer)
             .with(fmt_layer.with_filter(print_fmts_filter));
 
         #[cfg(feature = "tokio-console")]
@@ -136,7 +139,14 @@ impl TraceController {
 
         sub.init();
 
-        args
+        // Send the type of command we are running to the telemetry collector
+        let (command, anonymous_args) = args.action.command_anonymized();
+        send_telemetry_event(
+            TelemetryEvent::new("cli_command", None, command, "start")
+                .with_value("args", anonymous_args),
+        );
+
+        args.action
     }
 
     /// Get a handle to the trace controller.
@@ -292,6 +302,60 @@ where
             .get()
             .unwrap()
             .unbounded_send(TraceMsg::text(visitor.source, *level, final_msg));
+    }
+}
+
+/// This is our "subscriber" (layer) that records structured data for telemetry errors.
+struct TelemetryLayer;
+
+impl<S> Layer<S> for TelemetryLayer
+where
+    S: Subscriber + for<'a> LookupSpan<'a>,
+{
+    // Subscribe to user
+    fn on_event(
+        &self,
+        event: &tracing::Event<'_>,
+        _ctx: tracing_subscriber::layer::Context<'_, S>,
+    ) {
+        let mut visitor = CollectVisitor::new();
+        event.record(&mut visitor);
+
+        let meta = event.metadata();
+        let level = meta.level();
+
+        // Only keep errors
+        if *level != Level::ERROR {
+            return;
+        }
+        let stage = match visitor.source {
+            // Don't keep any app logs
+            TraceSrc::Cargo | TraceSrc::App(_) => return,
+            TraceSrc::Dev => "dev",
+            TraceSrc::Build => "build",
+            TraceSrc::Bundle => "bundle",
+            TraceSrc::Unknown => "unknown",
+        };
+
+        let location = meta
+            .file()
+            .and_then(|f| Some((f, meta.line()?)))
+            .map(|(file, line)| format!("{file}:{line}"))
+            .unwrap_or_else(|| "<unknown>".to_string());
+
+        let mut event = TelemetryEvent::new(
+            "tracing error",
+            meta.module_path().map(ToString::to_string),
+            visitor.message,
+            stage,
+        )
+        .with_value("location", location);
+
+        for (field, value) in visitor.fields.iter() {
+            event = event.with_value(field, value);
+        }
+
+        send_telemetry_event(event);
     }
 }
 

@@ -29,6 +29,8 @@ pub(crate) struct CliSettings {
     pub(crate) no_downloads: Option<bool>,
     /// Ignore updates for this version
     pub(crate) ignore_version_update: Option<String>,
+    /// Disable telemetry
+    pub(crate) disable_telemetry: Option<bool>,
 }
 
 impl CliSettings {
@@ -134,6 +136,19 @@ impl CliSettings {
         }
 
         CliSettings::load().no_downloads.unwrap_or_default()
+    }
+
+    /// Check if telemetry is disabled
+    pub(crate) fn telemetry_disabled() -> bool {
+        if cfg!(feature = "disable-telemetry") {
+            return true;
+        }
+
+        if crate::devcfg::disable_telemetry() {
+            return true;
+        }
+
+        CliSettings::load().disable_telemetry.unwrap_or_default()
     }
 }
 

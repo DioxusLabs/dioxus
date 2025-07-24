@@ -515,6 +515,10 @@ impl Workspace {
     pub(crate) fn dioxus_home_dir() -> PathBuf {
         dirs::home_dir().unwrap().join(".dioxus")
     }
+
+    pub(crate) fn telemetry_file() -> PathBuf {
+        Self::dioxus_home_dir().join("telemetry.json")
+    }
 }
 
 impl std::fmt::Debug for Workspace {

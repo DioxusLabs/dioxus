@@ -17,11 +17,13 @@ pub(crate) mod update;
 pub(crate) mod verbosity;
 
 pub(crate) use build::*;
+use serde_json::Value;
 pub(crate) use serve::*;
 pub(crate) use target::*;
 pub(crate) use verbosity::*;
 
 use crate::platform_override::CommandWithPlatformOverrides;
+use crate::telemetry::Anonymized;
 use crate::{error::Result, Error, StructuredOutput};
 use clap::builder::styling::{AnsiColor, Effects, Style, Styles};
 use clap::{Parser, Subcommand};
@@ -113,22 +115,24 @@ pub enum BuildTools {
     BuildAssets(build_assets::BuildAssets),
 }
 
-impl Display for Commands {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Commands {
+    pub(crate) fn command_anonymized(&self) -> (String, Value) {
         match self {
-            Commands::Build(_) => write!(f, "build"),
-            Commands::Translate(_) => write!(f, "translate"),
-            Commands::Serve(_) => write!(f, "serve"),
-            Commands::New(_) => write!(f, "create"),
-            Commands::Init(_) => write!(f, "init"),
-            Commands::Config(_) => write!(f, "config"),
-            Commands::Autoformat(_) => write!(f, "fmt"),
-            Commands::Check(_) => write!(f, "check"),
-            Commands::Bundle(_) => write!(f, "bundle"),
-            Commands::Run(_) => write!(f, "run"),
-            Commands::SelfUpdate(_) => write!(f, "self-update"),
-            Commands::Tools(_) => write!(f, "tools"),
-            Commands::Doctor(_) => write!(f, "doctor"),
+            Commands::New(new) => new.command_anonymized(),
+            Commands::Serve(serve) => serve.command_anonymized(),
+            Commands::Bundle(bundle) => bundle.command_anonymized(),
+            Commands::Build(build) => ("build".to_string(), build.anonymized()),
+            Commands::Run(run) => run.command_anonymized(),
+            Commands::Init(init) => init.command_anonymized(),
+            Commands::Doctor(doctor) => doctor.command_anonymized(),
+            Commands::Translate(translate) => translate.command_anonymized(),
+            Commands::Autoformat(autoformat) => autoformat.command_anonymized(),
+            Commands::Check(check) => check.command_anonymized(),
+            Commands::Config(config) => config.command_anonymized(),
+            Commands::SelfUpdate(self_update) => self_update.command_anonymized(),
+            Commands::Tools(tool) => match tool {
+                BuildTools::BuildAssets(build_assets) => build_assets.command_anonymized(),
+            },
         }
     }
 }

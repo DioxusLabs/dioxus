@@ -258,4 +258,12 @@ impl Bundle {
 
         Ok(bundles)
     }
+
+    pub(crate) fn command_anonymized(&self) -> (String, Value) {
+        let args = serde_json::json!({
+            "package_types": self.package_types,
+            "out_dir": self.out_dir.is_some(),
+        });
+        ("bundle".to_string(), args)
+    }
 }
