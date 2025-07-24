@@ -1874,7 +1874,7 @@ impl BuildRequest {
             // but is necessary for some linkers to work properly.
             // We ignore its error in case it doesn't recognize the architecture
             if self.linker_flavor() == LinkerFlavor::Darwin {
-                if let Some(ranlib) = self.select_ranlib() {
+                if let Some(ranlib) = Workspace::select_ranlib() {
                     _ = Command::new(ranlib).arg(&out_ar_path).output().await;
                 }
             }
@@ -4605,13 +4605,6 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         };
 
         Ok(())
-    }
-
-    fn select_ranlib(&self) -> Option<PathBuf> {
-        // prefer the modern llvm-ranlib if they have it
-        which::which("llvm-ranlib")
-            .or_else(|_| which::which("ranlib"))
-            .ok()
     }
 
     /// Assemble a series of `--config key=value` arguments for the build command.
