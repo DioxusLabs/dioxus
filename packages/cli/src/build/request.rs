@@ -325,7 +325,7 @@ use cargo_metadata::diagnostic::Diagnostic;
 use depinfo::RustcDepInfo;
 use dioxus_cli_config::{format_base_path_meta_element, PRODUCT_NAME_ENV};
 use dioxus_cli_config::{APP_TITLE_ENV, ASSET_ROOT_ENV};
-use dioxus_cli_opt::{create_asset, process_file_to, AssetManifest};
+use dioxus_cli_opt::{create_bundled_asset, process_file_to, AssetManifest};
 use itertools::Itertools;
 use krates::{cm::TargetKind, NodeId};
 use manganis::{AssetOptions, BundledAsset};
@@ -3778,7 +3778,7 @@ impl BuildRequest {
         // Register the main.js with the asset system so it bundles in the snippets and optimizes
         if self.should_optimize_wasm_bindgen_to_asset() {
             let try_bundle_js = || {
-                let asset = create_asset(
+                let asset = create_bundled_asset(
                     &self.wasm_bindgen_js_output_file(),
                     AssetOptions::js()
                         .with_minify(true)
@@ -3801,7 +3801,7 @@ impl BuildRequest {
                 // If bundling the js fails, bundle the whole folder instead
                 Err(err) => {
                     tracing::warn!("Failed to bundle the wasm-bindgen javascript: {err}. Copying the whole folder instead.");
-                    let asset = create_asset(
+                    let asset = create_bundled_asset(
                         &self.wasm_bindgen_out_dir(),
                         AssetOptions::builder().into_asset_options(),
                         false,

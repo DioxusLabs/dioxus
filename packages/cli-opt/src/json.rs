@@ -1,6 +1,6 @@
 use std::{io::Read, path::Path};
 
-use anyhow::Context;
+use anyhow::{bail, Context};
 
 pub(crate) fn minify_json(source: &str) -> anyhow::Result<String> {
     // First try to parse the json
@@ -21,15 +21,15 @@ pub(crate) fn process_json(
     let json = match minify_json(&source) {
         Ok(json) => json,
         Err(err) => {
-            if allow_fallback {
-                tracing::error!("Failed to minify json: {}", err);
-            } else {
-                return Err(anyhow::anyhow!(
+            if !allow_fallback {
+                bail!(
                     "Failed to minify json from {}: {}",
                     source_path.display(),
                     err
-                ));
+                );
             }
+
+            tracing::error!("Failed to minify json: {}", err);
 
             source
         }

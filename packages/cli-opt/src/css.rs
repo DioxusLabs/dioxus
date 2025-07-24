@@ -1,6 +1,4 @@
-use std::{hash::Hasher, path::Path};
-
-use anyhow::{anyhow, Context};
+use anyhow::{anyhow, bail, Context};
 use codemap::SpanLoc;
 use grass::OutputStyle;
 use lightningcss::{
@@ -9,6 +7,7 @@ use lightningcss::{
     targets::{Browsers, Targets},
 };
 use manganis_core::{CssAssetOptions, CssModuleAssetOptions};
+use std::{hash::Hasher, path::Path};
 
 pub(crate) fn process_css(
     css_options: &CssAssetOptions,
@@ -23,18 +22,15 @@ pub(crate) fn process_css(
         match minify_css(&css) {
             Ok(minified) => minified,
             Err(err) => {
-                if allow_fallback {
-                    tracing::error!(
-                        "Failed to minify css; Falling back to unminified css. Error: {}",
-                        err
-                    );
-                } else {
-                    return Err(anyhow::anyhow!(
-                        "Failed to minify css from {}: {}",
-                        source.display(),
-                        err
-                    ));
+                if !allow_fallback {
+                    bail!("Failed to minify css from {}: {}", source.display(), err);
                 }
+
+                tracing::error!(
+                    "Failed to minify css; Falling back to unminified css. Error: {}",
+                    err
+                );
+
                 css
             }
         }
@@ -100,18 +96,19 @@ pub(crate) fn process_css_module(
         match minify_css(&css) {
             Ok(minified) => minified,
             Err(err) => {
-                if allow_fallback {
-                    tracing::error!(
-                        "Failed to minify css module; Falling back to unminified css. Error: {}",
-                        err
-                    );
-                } else {
-                    return Err(anyhow::anyhow!(
+                if !allow_fallback {
+                    bail!(
                         "Failed to minify css module from {}: {}",
                         source.display(),
                         err
-                    ));
+                    );
                 }
+
+                tracing::error!(
+                    "Failed to minify css module; Falling back to unminified css. Error: {}",
+                    err
+                );
+
                 css
             }
         }

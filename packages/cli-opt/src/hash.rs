@@ -11,6 +11,7 @@ use crate::{
     file::{resolve_asset_options, ResolvedAssetType},
     js::hash_js,
 };
+use anyhow::bail;
 use manganis::{AssetOptions, BundledAsset};
 
 /// The opaque hash type manganis uses to identify assets. Each time an asset or asset options change, this hash will
@@ -129,10 +130,7 @@ pub fn add_hash_to_asset(asset: &mut BundledAsset, allow_fallback: bool) -> anyh
             // Set the bundled path to the source path with the hash appended before the extension
             let source_path = PathBuf::from(source);
             let Some(file_name) = source_path.file_name() else {
-                return Err(anyhow::anyhow!(
-                    "Failed to get file name from path {}",
-                    source
-                ));
+                bail!("Failed to get file name from path {}", source);
             };
             // The output extension path is the extension set by the options
             // or the extension of the source file if we don't recognize the file
