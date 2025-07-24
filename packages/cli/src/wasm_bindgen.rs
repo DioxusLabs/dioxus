@@ -400,7 +400,7 @@ impl WasmBindgen {
     }
 
     fn install_dir(&self) -> anyhow::Result<PathBuf> {
-        let bindgen_dir = Workspace::dioxus_home_dir().join("wasm-bindgen/");
+        let bindgen_dir = Workspace::dioxus_data_dir().join("wasm-bindgen/");
         std::fs::create_dir_all(&bindgen_dir)?;
         Ok(bindgen_dir)
     }
