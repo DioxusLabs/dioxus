@@ -1,4 +1,4 @@
-use crate::{BuildId, BuilderUpdate, Platform, TraceMsg};
+use crate::{BuildId, BuilderUpdate, BundleFormat, Error, TraceMsg};
 use axum::extract::ws::Message as WsMessage;
 use std::path::PathBuf;
 
@@ -13,7 +13,7 @@ pub(crate) enum ServeUpdate {
         pid: Option<u32>,
     },
     WsMessage {
-        platform: Platform,
+        bundle: BundleFormat,
         msg: WsMessage,
     },
 
@@ -44,6 +44,6 @@ pub(crate) enum ServeUpdate {
     },
 
     Exit {
-        error: Option<Box<dyn std::error::Error + Send + Sync>>,
+        error: Option<Error>,
     },
 }

@@ -30,7 +30,7 @@ use crate::hash::hash_file_contents;
 struct TracingEmitter;
 
 impl Emitter for TracingEmitter {
-    fn emit(&mut self, db: &swc_common::errors::DiagnosticBuilder<'_>) {
+    fn emit(&mut self, db: &mut swc_common::errors::DiagnosticBuilder<'_>) {
         match db.level {
             swc_common::errors::Level::Bug
             | swc_common::errors::Level::Fatal

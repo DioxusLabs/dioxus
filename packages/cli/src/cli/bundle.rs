@@ -1,5 +1,5 @@
-use crate::{AppBuilder, BuildArgs, BuildMode, BuildRequest, Platform};
-use anyhow::{anyhow, Context};
+use crate::{AppBuilder, BuildArgs, BuildMode, BuildRequest, BundleFormat};
+use anyhow::{bail, Context};
 use path_absolutize::Absolutize;
 use std::collections::HashMap;
 use tauri_bundler::{BundleBinary, BundleSettings, PackageSettings, SettingsBuilder};
@@ -39,7 +39,7 @@ impl Bundle {
 
         let BuildTargets { client, server } = self.args.into_targets().await?;
 
-        AppBuilder::start(&client, BuildMode::Base)?
+        AppBuilder::started(&client, BuildMode::Base { run: false })?
             .finish_build()
             .await?;
 
@@ -47,7 +47,7 @@ impl Bundle {
 
         if let Some(server) = server.as_ref() {
             // If the server is present, we need to build it as well
-            AppBuilder::start(server, BuildMode::Base)?
+            AppBuilder::started(server, BuildMode::Base { run: false })?
                 .finish_build()
                 .await?;
 
@@ -55,7 +55,7 @@ impl Bundle {
         }
 
         // If we're building for iOS, we need to bundle the iOS bundle
-        if client.platform == Platform::Ios && self.package_types.is_none() {
+        if client.bundle == BundleFormat::Ios && self.package_types.is_none() {
             self.package_types = Some(vec![crate::PackageType::IosBundle]);
         }
 
@@ -67,9 +67,9 @@ impl Bundle {
         }
 
         // Create a list of bundles that we might need to copy
-        match client.platform {
+        match client.bundle {
             // By default, mac/win/linux work with tauri bundle
-            Platform::MacOS | Platform::Linux | Platform::Windows => {
+            BundleFormat::MacOS | BundleFormat::Linux | BundleFormat::Windows => {
                 tracing::info!("Running desktop bundler...");
                 for bundle in Self::bundle_desktop(&client, &self.package_types)? {
                     bundles.extend(bundle.bundle_paths);
@@ -77,15 +77,14 @@ impl Bundle {
             }
 
             // Web/ios can just use their root_dir
-            Platform::Web => bundles.push(client.root_dir()),
-            Platform::Ios => {
+            BundleFormat::Web => bundles.push(client.root_dir()),
+            BundleFormat::Ios => {
                 tracing::warn!("iOS bundles are not currently codesigned! You will need to codesign the app before distributing.");
                 bundles.push(client.root_dir())
             }
-            Platform::Server => bundles.push(client.root_dir()),
-            Platform::Liveview => bundles.push(client.root_dir()),
+            BundleFormat::Server => bundles.push(client.root_dir()),
 
-            Platform::Android => {
+            BundleFormat::Android => {
                 let aab = client
                     .android_gradle_bundle()
                     .await
@@ -145,16 +144,16 @@ impl Bundle {
         let krate = &build;
         let exe = build.main_exe();
 
-        _ = std::fs::remove_dir_all(krate.bundle_dir(build.platform));
+        _ = std::fs::remove_dir_all(krate.bundle_dir(build.bundle));
 
         let package = krate.package();
         let mut name: PathBuf = krate.executable_name().into();
         if cfg!(windows) {
             name.set_extension("exe");
         }
-        std::fs::create_dir_all(krate.bundle_dir(build.platform))
+        std::fs::create_dir_all(krate.bundle_dir(build.bundle))
             .context("Failed to create bundle directory")?;
-        std::fs::copy(&exe, krate.bundle_dir(build.platform).join(&name))
+        std::fs::copy(&exe, krate.bundle_dir(build.bundle).join(&name))
             .with_context(|| "Failed to copy the output executable into the bundle directory")?;
 
         let binaries = vec![
@@ -167,10 +166,10 @@ impl Bundle {
 
         // Check if required fields are provided instead of failing silently.
         if bundle_settings.identifier.is_none() {
-            return Err(anyhow!("\n\nBundle identifier was not provided in `Dioxus.toml`. Add it as:\n\n[bundle]\nidentifier = \"com.mycompany\"\n\n").into());
+            bail!("\n\nBundle identifier was not provided in `Dioxus.toml`. Add it as:\n\n[bundle]\nidentifier = \"com.mycompany\"\n\n");
         }
         if bundle_settings.publisher.is_none() {
-            return Err(anyhow!("\n\nBundle publisher was not provided in `Dioxus.toml`. Add it as:\n\n[bundle]\npublisher = \"MyCompany\"\n\n").into());
+            bail!("\n\nBundle publisher was not provided in `Dioxus.toml`. Add it as:\n\n[bundle]\npublisher = \"MyCompany\"\n\n");
         }
 
         if cfg!(windows) {
@@ -223,7 +222,7 @@ impl Bundle {
         }
 
         let mut settings = SettingsBuilder::new()
-            .project_out_directory(krate.bundle_dir(build.platform))
+            .project_out_directory(krate.bundle_dir(build.bundle))
             .package_settings(PackageSettings {
                 product_name: krate.bundled_app_name(),
                 version: package.version.to_string(),

@@ -2,11 +2,8 @@ use super::{Synthetic, WebEventExt};
 use dioxus_html::{
     geometry::{ClientPoint, ElementPoint, PagePoint, ScreenPoint},
     input_data::{decode_mouse_button_set, MouseButton},
-    prelude::{
-        InteractionElementOffset, InteractionLocation, Modifiers, ModifiersInteraction,
-        PointerInteraction,
-    },
-    HasDragData, HasFileData, HasMouseData,
+    HasDragData, HasFileData, HasMouseData, InteractionElementOffset, InteractionLocation,
+    Modifiers, ModifiersInteraction, PointerInteraction,
 };
 use web_sys::DragEvent;
 

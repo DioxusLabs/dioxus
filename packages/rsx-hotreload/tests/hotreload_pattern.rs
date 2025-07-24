@@ -7,8 +7,7 @@ use dioxus_core::{
         FmtSegment, FmtedSegments, HotReloadAttributeValue, HotReloadDynamicAttribute,
         HotReloadDynamicNode, HotReloadLiteral, HotReloadedTemplate, NamedAttribute,
     },
-    prelude::{Template, TemplateNode},
-    TemplateAttribute, VNode,
+    Template, TemplateAttribute, TemplateNode, VNode,
 };
 use dioxus_core_types::HotReloadingContext;
 use dioxus_rsx::CallBody;

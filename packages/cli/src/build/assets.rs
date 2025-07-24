@@ -34,7 +34,7 @@ use std::{
 };
 
 use crate::Result;
-use anyhow::Context;
+use anyhow::{bail, Context};
 use const_serialize::{ConstVec, SerializeConst};
 use dioxus_cli_opt::AssetManifest;
 use manganis::BundledAsset;
@@ -337,26 +337,27 @@ pub(crate) fn extract_assets_from_file(path: impl AsRef<Path>) -> Result<AssetMa
         // Write the modified binary data back to the file
         file.write_all(new_data.as_ref())?;
     }
+
     // Ensure the file is flushed to disk
     file.sync_all()
         .context("Failed to sync file after writing assets")?;
 
     // If the file is a macos binary, we need to re-sign the modified binary
-    if object_file.format() == object::BinaryFormat::MachO {
+    if object_file.format() == object::BinaryFormat::MachO && !assets.is_empty() {
         // Spawn the codesign command to re-sign the binary
         let output = std::process::Command::new("codesign")
             .arg("--force")
             .arg("--sign")
             .arg("-") // Sign with an empty identity
             .arg(path)
-            .output()?;
+            .output()
+            .context("Failed to run codesign - is `codesign` in your path?")?;
 
         if !output.status.success() {
-            return Err(anyhow::anyhow!(
+            bail!(
                 "Failed to re-sign the binary with codesign after finalizing the assets: {}",
                 String::from_utf8_lossy(&output.stderr)
-            )
-            .into());
+            );
         }
     }
 

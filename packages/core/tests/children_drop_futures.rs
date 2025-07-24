@@ -3,6 +3,7 @@
 use std::{sync::atomic::AtomicUsize, time::Duration};
 
 use dioxus::prelude::*;
+use dioxus_core::generation;
 
 #[tokio::test]
 async fn child_futures_drop_first() {

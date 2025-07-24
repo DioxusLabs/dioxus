@@ -1,8 +1,8 @@
 /// Components that allow the macro to add child routers. This component provides a context
 /// to the child router that maps child routes to root routes and vice versa.
-use dioxus_lib::prelude::*;
-
-use crate::prelude::Routable;
+use crate::Routable;
+use dioxus_core::{provide_context, try_consume_context, use_hook, Element};
+use dioxus_core_macro::{component, Props};
 
 /// Maps a child route into the root router and vice versa
 // NOTE: Currently child routers only support simple static prefixes, but this
@@ -53,7 +53,7 @@ impl<R: Routable> PartialEq for ChildRouterProps<R> {
     }
 }
 
-/// A component that provides a [`History`] to a child router. The `#[child]` attribute on the router macro will insert this automatically.
+/// A component that provides a [`History`](dioxus_history::History) to a child router. The `#[child]` attribute on the router macro will insert this automatically.
 #[component]
 #[allow(missing_docs)]
 pub fn ChildRouter<R: Routable>(props: ChildRouterProps<R>) -> Element {

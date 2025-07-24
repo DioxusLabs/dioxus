@@ -4,7 +4,7 @@ use flate2::read::GzDecoder;
 use std::path::{Path, PathBuf};
 use tar::Archive;
 use tempfile::TempDir;
-use tokio::{fs, process::Command};
+use tokio::process::Command;
 
 pub(crate) struct WasmBindgen {
     version: String,
@@ -100,7 +100,7 @@ impl WasmBindgen {
 
     /// Run the bindgen command with the current settings
     pub(crate) async fn run(&self) -> Result<std::process::Output> {
-        let binary = self.get_binary_path().await?;
+        let binary = self.get_binary_path()?;
 
         let mut args = Vec::new();
 
@@ -253,7 +253,7 @@ impl WasmBindgen {
         })?;
 
         // Get the final binary location.
-        let binary_path = self.get_binary_path().await?;
+        let binary_path = self.get_binary_path()?;
 
         // Download then extract wasm-bindgen-cli.
         let bytes = reqwest::get(url).await?.bytes().await?;
@@ -300,11 +300,10 @@ impl WasmBindgen {
             .output()
             .await?;
 
-        fs::copy(
+        std::fs::copy(
             tempdir.path().join(self.downloaded_bin_name()),
-            self.get_binary_path().await?,
-        )
-        .await?;
+            self.get_binary_path()?,
+        )?;
 
         Ok(())
     }
@@ -336,11 +335,10 @@ impl WasmBindgen {
         tracing::info!("Copying into path: {}", tempdir.path().display());
 
         // copy the wasm-bindgen out of the tempdir to the final location
-        fs::copy(
+        std::fs::copy(
             tempdir.path().join("bin").join(self.downloaded_bin_name()),
-            self.get_binary_path().await?,
+            self.get_binary_path()?,
         )
-        .await
         .context("failed to copy wasm-bindgen binary")?;
 
         Ok(())
@@ -352,7 +350,7 @@ impl WasmBindgen {
             self.version
         );
 
-        let binary = self.get_binary_path().await?;
+        let binary = self.get_binary_path()?;
         let output = Command::new(binary)
             .args(["--version"])
             .output()
@@ -381,7 +379,7 @@ impl WasmBindgen {
         );
 
         let binary_name = self.installed_bin_name();
-        let path = self.install_dir().await?.join(binary_name);
+        let path = self.install_dir()?.join(binary_name);
 
         if !path.exists() {
             self.install().await?;
@@ -390,20 +388,20 @@ impl WasmBindgen {
         Ok(())
     }
 
-    async fn get_binary_path(&self) -> anyhow::Result<PathBuf> {
+    pub fn get_binary_path(&self) -> anyhow::Result<PathBuf> {
         if CliSettings::prefer_no_downloads() {
             which::which("wasm-bindgen")
                 .map_err(|_| anyhow!("Missing wasm-bindgen-cli@{}", self.version))
         } else {
             let installed_name = self.installed_bin_name();
-            let install_dir = self.install_dir().await?;
+            let install_dir = self.install_dir()?;
             Ok(install_dir.join(installed_name))
         }
     }
 
-    async fn install_dir(&self) -> anyhow::Result<PathBuf> {
+    fn install_dir(&self) -> anyhow::Result<PathBuf> {
         let bindgen_dir = Workspace::dioxus_home_dir().join("wasm-bindgen/");
-        fs::create_dir_all(&bindgen_dir).await?;
+        std::fs::create_dir_all(&bindgen_dir)?;
         Ok(bindgen_dir)
     }
 
@@ -501,7 +499,7 @@ mod test {
 
     /// Helper to test that the installed binary actually exists.
     async fn verify_installation(binary: &WasmBindgen) {
-        let path = binary.install_dir().await.unwrap();
+        let path = binary.install_dir().unwrap();
         let name = binary.installed_bin_name();
         let binary_path = path.join(name);
         assert!(
@@ -513,9 +511,9 @@ mod test {
     /// Delete the installed binary. The temp folder should be automatically deleted.
     async fn reset_test() {
         let binary = WasmBindgen::new(VERSION);
-        let path = binary.install_dir().await.unwrap();
+        let path = binary.install_dir().unwrap();
         let name = binary.installed_bin_name();
         let binary_path = path.join(name);
-        let _ = tokio::fs::remove_file(binary_path).await;
+        let _ = std::fs::remove_file(binary_path);
     }
 }

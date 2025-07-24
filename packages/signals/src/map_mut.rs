@@ -4,7 +4,7 @@ use crate::{
     read_impls, write_impls, Readable, ReadableExt, ReadableRef, Writable, WritableExt,
     WritableRef, WriteLock,
 };
-use dioxus_core::prelude::*;
+use dioxus_core::IntoAttributeValue;
 use generational_box::{AnyStorage, BorrowResult};
 
 /// A read only signal that has been mapped to a new type.

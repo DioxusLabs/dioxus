@@ -1,8 +1,8 @@
 use crate::{
-    config::WebHttpsConfig, serve::ServeUpdate, BuildId, BuildStage, BuilderUpdate, Platform,
+    config::WebHttpsConfig, serve::ServeUpdate, BuildId, BuildStage, BuilderUpdate, BundleFormat,
     Result, TraceSrc,
 };
-use anyhow::Context;
+use anyhow::{bail, Context};
 use axum::{
     body::Body,
     extract::{
@@ -62,7 +62,7 @@ pub(crate) struct WebServer {
     new_build_status_sockets: UnboundedReceiver<ConnectedWsClient>,
     build_status: SharedStatus,
     application_name: String,
-    platform: Platform,
+    bundle: BundleFormat,
 }
 
 pub(crate) struct ConnectedWsClient {
@@ -128,7 +128,7 @@ impl WebServer {
             new_hot_reload_sockets: hot_reload_sockets_rx,
             new_build_status_sockets: build_status_sockets_rx,
             application_name: runner.app_name().to_string(),
-            platform: runner.client.build.platform,
+            bundle: runner.client.build.bundle,
         })
     }
 
@@ -163,7 +163,7 @@ impl WebServer {
                     drop(new_message);
 
                     // Update the socket with project info and current build status
-                    let project_info = SharedStatus::new(Status::ClientInit { application_name: self.application_name.clone(), platform: self.platform });
+                    let project_info = SharedStatus::new(Status::ClientInit { application_name: self.application_name.clone(), bundle: self.bundle });
                     if project_info.send_to(&mut new_socket.socket).await.is_ok() {
                         _ = self.build_status.send_to(&mut new_socket.socket).await;
                         self.build_status_sockets.push(new_socket);
@@ -175,7 +175,7 @@ impl WebServer {
             }
             Some((idx, message)) = new_message.next() => {
                 match message {
-                    Some(Ok(msg)) => return ServeUpdate::WsMessage { msg, platform: Platform::Web },
+                    Some(Ok(msg)) => return ServeUpdate::WsMessage { msg, bundle: BundleFormat::Web },
                     _ => {
                         drop(new_message);
                         _ = self.hot_reload_sockets.remove(idx);
@@ -375,8 +375,8 @@ impl WebServer {
     }
 
     pub fn server_address(&self) -> Option<SocketAddr> {
-        match self.platform {
-            Platform::Web | Platform::Server => Some(self.devserver_address()),
+        match self.bundle {
+            BundleFormat::Web | BundleFormat::Server => Some(self.devserver_address()),
             _ => self.proxied_server_address(),
         }
     }
@@ -461,8 +461,7 @@ fn build_devserver_router(
                 Response::builder()
                     .status(StatusCode::INTERNAL_SERVER_ERROR)
                     .body(Body::from(format!(
-                        "Backend connection failed. The backend is likely still starting up. Please try again in a few seconds. Error: {:#?}",
-                        error
+                        "Backend connection failed. The backend is likely still starting up. Please try again in a few seconds. Error: {error:#?}"
                     )))
                     .unwrap()
             },
@@ -577,7 +576,7 @@ fn build_serve_dir(runner: &AppServer) -> axum::routing::MethodRouter {
     .handle_error(|error: Infallible| async move {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Unhandled internal error: {}", error),
+            format!("Unhandled internal error: {error}"),
         )
     })
 }
@@ -635,8 +634,7 @@ async fn get_rustls(web_config: &WebHttpsConfig) -> Result<(String, String)> {
         {
             return Ok((cert, key));
         } else {
-            // missing cert or key
-            return Err("https is enabled but cert or key path is missing".into());
+            bail!("https is enabled but cert or key path is missing");
         }
     }
 
@@ -682,7 +680,7 @@ async fn get_rustls(web_config: &WebHttpsConfig) -> Result<(String, String)> {
                     tracing::error!(dx_src = ?TraceSrc::Dev, "An error occurred while generating mkcert certificates: {}", e.to_string())
                 }
             };
-            return Err("failed to generate mkcert certificates".into());
+            bail!("failed to generate mkcert certificates");
         }
         Ok(mut cmd) => {
             cmd.wait().await?;
@@ -731,7 +729,7 @@ struct SharedStatus(Arc<RwLock<Status>>);
 enum Status {
     ClientInit {
         application_name: String,
-        platform: Platform,
+        bundle: BundleFormat,
     },
     Building {
         progress: f64,

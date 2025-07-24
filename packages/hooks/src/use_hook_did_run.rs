@@ -1,4 +1,4 @@
-use dioxus_core::prelude::*;
+use dioxus_core::{use_after_render, use_before_render, use_hook};
 use dioxus_signals::{CopyValue, WritableExt};
 
 /// A hook that uses before/after lifecycle hooks to determine if the hook was run

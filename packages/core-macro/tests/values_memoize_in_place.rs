@@ -1,4 +1,7 @@
-use dioxus::prelude::*;
+use dioxus::{
+    core::{generation, needs_update},
+    prelude::*,
+};
 use dioxus_core::ElementId;
 use std::{any::Any, rc::Rc};
 
@@ -136,6 +139,8 @@ fn TakesSignal(sig: ReadSignal<usize>, number: usize) -> Element {
 // Regression test for https://github.com/DioxusLabs/dioxus/issues/2582
 #[test]
 fn spreads_memorize_in_place() {
+    use dioxus_core::Properties;
+
     #[derive(Props, Clone, PartialEq)]
     struct CompProps {
         #[props(extends = GlobalAttributes)]

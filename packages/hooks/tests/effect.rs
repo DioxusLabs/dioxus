@@ -30,7 +30,7 @@ async fn effects_rerun() {
                     println!("Signal: {:?}", signal);
 
                     // Stop the wait for work manually
-                    needs_update();
+                    dioxus_core::needs_update();
                 }
             });
             signal += 1;

@@ -1,5 +1,5 @@
+use crate::BuildMode;
 use crate::{cli::*, AppBuilder, BuildRequest, Workspace};
-use crate::{BuildMode, Platform};
 
 use super::target::TargetArgs;
 
@@ -12,7 +12,11 @@ pub struct BuildArgs {
     /// Enable fullstack mode [default: false]
     ///
     /// This is automatically detected from `dx serve` if the "fullstack" feature is enabled by default.
-    #[clap(long)]
+    #[arg(
+        long,
+        default_missing_value = "true",
+        num_args = 0..=1,
+    )]
     pub(crate) fullstack: Option<bool>,
 
     /// Pre-render all routes returned from the app's `/static_routes` endpoint [default: false]
@@ -48,7 +52,7 @@ impl BuildArgs {
         // This involves modifying the BuildRequest to add the client features and server features
         // only if we can properly detect that it's a fullstack build. Careful with this, since
         // we didn't build BuildRequest to be generally mutable.
-        let default_server = client.enabled_platforms.contains(&Platform::Server);
+        let default_server = client.enabled_renderers.contains(&crate::Renderer::Server);
 
         // Make sure we set the fullstack platform so we actually build the fullstack variant
         // Users need to enable "fullstack" in their default feature set.
@@ -70,7 +74,7 @@ impl CommandWithPlatformOverrides<BuildArgs> {
         let ssg = self.shared.ssg;
         let targets = self.into_targets().await?;
 
-        AppBuilder::start(&targets.client, BuildMode::Base)?
+        AppBuilder::started(&targets.client, BuildMode::Base { run: false })?
             .finish_build()
             .await?;
 
@@ -78,7 +82,7 @@ impl CommandWithPlatformOverrides<BuildArgs> {
 
         if let Some(server) = targets.server.as_ref() {
             // If the server is present, we need to build it as well
-            let mut server_build = AppBuilder::start(server, BuildMode::Base)?;
+            let mut server_build = AppBuilder::started(server, BuildMode::Base { run: false })?;
             server_build.finish_build().await?;
 
             // Run SSG and cache static routes
@@ -119,8 +123,8 @@ impl CommandWithPlatformOverrides<BuildArgs> {
             // Copy the main target from the client to the server
             let main_target = client.main_target.clone();
             let mut server_args = server_args.clone();
-            // The platform in the server build is always set to Server
-            server_args.platform = Some(Platform::Server);
+            // The renderer in the server build is always set to Server
+            server_args.renderer.renderer = Some(crate::Renderer::Server);
             server =
                 Some(BuildRequest::new(&server_args, Some(main_target), workspace.clone()).await?);
         }

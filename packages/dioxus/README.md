@@ -44,7 +44,7 @@ cargo binstall dioxus-cli
 dx new my-app && cd my-app
 
 # and then serve!
-dx serve --platform desktop
+dx serve --desktop
 ```
 
 ## Your first app

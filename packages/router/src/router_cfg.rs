@@ -1,13 +1,13 @@
-use crate::prelude::*;
-use dioxus_lib::prelude::*;
+use crate::{GenericRouterContext, NavigationTarget, Routable, RoutingCallback};
+use dioxus_core::Element;
 use std::sync::Arc;
 
 /// Global configuration options for the router.
 ///
 /// This implements [`Default`] and follows the builder pattern, so you can use it like this:
 /// ```rust,no_run
-/// # use dioxus_router::prelude::*;
 /// # use dioxus::prelude::*;
+/// # use dioxus_router::RouterConfig;
 /// # #[component]
 /// # fn Index() -> Element {
 /// #     VNode::empty()

@@ -21,6 +21,7 @@ use dioxus_history::{History, MemoryHistory};
 use dioxus_hooks::to_owned;
 use dioxus_html::{HasFileData, HtmlEvent, PlatformEventData};
 use futures_util::{pin_mut, FutureExt};
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::{cell::OnceCell, time::Duration};
 use std::{rc::Rc, task::Waker};
@@ -300,6 +301,8 @@ impl WebviewInstance {
             }
         };
 
+        let page_loaded = AtomicBool::new(false);
+
         let mut webview = WebViewBuilder::new_with_web_context(&mut web_context)
             .with_bounds(wry::Rect {
                 position: wry::dpi::Position::Logical(wry::dpi::LogicalPosition::new(0.0, 0.0)),
@@ -311,22 +314,35 @@ impl WebviewInstance {
             .with_transparent(cfg.window.window.transparent)
             .with_url("dioxus://index.html/")
             .with_ipc_handler(ipc_handler)
-            .with_navigation_handler(|var| {
+            .with_navigation_handler(move |var| {
                 // We don't want to allow any navigation
                 // We only want to serve the index file and assets
-                if var.starts_with("dioxus://") || var.starts_with("http://dioxus.") {
-                    true
+                if var.starts_with("dioxus://")
+                    || var.starts_with("http://dioxus.")
+                    || var.starts_with("https://dioxus.")
+                {
+                    // After the page has loaded once, don't allow any more navigation
+                    let page_loaded = page_loaded.swap(true, std::sync::atomic::Ordering::SeqCst);
+                    !page_loaded
                 } else {
                     if var.starts_with("http://")
                         || var.starts_with("https://")
                         || var.starts_with("mailto:")
                     {
-                        _ = open::that_detached(&var);
+                        _ = webbrowser::open(&var);
                     }
                     false
                 }
             }) // prevent all navigations
             .with_asynchronous_custom_protocol(String::from("dioxus"), request_handler);
+
+        // Enable https scheme on android, needed for secure context API, like the geolocation API
+        #[cfg(target_os = "android")]
+        {
+            use wry::WebViewBuilderExtAndroid as _;
+
+            webview = webview.with_https_scheme(true);
+        };
 
         // Disable the webview default shortcuts to disable the reload shortcut
         #[cfg(target_os = "windows")]
@@ -443,6 +459,24 @@ impl WebviewInstance {
         // Wait for work will return Ready when it has edits to be sent to the webview
         // It will return Pending when it needs to be polled again - nothing is ready
         loop {
+            // Check if there is a new edit channel we need to send. On IOS,
+            // the websocket will be killed when the device is put into sleep. If we
+            // find the socket has been closed, we create a new socket and send it to
+            // the webview to continue on
+            // https://github.com/DioxusLabs/dioxus/issues/4374
+            if self
+                .edits
+                .wry_queue
+                .poll_new_edits_location(&mut cx)
+                .is_ready()
+            {
+                _ = self.desktop_context.webview.evaluate_script(&format!(
+                    "window.interpreter.waitForRequest(\"{edits_path}\", \"{expected_key}\");",
+                    edits_path = self.edits.wry_queue.edits_path(),
+                    expected_key = self.edits.wry_queue.required_server_key()
+                ));
+            }
+
             // If we're waiting for a render, wait for it to finish before we continue
             let edits_flushed_poll = self.edits.wry_queue.poll_edits_flushed(&mut cx);
             if edits_flushed_poll.is_pending() {

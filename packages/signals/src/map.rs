@@ -1,8 +1,7 @@
-use std::ops::Deref;
-
 use crate::{read::Readable, read_impls, ReadableExt, ReadableRef};
-use dioxus_core::prelude::*;
+use dioxus_core::IntoAttributeValue;
 use generational_box::{AnyStorage, BorrowResult};
+use std::ops::Deref;
 
 /// A read only signal that has been mapped to a new type.
 pub struct MappedSignal<O: ?Sized + 'static, V: Readable, F = fn(&<V as Readable>::Target) -> &O> {

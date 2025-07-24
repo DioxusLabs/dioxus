@@ -3,7 +3,7 @@
 use std::rc::Rc;
 
 use dioxus::prelude::*;
-use dioxus_core::NoOpMutations;
+use dioxus_core::{generation, NoOpMutations};
 
 /// This test checks that we should release all memory used by the virtualdom when it exits.
 ///

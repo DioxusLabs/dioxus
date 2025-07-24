@@ -1,4 +1,5 @@
 use dioxus::prelude::*;
+use dioxus_core::TemplateNode;
 
 /// Make sure that rsx! is parsing templates and their attributes properly
 #[test]

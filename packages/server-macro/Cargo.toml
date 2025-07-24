@@ -28,6 +28,7 @@ proc-macro = true
 [features]
 axum = ["server_fn_macro/axum"]
 server = ["server_fn_macro/ssr"]
+browser = []
 reqwest = ["server_fn_macro/reqwest"]
 generic = ["server_fn_macro/generic"]
 

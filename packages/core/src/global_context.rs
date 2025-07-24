@@ -1,6 +1,8 @@
-use crate::prelude::SuspenseContext;
 use crate::runtime::RuntimeError;
-use crate::{innerlude::SuspendedFuture, runtime::Runtime, CapturedError, Element, ScopeId, Task};
+use crate::{
+    innerlude::SuspendedFuture, runtime::Runtime, CapturedError, Element, ScopeId, SuspenseContext,
+    Task,
+};
 use std::future::Future;
 use std::sync::Arc;
 
@@ -18,7 +20,7 @@ pub fn vdom_is_rendering() -> bool {
     Runtime::with(|rt| rt.rendering.get()).unwrap_or_default()
 }
 
-/// Throw a [`CapturedError`] into the current scope. The error will bubble up to the nearest [`crate::prelude::ErrorBoundary()`] or the root of the app.
+/// Throw a [`CapturedError`] into the current scope. The error will bubble up to the nearest [`crate::ErrorBoundary()`] or the root of the app.
 ///
 /// # Examples
 /// ```rust, no_run
@@ -107,6 +109,7 @@ pub fn suspend(task: Task) -> Element {
 ///
 /// ```rust, no_run
 /// # use dioxus::prelude::*;
+/// # use dioxus_core::spawn_isomorphic;
 /// // ❌ Do not do requests in isomorphic tasks. It may resolve at a different time on the server and client, causing hydration issues.
 /// let mut state = use_signal(|| None);
 /// spawn_isomorphic(async move {
@@ -169,6 +172,7 @@ pub fn queue_effect(f: impl FnOnce() + 'static) {
 ///
 /// ```rust
 /// use dioxus::prelude::*;
+/// use dioxus_core::spawn_forever;
 ///
 /// // The parent component can create and destroy children dynamically
 /// fn App() -> Element {
@@ -371,6 +375,7 @@ pub fn schedule_update_any() -> Arc<dyn Fn(ScopeId) + Send + Sync> {
 /// Example:
 /// ```rust
 /// use dioxus::prelude::*;
+/// use dioxus_core::use_drop;
 ///
 /// fn app() -> Element {
 ///     let mut state = use_signal(|| true);

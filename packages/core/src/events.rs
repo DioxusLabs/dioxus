@@ -1,6 +1,4 @@
-use crate::{
-    prelude::current_scope_id, properties::SuperFrom, runtime::RuntimeGuard, Runtime, ScopeId,
-};
+use crate::{current_scope_id, properties::SuperFrom, runtime::RuntimeGuard, Runtime, ScopeId};
 use generational_box::GenerationalBox;
 use std::{any::Any, cell::RefCell, marker::PhantomData, panic::Location, rc::Rc};
 
@@ -337,7 +335,7 @@ impl<Ret> SpawnIfAsync<(), Ret> for Ret {
 pub struct AsyncMarker;
 impl<F: std::future::Future<Output = ()> + 'static> SpawnIfAsync<AsyncMarker> for F {
     fn spawn(self) {
-        crate::prelude::spawn(async move {
+        crate::spawn(async move {
             self.await;
         });
     }
@@ -353,9 +351,9 @@ where
 {
     #[inline]
     fn spawn(self) {
-        crate::prelude::spawn(async move {
+        crate::spawn(async move {
             if let Err(err) = self.await {
-                crate::prelude::throw_error(err)
+                crate::throw_error(err)
             }
         });
     }
@@ -366,7 +364,7 @@ impl SpawnIfAsync<()> for crate::Result<()> {
     #[inline]
     fn spawn(self) {
         if let Err(err) = self {
-            crate::prelude::throw_error(err)
+            crate::throw_error(err)
         }
     }
 }

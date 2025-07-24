@@ -5,7 +5,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use dioxus_core::prelude::ReactiveContext;
+use dioxus_core::ReactiveContext;
 use generational_box::{AnyStorage, UnsyncStorage};
 
 use crate::{MappedSignal, ReadSignal};

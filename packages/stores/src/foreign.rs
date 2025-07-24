@@ -1,5 +1,5 @@
 use crate::{CreateSelector, SelectorScope, SelectorStorage, Storable};
-use dioxus_core::{prelude::IntoAttributeValue, IntoDynNode};
+use dioxus_core::{IntoAttributeValue, IntoDynNode};
 use dioxus_signals::{
     read_impls, write_impls, BorrowError, BorrowMutError, Readable, ReadableExt, ReadableRef,
     Subscribers, UnsyncStorage, Writable, WritableExt, WritableRef,

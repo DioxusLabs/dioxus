@@ -174,8 +174,8 @@ pub fn serialize_context() -> HydrationContext {
     #[cfg(not(feature = "web"))]
     {
         // On the server each scope creates the context lazily
-        dioxus_core::prelude::has_context()
-            .unwrap_or_else(|| dioxus_core::prelude::provide_context(HydrationContext::default()))
+        dioxus_core::has_context()
+            .unwrap_or_else(|| dioxus_core::provide_context(HydrationContext::default()))
     }
 }
 

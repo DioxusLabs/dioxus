@@ -1,6 +1,6 @@
 use std::{any::Any, ops::Deref};
 
-use dioxus_core::{prelude::IntoAttributeValue, IntoDynNode};
+use dioxus_core::{IntoAttributeValue, IntoDynNode};
 use generational_box::{BorrowResult, UnsyncStorage};
 
 use crate::{

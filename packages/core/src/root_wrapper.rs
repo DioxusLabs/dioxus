@@ -1,4 +1,7 @@
-use crate::{prelude::*, properties::RootProps, DynamicNode, VComponent};
+use crate::{
+    fc_to_builder, properties::RootProps, DynamicNode, Element, ErrorBoundary, Properties,
+    SuspenseBoundary, Template, TemplateNode, VComponent, VNode,
+};
 
 // We wrap the root scope in a component that renders it inside a default ErrorBoundary and SuspenseBoundary
 #[allow(non_snake_case)]

@@ -1,7 +1,11 @@
 #![allow(missing_docs)]
 
 use crate::{use_callback, use_signal};
-use dioxus_core::prelude::*;
+
+use dioxus_core::{
+    spawn, use_hook, Callback, IntoAttributeValue, IntoDynNode, ReactiveContext, RenderError,
+    SuspendedFuture, Task,
+};
 use dioxus_signals::*;
 use futures_util::{future, pin_mut, FutureExt, StreamExt};
 use std::ops::Deref;
