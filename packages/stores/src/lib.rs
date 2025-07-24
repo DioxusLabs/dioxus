@@ -16,6 +16,8 @@ mod subscriptions;
 mod vec;
 pub use hashmap::*;
 pub use vec::*;
+mod result;
+pub use result::*;
 
 // Re-exported for the macro
 #[doc(hidden)]
