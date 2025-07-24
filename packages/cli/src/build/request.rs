@@ -323,7 +323,7 @@ use crate::{
 use anyhow::{bail, Context};
 use cargo_metadata::diagnostic::Diagnostic;
 use depinfo::RustcDepInfo;
-use dioxus_cli_config::format_base_path_meta_element;
+use dioxus_cli_config::{format_base_path_meta_element, PRODUCT_NAME_ENV};
 use dioxus_cli_config::{APP_TITLE_ENV, ASSET_ROOT_ENV};
 use dioxus_cli_opt::{process_file_to, AssetManifest};
 use itertools::Itertools;
@@ -2423,6 +2423,7 @@ impl BuildRequest {
                 env_vars.push((ASSET_ROOT_ENV.into(), base_path.to_string()));
             }
             env_vars.push((APP_TITLE_ENV.into(), self.config.web.app.title.clone()));
+            env_vars.push((PRODUCT_NAME_ENV.into(), self.bundled_app_name()));
         }
 
         // Assemble the rustflags by peering into the `.cargo/config.toml` file
