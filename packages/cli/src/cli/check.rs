@@ -4,7 +4,7 @@
 //! <https://github.com/rust-lang/rustfmt/blob/master/src/bin/main.rs>
 
 use super::*;
-use crate::BuildRequest;
+use crate::{telemetry::Anonymized, BuildRequest};
 use anyhow::{anyhow, Context};
 use futures_util::{stream::FuturesUnordered, StreamExt};
 use std::path::Path;
@@ -49,6 +49,14 @@ impl Check {
         }
 
         Ok(StructuredOutput::Success)
+    }
+
+    pub(crate) fn command_anonymized(&self) -> (String, Value) {
+        let args = serde_json::json!({
+            "file": self.file.is_some(),
+            "build_args": self.build_args.anonymized(),
+        });
+        ("check".to_string(), args)
     }
 }
 

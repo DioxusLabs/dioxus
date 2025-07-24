@@ -3,6 +3,7 @@ use std::{fs::create_dir_all, path::PathBuf};
 use crate::{extract_assets_from_file, Result, StructuredOutput};
 use clap::Parser;
 use dioxus_cli_opt::process_file_to;
+use serde_json::Value;
 use tracing::debug;
 
 #[derive(Clone, Debug, Parser)]
@@ -32,5 +33,10 @@ impl BuildAssets {
         }
 
         Ok(StructuredOutput::Success)
+    }
+
+    pub(crate) fn command_anonymized(&self) -> (String, Value) {
+        let args = serde_json::json!({});
+        ("tools assets".to_string(), args)
     }
 }

@@ -1,3 +1,6 @@
+use serde_json::json;
+
+use crate::telemetry::Anonymized;
 use crate::BuildMode;
 use crate::{cli::*, telemetry, AppBuilder, BuildRequest, Workspace};
 
@@ -26,6 +29,16 @@ pub struct BuildArgs {
     /// Arguments for the build itself
     #[clap(flatten)]
     pub(crate) build_arguments: TargetArgs,
+}
+
+impl Anonymized for BuildArgs {
+    fn anonymized(&self) -> Value {
+        json! {{
+            "fullstack": self.fullstack,
+            "ssg": self.ssg,
+            "build_arguments": self.build_arguments.anonymized(),
+        }}
+    }
 }
 
 pub struct BuildTargets {

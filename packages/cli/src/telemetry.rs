@@ -12,6 +12,7 @@ use dioxus_dx_wire_format::StructuredOutput;
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::FutureExt;
 use posthog_rs::ClientOptions;
+use serde_json::Value;
 use target_lexicon::Triple;
 
 static TELEMETRY_TX: OnceLock<UnboundedSender<TelemetryEvent>> = OnceLock::new();
@@ -241,4 +242,8 @@ fn handle_panic(
             Err(anyhow::anyhow!(message))
         }
     }
+}
+
+pub(crate) trait Anonymized {
+    fn anonymized(&self) -> Value;
 }

@@ -209,4 +209,10 @@ More info: {LINK_STYLE}https://dioxuslabs.com/learn/0.6/{LINK_STYLE:#}
 
         Ok(StructuredOutput::Success)
     }
+
+    pub(crate) fn command_anonymized(&self) -> (String, Value) {
+        let command = "doctor".to_string();
+        let args = serde_json::json!({});
+        (command, args)
+    }
 }

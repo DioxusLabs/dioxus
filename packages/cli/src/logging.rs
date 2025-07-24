@@ -140,9 +140,10 @@ impl TraceController {
         sub.init();
 
         // Send the type of command we are running to the telemetry collector
+        let (command, anonymous_args) = args.action.command_anonymized();
         send_telemetry_event(
-            TelemetryEvent::new("cli_command", None, args.action.to_string(), "start")
-                .with_value("args", std::env::args().into_iter().collect::<Vec<_>>()),
+            TelemetryEvent::new("cli_command", None, command, "start")
+                .with_value("args", anonymous_args),
         );
 
         args.action

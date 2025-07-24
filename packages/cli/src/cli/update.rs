@@ -205,6 +205,17 @@ impl SelfUpdate {
         .await
         .context("Failed to run self-update")?
     }
+
+    pub(crate) fn command_anonymized(&self) -> (String, Value) {
+        let args = serde_json::json!({
+            "nightly": self.nightly,
+            "version": self.version,
+            "install": self.install,
+            "list": self.list,
+            "force": self.force,
+        });
+        ("update".to_string(), args)
+    }
 }
 
 /// Check against the github release list to see if the currently released `dx` version is

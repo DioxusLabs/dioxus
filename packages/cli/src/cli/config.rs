@@ -1,3 +1,6 @@
+use serde::Serialize;
+use serde_json::json;
+
 use super::*;
 use crate::{CliSettings, TraceSrc, Workspace};
 
@@ -58,9 +61,22 @@ impl Display for Setting {
     }
 }
 
+impl Setting {
+    pub(crate) fn anonymized(&self) -> (String, Value) {
+        let args = match self {
+            Self::AlwaysHotReload { value } => json!({ "value": value }),
+            Self::AlwaysOpenBrowser { value } => json!({ "value": value }),
+            Self::AlwaysOnTop { value } => json!({ "value": value }),
+            Self::WSLFilePollInterval { value } => json!({ "value": value }),
+            Self::DisableTelemetry { value } => json!({ "value": value }),
+        };
+        (format!("config set {}", self), args)
+    }
+}
+
 // Clap complains if we use a bool directly and I can't find much info about it.
 // "Argument 'value` is positional and it must take a value but action is SetTrue"
-#[derive(Debug, Clone, Copy, Deserialize, clap::ValueEnum)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, clap::ValueEnum)]
 pub(crate) enum BoolValue {
     True,
     False,
@@ -134,5 +150,21 @@ impl Config {
         }
 
         Ok(StructuredOutput::Success)
+    }
+
+    pub(crate) fn command_anonymized(&self) -> (String, Value) {
+        match self {
+            Config::Init { force, .. } => {
+                let args = json!({
+                    "force": force,
+                });
+                ("config init".to_string(), args)
+            }
+            Config::FormatPrint {} => ("config format-print".to_string(), json!({})),
+            Config::CustomHtml {} => ("config custom-html".to_string(), json!({})),
+            Config::LogFile {} => ("config log-file".to_string(), json!({})),
+            Config::TelemetryFile {} => ("config telemetry-file".to_string(), json!({})),
+            Config::Set(setting) => setting.anonymized(),
+        }
     }
 }
