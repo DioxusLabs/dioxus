@@ -36,12 +36,11 @@ pub async fn run_rustc() {
     // this is a stupid hack
     if std::env::args()
         .take(5)
-        .any(|arg| arg.ends_with(".o") || arg == "-flavor" || arg.starts_with("@"))
+        .any(|arg| arg.ends_with(".o") || arg == "-flavor")
     {
-        return crate::link::LinkAction::from_env()
-            .expect("Linker action not found")
-            .run_link()
-            .await;
+        if let Some(link_action) = crate::link::LinkAction::from_env() {
+            return link_action.run_link().await;
+        }
     }
 
     let var_file: PathBuf = std::env::var(DX_RUSTC_WRAPPER_ENV_VAR)
