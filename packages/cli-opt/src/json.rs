@@ -30,7 +30,6 @@ pub(crate) fn process_json(
             }
 
             tracing::error!("Failed to minify json: {}", err);
-
             source
         }
     };
