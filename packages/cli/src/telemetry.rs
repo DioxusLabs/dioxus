@@ -73,11 +73,17 @@ pub fn flush_telemetry_to_file() {
         tracing::warn!("Failed to lock telemetry RX");
         return;
     };
-    let mut log_file = std::fs::File::options()
+    let mut log_file = match std::fs::File::options()
         .create(true)
         .append(true)
         .open(Workspace::telemetry_file())
-        .unwrap();
+    {
+        Ok(file) => file,
+        Err(err) => {
+            tracing::trace!("Failed to open telemetry file: {}", err);
+            return;
+        }
+    };
 
     while let Ok(Some(msg)) = rx.try_next() {
         _ = serde_json::to_writer(&mut log_file, &msg);
@@ -124,8 +130,7 @@ async fn check_flush_file() {
         }
         events.push(posthog_event);
     }
-    // Remove the file
-    std::fs::remove_file(file).unwrap();
+
     // Send the events in the background
     tokio::spawn(async move {
         let client = posthog_rs::client(ClientOptions::from(KEY)).await;
@@ -135,6 +140,9 @@ async fn check_flush_file() {
                 "Failed to send telemetry events: {}",
                 error
             );
+        } else {
+            // Remove the file
+            _ = std::fs::remove_file(file);
         }
     });
 }
