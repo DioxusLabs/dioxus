@@ -392,7 +392,8 @@ pub(crate) struct BuildRequest {
     pub(crate) link_args_file: Arc<NamedTempFile>,
     pub(crate) link_err_file: Arc<NamedTempFile>,
     pub(crate) rustc_wrapper_args_file: Arc<NamedTempFile>,
-    pub(crate) command_file: Arc<NamedTempFile>,
+    pub(crate) linker_command_file: Arc<NamedTempFile>,
+    pub(crate) rustc_command_file: Arc<NamedTempFile>,
     pub(crate) base_path: Option<String>,
     pub(crate) using_dioxus_explicitly: bool,
 }
@@ -763,8 +764,11 @@ impl BuildRequest {
         let session_cache_dir = Arc::new(
             TempDir::new().context("Failed to create temporary directory for session cache")?,
         );
-        let command_file = Arc::new(
+        let linker_command_file = Arc::new(
             NamedTempFile::new().context("Failed to create temporary file for linker args")?,
+        );
+        let rustc_command_file = Arc::new(
+            NamedTempFile::new().context("Failed to create temporary file for rustc args")?,
         );
 
         let extra_rustc_args = shell_words::split(&args.rustc_args.clone().unwrap_or_default())
@@ -811,7 +815,8 @@ impl BuildRequest {
             custom_linker,
             link_args_file,
             link_err_file,
-            command_file,
+            linker_command_file,
+            rustc_command_file,
             session_cache_dir,
             rustc_wrapper_args_file,
             extra_rustc_args,
@@ -1472,9 +1477,9 @@ impl BuildRequest {
                 .iter()
                 .map(|s| format!("\"{}\"", s.to_string_lossy()))
                 .join(" ");
-            std::fs::write(self.command_file.path(), cmd_contents)
+            std::fs::write(self.linker_command_file.path(), cmd_contents)
                 .context("Failed to write linker command file")?;
-            out_args = vec![format!("@{}", self.command_file.path().display()).into()];
+            out_args = vec![format!("@{}", self.linker_command_file.path().display()).into()];
         }
 
         // Run the linker directly!
@@ -1993,9 +1998,9 @@ impl BuildRequest {
         let mut out_args = args.clone();
         if cfg!(windows) {
             let cmd_contents: String = out_args.iter().map(|f| format!("\"{f}\"")).join(" ");
-            std::fs::write(self.command_file.path(), cmd_contents)
+            std::fs::write(self.linker_command_file.path(), cmd_contents)
                 .context("Failed to write linker command file")?;
-            out_args = vec![format!("@{}", self.command_file.path().display())];
+            out_args = vec![format!("@{}", self.linker_command_file.path().display())];
         }
 
         // Run the linker directly!
@@ -2154,7 +2159,6 @@ impl BuildRequest {
                 let mut cmd = Command::new("rustc");
                 cmd.current_dir(self.workspace_dir());
                 cmd.env_clear();
-                cmd.args(rustc_args.args[1..].iter());
                 cmd.env_remove("RUSTC_WORKSPACE_WRAPPER");
                 cmd.env_remove("RUSTC_WRAPPER");
                 cmd.env_remove(DX_RUSTC_WRAPPER_ENV_VAR);
@@ -2163,13 +2167,34 @@ impl BuildRequest {
                         .iter()
                         .map(|(k, v)| (k.as_ref(), v)),
                 );
-                cmd.arg(format!("-Clinker={}", Workspace::path_to_dx()?.display()));
+                cmd.envs(rustc_args.envs.iter().cloned());
 
-                if self.is_wasm_or_wasi() {
-                    cmd.arg("-Crelocation-model=pic");
+                let mut args = rustc_args.args[1..]
+                    .iter()
+                    .map(Cow::Borrowed)
+                    .chain(Some(Cow::Owned(format!(
+                        "-Clinker={}",
+                        Workspace::path_to_dx()?.display()
+                    ))))
+                    .chain(
+                        self.is_wasm_or_wasi()
+                            .then_some(Cow::Owned("-Crelocation-model=pic".to_string())),
+                    )
+                    .collect::<Vec<_>>();
+
+                if cfg!(windows) {
+                    // On windows, we need to use the command file to pass the arguments
+                    // since the command line length can be too long.
+                    let cmd_contents: String = args.iter().map(|f| format!("\"{f}\"")).join(" ");
+                    std::fs::write(self.rustc_command_file.path(), cmd_contents)
+                        .context("Failed to write rustc command file")?;
+                    args = vec![Cow::Owned(format!(
+                        "@{}",
+                        self.rustc_command_file.path().display()
+                    ))];
                 }
 
-                cmd.envs(rustc_args.envs.iter().cloned());
+                cmd.args(args.iter().map(|a| a.as_ref()));
 
                 Ok(cmd)
             }
