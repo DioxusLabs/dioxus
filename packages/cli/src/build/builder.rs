@@ -1089,7 +1089,7 @@ We checked the folders:
             .args(["find-identity", "-v", "-p", "codesigning"])
             .output()
             .await
-            .context("Failed to run `security find-identity -v -p codesigning`")
+            .context("Failed to run `security find-identity -v -p codesigning` - is `security` in your path?")
             .map(|e| {
                 String::from_utf8(e.stdout)
                     .context("Failed to parse `security find-identity -v -p codesigning`")
@@ -1194,7 +1194,7 @@ We checked the folders:
             .arg(self.build.root_dir())
             .output()
             .await
-            .context("Failed to codesign the app")?;
+            .context("Failed to codesign the app - is `codesign` in your path?")?;
 
         if !output.status.success() {
             bail!(

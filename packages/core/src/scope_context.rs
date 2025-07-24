@@ -451,45 +451,66 @@ impl Scope {
     /// ```
     pub fn use_hook<State: Clone + 'static>(&self, initializer: impl FnOnce() -> State) -> State {
         let cur_hook = self.hook_index.get();
-        let mut hooks = self.hooks.try_borrow_mut().expect("The hook list is already borrowed: This error is likely caused by trying to use a hook inside a hook which violates the rules of hooks.");
 
-        if cur_hook >= hooks.len() {
-            Runtime::with(|rt| {
-                rt.while_not_rendering(|| {
-                    hooks.push(Box::new(initializer()));
-                });
-            })
-            .unwrap()
+        // The hook list works by keeping track of the current hook index and pushing the index forward
+        // while retrieving the hook value.
+        self.hook_index.set(cur_hook + 1);
+
+        let mut hooks = self.hooks
+            .try_borrow_mut()
+            .expect("The hook list is already borrowed: This error is likely caused by trying to use  hook inside a hook which violates the rules of hooks.");
+
+        // Try and retrieve the hook value if it exists
+        if let Some(existing) = self.use_hook_inner::<State>(&mut hooks, cur_hook) {
+            return existing;
         }
 
-        self.use_hook_inner::<State>(hooks, cur_hook)
+        // Otherwise, initialize the hook value. In debug mode, we allow hook types to change after a hot patch
+        self.push_hook_value(&mut hooks, cur_hook, initializer())
     }
 
-    // The interior version that gets monoorphized by the `State` type but not the `initializer` type.
+    // The interior version that gets monomorphized by the `State` type but not the `initializer` type.
     // This helps trim down binary sizes
     fn use_hook_inner<State: Clone + 'static>(
         &self,
-        hooks: std::cell::RefMut<Vec<Box<dyn std::any::Any>>>,
+        hooks: &mut Vec<Box<dyn std::any::Any>>,
         cur_hook: usize,
+    ) -> Option<State> {
+        hooks.get(cur_hook).and_then(|inn| {
+            let raw_ref: &dyn Any = inn.as_ref();
+            raw_ref.downcast_ref::<State>().cloned()
+        })
+    }
+
+    /// Push a new hook value or insert the value into the existing slot, warning if this is not after a hot patch
+    fn push_hook_value<State: Clone + 'static>(
+        &self,
+        hooks: &mut Vec<Box<dyn std::any::Any>>,
+        cur_hook: usize,
+        value: State,
     ) -> State {
-        hooks
-            .get(cur_hook)
-            .and_then(|inn| {
-                self.hook_index.set(cur_hook + 1);
-                let raw_ref: &dyn Any = inn.as_ref();
-                raw_ref.downcast_ref::<State>().cloned()
-            })
-            .expect(
-                r#"
-                Unable to retrieve the hook that was initialized at this index.
-                Consult the `rules of hooks` to understand how to use hooks properly.
+        // If this is a new hook, push it
+        if cur_hook >= hooks.len() {
+            hooks.push(Box::new(value.clone()));
+            return value;
+        }
 
-                You likely used the hook in a conditional. Hooks rely on consistent ordering between renders.
-                Functions prefixed with "use" should never be called conditionally.
+        // If we're in dev mode, we allow swapping hook values if the hook was initialized at this index
+        if cfg!(debug_assertions) && unsafe { subsecond::get_jump_table().is_some() } {
+            hooks[cur_hook] = Box::new(value.clone());
+            return value;
+        }
 
-                Help: Run `dx check` to look for check for some common hook errors.
-                "#,
-            )
+        // Otherwise, panic
+        panic!(
+            r#"Unable to retrieve the hook that was initialized at this index.
+                    Consult the `rules of hooks` to understand how to use hooks properly.
+
+                    You likely used the hook in a conditional. Hooks rely on consistent ordering between renders.
+                    Functions prefixed with "use" should never be called conditionally.
+
+                    Help: Run `dx check` to look for check for some common hook errors."#
+        );
     }
 
     pub fn push_before_render(&self, f: impl FnMut() + 'static) {

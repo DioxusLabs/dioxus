@@ -195,11 +195,11 @@ depinfo = { path = "packages/depinfo", version = "0.7.0-alpha.3" }
 warnings = { version = "0.2.1" }
 
 # blitz
-blitz-dom = { version = "=0.1.0-rc.1", default-features = false }
-blitz-net = { version = "=0.1.0-rc.1" }
-blitz-paint = { version = "=0.1.0-rc.1" }
-blitz-traits = { version = "=0.1.0-rc.1" }
-blitz-shell = { version = "=0.1.0-rc.1", default-features = false }
+blitz-dom = { version = "=0.1.0-rc.2", default-features = false }
+blitz-net = { version = "=0.1.0-rc.2" }
+blitz-paint = { version = "=0.1.0-rc.2" }
+blitz-traits = { version = "=0.1.0-rc.2" }
+blitz-shell = { version = "=0.1.0-rc.2", default-features = false }
 anyrender = { version = "0.5", default-features = false }
 anyrender_vello = { version = "0.5", default-features = false }
 wgpu = { version = "24.0" }
