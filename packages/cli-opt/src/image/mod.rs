@@ -1,9 +1,8 @@
-use std::path::Path;
-
-use anyhow::Context;
+use anyhow::{bail, Context};
 use jpg::compress_jpg;
 use manganis_core::{ImageAssetOptions, ImageFormat, ImageSize};
 use png::compress_png;
+use std::path::Path;
 
 mod jpg;
 mod png;
@@ -12,6 +11,7 @@ pub(crate) fn process_image(
     image_options: &ImageAssetOptions,
     source: &Path,
     output_path: &Path,
+    allow_fallback: bool,
 ) -> anyhow::Result<()> {
     let mut image = image::ImageReader::new(std::io::Cursor::new(&*std::fs::read(source)?))
         .with_guessed_format()
@@ -49,6 +49,9 @@ pub(crate) fn process_image(
                     output_path.display()
                 )
             })?;
+        }
+        (Err(err), _) if !allow_fallback => {
+            bail!("Failed to decode image from {}: {}", source.display(), err);
         }
         // If we can't decode the image or it is of an unknown type, we just copy the file
         _ => {

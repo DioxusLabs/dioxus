@@ -42,6 +42,47 @@ use object::{File, Object, ObjectSection, ObjectSymbol, ReadCache, ReadRef, Sect
 use pdb::FallibleIterator;
 use rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
 
+#[derive(Clone, Debug)]
+pub(crate) struct BuildAssets {
+    pub manifest: AssetManifest,
+    pub wasm_js_bundled: bool,
+    pub wasm_bindgen_js: Option<BundledAsset>,
+}
+
+impl BuildAssets {
+    /// Create a new set of build assets.
+    pub fn new(manifest: AssetManifest) -> Self {
+        Self {
+            manifest,
+            wasm_js_bundled: false,
+            wasm_bindgen_js: None,
+        }
+    }
+
+    /// Set the wasm-bindgen JS asset.
+    pub fn set_wasm_bindgen_js(&mut self, asset: BundledAsset, bundled: bool) {
+        self.wasm_bindgen_js = Some(asset);
+        self.wasm_js_bundled = bundled;
+    }
+
+    /// Get the wasm-bindgen JS asset.
+    pub fn wasm_bindgen_js(&self) -> Option<&BundledAsset> {
+        self.wasm_bindgen_js.as_ref()
+    }
+
+    /// Check if the wasm-bindgen JS asset is bundled.
+    pub fn wasm_js_bundled(&self) -> bool {
+        self.wasm_js_bundled
+    }
+
+    /// Iterate over all unique assets in the manifest.
+    pub fn unique_assets(&self) -> impl Iterator<Item = &BundledAsset> {
+        self.manifest
+            .unique_assets()
+            .chain(self.wasm_bindgen_js.iter())
+    }
+}
+
 /// Extract all manganis symbols and their sections from the given object file.
 fn manganis_symbols<'a, 'b, R: ReadRef<'a>>(
     file: &'b File<'a, R>,
@@ -323,9 +364,11 @@ pub(crate) fn extract_assets_from_file(path: impl AsRef<Path>) -> Result<AssetMa
     }
 
     // Add the hash to each asset in parallel
-    assets
-        .par_iter_mut()
-        .for_each(dioxus_cli_opt::add_hash_to_asset);
+    assets.par_iter_mut().for_each(|asset| {
+        if let Err(err) = dioxus_cli_opt::add_hash_to_asset(asset, true) {
+            tracing::error!("Failed to add hash to asset: {err}");
+        }
+    });
 
     // Write back the assets to the binary file
     for (offset, asset) in offsets.into_iter().zip(&assets) {
