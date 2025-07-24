@@ -10,7 +10,7 @@ use dioxus_document::{
     Document, Eval, LinkProps, MetaProps, NoOpDocument, ScriptProps, StyleProps,
 };
 use dioxus_html as dioxus_elements;
-use dioxus_signals::{GlobalSignal, Readable};
+use dioxus_signals::{GlobalSignal, ReadableExt};
 use dioxus_ssr::Renderer;
 use parking_lot::RwLock;
 use std::sync::LazyLock;

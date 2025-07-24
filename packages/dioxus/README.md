@@ -32,6 +32,7 @@ Dioxus is crossplatform app framework that empowers developer to build beautiful
 ## Quick start
 
 To get started with Dioxus, you'll want to grab the dioxus-cli tool: `dx`. We distribute `dx` with `cargo-binstall` - if you already have binstall skip this step.
+
 ```shell
 # skip if you already have cargo-binstall
 cargo install cargo-binstall
@@ -123,7 +124,7 @@ fn App() -> Element {
 
 We can compose these function components to build a complex app. Each new component takes some Properties. For components with no explicit properties, we can omit the type altogether.
 
-In Dioxus, all properties are memoized by default with `Clone` and `PartialEq`. For props you can't clone, simply wrap the fields in a [`ReadOnlySignal`](dioxus_signals::ReadOnlySignal) and Dioxus will handle converting types for you.
+In Dioxus, all properties are memoized by default with `Clone` and `PartialEq`. For props you can't clone, simply wrap the fields in a [`ReadSignal`](dioxus_signals::ReadSignal) and Dioxus will handle converting types for you.
 
 ```rust, no_run
 # use dioxus::prelude::*;

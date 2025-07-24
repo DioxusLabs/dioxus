@@ -7,7 +7,7 @@ use dioxus_core_macro::{rsx, Props};
 use dioxus_html::{
     self as dioxus_elements, ModifiersInteraction, MountedEvent, MouseEvent, PointerInteraction,
 };
-use dioxus_signals::{GlobalSignal, Owner, Readable};
+use dioxus_signals::{GlobalSignal, Owner, ReadableExt};
 
 use tracing::error;
 

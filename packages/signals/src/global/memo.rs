@@ -1,5 +1,5 @@
 use super::{Global, InitializeFromFunction};
-use crate::read::Readable;
+use crate::read::ReadableExt;
 use crate::read_impls;
 use crate::Memo;
 

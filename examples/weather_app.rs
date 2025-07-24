@@ -108,7 +108,7 @@ fn Forecast(weather: WeatherResponse) -> Element {
 }
 
 #[component]
-fn SearchBox(mut country: Signal<WeatherLocation>) -> Element {
+fn SearchBox(mut country: WriteSignal<WeatherLocation>) -> Element {
     let mut input = use_signal(|| "".to_string());
 
     let locations = use_resource(move || async move { get_locations(&input()).await });

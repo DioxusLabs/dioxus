@@ -87,7 +87,7 @@ fn app() -> Element {
 }
 
 #[component]
-fn ColorControl(label: &'static str, color_str: Signal<String>) -> Element {
+fn ColorControl(label: &'static str, color_str: WriteSignal<String>) -> Element {
     rsx!(div {
         class: "color-control",
         { label },

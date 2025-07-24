@@ -1,5 +1,5 @@
 use dioxus_core::use_hook;
-use dioxus_signals::{ReadOnlySignal, SetCompare};
+use dioxus_signals::{ReadSignal, SetCompare};
 use std::hash::Hash;
 
 /// Creates a new SetCompare which efficiently tracks when a value changes to check if it is equal to a set of values.
@@ -51,6 +51,6 @@ pub fn use_set_compare<R: Eq + Hash>(f: impl FnMut() -> R + 'static) -> SetCompa
 pub fn use_set_compare_equal<R: Eq + Hash>(
     value: R,
     mut compare: SetCompare<R>,
-) -> ReadOnlySignal<bool> {
+) -> ReadSignal<bool> {
     use_hook(move || compare.equal(value))
 }

@@ -7,7 +7,7 @@ use std::{
 
 use dioxus_core::{provide_context, Element, ReactiveContext, ScopeId};
 use dioxus_history::history;
-use dioxus_signals::{CopyValue, Readable, Signal, Writable};
+use dioxus_signals::{CopyValue, ReadableExt, Signal, Writable};
 
 use crate::{
     components::child_router::consume_child_route_mapping, navigation::NavigationTarget,
