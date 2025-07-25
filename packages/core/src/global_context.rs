@@ -4,6 +4,7 @@ use crate::{
     Task,
 };
 use std::future::Future;
+use std::rc::Rc;
 use std::sync::Arc;
 
 /// Get the current scope id
@@ -441,15 +442,10 @@ pub fn use_drop<D: FnOnce() + 'static>(destroy: D) {
         }
     }
 
-    // We need to impl clone for the lifecycle, but we don't want the drop handler for the closure to be called twice.
-    impl<D: FnOnce()> Clone for LifeCycle<D> {
-        fn clone(&self) -> Self {
-            Self { ondestroy: None }
-        }
-    }
-
-    use_hook(|| LifeCycle {
-        ondestroy: Some(destroy),
+    use_hook(|| {
+        Rc::new(LifeCycle {
+            ondestroy: Some(destroy),
+        })
     });
 }
 
