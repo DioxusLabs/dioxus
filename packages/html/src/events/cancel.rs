@@ -83,6 +83,6 @@ pub trait HasCancelData: std::any::Any {
 impl_event! {
     CancelData;
 
-    /// onCancel
+    /// oncancel
     oncancel
 }
