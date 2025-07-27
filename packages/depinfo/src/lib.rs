@@ -342,6 +342,7 @@ mod tests {
             "/dioxus/packages/html/src/attribute_groups.rs",
             "/dioxus/packages/html/src/elements.rs",
             "/dioxus/packages/html/src/events/animation.rs",
+            "/dioxus/packages/html/src/events/cancel.rs",
             "/dioxus/packages/html/src/events/clipboard.rs",
             "/dioxus/packages/html/src/events/composition.rs",
             "/dioxus/packages/html/src/events/drag.rs",
