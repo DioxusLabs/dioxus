@@ -18,6 +18,8 @@ pub use hashmap::*;
 pub use vec::*;
 mod result;
 pub use result::*;
+mod option;
+pub use option::*;
 
 // Re-exported for the macro
 #[doc(hidden)]
