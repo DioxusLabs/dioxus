@@ -97,15 +97,16 @@ pub async fn run_rustc() {
         .nth(1)
         .is_some_and(|name| name != "___")
     {
-        let parent_dir = var_file.parent().expect("Args file path has no parent directory");
+        let parent_dir = var_file
+            .parent()
+            .expect("Args file path has no parent directory");
         std::fs::create_dir_all(parent_dir)
             .expect("Failed to create parent directory for args file");
 
-        let serialized_args = serde_json::to_string(&rustc_args)
-            .expect("Failed to serialize rustc args");
+        let serialized_args =
+            serde_json::to_string(&rustc_args).expect("Failed to serialize rustc args");
 
-        std::fs::write(&var_file, serialized_args)
-            .expect("Failed to write rustc args to file");
+        std::fs::write(&var_file, serialized_args).expect("Failed to write rustc args to file");
     }
 
     // Run the actual rustc command.
