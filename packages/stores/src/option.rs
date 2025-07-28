@@ -1,5 +1,5 @@
 use crate::{CreateSelector, SelectorScope, Storable, Store};
-use dioxus_signals::{MappedMutSignal, ReadableExt, Writable};
+use dioxus_signals::{MappedMutSignal, ReadableExt, UnsyncStorage, Writable, WriteSignal};
 use std::marker::PhantomData;
 
 impl<T> Storable for Option<T> {
@@ -33,6 +33,22 @@ where
 }
 
 impl<W, T> Copy for OptionSelector<W, T> where W: Copy {}
+
+impl<
+        T,
+        W: Writable<Storage = UnsyncStorage> + 'static,
+        F: Fn(&W::Target) -> &Option<T> + 'static,
+        FMut: Fn(&mut W::Target) -> &mut Option<T> + 'static,
+    > ::std::convert::From<OptionSelector<MappedMutSignal<Option<T>, W, F, FMut>, T>>
+    for OptionSelector<WriteSignal<Option<T>>, T>
+{
+    fn from(value: OptionSelector<MappedMutSignal<Option<T>, W, F, FMut>, T>) -> Self {
+        OptionSelector {
+            selector: value.selector.map(::std::convert::Into::into),
+            _phantom: PhantomData,
+        }
+    }
+}
 
 impl<W, T> CreateSelector for OptionSelector<W, T> {
     type View = W;

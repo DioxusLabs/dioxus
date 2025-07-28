@@ -1,5 +1,5 @@
 use crate::{CreateSelector, SelectorScope, Storable, Store};
-use dioxus_signals::{MappedMutSignal, ReadableExt, Writable};
+use dioxus_signals::{MappedMutSignal, ReadableExt, UnsyncStorage, Writable, WriteSignal};
 use std::marker::PhantomData;
 
 impl<T, E> Storable for Result<T, E> {
@@ -33,6 +33,23 @@ where
 }
 
 impl<W, T, E> Copy for ResultSelector<W, T, E> where W: Copy {}
+
+impl<
+        T,
+        E,
+        W: Writable<Storage = UnsyncStorage> + 'static,
+        F: Fn(&W::Target) -> &Result<T, E> + 'static,
+        FMut: Fn(&mut W::Target) -> &mut Result<T, E> + 'static,
+    > ::std::convert::From<ResultSelector<MappedMutSignal<Result<T, E>, W, F, FMut>, T, E>>
+    for ResultSelector<WriteSignal<Result<T, E>>, T, E>
+{
+    fn from(value: ResultSelector<MappedMutSignal<Result<T, E>, W, F, FMut>, T, E>) -> Self {
+        ResultSelector {
+            selector: value.selector.map(::std::convert::Into::into),
+            _phantom: PhantomData,
+        }
+    }
+}
 
 impl<W, T, E> CreateSelector for ResultSelector<W, T, E> {
     type View = W;

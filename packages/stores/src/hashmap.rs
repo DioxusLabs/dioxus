@@ -1,5 +1,5 @@
 use crate::{CreateSelector, SelectorScope, Storable, Store};
-use dioxus_signals::{MappedMutSignal, ReadableExt, Writable};
+use dioxus_signals::{MappedMutSignal, ReadableExt, UnsyncStorage, Writable, WriteSignal};
 use std::{
     borrow::Borrow,
     collections::HashMap,
@@ -38,6 +38,27 @@ where
 }
 
 impl<W, K, V, St> Copy for HashMapSelector<W, K, V, St> where W: Copy {}
+
+impl<
+        K,
+        V,
+        St,
+        W: Writable<Storage = UnsyncStorage> + 'static,
+        F: Fn(&W::Target) -> &HashMap<K, V, St> + 'static,
+        FMut: Fn(&mut W::Target) -> &mut HashMap<K, V, St> + 'static,
+    >
+    ::std::convert::From<HashMapSelector<MappedMutSignal<HashMap<K, V, St>, W, F, FMut>, K, V, St>>
+    for HashMapSelector<WriteSignal<HashMap<K, V, St>>, K, V, St>
+{
+    fn from(
+        value: HashMapSelector<MappedMutSignal<HashMap<K, V, St>, W, F, FMut>, K, V, St>,
+    ) -> Self {
+        HashMapSelector {
+            selector: value.selector.map(::std::convert::Into::into),
+            _phantom: PhantomData,
+        }
+    }
+}
 
 impl<W, K, V, St> CreateSelector for HashMapSelector<W, K, V, St> {
     type View = W;
