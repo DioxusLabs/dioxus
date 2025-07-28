@@ -221,13 +221,17 @@ struct StoreSubscribers {
 
 impl SubscriberList for StoreSubscribers {
     fn add(&self, subscriber: ReactiveContext) {
-        let mut write = self.subscriptions.inner.write_unchecked();
+        let Ok(mut write) = self.subscriptions.inner.try_write_unchecked() else {
+            return;
+        };
         let node = write.root.get_mut_or_default(&self.path);
         node.subscribers.insert(subscriber);
     }
 
     fn remove(&self, subscriber: &ReactiveContext) {
-        let mut write = self.subscriptions.inner.write_unchecked();
+        let Ok(mut write) = self.subscriptions.inner.try_write_unchecked() else {
+            return;
+        };
         let Some(node) = write.root.find_mut(&self.path) else {
             return;
         };
@@ -238,7 +242,9 @@ impl SubscriberList for StoreSubscribers {
     }
 
     fn visit(&self, f: &mut dyn FnMut(&ReactiveContext)) {
-        let read = self.subscriptions.inner.read();
+        let Ok(read) = self.subscriptions.inner.try_read() else {
+            return;
+        };
         let Some(node) = read.root.find(&self.path) else {
             return;
         };

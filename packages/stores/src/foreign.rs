@@ -1,13 +1,18 @@
 use crate::{CreateSelector, SelectorScope, Storable};
 use dioxus_core::{IntoAttributeValue, IntoDynNode, Subscribers};
 use dioxus_signals::{
-    read_impls, write_impls, BorrowError, BorrowMutError, Readable, ReadableExt, ReadableRef,
-    Writable, WritableExt, WritableRef,
+    read_impls, write_impls, BorrowError, BorrowMutError, MappedMutSignal, Readable, ReadableExt,
+    ReadableRef, UnsyncStorage, Writable, WritableExt, WritableRef, WriteSignal,
 };
 use std::{
     collections::{BTreeMap, BTreeSet, BinaryHeap, HashSet, LinkedList, VecDeque},
+    ffi::{OsStr, OsString},
     marker::PhantomData,
     ops::Deref,
+    path::{Path, PathBuf},
+    rc::Rc,
+    sync::Arc,
+    time::Duration,
 };
 
 pub struct ForeignType<T: ?Sized> {
@@ -111,6 +116,28 @@ where
     }
 }
 
+impl<W: PartialEq, T: ?Sized> PartialEq for ForeignStore<T, W> {
+    fn eq(&self, other: &Self) -> bool {
+        self.selector == other.selector
+    }
+}
+
+impl<
+        T,
+        W: Writable<Storage = UnsyncStorage> + 'static,
+        F: Fn(&W::Target) -> &T + 'static,
+        FMut: Fn(&mut W::Target) -> &mut T + 'static,
+    > ::std::convert::From<ForeignStore<T, MappedMutSignal<T, W, F, FMut>>>
+    for ForeignStore<T, WriteSignal<T>>
+{
+    fn from(value: ForeignStore<T, MappedMutSignal<T, W, F, FMut>>) -> Self {
+        ForeignStore {
+            selector: value.selector.map(::std::convert::Into::into),
+            phantom: PhantomData,
+        }
+    }
+}
+
 macro_rules! mark_foreign_type {
     (
         // accept a path without angle brackets
@@ -162,6 +189,11 @@ mark_foreign_type!(isize);
 // Common foreign types
 mark_foreign_type!(String);
 mark_foreign_type!(str);
+mark_foreign_type!(Path);
+mark_foreign_type!(PathBuf);
+mark_foreign_type!(OsString);
+mark_foreign_type!(OsStr);
+mark_foreign_type!(Duration);
 
 // Common foreign data structures
 mark_foreign_type!(HashSet<T>);
@@ -170,3 +202,7 @@ mark_foreign_type!(BTreeSet<T>);
 mark_foreign_type!(LinkedList<T>);
 mark_foreign_type!(BinaryHeap<T>);
 mark_foreign_type!(VecDeque<T>);
+
+mark_foreign_type!(Box<T>);
+mark_foreign_type!(Rc<T>);
+mark_foreign_type!(Arc<T>);
