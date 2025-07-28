@@ -264,9 +264,7 @@ enum FilterState {
 
 #[derive(Store, PartialEq, Clone, Debug)]
 struct TodoItem {
-    #[store(foreign)]
     checked: bool,
-    #[store(foreign)]
     contents: String,
 }
 

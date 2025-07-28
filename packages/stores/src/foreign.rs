@@ -4,22 +4,26 @@ use dioxus_signals::{
     read_impls, write_impls, BorrowError, BorrowMutError, Readable, ReadableExt, ReadableRef,
     Writable, WritableExt, WritableRef,
 };
-use std::{marker::PhantomData, ops::Deref};
+use std::{
+    collections::{BTreeMap, BTreeSet, BinaryHeap, HashSet, LinkedList, VecDeque},
+    marker::PhantomData,
+    ops::Deref,
+};
 
-pub struct ForeignType<T> {
+pub struct ForeignType<T: ?Sized> {
     phantom: PhantomData<(T,)>,
 }
 
-impl<T> Storable for ForeignType<T> {
+impl<T: ?Sized> Storable for ForeignType<T> {
     type Store<View> = ForeignStore<T, View>;
 }
 
-pub struct ForeignStore<T, W> {
+pub struct ForeignStore<T: ?Sized, W> {
     selector: SelectorScope<W>,
     phantom: PhantomData<T>,
 }
 
-impl<W, T> Clone for ForeignStore<T, W>
+impl<W, T: ?Sized> Clone for ForeignStore<T, W>
 where
     W: Clone,
 {
@@ -31,9 +35,9 @@ where
     }
 }
 
-impl<W, T> Copy for ForeignStore<T, W> where W: Copy {}
+impl<W, T: ?Sized> Copy for ForeignStore<T, W> where W: Copy {}
 
-impl<W, T> CreateSelector for ForeignStore<T, W> {
+impl<W, T: ?Sized> CreateSelector for ForeignStore<T, W> {
     type View = W;
 
     fn new(selector: SelectorScope<Self::View>) -> Self {
@@ -75,7 +79,7 @@ impl<T: Clone + 'static, W: Writable<Target = T> + 'static> Deref for ForeignSto
     }
 }
 
-impl<W, T: 'static> Readable for ForeignStore<T, W>
+impl<W, T: ?Sized + 'static> Readable for ForeignStore<T, W>
 where
     W: Readable<Target = T>,
 {
@@ -96,7 +100,7 @@ where
     }
 }
 
-impl<W, T: 'static> Writable for ForeignStore<T, W>
+impl<W, T: ?Sized + 'static> Writable for ForeignStore<T, W>
 where
     W: Writable<Target = T>,
 {
@@ -106,3 +110,63 @@ where
         self.selector.try_write_unchecked()
     }
 }
+
+macro_rules! mark_foreign_type {
+    (
+        // accept a path without angle brackets
+        $ty:ident
+        // Accept generics
+        $(< $($gen:ident $(: $gen_bound:path)?),* >)?
+        // Accept extra bounds
+        $(
+            where
+                $(
+                    $extra_bound_ty:ident: $extra_bound:path
+                ),+
+        )?) => {
+        impl
+        $(
+            <
+                $(
+                    $gen $(: $gen_bound)?
+                ),*
+            >
+        )?
+        Storable for $ty $(< $($gen),* >)?
+        where
+            $($($extra_bound_ty: $extra_bound),*)?
+        {
+            type Store<View> = ForeignStore<$ty $(< $($gen),* >)?, View>;
+        }
+    };
+}
+
+// Primitive foreign types
+mark_foreign_type!(u8);
+mark_foreign_type!(u16);
+mark_foreign_type!(u32);
+mark_foreign_type!(u64);
+mark_foreign_type!(u128);
+mark_foreign_type!(i8);
+mark_foreign_type!(i16);
+mark_foreign_type!(i32);
+mark_foreign_type!(i64);
+mark_foreign_type!(i128);
+mark_foreign_type!(f32);
+mark_foreign_type!(f64);
+mark_foreign_type!(bool);
+mark_foreign_type!(char);
+mark_foreign_type!(usize);
+mark_foreign_type!(isize);
+
+// Common foreign types
+mark_foreign_type!(String);
+mark_foreign_type!(str);
+
+// Common foreign data structures
+mark_foreign_type!(HashSet<T>);
+mark_foreign_type!(BTreeMap<K, V>);
+mark_foreign_type!(BTreeSet<T>);
+mark_foreign_type!(LinkedList<T>);
+mark_foreign_type!(BinaryHeap<T>);
+mark_foreign_type!(VecDeque<T>);

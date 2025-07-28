@@ -9,11 +9,7 @@ fn main() {
 }
 
 fn app() -> Element {
-    let result = use_store(|| {
-        "0".parse::<u32>()
-            .map(|data| TodoState { data })
-            .map_err(|error| ParseError { error })
-    });
+    let result = use_store(|| "0".parse::<u32>().map_err(|error| ParseError { error }));
     match result.as_result() {
         Ok(data) => {
             rsx! {
@@ -37,17 +33,11 @@ fn HandleError(error: Store<ParseError>) -> Element {
 }
 
 #[component]
-fn HandleOk(data: Store<TodoState>) -> Element {
+fn HandleOk(data: Store<u32>) -> Element {
     rsx! {
         h1 { "Parsed number successfully" }
-        p { "The parsed number is: {data.data()}" }
+        p { "The parsed number is: {data}" }
     }
-}
-
-#[derive(Store)]
-struct TodoState {
-    #[store(foreign)]
-    data: u32,
 }
 
 #[derive(Store)]

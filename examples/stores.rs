@@ -13,7 +13,6 @@ struct Value {
 
 #[derive(Store, Default)]
 struct DoubleCount {
-    #[store(foreign)]
     count: i32,
 }
 
