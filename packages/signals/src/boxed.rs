@@ -1,6 +1,6 @@
 use std::{any::Any, ops::Deref};
 
-use dioxus_core::{IntoAttributeValue, IntoDynNode};
+use dioxus_core::{IntoAttributeValue, IntoDynNode, Subscribers};
 use generational_box::{BorrowResult, UnsyncStorage};
 
 use crate::{
@@ -35,10 +35,9 @@ impl<T: ?Sized + 'static> ReadSignal<T> {
         if let (Some(this_subscribers), Some(other_subscribers)) =
             (this_subscribers, other_subscribers)
         {
-            let this_subscribers = this_subscribers.lock().unwrap();
-            for subscriber in this_subscribers.iter() {
+            this_subscribers.visit(|subscriber| {
                 subscriber.subscribe(other_subscribers.clone());
-            }
+            });
         }
         self.value.point_to(other.value)
     }
@@ -49,12 +48,9 @@ impl<T: ?Sized + 'static> ReadSignal<T> {
     pub fn mark_dirty(&mut self) {
         let subscribers = self.value.subscribers();
         if let Some(subscribers) = subscribers {
-            let Ok(subscribers) = subscribers.try_lock() else {
-                return;
-            };
-            for subscriber in subscribers.iter() {
+            subscribers.visit(|subscriber| {
                 subscriber.mark_dirty();
-            }
+            });
         }
     }
 }
@@ -131,7 +127,7 @@ impl<T: 'static> Readable for ReadSignal<T> {
             .try_peek_unchecked()
     }
 
-    fn subscribers(&self) -> Option<crate::Subscribers> {
+    fn subscribers(&self) -> Option<Subscribers> {
         self.value.subscribers()
     }
 }
@@ -229,7 +225,7 @@ impl<W: Readable> Readable for BoxWriteMetadata<W> {
         self.value.try_peek_unchecked()
     }
 
-    fn subscribers(&self) -> Option<crate::Subscribers> {
+    fn subscribers(&self) -> Option<Subscribers> {
         self.value.subscribers()
     }
 }
@@ -333,7 +329,7 @@ impl<T: 'static> Readable for WriteSignal<T> {
             .try_peek_unchecked()
     }
 
-    fn subscribers(&self) -> Option<crate::Subscribers> {
+    fn subscribers(&self) -> Option<Subscribers> {
         self.value.subscribers()
     }
 }

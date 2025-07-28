@@ -3,10 +3,10 @@
 use std::hash::Hash;
 
 use crate::subscriptions::{StoreSubscriptions, StoreSubscriptionsInner, TinyVec};
-use dioxus_core::use_hook;
+use dioxus_core::{use_hook, Subscribers};
 use dioxus_signals::{
     BorrowError, BorrowMutError, CopyValue, MappedMutSignal, Readable, ReadableRef, Storage,
-    Subscribers, UnsyncStorage, Writable, WritableExt, WritableRef, WriteSignal,
+    UnsyncStorage, Writable, WritableExt, WritableRef, WriteSignal,
 };
 
 mod foreign;
@@ -24,6 +24,7 @@ pub use option::*;
 // Re-exported for the macro
 #[doc(hidden)]
 pub mod macro_helpers {
+    pub use dioxus_core;
     pub use dioxus_signals;
 }
 
@@ -31,19 +32,19 @@ pub mod macro_helpers {
 pub trait SelectorStorage: Storage<StoreSubscriptionsInner> {}
 impl<S: Storage<StoreSubscriptionsInner>> SelectorStorage for S {}
 
-pub struct SelectorScope<W, S: SelectorStorage = UnsyncStorage> {
+pub struct SelectorScope<W> {
     path: TinyVec,
-    store: StoreSubscriptions<S>,
+    store: StoreSubscriptions,
     write: W,
 }
 
-impl<W: PartialEq, S: SelectorStorage> PartialEq for SelectorScope<W, S> {
+impl<W: PartialEq> PartialEq for SelectorScope<W> {
     fn eq(&self, other: &Self) -> bool {
         self.path == other.path && self.write == other.write
     }
 }
 
-impl<W, S: SelectorStorage> Clone for SelectorScope<W, S>
+impl<W> Clone for SelectorScope<W>
 where
     W: Clone,
 {
@@ -56,10 +57,10 @@ where
     }
 }
 
-impl<W, S: SelectorStorage> Copy for SelectorScope<W, S> where W: Copy {}
+impl<W> Copy for SelectorScope<W> where W: Copy {}
 
-impl<W, S: SelectorStorage> SelectorScope<W, S> {
-    fn new(path: TinyVec, store: StoreSubscriptions<S>, write: W) -> Self {
+impl<W> SelectorScope<W> {
+    fn new(path: TinyVec, store: StoreSubscriptions, write: W) -> Self {
         Self { path, store, write }
     }
 
@@ -68,9 +69,9 @@ impl<W, S: SelectorStorage> SelectorScope<W, S> {
         index: impl Hash,
         map: F,
         map_mut: FMut,
-    ) -> SelectorScope<MappedMutSignal<U, W, F, FMut>, S>
+    ) -> SelectorScope<MappedMutSignal<U, W, F, FMut>>
     where
-        W: Writable<Storage = S> + Copy + 'static,
+        W: Writable + Copy + 'static,
         F: Fn(&W::Target) -> &U + Copy + 'static,
         FMut: Fn(&mut W::Target) -> &mut U + Copy + 'static,
     {
@@ -83,9 +84,9 @@ impl<W, S: SelectorStorage> SelectorScope<W, S> {
         index: u32,
         map: F,
         map_mut: FMut,
-    ) -> SelectorScope<MappedMutSignal<U, W, F, FMut>, S>
+    ) -> SelectorScope<MappedMutSignal<U, W, F, FMut>>
     where
-        W: Writable<Storage = S> + Copy + 'static,
+        W: Writable + Copy + 'static,
         F: Fn(&W::Target) -> &U + Copy + 'static,
         FMut: Fn(&mut W::Target) -> &mut U + Copy + 'static,
     {
@@ -103,10 +104,6 @@ impl<W, S: SelectorStorage> SelectorScope<W, S> {
         self.store.track(&self.path);
     }
 
-    fn track_nested(&self) {
-        self.store.track_nested(&self.path);
-    }
-
     fn mark_dirty(&self) {
         self.store.mark_dirty(&self.path);
     }
@@ -120,7 +117,7 @@ impl<W, S: SelectorStorage> SelectorScope<W, S> {
     }
 
     /// Map the writer to a new type.
-    pub fn map<W2>(self, map: impl FnOnce(W) -> W2) -> SelectorScope<W2, S> {
+    pub fn map<W2>(self, map: impl FnOnce(W) -> W2) -> SelectorScope<W2> {
         SelectorScope {
             path: self.path,
             store: self.store,
@@ -129,9 +126,9 @@ impl<W, S: SelectorStorage> SelectorScope<W, S> {
     }
 }
 
-impl<W: Readable, S: SelectorStorage> SelectorScope<W, S> {
+impl<W: Readable> SelectorScope<W> {
     pub fn try_read_unchecked(&self) -> Result<ReadableRef<'static, W>, BorrowError> {
-        self.track_nested();
+        self.track();
         self.write.try_read_unchecked()
     }
 
@@ -140,22 +137,22 @@ impl<W: Readable, S: SelectorStorage> SelectorScope<W, S> {
     }
 
     pub fn subscribers(&self) -> Option<Subscribers> {
-        self.store.subscribers(&self.path)
+        Some(self.store.subscribers(&self.path))
     }
 }
 
-impl<W: Writable, S: SelectorStorage> SelectorScope<W, S> {
+impl<W: Writable> SelectorScope<W> {
     pub fn try_write_unchecked(&self) -> Result<WritableRef<'static, W>, BorrowMutError> {
         self.mark_dirty();
         self.write.try_write_unchecked()
     }
 }
 
-pub type Store<T, W = WriteSignal<T>, S = UnsyncStorage> = <T as Storable>::Store<W, S>;
+pub type Store<T, W = WriteSignal<T>> = <T as Storable>::Store<W>;
 
-pub fn create_maybe_sync_store<T: Storable, S: SelectorStorage + Storage<T>>(
+pub fn create_maybe_sync_store<T: Storable, S: Storage<T>>(
     value: T,
-) -> Store<T, MappedMutSignal<T, CopyValue<T, S>>, S> {
+) -> Store<T, MappedMutSignal<T, CopyValue<T, S>>> {
     let store = StoreSubscriptions::new();
     let value = CopyValue::new_maybe_sync(value);
 
@@ -170,11 +167,11 @@ pub fn create_maybe_sync_store<T: Storable, S: SelectorStorage + Storage<T>>(
     T::Store::new(selector)
 }
 
-pub fn use_maybe_sync_store<T: Storable, S: SelectorStorage + Storage<T>>(
+pub fn use_maybe_sync_store<T: Storable, S: Storage<T>>(
     init: impl Fn() -> T,
-) -> Store<T, MappedMutSignal<T, CopyValue<T, S>>, S>
+) -> Store<T, MappedMutSignal<T, CopyValue<T, S>>>
 where
-    Store<T, MappedMutSignal<T, CopyValue<T, S>>, S>: Clone,
+    Store<T, MappedMutSignal<T, CopyValue<T, S>>>: Clone,
 {
     use_hook(move || create_maybe_sync_store(init()))
 }
@@ -191,12 +188,11 @@ where
 }
 
 pub trait Storable {
-    type Store<View, S: SelectorStorage>: CreateSelector<View = View, Storage = S>;
+    type Store<View>: CreateSelector<View = View>;
 }
 
 pub trait CreateSelector {
     type View;
-    type Storage: SelectorStorage;
 
-    fn new(selector: SelectorScope<Self::View, Self::Storage>) -> Self;
+    fn new(selector: SelectorScope<Self::View>) -> Self;
 }

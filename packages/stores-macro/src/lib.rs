@@ -53,9 +53,6 @@ fn derive_store_struct(input: &DeriveInput, structure: &DataStruct) -> syn::Resu
     // Extend the original generics with a view and storage type for the selector generics
     let mut selector_generics = generics.clone();
     selector_generics.params.push(parse_quote!(__W));
-    selector_generics
-        .params
-        .push(parse_quote!(__S: dioxus_stores::SelectorStorage = dioxus_stores::macro_helpers::dioxus_signals::UnsyncStorage));
 
     let (selector_impl_generics, selector_ty_generics, selector_where_clause) =
         selector_generics.split_for_impl();
@@ -63,7 +60,7 @@ fn derive_store_struct(input: &DeriveInput, structure: &DataStruct) -> syn::Resu
     let mut selector_map_bounds: Punctuated<syn::WherePredicate, syn::Token![,]> =
         Punctuated::new();
     selector_map_bounds.push(
-        parse_quote!(__W: dioxus_stores::macro_helpers::dioxus_signals::Writable<Target = #struct_name #ty_generics, Storage = __S> + Copy + 'static),
+        parse_quote!(__W: dioxus_stores::macro_helpers::dioxus_signals::Writable<Target = #struct_name #ty_generics> + Copy + 'static),
     );
     for generic in generics.type_params() {
         let ident = &generic.ident;
@@ -145,7 +142,6 @@ fn derive_store_struct(input: &DeriveInput, structure: &DataStruct) -> syn::Resu
                     self,
                 ) -> <#foreign_type as dioxus_stores::Storable>::Store<
                     dioxus_stores::macro_helpers::dioxus_signals::MappedMutSignal<#field_type, __W>,
-                    __S,
                 > {
                     let __map_field: fn(&#struct_name #ty_generics) -> &#field_type = |value| &value.#field_accessor;
                     let __map_mut_field: fn(&mut #struct_name #ty_generics) -> &mut #field_type = |value| &mut value.#field_accessor;
@@ -162,11 +158,11 @@ fn derive_store_struct(input: &DeriveInput, structure: &DataStruct) -> syn::Resu
     // Generate the store implementation
     let expanded = quote! {
         impl #impl_generics dioxus_stores::Storable for #struct_name #ty_generics #where_clause {
-            type Store<__W, __S: dioxus_stores::SelectorStorage> = #selector_name #selector_ty_generics;
+            type Store<__W> = #selector_name #selector_ty_generics;
         }
 
         struct #selector_name #selector_generics #selector_where_clause {
-            selector: dioxus_stores::SelectorScope<__W, __S>,
+            selector: dioxus_stores::SelectorScope<__W>,
             _phantom: std::marker::PhantomData<#struct_name #ty_generics>,
         }
 
@@ -189,9 +185,8 @@ fn derive_store_struct(input: &DeriveInput, structure: &DataStruct) -> syn::Resu
 
         impl #selector_impl_generics dioxus_stores::CreateSelector for #selector_name #selector_ty_generics #selector_where_clause {
             type View = __W;
-            type Storage = __S;
 
-            fn new(selector: dioxus_stores::SelectorScope<Self::View, Self::Storage>) -> Self {
+            fn new(selector: dioxus_stores::SelectorScope<Self::View>) -> Self {
                 Self { selector, _phantom: std::marker::PhantomData }
             }
         }
@@ -278,10 +273,7 @@ fn derive_store_struct_readable(
     let mut generics = input.generics.clone();
     generics
         .params
-        .push(parse_quote!(__W: dioxus_stores::macro_helpers::dioxus_signals::Readable<Target = #struct_name #original_ty_generics, Storage = __S>));
-    generics
-        .params
-        .push(parse_quote!(__S: dioxus_stores::SelectorStorage));
+        .push(parse_quote!(__W: dioxus_stores::macro_helpers::dioxus_signals::Readable<Target = #struct_name #original_ty_generics>));
 
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
@@ -290,7 +282,7 @@ fn derive_store_struct_readable(
             for #selector_name #ty_generics
             #where_clause
         {
-            type Storage = __S;
+            type Storage = __W::Storage;
             type Target = #struct_name #original_ty_generics;
 
             fn try_read_unchecked(&self) -> Result<dioxus_stores::macro_helpers::dioxus_signals::ReadableRef<'static, Self>, dioxus_stores::macro_helpers::dioxus_signals::BorrowError> {
@@ -301,7 +293,7 @@ fn derive_store_struct_readable(
                 self.selector.try_peek_unchecked()
             }
 
-            fn subscribers(&self) -> Option<Subscribers> {
+            fn subscribers(&self) -> Option<dioxus_stores::macro_helpers::dioxus_core::Subscribers> {
                 self.selector.subscribers()
             }
         }
@@ -318,11 +310,7 @@ fn derive_store_struct_writable(
     let mut generics = input.generics.clone();
     generics
         .params
-        .push(parse_quote!(__W: dioxus_stores::macro_helpers::dioxus_signals::Writable<Target = #struct_name #original_ty_generics, Storage = __S>));
-    generics
-        .params
-        .push(parse_quote!(__S: dioxus_stores::SelectorStorage));
-
+        .push(parse_quote!(__W: dioxus_stores::macro_helpers::dioxus_signals::Writable<Target = #struct_name #original_ty_generics>));
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
     Ok(quote! {

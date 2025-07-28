@@ -10,6 +10,7 @@ use std::{
 
 use dioxus_core::{
     current_scope_id, spawn_isomorphic, IntoAttributeValue, IntoDynNode, ReactiveContext, ScopeId,
+    Subscribers,
 };
 use futures_util::StreamExt;
 use generational_box::{AnyStorage, BorrowResult, UnsyncStorage};
@@ -195,7 +196,7 @@ where
         self.inner.try_peek_unchecked()
     }
 
-    fn subscribers(&self) -> Option<crate::Subscribers> {
+    fn subscribers(&self) -> Option<Subscribers> {
         self.inner.subscribers()
     }
 }

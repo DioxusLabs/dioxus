@@ -2,7 +2,7 @@ use crate::{
     default_impl, fmt_impls, read::*, write::*, write_impls, CopyValue, Global, GlobalMemo,
     GlobalSignal, Memo, ReadableRef, WritableRef,
 };
-use dioxus_core::{IntoAttributeValue, IntoDynNode, ReactiveContext, ScopeId};
+use dioxus_core::{IntoAttributeValue, IntoDynNode, ReactiveContext, ScopeId, Subscribers};
 use generational_box::{BorrowResult, Storage, SyncStorage, UnsyncStorage};
 use std::{any::Any, collections::HashSet, ops::Deref, sync::Arc, sync::Mutex};
 
@@ -406,7 +406,7 @@ impl<T, S: Storage<SignalData<T>>> Readable for Signal<T, S> {
     }
 
     fn subscribers(&self) -> Option<Subscribers> {
-        Some(self.inner.read().subscribers.clone())
+        Some(self.inner.read().subscribers.clone().into())
     }
 }
 

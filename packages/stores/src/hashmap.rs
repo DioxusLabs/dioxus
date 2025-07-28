@@ -8,15 +8,15 @@ use std::{
 };
 
 impl<K, V, St> Storable for HashMap<K, V, St> {
-    type Store<View, S: SelectorStorage> = HashMapSelector<View, K, V, St, S>;
+    type Store<View> = HashMapSelector<View, K, V, St>;
 }
 
-pub struct HashMapSelector<W, K, V, St, S: SelectorStorage = UnsyncStorage> {
-    selector: SelectorScope<W, S>,
+pub struct HashMapSelector<W, K, V, St> {
+    selector: SelectorScope<W>,
     _phantom: std::marker::PhantomData<(K, V, St)>,
 }
 
-impl<W, K, V, St, S: SelectorStorage> PartialEq for HashMapSelector<W, K, V, St, S>
+impl<W, K, V, St> PartialEq for HashMapSelector<W, K, V, St>
 where
     W: PartialEq,
 {
@@ -25,7 +25,7 @@ where
     }
 }
 
-impl<W, K, V, St, S: SelectorStorage> Clone for HashMapSelector<W, K, V, St, S>
+impl<W, K, V, St> Clone for HashMapSelector<W, K, V, St>
 where
     W: Clone,
 {
@@ -37,13 +37,12 @@ where
     }
 }
 
-impl<W, K, V, St, S: SelectorStorage> Copy for HashMapSelector<W, K, V, St, S> where W: Copy {}
+impl<W, K, V, St> Copy for HashMapSelector<W, K, V, St> where W: Copy {}
 
-impl<W, K, V, St, S: SelectorStorage> CreateSelector for HashMapSelector<W, K, V, St, S> {
+impl<W, K, V, St> CreateSelector for HashMapSelector<W, K, V, St> {
     type View = W;
-    type Storage = S;
 
-    fn new(selector: SelectorScope<Self::View, Self::Storage>) -> Self {
+    fn new(selector: SelectorScope<Self::View>) -> Self {
         Self {
             selector,
             _phantom: PhantomData,
@@ -52,12 +51,11 @@ impl<W, K, V, St, S: SelectorStorage> CreateSelector for HashMapSelector<W, K, V
 }
 
 impl<
-        W: Writable<Target = HashMap<K, V, St>, Storage = S> + Copy + 'static,
+        W: Writable<Target = HashMap<K, V, St>> + Copy + 'static,
         K: 'static,
         V: 'static,
         St: 'static,
-        S: SelectorStorage,
-    > HashMapSelector<W, K, V, St, S>
+    > HashMapSelector<W, K, V, St>
 {
     pub fn get<Q>(
         self,
@@ -70,7 +68,6 @@ impl<
             impl Fn(&HashMap<K, V, St>) -> &V + Copy + 'static,
             impl Fn(&mut HashMap<K, V, St>) -> &mut V + Copy + 'static,
         >,
-        S,
     >
     where
         Q: Hash + Eq + Copy + 'static,
@@ -108,7 +105,6 @@ impl<
                     impl Fn(&HashMap<K, V, St>) -> &V + Copy + 'static,
                     impl Fn(&mut HashMap<K, V, St>) -> &mut V + Copy + 'static,
                 >,
-                S,
             >,
         ),
     >
@@ -140,7 +136,6 @@ impl<
                 impl Fn(&HashMap<K, V, St>) -> &V + Copy + 'static,
                 impl Fn(&mut HashMap<K, V, St>) -> &mut V + Copy + 'static,
             >,
-            S,
         >,
     >
     where

@@ -4,7 +4,7 @@ use crate::{
     read_impls, write_impls, Readable, ReadableExt, ReadableRef, Writable, WritableExt,
     WritableRef, WriteLock,
 };
-use dioxus_core::IntoAttributeValue;
+use dioxus_core::{IntoAttributeValue, Subscribers};
 use generational_box::{AnyStorage, BorrowResult};
 
 /// A read only signal that has been mapped to a new type.
@@ -82,7 +82,7 @@ where
         Ok(V::Storage::map(value, |v| (self.map_fn)(v)))
     }
 
-    fn subscribers(&self) -> Option<crate::Subscribers> {
+    fn subscribers(&self) -> Option<Subscribers> {
         self.value.subscribers()
     }
 }

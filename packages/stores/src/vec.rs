@@ -3,15 +3,15 @@ use dioxus_signals::{MappedMutSignal, ReadableExt, UnsyncStorage, Writable};
 use std::marker::PhantomData;
 
 impl<T> Storable for Vec<T> {
-    type Store<View, S: SelectorStorage> = VecSelector<View, T, S>;
+    type Store<View> = VecSelector<View, T>;
 }
 
-pub struct VecSelector<W, T, S: SelectorStorage = UnsyncStorage> {
-    selector: SelectorScope<W, S>,
+pub struct VecSelector<W, T> {
+    selector: SelectorScope<W>,
     _phantom: std::marker::PhantomData<T>,
 }
 
-impl<W, T, S: SelectorStorage> PartialEq for VecSelector<W, T, S>
+impl<W, T> PartialEq for VecSelector<W, T>
 where
     W: PartialEq,
 {
@@ -20,7 +20,7 @@ where
     }
 }
 
-impl<W, T, S: SelectorStorage> Clone for VecSelector<W, T, S>
+impl<W, T> Clone for VecSelector<W, T>
 where
     W: Clone,
 {
@@ -32,13 +32,12 @@ where
     }
 }
 
-impl<W, T, S: SelectorStorage> Copy for VecSelector<W, T, S> where W: Copy {}
+impl<W, T> Copy for VecSelector<W, T> where W: Copy {}
 
-impl<W, T, S: SelectorStorage> CreateSelector for VecSelector<W, T, S> {
+impl<W, T> CreateSelector for VecSelector<W, T> {
     type View = W;
-    type Storage = S;
 
-    fn new(selector: SelectorScope<Self::View, Self::Storage>) -> Self {
+    fn new(selector: SelectorScope<Self::View>) -> Self {
         Self {
             selector,
             _phantom: PhantomData,
@@ -46,12 +45,7 @@ impl<W, T, S: SelectorStorage> CreateSelector for VecSelector<W, T, S> {
     }
 }
 
-impl<
-        W: Writable<Target = Vec<T>, Storage = S> + Copy + 'static,
-        T: Storable + 'static,
-        S: SelectorStorage,
-    > VecSelector<W, T, S>
-{
+impl<W: Writable<Target = Vec<T>> + Copy + 'static, T: Storable + 'static> VecSelector<W, T> {
     pub fn index(
         self,
         index: usize,
@@ -63,7 +57,6 @@ impl<
             impl Fn(&Vec<T>) -> &T + Copy + 'static,
             impl Fn(&mut Vec<T>) -> &mut T + Copy + 'static,
         >,
-        S,
     > {
         T::Store::new(self.selector.scope(
             index as u32,
@@ -93,7 +86,6 @@ impl<
                 impl Fn(&Vec<T>) -> &T + Copy + 'static,
                 impl Fn(&mut Vec<T>) -> &mut T + Copy + 'static,
             >,
-            S,
         >,
     > {
         (0..self.len()).map(move |i| self.index(i))

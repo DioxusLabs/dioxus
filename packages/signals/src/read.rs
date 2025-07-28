@@ -1,11 +1,6 @@
-use std::{
-    collections::HashSet,
-    mem::MaybeUninit,
-    ops::Index,
-    sync::{Arc, Mutex},
-};
+use std::{mem::MaybeUninit, ops::Index};
 
-use dioxus_core::ReactiveContext;
+use dioxus_core::Subscribers;
 use generational_box::{AnyStorage, UnsyncStorage};
 
 use crate::{MappedSignal, ReadSignal};
@@ -65,9 +60,6 @@ pub trait Readable {
     /// Get the underlying subscriber list for this readable. This is used to track when the value changes and notify subscribers.
     fn subscribers(&self) -> Option<Subscribers>;
 }
-
-/// A list of [ReactiveContext]s that are subscribed to this readable. This is used to notify subscribers when the value changes.
-pub type Subscribers = Arc<Mutex<HashSet<ReactiveContext>>>;
 
 /// An extension trait for `Readable` types that provides some convenience methods.
 pub trait ReadableExt: Readable {

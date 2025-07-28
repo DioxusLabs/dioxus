@@ -1,25 +1,25 @@
 use crate::{CreateSelector, SelectorScope, SelectorStorage, Storable};
-use dioxus_core::{IntoAttributeValue, IntoDynNode};
+use dioxus_core::{IntoAttributeValue, IntoDynNode, Subscribers};
 use dioxus_signals::{
     read_impls, write_impls, BorrowError, BorrowMutError, Readable, ReadableExt, ReadableRef,
-    Subscribers, UnsyncStorage, Writable, WritableExt, WritableRef,
+    UnsyncStorage, Writable, WritableExt, WritableRef,
 };
 use std::{marker::PhantomData, ops::Deref};
 
-pub struct ForeignType<T, S: SelectorStorage = UnsyncStorage> {
-    phantom: PhantomData<(T, S)>,
+pub struct ForeignType<T> {
+    phantom: PhantomData<(T,)>,
 }
 
-impl<T, S: SelectorStorage> Storable for ForeignType<T, S> {
-    type Store<View, St: SelectorStorage> = ForeignStore<T, View, St>;
+impl<T> Storable for ForeignType<T> {
+    type Store<View> = ForeignStore<T, View>;
 }
 
-pub struct ForeignStore<T, W, S: SelectorStorage = UnsyncStorage> {
-    selector: SelectorScope<W, S>,
+pub struct ForeignStore<T, W> {
+    selector: SelectorScope<W>,
     phantom: PhantomData<T>,
 }
 
-impl<W, T, S: SelectorStorage> Clone for ForeignStore<T, W, S>
+impl<W, T> Clone for ForeignStore<T, W>
 where
     W: Clone,
 {
@@ -31,13 +31,12 @@ where
     }
 }
 
-impl<W, T, S: SelectorStorage> Copy for ForeignStore<T, W, S> where W: Copy {}
+impl<W, T> Copy for ForeignStore<T, W> where W: Copy {}
 
-impl<W, T, S: SelectorStorage> CreateSelector for ForeignStore<T, W, S> {
+impl<W, T> CreateSelector for ForeignStore<T, W> {
     type View = W;
-    type Storage = S;
 
-    fn new(selector: SelectorScope<Self::View, Self::Storage>) -> Self {
+    fn new(selector: SelectorScope<Self::View>) -> Self {
         Self {
             selector,
             phantom: PhantomData,
@@ -45,34 +44,30 @@ impl<W, T, S: SelectorStorage> CreateSelector for ForeignStore<T, W, S> {
     }
 }
 
-read_impls!(ForeignStore<T, W, S> where W: Readable<Target = T>, S: SelectorStorage);
-write_impls!(ForeignStore<T, W, S> where W: Writable<Target = T>, S: SelectorStorage);
+read_impls!(ForeignStore<T, W> where W: Readable<Target = T>);
+write_impls!(ForeignStore<T, W> where W: Writable<Target = T>);
 
-impl<T, W, S> IntoAttributeValue for ForeignStore<T, W, S>
+impl<T, W> IntoAttributeValue for ForeignStore<T, W>
 where
     T: Clone + IntoAttributeValue + 'static,
     W: Writable<Target = T>,
-    S: SelectorStorage,
 {
     fn into_value(self) -> dioxus_core::AttributeValue {
         self.with(|f| f.clone().into_value())
     }
 }
 
-impl<T, W, S> IntoDynNode for ForeignStore<T, W, S>
+impl<T, W> IntoDynNode for ForeignStore<T, W>
 where
     T: Clone + IntoDynNode + 'static,
     W: Writable<Target = T>,
-    S: SelectorStorage,
 {
     fn into_dyn_node(self) -> dioxus_core::DynamicNode {
         self.with(|f| f.clone().into_dyn_node())
     }
 }
 
-impl<T: Clone + 'static, W: Writable<Target = T> + 'static, S: SelectorStorage> Deref
-    for ForeignStore<T, W, S>
-{
+impl<T: Clone + 'static, W: Writable<Target = T> + 'static> Deref for ForeignStore<T, W> {
     type Target = dyn Fn() -> T;
 
     fn deref(&self) -> &Self::Target {
@@ -80,7 +75,7 @@ impl<T: Clone + 'static, W: Writable<Target = T> + 'static, S: SelectorStorage> 
     }
 }
 
-impl<W, T: 'static, S: SelectorStorage> Readable for ForeignStore<T, W, S>
+impl<W, T: 'static> Readable for ForeignStore<T, W>
 where
     W: Readable<Target = T>,
 {
@@ -101,7 +96,7 @@ where
     }
 }
 
-impl<W, T: 'static, S: SelectorStorage> Writable for ForeignStore<T, W, S>
+impl<W, T: 'static> Writable for ForeignStore<T, W>
 where
     W: Writable<Target = T>,
 {

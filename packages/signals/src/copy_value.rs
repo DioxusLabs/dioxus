@@ -1,6 +1,7 @@
 #![allow(clippy::unnecessary_operation)]
 #![allow(clippy::no_effect)]
 
+use dioxus_core::Subscribers;
 use dioxus_core::{current_owner, current_scope_id, ScopeId};
 use generational_box::{BorrowResult, GenerationalBox, GenerationalBoxId, Storage, UnsyncStorage};
 use std::ops::Deref;
@@ -154,7 +155,7 @@ impl<T: 'static, S: Storage<T>> Readable for CopyValue<T, S> {
         self.value.try_read()
     }
 
-    fn subscribers(&self) -> Option<crate::Subscribers> {
+    fn subscribers(&self) -> Option<Subscribers> {
         None
     }
 }

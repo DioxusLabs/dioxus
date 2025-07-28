@@ -1,6 +1,6 @@
 use crate::SelectorStorage;
-use dioxus_core::ReactiveContext;
-use dioxus_signals::{CopyValue, ReadableExt, Subscribers, UnsyncStorage, Writable};
+use dioxus_core::{ReactiveContext, SubscriberList, Subscribers};
+use dioxus_signals::{CopyValue, ReadableExt, SyncStorage, UnsyncStorage, Writable};
 use std::hash::{BuildHasher, Hasher};
 use std::{
     collections::{HashMap, HashSet},
@@ -11,7 +11,7 @@ use std::{
 
 #[derive(Clone, Default)]
 pub(crate) struct SelectorNode {
-    subscribers: Arc<Mutex<HashSet<ReactiveContext>>>,
+    subscribers: HashSet<ReactiveContext>,
     root: HashMap<u32, SelectorNode>,
 }
 
@@ -23,6 +23,15 @@ impl SelectorNode {
         self.root.get(first).and_then(|child| child.find(rest))
     }
 
+    fn find_mut(&mut self, path: &[u32]) -> Option<&mut SelectorNode> {
+        let [first, rest @ ..] = path else {
+            return Some(self);
+        };
+        self.root
+            .get_mut(first)
+            .and_then(|child| child.find_mut(rest))
+    }
+
     fn get_mut_or_default(&mut self, path: &[u32]) -> &mut SelectorNode {
         let [first, rest @ ..] = path else {
             return self;
@@ -31,24 +40,6 @@ impl SelectorNode {
             .entry(*first)
             .or_default()
             .get_mut_or_default(rest)
-    }
-
-    fn read(&mut self, path: &[u32]) {
-        let node = self.get_mut_or_default(path);
-        node.track();
-    }
-
-    fn track(&mut self) {
-        if let Some(rc) = ReactiveContext::current() {
-            rc.subscribe(self.subscribers.clone());
-        }
-    }
-
-    fn read_nested(&mut self, path: &[u32]) {
-        let node = self.get_mut_or_default(path);
-        node.visit_depth_first_mut(&mut |n| {
-            n.track();
-        });
     }
 
     fn visit_depth_first(&self, f: &mut dyn FnMut(&SelectorNode)) {
@@ -65,34 +56,34 @@ impl SelectorNode {
         }
     }
 
-    fn mark_children_dirty(&self, path: &[u32]) {
-        let Some(node) = self.find(path) else {
+    fn mark_children_dirty(&mut self, path: &[u32]) {
+        let Some(node) = self.find_mut(path) else {
             return;
         };
 
         // Mark the node and all its children as dirty
-        node.visit_depth_first(&mut |node| {
+        node.visit_depth_first_mut(&mut |node| {
             node.mark_dirty();
         });
     }
 
-    fn mark_dirty_at_and_after_index(&self, path: &[u32], index: usize) {
-        let Some(node) = self.find(path) else {
+    fn mark_dirty_at_and_after_index(&mut self, path: &[u32], index: usize) {
+        let Some(node) = self.find_mut(path) else {
             return;
         };
 
         // Mark the nodes before the index as dirty
-        for (i, child) in node.root.iter() {
+        for (i, child) in node.root.iter_mut() {
             if *i as usize >= index {
-                child.visit_depth_first(&mut |node| {
+                child.visit_depth_first_mut(&mut |node| {
                     node.mark_dirty();
                 });
             }
         }
     }
 
-    fn mark_dirty_shallow(&self, path: &[u32]) {
-        let Some(node) = self.find(path) else {
+    fn mark_dirty_shallow(&mut self, path: &[u32]) {
+        let Some(node) = self.find_mut(path) else {
             return;
         };
 
@@ -100,13 +91,26 @@ impl SelectorNode {
         node.mark_dirty();
     }
 
-    fn mark_dirty(&self) {
+    fn mark_dirty(&mut self) {
         // We cannot hold the subscribers lock while calling mark_dirty, because mark_dirty can run user code which may cause a new subscriber to be added. If we hold the lock, we will deadlock.
         #[allow(clippy::mutable_key_type)]
-        let mut subscribers = std::mem::take(&mut *self.subscribers.lock().unwrap());
+        let mut subscribers = std::mem::take(&mut self.subscribers);
         subscribers.retain(|reactive_context| reactive_context.mark_dirty());
         // Extend the subscribers list instead of overwriting it in case a subscriber is added while reactive contexts are marked dirty
-        self.subscribers.lock().unwrap().extend(subscribers);
+        self.subscribers.extend(subscribers);
+    }
+
+    fn remove(&mut self, path: &[u32]) {
+        let [first, rest @ ..] = path else {
+            return;
+        };
+        if let Some(node) = self.root.get_mut(first) {
+            if rest.is_empty() {
+                self.root.remove(first);
+            } else {
+                node.remove(rest);
+            }
+        }
     }
 }
 
@@ -155,25 +159,25 @@ pub(crate) struct StoreSubscriptionsInner {
 }
 
 #[derive(Default)]
-pub(crate) struct StoreSubscriptions<S: SelectorStorage = UnsyncStorage> {
-    inner: CopyValue<StoreSubscriptionsInner, S>,
+pub(crate) struct StoreSubscriptions {
+    inner: CopyValue<StoreSubscriptionsInner, SyncStorage>,
 }
 
-impl<S: SelectorStorage> Clone for StoreSubscriptions<S> {
+impl Clone for StoreSubscriptions {
     fn clone(&self) -> Self {
         *self
     }
 }
 
-impl<S: SelectorStorage> Copy for StoreSubscriptions<S> {}
+impl Copy for StoreSubscriptions {}
 
-impl<S: SelectorStorage> PartialEq for StoreSubscriptions<S> {
+impl PartialEq for StoreSubscriptions {
     fn eq(&self, other: &Self) -> bool {
         self.inner == other.inner
     }
 }
 
-impl<S: SelectorStorage> StoreSubscriptions<S> {
+impl StoreSubscriptions {
     pub(crate) fn new() -> Self {
         Self {
             inner: CopyValue::new_maybe_sync(StoreSubscriptionsInner {
@@ -190,31 +194,67 @@ impl<S: SelectorStorage> StoreSubscriptions<S> {
     }
 
     pub(crate) fn track(&self, key: &[u32]) {
-        self.inner.write_unchecked().root.read(key);
-    }
-
-    pub(crate) fn track_nested(&self, key: &[u32]) {
-        self.inner.write_unchecked().root.read_nested(key);
+        if let Some(rc) = ReactiveContext::current() {
+            let subscribers = self.subscribers(key);
+            rc.subscribe(subscribers);
+        }
     }
 
     pub(crate) fn mark_dirty(&self, key: &[u32]) {
-        self.inner.read().root.mark_children_dirty(key);
+        self.inner.write_unchecked().root.mark_children_dirty(key);
     }
 
     pub(crate) fn mark_dirty_shallow(&self, key: &[u32]) {
-        self.inner.read().root.mark_dirty_shallow(key);
+        self.inner.write_unchecked().root.mark_dirty_shallow(key);
     }
 
     pub(crate) fn mark_dirty_at_and_after_index(&self, key: &[u32], index: usize) {
         self.inner
-            .read()
+            .write_unchecked()
             .root
             .mark_dirty_at_and_after_index(key, index);
     }
 
-    pub(crate) fn subscribers(&self, key: &[u32]) -> Option<Subscribers> {
-        let read = self.inner.read();
-        let node = read.root.find(key)?;
-        Some(node.subscribers.clone())
+    pub(crate) fn subscribers(&self, key: &[u32]) -> Subscribers {
+        Arc::new(StoreSubscribers {
+            subscriptions: self.clone(),
+            path: key.to_vec().into_boxed_slice(),
+        })
+        .into()
+    }
+}
+
+struct StoreSubscribers {
+    subscriptions: StoreSubscriptions,
+    path: Box<[u32]>,
+}
+
+impl SubscriberList for StoreSubscribers {
+    fn add(&self, subscriber: ReactiveContext) {
+        let mut write = self.subscriptions.inner.write_unchecked();
+        let node = write.root.get_mut_or_default(&self.path);
+        node.subscribers.insert(subscriber);
+    }
+
+    fn remove(&self, subscriber: &ReactiveContext) {
+        let mut write = self.subscriptions.inner.write_unchecked();
+        let Some(node) = write.root.find_mut(&self.path) else {
+            return;
+        };
+        node.subscribers.remove(subscriber);
+        if node.subscribers.is_empty() && node.root.is_empty() {
+            // If the node has no subscribers and no children, remove it from the parent
+            if let Some(parent) = write.root.find_mut(&self.path[..self.path.len() - 1]) {
+                parent.root.remove(&self.path[self.path.len() - 1]);
+            }
+        }
+    }
+
+    fn visit(&self, f: &mut dyn FnMut(&ReactiveContext)) {
+        let read = self.subscriptions.inner.read();
+        let Some(node) = read.root.find(&self.path) else {
+            return;
+        };
+        node.subscribers.iter().for_each(f);
     }
 }

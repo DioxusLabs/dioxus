@@ -3,15 +3,15 @@ use dioxus_signals::{MappedMutSignal, ReadableExt, UnsyncStorage, Writable};
 use std::marker::PhantomData;
 
 impl<T, E> Storable for Result<T, E> {
-    type Store<View, S: SelectorStorage> = ResultSelector<View, T, E, S>;
+    type Store<View> = ResultSelector<View, T, E>;
 }
 
-pub struct ResultSelector<W, T, E, S: SelectorStorage = UnsyncStorage> {
-    selector: SelectorScope<W, S>,
+pub struct ResultSelector<W, T, E> {
+    selector: SelectorScope<W>,
     _phantom: std::marker::PhantomData<(T, E)>,
 }
 
-impl<W, T, E, S: SelectorStorage> PartialEq for ResultSelector<W, T, E, S>
+impl<W, T, E> PartialEq for ResultSelector<W, T, E>
 where
     W: PartialEq,
 {
@@ -20,7 +20,7 @@ where
     }
 }
 
-impl<W, T, E, S: SelectorStorage> Clone for ResultSelector<W, T, E, S>
+impl<W, T, E> Clone for ResultSelector<W, T, E>
 where
     W: Clone,
 {
@@ -32,13 +32,12 @@ where
     }
 }
 
-impl<W, T, E, S: SelectorStorage> Copy for ResultSelector<W, T, E, S> where W: Copy {}
+impl<W, T, E> Copy for ResultSelector<W, T, E> where W: Copy {}
 
-impl<W, T, E, S: SelectorStorage> CreateSelector for ResultSelector<W, T, E, S> {
+impl<W, T, E> CreateSelector for ResultSelector<W, T, E> {
     type View = W;
-    type Storage = S;
 
-    fn new(selector: SelectorScope<Self::View, Self::Storage>) -> Self {
+    fn new(selector: SelectorScope<Self::View>) -> Self {
         Self {
             selector,
             _phantom: PhantomData,
@@ -47,11 +46,10 @@ impl<W, T, E, S: SelectorStorage> CreateSelector for ResultSelector<W, T, E, S> 
 }
 
 impl<
-        W: Writable<Target = Result<T, E>, Storage = S> + Copy + 'static,
+        W: Writable<Target = Result<T, E>> + Copy + 'static,
         T: Storable + 'static,
         E: Storable + 'static,
-        S: SelectorStorage,
-    > ResultSelector<W, T, E, S>
+    > ResultSelector<W, T, E>
 {
     pub fn is_ok(self) -> bool {
         self.selector.track();
@@ -74,12 +72,11 @@ impl<
                 impl Fn(&Result<T, E>) -> &T + Copy + 'static,
                 impl Fn(&mut Result<T, E>) -> &mut T + Copy + 'static,
             >,
-            S,
         >,
     >
     where
         T: Storable + 'static,
-        W: Writable<Target = Result<T, E>, Storage = S> + Copy + 'static,
+        W: Writable<Target = Result<T, E>> + Copy + 'static,
     {
         self.is_ok().then(|| {
             T::Store::new(self.selector.scope(
@@ -109,12 +106,11 @@ impl<
                 impl Fn(&Result<T, E>) -> &E + Copy + 'static,
                 impl Fn(&mut Result<T, E>) -> &mut E + Copy + 'static,
             >,
-            S,
         >,
     >
     where
         T: Storable + 'static,
-        W: Writable<Target = Result<T, E>, Storage = S> + Copy + 'static,
+        W: Writable<Target = Result<T, E>> + Copy + 'static,
     {
         self.is_err().then(|| {
             E::Store::new(self.selector.scope(
@@ -142,7 +138,6 @@ impl<
                 impl Fn(&Result<T, E>) -> &T + Copy + 'static,
                 impl Fn(&mut Result<T, E>) -> &mut T + Copy + 'static,
             >,
-            S,
         >,
         Store<
             E,
@@ -152,12 +147,11 @@ impl<
                 impl Fn(&Result<T, E>) -> &E + Copy + 'static,
                 impl Fn(&mut Result<T, E>) -> &mut E + Copy + 'static,
             >,
-            S,
         >,
     >
     where
         T: Storable + 'static,
-        W: Writable<Target = Result<T, E>, Storage = S> + Copy + 'static,
+        W: Writable<Target = Result<T, E>> + Copy + 'static,
     {
         if self.is_ok() {
             Ok(T::Store::new(self.selector.scope(

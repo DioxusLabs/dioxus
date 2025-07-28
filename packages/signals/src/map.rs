@@ -1,5 +1,5 @@
 use crate::{read::Readable, read_impls, ReadableExt, ReadableRef};
-use dioxus_core::IntoAttributeValue;
+use dioxus_core::{IntoAttributeValue, Subscribers};
 use generational_box::{AnyStorage, BorrowResult};
 use std::ops::Deref;
 
@@ -68,7 +68,7 @@ where
         Ok(V::Storage::map(value, |v| (self.map_fn)(v)))
     }
 
-    fn subscribers(&self) -> Option<crate::Subscribers> {
+    fn subscribers(&self) -> Option<Subscribers> {
         self.value.subscribers()
     }
 }

@@ -1,6 +1,6 @@
 #![allow(missing_docs)]
 use crate::{use_callback, use_hook_did_run, use_signal};
-use dioxus_core::{use_hook, Callback, Task};
+use dioxus_core::{use_hook, Callback, Subscribers, Task};
 use dioxus_signals::*;
 use std::future::Future;
 use std::ops::Deref;
@@ -181,7 +181,7 @@ impl Readable for UseFuture {
         self.state.try_peek_unchecked()
     }
 
-    fn subscribers(&self) -> Option<dioxus_signals::Subscribers> {
+    fn subscribers(&self) -> Option<Subscribers> {
         self.state.subscribers()
     }
 }

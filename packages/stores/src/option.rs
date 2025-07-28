@@ -3,15 +3,15 @@ use dioxus_signals::{MappedMutSignal, ReadableExt, UnsyncStorage, Writable};
 use std::marker::PhantomData;
 
 impl<T> Storable for Option<T> {
-    type Store<View, S: SelectorStorage> = OptionSelector<View, T, S>;
+    type Store<View> = OptionSelector<View, T>;
 }
 
-pub struct OptionSelector<W, T, S: SelectorStorage = UnsyncStorage> {
-    selector: SelectorScope<W, S>,
+pub struct OptionSelector<W, T> {
+    selector: SelectorScope<W>,
     _phantom: std::marker::PhantomData<T>,
 }
 
-impl<W, T, S: SelectorStorage> PartialEq for OptionSelector<W, T, S>
+impl<W, T> PartialEq for OptionSelector<W, T>
 where
     W: PartialEq,
 {
@@ -20,7 +20,7 @@ where
     }
 }
 
-impl<W, T, S: SelectorStorage> Clone for OptionSelector<W, T, S>
+impl<W, T> Clone for OptionSelector<W, T>
 where
     W: Clone,
 {
@@ -32,13 +32,12 @@ where
     }
 }
 
-impl<W, T, S: SelectorStorage> Copy for OptionSelector<W, T, S> where W: Copy {}
+impl<W, T> Copy for OptionSelector<W, T> where W: Copy {}
 
-impl<W, T, S: SelectorStorage> CreateSelector for OptionSelector<W, T, S> {
+impl<W, T> CreateSelector for OptionSelector<W, T> {
     type View = W;
-    type Storage = S;
 
-    fn new(selector: SelectorScope<Self::View, Self::Storage>) -> Self {
+    fn new(selector: SelectorScope<Self::View>) -> Self {
         Self {
             selector,
             _phantom: PhantomData,
@@ -46,12 +45,7 @@ impl<W, T, S: SelectorStorage> CreateSelector for OptionSelector<W, T, S> {
     }
 }
 
-impl<
-        W: Writable<Target = Option<T>, Storage = S> + Copy + 'static,
-        T: Storable + 'static,
-        S: SelectorStorage,
-    > OptionSelector<W, T, S>
-{
+impl<W: Writable<Target = Option<T>> + Copy + 'static, T: Storable + 'static> OptionSelector<W, T> {
     pub fn is_some(self) -> bool {
         self.selector.track();
         self.selector.write.read().is_some()
@@ -73,12 +67,11 @@ impl<
                 impl Fn(&Option<T>) -> &T + Copy + 'static,
                 impl Fn(&mut Option<T>) -> &mut T + Copy + 'static,
             >,
-            S,
         >,
     >
     where
         T: Storable + 'static,
-        W: Writable<Target = Option<T>, Storage = S> + Copy + 'static,
+        W: Writable<Target = Option<T>> + Copy + 'static,
     {
         self.is_some().then(|| {
             T::Store::new(self.selector.scope(
@@ -107,7 +100,6 @@ impl<
             impl Fn(&Option<T>) -> &T + Copy + 'static,
             impl Fn(&mut Option<T>) -> &mut T + Copy + 'static,
         >,
-        S,
     > {
         self.as_option().unwrap()
     }

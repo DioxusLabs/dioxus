@@ -1,4 +1,4 @@
-use dioxus_core::ScopeId;
+use dioxus_core::{ScopeId, Subscribers};
 use generational_box::BorrowResult;
 use std::{any::Any, cell::RefCell, collections::HashMap, ops::Deref, panic::Location, rc::Rc};
 
@@ -62,7 +62,7 @@ where
         self.resolve().try_peek_unchecked()
     }
 
-    fn subscribers(&self) -> Option<crate::Subscribers> {
+    fn subscribers(&self) -> Option<Subscribers> {
         self.resolve().subscribers()
     }
 }
