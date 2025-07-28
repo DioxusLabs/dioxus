@@ -2,7 +2,7 @@
 
 use std::hash::Hash;
 
-use crate::subscriptions::{StoreSubscriptions, StoreSubscriptionsInner, TinyVec};
+use crate::subscriptions::{StoreSubscriptions, TinyVec};
 use dioxus_core::{use_hook, Subscribers};
 use dioxus_signals::{
     BorrowError, BorrowMutError, CopyValue, MappedMutSignal, Readable, ReadableRef, Storage,
@@ -27,10 +27,6 @@ pub mod macro_helpers {
     pub use dioxus_core;
     pub use dioxus_signals;
 }
-
-#[allow(private_bounds)]
-pub trait SelectorStorage: Storage<StoreSubscriptionsInner> {}
-impl<S: Storage<StoreSubscriptionsInner>> SelectorStorage for S {}
 
 pub struct SelectorScope<W> {
     path: TinyVec,

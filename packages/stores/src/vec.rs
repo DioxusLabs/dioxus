@@ -1,5 +1,5 @@
-use crate::{CreateSelector, SelectorScope, SelectorStorage, Storable, Store};
-use dioxus_signals::{MappedMutSignal, ReadableExt, UnsyncStorage, Writable};
+use crate::{CreateSelector, SelectorScope, Storable, Store};
+use dioxus_signals::{MappedMutSignal, ReadableExt, Writable};
 use std::marker::PhantomData;
 
 impl<T> Storable for Vec<T> {
@@ -105,10 +105,7 @@ impl<W: Writable<Target = Vec<T>> + Copy + 'static, T: Storable + 'static> VecSe
     pub fn insert(self, index: usize, value: T) {
         self.selector.mark_dirty_shallow();
         self.selector.mark_dirty_at_and_after_index(index);
-        self.selector
-            .write
-            .write_unchecked()
-            .insert(index as usize, value);
+        self.selector.write.write_unchecked().insert(index, value);
     }
 
     pub fn clear(self) {

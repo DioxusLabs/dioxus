@@ -106,7 +106,7 @@ where
 
 impl<V, O, F, FMut> IntoAttributeValue for MappedMutSignal<O, V, F, FMut>
 where
-    O: ?Sized + Clone + IntoAttributeValue,
+    O: Clone + IntoAttributeValue,
     V: Readable,
     F: Fn(&V::Target) -> &O,
 {
@@ -134,7 +134,7 @@ where
 /// Currently only limited to clone types, though could probably specialize for string/arc/rc
 impl<V, O, F, FMut> Deref for MappedMutSignal<O, V, F, FMut>
 where
-    O: Clone + ?Sized,
+    O: Clone,
     V: Readable + 'static,
     F: Fn(&V::Target) -> &O + 'static,
     FMut: 'static,

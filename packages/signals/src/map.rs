@@ -75,7 +75,7 @@ where
 
 impl<V, O, F> IntoAttributeValue for MappedSignal<O, V, F>
 where
-    O: ?Sized + Clone + IntoAttributeValue,
+    O: Clone + IntoAttributeValue,
     V: Readable,
     F: Fn(&V::Target) -> &O,
 {
@@ -100,7 +100,7 @@ where
 /// Currently only limited to clone types, though could probably specialize for string/arc/rc
 impl<V, O, F> Deref for MappedSignal<O, V, F>
 where
-    O: Clone + ?Sized,
+    O: Clone,
     V: Readable + 'static,
     F: Fn(&V::Target) -> &O + 'static,
 {

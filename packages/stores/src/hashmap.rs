@@ -1,5 +1,5 @@
-use crate::{CreateSelector, SelectorScope, SelectorStorage, Storable, Store};
-use dioxus_signals::{MappedMutSignal, ReadableExt, UnsyncStorage, Writable};
+use crate::{CreateSelector, SelectorScope, Storable, Store};
+use dioxus_signals::{MappedMutSignal, ReadableExt, Writable};
 use std::{
     borrow::Borrow,
     collections::HashMap,
@@ -121,8 +121,7 @@ impl<
             .keys()
             .cloned()
             .collect::<Vec<_>>();
-        keys.into_iter()
-            .map(move |key| (key.clone(), self.get(key)))
+        keys.into_iter().map(move |key| (key, self.get(key)))
     }
 
     pub fn values(
@@ -152,7 +151,7 @@ impl<
             .cloned()
             .collect::<Vec<_>>();
         keys.into_iter()
-            .map(|k| k.borrow().clone())
+            .map(|k| *k.borrow())
             .map(move |key| self.get(key))
     }
 

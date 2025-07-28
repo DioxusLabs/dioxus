@@ -1,5 +1,5 @@
-use crate::{CreateSelector, SelectorScope, SelectorStorage, Storable, Store};
-use dioxus_signals::{MappedMutSignal, ReadableExt, UnsyncStorage, Writable};
+use crate::{CreateSelector, SelectorScope, Storable, Store};
+use dioxus_signals::{MappedMutSignal, ReadableExt, Writable};
 use std::marker::PhantomData;
 
 impl<T, E> Storable for Result<T, E> {

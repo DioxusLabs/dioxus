@@ -57,9 +57,7 @@ impl<T: ?Sized + 'static> ReadSignal<T> {
 
 impl<T: ?Sized + 'static> Clone for ReadSignal<T> {
     fn clone(&self) -> Self {
-        Self {
-            value: self.value.clone(),
-        }
+        *self
     }
 }
 
@@ -264,9 +262,7 @@ impl<W: Writable> Writable for BoxWriteMetadata<W> {
 
 impl<T: ?Sized> Clone for WriteSignal<T> {
     fn clone(&self) -> Self {
-        Self {
-            value: self.value.clone(),
-        }
+        *self
     }
 }
 

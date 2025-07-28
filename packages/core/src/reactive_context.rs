@@ -328,6 +328,12 @@ pub struct Subscribers {
     pub(crate) inner: Arc<dyn SubscriberList + Send + Sync>,
 }
 
+impl Default for Subscribers {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Subscribers {
     /// Create a new list of subscribers.
     pub fn new() -> Self {

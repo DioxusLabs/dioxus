@@ -1,12 +1,11 @@
-use crate::SelectorStorage;
 use dioxus_core::{ReactiveContext, SubscriberList, Subscribers};
-use dioxus_signals::{CopyValue, ReadableExt, SyncStorage, UnsyncStorage, Writable};
-use std::hash::{BuildHasher, Hasher};
+use dioxus_signals::{CopyValue, ReadableExt, SyncStorage, Writable};
+use std::hash::BuildHasher;
 use std::{
     collections::{HashMap, HashSet},
     hash::Hash,
     ops::Deref,
-    sync::{Arc, Mutex},
+    sync::Arc,
 };
 
 #[derive(Clone, Default)]
@@ -40,13 +39,6 @@ impl SelectorNode {
             .entry(*first)
             .or_default()
             .get_mut_or_default(rest)
-    }
-
-    fn visit_depth_first(&self, f: &mut dyn FnMut(&SelectorNode)) {
-        f(self);
-        for child in self.root.values() {
-            child.visit_depth_first(f);
-        }
     }
 
     fn visit_depth_first_mut(&mut self, f: &mut dyn FnMut(&mut SelectorNode)) {
@@ -188,9 +180,7 @@ impl StoreSubscriptions {
     }
 
     pub(crate) fn hash(&self, index: impl Hash) -> u32 {
-        let mut hasher = self.inner.write_unchecked().hasher.build_hasher();
-        index.hash(&mut hasher);
-        hasher.finish() as u32
+        self.inner.write_unchecked().hasher.hash_one(&index) as u32
     }
 
     pub(crate) fn track(&self, key: &[u32]) {
@@ -217,7 +207,7 @@ impl StoreSubscriptions {
 
     pub(crate) fn subscribers(&self, key: &[u32]) -> Subscribers {
         Arc::new(StoreSubscribers {
-            subscriptions: self.clone(),
+            subscriptions: *self,
             path: key.to_vec().into_boxed_slice(),
         })
         .into()
@@ -243,10 +233,7 @@ impl SubscriberList for StoreSubscribers {
         };
         node.subscribers.remove(subscriber);
         if node.subscribers.is_empty() && node.root.is_empty() {
-            // If the node has no subscribers and no children, remove it from the parent
-            if let Some(parent) = write.root.find_mut(&self.path[..self.path.len() - 1]) {
-                parent.root.remove(&self.path[self.path.len() - 1]);
-            }
+            write.root.remove(&self.path);
         }
     }
 
