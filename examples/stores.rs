@@ -7,13 +7,8 @@ fn main() {
 
 #[derive(Store)]
 struct Value {
-    count: DoubleCount,
-    values: Vec<Value>,
-}
-
-#[derive(Store, Default)]
-struct DoubleCount {
     count: i32,
+    values: Vec<Value>,
 }
 
 fn app() -> Element {
@@ -35,8 +30,8 @@ fn app() -> Element {
 #[component]
 fn Tree(value: Store<Value>) -> Element {
     rsx! {
-        Counter { count: value.count().count().boxed_mut() }
-        button { onclick: move |_| value.values().push(Value{ count: Default::default(), values: Vec::new() }), "Push child" }
+        Counter { count: value.count() }
+        button { onclick: move |_| value.values().push(Value { count: Default::default(), values: Vec::new() }), "Push child" }
         ul {
             for child in value.values().iter() {
                 li {
@@ -48,7 +43,7 @@ fn Tree(value: Store<Value>) -> Element {
 }
 
 #[component]
-fn Counter(count: WriteSignal<i32>) -> Element {
+fn Counter(count: Store<i32>) -> Element {
     println!("Child counter run: {}", count);
 
     rsx! {

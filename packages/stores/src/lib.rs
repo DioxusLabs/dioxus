@@ -11,19 +11,8 @@ use dioxus_signals::{
 
 mod foreign;
 pub use foreign::*;
-mod hashmap;
+mod impls;
 mod subscriptions;
-mod vec;
-pub use vec::*;
-mod slice;
-pub use hashmap::*;
-pub use slice::*;
-mod array;
-pub use array::*;
-mod result;
-pub use result::*;
-mod option;
-pub use option::*;
 
 // Re-exported for the macro
 #[doc(hidden)]
