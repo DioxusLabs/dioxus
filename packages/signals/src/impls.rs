@@ -4,6 +4,7 @@
 /// ```rust
 /// use generational_box::*;
 /// use dioxus::prelude::*;
+/// use dioxus_core::Subscribers;
 ///
 /// struct MyCopyValue<T: 'static, S: Storage<T>> {
 ///     value: CopyValue<T, S>,
@@ -76,6 +77,7 @@ macro_rules! default_impl {
 /// ```rust
 /// use generational_box::*;
 /// use dioxus::prelude::*;
+/// use dioxus_core::Subscribers;
 ///
 /// struct MyCopyValue<T: 'static, S: Storage<T>> {
 ///     value: CopyValue<T, S>,
@@ -153,6 +155,7 @@ macro_rules! read_impls {
 /// ```rust
 /// use generational_box::*;
 /// use dioxus::prelude::*;
+/// use dioxus_core::Subscribers;
 ///
 /// struct MyCopyValue<T: 'static, S: Storage<T>> {
 ///     value: CopyValue<T, S>,
@@ -233,6 +236,7 @@ macro_rules! fmt_impls {
 /// ```rust
 /// use generational_box::*;
 /// use dioxus::prelude::*;
+/// use dioxus_core::Subscribers;
 ///
 /// struct MyCopyValue<T: 'static, S: Storage<T>> {
 ///     value: CopyValue<T, S>,

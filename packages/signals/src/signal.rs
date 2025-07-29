@@ -255,7 +255,7 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
         self.inner.id()
     }
 
-    /// **This pattern is no longer recommended. Prefer [`peek`](Signal::peek) or creating new signals instead.**
+    /// **This pattern is no longer recommended. Prefer [`peek`](ReadableExt::peek) or creating new signals instead.**
     ///
     /// This function is the equivalent of the [write_silent](https://docs.rs/dioxus/latest/dioxus/prelude/struct.UseRef.html#method.write_silent) method on use_ref.
     ///
@@ -283,7 +283,7 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
     /// *signal.write_silent() += 1;
     /// ```
     ///
-    /// Instead you can use the [`peek`](Signal::peek) and [`write`](Signal::write) methods instead. The peek method will not subscribe to the current scope which will avoid an infinite loop if you are reading and writing to the same signal in the same scope.
+    /// Instead you can use the [`peek`](ReadableExt::peek) and [`write`](Signal::write) methods instead. The peek method will not subscribe to the current scope which will avoid an infinite loop if you are reading and writing to the same signal in the same scope.
     /// ```rust, no_run
     /// # use dioxus::prelude::*;
     /// let mut signal = use_signal(|| 0);
@@ -336,7 +336,7 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
     /// }
     /// ```
     ///
-    /// Instead [`peek`](Signal::peek) locally opts out of automatic state updates explicitly for a specific read which is easier to reason about.
+    /// Instead [`peek`](ReadableExt::peek) locally opts out of automatic state updates explicitly for a specific read which is easier to reason about.
     ///
     /// Here is the same example using peek:
     /// main.rs:
