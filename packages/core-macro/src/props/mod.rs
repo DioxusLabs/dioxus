@@ -221,7 +221,7 @@ mod field_info {
                     builder_attr.auto_into = false;
                 }
 
-                // Write and Store fields automatically use impl Into
+                // Write fields automatically use impl Into
                 if looks_like_write_type(&field.ty) {
                     builder_attr.auto_into = true;
                 }
@@ -1741,7 +1741,7 @@ fn remove_option_wrapper(type_: Type) -> Type {
 
 /// Check if a type should be owned by the child component after conversion
 fn child_owned_type(ty: &Type) -> bool {
-    looks_like_signal_type(ty) || looks_like_callback_type(ty)
+    looks_like_signal_type(ty) || looks_like_write_type(ty) || looks_like_callback_type(ty)
 }
 
 fn looks_like_signal_type(ty: &Type) -> bool {
