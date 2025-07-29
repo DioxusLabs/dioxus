@@ -3,7 +3,7 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote, ToTokens};
 use syn::{
     parse::Parse, parse_macro_input, parse_quote, punctuated::Punctuated, spanned::Spanned,
-    AngleBracketedGenericArguments, DataStruct, DeriveInput, Ident, Index,
+    DataStruct, DeriveInput, Index,
 };
 
 #[proc_macro_derive(Store, attributes(store))]
@@ -52,7 +52,7 @@ fn derive_store_struct(input: &DeriveInput, structure: &DataStruct) -> syn::Resu
 
     // Extend the original generics with a view and storage type for the selector generics
     let mut selector_generics = generics.clone();
-    selector_generics.params.push(parse_quote!(__W));
+    selector_generics.params.insert(0, parse_quote!(__W));
 
     let (selector_impl_generics, selector_ty_generics, selector_where_clause) =
         selector_generics.split_for_impl();
@@ -72,40 +72,6 @@ fn derive_store_struct(input: &DeriveInput, structure: &DataStruct) -> syn::Resu
     } else {
         quote! { where #selector_map_bounds }
     };
-
-    let mut selector_clone_bounds: Punctuated<syn::WherePredicate, syn::Token![,]> =
-        Punctuated::new();
-    selector_clone_bounds.push(parse_quote!(__W: ::std::clone::Clone));
-    let selector_clone_where_clause = if let Some(mut clause) = generics.where_clause.clone() {
-        clause.predicates.extend(selector_clone_bounds);
-        clause.into_token_stream()
-    } else {
-        quote! { where #selector_clone_bounds }
-    };
-
-    let mut selector_copy_bounds: Punctuated<syn::WherePredicate, syn::Token![+]> =
-        Punctuated::new();
-    selector_copy_bounds.push(parse_quote!(__W: ::std::marker::Copy));
-    let selector_copy_where_clause = if let Some(mut clause) = generics.where_clause.clone() {
-        clause.predicates.extend(selector_copy_bounds);
-        clause.into_token_stream()
-    } else {
-        quote! { where #selector_copy_bounds }
-    };
-
-    let mut selector_partial_eq_bounds: Punctuated<syn::WherePredicate, syn::Token![,]> =
-        Punctuated::new();
-    selector_partial_eq_bounds.push(parse_quote!(__W: ::std::cmp::PartialEq));
-    let selector_partial_eq_where_clause = if let Some(mut clause) = generics.where_clause.clone() {
-        clause.predicates.extend(selector_partial_eq_bounds);
-        clause.into_token_stream()
-    } else {
-        quote! { where #selector_partial_eq_bounds }
-    };
-
-    let store_struct_into_boxed = derive_store_struct_into_boxed(input, &selector_name)?;
-    let store_struct_readable = derive_store_struct_readable(input, &selector_name)?;
-    let store_struct_writable = derive_store_struct_writable(input, &selector_name)?;
 
     let fields = fields
         .iter()
@@ -132,7 +98,7 @@ fn derive_store_struct(input: &DeriveInput, structure: &DataStruct) -> syn::Resu
             let write_type = quote! { dioxus_stores::macro_helpers::dioxus_signals::MappedMutSignal<#field_type, __W> };
 
             let store_type = if foreign {
-                quote! { dioxus_stores::ForeignStore<#field_type, #write_type> }
+                quote! { dioxus_stores::ForeignStore<#write_type, #field_type> }
             } else {
                 quote! { <#field_type as dioxus_stores::Storable>::Store<
                     #write_type
@@ -179,157 +145,16 @@ fn derive_store_struct(input: &DeriveInput, structure: &DataStruct) -> syn::Resu
             _phantom: std::marker::PhantomData<#struct_name #ty_generics>,
         }
 
-        impl #selector_impl_generics std::clone::Clone for #selector_name #selector_ty_generics #selector_clone_where_clause {
-            fn clone(&self) -> Self {
-                Self {
-                    selector: self.selector.clone(),
-                    _phantom: std::marker::PhantomData,
-                }
-            }
-        }
-
-        impl #selector_impl_generics std::marker::Copy for #selector_name #selector_ty_generics #selector_copy_where_clause {}
-
-        impl #selector_impl_generics std::cmp::PartialEq for #selector_name #selector_ty_generics #selector_partial_eq_where_clause {
-            fn eq(&self, other: &Self) -> bool {
-                self.selector == other.selector
-            }
-        }
+        dioxus_stores::store_impls!(#struct_name #ty_generics => #selector_name #selector_generics #selector_where_clause);
 
         impl #selector_impl_generics #selector_name #selector_ty_generics #selector_map_where_clause {
             #(
                 #fields
             )*
         }
-
-        #store_struct_into_boxed
-
-        #store_struct_readable
-
-        #store_struct_writable
     };
 
     Ok(expanded)
-}
-
-fn derive_store_struct_into_boxed(
-    input: &DeriveInput,
-    selector_name: &Ident,
-) -> syn::Result<TokenStream2> {
-    let struct_name = &input.ident;
-
-    let (_, ty_generics, _) = input.generics.split_for_impl();
-    let mut impl_generics = input.generics.clone();
-    impl_generics
-        .params
-        .push(parse_quote!(__W: Writable<Storage = UnsyncStorage> + 'static));
-    impl_generics
-        .params
-        .push(parse_quote!(__F: Fn(&__W::Target) -> &#struct_name #ty_generics + 'static));
-    impl_generics.params.push(
-        parse_quote!(__FMut: Fn(&mut __W::Target) -> &mut #struct_name #ty_generics + 'static),
-    );
-    let (impl_generics, _, where_clause) = impl_generics.split_for_impl();
-
-    let general_selector_ty_generics: Option<AngleBracketedGenericArguments> =
-        syn::parse2(ty_generics.to_token_stream()).ok();
-    let extra = parse_quote!(dioxus_stores::macro_helpers::dioxus_signals::MappedMutSignal<#struct_name #ty_generics, __W, __F, __FMut>);
-    let general_selector_ty_generics = match general_selector_ty_generics {
-        Some(mut args) => {
-            args.args.push(extra);
-            args
-        }
-        None => parse_quote! {<#extra>},
-    };
-
-    let boxed_selector_ty_generics: Option<AngleBracketedGenericArguments> =
-        syn::parse2(ty_generics.to_token_stream()).ok();
-    let extra = parse_quote!(dioxus_stores::macro_helpers::dioxus_signals::WriteSignal<#struct_name #ty_generics>);
-    let boxed_selector_ty_generics = match boxed_selector_ty_generics {
-        Some(mut args) => {
-            args.args.push(extra);
-            args
-        }
-        None => parse_quote! {<#extra>},
-    };
-
-    Ok(quote! {
-        impl #impl_generics ::std::convert::From<#selector_name #general_selector_ty_generics>
-            for #selector_name #boxed_selector_ty_generics
-            #where_clause
-        {
-            fn from(value: #selector_name #general_selector_ty_generics) -> Self {
-                #selector_name {
-                    selector: value.selector.map(::std::convert::Into::into),
-                    _phantom: std::marker::PhantomData,
-                }
-            }
-        }
-    })
-}
-
-fn derive_store_struct_readable(
-    input: &DeriveInput,
-    selector_name: &Ident,
-) -> syn::Result<TokenStream2> {
-    let struct_name = &input.ident;
-
-    let (_, original_ty_generics, _) = input.generics.split_for_impl();
-    let mut generics = input.generics.clone();
-    generics
-        .params
-        .push(parse_quote!(__W: dioxus_stores::macro_helpers::dioxus_signals::Readable<Target = #struct_name #original_ty_generics>));
-
-    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
-
-    Ok(quote! {
-        impl #impl_generics dioxus_stores::macro_helpers::dioxus_signals::Readable
-            for #selector_name #ty_generics
-            #where_clause
-        {
-            type Storage = __W::Storage;
-            type Target = #struct_name #original_ty_generics;
-
-            fn try_read_unchecked(&self) -> Result<dioxus_stores::macro_helpers::dioxus_signals::ReadableRef<'static, Self>, dioxus_stores::macro_helpers::dioxus_signals::BorrowError> {
-                self.selector.try_read_unchecked()
-            }
-
-            fn try_peek_unchecked(&self) -> Result<dioxus_stores::macro_helpers::dioxus_signals::ReadableRef<'static, Self>, dioxus_stores::macro_helpers::dioxus_signals::BorrowError> {
-                self.selector.try_peek_unchecked()
-            }
-
-            fn subscribers(&self) -> Option<dioxus_stores::macro_helpers::dioxus_core::Subscribers> {
-                self.selector.subscribers()
-            }
-        }
-    })
-}
-
-fn derive_store_struct_writable(
-    input: &DeriveInput,
-    selector_name: &Ident,
-) -> syn::Result<TokenStream2> {
-    let struct_name = &input.ident;
-
-    let (_, original_ty_generics, _) = input.generics.split_for_impl();
-    let mut generics = input.generics.clone();
-    generics
-        .params
-        .push(parse_quote!(__W: dioxus_stores::macro_helpers::dioxus_signals::Writable<Target = #struct_name #original_ty_generics>));
-    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
-
-    Ok(quote! {
-        impl #impl_generics dioxus_stores::macro_helpers::dioxus_signals::Writable
-            for #selector_name #ty_generics
-            #where_clause
-        {
-            type WriteMetadata = <__W as dioxus_stores::macro_helpers::dioxus_signals::Writable>::WriteMetadata;
-
-            fn try_write_unchecked(&self) -> Result<dioxus_stores::macro_helpers::dioxus_signals::WritableRef<'static, Self>, dioxus_stores::macro_helpers::dioxus_signals::BorrowMutError> {
-                self.selector.try_write_unchecked()
-            }
-        }
-    })
 }
 
 enum StoreAttribute {

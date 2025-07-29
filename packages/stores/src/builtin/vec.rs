@@ -1,4 +1,4 @@
-use crate::store_impls;
+use crate::{store_impls, store_read_impls};
 use crate::{SelectorScope, Storable, Store};
 use dioxus_signals::{MappedMutSignal, ReadableExt, UnsyncStorage, Writable, WriteSignal};
 use std::marker::PhantomData;
@@ -19,6 +19,7 @@ pub struct VecSelector<W, T> {
 }
 
 store_impls!(Vec<T> => VecSelector<W, T>);
+store_read_impls!(Vec<T> => VecSelector<W, T>);
 
 impl<W, T> VecSelector<W, T> {
     fn new(selector: SelectorScope<W>) -> Self {

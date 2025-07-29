@@ -1,4 +1,4 @@
-use crate::{store_impls, SelectorScope, Storable, Store};
+use crate::{store_impls, store_read_impls, SelectorScope, Storable, Store};
 use dioxus_signals::{MappedMutSignal, ReadableExt, UnsyncStorage, Writable, WriteSignal};
 use std::{
     borrow::Borrow,
@@ -23,6 +23,7 @@ pub struct HashMapSelector<W, K, V, St> {
 }
 
 store_impls!(HashMap<K, V, St> => HashMapSelector<W, K, V, St>);
+store_read_impls!(HashMap<K, V, St> => HashMapSelector<W, K, V, St>);
 
 impl<W, K, V, St> HashMapSelector<W, K, V, St> {
     fn new(selector: SelectorScope<W>) -> Self {

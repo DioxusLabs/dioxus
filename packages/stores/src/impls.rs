@@ -18,7 +18,8 @@ macro_rules! store_impls {
                 $(
                     $extra_bound_ty:ident: $extra_bound:path
                 ),+
-        )?) => {
+        )?
+    ) => {
         impl<$write $(, $gen $(: $gen_bound)?)*>
         PartialEq for $ty<$write $(, $gen)*>
         where
@@ -39,7 +40,7 @@ macro_rules! store_impls {
             fn clone(&self) -> Self {
                 Self {
                     selector: self.selector.clone(),
-                    _phantom: PhantomData,
+                    _phantom: ::std::marker::PhantomData,
                 }
             }
         }
@@ -61,7 +62,7 @@ macro_rules! store_impls {
             fn from(value: $ty<MappedMutSignal<$raw_ty $(< $($raw_gen),*>)?, $write, __F, __FMut> $(, $gen)*>) -> Self {
                 $ty {
                     selector: value.selector.map(::std::convert::Into::into),
-                    _phantom: PhantomData,
+                    _phantom: ::std::marker::PhantomData,
                 }
             }
         }
@@ -115,7 +116,31 @@ macro_rules! store_impls {
                 self.selector.try_write_unchecked()
             }
         }
+    };
+}
 
+#[macro_export]
+macro_rules! store_read_impls {
+    (
+        $raw_ty:ident
+        // Accept generics
+        $(
+            <$($raw_gen:ident $(: $raw_gen_bound:path)?),*>
+        )?
+
+        =>
+
+        $ty:ident
+        // Accept generics
+        <$write:ident $(, $gen:ident $(: $gen_bound:path)?)* $(,)?>
+        // Accept extra bounds
+        $(
+            where
+                $(
+                    $extra_bound_ty:ident: $extra_bound:path
+                ),+
+        )?
+    ) => {
         impl<$write $(, $gen $(: $gen_bound)?)*>
         ::std::fmt::Debug for $ty<$write $(, $gen)*>
         where
@@ -123,7 +148,7 @@ macro_rules! store_impls {
             $raw_ty $(< $($raw_gen),*>)?: ::std::fmt::Debug + 'static,
         {
             fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
-                self.read().fmt(f)
+                $crate::macro_helpers::dioxus_signals::ReadableExt::read(self).fmt(f)
             }
         }
 
@@ -134,7 +159,7 @@ macro_rules! store_impls {
             $raw_ty $(< $($raw_gen),*>)?: ::std::fmt::Display + 'static,
         {
             fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
-                self.read().fmt(f)
+                $crate::macro_helpers::dioxus_signals::ReadableExt::read(self).fmt(f)
             }
         }
 
@@ -145,7 +170,7 @@ macro_rules! store_impls {
             $raw_ty $(< $($raw_gen),*>)?: ::std::clone::Clone + $crate::macro_helpers::dioxus_core::IntoAttributeValue + 'static,
         {
             fn into_value(self) -> $crate::macro_helpers::dioxus_core::AttributeValue {
-                self.cloned().into_value()
+                $crate::macro_helpers::dioxus_signals::ReadableExt::cloned(&self).into_value()
             }
         }
 
@@ -156,7 +181,7 @@ macro_rules! store_impls {
             $raw_ty $(< $($raw_gen),*>)?: ::std::clone::Clone + $crate::macro_helpers::dioxus_core::IntoDynNode + 'static,
         {
             fn into_dyn_node(self) -> $crate::macro_helpers::dioxus_core::DynamicNode {
-                self.cloned().into_dyn_node()
+                $crate::macro_helpers::dioxus_signals::ReadableExt::cloned(&self).into_dyn_node()
             }
         }
 

@@ -1,14 +1,10 @@
-use crate::{store_impls, SelectorScope, Storable};
-use dioxus_core::{IntoAttributeValue, IntoDynNode, Subscribers};
-use dioxus_signals::{
-    read_impls, write_impls, BorrowError, BorrowMutError, MappedMutSignal, Readable, ReadableExt,
-    ReadableRef, UnsyncStorage, Writable, WritableExt, WritableRef, WriteSignal,
-};
+use crate::{store_impls, store_read_impls, SelectorScope, Storable};
+use dioxus_signals::{MappedMutSignal, UnsyncStorage, Writable, WriteSignal};
 use std::{
     collections::{BTreeMap, BTreeSet, BinaryHeap, HashSet, LinkedList, VecDeque},
-    ffi::{OsStr, OsString},
+    ffi::OsString,
     marker::PhantomData,
-    path::{Path, PathBuf},
+    path::PathBuf,
     rc::Rc,
     sync::Arc,
     time::Duration,
@@ -30,6 +26,7 @@ impl<W, T> ForeignStore<W, T> {
 }
 
 store_impls!(T => ForeignStore<W, T>);
+store_read_impls!(T => ForeignStore<W, T>);
 
 macro_rules! mark_foreign_type {
     (

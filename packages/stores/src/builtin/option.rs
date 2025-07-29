@@ -1,4 +1,4 @@
-use crate::{store_impls, SelectorScope, Storable, Store};
+use crate::{store_impls, store_read_impls, SelectorScope, Storable, Store};
 use dioxus_signals::{MappedMutSignal, ReadableExt, UnsyncStorage, Writable, WriteSignal};
 use std::marker::PhantomData;
 
@@ -18,6 +18,7 @@ pub struct OptionSelector<W, T> {
 }
 
 store_impls!(Option<T> => OptionSelector<W, T>);
+store_read_impls!(Option<T> => OptionSelector<W, T>);
 
 impl<W, T> OptionSelector<W, T> {
     fn new(selector: SelectorScope<W>) -> Self {

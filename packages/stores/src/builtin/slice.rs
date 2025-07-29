@@ -1,4 +1,4 @@
-use crate::{store_impls, SelectorScope, Storable, Store};
+use crate::{store_impls, store_read_impls, SelectorScope, Storable, Store};
 use dioxus_signals::{MappedMutSignal, ReadableExt, UnsyncStorage, Writable, WriteSignal};
 use std::{marker::PhantomData, ops::DerefMut};
 
@@ -28,6 +28,7 @@ pub struct SliceSelector<W, T: ?Sized> {
 }
 
 store_impls!(T => SliceSelector<W, T>);
+store_read_impls!(T => SliceSelector<W, T>);
 
 impl<W, T: ?Sized> SliceSelector<W, T> {
     fn new(selector: SelectorScope<W>) -> Self {
@@ -38,7 +39,12 @@ impl<W, T: ?Sized> SliceSelector<W, T> {
     }
 }
 
-impl<W: Writable<Target = T> + Copy + 'static, I: Storable + 'static, T: DerefMut<Target=[I]>  + 'static> SliceSelector<W, T> {
+impl<
+        W: Writable<Target = T> + Copy + 'static,
+        I: Storable + 'static,
+        T: DerefMut<Target = [I]> + 'static,
+    > SliceSelector<W, T>
+{
     pub fn index(
         self,
         index: usize,

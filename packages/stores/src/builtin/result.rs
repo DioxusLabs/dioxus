@@ -1,4 +1,4 @@
-use crate::{store_impls, SelectorScope, Storable, Store};
+use crate::{store_impls, store_read_impls, SelectorScope, Storable, Store};
 use dioxus_signals::{MappedMutSignal, ReadableExt, UnsyncStorage, Writable, WriteSignal};
 use std::marker::PhantomData;
 
@@ -18,6 +18,7 @@ pub struct ResultSelector<W, T, E> {
 }
 
 store_impls!(Result<T, E> => ResultSelector<W, T, E>);
+store_read_impls!(Result<T, E> => ResultSelector<W, T, E>);
 
 impl<W, T, E> ResultSelector<W, T, E> {
     fn new(selector: SelectorScope<W>) -> Self {
