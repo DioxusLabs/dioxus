@@ -182,7 +182,7 @@ pub struct WriteLock<'a, T: ?Sized + 'static, S: AnyStorage = UnsyncStorage, D =
 }
 
 impl<'a, T: ?Sized, S: AnyStorage> WriteLock<'a, T, S> {
-    /// Create a new write referenc
+    /// Create a new write reference
     pub fn new(write: S::Mut<'a, T>) -> Self {
         Self { write, data: () }
     }
