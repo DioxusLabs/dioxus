@@ -253,7 +253,7 @@ impl<'a, T: ?Sized, S: AnyStorage, D> WriteLock<'a, T, S, D> {
     }
 }
 
-impl<'a, T, S, D> Deref for WriteLock<'a, T, S, D>
+impl<T, S, D> Deref for WriteLock<'_, T, S, D>
 where
     S: AnyStorage,
     T: ?Sized + 'static,
@@ -265,7 +265,7 @@ where
     }
 }
 
-impl<'a, T, S, D> DerefMut for WriteLock<'a, T, S, D>
+impl<T, S, D> DerefMut for WriteLock<'_, T, S, D>
 where
     S: AnyStorage,
     T: ?Sized + 'static,
