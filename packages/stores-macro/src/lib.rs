@@ -145,8 +145,6 @@ fn derive_store_struct(input: &DeriveInput, structure: &DataStruct) -> syn::Resu
             _phantom: std::marker::PhantomData<#struct_name #ty_generics>,
         }
 
-        dioxus_stores::store_impls!(#struct_name #ty_generics => #selector_name #selector_generics #selector_where_clause);
-
         impl #selector_impl_generics #selector_name #selector_ty_generics #selector_map_where_clause {
             #(
                 #fields

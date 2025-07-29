@@ -1,107 +1,49 @@
-use crate::{store_impls, store_read_impls};
-use crate::{SelectorScope, Storable, Store};
-use dioxus_signals::{MappedMutSignal, ReadableExt, UnsyncStorage, Writable, WriteSignal};
-use std::marker::PhantomData;
+use crate::store::Store;
+use dioxus_signals::Writable;
 
-impl<T> Storable for Vec<T> {
-    type Store<View: Writable<Target = Self>> = VecSelector<View, T>;
+pub trait VecStoreExt {
+    type Item;
 
-    fn create_selector<View: Writable<Target = Self>>(
-        selector: SelectorScope<View>,
-    ) -> Self::Store<View> {
-        VecSelector::new(selector)
-    }
+    fn push(self, value: Self::Item);
+
+    fn remove(self, index: usize) -> Self::Item;
+
+    fn insert(self, index: usize, value: Self::Item);
+
+    fn clear(self);
+
+    fn retain(self, f: impl FnMut(&Self::Item) -> bool);
 }
 
-pub struct VecSelector<W, T> {
-    selector: SelectorScope<W>,
-    _phantom: std::marker::PhantomData<T>,
-}
+impl<W: Writable<Target = Vec<T>> + Copy + 'static, T: 'static> VecStoreExt for Store<Vec<T>, W> {
+    type Item = T;
 
-store_impls!(Vec<T> => VecSelector<W, T>);
-store_read_impls!(Vec<T> => VecSelector<W, T>);
-
-impl<W, T> VecSelector<W, T> {
-    fn new(selector: SelectorScope<W>) -> Self {
-        Self {
-            selector,
-            _phantom: PhantomData,
-        }
-    }
-}
-
-impl<W: Writable<Target = Vec<T>> + Copy + 'static, T: Storable + 'static> VecSelector<W, T> {
-    pub fn index(
-        self,
-        index: usize,
-    ) -> Store<
-        T,
-        MappedMutSignal<
-            T,
-            W,
-            impl Fn(&Vec<T>) -> &T + Copy + 'static,
-            impl Fn(&mut Vec<T>) -> &mut T + Copy + 'static,
-        >,
-    > {
-        T::create_selector(self.selector.scope(
-            index as u32,
-            move |value| &value[index],
-            move |value| &mut value[index],
-        ))
+    fn push(self, value: Self::Item) {
+        self.selector().mark_dirty_shallow();
+        self.selector().write.write_unchecked().push(value);
     }
 
-    pub fn len(self) -> usize {
-        self.selector.track();
-        self.selector.write.read().len()
+    fn remove(self, index: usize) -> Self::Item {
+        self.selector().mark_dirty_shallow();
+        self.selector().mark_dirty_at_and_after_index(index);
+        self.selector().write.write_unchecked().remove(index)
     }
 
-    pub fn is_empty(self) -> bool {
-        self.selector.track();
-        self.selector.write.read().is_empty()
+    fn insert(self, index: usize, value: Self::Item) {
+        self.selector().mark_dirty_shallow();
+        self.selector().mark_dirty_at_and_after_index(index);
+        self.selector().write.write_unchecked().insert(index, value);
     }
 
-    pub fn iter(
-        self,
-    ) -> impl Iterator<
-        Item = Store<
-            T,
-            MappedMutSignal<
-                T,
-                W,
-                impl Fn(&Vec<T>) -> &T + Copy + 'static,
-                impl Fn(&mut Vec<T>) -> &mut T + Copy + 'static,
-            >,
-        >,
-    > {
-        (0..self.len()).map(move |i| self.index(i))
+    fn clear(self) {
+        self.selector().mark_dirty();
+        self.selector().write.write_unchecked().clear();
     }
 
-    pub fn push(self, value: T) {
-        self.selector.mark_dirty_shallow();
-        self.selector.write.write_unchecked().push(value);
-    }
-
-    pub fn remove(self, index: usize) -> T {
-        self.selector.mark_dirty_shallow();
-        self.selector.mark_dirty_at_and_after_index(index);
-        self.selector.write.write_unchecked().remove(index)
-    }
-
-    pub fn insert(self, index: usize, value: T) {
-        self.selector.mark_dirty_shallow();
-        self.selector.mark_dirty_at_and_after_index(index);
-        self.selector.write.write_unchecked().insert(index, value);
-    }
-
-    pub fn clear(self) {
-        self.selector.mark_dirty();
-        self.selector.write.write_unchecked().clear();
-    }
-
-    pub fn retain(self, mut f: impl FnMut(&T) -> bool) {
+    fn retain(self, mut f: impl FnMut(&Self::Item) -> bool) {
         let mut index = 0;
         let mut first_removed_index = None;
-        self.selector.write.write_unchecked().retain(|item| {
+        self.selector().write.write_unchecked().retain(|item| {
             let keep = f(item);
             if !keep {
                 first_removed_index = first_removed_index.or(Some(index));
@@ -110,8 +52,8 @@ impl<W: Writable<Target = Vec<T>> + Copy + 'static, T: Storable + 'static> VecSe
             keep
         });
         if let Some(index) = first_removed_index {
-            self.selector.mark_dirty_shallow();
-            self.selector.mark_dirty_at_and_after_index(index);
+            self.selector().mark_dirty_shallow();
+            self.selector().mark_dirty_at_and_after_index(index);
         }
     }
 }

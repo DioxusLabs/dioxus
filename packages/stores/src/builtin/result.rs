@@ -1,51 +1,88 @@
-use crate::{store_impls, store_read_impls, SelectorScope, Storable, Store};
-use dioxus_signals::{MappedMutSignal, ReadableExt, UnsyncStorage, Writable, WriteSignal};
-use std::marker::PhantomData;
+use crate::store::Store;
+use dioxus_signals::{MappedMutSignal, ReadableExt, Writable};
 
-impl<T, E> Storable for Result<T, E> {
-    type Store<View: Writable<Target = Self>> = ResultSelector<View, T, E>;
+pub trait ResultStoreExt {
+    type Ok;
+    type Err;
+    type Write;
 
-    fn create_selector<View: Writable<Target = Self>>(
-        selector: SelectorScope<View>,
-    ) -> Self::Store<View> {
-        ResultSelector::new(selector)
-    }
+    fn is_ok(self) -> bool;
+
+    fn is_err(self) -> bool;
+
+    fn ok(
+        self,
+    ) -> Option<
+        Store<
+            Self::Ok,
+            MappedMutSignal<
+                Self::Ok,
+                Self::Write,
+                impl Fn(&Result<Self::Ok, Self::Err>) -> &Self::Ok + Copy + 'static,
+                impl Fn(&mut Result<Self::Ok, Self::Err>) -> &mut Self::Ok + Copy + 'static,
+            >,
+        >,
+    >;
+
+    fn err(
+        self,
+    ) -> Option<
+        Store<
+            Self::Err,
+            MappedMutSignal<
+                Self::Err,
+                Self::Write,
+                impl Fn(&Result<Self::Ok, Self::Err>) -> &Self::Err + Copy + 'static,
+                impl Fn(&mut Result<Self::Ok, Self::Err>) -> &mut Self::Err + Copy + 'static,
+            >,
+        >,
+    >;
+
+    fn as_result(
+        self,
+    ) -> Result<
+        Store<
+            Self::Ok,
+            MappedMutSignal<
+                Self::Ok,
+                Self::Write,
+                impl Fn(&Result<Self::Ok, Self::Err>) -> &Self::Ok + Copy + 'static,
+                impl Fn(&mut Result<Self::Ok, Self::Err>) -> &mut Self::Ok + Copy + 'static,
+            >,
+        >,
+        Store<
+            Self::Err,
+            MappedMutSignal<
+                Self::Err,
+                Self::Write,
+                impl Fn(&Result<Self::Ok, Self::Err>) -> &Self::Err + Copy + 'static,
+                impl Fn(&mut Result<Self::Ok, Self::Err>) -> &mut Self::Err + Copy + 'static,
+            >,
+        >,
+    >;
 }
 
-pub struct ResultSelector<W, T, E> {
-    selector: SelectorScope<W>,
-    _phantom: std::marker::PhantomData<(T, E)>,
-}
-
-store_impls!(Result<T, E> => ResultSelector<W, T, E>);
-store_read_impls!(Result<T, E> => ResultSelector<W, T, E>);
-
-impl<W, T, E> ResultSelector<W, T, E> {
-    fn new(selector: SelectorScope<W>) -> Self {
-        Self {
-            selector,
-            _phantom: PhantomData,
-        }
-    }
-}
-
-impl<
-        W: Writable<Target = Result<T, E>> + Copy + 'static,
-        T: Storable + 'static,
-        E: Storable + 'static,
-    > ResultSelector<W, T, E>
+impl<W, T, E> ResultStoreExt for Store<Result<T, E>, W>
+where
+    W: Writable<Target = Result<T, E>> + Copy + 'static,
+    T: 'static,
+    E: 'static,
 {
-    pub fn is_ok(self) -> bool {
-        self.selector.track();
-        self.selector.write.read().is_ok()
+    type Ok = T;
+    type Err = E;
+    type Write = W;
+
+    fn is_ok(self) -> bool {
+        self.selector().track();
+        self.selector().write.read().is_ok()
     }
 
-    pub fn is_err(self) -> bool {
-        self.selector.track();
-        self.selector.write.read().is_err()
+    fn is_err(self) -> bool {
+        self.selector().track();
+        self.selector().write.read().is_err()
     }
 
-    pub fn ok(
+    fn ok(
         self,
     ) -> Option<
         Store<
@@ -57,13 +94,9 @@ impl<
                 impl Fn(&mut Result<T, E>) -> &mut T + Copy + 'static,
             >,
         >,
-    >
-    where
-        T: Storable + 'static,
-        W: Writable<Target = Result<T, E>> + Copy + 'static,
-    {
+    > {
         self.is_ok().then(|| {
-            T::create_selector(self.selector.scope(
+            Store::new(self.selector().scope(
                 0,
                 move |value: &Result<T, E>| {
                     value.as_ref().unwrap_or_else(|_| {
@@ -79,7 +112,7 @@ impl<
         })
     }
 
-    pub fn err(
+    fn err(
         self,
     ) -> Option<
         Store<
@@ -93,12 +126,11 @@ impl<
         >,
     >
     where
-        T: Storable + 'static,
         W: Writable<Target = Result<T, E>> + Copy + 'static,
     {
         self.is_err().then(|| {
-            E::create_selector(self.selector.scope(
-                0,
+            Store::new(self.selector().scope(
+                1,
                 move |value: &Result<T, E>| match value {
                     Ok(_) => panic!("Tried to access `err` on an Ok value"),
                     Err(e) => e,
@@ -111,7 +143,7 @@ impl<
         })
     }
 
-    pub fn as_result(
+    fn as_result(
         self,
     ) -> Result<
         Store<
@@ -134,11 +166,10 @@ impl<
         >,
     >
     where
-        T: Storable + 'static,
         W: Writable<Target = Result<T, E>> + Copy + 'static,
     {
         if self.is_ok() {
-            Ok(T::create_selector(self.selector.scope(
+            Ok(Store::new(self.selector().scope(
                 0,
                 move |value: &Result<T, E>| {
                     value.as_ref().unwrap_or_else(|_| {
@@ -152,8 +183,8 @@ impl<
                 },
             )))
         } else {
-            Err(E::create_selector(self.selector.scope(
-                0,
+            Err(Store::new(self.selector().scope(
+                1,
                 move |value: &Result<T, E>| match value {
                     Ok(_) => panic!("Tried to access `err` on an Ok value"),
                     Err(e) => e,

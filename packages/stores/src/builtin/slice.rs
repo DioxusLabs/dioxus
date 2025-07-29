@@ -1,80 +1,55 @@
-use crate::{store_impls, store_read_impls, SelectorScope, Storable, Store};
-use dioxus_signals::{MappedMutSignal, ReadableExt, UnsyncStorage, Writable, WriteSignal};
-use std::{marker::PhantomData, ops::DerefMut};
+use std::ops::DerefMut;
+use std::ops::IndexMut;
 
-impl<T> Storable for [T] {
-    type Store<View: Writable<Target = Self>> = SliceSelector<View, [T]>;
+use crate::store::Store;
+use crate::IndexStoreExt;
+use dioxus_signals::{MappedMutSignal, ReadableExt, Writable};
 
-    fn create_selector<View: Writable<Target = Self>>(
-        selector: SelectorScope<View>,
-    ) -> Self::Store<View> {
-        SliceSelector::new(selector)
-    }
-}
+pub trait SliceStoreExt {
+    type Slice;
+    type Item;
+    type Write;
 
-impl<const N: usize, T> Storable for [T; N] {
-    type Store<View: Writable<Target = Self>> = SliceSelector<View, [T; N]>;
+    fn len(self) -> usize;
 
-    fn create_selector<View: Writable<Target = Self>>(
-        selector: SelectorScope<View>,
-    ) -> Self::Store<View> {
-        SliceSelector::new(selector)
-    }
-}
+    fn is_empty(self) -> bool;
 
-pub struct SliceSelector<W, T: ?Sized> {
-    selector: SelectorScope<W>,
-    _phantom: std::marker::PhantomData<Box<T>>,
-}
-
-store_impls!(T => SliceSelector<W, T>);
-store_read_impls!(T => SliceSelector<W, T>);
-
-impl<W, T: ?Sized> SliceSelector<W, T> {
-    fn new(selector: SelectorScope<W>) -> Self {
-        Self {
-            selector,
-            _phantom: PhantomData,
-        }
-    }
-}
-
-impl<
-        W: Writable<Target = T> + Copy + 'static,
-        I: Storable + 'static,
-        T: DerefMut<Target = [I]> + 'static,
-    > SliceSelector<W, T>
-{
-    pub fn index(
+    fn iter(
         self,
-        index: usize,
-    ) -> Store<
-        I,
-        MappedMutSignal<
-            I,
-            W,
-            impl Fn(&T) -> &I + Copy + 'static,
-            impl Fn(&mut T) -> &mut I + Copy + 'static,
+    ) -> impl Iterator<
+        Item = Store<
+            Self::Item,
+            MappedMutSignal<
+                Self::Item,
+                Self::Write,
+                impl Fn(&Self::Slice) -> &Self::Item + Copy + 'static,
+                impl Fn(&mut Self::Slice) -> &mut Self::Item + Copy + 'static,
+            >,
         >,
-    > {
-        I::create_selector(self.selector.scope(
-            index as u32,
-            move |value| &value.deref()[index],
-            move |value| &mut value.deref_mut()[index],
-        ))
+    >;
+}
+
+impl<W, T, I> SliceStoreExt for Store<T, W>
+where
+    W: Writable<Target = T> + Copy + 'static,
+    T: DerefMut<Target = [I]> + IndexMut<usize, Output = I> + 'static,
+    I: 'static,
+{
+    type Slice = T;
+    type Item = I;
+    type Write = W;
+
+    fn len(self) -> usize {
+        self.selector().track();
+        self.selector().write.read().deref().len()
     }
 
-    pub fn len(self) -> usize {
-        self.selector.track();
-        self.selector.write.read().deref().len()
+    fn is_empty(self) -> bool {
+        self.selector().track();
+        self.selector().write.read().deref().is_empty()
     }
 
-    pub fn is_empty(self) -> bool {
-        self.selector.track();
-        self.selector.write.read().deref().is_empty()
-    }
-
-    pub fn iter(
+    fn iter(
         self,
     ) -> impl Iterator<
         Item = Store<
@@ -87,6 +62,6 @@ impl<
             >,
         >,
     > {
-        (0..self.len()).map(move |i| self.index(i))
+        (0..self.len()).map(move |i| IndexStoreExt::index(self, i))
     }
 }

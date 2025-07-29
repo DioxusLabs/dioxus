@@ -1,46 +1,57 @@
-use crate::{store_impls, store_read_impls, SelectorScope, Storable, Store};
-use dioxus_signals::{MappedMutSignal, ReadableExt, UnsyncStorage, Writable, WriteSignal};
-use std::marker::PhantomData;
+use crate::store::Store;
+use dioxus_signals::{MappedMutSignal, ReadableExt, Writable};
 
-impl<T> Storable for Option<T> {
-    type Store<View: Writable<Target = Self>> = OptionSelector<View, T>;
+pub trait OptionStoreExt {
+    type Data;
+    type Write;
 
-    fn create_selector<View: Writable<Target = Self>>(
-        selector: SelectorScope<View>,
-    ) -> Self::Store<View> {
-        OptionSelector::new(selector)
-    }
+    fn is_some(self) -> bool;
+    fn is_none(self) -> bool;
+
+    fn as_option(
+        self,
+    ) -> Option<
+        Store<
+            Self::Data,
+            MappedMutSignal<
+                Self::Data,
+                Self::Write,
+                impl Fn(&Option<Self::Data>) -> &Self::Data + Copy + 'static,
+                impl Fn(&mut Option<Self::Data>) -> &mut Self::Data + Copy + 'static,
+            >,
+        >,
+    >;
+
+    fn unwrap(
+        self,
+    ) -> Store<
+        Self::Data,
+        MappedMutSignal<
+            Self::Data,
+            Self::Write,
+            impl Fn(&Option<Self::Data>) -> &Self::Data + Copy + 'static,
+            impl Fn(&mut Option<Self::Data>) -> &mut Self::Data + Copy + 'static,
+        >,
+    >;
 }
 
-pub struct OptionSelector<W, T> {
-    selector: SelectorScope<W>,
-    _phantom: std::marker::PhantomData<T>,
-}
+impl<W: Writable<Target = Option<T>> + Copy + 'static, T: 'static> OptionStoreExt
+    for Store<Option<T>, W>
+{
+    type Data = T;
+    type Write = W;
 
-store_impls!(Option<T> => OptionSelector<W, T>);
-store_read_impls!(Option<T> => OptionSelector<W, T>);
-
-impl<W, T> OptionSelector<W, T> {
-    fn new(selector: SelectorScope<W>) -> Self {
-        Self {
-            selector,
-            _phantom: PhantomData,
-        }
-    }
-}
-
-impl<W: Writable<Target = Option<T>> + Copy + 'static, T: Storable + 'static> OptionSelector<W, T> {
-    pub fn is_some(self) -> bool {
-        self.selector.track();
-        self.selector.write.read().is_some()
+    fn is_some(self) -> bool {
+        self.selector().track();
+        self.selector().write.read().is_some()
     }
 
-    pub fn is_none(self) -> bool {
-        self.selector.track();
-        self.selector.write.read().is_none()
+    fn is_none(self) -> bool {
+        self.selector().track();
+        self.selector().write.read().is_none()
     }
 
-    pub fn as_option(
+    fn as_option(
         self,
     ) -> Option<
         Store<
@@ -52,13 +63,9 @@ impl<W: Writable<Target = Option<T>> + Copy + 'static, T: Storable + 'static> Op
                 impl Fn(&mut Option<T>) -> &mut T + Copy + 'static,
             >,
         >,
-    >
-    where
-        T: Storable + 'static,
-        W: Writable<Target = Option<T>> + Copy + 'static,
-    {
+    > {
         self.is_some().then(|| {
-            T::create_selector(self.selector.scope(
+            Store::new(self.selector().scope(
                 0,
                 move |value: &Option<T>| {
                     value.as_ref().unwrap_or_else(|| {
@@ -74,7 +81,7 @@ impl<W: Writable<Target = Option<T>> + Copy + 'static, T: Storable + 'static> Op
         })
     }
 
-    pub fn unwrap(
+    fn unwrap(
         self,
     ) -> Store<
         T,

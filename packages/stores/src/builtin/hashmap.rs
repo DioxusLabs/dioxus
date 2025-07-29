@@ -1,37 +1,98 @@
-use crate::{store_impls, store_read_impls, SelectorScope, Storable, Store};
-use dioxus_signals::{MappedMutSignal, ReadableExt, UnsyncStorage, Writable, WriteSignal};
 use std::{
     borrow::Borrow,
     collections::HashMap,
     hash::{BuildHasher, Hash},
-    marker::PhantomData,
 };
 
-impl<K, V, St> Storable for HashMap<K, V, St> {
-    type Store<View: Writable<Target = Self>> = HashMapSelector<View, K, V, St>;
+use crate::store::Store;
+use dioxus_signals::{MappedMutSignal, ReadableExt, Writable};
 
-    fn create_selector<View: Writable<Target = Self>>(
-        selector: SelectorScope<View>,
-    ) -> Self::Store<View> {
-        HashMapSelector::new(selector)
-    }
-}
+pub trait HashMapStoreExt {
+    type Key;
+    type Value;
+    type State;
+    type Write;
 
-pub struct HashMapSelector<W, K, V, St> {
-    selector: SelectorScope<W>,
-    _phantom: std::marker::PhantomData<(K, V, St)>,
-}
+    fn len(self) -> usize;
 
-store_impls!(HashMap<K, V, St> => HashMapSelector<W, K, V, St>);
-store_read_impls!(HashMap<K, V, St> => HashMapSelector<W, K, V, St>);
+    fn is_empty(self) -> bool;
 
-impl<W, K, V, St> HashMapSelector<W, K, V, St> {
-    fn new(selector: SelectorScope<W>) -> Self {
-        Self {
-            selector,
-            _phantom: PhantomData,
-        }
-    }
+    fn get<Q>(
+        self,
+        key: Q,
+    ) -> Store<
+        Self::Value,
+        MappedMutSignal<
+            Self::Value,
+            Self::Write,
+            impl Fn(&HashMap<Self::Key, Self::Value, Self::State>) -> &Self::Value + Copy + 'static,
+            impl Fn(&mut HashMap<Self::Key, Self::Value, Self::State>) -> &mut Self::Value
+                + Copy
+                + 'static,
+        >,
+    >
+    where
+        Q: Hash + Eq + Copy + 'static,
+        Self::Key: Borrow<Q> + Eq + Hash,
+        Self::State: BuildHasher;
+
+    fn iter(
+        self,
+    ) -> impl Iterator<
+        Item = (
+            Self::Key,
+            Store<
+                Self::Value,
+                MappedMutSignal<
+                    Self::Value,
+                    Self::Write,
+                    impl Fn(&HashMap<Self::Key, Self::Value, Self::State>) -> &Self::Value
+                        + Copy
+                        + 'static,
+                    impl Fn(&mut HashMap<Self::Key, Self::Value, Self::State>) -> &mut Self::Value
+                        + Copy
+                        + 'static,
+                >,
+            >,
+        ),
+    >
+    where
+        Self::Key: Copy + Eq + Hash,
+        Self::State: BuildHasher;
+
+    fn values(
+        self,
+    ) -> impl Iterator<
+        Item = Store<
+            Self::Value,
+            MappedMutSignal<
+                Self::Value,
+                Self::Write,
+                impl Fn(&HashMap<Self::Key, Self::Value, Self::State>) -> &Self::Value + Copy + 'static,
+                impl Fn(&mut HashMap<Self::Key, Self::Value, Self::State>) -> &mut Self::Value
+                    + Copy
+                    + 'static,
+            >,
+        >,
+    >
+    where
+        Self::Key: Copy + Eq + Hash,
+        Self::State: BuildHasher;
+
+    fn insert(self, key: Self::Key, value: Self::Value)
+    where
+        Self::Key: Eq + Hash,
+        Self::State: BuildHasher;
+
+    fn remove<Q>(self, key: &Q) -> Option<Self::Value>
+    where
+        Q: Hash + Eq + Copy + 'static,
+        Self::Key: Borrow<Q> + Eq + Hash,
+        Self::State: BuildHasher;
+
+    fn clear(self);
+
+    fn retain(self, f: impl FnMut(&Self::Key, &mut Self::Value) -> bool);
 }
 
 impl<
@@ -39,44 +100,24 @@ impl<
         K: 'static,
         V: 'static,
         St: 'static,
-    > HashMapSelector<W, K, V, St>
+    > HashMapStoreExt for Store<HashMap<K, V, St>, W>
 {
-    pub fn get<Q>(
-        self,
-        key: Q,
-    ) -> Store<
-        V,
-        MappedMutSignal<
-            V,
-            W,
-            impl Fn(&HashMap<K, V, St>) -> &V + Copy + 'static,
-            impl Fn(&mut HashMap<K, V, St>) -> &mut V + Copy + 'static,
-        >,
-    >
-    where
-        Q: Hash + Eq + Copy + 'static,
-        K: Borrow<Q> + Eq + Hash,
-        St: BuildHasher,
-        V: Storable,
-    {
-        V::create_selector(self.selector.hash_scope(
-            key.borrow(),
-            move |value| value.get(&key).unwrap(),
-            move |value| value.get_mut(&key).unwrap(),
-        ))
+    type Key = K;
+    type Value = V;
+    type State = St;
+    type Write = W;
+
+    fn len(self) -> usize {
+        self.selector().track();
+        self.selector().write.read().len()
     }
 
-    pub fn len(self) -> usize {
-        self.selector.track();
-        self.selector.write.read().len()
+    fn is_empty(self) -> bool {
+        self.selector().track();
+        self.selector().write.read().is_empty()
     }
 
-    pub fn is_empty(self) -> bool {
-        self.selector.track();
-        self.selector.write.read().is_empty()
-    }
-
-    pub fn iter(
+    fn iter(
         self,
     ) -> impl Iterator<
         Item = (
@@ -95,11 +136,10 @@ impl<
     where
         K: Copy + Eq + Hash,
         St: BuildHasher,
-        V: Storable,
     {
-        self.selector.track();
+        self.selector().track();
         let keys = self
-            .selector
+            .selector()
             .write
             .read()
             .keys()
@@ -108,7 +148,7 @@ impl<
         keys.into_iter().map(move |key| (key, self.get(key)))
     }
 
-    pub fn values(
+    fn values(
         self,
     ) -> impl Iterator<
         Item = Store<
@@ -124,11 +164,10 @@ impl<
     where
         K: Copy + Eq + Hash,
         St: BuildHasher,
-        V: Storable,
     {
-        self.selector.track();
+        self.selector().track();
         let keys = self
-            .selector
+            .selector()
             .write
             .read()
             .keys()
@@ -139,32 +178,56 @@ impl<
             .map(move |key| self.get(key))
     }
 
-    pub fn insert(self, key: K, value: V)
+    fn insert(self, key: K, value: V)
     where
         K: Eq + Hash,
         St: BuildHasher,
     {
-        self.selector.mark_dirty_shallow();
-        self.selector.write.write_unchecked().insert(key, value);
+        self.selector().mark_dirty_shallow();
+        self.selector().write.write_unchecked().insert(key, value);
     }
 
-    pub fn remove<Q>(self, key: &Q) -> Option<V>
+    fn remove<Q>(self, key: &Q) -> Option<V>
     where
         Q: Hash + Eq + Copy + 'static,
         K: Borrow<Q> + Eq + Hash,
         St: BuildHasher,
     {
-        self.selector.mark_dirty_shallow();
-        self.selector.write.write_unchecked().remove(key)
+        self.selector().mark_dirty_shallow();
+        self.selector().write.write_unchecked().remove(key)
     }
 
-    pub fn clear(self) {
-        self.selector.mark_dirty_shallow();
-        self.selector.write.write_unchecked().clear();
+    fn clear(self) {
+        self.selector().mark_dirty_shallow();
+        self.selector().write.write_unchecked().clear();
     }
 
-    pub fn retain(self, f: impl FnMut(&K, &mut V) -> bool) {
-        self.selector.mark_dirty_shallow();
-        self.selector.write.write_unchecked().retain(f);
+    fn retain(self, f: impl FnMut(&K, &mut V) -> bool) {
+        self.selector().mark_dirty_shallow();
+        self.selector().write.write_unchecked().retain(f);
+    }
+
+    fn get<Q>(
+        self,
+        key: Q,
+    ) -> Store<
+        V,
+        MappedMutSignal<
+            V,
+            W,
+            impl Fn(&HashMap<K, V, St>) -> &V + Copy + 'static,
+            impl Fn(&mut HashMap<K, V, St>) -> &mut V + Copy + 'static,
+        >,
+    >
+    where
+        Q: Hash + Eq + Copy + 'static,
+        K: Borrow<Q> + Eq + Hash,
+        St: BuildHasher,
+    {
+        Store::new(self.selector().hash_scope(
+            key.borrow(),
+            move |value| value.get(&key).unwrap(),
+            move |value| value.get_mut(&key).unwrap(),
+        ))
     }
 }

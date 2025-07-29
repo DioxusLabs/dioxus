@@ -2,18 +2,19 @@
 
 use std::hash::Hash;
 
-use crate::subscriptions::{StoreSubscriptions, TinyVec};
+use crate::{
+    store::Store,
+    subscriptions::{StoreSubscriptions, TinyVec},
+};
 use dioxus_core::{use_hook, Subscribers};
 use dioxus_signals::{
     BorrowError, BorrowMutError, CopyValue, MappedMutSignal, Readable, ReadableRef, Storage,
-    UnsyncStorage, Writable, WritableExt, WritableRef, WriteSignal,
+    UnsyncStorage, Writable, WritableExt, WritableRef,
 };
 
-mod foreign;
-pub use foreign::*;
 mod builtin;
 pub use builtin::*;
-mod impls;
+mod store;
 mod subscriptions;
 
 // Re-exported for the macro
@@ -151,9 +152,7 @@ impl<W: Writable> SelectorScope<W> {
     }
 }
 
-pub type Store<T, W = WriteSignal<T>> = <T as Storable>::Store<W>;
-
-pub fn create_maybe_sync_store<T: Storable, S: Storage<T>>(
+pub fn create_maybe_sync_store<T, S: Storage<T>>(
     value: T,
 ) -> Store<T, MappedMutSignal<T, CopyValue<T, S>>> {
     let store = StoreSubscriptions::new();
@@ -167,33 +166,19 @@ pub fn create_maybe_sync_store<T: Storable, S: Storage<T>>(
         store,
         write: value.map_mut(map, map_mut),
     };
-    T::create_selector(selector)
+    Store::new(selector)
 }
 
-pub fn use_maybe_sync_store<T: Storable, S: Storage<T>>(
+pub fn use_maybe_sync_store<T, S: Storage<T>>(
     init: impl Fn() -> T,
-) -> Store<T, MappedMutSignal<T, CopyValue<T, S>>>
-where
-    Store<T, MappedMutSignal<T, CopyValue<T, S>>>: Clone,
-{
+) -> Store<T, MappedMutSignal<T, CopyValue<T, S>>> {
     use_hook(move || create_maybe_sync_store(init()))
 }
 
-pub fn create_store<T: Storable>(value: T) -> Store<T, MappedMutSignal<T, CopyValue<T>>> {
+pub fn create_store<T>(value: T) -> Store<T, MappedMutSignal<T, CopyValue<T>>> {
     create_maybe_sync_store::<T, UnsyncStorage>(value)
 }
 
-pub fn use_store<T: Storable>(init: impl Fn() -> T) -> Store<T, MappedMutSignal<T, CopyValue<T>>>
-where
-    Store<T, MappedMutSignal<T, CopyValue<T>>>: Clone,
-{
+pub fn use_store<T>(init: impl Fn() -> T) -> Store<T, MappedMutSignal<T, CopyValue<T>>> {
     use_hook(move || create_store(init()))
-}
-
-pub trait Storable {
-    type Store<View: Writable<Target = Self>>;
-
-    fn create_selector<View: Writable<Target = Self>>(
-        selector: SelectorScope<View>,
-    ) -> Self::Store<View>;
 }
