@@ -4985,8 +4985,6 @@ dependencies = [
  "dioxus-server",
  "dioxus-signals",
  "dioxus-ssr",
- "dioxus-stores",
- "dioxus-stores-macro",
  "dioxus-web",
  "dioxus_server_macro",
  "env_logger 0.11.8",
@@ -5935,23 +5933,6 @@ dependencies = [
  "dioxus-core",
  "dioxus-core-types",
  "rustc-hash 2.1.1",
-]
-
-[[package]]
-name = "dioxus-stores"
-version = "0.7.0-alpha.3"
-dependencies = [
- "dioxus-core",
- "dioxus-signals",
-]
-
-[[package]]
-name = "dioxus-stores-macro"
-version = "0.7.0-alpha.3"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.104",
 ]
 
 [[package]]

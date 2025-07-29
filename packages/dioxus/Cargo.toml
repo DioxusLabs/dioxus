@@ -20,8 +20,6 @@ dioxus-core-macro = { workspace = true, optional = true }
 dioxus-config-macro = { workspace = true, optional = true }
 dioxus-hooks = { workspace = true, optional = true }
 dioxus-signals = { workspace = true, optional = true }
-dioxus-stores = { workspace = true, optional = true }
-dioxus-stores-macro = { workspace = true, optional = true }
 dioxus-router = { workspace = true, optional = true }
 dioxus-web = { workspace = true, default-features = false, optional = true }
 dioxus-desktop = { workspace = true, default-features = true, optional = true }
@@ -64,7 +62,6 @@ lib = [
 # The minimal set of features required to use dioxus renderers for minimal binary size
 minimal = ["macro", "html", "signals", "hooks", "launch"]
 signals = ["dep:dioxus-signals"]
-stores = ["dep:dioxus-stores", "dep:dioxus-stores-macro"]
 macro = ["dep:dioxus-core-macro"]
 html = ["dep:dioxus-html"]
 hooks = ["dep:dioxus-hooks"]

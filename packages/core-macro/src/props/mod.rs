@@ -172,7 +172,7 @@ mod util {
 }
 
 mod field_info {
-    use crate::props::{looks_like_store_type, looks_like_write_type, type_from_inside_option};
+    use crate::props::{looks_like_write_type, type_from_inside_option};
     use proc_macro2::TokenStream;
     use quote::{format_ident, quote};
     use syn::spanned::Spanned;
@@ -222,7 +222,7 @@ mod field_info {
                 }
 
                 // Write and Store fields automatically use impl Into
-                if looks_like_write_type(&field.ty) || looks_like_store_type(&field.ty) {
+                if looks_like_write_type(&field.ty) {
                     builder_attr.auto_into = true;
                 }
 
@@ -1764,17 +1764,6 @@ fn looks_like_write_type(ty: &Type) -> bool {
             path_without_generics == parse_quote!(dioxus_core::prelude::WriteSignal)
                 || path_without_generics == parse_quote!(prelude::WriteSignal)
                 || path_without_generics == parse_quote!(WriteSignal)
-        }
-        None => false,
-    }
-}
-
-fn looks_like_store_type(ty: &Type) -> bool {
-    match extract_base_type_without_generics(ty) {
-        Some(path_without_generics) => {
-            path_without_generics == parse_quote!(dioxus_stores::prelude::Store)
-                || path_without_generics == parse_quote!(prelude::Store)
-                || path_without_generics == parse_quote!(Store)
         }
         None => false,
     }
