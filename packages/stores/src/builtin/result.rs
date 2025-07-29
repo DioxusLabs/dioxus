@@ -1,4 +1,4 @@
-use crate::{SelectorScope, Storable, Store};
+use crate::{store_impls, SelectorScope, Storable, Store};
 use dioxus_signals::{MappedMutSignal, ReadableExt, UnsyncStorage, Writable, WriteSignal};
 use std::marker::PhantomData;
 
@@ -17,45 +17,7 @@ pub struct ResultSelector<W, T, E> {
     _phantom: std::marker::PhantomData<(T, E)>,
 }
 
-impl<W, T, E> PartialEq for ResultSelector<W, T, E>
-where
-    W: PartialEq,
-{
-    fn eq(&self, other: &Self) -> bool {
-        self.selector == other.selector
-    }
-}
-
-impl<W, T, E> Clone for ResultSelector<W, T, E>
-where
-    W: Clone,
-{
-    fn clone(&self) -> Self {
-        Self {
-            selector: self.selector.clone(),
-            _phantom: PhantomData,
-        }
-    }
-}
-
-impl<W, T, E> Copy for ResultSelector<W, T, E> where W: Copy {}
-
-impl<
-        T,
-        E,
-        W: Writable<Storage = UnsyncStorage> + 'static,
-        F: Fn(&W::Target) -> &Result<T, E> + 'static,
-        FMut: Fn(&mut W::Target) -> &mut Result<T, E> + 'static,
-    > ::std::convert::From<ResultSelector<MappedMutSignal<Result<T, E>, W, F, FMut>, T, E>>
-    for ResultSelector<WriteSignal<Result<T, E>>, T, E>
-{
-    fn from(value: ResultSelector<MappedMutSignal<Result<T, E>, W, F, FMut>, T, E>) -> Self {
-        ResultSelector {
-            selector: value.selector.map(::std::convert::Into::into),
-            _phantom: PhantomData,
-        }
-    }
-}
+store_impls!(Result<T, E> => ResultSelector<W, T, E>);
 
 impl<W, T, E> ResultSelector<W, T, E> {
     fn new(selector: SelectorScope<W>) -> Self {

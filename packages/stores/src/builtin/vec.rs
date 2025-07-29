@@ -1,3 +1,4 @@
+use crate::store_impls;
 use crate::{SelectorScope, Storable, Store};
 use dioxus_signals::{MappedMutSignal, ReadableExt, UnsyncStorage, Writable, WriteSignal};
 use std::marker::PhantomData;
@@ -17,44 +18,7 @@ pub struct VecSelector<W, T> {
     _phantom: std::marker::PhantomData<T>,
 }
 
-impl<W, T> PartialEq for VecSelector<W, T>
-where
-    W: PartialEq,
-{
-    fn eq(&self, other: &Self) -> bool {
-        self.selector == other.selector
-    }
-}
-
-impl<W, T> Clone for VecSelector<W, T>
-where
-    W: Clone,
-{
-    fn clone(&self) -> Self {
-        Self {
-            selector: self.selector.clone(),
-            _phantom: PhantomData,
-        }
-    }
-}
-
-impl<W, T> Copy for VecSelector<W, T> where W: Copy {}
-
-impl<
-        T,
-        W: Writable<Storage = UnsyncStorage> + 'static,
-        F: Fn(&W::Target) -> &Vec<T> + 'static,
-        FMut: Fn(&mut W::Target) -> &mut Vec<T> + 'static,
-    > ::std::convert::From<VecSelector<MappedMutSignal<Vec<T>, W, F, FMut>, T>>
-    for VecSelector<WriteSignal<Vec<T>>, T>
-{
-    fn from(value: VecSelector<MappedMutSignal<Vec<T>, W, F, FMut>, T>) -> Self {
-        VecSelector {
-            selector: value.selector.map(::std::convert::Into::into),
-            _phantom: PhantomData,
-        }
-    }
-}
+store_impls!(Vec<T> => VecSelector<W, T>);
 
 impl<W, T> VecSelector<W, T> {
     fn new(selector: SelectorScope<W>) -> Self {

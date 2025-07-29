@@ -190,6 +190,26 @@ impl StoreSubscriptions {
         }
     }
 
+    pub(crate) fn track_recursive(&self, key: &[u32]) {
+        if let Some(rc) = ReactiveContext::current() {
+            let read = self.inner.read_unchecked();
+            let Some(root) = read.root.find(key) else {
+                return;
+            };
+
+            let mut nodes = vec![(key.to_vec(), root)];
+            while let Some((path, node)) = nodes.pop() {
+                for (child_key, child_node) in &node.root {
+                    let mut new_path = path.clone();
+                    new_path.push(*child_key);
+                    nodes.push((new_path, child_node));
+                }
+                let subscribers = self.subscribers(&path);
+                rc.subscribe(subscribers);
+            }
+        }
+    }
+
     pub(crate) fn mark_dirty(&self, key: &[u32]) {
         self.inner.write_unchecked().root.mark_children_dirty(key);
     }

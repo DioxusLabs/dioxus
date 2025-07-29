@@ -1,4 +1,4 @@
-use crate::{SelectorScope, Storable, Store};
+use crate::{store_impls, SelectorScope, Storable, Store};
 use dioxus_signals::{MappedMutSignal, ReadableExt, UnsyncStorage, Writable, WriteSignal};
 use std::{
     borrow::Borrow,
@@ -22,49 +22,7 @@ pub struct HashMapSelector<W, K, V, St> {
     _phantom: std::marker::PhantomData<(K, V, St)>,
 }
 
-impl<W, K, V, St> PartialEq for HashMapSelector<W, K, V, St>
-where
-    W: PartialEq,
-{
-    fn eq(&self, other: &Self) -> bool {
-        self.selector == other.selector
-    }
-}
-
-impl<W, K, V, St> Clone for HashMapSelector<W, K, V, St>
-where
-    W: Clone,
-{
-    fn clone(&self) -> Self {
-        Self {
-            selector: self.selector.clone(),
-            _phantom: PhantomData,
-        }
-    }
-}
-
-impl<W, K, V, St> Copy for HashMapSelector<W, K, V, St> where W: Copy {}
-
-impl<
-        K,
-        V,
-        St,
-        W: Writable<Storage = UnsyncStorage> + 'static,
-        F: Fn(&W::Target) -> &HashMap<K, V, St> + 'static,
-        FMut: Fn(&mut W::Target) -> &mut HashMap<K, V, St> + 'static,
-    >
-    ::std::convert::From<HashMapSelector<MappedMutSignal<HashMap<K, V, St>, W, F, FMut>, K, V, St>>
-    for HashMapSelector<WriteSignal<HashMap<K, V, St>>, K, V, St>
-{
-    fn from(
-        value: HashMapSelector<MappedMutSignal<HashMap<K, V, St>, W, F, FMut>, K, V, St>,
-    ) -> Self {
-        HashMapSelector {
-            selector: value.selector.map(::std::convert::Into::into),
-            _phantom: PhantomData,
-        }
-    }
-}
+store_impls!(HashMap<K, V, St> => HashMapSelector<W, K, V, St>);
 
 impl<W, K, V, St> HashMapSelector<W, K, V, St> {
     fn new(selector: SelectorScope<W>) -> Self {

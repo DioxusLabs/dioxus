@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use dioxus::prelude::{dioxus_stores::Store, *};
 use dioxus_stores::use_store;
 
@@ -9,6 +11,27 @@ fn main() {
 struct Value {
     count: i32,
     values: Vec<Value>,
+}
+
+impl Display for Value {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Value(count: {}, values: {})",
+            self.count,
+            self.values.len()
+        )
+    }
+}
+
+impl<W> Display for ValueSelector<W>
+where
+    ValueSelector<W>: Readable,
+    <ValueSelector<W> as Readable>::Target: Display,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ValueSelector({})", &*self.read())
+    }
 }
 
 fn app() -> Element {

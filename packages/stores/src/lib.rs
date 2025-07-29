@@ -11,8 +11,9 @@ use dioxus_signals::{
 
 mod foreign;
 pub use foreign::*;
+mod builtin;
+pub use builtin::*;
 mod impls;
-pub use impls::*;
 mod subscriptions;
 
 // Re-exported for the macro
@@ -102,6 +103,10 @@ impl<W> SelectorScope<W> {
         self.store.track(&self.path);
     }
 
+    fn track_recursive(&self) {
+        self.store.track_recursive(&self.path);
+    }
+
     fn mark_dirty(&self) {
         self.store.mark_dirty(&self.path);
     }
@@ -126,7 +131,7 @@ impl<W> SelectorScope<W> {
 
 impl<W: Readable> SelectorScope<W> {
     pub fn try_read_unchecked(&self) -> Result<ReadableRef<'static, W>, BorrowError> {
-        self.track();
+        self.track_recursive();
         self.write.try_read_unchecked()
     }
 
