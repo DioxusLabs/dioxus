@@ -1,4 +1,4 @@
-use crate::{CreateSelector, SelectorScope, Storable, Store};
+use crate::{SelectorScope, Storable, Store};
 use dioxus_signals::{MappedMutSignal, ReadableExt, UnsyncStorage, Writable, WriteSignal};
 use std::{
     borrow::Borrow,
@@ -8,7 +8,13 @@ use std::{
 };
 
 impl<K, V, St> Storable for HashMap<K, V, St> {
-    type Store<View> = HashMapSelector<View, K, V, St>;
+    type Store<View: Writable<Target = Self>> = HashMapSelector<View, K, V, St>;
+
+    fn create_selector<View: Writable<Target = Self>>(
+        selector: SelectorScope<View>,
+    ) -> Self::Store<View> {
+        HashMapSelector::new(selector)
+    }
 }
 
 pub struct HashMapSelector<W, K, V, St> {
@@ -60,10 +66,8 @@ impl<
     }
 }
 
-impl<W, K, V, St> CreateSelector for HashMapSelector<W, K, V, St> {
-    type View = W;
-
-    fn new(selector: SelectorScope<Self::View>) -> Self {
+impl<W, K, V, St> HashMapSelector<W, K, V, St> {
+    fn new(selector: SelectorScope<W>) -> Self {
         Self {
             selector,
             _phantom: PhantomData,
@@ -96,7 +100,7 @@ impl<
         St: BuildHasher,
         V: Storable,
     {
-        V::Store::new(self.selector.hash_scope(
+        V::create_selector(self.selector.hash_scope(
             key.borrow(),
             move |value| value.get(&key).unwrap(),
             move |value| value.get_mut(&key).unwrap(),

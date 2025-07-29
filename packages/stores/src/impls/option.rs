@@ -1,9 +1,15 @@
-use crate::{CreateSelector, SelectorScope, Storable, Store};
+use crate::{SelectorScope, Storable, Store};
 use dioxus_signals::{MappedMutSignal, ReadableExt, UnsyncStorage, Writable, WriteSignal};
 use std::marker::PhantomData;
 
 impl<T> Storable for Option<T> {
-    type Store<View> = OptionSelector<View, T>;
+    type Store<View: Writable<Target = Self>> = OptionSelector<View, T>;
+
+    fn create_selector<View: Writable<Target = Self>>(
+        selector: SelectorScope<View>,
+    ) -> Self::Store<View> {
+        OptionSelector::new(selector)
+    }
 }
 
 pub struct OptionSelector<W, T> {
@@ -50,10 +56,8 @@ impl<
     }
 }
 
-impl<W, T> CreateSelector for OptionSelector<W, T> {
-    type View = W;
-
-    fn new(selector: SelectorScope<Self::View>) -> Self {
+impl<W, T> OptionSelector<W, T> {
+    fn new(selector: SelectorScope<W>) -> Self {
         Self {
             selector,
             _phantom: PhantomData,
@@ -90,7 +94,7 @@ impl<W: Writable<Target = Option<T>> + Copy + 'static, T: Storable + 'static> Op
         W: Writable<Target = Option<T>> + Copy + 'static,
     {
         self.is_some().then(|| {
-            T::Store::new(self.selector.scope(
+            T::create_selector(self.selector.scope(
                 0,
                 move |value: &Option<T>| {
                     value.as_ref().unwrap_or_else(|| {

@@ -306,8 +306,8 @@ pub trait WritableExt: Writable {
     /// ```
     fn map_mut<O, F, FMut>(self, f: F, f_mut: FMut) -> MappedMutSignal<O, Self, F, FMut>
     where
-        Self: Clone + Sized + 'static,
-        O: ?Sized + 'static,
+        Self: Sized,
+        O: ?Sized,
         F: Fn(&Self::Target) -> &O + 'static,
         FMut: Fn(&mut Self::Target) -> &mut O + 'static,
     {

@@ -1,9 +1,15 @@
-use crate::{CreateSelector, SelectorScope, Storable, Store};
+use crate::{SelectorScope, Storable, Store};
 use dioxus_signals::{MappedMutSignal, ReadableExt, UnsyncStorage, Writable, WriteSignal};
 use std::marker::PhantomData;
 
 impl<const N: usize, T> Storable for [T; N] {
-    type Store<View> = ArraySelector<View, T>;
+    type Store<View: Writable<Target = Self>> = ArraySelector<View, T>;
+
+    fn create_selector<View: Writable<Target = Self>>(
+        selector: SelectorScope<View>,
+    ) -> Self::Store<View> {
+        ArraySelector::new(selector)
+    }
 }
 
 pub struct ArraySelector<W, T> {
@@ -51,10 +57,8 @@ impl<
     }
 }
 
-impl<W, T> CreateSelector for ArraySelector<W, T> {
-    type View = W;
-
-    fn new(selector: SelectorScope<Self::View>) -> Self {
+impl<W, T> ArraySelector<W, T> {
+    fn new(selector: SelectorScope<W>) -> Self {
         Self {
             selector,
             _phantom: PhantomData,
@@ -77,7 +81,7 @@ impl<const N: usize, W: Writable<Target = [T; N]> + Copy + 'static, T: Storable 
             impl Fn(&mut [T; N]) -> &mut T + Copy + 'static,
         >,
     > {
-        T::Store::new(self.selector.scope(
+        T::create_selector(self.selector.scope(
             index as u32,
             move |value| &value[index],
             move |value| &mut value[index],

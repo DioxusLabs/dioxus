@@ -129,10 +129,20 @@ fn derive_store_struct(input: &DeriveInput, structure: &DataStruct) -> syn::Resu
                 .map_or_else(|| format_ident!("field_{i}"), |name| name.clone());
             let field_type = &field.ty;
 
-            let foreign_type = if foreign {
-                quote! { dioxus_stores::ForeignType<#field_type> }
+            let write_type = quote! { dioxus_stores::macro_helpers::dioxus_signals::MappedMutSignal<#field_type, __W> };
+
+            let store_type = if foreign {
+                quote! { dioxus_stores::ForeignStore<#field_type, #write_type> }
             } else {
-                quote! { #field_type }
+                quote! { <#field_type as dioxus_stores::Storable>::Store<
+                    #write_type
+                > }
+            };
+
+            let store_constructor = if foreign {
+                quote! { dioxus_stores::ForeignStore::new }
+            } else {
+                quote! { <#field_type as dioxus_stores::Storable>::create_selector }
             };
 
             let ordinal = i as u32;
@@ -140,16 +150,15 @@ fn derive_store_struct(input: &DeriveInput, structure: &DataStruct) -> syn::Resu
             Ok::<_, syn::Error>(quote! {
                 fn #function_name(
                     self,
-                ) -> <#foreign_type as dioxus_stores::Storable>::Store<
-                    dioxus_stores::macro_helpers::dioxus_signals::MappedMutSignal<#field_type, __W>,
-                > {
+                ) -> #store_type {
                     let __map_field: fn(&#struct_name #ty_generics) -> &#field_type = |value| &value.#field_accessor;
                     let __map_mut_field: fn(&mut #struct_name #ty_generics) -> &mut #field_type = |value| &mut value.#field_accessor;
-                    dioxus_stores::CreateSelector::new(self.selector.scope(
+                    let scope = self.selector.scope(
                         #ordinal,
                         __map_field,
                         __map_mut_field,
-                    ))
+                    );
+                    #store_constructor(scope)
                 }
             })
         })
@@ -158,7 +167,11 @@ fn derive_store_struct(input: &DeriveInput, structure: &DataStruct) -> syn::Resu
     // Generate the store implementation
     let expanded = quote! {
         impl #impl_generics dioxus_stores::Storable for #struct_name #ty_generics #where_clause {
-            type Store<__W> = #selector_name #selector_ty_generics;
+            type Store<__W: dioxus_stores::macro_helpers::dioxus_signals::Writable<Target = Self>> = #selector_name #selector_ty_generics;
+
+            fn create_selector<__W: dioxus_stores::macro_helpers::dioxus_signals::Writable<Target = Self>>(selector: dioxus_stores::SelectorScope<__W>) -> Self::Store<__W> {
+                #selector_name { selector, _phantom: std::marker::PhantomData }
+            }
         }
 
         struct #selector_name #selector_generics #selector_where_clause {
@@ -180,14 +193,6 @@ fn derive_store_struct(input: &DeriveInput, structure: &DataStruct) -> syn::Resu
         impl #selector_impl_generics std::cmp::PartialEq for #selector_name #selector_ty_generics #selector_partial_eq_where_clause {
             fn eq(&self, other: &Self) -> bool {
                 self.selector == other.selector
-            }
-        }
-
-        impl #selector_impl_generics dioxus_stores::CreateSelector for #selector_name #selector_ty_generics #selector_where_clause {
-            type View = __W;
-
-            fn new(selector: dioxus_stores::SelectorScope<Self::View>) -> Self {
-                Self { selector, _phantom: std::marker::PhantomData }
             }
         }
 

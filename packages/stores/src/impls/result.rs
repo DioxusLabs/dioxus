@@ -1,9 +1,15 @@
-use crate::{CreateSelector, SelectorScope, Storable, Store};
+use crate::{SelectorScope, Storable, Store};
 use dioxus_signals::{MappedMutSignal, ReadableExt, UnsyncStorage, Writable, WriteSignal};
 use std::marker::PhantomData;
 
 impl<T, E> Storable for Result<T, E> {
-    type Store<View> = ResultSelector<View, T, E>;
+    type Store<View: Writable<Target = Self>> = ResultSelector<View, T, E>;
+
+    fn create_selector<View: Writable<Target = Self>>(
+        selector: SelectorScope<View>,
+    ) -> Self::Store<View> {
+        ResultSelector::new(selector)
+    }
 }
 
 pub struct ResultSelector<W, T, E> {
@@ -51,10 +57,8 @@ impl<
     }
 }
 
-impl<W, T, E> CreateSelector for ResultSelector<W, T, E> {
-    type View = W;
-
-    fn new(selector: SelectorScope<Self::View>) -> Self {
+impl<W, T, E> ResultSelector<W, T, E> {
+    fn new(selector: SelectorScope<W>) -> Self {
         Self {
             selector,
             _phantom: PhantomData,
@@ -96,7 +100,7 @@ impl<
         W: Writable<Target = Result<T, E>> + Copy + 'static,
     {
         self.is_ok().then(|| {
-            T::Store::new(self.selector.scope(
+            T::create_selector(self.selector.scope(
                 0,
                 move |value: &Result<T, E>| {
                     value.as_ref().unwrap_or_else(|_| {
@@ -130,7 +134,7 @@ impl<
         W: Writable<Target = Result<T, E>> + Copy + 'static,
     {
         self.is_err().then(|| {
-            E::Store::new(self.selector.scope(
+            E::create_selector(self.selector.scope(
                 0,
                 move |value: &Result<T, E>| match value {
                     Ok(_) => panic!("Tried to access `err` on an Ok value"),
@@ -171,7 +175,7 @@ impl<
         W: Writable<Target = Result<T, E>> + Copy + 'static,
     {
         if self.is_ok() {
-            Ok(T::Store::new(self.selector.scope(
+            Ok(T::create_selector(self.selector.scope(
                 0,
                 move |value: &Result<T, E>| {
                     value.as_ref().unwrap_or_else(|_| {
@@ -185,7 +189,7 @@ impl<
                 },
             )))
         } else {
-            Err(E::Store::new(self.selector.scope(
+            Err(E::create_selector(self.selector.scope(
                 0,
                 move |value: &Result<T, E>| match value {
                     Ok(_) => panic!("Tried to access `err` on an Ok value"),

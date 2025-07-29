@@ -1,9 +1,15 @@
-use crate::{CreateSelector, SelectorScope, Storable, Store};
+use crate::{SelectorScope, Storable, Store};
 use dioxus_signals::{MappedMutSignal, ReadableExt, UnsyncStorage, Writable, WriteSignal};
 use std::marker::PhantomData;
 
 impl<T> Storable for Vec<T> {
-    type Store<View> = VecSelector<View, T>;
+    type Store<View: Writable<Target = Self>> = VecSelector<View, T>;
+
+    fn create_selector<View: Writable<Target = Self>>(
+        selector: SelectorScope<View>,
+    ) -> Self::Store<View> {
+        VecSelector::new(selector)
+    }
 }
 
 pub struct VecSelector<W, T> {
@@ -50,10 +56,8 @@ impl<
     }
 }
 
-impl<W, T> CreateSelector for VecSelector<W, T> {
-    type View = W;
-
-    fn new(selector: SelectorScope<Self::View>) -> Self {
+impl<W, T> VecSelector<W, T> {
+    fn new(selector: SelectorScope<W>) -> Self {
         Self {
             selector,
             _phantom: PhantomData,
@@ -74,7 +78,7 @@ impl<W: Writable<Target = Vec<T>> + Copy + 'static, T: Storable + 'static> VecSe
             impl Fn(&mut Vec<T>) -> &mut T + Copy + 'static,
         >,
     > {
-        T::Store::new(self.selector.scope(
+        T::create_selector(self.selector.scope(
             index as u32,
             move |value| &value[index],
             move |value| &mut value[index],

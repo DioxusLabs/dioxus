@@ -1,4 +1,4 @@
-use crate::{CreateSelector, SelectorScope, Storable};
+use crate::{SelectorScope, Storable};
 use dioxus_core::{IntoAttributeValue, IntoDynNode, Subscribers};
 use dioxus_signals::{
     read_impls, write_impls, BorrowError, BorrowMutError, MappedMutSignal, Readable, ReadableExt,
@@ -14,14 +14,6 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-
-pub struct ForeignType<T: ?Sized> {
-    phantom: PhantomData<(T,)>,
-}
-
-impl<T: ?Sized> Storable for ForeignType<T> {
-    type Store<View> = ForeignStore<T, View>;
-}
 
 pub struct ForeignStore<T: ?Sized, W> {
     selector: SelectorScope<W>,
@@ -42,10 +34,9 @@ where
 
 impl<W, T: ?Sized> Copy for ForeignStore<T, W> where W: Copy {}
 
-impl<W, T: ?Sized> CreateSelector for ForeignStore<T, W> {
-    type View = W;
-
-    fn new(selector: SelectorScope<Self::View>) -> Self {
+impl<W, T: ?Sized> ForeignStore<T, W> {
+    /// Creates a new `ForeignStore` with the given selector.
+    pub fn new(selector: SelectorScope<W>) -> Self {
         Self {
             selector,
             phantom: PhantomData,
@@ -163,7 +154,11 @@ macro_rules! mark_foreign_type {
         where
             $($($extra_bound_ty: $extra_bound),*)?
         {
-            type Store<View> = ForeignStore<$ty $(< $($gen),* >)?, View>;
+            type Store<View: Writable<Target = Self>> = ForeignStore<$ty $(< $($gen),* >)?, View>;
+
+            fn create_selector<View: Writable<Target = Self>>(selector: SelectorScope<View>) -> Self::Store<View> {
+                ForeignStore::new(selector)
+            }
         }
     };
 }
@@ -203,6 +198,5 @@ mark_foreign_type!(LinkedList<T>);
 mark_foreign_type!(BinaryHeap<T>);
 mark_foreign_type!(VecDeque<T>);
 
-mark_foreign_type!(Box<T>);
 mark_foreign_type!(Rc<T>);
 mark_foreign_type!(Arc<T>);

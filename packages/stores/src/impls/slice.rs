@@ -1,9 +1,15 @@
-use crate::{CreateSelector, SelectorScope, Storable, Store};
+use crate::{SelectorScope, Storable, Store};
 use dioxus_signals::{MappedMutSignal, ReadableExt, UnsyncStorage, Writable, WriteSignal};
 use std::marker::PhantomData;
 
 impl<T> Storable for [T] {
-    type Store<View> = SliceSelector<View, T>;
+    type Store<View: Writable<Target = Self>> = SliceSelector<View, T>;
+
+    fn create_selector<View: Writable<Target = Self>>(
+        selector: SelectorScope<View>,
+    ) -> Self::Store<View> {
+        SliceSelector::new(selector)
+    }
 }
 
 pub struct SliceSelector<W, T> {
@@ -50,10 +56,8 @@ impl<
     }
 }
 
-impl<W, T> CreateSelector for SliceSelector<W, T> {
-    type View = W;
-
-    fn new(selector: SelectorScope<Self::View>) -> Self {
+impl<W, T> SliceSelector<W, T> {
+    fn new(selector: SelectorScope<W>) -> Self {
         Self {
             selector,
             _phantom: PhantomData,
@@ -74,7 +78,7 @@ impl<W: Writable<Target = [T]> + Copy + 'static, T: Storable + 'static> SliceSel
             impl Fn(&mut [T]) -> &mut T + Copy + 'static,
         >,
     > {
-        T::Store::new(self.selector.scope(
+        T::create_selector(self.selector.scope(
             index as u32,
             move |value| &value[index],
             move |value| &mut value[index],

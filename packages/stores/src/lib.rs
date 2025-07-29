@@ -12,6 +12,7 @@ use dioxus_signals::{
 mod foreign;
 pub use foreign::*;
 mod impls;
+pub use impls::*;
 mod subscriptions;
 
 // Re-exported for the macro
@@ -53,40 +54,48 @@ impl<W> SelectorScope<W> {
         Self { path, store, write }
     }
 
-    pub fn hash_scope<U: 'static, F, FMut>(
+    pub fn hash_scope<U: ?Sized, F, FMut>(
         self,
         index: impl Hash,
         map: F,
         map_mut: FMut,
     ) -> SelectorScope<MappedMutSignal<U, W, F, FMut>>
     where
-        W: Writable + Copy + 'static,
-        F: Fn(&W::Target) -> &U + Copy + 'static,
-        FMut: Fn(&mut W::Target) -> &mut U + Copy + 'static,
+        W: Writable + 'static,
+        F: Fn(&W::Target) -> &U + 'static,
+        FMut: Fn(&mut W::Target) -> &mut U + 'static,
     {
         let hash = self.store.hash(index);
         self.scope(hash, map, map_mut)
     }
 
-    pub fn scope<U: 'static, F, FMut>(
-        self,
+    pub fn scope<U: ?Sized, F, FMut>(
+        mut self,
         index: u32,
         map: F,
         map_mut: FMut,
     ) -> SelectorScope<MappedMutSignal<U, W, F, FMut>>
     where
-        W: Writable + Copy + 'static,
-        F: Fn(&W::Target) -> &U + Copy + 'static,
-        FMut: Fn(&mut W::Target) -> &mut U + Copy + 'static,
+        W: Writable + 'static,
+        F: Fn(&W::Target) -> &U + 'static,
+        FMut: Fn(&mut W::Target) -> &mut U + 'static,
     {
-        let Self {
-            mut path,
-            store,
-            write,
-        } = self;
-        path.push(index);
-        let write = write.map_mut(map, map_mut);
-        SelectorScope::new(path, store, write)
+        self.path.push(index);
+        self.scope_raw(map, map_mut)
+    }
+
+    pub fn scope_raw<U: ?Sized, F, FMut>(
+        self,
+        map: F,
+        map_mut: FMut,
+    ) -> SelectorScope<MappedMutSignal<U, W, F, FMut>>
+    where
+        W: Writable,
+        F: Fn(&W::Target) -> &U + 'static,
+        FMut: Fn(&mut W::Target) -> &mut U + 'static,
+    {
+        let write = self.write.map_mut(map, map_mut);
+        SelectorScope::new(self.path, self.store, write)
     }
 
     fn track(&self) {
@@ -153,7 +162,7 @@ pub fn create_maybe_sync_store<T: Storable, S: Storage<T>>(
         store,
         write: value.map_mut(map, map_mut),
     };
-    T::Store::new(selector)
+    T::create_selector(selector)
 }
 
 pub fn use_maybe_sync_store<T: Storable, S: Storage<T>>(
@@ -177,11 +186,9 @@ where
 }
 
 pub trait Storable {
-    type Store<View>: CreateSelector<View = View>;
-}
+    type Store<View: Writable<Target = Self>>;
 
-pub trait CreateSelector {
-    type View;
-
-    fn new(selector: SelectorScope<Self::View>) -> Self;
+    fn create_selector<View: Writable<Target = Self>>(
+        selector: SelectorScope<View>,
+    ) -> Self::Store<View>;
 }

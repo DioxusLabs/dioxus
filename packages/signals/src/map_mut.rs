@@ -9,8 +9,8 @@ use generational_box::{AnyStorage, BorrowResult};
 
 /// A read only signal that has been mapped to a new type.
 pub struct MappedMutSignal<
-    O: ?Sized + 'static,
-    V: Readable,
+    O: ?Sized,
+    V,
     F = fn(&<V as Readable>::Target) -> &O,
     FMut = fn(&mut <V as Readable>::Target) -> &mut O,
 > {
@@ -22,7 +22,7 @@ pub struct MappedMutSignal<
 
 impl<V, O, F, FMut> Clone for MappedMutSignal<O, V, F, FMut>
 where
-    V: Readable + Clone,
+    V: Clone,
     F: Clone,
     FMut: Clone,
 {
@@ -38,7 +38,7 @@ where
 
 impl<V, O, F, FMut> Copy for MappedMutSignal<O, V, F, FMut>
 where
-    V: Readable + Copy,
+    V: Copy,
     F: Copy,
     FMut: Copy,
 {
@@ -47,8 +47,6 @@ where
 impl<V, O, F, FMut> MappedMutSignal<O, V, F, FMut>
 where
     O: ?Sized,
-    V: Readable,
-    F: Fn(&V::Target) -> &O,
 {
     /// Create a new mapped signal.
     pub(crate) fn new(value: V, map_fn: F, map_fn_mut: FMut) -> Self {
@@ -63,7 +61,7 @@ where
 
 impl<V, O, F, FMut> Readable for MappedMutSignal<O, V, F, FMut>
 where
-    O: ?Sized,
+    O: ?Sized + 'static,
     V: Readable,
     F: Fn(&V::Target) -> &O,
 {
@@ -89,7 +87,7 @@ where
 
 impl<V, O, F, FMut> Writable for MappedMutSignal<O, V, F, FMut>
 where
-    O: ?Sized,
+    O: ?Sized + 'static,
     V: Writable,
     F: Fn(&V::Target) -> &O,
     FMut: Fn(&mut V::Target) -> &mut O,
@@ -106,7 +104,7 @@ where
 
 impl<V, O, F, FMut> IntoAttributeValue for MappedMutSignal<O, V, F, FMut>
 where
-    O: Clone + IntoAttributeValue,
+    O: Clone + IntoAttributeValue + 'static,
     V: Readable,
     F: Fn(&V::Target) -> &O,
 {
@@ -117,7 +115,7 @@ where
 
 impl<V, O, F, FMut> PartialEq for MappedMutSignal<O, V, F, FMut>
 where
-    O: ?Sized,
+    O: ?Sized + 'static,
     V: Readable + PartialEq,
     F: PartialEq,
     FMut: PartialEq,
@@ -134,7 +132,7 @@ where
 /// Currently only limited to clone types, though could probably specialize for string/arc/rc
 impl<V, O, F, FMut> Deref for MappedMutSignal<O, V, F, FMut>
 where
-    O: Clone,
+    O: Clone + 'static,
     V: Readable + 'static,
     F: Fn(&V::Target) -> &O + 'static,
     FMut: 'static,
