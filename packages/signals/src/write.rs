@@ -95,8 +95,8 @@ pub trait Writable: Readable {
 ///
 /// ## Matching on WriteLock
 ///
-/// You need to get the inner mutable reference with [`Write::deref_mut`] before you match the inner value. If you try to match
-/// without calling [`Write::deref_mut`], you will get an error like this:
+/// You need to get the inner mutable reference with [`WriteLock::deref_mut`] before you match the inner value. If you try to match
+/// without calling [`WriteLock::deref_mut`], you will get an error like this:
 ///
 /// ```compile_fail
 /// # use dioxus::prelude::*;
@@ -295,7 +295,7 @@ pub trait WritableExt: Writable {
     ///
     /// // The child component doesn't need to know that the mapped value is coming from a list
     /// #[component]
-    /// fn Item(item: Write<i32>) -> Element {
+    /// fn Item(item: WriteSignal<i32>) -> Element {
     ///     rsx! {
     ///         button {
     ///             onclick: move |_| *item.write() += 1,
