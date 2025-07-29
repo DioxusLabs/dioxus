@@ -36,10 +36,6 @@ fn app() -> Element {
 fn Child(count: WriteSignal<i32>) -> Element {
     rsx! {
         div {
-            button {
-                onclick: move |_| *count.write() += 1,
-                "+"
-            }
             "{count}"
         }
     }
