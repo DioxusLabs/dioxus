@@ -1,7 +1,4 @@
-use dioxus::prelude::{
-    dioxus_stores::{use_store, Store},
-    *,
-};
+use dioxus::prelude::{dioxus_stores::*, *};
 use std::num::ParseIntError;
 
 fn main() {
@@ -42,6 +39,5 @@ fn HandleOk(data: Store<u32>) -> Element {
 
 #[derive(Store)]
 struct ParseError {
-    #[store(foreign)]
     error: ParseIntError,
 }

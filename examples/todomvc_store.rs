@@ -1,10 +1,7 @@
 //! The typical TodoMVC app, implemented in Dioxus.
 
-use dioxus::prelude::{
-    dioxus_stores::{use_store, Store},
-    *,
-};
-use std::collections::HashMap;
+use dioxus::prelude::{dioxus_stores::*, *};
+use std::{collections::HashMap, vec};
 
 const STYLE: Asset = asset!("/examples/assets/todomvc.css");
 
@@ -251,7 +248,6 @@ fn ListFooter(mut todos: Store<TodoState>, active_todo_count: ReadSignal<usize>)
 #[derive(Store, PartialEq, Clone, Debug)]
 struct TodoState {
     todos: HashMap<u32, TodoItem>,
-    #[store(foreign)]
     filter: FilterState,
 }
 

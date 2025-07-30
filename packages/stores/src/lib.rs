@@ -2,10 +2,7 @@
 
 use std::hash::Hash;
 
-use crate::{
-    store::Store,
-    subscriptions::{StoreSubscriptions, TinyVec},
-};
+use crate::subscriptions::{StoreSubscriptions, TinyVec};
 use dioxus_core::{use_hook, Subscribers};
 use dioxus_signals::{
     BorrowError, BorrowMutError, CopyValue, MappedMutSignal, Readable, ReadableRef, Storage,
@@ -16,6 +13,7 @@ mod builtin;
 pub use builtin::*;
 mod store;
 mod subscriptions;
+pub use store::Store;
 
 // Re-exported for the macro
 #[doc(hidden)]
