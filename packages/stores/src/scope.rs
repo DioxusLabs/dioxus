@@ -1,4 +1,4 @@
-use std::hash::Hash;
+use std::{fmt::Debug, hash::Hash};
 
 use crate::subscriptions::{StoreSubscriptions, TinyVec};
 use dioxus_core::Subscribers;
@@ -11,6 +11,14 @@ pub struct SelectorScope<W> {
     path: TinyVec,
     store: StoreSubscriptions,
     write: W,
+}
+
+impl<W> Debug for SelectorScope<W> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.debug_struct("SelectorScope")
+            .field("path", &self.path)
+            .finish()
+    }
 }
 
 impl<W: PartialEq> PartialEq for SelectorScope<W> {

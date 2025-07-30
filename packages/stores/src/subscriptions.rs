@@ -1,5 +1,6 @@
 use dioxus_core::{ReactiveContext, SubscriberList, Subscribers};
 use dioxus_signals::{CopyValue, ReadableExt, SyncStorage, Writable};
+use std::fmt::Debug;
 use std::hash::BuildHasher;
 use std::{
     collections::{HashMap, HashSet},
@@ -118,6 +119,14 @@ impl Default for TinyVec {
     }
 }
 
+impl Debug for TinyVec {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TinyVec")
+            .field("path", &&self.path[..self.length])
+            .finish()
+    }
+}
+
 impl TinyVec {
     pub(crate) const fn new() -> Self {
         Self {
@@ -192,18 +201,22 @@ impl StoreSubscriptions {
 
     pub(crate) fn track_recursive(&self, key: &[u32]) {
         if let Some(rc) = ReactiveContext::current() {
-            let read = self.inner.read_unchecked();
-            let Some(root) = read.root.find(key) else {
-                return;
-            };
+            let mut paths = Vec::new();
+            {
+                let mut write = self.inner.write_unchecked();
 
-            let mut nodes = vec![(key.to_vec(), root)];
-            while let Some((path, node)) = nodes.pop() {
-                for (child_key, child_node) in &node.root {
-                    let mut new_path = path.clone();
-                    new_path.push(*child_key);
-                    nodes.push((new_path, child_node));
+                let root = write.root.get_mut_or_default(key);
+                let mut nodes = vec![(key.to_vec(), &*root)];
+                while let Some((path, node)) = nodes.pop() {
+                    for (child_key, child_node) in &node.root {
+                        let mut new_path = path.clone();
+                        new_path.push(*child_key);
+                        nodes.push((new_path, child_node));
+                    }
+                    paths.push(path);
                 }
+            }
+            for path in paths {
                 let subscribers = self.subscribers(&path);
                 rc.subscribe(subscribers);
             }
