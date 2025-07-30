@@ -8,8 +8,7 @@ mod impls;
 mod store;
 mod subscriptions;
 pub use store::*;
-mod scope;
-pub use scope::SelectorScope;
+pub mod scope;
 
 #[cfg(feature = "macro")]
 pub use dioxus_stores_macro::Store;

@@ -7,7 +7,7 @@ use syn::{
     DeriveInput, Fields, Index,
 };
 
-/// # Store
+/// # `derive(Store)`
 ///
 /// The `Store` macro is used to create an extension trait for stores that makes it possible to access the fields or variants
 /// of an item as stores.

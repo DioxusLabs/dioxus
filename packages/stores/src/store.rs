@@ -1,6 +1,6 @@
 use crate::{
+    scope::SelectorScope,
     subscriptions::{StoreSubscriptions, TinyVec},
-    SelectorScope,
 };
 use dioxus_core::{
     use_hook, AttributeValue, DynamicNode, IntoAttributeValue, IntoDynNode, Subscribers,
@@ -17,11 +17,11 @@ use std::marker::PhantomData;
 ///
 /// By default stores act a lot like [`dioxus_signals::Signal`]s, but they provide more granular
 /// subscriptions without requiring nested signals. You should derive [`Store`](dioxus_stores_macro::Store) on your data
-/// structures to generate selectors that let you scope the store to a specific part of your data structure.
+/// structures to generate selectors that let you scope the store to a specific part of your data.
 ///
 /// # Example
 ///
-/// ```rust
+/// ```rust, no_run
 /// use dioxus::prelude::*;
 /// use dioxus_stores::*;
 ///
@@ -218,7 +218,7 @@ write_impls!(Store<T, W> where W: Writable<Target = T>);
 ///
 /// # Example
 ///
-/// ```rust
+/// ```rust, no_run
 /// use dioxus::prelude::*;
 /// use dioxus_stores::*;
 ///
@@ -227,7 +227,7 @@ write_impls!(Store<T, W> where W: Writable<Target = T>);
 /// }
 ///
 /// // Deriving the store trait provides methods to scope the store to specific parts of your data structure.
-/// // The `Store` macro generates a `count` and `children` method for the `CounterTree` struct.
+/// // The `Store` macro generates a `count` and `children` method for `Store<CounterTree>`.
 /// #[derive(Store, Default)]
 /// struct CounterTree {
 ///     count: i32,
@@ -280,9 +280,14 @@ pub fn use_store<T>(init: impl FnOnce() -> T) -> Store<T, MappedMutSignal<T, Cop
 /// A type alias for global stores
 ///
 /// # Example
-/// ```rust
+/// ```rust, no_run
 /// use dioxus::prelude::*;
 /// use dioxus_stores::*;
+///
+/// #[derive(Store)]
+/// struct Counter {
+///    count: i32,
+/// }
 ///
 /// static COUNTER: GlobalStore<Counter> = Global::new(|| Counter { count: 0 });
 ///

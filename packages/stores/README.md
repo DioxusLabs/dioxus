@@ -6,7 +6,7 @@ By default stores act a lot like [`dioxus_signals::Signal`]s, but they provide m
 subscriptions without requiring nested signals. You should derive [`Store`](dioxus_stores_macro::Store) on your data
 structures to generate selectors that let you scope the store to a specific part of your data structure.
 
-```rust
+```rust, no_run
 use dioxus::prelude::*;
 use dioxus_stores::*;
 
@@ -15,7 +15,8 @@ fn main() {
 }
 
 // Deriving the store trait provides methods to scope the store to specific parts of your data structure.
-// The `Store` macro generates a `count` and `children` method for the `CounterTree` struct. #[derive(Store, Default)]
+// The `Store` macro generates a `count` and `children` method for `Store<CounterTree>`
+#[derive(Store, Default)]
 struct CounterTree {
     count: i32,
     children: Vec<CounterTree>,

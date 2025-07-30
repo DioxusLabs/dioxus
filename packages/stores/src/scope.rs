@@ -1,3 +1,6 @@
+//! This module contains the `SelectorScope` type with raw access to the underlying store system. Most applications should
+//! use the [`Store`](dioxus_stores_macro::Store) macro to derive stores for their data structures, which provides a more ergonomic API.
+
 use std::{fmt::Debug, hash::Hash};
 
 use crate::subscriptions::{StoreSubscriptions, TinyVec};
