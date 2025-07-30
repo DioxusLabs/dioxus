@@ -5,15 +5,62 @@ use crate::store::Store;
 use crate::IndexStoreExt;
 use dioxus_signals::{MappedMutSignal, ReadableExt, Writable};
 
-pub trait SliceStoreExt {
+mod private {
+    pub trait Sealed {}
+}
+
+/// A trait for `Store` that provides methods for working with slices.
+///
+/// # Example
+/// ```rust, no_run
+/// use dioxus_stores::*;
+/// let store = use_store(|| vec![1, 2, 3]);
+/// assert_eq!(store.len(), 3);
+/// assert!(!store.is_empty());
+/// for item in store.iter() {
+///     println!("{}", item);
+/// }
+/// ```
+pub trait SliceStoreExt: private::Sealed {
+    /// The slice type of the store.
     type Slice;
+    /// The item type of the slice.
     type Item;
+    /// The writer backing the store.
     type Write;
 
+    /// Returns the length of the slice. This will only track the shallow state of the slice.
+    /// It will only cause a re-run if the length of the slice could change.
+    ///
+    /// # Example
+    /// ```rust, no_run
+    /// use dioxus_stores::*;
+    /// let store = use_store(|| vec![1, 2, 3]);
+    /// assert_eq!(store.len(), 3);
+    /// ```
     fn len(self) -> usize;
 
+    /// Checks if the slice is empty. This will only track the shallow state of the slice.
+    /// It will only cause a re-run if the length of the slice could change.
+    ///
+    /// # Example
+    /// ```rust, no_run
+    /// use dioxus_stores::*;
+    /// let store = use_store(|| vec![1, 2, 3]);
+    /// assert!(!store.is_empty());
+    /// ```
     fn is_empty(self) -> bool;
 
+    /// Returns an iterator over the items in the slice. This will only track the shallow state of the slice.
+    /// It will only cause a re-run if the length of the slice could change.
+    /// # Example
+    /// ```rust, no_run
+    /// use dioxus_stores::*;
+    /// let store = use_store(|| vec![1, 2, 3]);
+    /// for item in store.iter() {
+    ///     println!("{}", item);
+    /// }
+    /// ```
     fn iter(
         self,
     ) -> impl Iterator<
@@ -28,6 +75,8 @@ pub trait SliceStoreExt {
         >,
     >;
 }
+
+impl<T: ?Sized, W> private::Sealed for Store<T, W> where W: Writable<Target = T> + Copy + 'static {}
 
 impl<W, T, I> SliceStoreExt for Store<T, W>
 where
