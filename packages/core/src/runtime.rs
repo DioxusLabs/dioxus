@@ -315,15 +315,9 @@ impl Runtime {
     #[instrument(skip(self, event), level = "trace", name = "Runtime::handle_event")]
     pub fn handle_event(self: &Rc<Self>, name: &str, event: Event<dyn Any>, element: ElementId) {
         let _runtime = RuntimeGuard::new(self.clone());
+        let elements = self.elements.borrow();
 
-        // Collect the parent path information first, then drop the borrow
-        // This prevents BorrowMutError when event handlers modify the DOM
-        let parent_path = {
-            let elements = self.elements.borrow();
-            elements.get(element.0).copied().flatten()
-        };
-
-        if let Some(parent_path) = parent_path {
+        if let Some(Some(parent_path)) = elements.get(element.0).copied() {
             if event.propagates() {
                 self.handle_bubbling_event(parent_path, name, event);
             } else {
@@ -359,75 +353,61 @@ impl Runtime {
         name = "VirtualDom::handle_bubbling_event"
     )]
     fn handle_bubbling_event(&self, parent: ElementRef, name: &str, uievent: Event<dyn Any>) {
-        // First, collect all listeners from the bubble chain without keeping borrows active
-        // This prevents BorrowMutError when event handlers modify the DOM
-        // Cloning AttributeValue::Listener is cheap since it just increments Rc counters
-        let all_listeners = {
-            let mounts = self.mounts.borrow();
-            let mut all_listeners = Vec::new();
+        let mounts = self.mounts.borrow();
 
-            // If the event bubbles, we traverse through the tree until we find the target element.
-            // Loop through each dynamic attribute (in a depth first order) in this template before moving up to the template's parent.
-            let mut parent = Some(parent);
-            while let Some(path) = parent {
-                let mut listeners = vec![];
+        // If the event bubbles, we traverse through the tree until we find the target element.
+        // Loop through each dynamic attribute (in a depth first order) in this template before moving up to the template's parent.
+        let mut parent = Some(parent);
+        while let Some(path) = parent {
+            let mut listeners = vec![];
 
-                let Some(mount) = mounts.get(path.mount.0) else {
-                    // If the node is suspended and not mounted, we can just ignore the event
-                    return;
-                };
-                let el_ref = &mount.node;
-                let node_template = el_ref.template;
-                let target_path = path.path;
+            let Some(mount) = mounts.get(path.mount.0) else {
+                // If the node is suspended and not mounted, we can just ignore the event
+                return;
+            };
+            let el_ref = &mount.node;
+            let node_template = el_ref.template;
+            let target_path = path.path;
 
-                // Accumulate listeners into the listener list bottom to top
-                for (idx, this_path) in node_template.attr_paths.iter().enumerate() {
-                    let attrs = &*el_ref.dynamic_attrs[idx];
+            // Accumulate listeners into the listener list bottom to top
+            for (idx, this_path) in node_template.attr_paths.iter().enumerate() {
+                let attrs = &*el_ref.dynamic_attrs[idx];
 
-                    for attr in attrs.iter() {
-                        // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
-                        if attr.name.get(2..) == Some(name) && target_path.is_descendant(this_path)
-                        {
-                            listeners.push(attr.value.clone());
+                for attr in attrs.iter() {
+                    // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
+                    if attr.name.get(2..) == Some(name) && target_path.is_descendant(this_path) {
+                        listeners.push(&attr.value);
 
-                            // Break if this is the exact target element.
-                            // This means we won't call two listeners with the same name on the same element. This should be
-                            // documented, or be rejected from the rsx! macro outright
-                            if target_path == this_path {
-                                break;
-                            }
+                        // Break if this is the exact target element.
+                        // This means we won't call two listeners with the same name on the same element. This should be
+                        // documented, or be rejected from the rsx! macro outright
+                        if target_path == this_path {
+                            break;
                         }
                     }
                 }
-
-                // Add listeners in reverse order for this level
-                for listener in listeners.into_iter().rev() {
-                    all_listeners.push(listener);
-                }
-
-                // Move to parent
-                let mount_id = el_ref.mount.get().as_usize();
-                parent = mount_id.and_then(|id| mounts.get(id).and_then(|el| el.parent));
             }
 
-            all_listeners
-        }; // mounts borrow is dropped here
+            // Now that we've accumulated all the parent attributes for the target element, call them in reverse order
+            // We check the bubble state between each call to see if the event has been stopped from bubbling
+            tracing::event!(
+                tracing::Level::TRACE,
+                "Calling {} listeners",
+                listeners.len()
+            );
+            for listener in listeners.into_iter().rev() {
+                if let AttributeValue::Listener(listener) = listener {
+                    listener.call(uievent.clone());
+                    let metadata = uievent.metadata.borrow();
 
-        // Now call all listeners without any active borrows
-        tracing::event!(
-            tracing::Level::TRACE,
-            "Calling {} listeners",
-            all_listeners.len()
-        );
-        for listener in all_listeners {
-            if let AttributeValue::Listener(listener) = listener {
-                listener.call(uievent.clone());
-                let metadata = uievent.metadata.borrow();
-
-                if !metadata.propagates {
-                    return;
+                    if !metadata.propagates {
+                        return;
+                    }
                 }
             }
+
+            let mount = el_ref.mount.get().as_usize();
+            parent = mount.and_then(|id| mounts.get(id).and_then(|el| el.parent));
         }
     }
 
@@ -438,43 +418,28 @@ impl Runtime {
         name = "VirtualDom::handle_non_bubbling_event"
     )]
     fn handle_non_bubbling_event(&self, node: ElementRef, name: &str, uievent: Event<dyn Any>) {
-        // First, collect the listener without keeping borrow active
-        // This prevents BorrowMutError when event handlers modify the DOM
-        // Cloning AttributeValue::Listener is cheap since it just increments Rc counters
-        let listener = {
-            let mounts = self.mounts.borrow();
-            let Some(mount) = mounts.get(node.mount.0) else {
-                // If the node is suspended and not mounted, we can just ignore the event
-                return;
-            };
-            let el_ref = &mount.node;
-            let node_template = el_ref.template;
-            let target_path = node.path;
+        let mounts = self.mounts.borrow();
+        let Some(mount) = mounts.get(node.mount.0) else {
+            // If the node is suspended and not mounted, we can just ignore the event
+            return;
+        };
+        let el_ref = &mount.node;
+        let node_template = el_ref.template;
+        let target_path = node.path;
 
-            let mut found_listener = None;
-            for (idx, this_path) in node_template.attr_paths.iter().enumerate() {
-                let attrs = &*el_ref.dynamic_attrs[idx];
+        for (idx, this_path) in node_template.attr_paths.iter().enumerate() {
+            let attrs = &*el_ref.dynamic_attrs[idx];
 
-                for attr in attrs.iter() {
-                    // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
-                    // Only call the listener if this is the exact target element.
-                    if attr.name.get(2..) == Some(name) && target_path == this_path {
-                        if let AttributeValue::Listener(listener) = &attr.value {
-                            found_listener = Some(listener.clone());
-                            break;
-                        }
+            for attr in attrs.iter() {
+                // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
+                // Only call the listener if this is the exact target element.
+                if attr.name.get(2..) == Some(name) && target_path == this_path {
+                    if let AttributeValue::Listener(listener) = &attr.value {
+                        listener.call(uievent.clone());
+                        break;
                     }
                 }
-                if found_listener.is_some() {
-                    break;
-                }
             }
-            found_listener
-        }; // mounts borrow is dropped here
-
-        // Now call the listener without any active borrows
-        if let Some(listener) = listener {
-            listener.call(uievent);
         }
     }
 }
