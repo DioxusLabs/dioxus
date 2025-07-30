@@ -25,11 +25,7 @@ impl<T, S: Storage<T>> Store<T, MappedMutSignal<T, CopyValue<T, S>>> {
         let path = TinyVec::new();
         let map: fn(&T) -> &T = |value| value;
         let map_mut: fn(&mut T) -> &mut T = |value| value;
-        let selector = SelectorScope {
-            path,
-            store,
-            write: value.map_mut(map, map_mut),
-        };
+        let selector = SelectorScope::new(path, store, value.map_mut(map, map_mut));
         selector.into()
     }
 }

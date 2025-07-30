@@ -141,7 +141,7 @@ fn TodoHeader(mut todos: Store<TodoState>) -> Element {
 fn TodoEntry(mut todos: Store<TodoState>, id: u32) -> Element {
     let mut is_editing = use_signal(|| false);
 
-    let entry = todos.todos().get(id);
+    let entry = todos.todos().get(id).unwrap();
     let checked = entry.checked();
     let contents = entry.contents();
 
