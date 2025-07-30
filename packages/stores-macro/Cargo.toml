@@ -12,7 +12,8 @@ description = "Server function macros for Dioxus"
 [dependencies]
 proc-macro2 = { workspace = true }
 quote = { workspace = true }
-syn = { workspace = true, features = ["full"] }
+syn = { workspace = true }
+convert_case = { workspace = true }
 
 [lib]
 proc-macro = true

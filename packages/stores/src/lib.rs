@@ -99,19 +99,23 @@ impl<W> SelectorScope<W> {
         SelectorScope::new(self.path, self.store, write)
     }
 
-    fn track(&self) {
+    /// Track this scope shallowly.
+    pub fn track(&self) {
         self.store.track(&self.path);
     }
 
-    fn track_recursive(&self) {
+    /// Track this scope recursively.
+    pub fn track_recursive(&self) {
         self.store.track_recursive(&self.path);
     }
 
-    fn mark_dirty(&self) {
+    /// Mark this scope as dirty recursively.
+    pub fn mark_dirty(&self) {
         self.store.mark_dirty(&self.path);
     }
 
-    fn mark_dirty_shallow(&self) {
+    /// Mark this scope as dirty shallowly.
+    pub fn mark_dirty_shallow(&self) {
         self.store.mark_dirty_shallow(&self.path);
     }
 

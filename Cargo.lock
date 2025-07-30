@@ -5950,6 +5950,7 @@ dependencies = [
 name = "dioxus-stores-macro"
 version = "0.7.0-alpha.3"
 dependencies = [
+ "convert_case 0.8.0",
  "proc-macro2",
  "quote",
  "syn 2.0.104",
