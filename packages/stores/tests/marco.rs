@@ -3,6 +3,11 @@ mod macro_tests {
     use dioxus_stores::*;
     use std::collections::HashMap;
 
+    fn derive_unit() {
+        #[derive(Store)]
+        struct TodoItem;
+    }
+
     fn derive_struct() {
         #[derive(Store)]
         struct TodoItem {

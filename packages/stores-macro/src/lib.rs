@@ -124,6 +124,11 @@ fn derive_store_struct(input: &DeriveInput, structure: &DataStruct) -> syn::Resu
     let fields = &structure.fields;
     let visibility = &input.vis;
 
+    // We don't need to do anything if there are no fields
+    if fields.is_empty() {
+        return Ok(quote! {});
+    }
+
     let extension_trait_name = format_ident!("{}StoreExt", struct_name);
     let transposed_name = format_ident!("{}StoreTransposed", struct_name);
 
