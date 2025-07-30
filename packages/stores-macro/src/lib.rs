@@ -112,12 +112,10 @@ fn derive_store(input: DeriveInput) -> syn::Result<TokenStream2> {
     match &input.data {
         syn::Data::Struct(data_struct) => derive_store_struct(&input, data_struct),
         syn::Data::Enum(data_enum) => derive_store_enum(&input, data_enum),
-        syn::Data::Union(_) => {
-            return Err(syn::Error::new(
-                input.span(),
-                "Store macro does not support unions",
-            ))
-        }
+        syn::Data::Union(_) => Err(syn::Error::new(
+            input.span(),
+            "Store macro does not support unions",
+        )),
     }
 }
 

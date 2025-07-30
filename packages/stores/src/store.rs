@@ -177,7 +177,7 @@ where
         self.selector.try_write_unchecked()
     }
 }
-impl<T: ?Sized, W> IntoAttributeValue for Store<T, W>
+impl<T, W> IntoAttributeValue for Store<T, W>
 where
     Self: Readable<Target = T>,
     T: ::std::clone::Clone + IntoAttributeValue + 'static,
@@ -186,7 +186,7 @@ where
         ReadableExt::cloned(&self).into_value()
     }
 }
-impl<T: ?Sized, W> IntoDynNode for Store<T, W>
+impl<T, W> IntoDynNode for Store<T, W>
 where
     Self: Readable<Target = T>,
     T: ::std::clone::Clone + IntoDynNode + 'static,
@@ -195,7 +195,7 @@ where
         ReadableExt::cloned(&self).into_dyn_node()
     }
 }
-impl<T: ?Sized, W> ::std::ops::Deref for Store<T, W>
+impl<T, W> ::std::ops::Deref for Store<T, W>
 where
     Self: Readable<Target = T> + 'static,
     T: ::std::clone::Clone + 'static,

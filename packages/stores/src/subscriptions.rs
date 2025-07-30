@@ -110,7 +110,7 @@ impl SelectorNode {
 #[derive(Copy, Clone, PartialEq)]
 pub(crate) struct TinyVec {
     length: usize,
-    path: [u32; 64],
+    path: [u32; 32],
 }
 
 impl Default for TinyVec {
@@ -131,7 +131,7 @@ impl TinyVec {
     pub(crate) const fn new() -> Self {
         Self {
             length: 0,
-            path: [0; 64],
+            path: [0; 32],
         }
     }
 

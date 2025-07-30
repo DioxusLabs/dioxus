@@ -139,6 +139,7 @@ where
     ///     Err(err_store) => assert_eq!(err_store(), ()),
     /// }
     /// ```
+    #[allow(clippy::result_large_err)]
     pub fn transpose(
         self,
     ) -> Result<

@@ -128,7 +128,7 @@ impl<
         self.selector().track_shallow();
         let keys = self.selector().peek().keys().cloned().collect::<Vec<_>>();
         keys.into_iter()
-            .map(|k| k.borrow().clone())
+            .map(|k| *k.borrow())
             .map(move |key| self.get(key).unwrap())
     }
 
@@ -276,7 +276,7 @@ impl<
         St: BuildHasher,
     {
         self.contains_key(&key).then(|| {
-            let key_ = key.clone();
+            let key_ = key;
             self.selector()
                 .hash_child(
                     key.borrow(),
