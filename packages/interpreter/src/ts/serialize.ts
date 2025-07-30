@@ -299,7 +299,7 @@ function serializeKeyboardEvent(event: KeyboardEvent): SerializedEvent {
   return {
     char_code: event.charCode,
     is_composing: event.isComposing,
-    key: event.key,
+    key: event.key ?? "Unidentified",
     alt_key: event.altKey ?? false,
     ctrl_key: event.ctrlKey ?? false,
     meta_key: event.metaKey ?? false,
@@ -308,7 +308,7 @@ function serializeKeyboardEvent(event: KeyboardEvent): SerializedEvent {
     location: event.location,
     repeat: event.repeat,
     which: event.which,
-    code: event.code,
+    code: event.code ?? "Unidentified",
   };
 }
 
