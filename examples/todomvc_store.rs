@@ -1,4 +1,4 @@
-//! The typical TodoMVC app, implemented in Dioxus.
+//! The typical TodoMVC app, implemented in Dioxus with stores
 
 use dioxus::prelude::*;
 use dioxus_stores::*;

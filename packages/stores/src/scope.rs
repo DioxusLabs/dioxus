@@ -7,6 +7,44 @@ use dioxus_signals::{
     WritableRef,
 };
 
+/// SelectorScope is the primitive that backs the store system.
+///
+/// Under the hood stores consist of two different parts:
+/// - The underlying lock that contains the data in the store.
+/// - A tree of subscriptions used to make the store reactive.
+///
+/// The `SelectorScope` contains a view into the lock (`W`) and a path into the subscription tree. When
+/// the selector is read to, it will track the current path in the subscription tree. When it it written to
+/// it marks itself and all its children as dirty.
+///
+/// When you derive the [`Store`](dioxus_stores_macro::Store) macro on your data structure,
+/// it generates methods that map the lock to a new type and scope the path to a specific part of the subscription structure.
+/// For example, a `Counter` store might look like this:
+///
+/// ```rust, ignore
+/// #[derive(Store)]
+/// struct Counter {
+///     count: i32,
+/// }
+///
+/// impl CounterStoreExt for Store<Counter> {
+///     fn count(
+///         self,
+///     ) -> dioxus_stores::Store<
+///         i32,
+///         dioxus_stores::macro_helpers::dioxus_signals::MappedMutSignal<i32, __W>,
+///     > {
+///         let __map_field: fn(&CounterTree) -> &i32 = |value| &value.count;
+///         let __map_mut_field: fn(&mut CounterTree) -> &mut i32 = |value| &mut value.count;
+///         let scope = self.selector().scope(0u32, __map_field, __map_mut_field);
+///         dioxus_stores::Store::new(scope)
+///     }
+/// }
+/// ```
+///
+/// The `count` method maps the lock to the `i32` type and creates a child `0` path in the subscription tree. Only writes
+/// to that `0` path or its parents will trigger a re-render of the components that read the `count` field.
+#[derive(PartialEq)]
 pub struct SelectorScope<W> {
     path: TinyVec,
     store: StoreSubscriptions,
@@ -18,12 +56,6 @@ impl<W> Debug for SelectorScope<W> {
         f.debug_struct("SelectorScope")
             .field("path", &self.path)
             .finish()
-    }
-}
-
-impl<W: PartialEq> PartialEq for SelectorScope<W> {
-    fn eq(&self, other: &Self) -> bool {
-        self.path == other.path && self.write == other.write
     }
 }
 
@@ -47,6 +79,12 @@ impl<W> SelectorScope<W> {
         Self { path, store, write }
     }
 
+    /// Create a child selector scope for a hash key. The scope will only be marked as dirty when a
+    /// write occurs to that key or its parents.
+    ///
+    /// Note the hash is lossy, so there may rarely be collisions. If a collision does occur, it may
+    /// cause reruns in a part of the app that has not changed. As long as derived data is pure,
+    /// this should not cause issues.
     pub fn hash_child<U: ?Sized, F, FMut>(
         self,
         index: impl Hash,
@@ -62,6 +100,8 @@ impl<W> SelectorScope<W> {
         self.child(hash, map, map_mut)
     }
 
+    /// Create a child selector scope for a specific index. The scope will only be marked as dirty when a
+    /// write occurs to that index or its parents.
     pub fn child<U: ?Sized, F, FMut>(
         mut self,
         index: u32,
@@ -77,6 +117,7 @@ impl<W> SelectorScope<W> {
         self.map(map, map_mut)
     }
 
+    /// Map the view into the writable data without creating a child selector scope
     pub fn map<U: ?Sized, F, FMut>(
         self,
         map: F,
