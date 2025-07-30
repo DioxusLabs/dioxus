@@ -46,6 +46,28 @@ pub trait OptionStoreExt: private::Sealed {
     /// ```
     fn is_none(self) -> bool;
 
+    /// Unwraps the `Option` and returns a `Store<T>`. This will only track the shallow state of the `Option`. It will
+    /// only cause a re-run if the `Option` could change from `None` to `Some` or vice versa.
+    ///
+    /// # Example
+    /// ```rust, no_run
+    /// use dioxus_stores::*;
+    /// let store = use_store(|| Some(42));
+    /// let unwrapped = store.unwrap();
+    /// assert_eq!(unwrapped(), 42);
+    /// ```
+    fn unwrap(
+        self,
+    ) -> Store<
+        Self::Data,
+        MappedMutSignal<
+            Self::Data,
+            Self::Write,
+            impl Fn(&Option<Self::Data>) -> &Self::Data + Copy + 'static,
+            impl Fn(&mut Option<Self::Data>) -> &mut Self::Data + Copy + 'static,
+        >,
+    >;
+
     /// Transpose the `Store<Option<T>>` into a `Option<Store<T>>`. This will only track the shallow state of the `Option`. It will
     /// only cause a re-run if the `Option` could change from `None` to `Some` or vice versa.
     ///
@@ -70,28 +92,6 @@ pub trait OptionStoreExt: private::Sealed {
                 impl Fn(&Option<Self::Data>) -> &Self::Data + Copy + 'static,
                 impl Fn(&mut Option<Self::Data>) -> &mut Self::Data + Copy + 'static,
             >,
-        >,
-    >;
-
-    /// Unwraps the `Option` and returns a `Store<T>`. This will only track the shallow state of the `Option`. It will
-    /// only cause a re-run if the `Option` could change from `None` to `Some` or vice versa.
-    ///
-    /// # Example
-    /// ```rust, no_run
-    /// use dioxus_stores::*;
-    /// let store = use_store(|| Some(42));
-    /// let unwrapped = store.unwrap();
-    /// assert_eq!(unwrapped(), 42);
-    /// ```
-    fn unwrap(
-        self,
-    ) -> Store<
-        Self::Data,
-        MappedMutSignal<
-            Self::Data,
-            Self::Write,
-            impl Fn(&Option<Self::Data>) -> &Self::Data + Copy + 'static,
-            impl Fn(&mut Option<Self::Data>) -> &mut Self::Data + Copy + 'static,
         >,
     >;
 }

@@ -1,15 +1,66 @@
 use crate::store::Store;
 use dioxus_signals::{MappedMutSignal, ReadableExt, Writable};
 
-pub trait ResultStoreExt {
+mod private {
+    pub trait Sealed {}
+}
+
+/// A trait for `Store` that provides methods for working with `Result` types.
+///
+/// # Example
+/// ```rust, no_run
+/// use dioxus_stores::*;
+/// let store = use_store(|| Ok::<i32, ()>(42));
+/// assert!(store.is_ok());
+/// assert!(!store.is_err());
+/// match store.transpose() {
+///     Ok(inner_store) => assert_eq!(inner_store(), 42),
+///     Err(_) => panic!("Expected Ok"),
+/// }
+/// ```
+pub trait ResultStoreExt: private::Sealed {
+    /// The type of the `Ok` variant.
     type Ok;
+    /// The type of the `Err` variant.
     type Err;
+    /// The writer backing the store.
     type Write;
 
+    /// Checks if the `Result` is `Ok`. This will only track the shallow state of the `Result`. It will
+    /// only cause a re-run if the `Result` could change from `Err` to `Ok` or vice versa.
+    ///
+    /// # Example
+    /// ```rust, no_run
+    /// use dioxus_stores::*;
+    /// let store = use_store(|| Ok::<u32, ()>(42));
+    /// assert!(store.is_ok());
+    /// ```
     fn is_ok(self) -> bool;
 
+    /// Checks if the `Result` is `Err`. This will only track the shallow state of the `Result`. It will
+    /// only cause a re-run if the `Result` could change from `Ok` to `Err` or vice versa.
+    ///
+    /// # Example
+    /// ```rust, no_run
+    /// use dioxus_stores::*;
+    /// let store = use_store(|| Err::<(), u32>(42));
+    /// assert!(store.is_err());
+    /// ```
     fn is_err(self) -> bool;
 
+    /// Converts `Store<Result<T, E>>` into `Option<Store<T>>`, discarding the error if present. This will
+    /// only track the shallow state of the `Result`. It will only cause a re-run if the `Result` could
+    /// change from `Err` to `Ok` or vice versa.
+    ///
+    /// # Example
+    /// ```rust, no_run
+    /// use dioxus_stores::*;
+    /// let store = use_store(|| Ok::<u32, ()>(42));
+    /// match store.ok() {
+    ///     Some(ok_store) => assert_eq!(ok_store(), 42),
+    ///     None => panic!("Expected Ok"),
+    /// }
+    /// ```
     fn ok(
         self,
     ) -> Option<
@@ -24,6 +75,19 @@ pub trait ResultStoreExt {
         >,
     >;
 
+    /// Converts `Store<Result<T, E>>` into `Option<Store<E>>`, discarding the success if present. This will
+    /// only track the shallow state of the `Result`. It will only cause a re-run if the `Result` could
+    /// change from `Ok` to `Err` or vice versa.
+    ///
+    /// # Example
+    /// ```rust, no_run
+    /// use dioxus_stores::*;
+    /// let store = use_store(|| Err::<(), u32>(42));
+    /// match store.err() {
+    ///     Some(err_store) => assert_eq!(err_store(), 42),
+    ///     None => panic!("Expected Err"),
+    /// }
+    /// ```
     fn err(
         self,
     ) -> Option<
@@ -38,7 +102,20 @@ pub trait ResultStoreExt {
         >,
     >;
 
-    fn as_result(
+    /// Transposes the `Store<Result<T, E>>` into a `Result<Store<T>, Store<E>>`. This will only track the
+    /// shallow state of the `Result`. It will only cause a re-run if the `Result` could change from `Err` to
+    /// `Ok` or vice versa.
+    ///
+    /// # Example
+    /// ```rust, no_run
+    /// use dioxus_stores::*;
+    /// let store = use_store(|| Ok::<u32, ()>(42));
+    /// match store.transpose() {
+    ///     Ok(ok_store) => assert_eq!(ok_store(), 42),
+    ///     Err(err_store) => assert_eq!(err_store(), ()),
+    /// }
+    /// ```
+    fn transpose(
         self,
     ) -> Result<
         Store<
@@ -60,6 +137,14 @@ pub trait ResultStoreExt {
             >,
         >,
     >;
+}
+
+impl<W, T, E> private::Sealed for Store<Result<T, E>, W>
+where
+    W: Writable<Target = Result<T, E>> + Copy + 'static,
+    T: 'static,
+    E: 'static,
+{
 }
 
 impl<W, T, E> ResultStoreExt for Store<Result<T, E>, W>
@@ -147,7 +232,7 @@ where
         })
     }
 
-    fn as_result(
+    fn transpose(
         self,
     ) -> Result<
         Store<

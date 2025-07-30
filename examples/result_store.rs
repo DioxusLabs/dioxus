@@ -8,7 +8,7 @@ fn main() {
 
 fn app() -> Element {
     let result = use_store(|| "0".parse::<u32>().map_err(|error| ParseError { error }));
-    match result.as_result() {
+    match result.transpose() {
         Ok(data) => {
             rsx! {
                 HandleOk { data }
