@@ -14,6 +14,18 @@ export function serializeEvent(
   event: Event,
   target: EventTarget
 ): SerializedEvent {
+  if ((event as any).altKey === undefined) {
+    (event as any).altKey = false;
+  }
+  if ((event as any).ctrlKey === undefined) {
+    (event as any).ctrlKey = false;
+  }
+  if ((event as any).metaKey === undefined) {
+    (event as any).metaKey = false;
+  }
+  if ((event as any).shiftKey === undefined) {
+    (event as any).shiftKey = false;
+  }
   let contents = {};
 
   // merge the object into the contents
