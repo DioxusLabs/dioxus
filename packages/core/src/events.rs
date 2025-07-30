@@ -654,7 +654,26 @@ impl<T> ListenerCallback<T> {
     pub fn call(&self, event: Event<dyn Any>) {
         let runtime = Runtime::current().expect("ListenerCallback must be called within a runtime");
         runtime.with_scope_on_stack(self.origin, || {
-            (self.callback.borrow_mut())(event);
+            // Use try_borrow_mut to handle cases where the callback is already borrowed
+            // This provides additional safety for edge cases where events might be nested
+            match self.callback.try_borrow_mut() {
+                Ok(mut callback) => {
+                    callback(event);
+                }
+                Err(_) => {
+                    // If we can't borrow mutably, it means we're in a reentrant call
+                    // This should be very rare now that we've fixed the main borrow issue,
+                    // but we defer the event to be safe
+                    let callback = self.callback.clone();
+                    let event = event.clone();
+
+                    crate::spawn(async move {
+                        if let Ok(mut cb) = callback.try_borrow_mut() {
+                            cb(event);
+                        }
+                    });
+                }
+            }
         });
     }
 
