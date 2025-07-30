@@ -95,8 +95,6 @@ fn derive_store_struct(input: &DeriveInput, structure: &DataStruct) -> syn::Resu
 
         transposed_fields.push(quote! { #vis #field_name #colon #store_type });
 
-        let store_constructor = quote! { dioxus_stores::Store::new };
-
         let ordinal = i as u32;
 
         let definition = quote! {
@@ -116,7 +114,7 @@ fn derive_store_struct(input: &DeriveInput, structure: &DataStruct) -> syn::Resu
                     __map_field,
                     __map_mut_field,
                 );
-                #store_constructor(scope)
+                ::std::convert::Into::into(scope)
             }
         };
         implementations.push(implementation);
@@ -293,7 +291,7 @@ fn derive_store_enum(input: &DeriveInput, structure: &DataEnum) -> syn::Result<T
                     __map_field,
                     __map_mut_field,
                 );
-                dioxus_stores::Store::new(scope)
+                ::std::convert::Into::into(scope)
             };
 
             // If there is only one field, generate a field() -> Option<Store<O, W>> method

@@ -1,8 +1,12 @@
-use crate::SelectorScope;
+use crate::{
+    subscriptions::{StoreSubscriptions, TinyVec},
+    SelectorScope,
+};
 use dioxus_core::{AttributeValue, DynamicNode, IntoAttributeValue, IntoDynNode, Subscribers};
 use dioxus_signals::{
-    read_impls, write_impls, BorrowError, BorrowMutError, MappedMutSignal, Readable, ReadableExt,
-    ReadableRef, UnsyncStorage, Writable, WritableExt, WritableRef, WriteSignal,
+    read_impls, write_impls, BorrowError, BorrowMutError, CopyValue, MappedMutSignal, Readable,
+    ReadableExt, ReadableRef, Storage, UnsyncStorage, Writable, WritableExt, WritableRef,
+    WriteSignal,
 };
 use std::marker::PhantomData;
 
@@ -11,19 +15,39 @@ pub struct Store<T: ?Sized, W = WriteSignal<T>> {
     _phantom: PhantomData<Box<T>>,
 }
 
-impl<T: ?Sized, W> Store<T, W> {
+impl<T, S: Storage<T>> Store<T, MappedMutSignal<T, CopyValue<T, S>>> {
     /// Creates a new `Store` with the given selector.
-    pub fn new(selector: SelectorScope<W>) -> Self {
-        Self {
-            selector,
-            _phantom: PhantomData,
-        }
-    }
+    #[track_caller]
+    pub fn new(value: T) -> Self {
+        let store = StoreSubscriptions::new();
+        let value = CopyValue::new_maybe_sync(value);
 
+        let path = TinyVec::new();
+        let map: fn(&T) -> &T = |value| value;
+        let map_mut: fn(&mut T) -> &mut T = |value| value;
+        let selector = SelectorScope {
+            path,
+            store,
+            write: value.map_mut(map, map_mut),
+        };
+        selector.into()
+    }
+}
+
+impl<T: ?Sized, W> Store<T, W> {
     /// Get the underlying selector. You should generally not use this directly. Instead use the extension
     /// traits implemented for your `Store` type.
     pub fn selector(&self) -> &SelectorScope<W> {
         &self.selector
+    }
+}
+
+impl<T: ?Sized, W> From<SelectorScope<W>> for Store<T, W> {
+    fn from(selector: SelectorScope<W>) -> Self {
+        Self {
+            selector,
+            _phantom: PhantomData,
+        }
     }
 }
 

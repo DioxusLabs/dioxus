@@ -45,10 +45,12 @@ where
             impl Fn(&mut T) -> &mut Self::Item + Copy + 'static,
         >,
     > {
-        Store::new(self.selector().hash_scope(
-            index,
-            move |value| value.index(index),
-            move |value| value.index_mut(index),
-        ))
+        self.selector()
+            .hash_scope(
+                index,
+                move |value| value.index(index),
+                move |value| value.index_mut(index),
+            )
+            .into()
     }
 }

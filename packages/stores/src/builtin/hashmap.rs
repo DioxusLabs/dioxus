@@ -224,10 +224,12 @@ impl<
         K: Borrow<Q> + Eq + Hash,
         St: BuildHasher,
     {
-        Store::new(self.selector().hash_scope(
-            key.borrow(),
-            move |value| value.get(&key).unwrap(),
-            move |value| value.get_mut(&key).unwrap(),
-        ))
+        self.selector()
+            .hash_scope(
+                key.borrow(),
+                move |value| value.get(&key).unwrap(),
+                move |value| value.get_mut(&key).unwrap(),
+            )
+            .into()
     }
 }

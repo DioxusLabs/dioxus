@@ -96,19 +96,21 @@ where
         >,
     > {
         self.is_ok().then(|| {
-            Store::new(self.selector().scope(
-                0,
-                move |value: &Result<T, E>| {
-                    value.as_ref().unwrap_or_else(|_| {
-                        panic!("Tried to access `ok` on an Err value");
-                    })
-                },
-                move |value: &mut Result<T, E>| {
-                    value.as_mut().unwrap_or_else(|_| {
-                        panic!("Tried to access `ok` on an Err value");
-                    })
-                },
-            ))
+            self.selector()
+                .scope(
+                    0,
+                    move |value: &Result<T, E>| {
+                        value.as_ref().unwrap_or_else(|_| {
+                            panic!("Tried to access `ok` on an Err value");
+                        })
+                    },
+                    move |value: &mut Result<T, E>| {
+                        value.as_mut().unwrap_or_else(|_| {
+                            panic!("Tried to access `ok` on an Err value");
+                        })
+                    },
+                )
+                .into()
         })
     }
 
@@ -129,17 +131,19 @@ where
         W: Writable<Target = Result<T, E>> + Copy + 'static,
     {
         self.is_err().then(|| {
-            Store::new(self.selector().scope(
-                1,
-                move |value: &Result<T, E>| match value {
-                    Ok(_) => panic!("Tried to access `err` on an Ok value"),
-                    Err(e) => e,
-                },
-                move |value: &mut Result<T, E>| match value {
-                    Ok(_) => panic!("Tried to access `err` on an Ok value"),
-                    Err(e) => e,
-                },
-            ))
+            self.selector()
+                .scope(
+                    1,
+                    move |value: &Result<T, E>| match value {
+                        Ok(_) => panic!("Tried to access `err` on an Ok value"),
+                        Err(e) => e,
+                    },
+                    move |value: &mut Result<T, E>| match value {
+                        Ok(_) => panic!("Tried to access `err` on an Ok value"),
+                        Err(e) => e,
+                    },
+                )
+                .into()
         })
     }
 
@@ -169,31 +173,37 @@ where
         W: Writable<Target = Result<T, E>> + Copy + 'static,
     {
         if self.is_ok() {
-            Ok(Store::new(self.selector().scope(
-                0,
-                move |value: &Result<T, E>| {
-                    value.as_ref().unwrap_or_else(|_| {
-                        panic!("Tried to access `ok` on an Err value");
-                    })
-                },
-                move |value: &mut Result<T, E>| {
-                    value.as_mut().unwrap_or_else(|_| {
-                        panic!("Tried to access `ok` on an Err value");
-                    })
-                },
-            )))
+            Ok(self
+                .selector()
+                .scope(
+                    0,
+                    move |value: &Result<T, E>| {
+                        value.as_ref().unwrap_or_else(|_| {
+                            panic!("Tried to access `ok` on an Err value");
+                        })
+                    },
+                    move |value: &mut Result<T, E>| {
+                        value.as_mut().unwrap_or_else(|_| {
+                            panic!("Tried to access `ok` on an Err value");
+                        })
+                    },
+                )
+                .into())
         } else {
-            Err(Store::new(self.selector().scope(
-                1,
-                move |value: &Result<T, E>| match value {
-                    Ok(_) => panic!("Tried to access `err` on an Ok value"),
-                    Err(e) => e,
-                },
-                move |value: &mut Result<T, E>| match value {
-                    Ok(_) => panic!("Tried to access `err` on an Ok value"),
-                    Err(e) => e,
-                },
-            )))
+            Err(self
+                .selector()
+                .scope(
+                    1,
+                    move |value: &Result<T, E>| match value {
+                        Ok(_) => panic!("Tried to access `err` on an Ok value"),
+                        Err(e) => e,
+                    },
+                    move |value: &mut Result<T, E>| match value {
+                        Ok(_) => panic!("Tried to access `err` on an Ok value"),
+                        Err(e) => e,
+                    },
+                )
+                .into())
         }
     }
 }

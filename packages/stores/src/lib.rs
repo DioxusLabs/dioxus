@@ -6,7 +6,7 @@ use crate::subscriptions::{StoreSubscriptions, TinyVec};
 use dioxus_core::{use_hook, Subscribers};
 use dioxus_signals::{
     BorrowError, BorrowMutError, CopyValue, MappedMutSignal, Readable, ReadableRef, Storage,
-    UnsyncStorage, Writable, WritableExt, WritableRef,
+    Writable, WritableExt, WritableRef,
 };
 
 mod builtin;
@@ -155,33 +155,12 @@ impl<W: Writable> SelectorScope<W> {
     }
 }
 
-pub fn create_maybe_sync_store<T, S: Storage<T>>(
-    value: T,
-) -> Store<T, MappedMutSignal<T, CopyValue<T, S>>> {
-    let store = StoreSubscriptions::new();
-    let value = CopyValue::new_maybe_sync(value);
-
-    let path = TinyVec::new();
-    let map: fn(&T) -> &T = |value| value;
-    let map_mut: fn(&mut T) -> &mut T = |value| value;
-    let selector = SelectorScope {
-        path,
-        store,
-        write: value.map_mut(map, map_mut),
-    };
-    Store::new(selector)
-}
-
 pub fn use_maybe_sync_store<T, S: Storage<T>>(
     init: impl Fn() -> T,
 ) -> Store<T, MappedMutSignal<T, CopyValue<T, S>>> {
-    use_hook(move || create_maybe_sync_store(init()))
-}
-
-pub fn create_store<T>(value: T) -> Store<T, MappedMutSignal<T, CopyValue<T>>> {
-    create_maybe_sync_store::<T, UnsyncStorage>(value)
+    use_hook(move || Store::new(init()))
 }
 
 pub fn use_store<T>(init: impl Fn() -> T) -> Store<T, MappedMutSignal<T, CopyValue<T>>> {
-    use_hook(move || create_store(init()))
+    use_hook(move || Store::new(init()))
 }

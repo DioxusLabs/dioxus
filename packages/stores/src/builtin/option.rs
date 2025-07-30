@@ -65,19 +65,21 @@ impl<W: Writable<Target = Option<T>> + Copy + 'static, T: 'static> OptionStoreEx
         >,
     > {
         self.is_some().then(|| {
-            Store::new(self.selector().scope(
-                0,
-                move |value: &Option<T>| {
-                    value.as_ref().unwrap_or_else(|| {
-                        panic!("Tried to access `Some` on an Option value");
-                    })
-                },
-                move |value: &mut Option<T>| {
-                    value.as_mut().unwrap_or_else(|| {
-                        panic!("Tried to access `Some` on an Option value");
-                    })
-                },
-            ))
+            self.selector()
+                .scope(
+                    0,
+                    move |value: &Option<T>| {
+                        value.as_ref().unwrap_or_else(|| {
+                            panic!("Tried to access `Some` on an Option value");
+                        })
+                    },
+                    move |value: &mut Option<T>| {
+                        value.as_mut().unwrap_or_else(|| {
+                            panic!("Tried to access `Some` on an Option value");
+                        })
+                    },
+                )
+                .into()
         })
     }
 
