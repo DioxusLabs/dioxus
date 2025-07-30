@@ -219,14 +219,6 @@ pub mod prelude {
     #[cfg_attr(docsrs, doc(cfg(feature = "wasm-split")))]
     pub use wasm_splitter as wasm_split;
 
-    #[cfg(feature = "stores")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "stores")))]
-    pub use dioxus_stores;
-
-    #[cfg(feature = "stores")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "stores")))]
-    pub use dioxus_stores_macro::Store;
-
     #[doc(inline)]
     pub use dioxus_core::{
         consume_context, provide_context, spawn, suspend, try_consume_context, use_hook, Attribute,

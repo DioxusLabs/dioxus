@@ -133,23 +133,28 @@ impl<W> SelectorScope<W> {
     }
 }
 
-impl<W: Readable> SelectorScope<W> {
-    pub fn try_read_unchecked(&self) -> Result<ReadableRef<'static, W>, BorrowError> {
+impl<W: Readable> Readable for SelectorScope<W> {
+    type Target = W::Target;
+    type Storage = W::Storage;
+
+    fn try_read_unchecked(&self) -> Result<ReadableRef<'static, W>, BorrowError> {
         self.track_recursive();
         self.write.try_read_unchecked()
     }
 
-    pub fn try_peek_unchecked(&self) -> Result<ReadableRef<'static, W>, BorrowError> {
+    fn try_peek_unchecked(&self) -> Result<ReadableRef<'static, W>, BorrowError> {
         self.write.try_peek_unchecked()
     }
 
-    pub fn subscribers(&self) -> Option<Subscribers> {
+    fn subscribers(&self) -> Option<Subscribers> {
         Some(self.store.subscribers(&self.path))
     }
 }
 
-impl<W: Writable> SelectorScope<W> {
-    pub fn try_write_unchecked(&self) -> Result<WritableRef<'static, W>, BorrowMutError> {
+impl<W: Writable> Writable for SelectorScope<W> {
+    type WriteMetadata = W::WriteMetadata;
+
+    fn try_write_unchecked(&self) -> Result<WritableRef<'static, W>, BorrowMutError> {
         self.mark_dirty();
         self.write.try_write_unchecked()
     }

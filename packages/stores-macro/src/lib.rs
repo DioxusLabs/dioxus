@@ -247,7 +247,7 @@ fn derive_store_enum(input: &DeriveInput, structure: &DataEnum) -> syn::Result<T
                 self,
             ) -> bool {
                 self.selector().track();
-                let ref_self = self.selector().try_peek_unchecked().unwrap();
+                let ref_self = dioxus_stores::macro_helpers::dioxus_signals::ReadableExt::peek(self.selector());
                 matches!(&*ref_self, #enum_name::#variant_name { .. })
             }
         };
@@ -377,7 +377,7 @@ fn derive_store_enum(input: &DeriveInput, structure: &DataEnum) -> syn::Result<T
             self,
         ) -> #transposed_name #transposed_generics {
             self.selector().track();
-            let read = self.selector().try_peek_unchecked().unwrap();
+            let read = dioxus_stores::macro_helpers::dioxus_signals::ReadableExt::peek(self.selector());
             match &*read {
                 #(#transposed_match_arms)*
                 #[allow(unreachable)]
