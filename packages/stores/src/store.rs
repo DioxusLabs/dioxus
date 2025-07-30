@@ -81,18 +81,31 @@ pub struct Store<T: ?Sized, W = WriteSignal<T>> {
     _phantom: PhantomData<Box<T>>,
 }
 
-impl<T, S: Storage<T>> Store<T, MappedMutSignal<T, CopyValue<T, S>>> {
+impl<T, S: Storage<T>> Store<T, CopyValue<T, S>> {
+    /// Creates a new `Store` that might be sync. This allocates memory in the current scope, so this should only be called
+    /// inside of an initialization closure like the closure passed to [`use_hook`](dioxus_core::use_hook).
+    #[track_caller]
+    pub fn new_maybe_sync(value: T) -> Self {
+        let store = StoreSubscriptions::new();
+        let value = CopyValue::new_maybe_sync(value);
+
+        let path = TinyVec::new();
+        let selector = SelectorScope::new(path, store, value);
+        selector.into()
+    }
+}
+
+impl<T> Store<T> {
     /// Creates a new `Store`. This allocates memory in the current scope, so this should only be called
     /// inside of an initialization closure like the closure passed to [`use_hook`](dioxus_core::use_hook).
     #[track_caller]
     pub fn new(value: T) -> Self {
         let store = StoreSubscriptions::new();
         let value = CopyValue::new_maybe_sync(value);
+        let value = value.into();
 
         let path = TinyVec::new();
-        let map: fn(&T) -> &T = |value| value;
-        let map_mut: fn(&mut T) -> &mut T = |value| value;
-        let selector = SelectorScope::new(path, store, value.map_mut(map, map_mut));
+        let selector = SelectorScope::new(path, store, value);
         selector.into()
     }
 }
@@ -273,7 +286,7 @@ write_impls!(Store<T, W> where W: Writable<Target = T>);
 ///     }
 /// }
 /// ```
-pub fn use_store<T>(init: impl FnOnce() -> T) -> Store<T, MappedMutSignal<T, CopyValue<T>>> {
+pub fn use_store<T>(init: impl FnOnce() -> T) -> Store<T> {
     use_hook(move || Store::new(init()))
 }
 
@@ -302,9 +315,9 @@ pub fn use_store<T>(init: impl FnOnce() -> T) -> Store<T, MappedMutSignal<T, Cop
 ///     }
 /// }
 /// ```
-pub type GlobalStore<T> = Global<Store<T, MappedMutSignal<T, CopyValue<T>>>, T>;
+pub type GlobalStore<T> = Global<Store<T>, T>;
 
-impl<T> InitializeFromFunction<T> for Store<T, MappedMutSignal<T, CopyValue<T>>> {
+impl<T> InitializeFromFunction<T> for Store<T> {
     fn initialize_from_function(f: fn() -> T) -> Self {
         Store::new(f())
     }
