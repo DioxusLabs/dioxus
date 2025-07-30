@@ -105,9 +105,13 @@ pub struct SerializedKeyboardData {
     key_code: KeyCode,
     #[serde(deserialize_with = "resilient_deserialize_code")]
     code: Code,
+    #[serde(default)]
     alt_key: bool,
+    #[serde(default)]
     ctrl_key: bool,
+    #[serde(default)]
     meta_key: bool,
+    #[serde(default)]
     shift_key: bool,
     location: usize,
     repeat: bool,
