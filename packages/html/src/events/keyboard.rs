@@ -19,6 +19,12 @@ pub struct KeyboardData {
     inner: Box<dyn HasKeyboardData>,
 }
 
+impl Default for KeyboardData {
+    fn default() -> Self {
+        Self::new(crate::events::empty::EmptyEvent)
+    }
+}
+
 impl<E: HasKeyboardData> From<E> for KeyboardData {
     fn from(e: E) -> Self {
         Self { inner: Box::new(e) }

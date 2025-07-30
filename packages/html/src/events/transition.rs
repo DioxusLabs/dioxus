@@ -6,6 +6,12 @@ pub struct TransitionData {
     inner: Box<dyn HasTransitionData>,
 }
 
+impl Default for TransitionData {
+    fn default() -> Self {
+        Self::new(crate::events::empty::EmptyEvent)
+    }
+}
+
 impl<E: HasTransitionData> From<E> for TransitionData {
     fn from(e: E) -> Self {
         Self { inner: Box::new(e) }

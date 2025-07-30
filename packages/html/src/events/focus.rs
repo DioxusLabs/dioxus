@@ -6,6 +6,12 @@ pub struct FocusData {
     inner: Box<dyn HasFocusData>,
 }
 
+impl Default for FocusData {
+    fn default() -> Self {
+        Self::new(crate::events::empty::EmptyEvent)
+    }
+}
+
 impl<E: HasFocusData> From<E> for FocusData {
     fn from(e: E) -> Self {
         Self { inner: Box::new(e) }
