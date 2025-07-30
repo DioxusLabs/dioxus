@@ -33,6 +33,6 @@ where
     fn deref(self) -> Store<Self::Target, MappedMutSignal<Self::Target, Self::Write>> {
         let map: fn(&T) -> &Self::Target = |value| value.deref();
         let map_mut: fn(&mut T) -> &mut Self::Target = |value| value.deref_mut();
-        self.selector().scope_raw(map, map_mut).into()
+        self.selector().map(map, map_mut).into()
     }
 }

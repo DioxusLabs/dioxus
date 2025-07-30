@@ -40,12 +40,12 @@ where
     type Write = W;
 
     fn len(self) -> usize {
-        self.selector().track();
+        self.selector().track_shallow();
         self.selector().write.read().deref().len()
     }
 
     fn is_empty(self) -> bool {
-        self.selector().track();
+        self.selector().track_shallow();
         self.selector().write.read().deref().is_empty()
     }
 

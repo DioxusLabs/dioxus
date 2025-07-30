@@ -430,7 +430,8 @@ ouroboros = { version = "*", optional = true }
 wasm-splitter = { workspace = true, package = "wasm-split" }
 
 [dev-dependencies]
-dioxus = { workspace = true, features = ["router", "stores"] }
+dioxus = { workspace = true, features = ["router"] }
+dioxus-stores = { workspace = true }
 dioxus-ssr = { workspace = true }
 futures-util = { workspace = true }
 separator = { workspace = true }

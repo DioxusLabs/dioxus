@@ -73,12 +73,12 @@ where
     type Write = W;
 
     fn is_ok(self) -> bool {
-        self.selector().track();
+        self.selector().track_shallow();
         self.selector().write.read().is_ok()
     }
 
     fn is_err(self) -> bool {
-        self.selector().track();
+        self.selector().track_shallow();
         self.selector().write.read().is_err()
     }
 
@@ -97,7 +97,7 @@ where
     > {
         self.is_ok().then(|| {
             self.selector()
-                .scope(
+                .child(
                     0,
                     move |value: &Result<T, E>| {
                         value.as_ref().unwrap_or_else(|_| {
@@ -132,7 +132,7 @@ where
     {
         self.is_err().then(|| {
             self.selector()
-                .scope(
+                .child(
                     1,
                     move |value: &Result<T, E>| match value {
                         Ok(_) => panic!("Tried to access `err` on an Ok value"),
@@ -175,7 +175,7 @@ where
         if self.is_ok() {
             Ok(self
                 .selector()
-                .scope(
+                .child(
                     0,
                     move |value: &Result<T, E>| {
                         value.as_ref().unwrap_or_else(|_| {
@@ -192,7 +192,7 @@ where
         } else {
             Err(self
                 .selector()
-                .scope(
+                .child(
                     1,
                     move |value: &Result<T, E>| match value {
                         Ok(_) => panic!("Tried to access `err` on an Ok value"),

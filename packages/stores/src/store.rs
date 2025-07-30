@@ -81,7 +81,7 @@ where
 {
     fn from(value: Store<T, MappedMutSignal<T, W, __F, __FMut>>) -> Self {
         Store {
-            selector: value.selector.map(::std::convert::Into::into),
+            selector: value.selector.map_writer(::std::convert::Into::into),
             _phantom: ::std::marker::PhantomData,
         }
     }

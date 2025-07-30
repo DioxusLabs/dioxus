@@ -1,4 +1,5 @@
-use dioxus::prelude::{dioxus_stores::*, *};
+use dioxus::prelude::*;
+use dioxus_stores::*;
 use std::num::ParseIntError;
 
 fn main() {

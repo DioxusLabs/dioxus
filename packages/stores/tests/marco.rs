@@ -74,7 +74,7 @@ mod macro_tests {
         let transposed = store.transpose();
         use EnumStoreTransposed::*;
         match transposed {
-            Foo => {}
+            EnumStoreTransposed::Foo => {}
             Bar(bar) => {
                 let bar: String = bar();
             }

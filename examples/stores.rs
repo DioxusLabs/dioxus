@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
-use dioxus::prelude::{dioxus_stores::*, *};
-use dioxus_stores::use_store;
+use dioxus::prelude::*;
+use dioxus_stores::*;
 
 fn main() {
     dioxus::launch(app);

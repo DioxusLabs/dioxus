@@ -42,12 +42,12 @@ impl<W: Writable<Target = Option<T>> + Copy + 'static, T: 'static> OptionStoreEx
     type Write = W;
 
     fn is_some(self) -> bool {
-        self.selector().track();
+        self.selector().track_shallow();
         self.selector().write.read().is_some()
     }
 
     fn is_none(self) -> bool {
-        self.selector().track();
+        self.selector().track_shallow();
         self.selector().write.read().is_none()
     }
 
@@ -66,7 +66,7 @@ impl<W: Writable<Target = Option<T>> + Copy + 'static, T: 'static> OptionStoreEx
     > {
         self.is_some().then(|| {
             self.selector()
-                .scope(
+                .child(
                     0,
                     move |value: &Option<T>| {
                         value.as_ref().unwrap_or_else(|| {

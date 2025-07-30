@@ -1,6 +1,7 @@
 //! The typical TodoMVC app, implemented in Dioxus.
 
-use dioxus::prelude::{dioxus_stores::*, *};
+use dioxus::prelude::*;
+use dioxus_stores::*;
 use std::{collections::HashMap, vec};
 
 const STYLE: Asset = asset!("/examples/assets/todomvc.css");

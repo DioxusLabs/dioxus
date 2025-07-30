@@ -109,7 +109,7 @@ fn derive_store_struct(input: &DeriveInput, structure: &DataStruct) -> syn::Resu
             ) -> #store_type {
                 let __map_field: fn(&#struct_name #ty_generics) -> &#field_type = |value| &value.#field_accessor;
                 let __map_mut_field: fn(&mut #struct_name #ty_generics) -> &mut #field_type = |value| &mut value.#field_accessor;
-                let scope = self.selector().scope(
+                let scope = self.selector().child(
                     #ordinal,
                     __map_field,
                     __map_mut_field,
@@ -231,9 +231,8 @@ fn derive_store_enum(input: &DeriveInput, structure: &DataEnum) -> syn::Result<T
     let mut transposed_variants = Vec::new();
     let mut transposed_match_arms = Vec::new();
 
-    for (i, variant) in variants.iter().enumerate() {
+    for variant in variants {
         let variant_name = &variant.ident;
-        let variant_ordinal = i as u32;
         let snake_case_variant = format_ident!("{}", variant_name.to_string().to_case(Case::Snake));
         let is_fn = format_ident!("is_{}", snake_case_variant);
         let definition = quote! {
@@ -246,7 +245,7 @@ fn derive_store_enum(input: &DeriveInput, structure: &DataEnum) -> syn::Result<T
             fn #is_fn(
                 self,
             ) -> bool {
-                self.selector().track();
+                self.selector().track_shallow();
                 let ref_self = dioxus_stores::macro_helpers::dioxus_signals::ReadableExt::peek(self.selector());
                 matches!(&*ref_self, #enum_name::#variant_name { .. })
             }
@@ -257,6 +256,7 @@ fn derive_store_enum(input: &DeriveInput, structure: &DataEnum) -> syn::Result<T
         let mut transposed_field_selectors = Vec::new();
         let fields = &variant.fields;
         for (i, field) in fields.iter().enumerate() {
+            let ordinal = i as u32;
             let vis = &field.vis;
             let field_name = &field.ident;
             let colon = field.colon_token.as_ref();
@@ -286,8 +286,8 @@ fn derive_store_enum(input: &DeriveInput, structure: &DataEnum) -> syn::Result<T
                     #enum_name::#variant_name #match_field => #function_name,
                     _ => panic!("Selector that was created to match {} written after variant changed", stringify!(#variant_name)),
                 };
-                let scope = self.selector().scope(
-                    #variant_ordinal,
+                let scope = self.selector().child(
+                    #ordinal,
                     __map_field,
                     __map_mut_field,
                 );
@@ -376,7 +376,7 @@ fn derive_store_enum(input: &DeriveInput, structure: &DataEnum) -> syn::Result<T
         fn transpose(
             self,
         ) -> #transposed_name #transposed_generics {
-            self.selector().track();
+            self.selector().track_shallow();
             let read = dioxus_stores::macro_helpers::dioxus_signals::ReadableExt::peek(self.selector());
             match &*read {
                 #(#transposed_match_arms)*

@@ -46,7 +46,7 @@ where
         >,
     > {
         self.selector()
-            .hash_scope(
+            .hash_child(
                 index,
                 move |value| value.index(index),
                 move |value| value.index_mut(index),

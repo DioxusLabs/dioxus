@@ -108,12 +108,12 @@ impl<
     type Write = W;
 
     fn len(self) -> usize {
-        self.selector().track();
+        self.selector().track_shallow();
         self.selector().write.read().len()
     }
 
     fn is_empty(self) -> bool {
-        self.selector().track();
+        self.selector().track_shallow();
         self.selector().write.read().is_empty()
     }
 
@@ -137,7 +137,7 @@ impl<
         K: Copy + Eq + Hash,
         St: BuildHasher,
     {
-        self.selector().track();
+        self.selector().track_shallow();
         let keys = self
             .selector()
             .write
@@ -165,7 +165,7 @@ impl<
         K: Copy + Eq + Hash,
         St: BuildHasher,
     {
-        self.selector().track();
+        self.selector().track_shallow();
         let keys = self
             .selector()
             .write
@@ -225,7 +225,7 @@ impl<
         St: BuildHasher,
     {
         self.selector()
-            .hash_scope(
+            .hash_child(
                 key.borrow(),
                 move |value| value.get(&key).unwrap(),
                 move |value| value.get_mut(&key).unwrap(),

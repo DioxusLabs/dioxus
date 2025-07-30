@@ -55,7 +55,7 @@ impl<W> SelectorScope<W> {
         Self { path, store, write }
     }
 
-    pub fn hash_scope<U: ?Sized, F, FMut>(
+    pub fn hash_child<U: ?Sized, F, FMut>(
         self,
         index: impl Hash,
         map: F,
@@ -67,10 +67,10 @@ impl<W> SelectorScope<W> {
         FMut: Fn(&mut W::Target) -> &mut U + 'static,
     {
         let hash = self.store.hash(index);
-        self.scope(hash, map, map_mut)
+        self.child(hash, map, map_mut)
     }
 
-    pub fn scope<U: ?Sized, F, FMut>(
+    pub fn child<U: ?Sized, F, FMut>(
         mut self,
         index: u32,
         map: F,
@@ -82,10 +82,10 @@ impl<W> SelectorScope<W> {
         FMut: Fn(&mut W::Target) -> &mut U + 'static,
     {
         self.path.push(index);
-        self.scope_raw(map, map_mut)
+        self.map(map, map_mut)
     }
 
-    pub fn scope_raw<U: ?Sized, F, FMut>(
+    pub fn map<U: ?Sized, F, FMut>(
         self,
         map: F,
         map_mut: FMut,
@@ -100,12 +100,12 @@ impl<W> SelectorScope<W> {
     }
 
     /// Track this scope shallowly.
-    pub fn track(&self) {
+    pub fn track_shallow(&self) {
         self.store.track(&self.path);
     }
 
     /// Track this scope recursively.
-    pub fn track_recursive(&self) {
+    pub fn track(&self) {
         self.store.track_recursive(&self.path);
     }
 
@@ -124,7 +124,7 @@ impl<W> SelectorScope<W> {
     }
 
     /// Map the writer to a new type.
-    pub fn map<W2>(self, map: impl FnOnce(W) -> W2) -> SelectorScope<W2> {
+    pub fn map_writer<W2>(self, map: impl FnOnce(W) -> W2) -> SelectorScope<W2> {
         SelectorScope {
             path: self.path,
             store: self.store,
@@ -138,7 +138,7 @@ impl<W: Readable> Readable for SelectorScope<W> {
     type Storage = W::Storage;
 
     fn try_read_unchecked(&self) -> Result<ReadableRef<'static, W>, BorrowError> {
-        self.track_recursive();
+        self.track();
         self.write.try_read_unchecked()
     }
 
