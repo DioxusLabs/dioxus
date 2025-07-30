@@ -5940,6 +5940,7 @@ dependencies = [
 name = "dioxus-stores"
 version = "0.7.0-alpha.3"
 dependencies = [
+ "dioxus",
  "dioxus-core",
  "dioxus-signals",
  "dioxus-stores-macro",

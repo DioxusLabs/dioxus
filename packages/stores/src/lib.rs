@@ -1,3 +1,4 @@
+#![warn(missing_docs)]
 #![allow(clippy::type_complexity)]
 
 use std::hash::Hash;
