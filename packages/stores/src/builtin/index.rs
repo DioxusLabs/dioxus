@@ -3,11 +3,39 @@ use std::{hash::Hash, ops::IndexMut};
 use crate::store::Store;
 use dioxus_signals::{MappedMutSignal, Writable};
 
-pub trait IndexStoreExt<Idx> {
+mod private {
+    pub trait Sealed {}
+}
+
+/// A extension trait for `Store` for types that implement `IndexMut`.
+///
+/// # Example
+/// ```rust, no_run
+/// use dioxus_stores::*;
+/// let store = use_store(|| vec![1, 2, 3]);
+/// let indexed_store = store.index(1);
+/// // The indexed store can access the store methods of the indexed store.
+/// assert_eq!(indexed_store(), 2);
+/// ```
+pub trait IndexStoreExt<Idx>: private::Sealed {
+    /// The collection type of the store.
     type Collection;
+    /// The writer backing the store
     type Write;
+    /// The item type of the store.
     type Item;
 
+    /// Index into the store, returning a store that allows access to the item at the given index. The
+    /// new store will only update when the item at the index changes.
+    ///
+    /// # Example
+    /// ```rust, no_run
+    /// use dioxus_stores::*;
+    /// let store = use_store(|| vec![1, 2, 3]);
+    /// let indexed_store = store.index(1);
+    /// // The indexed store can access the store methods of the indexed store.
+    /// assert_eq!(indexed_store(), 2);
+    /// ```
     fn index(
         self,
         index: Idx,
@@ -21,6 +49,8 @@ pub trait IndexStoreExt<Idx> {
         >,
     >;
 }
+
+impl<W, T> private::Sealed for Store<T, W> {}
 
 impl<W, T, I, Idx> IndexStoreExt<Idx> for Store<T, W>
 where

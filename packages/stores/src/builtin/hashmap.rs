@@ -385,7 +385,7 @@ impl<
         self.selector().write.write_unchecked().clear();
     }
 
-    fn retain(self, f: impl FnMut(&K, &V) -> bool) {
+    fn retain(self, mut f: impl FnMut(&K, &V) -> bool) {
         self.selector().mark_dirty_shallow();
         self.selector()
             .write
