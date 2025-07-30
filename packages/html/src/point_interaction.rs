@@ -51,6 +51,7 @@ pub trait ModifiersInteraction {
 #[cfg(feature = "serialize")]
 #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Clone, Default)]
 pub struct SerializedPointInteraction {
+    #[serde(default)]
     pub alt_key: bool,
 
     /// The button number that was pressed (if applicable) when the mouse event was fired.
@@ -78,9 +79,11 @@ pub struct SerializedPointInteraction {
     pub client_y: i32,
 
     /// True if the control key was down when the mouse event was fired.
+    #[serde(default)]
     pub ctrl_key: bool,
 
     /// True if the meta key was down when the mouse event was fired.
+    #[serde(default)]
     pub meta_key: bool,
 
     /// The offset in the X coordinate of the mouse pointer between that event and the padding edge of the target node.
@@ -106,6 +109,7 @@ pub struct SerializedPointInteraction {
     pub screen_y: i32,
 
     /// True if the shift key was down when the mouse event was fired.
+    #[serde(default)]
     pub shift_key: bool,
 }
 
