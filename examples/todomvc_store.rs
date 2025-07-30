@@ -11,7 +11,7 @@ fn main() {
 }
 
 fn app() -> Element {
-    // We store the todos in a HashMap in a Signal.
+    // We store the todos in a HashMap in a Store.
     // Each key is the id of the todo, and the value is the todo itself.
     let todos = use_store(|| TodoState {
         todos: HashMap::new(),
@@ -74,9 +74,8 @@ fn app() -> Element {
                     label { r#for: "toggle-all" }
                 }
 
-                // Render the todos using the filtered_todos signal
-                // We pass the ID into the TodoEntry component so it can access the todo from the todos signal.
-                // Since we store the todos in a signal too, we also need to send down the todo list
+                // Render the todos using the filtered_todos memo
+                // We pass the ID along with the hashmap into the TodoEntry component so it can access the todo from the todos store.
                 ul { class: "todo-list",
                     for id in filtered_todos() {
                         TodoEntry { key: "{id}", id, todos }
@@ -135,7 +134,7 @@ fn TodoHeader(mut todos: Store<TodoState>) -> Element {
 }
 
 /// A single todo entry
-/// This takes the ID of the todo and the todos signal as props
+/// This takes the ID of the todo and the todos store as props
 /// We can use these together to memoize the todo contents and checked state
 #[component]
 fn TodoEntry(mut todos: Store<TodoState>, id: u32) -> Element {
