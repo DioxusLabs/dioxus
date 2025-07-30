@@ -17,7 +17,7 @@ mod subscriptions;
 pub use dioxus_stores_macro::Store;
 pub use store::Store;
 
-// Re-exported for the macro
+/// Re-exports for the storage derive macro
 #[doc(hidden)]
 pub mod macro_helpers {
     pub use dioxus_core;

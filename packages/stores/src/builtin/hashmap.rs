@@ -206,7 +206,7 @@ pub trait HashMapStoreExt: private::Sealed {
     /// store.insert(0, "value".to_string());
     /// assert_eq!(store.get(0).unwrap().cloned(), "value".to_string());
     /// ```
-    fn insert(self, key: Self::Key, value: Self::Value)
+    fn insert(&mut self, key: Self::Key, value: Self::Value)
     where
         Self::Key: Eq + Hash,
         Self::State: BuildHasher;
@@ -226,7 +226,7 @@ pub trait HashMapStoreExt: private::Sealed {
     /// assert_eq!(removed_value, Some("value".to_string()));
     /// assert!(store.get(0).is_none());
     /// ```
-    fn remove<Q>(self, key: &Q) -> Option<Self::Value>
+    fn remove<Q>(&mut self, key: &Q) -> Option<Self::Value>
     where
         Q: ?Sized + Hash + Eq + 'static,
         Self::Key: Borrow<Q> + Eq + Hash,
@@ -247,7 +247,7 @@ pub trait HashMapStoreExt: private::Sealed {
     /// store.clear();
     /// assert!(store.is_empty());
     /// ```
-    fn clear(self);
+    fn clear(&mut self);
 
     /// Retain only the key-value pairs that satisfy the given predicate. This method will mark the store as shallowly dirty,
     /// causing re-runs of any reactive scopes that depend on the shape of the map or the values retained.
@@ -265,7 +265,7 @@ pub trait HashMapStoreExt: private::Sealed {
     /// assert!(store.get(1).is_some());
     /// assert!(store.get(2).is_none());
     /// ```
-    fn retain(self, f: impl FnMut(&Self::Key, &Self::Value) -> bool);
+    fn retain(&mut self, f: impl FnMut(&Self::Key, &Self::Value) -> bool);
 }
 
 impl<
@@ -361,7 +361,7 @@ impl<
             .map(move |key| self.get(key).unwrap())
     }
 
-    fn insert(self, key: K, value: V)
+    fn insert(&mut self, key: K, value: V)
     where
         K: Eq + Hash,
         St: BuildHasher,
@@ -370,7 +370,7 @@ impl<
         self.selector().write.write_unchecked().insert(key, value);
     }
 
-    fn remove<Q>(self, key: &Q) -> Option<V>
+    fn remove<Q>(&mut self, key: &Q) -> Option<V>
     where
         Q: ?Sized + Hash + Eq + 'static,
         K: Borrow<Q> + Eq + Hash,
@@ -380,12 +380,12 @@ impl<
         self.selector().write.write_unchecked().remove(key)
     }
 
-    fn clear(self) {
+    fn clear(&mut self) {
         self.selector().mark_dirty_shallow();
         self.selector().write.write_unchecked().clear();
     }
 
-    fn retain(self, mut f: impl FnMut(&K, &V) -> bool) {
+    fn retain(&mut self, mut f: impl FnMut(&K, &V) -> bool) {
         self.selector().mark_dirty_shallow();
         self.selector()
             .write
