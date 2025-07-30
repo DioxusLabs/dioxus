@@ -15,6 +15,10 @@ quote = { workspace = true }
 syn = { workspace = true }
 convert_case = { workspace = true }
 
+[dev-dependencies]
+dioxus = { workspace = true }
+dioxus-stores = { workspace = true }
+
 [lib]
 proc-macro = true
 

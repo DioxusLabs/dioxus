@@ -7,10 +7,12 @@
 mod impls;
 mod store;
 mod subscriptions;
-pub use dioxus_stores_macro::Store;
 pub use store::*;
 mod scope;
 pub use scope::SelectorScope;
+
+#[cfg(feature = "macro")]
+pub use dioxus_stores_macro::Store;
 
 /// Re-exports for the store derive macro
 #[doc(hidden)]

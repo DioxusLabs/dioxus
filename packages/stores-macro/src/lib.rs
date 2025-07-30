@@ -7,6 +7,90 @@ use syn::{
     DeriveInput, Fields, Index,
 };
 
+/// # Store
+///
+/// The `Store` macro is used to create an extension trait for stores that makes it possible to access the fields or variants
+/// of an item as stores.
+///
+/// ## Expansion
+///
+/// The macro expands to two different items:
+/// - An extension trait which is implemented for `Store<YourType, W>` with methods to access fields and variants for your type.
+/// - A transposed version of your type which contains the fields or variants as stores.
+///
+/// ### Structs
+///
+/// For structs, the store macro generates methods for each field that returns a store scoped to that field and a `transpose` method that returns a struct with all fields as stores:
+///
+/// ```rust, no_run
+/// use dioxus::prelude::*;
+/// use dioxus_stores::*;
+///
+/// #[derive(Store)]
+/// struct TodoItem {
+///     checked: bool,
+///     contents: String,
+/// }
+///
+/// let store = use_store(|| TodoItem {
+///     checked: false,
+///     contents: "Learn about stores".to_string(),
+/// });
+///
+/// // The store macro creates an extension trait with methods for each field
+/// // that returns a store scoped to that field.
+/// let checked: Store<bool, _> = store.checked();
+/// let contents: Store<String, _> = store.contents();
+///
+/// // It also generates a `transpose` method returns a variant of your structure
+/// // with stores wrapping each of your data types. This can be very useful when destructuring
+/// // or matching your type
+/// let TodoItemStoreTransposed { checked, contents } = store.transpose();
+/// let checked: bool = checked();
+/// let contents: String = contents();
+/// ```
+///
+///
+/// ### Enums
+///
+/// For enums,
+///
+/// ```rust, no_run
+/// use dioxus::prelude::*;
+/// use dioxus_stores::*;
+///
+/// #[derive(Store, PartialEq, Clone, Debug)]
+/// enum Enum {
+///     Foo(String),
+///     Bar { foo: i32, bar: String },
+/// }
+///
+/// let store = use_store(|| Enum::Foo("Hello".to_string()));
+/// // The store macro creates an extension trait with methods for each variant to check
+/// // if the store is that variant.
+/// let foo: bool = store.is_foo();
+/// let bar: bool = store.is_bar();
+///
+/// // If there is only one field in the variant, it also generates a method to try
+/// // to downcast the store to that variant.
+/// let foo: Option<Store<String, _>> = store.foo();
+/// if let Some(foo) = foo {
+///     println!("Foo: {foo}");
+/// }
+///
+/// // It also generates a `transpose` method that returns a variant of your enum where all
+/// // the fields are stores. You can use this to match your enum
+/// let transposed = store.transpose();
+/// use EnumStoreTransposed::*;
+/// match transposed {
+///     EnumStoreTransposed::Foo(foo) => println!("Foo: {foo}"),
+///     EnumStoreTransposed::Bar { foo, bar } => {
+///         let foo: i32 = foo();
+///         let bar: String = bar();
+///         println!("Bar: foo = {foo}, bar = {bar}");
+///     }
+/// }
+/// ```
 #[proc_macro_derive(Store)]
 pub fn store(input: TokenStream) -> TokenStream {
     // Parse the input tokens into a syntax tree
