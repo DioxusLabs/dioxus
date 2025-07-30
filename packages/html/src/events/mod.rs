@@ -374,7 +374,7 @@ pub(crate) mod empty {
             self
         }
     }
-    impl crate::animation::HasAnimationData for EmptyEvent {
+    impl super::animation::HasAnimationData for EmptyEvent {
         fn animation_name(&self) -> String {
             String::new()
         }
@@ -388,12 +388,12 @@ pub(crate) mod empty {
             self
         }
     }
-    impl crate::clipboard::HasClipboardData for EmptyEvent {
+    impl super::clipboard::HasClipboardData for EmptyEvent {
         fn as_any(&self) -> &dyn std::any::Any {
             self
         }
     }
-    impl crate::composition::HasCompositionData for EmptyEvent {
+    impl super::composition::HasCompositionData for EmptyEvent {
         fn data(&self) -> String {
             String::new()
         }
@@ -401,7 +401,7 @@ pub(crate) mod empty {
             self
         }
     }
-    impl crate::transition::HasTransitionData for EmptyEvent {
+    impl super::transition::HasTransitionData for EmptyEvent {
         fn property_name(&self) -> String {
             String::new()
         }
@@ -479,26 +479,26 @@ pub(crate) mod empty {
     }
 }
 
-pub mod animation;
-pub mod clipboard;
-pub mod composition;
-pub mod drag;
-pub mod focus;
-pub mod form;
-pub mod image;
-pub mod keyboard;
-pub mod media;
-pub mod mounted;
-pub mod mouse;
-pub mod pointer;
-pub mod resize;
-pub mod scroll;
-pub mod selection;
-pub mod toggle;
-pub mod touch;
-pub mod transition;
-pub mod visible;
-pub mod wheel;
+mod animation;
+mod clipboard;
+mod composition;
+mod drag;
+mod focus;
+mod form;
+mod image;
+mod keyboard;
+mod media;
+mod mounted;
+mod mouse;
+mod pointer;
+mod resize;
+mod scroll;
+mod selection;
+mod toggle;
+mod touch;
+mod transition;
+mod visible;
+mod wheel;
 
 pub use animation::*;
 pub use clipboard::*;
