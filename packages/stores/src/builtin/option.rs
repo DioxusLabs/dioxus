@@ -1,14 +1,65 @@
 use crate::store::Store;
 use dioxus_signals::{MappedMutSignal, ReadableExt, Writable};
 
-pub trait OptionStoreExt {
+mod private {
+    pub trait Sealed {}
+}
+
+/// A trait for `Store` that provides methods for working with `Option` types.
+///
+/// # Example
+/// ```rust, no_run
+/// use dioxus_stores::*;
+/// let store = use_store(|| Some(42));
+/// assert!(store.is_some());
+/// assert!(!store.is_none());
+/// match store.transpose() {
+///     Some(inner_store) => assert_eq!(inner_store(), 42),
+///     None => panic!("Expected Some"),
+/// }
+/// ```
+pub trait OptionStoreExt: private::Sealed {
+    /// The data type contained in the `Option`.
     type Data;
+    /// The writer backing the store.
     type Write;
 
+    /// Checks if the `Option` is `Some`. This will only track the shallow state of the `Option`. It will
+    /// only cause a re-run if the `Option` could change from `None` to `Some` or vice versa.
+    ///
+    /// # Example
+    /// ```rust, no_run
+    /// use dioxus_stores::*;
+    /// let store = use_store(|| Some(42));
+    /// assert!(store.is_some());
+    /// ```
     fn is_some(self) -> bool;
+
+    /// Checks if the `Option` is `None`. This will only track the shallow state of the `Option`. It will
+    /// only cause a re-run if the `Option` could change from `Some` to `None` or vice versa.
+    ///
+    /// # Example
+    /// ```rust, no_run
+    /// use dioxus_stores::*;
+    /// let store = use_store(|| None::<i32>);
+    /// assert!(store.is_none());
+    /// ```
     fn is_none(self) -> bool;
 
-    fn as_option(
+    /// Transpose the `Store<Option<T>>` into a `Option<Store<T>>`. This will only track the shallow state of the `Option`. It will
+    /// only cause a re-run if the `Option` could change from `None` to `Some` or vice versa.
+    ///
+    /// # Example
+    /// ```rust, no_run
+    /// use dioxus_stores::*;
+    /// let store = use_store(|| Some(42));
+    /// let transposed = store.transpose();
+    /// match transposed {
+    ///     Some(inner_store) => assert_eq!(inner_store(), 42),
+    ///     None => panic!("Expected Some"),
+    /// }
+    /// ```
+    fn transpose(
         self,
     ) -> Option<
         Store<
@@ -22,6 +73,16 @@ pub trait OptionStoreExt {
         >,
     >;
 
+    /// Unwraps the `Option` and returns a `Store<T>`. This will only track the shallow state of the `Option`. It will
+    /// only cause a re-run if the `Option` could change from `None` to `Some` or vice versa.
+    ///
+    /// # Example
+    /// ```rust, no_run
+    /// use dioxus_stores::*;
+    /// let store = use_store(|| Some(42));
+    /// let unwrapped = store.unwrap();
+    /// assert_eq!(unwrapped(), 42);
+    /// ```
     fn unwrap(
         self,
     ) -> Store<
@@ -33,6 +94,11 @@ pub trait OptionStoreExt {
             impl Fn(&mut Option<Self::Data>) -> &mut Self::Data + Copy + 'static,
         >,
     >;
+}
+
+impl<W: Writable<Target = Option<T>> + Copy + 'static, T: 'static> private::Sealed
+    for Store<Option<T>, W>
+{
 }
 
 impl<W: Writable<Target = Option<T>> + Copy + 'static, T: 'static> OptionStoreExt
@@ -51,7 +117,7 @@ impl<W: Writable<Target = Option<T>> + Copy + 'static, T: 'static> OptionStoreEx
         self.selector().write.read().is_none()
     }
 
-    fn as_option(
+    fn transpose(
         self,
     ) -> Option<
         Store<
@@ -94,6 +160,6 @@ impl<W: Writable<Target = Option<T>> + Copy + 'static, T: 'static> OptionStoreEx
             impl Fn(&mut Option<T>) -> &mut T + Copy + 'static,
         >,
     > {
-        self.as_option().unwrap()
+        self.transpose().unwrap()
     }
 }
