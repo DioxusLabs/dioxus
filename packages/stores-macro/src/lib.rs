@@ -257,13 +257,13 @@ fn derive_store_struct(input: &DeriveInput, structure: &DataStruct) -> syn::Resu
 
     // Generate the store implementation
     let expanded = quote! {
-        #visibility trait #extension_trait_name<__W> where #extension_map_bounds {
+        #visibility trait #extension_trait_name #transposed_generics  where #extension_map_bounds {
             #(
                 #definitions
             )*
         }
 
-        impl #extension_impl_generics #extension_trait_name<__W> for dioxus_stores::Store<#struct_name, __W> #ty_generics #extension_map_where_clause {
+        impl #extension_impl_generics #extension_trait_name #transposed_generics for dioxus_stores::Store<#struct_name #ty_generics, __W> #extension_map_where_clause {
             #(
                 #implementations
             )*
@@ -475,13 +475,13 @@ fn derive_store_enum(input: &DeriveInput, structure: &DataEnum) -> syn::Result<T
 
     // Generate the store implementation
     let expanded = quote! {
-        #visibility trait #extension_trait_name<__W> where #extension_map_bounds {
+        #visibility trait #extension_trait_name #transposed_generics where #extension_map_bounds {
             #(
                 #definitions
             )*
         }
 
-        impl #extension_impl_generics #extension_trait_name<__W> for dioxus_stores::Store<#enum_name, __W> #ty_generics #extension_map_where_clause {
+        impl #extension_impl_generics #extension_trait_name #transposed_generics for dioxus_stores::Store<#enum_name #ty_generics, __W> #extension_map_where_clause {
             #(
                 #implementations
             )*
