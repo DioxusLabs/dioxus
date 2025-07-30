@@ -53,7 +53,7 @@ use syn::{
 ///
 /// ### Enums
 ///
-/// For enums,
+/// For enums, the store macro generates methods for each variant that checks if the store is that variant. It also generates a `transpose` method that returns an enum with all fields as stores.
 ///
 /// ```rust, no_run
 /// use dioxus::prelude::*;
