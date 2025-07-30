@@ -41,7 +41,7 @@ fn app() -> Element {
                 FilterState::Active => !item.checked().cloned(),
                 FilterState::Completed => item.checked().cloned(),
             })
-            .map(|(i, _)| i as u32)
+            .map(|(i, _)| i)
             .collect::<Vec<_>>();
 
         filtered_todos.sort_unstable();
