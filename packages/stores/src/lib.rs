@@ -13,6 +13,7 @@ mod builtin;
 pub use builtin::*;
 mod store;
 mod subscriptions;
+pub use dioxus_stores_macro::Store;
 pub use store::Store;
 
 // Re-exported for the macro

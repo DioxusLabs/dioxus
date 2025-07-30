@@ -20,7 +20,8 @@ impl<T: ?Sized, W> Store<T, W> {
         }
     }
 
-    /// Get the underlying selector.
+    /// Get the underlying selector. You should generally not use this directly. Instead use the extension
+    /// traits implemented for your `Store` type.
     pub fn selector(&self) -> &SelectorScope<W> {
         &self.selector
     }

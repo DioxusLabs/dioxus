@@ -3,7 +3,7 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote, ToTokens};
 use syn::{
     parse_macro_input, parse_quote, punctuated::Punctuated, spanned::Spanned, DataStruct,
-    DeriveInput, Index,
+    DeriveInput, Fields, Index,
 };
 
 #[proc_macro_derive(Store)]
@@ -47,6 +47,7 @@ fn derive_store_struct(input: &DeriveInput, structure: &DataStruct) -> syn::Resu
     let visibility = &input.vis;
 
     let extension_trait_name = format_ident!("{}StoreExt", struct_name);
+    let transposed_name = format_ident!("{}StoreTransposed", struct_name);
 
     let generics = &input.generics;
     let (_, ty_generics, _) = generics.split_for_impl();
@@ -55,7 +56,7 @@ fn derive_store_struct(input: &DeriveInput, structure: &DataStruct) -> syn::Resu
     let mut extension_generics = generics.clone();
     extension_generics.params.insert(0, parse_quote!(__W));
 
-    let (extension_impl_generics, _, _) = extension_generics.split_for_impl();
+    let (extension_impl_generics, transposed_generics, _) = extension_generics.split_for_impl();
 
     let mut extension_map_bounds: Punctuated<syn::WherePredicate, syn::Token![,]> =
         Punctuated::new();
@@ -77,9 +78,11 @@ fn derive_store_struct(input: &DeriveInput, structure: &DataStruct) -> syn::Resu
 
     let mut implementations = Vec::new();
     let mut definitions = Vec::new();
+    let mut transposed_fields = Vec::new();
 
     for (i, field) in fields.iter().enumerate() {
         let field_name = &field.ident;
+        let colon = field.colon_token.as_ref();
         let field_accessor = field_name.as_ref().map_or_else(
             || Index::from(i).to_token_stream(),
             |name| name.to_token_stream(),
@@ -92,6 +95,8 @@ fn derive_store_struct(input: &DeriveInput, structure: &DataStruct) -> syn::Resu
         let write_type = quote! { dioxus_stores::macro_helpers::dioxus_signals::MappedMutSignal<#field_type, __W> };
 
         let store_type = quote! { dioxus_stores::Store<#field_type, #write_type> };
+
+        transposed_fields.push(quote! { #field_name #colon #store_type });
 
         let store_constructor = quote! { dioxus_stores::Store::new };
 
@@ -120,6 +125,57 @@ fn derive_store_struct(input: &DeriveInput, structure: &DataStruct) -> syn::Resu
         implementations.push(implementation);
     }
 
+    let definition = quote! {
+        fn transpose(
+            self,
+        ) -> #transposed_name #transposed_generics;
+    };
+    definitions.push(definition);
+    let field_names = fields
+        .iter()
+        .enumerate()
+        .map(|(i, field)| {
+            field
+                .ident
+                .as_ref()
+                .map_or_else(|| format_ident!("field_{i}"), |name| name.clone())
+        })
+        .collect::<Vec<_>>();
+    let construct = match &structure.fields {
+        Fields::Named(_) => {
+            quote! { #transposed_name { #(#field_names),* } }
+        }
+        Fields::Unnamed(_) => {
+            quote! { #transposed_name(#(#field_names),*) }
+        }
+        Fields::Unit => {
+            quote! { #transposed_name }
+        }
+    };
+    let implementation = quote! {
+        fn transpose(
+            self,
+        ) -> #transposed_name #transposed_generics {
+            #(
+                let #field_names = self.#field_names();
+            )*
+            #construct
+        }
+    };
+    implementations.push(implementation);
+
+    let transposed_struct = match &structure.fields {
+        Fields::Named(_) => {
+            quote! { #visibility struct #transposed_name #transposed_generics #extension_map_where_clause {#(#transposed_fields),*} }
+        }
+        Fields::Unnamed(_) => {
+            quote! { #visibility struct #transposed_name #transposed_generics (#(#transposed_fields),*) #extension_map_where_clause; }
+        }
+        Fields::Unit => {
+            quote! {#visibility struct #transposed_name #transposed_generics #extension_map_where_clause;}
+        }
+    };
+
     // Generate the store implementation
     let expanded = quote! {
         #visibility trait #extension_trait_name<__W> where #extension_map_bounds {
@@ -134,6 +190,8 @@ fn derive_store_struct(input: &DeriveInput, structure: &DataStruct) -> syn::Resu
                 #implementations
             )*
         }
+
+        #transposed_struct
     };
 
     Ok(expanded)

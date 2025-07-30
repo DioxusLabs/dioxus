@@ -12,6 +12,7 @@ description = "Server function macros for Dioxus"
 [dependencies]
 dioxus-core = { workspace = true }
 dioxus-signals = { workspace = true }
+dioxus-stores-macro = { workspace = true }
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
