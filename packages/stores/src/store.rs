@@ -83,7 +83,7 @@ pub struct Store<T: ?Sized, W = WriteSignal<T>> {
 
 impl<T, S: Storage<T>> Store<T, CopyValue<T, S>> {
     /// Creates a new `Store` that might be sync. This allocates memory in the current scope, so this should only be called
-    /// inside of an initialization closure like the closure passed to [`use_hook`](dioxus_core::use_hook).
+    /// inside of an initialization closure like the closure passed to [`use_hook`].
     #[track_caller]
     pub fn new_maybe_sync(value: T) -> Self {
         let store = StoreSubscriptions::new();
@@ -97,7 +97,7 @@ impl<T, S: Storage<T>> Store<T, CopyValue<T, S>> {
 
 impl<T> Store<T> {
     /// Creates a new `Store`. This allocates memory in the current scope, so this should only be called
-    /// inside of an initialization closure like the closure passed to [`use_hook`](dioxus_core::use_hook).
+    /// inside of an initialization closure like the closure passed to [`use_hook`].
     #[track_caller]
     pub fn new(value: T) -> Self {
         let store = StoreSubscriptions::new();

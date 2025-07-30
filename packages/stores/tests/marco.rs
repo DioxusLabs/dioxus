@@ -1,4 +1,5 @@
 #[allow(unused)]
+#[allow(clippy::disallowed_names)]
 mod macro_tests {
     use dioxus_stores::*;
     use std::collections::HashMap;
