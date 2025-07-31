@@ -11,6 +11,7 @@ use crate::{
     file::{resolve_asset_options, ResolvedAssetType},
     js::hash_js,
 };
+use anyhow::bail;
 use manganis::{AssetOptions, BundledAsset};
 
 /// The opaque hash type manganis uses to identify assets. Each time an asset or asset options change, this hash will
@@ -37,19 +38,24 @@ impl AssetHash {
     pub fn hash_file_contents(
         options: &AssetOptions,
         file_path: impl AsRef<Path>,
+        allow_fallback: bool,
     ) -> anyhow::Result<AssetHash> {
-        hash_file(options, file_path.as_ref())
+        hash_file(options, file_path.as_ref(), allow_fallback)
     }
 }
 
 /// Process a specific file asset with the given options reading from the source and writing to the output path
-fn hash_file(options: &AssetOptions, source: &Path) -> anyhow::Result<AssetHash> {
+fn hash_file(
+    options: &AssetOptions,
+    source: &Path,
+    allow_fallback: bool,
+) -> anyhow::Result<AssetHash> {
     // Create a hasher
     let mut hash = std::collections::hash_map::DefaultHasher::new();
     options.hash(&mut hash);
     // Hash the version of CLI opt
     hash.write(crate::build_info::version().as_bytes());
-    hash_file_with_options(options, source, &mut hash, false)?;
+    hash_file_with_options(options, source, &mut hash, false, allow_fallback)?;
 
     let hash = hash.finish();
     Ok(AssetHash::new(hash))
@@ -61,6 +67,7 @@ pub(crate) fn hash_file_with_options(
     source: &Path,
     hasher: &mut impl Hasher,
     in_folder: bool,
+    allow_fallback: bool,
 ) -> anyhow::Result<()> {
     let resolved_options = resolve_asset_options(source, options.variant());
 
@@ -71,7 +78,7 @@ pub(crate) fn hash_file_with_options(
             hash_scss(options, source, hasher)?;
         }
         ResolvedAssetType::Js(options) => {
-            hash_js(options, source, hasher, !in_folder)?;
+            hash_js(options, source, hasher, !in_folder, allow_fallback)?;
         }
 
         // Otherwise, we can just hash the file contents
@@ -87,7 +94,7 @@ pub(crate) fn hash_file_with_options(
             let files = std::fs::read_dir(source)?;
             for file in files.flatten() {
                 let path = file.path();
-                hash_file_with_options(options, &path, hasher, true)?;
+                hash_file_with_options(options, &path, hasher, true, allow_fallback)?;
             }
         }
     }
@@ -114,17 +121,16 @@ pub(crate) fn hash_file_contents(source: &Path, hasher: &mut impl Hasher) -> any
 }
 
 /// Add a hash to the asset, or log an error if it fails
-pub fn add_hash_to_asset(asset: &mut BundledAsset) {
+pub fn add_hash_to_asset(asset: &mut BundledAsset, allow_fallback: bool) -> anyhow::Result<()> {
     let source = asset.absolute_source_path();
-    match AssetHash::hash_file_contents(asset.options(), source) {
+    match AssetHash::hash_file_contents(asset.options(), source, allow_fallback) {
         Ok(hash) => {
             let options = *asset.options();
 
             // Set the bundled path to the source path with the hash appended before the extension
             let source_path = PathBuf::from(source);
             let Some(file_name) = source_path.file_name() else {
-                tracing::error!("Failed to get file name from path: {source}");
-                return;
+                bail!("Failed to get file name from path {}", source);
             };
             // The output extension path is the extension set by the options
             // or the extension of the source file if we don't recognize the file
@@ -161,9 +167,8 @@ pub fn add_hash_to_asset(asset: &mut BundledAsset) {
             let bundled_path = bundled_path.to_string_lossy().to_string();
 
             *asset = BundledAsset::new(source, &bundled_path, options);
+            Ok(())
         }
-        Err(err) => {
-            tracing::error!("Failed to hash asset: {err}");
-        }
+        Err(err) => Err(err),
     }
 }
