@@ -4,6 +4,7 @@
 /// ```rust
 /// use generational_box::*;
 /// use dioxus::prelude::*;
+/// use dioxus_core::Subscribers;
 ///
 /// struct MyCopyValue<T: 'static, S: Storage<T>> {
 ///     value: CopyValue<T, S>,
@@ -29,6 +30,10 @@
 ///         &self,
 ///     ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> {
 ///         self.value.try_read_unchecked()
+///     }
+///
+///     fn subscribers(&self) -> Option<Subscribers> {
+///         self.value.subscribers()
 ///     }
 /// }
 ///
@@ -72,6 +77,7 @@ macro_rules! default_impl {
 /// ```rust
 /// use generational_box::*;
 /// use dioxus::prelude::*;
+/// use dioxus_core::Subscribers;
 ///
 /// struct MyCopyValue<T: 'static, S: Storage<T>> {
 ///     value: CopyValue<T, S>,
@@ -91,6 +97,10 @@ macro_rules! default_impl {
 ///         &self,
 ///     ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> {
 ///         self.value.try_read_unchecked()
+///     }
+///
+///     fn subscribers(&self) -> Option<Subscribers> {
+///         self.value.subscribers()
 ///     }
 /// }
 ///
@@ -145,6 +155,7 @@ macro_rules! read_impls {
 /// ```rust
 /// use generational_box::*;
 /// use dioxus::prelude::*;
+/// use dioxus_core::Subscribers;
 ///
 /// struct MyCopyValue<T: 'static, S: Storage<T>> {
 ///     value: CopyValue<T, S>,
@@ -164,6 +175,10 @@ macro_rules! read_impls {
 ///         &self,
 ///     ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> {
 ///         self.value.try_read_unchecked()
+///     }
+///
+///     fn subscribers(&self) -> Option<Subscribers> {
+///         self.value.subscribers()
 ///     }
 /// }
 ///
@@ -221,6 +236,7 @@ macro_rules! fmt_impls {
 /// ```rust
 /// use generational_box::*;
 /// use dioxus::prelude::*;
+/// use dioxus_core::Subscribers;
 ///
 /// struct MyCopyValue<T: 'static, S: Storage<T>> {
 ///     value: CopyValue<T, S>,
@@ -240,6 +256,10 @@ macro_rules! fmt_impls {
 ///         &self,
 ///     ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> {
 ///         self.value.try_read_unchecked()
+///     }
+///
+///     fn subscribers(&self) -> Option<Subscribers> {
+///         self.value.subscribers()
 ///     }
 /// }
 ///
@@ -307,8 +327,7 @@ macro_rules! eq_impls {
 ///         &self,
 ///     ) -> Result<WritableRef<'static, Self>, generational_box::BorrowMutError> {
 ///         self.value.try_write_unchecked()
-///
-///      }
+///     }
 ///
 ///     //...
 /// }
@@ -332,6 +351,10 @@ macro_rules! write_impls {
         $(, $gen $(: $gen_bound)?)*
         > std::ops::Add<T>
             for $ty<T $(, $gen)*>
+            $(
+                where
+                    $($extra_bound_ty: $extra_bound,)*
+            )?
         {
             type Output = T;
 
@@ -345,6 +368,10 @@ macro_rules! write_impls {
         $(, $gen $(: $gen_bound)?)*
         > std::ops::AddAssign<T>
             for $ty<T $(, $gen)*>
+            $(
+                where
+                    $($extra_bound_ty: $extra_bound,)*
+            )?
         {
             #[track_caller]
             fn add_assign(&mut self, rhs: T) {
@@ -356,6 +383,10 @@ macro_rules! write_impls {
         $(, $gen $(: $gen_bound)?)*
         > std::ops::SubAssign<T>
             for $ty<T $(, $gen)*>
+            $(
+                where
+                    $($extra_bound_ty: $extra_bound,)*
+            )?
         {
             #[track_caller]
             fn sub_assign(&mut self, rhs: T) {
@@ -367,6 +398,10 @@ macro_rules! write_impls {
         $(, $gen $(: $gen_bound)?)*
         > std::ops::Sub<T>
             for $ty<T $(, $gen)*>
+            $(
+                where
+                    $($extra_bound_ty: $extra_bound,)*
+            )?
         {
             type Output = T;
 
@@ -380,6 +415,10 @@ macro_rules! write_impls {
         $(, $gen $(: $gen_bound)?)*
         > std::ops::MulAssign<T>
             for $ty<T $(, $gen)*>
+            $(
+                where
+                    $($extra_bound_ty: $extra_bound,)*
+            )?
         {
             #[track_caller]
             fn mul_assign(&mut self, rhs: T) {
@@ -391,6 +430,10 @@ macro_rules! write_impls {
         $(, $gen $(: $gen_bound)?)*
         > std::ops::Mul<T>
             for $ty<T $(, $gen)*>
+            $(
+                where
+                    $($extra_bound_ty: $extra_bound,)*
+            )?
         {
             type Output = T;
 
@@ -404,6 +447,10 @@ macro_rules! write_impls {
         $(, $gen $(: $gen_bound)?)*
         > std::ops::DivAssign<T>
             for $ty<T $(, $gen)*>
+            $(
+                where
+                    $($extra_bound_ty: $extra_bound,)*
+            )?
         {
             #[track_caller]
             fn div_assign(&mut self, rhs: T) {
@@ -415,6 +462,10 @@ macro_rules! write_impls {
         $(, $gen $(: $gen_bound)?)*
         > std::ops::Div<T>
             for $ty<T $(, $gen)*>
+            $(
+                where
+                    $($extra_bound_ty: $extra_bound,)*
+            )?
         {
             type Output = T;
 

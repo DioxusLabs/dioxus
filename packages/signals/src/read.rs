@@ -1,15 +1,16 @@
-use std::{mem::MaybeUninit, ops::Index, rc::Rc};
+use std::{mem::MaybeUninit, ops::Index};
 
-use generational_box::AnyStorage;
+use dioxus_core::Subscribers;
+use generational_box::{AnyStorage, UnsyncStorage};
 
-use crate::MappedSignal;
+use crate::{MappedSignal, ReadSignal};
 
 /// A reference to a value that can be read from.
 #[allow(type_alias_bounds)]
 pub type ReadableRef<'a, T: Readable, O = <T as Readable>::Target> =
     <T::Storage as AnyStorage>::Ref<'a, O>;
 
-/// A trait for states that can be read from like [`crate::Signal`], [`crate::GlobalSignal`], or [`crate::ReadOnlySignal`]. You may choose to accept this trait as a parameter instead of the concrete type to allow for more flexibility in your API. For example, instead of creating two functions, one that accepts a [`crate::Signal`] and one that accepts a [`crate::GlobalSignal`], you can create one function that accepts a [`Readable`] type.
+/// A trait for states that can be read from like [`crate::Signal`], [`crate::GlobalSignal`], or [`crate::ReadSignal`]. You may choose to accept this trait as a parameter instead of the concrete type to allow for more flexibility in your API. For example, instead of creating two functions, one that accepts a [`crate::Signal`] and one that accepts a [`crate::GlobalSignal`], you can create one function that accepts a [`Readable`] type.
 ///
 /// # Example
 /// ```rust
@@ -21,7 +22,7 @@ pub type ReadableRef<'a, T: Readable, O = <T as Readable>::Target> =
 /// static COUNT: GlobalSignal<i32> = Signal::global(|| 0);
 ///
 /// fn MyComponent(count: Signal<i32>) -> Element {
-///     // Since we defined the function in terms of the readable trait, we can use it with any readable type (Signal, GlobalSignal, ReadOnlySignal, etc)
+///     // Since we defined the function in terms of the readable trait, we can use it with any readable type (Signal, GlobalSignal, ReadSignal, etc)
 ///     let doubled = use_memo(move || double(&count));
 ///     let global_count_doubled = use_memo(|| double(&COUNT));
 ///     rsx! {
@@ -41,64 +42,27 @@ pub trait Readable {
     /// The type of the storage this readable uses.
     type Storage: AnyStorage;
 
-    /// Map the readable type to a new type. This lets you provide a view into a readable type without needing to clone the inner value.
+    /// Try to get a reference to the value without checking the lifetime. This will subscribe the current scope to the signal.
     ///
-    /// Anything that subscribes to the readable value will be rerun whenever the original value changes, even if the view does not change. If you want to memorize the view, you can use a [`crate::Memo`] instead.
-    ///
-    /// # Example
-    /// ```rust
-    /// # use dioxus::prelude::*;
-    /// fn List(list: Signal<Vec<i32>>) -> Element {
-    ///     rsx! {
-    ///         for index in 0..list.len() {
-    ///             // We can use the `map` method to provide a view into the single item in the list that the child component will render
-    ///             Item { item: list.map(move |v| &v[index]) }
-    ///         }
-    ///     }
-    /// }
-    ///
-    /// // The child component doesn't need to know that the mapped value is coming from a list
-    /// #[component]
-    /// fn Item(item: MappedSignal<i32>) -> Element {
-    ///     rsx! {
-    ///         div { "Item: {item}" }
-    ///     }
-    /// }
-    /// ```
-    fn map<O>(self, f: impl Fn(&Self::Target) -> &O + 'static) -> MappedSignal<O, Self::Storage>
-    where
-        Self: Clone + Sized + 'static,
-    {
-        let mapping = Rc::new(f);
-        let try_read = Rc::new({
-            let self_ = self.clone();
-            let mapping = mapping.clone();
-            move || {
-                self_
-                    .try_read_unchecked()
-                    .map(|ref_| <Self::Storage as AnyStorage>::map(ref_, |r| mapping(r)))
-            }
-        })
-            as Rc<
-                dyn Fn() -> Result<ReadableRef<'static, Self, O>, generational_box::BorrowError>
-                    + 'static,
-            >;
-        let try_peek = Rc::new({
-            let self_ = self.clone();
-            let mapping = mapping.clone();
-            move || {
-                self_
-                    .try_peek_unchecked()
-                    .map(|ref_| <Self::Storage as AnyStorage>::map(ref_, |r| mapping(r)))
-            }
-        })
-            as Rc<
-                dyn Fn() -> Result<ReadableRef<'static, Self, O>, generational_box::BorrowError>
-                    + 'static,
-            >;
-        MappedSignal::new(try_read, try_peek)
-    }
+    /// NOTE: This method is completely safe because borrow checking is done at runtime.
+    fn try_read_unchecked(
+        &self,
+    ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError>;
 
+    /// Try to peek the current value of the signal without subscribing to updates. If the value has
+    /// been dropped, this will return an error.
+    ///
+    /// NOTE: This method is completely safe because borrow checking is done at runtime.
+    fn try_peek_unchecked(
+        &self,
+    ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError>;
+
+    /// Get the underlying subscriber list for this readable. This is used to track when the value changes and notify subscribers.
+    fn subscribers(&self) -> Option<Subscribers>;
+}
+
+/// An extension trait for `Readable` types that provides some convenience methods.
+pub trait ReadableExt: Readable {
     /// Get the current value of the state. If this is a signal, this will subscribe the current scope to the signal.
     /// If the value has been dropped, this will panic. Calling this on a Signal is the same as
     /// using the signal() syntax to read and subscribe to its value
@@ -121,13 +85,6 @@ pub trait Readable {
     fn read_unchecked(&self) -> ReadableRef<'static, Self> {
         self.try_read_unchecked().unwrap()
     }
-
-    /// Try to get a reference to the value without checking the lifetime. This will subscribe the current scope to the signal.
-    ///
-    /// NOTE: This method is completely safe because borrow checking is done at runtime.
-    fn try_read_unchecked(
-        &self,
-    ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError>;
 
     /// Get the current value of the state without subscribing to updates. If the value has been dropped, this will panic.
     ///
@@ -184,13 +141,37 @@ pub trait Readable {
         self.try_peek_unchecked().unwrap()
     }
 
-    /// Try to peek the current value of the signal without subscribing to updates. If the value has
-    /// been dropped, this will return an error.
+    /// Map the readable type to a new type. This lets you provide a view into a readable type without needing to clone the inner value.
     ///
-    /// NOTE: This method is completely safe because borrow checking is done at runtime.
-    fn try_peek_unchecked(
-        &self,
-    ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError>;
+    /// Anything that subscribes to the readable value will be rerun whenever the original value changes, even if the view does not change. If you want to memorize the view, you can use a [`crate::Memo`] instead.
+    ///
+    /// # Example
+    /// ```rust
+    /// # use dioxus::prelude::*;
+    /// fn List(list: Signal<Vec<i32>>) -> Element {
+    ///     rsx! {
+    ///         for index in 0..list.len() {
+    ///             // We can use the `map` method to provide a view into the single item in the list that the child component will render
+    ///             Item { item: list.map(move |v| &v[index]) }
+    ///         }
+    ///     }
+    /// }
+    ///
+    /// // The child component doesn't need to know that the mapped value is coming from a list
+    /// #[component]
+    /// fn Item(item: ReadSignal<i32>) -> Element {
+    ///     rsx! {
+    ///         div { "Item: {item}" }
+    ///     }
+    /// }
+    /// ```
+    fn map<F, O>(self, f: F) -> MappedSignal<O, Self, F>
+    where
+        Self: Clone + Sized + 'static,
+        F: Fn(&Self::Target) -> &O + 'static,
+    {
+        MappedSignal::new(self, f)
+    }
 
     /// Clone the inner value and return it. If the value has been dropped, this will panic.
     #[track_caller]
@@ -260,6 +241,19 @@ pub trait Readable {
 
         // Cast the closure to a trait object.
         reference_to_closure as &_
+    }
+}
+
+impl<R: Readable + ?Sized> ReadableExt for R {}
+
+/// An extension trait for `Readable` types that can be boxed into a trait object.
+pub trait ReadableBoxExt: Readable<Storage = UnsyncStorage> {
+    /// Box the readable value into a trait object. This is useful for passing around readable values without knowing their concrete type.
+    fn boxed(self) -> ReadSignal<Self::Target>
+    where
+        Self: Sized + 'static,
+    {
+        ReadSignal::new(self)
     }
 }
 

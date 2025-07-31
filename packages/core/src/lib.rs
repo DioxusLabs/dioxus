@@ -87,10 +87,10 @@ pub use crate::innerlude::{
     Element, ElementId, ErrorBoundary, ErrorContext, Event, EventHandler, Fragment, HasAttributes,
     IntoAttributeValue, IntoDynNode, LaunchConfig, ListenerCallback, MarkerWrapper, Mutation,
     Mutations, NoOpMutations, Ok, OptionStringFromMarker, Properties, ReactiveContext, RenderError,
-    Result, Runtime, RuntimeGuard, ScopeId, ScopeState, SpawnIfAsync, SuperFrom, SuperInto,
-    SuspendedFuture, SuspenseBoundary, SuspenseBoundaryProps, SuspenseContext, SuspenseExtension,
-    Task, Template, TemplateAttribute, TemplateNode, VComponent, VNode, VNodeInner, VPlaceholder,
-    VText, VirtualDom, WriteMutations,
+    Result, Runtime, RuntimeGuard, ScopeId, ScopeState, SpawnIfAsync, SubscriberList, Subscribers,
+    SuperFrom, SuperInto, SuspendedFuture, SuspenseBoundary, SuspenseBoundaryProps,
+    SuspenseContext, SuspenseExtension, Task, Template, TemplateAttribute, TemplateNode,
+    VComponent, VNode, VNodeInner, VPlaceholder, VText, VirtualDom, WriteMutations,
 };
 
 pub use const_format;
