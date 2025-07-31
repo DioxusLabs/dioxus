@@ -23,6 +23,12 @@ impl PointerData {
     }
 }
 
+impl Default for PointerData {
+    fn default() -> Self {
+        Self::new(crate::events::empty::EmptyEvent)
+    }
+}
+
 impl<E: HasPointerData + 'static> From<E> for PointerData {
     fn from(e: E) -> Self {
         Self { inner: Box::new(e) }

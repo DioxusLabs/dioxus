@@ -1,6 +1,4 @@
-use dioxus_html::{
-    DragData, FormData, HtmlEventConverter, ImageData, MountedData, PlatformEventData,
-};
+use dioxus_html::{FormData, HtmlEventConverter, ImageData, MountedData, PlatformEventData};
 use form::WebFormData;
 use load::WebImageEvent;
 use wasm_bindgen::JsCast;
@@ -51,43 +49,80 @@ fn downcast_event(event: &dioxus_html::PlatformEventData) -> &GenericWebSysEvent
         .expect("event should be a GenericWebSysEvent")
 }
 
+macro_rules! impl_safe_converter {
+    (
+        $(
+            ($fn_name:ident, $dioxus_event:ty, $web_sys_event:ty),
+        )*
+    ) => {
+        $(
+            #[inline(always)]
+            fn $fn_name(&self, event: &dioxus_html::PlatformEventData) -> $dioxus_event {
+                let raw_event = &downcast_event(event).raw;
+                if let Ok(event) = raw_event.clone().dyn_into::<$web_sys_event>() {
+                    <$dioxus_event>::new(Synthetic::new(event))
+                } else {
+                    <$dioxus_event>::default()
+                }
+            }
+        )*
+    };
+}
+
 impl HtmlEventConverter for WebEventConverter {
-    #[inline(always)]
-    fn convert_animation_data(
-        &self,
-        event: &dioxus_html::PlatformEventData,
-    ) -> dioxus_html::AnimationData {
-        Synthetic::<web_sys::AnimationEvent>::from(downcast_event(event).raw.clone()).into()
-    }
-
-    #[inline(always)]
-    fn convert_clipboard_data(
-        &self,
-        event: &dioxus_html::PlatformEventData,
-    ) -> dioxus_html::ClipboardData {
-        Synthetic::new(downcast_event(event).raw.clone()).into()
-    }
-
-    #[inline(always)]
-    fn convert_composition_data(
-        &self,
-        event: &dioxus_html::PlatformEventData,
-    ) -> dioxus_html::CompositionData {
-        Synthetic::<web_sys::CompositionEvent>::from(downcast_event(event).raw.clone()).into()
-    }
-
-    #[inline(always)]
-    fn convert_drag_data(&self, event: &dioxus_html::PlatformEventData) -> dioxus_html::DragData {
-        let event = downcast_event(event);
-        DragData::new(Synthetic::new(
-            event.raw.clone().unchecked_into::<web_sys::DragEvent>(),
-        ))
-    }
-
-    #[inline(always)]
-    fn convert_focus_data(&self, event: &dioxus_html::PlatformEventData) -> dioxus_html::FocusData {
-        Synthetic::<web_sys::FocusEvent>::from(downcast_event(event).raw.clone()).into()
-    }
+    impl_safe_converter!(
+        (
+            convert_animation_data,
+            dioxus_html::AnimationData,
+            web_sys::AnimationEvent
+        ),
+        (
+            convert_clipboard_data,
+            dioxus_html::ClipboardData,
+            web_sys::ClipboardEvent
+        ),
+        (
+            convert_composition_data,
+            dioxus_html::CompositionData,
+            web_sys::CompositionEvent
+        ),
+        (convert_drag_data, dioxus_html::DragData, web_sys::DragEvent),
+        (
+            convert_focus_data,
+            dioxus_html::FocusData,
+            web_sys::FocusEvent
+        ),
+        (
+            convert_keyboard_data,
+            dioxus_html::KeyboardData,
+            web_sys::KeyboardEvent
+        ),
+        (
+            convert_mouse_data,
+            dioxus_html::MouseData,
+            web_sys::MouseEvent
+        ),
+        (
+            convert_pointer_data,
+            dioxus_html::PointerData,
+            web_sys::PointerEvent
+        ),
+        (
+            convert_touch_data,
+            dioxus_html::TouchData,
+            web_sys::TouchEvent
+        ),
+        (
+            convert_transition_data,
+            dioxus_html::TransitionData,
+            web_sys::TransitionEvent
+        ),
+        (
+            convert_wheel_data,
+            dioxus_html::WheelData,
+            web_sys::WheelEvent
+        ),
+    );
 
     #[inline(always)]
     fn convert_form_data(&self, event: &dioxus_html::PlatformEventData) -> dioxus_html::FormData {
@@ -100,14 +135,6 @@ impl HtmlEventConverter for WebEventConverter {
         let event = downcast_event(event);
         let error = event.raw.type_() == "error";
         ImageData::new(WebImageEvent::new(event.raw.clone(), error))
-    }
-
-    #[inline(always)]
-    fn convert_keyboard_data(
-        &self,
-        event: &dioxus_html::PlatformEventData,
-    ) -> dioxus_html::KeyboardData {
-        Synthetic::<web_sys::KeyboardEvent>::from(downcast_event(event).raw.clone()).into()
     }
 
     #[inline(always)]
@@ -132,19 +159,6 @@ impl HtmlEventConverter for WebEventConverter {
         {
             panic!("mounted events are not supported without the mounted feature on the dioxus-web crate enabled")
         }
-    }
-
-    #[inline(always)]
-    fn convert_mouse_data(&self, event: &dioxus_html::PlatformEventData) -> dioxus_html::MouseData {
-        Synthetic::<web_sys::MouseEvent>::from(downcast_event(event).raw.clone()).into()
-    }
-
-    #[inline(always)]
-    fn convert_pointer_data(
-        &self,
-        event: &dioxus_html::PlatformEventData,
-    ) -> dioxus_html::PointerData {
-        Synthetic::<web_sys::PointerEvent>::from(downcast_event(event).raw.clone()).into()
     }
 
     #[inline(always)]
@@ -180,30 +194,12 @@ impl HtmlEventConverter for WebEventConverter {
     }
 
     #[inline(always)]
-    fn convert_touch_data(&self, event: &dioxus_html::PlatformEventData) -> dioxus_html::TouchData {
-        Synthetic::<web_sys::TouchEvent>::from(downcast_event(event).raw.clone()).into()
-    }
-
-    #[inline(always)]
-    fn convert_transition_data(
-        &self,
-        event: &dioxus_html::PlatformEventData,
-    ) -> dioxus_html::TransitionData {
-        Synthetic::<web_sys::TransitionEvent>::from(downcast_event(event).raw.clone()).into()
-    }
-
-    #[inline(always)]
     fn convert_visible_data(
         &self,
         event: &dioxus_html::PlatformEventData,
     ) -> dioxus_html::VisibleData {
         Synthetic::<web_sys::IntersectionObserverEntry>::from(downcast_event(event).raw.clone())
             .into()
-    }
-
-    #[inline(always)]
-    fn convert_wheel_data(&self, event: &dioxus_html::PlatformEventData) -> dioxus_html::WheelData {
-        Synthetic::<web_sys::WheelEvent>::from(downcast_event(event).raw.clone()).into()
     }
 }
 
@@ -254,37 +250,5 @@ pub(crate) fn load_document() -> Document {
         .expect("should have access to the Document")
 }
 
-macro_rules! uncheck_convert {
-    ($t:ty) => {
-        impl From<Event> for Synthetic<$t> {
-            #[inline]
-            fn from(e: Event) -> Self {
-                let e: $t = e.unchecked_into();
-                Self::new(e)
-            }
-        }
-
-        impl From<&Event> for Synthetic<$t> {
-            #[inline]
-            fn from(e: &Event) -> Self {
-                let e: &$t = e.unchecked_ref();
-                Self::new(e.clone())
-            }
-        }
-    };
-    ($($t:ty),+ $(,)?) => {
-        $(uncheck_convert!($t);)+
-    };
-}
-
-uncheck_convert![
-    web_sys::CompositionEvent,
-    web_sys::KeyboardEvent,
-    web_sys::TouchEvent,
-    web_sys::PointerEvent,
-    web_sys::WheelEvent,
-    web_sys::AnimationEvent,
-    web_sys::TransitionEvent,
-    web_sys::MouseEvent,
-    web_sys::FocusEvent,
-];
+// ResizeObserverEntry and IntersectionObserverEntry need custom From implementations
+// because they come from CustomEvent details and are handled in their respective modules
