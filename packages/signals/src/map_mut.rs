@@ -61,7 +61,7 @@ where
 
 impl<V, O, F, FMut> Readable for MappedMutSignal<O, V, F, FMut>
 where
-    O: ?Sized + 'static,
+    O: ?Sized,
     V: Readable,
     F: Fn(&V::Target) -> &O,
 {
@@ -87,7 +87,7 @@ where
 
 impl<V, O, F, FMut> Writable for MappedMutSignal<O, V, F, FMut>
 where
-    O: ?Sized + 'static,
+    O: ?Sized,
     V: Writable,
     F: Fn(&V::Target) -> &O,
     FMut: Fn(&mut V::Target) -> &mut O,
@@ -104,7 +104,7 @@ where
 
 impl<V, O, F, FMut> IntoAttributeValue for MappedMutSignal<O, V, F, FMut>
 where
-    O: Clone + IntoAttributeValue + 'static,
+    O: Clone + IntoAttributeValue,
     V: Readable,
     F: Fn(&V::Target) -> &O,
 {
@@ -115,7 +115,7 @@ where
 
 impl<V, O, F, FMut> PartialEq for MappedMutSignal<O, V, F, FMut>
 where
-    O: ?Sized + 'static,
+    O: ?Sized,
     V: Readable + PartialEq,
     F: PartialEq,
     FMut: PartialEq,
@@ -132,7 +132,7 @@ where
 /// Currently only limited to clone types, though could probably specialize for string/arc/rc
 impl<V, O, F, FMut> Deref for MappedMutSignal<O, V, F, FMut>
 where
-    O: Clone + 'static,
+    O: Clone,
     V: Readable + 'static,
     F: Fn(&V::Target) -> &O + 'static,
     FMut: 'static,
