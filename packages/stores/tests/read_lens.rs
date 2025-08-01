@@ -1,12 +1,13 @@
+use dioxus::prelude::*;
 use dioxus_stores::*;
 
-fn read_lens() {
-    #[derive(Store)]
-    struct TodoItem {
-        checked: bool,
-        contents: String,
-    }
+#[derive(Store)]
+struct TodoItem {
+    checked: bool,
+    contents: String,
+}
 
+fn app() -> Element {
     let store = use_store(|| TodoItem {
         checked: false,
         contents: "Learn about stores".to_string(),
@@ -25,4 +26,19 @@ fn read_lens() {
     let TodoItemStoreTransposed { checked, contents } = store.transpose();
     let checked: bool = checked();
     let contents: String = contents();
+
+    rsx! {
+        ReadLens {
+            item: store,
+        }
+    }
+}
+
+#[component]
+fn ReadLens(item: ReadSignal<TodoItem>) -> Element {
+    rsx! {
+        ReadLens {
+            item,
+        }
+    }
 }

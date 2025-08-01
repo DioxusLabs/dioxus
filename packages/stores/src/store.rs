@@ -3,7 +3,7 @@ use crate::{
     subscriptions::{StoreSubscriptions, TinyVec},
 };
 use dioxus_core::{
-    use_hook, AttributeValue, DynamicNode, IntoAttributeValue, IntoDynNode, Subscribers,
+    use_hook, AttributeValue, DynamicNode, IntoAttributeValue, IntoDynNode, Subscribers, SuperInto,
 };
 use dioxus_signals::{
     read_impls, write_impls, BorrowError, BorrowMutError, CopyValue, Global,
@@ -187,6 +187,31 @@ where
         }
     }
 }
+
+#[doc(hidden)]
+pub struct SuperIntoReadSignalMarker;
+impl<T, W> SuperInto<ReadSignal<T>, SuperIntoReadSignalMarker> for Store<T, W>
+where
+    T: 'static,
+    W: Readable<Target = T, Storage = UnsyncStorage> + 'static,
+{
+    fn super_into(self) -> ReadSignal<T> {
+        ReadSignal::new(self)
+    }
+}
+
+#[doc(hidden)]
+pub struct SuperIntoWriteSignalMarker;
+impl<T, W> SuperInto<WriteSignal<T>, SuperIntoWriteSignalMarker> for Store<T, W>
+where
+    T: 'static,
+    W: Writable<Target = T, Storage = UnsyncStorage> + 'static,
+{
+    fn super_into(self) -> WriteSignal<T> {
+        WriteSignal::new(self)
+    }
+}
+
 impl<T: ?Sized, W> Readable for Store<T, W>
 where
     W: Readable<Target = T>,
