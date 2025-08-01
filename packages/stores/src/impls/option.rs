@@ -32,9 +32,9 @@ impl<Lens: Readable<Target = Option<T>> + 'static, T: 'static> Store<Option<T>, 
         let value = self.selector().peek();
         if let Some(v) = &*value {
             self.selector().track();
-            return f(v);
+            f(v)
         } else {
-            return false;
+            false
         }
     }
 
@@ -66,9 +66,9 @@ impl<Lens: Readable<Target = Option<T>> + 'static, T: 'static> Store<Option<T>, 
         let value = self.selector().peek();
         if let Some(v) = &*value {
             self.selector().track();
-            return f(v);
+            f(v)
         } else {
-            return true;
+            true
         }
     }
 
@@ -212,7 +212,7 @@ impl<Lens: Readable<Target = Option<T>> + 'static, T: 'static> Store<Option<T>, 
     /// # Example
     /// ```rust, no_run
     /// use dioxus_stores::*;
-    /// let store = use_store(|| Some(42)).inspect(|v| dbg!(*v));
+    /// let store = use_store(|| Some(42)).inspect(|v| println!("{v}"));
     /// ```
     pub fn inspect(self, f: impl FnOnce(&T)) -> Self {
         {
