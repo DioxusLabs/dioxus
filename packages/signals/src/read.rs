@@ -286,6 +286,8 @@ pub trait ReadableBoxExt: Readable<Storage = UnsyncStorage> {
         ReadSignal::new(self)
     }
 }
+impl<R: Readable<Storage = UnsyncStorage> + ?Sized> ReadableBoxExt for R {}
+
 /// An extension trait for `Readable<Vec<T>>` that provides some convenience methods.
 pub trait ReadableVecExt<T>: Readable<Target = Vec<T>> {
     /// Returns the length of the inner vector.

@@ -1,9 +1,9 @@
 use crate::store::Store;
-use dioxus_signals::{MappedMutSignal, ReadableExt, Writable};
+use dioxus_signals::{MappedMutSignal, Readable, ReadableExt, Writable};
 
 impl<W, T, E> Store<Result<T, E>, W>
 where
-    W: Writable<Target = Result<T, E>> + Copy + 'static,
+    W: Readable<Target = Result<T, E>> + Copy + 'static,
     T: 'static,
     E: 'static,
 {

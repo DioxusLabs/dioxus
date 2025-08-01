@@ -1,11 +1,11 @@
 use std::ops::DerefMut;
 
 use crate::store::Store;
-use dioxus_signals::{MappedMutSignal, Writable};
+use dioxus_signals::{MappedMutSignal, Readable};
 
 impl<W, T> Store<T, W>
 where
-    W: Writable<Target = T> + Copy + 'static,
+    W: Readable<Target = T> + Copy + 'static,
     T: DerefMut + 'static,
 {
     /// Returns a store that dereferences the original value. The dereferenced store shares the same

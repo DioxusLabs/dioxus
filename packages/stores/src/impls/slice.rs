@@ -1,9 +1,9 @@
 use crate::store::Store;
-use dioxus_signals::{MappedMutSignal, ReadableExt, Writable};
+use dioxus_signals::{MappedMutSignal, Readable, ReadableExt, Writable};
 
 impl<W, I> Store<Vec<I>, W>
 where
-    W: Writable<Target = Vec<I>> + Copy + 'static,
+    W: Readable<Target = Vec<I>> + Copy + 'static,
     I: 'static,
 {
     /// Returns the length of the slice. This will only track the shallow state of the slice.

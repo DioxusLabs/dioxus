@@ -5,10 +5,10 @@ use std::{
 };
 
 use crate::store::Store;
-use dioxus_signals::{MappedMutSignal, ReadableExt, Writable};
+use dioxus_signals::{MappedMutSignal, Readable, ReadableExt, Writable};
 
 impl<
-        W: Writable<Target = HashMap<K, V, St>> + Copy + 'static,
+        W: Readable<Target = HashMap<K, V, St>> + Copy + 'static,
         K: 'static,
         V: 'static,
         St: 'static,
@@ -149,6 +149,7 @@ impl<
     where
         K: Eq + Hash,
         St: BuildHasher,
+        W: Writable,
     {
         self.selector().mark_dirty_shallow();
         self.selector().write_untracked().insert(key, value);
@@ -174,6 +175,7 @@ impl<
         Q: ?Sized + Hash + Eq + 'static,
         K: Borrow<Q> + Eq + Hash,
         St: BuildHasher,
+        W: Writable,
     {
         self.selector().mark_dirty_shallow();
         self.selector().write_untracked().remove(key)
@@ -194,7 +196,10 @@ impl<
     /// store.clear();
     /// assert!(store.is_empty());
     /// ```
-    pub fn clear(&mut self) {
+    pub fn clear(&mut self)
+    where
+        W: Writable,
+    {
         self.selector().mark_dirty_shallow();
         self.selector().write_untracked().clear();
     }
@@ -215,7 +220,10 @@ impl<
     /// assert!(store.get(1).is_some());
     /// assert!(store.get(2).is_none());
     /// ```
-    pub fn retain(&mut self, mut f: impl FnMut(&K, &V) -> bool) {
+    pub fn retain(&mut self, mut f: impl FnMut(&K, &V) -> bool)
+    where
+        W: Writable,
+    {
         self.selector().mark_dirty_shallow();
         self.selector().write_untracked().retain(|k, v| f(k, v));
     }

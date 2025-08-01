@@ -1,7 +1,7 @@
 use std::{hash::Hash, ops::IndexMut};
 
 use crate::store::Store;
-use dioxus_signals::{MappedMutSignal, Writable};
+use dioxus_signals::{MappedMutSignal, Readable, Writable};
 
 impl<W, T> Store<T, W> {
     /// Index into the store, returning a store that allows access to the item at the given index. The
@@ -30,7 +30,7 @@ impl<W, T> Store<T, W> {
     where
         T: IndexMut<Idx> + 'static,
         Idx: Hash + Copy + 'static,
-        W: Writable<Target = T> + Copy + 'static,
+        W: Readable<Target = T> + Copy + 'static,
     {
         self.selector()
             .hash_child(

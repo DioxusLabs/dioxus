@@ -1,7 +1,7 @@
 use crate::store::Store;
-use dioxus_signals::{MappedMutSignal, ReadableExt, Writable};
+use dioxus_signals::{MappedMutSignal, Readable, ReadableExt, Writable};
 
-impl<W: Writable<Target = Option<T>> + Copy + 'static, T: 'static> Store<Option<T>, W> {
+impl<W: Readable<Target = Option<T>> + Copy + 'static, T: 'static> Store<Option<T>, W> {
     /// Checks if the `Option` is `Some`. This will only track the shallow state of the `Option`. It will
     /// only cause a re-run if the `Option` could change from `None` to `Some` or vice versa.
     ///
