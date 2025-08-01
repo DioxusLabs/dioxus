@@ -26,7 +26,7 @@ impl<Lens: Readable<Target = HashMap<K, V, St>> + 'static, K: 'static, V: 'stati
     /// store.insert(0, "value".to_string());
     /// assert_eq!(store.len(), 1);
     /// ```
-    pub fn len(self) -> usize {
+    pub fn len(&self) -> usize {
         self.selector().track_shallow();
         self.selector().peek().len()
     }
@@ -44,7 +44,7 @@ impl<Lens: Readable<Target = HashMap<K, V, St>> + 'static, K: 'static, V: 'stati
     /// store.insert(0, "value".to_string());
     /// assert!(!store.is_empty());
     /// ```
-    pub fn is_empty(self) -> bool {
+    pub fn is_empty(&self) -> bool {
         self.selector().track_shallow();
         self.selector().peek().is_empty()
     }

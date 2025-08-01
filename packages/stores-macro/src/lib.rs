@@ -206,7 +206,7 @@ fn derive_store_struct(input: &DeriveInput, structure: &DataStruct) -> syn::Resu
 
     let definition = quote! {
         fn transpose(
-            &self,
+            self,
         ) -> #transposed_name #transposed_generics where Self: ::std::marker::Copy;
     };
     definitions.push(definition);
@@ -233,7 +233,7 @@ fn derive_store_struct(input: &DeriveInput, structure: &DataStruct) -> syn::Resu
     };
     let implementation = quote! {
         fn transpose(
-            &self,
+            self,
         ) -> #transposed_name #transposed_generics where Self: ::std::marker::Copy {
             #(
                 let #field_names = self.#field_names();
@@ -450,13 +450,13 @@ fn derive_store_enum(input: &DeriveInput, structure: &DataEnum) -> syn::Result<T
 
     let definition = quote! {
         fn transpose(
-            &self,
+            self,
         ) -> #transposed_name #transposed_generics where #readable_bound, Self: ::std::marker::Copy;
     };
     definitions.push(definition);
     let implementation = quote! {
         fn transpose(
-            &self,
+            self,
         ) -> #transposed_name #transposed_generics where #readable_bound, Self: ::std::marker::Copy {
             self.selector().track_shallow();
             let read = dioxus_stores::macro_helpers::dioxus_signals::ReadableExt::peek(self.selector());
