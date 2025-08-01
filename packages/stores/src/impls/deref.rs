@@ -1,7 +1,7 @@
 use std::ops::DerefMut;
 
 use crate::{store::Store, MappedStore};
-use dioxus_signals::{ Readable};
+use dioxus_signals::Readable;
 
 impl<Lens, T> Store<T, Lens>
 where

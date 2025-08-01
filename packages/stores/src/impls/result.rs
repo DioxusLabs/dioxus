@@ -1,5 +1,5 @@
 use crate::{store::Store, MappedStore};
-use dioxus_signals::{ Readable, ReadableExt, Writable};
+use dioxus_signals::{Readable, ReadableExt, Writable};
 
 impl<Lens, T, E> Store<Result<T, E>, Lens>
 where

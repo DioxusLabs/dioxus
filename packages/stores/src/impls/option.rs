@@ -1,5 +1,5 @@
 use crate::{store::Store, MappedStore};
-use dioxus_signals::{ Readable, ReadableExt};
+use dioxus_signals::{Readable, ReadableExt};
 
 impl<Lens: Readable<Target = Option<T>> + 'static, T: 'static> Store<Option<T>, Lens> {
     /// Checks if the `Option` is `Some`. This will only track the shallow state of the `Option`. It will
