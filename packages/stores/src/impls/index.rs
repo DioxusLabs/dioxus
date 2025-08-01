@@ -35,8 +35,8 @@ impl<W, T> Store<T, W> {
         self.selector()
             .hash_child(
                 index,
-                move |value| value.index(index),
-                move |value| value.index_mut(index),
+                move |value: &T| value.index(index),
+                move |value: &mut T| value.index_mut(index),
             )
             .into()
     }

@@ -7,10 +7,13 @@ use dioxus_core::{
 };
 use dioxus_signals::{
     read_impls, write_impls, BorrowError, BorrowMutError, CopyValue, Global,
-    InitializeFromFunction, MappedMutSignal, Readable, ReadableExt, ReadableRef, Storage,
-    UnsyncStorage, Writable, WritableExt, WritableRef, WriteSignal,
+    InitializeFromFunction, MappedMutSignal, ReadSignal, Readable, ReadableExt, ReadableRef,
+    Storage, UnsyncStorage, Writable, WritableExt, WritableRef, WriteSignal,
 };
 use std::marker::PhantomData;
+
+/// A type alias for a read-only store.
+pub type ReadStore<T> = Store<T, ReadSignal<T>>;
 
 /// Stores are a reactive type built for nested data structures. Each store will lazily create signals
 /// for each field/member of the data structure as needed.
@@ -117,6 +120,11 @@ impl<T: ?Sized, W> Store<T, W> {
     pub fn selector(&self) -> &SelectorScope<W> {
         &self.selector
     }
+
+    /// Convert the store into the underlying selector
+    pub fn into_selector(self) -> SelectorScope<W> {
+        self.selector
+    }
 }
 
 impl<T: ?Sized, W> From<SelectorScope<W>> for Store<T, W> {
@@ -151,6 +159,21 @@ impl<T: ?Sized, W> Copy for Store<T, W> where W: Copy {}
 
 impl<__F, __FMut, T: ?Sized, W> ::std::convert::From<Store<T, MappedMutSignal<T, W, __F, __FMut>>>
     for Store<T, WriteSignal<T>>
+where
+    W: Writable<Storage = UnsyncStorage> + 'static,
+    __F: Fn(&W::Target) -> &T + 'static,
+    __FMut: Fn(&mut W::Target) -> &mut T + 'static,
+    T: 'static,
+{
+    fn from(value: Store<T, MappedMutSignal<T, W, __F, __FMut>>) -> Self {
+        Store {
+            selector: value.selector.map_writer(::std::convert::Into::into),
+            _phantom: ::std::marker::PhantomData,
+        }
+    }
+}
+impl<__F, __FMut, T: ?Sized, W> ::std::convert::From<Store<T, MappedMutSignal<T, W, __F, __FMut>>>
+    for Store<T, ReadSignal<T>>
 where
     W: Writable<Storage = UnsyncStorage> + 'static,
     __F: Fn(&W::Target) -> &T + 'static,

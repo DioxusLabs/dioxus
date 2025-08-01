@@ -143,9 +143,6 @@ fn derive_store_struct(input: &DeriveInput, structure: &DataStruct) -> syn::Resu
 
     let mut extension_map_bounds: Punctuated<syn::WherePredicate, syn::Token![,]> =
         Punctuated::new();
-    extension_map_bounds.push(
-        parse_quote!(__W: dioxus_stores::macro_helpers::dioxus_signals::Writable<Target = #struct_name #ty_generics> + Copy + 'static),
-    );
     for generic in generics.type_params() {
         let ident = &generic.ident;
         extension_map_bounds.push(parse_quote!(#ident: 'static));
@@ -176,7 +173,7 @@ fn derive_store_struct(input: &DeriveInput, structure: &DataStruct) -> syn::Resu
             .map_or_else(|| format_ident!("field_{i}"), |name| name.clone());
         let field_type = &field.ty;
 
-        let write_type = quote! { dioxus_stores::macro_helpers::dioxus_signals::MappedMutSignal<#field_type, __W> };
+        let write_type = quote! { dioxus_stores::macro_helpers::dioxus_signals::MappedMutSignal<#field_type, __W, fn(&#struct_name #ty_generics) -> &#field_type,  fn(&mut #struct_name #ty_generics) -> &mut #field_type> };
 
         let store_type = quote! { dioxus_stores::Store<#field_type, #write_type> };
 
@@ -196,7 +193,7 @@ fn derive_store_struct(input: &DeriveInput, structure: &DataStruct) -> syn::Resu
             ) -> #store_type {
                 let __map_field: fn(&#struct_name #ty_generics) -> &#field_type = |value| &value.#field_accessor;
                 let __map_mut_field: fn(&mut #struct_name #ty_generics) -> &mut #field_type = |value| &mut value.#field_accessor;
-                let scope = self.selector().child(
+                let scope = self.into_selector().child(
                     #ordinal,
                     __map_field,
                     __map_mut_field,
@@ -209,8 +206,8 @@ fn derive_store_struct(input: &DeriveInput, structure: &DataStruct) -> syn::Resu
 
     let definition = quote! {
         fn transpose(
-            self,
-        ) -> #transposed_name #transposed_generics;
+            &self,
+        ) -> #transposed_name #transposed_generics where Self: ::std::marker::Copy;
     };
     definitions.push(definition);
     let field_names = fields
@@ -236,8 +233,8 @@ fn derive_store_struct(input: &DeriveInput, structure: &DataStruct) -> syn::Resu
     };
     let implementation = quote! {
         fn transpose(
-            self,
-        ) -> #transposed_name #transposed_generics {
+            &self,
+        ) -> #transposed_name #transposed_generics where Self: ::std::marker::Copy {
             #(
                 let #field_names = self.#field_names();
             )*
@@ -297,9 +294,6 @@ fn derive_store_enum(input: &DeriveInput, structure: &DataEnum) -> syn::Result<T
 
     let mut extension_map_bounds: Punctuated<syn::WherePredicate, syn::Token![,]> =
         Punctuated::new();
-    extension_map_bounds.push(
-        parse_quote!(__W: dioxus_stores::macro_helpers::dioxus_signals::Writable<Target = #enum_name #ty_generics> + Copy + 'static),
-    );
     for generic in generics.type_params() {
         let ident = &generic.ident;
         extension_map_bounds.push(parse_quote!(#ident: 'static));
@@ -331,7 +325,7 @@ fn derive_store_enum(input: &DeriveInput, structure: &DataEnum) -> syn::Result<T
         let implementation = quote! {
             fn #is_fn(
                 self,
-            ) -> bool {
+            ) -> bool where Self: dioxus_stores::macro_helpers::dioxus_signals::Readable<Target = #enum_name #ty_generics> {
                 self.selector().track_shallow();
                 let ref_self = dioxus_stores::macro_helpers::dioxus_signals::ReadableExt::peek(self.selector());
                 matches!(&*ref_self, #enum_name::#variant_name { .. })
@@ -352,7 +346,7 @@ fn derive_store_enum(input: &DeriveInput, structure: &DataEnum) -> syn::Result<T
                 .map_or_else(|| format_ident!("field_{i}"), |name| name.clone());
             let field_type = &field.ty;
 
-            let write_type = quote! { dioxus_stores::macro_helpers::dioxus_signals::MappedMutSignal<#field_type, __W> };
+            let write_type = quote! { dioxus_stores::macro_helpers::dioxus_signals::MappedMutSignal<#field_type, __W, fn(&#enum_name #ty_generics) -> &#field_type, fn(&mut #enum_name #ty_generics) -> &mut #field_type> };
 
             let store_type = quote! { dioxus_stores::Store<#field_type, #write_type> };
 
@@ -373,7 +367,7 @@ fn derive_store_enum(input: &DeriveInput, structure: &DataEnum) -> syn::Result<T
                     #enum_name::#variant_name #match_field => #function_name,
                     _ => panic!("Selector that was created to match {} written after variant changed", stringify!(#variant_name)),
                 };
-                let scope = self.selector().child(
+                let scope = self.into_selector().child(
                     #ordinal,
                     __map_field,
                     __map_mut_field,
@@ -455,14 +449,14 @@ fn derive_store_enum(input: &DeriveInput, structure: &DataEnum) -> syn::Result<T
 
     let definition = quote! {
         fn transpose(
-            self,
-        ) -> #transposed_name #transposed_generics;
+            &self,
+        ) -> #transposed_name #transposed_generics where Self: ::std::marker::Copy;
     };
     definitions.push(definition);
     let implementation = quote! {
         fn transpose(
-            self,
-        ) -> #transposed_name #transposed_generics {
+            &self,
+        ) -> #transposed_name #transposed_generics where Self: dioxus_stores::macro_helpers::dioxus_signals::Readable<Target = #enum_name #ty_generics> + ::std::marker::Copy {
             self.selector().track_shallow();
             let read = dioxus_stores::macro_helpers::dioxus_signals::ReadableExt::peek(self.selector());
             match &*read {

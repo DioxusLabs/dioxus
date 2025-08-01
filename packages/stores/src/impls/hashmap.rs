@@ -280,8 +280,8 @@ impl<
             self.selector()
                 .hash_child(
                     key.borrow(),
-                    move |value| value.get(&key).unwrap(),
-                    move |value| value.get_mut(&key_).unwrap(),
+                    move |value: &HashMap<K, V, St>| value.get(&key).unwrap(),
+                    move |value: &mut HashMap<K, V, St>| value.get_mut(&key_).unwrap(),
                 )
                 .into()
         })

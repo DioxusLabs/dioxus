@@ -49,7 +49,7 @@ where
     O: ?Sized,
 {
     /// Create a new mapped signal.
-    pub(crate) fn new(value: V, map_fn: F, map_fn_mut: FMut) -> Self {
+    pub fn new(value: V, map_fn: F, map_fn_mut: FMut) -> Self {
         MappedMutSignal {
             value,
             map_fn,

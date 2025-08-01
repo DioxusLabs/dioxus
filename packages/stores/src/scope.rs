@@ -88,16 +88,15 @@ impl<W> SelectorScope<W> {
     /// Note the hash is lossy, so there may rarely be collisions. If a collision does occur, it may
     /// cause reruns in a part of the app that has not changed. As long as derived data is pure,
     /// this should not cause issues.
-    pub fn hash_child<U: ?Sized, F, FMut>(
+    pub fn hash_child<U: ?Sized, T, F, FMut>(
         self,
         index: impl Hash,
         map: F,
         map_mut: FMut,
     ) -> SelectorScope<MappedMutSignal<U, W, F, FMut>>
     where
-        W: Writable + 'static,
-        F: Fn(&W::Target) -> &U + 'static,
-        FMut: Fn(&mut W::Target) -> &mut U + 'static,
+        F: Fn(&T) -> &U,
+        FMut: Fn(&mut T) -> &mut U,
     {
         let hash = self.store.hash(index);
         self.child(hash, map, map_mut)
@@ -105,33 +104,31 @@ impl<W> SelectorScope<W> {
 
     /// Create a child selector scope for a specific index. The scope will only be marked as dirty when a
     /// write occurs to that index or its parents.
-    pub fn child<U: ?Sized, F, FMut>(
+    pub fn child<U: ?Sized, T, F, FMut>(
         mut self,
         index: u32,
         map: F,
         map_mut: FMut,
     ) -> SelectorScope<MappedMutSignal<U, W, F, FMut>>
     where
-        W: Writable + 'static,
-        F: Fn(&W::Target) -> &U + 'static,
-        FMut: Fn(&mut W::Target) -> &mut U + 'static,
+        F: Fn(&T) -> &U,
+        FMut: Fn(&mut T) -> &mut U,
     {
         self.path.push(index);
         self.map(map, map_mut)
     }
 
     /// Map the view into the writable data without creating a child selector scope
-    pub fn map<U: ?Sized, F, FMut>(
+    pub fn map<U: ?Sized, T, F, FMut>(
         self,
         map: F,
         map_mut: FMut,
     ) -> SelectorScope<MappedMutSignal<U, W, F, FMut>>
     where
-        W: Writable,
-        F: Fn(&W::Target) -> &U + 'static,
-        FMut: Fn(&mut W::Target) -> &mut U + 'static,
+        F: Fn(&T) -> &U,
+        FMut: Fn(&mut T) -> &mut U,
     {
-        let write = self.write.map_mut(map, map_mut);
+        let write = MappedMutSignal::new(self.write, map, map_mut);
         SelectorScope::new(self.path, self.store, write)
     }
 

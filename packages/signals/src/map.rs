@@ -38,7 +38,7 @@ where
     F: Fn(&V::Target) -> &O,
 {
     /// Create a new mapped signal.
-    pub(crate) fn new(value: V, map_fn: F) -> Self {
+    pub fn new(value: V, map_fn: F) -> Self {
         MappedSignal {
             value,
             map_fn,

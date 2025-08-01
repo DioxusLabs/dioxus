@@ -1775,6 +1775,9 @@ fn looks_like_store_type(ty: &Type) -> bool {
             path_without_generics == parse_quote!(dioxus_stores::prelude::Store)
                 || path_without_generics == parse_quote!(prelude::Store)
                 || path_without_generics == parse_quote!(Store)
+                || path_without_generics == parse_quote!(dioxus_stores::prelude::ReadStore)
+                || path_without_generics == parse_quote!(prelude::ReadStore)
+                || path_without_generics == parse_quote!(ReadStore)
         }
         None => false,
     }
