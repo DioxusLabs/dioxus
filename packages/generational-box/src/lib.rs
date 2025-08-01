@@ -159,7 +159,7 @@ impl<T, S> Clone for GenerationalBox<T, S> {
 }
 
 /// A trait for a storage backing type. (RefCell, RwLock, etc.)
-pub trait Storage<Data = ()>: AnyStorage + 'static {
+pub trait Storage<Data = ()>: AnyStorage {
     /// Try to read the value. Returns None if the value is no longer valid.
     fn try_read(pointer: GenerationalPointer<Self>) -> BorrowResult<Self::Ref<'static, Data>>;
 
@@ -193,7 +193,7 @@ pub trait Storage<Data = ()>: AnyStorage + 'static {
 }
 
 /// A trait for any storage backing type.
-pub trait AnyStorage: Default + 'static {
+pub trait AnyStorage: Default {
     /// The reference this storage type returns.
     type Ref<'a, T: ?Sized + 'a>: Deref<Target = T>;
     /// The mutable reference this storage type returns.
@@ -248,7 +248,10 @@ pub trait AnyStorage: Default + 'static {
     fn recycle(location: GenerationalPointer<Self>);
 
     /// Create a new owner. The owner will be responsible for dropping all of the generational boxes that it creates.
-    fn owner() -> Owner<Self> {
+    fn owner() -> Owner<Self>
+    where
+        Self: 'static,
+    {
         Owner(Arc::new(Mutex::new(OwnerInner {
             owned: Default::default(),
         })))
@@ -374,7 +377,7 @@ impl<S: AnyStorage> Clone for Owner<S> {
 impl<S: AnyStorage> Owner<S> {
     /// Insert a value into the store. The value will be dropped when the owner is dropped.
     #[track_caller]
-    pub fn insert<T: 'static>(&self, value: T) -> GenerationalBox<T, S>
+    pub fn insert<T>(&self, value: T) -> GenerationalBox<T, S>
     where
         S: Storage<T>,
     {
@@ -383,7 +386,7 @@ impl<S: AnyStorage> Owner<S> {
 
     /// Create a new reference counted box. The box will be dropped when all references are dropped.
     #[track_caller]
-    pub fn insert_rc<T: 'static>(&self, value: T) -> GenerationalBox<T, S>
+    pub fn insert_rc<T>(&self, value: T) -> GenerationalBox<T, S>
     where
         S: Storage<T>,
     {
@@ -391,7 +394,7 @@ impl<S: AnyStorage> Owner<S> {
     }
 
     /// Insert a value into the store with a specific location blamed for creating the value. The value will be dropped when the owner is dropped.
-    pub fn insert_rc_with_caller<T: 'static>(
+    pub fn insert_rc_with_caller<T>(
         &self,
         value: T,
         caller: &'static std::panic::Location<'static>,
@@ -408,7 +411,7 @@ impl<S: AnyStorage> Owner<S> {
     }
 
     /// Insert a value into the store with a specific location blamed for creating the value. The value will be dropped when the owner is dropped.
-    pub fn insert_with_caller<T: 'static>(
+    pub fn insert_with_caller<T>(
         &self,
         value: T,
         caller: &'static std::panic::Location<'static>,
@@ -428,7 +431,7 @@ impl<S: AnyStorage> Owner<S> {
     ///
     /// This method may return an error if the other box is no longer valid or it is already borrowed mutably.
     #[track_caller]
-    pub fn insert_reference<T: 'static>(
+    pub fn insert_reference<T>(
         &self,
         other: GenerationalBox<T, S>,
     ) -> BorrowResult<GenerationalBox<T, S>>
