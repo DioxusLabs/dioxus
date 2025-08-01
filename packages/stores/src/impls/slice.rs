@@ -1,3 +1,5 @@
+use std::iter::FusedIterator;
+
 use crate::{impls::index::IndexWrite, store::Store};
 use dioxus_signals::{Readable, ReadableExt};
 
@@ -44,7 +46,13 @@ where
     ///     println!("{}", item);
     /// }
     /// ```
-    pub fn iter(&self) -> impl Iterator<Item = Store<I, IndexWrite<usize, Lens>>> + '_
+    pub fn iter(
+        &self,
+    ) -> impl Iterator<Item = Store<I, IndexWrite<usize, Lens>>>
+           + ExactSizeIterator
+           + DoubleEndedIterator
+           + FusedIterator
+           + '_
     where
         Lens: Clone,
     {

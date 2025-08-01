@@ -1,4 +1,4 @@
-use std::{borrow::Borrow, collections::BTreeMap, hash::Hash};
+use std::{borrow::Borrow, collections::BTreeMap, hash::Hash, iter::FusedIterator};
 
 use crate::{store::Store, ReadStore};
 use dioxus_signals::{
@@ -62,7 +62,13 @@ impl<Lens: Readable<Target = BTreeMap<K, V>> + 'static, K: 'static, V: 'static>
     ///     println!("{}: {}", key, value_store.read());
     /// }
     /// ```
-    pub fn iter(&self) -> impl Iterator<Item = (K, Store<V, GetWrite<K, Lens>>)> + '_
+    pub fn iter(
+        &self,
+    ) -> impl Iterator<Item = (K, Store<V, GetWrite<K, Lens>>)>
+           + ExactSizeIterator
+           + DoubleEndedIterator
+           + FusedIterator
+           + '_
     where
         K: Hash + Ord + Clone,
         Lens: Clone,
@@ -90,7 +96,13 @@ impl<Lens: Readable<Target = BTreeMap<K, V>> + 'static, K: 'static, V: 'static>
     ///     println!("{}", value_store.read());
     /// }
     /// ```
-    pub fn values(&self) -> impl Iterator<Item = Store<V, GetWrite<K, Lens>>> + '_
+    pub fn values(
+        &self,
+    ) -> impl Iterator<Item = Store<V, GetWrite<K, Lens>>>
+           + ExactSizeIterator
+           + DoubleEndedIterator
+           + FusedIterator
+           + '_
     where
         K: Hash + Ord + Clone,
         Lens: Clone,

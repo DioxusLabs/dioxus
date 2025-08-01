@@ -2,6 +2,7 @@ use std::{
     borrow::Borrow,
     collections::HashMap,
     hash::{BuildHasher, Hash},
+    iter::FusedIterator,
 };
 
 use crate::{store::Store, ReadStore};
@@ -66,7 +67,13 @@ impl<Lens: Readable<Target = HashMap<K, V, St>> + 'static, K: 'static, V: 'stati
     ///     println!("{}: {}", key, value_store.read());
     /// }
     /// ```
-    pub fn iter(&self) -> impl Iterator<Item = (K, Store<V, GetWrite<K, Lens>>)> + '_
+    pub fn iter(
+        &self,
+    ) -> impl Iterator<Item = (K, Store<V, GetWrite<K, Lens>>)>
+           + ExactSizeIterator
+           + DoubleEndedIterator
+           + FusedIterator
+           + '_
     where
         K: Eq + Hash + Clone,
         St: BuildHasher,
@@ -95,7 +102,13 @@ impl<Lens: Readable<Target = HashMap<K, V, St>> + 'static, K: 'static, V: 'stati
     ///     println!("{}", value_store.read());
     /// }
     /// ```
-    pub fn values(&self) -> impl Iterator<Item = Store<V, GetWrite<K, Lens>>> + '_
+    pub fn values(
+        &self,
+    ) -> impl Iterator<Item = Store<V, GetWrite<K, Lens>>>
+           + ExactSizeIterator
+           + DoubleEndedIterator
+           + FusedIterator
+           + '_
     where
         K: Eq + Hash + Clone,
         St: BuildHasher,
