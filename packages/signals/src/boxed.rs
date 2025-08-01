@@ -26,8 +26,7 @@ impl<T: ?Sized + 'static> ReadSignal<T> {
 
     /// Point to another [ReadSignal]. This will subscribe the other [ReadSignal] to all subscribers of this [ReadSignal].
     pub fn point_to(&self, other: Self) -> BorrowResult
-    where
-        T: Sized,
+    
     {
         #[allow(clippy::mutable_key_type)]
         let this_subscribers = self.subscribers();
@@ -103,7 +102,7 @@ impl<T: Clone + 'static> Deref for ReadSignal<T> {
     }
 }
 
-impl<T> Readable for ReadSignal<T> {
+impl<T: ?Sized> Readable for ReadSignal<T> {
     type Target = T;
     type Storage = UnsyncStorage;
 
@@ -142,12 +141,12 @@ impl<T> Readable for ReadSignal<T> {
 // We can't implement From<impl Readable<Target = T, Storage = S> > for ReadSignal<T, S>
 // because it would conflict with the From<T> for T implementation, but we can implement it for
 // all specific readable types
-impl<T: 'static> From<Signal<T>> for ReadSignal<T> {
+impl<T:  'static> From<Signal<T>> for ReadSignal<T> {
     fn from(value: Signal<T>) -> Self {
         Self::new(value)
     }
 }
-impl<T: PartialEq + 'static> From<Memo<T>> for ReadSignal<T> {
+impl<T:  PartialEq + 'static> From<Memo<T>> for ReadSignal<T> {
     fn from(value: Memo<T>) -> Self {
         Self::new(value)
     }
@@ -184,6 +183,11 @@ where
     FMut: 'static,
 {
     fn from(value: MappedMutSignal<O, V, F, FMut>) -> Self {
+        Self::new(value)
+    }
+}
+impl<T: ?Sized +'static> From<WriteSignal<T>> for ReadSignal<T> {
+    fn from(value: WriteSignal<T>) -> Self {
         Self::new(value)
     }
 }
@@ -309,7 +313,7 @@ impl<T: Clone + 'static> Deref for WriteSignal<T> {
     }
 }
 
-impl<T> Readable for WriteSignal<T> {
+impl<T: ?Sized> Readable for WriteSignal<T> {
     type Target = T;
     type Storage = UnsyncStorage;
 
@@ -345,7 +349,7 @@ impl<T> Readable for WriteSignal<T> {
     }
 }
 
-impl<T> Writable for WriteSignal<T> {
+impl<T: ?Sized> Writable for WriteSignal<T> {
     type WriteMetadata = Box<dyn Any>;
 
     fn try_write_unchecked(

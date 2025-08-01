@@ -190,12 +190,24 @@ where
         }
     }
 }
+impl<T> ::std::convert::From<Store<T>>
+    for ReadStore<T>
+where
+    T: ?Sized + 'static,
+{
+    fn from(value: Store<T>) -> Self {
+        Self {
+            selector: value.selector.map_writer(::std::convert::Into::into),
+            _phantom: ::std::marker::PhantomData,
+        }
+    }
+}
 
 #[doc(hidden)]
 pub struct SuperIntoReadSignalMarker;
 impl<T, W> SuperInto<ReadSignal<T>, SuperIntoReadSignalMarker> for Store<T, W>
 where
-    T: 'static,
+    T: ?Sized + 'static,
     W: Readable<Target = T, Storage = UnsyncStorage> + 'static,
 {
     fn super_into(self) -> ReadSignal<T> {
@@ -207,7 +219,7 @@ where
 pub struct SuperIntoWriteSignalMarker;
 impl<T, W> SuperInto<WriteSignal<T>, SuperIntoWriteSignalMarker> for Store<T, W>
 where
-    T: 'static,
+    T: ?Sized + 'static,
     W: Writable<Target = T, Storage = UnsyncStorage> + 'static,
 {
     fn super_into(self) -> WriteSignal<T> {
