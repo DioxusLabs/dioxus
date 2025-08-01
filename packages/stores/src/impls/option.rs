@@ -43,35 +43,19 @@ impl<W: Readable<Target = Option<T>> + Copy + 'static, T: 'static> Store<Option<
     ///     None => panic!("Expected Some"),
     /// }
     /// ```
-    pub fn transpose(
-        self,
-    ) -> Option<
-        Store<
-            T,
-            MappedMutSignal<
-                T,
-                W,
-                impl Fn(&Option<T>) -> &T + Copy + 'static,
-                impl Fn(&mut Option<T>) -> &mut T + Copy + 'static,
-            >,
-        >,
-    > {
+    pub fn transpose(self) -> Option<Store<T, MappedMutSignal<T, W>>> {
         self.is_some().then(|| {
-            self.selector()
-                .child(
-                    0,
-                    move |value: &Option<T>| {
-                        value.as_ref().unwrap_or_else(|| {
-                            panic!("Tried to access `Some` on an Option value");
-                        })
-                    },
-                    move |value: &mut Option<T>| {
-                        value.as_mut().unwrap_or_else(|| {
-                            panic!("Tried to access `Some` on an Option value");
-                        })
-                    },
-                )
-                .into()
+            let map: fn(&Option<T>) -> &T = |value| {
+                value.as_ref().unwrap_or_else(|| {
+                    panic!("Tried to access `Some` on an Option value");
+                })
+            };
+            let map_mut: fn(&mut Option<T>) -> &mut T = |value| {
+                value.as_mut().unwrap_or_else(|| {
+                    panic!("Tried to access `Some` on an Option value");
+                })
+            };
+            self.selector().child(0, map, map_mut).into()
         })
     }
 

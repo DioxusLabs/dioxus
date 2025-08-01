@@ -48,36 +48,19 @@ where
     ///     None => panic!("Expected Ok"),
     /// }
     /// ```
-    pub fn ok(
-        self,
-    ) -> Option<
-        Store<
-            T,
-            MappedMutSignal<
-                T,
-                W,
-                impl Fn(&Result<T, E>) -> &T + Copy + 'static,
-                impl Fn(&mut Result<T, E>) -> &mut T + Copy + 'static,
-            >,
-        >,
-    > {
-        self.is_ok().then(|| {
-            self.selector()
-                .child(
-                    0,
-                    move |value: &Result<T, E>| {
-                        value.as_ref().unwrap_or_else(|_| {
-                            panic!("Tried to access `ok` on an Err value");
-                        })
-                    },
-                    move |value: &mut Result<T, E>| {
-                        value.as_mut().unwrap_or_else(|_| {
-                            panic!("Tried to access `ok` on an Err value");
-                        })
-                    },
-                )
-                .into()
-        })
+    pub fn ok(self) -> Option<Store<T, MappedMutSignal<T, W>>> {
+        let map: fn(&Result<T, E>) -> &T = |value| {
+            value.as_ref().unwrap_or_else(|_| {
+                panic!("Tried to access `ok` on an Err value");
+            })
+        };
+        let map_mut: fn(&mut Result<T, E>) -> &mut T = |value| {
+            value.as_mut().unwrap_or_else(|_| {
+                panic!("Tried to access `ok` on an Err value");
+            })
+        };
+        self.is_ok()
+            .then(|| self.selector().child(0, map, map_mut).into())
     }
 
     /// Converts `Store<Result<T, E>>` into `Option<Store<E>>`, discarding the success if present. This will
@@ -93,36 +76,20 @@ where
     ///     None => panic!("Expected Err"),
     /// }
     /// ```
-    pub fn err(
-        self,
-    ) -> Option<
-        Store<
-            E,
-            MappedMutSignal<
-                E,
-                W,
-                impl Fn(&Result<T, E>) -> &E + Copy + 'static,
-                impl Fn(&mut Result<T, E>) -> &mut E + Copy + 'static,
-            >,
-        >,
-    >
+    pub fn err(self) -> Option<Store<E, MappedMutSignal<E, W>>>
     where
         W: Writable<Target = Result<T, E>> + Copy + 'static,
     {
         self.is_err().then(|| {
-            self.selector()
-                .child(
-                    1,
-                    move |value: &Result<T, E>| match value {
-                        Ok(_) => panic!("Tried to access `err` on an Ok value"),
-                        Err(e) => e,
-                    },
-                    move |value: &mut Result<T, E>| match value {
-                        Ok(_) => panic!("Tried to access `err` on an Ok value"),
-                        Err(e) => e,
-                    },
-                )
-                .into()
+            let map: fn(&Result<T, E>) -> &E = |value| match value {
+                Ok(_) => panic!("Tried to access `err` on an Ok value"),
+                Err(e) => e,
+            };
+            let map_mut: fn(&mut Result<T, E>) -> &mut E = |value| match value {
+                Ok(_) => panic!("Tried to access `err` on an Ok value"),
+                Err(e) => e,
+            };
+            self.selector().child(1, map, map_mut).into()
         })
     }
 
@@ -142,61 +109,30 @@ where
     #[allow(clippy::result_large_err)]
     pub fn transpose(
         self,
-    ) -> Result<
-        Store<
-            T,
-            MappedMutSignal<
-                T,
-                W,
-                impl Fn(&Result<T, E>) -> &T + Copy + 'static,
-                impl Fn(&mut Result<T, E>) -> &mut T + Copy + 'static,
-            >,
-        >,
-        Store<
-            E,
-            MappedMutSignal<
-                E,
-                W,
-                impl Fn(&Result<T, E>) -> &E + Copy + 'static,
-                impl Fn(&mut Result<T, E>) -> &mut E + Copy + 'static,
-            >,
-        >,
-    >
+    ) -> Result<Store<T, MappedMutSignal<T, W>>, Store<E, MappedMutSignal<E, W>>>
     where
         W: Writable<Target = Result<T, E>> + Copy + 'static,
     {
         if self.is_ok() {
-            Ok(self
-                .selector()
-                .child(
-                    0,
-                    move |value: &Result<T, E>| {
-                        value.as_ref().unwrap_or_else(|_| {
-                            panic!("Tried to access `ok` on an Err value");
-                        })
-                    },
-                    move |value: &mut Result<T, E>| {
-                        value.as_mut().unwrap_or_else(|_| {
-                            panic!("Tried to access `ok` on an Err value");
-                        })
-                    },
-                )
-                .into())
+            let map: fn(&Result<T, E>) -> &T = |value| match value {
+                Ok(t) => t,
+                Err(_) => panic!("Tried to access `ok` on an Err value"),
+            };
+            let map_mut: fn(&mut Result<T, E>) -> &mut T = |value| match value {
+                Ok(t) => t,
+                Err(_) => panic!("Tried to access `ok` on an Err value"),
+            };
+            Ok(self.selector().child(0, map, map_mut).into())
         } else {
-            Err(self
-                .selector()
-                .child(
-                    1,
-                    move |value: &Result<T, E>| match value {
-                        Ok(_) => panic!("Tried to access `err` on an Ok value"),
-                        Err(e) => e,
-                    },
-                    move |value: &mut Result<T, E>| match value {
-                        Ok(_) => panic!("Tried to access `err` on an Ok value"),
-                        Err(e) => e,
-                    },
-                )
-                .into())
+            let map: fn(&Result<T, E>) -> &E = |value| match value {
+                Ok(_) => panic!("Tried to access `err` on an Ok value"),
+                Err(e) => e,
+            };
+            let map_mut: fn(&mut Result<T, E>) -> &mut E = |value| match value {
+                Ok(_) => panic!("Tried to access `err` on an Ok value"),
+                Err(e) => e,
+            };
+            Err(self.selector().child(1, map, map_mut).into())
         }
     }
 }
