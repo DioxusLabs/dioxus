@@ -63,9 +63,9 @@ fn Home() -> Element {
     }
 }
 
-// Instead of accepting String and usize directly, we use ReadOnlySignal to make the parameters `Copy` and let us subscribe to them automatically inside the meme
+// Instead of accepting String and usize directly, we use ReadSignal to make the parameters `Copy` and let us subscribe to them automatically inside the meme
 #[component]
-fn Search(query: ReadOnlySignal<String>, word_count: ReadOnlySignal<usize>) -> Element {
+fn Search(query: ReadSignal<String>, word_count: ReadSignal<usize>) -> Element {
     const ITEMS: &[&str] = &[
         "hello",
         "world",

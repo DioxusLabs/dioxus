@@ -164,14 +164,9 @@ impl DioxusDocument {
         let new_elem_id = mutr.create_element(qual_name(name, None), attributes);
         mutr.append_children(self.head_element_id, &[new_elem_id]);
         if let Some(contents) = contents {
-            mutr.append_text_to_node(new_elem_id, contents).unwrap();
+            let text_node_id = mutr.create_text_node(contents);
+            mutr.append_children(new_elem_id, &[text_node_id]);
         }
-
-        // TODO: set title (we may also wish to have this built-in to the document?)
-        // if name == "title" {
-        //     let title = mutr.doc.nodes[new_elem_id].text_content();
-        //
-        // }
     }
 }
 

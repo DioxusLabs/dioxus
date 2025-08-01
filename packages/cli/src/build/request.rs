@@ -323,7 +323,7 @@ use crate::{
 use anyhow::{bail, Context};
 use cargo_metadata::diagnostic::Diagnostic;
 use depinfo::RustcDepInfo;
-use dioxus_cli_config::format_base_path_meta_element;
+use dioxus_cli_config::{format_base_path_meta_element, PRODUCT_NAME_ENV};
 use dioxus_cli_config::{APP_TITLE_ENV, ASSET_ROOT_ENV};
 use dioxus_cli_opt::{process_file_to, AssetManifest};
 use itertools::Itertools;
@@ -1874,7 +1874,7 @@ impl BuildRequest {
             // but is necessary for some linkers to work properly.
             // We ignore its error in case it doesn't recognize the architecture
             if self.linker_flavor() == LinkerFlavor::Darwin {
-                if let Some(ranlib) = self.select_ranlib() {
+                if let Some(ranlib) = Workspace::select_ranlib() {
                     _ = Command::new(ranlib).arg(&out_ar_path).output().await;
                 }
             }
@@ -2423,6 +2423,7 @@ impl BuildRequest {
                 env_vars.push((ASSET_ROOT_ENV.into(), base_path.to_string()));
             }
             env_vars.push((APP_TITLE_ENV.into(), self.config.web.app.title.clone()));
+            env_vars.push((PRODUCT_NAME_ENV.into(), self.bundled_app_name()));
         }
 
         // Assemble the rustflags by peering into the `.cargo/config.toml` file
@@ -4605,13 +4606,6 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         };
 
         Ok(())
-    }
-
-    fn select_ranlib(&self) -> Option<PathBuf> {
-        // prefer the modern llvm-ranlib if they have it
-        which::which("llvm-ranlib")
-            .or_else(|_| which::which("ranlib"))
-            .ok()
     }
 
     /// Assemble a series of `--config key=value` arguments for the build command.

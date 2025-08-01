@@ -18,7 +18,7 @@ pub(crate) struct SelfUpdate {
     pub version: Option<String>,
 
     /// Install the update.
-    #[clap(long, default_value = "true")]
+    #[clap(long, default_value = "true", num_args = 0..=1)]
     pub install: bool,
 
     /// List available versions.

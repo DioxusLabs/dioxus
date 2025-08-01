@@ -96,7 +96,7 @@ pub(crate) struct TargetArgs {
     pub(crate) skip_assets: bool,
 
     /// Inject scripts to load the wasm and js files for your dioxus app if they are not already present [default: true]
-    #[clap(long, default_value_t = true, help_heading = HELP_HEADING)]
+    #[clap(long, default_value_t = true, help_heading = HELP_HEADING, num_args = 0..=1)]
     pub(crate) inject_loading_scripts: bool,
 
     /// Experimental: Bundle split the wasm binary into multiple chunks based on `#[wasm_split]` annotations [default: false]
@@ -107,7 +107,7 @@ pub(crate) struct TargetArgs {
     ///
     /// This will make the binary larger and take longer to compile, but will allow you to debug the
     /// wasm binary
-    #[clap(long, default_value_t = true, help_heading = HELP_HEADING)]
+    #[clap(long, default_value_t = true, help_heading = HELP_HEADING, num_args = 0..=1)]
     pub(crate) debug_symbols: bool,
 
     /// Are we building for a device or just the simulator.

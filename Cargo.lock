@@ -2790,9 +2790,9 @@ dependencies = [
 
 [[package]]
 name = "blitz-dom"
-version = "0.1.0-rc.1"
+version = "0.1.0-rc.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5b715adfa6d85cad5da636aac5785d40e26dcf3f4195403fe8c46be501b77d72"
+checksum = "145a503f45b2284a75ca1e715dbbef4d1ccf1eeace85330e29a2ae12a01d1263"
 dependencies = [
  "accesskit 0.17.1",
  "app_units",
@@ -2802,6 +2802,7 @@ dependencies = [
  "color",
  "cursor-icon",
  "euclid",
+ "fastrand",
  "html-escape",
  "image",
  "keyboard-types",
@@ -2827,9 +2828,9 @@ dependencies = [
 
 [[package]]
 name = "blitz-net"
-version = "0.1.0-rc.1"
+version = "0.1.0-rc.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a4b0b681ed5c32d0c3dafc2288cf10b9aa46e08de1a58350e5842d4d761c33ae"
+checksum = "e2a5ebc8993e3985097716262d4d496c18d3324727109e3c865071776dfe38b1"
 dependencies = [
  "blitz-traits",
  "data-url 0.3.1",
@@ -2839,9 +2840,9 @@ dependencies = [
 
 [[package]]
 name = "blitz-paint"
-version = "0.1.0-rc.1"
+version = "0.1.0-rc.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b6b26d3c0645d2b502ec7b3984354b3c42a2af7e4bde92ed5d189ac160e4e1f5"
+checksum = "9d62c7953382622298402412535db1796aaa83c71600bfc77fa7627a39aa722d"
 dependencies = [
  "anyrender",
  "anyrender_svg",
@@ -2860,9 +2861,9 @@ dependencies = [
 
 [[package]]
 name = "blitz-shell"
-version = "0.1.0-rc.1"
+version = "0.1.0-rc.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cc0706c841eb5df72be68f0f0e56b9b0e6f4fab6e918c995a4c50cbd6ec127ff"
+checksum = "347af5abefe16205d61a49101aeedeb9b4dafe4bb0c64858b267e448cfa0a471"
 dependencies = [
  "accesskit 0.17.1",
  "accesskit_winit 0.23.1",
@@ -2879,15 +2880,16 @@ dependencies = [
 
 [[package]]
 name = "blitz-traits"
-version = "0.1.0-rc.1"
+version = "0.1.0-rc.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f559ae4a8b1c7dafc09df5e1249f8a27c6b9a20658a15041128d202334e8e2c2"
+checksum = "4cb0235930120526087ce9d69fa2d6828e3fb078c61dde43231acec7968376bf"
 dependencies = [
  "bitflags 2.9.1",
  "bytes",
  "cursor-icon",
  "http 1.3.1",
  "keyboard-types",
+ "serde",
  "smol_str",
  "url",
 ]
@@ -15401,9 +15403,9 @@ checksum = "500f379645e8a87fd03fe88607a5edcb0d8e4e423baa74ba52db198a06a0c261"
 
 [[package]]
 name = "stylo_taffy"
-version = "0.1.0-rc.1"
+version = "0.1.0-rc.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "94014fa36fdc4698a0b36179385d70810b6f0825b90c1df52de2aa5ee670328a"
+checksum = "dce8876a33e0f3b16916b2b4da1cdbb64b9985d5ae61033d23024d95e45569ac"
 dependencies = [
  "stylo",
  "taffy 0.8.3",

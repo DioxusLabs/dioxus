@@ -1,4 +1,4 @@
-use dioxus_core::ScopeId;
+use dioxus_core::{ScopeId, Subscribers};
 use generational_box::BorrowResult;
 use std::{any::Any, cell::RefCell, collections::HashMap, ops::Deref, panic::Location, rc::Rc};
 
@@ -8,7 +8,7 @@ pub use memo::*;
 mod signal;
 pub use signal::*;
 
-use crate::{Readable, ReadableRef, Signal, Writable, WritableRef};
+use crate::{Readable, ReadableExt, ReadableRef, Signal, Writable, WritableExt, WritableRef};
 
 /// A trait for an item that can be constructed from an initialization function
 pub trait InitializeFromFunction<T> {
@@ -39,7 +39,7 @@ where
     type Target = dyn Fn() -> R;
 
     fn deref(&self) -> &Self::Target {
-        unsafe { Readable::deref_impl(self) }
+        unsafe { ReadableExt::deref_impl(self) }
     }
 }
 
@@ -61,37 +61,17 @@ where
     fn try_peek_unchecked(&self) -> BorrowResult<ReadableRef<'static, Self>> {
         self.resolve().try_peek_unchecked()
     }
+
+    fn subscribers(&self) -> Option<Subscribers> {
+        self.resolve().subscribers()
+    }
 }
 
 impl<T: Clone + 'static, R: 'static> Writable for Global<T, R>
 where
     T: Writable<Target = R> + InitializeFromFunction<R>,
 {
-    type Mut<'a, Read: ?Sized + 'static> = T::Mut<'a, Read>;
-
-    fn map_mut<I: ?Sized, U: ?Sized + 'static, F: FnOnce(&mut I) -> &mut U>(
-        ref_: Self::Mut<'_, I>,
-        f: F,
-    ) -> Self::Mut<'_, U> {
-        T::map_mut(ref_, f)
-    }
-
-    fn try_map_mut<
-        I: ?Sized + 'static,
-        U: ?Sized + 'static,
-        F: FnOnce(&mut I) -> Option<&mut U>,
-    >(
-        ref_: Self::Mut<'_, I>,
-        f: F,
-    ) -> Option<Self::Mut<'_, U>> {
-        T::try_map_mut(ref_, f)
-    }
-
-    fn downcast_lifetime_mut<'a: 'b, 'b, Read: ?Sized + 'static>(
-        mut_: Self::Mut<'a, Read>,
-    ) -> Self::Mut<'b, Read> {
-        T::downcast_lifetime_mut(mut_)
-    }
+    type WriteMetadata = T::WriteMetadata;
 
     #[track_caller]
     fn try_write_unchecked(
@@ -106,7 +86,7 @@ where
     T: Writable<Target = R> + InitializeFromFunction<R>,
 {
     /// Write this value
-    pub fn write(&self) -> T::Mut<'static, R> {
+    pub fn write(&self) -> WritableRef<'static, T, R> {
         self.resolve().try_write_unchecked().unwrap()
     }
 

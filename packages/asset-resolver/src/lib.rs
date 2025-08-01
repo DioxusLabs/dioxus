@@ -80,7 +80,7 @@ pub fn serve_asset(path: &str) -> Result<Response<Vec<u8>>, AssetServeError> {
 /// - [x] Windows
 /// - [x] Linux (appimage)
 /// - [ ] Linux (rpm)
-/// - [ ] Linux (deb)
+/// - [x] Linux (deb)
 /// - [ ] Android
 #[allow(unreachable_code)]
 fn get_asset_root() -> PathBuf {
@@ -94,6 +94,25 @@ fn get_asset_root() -> PathBuf {
             .parent()
             .unwrap()
             .join("Resources");
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        // In linux bundles, the assets are placed in the lib/$product_name directory
+        // bin/
+        //   main
+        // lib/
+        //   $product_name/
+        //     assets/
+        if let Some(product_name) = dioxus_cli_config::product_name() {
+            let lib_asset_path = || {
+                let path = cur_exe.parent()?.parent()?.join("lib").join(product_name);
+                path.exists().then_some(path)
+            };
+            if let Some(asset_dir) = lib_asset_path() {
+                return asset_dir;
+            }
+        }
     }
 
     // For all others, the structure looks like this:
