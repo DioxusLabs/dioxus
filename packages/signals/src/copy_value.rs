@@ -3,7 +3,9 @@
 
 use dioxus_core::Subscribers;
 use dioxus_core::{current_owner, current_scope_id, ScopeId};
-use generational_box::{BorrowResult, GenerationalBox, GenerationalBoxId, Storage, UnsyncStorage};
+use generational_box::{
+    AnyStorage, BorrowResult, GenerationalBox, GenerationalBoxId, Storage, UnsyncStorage,
+};
 use std::ops::Deref;
 
 use crate::read_impls;
@@ -18,15 +20,15 @@ use crate::{default_impl, write_impls, WritableExt};
 /// CopyValue is a wrapper around a value to make the value mutable and Copy.
 ///
 /// It is internally backed by [`generational_box::GenerationalBox`].
-pub struct CopyValue<T: 'static, S: Storage<T> = UnsyncStorage> {
+pub struct CopyValue<T, S: 'static = UnsyncStorage> {
     pub(crate) value: GenerationalBox<T, S>,
     pub(crate) origin_scope: ScopeId,
 }
 
 #[cfg(feature = "serialize")]
-impl<T: 'static, Store: Storage<T>> serde::Serialize for CopyValue<T, Store>
+impl<T, Store: Storage<T>> serde::Serialize for CopyValue<T, Store>
 where
-    T: serde::Serialize,
+    T: serde::Serialize + 'static,
 {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         self.value.read().serialize(serializer)
@@ -34,9 +36,9 @@ where
 }
 
 #[cfg(feature = "serialize")]
-impl<'de, T: 'static, Store: Storage<T>> serde::Deserialize<'de> for CopyValue<T, Store>
+impl<'de, T, Store: Storage<T>> serde::Deserialize<'de> for CopyValue<T, Store>
 where
-    T: serde::Deserialize<'de>,
+    T: serde::Deserialize<'de> + 'static,
 {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let value = T::deserialize(deserializer)?;
@@ -61,17 +63,23 @@ impl<T: 'static> CopyValue<T> {
     }
 }
 
-impl<T: 'static, S: Storage<T>> CopyValue<T, S> {
+impl<T, S: Storage<T>> CopyValue<T, S> {
     /// Create a new CopyValue. The value will be stored in the current component.
     ///
     /// Once the component this value is created in is dropped, the value will be dropped.
     #[track_caller]
-    pub fn new_maybe_sync(value: T) -> Self {
+    pub fn new_maybe_sync(value: T) -> Self
+    where
+        T: 'static,
+    {
         Self::new_with_caller(value, std::panic::Location::caller())
     }
 
     /// Create a new CopyValue without an owner. This will leak memory if you don't manually drop it.
-    pub fn leak_with_caller(value: T, caller: &'static std::panic::Location<'static>) -> Self {
+    pub fn leak_with_caller(value: T, caller: &'static std::panic::Location<'static>) -> Self
+    where
+        T: 'static,
+    {
         Self {
             value: GenerationalBox::leak(value, caller),
             origin_scope: current_scope_id().expect("in a virtual dom"),
@@ -117,7 +125,10 @@ impl<T: 'static, S: Storage<T>> CopyValue<T, S> {
     }
 
     /// Manually drop the value in the CopyValue, invalidating the value in the process.
-    pub fn manually_drop(&self) {
+    pub fn manually_drop(&self)
+    where
+        T: 'static,
+    {
         self.value.manually_drop()
     }
 
@@ -137,7 +148,7 @@ impl<T: 'static, S: Storage<T>> CopyValue<T, S> {
     }
 }
 
-impl<T: 'static, S: Storage<T>> Readable for CopyValue<T, S> {
+impl<T, S: Storage<T>> Readable for CopyValue<T, S> {
     type Target = T;
     type Storage = S;
 
@@ -160,7 +171,7 @@ impl<T: 'static, S: Storage<T>> Readable for CopyValue<T, S> {
     }
 }
 
-impl<T: 'static, S: Storage<T>> Writable for CopyValue<T, S> {
+impl<T, S: Storage<T>> Writable for CopyValue<T, S> {
     type WriteMetadata = ();
 
     #[track_caller]
@@ -172,14 +183,14 @@ impl<T: 'static, S: Storage<T>> Writable for CopyValue<T, S> {
     }
 }
 
-impl<T: 'static, S: Storage<T>> PartialEq for CopyValue<T, S> {
+impl<T, S: AnyStorage> PartialEq for CopyValue<T, S> {
     fn eq(&self, other: &Self) -> bool {
         self.value.ptr_eq(&other.value)
     }
 }
-impl<T: 'static, S: Storage<T>> Eq for CopyValue<T, S> {}
+impl<T, S: AnyStorage> Eq for CopyValue<T, S> {}
 
-impl<T: Copy, S: Storage<T>> Deref for CopyValue<T, S> {
+impl<T: Copy + 'static, S: Storage<T>> Deref for CopyValue<T, S> {
     type Target = dyn Fn() -> T;
 
     fn deref(&self) -> &Self::Target {
@@ -187,13 +198,13 @@ impl<T: Copy, S: Storage<T>> Deref for CopyValue<T, S> {
     }
 }
 
-impl<T, S: Storage<T>> Clone for CopyValue<T, S> {
+impl<T, S> Clone for CopyValue<T, S> {
     fn clone(&self) -> Self {
         *self
     }
 }
 
-impl<T, S: Storage<T>> Copy for CopyValue<T, S> {}
+impl<T, S> Copy for CopyValue<T, S> {}
 
 read_impls!(CopyValue<T, S: Storage<T>>);
 default_impl!(CopyValue<T, S: Storage<T>>);

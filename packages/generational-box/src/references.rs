@@ -84,7 +84,7 @@ pub struct GenerationalRef<R> {
     guard: GenerationalRefBorrowGuard,
 }
 
-impl<T: ?Sized + 'static, R: Deref<Target = T>> GenerationalRef<R> {
+impl<T: ?Sized, R: Deref<Target = T>> GenerationalRef<R> {
     pub(crate) fn new(inner: R, guard: GenerationalRefBorrowGuard) -> Self {
         Self { inner, guard }
     }
@@ -118,7 +118,7 @@ impl<T: ?Sized + Display, R: Deref<Target = T>> Display for GenerationalRef<R> {
     }
 }
 
-impl<T: ?Sized + 'static, R: Deref<Target = T>> Deref for GenerationalRef<R> {
+impl<T: ?Sized, R: Deref<Target = T>> Deref for GenerationalRef<R> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -218,7 +218,7 @@ pub struct GenerationalRefMut<W> {
     pub(crate) borrow: GenerationalRefBorrowMutGuard,
 }
 
-impl<T: ?Sized + 'static, R: DerefMut<Target = T>> GenerationalRefMut<R> {
+impl<T: ?Sized, R: DerefMut<Target = T>> GenerationalRefMut<R> {
     pub(crate) fn new(inner: R, borrow: GenerationalRefBorrowMutGuard) -> Self {
         Self { inner, borrow }
     }

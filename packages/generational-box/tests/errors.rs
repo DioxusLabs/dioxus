@@ -35,7 +35,7 @@ fn create_at_location<S: Storage<i32>>(
 
 #[test]
 fn read_while_writing_error() {
-    fn read_while_writing_error_test<S: Storage<i32>>() {
+    fn read_while_writing_error_test<S: Storage<i32> + 'static>() {
         let owner = S::owner();
         let value = owner.insert(1);
 
@@ -56,7 +56,7 @@ fn read_while_writing_error() {
 
 #[test]
 fn read_after_dropped_error() {
-    fn read_after_dropped_error_test<S: Storage<i32>>() {
+    fn read_after_dropped_error_test<S: Storage<i32> + 'static>() {
         let owner = S::owner();
         let (value, location) = create_at_location(&owner);
         drop(owner);
@@ -72,7 +72,7 @@ fn read_after_dropped_error() {
 
 #[test]
 fn write_while_writing_error() {
-    fn write_while_writing_error_test<S: Storage<i32>>() {
+    fn write_while_writing_error_test<S: Storage<i32> + 'static>() {
         let owner = S::owner();
         let value = owner.insert(1);
 
@@ -98,7 +98,7 @@ fn write_while_writing_error() {
 
 #[test]
 fn write_while_reading_error() {
-    fn write_while_reading_error_test<S: Storage<i32>>() {
+    fn write_while_reading_error_test<S: Storage<i32> + 'static>() {
         let owner = S::owner();
         let value = owner.insert(1);
 

@@ -117,22 +117,12 @@ impl<T, S: Storage<T>> GenerationalBox<T, S> {
         *self.write() = value;
     }
 
-    /// Returns true if the pointer is equal to the other pointer.
-    pub fn ptr_eq(&self, other: &Self) -> bool {
-        self.raw == other.raw
-    }
-
     /// Drop the value out of the generational box and invalidate the generational box.
     pub fn manually_drop(&self)
     where
         T: 'static,
     {
         self.raw.recycle();
-    }
-
-    /// Try to get the location the generational box was created at. In release mode this will always return None.
-    pub fn created_at(&self) -> Option<&'static std::panic::Location<'static>> {
-        self.raw.location.created_at()
     }
 
     /// Get a reference to the value
@@ -150,6 +140,21 @@ impl<T, S: Storage<T>> GenerationalBox<T, S> {
     }
 }
 
+impl<T, S> GenerationalBox<T, S> {
+    /// Returns true if the pointer is equal to the other pointer.
+    pub fn ptr_eq(&self, other: &Self) -> bool
+    where
+        S: AnyStorage,
+    {
+        self.raw == other.raw
+    }
+
+    /// Try to get the location the generational box was created at. In release mode this will always return None.
+    pub fn created_at(&self) -> Option<&'static std::panic::Location<'static>> {
+        self.raw.location.created_at()
+    }
+}
+
 impl<T, S> Copy for GenerationalBox<T, S> {}
 
 impl<T, S> Clone for GenerationalBox<T, S> {
@@ -159,7 +164,7 @@ impl<T, S> Clone for GenerationalBox<T, S> {
 }
 
 /// A trait for a storage backing type. (RefCell, RwLock, etc.)
-pub trait Storage<Data = ()>: AnyStorage + 'static {
+pub trait Storage<Data = ()>: AnyStorage {
     /// Try to read the value. Returns None if the value is no longer valid.
     fn try_read(pointer: GenerationalPointer<Self>) -> BorrowResult<Self::Ref<'static, Data>>;
 
@@ -193,34 +198,34 @@ pub trait Storage<Data = ()>: AnyStorage + 'static {
 }
 
 /// A trait for any storage backing type.
-pub trait AnyStorage: Default + 'static {
+pub trait AnyStorage: Default {
     /// The reference this storage type returns.
-    type Ref<'a, T: ?Sized + 'static>: Deref<Target = T>;
+    type Ref<'a, T: ?Sized + 'a>: Deref<Target = T>;
     /// The mutable reference this storage type returns.
-    type Mut<'a, T: ?Sized + 'static>: DerefMut<Target = T>;
+    type Mut<'a, T: ?Sized + 'a>: DerefMut<Target = T>;
 
     /// Downcast a reference in a Ref to a more specific lifetime
     ///
     /// This function enforces the variance of the lifetime parameter `'a` in Ref. Rust will typically infer this cast with a concrete type, but it cannot with a generic type.
-    fn downcast_lifetime_ref<'a: 'b, 'b, T: ?Sized + 'static>(
+    fn downcast_lifetime_ref<'a: 'b, 'b, T: ?Sized + 'a>(
         ref_: Self::Ref<'a, T>,
     ) -> Self::Ref<'b, T>;
 
     /// Downcast a mutable reference in a RefMut to a more specific lifetime
     ///
     /// This function enforces the variance of the lifetime parameter `'a` in Mut.  Rust will typically infer this cast with a concrete type, but it cannot with a generic type.
-    fn downcast_lifetime_mut<'a: 'b, 'b, T: ?Sized + 'static>(
+    fn downcast_lifetime_mut<'a: 'b, 'b, T: ?Sized + 'a>(
         mut_: Self::Mut<'a, T>,
     ) -> Self::Mut<'b, T>;
 
     /// Try to map the mutable ref.
-    fn try_map_mut<T: ?Sized + 'static, U: ?Sized + 'static>(
+    fn try_map_mut<T: ?Sized, U: ?Sized>(
         mut_ref: Self::Mut<'_, T>,
         f: impl FnOnce(&mut T) -> Option<&mut U>,
     ) -> Option<Self::Mut<'_, U>>;
 
     /// Map the mutable ref.
-    fn map_mut<T: ?Sized + 'static, U: ?Sized + 'static>(
+    fn map_mut<T: ?Sized, U: ?Sized>(
         mut_ref: Self::Mut<'_, T>,
         f: impl FnOnce(&mut T) -> &mut U,
     ) -> Self::Mut<'_, U> {
@@ -228,13 +233,13 @@ pub trait AnyStorage: Default + 'static {
     }
 
     /// Try to map the ref.
-    fn try_map<T: ?Sized, U: ?Sized + 'static>(
+    fn try_map<T: ?Sized, U: ?Sized>(
         ref_: Self::Ref<'_, T>,
         f: impl FnOnce(&T) -> Option<&U>,
     ) -> Option<Self::Ref<'_, U>>;
 
     /// Map the ref.
-    fn map<T: ?Sized, U: ?Sized + 'static>(
+    fn map<T: ?Sized, U: ?Sized>(
         ref_: Self::Ref<'_, T>,
         f: impl FnOnce(&T) -> &U,
     ) -> Self::Ref<'_, U> {
@@ -248,7 +253,10 @@ pub trait AnyStorage: Default + 'static {
     fn recycle(location: GenerationalPointer<Self>);
 
     /// Create a new owner. The owner will be responsible for dropping all of the generational boxes that it creates.
-    fn owner() -> Owner<Self> {
+    fn owner() -> Owner<Self>
+    where
+        Self: 'static,
+    {
         Owner(Arc::new(Mutex::new(OwnerInner {
             owned: Default::default(),
         })))
@@ -374,7 +382,7 @@ impl<S: AnyStorage> Clone for Owner<S> {
 impl<S: AnyStorage> Owner<S> {
     /// Insert a value into the store. The value will be dropped when the owner is dropped.
     #[track_caller]
-    pub fn insert<T: 'static>(&self, value: T) -> GenerationalBox<T, S>
+    pub fn insert<T>(&self, value: T) -> GenerationalBox<T, S>
     where
         S: Storage<T>,
     {
@@ -383,7 +391,7 @@ impl<S: AnyStorage> Owner<S> {
 
     /// Create a new reference counted box. The box will be dropped when all references are dropped.
     #[track_caller]
-    pub fn insert_rc<T: 'static>(&self, value: T) -> GenerationalBox<T, S>
+    pub fn insert_rc<T>(&self, value: T) -> GenerationalBox<T, S>
     where
         S: Storage<T>,
     {
@@ -391,7 +399,7 @@ impl<S: AnyStorage> Owner<S> {
     }
 
     /// Insert a value into the store with a specific location blamed for creating the value. The value will be dropped when the owner is dropped.
-    pub fn insert_rc_with_caller<T: 'static>(
+    pub fn insert_rc_with_caller<T>(
         &self,
         value: T,
         caller: &'static std::panic::Location<'static>,
@@ -408,7 +416,7 @@ impl<S: AnyStorage> Owner<S> {
     }
 
     /// Insert a value into the store with a specific location blamed for creating the value. The value will be dropped when the owner is dropped.
-    pub fn insert_with_caller<T: 'static>(
+    pub fn insert_with_caller<T>(
         &self,
         value: T,
         caller: &'static std::panic::Location<'static>,
@@ -428,7 +436,7 @@ impl<S: AnyStorage> Owner<S> {
     ///
     /// This method may return an error if the other box is no longer valid or it is already borrowed mutably.
     #[track_caller]
-    pub fn insert_reference<T: 'static>(
+    pub fn insert_reference<T>(
         &self,
         other: GenerationalBox<T, S>,
     ) -> BorrowResult<GenerationalBox<T, S>>

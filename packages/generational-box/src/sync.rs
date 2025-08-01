@@ -178,43 +178,43 @@ fn sync_runtime() -> &'static Arc<Mutex<Vec<&'static SyncStorage>>> {
 }
 
 impl AnyStorage for SyncStorage {
-    type Ref<'a, R: ?Sized + 'static> = GenerationalRef<MappedRwLockReadGuard<'a, R>>;
-    type Mut<'a, W: ?Sized + 'static> = GenerationalRefMut<MappedRwLockWriteGuard<'a, W>>;
+    type Ref<'a, R: ?Sized + 'a> = GenerationalRef<MappedRwLockReadGuard<'a, R>>;
+    type Mut<'a, W: ?Sized + 'a> = GenerationalRefMut<MappedRwLockWriteGuard<'a, W>>;
 
-    fn downcast_lifetime_ref<'a: 'b, 'b, T: ?Sized + 'static>(
+    fn downcast_lifetime_ref<'a: 'b, 'b, T: ?Sized + 'b>(
         ref_: Self::Ref<'a, T>,
     ) -> Self::Ref<'b, T> {
         ref_
     }
 
-    fn downcast_lifetime_mut<'a: 'b, 'b, T: ?Sized + 'static>(
+    fn downcast_lifetime_mut<'a: 'b, 'b, T: ?Sized + 'a>(
         mut_: Self::Mut<'a, T>,
     ) -> Self::Mut<'b, T> {
         mut_
     }
 
-    fn map<T: ?Sized + 'static, U: ?Sized + 'static>(
+    fn map<T: ?Sized, U: ?Sized>(
         ref_: Self::Ref<'_, T>,
         f: impl FnOnce(&T) -> &U,
     ) -> Self::Ref<'_, U> {
         ref_.map(|inner| MappedRwLockReadGuard::map(inner, f))
     }
 
-    fn map_mut<T: ?Sized + 'static, U: ?Sized + 'static>(
+    fn map_mut<T: ?Sized, U: ?Sized>(
         mut_ref: Self::Mut<'_, T>,
         f: impl FnOnce(&mut T) -> &mut U,
     ) -> Self::Mut<'_, U> {
         mut_ref.map(|inner| MappedRwLockWriteGuard::map(inner, f))
     }
 
-    fn try_map<I: ?Sized + 'static, U: ?Sized + 'static>(
+    fn try_map<I: ?Sized, U: ?Sized>(
         ref_: Self::Ref<'_, I>,
         f: impl FnOnce(&I) -> Option<&U>,
     ) -> Option<Self::Ref<'_, U>> {
         ref_.try_map(|inner| MappedRwLockReadGuard::try_map(inner, f).ok())
     }
 
-    fn try_map_mut<I: ?Sized + 'static, U: ?Sized + 'static>(
+    fn try_map_mut<I: ?Sized, U: ?Sized>(
         mut_ref: Self::Mut<'_, I>,
         f: impl FnOnce(&mut I) -> Option<&mut U>,
     ) -> Option<Self::Mut<'_, U>> {

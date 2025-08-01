@@ -1,10 +1,10 @@
 Memos are the result of computing a value from `use_memo`.
 
-You may have noticed that this struct doesn't have many methods. Most methods for `Memo` are defined on the [`Readable`] and [`Writable`] traits.
+You may have noticed that this struct doesn't have many methods. Most methods for `Memo` are defined on the [`ReadableExt`] trait.
 
 # Reading a Memo
 
-You can use the methods on the `Readable` trait to read a memo:
+You can use the methods on the `ReadableExt` trait to read a memo:
 
 ```rust, no_run
 # use dioxus::prelude::*;

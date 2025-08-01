@@ -7,6 +7,7 @@ pub struct ReadFromMarker<M>(std::marker::PhantomData<M>);
 impl<T, O, M> SuperFrom<T, ReadFromMarker<M>> for ReadSignal<O>
 where
     O: SuperFrom<T, M> + 'static,
+    T: 'static,
 {
     fn super_from(input: T) -> Self {
         ReadSignal::new(Signal::new(O::super_from(input)))
