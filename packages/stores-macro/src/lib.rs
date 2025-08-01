@@ -311,6 +311,7 @@ fn derive_store_enum(input: &DeriveInput, structure: &DataEnum) -> syn::Result<T
     let mut definitions = Vec::new();
     let mut transposed_variants = Vec::new();
     let mut transposed_match_arms = Vec::new();
+    let readable_bound = quote! { __W: dioxus_stores::macro_helpers::dioxus_signals::Readable<Target = #enum_name #ty_generics> };
 
     for variant in variants {
         let variant_name = &variant.ident;
@@ -318,14 +319,14 @@ fn derive_store_enum(input: &DeriveInput, structure: &DataEnum) -> syn::Result<T
         let is_fn = format_ident!("is_{}", snake_case_variant);
         let definition = quote! {
             fn #is_fn(
-                self,
-            ) -> bool;
+                &self,
+            ) -> bool where #readable_bound;
         };
         definitions.push(definition);
         let implementation = quote! {
             fn #is_fn(
-                self,
-            ) -> bool where Self: dioxus_stores::macro_helpers::dioxus_signals::Readable<Target = #enum_name #ty_generics> {
+                &self,
+            ) -> bool where #readable_bound {
                 self.selector().track_shallow();
                 let ref_self = dioxus_stores::macro_helpers::dioxus_signals::ReadableExt::peek(self.selector());
                 matches!(&*ref_self, #enum_name::#variant_name { .. })
@@ -380,13 +381,13 @@ fn derive_store_enum(input: &DeriveInput, structure: &DataEnum) -> syn::Result<T
                 let definition = quote! {
                     fn #snake_case_variant(
                         self,
-                    ) -> Option<#store_type>;
+                    ) -> Option<#store_type> where __W: dioxus_stores::macro_helpers::dioxus_signals::Readable<Target = #enum_name #ty_generics>;
                 };
                 definitions.push(definition);
                 let implementation = quote! {
                     fn #snake_case_variant(
                         self,
-                    ) -> Option<#store_type> {
+                    ) -> Option<#store_type> where __W: dioxus_stores::macro_helpers::dioxus_signals::Readable<Target = #enum_name #ty_generics> {
                         self.#is_fn().then(|| {
                             #select_field
                         })
@@ -450,13 +451,13 @@ fn derive_store_enum(input: &DeriveInput, structure: &DataEnum) -> syn::Result<T
     let definition = quote! {
         fn transpose(
             &self,
-        ) -> #transposed_name #transposed_generics where Self: ::std::marker::Copy;
+        ) -> #transposed_name #transposed_generics where #readable_bound, Self: ::std::marker::Copy;
     };
     definitions.push(definition);
     let implementation = quote! {
         fn transpose(
             &self,
-        ) -> #transposed_name #transposed_generics where Self: dioxus_stores::macro_helpers::dioxus_signals::Readable<Target = #enum_name #ty_generics> + ::std::marker::Copy {
+        ) -> #transposed_name #transposed_generics where #readable_bound, Self: ::std::marker::Copy {
             self.selector().track_shallow();
             let read = dioxus_stores::macro_helpers::dioxus_signals::ReadableExt::peek(self.selector());
             match &*read {

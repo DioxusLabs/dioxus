@@ -1,5 +1,5 @@
 use crate::store::Store;
-use dioxus_signals::{MappedMutSignal, Readable, ReadableExt, Writable};
+use dioxus_signals::{MappedMutSignal, Readable, ReadableExt};
 
 impl<W, I> Store<Vec<I>, W>
 where

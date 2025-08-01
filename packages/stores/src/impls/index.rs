@@ -1,7 +1,7 @@
 use std::{hash::Hash, ops::IndexMut};
 
 use crate::store::Store;
-use dioxus_signals::{MappedMutSignal, Readable, Writable};
+use dioxus_signals::{MappedMutSignal, Readable};
 
 impl<W, T> Store<T, W> {
     /// Index into the store, returning a store that allows access to the item at the given index. The
