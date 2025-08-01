@@ -81,7 +81,7 @@ pub struct Store<T: ?Sized, W = WriteSignal<T>> {
     _phantom: PhantomData<Box<T>>,
 }
 
-impl<T, S: Storage<T>> Store<T, CopyValue<T, S>> {
+impl<T: 'static, S: Storage<T>> Store<T, CopyValue<T, S>> {
     /// Creates a new `Store` that might be sync. This allocates memory in the current scope, so this should only be called
     /// inside of an initialization closure like the closure passed to [`use_hook`].
     #[track_caller]
@@ -95,7 +95,7 @@ impl<T, S: Storage<T>> Store<T, CopyValue<T, S>> {
     }
 }
 
-impl<T> Store<T> {
+impl<T: 'static> Store<T> {
     /// Creates a new `Store`. This allocates memory in the current scope, so this should only be called
     /// inside of an initialization closure like the closure passed to [`use_hook`].
     #[track_caller]
@@ -155,6 +155,7 @@ where
     W: Writable<Storage = UnsyncStorage> + 'static,
     __F: Fn(&W::Target) -> &T + 'static,
     __FMut: Fn(&mut W::Target) -> &mut T + 'static,
+    T: 'static,
 {
     fn from(value: Store<T, MappedMutSignal<T, W, __F, __FMut>>) -> Self {
         Store {
@@ -286,7 +287,7 @@ write_impls!(Store<T, W> where W: Writable<Target = T>);
 ///     }
 /// }
 /// ```
-pub fn use_store<T>(init: impl FnOnce() -> T) -> Store<T> {
+pub fn use_store<T: 'static>(init: impl FnOnce() -> T) -> Store<T> {
     use_hook(move || Store::new(init()))
 }
 
@@ -317,7 +318,7 @@ pub fn use_store<T>(init: impl FnOnce() -> T) -> Store<T> {
 /// ```
 pub type GlobalStore<T> = Global<Store<T>, T>;
 
-impl<T> InitializeFromFunction<T> for Store<T> {
+impl<T: 'static> InitializeFromFunction<T> for Store<T> {
     fn initialize_from_function(f: fn() -> T) -> Self {
         Store::new(f())
     }

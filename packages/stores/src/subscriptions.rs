@@ -1,5 +1,5 @@
 use dioxus_core::{ReactiveContext, SubscriberList, Subscribers};
-use dioxus_signals::{CopyValue, ReadableExt, SyncStorage, Writable};
+use dioxus_signals::{CopyValue, ReadableExt, SyncStorage, Writable, WritableExt};
 use std::fmt::Debug;
 use std::hash::BuildHasher;
 use std::{
