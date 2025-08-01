@@ -63,14 +63,16 @@ impl Display for Setting {
 
 impl Setting {
     pub(crate) fn anonymized(&self) -> (String, Value) {
-        let args = match self {
-            Self::AlwaysHotReload { value } => json!({ "value": value }),
-            Self::AlwaysOpenBrowser { value } => json!({ "value": value }),
-            Self::AlwaysOnTop { value } => json!({ "value": value }),
-            Self::WSLFilePollInterval { value } => json!({ "value": value }),
-            Self::DisableTelemetry { value } => json!({ "value": value }),
-        };
-        (format!("config set {}", self), args)
+        (
+            format!("config set {}", self),
+            match self {
+                Self::AlwaysHotReload { value } => json!({ "value": value }),
+                Self::AlwaysOpenBrowser { value } => json!({ "value": value }),
+                Self::AlwaysOnTop { value } => json!({ "value": value }),
+                Self::WSLFilePollInterval { value } => json!({ "value": value }),
+                Self::DisableTelemetry { value } => json!({ "value": value }),
+            },
+        )
     }
 }
 
@@ -154,12 +156,12 @@ impl Config {
 
     pub(crate) fn command_anonymized(&self) -> (String, Value) {
         match self {
-            Config::Init { force, .. } => {
-                let args = json!({
+            Config::Init { force, .. } => (
+                "config init".to_string(),
+                json!({
                     "force": force,
-                });
-                ("config init".to_string(), args)
-            }
+                }),
+            ),
             Config::FormatPrint {} => ("config format-print".to_string(), json!({})),
             Config::CustomHtml {} => ("config custom-html".to_string(), json!({})),
             Config::LogFile {} => ("config log-file".to_string(), json!({})),

@@ -328,6 +328,7 @@ where
         if *level != Level::ERROR {
             return;
         }
+
         let stage = match visitor.source {
             // Don't keep any app logs
             TraceSrc::Cargo | TraceSrc::App(_) => return,

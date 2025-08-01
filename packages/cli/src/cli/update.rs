@@ -207,14 +207,16 @@ impl SelfUpdate {
     }
 
     pub(crate) fn command_anonymized(&self) -> (String, Value) {
-        let args = serde_json::json!({
-            "nightly": self.nightly,
-            "version": self.version,
-            "install": self.install,
-            "list": self.list,
-            "force": self.force,
-        });
-        ("update".to_string(), args)
+        (
+            "update".to_string(),
+            serde_json::json!({
+                "nightly": self.nightly,
+                "version": self.version,
+                "install": self.install,
+                "list": self.list,
+                "force": self.force,
+            }),
+        )
     }
 }
 

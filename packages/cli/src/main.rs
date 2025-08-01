@@ -34,6 +34,7 @@ pub(crate) use platform::*;
 pub(crate) use rustcwrapper::*;
 pub(crate) use settings::*;
 pub(crate) use tailwind::*;
+pub(crate) use telemetry::Anonymized;
 pub(crate) use wasm_bindgen::*;
 pub(crate) use workspace::*;
 
@@ -81,7 +82,7 @@ fn main() {
 
             eprintln!(
                 "{ERROR_STYLE}Failed{ERROR_STYLE:#}: {}",
-                crate::error::log_stacktrace(&err, 1),
+                crate::error::log_stacktrace(err, 1),
                 ERROR_STYLE = crate::styles::ERROR_STYLE,
             );
 

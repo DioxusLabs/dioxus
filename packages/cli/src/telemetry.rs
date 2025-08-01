@@ -7,13 +7,14 @@ use std::{
 };
 
 use crate::{CliSettings, Result, TraceSrc, Workspace};
-use dioxus_cli_telemetry::{set_identity, TelemetryEvent};
+use dioxus_cli_telemetry::TelemetryEvent;
 use dioxus_dx_wire_format::StructuredOutput;
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::FutureExt;
 use posthog_rs::ClientOptions;
 use serde_json::Value;
 use target_lexicon::Triple;
+use uuid::Uuid;
 
 static TELEMETRY_TX: OnceLock<UnboundedSender<TelemetryEvent>> = OnceLock::new();
 static TELEMETRY_RX: OnceLock<Mutex<UnboundedReceiver<TelemetryEvent>>> = OnceLock::new();
@@ -31,11 +32,10 @@ pub fn main(app: impl Future<Output = Result<StructuredOutput>>) -> Result<Struc
     TELEMETRY_RX
         .set(Mutex::new(rx))
         .expect("Failed to set telemetry rx");
-    set_identity(
-        Triple::host().to_string(),
-        std::env::var("CI").is_ok(),
-        crate::VERSION.to_string(),
-    );
+
+    if let Err(e) = initialize_user_session() {
+        tracing::trace!("Failed to initialize user session: {}", e);
+    }
 
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
@@ -69,10 +69,12 @@ pub fn flush_telemetry_to_file() {
         tracing::warn!("Telemetry RX is not set, cannot flush telemetry.");
         return;
     };
+
     let Ok(mut rx) = rx.lock() else {
         tracing::warn!("Failed to lock telemetry RX");
         return;
     };
+
     let mut log_file = match std::fs::File::options()
         .create(true)
         .append(true)
@@ -176,7 +178,7 @@ fn fatal_error(error: &anyhow::Error) -> TelemetryEvent {
     let mut telemetry_event = TelemetryEvent::new("fatal_error", None, error.to_string(), "error");
     let backtrace = error.backtrace();
     if backtrace.status() == std::backtrace::BacktraceStatus::Captured {
-        telemetry_event = telemetry_event.with_value("backtrace", clean_backtrace(&backtrace));
+        telemetry_event = telemetry_event.with_value("backtrace", clean_backtrace(backtrace));
     }
     let chain = error.chain();
     telemetry_event.with_value(
@@ -252,6 +254,36 @@ fn handle_panic(
     }
 }
 
+/// Initialize a user session with a stable ID.
+fn initialize_user_session() -> Result<()> {
+    let sessions_folder = Workspace::dioxus_home_dir().join("stats");
+
+    // Create the sessions folder if it doesn't exist
+    if !sessions_folder.exists() {
+        std::fs::create_dir_all(&sessions_folder)?;
+    }
+
+    let stable_session_file = sessions_folder.join("stable_id.json");
+    let reported_id = if stable_session_file.exists() {
+        let contents = std::fs::read_to_string(stable_session_file)?;
+        serde_json::from_str::<Uuid>(&contents)?
+    } else {
+        let new_id = Uuid::new_v4();
+        std::fs::write(stable_session_file, serde_json::to_string(&new_id)?)?;
+        new_id
+    };
+
+    dioxus_cli_telemetry::set_reporter(
+        Triple::host().to_string(),
+        std::env::var("CI").is_ok(),
+        crate::VERSION.to_string(),
+        reported_id.as_u128(),
+    );
+
+    Ok(())
+}
+
+/// A trait that emits an anonymous JSON representation of the object, suitable for telemetry.
 pub(crate) trait Anonymized {
     fn anonymized(&self) -> Value;
 }

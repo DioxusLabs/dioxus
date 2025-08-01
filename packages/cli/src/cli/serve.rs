@@ -1,7 +1,5 @@
-use serde_json::json;
-
 use super::*;
-use crate::{telemetry::Anonymized, AddressArguments, BuildArgs, TraceController};
+use crate::{AddressArguments, Anonymized, BuildArgs, TraceController};
 /// Serve the project
 ///
 /// `dx serve` takes cargo args by default with additional renderer args like `--web`, `--webview`, and `--native`:
@@ -80,33 +78,6 @@ pub(crate) struct ServeArgs {
     pub(crate) platform_args: CommandWithPlatformOverrides<PlatformServeArgs>,
 }
 
-impl Anonymized for ServeArgs {
-    fn anonymized(&self) -> Value {
-        json! {{
-            "address": self.address.anonymized(),
-            "open": self.open,
-            "hot_reload": self.hot_reload,
-            "always_on_top": self.always_on_top,
-            "cross_origin_policy": self.cross_origin_policy,
-            "wsl_file_poll_interval": self.wsl_file_poll_interval,
-            "interactive": self.interactive,
-            "hot_patch": self.hot_patch,
-            "watch": self.watch,
-            "force_sequential": self.force_sequential,
-            "exit_on_error": self.exit_on_error,
-            "platform_args": self.platform_args.anonymized(),
-        }}
-    }
-}
-
-impl ServeArgs {
-    pub(crate) fn command_anonymized(&self) -> (String, Value) {
-        let args = self.anonymized();
-
-        ("serve".to_string(), args)
-    }
-}
-
 #[derive(Clone, Debug, Default, Parser)]
 pub(crate) struct PlatformServeArgs {
     #[clap(flatten)]
@@ -115,15 +86,6 @@ pub(crate) struct PlatformServeArgs {
     /// Additional arguments to pass to the executable
     #[clap(long, default_value = "")]
     pub(crate) args: String,
-}
-
-impl Anonymized for PlatformServeArgs {
-    fn anonymized(&self) -> Value {
-        json! {{
-            "targets": self.targets.anonymized(),
-            "args": !self.args.is_empty(),
-        }}
-    }
 }
 
 impl ServeArgs {
@@ -150,19 +112,48 @@ impl ServeArgs {
 
         // And drain the tracer as regular messages. All messages will be logged (including traces)
         // and then we can print the panic message
-        if !matches!(res, Ok(_)) {
+        if res.is_err() {
             tracer.shutdown_panic();
         }
 
-        match res {
-            Ok(_res) => Ok(StructuredOutput::Success),
-            Err(e) => Err(e),
-        }
+        res.map(|_| StructuredOutput::Success)
     }
 
     /// Check if the server is running in interactive mode. This involves checking the terminal as well
     pub(crate) fn is_interactive_tty(&self) -> bool {
         use std::io::IsTerminal;
         std::io::stdout().is_terminal() && self.interactive.unwrap_or(true)
+    }
+
+    pub(crate) fn command_anonymized(&self) -> (String, Value) {
+        ("serve".to_string(), self.anonymized())
+    }
+}
+
+impl Anonymized for ServeArgs {
+    fn anonymized(&self) -> Value {
+        json! {{
+            "address": self.address.anonymized(),
+            "open": self.open,
+            "hot_reload": self.hot_reload,
+            "always_on_top": self.always_on_top,
+            "cross_origin_policy": self.cross_origin_policy,
+            "wsl_file_poll_interval": self.wsl_file_poll_interval,
+            "interactive": self.interactive,
+            "hot_patch": self.hot_patch,
+            "watch": self.watch,
+            "force_sequential": self.force_sequential,
+            "exit_on_error": self.exit_on_error,
+            "platform_args": self.platform_args.anonymized(),
+        }}
+    }
+}
+
+impl Anonymized for PlatformServeArgs {
+    fn anonymized(&self) -> Value {
+        json! {{
+            "targets": self.targets.anonymized(),
+            "args": !self.args.is_empty(),
+        }}
     }
 }

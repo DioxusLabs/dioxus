@@ -17,7 +17,6 @@ pub(crate) mod update;
 pub(crate) mod verbosity;
 
 pub(crate) use build::*;
-use serde_json::Value;
 pub(crate) use serve::*;
 pub(crate) use target::*;
 pub(crate) use verbosity::*;
@@ -29,6 +28,7 @@ use clap::builder::styling::{AnsiColor, Effects, Style, Styles};
 use clap::{Parser, Subcommand};
 use html_parser::Dom;
 use serde::Deserialize;
+use serde_json::{json, Value};
 use std::sync::LazyLock;
 use std::{
     fmt::Display,

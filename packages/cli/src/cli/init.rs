@@ -93,17 +93,18 @@ impl Init {
     }
 
     pub(crate) fn command_anonymized(&self) -> (String, Value) {
-        let command = "new".to_string();
-        let args = json!({
-            "subtemplate": self.subtemplate,
-            "option": self.option,
-            "yes": self.yes,
-            "vcs": self.vcs.map(|v| match v {
-                Vcs::Git => "git",
-                Vcs::None => "none",
+        (
+            "new".to_string(),
+            json!({
+                "subtemplate": self.subtemplate,
+                "option": self.option,
+                "yes": self.yes,
+                "vcs": self.vcs.map(|v| match v {
+                    Vcs::Git => "git",
+                    Vcs::None => "none",
+                }),
             }),
-        });
-        (command, args)
+        )
     }
 }
 

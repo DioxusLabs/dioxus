@@ -1,10 +1,8 @@
 use crate::cli::*;
-use crate::telemetry::Anonymized;
 use crate::BundleFormat;
 use crate::Platform;
 use crate::RendererArg;
 use crate::TargetAlias;
-use serde_json::json;
 use target_lexicon::Triple;
 
 const HELP_HEADING: &str = "Target Options";

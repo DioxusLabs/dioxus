@@ -2,7 +2,6 @@ use super::*;
 use crate::TraceSrc;
 use anyhow::{bail, Context};
 use cargo_generate::{GenerateArgs, TemplatePath, Vcs};
-use serde_json::json;
 use std::path::Path;
 
 pub(crate) static DEFAULT_TEMPLATE: &str = "gh:dioxuslabs/dioxus-template";
@@ -110,17 +109,18 @@ impl Create {
     }
 
     pub(crate) fn command_anonymized(&self) -> (String, Value) {
-        let command = "new".to_string();
-        let args = json!({
-            "subtemplate": self.subtemplate,
-            "option": self.option,
-            "yes": self.yes,
-            "vcs": self.vcs.map(|v| match v {
-                Vcs::Git => "git",
-                Vcs::None => "none",
+        (
+            "new".to_string(),
+            json!({
+                "subtemplate": self.subtemplate,
+                "option": self.option,
+                "yes": self.yes,
+                "vcs": self.vcs.map(|v| match v {
+                    Vcs::Git => "git",
+                    Vcs::None => "none",
+                }),
             }),
-        });
-        (command, args)
+        )
     }
 }
 

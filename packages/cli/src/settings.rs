@@ -5,8 +5,6 @@ use std::sync::LazyLock;
 use std::{fs, path::PathBuf, sync::Arc};
 use tracing::{error, trace, warn};
 
-const GLOBAL_SETTINGS_FILE_NAME: &str = "dioxus/settings.toml";
-
 /// Describes cli settings from project or global level.
 /// The order of priority goes:
 /// 1. CLI Flags/Arguments
@@ -45,38 +43,37 @@ impl CliSettings {
         CliSettings::from_global().unwrap_or_default()
     }
 
+    /// Get the path to the settings toml file.
+    pub(crate) fn get_settings_path() -> PathBuf {
+        crate::Workspace::global_settings_file()
+    }
+
     /// Get the current settings structure from global.
     pub(crate) fn from_global() -> Option<Self> {
-        let Some(path) = dirs::data_local_dir() else {
-            warn!("failed to get local data directory, some config keys may be missing");
-            return None;
-        };
+        let settings = crate::Workspace::global_settings_file();
 
-        let path = path.join(GLOBAL_SETTINGS_FILE_NAME);
-        let Some(data) = fs::read_to_string(path).ok() else {
-            // We use a debug here because we expect the file to not exist.
-            trace!("failed to read `{}` config file", GLOBAL_SETTINGS_FILE_NAME);
+        if !settings.exists() {
+            trace!("global settings file does not exist, returning None");
             return None;
-        };
-
-        let data = toml::from_str::<CliSettings>(&data).ok();
-        if data.is_none() {
-            warn!(
-                "failed to parse `{}` config file",
-                GLOBAL_SETTINGS_FILE_NAME
-            );
         }
 
-        data
+        let Some(data) = fs::read_to_string(&settings).ok() else {
+            warn!("failed to read global settings file");
+            return None;
+        };
+
+        let Some(data) = serde_json5::from_str::<CliSettings>(&data).ok() else {
+            warn!("failed to parse global settings file");
+            return None;
+        };
+
+        Some(data)
     }
 
     /// Save the current structure to the global settings toml.
     /// This does not save to project-level settings.
     pub(crate) fn save(&self) -> Result<()> {
-        let path = Self::get_settings_path().ok_or_else(|| {
-            error!(dx_src = ?TraceSrc::Dev, "failed to get settings path");
-            anyhow::anyhow!("failed to get settings path")
-        })?;
+        let path = Self::get_settings_path();
 
         let data = toml::to_string_pretty(&self).map_err(|e| {
             error!(dx_src = ?TraceSrc::Dev, ?self, "failed to parse config into toml");
@@ -103,16 +100,6 @@ impl CliSettings {
         }
 
         Ok(())
-    }
-
-    /// Get the path to the settings toml file.
-    pub(crate) fn get_settings_path() -> Option<PathBuf> {
-        let Some(path) = dirs::data_local_dir() else {
-            warn!("failed to get local data directory, some config keys may be missing");
-            return None;
-        };
-
-        Some(path.join(GLOBAL_SETTINGS_FILE_NAME))
     }
 
     /// Modify the settings toml file - doesn't change the settings for this session

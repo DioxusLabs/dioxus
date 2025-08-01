@@ -5,7 +5,6 @@ use crate::{
 };
 use anyhow::bail;
 use dioxus_dx_wire_format::BuildStage;
-use serde_json::json;
 
 /// Run the project with the given arguments
 ///
@@ -167,10 +166,12 @@ impl RunArgs {
         Ok(StructuredOutput::Success)
     }
 
-    pub(crate) fn command_anonymized(&self) -> (String, Value) {
-        let args = json! {{
-            "args": self.args.command_anonymized()
-        }};
-        ("run".to_string(), args)
+    pub(crate) fn command_anonymized(&self) -> (String, serde_json::Value) {
+        (
+            "run".to_string(),
+            serde_json::json! {{
+                "args": self.args.command_anonymized()
+            }},
+        )
     }
 }

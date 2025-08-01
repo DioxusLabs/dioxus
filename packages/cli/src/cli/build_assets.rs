@@ -36,7 +36,6 @@ impl BuildAssets {
     }
 
     pub(crate) fn command_anonymized(&self) -> (String, Value) {
-        let args = serde_json::json!({});
-        ("tools assets".to_string(), args)
+        ("tools assets".to_string(), serde_json::json!({}))
     }
 }

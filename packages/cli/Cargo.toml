@@ -157,6 +157,7 @@ self-replace = "1.5.0"
 cargo-config2 = { workspace = true }
 posthog-rs = "0.3.5"
 snafu = { version = "0.7.5", features = ["backtrace", "backtraces"] }
+serde_json5 = "0.2.1"
 
 [build-dependencies]
 built = { version = "0.8.0", features = ["git2"] }

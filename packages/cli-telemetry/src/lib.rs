@@ -37,37 +37,28 @@ use serde::{Deserialize, Serialize};
 /// - whether the CLI is running in CI
 /// - the CLI version
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct Identity {
+pub struct Reporter {
     pub device_triple: String,
     pub is_ci: bool,
     pub cli_version: String,
+    pub reporter_id: u128,
     pub session_id: u128,
 }
 
-impl Identity {
-    pub fn new(device_triple: String, is_ci: bool, cli_version: String, session_id: u128) -> Self {
-        Self {
-            device_triple,
-            is_ci,
-            cli_version,
-            session_id,
-        }
-    }
-}
+static REPORTER: OnceLock<Reporter> = OnceLock::new();
 
-static IDENTITY: OnceLock<Identity> = OnceLock::new();
-
-pub fn set_identity(device_triple: String, is_ci: bool, cli_version: String) {
-    _ = IDENTITY.set(Identity::new(
+pub fn set_reporter(device_triple: String, is_ci: bool, cli_version: String, reporter_id: u128) {
+    _ = REPORTER.set(Reporter {
         device_triple,
         is_ci,
         cli_version,
-        rand::random::<u128>(),
-    ));
+        reporter_id,
+        session_id: rand::random::<u128>(),
+    });
 }
 
-fn identity() -> Identity {
-    IDENTITY.get().unwrap().clone()
+fn reporter() -> Reporter {
+    REPORTER.get().unwrap().clone()
 }
 
 /// An event, corresponding roughly to a trace!()
@@ -85,7 +76,7 @@ fn identity() -> Identity {
 /// the stage as a marker.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct TelemetryEvent {
-    pub identity: Identity,
+    pub identity: Reporter,
     pub name: String,
     pub module: Option<String>,
     pub message: String,
@@ -102,7 +93,7 @@ impl TelemetryEvent {
         stage: impl ToString,
     ) -> Self {
         Self {
-            identity: identity(),
+            identity: reporter(),
             name: strip_paths(&name.to_string()),
             module: module.map(|m| strip_paths(&m)),
             message: strip_paths(&message.to_string()),
@@ -124,6 +115,7 @@ impl TelemetryEvent {
 fn strip_paths(string: &str) -> String {
     // Strip the home path from any paths in the backtrace
     let home_dir = dirs::home_dir().unwrap_or_default();
+
     // Strip every path between the current path and the home directory
     let mut cwd = std::env::current_dir().unwrap_or_default();
     let mut string = string.to_string();
@@ -137,6 +129,7 @@ fn strip_paths(string: &str) -> String {
             break;
         }
     }
+
     // Finally, strip the home directory itself (in case the cwd is outside the home directory)
     string.replace(&*home_dir.to_string_lossy(), "~")
 }
@@ -144,12 +137,8 @@ fn strip_paths(string: &str) -> String {
 fn strip_paths_value(value: &mut serde_json::Value) {
     match value {
         serde_json::Value::String(s) => *s = strip_paths(s),
-        serde_json::Value::Object(map) => {
-            map.values_mut().for_each(strip_paths_value);
-        }
-        serde_json::Value::Array(arr) => {
-            arr.iter_mut().for_each(strip_paths_value);
-        }
+        serde_json::Value::Object(map) => map.values_mut().for_each(strip_paths_value),
+        serde_json::Value::Array(arr) => arr.iter_mut().for_each(strip_paths_value),
         _ => {}
     }
 }
