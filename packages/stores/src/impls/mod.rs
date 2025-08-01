@@ -1,3 +1,4 @@
+mod btreemap;
 mod deref;
 mod hashmap;
 mod index;
