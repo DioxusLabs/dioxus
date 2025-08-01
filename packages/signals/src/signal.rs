@@ -301,7 +301,7 @@ impl<T, S: Storage<SignalData<T>>> Signal<T, S> {
     /// *signal.write_silent() += 1;
     /// ```
     ///
-    /// Instead you can use the [`peek`](ReadableExt::peek) and [`write`](Signal::write) methods instead. The peek method will not subscribe to the current scope which will avoid an infinite loop if you are reading and writing to the same signal in the same scope.
+    /// Instead you can use the [`peek`](ReadableExt::peek) and [`write`](WritableExt::write) methods instead. The peek method will not subscribe to the current scope which will avoid an infinite loop if you are reading and writing to the same signal in the same scope.
     /// ```rust, no_run
     /// # use dioxus::prelude::*;
     /// let mut signal = use_signal(|| 0);
