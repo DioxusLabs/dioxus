@@ -1,9 +1,9 @@
 use crate::{impls::index::IndexWrite, store::Store};
 use dioxus_signals::{Readable, ReadableExt};
 
-impl<W, I> Store<Vec<I>, W>
+impl<Lens, I> Store<Vec<I>, Lens>
 where
-    W: Readable<Target = Vec<I>> + 'static,
+    Lens: Readable<Target = Vec<I>> + 'static,
     I: 'static,
 {
     /// Returns the length of the slice. This will only track the shallow state of the slice.
@@ -44,9 +44,9 @@ where
     ///     println!("{}", item);
     /// }
     /// ```
-    pub fn iter(&self) -> impl Iterator<Item = Store<I, IndexWrite<usize, W>>> + '_
+    pub fn iter(&self) -> impl Iterator<Item = Store<I, IndexWrite<usize, Lens>>> + '_
     where
-        W: Clone,
+        Lens: Clone,
     {
         (0..self.len()).map(move |i| self.clone().index(i))
     }

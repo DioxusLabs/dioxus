@@ -10,8 +10,8 @@ use dioxus_signals::{
     Writable, WriteLock, WriteSignal,
 };
 
-impl<W: Readable<Target = HashMap<K, V, St>> + 'static, K: 'static, V: 'static, St: 'static>
-    Store<HashMap<K, V, St>, W>
+impl<Lens: Readable<Target = HashMap<K, V, St>> + 'static, K: 'static, V: 'static, St: 'static>
+    Store<HashMap<K, V, St>, Lens>
 {
     /// Get the length of the HashMap. This method will track the store shallowly and only cause
     /// re-runs when items are added or removed from the map, not when existing values are modified.
@@ -66,11 +66,11 @@ impl<W: Readable<Target = HashMap<K, V, St>> + 'static, K: 'static, V: 'static, 
     ///     println!("{}: {}", key, value_store.read());
     /// }
     /// ```
-    pub fn iter(&self) -> impl Iterator<Item = (K, Store<V, GetWrite<K, W>>)> + '_
+    pub fn iter(&self) -> impl Iterator<Item = (K, Store<V, GetWrite<K, Lens>>)> + '_
     where
         K: Eq + Hash + Clone,
         St: BuildHasher,
-        W: Clone,
+        Lens: Clone,
     {
         self.selector().track_shallow();
         let keys: Vec<_> = self.selector().peek_unchecked().keys().cloned().collect();
@@ -95,11 +95,11 @@ impl<W: Readable<Target = HashMap<K, V, St>> + 'static, K: 'static, V: 'static, 
     ///     println!("{}", value_store.read());
     /// }
     /// ```
-    pub fn values(&self) -> impl Iterator<Item = Store<V, GetWrite<K, W>>> + '_
+    pub fn values(&self) -> impl Iterator<Item = Store<V, GetWrite<K, Lens>>> + '_
     where
         K: Eq + Hash + Clone,
         St: BuildHasher,
-        W: Clone,
+        Lens: Clone,
     {
         self.selector().track_shallow();
         let keys = self.selector().peek().keys().cloned().collect::<Vec<_>>();
@@ -124,7 +124,7 @@ impl<W: Readable<Target = HashMap<K, V, St>> + 'static, K: 'static, V: 'static, 
     where
         K: Eq + Hash,
         St: BuildHasher,
-        W: Writable,
+        Lens: Writable,
     {
         self.selector().mark_dirty_shallow();
         self.selector().write_untracked().insert(key, value);
@@ -150,7 +150,7 @@ impl<W: Readable<Target = HashMap<K, V, St>> + 'static, K: 'static, V: 'static, 
         Q: ?Sized + Hash + Eq + 'static,
         K: Borrow<Q> + Eq + Hash,
         St: BuildHasher,
-        W: Writable,
+        Lens: Writable,
     {
         self.selector().mark_dirty_shallow();
         self.selector().write_untracked().remove(key)
@@ -173,7 +173,7 @@ impl<W: Readable<Target = HashMap<K, V, St>> + 'static, K: 'static, V: 'static, 
     /// ```
     pub fn clear(&mut self)
     where
-        W: Writable,
+        Lens: Writable,
     {
         self.selector().mark_dirty_shallow();
         self.selector().write_untracked().clear();
@@ -197,7 +197,7 @@ impl<W: Readable<Target = HashMap<K, V, St>> + 'static, K: 'static, V: 'static, 
     /// ```
     pub fn retain(&mut self, mut f: impl FnMut(&K, &V) -> bool)
     where
-        W: Writable,
+        Lens: Writable,
     {
         self.selector().mark_dirty_shallow();
         self.selector().write_untracked().retain(|k, v| f(k, v));
@@ -239,7 +239,7 @@ impl<W: Readable<Target = HashMap<K, V, St>> + 'static, K: 'static, V: 'static, 
     /// store.insert(0, "value".to_string());
     /// assert_eq!(store.get(0).unwrap().cloned(), "value".to_string());
     /// ```
-    pub fn get<Q>(self, key: Q) -> Option<Store<V, GetWrite<Q, W>>>
+    pub fn get<Q>(self, key: Q) -> Option<Store<V, GetWrite<Q, Lens>>>
     where
         Q: Hash + Eq + 'static,
         K: Borrow<Q> + Eq + Hash,

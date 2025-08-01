@@ -16,7 +16,7 @@ use dioxus_signals::{
 /// - The underlying lock that contains the data in the store.
 /// - A tree of subscriptions used to make the store reactive.
 ///
-/// The `SelectorScope` contains a view into the lock (`W`) and a path into the subscription tree. When
+/// The `SelectorScope` contains a view into the lock (`Lens`) and a path into the subscription tree. When
 /// the selector is read to, it will track the current path in the subscription tree. When it it written to
 /// it marks itself and all its children as dirty.
 ///
@@ -48,13 +48,13 @@ use dioxus_signals::{
 /// The `count` method maps the lock to the `i32` type and creates a child `0` path in the subscription tree. Only writes
 /// to that `0` path or its parents will trigger a re-render of the components that read the `count` field.
 #[derive(PartialEq)]
-pub struct SelectorScope<W> {
+pub struct SelectorScope<Lens> {
     path: TinyVec,
     store: StoreSubscriptions,
-    write: W,
+    write: Lens,
 }
 
-impl<W> Debug for SelectorScope<W> {
+impl<Lens> Debug for SelectorScope<Lens> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         f.debug_struct("SelectorScope")
             .field("path", &self.path)
@@ -62,9 +62,9 @@ impl<W> Debug for SelectorScope<W> {
     }
 }
 
-impl<W> Clone for SelectorScope<W>
+impl<Lens> Clone for SelectorScope<Lens>
 where
-    W: Clone,
+    Lens: Clone,
 {
     fn clone(&self) -> Self {
         Self {
@@ -75,10 +75,10 @@ where
     }
 }
 
-impl<W> Copy for SelectorScope<W> where W: Copy {}
+impl<Lens> Copy for SelectorScope<Lens> where Lens: Copy {}
 
-impl<W> SelectorScope<W> {
-    pub(crate) fn new(path: TinyVec, store: StoreSubscriptions, write: W) -> Self {
+impl<Lens> SelectorScope<Lens> {
+    pub(crate) fn new(path: TinyVec, store: StoreSubscriptions, write: Lens) -> Self {
         Self { path, store, write }
     }
 
@@ -93,7 +93,7 @@ impl<W> SelectorScope<W> {
         index: &impl Hash,
         map: F,
         map_mut: FMut,
-    ) -> SelectorScope<MappedMutSignal<U, W, F, FMut>>
+    ) -> SelectorScope<MappedMutSignal<U, Lens, F, FMut>>
     where
         F: Fn(&T) -> &U,
         FMut: Fn(&mut T) -> &mut U,
@@ -109,7 +109,7 @@ impl<W> SelectorScope<W> {
         index: PathKey,
         map: F,
         map_mut: FMut,
-    ) -> SelectorScope<MappedMutSignal<U, W, F, FMut>>
+    ) -> SelectorScope<MappedMutSignal<U, Lens, F, FMut>>
     where
         F: Fn(&T) -> &U,
         FMut: Fn(&mut T) -> &mut U,
@@ -119,14 +119,14 @@ impl<W> SelectorScope<W> {
 
     /// Create a hashed child selector scope for a specific index without mapping the writer. The scope will only
     /// be marked as dirty when a write occurs to that index or its parents.
-    pub fn hash_child_unmapped(self, index: &impl Hash) -> SelectorScope<W> {
+    pub fn hash_child_unmapped(self, index: &impl Hash) -> SelectorScope<Lens> {
         let hash = self.store.hash(index);
         self.child_unmapped(hash)
     }
 
     /// Create a child selector scope for a specific index without mapping the writer. The scope will only
     /// be marked as dirty when a write occurs to that index or its parents.
-    pub fn child_unmapped(mut self, index: PathKey) -> SelectorScope<W> {
+    pub fn child_unmapped(mut self, index: PathKey) -> SelectorScope<Lens> {
         self.path.push(index);
         self
     }
@@ -136,7 +136,7 @@ impl<W> SelectorScope<W> {
         self,
         map: F,
         map_mut: FMut,
-    ) -> SelectorScope<MappedMutSignal<U, W, F, FMut>>
+    ) -> SelectorScope<MappedMutSignal<U, Lens, F, FMut>>
     where
         F: Fn(&T) -> &U,
         FMut: Fn(&mut T) -> &mut U,
@@ -170,7 +170,7 @@ impl<W> SelectorScope<W> {
     }
 
     /// Map the writer to a new type.
-    pub fn map_writer<W2>(self, map: impl FnOnce(W) -> W2) -> SelectorScope<W2> {
+    pub fn map_writer<W2>(self, map: impl FnOnce(Lens) -> W2) -> SelectorScope<W2> {
         SelectorScope {
             path: self.path,
             store: self.store,
@@ -179,24 +179,24 @@ impl<W> SelectorScope<W> {
     }
 
     /// Write without notifying subscribers.
-    pub fn write_untracked(&self) -> WritableRef<'static, W>
+    pub fn write_untracked(&self) -> WritableRef<'static, Lens>
     where
-        W: Writable,
+        Lens: Writable,
     {
         self.write.write_unchecked()
     }
 }
 
-impl<W: Readable> Readable for SelectorScope<W> {
-    type Target = W::Target;
-    type Storage = W::Storage;
+impl<Lens: Readable> Readable for SelectorScope<Lens> {
+    type Target = Lens::Target;
+    type Storage = Lens::Storage;
 
-    fn try_read_unchecked(&self) -> Result<ReadableRef<'static, W>, BorrowError> {
+    fn try_read_unchecked(&self) -> Result<ReadableRef<'static, Lens>, BorrowError> {
         self.track();
         self.write.try_read_unchecked()
     }
 
-    fn try_peek_unchecked(&self) -> Result<ReadableRef<'static, W>, BorrowError> {
+    fn try_peek_unchecked(&self) -> Result<ReadableRef<'static, Lens>, BorrowError> {
         self.write.try_peek_unchecked()
     }
 
@@ -205,10 +205,10 @@ impl<W: Readable> Readable for SelectorScope<W> {
     }
 }
 
-impl<W: Writable> Writable for SelectorScope<W> {
-    type WriteMetadata = W::WriteMetadata;
+impl<Lens: Writable> Writable for SelectorScope<Lens> {
+    type WriteMetadata = Lens::WriteMetadata;
 
-    fn try_write_unchecked(&self) -> Result<WritableRef<'static, W>, BorrowMutError> {
+    fn try_write_unchecked(&self) -> Result<WritableRef<'static, Lens>, BorrowMutError> {
         self.mark_dirty();
         self.write.try_write_unchecked()
     }

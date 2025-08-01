@@ -1,11 +1,11 @@
 use std::ops::DerefMut;
 
-use crate::store::Store;
-use dioxus_signals::{MappedMutSignal, Readable};
+use crate::{store::Store, MappedStore};
+use dioxus_signals::{ Readable};
 
-impl<W, T> Store<T, W>
+impl<Lens, T> Store<T, Lens>
 where
-    W: Readable<Target = T> + 'static,
+    Lens: Readable<Target = T> + 'static,
     T: DerefMut + 'static,
 {
     /// Returns a store that dereferences the original value. The dereferenced store shares the same
@@ -20,7 +20,7 @@ where
     /// // The dereferenced store can access the store methods of the underlying type.
     /// assert_eq!(deref_store.len(), 3);
     /// ```
-    pub fn deref(self) -> Store<T::Target, MappedMutSignal<T::Target, W>> {
+    pub fn deref(self) -> MappedStore<T::Target, Lens> {
         let map: fn(&T) -> &T::Target = |value| value.deref();
         let map_mut: fn(&mut T) -> &mut T::Target = |value| value.deref_mut();
         self.into_selector().map(map, map_mut).into()

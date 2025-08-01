@@ -1,9 +1,9 @@
-use crate::store::Store;
-use dioxus_signals::{MappedMutSignal, Readable, ReadableExt, Writable};
+use crate::{store::Store, MappedStore};
+use dioxus_signals::{ Readable, ReadableExt, Writable};
 
-impl<W, T, E> Store<Result<T, E>, W>
+impl<Lens, T, E> Store<Result<T, E>, Lens>
 where
-    W: Readable<Target = Result<T, E>> + 'static,
+    Lens: Readable<Target = Result<T, E>> + 'static,
     T: 'static,
     E: 'static,
 {
@@ -48,7 +48,7 @@ where
     ///     None => panic!("Expected Ok"),
     /// }
     /// ```
-    pub fn ok(self) -> Option<Store<T, MappedMutSignal<T, W>>> {
+    pub fn ok(self) -> Option<MappedStore<T, Lens>> {
         let map: fn(&Result<T, E>) -> &T = |value| {
             value.as_ref().unwrap_or_else(|_| {
                 panic!("Tried to access `ok` on an Err value");
@@ -76,9 +76,9 @@ where
     ///     None => panic!("Expected Err"),
     /// }
     /// ```
-    pub fn err(self) -> Option<Store<E, MappedMutSignal<E, W>>>
+    pub fn err(self) -> Option<MappedStore<E, Lens>>
     where
-        W: Writable<Target = Result<T, E>> + 'static,
+        Lens: Writable<Target = Result<T, E>> + 'static,
     {
         self.is_err().then(|| {
             let map: fn(&Result<T, E>) -> &E = |value| match value {
@@ -107,11 +107,9 @@ where
     /// }
     /// ```
     #[allow(clippy::result_large_err)]
-    pub fn transpose(
-        self,
-    ) -> Result<Store<T, MappedMutSignal<T, W>>, Store<E, MappedMutSignal<E, W>>>
+    pub fn transpose(self) -> Result<MappedStore<T, Lens>, MappedStore<E, Lens>>
     where
-        W: Writable<Target = Result<T, E>> + 'static,
+        Lens: Writable<Target = Result<T, E>> + 'static,
     {
         if self.is_ok() {
             let map: fn(&Result<T, E>) -> &T = |value| match value {

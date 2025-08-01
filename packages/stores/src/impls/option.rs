@@ -1,7 +1,7 @@
-use crate::store::Store;
-use dioxus_signals::{MappedMutSignal, Readable, ReadableExt};
+use crate::{store::Store, MappedStore};
+use dioxus_signals::{ Readable, ReadableExt};
 
-impl<W: Readable<Target = Option<T>> + 'static, T: 'static> Store<Option<T>, W> {
+impl<Lens: Readable<Target = Option<T>> + 'static, T: 'static> Store<Option<T>, Lens> {
     /// Checks if the `Option` is `Some`. This will only track the shallow state of the `Option`. It will
     /// only cause a re-run if the `Option` could change from `None` to `Some` or vice versa.
     ///
@@ -43,7 +43,7 @@ impl<W: Readable<Target = Option<T>> + 'static, T: 'static> Store<Option<T>, W> 
     ///     None => panic!("Expected Some"),
     /// }
     /// ```
-    pub fn transpose(self) -> Option<Store<T, MappedMutSignal<T, W>>> {
+    pub fn transpose(self) -> Option<MappedStore<T, Lens>> {
         self.is_some().then(move || {
             let map: fn(&Option<T>) -> &T = |value| {
                 value.as_ref().unwrap_or_else(|| {
@@ -69,7 +69,7 @@ impl<W: Readable<Target = Option<T>> + 'static, T: 'static> Store<Option<T>, W> 
     /// let unwrapped = store.unwrap();
     /// assert_eq!(unwrapped(), 42);
     /// ```
-    pub fn unwrap(self) -> Store<T, MappedMutSignal<T, W>> {
+    pub fn unwrap(self) -> MappedStore<T, Lens> {
         self.transpose().unwrap()
     }
 }

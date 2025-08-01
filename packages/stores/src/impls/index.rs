@@ -9,7 +9,7 @@ use dioxus_signals::{
     WriteLock, WriteSignal,
 };
 
-impl<W, T> Store<T, W> {
+impl<Lens, T> Store<T, Lens> {
     /// Index into the store, returning a store that allows access to the item at the given index. The
     /// new store will only update when the item at the index changes.
     ///
@@ -21,11 +21,11 @@ impl<W, T> Store<T, W> {
     /// // The indexed store can access the store methods of the indexed store.
     /// assert_eq!(indexed_store(), 2);
     /// ```
-    pub fn index<Idx>(self, index: Idx) -> Store<T::Output, IndexWrite<Idx, W>>
+    pub fn index<Idx>(self, index: Idx) -> Store<T::Output, IndexWrite<Idx, Lens>>
     where
         T: IndexMut<Idx> + 'static,
         Idx: Hash + 'static,
-        W: Readable<Target = T> + 'static,
+        Lens: Readable<Target = T> + 'static,
     {
         self.into_selector()
             .hash_child_unmapped(&index)
