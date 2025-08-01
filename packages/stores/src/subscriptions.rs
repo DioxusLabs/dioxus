@@ -12,18 +12,18 @@ use std::{
 #[derive(Clone, Default)]
 pub(crate) struct SelectorNode {
     subscribers: HashSet<ReactiveContext>,
-    root: HashMap<u32, SelectorNode>,
+    root: HashMap<PathKey, SelectorNode>,
 }
 
 impl SelectorNode {
-    fn find(&self, path: &[u32]) -> Option<&SelectorNode> {
+    fn find(&self, path: &[PathKey]) -> Option<&SelectorNode> {
         let [first, rest @ ..] = path else {
             return Some(self);
         };
         self.root.get(first).and_then(|child| child.find(rest))
     }
 
-    fn find_mut(&mut self, path: &[u32]) -> Option<&mut SelectorNode> {
+    fn find_mut(&mut self, path: &[PathKey]) -> Option<&mut SelectorNode> {
         let [first, rest @ ..] = path else {
             return Some(self);
         };
@@ -32,7 +32,7 @@ impl SelectorNode {
             .and_then(|child| child.find_mut(rest))
     }
 
-    fn get_mut_or_default(&mut self, path: &[u32]) -> &mut SelectorNode {
+    fn get_mut_or_default(&mut self, path: &[PathKey    ]) -> &mut SelectorNode {
         let [first, rest @ ..] = path else {
             return self;
         };
@@ -49,7 +49,7 @@ impl SelectorNode {
         }
     }
 
-    fn mark_children_dirty(&mut self, path: &[u32]) {
+    fn mark_children_dirty(&mut self, path: &[PathKey]) {
         let Some(node) = self.find_mut(path) else {
             return;
         };
@@ -60,7 +60,7 @@ impl SelectorNode {
         });
     }
 
-    fn mark_dirty_at_and_after_index(&mut self, path: &[u32], index: usize) {
+    fn mark_dirty_at_and_after_index(&mut self, path: &[PathKey], index: usize) {
         let Some(node) = self.find_mut(path) else {
             return;
         };
@@ -75,7 +75,7 @@ impl SelectorNode {
         }
     }
 
-    fn mark_dirty_shallow(&mut self, path: &[u32]) {
+    fn mark_dirty_shallow(&mut self, path: &[PathKey]) {
         let Some(node) = self.find_mut(path) else {
             return;
         };
@@ -93,7 +93,7 @@ impl SelectorNode {
         self.subscribers.extend(subscribers);
     }
 
-    fn remove(&mut self, path: &[u32]) {
+    fn remove(&mut self, path: &[PathKey]) {
         let [first, rest @ ..] = path else {
             return;
         };
@@ -107,10 +107,16 @@ impl SelectorNode {
     }
 }
 
+pub(crate) type PathKey = u16;
+#[cfg(feature = "large-path")]
+const PATH_LENGTH: usize = 32;
+#[cfg(not(feature = "large-path"))]
+const PATH_LENGTH: usize = 16;
+
 #[derive(Copy, Clone, PartialEq)]
 pub(crate) struct TinyVec {
     length: usize,
-    path: [u32; 32],
+    path: [PathKey; PATH_LENGTH],
 }
 
 impl Default for TinyVec {
@@ -131,11 +137,11 @@ impl TinyVec {
     pub(crate) const fn new() -> Self {
         Self {
             length: 0,
-            path: [0; 32],
+            path: [0; PATH_LENGTH],
         }
     }
 
-    pub(crate) const fn push(&mut self, index: u32) {
+    pub(crate) const fn push(&mut self, index: u16) {
         if self.length < self.path.len() {
             self.path[self.length] = index;
             self.length += 1;
@@ -146,7 +152,7 @@ impl TinyVec {
 }
 
 impl Deref for TinyVec {
-    type Target = [u32];
+    type Target = [u16];
 
     fn deref(&self) -> &Self::Target {
         &self.path[..self.length]
@@ -188,18 +194,18 @@ impl StoreSubscriptions {
         }
     }
 
-    pub(crate) fn hash(&self, index: impl Hash) -> u32 {
-        self.inner.write_unchecked().hasher.hash_one(&index) as u32
+    pub(crate) fn hash(&self, index: impl Hash) -> PathKey {
+        self.inner.write_unchecked().hasher.hash_one(&index) as PathKey
     }
 
-    pub(crate) fn track(&self, key: &[u32]) {
+    pub(crate) fn track(&self, key: &[PathKey]) {
         if let Some(rc) = ReactiveContext::current() {
             let subscribers = self.subscribers(key);
             rc.subscribe(subscribers);
         }
     }
 
-    pub(crate) fn track_recursive(&self, key: &[u32]) {
+    pub(crate) fn track_recursive(&self, key: &[PathKey]) {
         if let Some(rc) = ReactiveContext::current() {
             let mut paths = Vec::new();
             {
@@ -223,22 +229,22 @@ impl StoreSubscriptions {
         }
     }
 
-    pub(crate) fn mark_dirty(&self, key: &[u32]) {
+    pub(crate) fn mark_dirty(&self, key: &[PathKey]) {
         self.inner.write_unchecked().root.mark_children_dirty(key);
     }
 
-    pub(crate) fn mark_dirty_shallow(&self, key: &[u32]) {
+    pub(crate) fn mark_dirty_shallow(&self, key: &[PathKey]) {
         self.inner.write_unchecked().root.mark_dirty_shallow(key);
     }
 
-    pub(crate) fn mark_dirty_at_and_after_index(&self, key: &[u32], index: usize) {
+    pub(crate) fn mark_dirty_at_and_after_index(&self, key: &[PathKey], index: usize) {
         self.inner
             .write_unchecked()
             .root
             .mark_dirty_at_and_after_index(key, index);
     }
 
-    pub(crate) fn subscribers(&self, key: &[u32]) -> Subscribers {
+    pub(crate) fn subscribers(&self, key: &[PathKey]) -> Subscribers {
         Arc::new(StoreSubscribers {
             subscriptions: *self,
             path: key.to_vec().into_boxed_slice(),
@@ -249,7 +255,7 @@ impl StoreSubscriptions {
 
 struct StoreSubscribers {
     subscriptions: StoreSubscriptions,
-    path: Box<[u32]>,
+    path: Box<[PathKey]>,
 }
 
 impl SubscriberList for StoreSubscribers {

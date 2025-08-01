@@ -4,7 +4,7 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote, ToTokens};
 use syn::{
     parse_macro_input, parse_quote, punctuated::Punctuated, spanned::Spanned, DataEnum, DataStruct,
-    DeriveInput, Fields, Index,
+    DeriveInput, Fields, Index,LitInt
 };
 
 /// # `derive(Store)`
@@ -179,7 +179,7 @@ fn derive_store_struct(input: &DeriveInput, structure: &DataStruct) -> syn::Resu
 
         transposed_fields.push(quote! { #vis #field_name #colon #store_type });
 
-        let ordinal = i as u32;
+        let ordinal = LitInt::new(&i.to_string(), field.span());
 
         let definition = quote! {
             fn #function_name(
@@ -338,7 +338,7 @@ fn derive_store_enum(input: &DeriveInput, structure: &DataEnum) -> syn::Result<T
         let mut transposed_field_selectors = Vec::new();
         let fields = &variant.fields;
         for (i, field) in fields.iter().enumerate() {
-            let ordinal = i as u32;
+            let ordinal = LitInt::new(&i.to_string(), field.span());
             let vis = &field.vis;
             let field_name = &field.ident;
             let colon = field.colon_token.as_ref();

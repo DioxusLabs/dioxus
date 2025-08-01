@@ -3,7 +3,7 @@
 
 use std::{fmt::Debug, hash::Hash};
 
-use crate::subscriptions::{StoreSubscriptions, TinyVec};
+use crate::subscriptions::{StoreSubscriptions, TinyVec, PathKey};
 use dioxus_core::Subscribers;
 use dioxus_signals::{
     BorrowError, BorrowMutError, MappedMutSignal, Readable, ReadableRef, Writable, WritableExt,
@@ -106,7 +106,7 @@ impl<W> SelectorScope<W> {
     /// write occurs to that index or its parents.
     pub fn child<U: ?Sized, T, F, FMut>(
         mut self,
-        index: u32,
+        index: PathKey,
         map: F,
         map_mut: FMut,
     ) -> SelectorScope<MappedMutSignal<U, W, F, FMut>>

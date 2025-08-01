@@ -20,6 +20,7 @@ dioxus = { workspace = true }
 [features]
 default = ["macro"]
 macro = ["dep:dioxus-stores-macro"]
+large-path = []
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
