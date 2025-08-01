@@ -117,22 +117,12 @@ impl<T, S: Storage<T>> GenerationalBox<T, S> {
         *self.write() = value;
     }
 
-    /// Returns true if the pointer is equal to the other pointer.
-    pub fn ptr_eq(&self, other: &Self) -> bool {
-        self.raw == other.raw
-    }
-
     /// Drop the value out of the generational box and invalidate the generational box.
     pub fn manually_drop(&self)
     where
         T: 'static,
     {
         self.raw.recycle();
-    }
-
-    /// Try to get the location the generational box was created at. In release mode this will always return None.
-    pub fn created_at(&self) -> Option<&'static std::panic::Location<'static>> {
-        self.raw.location.created_at()
     }
 
     /// Get a reference to the value
@@ -147,6 +137,21 @@ impl<T, S: Storage<T>> GenerationalBox<T, S> {
     /// Change this box to point to another generational box
     pub fn point_to(&self, other: GenerationalBox<T, S>) -> BorrowResult {
         S::change_reference(self.raw, other.raw)
+    }
+}
+
+impl<T, S> GenerationalBox<T, S> {
+    /// Returns true if the pointer is equal to the other pointer.
+    pub fn ptr_eq(&self, other: &Self) -> bool
+    where
+        S: AnyStorage,
+    {
+        self.raw == other.raw
+    }
+
+    /// Try to get the location the generational box was created at. In release mode this will always return None.
+    pub fn created_at(&self) -> Option<&'static std::panic::Location<'static>> {
+        self.raw.location.created_at()
     }
 }
 

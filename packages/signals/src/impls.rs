@@ -6,17 +6,17 @@
 /// use dioxus::prelude::*;
 /// use dioxus_core::Subscribers;
 ///
-/// struct MyCopyValue<T: 'static, S: Storage<T>> {
+/// struct MyCopyValue<T, S: Storage<T>> {
 ///     value: CopyValue<T, S>,
 /// }
 ///
-/// impl<T: 'static, S: Storage<T>> MyCopyValue<T, S> {
+/// impl<T, S: Storage<T>> MyCopyValue<T, S> {
 ///     fn new_maybe_sync(value: T) -> Self {
 ///         Self { value: CopyValue::new_maybe_sync(value) }
 ///     }
 /// }
 ///
-/// impl<T: 'static, S: Storage<T>> Readable for MyCopyValue<T, S> {
+/// impl<T, S: Storage<T>> Readable for MyCopyValue<T, S> {
 ///     type Target = T;
 ///     type Storage = S;
 ///
@@ -79,11 +79,11 @@ macro_rules! default_impl {
 /// use dioxus::prelude::*;
 /// use dioxus_core::Subscribers;
 ///
-/// struct MyCopyValue<T: 'static, S: Storage<T>> {
+/// struct MyCopyValue<T, S: Storage<T>> {
 ///     value: CopyValue<T, S>,
 /// }
 ///
-/// impl<T: 'static, S: Storage<T>> Readable for MyCopyValue<T, S> {
+/// impl<T, S: Storage<T>> Readable for MyCopyValue<T, S> {
 ///     type Target = T;
 ///     type Storage = S;
 ///
@@ -157,11 +157,11 @@ macro_rules! read_impls {
 /// use dioxus::prelude::*;
 /// use dioxus_core::Subscribers;
 ///
-/// struct MyCopyValue<T: 'static, S: Storage<T>> {
+/// struct MyCopyValue<T, S: Storage<T>> {
 ///     value: CopyValue<T, S>,
 /// }
 ///
-/// impl<T: 'static, S: Storage<T>> Readable for MyCopyValue<T, S> {
+/// impl<T, S: Storage<T>> Readable for MyCopyValue<T, S> {
 ///     type Target = T;
 ///     type Storage = S;
 ///
@@ -238,11 +238,11 @@ macro_rules! fmt_impls {
 /// use dioxus::prelude::*;
 /// use dioxus_core::Subscribers;
 ///
-/// struct MyCopyValue<T: 'static, S: Storage<T>> {
+/// struct MyCopyValue<T, S: Storage<T>> {
 ///     value: CopyValue<T, S>,
 /// }
 ///
-/// impl<T: 'static, S: Storage<T>> Readable for MyCopyValue<T, S> {
+/// impl<T, S: Storage<T>> Readable for MyCopyValue<T, S> {
 ///     type Target = T;
 ///     type Storage = S;
 ///
@@ -303,11 +303,11 @@ macro_rules! eq_impls {
 /// use generational_box::*;
 /// use dioxus::prelude::*;
 ///
-/// struct MyCopyValue<T: 'static, S: Storage<T>> {
+/// struct MyCopyValue<T, S: Storage<T>> {
 ///     value: CopyValue<T, S>,
 /// }
 ///
-/// impl<T: 'static, S: Storage<T>> Readable for MyCopyValue<T, S> {
+/// impl<T, S: Storage<T>> Readable for MyCopyValue<T, S> {
 ///     type Target = T;
 ///     type Storage = S;
 ///
@@ -322,7 +322,7 @@ macro_rules! eq_impls {
 ///     }
 /// }
 ///
-/// impl<T: 'static, S: Storage<T>> Writable for MyCopyValue<T, S> {
+/// impl<T, S: Storage<T>> Writable for MyCopyValue<T, S> {
 ///     fn try_write_unchecked(
 ///         &self,
 ///     ) -> Result<WritableRef<'static, Self>, generational_box::BorrowMutError> {
