@@ -9,6 +9,9 @@ use std::{
     sync::Arc,
 };
 
+/// A single node in the [`StoreSubscriptions`] tree. Each path is a specific view into the store
+/// and can be subscribed to and marked dirty separately. If the whole store is read or written to, all
+/// nodes in the subtree are subscribed to or marked as dirty.
 #[derive(Clone, Default)]
 pub(crate) struct SelectorNode {
     subscribers: HashSet<ReactiveContext>,
@@ -16,22 +19,26 @@ pub(crate) struct SelectorNode {
 }
 
 impl SelectorNode {
-    fn find(&self, path: &[PathKey]) -> Option<&SelectorNode> {
+    /// Get an existing selector node by its path.
+    fn get(&self, path: &[PathKey]) -> Option<&SelectorNode> {
         let [first, rest @ ..] = path else {
             return Some(self);
         };
-        self.root.get(first).and_then(|child| child.find(rest))
+        self.root.get(first).and_then(|child| child.get(rest))
     }
 
-    fn find_mut(&mut self, path: &[PathKey]) -> Option<&mut SelectorNode> {
+    /// Get an existing selector node by its path mutably.
+    fn get_mut(&mut self, path: &[PathKey]) -> Option<&mut SelectorNode> {
         let [first, rest @ ..] = path else {
             return Some(self);
         };
         self.root
             .get_mut(first)
-            .and_then(|child| child.find_mut(rest))
+            .and_then(|child| child.get_mut(rest))
     }
 
+    /// Get a selector mutably or create one if it doesn't exist. This is used when subscribing to
+    /// a path that may not exist yet.
     fn get_mut_or_default(&mut self, path: &[PathKey]) -> &mut SelectorNode {
         let [first, rest @ ..] = path else {
             return self;
@@ -42,6 +49,9 @@ impl SelectorNode {
             .get_mut_or_default(rest)
     }
 
+    /// Visit this node and all of its children in depth-first order, calling the provided function on each node.
+    ///
+    /// This is used to mark nodes dirty recursively when a Store is written to.
     fn visit_depth_first_mut(&mut self, f: &mut dyn FnMut(&mut SelectorNode)) {
         f(self);
         for child in self.root.values_mut() {
@@ -49,8 +59,10 @@ impl SelectorNode {
         }
     }
 
+    /// Mark this selector and all children as dirty. This should be called any time a raw mutable reference to a store
+    /// is exposed to the user. They could write to any level of the store, so we need to mark all nodes as dirty.
     fn mark_children_dirty(&mut self, path: &[PathKey]) {
-        let Some(node) = self.find_mut(path) else {
+        let Some(node) = self.get_mut(path) else {
             return;
         };
 
@@ -60,8 +72,10 @@ impl SelectorNode {
         });
     }
 
+    /// Mark only children after a certain index as dirty. This is used when inserting a new item into a list.
+    /// Items after the index that is inserted need to be marked dirty because the value that index points to may have changed.
     fn mark_dirty_at_and_after_index(&mut self, path: &[PathKey], index: usize) {
-        let Some(node) = self.find_mut(path) else {
+        let Some(node) = self.get_mut(path) else {
             return;
         };
 
@@ -75,15 +89,18 @@ impl SelectorNode {
         }
     }
 
+    /// Mark a specific node as dirty without marking its children. This is used for data structures like HashMaps
+    /// when inserting or removing items. Inserting an item into a HashMap only changes the length of the map and the
+    /// specific value that was inserted or removed.
     fn mark_dirty_shallow(&mut self, path: &[PathKey]) {
-        let Some(node) = self.find_mut(path) else {
+        let Some(node) = self.get_mut(path) else {
             return;
         };
 
-        // Mark the node as dirty
         node.mark_dirty();
     }
 
+    /// Mark this node as dirty, which will notify all subscribers that the value has changed.
     fn mark_dirty(&mut self) {
         // We cannot hold the subscribers lock while calling mark_dirty, because mark_dirty can run user code which may cause a new subscriber to be added. If we hold the lock, we will deadlock.
         #[allow(clippy::mutable_key_type)]
@@ -93,6 +110,7 @@ impl SelectorNode {
         self.subscribers.extend(subscribers);
     }
 
+    /// Remove a path from the subscription tree
     fn remove(&mut self, path: &[PathKey]) {
         let [first, rest @ ..] = path else {
             return;
@@ -185,6 +203,7 @@ impl PartialEq for StoreSubscriptions {
 }
 
 impl StoreSubscriptions {
+    /// Create a new instance of StoreSubscriptions.
     pub(crate) fn new() -> Self {
         Self {
             inner: CopyValue::new_maybe_sync(StoreSubscriptionsInner {
@@ -194,10 +213,13 @@ impl StoreSubscriptions {
         }
     }
 
+    /// Hash an index into a PathKey using the hasher. The hash should be consistent
+    /// across calls
     pub(crate) fn hash(&self, index: &impl Hash) -> PathKey {
-        self.inner.write_unchecked().hasher.hash_one(index) as PathKey
+        (self.inner.write_unchecked().hasher.hash_one(index) % PathKey::MAX as u64) as PathKey
     }
 
+    /// Subscribe to a specific path in the store.
     pub(crate) fn track(&self, key: &[PathKey]) {
         if let Some(rc) = ReactiveContext::current() {
             let subscribers = self.subscribers(key);
@@ -205,6 +227,8 @@ impl StoreSubscriptions {
         }
     }
 
+    /// Subscribe to a path and all of its children recursively. This should be called any time we give out
+    /// a raw reference to a store, because the user could read any level of the store.
     pub(crate) fn track_recursive(&self, key: &[PathKey]) {
         if let Some(rc) = ReactiveContext::current() {
             let mut paths = Vec::new();
@@ -244,6 +268,8 @@ impl StoreSubscriptions {
             .mark_dirty_at_and_after_index(key, index);
     }
 
+    /// Get a subscriber list for a specific path in the store. This is used to subscribe to changes
+    /// to a specific path in the store and remove the node from the subscription tree when it is no longer needed.
     pub(crate) fn subscribers(&self, key: &[PathKey]) -> Subscribers {
         Arc::new(StoreSubscribers {
             subscriptions: *self,
@@ -253,12 +279,14 @@ impl StoreSubscriptions {
     }
 }
 
+/// A subscriber list implementation that handles garbage collection of the subscription tree.
 struct StoreSubscribers {
     subscriptions: StoreSubscriptions,
     path: Box<[PathKey]>,
 }
 
 impl SubscriberList for StoreSubscribers {
+    /// Add a subscriber to the subscription list for this path in the store, creating the node if it doesn't exist.
     fn add(&self, subscriber: ReactiveContext) {
         let Ok(mut write) = self.subscriptions.inner.try_write_unchecked() else {
             return;
@@ -267,11 +295,13 @@ impl SubscriberList for StoreSubscribers {
         node.subscribers.insert(subscriber);
     }
 
+    /// Remove a subscriber from the subscription list for this path in the store. If the node has no subscribers left
+    /// remove that node from the subscription tree.
     fn remove(&self, subscriber: &ReactiveContext) {
         let Ok(mut write) = self.subscriptions.inner.try_write_unchecked() else {
             return;
         };
-        let Some(node) = write.root.find_mut(&self.path) else {
+        let Some(node) = write.root.get_mut(&self.path) else {
             return;
         };
         node.subscribers.remove(subscriber);
@@ -280,11 +310,12 @@ impl SubscriberList for StoreSubscribers {
         }
     }
 
+    /// Visit all subscribers for this path in the store, calling the provided function on each subscriber.
     fn visit(&self, f: &mut dyn FnMut(&ReactiveContext)) {
         let Ok(read) = self.subscriptions.inner.try_read() else {
             return;
         };
-        let Some(node) = read.root.find(&self.path) else {
+        let Some(node) = read.root.get(&self.path) else {
             return;
         };
         node.subscribers.iter().for_each(f);
