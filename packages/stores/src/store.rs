@@ -12,8 +12,11 @@ use dioxus_signals::{
 };
 use std::marker::PhantomData;
 
-/// A type alias for a read-only store.
+/// A type alias for a boxed read-only store.
 pub type ReadStore<T> = Store<T, ReadSignal<T>>;
+
+/// A type alias for a boxed writable-only store.
+pub type WriteStore<T> = Store<T, WriteSignal<T>>;
 
 /// Stores are a reactive type built for nested data structures. Each store will lazily create signals
 /// for each field/member of the data structure as needed.
