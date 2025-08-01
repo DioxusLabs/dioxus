@@ -6,33 +6,33 @@
 /// use dioxus::prelude::*;
 /// use dioxus_core::Subscribers;
 ///
-/// struct MyCopyValue<T, S: Storage<T>> {
+/// struct MyCopyValue<T, S: 'static> {
 ///     value: CopyValue<T, S>,
 /// }
 ///
-/// impl<T, S: Storage<T>> MyCopyValue<T, S> {
+/// impl<T: 'static, S: Storage<T> + 'static> MyCopyValue<T, S> {
 ///     fn new_maybe_sync(value: T) -> Self {
 ///         Self { value: CopyValue::new_maybe_sync(value) }
 ///     }
 /// }
 ///
-/// impl<T, S: Storage<T>> Readable for MyCopyValue<T, S> {
+/// impl<T, S: Storage<T> + 'static> Readable for MyCopyValue<T, S> {
 ///     type Target = T;
 ///     type Storage = S;
 ///
 ///     fn try_read_unchecked(
 ///         &self,
-///     ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> {
+///     ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> where T: 'static {
 ///         self.value.try_read_unchecked()
 ///     }
 ///
 ///     fn try_peek_unchecked(
 ///         &self,
-///     ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> {
+///     ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> where T: 'static {
 ///         self.value.try_read_unchecked()
 ///     }
 ///
-///     fn subscribers(&self) -> Option<Subscribers> {
+///     fn subscribers(&self) -> Option<Subscribers> where T: 'static {
 ///         self.value.subscribers()
 ///     }
 /// }
@@ -79,27 +79,27 @@ macro_rules! default_impl {
 /// use dioxus::prelude::*;
 /// use dioxus_core::Subscribers;
 ///
-/// struct MyCopyValue<T, S: Storage<T>> {
+/// struct MyCopyValue<T, S: 'static> {
 ///     value: CopyValue<T, S>,
 /// }
 ///
-/// impl<T, S: Storage<T>> Readable for MyCopyValue<T, S> {
+/// impl<T: 'static, S: Storage<T> + 'static> Readable for MyCopyValue<T, S> where T: 'static {
 ///     type Target = T;
 ///     type Storage = S;
 ///
 ///     fn try_read_unchecked(
 ///         &self,
-///     ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> {
+///     ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> where T: 'static {
 ///         self.value.try_read_unchecked()
 ///     }
 ///
 ///     fn try_peek_unchecked(
 ///         &self,
-///     ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> {
+///     ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> where T: 'static {
 ///         self.value.try_read_unchecked()
 ///     }
 ///
-///     fn subscribers(&self) -> Option<Subscribers> {
+///     fn subscribers(&self) -> Option<Subscribers> where T: 'static {
 ///         self.value.subscribers()
 ///     }
 /// }
@@ -157,27 +157,27 @@ macro_rules! read_impls {
 /// use dioxus::prelude::*;
 /// use dioxus_core::Subscribers;
 ///
-/// struct MyCopyValue<T, S: Storage<T>> {
+/// struct MyCopyValue<T, S: 'static> {
 ///     value: CopyValue<T, S>,
 /// }
 ///
-/// impl<T, S: Storage<T>> Readable for MyCopyValue<T, S> {
+/// impl<T: 'static, S: Storage<T> + 'static> Readable for MyCopyValue<T, S> {
 ///     type Target = T;
 ///     type Storage = S;
 ///
 ///     fn try_read_unchecked(
 ///         &self,
-///     ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> {
+///     ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> where T: 'static {
 ///         self.value.try_read_unchecked()
 ///     }
 ///
 ///     fn try_peek_unchecked(
 ///         &self,
-///     ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> {
+///     ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> where T: 'static {
 ///         self.value.try_read_unchecked()
 ///     }
 ///
-///     fn subscribers(&self) -> Option<Subscribers> {
+///     fn subscribers(&self) -> Option<Subscribers> where T: 'static {
 ///         self.value.subscribers()
 ///     }
 /// }
@@ -238,27 +238,27 @@ macro_rules! fmt_impls {
 /// use dioxus::prelude::*;
 /// use dioxus_core::Subscribers;
 ///
-/// struct MyCopyValue<T, S: Storage<T>> {
+/// struct MyCopyValue<T, S: 'static> {
 ///     value: CopyValue<T, S>,
 /// }
 ///
-/// impl<T, S: Storage<T>> Readable for MyCopyValue<T, S> {
+/// impl<T: 'static, S: Storage<T> + 'static> Readable for MyCopyValue<T, S> {
 ///     type Target = T;
 ///     type Storage = S;
 ///
 ///     fn try_read_unchecked(
 ///         &self,
-///     ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> {
+///     ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> where T: 'static {
 ///         self.value.try_read_unchecked()
 ///     }
 ///
 ///     fn try_peek_unchecked(
 ///         &self,
-///     ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> {
+///     ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> where T: 'static {
 ///         self.value.try_read_unchecked()
 ///     }
 ///
-///     fn subscribers(&self) -> Option<Subscribers> {
+///     fn subscribers(&self) -> Option<Subscribers> where T: 'static {
 ///         self.value.subscribers()
 ///     }
 /// }
@@ -303,29 +303,29 @@ macro_rules! eq_impls {
 /// use generational_box::*;
 /// use dioxus::prelude::*;
 ///
-/// struct MyCopyValue<T, S: Storage<T>> {
+/// struct MyCopyValue<T, S: 'static> {
 ///     value: CopyValue<T, S>,
 /// }
 ///
-/// impl<T, S: Storage<T>> Readable for MyCopyValue<T, S> {
+/// impl<T: 'static, S: Storage<T> + 'static> Readable for MyCopyValue<T, S> {
 ///     type Target = T;
 ///     type Storage = S;
 ///
 ///     fn try_read_unchecked(
 ///         &self,
-///     ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> {
+///     ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> where T: 'static {
 ///         self.value.try_read_unchecked()
 ///     }
 ///
-///     fn peek_unchecked(&self) -> ReadableRef<'static, Self> {
+///     fn peek_unchecked(&self) -> ReadableRef<'static, Self> where T: 'static {
 ///         self.value.read_unchecked()
 ///     }
 /// }
 ///
-/// impl<T, S: Storage<T>> Writable for MyCopyValue<T, S> {
+/// impl<T: 'static, S: Storage<T> + 'static> Writable for MyCopyValue<T, S> {
 ///     fn try_write_unchecked(
 ///         &self,
-///     ) -> Result<WritableRef<'static, Self>, generational_box::BorrowMutError> {
+///     ) -> Result<WritableRef<'static, Self>, generational_box::BorrowMutError> where T: 'static {
 ///         self.value.try_write_unchecked()
 ///     }
 ///
