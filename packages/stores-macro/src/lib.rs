@@ -3,8 +3,8 @@ use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote, ToTokens};
 use syn::{
-    parse_macro_input, parse_quote, spanned::Spanned, DataEnum, DataStruct, DeriveInput, Fields,
-    Generics, Ident, Index, LitInt,
+    parse_macro_input, parse_quote, spanned::Spanned, DataEnum, DataStruct, DeriveInput, Field,
+    Fields, Generics, Ident, Index, LitInt,
 };
 
 /// # `derive(Store)`
@@ -170,51 +170,16 @@ fn derive_store_struct(
     let mut definitions = Vec::new();
     let mut transposed_fields = Vec::new();
 
-    for (i, field) in fields.iter().enumerate() {
-        let vis = &field.vis;
-        let field_name = &field.ident;
-        let colon = field.colon_token.as_ref();
-
-        // When we map the field, we need to use either the field name for named fields or the index for unnamed fields.
-        let field_accessor = field_name.as_ref().map_or_else(
-            || Index::from(i).to_token_stream(),
-            |name| name.to_token_stream(),
+    for (field_index, field) in fields.iter().enumerate() {
+        generate_field_methods(
+            field_index,
+            field,
+            struct_name,
+            &ty_generics,
+            &mut transposed_fields,
+            &mut definitions,
+            &mut implementations,
         );
-        let function_name = function_name_from_field(i, field);
-        let field_type = &field.ty;
-
-        // The zoomed in store type is a MappedMutSignal with function pointers to map the reference to the struct into a reference to the field
-        let write_type = quote! { dioxus_stores::macro_helpers::dioxus_signals::MappedMutSignal<#field_type, __Lens, fn(&#struct_name #ty_generics) -> &#field_type,  fn(&mut #struct_name #ty_generics) -> &mut #field_type> };
-        let store_type = quote! { dioxus_stores::Store<#field_type, #write_type> };
-
-        transposed_fields.push(quote! { #vis #field_name #colon #store_type });
-
-        // Each field gets its own reactive scope within the child based on the field's index
-        let ordinal = LitInt::new(&i.to_string(), field.span());
-
-        let definition = quote! {
-            fn #function_name(
-                self,
-            ) -> #store_type;
-        };
-        definitions.push(definition);
-        let implementation = quote! {
-            fn #function_name(
-                self,
-            ) -> #store_type {
-                let __map_field: fn(&#struct_name #ty_generics) -> &#field_type = |value| &value.#field_accessor;
-                let __map_mut_field: fn(&mut #struct_name #ty_generics) -> &mut #field_type = |value| &mut value.#field_accessor;
-                // Map the field into a child selector that tracks the field
-                let scope = self.into_selector().child(
-                    #ordinal,
-                    __map_field,
-                    __map_mut_field,
-                );
-                // Convert the selector into a store
-                ::std::convert::Into::into(scope)
-            }
-        };
-        implementations.push(implementation);
     }
 
     // Add a transpose method to turn the stored struct into a struct with all fields as stores
@@ -286,6 +251,58 @@ fn derive_store_struct(
     })
 }
 
+fn generate_field_methods(
+    field_index: usize,
+    field: &syn::Field,
+    struct_name: &Ident,
+    ty_generics: &syn::TypeGenerics,
+    transposed_fields: &mut Vec<TokenStream2>,
+    definitions: &mut Vec<TokenStream2>,
+    implementations: &mut Vec<TokenStream2>,
+) {
+    let vis = &field.vis;
+    let field_name = &field.ident;
+    let colon = field.colon_token.as_ref();
+
+    // When we map the field, we need to use either the field name for named fields or the index for unnamed fields.
+    let field_accessor = field_name.as_ref().map_or_else(
+        || Index::from(field_index).to_token_stream(),
+        |name| name.to_token_stream(),
+    );
+    let function_name = function_name_from_field(field_index, field);
+    let field_type = &field.ty;
+    let store_type = mapped_type(&struct_name, &ty_generics, field_type);
+
+    transposed_fields.push(quote! { #vis #field_name #colon #store_type });
+
+    // Each field gets its own reactive scope within the child based on the field's index
+    let ordinal = LitInt::new(&field_index.to_string(), field.span());
+
+    let definition = quote! {
+        fn #function_name(
+            self,
+        ) -> #store_type;
+    };
+    definitions.push(definition);
+    let implementation = quote! {
+        fn #function_name(
+            self,
+        ) -> #store_type {
+            let __map_field: fn(&#struct_name #ty_generics) -> &#field_type = |value| &value.#field_accessor;
+            let __map_mut_field: fn(&mut #struct_name #ty_generics) -> &mut #field_type = |value| &mut value.#field_accessor;
+            // Map the field into a child selector that tracks the field
+            let scope = self.into_selector().child(
+                #ordinal,
+                __map_field,
+                __map_mut_field,
+            );
+            // Convert the selector into a store
+            ::std::convert::Into::into(scope)
+        }
+    };
+    implementations.push(implementation);
+}
+
 // For enums, we derive two items:
 // - An extension trait with methods to check if the store is a specific variant and a method
 //   to access the field of that variant if there is only one field
@@ -318,92 +335,52 @@ fn derive_store_enum(
 
     for variant in variants {
         let variant_name = &variant.ident;
-
-        // Generate a is_variant that checks if the store is a specific variant
         let snake_case_variant = format_ident!("{}", variant_name.to_string().to_case(Case::Snake));
         let is_fn = format_ident!("is_{}", snake_case_variant);
-        let definition = quote! {
-            fn #is_fn(
-                &self,
-            ) -> bool where #readable_bounds;
-        };
-        definitions.push(definition);
-        let implementation = quote! {
-            fn #is_fn(
-                &self,
-            ) -> bool where #readable_bounds {
-                // Reading the current variant only tracks the shallow value of the store. Writing to a specific
-                // variant will not cause the variant to change, so we don't need to subscribe deeply
-                self.selector().track_shallow();
-                let ref_self = dioxus_stores::macro_helpers::dioxus_signals::ReadableExt::peek(self.selector());
-                matches!(&*ref_self, #enum_name::#variant_name { .. })
-            }
-        };
-        implementations.push(implementation);
+
+        generate_is_variant_method(
+            &is_fn,
+            variant_name,
+            enum_name,
+            readable_bounds.clone(),
+            &mut definitions,
+            &mut implementations,
+        );
 
         let mut transposed_fields = Vec::new();
         let mut transposed_field_selectors = Vec::new();
         let fields = &variant.fields;
         for (i, field) in fields.iter().enumerate() {
-            let ordinal = LitInt::new(&i.to_string(), field.span());
             let vis = &field.vis;
             let field_name = &field.ident;
             let colon = field.colon_token.as_ref();
-            let function_name = function_name_from_field(i, field);
             let field_type = &field.ty;
-
-            // The zoomed in store type is a MappedMutSignal with function pointers to map the reference to the enum into a reference to the field
-            let write_type = quote! { dioxus_stores::macro_helpers::dioxus_signals::MappedMutSignal<#field_type, __Lens, fn(&#enum_name #ty_generics) -> &#field_type, fn(&mut #enum_name #ty_generics) -> &mut #field_type> };
-            let store_type = quote! { dioxus_stores::Store<#field_type, #write_type> };
+            let store_type = mapped_type(&enum_name, &ty_generics, field_type);
 
             // Push the field for the transposed enum
             transposed_fields.push(quote! { #vis #field_name #colon #store_type });
 
-            // Generate the match arm for the field
-            let match_field = if field_name.is_none() {
-                let ignore_before = (0..i).map(|_| quote!(_));
-                let ignore_after = (i + 1..fields.len()).map(|_| quote!(_));
-                quote!( ( #(#ignore_before,)* #function_name, #(#ignore_after),* ) )
-            } else {
-                quote!( { #function_name, .. })
-            };
-            let select_field = quote! {
-                let __map_field: fn(&#enum_name #ty_generics) -> &#field_type = |value| match value {
-                    #enum_name::#variant_name #match_field => #function_name,
-                    _ => panic!("Selector that was created to match {} read after variant changed", stringify!(#variant_name)),
-                };
-                let __map_mut_field: fn(&mut #enum_name #ty_generics) -> &mut #field_type = |value| match value {
-                    #enum_name::#variant_name #match_field => #function_name,
-                    _ => panic!("Selector that was created to match {} written after variant changed", stringify!(#variant_name)),
-                };
-                // Each field within the variant gets its own reactive scope. Writing to one field will not notify the enum or
-                // other fields
-                let scope = self.into_selector().child(
-                    #ordinal,
-                    __map_field,
-                    __map_mut_field,
-                );
-                ::std::convert::Into::into(scope)
-            };
+            // Generate the code to get Store<Field, W> from the enum
+            let select_field = select_enum_variant_field(
+                enum_name,
+                &ty_generics,
+                variant_name,
+                field,
+                i,
+                fields.len(),
+            );
 
             // If there is only one field, generate a field() -> Option<Store<O, W>> method
             if fields.len() == 1 {
-                let definition = quote! {
-                    fn #snake_case_variant(
-                        self,
-                    ) -> Option<#store_type> where #readable_bounds;
-                };
-                definitions.push(definition);
-                let implementation = quote! {
-                    fn #snake_case_variant(
-                        self,
-                    ) -> Option<#store_type> where #readable_bounds {
-                        self.#is_fn().then(|| {
-                            #select_field
-                        })
-                    }
-                };
-                implementations.push(implementation);
+                generate_as_variant_method(
+                    &is_fn,
+                    &snake_case_variant,
+                    &select_field,
+                    &store_type,
+                    &readable_bounds,
+                    &mut definitions,
+                    &mut implementations,
+                );
             }
 
             transposed_field_selectors.push(select_field);
@@ -503,10 +480,116 @@ fn derive_store_enum(
     })
 }
 
+fn generate_is_variant_method(
+    is_fn: &Ident,
+    variant_name: &Ident,
+    enum_name: &Ident,
+    readable_bounds: TokenStream2,
+    definitions: &mut Vec<TokenStream2>,
+    implementations: &mut Vec<TokenStream2>,
+) {
+    // Generate a is_variant method that checks if the store is a specific variant
+    let definition = quote! {
+        fn #is_fn(
+            &self,
+        ) -> bool where #readable_bounds;
+    };
+    definitions.push(definition);
+    let implementation = quote! {
+        fn #is_fn(
+            &self,
+        ) -> bool where #readable_bounds {
+            // Reading the current variant only tracks the shallow value of the store. Writing to a specific
+            // variant will not cause the variant to change, so we don't need to subscribe deeply
+            self.selector().track_shallow();
+            let ref_self = dioxus_stores::macro_helpers::dioxus_signals::ReadableExt::peek(self.selector());
+            matches!(&*ref_self, #enum_name::#variant_name { .. })
+        }
+    };
+    implementations.push(implementation);
+}
+
+/// Generate a method to turn Store<Enum, W> into Option<Store<VariantField, W>> if the variant only has one field.
+fn generate_as_variant_method(
+    is_fn: &Ident,
+    snake_case_variant: &Ident,
+    select_field: &TokenStream2,
+    store_type: &TokenStream2,
+    readable_bounds: &TokenStream2,
+    definitions: &mut Vec<TokenStream2>,
+    implementations: &mut Vec<TokenStream2>,
+) {
+    let definition = quote! {
+        fn #snake_case_variant(
+            self,
+        ) -> Option<#store_type> where #readable_bounds;
+    };
+    definitions.push(definition);
+    let implementation = quote! {
+        fn #snake_case_variant(
+            self,
+        ) -> Option<#store_type> where #readable_bounds {
+            self.#is_fn().then(|| {
+                #select_field
+            })
+        }
+    };
+    implementations.push(implementation);
+}
+
+fn select_enum_variant_field(
+    enum_name: &Ident,
+    ty_generics: &syn::TypeGenerics,
+    variant_name: &Ident,
+    field: &Field,
+    field_index: usize,
+    field_count: usize,
+) -> TokenStream2 {
+    // Generate the match arm for the field
+    let function_name = function_name_from_field(field_index, field);
+    let field_type = &field.ty;
+    let match_field = if field.ident.is_none() {
+        let ignore_before = (0..field_index).map(|_| quote!(_));
+        let ignore_after = (field_index + 1..field_count).map(|_| quote!(_));
+        quote!( ( #(#ignore_before,)* #function_name, #(#ignore_after),* ) )
+    } else {
+        quote!( { #function_name, .. })
+    };
+    let ordinal = LitInt::new(&field_index.to_string(), variant_name.span());
+    quote! {
+        let __map_field: fn(&#enum_name #ty_generics) -> &#field_type = |value| match value {
+            #enum_name::#variant_name #match_field => #function_name,
+            _ => panic!("Selector that was created to match {} read after variant changed", stringify!(#variant_name)),
+        };
+        let __map_mut_field: fn(&mut #enum_name #ty_generics) -> &mut #field_type = |value| match value {
+            #enum_name::#variant_name #match_field => #function_name,
+            _ => panic!("Selector that was created to match {} written after variant changed", stringify!(#variant_name)),
+        };
+        // Each field within the variant gets its own reactive scope. Writing to one field will not notify the enum or
+        // other fields
+        let scope = self.into_selector().child(
+            #ordinal,
+            __map_field,
+            __map_mut_field,
+        );
+        ::std::convert::Into::into(scope)
+    }
+}
+
 fn function_name_from_field(index: usize, field: &syn::Field) -> Ident {
     // Generate a function name from the field's identifier or index
     field
         .ident
         .as_ref()
         .map_or_else(|| format_ident!("field_{index}"), |name| name.clone())
+}
+
+fn mapped_type(
+    item: &Ident,
+    ty_generics: &syn::TypeGenerics,
+    field_type: &syn::Type,
+) -> TokenStream2 {
+    // The zoomed in store type is a MappedMutSignal with function pointers to map the reference to the enum into a reference to the field
+    let write_type = quote! { dioxus_stores::macro_helpers::dioxus_signals::MappedMutSignal<#field_type, __Lens, fn(&#item #ty_generics) -> &#field_type, fn(&mut #item #ty_generics) -> &mut #field_type> };
+    quote! { dioxus_stores::Store<#field_type, #write_type> }
 }
