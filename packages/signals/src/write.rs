@@ -288,9 +288,12 @@ pub trait WritableExt: Writable {
         self.try_write_unchecked().unwrap()
     }
 
-    /// Map the readable type to a new type. This lets you provide a view into a readable type without needing to clone the inner value.
+    /// Map the references and mutable references of the writable value to a new type. This lets you provide a view
+    /// into the writable value without creating a new signal or cloning the value.
     ///
-    /// Anything that subscribes to the readable value will be rerun whenever the original value changes, even if the view does not change. If you want to memorize the view, you can use a [`crate::Memo`] instead.
+    /// Anything that subscribes to the writable value will be rerun whenever the original value changes or you write to this
+    /// scoped value, even if the view does not change. If you want to memorize the view, you can use a [`crate::Memo`] instead.
+    /// For fine grained scoped updates, use stores instead
     ///
     /// # Example
     /// ```rust

@@ -4,7 +4,7 @@ use crate::{
 };
 use dioxus_core::{IntoAttributeValue, IntoDynNode, ReactiveContext, ScopeId, Subscribers};
 use generational_box::{BorrowResult, Storage, SyncStorage, UnsyncStorage};
-use std::{any::Any, collections::HashSet, ops::Deref, sync::Arc, sync::Mutex};
+use std::{collections::HashSet, ops::Deref, sync::Arc, sync::Mutex};
 
 #[doc = include_str!("../docs/signals.md")]
 #[doc(alias = "State")]
@@ -437,8 +437,8 @@ impl<T, S: Storage<SignalData<T>>> Readable for Signal<T, S> {
     }
 }
 
-impl<T, S: Storage<SignalData<T>>> Writable for Signal<T, S> {
-    type WriteMetadata = Box<dyn Any>;
+impl<T: 'static, S: Storage<SignalData<T>>> Writable for Signal<T, S> {
+    type WriteMetadata = SignalSubscriberDrop<T, S>;
 
     #[track_caller]
     fn try_write_unchecked(
@@ -450,11 +450,11 @@ impl<T, S: Storage<SignalData<T>>> Writable for Signal<T, S> {
             let borrow = S::map_mut(inner.into_inner(), |v| &mut v.value);
             WriteLock::new_with_metadata(
                 borrow,
-                Box::new(SignalSubscriberDrop {
+                SignalSubscriberDrop {
                     signal: *self,
                     #[cfg(debug_assertions)]
                     origin,
-                }) as Box<dyn Any>,
+                },
             )
         })
     }
@@ -515,7 +515,9 @@ impl<'de, T: serde::Deserialize<'de> + 'static, Store: Storage<SignalData<T>> + 
     }
 }
 
-struct SignalSubscriberDrop<T: 'static, S: Storage<SignalData<T>> + 'static> {
+#[doc(hidden)]
+/// A drop guard that will update the subscribers of the signal when it is dropped.
+pub struct SignalSubscriberDrop<T: 'static, S: Storage<SignalData<T>> + 'static> {
     signal: Signal<T, S>,
     #[cfg(debug_assertions)]
     origin: &'static std::panic::Location<'static>,

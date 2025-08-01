@@ -4,7 +4,7 @@ use generational_box::{AnyStorage, BorrowResult};
 use std::ops::Deref;
 
 /// A read only signal that has been mapped to a new type.
-pub struct MappedSignal<O: ?Sized, V: Readable, F = fn(&<V as Readable>::Target) -> &O> {
+pub struct MappedSignal<O: ?Sized, V, F = fn(&<V as Readable>::Target) -> &O> {
     value: V,
     map_fn: F,
     _marker: std::marker::PhantomData<O>,
@@ -34,8 +34,6 @@ where
 impl<V, O, F> MappedSignal<O, V, F>
 where
     O: ?Sized,
-    V: Readable,
-    F: Fn(&V::Target) -> &O,
 {
     /// Create a new mapped signal.
     pub fn new(value: V, map_fn: F) -> Self {

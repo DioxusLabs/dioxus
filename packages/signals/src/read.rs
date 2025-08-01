@@ -165,9 +165,12 @@ pub trait ReadableExt: Readable {
         self.try_peek_unchecked().unwrap()
     }
 
-    /// Map the readable type to a new type. This lets you provide a view into a readable type without needing to clone the inner value.
+    /// Map the references of the readable value to a new type. This lets you provide a view
+    /// into the readable value without creating a new signal or cloning the value.
     ///
-    /// Anything that subscribes to the readable value will be rerun whenever the original value changes, even if the view does not change. If you want to memorize the view, you can use a [`crate::Memo`] instead.
+    /// Anything that subscribes to the readable value will be rerun whenever the original value changes, even if the view does not
+    /// change. If you want to memorize the view, you can use a [`crate::Memo`] instead. For fine grained scoped updates, use
+    /// stores instead
     ///
     /// # Example
     /// ```rust
