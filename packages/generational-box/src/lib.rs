@@ -195,32 +195,32 @@ pub trait Storage<Data = ()>: AnyStorage + 'static {
 /// A trait for any storage backing type.
 pub trait AnyStorage: Default + 'static {
     /// The reference this storage type returns.
-    type Ref<'a, T: ?Sized + 'static>: Deref<Target = T>;
+    type Ref<'a, T: ?Sized + 'a>: Deref<Target = T>;
     /// The mutable reference this storage type returns.
-    type Mut<'a, T: ?Sized + 'static>: DerefMut<Target = T>;
+    type Mut<'a, T: ?Sized + 'a>: DerefMut<Target = T>;
 
     /// Downcast a reference in a Ref to a more specific lifetime
     ///
     /// This function enforces the variance of the lifetime parameter `'a` in Ref. Rust will typically infer this cast with a concrete type, but it cannot with a generic type.
-    fn downcast_lifetime_ref<'a: 'b, 'b, T: ?Sized + 'static>(
+    fn downcast_lifetime_ref<'a: 'b, 'b, T: ?Sized + 'a>(
         ref_: Self::Ref<'a, T>,
     ) -> Self::Ref<'b, T>;
 
     /// Downcast a mutable reference in a RefMut to a more specific lifetime
     ///
     /// This function enforces the variance of the lifetime parameter `'a` in Mut.  Rust will typically infer this cast with a concrete type, but it cannot with a generic type.
-    fn downcast_lifetime_mut<'a: 'b, 'b, T: ?Sized + 'static>(
+    fn downcast_lifetime_mut<'a: 'b, 'b, T: ?Sized + 'a>(
         mut_: Self::Mut<'a, T>,
     ) -> Self::Mut<'b, T>;
 
     /// Try to map the mutable ref.
-    fn try_map_mut<T: ?Sized + 'static, U: ?Sized + 'static>(
+    fn try_map_mut<T: ?Sized, U: ?Sized>(
         mut_ref: Self::Mut<'_, T>,
         f: impl FnOnce(&mut T) -> Option<&mut U>,
     ) -> Option<Self::Mut<'_, U>>;
 
     /// Map the mutable ref.
-    fn map_mut<T: ?Sized + 'static, U: ?Sized + 'static>(
+    fn map_mut<T: ?Sized, U: ?Sized>(
         mut_ref: Self::Mut<'_, T>,
         f: impl FnOnce(&mut T) -> &mut U,
     ) -> Self::Mut<'_, U> {
@@ -228,13 +228,13 @@ pub trait AnyStorage: Default + 'static {
     }
 
     /// Try to map the ref.
-    fn try_map<T: ?Sized, U: ?Sized + 'static>(
+    fn try_map<T: ?Sized, U: ?Sized>(
         ref_: Self::Ref<'_, T>,
         f: impl FnOnce(&T) -> Option<&U>,
     ) -> Option<Self::Ref<'_, U>>;
 
     /// Map the ref.
-    fn map<T: ?Sized, U: ?Sized + 'static>(
+    fn map<T: ?Sized, U: ?Sized>(
         ref_: Self::Ref<'_, T>,
         f: impl FnOnce(&T) -> &U,
     ) -> Self::Ref<'_, U> {
