@@ -1746,11 +1746,11 @@ fn child_owned_type(ty: &Type) -> bool {
 
 /// Check if the path without generics matches the type we are looking for
 fn last_segment_matches(ty: &Type, expected: &Ident) -> bool {
-    extract_base_type_without_generics(ty).map_or(false, |path_without_generics| {
+    extract_base_type_without_generics(ty).is_some_and(|path_without_generics| {
         path_without_generics
             .segments
             .last()
-            .map_or(false, |seg| seg.ident == *expected)
+            .is_some_and(|seg| seg.ident == *expected)
     })
 }
 

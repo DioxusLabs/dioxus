@@ -271,7 +271,7 @@ fn generate_field_methods(
     );
     let function_name = function_name_from_field(field_index, field);
     let field_type = &field.ty;
-    let store_type = mapped_type(&struct_name, &ty_generics, field_type);
+    let store_type = mapped_type(struct_name, ty_generics, field_type);
 
     transposed_fields.push(quote! { #vis #field_name #colon #store_type });
 
@@ -355,7 +355,7 @@ fn derive_store_enum(
             let field_name = &field.ident;
             let colon = field.colon_token.as_ref();
             let field_type = &field.ty;
-            let store_type = mapped_type(&enum_name, &ty_generics, field_type);
+            let store_type = mapped_type(enum_name, &ty_generics, field_type);
 
             // Push the field for the transposed enum
             transposed_fields.push(quote! { #vis #field_name #colon #store_type });
