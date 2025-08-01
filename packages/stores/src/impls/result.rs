@@ -3,7 +3,7 @@ use dioxus_signals::{MappedMutSignal, Readable, ReadableExt, Writable};
 
 impl<W, T, E> Store<Result<T, E>, W>
 where
-    W: Readable<Target = Result<T, E>> + Copy + 'static,
+    W: Readable<Target = Result<T, E>> + 'static,
     T: 'static,
     E: 'static,
 {
@@ -16,7 +16,7 @@ where
     /// let store = use_store(|| Ok::<u32, ()>(42));
     /// assert!(store.is_ok());
     /// ```
-    pub fn is_ok(self) -> bool {
+    pub fn is_ok(&self) -> bool {
         self.selector().track_shallow();
         self.selector().peek().is_ok()
     }
@@ -30,7 +30,7 @@ where
     /// let store = use_store(|| Err::<(), u32>(42));
     /// assert!(store.is_err());
     /// ```
-    pub fn is_err(self) -> bool {
+    pub fn is_err(&self) -> bool {
         self.selector().track_shallow();
         self.selector().peek().is_err()
     }
@@ -60,7 +60,7 @@ where
             })
         };
         self.is_ok()
-            .then(|| self.selector().child(0, map, map_mut).into())
+            .then(|| self.into_selector().child(0, map, map_mut).into())
     }
 
     /// Converts `Store<Result<T, E>>` into `Option<Store<E>>`, discarding the success if present. This will
@@ -78,7 +78,7 @@ where
     /// ```
     pub fn err(self) -> Option<Store<E, MappedMutSignal<E, W>>>
     where
-        W: Writable<Target = Result<T, E>> + Copy + 'static,
+        W: Writable<Target = Result<T, E>> + 'static,
     {
         self.is_err().then(|| {
             let map: fn(&Result<T, E>) -> &E = |value| match value {
@@ -89,7 +89,7 @@ where
                 Ok(_) => panic!("Tried to access `err` on an Ok value"),
                 Err(e) => e,
             };
-            self.selector().child(1, map, map_mut).into()
+            self.into_selector().child(1, map, map_mut).into()
         })
     }
 
@@ -111,7 +111,7 @@ where
         self,
     ) -> Result<Store<T, MappedMutSignal<T, W>>, Store<E, MappedMutSignal<E, W>>>
     where
-        W: Writable<Target = Result<T, E>> + Copy + 'static,
+        W: Writable<Target = Result<T, E>> + 'static,
     {
         if self.is_ok() {
             let map: fn(&Result<T, E>) -> &T = |value| match value {
@@ -122,7 +122,7 @@ where
                 Ok(t) => t,
                 Err(_) => panic!("Tried to access `ok` on an Err value"),
             };
-            Ok(self.selector().child(0, map, map_mut).into())
+            Ok(self.into_selector().child(0, map, map_mut).into())
         } else {
             let map: fn(&Result<T, E>) -> &E = |value| match value {
                 Ok(_) => panic!("Tried to access `err` on an Ok value"),
@@ -132,7 +132,7 @@ where
                 Ok(_) => panic!("Tried to access `err` on an Ok value"),
                 Err(e) => e,
             };
-            Err(self.selector().child(1, map, map_mut).into())
+            Err(self.into_selector().child(1, map, map_mut).into())
         }
     }
 }

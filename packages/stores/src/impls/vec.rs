@@ -1,7 +1,7 @@
 use crate::store::Store;
 use dioxus_signals::Writable;
 
-impl<W: Writable<Target = Vec<T>> + Copy + 'static, T: 'static> Store<Vec<T>, W> {
+impl<W: Writable<Target = Vec<T>> + 'static, T: 'static> Store<Vec<T>, W> {
     /// Pushes an item to the end of the vector. This will only mark the length of the vector as dirty.
     ///
     /// # Example

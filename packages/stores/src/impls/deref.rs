@@ -5,7 +5,7 @@ use dioxus_signals::{MappedMutSignal, Readable};
 
 impl<W, T> Store<T, W>
 where
-    W: Readable<Target = T> + Copy + 'static,
+    W: Readable<Target = T> + 'static,
     T: DerefMut + 'static,
 {
     /// Returns a store that dereferences the original value. The dereferenced store shares the same
@@ -23,6 +23,6 @@ where
     pub fn deref(self) -> Store<T::Target, MappedMutSignal<T::Target, W>> {
         let map: fn(&T) -> &T::Target = |value| value.deref();
         let map_mut: fn(&mut T) -> &mut T::Target = |value| value.deref_mut();
-        self.selector().map(map, map_mut).into()
+        self.into_selector().map(map, map_mut).into()
     }
 }

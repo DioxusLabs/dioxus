@@ -95,16 +95,15 @@ impl<W: Readable<Target = HashMap<K, V, St>> + 'static, K: 'static, V: 'static, 
     ///     println!("{}", value_store.read());
     /// }
     /// ```
-    pub fn values(self) -> impl Iterator<Item = Store<V, GetWrite<K, W>>>
+    pub fn values(&self) -> impl Iterator<Item = Store<V, GetWrite<K, W>>> + '_
     where
-        K: Copy + Eq + Hash,
+        K: Eq + Hash + Clone,
         St: BuildHasher,
         W: Clone,
     {
         self.selector().track_shallow();
         let keys = self.selector().peek().keys().cloned().collect::<Vec<_>>();
         keys.into_iter()
-            .map(|k| *k.borrow())
             .map(move |key| self.clone().get(key).unwrap())
     }
 

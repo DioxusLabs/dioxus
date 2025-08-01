@@ -3,7 +3,7 @@ use dioxus_signals::{Readable, ReadableExt};
 
 impl<W, I> Store<Vec<I>, W>
 where
-    W: Readable<Target = Vec<I>> + Copy + 'static,
+    W: Readable<Target = Vec<I>> + 'static,
     I: 'static,
 {
     /// Returns the length of the slice. This will only track the shallow state of the slice.
@@ -15,7 +15,7 @@ where
     /// let store = use_store(|| vec![1, 2, 3]);
     /// assert_eq!(store.len(), 3);
     /// ```
-    pub fn len(self) -> usize {
+    pub fn len(&self) -> usize {
         self.selector().track_shallow();
         self.selector().peek().len()
     }
@@ -29,7 +29,7 @@ where
     /// let store = use_store(|| vec![1, 2, 3]);
     /// assert!(!store.is_empty());
     /// ```
-    pub fn is_empty(self) -> bool {
+    pub fn is_empty(&self) -> bool {
         self.selector().track_shallow();
         self.selector().peek().is_empty()
     }
@@ -44,7 +44,10 @@ where
     ///     println!("{}", item);
     /// }
     /// ```
-    pub fn iter(self) -> impl Iterator<Item = Store<I, IndexWrite<usize, W>>> {
-        (0..self.len()).map(move |i| self.index(i))
+    pub fn iter(&self) -> impl Iterator<Item = Store<I, IndexWrite<usize, W>>> + '_
+    where
+        W: Clone,
+    {
+        (0..self.len()).map(move |i| self.clone().index(i))
     }
 }
