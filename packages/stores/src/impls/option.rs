@@ -134,6 +134,7 @@ impl<Lens: Readable<Target = Option<T>> + 'static, T: 'static> Store<Option<T>, 
     ///
     /// # Example
     /// ```rust, no_run
+    /// use dioxus::prelude::*;
     /// use dioxus_stores::*;
     /// let store = use_store(|| Some(42));
     /// let slice = store.as_slice();
@@ -151,9 +152,9 @@ impl<Lens: Readable<Target = Option<T>> + 'static, T: 'static> Store<Option<T>, 
     /// # Example
     /// ```rust, no_run
     /// use dioxus_stores::*;
-    /// let store = use_store(|| Some(42));
-    /// let slice = store.as_slice();
-    /// assert_eq!(&*slice.read(), [42]);
+    /// let store = use_store(|| Some(Box::new(42)));
+    /// let derefed = store.as_deref().unwrap();
+    /// assert_eq!(derefed(), 42);
     /// ```
     pub fn as_deref(self) -> Option<MappedStore<T::Target, Lens>>
     where
@@ -187,8 +188,9 @@ impl<Lens: Readable<Target = Option<T>> + 'static, T: 'static> Store<Option<T>, 
     /// ```rust, no_run
     /// use dioxus_stores::*;
     /// let store = use_store(|| Some(42));
-    /// let slice = store.filter(|&v| v > 40);
-    /// assert_eq!(slice(), 42);
+    /// let option = store.filter(|&v| v > 40);
+    /// let value = option.unwrap();
+    /// assert_eq!(value(), 42);
     /// ```
     pub fn filter(self, f: impl FnOnce(&T) -> bool) -> Option<MappedStore<T, Lens>> {
         self.is_some_and(f).then(move || {
