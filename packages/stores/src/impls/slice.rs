@@ -48,8 +48,7 @@ where
     /// ```
     pub fn iter(
         &self,
-    ) -> impl Iterator<Item = Store<I, IndexWrite<usize, Lens>>>
-           + ExactSizeIterator
+    ) -> impl ExactSizeIterator<Item = Store<I, IndexWrite<usize, Lens>>>
            + DoubleEndedIterator
            + FusedIterator
            + '_

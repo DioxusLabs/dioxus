@@ -64,8 +64,7 @@ impl<Lens: Readable<Target = BTreeMap<K, V>> + 'static, K: 'static, V: 'static>
     /// ```
     pub fn iter(
         &self,
-    ) -> impl Iterator<Item = (K, Store<V, GetWrite<K, Lens>>)>
-           + ExactSizeIterator
+    ) -> impl ExactSizeIterator<Item = (K, Store<V, GetWrite<K, Lens>>)>
            + DoubleEndedIterator
            + FusedIterator
            + '_
@@ -98,8 +97,7 @@ impl<Lens: Readable<Target = BTreeMap<K, V>> + 'static, K: 'static, V: 'static>
     /// ```
     pub fn values(
         &self,
-    ) -> impl Iterator<Item = Store<V, GetWrite<K, Lens>>>
-           + ExactSizeIterator
+    ) -> impl ExactSizeIterator<Item = Store<V, GetWrite<K, Lens>>>
            + DoubleEndedIterator
            + FusedIterator
            + '_
