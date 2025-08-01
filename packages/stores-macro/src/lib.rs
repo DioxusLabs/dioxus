@@ -4,7 +4,7 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote, ToTokens};
 use syn::{
     parse_macro_input, parse_quote, punctuated::Punctuated, spanned::Spanned, DataEnum, DataStruct,
-    DeriveInput, Fields, Index,LitInt
+    DeriveInput, Fields, Index, LitInt,
 };
 
 /// # `derive(Store)`

@@ -1,7 +1,7 @@
 use crate::store::Store;
 use dioxus_signals::{MappedMutSignal, Readable, ReadableExt};
 
-impl<W: Readable<Target = Option<T>> + Copy + 'static, T: 'static> Store<Option<T>, W> {
+impl<W: Readable<Target = Option<T>> + 'static, T: 'static> Store<Option<T>, W> {
     /// Checks if the `Option` is `Some`. This will only track the shallow state of the `Option`. It will
     /// only cause a re-run if the `Option` could change from `None` to `Some` or vice versa.
     ///
@@ -11,7 +11,7 @@ impl<W: Readable<Target = Option<T>> + Copy + 'static, T: 'static> Store<Option<
     /// let store = use_store(|| Some(42));
     /// assert!(store.is_some());
     /// ```
-    pub fn is_some(self) -> bool {
+    pub fn is_some(&self) -> bool {
         self.selector().track_shallow();
         self.selector().peek().is_some()
     }
@@ -25,7 +25,7 @@ impl<W: Readable<Target = Option<T>> + Copy + 'static, T: 'static> Store<Option<
     /// let store = use_store(|| None::<i32>);
     /// assert!(store.is_none());
     /// ```
-    pub fn is_none(self) -> bool {
+    pub fn is_none(&self) -> bool {
         self.selector().track_shallow();
         self.selector().peek().is_none()
     }
@@ -44,7 +44,7 @@ impl<W: Readable<Target = Option<T>> + Copy + 'static, T: 'static> Store<Option<
     /// }
     /// ```
     pub fn transpose(self) -> Option<Store<T, MappedMutSignal<T, W>>> {
-        self.is_some().then(|| {
+        self.is_some().then(move || {
             let map: fn(&Option<T>) -> &T = |value| {
                 value.as_ref().unwrap_or_else(|| {
                     panic!("Tried to access `Some` on an Option value");
@@ -55,7 +55,7 @@ impl<W: Readable<Target = Option<T>> + Copy + 'static, T: 'static> Store<Option<
                     panic!("Tried to access `Some` on an Option value");
                 })
             };
-            self.selector().child(0, map, map_mut).into()
+            self.into_selector().child(0, map, map_mut).into()
         })
     }
 
@@ -69,17 +69,7 @@ impl<W: Readable<Target = Option<T>> + Copy + 'static, T: 'static> Store<Option<
     /// let unwrapped = store.unwrap();
     /// assert_eq!(unwrapped(), 42);
     /// ```
-    pub fn unwrap(
-        self,
-    ) -> Store<
-        T,
-        MappedMutSignal<
-            T,
-            W,
-            impl Fn(&Option<T>) -> &T + Copy + 'static,
-            impl Fn(&mut Option<T>) -> &mut T + Copy + 'static,
-        >,
-    > {
+    pub fn unwrap(self) -> Store<T, MappedMutSignal<T, W>> {
         self.transpose().unwrap()
     }
 }

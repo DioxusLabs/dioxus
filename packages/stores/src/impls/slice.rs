@@ -1,5 +1,5 @@
-use crate::store::Store;
-use dioxus_signals::{MappedMutSignal, Readable, ReadableExt};
+use crate::{impls::index::IndexWrite, store::Store};
+use dioxus_signals::{Readable, ReadableExt};
 
 impl<W, I> Store<Vec<I>, W>
 where
@@ -44,19 +44,7 @@ where
     ///     println!("{}", item);
     /// }
     /// ```
-    pub fn iter(
-        self,
-    ) -> impl Iterator<
-        Item = Store<
-            I,
-            MappedMutSignal<
-                I,
-                W,
-                impl Fn(&Vec<I>) -> &I + Copy + 'static,
-                impl Fn(&mut Vec<I>) -> &mut I + Copy + 'static,
-            >,
-        >,
-    > {
+    pub fn iter(self) -> impl Iterator<Item = Store<I, IndexWrite<usize, W>>> {
         (0..self.len()).map(move |i| self.index(i))
     }
 }

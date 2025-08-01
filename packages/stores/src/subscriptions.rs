@@ -32,7 +32,7 @@ impl SelectorNode {
             .and_then(|child| child.find_mut(rest))
     }
 
-    fn get_mut_or_default(&mut self, path: &[PathKey    ]) -> &mut SelectorNode {
+    fn get_mut_or_default(&mut self, path: &[PathKey]) -> &mut SelectorNode {
         let [first, rest @ ..] = path else {
             return self;
         };
@@ -194,8 +194,8 @@ impl StoreSubscriptions {
         }
     }
 
-    pub(crate) fn hash(&self, index: impl Hash) -> PathKey {
-        self.inner.write_unchecked().hasher.hash_one(&index) as PathKey
+    pub(crate) fn hash(&self, index: &impl Hash) -> PathKey {
+        self.inner.write_unchecked().hasher.hash_one(index) as PathKey
     }
 
     pub(crate) fn track(&self, key: &[PathKey]) {

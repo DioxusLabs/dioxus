@@ -4,15 +4,14 @@ use std::{
     hash::{BuildHasher, Hash},
 };
 
-use crate::store::Store;
-use dioxus_signals::{MappedMutSignal, Readable, ReadableExt, Writable};
+use crate::{store::Store, ReadStore};
+use dioxus_signals::{
+    AnyStorage, BorrowError, BorrowMutError, ReadSignal, Readable, ReadableExt, UnsyncStorage,
+    Writable, WriteLock, WriteSignal,
+};
 
-impl<
-        W: Readable<Target = HashMap<K, V, St>> + Copy + 'static,
-        K: 'static,
-        V: 'static,
-        St: 'static,
-    > Store<HashMap<K, V, St>, W>
+impl<W: Readable<Target = HashMap<K, V, St>> + 'static, K: 'static, V: 'static, St: 'static>
+    Store<HashMap<K, V, St>, W>
 {
     /// Get the length of the HashMap. This method will track the store shallowly and only cause
     /// re-runs when items are added or removed from the map, not when existing values are modified.
@@ -67,30 +66,18 @@ impl<
     ///     println!("{}: {}", key, value_store.read());
     /// }
     /// ```
-    pub fn iter(
-        self,
-    ) -> impl Iterator<
-        Item = (
-            K,
-            Store<
-                V,
-                MappedMutSignal<
-                    V,
-                    W,
-                    impl Fn(&HashMap<K, V, St>) -> &V + Copy + 'static,
-                    impl Fn(&mut HashMap<K, V, St>) -> &mut V + Copy + 'static,
-                >,
-            >,
-        ),
-    >
+    pub fn iter(&self) -> impl Iterator<Item = (K, Store<V, GetWrite<K, W>>)> + '_
     where
-        K: Copy + Eq + Hash,
+        K: Eq + Hash + Clone,
         St: BuildHasher,
+        W: Clone,
     {
         self.selector().track_shallow();
-        let keys = self.selector().peek().keys().cloned().collect::<Vec<_>>();
-        keys.into_iter()
-            .map(move |key| (key, self.get(key).unwrap()))
+        let keys: Vec<_> = self.selector().peek_unchecked().keys().cloned().collect();
+        keys.into_iter().map(move |key| {
+            let value = self.clone().get(key.clone()).unwrap();
+            (key, value)
+        })
     }
 
     /// Get an iterator over the values in the HashMap. This method will track the store shallowly and only cause
@@ -108,28 +95,17 @@ impl<
     ///     println!("{}", value_store.read());
     /// }
     /// ```
-    pub fn values(
-        self,
-    ) -> impl Iterator<
-        Item = Store<
-            V,
-            MappedMutSignal<
-                V,
-                W,
-                impl Fn(&HashMap<K, V, St>) -> &V + Copy + 'static,
-                impl Fn(&mut HashMap<K, V, St>) -> &mut V + Copy + 'static,
-            >,
-        >,
-    >
+    pub fn values(self) -> impl Iterator<Item = Store<V, GetWrite<K, W>>>
     where
         K: Copy + Eq + Hash,
         St: BuildHasher,
+        W: Clone,
     {
         self.selector().track_shallow();
         let keys = self.selector().peek().keys().cloned().collect::<Vec<_>>();
         keys.into_iter()
             .map(|k| *k.borrow())
-            .map(move |key| self.get(key).unwrap())
+            .map(move |key| self.clone().get(key).unwrap())
     }
 
     /// Insert a new key-value pair into the HashMap. This method will mark the store as shallowly dirty, causing
@@ -264,34 +240,131 @@ impl<
     /// store.insert(0, "value".to_string());
     /// assert_eq!(store.get(0).unwrap().cloned(), "value".to_string());
     /// ```
-    pub fn get<Q>(
-        self,
-        key: Q,
-    ) -> Option<
-        Store<
-            V,
-            MappedMutSignal<
-                V,
-                W,
-                impl Fn(&HashMap<K, V, St>) -> &V + Copy + 'static,
-                impl Fn(&mut HashMap<K, V, St>) -> &mut V + Copy + 'static,
-            >,
-        >,
-    >
+    pub fn get<Q>(self, key: Q) -> Option<Store<V, GetWrite<Q, W>>>
     where
-        Q: Hash + Eq + Copy + 'static,
+        Q: Hash + Eq + 'static,
         K: Borrow<Q> + Eq + Hash,
         St: BuildHasher,
     {
         self.contains_key(&key).then(|| {
-            let key_ = key;
-            self.selector()
-                .hash_child(
-                    key.borrow(),
-                    move |value: &HashMap<K, V, St>| value.get(&key).unwrap(),
-                    move |value: &mut HashMap<K, V, St>| value.get_mut(&key_).unwrap(),
-                )
+            self.into_selector()
+                .hash_child_unmapped(key.borrow())
+                .map_writer(move |writer| GetWrite {
+                    index: key,
+                    write: writer,
+                })
                 .into()
         })
+    }
+}
+
+/// A specific index in a `Readable` / `Writable` hashmap
+#[derive(Clone, Copy)]
+pub struct GetWrite<Index, Write> {
+    index: Index,
+    write: Write,
+}
+
+impl<Index, Write, K, V, St> Readable for GetWrite<Index, Write>
+where
+    Write: Readable<Target = HashMap<K, V, St>>,
+    Index: Hash + Eq + 'static,
+    K: Borrow<Index> + Eq + Hash + 'static,
+    St: BuildHasher + 'static,
+{
+    type Target = V;
+
+    type Storage = Write::Storage;
+
+    fn try_read_unchecked(&self) -> Result<dioxus_signals::ReadableRef<'static, Self>, BorrowError>
+    where
+        Self::Target: 'static,
+    {
+        self.write.try_read_unchecked().map(|value| {
+            Self::Storage::map(value, |value: &Write::Target| {
+                value
+                    .get(&self.index)
+                    .expect("Tried to access a key that does not exist")
+            })
+        })
+    }
+
+    fn try_peek_unchecked(&self) -> Result<dioxus_signals::ReadableRef<'static, Self>, BorrowError>
+    where
+        Self::Target: 'static,
+    {
+        self.write.try_peek_unchecked().map(|value| {
+            Self::Storage::map(value, |value: &Write::Target| {
+                value
+                    .get(&self.index)
+                    .expect("Tried to access a key that does not exist")
+            })
+        })
+    }
+
+    fn subscribers(&self) -> Option<dioxus_core::Subscribers>
+    where
+        Self::Target: 'static,
+    {
+        self.write.subscribers()
+    }
+}
+
+impl<Index, Write, K, V, St> Writable for GetWrite<Index, Write>
+where
+    Write: Writable<Target = HashMap<K, V, St>>,
+    Index: Hash + Eq + 'static,
+    K: Borrow<Index> + Eq + Hash + 'static,
+    St: BuildHasher + 'static,
+{
+    type WriteMetadata = Write::WriteMetadata;
+
+    fn try_write_unchecked(
+        &self,
+    ) -> Result<dioxus_signals::WritableRef<'static, Self>, BorrowMutError>
+    where
+        Self::Target: 'static,
+    {
+        self.write.try_write_unchecked().map(|value| {
+            WriteLock::map(value, |value: &mut Write::Target| {
+                value
+                    .get_mut(&self.index)
+                    .expect("Tried to access a key that does not exist")
+            })
+        })
+    }
+}
+
+impl<Index, Write, K, V, St> ::std::convert::From<Store<V, GetWrite<Index, Write>>>
+    for Store<V, WriteSignal<V>>
+where
+    Write::WriteMetadata: 'static,
+    Write: Writable<Target = HashMap<K, V, St>, Storage = UnsyncStorage> + 'static,
+    Index: Hash + Eq + 'static,
+    K: Borrow<Index> + Eq + Hash + 'static,
+    St: BuildHasher + 'static,
+    V: 'static,
+{
+    fn from(value: Store<V, GetWrite<Index, Write>>) -> Self {
+        value
+            .into_selector()
+            .map_writer(|writer| WriteSignal::new(writer))
+            .into()
+    }
+}
+
+impl<Index, Write, K, V, St> ::std::convert::From<Store<V, GetWrite<Index, Write>>> for ReadStore<V>
+where
+    Write: Readable<Target = HashMap<K, V, St>, Storage = UnsyncStorage> + 'static,
+    Index: Hash + Eq + 'static,
+    K: Borrow<Index> + Eq + Hash + 'static,
+    St: BuildHasher + 'static,
+    V: 'static,
+{
+    fn from(value: Store<V, GetWrite<Index, Write>>) -> Self {
+        value
+            .into_selector()
+            .map_writer(|writer| ReadSignal::new(writer))
+            .into()
     }
 }

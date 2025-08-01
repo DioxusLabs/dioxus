@@ -3,7 +3,7 @@
 
 use std::{fmt::Debug, hash::Hash};
 
-use crate::subscriptions::{StoreSubscriptions, TinyVec, PathKey};
+use crate::subscriptions::{PathKey, StoreSubscriptions, TinyVec};
 use dioxus_core::Subscribers;
 use dioxus_signals::{
     BorrowError, BorrowMutError, MappedMutSignal, Readable, ReadableRef, Writable, WritableExt,
@@ -90,7 +90,7 @@ impl<W> SelectorScope<W> {
     /// this should not cause issues.
     pub fn hash_child<U: ?Sized, T, F, FMut>(
         self,
-        index: impl Hash,
+        index: &impl Hash,
         map: F,
         map_mut: FMut,
     ) -> SelectorScope<MappedMutSignal<U, W, F, FMut>>
@@ -105,7 +105,7 @@ impl<W> SelectorScope<W> {
     /// Create a child selector scope for a specific index. The scope will only be marked as dirty when a
     /// write occurs to that index or its parents.
     pub fn child<U: ?Sized, T, F, FMut>(
-        mut self,
+        self,
         index: PathKey,
         map: F,
         map_mut: FMut,
@@ -114,8 +114,21 @@ impl<W> SelectorScope<W> {
         F: Fn(&T) -> &U,
         FMut: Fn(&mut T) -> &mut U,
     {
+        self.child_unmapped(index).map(map, map_mut)
+    }
+
+    /// Create a hashed child selector scope for a specific index without mapping the writer. The scope will only
+    /// be marked as dirty when a write occurs to that index or its parents.
+    pub fn hash_child_unmapped(self, index: &impl Hash) -> SelectorScope<W> {
+        let hash = self.store.hash(index);
+        self.child_unmapped(hash)
+    }
+
+    /// Create a child selector scope for a specific index without mapping the writer. The scope will only
+    /// be marked as dirty when a write occurs to that index or its parents.
+    pub fn child_unmapped(mut self, index: PathKey) -> SelectorScope<W> {
         self.path.push(index);
-        self.map(map, map_mut)
+        self
     }
 
     /// Map the view into the writable data without creating a child selector scope
@@ -128,8 +141,7 @@ impl<W> SelectorScope<W> {
         F: Fn(&T) -> &U,
         FMut: Fn(&mut T) -> &mut U,
     {
-        let write = MappedMutSignal::new(self.write, map, map_mut);
-        SelectorScope::new(self.path, self.store, write)
+        self.map_writer(move |write| MappedMutSignal::new(write, map, map_mut))
     }
 
     /// Track this scope shallowly.

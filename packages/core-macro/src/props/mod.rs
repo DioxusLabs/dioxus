@@ -1747,12 +1747,16 @@ fn child_owned_type(ty: &Type) -> bool {
 /// Check if the path without generics matches the type we are looking for
 fn last_segment_matches(ty: &Type, expected: &Ident) -> bool {
     extract_base_type_without_generics(ty).map_or(false, |path_without_generics| {
-        path_without_generics.segments.last().map_or(false, |seg| seg.ident == *expected)
+        path_without_generics
+            .segments
+            .last()
+            .map_or(false, |seg| seg.ident == *expected)
     })
 }
 
 fn looks_like_signal_type(ty: &Type) -> bool {
-    last_segment_matches(ty, &parse_quote!(ReadOnlySignal)) || last_segment_matches(ty, &parse_quote!(ReadSignal))
+    last_segment_matches(ty, &parse_quote!(ReadOnlySignal))
+        || last_segment_matches(ty, &parse_quote!(ReadSignal))
 }
 
 fn looks_like_write_type(ty: &Type) -> bool {
@@ -1760,7 +1764,8 @@ fn looks_like_write_type(ty: &Type) -> bool {
 }
 
 fn looks_like_store_type(ty: &Type) -> bool {
-    last_segment_matches(ty, &parse_quote!(Store)) || last_segment_matches(ty, &parse_quote!(ReadStore))
+    last_segment_matches(ty, &parse_quote!(Store))
+        || last_segment_matches(ty, &parse_quote!(ReadStore))
 }
 
 fn looks_like_callback_type(ty: &Type) -> bool {

@@ -190,8 +190,7 @@ where
         }
     }
 }
-impl<T> ::std::convert::From<Store<T>>
-    for ReadStore<T>
+impl<T> ::std::convert::From<Store<T>> for ReadStore<T>
 where
     T: ?Sized + 'static,
 {
