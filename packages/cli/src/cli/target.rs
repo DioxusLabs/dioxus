@@ -118,3 +118,31 @@ pub(crate) struct TargetArgs {
     #[clap(long, help_heading = HELP_HEADING)]
     pub(crate) base_path: Option<String>,
 }
+
+impl Anonymized for TargetArgs {
+    fn anonymized(&self) -> Value {
+        json! {{
+            "target_alias": self.target_alias,
+            "renderer": self.renderer,
+            "bundle": self.bundle,
+            "platform": self.platform,
+            "release": self.release,
+            "package": self.package,
+            "bin": self.bin,
+            "example": self.example.is_some(),
+            "profile": self.profile.is_some(),
+            "features": !self.features.is_empty(),
+            "no_default_features": self.no_default_features,
+            "all_features": self.all_features,
+            "target": self.target.as_ref().map(|t| t.to_string()),
+            "skip_assets": self.skip_assets,
+            "inject_loading_scripts": self.inject_loading_scripts,
+            "wasm_split": self.wasm_split,
+            "debug_symbols": self.debug_symbols,
+            "device": self.device,
+            "base_path": self.base_path.is_some(),
+            "cargo_args": self.cargo_args.is_some(),
+            "rustc_args": self.rustc_args.is_some(),
+        }}
+    }
+}

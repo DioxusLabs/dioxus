@@ -13,6 +13,14 @@ pub(crate) fn no_downloads() -> bool {
     std::env::var("NO_DOWNLOADS").is_ok()
 }
 
+/// Should we disable telemetry?
+pub(crate) fn disable_telemetry() -> bool {
+    match std::env::var("TELEMETRY") {
+        Ok(val) => !val.eq_ignore_ascii_case("false") && !val.eq_ignore_ascii_case("0"),
+        Err(_) => false,
+    }
+}
+
 /// Should we test the installs?
 #[allow(dead_code)] // -> used in tests only
 pub(crate) fn test_installs() -> bool {

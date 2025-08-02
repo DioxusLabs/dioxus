@@ -5072,6 +5072,7 @@ dependencies = [
  "dioxus-check",
  "dioxus-cli-config",
  "dioxus-cli-opt",
+ "dioxus-cli-telemetry",
  "dioxus-core",
  "dioxus-core-types",
  "dioxus-devtools-types",
@@ -5111,6 +5112,7 @@ dependencies = [
  "path-absolutize",
  "pdb",
  "plist",
+ "posthog-rs",
  "prettyplease",
  "proc-macro2",
  "ratatui",
@@ -5122,7 +5124,9 @@ dependencies = [
  "self_update",
  "serde",
  "serde_json",
+ "serde_json5",
  "shell-words",
+ "snafu",
  "strum 0.27.1",
  "subsecond-types",
  "syn 2.0.104",
@@ -5218,6 +5222,17 @@ dependencies = [
  "flate2",
  "reqwest 0.12.22",
  "tar",
+]
+
+[[package]]
+name = "dioxus-cli-telemetry"
+version = "0.7.0-alpha.3"
+dependencies = [
+ "chrono",
+ "dirs 6.0.0",
+ "rand 0.9.1",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -12467,6 +12482,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "posthog-rs"
+version = "0.3.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ead24e7bd3ce35a88fffe1f9a4747b4844335fa837eddecf9e7ad9708f3e26b3"
+dependencies = [
+ "chrono",
+ "derive_builder",
+ "reqwest 0.11.27",
+ "semver",
+ "serde",
+ "serde_json",
+ "uuid",
+]
+
+[[package]]
 name = "potential_utf"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -14264,6 +14294,17 @@ dependencies = [
  "itoa",
  "memchr",
  "ryu",
+ "serde",
+]
+
+[[package]]
+name = "serde_json5"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5d34d03f54462862f2a42918391c9526337f53171eaa4d8894562be7f252edd3"
+dependencies = [
+ "pest",
+ "pest_derive",
  "serde",
 ]
 

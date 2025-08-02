@@ -107,6 +107,21 @@ impl Create {
 
         Ok(StructuredOutput::Success)
     }
+
+    pub(crate) fn command_anonymized(&self) -> (String, Value) {
+        (
+            "new".to_string(),
+            json!({
+                "subtemplate": self.subtemplate,
+                "option": self.option,
+                "yes": self.yes,
+                "vcs": self.vcs.map(|v| match v {
+                    Vcs::Git => "git",
+                    Vcs::None => "none",
+                }),
+            }),
+        )
+    }
 }
 
 /// If no template is specified, use the default one and set the branch to the latest release.
