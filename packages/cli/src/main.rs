@@ -50,8 +50,8 @@ fn main() {
     }
 
     // Run under the telemetry collector so we can log errors/panics.
-    let result = telemetry::main(async {
-        match TraceController::initialize() {
+    let result = TraceController::main(|args| async move {
+        match args {
             Commands::Translate(opts) => opts.translate(),
             Commands::New(opts) => opts.create().await,
             Commands::Init(opts) => opts.init().await,

@@ -14,12 +14,16 @@
 //! 3. Build CLI layer for routing tracing logs to the TUI.
 //! 4. Build fmt layer for non-interactive logging with a custom writer that prevents output during interactive mode.
 
-use crate::telemetry::send_telemetry_event;
+use crate::telemetry::{
+    capture_panics, flush_old_telemetry, flush_telemetry_to_file, send_telemetry_event,
+};
 use crate::BundleFormat;
 use crate::{serve::ServeUpdate, Cli, Commands, Verbosity};
+use anyhow::Result;
 use cargo_metadata::diagnostic::{Diagnostic, DiagnosticLevel};
 use clap::Parser;
 use dioxus_cli_telemetry::TelemetryEvent;
+use dioxus_dx_wire_format::StructuredOutput;
 use futures_channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
 use std::str::FromStr;
 use std::sync::OnceLock;
@@ -35,6 +39,7 @@ use std::{
     },
     time::Instant,
 };
+use std::{future::Future, panic::AssertUnwindSafe};
 use tracing::{field::Visit, Level, Subscriber};
 use tracing_subscriber::{
     fmt::{
@@ -60,7 +65,12 @@ pub(crate) struct TraceController {
 
 impl TraceController {
     /// Initialize the CLI and set up the tracing infrastructure
-    pub fn initialize() -> Commands {
+    ///
+    /// This captures panics and flushes telemetry to a file after the CLI has run.
+    pub fn main<F>(app: impl FnOnce(Commands) -> F) -> Result<StructuredOutput>
+    where
+        F: Future<Output = Result<StructuredOutput>>,
+    {
         let args = Cli::parse();
 
         VERBOSITY
@@ -139,14 +149,35 @@ impl TraceController {
 
         sub.init();
 
-        // Send the type of command we are running to the telemetry collector
-        let (command, anonymous_args) = args.action.command_anonymized();
-        send_telemetry_event(
-            TelemetryEvent::new("cli_command", None, command, "start")
-                .with_value("args", anonymous_args),
-        );
+        tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .expect("Failed building the Runtime")
+            .block_on(async move {
+                use futures_util::FutureExt;
 
-        args.action
+                // Initialize the user session
+                if let Err(e) = crate::telemetry::initializer_telemetry_session() {
+                    tracing::trace!("Failed to initialize user session: {}", e);
+                }
+
+                // Queue the type of command we are running to the telemetry collector
+                let (command, anonymous_args) = args.action.command_anonymized();
+                send_telemetry_event(
+                    TelemetryEvent::new("cli_command", None, command, "start")
+                        .with_value("args", anonymous_args),
+                );
+
+                flush_old_telemetry();
+                capture_panics();
+
+                let result = AssertUnwindSafe(app(args.action)).catch_unwind().await;
+                let result = Self::handle_panic(result);
+
+                flush_telemetry_to_file();
+
+                result
+            })
     }
 
     /// Get a handle to the trace controller.
@@ -190,6 +221,58 @@ impl TraceController {
             }
         }
     }
+
+    pub fn handle_panic(
+        result: Result<Result<StructuredOutput>, Box<dyn std::any::Any + Send>>,
+    ) -> Result<StructuredOutput> {
+        match result {
+            Ok(Ok(_res)) => Ok(StructuredOutput::Success),
+            Ok(Err(e)) => {
+                // Add the fatal error to the telemetry
+                send_telemetry_event(fatal_error(&e));
+                Err(e)
+            }
+            Err(panic_err) => {
+                // And then print the panic itself.
+                let as_str = if let Some(p) = panic_err.downcast_ref::<String>() {
+                    p.as_ref()
+                } else if let Some(p) = panic_err.downcast_ref::<&str>() {
+                    p
+                } else {
+                    "<unknown panic>"
+                };
+
+                // Attempt to emulate the default panic hook
+                let message = match BACKTRACE.get() {
+                    Some((back, location)) => {
+                        let location_display = location
+                            .as_ref()
+                            .map(|l| format!("{}:{}:{}", l.file, l.line, l.column))
+                            .unwrap_or_else(|| "<unknown>".to_string());
+
+                        let backtrace_display = clean_backtrace(back);
+
+                        // Add the fatal error to the telemetry
+                        send_telemetry_event(TelemetryEvent::new(
+                            "panic",
+                            Some(location_display.clone()),
+                            &backtrace_display,
+                            "error",
+                        ));
+
+                        format!("dx serve panicked at {location_display}\n{as_str}\n{backtrace_display} ___rust_try")
+                    }
+                    None => {
+                        // Add the fatal error to the telemetry
+                        send_telemetry_event(TelemetryEvent::new("panic", None, as_str, "error"));
+                        format!("dx serve panicked: {as_str}")
+                    }
+                };
+
+                Err(anyhow::anyhow!(message))
+            }
+        }
+    }
 }
 
 /// A logging layer that appends to a file.
@@ -229,7 +312,7 @@ where
         event: &tracing::Event<'_>,
         _ctx: tracing_subscriber::layer::Context<'_, S>,
     ) {
-        let mut visitor = CollectVisitor::new();
+        let mut visitor = CollectVisitor::default();
         event.record(&mut visitor);
 
         let new_line = if visitor.source == TraceSrc::Cargo {
@@ -281,7 +364,7 @@ where
             return;
         }
 
-        let mut visitor = CollectVisitor::new();
+        let mut visitor = CollectVisitor::default();
         event.record(&mut visitor);
 
         let meta = event.metadata();
@@ -318,7 +401,7 @@ where
         event: &tracing::Event<'_>,
         _ctx: tracing_subscriber::layer::Context<'_, S>,
     ) {
-        let mut visitor = CollectVisitor::new();
+        let mut visitor = CollectVisitor::default();
         event.record(&mut visitor);
 
         let meta = event.metadata();
@@ -361,20 +444,11 @@ where
 }
 
 /// A record visitor that collects dx-specific info and user-provided fields for logging consumption.
+#[derive(Default)]
 struct CollectVisitor {
     message: String,
     source: TraceSrc,
     fields: HashMap<String, String>,
-}
-
-impl CollectVisitor {
-    pub fn new() -> Self {
-        Self {
-            message: String::new(),
-            source: TraceSrc::Unknown,
-            fields: HashMap::new(),
-        }
-    }
 }
 
 impl Visit for CollectVisitor {
@@ -400,14 +474,10 @@ impl Visit for CollectVisitor {
 
 /// Formats a tracing field and value, removing any internal fields from the final output.
 fn format_field(field_name: &str, value: &dyn Debug) -> String {
-    let mut out = String::new();
     match field_name {
-        "message" => write!(out, "{value:?}"),
-        _ => write!(out, "{field_name}={value:?}"),
+        "message" => format!("{value:?}"),
+        _ => format!("{field_name}={value:?}"),
     }
-    .unwrap();
-
-    out
 }
 
 #[derive(Clone, PartialEq)]
@@ -456,13 +526,15 @@ impl TraceMsg {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Default)]
 pub enum TraceSrc {
     App(BundleFormat),
     Dev,
     Build,
     Bundle,
     Cargo,
+
+    #[default]
     Unknown,
 }
 

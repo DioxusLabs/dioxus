@@ -127,15 +127,19 @@ impl CliSettings {
 
     /// Check if telemetry is disabled
     pub(crate) fn telemetry_disabled() -> bool {
-        if cfg!(feature = "disable-telemetry") {
-            return true;
-        }
+        static TELEMETRY_DISABLED: LazyLock<bool> = LazyLock::new(|| {
+            if cfg!(feature = "disable-telemetry") {
+                return true;
+            }
 
-        if crate::devcfg::disable_telemetry() {
-            return true;
-        }
+            if crate::devcfg::disable_telemetry() {
+                return true;
+            }
 
-        CliSettings::load().disable_telemetry.unwrap_or_default()
+            CliSettings::load().disable_telemetry.unwrap_or_default()
+        });
+
+        *TELEMETRY_DISABLED
     }
 }
 

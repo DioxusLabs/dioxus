@@ -127,7 +127,7 @@ impl Config {
                 tracing::info!(dx_src = ?TraceSrc::Dev, "Log file is located at {}", log_path.display());
             }
             Config::TelemetryFile {} => {
-                let telemetry_path = Workspace::telemetry_file();
+                let telemetry_path = Workspace::telemetry_pending_file();
                 tracing::info!(dx_src = ?TraceSrc::Dev, "Telemetry file is located at {}", telemetry_path.display());
             }
             // Handle CLI settings.

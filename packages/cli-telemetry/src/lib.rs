@@ -26,7 +26,7 @@
 //! - setting TELEMETRY=false in your env
 //! - setting `dx config set disable-telemetry true`
 
-use std::{collections::HashMap, sync::OnceLock, time::SystemTime};
+use std::{collections::HashMap, time::SystemTime};
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -45,22 +45,6 @@ pub struct Reporter {
     pub session_id: u128,
 }
 
-static REPORTER: OnceLock<Reporter> = OnceLock::new();
-
-pub fn set_reporter(device_triple: String, is_ci: bool, cli_version: String, reporter_id: u128) {
-    _ = REPORTER.set(Reporter {
-        device_triple,
-        is_ci,
-        cli_version,
-        reporter_id,
-        session_id: rand::random::<u128>(),
-    });
-}
-
-fn reporter() -> Reporter {
-    REPORTER.get().unwrap().clone()
-}
-
 /// An event, corresponding roughly to a trace!()
 ///
 /// This can be something like a build, bundle, translate, etc
@@ -76,7 +60,6 @@ fn reporter() -> Reporter {
 /// the stage as a marker.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct TelemetryEvent {
-    pub identity: Reporter,
     pub name: String,
     pub module: Option<String>,
     pub message: String,
@@ -93,7 +76,6 @@ impl TelemetryEvent {
         stage: impl ToString,
     ) -> Self {
         Self {
-            identity: reporter(),
             name: strip_paths(&name.to_string()),
             module: module.map(|m| strip_paths(&m)),
             message: strip_paths(&message.to_string()),
