@@ -26,13 +26,16 @@ impl<T: ?Sized + 'static> ReadSignal<T> {
 
     /// Point to another [ReadSignal]. This will subscribe the other [ReadSignal] to all subscribers of this [ReadSignal].
     pub fn point_to(&self, other: Self) -> BorrowResult {
-        #[allow(clippy::mutable_key_type)]
         let this_subscribers = self.subscribers();
+        let mut this_subscribers_vec = Vec::new();
+        // Note we don't subscribe directly in the visit closure to avoid a deadlock when pointing to self
+        this_subscribers.visit(|subscriber| this_subscribers_vec.push(subscriber.clone()));
         let other_subscribers = other.subscribers();
-        this_subscribers.visit(|subscriber| {
+        for subscriber in this_subscribers_vec {
             subscriber.subscribe(other_subscribers.clone());
-        });
-        self.value.point_to(other.value)
+        }
+        self.value.point_to(other.value)?;
+        Ok(())
     }
 
     #[doc(hidden)]
@@ -40,9 +43,12 @@ impl<T: ?Sized + 'static> ReadSignal<T> {
     /// Mark any readers of the signal as dirty
     pub fn mark_dirty(&mut self) {
         let subscribers = self.subscribers();
-        subscribers.visit(|subscriber| {
+        let mut this_subscribers_vec = Vec::new();
+        subscribers.visit(|subscriber| this_subscribers_vec.push(subscriber.clone()));
+        for subscriber in this_subscribers_vec {
+            subscribers.remove(&subscriber);
             subscriber.mark_dirty();
-        });
+        }
     }
 }
 
