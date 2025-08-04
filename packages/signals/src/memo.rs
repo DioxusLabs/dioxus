@@ -207,7 +207,7 @@ where
         self.inner.try_peek_unchecked()
     }
 
-    fn subscribers(&self) -> Option<Subscribers>
+    fn subscribers(&self) -> Subscribers
     where
         T: 'static,
     {

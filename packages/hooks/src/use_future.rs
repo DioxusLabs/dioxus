@@ -181,7 +181,7 @@ impl Readable for UseFuture {
         self.state.try_peek_unchecked()
     }
 
-    fn subscribers(&self) -> Option<Subscribers> {
+    fn subscribers(&self) -> Subscribers {
         self.state.subscribers()
     }
 }

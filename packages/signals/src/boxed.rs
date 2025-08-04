@@ -29,13 +29,9 @@ impl<T: ?Sized + 'static> ReadSignal<T> {
         #[allow(clippy::mutable_key_type)]
         let this_subscribers = self.subscribers();
         let other_subscribers = other.subscribers();
-        if let (Some(this_subscribers), Some(other_subscribers)) =
-            (this_subscribers, other_subscribers)
-        {
-            this_subscribers.visit(|subscriber| {
-                subscriber.subscribe(other_subscribers.clone());
-            });
-        }
+        this_subscribers.visit(|subscriber| {
+            subscriber.subscribe(other_subscribers.clone());
+        });
         self.value.point_to(other.value)
     }
 
@@ -43,12 +39,10 @@ impl<T: ?Sized + 'static> ReadSignal<T> {
     /// This is only used by the `props` macro.
     /// Mark any readers of the signal as dirty
     pub fn mark_dirty(&mut self) {
-        let subscribers = self.value.subscribers();
-        if let Some(subscribers) = subscribers {
-            subscribers.visit(|subscriber| {
-                subscriber.mark_dirty();
-            });
-        }
+        let subscribers = self.subscribers();
+        subscribers.visit(|subscriber| {
+            subscriber.mark_dirty();
+        });
     }
 }
 
@@ -128,11 +122,11 @@ impl<T: ?Sized> Readable for ReadSignal<T> {
             .try_peek_unchecked()
     }
 
-    fn subscribers(&self) -> Option<Subscribers>
+    fn subscribers(&self) -> Subscribers
     where
         T: 'static,
     {
-        self.value.subscribers()
+        self.value.try_peek_unchecked().unwrap().subscribers()
     }
 }
 
@@ -241,7 +235,7 @@ impl<W: Readable> Readable for BoxWriteMetadata<W> {
         self.value.try_peek_unchecked()
     }
 
-    fn subscribers(&self) -> Option<Subscribers>
+    fn subscribers(&self) -> Subscribers
     where
         W::Target: 'static,
     {
@@ -339,11 +333,11 @@ impl<T: ?Sized> Readable for WriteSignal<T> {
             .try_peek_unchecked()
     }
 
-    fn subscribers(&self) -> Option<Subscribers>
+    fn subscribers(&self) -> Subscribers
     where
         T: 'static,
     {
-        self.value.subscribers()
+        self.value.try_peek_unchecked().unwrap().subscribers()
     }
 }
 

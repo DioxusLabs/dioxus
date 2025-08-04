@@ -247,7 +247,7 @@ where
     fn try_peek_unchecked(&self) -> Result<ReadableRef<'static, Self>, BorrowError> {
         self.selector.try_peek_unchecked()
     }
-    fn subscribers(&self) -> Option<Subscribers> {
+    fn subscribers(&self) -> Subscribers {
         self.selector.subscribers()
     }
 }

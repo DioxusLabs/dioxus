@@ -32,7 +32,7 @@
 ///         self.value.try_read_unchecked()
 ///     }
 ///
-///     fn subscribers(&self) -> Option<Subscribers> where T: 'static {
+///     fn subscribers(&self) -> Subscribers where T: 'static {
 ///         self.value.subscribers()
 ///     }
 /// }
@@ -99,7 +99,7 @@ macro_rules! default_impl {
 ///         self.value.try_read_unchecked()
 ///     }
 ///
-///     fn subscribers(&self) -> Option<Subscribers> where T: 'static {
+///     fn subscribers(&self) -> Subscribers where T: 'static {
 ///         self.value.subscribers()
 ///     }
 /// }
@@ -177,7 +177,7 @@ macro_rules! read_impls {
 ///         self.value.try_read_unchecked()
 ///     }
 ///
-///     fn subscribers(&self) -> Option<Subscribers> where T: 'static {
+///     fn subscribers(&self) -> Subscribers where T: 'static {
 ///         self.value.subscribers()
 ///     }
 /// }
@@ -258,7 +258,7 @@ macro_rules! fmt_impls {
 ///         self.value.try_read_unchecked()
 ///     }
 ///
-///     fn subscribers(&self) -> Option<Subscribers> where T: 'static {
+///     fn subscribers(&self) -> Subscribers where T: 'static {
 ///         self.value.subscribers()
 ///     }
 /// }

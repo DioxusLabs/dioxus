@@ -69,7 +69,7 @@ where
         self.resolve().try_peek_unchecked()
     }
 
-    fn subscribers(&self) -> Option<Subscribers>
+    fn subscribers(&self) -> Subscribers
     where
         R: 'static,
     {

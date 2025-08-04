@@ -166,8 +166,8 @@ impl<T, S: Storage<T>> Readable for CopyValue<T, S> {
         self.value.try_read()
     }
 
-    fn subscribers(&self) -> Option<Subscribers> {
-        None
+    fn subscribers(&self) -> Subscribers {
+        Subscribers::new_noop()
     }
 }
 

@@ -73,7 +73,7 @@ where
         })
     }
 
-    fn subscribers(&self) -> Option<dioxus_core::Subscribers>
+    fn subscribers(&self) -> dioxus_core::Subscribers
     where
         Self::Target: 'static,
     {

@@ -62,7 +62,7 @@ pub trait Readable {
         Self::Target: 'static;
 
     /// Get the underlying subscriber list for this readable. This is used to track when the value changes and notify subscribers.
-    fn subscribers(&self) -> Option<Subscribers>
+    fn subscribers(&self) -> Subscribers
     where
         Self::Target: 'static;
 }

@@ -200,8 +200,8 @@ impl<Lens: Readable> Readable for SelectorScope<Lens> {
         self.write.try_peek_unchecked()
     }
 
-    fn subscribers(&self) -> Option<Subscribers> {
-        Some(self.store.subscribers(&self.path))
+    fn subscribers(&self) -> Subscribers {
+        self.store.subscribers(&self.path)
     }
 }
 

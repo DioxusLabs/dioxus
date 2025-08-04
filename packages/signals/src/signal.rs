@@ -429,11 +429,11 @@ impl<T, S: Storage<SignalData<T>>> Readable for Signal<T, S> {
             .map(|inner| S::map(inner, |v| &v.value))
     }
 
-    fn subscribers(&self) -> Option<Subscribers>
+    fn subscribers(&self) -> Subscribers
     where
         T: 'static,
     {
-        Some(self.inner.read().subscribers.clone().into())
+        self.inner.read().subscribers.clone().into()
     }
 }
 

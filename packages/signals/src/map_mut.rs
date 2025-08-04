@@ -87,7 +87,7 @@ where
         Ok(V::Storage::map(value, |v| (self.map_fn)(v)))
     }
 
-    fn subscribers(&self) -> Option<Subscribers>
+    fn subscribers(&self) -> Subscribers
     where
         O: 'static,
     {
