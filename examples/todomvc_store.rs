@@ -32,7 +32,7 @@ impl<Lens> Store<TodoState, Lens> {
         let mut active_ids: Vec<u32> = self
             .todos()
             .iter()
-            .filter_map(|(id, item)| item.active(filter).then_some(*id))
+            .filter_map(|(id, item)| item.active(filter).then_some(id))
             .collect();
         active_ids.sort_unstable();
         active_ids
