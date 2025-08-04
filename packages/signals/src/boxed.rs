@@ -29,7 +29,7 @@ impl<T: ?Sized + 'static> ReadSignal<T> {
         let this_subscribers = self.subscribers();
         let mut this_subscribers_vec = Vec::new();
         // Note we don't subscribe directly in the visit closure to avoid a deadlock when pointing to self
-        this_subscribers.visit(|subscriber| this_subscribers_vec.push(subscriber.clone()));
+        this_subscribers.visit(|subscriber| this_subscribers_vec.push(*subscriber));
         let other_subscribers = other.subscribers();
         for subscriber in this_subscribers_vec {
             subscriber.subscribe(other_subscribers.clone());
@@ -44,7 +44,7 @@ impl<T: ?Sized + 'static> ReadSignal<T> {
     pub fn mark_dirty(&mut self) {
         let subscribers = self.subscribers();
         let mut this_subscribers_vec = Vec::new();
-        subscribers.visit(|subscriber| this_subscribers_vec.push(subscriber.clone()));
+        subscribers.visit(|subscriber| this_subscribers_vec.push(*subscriber));
         for subscriber in this_subscribers_vec {
             subscribers.remove(&subscriber);
             subscriber.mark_dirty();
