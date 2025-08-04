@@ -38,9 +38,15 @@ pub fn use_wry_event_handler(
 /// Register an event handler that runs when a muda event is processed.
 #[cfg_attr(
     docsrs,
-    doc(cfg(any(target_os = "windows", target_os = "linux", target_os = "macos")))
+    doc(cfg(all(
+        any(target_os = "windows", target_os = "linux", target_os = "macos"),
+        not(target_env = "ohos")
+    )))
 )]
-#[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+#[cfg(all(
+    any(target_os = "windows", target_os = "linux", target_os = "macos"),
+    not(target_env = "ohos")
+))]
 pub fn use_muda_event_handler(
     mut handler: impl FnMut(&muda::MenuEvent) + 'static,
 ) -> WryEventHandler {
@@ -54,9 +60,15 @@ pub fn use_muda_event_handler(
 /// Register an event handler that runs when a tray icon menu event is processed.
 #[cfg_attr(
     docsrs,
-    doc(cfg(any(target_os = "windows", target_os = "linux", target_os = "macos")))
+    doc(cfg(all(
+        any(target_os = "windows", target_os = "linux", target_os = "macos"),
+        not(target_env = "ohos")
+    )))
 )]
-#[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+#[cfg(all(
+    any(target_os = "windows", target_os = "linux", target_os = "macos"),
+    not(target_env = "ohos")
+))]
 pub fn use_tray_menu_event_handler(
     mut handler: impl FnMut(&tray_icon::menu::MenuEvent) + 'static,
 ) -> WryEventHandler {
@@ -72,9 +84,15 @@ pub fn use_tray_menu_event_handler(
 /// If you want to register tray icon menus handler use `use_tray_menu_event_handler` instead.
 #[cfg_attr(
     docsrs,
-    doc(cfg(any(target_os = "windows", target_os = "linux", target_os = "macos")))
+    doc(cfg(all(
+        any(target_os = "windows", target_os = "linux", target_os = "macos"),
+        not(target_env = "ohos")
+    )))
 )]
-#[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+#[cfg(all(
+    any(target_os = "windows", target_os = "linux", target_os = "macos"),
+    not(target_env = "ohos")
+))]
 pub fn use_tray_icon_event_handler(
     mut handler: impl FnMut(&tray_icon::TrayIconEvent) + 'static,
 ) -> WryEventHandler {
