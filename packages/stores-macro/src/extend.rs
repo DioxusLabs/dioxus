@@ -247,7 +247,7 @@ fn parse_store_type(store_type: &Type) -> syn::Result<StorePath> {
     ))
 }
 
-/// The args the #[store] attribute macro accepts
+/// The args the `#[store]` attribute macro accepts
 pub(crate) struct ExtendArgs {
     /// The name of the extension trait generated
     name: Option<Ident>,
