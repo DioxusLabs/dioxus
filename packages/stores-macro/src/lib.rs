@@ -141,7 +141,7 @@ pub fn derive_store(input: TokenStream) -> TokenStream {
 /// impl<Lens> Store<TodoItem, Lens> {
 ///    // Since this method takes &mut self, the lens will require Writable automatically. It cannot be used
 ///    // with ReadStore<TodoItem>
-///    fn toggle(&mut self) {
+///    fn toggle_checked(&mut self) {
 ///        self.checked().toggle();
 ///    }
 ///
@@ -151,13 +151,13 @@ pub fn derive_store(input: TokenStream) -> TokenStream {
 ///    }
 /// }
 ///
-/// let store = use_store(|| TodoItem {
+/// let mut store = use_store(|| TodoItem {
 ///     checked: false,
 ///     contents: "Learn about stores".to_string(),
 /// });
 ///
 /// // You can use the methods defined in the extension trait
-/// store.toggle();
+/// store.toggle_checked();
 /// let contents: Option<String> = store.checked_contents();
 /// ```
 #[proc_macro_attribute]
