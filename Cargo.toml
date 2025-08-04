@@ -323,8 +323,12 @@ memmap2 = "0.9.5"
 memfd = "0.6.4"
 
 # desktop
-wry = { version = "0.52.1", default-features = false }
-tao = { version = "0.34.0", features = ["rwh_05"] }
+wry = { git = "https://github.com/richerfu/wry.git", default-features = false }
+tao = { git = "https://github.com/richerfu/tao.git", features = ["rwh_06"] }
+
+# wry = { path = "../wry", default-features = false }
+# tao = { path = "../tao", features = ["rwh_06"] }
+
 infer = "0.19.0"
 dunce = "1.0.5"
 percent-encoding = "2.3.1"

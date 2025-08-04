@@ -55,15 +55,15 @@ webbrowser = { version = "1.0" }
 [target.'cfg(unix)'.dependencies]
 signal-hook = "0.3.18"
 
-[target.'cfg(target_os = "linux")'.dependencies]
+[target.'cfg(any(target_os = "linux", not(target_env = "ohos")))'.dependencies]
 wry = { workspace = true, features = ["os-webview", "protocol", "drag-drop", "linux-body"] }
 
-[target.'cfg(any(target_os = "windows",target_os = "macos",target_os = "linux",target_os = "dragonfly", target_os = "freebsd", target_os = "netbsd", target_os = "openbsd"))'.dependencies]
+[target.'cfg(all(any(target_os = "windows",target_os = "macos",target_os = "linux",target_os = "dragonfly", target_os = "freebsd", target_os = "netbsd", target_os = "openbsd"), not(target_env = "ohos")))'.dependencies]
 global-hotkey = "0.7.0"
 rfd = { version = "0.15.3", default-features = false, features = ["xdg-portal", "tokio"] }
 muda = { workspace = true }
 
-[target.'cfg(any(target_os = "windows",target_os = "macos",target_os = "linux"))'.dependencies]
+[target.'cfg(all(any(target_os = "windows",target_os = "macos",target_os = "linux"), not(target_env = "ohos")))'.dependencies]
 tray-icon = { workspace = true }
 
 [target.'cfg(target_os = "ios")'.dependencies]
