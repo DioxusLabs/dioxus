@@ -33,6 +33,9 @@ pub type WriteStore<T> = Store<T, WriteSignal<T>>;
 /// subscriptions without requiring nested signals. You should derive [`Store`](dioxus_stores_macro::Store) on your data
 /// structures to generate selectors that let you scope the store to a specific part of your data.
 ///
+/// You can also use the [`#[store]`](dioxus_stores_macro::store) macro on an impl block to add any additional methods to your store
+/// with an extension trait. This lets you add methods to the store even though the type is not defined in your crate.
+///
 /// # Example
 ///
 /// ```rust, no_run
@@ -49,6 +52,15 @@ pub type WriteStore<T> = Store<T, WriteSignal<T>>;
 /// struct CounterTree {
 ///     count: i32,
 ///     children: Vec<CounterTree>,
+/// }
+///
+/// // The store macro generates an extension trait with additional methods for the store based on the impl block.
+/// #[store]
+/// impl<Lens> Store<CounterTree, Lens> {
+///     // Methods that take &self automatically require the lens to implement `Readable` which lets you read the store.
+///     fn sum(&self) -> i32 {
+///        self.count().cloned() + self.children().iter().map(|c| c.sum()).sum::<i32>()
+///     }
 /// }
 ///
 /// fn app() -> Element {
@@ -79,6 +91,7 @@ pub type WriteStore<T> = Store<T, WriteSignal<T>>;
 ///             onclick: move |_| children.push(Default::default()),
 ///             "Push child"
 ///         }
+///         "sum: {value.sum()}"
 ///         ul {
 ///             // Iterating over the children gives us stores scoped to each child.
 ///             for value in children.iter() {

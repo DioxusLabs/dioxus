@@ -11,7 +11,7 @@ pub use store::*;
 pub mod scope;
 
 #[cfg(feature = "macro")]
-pub use dioxus_stores_macro::Store;
+pub use dioxus_stores_macro::{store, Store};
 
 /// Re-exports for the store derive macro
 #[doc(hidden)]

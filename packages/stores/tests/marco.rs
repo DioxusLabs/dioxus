@@ -1,6 +1,7 @@
 #[allow(unused)]
 #[allow(clippy::disallowed_names)]
 mod macro_tests {
+    use dioxus_signals::*;
     use dioxus_stores::*;
     use std::collections::HashMap;
 
@@ -16,7 +17,18 @@ mod macro_tests {
             contents: String,
         }
 
-        let store = use_store(|| TodoItem {
+        #[store]
+        impl Store<TodoItem> {
+            fn is_checked(&self) -> bool {
+                self.checked().cloned()
+            }
+
+            fn check(&mut self) {
+                self.checked().set(true);
+            }
+        }
+
+        let mut store = use_store(|| TodoItem {
             checked: false,
             contents: "Learn about stores".to_string(),
         });
@@ -34,6 +46,9 @@ mod macro_tests {
         let TodoItemStoreTransposed { checked, contents } = store.transpose();
         let checked: bool = checked();
         let contents: String = contents();
+
+        let is_checked = store.is_checked();
+        store.check();
     }
 
     fn derive_generic_struct() {
@@ -43,7 +58,24 @@ mod macro_tests {
             contents: T,
         }
 
-        let store = use_store(|| Item {
+        #[store]
+        impl<T> Store<Item<T>> {
+            fn is_checked(&self) -> bool
+            where
+                T: 'static,
+            {
+                self.checked().cloned()
+            }
+
+            fn check(&mut self)
+            where
+                T: 'static,
+            {
+                self.checked().set(true);
+            }
+        }
+
+        let mut store = use_store(|| Item {
             checked: false,
             contents: "Learn about stores".to_string(),
         });
@@ -56,6 +88,9 @@ mod macro_tests {
         let ItemStoreTransposed { checked, contents } = store.transpose();
         let checked: bool = checked();
         let contents: String = contents();
+
+        let is_checked = store.is_checked();
+        store.check();
     }
 
     fn derive_tuple() {
@@ -85,7 +120,18 @@ mod macro_tests {
             BarFoo { foo: String },
         }
 
-        let store = use_store(|| Enum::Bar("Hello".to_string()));
+        #[store]
+        impl Store<Enum> {
+            fn is_foo_or_bar(&self) -> bool {
+                matches!(self.cloned(), Enum::Foo | Enum::Bar(_))
+            }
+
+            fn make_foo(&mut self) {
+                self.set(Enum::Foo);
+            }
+        }
+
+        let mut store = use_store(|| Enum::Bar("Hello".to_string()));
 
         let foo = store.is_foo();
         let bar = store.is_bar();
@@ -117,6 +163,9 @@ mod macro_tests {
                 let foo: String = foo();
             }
         }
+
+        let is_foo_or_bar = store.is_foo_or_bar();
+        store.make_foo();
     }
 
     fn derive_generic_enum() {
@@ -130,7 +179,24 @@ mod macro_tests {
             BarFoo { foo: T },
         }
 
-        let store = use_store(|| Enum::Bar("Hello".to_string()));
+        #[store]
+        impl<T> Store<Enum<T>> {
+            fn is_foo_or_bar(&self) -> bool
+            where
+                T: Clone + 'static,
+            {
+                matches!(self.cloned(), Enum::Foo | Enum::Bar(_))
+            }
+
+            fn make_foo(&mut self)
+            where
+                T: 'static,
+            {
+                self.set(Enum::Foo);
+            }
+        }
+
+        let mut store = use_store(|| Enum::Bar("Hello".to_string()));
 
         let foo = store.is_foo();
         let bar = store.is_bar();
@@ -162,5 +228,8 @@ mod macro_tests {
                 let foo: String = foo();
             }
         }
+
+        let is_foo_or_bar = store.is_foo_or_bar();
+        store.make_foo();
     }
 }
