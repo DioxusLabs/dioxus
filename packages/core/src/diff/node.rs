@@ -450,7 +450,7 @@ impl VNode {
                             let mut path_iterator = path.iter();
                             path_iterator.next();
                             let mut element = self.template.roots[path[0] as usize];
-                            while let Some(next_index) = path_iterator.next() {
+                            for next_index in path_iterator {
                                 if let TemplateNode::Element { children, .. } = element {
                                     element = children[*next_index as usize]
                                 } else {
