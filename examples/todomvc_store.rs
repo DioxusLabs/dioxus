@@ -4,7 +4,6 @@
 //! maintaining fine grained reactivity.
 
 use dioxus::prelude::*;
-use dioxus_stores::*;
 use std::{collections::HashMap, vec};
 
 const STYLE: Asset = asset!("/examples/assets/todomvc.css");
