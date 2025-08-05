@@ -13,7 +13,7 @@ use syn::spanned::Spanned;
 use syn::{parse::Error, PathArguments};
 
 use quote::quote;
-use syn::{parse_quote, GenericArgument, PathSegment, Type};
+use syn::{parse_quote, GenericArgument, Ident, PathSegment, Type};
 
 pub fn impl_my_derive(ast: &syn::DeriveInput) -> Result<TokenStream, Error> {
     let data = match &ast.data {
@@ -172,7 +172,7 @@ mod util {
 }
 
 mod field_info {
-    use crate::props::{looks_like_write_type, type_from_inside_option};
+    use crate::props::{looks_like_store_type, looks_like_write_type, type_from_inside_option};
     use proc_macro2::TokenStream;
     use quote::{format_ident, quote};
     use syn::spanned::Spanned;
@@ -221,8 +221,8 @@ mod field_info {
                     builder_attr.auto_into = false;
                 }
 
-                // Write fields automatically use impl Into
-                if looks_like_write_type(&field.ty) {
+                // Write and Store fields automatically use impl Into
+                if looks_like_write_type(&field.ty) || looks_like_store_type(&field.ty) {
                     builder_attr.auto_into = true;
                 }
 
@@ -1744,44 +1744,34 @@ fn child_owned_type(ty: &Type) -> bool {
     looks_like_signal_type(ty) || looks_like_write_type(ty) || looks_like_callback_type(ty)
 }
 
+/// Check if the path without generics matches the type we are looking for
+fn last_segment_matches(ty: &Type, expected: &Ident) -> bool {
+    extract_base_type_without_generics(ty).is_some_and(|path_without_generics| {
+        path_without_generics
+            .segments
+            .last()
+            .is_some_and(|seg| seg.ident == *expected)
+    })
+}
+
 fn looks_like_signal_type(ty: &Type) -> bool {
-    match extract_base_type_without_generics(ty) {
-        Some(path_without_generics) => {
-            path_without_generics == parse_quote!(dioxus_core::ReadOnlySignal)
-                || path_without_generics == parse_quote!(prelude::ReadOnlySignal)
-                || path_without_generics == parse_quote!(ReadOnlySignal)
-                || path_without_generics == parse_quote!(dioxus_core::prelude::ReadSignal)
-                || path_without_generics == parse_quote!(prelude::ReadSignal)
-                || path_without_generics == parse_quote!(ReadSignal)
-        }
-        None => false,
-    }
+    last_segment_matches(ty, &parse_quote!(ReadOnlySignal))
+        || last_segment_matches(ty, &parse_quote!(ReadSignal))
 }
 
 fn looks_like_write_type(ty: &Type) -> bool {
-    match extract_base_type_without_generics(ty) {
-        Some(path_without_generics) => {
-            path_without_generics == parse_quote!(dioxus_core::prelude::WriteSignal)
-                || path_without_generics == parse_quote!(prelude::WriteSignal)
-                || path_without_generics == parse_quote!(WriteSignal)
-        }
-        None => false,
-    }
+    last_segment_matches(ty, &parse_quote!(WriteSignal))
+}
+
+fn looks_like_store_type(ty: &Type) -> bool {
+    last_segment_matches(ty, &parse_quote!(Store))
+        || last_segment_matches(ty, &parse_quote!(ReadStore))
 }
 
 fn looks_like_callback_type(ty: &Type) -> bool {
     let type_without_option = remove_option_wrapper(ty.clone());
-    match extract_base_type_without_generics(&type_without_option) {
-        Some(path_without_generics) => {
-            path_without_generics == parse_quote!(dioxus_core::EventHandler)
-                || path_without_generics == parse_quote!(prelude::EventHandler)
-                || path_without_generics == parse_quote!(EventHandler)
-                || path_without_generics == parse_quote!(dioxus_core::Callback)
-                || path_without_generics == parse_quote!(prelude::Callback)
-                || path_without_generics == parse_quote!(Callback)
-        }
-        None => false,
-    }
+    last_segment_matches(&type_without_option, &parse_quote!(EventHandler))
+        || last_segment_matches(&type_without_option, &parse_quote!(Callback))
 }
 
 #[test]

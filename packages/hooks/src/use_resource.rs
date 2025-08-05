@@ -454,7 +454,7 @@ impl<T> Readable for Resource<T> {
         self.value.try_peek_unchecked()
     }
 
-    fn subscribers(&self) -> Option<Subscribers> {
+    fn subscribers(&self) -> Subscribers {
         self.value.subscribers()
     }
 }

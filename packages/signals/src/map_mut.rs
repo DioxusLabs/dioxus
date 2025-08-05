@@ -9,8 +9,8 @@ use generational_box::{AnyStorage, BorrowResult};
 
 /// A read only signal that has been mapped to a new type.
 pub struct MappedMutSignal<
-    O: ?Sized + 'static,
-    V: Readable,
+    O: ?Sized,
+    V,
     F = fn(&<V as Readable>::Target) -> &O,
     FMut = fn(&mut <V as Readable>::Target) -> &mut O,
 > {
@@ -22,7 +22,7 @@ pub struct MappedMutSignal<
 
 impl<V, O, F, FMut> Clone for MappedMutSignal<O, V, F, FMut>
 where
-    V: Readable + Clone,
+    V: Clone,
     F: Clone,
     FMut: Clone,
 {
@@ -38,7 +38,7 @@ where
 
 impl<V, O, F, FMut> Copy for MappedMutSignal<O, V, F, FMut>
 where
-    V: Readable + Copy,
+    V: Copy,
     F: Copy,
     FMut: Copy,
 {
@@ -47,11 +47,9 @@ where
 impl<V, O, F, FMut> MappedMutSignal<O, V, F, FMut>
 where
     O: ?Sized,
-    V: Readable,
-    F: Fn(&V::Target) -> &O,
 {
     /// Create a new mapped signal.
-    pub(crate) fn new(value: V, map_fn: F, map_fn_mut: FMut) -> Self {
+    pub fn new(value: V, map_fn: F, map_fn_mut: FMut) -> Self {
         MappedMutSignal {
             value,
             map_fn,
@@ -65,6 +63,7 @@ impl<V, O, F, FMut> Readable for MappedMutSignal<O, V, F, FMut>
 where
     O: ?Sized,
     V: Readable,
+    V::Target: 'static,
     F: Fn(&V::Target) -> &O,
 {
     type Target = O;
@@ -72,17 +71,26 @@ where
 
     fn try_read_unchecked(
         &self,
-    ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> {
+    ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError>
+    where
+        O: 'static,
+    {
         let value = self.value.try_read_unchecked()?;
         Ok(V::Storage::map(value, |v| (self.map_fn)(v)))
     }
 
-    fn try_peek_unchecked(&self) -> BorrowResult<ReadableRef<'static, Self>> {
+    fn try_peek_unchecked(&self) -> BorrowResult<ReadableRef<'static, Self>>
+    where
+        O: 'static,
+    {
         let value = self.value.try_peek_unchecked()?;
         Ok(V::Storage::map(value, |v| (self.map_fn)(v)))
     }
 
-    fn subscribers(&self) -> Option<Subscribers> {
+    fn subscribers(&self) -> Subscribers
+    where
+        O: 'static,
+    {
         self.value.subscribers()
     }
 }
@@ -91,6 +99,7 @@ impl<V, O, F, FMut> Writable for MappedMutSignal<O, V, F, FMut>
 where
     O: ?Sized,
     V: Writable,
+    V::Target: 'static,
     F: Fn(&V::Target) -> &O,
     FMut: Fn(&mut V::Target) -> &mut O,
 {
@@ -106,8 +115,9 @@ where
 
 impl<V, O, F, FMut> IntoAttributeValue for MappedMutSignal<O, V, F, FMut>
 where
-    O: Clone + IntoAttributeValue,
+    O: Clone + IntoAttributeValue + 'static,
     V: Readable,
+    V::Target: 'static,
     F: Fn(&V::Target) -> &O,
 {
     fn into_value(self) -> dioxus_core::AttributeValue {
@@ -134,8 +144,9 @@ where
 /// Currently only limited to clone types, though could probably specialize for string/arc/rc
 impl<V, O, F, FMut> Deref for MappedMutSignal<O, V, F, FMut>
 where
-    O: Clone,
+    O: Clone + 'static,
     V: Readable + 'static,
+    V::Target: 'static,
     F: Fn(&V::Target) -> &O + 'static,
     FMut: 'static,
 {
@@ -146,5 +157,5 @@ where
     }
 }
 
-read_impls!(MappedMutSignal<T, V, F, FMut> where V: Readable, F: Fn(&V::Target) -> &T);
-write_impls!(MappedMutSignal<T, V, F, FMut> where V: Writable, F: Fn(&V::Target) -> &T, FMut: Fn(&mut V::Target) -> &mut T);
+read_impls!(MappedMutSignal<T, V, F, FMut> where V: Readable<Target: 'static>, F: Fn(&V::Target) -> &T);
+write_impls!(MappedMutSignal<T, V, F, FMut> where V: Writable<Target: 'static>, F: Fn(&V::Target) -> &T, FMut: Fn(&mut V::Target) -> &mut T);

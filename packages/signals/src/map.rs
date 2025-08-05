@@ -4,7 +4,7 @@ use generational_box::{AnyStorage, BorrowResult};
 use std::ops::Deref;
 
 /// A read only signal that has been mapped to a new type.
-pub struct MappedSignal<O: ?Sized + 'static, V: Readable, F = fn(&<V as Readable>::Target) -> &O> {
+pub struct MappedSignal<O: ?Sized, V, F = fn(&<V as Readable>::Target) -> &O> {
     value: V,
     map_fn: F,
     _marker: std::marker::PhantomData<O>,
@@ -34,11 +34,9 @@ where
 impl<V, O, F> MappedSignal<O, V, F>
 where
     O: ?Sized,
-    V: Readable,
-    F: Fn(&V::Target) -> &O,
 {
     /// Create a new mapped signal.
-    pub(crate) fn new(value: V, map_fn: F) -> Self {
+    pub fn new(value: V, map_fn: F) -> Self {
         MappedSignal {
             value,
             map_fn,
@@ -51,6 +49,7 @@ impl<V, O, F> Readable for MappedSignal<O, V, F>
 where
     O: ?Sized,
     V: Readable,
+    V::Target: 'static,
     F: Fn(&V::Target) -> &O,
 {
     type Target = O;
@@ -68,15 +67,16 @@ where
         Ok(V::Storage::map(value, |v| (self.map_fn)(v)))
     }
 
-    fn subscribers(&self) -> Option<Subscribers> {
+    fn subscribers(&self) -> Subscribers {
         self.value.subscribers()
     }
 }
 
 impl<V, O, F> IntoAttributeValue for MappedSignal<O, V, F>
 where
-    O: Clone + IntoAttributeValue,
+    O: Clone + IntoAttributeValue + 'static,
     V: Readable,
+    V::Target: 'static,
     F: Fn(&V::Target) -> &O,
 {
     fn into_value(self) -> dioxus_core::AttributeValue {
@@ -100,7 +100,7 @@ where
 /// Currently only limited to clone types, though could probably specialize for string/arc/rc
 impl<V, O, F> Deref for MappedSignal<O, V, F>
 where
-    O: Clone,
+    O: Clone + 'static,
     V: Readable + 'static,
     F: Fn(&V::Target) -> &O + 'static,
 {
@@ -111,4 +111,4 @@ where
     }
 }
 
-read_impls!(MappedSignal<T, V, F> where V: Readable, F: Fn(&V::Target) -> &T);
+read_impls!(MappedSignal<T, V, F> where V: Readable<Target: 'static>, F: Fn(&V::Target) -> &T);
