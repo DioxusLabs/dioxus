@@ -414,32 +414,6 @@ impl VNode {
     }
 
     fn merge_dynamic_attributes(&self) -> Box<[Box<[Attribute]>]> {
-        let static_style_strings = self
-            .template
-            .roots
-            .iter()
-            .map(|root| {
-                let mut style_string = String::from("");
-                if let TemplateNode::Element { attrs, .. } = root {
-                    attrs.iter().for_each(|attribute| {
-                        if let TemplateAttribute::Static {
-                            name,
-                            value,
-                            namespace,
-                        } = attribute
-                        {
-                            if *name == "style" {
-                                style_string = format!("{style_string} {value}");
-                            } else if *namespace == Some("style") {
-                                style_string = format!("{style_string} {name}: {value};");
-                            }
-                        }
-                    });
-                }
-                style_string.trim().to_string()
-            })
-            .collect::<Vec<String>>();
-
         let dynamic_style_strings = self
             .dynamic_attrs
             .iter()
@@ -473,10 +447,37 @@ impl VNode {
                         // Only merge if the current attribute is a style attribute
                         if attribute.name == "style" || attribute.namespace == Some("style") {
                             // Get the static styles for the corresponding element
-                            let static_styles = match static_style_strings.get(path[0] as usize) {
-                                Some(static_style) => static_style,
-                                None => &String::from(""),
-                            };
+                            let mut path_iterator = path.iter();
+                            path_iterator.next();
+                            let mut element = self.template.roots[path[0] as usize];
+                            while let Some(next_index) = path_iterator.next() {
+                                if let TemplateNode::Element { children, .. } = element {
+                                    element = children[*next_index as usize]
+                                } else {
+                                    break;
+                                }
+                            }
+
+                            let mut static_styles = String::from("");
+                            if let TemplateNode::Element { attrs, .. } = element {
+                                attrs.iter().for_each(|attribute| {
+                                    if let TemplateAttribute::Static {
+                                        name,
+                                        value,
+                                        namespace,
+                                    } = attribute
+                                    {
+                                        if *name == "style" {
+                                            static_styles = format!("{static_styles} {value}");
+                                        } else if *namespace == Some("style") {
+                                            static_styles =
+                                                format!("{static_styles} {name}: {value};");
+                                        }
+                                    }
+                                });
+                            }
+                            static_styles = static_styles.trim().to_string();
+
                             // There might be more than one dynamic style for the same element
                             let dynamic_styles = dynamic_style_strings
                                 .iter()
