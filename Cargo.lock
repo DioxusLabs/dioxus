@@ -4985,6 +4985,7 @@ dependencies = [
  "dioxus-server",
  "dioxus-signals",
  "dioxus-ssr",
+ "dioxus-stores",
  "dioxus-web",
  "dioxus_server_macro",
  "env_logger 0.11.8",
