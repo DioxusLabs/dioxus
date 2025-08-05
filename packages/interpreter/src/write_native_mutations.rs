@@ -53,6 +53,7 @@ impl MutationState {
                     None => self.channel.create_element(tag),
                 }
                 // Set attributes on the current node
+                let mut style_string = String::from("");
                 for attr in *attrs {
                     if let TemplateAttribute::Static {
                         name,
@@ -60,9 +61,22 @@ impl MutationState {
                         namespace,
                     } = attr
                     {
-                        self.channel
-                            .set_top_attribute(name, value, namespace.unwrap_or_default())
+                        if *name == "style" {
+                            style_string = format!("{style_string} {value}");
+                        } else if *namespace == Some("style") {
+                            style_string = format!("{style_string} {name}: {value};");
+                        } else {
+                            self.channel.set_top_attribute(
+                                name,
+                                value,
+                                namespace.unwrap_or_default(),
+                            )
+                        }
                     }
+                }
+                if !style_string.is_empty() {
+                    self.channel
+                        .set_top_attribute("style", style_string.trim(), "")
                 }
                 // Add each child to the stack
                 for child in *children {
