@@ -1,5 +1,5 @@
 use crate::{
-    serve::WebServer, BuildArtifacts, BuildRequest, BuildStage, BuilderUpdate, Platform,
+    serve::WebServer, BuildArtifacts, BuildRequest, BuildStage, BuilderUpdate, BundleFormat,
     ProgressRx, ProgressTx, Result, RustcArgs, StructuredOutput,
 };
 use anyhow::{bail, Context};
@@ -16,6 +16,7 @@ use std::{
     process::Stdio,
 };
 use subsecond_types::JumpTable;
+use target_lexicon::Architecture;
 use tokio::{
     io::{AsyncBufReadExt, BufReader, Lines},
     process::{Child, ChildStderr, ChildStdout, Command},
@@ -189,7 +190,7 @@ impl AppBuilder {
                 match bundle {
                     Ok(Ok(bundle)) => BuilderUpdate::BuildReady { bundle },
                     Ok(Err(err)) => BuilderUpdate::BuildFailed { err },
-                    Err(err) => BuilderUpdate::BuildFailed { err: anyhow::anyhow!("Build panicked! {:#?}", err) },
+                    Err(err) => BuilderUpdate::BuildFailed { err: anyhow::anyhow!("Build panicked! {err:#?}") },
                 }
             },
             Some(Ok(Some(msg))) = OptionFuture::from(self.stdout.as_mut().map(|f| f.next_line())) => {
@@ -300,7 +301,13 @@ impl AppBuilder {
         // for all other platforms, we need to use the ASLR reference to know where to insert the patch.
         let aslr_reference = match self.aslr_reference {
             Some(val) => val,
-            None if self.build.platform == Platform::Web => 0,
+            None if matches!(
+                self.build.triple.architecture,
+                Architecture::Wasm32 | Architecture::Wasm64
+            ) =>
+            {
+                0
+            }
             None => {
                 tracing::warn!(
                     "Ignoring hotpatch since there is no ASLR reference. Is the client connected?"
@@ -542,18 +549,18 @@ impl AppBuilder {
         );
 
         // We try to use stdin/stdout to communicate with the app
-        match self.build.platform {
+        match self.build.bundle {
             // Unfortunately web won't let us get a proc handle to it (to read its stdout/stderr) so instead
             // use use the websocket to communicate with it. I wish we could merge the concepts here,
             // like say, opening the socket as a subprocess, but alas, it's simpler to do that somewhere else.
-            Platform::Web => {
+            BundleFormat::Web => {
                 // Only the first build we open the web app, after that the user knows it's running
                 if open_browser {
                     self.open_web(open_address.unwrap_or(devserver_ip));
                 }
             }
 
-            Platform::Ios => {
+            BundleFormat::Ios => {
                 if self.build.device {
                     self.codesign_ios().await?;
                     self.open_ios_device().await?
@@ -562,16 +569,15 @@ impl AppBuilder {
                 }
             }
 
-            Platform::Android => {
+            BundleFormat::Android => {
                 self.open_android_sim(false, devserver_ip, envs).await?;
             }
 
             // These are all just basically running the main exe, but with slightly different resource dir paths
-            Platform::Server
-            | Platform::MacOS
-            | Platform::Windows
-            | Platform::Linux
-            | Platform::Liveview => self.open_with_main_exe(envs, args)?,
+            BundleFormat::Server
+            | BundleFormat::MacOS
+            | BundleFormat::Windows
+            | BundleFormat::Linux => self.open_with_main_exe(envs, args)?,
         };
 
         self.builds_opened += 1;
@@ -661,7 +667,7 @@ impl AppBuilder {
             }
 
             // If the emulator is android, we need to copy the asset to the device with `adb push asset /data/local/tmp/dx/assets/filename.ext`
-            if self.build.platform == Platform::Android {
+            if self.build.bundle == BundleFormat::Android {
                 let bundled_name = PathBuf::from(bundled.bundled_path());
                 _ = self.copy_file_to_android_tmp(&from, &bundled_name).await;
             }
@@ -684,7 +690,7 @@ impl AppBuilder {
         let mut jump_table = crate::build::create_jump_table(&new, &triple, cache)?;
 
         // If it's android, we need to copy the assets to the device and then change the location of the patch
-        if self.build.platform == Platform::Android {
+        if self.build.bundle == BundleFormat::Android {
             jump_table.lib = self
                 .copy_file_to_android_tmp(&new, &(PathBuf::from(new.file_name().unwrap())))
                 .await?;
@@ -777,7 +783,7 @@ impl AppBuilder {
             }
 
             // If the emulator is android, we need to copy the asset to the device with `adb push asset /data/local/tmp/dx/assets/filename.ext`
-            if self.build.platform == Platform::Android {
+            if self.build.bundle == BundleFormat::Android {
                 _ = self
                     .copy_file_to_android_tmp(&changed_file, &bundled_name)
                     .await;
@@ -972,7 +978,7 @@ impl AppBuilder {
                 .await?;
 
             if !output.status.success() {
-                bail!("Failed to install app: {:?}", output);
+                bail!("Failed to install app: {output:?}");
             }
 
             let json: Value = serde_json::from_str(&std::fs::read_to_string(tmpfile.path())?)
@@ -1007,7 +1013,7 @@ impl AppBuilder {
                 .await?;
 
             if !output.status.success() {
-                bail!("Failed to launch app: {:?}", output);
+                bail!("Failed to launch app: {output:?}");
             }
 
             let json: Value = serde_json::from_str(&std::fs::read_to_string(tmpfile.path())?)
@@ -1032,7 +1038,7 @@ impl AppBuilder {
                 .await?;
 
             if !output.status.success() {
-                bail!("Failed to resume app: {:?}", output);
+                bail!("Failed to resume app: {output:?}");
             }
 
             Ok(())
@@ -1080,7 +1086,7 @@ We checked the folders:
             .args(["find-identity", "-v", "-p", "codesigning"])
             .output()
             .await
-            .context("Failed to run `security find-identity -v -p codesigning`")
+            .context("Failed to run `security find-identity -v -p codesigning` - is `security` in your path?")
             .map(|e| {
                 String::from_utf8(e.stdout)
                     .context("Failed to parse `security find-identity -v -p codesigning`")
@@ -1185,7 +1191,7 @@ We checked the folders:
             .arg(self.build.root_dir())
             .output()
             .await
-            .context("Failed to codesign the app")?;
+            .context("Failed to codesign the app - is `codesign` in your path?")?;
 
         if !output.status.success() {
             bail!(
@@ -1255,8 +1261,8 @@ We checked the folders:
             let port = devserver_socket.port();
             if let Err(e) = Command::new(&adb)
                 .arg("reverse")
-                .arg(format!("tcp:{}", port))
-                .arg(format!("tcp:{}", port))
+                .arg(format!("tcp:{port}"))
+                .arg(format!("tcp:{port}"))
                 .output()
                 .await
             {
@@ -1362,18 +1368,14 @@ We checked the folders:
         let mut main_exe = self.build.main_exe();
 
         // The requirement here is based on the platform, not necessarily our current architecture.
-        let requires_entropy = match self.build.platform {
+        let requires_entropy = match self.build.bundle {
             // When running "bundled", we don't need entropy
-            Platform::Web => false,
-            Platform::MacOS => false,
-            Platform::Ios => false,
-            Platform::Android => false,
+            BundleFormat::Web | BundleFormat::MacOS | BundleFormat::Ios | BundleFormat::Android => {
+                false
+            }
 
             // But on platforms that aren't running as "bundled", we do.
-            Platform::Windows => true,
-            Platform::Linux => true,
-            Platform::Server => true,
-            Platform::Liveview => true,
+            BundleFormat::Windows | BundleFormat::Linux | BundleFormat::Server => true,
         };
 
         if requires_entropy || crate::devcfg::should_force_entropy() {
@@ -1443,24 +1445,22 @@ We checked the folders:
     }
 
     pub(crate) async fn open_debugger(&mut self, server: &WebServer) -> Result<()> {
-        let url = match self.build.platform {
-            Platform::MacOS
-            | Platform::Windows
-            | Platform::Linux
-            | Platform::Server
-            | Platform::Liveview => {
+        let url = match self.build.bundle {
+            BundleFormat::MacOS
+            | BundleFormat::Windows
+            | BundleFormat::Linux
+            | BundleFormat::Server => {
                 let Some(Some(pid)) = self.child.as_mut().map(|f| f.id()) else {
                     tracing::warn!("No process to attach debugger to");
                     return Ok(());
                 };
 
                 format!(
-                    "vscode://vadimcn.vscode-lldb/launch/config?{{'request':'attach','pid':{}}}",
-                    pid
+                    "vscode://vadimcn.vscode-lldb/launch/config?{{'request':'attach','pid':{pid}}}"
                 )
             }
 
-            Platform::Web => {
+            BundleFormat::Web => {
                 // code --open-url "vscode://DioxusLabs.dioxus/debugger?uri=http://127.0.0.1:8080"
                 // todo - debugger could open to the *current* page afaik we don't have a way to have that info
                 let address = server.devserver_address();
@@ -1474,7 +1474,7 @@ We checked the folders:
                 format!("vscode://DioxusLabs.dioxus/debugger?uri={protocol}://{address}{base_path}")
             }
 
-            Platform::Ios => {
+            BundleFormat::Ios => {
                 let Some(pid) = self.pid else {
                     tracing::warn!("No process to attach debugger to");
                     return Ok(());
@@ -1513,7 +1513,7 @@ We checked the folders:
             // (lldb) settings append target.exec-search-paths target/dx/tw6/debug/android/app/app/src/main/jniLibs/arm64-v8a/libdioxusmain.so
             // (lldb) process handle SIGSEGV --pass true --stop false --notify true (otherwise the java threads cause crash)
             //
-            Platform::Android => {
+            BundleFormat::Android => {
                 // adb push ./sdk/ndk/29.0.13113456/toolchains/llvm/prebuilt/darwin-x86_64/lib/clang/20/lib/linux/aarch64/lldb-server /tmp
                 // adb shell "/tmp/lldb-server --server --listen ..."
                 // "vscode://vadimcn.vscode-lldb/launch/config?{{'request':'connect','port': {}}}",
@@ -1601,7 +1601,7 @@ We checked the folders:
             }
         };
 
-        tracing::info!("Opening debugger for [{}]: {url}", self.build.platform);
+        tracing::info!("Opening debugger for [{}]: {url}", self.build.bundle);
 
         _ = tokio::process::Command::new("code")
             .arg("--open-url")

@@ -108,11 +108,11 @@ fn refactor_file(
     let out = dioxus_autofmt::apply_formats(&s, edits);
 
     if file == "-" {
-        print!("{}", out);
+        print!("{out}");
     } else if let Err(e) = fs::write(&file, out) {
         tracing::error!("failed to write formatted content to file: {e}",);
     } else {
-        println!("formatted {}", file);
+        println!("formatted {file}");
     }
 
     Ok(())
@@ -191,7 +191,7 @@ fn autoformat_project(
     let files_formatted: usize = counts.into_iter().flatten().sum();
 
     if files_formatted > 0 && check {
-        bail!("{} files needed formatting", files_formatted);
+        bail!("{files_formatted} files needed formatting");
     }
 
     Ok(())
@@ -252,7 +252,7 @@ fn format_syn_error(err: syn::Error) -> Error {
     let start = err.span().start();
     let line = start.line;
     let column = start.column;
-    anyhow::anyhow!("Syntax Error in line {} column {}:\n{}", line, column, err)
+    anyhow::anyhow!("Syntax Error in line {line} column {column}:\n{err}")
 }
 
 #[tokio::test]

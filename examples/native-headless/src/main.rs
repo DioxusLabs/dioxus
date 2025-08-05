@@ -4,7 +4,7 @@
 //! (this example is not really intended to be run as-is, and requires you to fill
 //! in the missing pieces)
 use anyrender_vello::{wgpu_context::WGPUContext, CustomPaintSource, VelloScenePainter};
-use blitz_dom::Document as _;
+use blitz_dom::{Document as _, DocumentConfig};
 use blitz_paint::paint_scene;
 use blitz_traits::{
     events::{BlitzMouseButtonEvent, MouseEventButton, MouseEventButtons, UiEvent},
@@ -49,8 +49,13 @@ fn main() {
     // Create the dioxus virtual dom and the dioxus-native document
     // It is important to set the width, height, and scale factor on the document as these are used for layout.
     let vdom = VirtualDom::new(app);
-    let mut dioxus_doc = DioxusDocument::new(vdom, None);
-    dioxus_doc.set_viewport(Viewport::new(WIDTH, HEIGHT, SCALE_FACTOR, COLOR_SCHEME));
+    let mut dioxus_doc = DioxusDocument::new(
+        vdom,
+        DocumentConfig {
+            viewport: Some(Viewport::new(WIDTH, HEIGHT, SCALE_FACTOR, COLOR_SCHEME)),
+            ..Default::default()
+        },
+    );
 
     // Setup a WGPU Device and Queue
     //
@@ -95,7 +100,7 @@ fn main() {
     // =============
 
     // Poll the vdom
-    dioxus_doc.poll(Context::from_waker(&waker));
+    dioxus_doc.poll(Some(Context::from_waker(&waker)));
 
     // Create a `VelloScenePainter` to paint into
     let mut custom_paint_sources =
@@ -151,7 +156,7 @@ fn main() {
         buttons: MouseEventButtons::Primary, // keep track of all pressed buttons
         mods: Modifiers::empty(),            // ctrl, alt, shift, etc
     });
-    dioxus_doc.handle_event(event);
+    dioxus_doc.handle_ui_event(event);
 
     // Trigger a poll via your event loop (or wait for next frame)
 }

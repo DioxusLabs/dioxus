@@ -11,6 +11,7 @@
 </div>
 
 ---
+
 Dioxus is a framework for building cross-platform apps in Rust. With one codebase, you can build web, desktop, and mobile apps with fullstack server functions. Dioxus is designed to be easy to learn for developers familiar with web technologies like HTML, CSS, and JavaScript.
 
 <div align="center">
@@ -31,6 +32,7 @@ Dioxus is crossplatform app framework that empowers developer to build beautiful
 ## Quick start
 
 To get started with Dioxus, you'll want to grab the dioxus-cli tool: `dx`. We distribute `dx` with `cargo-binstall` - if you already have binstall skip this step.
+
 ```shell
 # skip if you already have cargo-binstall
 cargo install cargo-binstall
@@ -42,7 +44,7 @@ cargo binstall dioxus-cli
 dx new my-app && cd my-app
 
 # and then serve!
-dx serve --platform desktop
+dx serve --desktop
 ```
 
 ## Your first app
@@ -122,7 +124,7 @@ fn App() -> Element {
 
 We can compose these function components to build a complex app. Each new component takes some Properties. For components with no explicit properties, we can omit the type altogether.
 
-In Dioxus, all properties are memoized by default with `Clone` and `PartialEq`. For props you can't clone, simply wrap the fields in a [`ReadOnlySignal`](dioxus_signals::ReadOnlySignal) and Dioxus will handle converting types for you.
+In Dioxus, all properties are memoized by default with `Clone` and `PartialEq`. For props you can't clone, simply wrap the fields in a [`ReadSignal`](dioxus_signals::ReadSignal) and Dioxus will handle converting types for you.
 
 ```rust, no_run
 # use dioxus::prelude::*;

@@ -9,13 +9,16 @@ pub(crate) struct Doctor {}
 
 impl Doctor {
     pub async fn doctor(self) -> Result<StructuredOutput> {
-        let Ok(workspace) = Workspace::current().await else {
-            bail!("dx doctor must be run within a cargo workspace!")
-        };
-
-        let rustc_version = &workspace.rustc_version;
-        let rustc_sysroot = &workspace.sysroot.to_string_lossy();
-        let rustlib = workspace.sysroot.join("lib").join("rustlib");
+        let mut rustc_version = "not found".to_string();
+        let mut rustc_sysroot = "not found".to_string();
+        let mut rustlib = PathBuf::from(".");
+        if let Ok(r) = Workspace::get_rustc_sysroot().await {
+            rustlib = PathBuf::from(r.as_str()).join("lib").join("rustlib");
+            rustc_sysroot = r;
+        }
+        if let Ok(r) = Workspace::get_rustc_version().await {
+            rustc_version = r;
+        }
 
         // wasm-opt
         let wasm_opt_location = crate::wasm_opt::installed_location();
@@ -25,18 +28,20 @@ impl Doctor {
         };
 
         // wasm-bindgen
-        let wbg_version = workspace.wasm_bindgen_version();
-        let wbg_version_msg = match wbg_version.clone() {
-            Some(msg) => msg,
-            None => "not required".to_string(),
-        };
-        let wasm_bindgen_location = match wbg_version {
-            Some(vers) => match crate::wasm_bindgen::WasmBindgen::new(&vers).get_binary_path() {
-                Ok(path) => path.to_string_lossy().to_string(),
-                Err(err) => err.to_string().lines().join(""),
-            },
-            None => "not required".to_string(),
-        };
+        let mut wbg_version_msg = "automatically managed".to_string();
+        let mut wasm_bindgen_location = "automatically managed".to_string();
+        if let Ok(workspace) = Workspace::current().await {
+            let wbg_version = workspace.wasm_bindgen_version();
+            if let Some(vers) = &wbg_version {
+                wbg_version_msg = vers.to_string();
+
+                wasm_bindgen_location =
+                    match crate::wasm_bindgen::WasmBindgen::new(vers).get_binary_path() {
+                        Ok(path) => path.to_string_lossy().to_string(),
+                        Err(err) => err.to_string().lines().join(""),
+                    };
+            }
+        }
 
         // extensions
         fn has_dioxus_ext(editor_dir: &str) -> anyhow::Result<PathBuf> {
@@ -81,7 +86,7 @@ impl Doctor {
         let mut sdk = "not found".to_string();
         let mut java_home = "not found".to_string();
         let mut emulator = "not found".to_string();
-        if let Some(rf) = workspace.android_tools.as_deref() {
+        if let Some(rf) = crate::build::get_android_tools() {
             if rf.adb.exists() {
                 adb = rf.adb.display().to_string();
             }
@@ -104,7 +109,7 @@ impl Doctor {
 
         let mut simulator_location = "not found".to_string();
         let mut xcode_install = "not found".to_string();
-        if let Some(xcode) = workspace.xcode.as_ref() {
+        if let Some(xcode) = Workspace::get_xcode_path().await {
             let sim_location = xcode.join("Applications").join("Simulator.app");
             if sim_location.exists() {
                 simulator_location = sim_location.display().to_string();
@@ -112,6 +117,27 @@ impl Doctor {
             if xcode.exists() {
                 xcode_install = xcode.display().to_string();
             }
+        }
+
+        let mut security_cli_path = "not found".to_string();
+        let mut codesign_path = "not found".to_string();
+        let mut xcode_select_path = "not found".to_string();
+        let mut xcrun_path = "not found".to_string();
+        let mut ranlib_path = "not found".to_string();
+        if let Ok(path) = which::which("security") {
+            security_cli_path = path.display().to_string();
+        }
+        if let Ok(path) = which::which("codesign") {
+            codesign_path = path.display().to_string();
+        }
+        if let Ok(path) = which::which("xcode-select") {
+            xcode_select_path = path.display().to_string();
+        }
+        if let Ok(path) = which::which("xcrun") {
+            xcrun_path = path.display().to_string();
+        }
+        if let Some(path) = Workspace::select_ranlib() {
+            ranlib_path = path.display().to_string();
         }
 
         // toolchains
@@ -152,6 +178,20 @@ impl Doctor {
             has_aarch64_apple_darwin = "✅";
         }
 
+        // Rust tool paths
+        let mut rustc_path = "not found".to_string();
+        let mut cargo_path = "not found".to_string();
+        let mut cc_path = "not found".to_string();
+        if let Ok(path) = which::which("rustc") {
+            rustc_path = path.display().to_string();
+        }
+        if let Ok(path) = which::which("cargo") {
+            cargo_path = path.display().to_string();
+        }
+        if let Ok(path) = which::which("cc") {
+            cc_path = path.display().to_string();
+        }
+
         // Things to know
         // - current rust version and rust-related things
         // - installed toolchains
@@ -165,10 +205,14 @@ impl Doctor {
  {GLOW_STYLE}macOS{GLOW_STYLE:#}: all tools should be installed by default
  {GLOW_STYLE}Windows{GLOW_STYLE:#}: install the webview2 binary
  {GLOW_STYLE}Linux{GLOW_STYLE:#}: Install libwebkit2gtk-4.1-dev libgtk-3-dev libasound2-dev libudev-dev libayatana-appindicator3-dev libxdo-dev libglib2.0-dev
+ {GLOW_STYLE}nix{GLOW_STYLE:#}: Make sure all tools are in your path (codesign, ld, etc.)
 
 {LINK_STYLE}Rust{LINK_STYLE:#}
  Rustc version: {HINT_STYLE}{rustc_version}{HINT_STYLE:#}
  Rustc sysroot: {HINT_STYLE}{rustc_sysroot}{HINT_STYLE:#}
+ Rustc path: {HINT_STYLE}{rustc_path}{HINT_STYLE:#}
+ Cargo path: {HINT_STYLE}{cargo_path}{HINT_STYLE:#}
+ cc path: {HINT_STYLE}{cc_path}{HINT_STYLE:#}
 
 {LINK_STYLE}Devtools{LINK_STYLE:#}
  VSCode Extension: {HINT_STYLE}{vscode_ext_msg}{HINT_STYLE:#}
@@ -180,9 +224,14 @@ impl Doctor {
  wasm-bindgen: {HINT_STYLE}{wasm_bindgen_location}{HINT_STYLE:#}
  wasm-bindgen version: {HINT_STYLE}{wbg_version_msg}{HINT_STYLE:#}
 
-{LINK_STYLE}iOS{LINK_STYLE:#}
+{LINK_STYLE}iOS/macOS{LINK_STYLE:#}
  XCode: {HINT_STYLE}{xcode_install}{HINT_STYLE:#}
  Simulator: {HINT_STYLE}{simulator_location}{HINT_STYLE:#}
+ Security CLI: {HINT_STYLE}{security_cli_path}{HINT_STYLE:#}
+ Codesign CII: {HINT_STYLE}{codesign_path}{HINT_STYLE:#}
+ xcode-select: {HINT_STYLE}{xcode_select_path}{HINT_STYLE:#}
+ xcrun: {HINT_STYLE}{xcrun_path}{HINT_STYLE:#}
+ ranlib: {HINT_STYLE}{ranlib_path}{HINT_STYLE:#}
 
 {LINK_STYLE}Android{LINK_STYLE:#}
  sdk: {HINT_STYLE}{sdk}{HINT_STYLE:#}

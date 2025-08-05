@@ -1,20 +1,24 @@
 //! Integration between Dioxus and Blitz
 use crate::{qual_name, trace, NodeId};
 use blitz_dom::{Attribute, BaseDocument, DocumentMutator};
+use blitz_traits::events::DomEventKind;
 use dioxus_core::{
     AttributeValue, ElementId, Template, TemplateAttribute, TemplateNode, WriteMutations,
 };
 use rustc_hash::FxHashMap;
+use std::str::FromStr as _;
 
 /// The state of the Dioxus integration with the RealDom
 #[derive(Debug)]
 pub struct DioxusState {
     /// Store of templates keyed by unique name
-    templates: FxHashMap<Template, Vec<NodeId>>,
+    pub(crate) templates: FxHashMap<Template, Vec<NodeId>>,
     /// Stack machine state for applying dioxus mutations
-    stack: Vec<NodeId>,
+    pub(crate) stack: Vec<NodeId>,
     /// Mapping from vdom ElementId -> rdom NodeId
-    node_id_mapping: Vec<Option<NodeId>>,
+    pub(crate) node_id_mapping: Vec<Option<NodeId>>,
+    /// Count of each handler type
+    pub(crate) event_handler_counts: [u32; 32],
 }
 
 impl DioxusState {
@@ -24,6 +28,7 @@ impl DioxusState {
             templates: FxHashMap::default(),
             stack: vec![root_id],
             node_id_mapping: vec![Some(root_id)],
+            event_handler_counts: [0; 32],
         }
     }
 
@@ -254,10 +259,18 @@ impl WriteMutations for MutationWriter<'_> {
         self.set_attribute("data-dioxus-id", None, &value, id);
 
         // node.add_event_listener(name);
+
+        if let Ok(kind) = DomEventKind::from_str(name) {
+            let idx = kind.discriminant() as usize;
+            self.state.event_handler_counts[idx] += 1;
+        }
     }
 
-    fn remove_event_listener(&mut self, _name: &'static str, _id: ElementId) {
-        // node.remove_event_listener(name);
+    fn remove_event_listener(&mut self, name: &'static str, _id: ElementId) {
+        if let Ok(kind) = DomEventKind::from_str(name) {
+            let idx = kind.discriminant() as usize;
+            self.state.event_handler_counts[idx] -= 1;
+        }
     }
 }
 

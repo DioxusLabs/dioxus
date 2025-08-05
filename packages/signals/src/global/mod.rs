@@ -1,4 +1,4 @@
-use dioxus_core::ScopeId;
+use dioxus_core::{ScopeId, Subscribers};
 use generational_box::BorrowResult;
 use std::{any::Any, cell::RefCell, collections::HashMap, ops::Deref, panic::Location, rc::Rc};
 
@@ -8,7 +8,7 @@ pub use memo::*;
 mod signal;
 pub use signal::*;
 
-use crate::{Readable, ReadableRef, Signal, Writable, WritableRef};
+use crate::{Readable, ReadableExt, ReadableRef, Signal, Writable, WritableExt, WritableRef};
 
 /// A trait for an item that can be constructed from an initialization function
 pub trait InitializeFromFunction<T> {
@@ -32,20 +32,21 @@ pub struct Global<T, R = T> {
 /// Allow calling a signal with signal() syntax
 ///
 /// Currently only limited to copy types, though could probably specialize for string/arc/rc
-impl<T: Clone + 'static, R: Clone + 'static> Deref for Global<T, R>
+impl<T: Clone, R: Clone> Deref for Global<T, R>
 where
-    T: Readable<Target = R> + InitializeFromFunction<R>,
+    T: Readable<Target = R> + InitializeFromFunction<R> + 'static,
+    T::Target: 'static,
 {
     type Target = dyn Fn() -> R;
 
     fn deref(&self) -> &Self::Target {
-        unsafe { Readable::deref_impl(self) }
+        unsafe { ReadableExt::deref_impl(self) }
     }
 }
 
-impl<T: Clone + 'static, R: 'static> Readable for Global<T, R>
+impl<T, R> Readable for Global<T, R>
 where
-    T: Readable<Target = R> + InitializeFromFunction<R>,
+    T: Readable<Target = R> + InitializeFromFunction<R> + Clone + 'static,
 {
     type Target = R;
     type Storage = T::Storage;
@@ -53,45 +54,34 @@ where
     #[track_caller]
     fn try_read_unchecked(
         &self,
-    ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> {
+    ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError>
+    where
+        R: 'static,
+    {
         self.resolve().try_read_unchecked()
     }
 
     #[track_caller]
-    fn try_peek_unchecked(&self) -> BorrowResult<ReadableRef<'static, Self>> {
+    fn try_peek_unchecked(&self) -> BorrowResult<ReadableRef<'static, Self>>
+    where
+        R: 'static,
+    {
         self.resolve().try_peek_unchecked()
+    }
+
+    fn subscribers(&self) -> Subscribers
+    where
+        R: 'static,
+    {
+        self.resolve().subscribers()
     }
 }
 
-impl<T: Clone + 'static, R: 'static> Writable for Global<T, R>
+impl<T: Clone, R> Writable for Global<T, R>
 where
-    T: Writable<Target = R> + InitializeFromFunction<R>,
+    T: Writable<Target = R> + InitializeFromFunction<R> + 'static,
 {
-    type Mut<'a, Read: ?Sized + 'static> = T::Mut<'a, Read>;
-
-    fn map_mut<I: ?Sized, U: ?Sized + 'static, F: FnOnce(&mut I) -> &mut U>(
-        ref_: Self::Mut<'_, I>,
-        f: F,
-    ) -> Self::Mut<'_, U> {
-        T::map_mut(ref_, f)
-    }
-
-    fn try_map_mut<
-        I: ?Sized + 'static,
-        U: ?Sized + 'static,
-        F: FnOnce(&mut I) -> Option<&mut U>,
-    >(
-        ref_: Self::Mut<'_, I>,
-        f: F,
-    ) -> Option<Self::Mut<'_, U>> {
-        T::try_map_mut(ref_, f)
-    }
-
-    fn downcast_lifetime_mut<'a: 'b, 'b, Read: ?Sized + 'static>(
-        mut_: Self::Mut<'a, Read>,
-    ) -> Self::Mut<'b, Read> {
-        T::downcast_lifetime_mut(mut_)
-    }
+    type WriteMetadata = T::WriteMetadata;
 
     #[track_caller]
     fn try_write_unchecked(
@@ -101,24 +91,27 @@ where
     }
 }
 
-impl<T: Clone + 'static, R: 'static> Global<T, R>
+impl<T: Clone, R> Global<T, R>
 where
-    T: Writable<Target = R> + InitializeFromFunction<R>,
+    T: Writable<Target = R> + InitializeFromFunction<R> + 'static,
 {
     /// Write this value
-    pub fn write(&self) -> T::Mut<'static, R> {
+    pub fn write(&self) -> WritableRef<'static, T, R> {
         self.resolve().try_write_unchecked().unwrap()
     }
 
     /// Run a closure with a mutable reference to the signal's value.
     /// If the signal has been dropped, this will panic.
     #[track_caller]
-    pub fn with_mut<O>(&self, f: impl FnOnce(&mut R) -> O) -> O {
+    pub fn with_mut<O>(&self, f: impl FnOnce(&mut R) -> O) -> O
+    where
+        T::Target: 'static,
+    {
         self.resolve().with_mut(f)
     }
 }
 
-impl<T: Clone + 'static, R> Global<T, R>
+impl<T: Clone, R> Global<T, R>
 where
     T: InitializeFromFunction<R>,
 {
@@ -180,7 +173,10 @@ where
 
     /// Resolve the global value. This will try to get the existing value from the current virtual dom, and if it doesn't exist, it will create a new one.
     // NOTE: This is not called "get" or "value" because those methods overlap with Readable and Writable
-    pub fn resolve(&self) -> T {
+    pub fn resolve(&self) -> T
+    where
+        T: 'static,
+    {
         let key = self.key();
 
         let context = get_global_context();
@@ -257,7 +253,7 @@ impl From<&'static Location<'static>> for GlobalKey<'static> {
 impl GlobalLazyContext {
     /// Get a signal with the given string key
     /// The key will be converted to a UUID with the appropriate internal namespace
-    pub fn get_signal_with_key<T>(&self, key: GlobalKey) -> Option<Signal<T>> {
+    pub fn get_signal_with_key<T: 'static>(&self, key: GlobalKey) -> Option<Signal<T>> {
         self.map.borrow().get(&key).map(|f| {
             *f.downcast_ref::<Signal<T>>().unwrap_or_else(|| {
                 panic!(

@@ -1,4 +1,4 @@
-//! Signals can degrade into a ReadOnlySignal variant automatically
+//! Signals can degrade into a Read variant automatically
 //! This is done thanks to a conversion by the #[component] macro
 
 use dioxus::prelude::*;
@@ -22,7 +22,7 @@ fn app() -> Element {
 }
 
 #[component]
-fn Child(count: ReadOnlySignal<i32>, children: Element) -> Element {
+fn Child(count: ReadSignal<i32>, children: Element) -> Element {
     rsx! {
         div { "Count: {count}" }
         {children}

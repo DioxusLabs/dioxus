@@ -28,7 +28,7 @@ fn app() -> Element {
 }
 
 #[component]
-fn Child(state: Memo<isize>, items: Memo<Vec<isize>>, depth: ReadOnlySignal<usize>) -> Element {
+fn Child(state: Memo<isize>, items: Memo<Vec<isize>>, depth: ReadSignal<usize>) -> Element {
     // These memos don't get re-computed when early returns happen
     let state = use_memo(move || state() + 1);
     let item = use_memo(move || items()[depth() - 1]);

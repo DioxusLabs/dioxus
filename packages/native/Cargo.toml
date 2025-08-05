@@ -10,24 +10,25 @@ homepage = "https://dioxuslabs.com/learn/0.6/getting_started"
 keywords = ["dom", "ui", "gui", "react"]
 
 [features]
-default = ["accessibility", "hot-reload", "tracing", "net", "svg", "system-fonts"]
+default = ["accessibility", "hot-reload", "tracing", "net", "svg", "system-fonts", "openssl-vendored-android"]
 svg = ["blitz-dom/svg", "blitz-paint/svg"]
 net = ["dep:tokio", "dep:blitz-net"]
 accessibility = ["blitz-shell/accessibility", "blitz-dom/accessibility"]
 tracing = ["dep:tracing", "blitz-shell/tracing", "blitz-dom/tracing"]
 hot-reload = ["dep:dioxus-cli-config", "dep:dioxus-devtools"]
 system-fonts = ["blitz-dom/system_fonts"]
+openssl-vendored-android = ["openssl"]
 autofocus = []
 
 [dependencies]
 # Blitz dependencies
-anyrender = { version = "0.4", default-features = false }
-anyrender_vello = { version = "0.4", default-features = false }
-blitz-dom = { workspace = true, default-features = false }
+anyrender = { workspace = true }
+anyrender_vello = { workspace = true }
+blitz-dom = { workspace = true }
 blitz-net = { workspace = true, optional = true }
 blitz-paint = { workspace = true, optional = true }
 blitz-traits = { workspace = true }
-blitz-shell = { workspace = true, default-features = false }
+blitz-shell = { workspace = true }
 
 # DioxusLabs dependencies
 dioxus-core = { workspace = true }
@@ -50,6 +51,9 @@ tokio = { workspace = true, features = ["rt-multi-thread"], optional = true }
 tracing = { workspace = true, optional = true }
 rustc-hash = { workspace = true }
 futures-util = { workspace = true }
+
+[target.'cfg(target_os = "android")'.dependencies]
+openssl = { version = "0.10", features = ["vendored"], optional = true }
 
 [package.metadata.docs.rs]
 all-features = true
