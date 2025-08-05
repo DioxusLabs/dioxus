@@ -2634,8 +2634,16 @@ impl BuildRequest {
             extra_include
         );
 
-        let openssl_lib_dir = AndroidTools::openssl_lib_dir(&self.triple);
-        let openssl_include_dir = AndroidTools::openssl_include_dir();
+        // Load up the OpenSSL environment variables, using our defaults if not set.
+        // if the user specifies `/vendor`, then they get vendored, unless OPENSSL_NO_VENDOR is passed (implicitly...)
+        let openssl_lib_dir = std::env::var("OPENSSL_LIB_DIR")
+            .map(PathBuf::from)
+            .unwrap_or_else(|_| AndroidTools::openssl_lib_dir(&self.triple));
+        let openssl_include_dir = std::env::var("OPENSSL_INCLUDE_DIR")
+            .map(PathBuf::from)
+            .unwrap_or_else(|_| AndroidTools::openssl_include_dir());
+        let openssl_libs =
+            std::env::var("OPENSSL_LIBS").unwrap_or_else(|_| "ssl:crypto".to_string());
 
         for env in [
             (cc_key, target_cc.clone().into_os_string()),
@@ -2682,7 +2690,7 @@ impl BuildRequest {
                 "OPENSSL_INCLUDE_DIR".to_string(),
                 openssl_include_dir.into_os_string(),
             ),
-            ("OPENSSL_LIBS".to_string(), "ssl:crypto".to_string().into()),
+            ("OPENSSL_LIBS".to_string(), openssl_libs.into()),
             // Set the wry env vars - this is where wry will dump its kotlin files.
             // Their setup is really annyoing and requires us to hardcode `dx` to specific versions of tao/wry.
             (
