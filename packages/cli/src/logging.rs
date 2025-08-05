@@ -22,7 +22,6 @@ use crate::{
 };
 use anyhow::Result;
 use cargo_metadata::diagnostic::{Diagnostic, DiagnosticLevel};
-// use chrono::Duration;
 use clap::Parser;
 use dioxus_cli_telemetry::TelemetryEvent;
 use dioxus_dx_wire_format::StructuredOutput;

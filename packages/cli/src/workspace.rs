@@ -536,7 +536,7 @@ impl Workspace {
     }
 
     pub(crate) fn global_settings_file() -> PathBuf {
-        Self::dioxus_home_dir().join("settings.json")
+        Self::dioxus_data_dir().join("settings.json")
     }
 }
 
