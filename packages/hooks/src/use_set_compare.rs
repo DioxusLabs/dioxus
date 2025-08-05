@@ -40,7 +40,7 @@ use std::hash::Hash;
 #[doc = include_str!("../docs/rules_of_hooks.md")]
 #[doc = include_str!("../docs/moving_state_around.md")]
 #[must_use]
-pub fn use_set_compare<R: Eq + Hash>(f: impl FnMut() -> R + 'static) -> SetCompare<R> {
+pub fn use_set_compare<R: Eq + Hash + 'static>(f: impl FnMut() -> R + 'static) -> SetCompare<R> {
     use_hook(move || SetCompare::new(f))
 }
 
@@ -48,7 +48,7 @@ pub fn use_set_compare<R: Eq + Hash>(f: impl FnMut() -> R + 'static) -> SetCompa
 #[doc = include_str!("../docs/rules_of_hooks.md")]
 #[doc = include_str!("../docs/moving_state_around.md")]
 #[must_use]
-pub fn use_set_compare_equal<R: Eq + Hash>(
+pub fn use_set_compare_equal<R: Eq + Hash + 'static>(
     value: R,
     mut compare: SetCompare<R>,
 ) -> ReadSignal<bool> {

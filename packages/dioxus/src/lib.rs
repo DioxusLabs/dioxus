@@ -47,6 +47,10 @@ pub use dioxus_hooks as hooks;
 #[cfg_attr(docsrs, doc(cfg(feature = "signals")))]
 pub use dioxus_signals as signals;
 
+#[cfg(feature = "signals")]
+#[cfg_attr(docsrs, doc(cfg(feature = "signals")))]
+pub use dioxus_stores as stores;
+
 pub mod events {
     #[cfg(feature = "html")]
     #[cfg_attr(docsrs, doc(cfg(feature = "html")))]
@@ -150,6 +154,9 @@ pub mod prelude {
     #[cfg_attr(docsrs, doc(cfg(feature = "signals")))]
     #[doc(inline)]
     pub use dioxus_signals::*;
+
+    #[cfg(feature = "signals")]
+    pub use dioxus_stores::{self, store, use_store, ReadStore, Store, WriteStore};
 
     #[cfg(feature = "macro")]
     #[cfg_attr(docsrs, doc(cfg(feature = "macro")))]

@@ -1,4 +1,3 @@
-use crate::write::Writable;
 use crate::CopyValue;
 use crate::{read::Readable, ReadableRef, Signal};
 use crate::{read_impls, GlobalMemo, ReadableExt, WritableExt};
@@ -24,17 +23,17 @@ struct UpdateInformation<T> {
 #[doc(alias = "Selector")]
 #[doc(alias = "UseMemo")]
 #[doc(alias = "Memorize")]
-pub struct Memo<T: 'static> {
+pub struct Memo<T> {
     inner: Signal<T>,
     update: CopyValue<UpdateInformation<T>>,
 }
 
-impl<T: 'static> Memo<T> {
+impl<T> Memo<T> {
     /// Create a new memo
     #[track_caller]
     pub fn new(f: impl FnMut() -> T + 'static) -> Self
     where
-        T: PartialEq,
+        T: PartialEq + 'static,
     {
         Self::new_with_location(f, std::panic::Location::caller())
     }
@@ -45,7 +44,7 @@ impl<T: 'static> Memo<T> {
         location: &'static std::panic::Location<'static>,
     ) -> Self
     where
-        T: PartialEq,
+        T: PartialEq + 'static,
     {
         let dirty = Arc::new(AtomicBool::new(false));
         let (tx, mut rx) = futures_channel::mpsc::unbounded();
@@ -114,7 +113,7 @@ impl<T: 'static> Memo<T> {
     #[track_caller]
     pub const fn global(constructor: fn() -> T) -> GlobalMemo<T>
     where
-        T: PartialEq,
+        T: PartialEq + 'static,
     {
         GlobalMemo::new(constructor)
     }
@@ -123,7 +122,7 @@ impl<T: 'static> Memo<T> {
     #[tracing::instrument(skip(self))]
     fn recompute(&self)
     where
-        T: PartialEq,
+        T: PartialEq + 'static,
     {
         let mut update_copy = self.update;
         let update_write = update_copy.write();
@@ -141,12 +140,18 @@ impl<T: 'static> Memo<T> {
     }
 
     /// Get the scope that the signal was created in.
-    pub fn origin_scope(&self) -> ScopeId {
+    pub fn origin_scope(&self) -> ScopeId
+    where
+        T: 'static,
+    {
         self.inner.origin_scope()
     }
 
     /// Get the id of the signal.
-    pub fn id(&self) -> generational_box::GenerationalBoxId {
+    pub fn id(&self) -> generational_box::GenerationalBoxId
+    where
+        T: 'static,
+    {
         self.inner.id()
     }
 }
@@ -161,7 +166,10 @@ where
     #[track_caller]
     fn try_read_unchecked(
         &self,
-    ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> {
+    ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError>
+    where
+        T: 'static,
+    {
         // Read the inner generational box instead of the signal so we have more fine grained control over exactly when the subscription happens
         let read = self.inner.inner.try_read_unchecked()?;
 
@@ -192,18 +200,24 @@ where
     ///
     /// If the signal has been dropped, this will panic.
     #[track_caller]
-    fn try_peek_unchecked(&self) -> BorrowResult<ReadableRef<'static, Self>> {
+    fn try_peek_unchecked(&self) -> BorrowResult<ReadableRef<'static, Self>>
+    where
+        T: 'static,
+    {
         self.inner.try_peek_unchecked()
     }
 
-    fn subscribers(&self) -> Option<Subscribers> {
+    fn subscribers(&self) -> Subscribers
+    where
+        T: 'static,
+    {
         self.inner.subscribers()
     }
 }
 
 impl<T> IntoAttributeValue for Memo<T>
 where
-    T: Clone + IntoAttributeValue + PartialEq,
+    T: Clone + IntoAttributeValue + PartialEq + 'static,
 {
     fn into_value(self) -> dioxus_core::AttributeValue {
         self.with(|f| f.clone().into_value())
@@ -212,7 +226,7 @@ where
 
 impl<T> IntoDynNode for Memo<T>
 where
-    T: Clone + IntoDynNode + PartialEq,
+    T: Clone + IntoDynNode + PartialEq + 'static,
 {
     fn into_dyn_node(self) -> dioxus_core::DynamicNode {
         self().into_dyn_node()
@@ -227,7 +241,7 @@ impl<T: 'static> PartialEq for Memo<T> {
 
 impl<T: Clone> Deref for Memo<T>
 where
-    T: PartialEq,
+    T: PartialEq + 'static,
 {
     type Target = dyn Fn() -> T;
 
@@ -238,10 +252,10 @@ where
 
 read_impls!(Memo<T> where T: PartialEq);
 
-impl<T: 'static> Clone for Memo<T> {
+impl<T> Clone for Memo<T> {
     fn clone(&self) -> Self {
         *self
     }
 }
 
-impl<T: 'static> Copy for Memo<T> {}
+impl<T> Copy for Memo<T> {}

@@ -335,6 +335,21 @@ impl Default for Subscribers {
 }
 
 impl Subscribers {
+    /// Create a new no-op list of subscribers.
+    pub fn new_noop() -> Self {
+        struct NoopSubscribers;
+        impl SubscriberList for NoopSubscribers {
+            fn add(&self, _subscriber: ReactiveContext) {}
+
+            fn remove(&self, _subscriber: &ReactiveContext) {}
+
+            fn visit(&self, _f: &mut dyn FnMut(&ReactiveContext)) {}
+        }
+        Subscribers {
+            inner: Arc::new(NoopSubscribers),
+        }
+    }
+
     /// Create a new list of subscribers.
     pub fn new() -> Self {
         Subscribers {

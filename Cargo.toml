@@ -52,6 +52,8 @@ members = [
     "packages/rsx",
     "packages/server-macro",
     "packages/signals",
+    "packages/stores",
+    "packages/stores-macro",
     "packages/ssr",
     "packages/lazy-js-bundle",
     "packages/cli-config",
@@ -161,6 +163,8 @@ dioxus-rsx = { path = "packages/rsx", version = "0.7.0-alpha.3" }
 dioxus-rsx-hotreload = { path = "packages/rsx-hotreload", version = "0.7.0-alpha.3" }
 dioxus-rsx-rosetta = { path = "packages/rsx-rosetta", version = "0.7.0-alpha.3" }
 dioxus-signals = { path = "packages/signals", version = "0.7.0-alpha.3" }
+dioxus-stores = { path = "packages/stores", version = "0.7.0-alpha.3" }
+dioxus-stores-macro = { path = "packages/stores-macro", version = "0.7.0-alpha.3" }
 dioxus-cli-config = { path = "packages/cli-config", version = "0.7.0-alpha.3" }
 dioxus-cli-opt = { path = "packages/cli-opt", version = "0.7.0-alpha.3" }
 dioxus-devtools = { path = "packages/devtools", version = "0.7.0-alpha.3" }
@@ -427,6 +431,7 @@ wasm-splitter = { workspace = true, package = "wasm-split" }
 
 [dev-dependencies]
 dioxus = { workspace = true, features = ["router"] }
+dioxus-stores = { workspace = true }
 dioxus-ssr = { workspace = true }
 futures-util = { workspace = true }
 separator = { workspace = true }
