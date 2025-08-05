@@ -511,9 +511,27 @@ impl Workspace {
             .context("Failed to find dx")
     }
 
-    /// Returns the path to the dioxus data directory, used to install tools and other things
+    /// Returns the path to the dioxus data directory, used to install tools, store configs, and other things
+    ///
+    /// On macOS, we prefer to not put this dir in Application Support, but rather in the home directory.
     pub(crate) fn dioxus_data_dir() -> PathBuf {
-        dirs::data_dir().unwrap().join(".dioxus")
+        static DX_HOME: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+        DX_HOME
+            .get_or_init(|| {
+                if let Some(path) = std::env::var_os("DX_HOME") {
+                    return PathBuf::from(path);
+                }
+
+                if cfg!(target_os = "macos") {
+                    dirs::home_dir().unwrap().join(".dx")
+                } else {
+                    dirs::data_dir()
+                        .or_else(dirs::home_dir)
+                        .unwrap()
+                        .join(".dx")
+                }
+            })
+            .to_path_buf()
     }
 }
 
