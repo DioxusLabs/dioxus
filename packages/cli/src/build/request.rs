@@ -1184,7 +1184,7 @@ impl BuildRequest {
 
             // On android, the c++_shared flag means we need to copy the libc++_shared.so precompiled
             // library to the jniLibs folder
-            if arg.contains("-lc++_shared") && self.bundle == BundleFormat::Android {
+            if self.bundle == BundleFormat::Android && arg.contains("-lc++_shared") {
                 std::fs::copy(
                     self.workspace.android_tools()?.libcpp_shared(&self.triple),
                     framework_dir.join("libc++_shared.so"),
@@ -1193,7 +1193,7 @@ impl BuildRequest {
             }
 
             // Copy over libssl and libcrypto if they are present in the link args
-            if arg.contains(openssl_dir_disp.as_str()) && self.bundle == BundleFormat::Android {
+            if self.bundle == BundleFormat::Android && arg.contains(openssl_dir_disp.as_str()) {
                 let libssl = openssl_dir.join("libssl.so");
                 let libcrypto = openssl_dir.join("libcrypto.so");
                 std::fs::copy(&libssl, framework_dir.join("libssl.so")).with_context(|| {

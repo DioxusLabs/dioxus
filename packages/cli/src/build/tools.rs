@@ -322,7 +322,7 @@ impl AndroidTools {
             Architecture::Aarch64(_) => libs_dir.join("android.arm64-v8a"),
             Architecture::X86_32(_) => libs_dir.join("android.x86"),
             Architecture::X86_64 => libs_dir.join("android.x86_64"),
-            _ => unimplemented!("Unsupported architecture for OpenSSL"),
+            _ => libs_dir.join("android.arm64-v8a"), // Default to arm64-v8a
         }
     }
 
