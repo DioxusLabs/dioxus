@@ -514,6 +514,7 @@ impl Workspace {
     /// Returns the path to the dioxus data directory, used to install tools, store configs, and other things
     ///
     /// On macOS, we prefer to not put this dir in Application Support, but rather in the home directory.
+    /// On Windows, we prefer to keep it in the home directory so the `dx` install dir matches the install script.
     pub(crate) fn dioxus_data_dir() -> PathBuf {
         static DX_HOME: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
         DX_HOME
@@ -522,7 +523,7 @@ impl Workspace {
                     return PathBuf::from(path);
                 }
 
-                if cfg!(target_os = "macos") {
+                if cfg!(target_os = "macos") || cfg!(target_os = "windows") {
                     dirs::home_dir().unwrap().join(".dx")
                 } else {
                     dirs::data_dir()
