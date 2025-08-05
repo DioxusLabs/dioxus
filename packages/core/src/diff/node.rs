@@ -461,7 +461,7 @@ impl VNode {
             })
             .collect::<Vec<String>>();
 
-        // Merge style static attribures with style dynamic attributes
+        // Merge style static attributes with style dynamic attributes
         self.dynamic_attrs
             .iter()
             .enumerate()
