@@ -166,6 +166,7 @@ dioxus-rsx-hotreload = { path = "packages/rsx-hotreload", version = "0.7.0-alpha
 dioxus-rsx-rosetta = { path = "packages/rsx-rosetta", version = "0.7.0-alpha.3" }
 dioxus-signals = { path = "packages/signals", version = "0.7.0-alpha.3" }
 dioxus-stores = { path = "packages/stores", version = "0.7.0-alpha.3" }
+dioxus-stores-macro = { path = "packages/stores-macro", version = "0.7.0-alpha.3" }
 dioxus-devtools = { path = "packages/devtools", version = "0.7.0-alpha.3" }
 dioxus-devtools-types = { path = "packages/devtools-types", version = "0.7.0-alpha.3" }
 dioxus-server = { path = "packages/server", version = "0.7.0-alpha.3" }
