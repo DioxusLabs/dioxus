@@ -1,3 +1,5 @@
+use crate::Result;
+use anyhow::Context;
 use itertools::Itertools;
 use std::{path::PathBuf, sync::Arc};
 use target_lexicon::{
@@ -300,6 +302,56 @@ impl AndroidTools {
             "armv7-linux-androideabi" => "arm-linux-androideabi",
             _ => rust_target,
         }) as _
+    }
+
+    pub(crate) fn openssl_prebuilt_aar() -> &'static [u8] {
+        include_bytes!("../../assets/android/prebuilt/openssl-1.1.1q-beta-1.tar.gz")
+    }
+
+    pub(crate) fn openssl_prebuilt_dest() -> PathBuf {
+        crate::Workspace::dioxus_data_dir()
+            .join("prebuilt")
+            .join("openssl-1.1.1q-beta-1")
+    }
+
+    pub(crate) fn openssl_lib_dir(arch: &Triple) -> PathBuf {
+        let libs_dir = Self::openssl_prebuilt_dest().join("ssl").join("libs");
+
+        match arch.architecture {
+            Architecture::Arm(_) => libs_dir.join("android.armeabi-v7a"),
+            Architecture::Aarch64(_) => libs_dir.join("android.arm64-v8a"),
+            Architecture::X86_32(_) => libs_dir.join("android.x86"),
+            Architecture::X86_64 => libs_dir.join("android.x86_64"),
+            _ => unimplemented!("Unsupported architecture for OpenSSL"),
+        }
+    }
+
+    pub(crate) fn openssl_include_dir() -> PathBuf {
+        Self::openssl_prebuilt_dest().join("ssl").join("include")
+    }
+
+    /// Unzip the prebuilt OpenSSL AAR file into the `.dx/prebuilt/openssl-<version>` directory
+    pub(crate) fn unpack_prebuilt_openssl() -> Result<()> {
+        let raw_aar = AndroidTools::openssl_prebuilt_aar();
+        let aar_dest = AndroidTools::openssl_prebuilt_dest();
+
+        if aar_dest.exists() {
+            tracing::trace!("Prebuilt OpenSSL already exists at {:?}", aar_dest);
+            return Ok(());
+        }
+
+        std::fs::create_dir_all(aar_dest.parent().context("no parent for aar")?)
+            .context("failed to create prebuilt OpenSSL directory")?;
+
+        // Unpack the entire tar.gz file into the destination directory
+        let mut archive = tar::Archive::new(flate2::read::GzDecoder::new(raw_aar as &[u8]));
+        archive
+            .unpack(aar_dest.parent().context("no parent for aar dest")?)
+            .context("failed to unpack prebuilt OpenSSL archive")?;
+
+        tracing::debug!("Unpacked prebuilt OpenSSL to {:?}", aar_dest);
+
+        Ok(())
     }
 }
 

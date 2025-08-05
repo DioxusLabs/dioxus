@@ -1147,6 +1147,10 @@ impl BuildRequest {
     async fn write_frameworks(&self, _ctx: &BuildContext, direct_rustc: &RustcArgs) -> Result<()> {
         let framework_dir = self.frameworks_folder();
 
+        // We have some prebuilt stuff that needs to be copied into the framework dir
+        let openssl_dir = AndroidTools::openssl_lib_dir(&self.triple);
+        let openssl_dir_disp = openssl_dir.display().to_string();
+
         for arg in &direct_rustc.link_args {
             // todo - how do we handle windows dlls? we don't want to bundle the system dlls
             // for now, we don't do anything with dlls, and only use .dylibs and .so files
@@ -1186,6 +1190,18 @@ impl BuildRequest {
                     framework_dir.join("libc++_shared.so"),
                 )
                 .with_context(|| "Failed to copy libc++_shared.so into bundle")?;
+            }
+
+            // Copy over libssl and libcrypto if they are present in the link args
+            if arg.contains(openssl_dir_disp.as_str()) && self.bundle == BundleFormat::Android {
+                let libssl = openssl_dir.join("libssl.so");
+                let libcrypto = openssl_dir.join("libcrypto.so");
+                std::fs::copy(&libssl, framework_dir.join("libssl.so")).with_context(|| {
+                    format!("Failed to copy libssl.so into bundle from {libssl:?}")
+                })?;
+                std::fs::copy(&libcrypto, framework_dir.join("libcrypto.so")).with_context(
+                    || format!("Failed to copy libcrypto.so into bundle from {libcrypto:?}"),
+                )?;
             }
         }
 
@@ -2590,17 +2606,21 @@ impl BuildRequest {
 
         // choose the clang target with the highest version
         // Should we filter for only numbers?
-        let clang_builtins_target = std::fs::read_dir(clang_folder)
-            .expect("Unable to get clang target directory")
-            .filter_map(|a| a.ok())
-            .max_by(|a, b| a.file_name().cmp(&b.file_name()))
-            .expect("Unable to get clang target")
-            .path();
-        let clang_rt = format!(
-            "-L{} -lstatic=clang_rt.builtins-{}-android",
-            clang_builtins_target.join("lib").join("linux").display(),
-            rt_builtins(&triple)
-        );
+        let clang_rt = std::fs::read_dir(&clang_folder)
+            .map(|dir| {
+                let clang_builtins_target = dir
+                    .filter_map(|a| a.ok())
+                    .max_by(|a, b| a.file_name().cmp(&b.file_name()))
+                    .map(|s| s.path())
+                    .unwrap_or_else(|| clang_folder.join("clang"));
+
+                format!(
+                    "-L{} -lstatic=clang_rt.builtins-{}-android",
+                    clang_builtins_target.join("lib").join("linux").display(),
+                    rt_builtins(&triple)
+                )
+            })
+            .unwrap_or_default();
 
         let extra_include: String = format!(
             "{}/usr/include/{}",
@@ -2613,6 +2633,9 @@ impl BuildRequest {
             &cargo_ndk_sysroot_path.display(),
             extra_include
         );
+
+        let openssl_lib_dir = AndroidTools::openssl_lib_dir(&self.triple);
+        let openssl_include_dir = AndroidTools::openssl_include_dir();
 
         for env in [
             (cc_key, target_cc.clone().into_os_string()),
@@ -2651,6 +2674,15 @@ impl BuildRequest {
                 linker.into_os_string(),
             ),
             ("ANDROID_NDK_ROOT".to_string(), ndk_home.into_os_string()),
+            (
+                "OPENSSL_LIB_DIR".to_string(),
+                openssl_lib_dir.into_os_string(),
+            ),
+            (
+                "OPENSSL_INCLUDE_DIR".to_string(),
+                openssl_include_dir.into_os_string(),
+            ),
+            ("OPENSSL_LIBS".to_string(), "ssl:crypto".to_string().into()),
             // Set the wry env vars - this is where wry will dump its kotlin files.
             // Their setup is really annyoing and requires us to hardcode `dx` to specific versions of tao/wry.
             (
@@ -4683,6 +4715,11 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
             self.config.application.tailwind_output.clone(),
         )
         .await?;
+
+        // We want to copy over the prebuilt OpenSSL binaries to ~/.dx/prebuilt/openssl-<version>
+        if self.bundle == BundleFormat::Android {
+            AndroidTools::unpack_prebuilt_openssl()?;
+        }
 
         Ok(())
     }
