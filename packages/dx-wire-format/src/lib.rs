@@ -44,6 +44,7 @@ pub enum StructuredOutput {
     HtmlTranslate {
         html: String,
     },
+    JsonEvent(serde_json::Value),
     Success,
     Error {
         message: String,

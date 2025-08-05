@@ -38,7 +38,8 @@ pub(crate) use telemetry::Anonymized;
 pub(crate) use wasm_bindgen::*;
 pub(crate) use workspace::*;
 
-fn main() {
+#[tokio::main]
+async fn main() {
     // The CLI uses dx as a rustcwrapper in some instances (like binary patching)
     if rustcwrapper::is_wrapping_rustc() {
         return rustcwrapper::run_rustc();
@@ -69,7 +70,7 @@ fn main() {
     });
 
     // Provide a structured output for third party tools that can consume the output of the CLI
-    match result.as_ref() {
+    match result.await.as_ref() {
         Ok(output) => {
             tracing::debug!(json = ?output);
         }

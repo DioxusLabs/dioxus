@@ -24,12 +24,6 @@ pub(crate) enum Config {
     /// Create a custom html file.
     CustomHtml {},
 
-    /// Print the location of the CLI log file.
-    LogFile {},
-
-    /// Print the location of the CLI telemetry file.
-    TelemetryFile {},
-
     /// Set CLI settings.
     #[command(subcommand)]
     Set(Setting),
@@ -122,14 +116,6 @@ impl Config {
                 file.write_all(content.as_bytes())?;
                 tracing::info!(dx_src = ?TraceSrc::Dev, "🚩 Create custom html file done.");
             }
-            Config::LogFile {} => {
-                let log_path = crate::logging::FileAppendLayer::log_path();
-                tracing::info!(dx_src = ?TraceSrc::Dev, "Log file is located at {}", log_path.display());
-            }
-            Config::TelemetryFile {} => {
-                let telemetry_path = Workspace::telemetry_pending_file();
-                tracing::info!(dx_src = ?TraceSrc::Dev, "Telemetry file is located at {}", telemetry_path.display());
-            }
             // Handle CLI settings.
             Config::Set(setting) => {
                 CliSettings::modify_settings(|settings| match setting {
@@ -164,8 +150,6 @@ impl Config {
             ),
             Config::FormatPrint {} => ("config format-print".to_string(), json!({})),
             Config::CustomHtml {} => ("config custom-html".to_string(), json!({})),
-            Config::LogFile {} => ("config log-file".to_string(), json!({})),
-            Config::TelemetryFile {} => ("config telemetry-file".to_string(), json!({})),
             Config::Set(setting) => setting.anonymized(),
         }
     }

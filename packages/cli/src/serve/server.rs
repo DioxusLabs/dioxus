@@ -1,6 +1,6 @@
 use crate::{
-    config::WebHttpsConfig, serve::ServeUpdate, telemetry::send_telemetry_event, BuildId,
-    BuildStage, BuilderUpdate, BundleFormat, Result, TraceSrc,
+    config::WebHttpsConfig, serve::ServeUpdate, BuildId, BuildStage, BuilderUpdate, BundleFormat,
+    Result, TraceSrc,
 };
 use anyhow::{bail, Context};
 use axum::{
@@ -228,12 +228,14 @@ impl WebServer {
                 // Only log the event if the identifier has changed
                 if self.last_build_status_identifier != identifier {
                     self.last_build_status_identifier = identifier;
-                    send_telemetry_event(TelemetryEvent::new(
-                        "build_stage",
-                        None,
-                        "Build stage update",
-                        identifier,
-                    ));
+                    tracing::trace!(
+                        telemetry = %TelemetryEvent::new(
+                            "build_stage",
+                            None,
+                            "Build stage update",
+                            identifier,
+                        )
+                    );
                 }
                 match stage {
                     BuildStage::Success => {}

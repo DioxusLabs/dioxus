@@ -91,6 +91,16 @@ impl TelemetryEvent {
         self.values.insert(key.to_string(), value);
         self
     }
+
+    pub fn to_json(&self) -> serde_json::Value {
+        serde_json::to_value(self).unwrap()
+    }
+}
+
+impl std::fmt::Display for TelemetryEvent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", serde_json::to_string(self).unwrap())
+    }
 }
 
 // If the CLI is compiled locally, it can contain backtraces which contain the home path with the username in it.
