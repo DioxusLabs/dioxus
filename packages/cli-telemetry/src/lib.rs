@@ -14,14 +14,23 @@
 //! - transparent
 //! - easy to disable
 //!
-//! We don't send events on every command, but instead perform roll-ups weekly. If you don't run the CLI,
-//! then we won't send any data - rollups are not done in background processes.
+//! We send a heartbeat when the CLI is executed and then rollups of logs over time.
+//! - Heartbeat: helps us track version distribution of the CLI and critical "failures on launch" useful during new version rollouts.
+//! - Rollups: helps us track performance and issues over time, as well as usage of various commands.
 //!
-//! Note that we do collect the target triple of your system. This lets us aggregate
-//! logs across time about a given installation, IE if your machine is a particular linux distribution,
-//! what types of panics or performance issues do you encounter?
+//! If you don't run the CLI, then we won't send any data. Rollups are not done in background processes.
 //!
-//! In the CLI, you can disable this by using any of the methods
+//! We don't collect any PII, but we do collect three "controversial" pieces of data:
+//! - the target triple of your system (OS, arch, etc)
+//! - a session ID which is a random number generated on each run
+//! - a distinct ID per `.dx` installation which is a random number generated on initial run.
+//!
+//! The distinct ID is used to track the same installation over time, but it is not tied to any user
+//! account or PII. Since `dx` doesn't have any accounts or authentication mechanism, this ID is used
+//! as a "best effort" identifier. If you still want to participate in telemetry but don't want a
+//! distinct ID, you can replace the stable_id.json file in the `.dx` directory with an empty string.
+//!
+//! In the CLI, you can disable this by using any of the methods:
 //! - installing with the "disable-telemetry" feature flag
 //! - setting TELEMETRY=false in your env
 //! - setting `dx config set disable-telemetry true`

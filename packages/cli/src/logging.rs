@@ -490,11 +490,13 @@ impl DxLayer {
             std::fs::create_dir_all(&sessions_folder)?;
         }
 
-        // Create a reporter_id.
+        // Create a reporter_id. If we find an invalid reporter_id, we use `nil` as the reporter ID.
+        // If users want to enroll in telemetry but don't want a reporter ID, they can replace the
+        // contents of the file with anything that is not a valid UUID.
         let stable_session_file = sessions_folder.join("reporter_id.json");
         let reporter_id = if stable_session_file.exists() {
             let contents = std::fs::read_to_string(stable_session_file)?;
-            serde_json::from_str::<Uuid>(&contents)?
+            serde_json::from_str::<Uuid>(&contents).unwrap_or(Uuid::from_u128(1))
         } else {
             let new_id = Uuid::new_v4();
             std::fs::write(stable_session_file, serde_json::to_string(&new_id)?)?;

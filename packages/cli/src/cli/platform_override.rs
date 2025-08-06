@@ -1,9 +1,8 @@
 #![allow(dead_code)]
+use crate::Anonymized;
 use clap::parser::ValueSource;
 use clap::{ArgMatches, Args, CommandFactory, FromArgMatches, Parser, Subcommand};
 use serde_json::{json, Value};
-
-use crate::Anonymized;
 
 /// Wraps a component with the subcommands `@server` and `@client` which will let you override the
 /// base arguments for the client and server instances.

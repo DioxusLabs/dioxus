@@ -223,8 +223,8 @@ impl WebServer {
     pub(crate) async fn new_build_update(&mut self, update: &BuilderUpdate) {
         match update {
             BuilderUpdate::Progress { stage } => {
-                // Todo(miles): wire up more messages into the splash screen UI
                 let identifier = stage.identifier();
+
                 // Only log the event if the identifier has changed
                 if self.last_build_status_identifier != identifier {
                     self.last_build_status_identifier = identifier;

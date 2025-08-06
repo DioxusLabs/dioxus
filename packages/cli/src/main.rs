@@ -48,7 +48,7 @@ async fn main() {
         return link_args.run_link();
     }
 
-    // Run under the telemetry collector so we can log errors/panics.
+    // Run under the tracing collector so we can capture errors/panics.
     let result = TraceController::main(|args| async move {
         match args {
             Commands::Translate(opts) => opts.translate(),
