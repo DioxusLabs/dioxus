@@ -429,23 +429,29 @@ pub fn schedule_update_any() -> Arc<dyn Fn(ScopeId) + Send + Sync> {
 #[doc(alias = "use_on_unmount")]
 pub fn use_drop<D: FnOnce() + 'static>(destroy: D) {
     struct LifeCycle<D: FnOnce()> {
-        /// Wrap the closure in an option so that we can take it out on drop.
-        ondestroy: Option<D>,
+        /// Wrap the closure in an Rc so that we can call it on drop
+        ondestroy: Rc<D>,
+    }
+
+    impl<D: FnOnce()> Clone for LifeCycle<D> {
+        fn clone(&self) -> Self {
+            Self {
+                ondestroy: self.ondestroy.clone(),
+            }
+        }
     }
 
     /// On drop, we want to run the closure.
     impl<D: FnOnce()> Drop for LifeCycle<D> {
         fn drop(&mut self) {
-            if let Some(f) = self.ondestroy.take() {
+            if let Ok(f) = Rc::try_unwrap(self.ondestroy.clone()) {
                 f();
             }
         }
     }
 
-    use_hook(|| {
-        Rc::new(LifeCycle {
-            ondestroy: Some(destroy),
-        })
+    use_hook(|| LifeCycle {
+        ondestroy: Rc::new(destroy),
     });
 }
 
