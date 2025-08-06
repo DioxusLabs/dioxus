@@ -46,7 +46,7 @@ fn child_component(props: AppProps) -> Element {
 }
 
 #[test]
-fn manual_diffing() {
+fn drop_runs() {
     let drop_count = Arc::new(Mutex::new(0));
     let render_child = Arc::new(Mutex::new(true));
     let mut dom = VirtualDom::new_with_props(
