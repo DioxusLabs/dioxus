@@ -118,7 +118,7 @@ impl CliSettings {
             return true;
         }
 
-        if crate::devcfg::no_downloads() {
+        if std::env::var("NO_DOWNLOADS").is_ok() {
             return true;
         }
 
@@ -127,12 +127,20 @@ impl CliSettings {
 
     /// Check if telemetry is disabled
     pub(crate) fn telemetry_disabled() -> bool {
+        use std::env::var;
+
         static TELEMETRY_DISABLED: LazyLock<bool> = LazyLock::new(|| {
             if cfg!(feature = "disable-telemetry") {
                 return true;
             }
 
-            if crate::devcfg::disable_telemetry() {
+            if matches!(var("DX_TELEMETRY_ENABLED"), Ok(val) if val.eq_ignore_ascii_case("false") || val == "0")
+            {
+                return true;
+            }
+
+            if matches!(var("TELEMETRY"), Ok(val) if val.eq_ignore_ascii_case("false") || val == "0")
+            {
                 return true;
             }
 

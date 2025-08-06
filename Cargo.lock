@@ -5089,6 +5089,7 @@ dependencies = [
  "env_logger 0.11.8",
  "escargot",
  "flate2",
+ "fs2",
  "futures-channel",
  "futures-util",
  "handlebars",
@@ -7006,6 +7007,16 @@ checksum = "88d7be93788013f265201256d58f04936a8079ad5dc898743aa20525f503b683"
 dependencies = [
  "autocfg",
  "tokio",
+]
+
+[[package]]
+name = "fs2"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9564fc758e15025b46aa6643b1b77d047d1a56a1aea6e01002ac0c7026876213"
+dependencies = [
+ "libc",
+ "winapi",
 ]
 
 [[package]]

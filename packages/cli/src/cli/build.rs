@@ -1,10 +1,4 @@
-use serde_json::json;
-
-use crate::telemetry::Anonymized;
-use crate::BuildMode;
-use crate::{cli::*, telemetry, AppBuilder, BuildRequest, Workspace};
-
-use super::target::TargetArgs;
+use crate::{cli::*, Anonymized, AppBuilder, BuildMode, BuildRequest, TargetArgs, Workspace};
 
 /// Build the Rust Dioxus app and all of its assets.
 ///
@@ -105,9 +99,6 @@ impl CommandWithPlatformOverrides<BuildArgs> {
 
             tracing::info!(path = ?targets.client.root_dir(), "Server build completed successfully! 🚀");
         }
-
-        // Flush the telemetry queue to the file
-        telemetry::flush_telemetry_to_file();
 
         Ok(StructuredOutput::BuildsFinished {
             client: targets.client.root_dir(),

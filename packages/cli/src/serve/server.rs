@@ -18,7 +18,7 @@ use axum::{
     routing::{get, get_service},
     Extension, Router,
 };
-use dioxus_cli_telemetry::TelemetryEvent;
+use dioxus_cli_telemetry::TelemetryEventData;
 use dioxus_devtools_types::{DevserverMsg, HotReloadMsg};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::{
@@ -229,9 +229,9 @@ impl WebServer {
                 if self.last_build_status_identifier != identifier {
                     self.last_build_status_identifier = identifier;
                     tracing::trace!(
-                        telemetry = %TelemetryEvent::new(
+                        telemetry = %TelemetryEventData::new(
                             "build_stage",
-                            None,
+                            module_path!(),
                             "Build stage update",
                             identifier,
                         )

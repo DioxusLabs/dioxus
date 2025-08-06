@@ -18,7 +18,6 @@ mod rustcwrapper;
 mod serve;
 mod settings;
 mod tailwind;
-mod telemetry;
 mod wasm_bindgen;
 mod wasm_opt;
 mod workspace;
@@ -34,7 +33,6 @@ pub(crate) use platform::*;
 pub(crate) use rustcwrapper::*;
 pub(crate) use settings::*;
 pub(crate) use tailwind::*;
-pub(crate) use telemetry::Anonymized;
 pub(crate) use wasm_bindgen::*;
 pub(crate) use workspace::*;
 

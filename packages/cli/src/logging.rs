@@ -14,20 +14,18 @@
 //! 3. Build CLI layer for routing tracing logs to the TUI.
 //! 4. Build fmt layer for non-interactive logging with a custom writer that prevents output during interactive mode.
 
-use crate::BundleFormat;
+use crate::Workspace;
 use crate::{serve::ServeUpdate, Cli, Commands, Verbosity};
-use crate::{
-    telemetry::{self, flush_old_telemetry, flush_telemetry_to_file},
-    Workspace,
-};
-use anyhow::Result;
+use crate::{BundleFormat, CliSettings};
+use anyhow::{bail, Context, Result};
 use cargo_metadata::diagnostic::{Diagnostic, DiagnosticLevel};
 use clap::Parser;
-use dioxus_cli_telemetry::TelemetryEvent;
+use dioxus_cli_telemetry::{Reporter, TelemetryEventData};
 use dioxus_dx_wire_format::StructuredOutput;
 use futures_channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
 use futures_util::FutureExt;
-use std::{any::Any, backtrace::Backtrace, str::FromStr, sync::Arc};
+use itertools::Itertools;
+use std::{any::Any, backtrace::Backtrace, io::Read, str::FromStr, sync::Arc};
 use std::{borrow::Cow, sync::OnceLock};
 use std::{
     collections::HashMap,
@@ -152,6 +150,14 @@ impl TraceController {
         // Construct our custom layer that handles the TUI and file logging
         let dx_layer = DxLayer::new(&args);
 
+        // Spawn the telemetry uploader in the background
+        if let Some(reporter) = dx_layer.reporter.clone() {
+            tokio::spawn(DxLayer::upload_telemetry(
+                args.action.to_heartbeat_event(),
+                reporter,
+            ));
+        }
+
         // Construct the tracing subscriber
         tracing_subscriber::registry()
             .with(env_filter)
@@ -170,11 +176,12 @@ impl TraceController {
         let app_res = AssertUnwindSafe(run_app(args.action)).catch_unwind().await;
 
         // Write any in-flight logs to the file / telemetry queue
-        dx_layer.finish(&app_res);
+        if let Err(e) = dx_layer.flush_telemetry(&app_res).await {
+            tracing::trace!("Failed to finish logging: {}", e);
+        }
 
-        // Flush the telemetry to a file.
-        // If CI=1, we wait for the telemetry to be flushed before exiting.
-        let output = match app_res {
+        // Return the right UI and error
+        match app_res {
             Ok(Ok(res)) => Ok(res),
             Ok(Err(e)) => Err(e),
             Err(panic_err) => {
@@ -191,9 +198,7 @@ impl TraceController {
 
                 // Err(anyhow::anyhow!(message))
             }
-        };
-
-        output
+        }
     }
 
     /// Get a handle to the trace controller.
@@ -255,11 +260,20 @@ struct SavedLocation {
 /// Redirects TUI logs, writes to files, and queues telemetry events.
 #[derive(Clone)]
 pub struct DxLayer {
-    session_id: Uuid,
-    telemetry_tx: UnboundedSender<TelemetryEvent>,
-    telemetry_rx: Arc<Mutex<UnboundedReceiver<TelemetryEvent>>>,
+    reporter: Option<Reporter>,
+    telemetry_tx: UnboundedSender<TelemetryEventData>,
+    telemetry_rx: Arc<Mutex<UnboundedReceiver<TelemetryEventData>>>,
     log_to_file: Option<PathBuf>,
     log_tile_file_buffer: Arc<Mutex<String>>,
+}
+
+pub mod telemetry_events {
+    pub const HEARTBEAT: &str = "cli_heartbeat";
+}
+
+/// A trait that emits an anonymous JSON representation of the object, suitable for telemetry.
+pub(crate) trait Anonymized {
+    fn anonymized(&self) -> serde_json::Value;
 }
 
 impl DxLayer {
@@ -276,64 +290,207 @@ impl DxLayer {
         };
 
         // Create a new session ID for this invocation of the CLI
-        let session_id = Uuid::new_v4();
+        let reporter = Self::enroll_reporter().ok().map(|reporter_id| Reporter {
+            is_ci: std::env::var("CI").is_ok(),
+            device_triple: target_lexicon::Triple::host().to_string(),
+            cli_version: crate::VERSION.to_string(),
+            session_id: Uuid::new_v4().as_u128(),
+            distinct_id: reporter_id.as_u128(),
+        });
 
         // Create a new telemetry channel
         // Note that we only drain the channel at the end of the CLI run, so it's not really being used as a channel - more of a vecdeque
         let (telemetry_tx, telemetry_rx) = futures_channel::mpsc::unbounded();
 
-        // Create an owned version of ourselves
-        let s = Self {
-            session_id,
+        Self {
+            reporter,
             telemetry_tx,
             log_to_file,
             telemetry_rx: Arc::new(Mutex::new(telemetry_rx)),
             log_tile_file_buffer: Arc::new(Mutex::new(String::new())),
-        };
+        }
+    }
 
-        // Send out the heartbeat event and then try to start uploading any existing telemetry logs
-        let (cmd, value) = args.action.command_anonymized();
-        let telemetry_event = TelemetryEvent::new(name, module, message, stage);
+    const DX_STATS_ENDPOINT: &str = "https://dx.stats.dioxus.dev/api/v1/";
 
-        tokio::spawn(async move {
-            use reqwest::{header::CONTENT_TYPE, Client as HttpClient};
+    /// Uploads telemetry logs from the filesystem to the telemetry endpoint.
+    ///
+    /// As the app runs, we simply fire off messages into the TelemetryTx handle.
+    ///
+    /// Once the session is over, or the tx is flushed manually, we then log to a file.
+    /// This prevents any performance issues from building up during long session.
+    /// For `dx serve`, we asynchronously flush after full rebuilds are *completed*.
+    /// Initialize a user session with a stable ID.
+    ///
+    /// This also sends a heartbeat event to the telemetry endpoint to indicate that the CLI is alive.
+    ///
+    /// Docs on how to send posthog:
+    ///    <https://posthog.com/docs/api/capture>
+    ///
+    /// We try to send batched requests *without* the api key in the header. It's usually fine to send
+    /// the API key along with the request, but we want to control revoking key on the backend.
+    ///
+    /// Todo: we should accept some sort of configuration from posthog to allow us to downsample telemetry events.
+    ///       otherwise we might end up being flooded by telemetry events.
+    ///
+    /// We loop receive messages, pushing them into a batch.
+    async fn upload_telemetry(heartbeat: TelemetryEventData, reporter: Reporter) -> Result<()> {
+        use fs2::FileExt;
+        use reqwest::{header::CONTENT_TYPE, Client as HttpClient};
 
-            // Try to initialize the telemetry session
-            let reporter_id = Self::enroll_reporter().ok();
+        // Wait a little bit to prevent abuse (spam loops) and not do extra work if it's a simple `--help` call
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
-            // Wait a little bit to prevent abuse (spam loops)
-            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        // Create the telemetry client
+        let client = HttpClient::builder()
+            .timeout(std::time::Duration::from_secs(5))
+            .build()?;
 
-            // Create the telemetry client
-            let client = HttpClient::builder()
-                .timeout(std::time::Duration::from_secs(5))
-                .build()
-                .unwrap();
+        // Send off a heartbeat request. If this fails, we skip anything else.
+        client
+            .post(Self::DX_STATS_ENDPOINT)
+            .header(CONTENT_TYPE, "application/json")
+            .header("X-Reporter-ID", reporter.distinct_id.to_string())
+            .json(&Self::telemetry_to_posthog(&reporter, heartbeat))
+            .send()
+            .await?
+            .status()
+            .is_success()
+            .then_some(())
+            .context("Failed to send heartbeat")?;
 
-            // Send off a heartbeat request
+        // Wait a few seconds to see if we can end up in `dx serve` or a long-running task
+        // If we're in CI though, we do want to flush telemetry immediately
+        if std::env::var("CI").is_err() {
+            tokio::time::sleep(std::time::Duration::from_millis(5000)).await;
+        }
 
-            // Wait a few seconds to see if we can end up in `dx serve` or a long-running task
-            // If we're in CI though, we do want to flush telemetry immediately
-            if std::env::var("CI").is_err() {
-                tokio::time::sleep(std::time::Duration::from_millis(5000)).await;
+        // Now start loading telemetry files, locking them, and then uploading them.
+        let stats_dir = Workspace::dioxus_data_dir().join("stats").join("sessions");
+        for e in stats_dir.read_dir()?.flatten() {
+            // Only handle jsonl files
+            if !e.path().ends_with(".jsonl") {
+                continue;
             }
 
-            // Now start loading telemetry files, locking them, and then uploading them.
-        });
+            // Try to open the file...
+            let Ok(mut file) = std::fs::File::open(e.path()) else {
+                continue;
+            };
 
-        s
+            // And then we hold an exclusive lock on the file while we upload it
+            // This prevents multiple processes from trying to upload the same file at the same time which would cause duplicate uploads
+            if file.try_lock_exclusive().is_err() {
+                continue;
+            };
+
+            // Now that we have the lock, we can read the file and upload it
+            // todo: validate that _bytes_read is not greater than 20mb - this will fail to upload
+            let mut lines = String::new();
+            let Ok(_bytes_read) = file.read_to_string(&mut lines) else {
+                continue;
+            };
+
+            // We assume since this is a jsonl file that every line is valid json. We just concat the lines together
+            // and then send them using the batched client.
+            let request_body = format!(
+                r#"{{
+                    "historical_migration": false,
+                    "batch": [{batch_body}]
+                }}"#,
+                batch_body = lines.trim_end_matches('\n').replace('\n', ",")
+            );
+
+            // Send the request
+            // If the request fails, we just log the error and continue
+            let res = client
+                .post(Self::DX_STATS_ENDPOINT)
+                .header(CONTENT_TYPE, "application/json")
+                .header("X-Reporter-ID", reporter.distinct_id.to_string())
+                .body(request_body)
+                .send()
+                .await;
+
+            // Delete the telemetry file if the upload was successful
+            match res {
+                Ok(res) if res.status().is_success() => {
+                    std::fs::remove_file(e.path());
+                }
+                Ok(res) => {
+                    tracing::trace!("Telemetry endpoint rejected: {}", e.path().display());
+                    tracing::trace!("Rejected because because {:?}", res.text().await);
+                }
+                Err(err) => {
+                    tracing::trace!(
+                        "Failed to upload telemetry file: {} because {}",
+                        e.path().display(),
+                        err
+                    );
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Convert the dioxus-cli-telemetry event into a posthog event.
+    ///
+    /// We try to maintain the same structure for each telemetry event to do advanced filtering on the backend.
+    fn telemetry_to_posthog(reporter: &Reporter, event: TelemetryEventData) -> posthog_rs::Event {
+        let Reporter {
+            is_ci,
+            device_triple,
+            cli_version,
+            session_id,
+            distinct_id,
+        } = reporter;
+
+        let TelemetryEventData {
+            name,
+            module,
+            message,
+            stage,
+            time,
+            values,
+        } = event;
+
+        let mut ph_event = posthog_rs::Event::new(name, distinct_id.to_string());
+
+        // The reporter fields
+        _ = ph_event.insert_prop("session_id", session_id);
+        _ = ph_event.insert_prop("device_triple", device_triple.clone());
+        _ = ph_event.insert_prop("is_ci", is_ci);
+        _ = ph_event.insert_prop("cli_version", cli_version.clone());
+        _ = ph_event.insert_prop("os", target_lexicon::HOST.operating_system.to_string());
+        _ = ph_event.insert_prop("arch", target_lexicon::HOST.architecture.to_string());
+
+        // And the TelemetryEventData fields
+        _ = ph_event.insert_prop("message", message);
+        _ = ph_event.insert_prop("module", module);
+        _ = ph_event.insert_prop("stage", stage);
+        _ = ph_event.insert_prop("timestamp", time);
+
+        // And the rest of the event values
+        for (key, value) in values {
+            _ = ph_event.insert_prop(key, value);
+        }
+
+        ph_event
     }
 
     fn enroll_reporter() -> Result<Uuid> {
         // If the user requests telemetry disabled, we don't enroll them
-
-        // Create the sessions folder if it doesn't exist
-        let sessions_folder = Workspace::dioxus_home_dir().join("stats");
-        if !sessions_folder.exists() {
-            std::fs::create_dir_all(&sessions_folder);
+        if CliSettings::telemetry_disabled() {
+            bail!("Telemetry is disabled");
         }
 
-        // Create a reporter_id
+        // Create the sessions folder if it doesn't exist
+        let sessions_folder = Workspace::dioxus_data_dir().join("stats");
+        if !sessions_folder.exists() {
+            std::fs::create_dir_all(&sessions_folder)?;
+        }
+
+        // Create a reporter_id.
         let stable_session_file = sessions_folder.join("reporter_id.json");
         let reporter_id = if stable_session_file.exists() {
             let contents = std::fs::read_to_string(stable_session_file)?;
@@ -347,10 +504,6 @@ impl DxLayer {
         Ok(reporter_id)
     }
 
-    fn start_telemetry_thread() {
-        todo!()
-    }
-
     /// When building the CLI in CI, we include a key used to sign telemetry events.
     /// This lets us verify that the telemetry events are coming from a mostly trusted source.
     ///
@@ -361,8 +514,16 @@ impl DxLayer {
     }
 
     /// Flush pending logs to the telemetry file.
-    fn finish(&self, res: &Result<Result<StructuredOutput>, Box<dyn Any + Send>>) -> Result<()> {
+    async fn flush_telemetry(
+        &self,
+        res: &Result<Result<StructuredOutput>, Box<dyn Any + Send>>,
+    ) -> Result<()> {
         use std::io::Write;
+
+        // Only flush telemetry if we have a reporter
+        let Some(reporter) = self.reporter.as_ref() else {
+            return Ok(());
+        };
 
         // Add the fatal error to the telemetry
         if let Ok(Err(err)) = res.as_ref() {
@@ -400,28 +561,60 @@ impl DxLayer {
             // };
         }
 
-        // Create a new file to dump our telemetry to
-        let path = self.session_logs_file();
-        std::fs::create_dir_all(path.parent().unwrap())?;
-        let mut out = std::fs::File::options()
-            .create(true)
-            .append(true)
-            .open(path)?;
+        let mut msgs = self
+            .telemetry_rx
+            .lock()
+            .ok()
+            .context("Failed to lock telemetry channel")?;
 
-        // Write the built-up telemetry events to the file
-        let mut messages = self.telemetry_rx.lock().unwrap();
-        while let Ok(Some(msg)) = messages.try_next() {
-            writeln!(out, "{}", serde_json::to_string(&msg).unwrap())?;
+        // If we're in CI, we try to upload the telemetry immediately, with a short timeout (5 seconds or so)
+        // Hopefully it doesn't fail! Not much we can do in CI.
+        match std::env::var("CI") {
+            Ok(t) if t == "true" || t == "1" => {
+                use reqwest::{header::CONTENT_TYPE, Client as HttpClient};
+                use std::time::Duration;
+
+                let client = HttpClient::builder()
+                    .timeout(Duration::from_secs(5))
+                    .build()
+                    .context("Failed to build telemetry client")?;
+
+                let request_body = format!(
+                    r#"{{ "historical_migration": false, "batch": [{batch_body}] }}"#,
+                    batch_body = std::iter::from_fn(|| msgs.try_next().ok().flatten())
+                        .map(|msg| serde_json::to_string(&msg).unwrap())
+                        .join(",")
+                );
+
+                client
+                    .post(Self::DX_STATS_ENDPOINT)
+                    .header(CONTENT_TYPE, "application/json")
+                    .header("X-Reporter-ID", reporter.distinct_id.to_string())
+                    .body(request_body)
+                    .send()
+                    .await?;
+            }
+
+            // Dump the logs to a the session file as jsonl
+            _ => {
+                let dest = Workspace::dioxus_data_dir()
+                    .join("stats")
+                    .join("sessions")
+                    .join(format!("stats-{}.jsonl", reporter.session_id));
+
+                let mut logfile = std::fs::OpenOptions::new()
+                    .append(true)
+                    .create(true)
+                    .open(dest)?;
+
+                while let Some(msg) = msgs.try_next().ok().flatten() {
+                    serde_json::to_writer(&mut logfile, &msg)?;
+                    writeln!(&mut logfile)?;
+                }
+            }
         }
 
         Ok(())
-    }
-
-    fn session_logs_file(&self) -> PathBuf {
-        Workspace::dioxus_home_dir()
-            .join("stats")
-            .join("sessions")
-            .join(format!("stats-{}.jsonl", self.session_id))
     }
 }
 
@@ -473,7 +666,7 @@ where
             // Otherwise, we try to create it from the event metadata
             Some(raw_event) => {
                 _ = self.telemetry_tx.unbounded_send(
-                    serde_json::from_str::<TelemetryEvent>(raw_event)
+                    serde_json::from_str::<TelemetryEventData>(raw_event)
                         .unwrap()
                         .with_value("location", event_location()),
                 );
@@ -495,9 +688,11 @@ where
                     TraceSrc::Unknown => "unknown",
                 };
 
-                let mut event = TelemetryEvent::new(
+                let mut event = TelemetryEventData::new(
                     "tracing error",
-                    meta.module_path().map(ToString::to_string),
+                    meta.module_path()
+                        .map(ToString::to_string)
+                        .unwrap_or_else(|| "<unknown>".to_string()),
                     visitor.message.as_str(),
                     stage,
                 )
@@ -696,8 +891,9 @@ impl FormatTime for PrettyUptime {
     }
 }
 
-pub fn fatal_error(error: &crate::Error) -> TelemetryEvent {
-    let mut telemetry_event = TelemetryEvent::new("fatal_error", None, error.to_string(), "error");
+pub fn fatal_error(error: &crate::Error) -> TelemetryEventData {
+    let mut telemetry_event =
+        TelemetryEventData::new("fatal_error", module_path!(), error.to_string(), "error");
     let backtrace = error.backtrace();
     if backtrace.status() == std::backtrace::BacktraceStatus::Captured {
         telemetry_event = telemetry_event.with_value("backtrace", clean_backtrace(backtrace));

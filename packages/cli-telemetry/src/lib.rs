@@ -26,10 +26,9 @@
 //! - setting TELEMETRY=false in your env
 //! - setting `dx config set disable-telemetry true`
 
-use std::{collections::HashMap, time::SystemTime};
-
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::{collections::HashMap, time::SystemTime};
 
 /// We only store non-pii information in telemetry to track issues and performance
 /// across the CLI. This includes:
@@ -38,46 +37,48 @@ use serde::{Deserialize, Serialize};
 /// - the CLI version
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Reporter {
-    pub device_triple: String,
     pub is_ci: bool,
+    pub device_triple: String,
     pub cli_version: String,
-    pub reporter_id: u128,
     pub session_id: u128,
+    pub distinct_id: u128,
 }
 
-/// An event, corresponding roughly to a trace!()
+/// An event's data, corresponding roughly to data collected from an individual trace.
 ///
 /// This can be something like a build, bundle, translate, etc
 /// We collect the phases of the build in a list of events to get a better sense of how long
 /// it took.
 ///
+/// Note that this is just the data and does not include the reporter information.
+///
 /// ```rust
-/// tracing::trace!(telemetry, stage = "start", "bundling", "Packaging...")
-/// tracing::trace!(telemetry, stage = "end", end = "bundling")
+/// tracing::trace!(telemetry = "cli_did_thing", data = json!({ stage: "start", }))
+/// tracing::trace!(telemetry = "cli_did_thing", data = json!({ stage: "end", end: "bundling" }))
 /// ```
 ///
 /// On the analytics, side, we reconstruct the trace messages into a sequence of events, using
 /// the stage as a marker.
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct TelemetryEvent {
+pub struct TelemetryEventData {
     pub name: String,
-    pub module: Option<String>,
+    pub module: String,
     pub message: String,
     pub stage: String,
     pub time: DateTime<Utc>,
     pub values: HashMap<String, serde_json::Value>,
 }
 
-impl TelemetryEvent {
+impl TelemetryEventData {
     pub fn new(
         name: impl ToString,
-        module: Option<String>,
+        module: impl ToString,
         message: impl ToString,
         stage: impl ToString,
     ) -> Self {
         Self {
+            module: strip_paths(&module.to_string()),
             name: strip_paths(&name.to_string()),
-            module: module.map(|m| strip_paths(&m)),
             message: strip_paths(&message.to_string()),
             stage: strip_paths(&stage.to_string()),
             time: DateTime::<Utc>::from(SystemTime::now()),
@@ -97,7 +98,7 @@ impl TelemetryEvent {
     }
 }
 
-impl std::fmt::Display for TelemetryEvent {
+impl std::fmt::Display for TelemetryEventData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", serde_json::to_string(self).unwrap())
     }

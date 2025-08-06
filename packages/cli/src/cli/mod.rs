@@ -17,12 +17,13 @@ pub(crate) mod update;
 pub(crate) mod verbosity;
 
 pub(crate) use build::*;
+use dioxus_cli_telemetry::TelemetryEventData;
 pub(crate) use serve::*;
 pub(crate) use target::*;
 pub(crate) use verbosity::*;
 
 use crate::platform_override::CommandWithPlatformOverrides;
-use crate::telemetry::Anonymized;
+use crate::Anonymized;
 use crate::{error::Result, Error, StructuredOutput};
 use clap::builder::styling::{AnsiColor, Effects, Style, Styles};
 use clap::{Parser, Subcommand};
@@ -116,6 +117,11 @@ pub enum BuildTools {
 }
 
 impl Commands {
+    pub(crate) fn to_heartbeat_event(&self) -> TelemetryEventData {
+        let (name, anonymized) = self.command_anonymized();
+        TelemetryEventData::new("heartbeat", module_path!(), name, anonymized)
+    }
+
     pub(crate) fn command_anonymized(&self) -> (String, Value) {
         match self {
             Commands::New(new) => new.command_anonymized(),
