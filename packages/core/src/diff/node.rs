@@ -454,7 +454,7 @@ impl VNode {
                                 if let TemplateNode::Element { children, .. } = element {
                                     element = children[*next_index as usize]
                                 } else {
-                                    break;
+                                    unreachable!("All nodes in the attr_paths should be TemplateNode::Element");
                                 }
                             }
 
