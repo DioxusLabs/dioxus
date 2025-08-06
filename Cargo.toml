@@ -366,7 +366,7 @@ winit = { version = "0.30.11", features = ["rwh_06"] }
 incremental = true
 
 # crank up the opt level for wasm-split-cli in dev mode
-# important here that lto is on and the debug symbols are present (since they're used by wasm-opt)a
+# important here that lto is on and the debug symbols are present (since they're used by wasm-opt)
 [profile.wasm-split-release]
 inherits = "release"
 opt-level = 'z'
@@ -448,10 +448,6 @@ tokio = { version = "1.46", default-features = false, features = ["sync", "macro
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 tokio = { version = "1.46", features = ["full"] }
-
-# force vendored openssl on android
-[target.'cfg(target_os = "android")'.dev-dependencies]
-openssl = { version = "0.10", features = ["vendored"] }
 
 # To make most examples faster to compile, we split out assets and http-related stuff
 # This trims off like 270 dependencies, leading to a significant speedup in compilation time
