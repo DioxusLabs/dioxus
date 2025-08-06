@@ -25,6 +25,7 @@ use dioxus_dx_wire_format::StructuredOutput;
 use futures_channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
 use futures_util::FutureExt;
 use itertools::Itertools;
+use krates::petgraph::Direction::Outgoing;
 use std::{any::Any, backtrace::Backtrace, io::Read, str::FromStr, sync::Arc};
 use std::{borrow::Cow, sync::OnceLock};
 use std::{
@@ -58,7 +59,29 @@ const DX_SRC_FLAG: &str = "dx_src";
 static BACKTRACE: OnceLock<CapturedBacktrace> = OnceLock::new();
 static TUI_ACTIVE: AtomicBool = AtomicBool::new(false);
 static TUI_TX: OnceLock<UnboundedSender<TraceMsg>> = OnceLock::new();
+
 pub static VERBOSITY: OnceLock<Verbosity> = OnceLock::new();
+
+/// A trait that emits an anonymous JSON representation of the object, suitable for telemetry.
+pub(crate) trait Anonymized {
+    fn anonymized(&self) -> serde_json::Value;
+}
+
+/// A custom layer that wraps our special interception logic based on the mode of the CLI and its verbosity.
+///
+/// Redirects TUI logs, writes to files, and queues telemetry events.
+#[derive(Clone)]
+pub struct DxLayer {
+    reporter: Option<Reporter>,
+    telemetry_tx: UnboundedSender<TelemetryEventData>,
+    telemetry_rx: Arc<Mutex<UnboundedReceiver<TelemetryEventData>>>,
+    log_to_file: Option<PathBuf>,
+    log_tile_file_buffer: Arc<Mutex<String>>,
+}
+
+pub mod telemetry_events {
+    pub const HEARTBEAT: &str = "cli_heartbeat";
+}
 
 pub(crate) struct TraceController {
     pub(crate) tui_rx: UnboundedReceiver<TraceMsg>,
@@ -253,27 +276,6 @@ struct SavedLocation {
     file: String,
     line: u32,
     column: u32,
-}
-
-/// A custom layer that wraps our special interception logic based on the mode of the CLI and its verbosity.
-///
-/// Redirects TUI logs, writes to files, and queues telemetry events.
-#[derive(Clone)]
-pub struct DxLayer {
-    reporter: Option<Reporter>,
-    telemetry_tx: UnboundedSender<TelemetryEventData>,
-    telemetry_rx: Arc<Mutex<UnboundedReceiver<TelemetryEventData>>>,
-    log_to_file: Option<PathBuf>,
-    log_tile_file_buffer: Arc<Mutex<String>>,
-}
-
-pub mod telemetry_events {
-    pub const HEARTBEAT: &str = "cli_heartbeat";
-}
-
-/// A trait that emits an anonymous JSON representation of the object, suitable for telemetry.
-pub(crate) trait Anonymized {
-    fn anonymized(&self) -> serde_json::Value;
 }
 
 impl DxLayer {
@@ -920,4 +922,32 @@ pub fn clean_backtrace(backtrace: &Backtrace) -> String {
     }
 
     backtrace_display
+}
+
+/// Run the provided future and wait for it to complete, handling Ctrl-C gracefully.
+///
+/// If ctrl-c is pressed twice, it exits immediately.
+async fn run_with_ctrl_c<T, E>(f: impl Future<Output = Result<T, E>>) -> Result<T, E> {
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    let mut tx = Some(tx);
+
+    ctrlc::set_handler(move || {
+        match tx.take() {
+            // If we have a sender, we unset the following `select!` and continue from there
+            Some(tx) => _ = tx.send(()),
+
+            // If we get a second ctrl-c, we just exit immediately
+            None => {
+                _ = console::Term::stdout().show_cursor();
+                std::process::exit(1);
+            }
+        }
+    })
+    .expect("ctrlc::set_handler");
+
+    tokio::select! {
+        _ = rx => {}
+    }
+
+    f.await
 }
