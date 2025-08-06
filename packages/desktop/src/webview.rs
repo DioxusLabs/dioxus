@@ -427,12 +427,7 @@ impl WebviewInstance {
             let vbox = window.default_vbox().unwrap();
             webview.build_gtk(vbox)
         };
-        let webview = webview
-            .map_err(|e| {
-                let s = e.to_string();
-                println!("Error building webview: {s}");
-            })
-            .unwrap();
+        let webview = webview.unwrap();
 
         let desktop_context = Rc::from(DesktopService::new(
             webview,

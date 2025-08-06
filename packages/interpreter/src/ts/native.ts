@@ -505,12 +505,7 @@ function handleVirtualdomEventSync(
   xhr.send();
 
   // Deserialize the response, and then prevent the default/capture the event if the virtualdom wants to
-  // @TODO Harmony crashed we need to fix this and remove this try/catch
-  try {
-    return JSON.parse(xhr.responseText);
-  } catch (error) {
-    console.error("Error deserializing event", error);
-  }
+  return JSON.parse(xhr.responseText);
 }
 
 function getTargetId(target: EventTarget): NodeId | null {
