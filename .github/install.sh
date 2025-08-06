@@ -84,7 +84,13 @@ else
     dx_uri=$github_repo/releases/download/$1/dx-$target.zip
 fi
 
-dx_install="${DX_INSTALL:-$HOME/.dx}"
+if [ -n "$DX_INSTALL" ]; then
+    dx_install="$DX_INSTALL"
+elif [ -n "$XDG_DATA_HOME" ]; then
+    dx_install="$XDG_DATA_HOME/dx"
+else
+    dx_install="$HOME/.dx"
+fi
 bin_dir="$dx_install/bin"
 exe="$bin_dir/dx"
 cargo_bin_dir="$HOME/.cargo/bin"

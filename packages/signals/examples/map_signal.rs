@@ -27,24 +27,16 @@ fn app() -> Element {
         }
 
         for i in 0..vec.len() {
-            Child { count: vec.map(move |v| &v[i]) }
+            Child { count: vec.map_mut(move |v| &v[i], move |v| &mut v[i]) }
         }
     }
 }
 
 #[component]
-fn Child(count: MappedSignal<i32>) -> Element {
-    use_memo({
-        to_owned![count];
-        move || {
-            let value = count.read();
-            println!("Child value: {value}");
-        }
-    });
-
+fn Child(count: WriteSignal<i32>) -> Element {
     rsx! {
         div {
-            "Child: {count}"
+            "{count}"
         }
     }
 }

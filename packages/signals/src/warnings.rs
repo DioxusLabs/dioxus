@@ -4,7 +4,7 @@ use warnings::warning;
 
 /// A warning that is triggered when a copy value is used in a higher scope that it is owned by
 #[warning]
-pub fn copy_value_hoisted<T: 'static, S: generational_box::Storage<T>>(
+pub fn copy_value_hoisted<T: 'static, S: generational_box::Storage<T> + 'static>(
     value: &crate::CopyValue<T, S>,
     caller: &'static std::panic::Location<'static>,
 ) {
