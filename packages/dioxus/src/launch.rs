@@ -1,7 +1,7 @@
 #![allow(clippy::new_without_default)]
 #![allow(unused)]
 use dioxus_config_macro::*;
-use dioxus_core::LaunchConfig;
+use dioxus_core::{Element, LaunchConfig};
 use std::any::Any;
 
 use crate::prelude::*;
@@ -299,7 +299,7 @@ impl LaunchBuilder {
         // Set any flags if we're running under fullstack
         #[cfg(feature = "fullstack")]
         {
-            use dioxus_fullstack::prelude::server_fn::client::{get_server_url, set_server_url};
+            use dioxus_fullstack::server_fn::client::{get_server_url, set_server_url};
 
             // Make sure to set the server_fn endpoint if the user specified the fullstack feature
             // We only set this on native targets
@@ -332,7 +332,7 @@ impl LaunchBuilder {
 
         #[cfg(feature = "mobile")]
         if matches!(platform, KnownPlatform::Mobile) {
-            return dioxus_mobile::launch_bindings::launch(app, contexts, configs);
+            return dioxus_desktop::launch::launch(app, contexts, configs);
         }
 
         #[cfg(feature = "desktop")]

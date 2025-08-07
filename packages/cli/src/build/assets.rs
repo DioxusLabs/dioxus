@@ -34,14 +34,13 @@ use std::{
 };
 
 use crate::Result;
-use anyhow::Context;
+use anyhow::{bail, Context};
 use const_serialize::{ConstVec, SerializeConst};
 use dioxus_cli_opt::AssetManifest;
 use manganis::BundledAsset;
 use object::{File, Object, ObjectSection, ObjectSymbol, ReadCache, ReadRef, Section, Symbol};
 use pdb::FallibleIterator;
 use rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
-use wasmparser::BinaryReader;
 
 /// Extract all manganis symbols and their sections from the given object file.
 fn manganis_symbols<'a, 'b, R: ReadRef<'a>>(
@@ -50,7 +49,7 @@ fn manganis_symbols<'a, 'b, R: ReadRef<'a>>(
     file.symbols()
         .filter(|symbol| {
             if let Ok(name) = symbol.name() {
-                name.contains("__MANGANIS__")
+                looks_like_manganis_symbol(name)
             } else {
                 false
             }
@@ -60,6 +59,10 @@ fn manganis_symbols<'a, 'b, R: ReadRef<'a>>(
             let section = file.section_by_index(section_index).ok()?;
             Some((symbol, section))
         })
+}
+
+fn looks_like_manganis_symbol(name: &str) -> bool {
+    name.contains("__MANGANIS__")
 }
 
 /// Find the offsets of any manganis symbols in the given file.
@@ -175,105 +178,113 @@ fn find_native_symbol_offsets<'a, R: ReadRef<'a>>(file: &File<'a, R>) -> Result<
     Ok(offsets)
 }
 
+fn eval_walrus_global_expr(module: &walrus::Module, expr: &walrus::ConstExpr) -> Option<u64> {
+    match expr {
+        walrus::ConstExpr::Value(walrus::ir::Value::I32(value)) => Some(*value as u64),
+        walrus::ConstExpr::Value(walrus::ir::Value::I64(value)) => Some(*value as u64),
+        walrus::ConstExpr::Global(id) => {
+            let global = module.globals.get(*id);
+            if let walrus::GlobalKind::Local(pointer) = &global.kind {
+                eval_walrus_global_expr(module, pointer)
+            } else {
+                None
+            }
+        }
+        _ => None,
+    }
+}
+
 /// Find the offsets of any manganis symbols in the wasm file.
 fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
     file_contents: &[u8],
     file: &File<'a, R>,
 ) -> Result<Vec<u64>> {
-    // Parse the wasm file to find the globals
-    let parser = wasmparser::Parser::new(0);
+    let Some(section) = file
+        .sections()
+        .find(|section| section.name() == Ok("<data>"))
+    else {
+        tracing::error!("Failed to find <data> section in WASM file");
+        return Ok(Vec::new());
+    };
+    let Some((_, section_range_end)) = section.file_range() else {
+        tracing::error!("Failed to find file range for <data> section in WASM file");
+        return Ok(Vec::new());
+    };
+    let section_size = section.data()?.len() as u64;
+    let section_start = section_range_end - section_size;
 
-    // All integer literal global values in the wasm file
-    let mut global_values = Vec::new();
-    for section in parser.parse_all(file_contents) {
-        let Ok(wasmparser::Payload::GlobalSection(global_section)) = section else {
+    // Translate the section_relative_address to the file offset
+    // WASM files have a section address of 0 in object, reparse the data section with wasmparser
+    // to get the correct address and section start
+    // Note: We need to reparse just the data section with wasmparser to get the file offset because walrus does
+    // not expose the file offset information
+    let reader = wasmparser::DataSectionReader::new(wasmparser::BinaryReader::new(
+        &file_contents[section_start as usize..section_range_end as usize],
+        0,
+    ))
+    .context("Failed to create WASM data section reader")?;
+    let main_memory = reader
+        .into_iter()
+        .next()
+        .context("Failed find main memory from WASM data section")?
+        .context("Failed to read main memory from WASM data section")?;
+    // main_memory.data is a slice somewhere in file_contents. Find out the offset in the file
+    let data_start_offset = (main_memory.data.as_ptr() as u64)
+        .checked_sub(file_contents.as_ptr() as u64)
+        .expect("Data section start offset should be within the file contents");
+
+    // Parse the wasm file to find the globals
+    let module = walrus::Module::from_buffer(file_contents).unwrap();
+    let mut offsets = Vec::new();
+
+    // Find the main memory offset
+    let main_memory = module
+        .data
+        .iter()
+        .next()
+        .context("Failed to find main memory in WASM module")?;
+
+    let walrus::DataKind::Active {
+        offset: main_memory_offset,
+        ..
+    } = main_memory.kind
+    else {
+        tracing::error!("Failed to find main memory offset in WASM module");
+        return Ok(Vec::new());
+    };
+
+    // In the hot patch build, the main memory offset is a global from the main module and each global
+    // is it's own global. Use an offset of 0 instead if we can't evaluate the global
+    let main_memory_offset =
+        eval_walrus_global_expr(&module, &main_memory_offset).unwrap_or_default();
+
+    for export in module.exports.iter() {
+        if !looks_like_manganis_symbol(&export.name) {
+            continue;
+        }
+
+        let walrus::ExportItem::Global(global) = export.item else {
             continue;
         };
 
-        global_values = global_section
-            .into_iter()
-            .map(|global| {
-                let global = global.ok()?;
-                match global.init_expr.get_operators_reader().into_iter().next() {
-                    Some(Ok(wasmparser::Operator::I32Const { value })) => Some(value as u64),
-                    Some(Ok(wasmparser::Operator::I64Const { value })) => Some(value as u64),
-                    _ => None,
-                }
-            })
-            .collect::<Vec<_>>();
-    }
-    let mut offsets = Vec::new();
+        let walrus::GlobalKind::Local(pointer) = module.globals.get(global).kind else {
+            continue;
+        };
 
-    for (symbol, section) in manganis_symbols(file) {
-        let virtual_address = symbol.address();
-
-        let Some((_, section_range_end)) = section.file_range() else {
+        let Some(virtual_address) = eval_walrus_global_expr(&module, &pointer) else {
             tracing::error!(
-                "Found __MANGANIS__ symbol {:?} in section {}, but the section has no file range",
-                symbol.name(),
-                section.index()
+                "Found __MANGANIS__ symbol {:?} in WASM file, but the global expression could not be evaluated",
+                export.name
             );
             continue;
         };
-        let section_size = section.data()?.len() as u64;
-        let section_start = section_range_end - section_size;
-        // Translate the section_relative_address to the file offset
-        // WASM files have a section address of 0 in object, reparse the data section with wasmparser
-        // to get the correct address and section start
-        let reader = wasmparser::DataSectionReader::new(BinaryReader::new(
-            &file_contents[section_start as usize..section_range_end as usize],
-            0,
-        ))
-        .context("Failed to create WASM data section reader")?;
-        let main_memory = reader
-            .into_iter()
-            .next()
-            .context("Failed find main memory from WASM data section")?
-            .context("Failed to read main memory from WASM data section")?;
-        let main_memory_offset = match main_memory.kind {
-            wasmparser::DataKind::Active { offset_expr, .. } => {
-                match offset_expr.get_operators_reader().into_iter().next() {
-                    Some(Ok(wasmparser::Operator::I32Const { value })) => -value as i128,
-                    Some(Ok(wasmparser::Operator::I64Const { value })) => -value as i128,
-                    Some(Ok(wasmparser::Operator::GlobalGet { global_index })) => {
-                        let Some(value) =
-                            global_values.get(global_index as usize).copied().flatten()
-                        else {
-                            tracing::error!(
-                                "Found __MANGANIS__ symbol {:?} in WASM file, but the global index {} is not found",
-                                symbol.name(),
-                                global_index
-                            );
-                            continue;
-                        };
-                        value as i128
-                    }
-                    offset_expr => {
-                        tracing::error!(
-                            "Found __MANGANIS__ symbol {:?} in WASM file, but the offset expression is not a constant is is {:?}",
-                            symbol.name(),
-                            offset_expr
-                        );
-                        continue;
-                    }
-                }
-            }
-            _ => {
-                tracing::error!(
-                    "Found __MANGANIS__ symbol {:?} in WASM file, but the data section is not active",
-                    symbol.name()
-                );
-                continue;
-            }
-        };
-        // main_memory.data is a slice somewhere in file_contents. Find out the offset in the file
-        let data_start_offset = (main_memory.data.as_ptr() as u64)
-            .checked_sub(file_contents.as_ptr() as u64)
-            .expect("Data section start offset should be within the file contents");
-        let section_relative_address: u64 = ((virtual_address as i128) + main_memory_offset)
+
+        let section_relative_address: u64 = ((virtual_address as i128)
+            - main_memory_offset as i128)
             .try_into()
             .expect("Virtual address should be greater than or equal to section address");
         let file_offset = data_start_offset + section_relative_address;
+
         offsets.push(file_offset);
     }
 
@@ -304,6 +315,7 @@ pub(crate) fn extract_assets_from_file(path: impl AsRef<Path>) -> Result<AssetMa
 
         if let Some((_, bundled_asset)) = const_serialize::deserialize_const!(BundledAsset, buffer)
         {
+            tracing::debug!("Found asset at offset {offset}: {:?}", bundled_asset);
             assets.push(bundled_asset);
         } else {
             tracing::warn!("Found an asset at offset {offset} that could not be deserialized. This may be caused by a mismatch between your dioxus and dioxus-cli versions.");
@@ -317,6 +329,7 @@ pub(crate) fn extract_assets_from_file(path: impl AsRef<Path>) -> Result<AssetMa
 
     // Write back the assets to the binary file
     for (offset, asset) in offsets.into_iter().zip(&assets) {
+        tracing::debug!("Writing asset to offset {offset}: {:?}", asset);
         let new_data = ConstVec::new();
         let new_data = const_serialize::serialize_const(asset, new_data);
 
@@ -325,22 +338,26 @@ pub(crate) fn extract_assets_from_file(path: impl AsRef<Path>) -> Result<AssetMa
         file.write_all(new_data.as_ref())?;
     }
 
+    // Ensure the file is flushed to disk
+    file.sync_all()
+        .context("Failed to sync file after writing assets")?;
+
     // If the file is a macos binary, we need to re-sign the modified binary
-    if object_file.format() == object::BinaryFormat::MachO {
+    if object_file.format() == object::BinaryFormat::MachO && !assets.is_empty() {
         // Spawn the codesign command to re-sign the binary
         let output = std::process::Command::new("codesign")
             .arg("--force")
             .arg("--sign")
             .arg("-") // Sign with an empty identity
             .arg(path)
-            .output()?;
+            .output()
+            .context("Failed to run codesign - is `codesign` in your path?")?;
 
         if !output.status.success() {
-            return Err(anyhow::anyhow!(
+            bail!(
                 "Failed to re-sign the binary with codesign after finalizing the assets: {}",
                 String::from_utf8_lossy(&output.stderr)
-            )
-            .into());
+            );
         }
     }
 

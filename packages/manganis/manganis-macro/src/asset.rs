@@ -35,7 +35,7 @@ impl Parse for AssetParser {
     // ```
     // asset!(
     //     "/assets/myfile.png",
-    //      ImageAssetOptions::new()
+    //      AssetOptions::image()
     //        .format(ImageFormat::Jpg)
     //        .size(512, 512)
     // )
@@ -84,8 +84,9 @@ impl ToTokens for AssetParser {
         asset_string.hash(&mut hash);
         let asset_hash = format!("{:016x}", hash.finish());
 
-        // Generate the link section for the asset
-        // The link section includes the source path and the output path of the asset
+        // Generate the link section for the asset. The link section includes the source path and the
+        // output path of the asset. We force the asset to be included in the binary even if it is unused
+        // if the asset is unhashed
         let link_section = crate::generate_link_section(quote!(__ASSET), &asset_hash);
 
         // generate the asset::new method to deprecate the `./assets/blah.css` syntax
@@ -96,7 +97,7 @@ impl ToTokens for AssetParser {
         };
 
         let options = if self.options.is_empty() {
-            quote! { manganis::AssetOptions::Unknown }
+            quote! { manganis::AssetOptions::builder() }
         } else {
             self.options.clone()
         };
@@ -119,9 +120,9 @@ impl ToTokens for AssetParser {
 
                 static __REFERENCE_TO_LINK_SECTION: &'static [u8] = &__LINK_SECTION;
 
-                manganis::Asset::new(
-                    __REFERENCE_TO_LINK_SECTION
-                )
+
+
+                manganis::Asset::new(|| unsafe { std::ptr::read_volatile(&__REFERENCE_TO_LINK_SECTION) })
             }
         })
     }

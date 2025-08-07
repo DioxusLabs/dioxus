@@ -127,7 +127,7 @@ impl ToTokens for IfChain {
 
         tokens.append_all(quote! {
             {
-                let ___nodes = (#body).into_dyn_node();
+                let ___nodes = dioxus_core::IntoDynNode::into_dyn_node(#body);
                 ___nodes
             }
         })

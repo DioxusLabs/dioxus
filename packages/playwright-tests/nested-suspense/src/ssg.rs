@@ -9,7 +9,7 @@ fn main() {
         .with_cfg(server_only! {
             ServeConfig::builder()
                 .incremental(
-                    IncrementalRendererConfig::new()
+                    dioxus::server::IncrementalRendererConfig::new()
                         .static_dir(
                             std::env::current_exe()
                                 .unwrap()

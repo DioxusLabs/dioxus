@@ -1,6 +1,6 @@
-use dioxus_lib::prelude::{try_consume_context, use_hook};
+use dioxus_core::{try_consume_context, use_hook};
 
-use crate::prelude::{Navigator, RouterContext};
+use crate::{Navigator, RouterContext};
 
 /// A hook that provides access to the navigator to change the router history.
 ///
@@ -8,7 +8,6 @@ use crate::prelude::{Navigator, RouterContext};
 ///
 /// ```rust
 /// # use dioxus::prelude::*;
-/// # use dioxus_router::prelude::*;
 /// #[derive(Clone, Routable)]
 /// enum Route {
 ///     #[route("/")]

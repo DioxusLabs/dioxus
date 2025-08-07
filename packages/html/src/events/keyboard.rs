@@ -2,7 +2,7 @@ use dioxus_core::Event;
 use keyboard_types::{Code, Key, Location, Modifiers};
 use std::fmt::Debug;
 
-use crate::prelude::ModifiersInteraction;
+use crate::ModifiersInteraction;
 
 #[cfg(feature = "serialize")]
 fn resilient_deserialize_code<'de, D>(deserializer: D) -> Result<Code, D::Error>

@@ -144,6 +144,19 @@ impl<T> SerializeContextEntry<T> {
     }
 }
 
+/// Check if the client is currently rendering a component for hydration. Always returns true on the server.
+pub fn is_hydrating() -> bool {
+    #[cfg(feature = "web")]
+    {
+        // On the client, we can check if the context is set
+        CONTEXT.with(|context| context.borrow().is_some())
+    }
+    #[cfg(not(feature = "web"))]
+    {
+        true
+    }
+}
+
 /// Get or insert the current serialize context. On the client, the hydration context this returns
 /// will always return `TakeDataError::DataNotAvailable` if hydration of the current chunk is finished.
 pub fn serialize_context() -> HydrationContext {
@@ -161,8 +174,8 @@ pub fn serialize_context() -> HydrationContext {
     #[cfg(not(feature = "web"))]
     {
         // On the server each scope creates the context lazily
-        dioxus_core::prelude::has_context()
-            .unwrap_or_else(|| dioxus_core::prelude::provide_context(HydrationContext::default()))
+        dioxus_core::has_context()
+            .unwrap_or_else(|| dioxus_core::provide_context(HydrationContext::default()))
     }
 }
 

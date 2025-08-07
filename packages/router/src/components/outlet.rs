@@ -1,5 +1,5 @@
-use crate::prelude::{outlet::OutletContext, *};
-use dioxus_lib::prelude::*;
+use crate::{outlet::OutletContext, *};
+use dioxus_core::Element;
 
 /// An outlet for the current content.
 ///
@@ -15,7 +15,6 @@ use dioxus_lib::prelude::*;
 /// # Example
 /// ```rust
 /// # use dioxus::prelude::*;
-/// # use dioxus_router::prelude::*;
 /// #[derive(Clone, Routable)]
 /// #[rustfmt::skip]
 /// enum Route {

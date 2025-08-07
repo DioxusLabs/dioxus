@@ -1,4 +1,4 @@
-use dioxus_core::prelude::use_hook;
+use dioxus_core::use_hook;
 use dioxus_fullstack_protocol::SerializeContextEntry;
 use serde::{de::DeserializeOwned, Serialize};
 
@@ -10,8 +10,7 @@ use serde::{de::DeserializeOwned, Serialize};
 ///
 /// # Example
 /// ```rust
-/// use dioxus_lib::prelude::*;
-/// use dioxus_fullstack::prelude::*;
+/// use dioxus::prelude::*;
 ///
 /// fn app() -> Element {
 ///    let state1 = use_server_cached(|| {

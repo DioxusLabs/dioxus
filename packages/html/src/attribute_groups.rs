@@ -1,8 +1,8 @@
 #![allow(non_upper_case_globals)]
 #![allow(deprecated)]
 
-use dioxus_core::prelude::IntoAttributeValue;
 use dioxus_core::HasAttributes;
+use dioxus_core::IntoAttributeValue;
 use dioxus_html_internal_macro::impl_extension_attributes;
 
 use crate::AttributeDescription;

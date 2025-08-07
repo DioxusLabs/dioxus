@@ -5,11 +5,13 @@ use dioxus::prelude::*;
 use dioxus_native::use_wgpu;
 use std::any::Any;
 use wgpu::{Features, Limits};
+use winit::dpi::LogicalSize;
+use winit::window::WindowAttributes;
 
 mod demo_renderer;
 
 // CSS Styles
-static STYLES: &str = include_str!("./styles.css");
+static STYLES: Asset = asset!("./src/styles.css");
 
 // WGPU settings required by this example
 const FEATURES: Features = Features::PUSH_CONSTANTS;
@@ -19,11 +21,25 @@ fn limits() -> Limits {
         ..Limits::default()
     }
 }
+fn window_attributes() -> WindowAttributes {
+    // You can also use a `<title>` element to set the window title
+    // but this demonstrates the use of `WindowAttributes`
+    WindowAttributes::default()
+        .with_title("WGPU Example")
+        .with_inner_size(LogicalSize::new(800, 600))
+}
 
 type Color = OpaqueColor<Srgb>;
 
 fn main() {
-    let config: Vec<Box<dyn Any>> = vec![Box::new(FEATURES), Box::new(limits())];
+    #[cfg(feature = "tracing")]
+    tracing_subscriber::fmt::init();
+
+    let config: Vec<Box<dyn Any>> = vec![
+        Box::new(FEATURES),
+        Box::new(limits()),
+        Box::new(window_attributes()),
+    ];
     dioxus_native::launch_cfg(app, Vec::new(), config);
 }
 
@@ -42,11 +58,11 @@ fn app() -> Element {
     use_effect(move || println!("{:?}", color().components));
 
     rsx!(
-        style { {STYLES} }
+        document::Link { rel: "stylesheet", href: STYLES }
         div { id:"overlay",
             h2 { "Control Panel" },
             button {
-                onclick: move |_| *show_cube.write() = !show_cube(),
+                onclick: move |_| show_cube.toggle(),
                 if show_cube() {
                     "Hide cube"
                 } else {
@@ -62,7 +78,7 @@ fn app() -> Element {
             p { "This underlay demonstrates that the custom WGPU content can be rendered above layers and blended with the content underneath" }
         }
         header {
-            h2 { "Blitz WGPU Demo" }
+            h1 { "Blitz WGPU Demo" }
         }
         if show_cube() {
             SpinningCube { color }
@@ -71,7 +87,7 @@ fn app() -> Element {
 }
 
 #[component]
-fn ColorControl(label: &'static str, color_str: Signal<String>) -> Element {
+fn ColorControl(label: &'static str, color_str: WriteSignal<String>) -> Element {
     rsx!(div {
         class: "color-control",
         { label },
@@ -99,7 +115,7 @@ fn SpinningCube(color: Memo<Color>) -> Element {
         div { id:"canvas-container",
             canvas {
                 id: "demo-canvas",
-                "data": paint_source_id
+                "src": paint_source_id
             }
         }
     )

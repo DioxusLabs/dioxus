@@ -2,7 +2,7 @@ use crate::styles::GLOW_STYLE;
 use crate::CliSettings;
 use crate::Result;
 use crate::{config::DioxusConfig, AndroidTools};
-use anyhow::Context;
+use anyhow::{bail, Context};
 use ignore::gitignore::Gitignore;
 use krates::{semver::Version, KrateDetails, LockOptions};
 use krates::{Cmd, Krates, NodeId};
@@ -48,9 +48,7 @@ impl Workspace {
 
             let mut builder = krates::Builder::new();
             builder.workspace(true);
-            let res = builder
-                .build(cmd, |_| {})
-                .context("Failed to run cargo metadata");
+            let res = builder.build(cmd, |_| {})?;
 
             if !lock_options.offline {
                 if let Ok(res) = std::env::var("SIMULATE_SLOW_NETWORK") {
@@ -58,7 +56,7 @@ impl Workspace {
                 }
             }
 
-            res
+            Ok(res) as Result<Krates, krates::Error>
         });
 
         let spin_future = async move {
@@ -76,26 +74,23 @@ impl Workspace {
         };
 
         let krates = tokio::select! {
-            f = krates_future => f.context("failed to run cargo metadata")??,
-            _ = spin_future => return Err(crate::Error::Network(
-                "cargo metadata took too long to respond, try again with --offline".to_string(),
-            )),
+            f = krates_future => {
+                let res = f?;
+                if let Err(krates::Error::Metadata(e)) = res {
+                    bail!("{e}");
+                }
+                res?
+            },
+            _ = spin_future => bail!("cargo metadata took too long to respond, try again with --offline"),
         };
 
         let settings = CliSettings::global_or_default();
-        let sysroot = Command::new("rustc")
-            .args(["--print", "sysroot"])
-            .output()
+        let sysroot = Self::get_rustc_sysroot()
             .await
-            .map(|out| String::from_utf8(out.stdout))?
-            .context("Failed to extract rustc sysroot output")?;
-
-        let rustc_version = Command::new("rustc")
-            .args(["--version"])
-            .output()
+            .context("Failed to get rustc sysroot")?;
+        let rustc_version = Self::get_rustc_version()
             .await
-            .map(|out| String::from_utf8(out.stdout))?
-            .context("Failed to extract rustc version output")?;
+            .context("Failed to get rustc version")?;
 
         let wasm_opt = which::which("wasm-opt").ok();
 
@@ -141,10 +136,10 @@ impl Workspace {
     }
 
     pub fn android_tools(&self) -> Result<Arc<AndroidTools>> {
-        Ok(self
+        self
             .android_tools
             .clone()
-            .context("Android not installed properly. Please set the `ANDROID_NDK_HOME` environment variable to the root of your NDK installation.")?)
+            .context("Android not installed properly. Please set the `ANDROID_NDK_HOME` environment variable to the root of your NDK installation.")
     }
 
     pub fn is_release_profile(&self, profile: &str) -> bool {
@@ -195,7 +190,10 @@ impl Workspace {
         let max = dioxus_versions.iter().max().unwrap();
 
         // If the minimum dioxus version is greater than the current cli version, warn the user
-        if min > &dx_semver || max < &dx_semver {
+        if min > &dx_semver
+            || max < &dx_semver
+            || dioxus_versions.iter().any(|f| f.pre != dx_semver.pre)
+        {
             tracing::error!(
                 r#"🚫dx and dioxus versions are incompatible!
                   • dx version: {dx_semver}
@@ -247,6 +245,21 @@ impl Workspace {
 
     pub fn wasm_ld(&self) -> PathBuf {
         self.gcc_ld_dir().join("wasm-ld")
+    }
+
+    pub fn select_ranlib() -> Option<PathBuf> {
+        // prefer the modern llvm-ranlib if they have it
+        which::which("llvm-ranlib")
+            .or_else(|_| which::which("ranlib"))
+            .ok()
+    }
+
+    /// Return the version of the wasm-bindgen crate if it exists
+    pub fn wasm_bindgen_version(&self) -> Option<String> {
+        self.krates
+            .krates_by_name("wasm-bindgen")
+            .next()
+            .map(|krate| krate.krate.version.to_string())
     }
 
     // wasm-ld: ./rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/wasm-ld
@@ -377,7 +390,7 @@ impl Workspace {
 
         toml::from_str::<DioxusConfig>(&std::fs::read_to_string(&dioxus_conf_file)?)
             .map_err(|err| {
-                anyhow::anyhow!("Failed to parse Dioxus.toml at {dioxus_conf_file:?}: {err}").into()
+                anyhow::anyhow!("Failed to parse Dioxus.toml at {dioxus_conf_file:?}: {err}")
             })
             .map(Some)
     }
@@ -459,24 +472,67 @@ impl Workspace {
                 }
                 None
             })
-            .ok_or_else(|| {
-                crate::Error::Cargo("Failed to find directory containing Cargo.toml".to_string())
-            })
+            .context("Failed to find directory containing Cargo.toml")
+    }
+
+    pub async fn get_xcode_path() -> Option<PathBuf> {
+        let xcode = Command::new("xcode-select")
+            .arg("-p")
+            .output()
+            .await
+            .ok()
+            .map(|s| String::from_utf8_lossy(&s.stdout).trim().to_string().into());
+        xcode
+    }
+
+    pub async fn get_rustc_sysroot() -> Result<String, anyhow::Error> {
+        let sysroot = Command::new("rustc")
+            .args(["--print", "sysroot"])
+            .output()
+            .await
+            .map(|out| String::from_utf8(out.stdout).map(|s| s.trim().to_string()))?
+            .context("Failed to extract rustc sysroot output")?;
+        Ok(sysroot)
+    }
+
+    pub async fn get_rustc_version() -> Result<String> {
+        let rustc_version = Command::new("rustc")
+            .args(["--version"])
+            .output()
+            .await
+            .map(|out| String::from_utf8(out.stdout))?
+            .context("Failed to extract rustc version output")?;
+        Ok(rustc_version)
     }
 
     /// Returns the properly canonicalized path to the dx executable, used for linking and wrapping rustc
     pub(crate) fn path_to_dx() -> Result<PathBuf> {
-        Ok(
-            dunce::canonicalize(std::env::current_exe().context("Failed to find dx")?)
-                .context("Failed to find dx")?,
-        )
+        dunce::canonicalize(std::env::current_exe().context("Failed to find dx")?)
+            .context("Failed to find dx")
     }
 
-    /// Returns the path to the dioxus home directory, used to install tools and other things
-    pub(crate) fn dioxus_home_dir() -> PathBuf {
-        dirs::data_local_dir()
-            .map(|f| f.join("dioxus/"))
-            .unwrap_or_else(|| dirs::home_dir().unwrap().join(".dioxus"))
+    /// Returns the path to the dioxus data directory, used to install tools, store configs, and other things
+    ///
+    /// On macOS, we prefer to not put this dir in Application Support, but rather in the home directory.
+    /// On Windows, we prefer to keep it in the home directory so the `dx` install dir matches the install script.
+    pub(crate) fn dioxus_data_dir() -> PathBuf {
+        static DX_HOME: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+        DX_HOME
+            .get_or_init(|| {
+                if let Some(path) = std::env::var_os("DX_HOME") {
+                    return PathBuf::from(path);
+                }
+
+                if cfg!(target_os = "macos") || cfg!(target_os = "windows") {
+                    dirs::home_dir().unwrap().join(".dx")
+                } else {
+                    dirs::data_dir()
+                        .or_else(dirs::home_dir)
+                        .unwrap()
+                        .join(".dx")
+                }
+            })
+            .to_path_buf()
     }
 }
 

@@ -2,7 +2,7 @@
 //!
 //! The enum router makes it easy to use your route as state in your app. This example shows how to use the router to encode search text into the url and decode it back into a string.
 //!
-//! Run this example on desktop with  
+//! Run this example on desktop with
 //! ```sh
 //! dx serve --example query_segment_search
 //! ```
@@ -29,7 +29,7 @@ enum Route {
 
     // The each query segment must implement <https://docs.rs/dioxus-router/latest/dioxus_router/routable/trait.FromQueryArgument.html> and Display.
     // You can use multiple query segments separated by `&`s.
-    #[route("/search?:query&:word_count")] 
+    #[route("/search?:query&:word_count")]
     Search {
         query: String,
         word_count: usize,
@@ -63,9 +63,9 @@ fn Home() -> Element {
     }
 }
 
-// Instead of accepting String and usize directly, we use ReadOnlySignal to make the parameters `Copy` and let us subscribe to them automatically inside the meme
+// Instead of accepting String and usize directly, we use ReadSignal to make the parameters `Copy` and let us subscribe to them automatically inside the meme
 #[component]
-fn Search(query: ReadOnlySignal<String>, word_count: ReadOnlySignal<usize>) -> Element {
+fn Search(query: ReadSignal<String>, word_count: ReadSignal<usize>) -> Element {
     const ITEMS: &[&str] = &[
         "hello",
         "world",

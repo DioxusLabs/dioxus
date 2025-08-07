@@ -491,7 +491,7 @@ impl RouteEnum {
 
         quote! {
             impl std::fmt::Display for #name {
-                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
                     #[allow(unused)]
                     match self {
                         #(#display_match)*
@@ -513,15 +513,15 @@ impl RouteEnum {
         });
 
         quote! {
-            impl<'a> core::convert::TryFrom<&'a str> for #name {
-                type Error = <Self as std::str::FromStr>::Err;
+            impl<'a> ::core::convert::TryFrom<&'a str> for #name {
+                type Error = <Self as ::std::str::FromStr>::Err;
 
                 fn try_from(s: &'a str) -> ::std::result::Result<Self, Self::Error> {
                     s.parse()
                 }
             }
 
-            impl std::str::FromStr for #name {
+            impl ::std::str::FromStr for #name {
                 type Err = dioxus_router::routable::RouteParseError<#error_name>;
 
                 fn from_str(s: &str) -> ::std::result::Result<Self, Self::Err> {
@@ -646,14 +646,14 @@ impl RouteEnum {
                 #(#error_variants),*
             }
 
-            impl std::fmt::Debug for #match_error_name {
-                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            impl ::std::fmt::Debug for #match_error_name {
+                fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
                     write!(f, "{}({})", stringify!(#match_error_name), self)
                 }
             }
 
-            impl std::fmt::Display for #match_error_name {
-                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            impl ::std::fmt::Display for #match_error_name {
+                fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
                     match self {
                         #(#display_match),*
                     }

@@ -1,5 +1,6 @@
 use crate::{
     config::{Config, WindowCloseBehaviour},
+    edits::EditWebsocket,
     event_handlers::WindowEventHandlers,
     file_upload::{DesktopFileUploadForm, FileDialogRequest, NativeFileEngine},
     ipc::{IpcMessage, UserWindowEvent},
@@ -22,7 +23,7 @@ use tao::{
     dpi::PhysicalSize,
     event::Event,
     event_loop::{ControlFlow, EventLoop, EventLoopBuilder, EventLoopProxy, EventLoopWindowTarget},
-    window::{Window, WindowId},
+    window::WindowId,
 };
 
 /// The single top-level object that manages all the running windows, assets, shortcuts, etc
@@ -35,7 +36,7 @@ pub(crate) struct App {
     // Stuff we need mutable access to
     pub(crate) control_flow: ControlFlow,
     pub(crate) is_visible_before_start: bool,
-    pub(crate) window_behavior: WindowCloseBehaviour,
+    pub(crate) exit_on_last_window_close: bool,
     pub(crate) webviews: HashMap<WindowId, WebviewInstance>,
     pub(crate) float_all: bool,
     pub(crate) show_devtools: bool,
@@ -53,6 +54,7 @@ pub(crate) struct SharedContext {
     pub(crate) shortcut_manager: ShortcutRegistry,
     pub(crate) proxy: EventLoopProxy<UserWindowEvent>,
     pub(crate) target: EventLoopWindowTarget<UserWindowEvent>,
+    pub(crate) websocket: EditWebsocket,
 }
 
 impl App {
@@ -63,7 +65,7 @@ impl App {
             .unwrap_or_else(|| EventLoopBuilder::<UserWindowEvent>::with_user_event().build());
 
         let app = Self {
-            window_behavior: cfg.last_window_close_behavior,
+            exit_on_last_window_close: cfg.exit_on_last_window_close,
             is_visible_before_start: true,
             webviews: HashMap::new(),
             control_flow: ControlFlow::Wait,
@@ -77,6 +79,7 @@ impl App {
                 shortcut_manager: ShortcutRegistry::new(),
                 proxy: event_loop.create_proxy(),
                 target: event_loop.clone(),
+                websocket: EditWebsocket::start(),
             }),
         };
 
@@ -186,43 +189,36 @@ impl App {
     }
 
     pub fn handle_close_requested(&mut self, id: WindowId) {
-        use WindowCloseBehaviour::*;
+        let Some(window) = self.webviews.get(&id) else {
+            // If the window is not found, we can just return
+            return;
+        };
 
-        match self.window_behavior {
-            LastWindowExitsApp => {
+        match window.desktop_context.close_behaviour.get() {
+            // If the window is just set to hide when closed, we can just hide it
+            WindowCloseBehaviour::WindowHides => {
+                window.desktop_context.window.set_visible(false);
+            }
+
+            // If the window is set to close, we can remove it from the list of webviews
+            // If the app is set to exit when the last window closes, we should also exit the app
+            WindowCloseBehaviour::WindowCloses => {
                 #[cfg(debug_assertions)]
                 self.persist_window_state();
 
                 self.webviews.remove(&id);
-                if self.webviews.is_empty() {
+
+                if self.exit_on_last_window_close && self.webviews.is_empty() {
                     self.control_flow = ControlFlow::Exit
                 }
             }
-
-            LastWindowHides if self.webviews.len() > 1 => {
-                self.webviews.remove(&id);
-            }
-
-            LastWindowHides => {
-                if let Some(webview) = self.webviews.get(&id) {
-                    hide_last_window(&webview.desktop_context.window);
-                }
-            }
-
-            CloseWindow => {
-                self.webviews.remove(&id);
-            }
-        }
+        };
     }
 
     pub fn window_destroyed(&mut self, id: WindowId) {
         self.webviews.remove(&id);
 
-        if matches!(
-            self.window_behavior,
-            WindowCloseBehaviour::LastWindowExitsApp
-        ) && self.webviews.is_empty()
-        {
+        if self.exit_on_last_window_close && self.webviews.is_empty() {
             self.control_flow = ControlFlow::Exit
         }
     }
@@ -272,8 +268,8 @@ impl App {
         if let Some(temp) = msg.params().as_object() {
             if temp.contains_key("href") {
                 if let Some(href) = temp.get("href").and_then(|v| v.as_str()) {
-                    if let Err(e) = open::that_detached(href) {
-                        tracing::error!("Open Browser error: {:?}", e);
+                    if let Err(err) = webbrowser::open(href) {
+                        tracing::error!("Failed to open URL: {}", err);
                     }
                 }
             }
@@ -532,19 +528,25 @@ impl App {
             let Ok(position) = window.outer_position() else {
                 return;
             };
+            let (x, y) = if cfg!(target_os = "macos") {
+                let position = position.to_logical::<i32>(window.scale_factor());
+                (position.x, position.y)
+            } else {
+                (position.x, position.y)
+            };
 
-            let size = window.outer_size();
-
-            let x = position.x;
-            let y = position.y;
-
-            // This is to work around a bug in how tao handles inner_size on macOS
-            // We *want* to use inner_size, but that's currently broken, so we use outer_size instead and then an adjustment
-            //
-            // https://github.com/tauri-apps/tao/issues/889
-            let adjustment = match window.is_decorated() {
-                true if cfg!(target_os = "macos") => 56,
-                _ => 0,
+            let (width, height) = if cfg!(target_os = "macos") {
+                let size = window.outer_size();
+                let size = size.to_logical::<u32>(window.scale_factor());
+                // This is to work around a bug in how tao handles inner_size on macOS
+                // We *want* to use inner_size, but that's currently broken, so we use outer_size instead and then an adjustment
+                //
+                // https://github.com/tauri-apps/tao/issues/889
+                let adjustment = if window.is_decorated() { 28 } else { 0 };
+                (size.width, size.height.saturating_sub(adjustment))
+            } else {
+                let size = window.inner_size();
+                (size.width, size.height)
             };
 
             let Some(monitor_name) = monitor.name() else {
@@ -561,8 +563,8 @@ impl App {
             let state = PreservedWindowState {
                 x,
                 y,
-                width: size.width.max(200),
-                height: size.height.saturating_sub(adjustment).max(200),
+                width: width.max(200),
+                height: height.max(200),
                 monitor: monitor_name.to_string(),
                 url: Some(url),
             };
@@ -599,14 +601,24 @@ impl App {
 
                 // Only set the outer position if it wasn't explicitly set
                 if explicit_window_position.is_none() {
-                    window.set_outer_position(tao::dpi::PhysicalPosition::new(
-                        position.0, position.1,
-                    ));
+                    if cfg!(target_os = "macos") {
+                        window.set_outer_position(tao::dpi::LogicalPosition::new(
+                            position.0, position.1,
+                        ));
+                    } else {
+                        window.set_outer_position(tao::dpi::PhysicalPosition::new(
+                            position.0, position.1,
+                        ));
+                    }
                 }
 
                 // Only set the inner size if it wasn't explicitly set
                 if explicit_inner_size.is_none() {
-                    window.set_inner_size(tao::dpi::PhysicalSize::new(size.0, size.1));
+                    if cfg!(target_os = "macos") {
+                        window.set_inner_size(tao::dpi::LogicalSize::new(size.0, size.1));
+                    } else {
+                        window.set_inner_size(tao::dpi::PhysicalSize::new(size.0, size.1));
+                    }
                 }
 
                 // Set the url if it exists
@@ -657,41 +669,6 @@ struct PreservedWindowState {
     height: u32,
     monitor: String,
     url: Option<String>,
-}
-
-/// Hide the last window when using LastWindowHides.
-///
-/// On macOS, if we use `set_visibility(false)` on the window, it will hide the window but not show
-/// it again when the user switches back to the app. `NSApplication::hide:` has the correct behaviour,
-/// so we need to special case it.
-#[allow(unused)]
-fn hide_last_window(window: &Window) {
-    #[cfg(target_os = "windows")]
-    {
-        use tao::platform::windows::WindowExtWindows;
-        window.set_visible(false);
-    }
-
-    #[cfg(target_os = "linux")]
-    {
-        use tao::platform::unix::WindowExtUnix;
-        window.set_visible(false);
-    }
-
-    #[cfg(target_os = "macos")]
-    {
-        // window.set_visible(false); has the wrong behaviour on macOS
-        // It will hide the window but not show it again when the user switches
-        // back to the app. `NSApplication::hide:` has the correct behaviour
-        use objc::runtime::Object;
-        use objc::{msg_send, sel, sel_impl};
-        #[allow(unexpected_cfgs)]
-        objc::rc::autoreleasepool(|| unsafe {
-            let app: *mut Object = msg_send![objc::class!(NSApplication), sharedApplication];
-            let nil = std::ptr::null_mut::<Object>();
-            let _: () = msg_send![app, hide: nil];
-        });
-    }
 }
 
 /// Return the location of a tempfile with our window state in it such that we can restore it later

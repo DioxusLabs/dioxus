@@ -1,6 +1,6 @@
 use dioxus_core::internal::HotReloadedTemplate;
 use dioxus_core::{ScopeId, VirtualDom};
-use dioxus_signals::{GlobalKey, Signal, Writable};
+use dioxus_signals::{GlobalKey, Signal, WritableExt};
 
 pub use dioxus_devtools_types::*;
 pub use subsecond;
@@ -44,7 +44,7 @@ pub fn try_apply_changes(dom: &VirtualDom, msg: &HotReloadMsg) -> Result<(), Pat
 
                 if msg.for_pid == our_pid {
                     unsafe { subsecond::apply_patch(jump_table) }?;
-                    dioxus_core::prelude::force_all_dirty();
+                    dioxus_core::force_all_dirty();
                     ctx.clear::<Signal<Option<HotReloadedTemplate>>>();
                 }
             }

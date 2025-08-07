@@ -47,6 +47,7 @@ impl AtomicResponsePartsModified {
 ///
 /// ```rust, no_run
 /// # use dioxus::prelude::*;
+/// use dioxus_server::server_context;
 /// #[server]
 /// async fn read_headers() -> ServerFnResult {
 ///     let server_context = server_context();
@@ -126,7 +127,7 @@ mod server_fn_impl {
             }
         }
 
-        /// Clone a value from the shared server context. If you are using [`DioxusRouterExt`](crate::prelude::DioxusRouterExt), any values you insert into
+        /// Clone a value from the shared server context. If you are using [`DioxusRouterExt`](crate::DioxusRouterExt), any values you insert into
         /// the launch context will also be available in the server context.
         ///
         /// Example:
@@ -200,6 +201,7 @@ mod server_fn_impl {
         ///
         /// ```rust, no_run
         /// # use dioxus::prelude::*;
+        /// use dioxus_server::server_context;
         /// #[server]
         /// async fn set_headers() -> ServerFnResult {
         ///     let server_context = server_context();
@@ -224,6 +226,7 @@ mod server_fn_impl {
         ///
         /// ```rust, no_run
         /// # use dioxus::prelude::*;
+        /// use dioxus_server::server_context;
         /// #[server]
         /// async fn set_headers() -> ServerFnResult {
         ///     let server_context = server_context();
@@ -246,6 +249,7 @@ mod server_fn_impl {
         ///
         /// ```rust, no_run
         /// # use dioxus::prelude::*;
+        /// use dioxus_server::server_context;
         /// #[server]
         /// async fn set_status() -> ServerFnResult {
         ///     let server_context = server_context();
@@ -267,6 +271,7 @@ mod server_fn_impl {
         ///
         /// ```rust, no_run
         /// # use dioxus::prelude::*;
+        /// use dioxus_server::server_context;
         /// #[server]
         /// async fn set_version() -> ServerFnResult {
         ///     let server_context = server_context();
@@ -288,6 +293,7 @@ mod server_fn_impl {
         ///
         /// ```rust, no_run
         /// # use dioxus::prelude::*;
+        /// use dioxus_server::server_context;
         /// #[server]
         /// async fn set_version() -> ServerFnResult {
         ///     let server_context = server_context();
@@ -322,6 +328,7 @@ mod server_fn_impl {
         ///
         /// ```rust, no_run
         /// # use dioxus::prelude::*;
+        /// use dioxus_server::server_context;
         /// #[server]
         /// async fn read_headers() -> ServerFnResult {
         ///     let server_context = server_context();
@@ -346,6 +353,7 @@ mod server_fn_impl {
         ///
         /// ```rust, no_run
         /// # use dioxus::prelude::*;
+        /// use dioxus_server::server_context;
         /// #[server]
         /// async fn read_headers() -> ServerFnResult {
         ///     let server_context = server_context();
@@ -369,6 +377,7 @@ mod server_fn_impl {
         ///
         /// ```rust, no_run
         /// # use dioxus::prelude::*;
+        /// use dioxus_server::server_context;
         /// #[server]
         /// async fn read_headers() -> ServerFnResult {
         ///     let server_context = server_context();

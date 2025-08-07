@@ -1,6 +1,6 @@
 use crate::{
-    serve::{ansi_buffer::AnsiStringLine, ServeUpdate, WebServer},
-    BuildId, BuildStage, BuilderUpdate, Platform, TraceContent, TraceMsg, TraceSrc,
+    serve::{ansi_buffer::ansi_string_to_line, ServeUpdate, WebServer},
+    BuildId, BuildStage, BuilderUpdate, BundleFormat, TraceContent, TraceMsg, TraceSrc,
 };
 use cargo_metadata::diagnostic::Diagnostic;
 use crossterm::{
@@ -29,7 +29,7 @@ use tracing::Level;
 use super::AppServer;
 
 const TICK_RATE_MS: u64 = 100;
-const VIEWPORT_MAX_WIDTH: u16 = 100;
+const VIEWPORT_MAX_WIDTH: u16 = 90;
 const VIEWPORT_HEIGHT_SMALL: u16 = 5;
 const VIEWPORT_HEIGHT_BIG: u16 = 13;
 
@@ -204,7 +204,7 @@ impl Output {
                 Ok(Some(update)) => return update,
                 Err(ee) => {
                     return ServeUpdate::Exit {
-                        error: Some(Box::new(ee)),
+                        error: Some(anyhow::anyhow!(ee)),
                     }
                 }
                 Ok(None) => {}
@@ -316,12 +316,12 @@ impl Output {
     /// Add a message from stderr to the logs
     /// This will queue the stderr message as a TraceMsg and print it on the next render
     /// We'll use the `App` TraceSrc for the msg, and whatever level is provided
-    pub fn push_stdio(&mut self, platform: Platform, msg: String, level: Level) {
-        self.push_log(TraceMsg::text(TraceSrc::App(platform), level, msg));
+    pub fn push_stdio(&mut self, bundle: BundleFormat, msg: String, level: Level) {
+        self.push_log(TraceMsg::text(TraceSrc::App(bundle), level, msg));
     }
 
     /// Push a message from the websocket to the logs
-    pub fn push_ws_message(&mut self, platform: Platform, message: &axum::extract::ws::Message) {
+    pub fn push_ws_message(&mut self, bundle: BundleFormat, message: &axum::extract::ws::Message) {
         use dioxus_devtools_types::ClientMsg;
 
         // We can only handle text messages from the websocket...
@@ -336,7 +336,7 @@ impl Output {
         let msg = match res {
             Ok(msg) => msg,
             Err(err) => {
-                tracing::error!(dx_src = ?TraceSrc::Dev, "Error parsing message from {}: {} -> {:?}", platform, err, text.as_str());
+                tracing::error!(dx_src = ?TraceSrc::Dev, "Error parsing message from {}: {} -> {:?}", bundle, err, text.as_str());
                 return;
             }
         };
@@ -358,7 +358,7 @@ impl Output {
         };
 
         // We don't care about logging the app's message so we directly push it instead of using tracing.
-        self.push_log(TraceMsg::text(TraceSrc::App(platform), level, content));
+        self.push_log(TraceMsg::text(TraceSrc::App(bundle), level, content));
     }
 
     /// Change internal state based on the build engine's update
@@ -641,7 +641,7 @@ impl Output {
         frame.render_widget(
             Paragraph::new(Line::from(vec![
                 "Platform: ".gray(),
-                client.build.platform.expected_name().yellow(),
+                client.build.bundle.expected_name().yellow(),
                 if state.runner.is_fullstack() {
                     " + fullstack".yellow()
                 } else {
@@ -672,10 +672,10 @@ impl Output {
 
         frame.render_widget_ref(
             Paragraph::new(Line::from(vec![
-                if client.build.platform == Platform::Web {
+                if client.build.bundle == BundleFormat::Web {
                     "Serving at: ".gray()
                 } else {
-                    "ServerFns at: ".gray()
+                    "Server at: ".gray()
                 },
                 address,
             ])),
@@ -755,7 +755,7 @@ impl Output {
         );
 
         let server_address = match state.server.server_address() {
-            Some(address) => format!("http://{}", address).yellow(),
+            Some(address) => format!("http://{address}").yellow(),
             None => "no address".dark_gray(),
         };
         frame.render_widget(
@@ -770,7 +770,7 @@ impl Output {
             frame.render_widget(
                 Paragraph::new(Line::from(vec![
                     "Read the docs: ".gray(),
-                    "https://dioxuslabs.com/0.6/docs".blue(),
+                    "https://dioxuslabs.com/learn/0.7/".blue(),
                 ])),
                 links_list[0],
             );
@@ -1022,13 +1022,7 @@ impl Output {
                     line = line.dark_gray();
                 }
 
-                // Create the ansi -> raw string line with a width of either the viewport width or the max width
-                let line_length = line.styled_graphemes(Style::default()).count();
-                if line_length < u16::MAX as usize {
-                    lines.push(AnsiStringLine::new(line_length as _).render(&line));
-                } else {
-                    lines.push(line.to_string())
-                }
+                lines.push(ansi_string_to_line(line));
             }
         }
 

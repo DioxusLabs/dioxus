@@ -134,7 +134,7 @@ async fn add_body_element() {
     let output_box = document.get_element_by_id("output-box").unwrap_throw();
     output_box.append_child(&output).unwrap_throw();
 
-    dioxus::prelude::queue_effect(move || {
+    dioxus::core::queue_effect(move || {
         web_sys::console::log_1(&"add body async internal!".into());
         *GLOBAL_COUNTER.write() += 2;
     });
@@ -146,7 +146,7 @@ async fn gzip_it() {
     let reader = Box::pin(futures::io::BufReader::new(DATA));
     let reader: Pin<Box<dyn futures::io::AsyncBufRead>> = reader;
 
-    dioxus::prelude::spawn(async move {
+    dioxus::core::spawn(async move {
         let mut fut = Box::pin(async_compression::futures::bufread::GzipDecoder::new(
             reader,
         ));
@@ -177,7 +177,7 @@ async fn brotli_it(data: &'static [u8]) {
     let reader = Box::pin(futures::io::BufReader::new(data));
     let reader: Pin<Box<dyn futures::io::AsyncBufRead>> = reader;
 
-    dioxus::prelude::spawn(async move {
+    dioxus::core::spawn(async move {
         let mut fut = Box::pin(async_compression::futures::bufread::BrotliDecoder::new(
             reader,
         ));
@@ -274,7 +274,7 @@ fn ChildSplit() -> Element {
             button {
                 onclick: move |_| {
                     set_stars("stars".to_string(), num + 1);
-                    dioxus::prelude::needs_update();
+                    dioxus::core::needs_update();
                 },
                 "Add Star"
             }

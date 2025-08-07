@@ -1,5 +1,8 @@
 use crate::cli::*;
+use crate::BundleFormat;
 use crate::Platform;
+use crate::RendererArg;
+use crate::TargetAlias;
 use target_lexicon::Triple;
 
 const HELP_HEADING: &str = "Target Options";
@@ -7,7 +10,25 @@ const HELP_HEADING: &str = "Target Options";
 /// A single target to build for
 #[derive(Clone, Debug, Default, Deserialize, Parser)]
 pub(crate) struct TargetArgs {
-    /// Build platform: support Web & Desktop [default: "default_platform"]
+    /// The target alias to use for this build. Supports wasm, macos, windows, linux, ios, android, and host [default: "host"]
+    #[clap(flatten)]
+    pub(crate) target_alias: TargetAlias,
+
+    /// Build renderer: supports web, webview, native, server, and liveview
+    #[clap(flatten)]
+    pub(crate) renderer: RendererArg,
+
+    /// The bundle format to target for the build: supports web, macos, windows, linux, ios, android, and server
+    #[clap(long, value_enum, help_heading = HELP_HEADING)]
+    pub(crate) bundle: Option<BundleFormat>,
+
+    /// Build platform: supports Web, MacOS, Windows, Linux, iOS, Android, and Server
+    ///
+    /// The platform implies a combination of the target alias, renderer, and bundle format flags.
+    ///
+    /// You should generally prefer to use the `--web`, `--webview`, or `--native` flags to set the renderer
+    /// or the `--wasm`, `--macos`, `--windows`, `--linux`, `--ios`, or `--android` flags to set the target alias
+    /// instead of this flag. The renderer, target alias, and bundle format will be inferred if you only pass one.
     #[clap(long, value_enum, help_heading = HELP_HEADING)]
     pub(crate) platform: Option<Platform>,
 
@@ -73,7 +94,7 @@ pub(crate) struct TargetArgs {
     pub(crate) skip_assets: bool,
 
     /// Inject scripts to load the wasm and js files for your dioxus app if they are not already present [default: true]
-    #[clap(long, default_value_t = true, help_heading = HELP_HEADING)]
+    #[clap(long, default_value_t = true, help_heading = HELP_HEADING, num_args = 0..=1)]
     pub(crate) inject_loading_scripts: bool,
 
     /// Experimental: Bundle split the wasm binary into multiple chunks based on `#[wasm_split]` annotations [default: false]
@@ -84,13 +105,13 @@ pub(crate) struct TargetArgs {
     ///
     /// This will make the binary larger and take longer to compile, but will allow you to debug the
     /// wasm binary
-    #[clap(long, default_value_t = true, help_heading = HELP_HEADING)]
+    #[clap(long, default_value_t = true, help_heading = HELP_HEADING, num_args = 0..=1)]
     pub(crate) debug_symbols: bool,
 
     /// Are we building for a device or just the simulator.
     /// If device is false, then we'll build for the simulator
-    #[clap(long, help_heading = HELP_HEADING)]
-    pub(crate) device: Option<bool>,
+    #[clap(long, default_value_t = false, help_heading = HELP_HEADING)]
+    pub(crate) device: bool,
 
     /// The base path the build will fetch assets relative to. This will override the
     /// base path set in the `dioxus` config.

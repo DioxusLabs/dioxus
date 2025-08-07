@@ -45,18 +45,18 @@ use linker::generate_link_section;
 /// ```
 /// Resize the image at compile time to make the assets file size smaller:
 /// ```rust
-/// # use manganis::{asset, Asset, ImageAssetOptions, ImageSize};
-/// const _: Asset = asset!("/assets/image.png", ImageAssetOptions::new().with_size(ImageSize::Manual { width: 52, height: 52 }));
+/// # use manganis::{asset, Asset, AssetOptions, ImageSize};
+/// const _: Asset = asset!("/assets/image.png", AssetOptions::image().with_size(ImageSize::Manual { width: 52, height: 52 }));
 /// ```
 /// Or convert the image at compile time to a web friendly format:
 /// ```rust
-/// # use manganis::{asset, Asset, ImageAssetOptions, ImageSize, ImageFormat};
-/// const _: Asset = asset!("/assets/image.png", ImageAssetOptions::new().with_format(ImageFormat::Avif));
+/// # use manganis::{asset, Asset, AssetOptions, ImageSize, ImageFormat};
+/// const _: Asset = asset!("/assets/image.png", AssetOptions::image().with_format(ImageFormat::Avif));
 /// ```
 /// You can mark images as preloaded to make them load faster in your app
 /// ```rust
-/// # use manganis::{asset, Asset, ImageAssetOptions};
-/// const _: Asset = asset!("/assets/image.png", ImageAssetOptions::new().with_preload(true));
+/// # use manganis::{asset, Asset, AssetOptions};
+/// const _: Asset = asset!("/assets/image.png", AssetOptions::image().with_preload(true));
 /// ```
 #[proc_macro]
 pub fn asset(input: TokenStream) -> TokenStream {
@@ -77,8 +77,8 @@ pub fn asset(input: TokenStream) -> TokenStream {
 /// - The asset string path. This is the absolute path (from the crate root) to your CSS module.
 /// - An optional `CssModuleAssetOptions` struct to configure the processing of your CSS module.
 ///
-/// ```rust
-/// css_module!(StylesIdent = "/my.module.css", CssModuleAssetOptions::new());
+/// ```rust, ignore
+/// css_module!(StylesIdent = "/my.module.css", AssetOptions::css_module());
 /// ```
 ///
 /// The styles struct can be made public by appending `pub` before the identifier.
@@ -90,7 +90,7 @@ pub fn asset(input: TokenStream) -> TokenStream {
 /// - It generates an asset using the `asset!()` macro and automatically inserts it into the app meta.
 /// - It generates a struct with snake-case associated constants of your CSS idents.
 ///
-/// ```rust
+/// ```rust, ignore
 /// // This macro usage:
 /// css_module!(Styles = "/mycss.module.css");
 ///
@@ -99,7 +99,7 @@ pub fn asset(input: TokenStream) -> TokenStream {
 ///
 /// impl Styles {
 ///     // This can be accessed with `Styles::your_ident`
-///     pub const your_ident: &str = "abc",
+///     pub const your_ident: &str = "abc";
 /// }
 /// ```
 ///
@@ -121,17 +121,17 @@ pub fn asset(input: TokenStream) -> TokenStream {
 /// # Variable Visibility
 /// If you want your asset or styles constant to be public, you can add the `pub` keyword in front of them.
 /// Restricted visibility (`pub(super)`, `pub(crate)`, etc) is also supported.
-/// ```rust
+/// ```rust, ignore
 /// css_module!(pub Styles = "/mycss.module.css");
 /// ```
 ///
 /// # Asset Options
 /// Similar to the  `asset!()` macro, you can pass an optional `CssModuleAssetOptions` to configure a few processing settings.
-/// ```rust
+/// ```rust, ignore
 /// use manganis::CssModuleAssetOptions;
 ///
 /// css_module!(Styles = "/mycss.module.css",
-///     CssModuleAssetOptions::new()
+///     AssetOptions::css_module()
 ///         .with_minify(true)
 ///         .with_preload(false),
 /// );
@@ -155,7 +155,7 @@ pub fn asset(input: TokenStream) -> TokenStream {
 /// }
 /// ```
 /// Then you can use the `css_module!()` macro in your Rust project:
-/// ```rust
+/// ```rust, ignore
 /// css_module!(Styles = "/mycss.module.css");
 ///
 /// println!("{}", Styles::header);

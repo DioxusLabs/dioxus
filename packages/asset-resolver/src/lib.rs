@@ -14,7 +14,16 @@ pub enum AssetServeError {
     ResponseError(#[from] http::Error),
 }
 
-pub fn serve_asset_from_raw_path(path: &str) -> Result<Response<Vec<u8>>, AssetServeError> {
+/// Serve an asset from the filesystem or a custom asset handler.
+///
+/// This method properly accesses the asset directory based on the platform and serves the asset
+/// wrapped in an HTTP response.
+///
+/// Platform specifics:
+/// - On the web, this returns AssetServerError since there's no filesystem access. Use `fetch` instead.
+/// - On Android, it attempts to load assets using the Android AssetManager.
+/// - On other platforms, it serves assets from the filesystem.
+pub fn serve_asset(path: &str) -> Result<Response<Vec<u8>>, AssetServeError> {
     // If the user provided a custom asset handler, then call it and return the response if the request was handled.
     // The path is the first part of the URI, so we need to trim the leading slash.
     let mut uri_path = PathBuf::from(
@@ -71,7 +80,7 @@ pub fn serve_asset_from_raw_path(path: &str) -> Result<Response<Vec<u8>>, AssetS
 /// - [x] Windows
 /// - [x] Linux (appimage)
 /// - [ ] Linux (rpm)
-/// - [ ] Linux (deb)
+/// - [x] Linux (deb)
 /// - [ ] Android
 #[allow(unreachable_code)]
 fn get_asset_root() -> PathBuf {
@@ -85,6 +94,25 @@ fn get_asset_root() -> PathBuf {
             .parent()
             .unwrap()
             .join("Resources");
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        // In linux bundles, the assets are placed in the lib/$product_name directory
+        // bin/
+        //   main
+        // lib/
+        //   $product_name/
+        //     assets/
+        if let Some(product_name) = dioxus_cli_config::product_name() {
+            let lib_asset_path = || {
+                let path = cur_exe.parent()?.parent()?.join("lib").join(product_name);
+                path.exists().then_some(path)
+            };
+            if let Some(asset_dir) = lib_asset_path() {
+                return asset_dir;
+            }
+        }
     }
 
     // For all others, the structure looks like this:

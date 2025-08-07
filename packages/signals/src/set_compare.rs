@@ -1,21 +1,19 @@
-use crate::write::Writable;
+use crate::{write::WritableExt, ReadableExt};
 use std::hash::Hash;
 
-use crate::read::Readable;
-use dioxus_core::prelude::*;
+use dioxus_core::ReactiveContext;
 use futures_util::StreamExt;
 use generational_box::{Storage, UnsyncStorage};
 
-use crate::{CopyValue, ReadOnlySignal, Signal, SignalData};
+use crate::{CopyValue, ReadSignal, Signal, SignalData};
 use rustc_hash::FxHashMap;
 
 /// An object that can efficiently compare a value to a set of values.
-#[derive(Debug)]
-pub struct SetCompare<R: 'static, S: Storage<SignalData<bool>> = UnsyncStorage> {
+pub struct SetCompare<R, S: 'static = UnsyncStorage> {
     subscribers: CopyValue<FxHashMap<R, Signal<bool, S>>>,
 }
 
-impl<R: Eq + Hash> SetCompare<R> {
+impl<R: Eq + Hash + 'static> SetCompare<R> {
     /// Creates a new [`SetCompare`] which efficiently tracks when a value changes to check if it is equal to a set of values.
     ///
     /// Generally, you shouldn't need to use this hook. Instead you can use [`crate::Memo`]. If you have many values that you need to compare to a single value, this hook will change updates from O(n) to O(1) where n is the number of values you are comparing to.
@@ -25,13 +23,13 @@ impl<R: Eq + Hash> SetCompare<R> {
     }
 }
 
-impl<R: Eq + Hash, S: Storage<SignalData<bool>>> SetCompare<R, S> {
+impl<R: Eq + Hash + 'static, S: Storage<SignalData<bool>> + 'static> SetCompare<R, S> {
     /// Creates a new [`SetCompare`] that may be `Sync + Send` which efficiently tracks when a value changes to check if it is equal to a set of values.
     ///
     /// Generally, you shouldn't need to use this hook. Instead you can use [`crate::Memo`]. If you have many values that you need to compare to a single value, this hook will change updates from O(n) to O(1) where n is the number of values you are comparing to.
     #[track_caller]
-    pub fn new_maybe_sync(mut f: impl FnMut() -> R + 'static) -> SetCompare<R> {
-        let subscribers: CopyValue<FxHashMap<R, Signal<bool>>> =
+    pub fn new_maybe_sync(mut f: impl FnMut() -> R + 'static) -> SetCompare<R, S> {
+        let subscribers: CopyValue<FxHashMap<R, Signal<bool, S>>> =
             CopyValue::new(FxHashMap::default());
         let mut previous = CopyValue::new(None);
 
@@ -54,7 +52,7 @@ impl<R: Eq + Hash, S: Storage<SignalData<bool>>> SetCompare<R, S> {
             *previous = Some(current);
         };
         let (rc, mut changed) = ReactiveContext::new();
-        spawn(async move {
+        dioxus_core::spawn(async move {
             loop {
                 // Recompute the value
                 rc.reset_and_run_in(&mut recompute);
@@ -66,9 +64,11 @@ impl<R: Eq + Hash, S: Storage<SignalData<bool>>> SetCompare<R, S> {
 
         SetCompare { subscribers }
     }
+}
 
+impl<R: Eq + Hash + 'static> SetCompare<R> {
     /// Returns a signal which is true when the value is equal to the value passed to this function.
-    pub fn equal(&mut self, value: R) -> ReadOnlySignal<bool, S> {
+    pub fn equal(&mut self, value: R) -> ReadSignal<bool> {
         let subscribers = self.subscribers.write();
 
         match subscribers.get(&value) {
@@ -84,7 +84,7 @@ impl<R: Eq + Hash, S: Storage<SignalData<bool>>> SetCompare<R, S> {
     }
 }
 
-impl<R: 'static, S: Storage<SignalData<bool>>> PartialEq for SetCompare<R, S> {
+impl<R, S: Storage<SignalData<bool>>> PartialEq for SetCompare<R, S> {
     fn eq(&self, other: &Self) -> bool {
         self.subscribers == other.subscribers
     }

@@ -1,7 +1,4 @@
-use dioxus_core::{
-    prelude::{consume_context, provide_context, try_consume_context},
-    use_hook,
-};
+use dioxus_core::{consume_context, provide_context, try_consume_context, use_hook};
 
 /// Consume some context in the tree, providing a sharable handle to the value
 ///

@@ -5,10 +5,8 @@
 // - Hydration
 
 #![allow(non_snake_case)]
-use dioxus::prelude::{
-    server_fn::{codec::JsonEncoding, BoxedStream, Websocket},
-    *,
-};
+use dioxus::fullstack::{codec::JsonEncoding, commit_initial_chunk, BoxedStream, Websocket};
+use dioxus::prelude::*;
 use futures::{channel::mpsc, SinkExt, StreamExt};
 
 fn main() {
@@ -77,6 +75,7 @@ fn DefaultServerFnCodec() -> Element {
 
 #[cfg(feature = "server")]
 async fn assert_server_context_provided() {
+    use dioxus::server::{extract, FromContext};
     let FromContext(i): FromContext<u32> = extract().await.unwrap();
     assert_eq!(i, 1234u32);
 }
@@ -164,18 +163,20 @@ fn DocumentElements() -> Element {
 /// Make sure assets in the assets folder are served correctly and hashed assets are cached forever
 #[component]
 fn Assets() -> Element {
+    #[used]
+    static _ASSET: Asset = asset!("/assets/image.png");
+    #[used]
+    static _OTHER_ASSET: Asset = asset!("/assets/nested");
     rsx! {
         img {
             src: asset!("/assets/image.png"),
         }
-        // TODO: raw assets support was removed and needs to be restored
-        // https://github.com/DioxusLabs/dioxus/issues/4115
-        // img {
-        //     src: "/assets/image.png",
-        // }
-        // img {
-        //     src: "/assets/nested/image.png",
-        // }
+        img {
+            src: "/assets/image.png",
+        }
+        img {
+            src: "/assets/nested/image.png",
+        }
     }
 }
 

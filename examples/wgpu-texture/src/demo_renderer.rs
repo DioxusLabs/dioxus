@@ -1,10 +1,16 @@
 // Copyright © SixtyFPS GmbH <info@slint.dev>
 // SPDX-License-Identifier: MIT
 use crate::Color;
-use dioxus_native::{CustomPaintCtx, CustomPaintSource, TextureHandle};
+use dioxus_native::{CustomPaintCtx, CustomPaintSource, DeviceHandle, TextureHandle};
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::time::Instant;
-use wgpu::{Device, Queue};
+use wgpu::{
+    CommandEncoderDescriptor, Device, Extent3d, FragmentState, Instance, LoadOp, MultisampleState,
+    Operations, PipelineLayoutDescriptor, PrimitiveState, PushConstantRange, Queue,
+    RenderPassColorAttachment, RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor,
+    ShaderModuleDescriptor, ShaderSource, ShaderStages, StoreOp, Texture, TextureDescriptor,
+    TextureDimension, TextureFormat, TextureUsages, TextureViewDescriptor, VertexState,
+};
 
 pub struct DemoPaintSource {
     state: DemoRendererState,
@@ -15,8 +21,10 @@ pub struct DemoPaintSource {
 }
 
 impl CustomPaintSource for DemoPaintSource {
-    fn resume(&mut self, device: &Device, queue: &Queue) {
-        // TODO: work out what to do about width/height
+    fn resume(&mut self, _instance: &Instance, device_handle: &DeviceHandle) {
+        // Extract device and queue from device_handle
+        let device = &device_handle.device;
+        let queue = &device_handle.queue;
         let active_state = ActiveDemoRenderer::new(device, queue);
         self.state = DemoRendererState::Active(Box::new(active_state));
     }
@@ -49,14 +57,14 @@ enum DemoRendererState {
 
 #[derive(Clone)]
 struct TextureAndHandle {
-    texture: wgpu::Texture,
+    texture: Texture,
     handle: TextureHandle,
 }
 
 struct ActiveDemoRenderer {
-    device: wgpu::Device,
-    queue: wgpu::Queue,
-    pipeline: wgpu::RenderPipeline,
+    device: Device,
+    queue: Queue,
+    pipeline: RenderPipeline,
     displayed_texture: Option<TextureAndHandle>,
     next_texture: Option<TextureAndHandle>,
 }
@@ -111,40 +119,38 @@ impl DemoPaintSource {
 
 impl ActiveDemoRenderer {
     pub(crate) fn new(device: &Device, queue: &Queue) -> Self {
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        let shader = device.create_shader_module(ShaderModuleDescriptor {
             label: None,
-            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!(
-                "shader.wgsl"
-            ))),
+            source: ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!("shader.wgsl"))),
         });
 
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: &[],
-            push_constant_ranges: &[wgpu::PushConstantRange {
-                stages: wgpu::ShaderStages::FRAGMENT,
+            push_constant_ranges: &[PushConstantRange {
+                stages: ShaderStages::FRAGMENT,
                 range: 0..16, // full size in bytes, aligned
             }],
         });
 
-        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        let pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
             label: None,
             layout: Some(&pipeline_layout),
-            vertex: wgpu::VertexState {
+            vertex: VertexState {
                 module: &shader,
                 entry_point: Some("vs_main"),
                 buffers: &[],
                 compilation_options: Default::default(),
             },
-            fragment: Some(wgpu::FragmentState {
+            fragment: Some(FragmentState {
                 module: &shader,
                 entry_point: Some("fs_main"),
                 compilation_options: Default::default(),
-                targets: &[Some(wgpu::TextureFormat::Rgba8Unorm.into())],
+                targets: &[Some(TextureFormat::Rgba8Unorm.into())],
             }),
-            primitive: wgpu::PrimitiveState::default(),
+            primitive: PrimitiveState::default(),
             depth_stencil: None,
-            multisample: wgpu::MultisampleState::default(),
+            multisample: MultisampleState::default(),
             multiview: None,
             cache: None,
         });
@@ -196,16 +202,16 @@ impl ActiveDemoRenderer {
 
         let mut encoder = self
             .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+            .create_command_encoder(&CommandEncoderDescriptor { label: None });
         {
-            let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            let mut rpass = encoder.begin_render_pass(&RenderPassDescriptor {
                 label: None,
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &next_texture.create_view(&wgpu::TextureViewDescriptor::default()),
+                color_attachments: &[Some(RenderPassColorAttachment {
+                    view: &next_texture.create_view(&TextureViewDescriptor::default()),
                     resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::GREEN),
-                        store: wgpu::StoreOp::Store,
+                    ops: Operations {
+                        load: LoadOp::Clear(wgpu::Color::GREEN),
+                        store: StoreOp::Store,
                     },
                 })],
                 depth_stencil_attachment: None,
@@ -214,8 +220,8 @@ impl ActiveDemoRenderer {
             });
             rpass.set_pipeline(&self.pipeline);
             rpass.set_push_constants(
-                wgpu::ShaderStages::FRAGMENT, // Stage (your constants are for fragment shader)
-                0,                            // Offset in bytes (start at 0)
+                ShaderStages::FRAGMENT, // Stage (your constants are for fragment shader)
+                0,                      // Offset in bytes (start at 0)
                 bytemuck::bytes_of(&push_constants),
             );
             rpass.draw(0..3, 0..1);
@@ -234,21 +240,21 @@ struct PushConstants {
     light_color_and_time: [f32; 4],
 }
 
-fn create_texture(device: &wgpu::Device, width: u32, height: u32) -> wgpu::Texture {
-    device.create_texture(&wgpu::TextureDescriptor {
+fn create_texture(device: &Device, width: u32, height: u32) -> Texture {
+    device.create_texture(&TextureDescriptor {
         label: None,
-        size: wgpu::Extent3d {
+        size: Extent3d {
             width,
             height,
             depth_or_array_layers: 1,
         },
         mip_level_count: 1,
         sample_count: 1,
-        dimension: wgpu::TextureDimension::D2,
-        format: wgpu::TextureFormat::Rgba8Unorm,
-        usage: wgpu::TextureUsages::RENDER_ATTACHMENT
-            | wgpu::TextureUsages::TEXTURE_BINDING
-            | wgpu::TextureUsages::COPY_SRC,
+        dimension: TextureDimension::D2,
+        format: TextureFormat::Rgba8Unorm,
+        usage: TextureUsages::RENDER_ATTACHMENT
+            | TextureUsages::TEXTURE_BINDING
+            | TextureUsages::COPY_SRC,
         view_formats: &[],
     })
 }

@@ -1,3 +1,5 @@
+use crate::Result;
+use anyhow::Context;
 use itertools::Itertools;
 use std::{path::PathBuf, sync::Arc};
 use target_lexicon::{
@@ -170,6 +172,13 @@ impl AndroidTools {
         ))
     }
 
+    pub(crate) fn sysroot(&self) -> PathBuf {
+        // The sysroot is usually located in the NDK under:
+        // "~/Library/Android/sdk/ndk/25.2.9519653/toolchains/llvm/prebuilt/darwin-x86_64/sysroot"
+        // or similar, depending on the platform.
+        self.android_tools_dir().parent().unwrap().join("sysroot")
+    }
+
     pub(crate) fn sdk(&self) -> PathBuf {
         // /Users/jonathankelley/Library/Android/sdk/ndk/25.2/... (25.2 is the ndk here)
         // /Users/jonathankelley/Library/Android/sdk/
@@ -185,6 +194,21 @@ impl AndroidTools {
     // todo(jon): this should be configurable
     pub(crate) fn min_sdk_version(&self) -> u32 {
         24
+    }
+
+    pub(crate) fn clang_folder(&self) -> PathBuf {
+        // The clang folder is usually located in the NDK under:
+        // "~/Library/Android/sdk/ndk/25.2.9519653/toolchains/llvm/prebuilt/darwin-x86_64/lib/clang/<version>"
+        // or similar, depending on the platform.
+        self.android_tools_dir()
+            .parent()
+            .unwrap()
+            .join("lib")
+            .join("clang")
+    }
+
+    pub(crate) fn ranlib(&self) -> PathBuf {
+        self.android_tools_dir().join("llvm-ranlib")
     }
 
     pub(crate) fn ar_path(&self) -> PathBuf {
@@ -260,6 +284,74 @@ impl AndroidTools {
         };
 
         triple
+    }
+
+    pub(crate) fn libcpp_shared(&self, triple: &Triple) -> PathBuf {
+        // The libc++_shared.so is usually located in the sysroot under:
+        // "~/Library/Android/sdk/ndk/25.2.9519653/toolchains/llvm/prebuilt/darwin-x86_64/sysroot/usr/lib/<arch>/libc++_shared.so"
+        // or similar, depending on the platform.
+        self.sysroot()
+            .join("usr")
+            .join("lib")
+            .join(Self::sysroot_target(&triple.to_string()))
+            .join("libc++_shared.so")
+    }
+
+    pub(crate) fn sysroot_target(rust_target: &str) -> &str {
+        (match rust_target {
+            "armv7-linux-androideabi" => "arm-linux-androideabi",
+            _ => rust_target,
+        }) as _
+    }
+
+    pub(crate) fn openssl_prebuilt_aar() -> &'static [u8] {
+        include_bytes!("../../assets/android/prebuilt/openssl-1.1.1q-beta-1.tar.gz")
+    }
+
+    pub(crate) fn openssl_prebuilt_dest() -> PathBuf {
+        crate::Workspace::dioxus_data_dir()
+            .join("prebuilt")
+            .join("openssl-1.1.1q-beta-1")
+    }
+
+    pub(crate) fn openssl_lib_dir(arch: &Triple) -> PathBuf {
+        let libs_dir = Self::openssl_prebuilt_dest().join("ssl").join("libs");
+
+        match arch.architecture {
+            Architecture::Arm(_) => libs_dir.join("android.armeabi-v7a"),
+            Architecture::Aarch64(_) => libs_dir.join("android.arm64-v8a"),
+            Architecture::X86_32(_) => libs_dir.join("android.x86"),
+            Architecture::X86_64 => libs_dir.join("android.x86_64"),
+            _ => libs_dir.join("android.arm64-v8a"), // Default to arm64-v8a
+        }
+    }
+
+    pub(crate) fn openssl_include_dir() -> PathBuf {
+        Self::openssl_prebuilt_dest().join("ssl").join("include")
+    }
+
+    /// Unzip the prebuilt OpenSSL AAR file into the `.dx/prebuilt/openssl-<version>` directory
+    pub(crate) fn unpack_prebuilt_openssl() -> Result<()> {
+        let raw_aar = AndroidTools::openssl_prebuilt_aar();
+        let aar_dest = AndroidTools::openssl_prebuilt_dest();
+
+        if aar_dest.exists() {
+            tracing::trace!("Prebuilt OpenSSL already exists at {:?}", aar_dest);
+            return Ok(());
+        }
+
+        std::fs::create_dir_all(aar_dest.parent().context("no parent for aar")?)
+            .context("failed to create prebuilt OpenSSL directory")?;
+
+        // Unpack the entire tar.gz file into the destination directory
+        let mut archive = tar::Archive::new(flate2::read::GzDecoder::new(raw_aar as &[u8]));
+        archive
+            .unpack(aar_dest.parent().context("no parent for aar dest")?)
+            .context("failed to unpack prebuilt OpenSSL archive")?;
+
+        tracing::debug!("Unpacked prebuilt OpenSSL to {:?}", aar_dest);
+
+        Ok(())
     }
 }
 

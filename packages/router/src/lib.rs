@@ -56,6 +56,7 @@ pub mod hooks {
     pub use use_router::*;
 
     mod use_route;
+
     pub use use_route::*;
 
     mod use_navigator;
@@ -64,30 +65,25 @@ pub mod hooks {
 
 pub use hooks::router;
 
-/// A collection of useful items most applications might need.
-pub mod prelude {
-    #[cfg(feature = "html")]
-    pub use crate::components::{
-        GoBackButton, GoForwardButton, HistoryButtonProps, Link, LinkProps,
-    };
-    pub use crate::components::{Outlet, Router, RouterProps};
-    pub use crate::contexts::*;
-    pub use crate::hooks::*;
-    pub use crate::navigation::*;
-    pub use crate::routable::*;
-    pub use crate::router_cfg::RouterConfig;
-    pub use dioxus_router_macro::Routable;
+#[cfg(feature = "html")]
+pub use crate::components::{GoBackButton, GoForwardButton, HistoryButtonProps, Link, LinkProps};
+pub use crate::components::{Outlet, Router, RouterProps};
+pub use crate::contexts::*;
+pub use crate::hooks::*;
+pub use crate::navigation::*;
+pub use crate::routable::*;
+pub use crate::router_cfg::RouterConfig;
+pub use dioxus_router_macro::Routable;
 
-    #[doc(hidden)]
-    /// A component with props used in the macro
-    pub trait HasProps {
-        /// The props type of the component.
-        type Props;
-    }
+#[doc(hidden)]
+/// A component with props used in the macro
+pub trait HasProps {
+    /// The props type of the component.
+    type Props;
+}
 
-    impl<P> HasProps for dioxus_lib::prelude::Component<P> {
-        type Props = P;
-    }
+impl<P> HasProps for dioxus_core::Component<P> {
+    type Props = P;
 }
 
 mod utils {

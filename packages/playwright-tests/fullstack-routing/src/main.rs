@@ -36,6 +36,9 @@ enum Route {
 
 #[component]
 fn Blog(id: i32) -> Element {
+    let route: Route = use_route();
+    assert_eq!(route, Route::Blog { id });
+
     rsx! {
         Link { to: Route::Home {}, "Go home" }
         "id: {id}"
@@ -51,8 +54,12 @@ fn ThrowsError() -> Element {
 
 #[component]
 fn Home() -> Element {
+    let route: Route = use_route();
+    assert_eq!(route, Route::Home);
+
     rsx! {
         "Home"
+        Link { to: Route::Blog { id: 1 }, "Go to blog 1" }
     }
 }
 

@@ -1,9 +1,9 @@
 use super::{Global, InitializeFromFunction};
-use crate::read::Readable;
+use crate::read::ReadableExt;
 use crate::read_impls;
 use crate::Signal;
 
-impl<T> InitializeFromFunction<T> for Signal<T> {
+impl<T: 'static> InitializeFromFunction<T> for Signal<T> {
     fn initialize_from_function(f: fn() -> T) -> Self {
         Signal::new(f())
     }

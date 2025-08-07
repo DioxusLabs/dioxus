@@ -33,7 +33,7 @@ impl<R: LiveviewRouter> Config<R> {
     }
 
     /// Create a new configuration for the LiveView server.
-    pub fn with_app(mut self, app: fn() -> dioxus_core::prelude::Element) -> Self {
+    pub fn with_app(mut self, app: fn() -> dioxus_core::Element) -> Self {
         self.router = self.router.with_app(&self.route, app);
         self
     }

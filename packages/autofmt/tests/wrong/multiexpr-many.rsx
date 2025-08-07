@@ -199,20 +199,15 @@ fn app() -> Element {
                 }
             }
         }
-        {
-            exit_button(
-                Duration::from_secs(3),
-                |trigger, delay| rsx! {
-                    {
-                        format!(
-                            "{:0.1?}",
-                            trigger
-                                .read()
-                                .map(|inst| (delay.as_secs_f32() - inst.elapsed().as_secs_f32())),
-                        )
-                    }
-                },
-            )
-        }
+        {exit_button(Duration::from_secs(3), |trigger, delay| rsx! {
+            {
+                format!(
+                    "{:0.1?}",
+                    trigger
+                        .read()
+                        .map(|inst| (delay.as_secs_f32() - inst.elapsed().as_secs_f32())),
+                )
+            }
+        })}
     }
 }

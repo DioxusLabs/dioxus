@@ -1,7 +1,7 @@
 #![allow(non_upper_case_globals)]
 
-use dioxus_core::prelude::IntoAttributeValue;
 use dioxus_core::HasAttributes;
+use dioxus_core::IntoAttributeValue;
 #[cfg(feature = "hot-reload-context")]
 use dioxus_core_types::HotReloadingContext;
 use dioxus_html_internal_macro::impl_extension_attributes;

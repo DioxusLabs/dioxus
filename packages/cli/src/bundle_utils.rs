@@ -114,6 +114,7 @@ impl From<MacOsSettings> for tauri_bundler::MacOsSettings {
             files: val.files,
             hardened_runtime: val.hardened_runtime,
             bundle_version: val.bundle_version,
+            bundle_name: val.bundle_name,
         }
     }
 }

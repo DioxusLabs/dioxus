@@ -1,10 +1,10 @@
 use super::{AppBuilder, ServeUpdate, WebServer};
 use crate::{
     platform_override::CommandWithPlatformOverrides, BuildArtifacts, BuildId, BuildMode,
-    BuildTargets, BuilderUpdate, Error, HotpatchModuleCache, Platform, Result, ServeArgs,
-    TailwindCli, TraceSrc, Workspace,
+    BuildTargets, BuilderUpdate, BundleFormat, HotpatchModuleCache, Result, ServeArgs, TailwindCli,
+    TraceSrc, Workspace,
 };
-use anyhow::Context;
+use anyhow::{bail, Context};
 use dioxus_core::internal::{
     HotReloadTemplateWithLocation, HotReloadedTemplate, TemplateGlobalKey,
 };
@@ -92,7 +92,7 @@ pub(crate) struct CachedFile {
 
 impl AppServer {
     /// Create the AppRunner and then initialize the filemap with the crate directory.
-    pub(crate) async fn start(args: ServeArgs) -> Result<Self> {
+    pub(crate) async fn new(args: ServeArgs) -> Result<Self> {
         let workspace = Workspace::current().await?;
 
         // Resolve the simpler args
@@ -115,7 +115,8 @@ impl AppServer {
 
         let open_browser = args
             .open
-            .unwrap_or_else(|| workspace.settings.always_open_browser.unwrap_or_default());
+            .unwrap_or_else(|| workspace.settings.always_open_browser.unwrap_or(true))
+            && interactive;
 
         let wsl_file_poll_interval = args
             .wsl_file_poll_interval
@@ -150,8 +151,8 @@ impl AppServer {
         // All servers will end up behind us (the devserver) but on a different port
         // This is so we can serve a loading screen as well as devtools without anything particularly fancy
         let fullstack = server.is_some();
-        let should_proxy_port = match client.platform {
-            Platform::Server => true,
+        let should_proxy_port = match client.bundle {
+            BundleFormat::Server => true,
             _ => fullstack && !ssg,
         };
 
@@ -161,21 +162,22 @@ impl AppServer {
 
         let watch_fs = args.watch.unwrap_or(true);
         let use_hotpatch_engine = args.hot_patch;
-        let build_mode = match use_hotpatch_engine {
-            true => BuildMode::Fat,
-            false => BuildMode::Base,
+
+        let client = AppBuilder::new(&client)?;
+        let server = server.map(|server| AppBuilder::new(&server)).transpose()?;
+
+        // Only start Tailwind watcher for client builds that serve assets (not server builds or fullstack mode)
+        // In fullstack mode, the client build's prebuild() handles Tailwind generation to avoid race conditions
+        let tw_watcher = if client.build.bundle != BundleFormat::Server && !fullstack {
+            TailwindCli::serve(
+                client.build.package_manifest_dir(),
+                client.build.config.application.tailwind_input.clone(),
+                client.build.config.application.tailwind_output.clone(),
+            )
+        } else {
+            // Return a dummy task that immediately completes for server builds or fullstack mode
+            tokio::spawn(async { Ok(()) })
         };
-
-        let client = AppBuilder::start(&client, build_mode.clone())?;
-        let server = server
-            .map(|server| AppBuilder::start(&server, build_mode))
-            .transpose()?;
-
-        let tw_watcher = TailwindCli::serve(
-            client.build.package_manifest_dir(),
-            client.build.config.application.tailwind_input.clone(),
-            client.build.config.application.tailwind_output.clone(),
-        );
 
         _ = client.build.start_simulators().await;
 
@@ -227,6 +229,18 @@ impl AppServer {
         }
 
         Ok(runner)
+    }
+
+    pub(crate) fn initialize(&mut self) {
+        let build_mode = match self.use_hotpatch_engine {
+            true => BuildMode::Fat,
+            false => BuildMode::Base { run: true },
+        };
+
+        self.client.start(build_mode.clone());
+        if let Some(server) = self.server.as_mut() {
+            server.start(build_mode);
+        }
     }
 
     pub(crate) async fn rebuild_ssg(&mut self, devserver: &WebServer) {
@@ -355,9 +369,10 @@ impl AppServer {
         for path in files {
             // for various assets that might be linked in, we just try to hotreloading them forcefully
             // That is, unless they appear in an include! macro, in which case we need to a full rebuild....
-            let Some(ext) = path.extension().and_then(|v| v.to_str()) else {
-                continue;
-            };
+            let ext = path
+                .extension()
+                .and_then(|v| v.to_str())
+                .unwrap_or_default();
 
             // If it's an asset, we want to hotreload it
             // todo(jon): don't hardcode this here
@@ -458,6 +473,21 @@ impl AppServer {
                     }
                 }
             }
+
+            // If it's not a rust file, then it might be depended on via include! or similar
+            if ext != "rs" {
+                if let Some(artifacts) = self.client.artifacts.as_ref() {
+                    if artifacts.depinfo.files.contains(path) {
+                        needs_full_rebuild = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        // If the client is in a failed state, any changes to rsx should trigger a rebuild/hotpatch
+        if self.client.stage == BuildStage::Failed && !templates.is_empty() {
+            needs_full_rebuild = true
         }
 
         // todo - we need to distinguish between hotpatchable rebuilds and true full rebuilds.
@@ -472,9 +502,9 @@ impl AppServer {
                 self.clear_cached_rsx();
                 server.send_patch_start().await;
             } else {
-                self.client.start_rebuild(BuildMode::Base);
+                self.client.start_rebuild(BuildMode::Base { run: true });
                 if let Some(server) = self.server.as_mut() {
-                    server.start_rebuild(BuildMode::Base);
+                    server.start_rebuild(BuildMode::Base { run: true });
                 }
                 self.clear_hot_reload_changes();
                 self.clear_cached_rsx();
@@ -506,7 +536,8 @@ impl AppServer {
                 use crate::styles::NOTE_STYLE;
                 tracing::info!(dx_src = ?TraceSrc::Dev, "Hotreloading: {NOTE_STYLE}{}{NOTE_STYLE:#}", file);
 
-                if !server.has_hotreload_sockets() && self.client.build.platform != Platform::Web {
+                if !server.has_hotreload_sockets() && self.client.build.bundle != BundleFormat::Web
+                {
                     tracing::warn!("No clients to hotreload - try reloading the app!");
                 }
 
@@ -524,8 +555,8 @@ impl AppServer {
         devserver: &mut WebServer,
     ) -> Result<()> {
         // Make sure to save artifacts regardless of if we're opening the app or not
-        match artifacts.platform {
-            Platform::Server => {
+        match artifacts.bundle {
+            BundleFormat::Server => {
                 if let Some(server) = self.server.as_mut() {
                     server.artifacts = Some(artifacts.clone());
                 }
@@ -631,7 +662,7 @@ impl AppServer {
 
         // If the client is running on Android, we need to remove the port forwarding
         // todo: use the android tools "adb"
-        if matches!(self.client.build.platform, Platform::Android) {
+        if matches!(self.client.build.bundle, BundleFormat::Android) {
             if let Err(err) = Command::new(&self.workspace.android_tools()?.adb)
                 .arg("reverse")
                 .arg("--remove")
@@ -657,7 +688,7 @@ impl AppServer {
     pub(crate) async fn full_rebuild(&mut self) {
         let build_mode = match self.use_hotpatch_engine {
             true => BuildMode::Fat,
-            false => BuildMode::Base,
+            false => BuildMode::Base { run: true },
         };
 
         self.client.start_rebuild(build_mode.clone());
@@ -685,7 +716,7 @@ impl AppServer {
                     .hotpatch(res, cache)
                     .await
             }
-            _ => return Err(Error::Runtime("Invalid build id".into())),
+            _ => bail!("Invalid build id"),
         }?;
 
         if id == BuildId::CLIENT {
@@ -756,7 +787,7 @@ impl AppServer {
             BuildId::CLIENT => {
                 // multiple tabs on web can cause this to be called incorrectly, and it doesn't
                 // make any sense anyways
-                if self.client.build.platform != Platform::Web {
+                if self.client.build.bundle != BundleFormat::Web {
                     if let Some(aslr_reference) = aslr_reference {
                         self.client.aslr_reference = Some(aslr_reference);
                     }
@@ -774,7 +805,7 @@ impl AppServer {
         }
 
         // Assign the runtime asset dir to the runner
-        if self.client.build.platform == Platform::Ios {
+        if self.client.build.bundle == BundleFormat::Ios {
             // xcrun simctl get_app_container booted com.dioxuslabs
             let res = Command::new("xcrun")
                 .arg("simctl")

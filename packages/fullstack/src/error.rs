@@ -4,7 +4,7 @@ use std::{
     str::FromStr,
 };
 
-use dioxus_lib::prelude::{dioxus_core::CapturedError, RenderError};
+use dioxus_core::{CapturedError, RenderError};
 use serde::{de::DeserializeOwned, Serialize};
 use server_fn::{
     codec::JsonEncoding,
@@ -33,7 +33,7 @@ pub type ServerFnResult<T = (), E = String> = std::result::Result<T, ServerFnErr
 ///
 /// You can use the [`ServerFnError`] type in the Error type of your server function result or use the [`ServerFnResult`]
 /// type as the return type of your server function. When you call the server function, you can handle the error directly
-/// or convert it into a [`CapturedError`] to throw into the nearest [`ErrorBoundary`](dioxus_lib::prelude::ErrorBoundary).
+/// or convert it into a [`CapturedError`] to throw into the nearest [`ErrorBoundary`](dioxus_core::ErrorBoundary).
 ///
 /// ```rust
 /// use dioxus::prelude::*;
@@ -120,7 +120,7 @@ pub type ServerFnResult<T = (), E = String> = std::result::Result<T, ServerFnErr
 ///     )))
 /// }
 /// ```
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub enum ServerFnError<T = String> {
     /// An error running the server function
     ServerError(T),
@@ -137,16 +137,8 @@ impl ServerFnError {
     /// use dioxus::prelude::*;
     /// use serde::{Serialize, Deserialize};
     ///
-    /// #[derive(Serialize, Deserialize, Debug)]
-    /// struct MyCustomError;
-    /// impl std::fmt::Display for MyCustomError {
-    ///    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    ///       write!(f, "My custom error")
-    ///   }
-    /// }
-    ///
     /// #[server]
-    /// async fn server_function() -> ServerFnResult<String, MyCustomError> {
+    /// async fn server_function() -> ServerFnResult<String> {
     ///     // Return your custom error
     ///     Err(ServerFnError::new("Something went wrong"))
     /// }
@@ -205,8 +197,8 @@ impl<T: FromStr> FromStr for ServerFnError<T> {
 impl<T: Display> Display for ServerFnError<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ServerFnError::ServerError(err) => write!(f, "Server error: {}", err),
-            ServerFnError::CommunicationError(err) => write!(f, "Communication error: {}", err),
+            ServerFnError::ServerError(err) => write!(f, "Server error: {err}"),
+            ServerFnError::CommunicationError(err) => write!(f, "Communication error: {err}"),
         }
     }
 }

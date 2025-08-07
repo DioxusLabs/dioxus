@@ -13,7 +13,7 @@ use syn::spanned::Spanned;
 use syn::{parse::Error, PathArguments};
 
 use quote::quote;
-use syn::{parse_quote, GenericArgument, PathSegment, Type};
+use syn::{parse_quote, GenericArgument, Ident, PathSegment, Type};
 
 pub fn impl_my_derive(ast: &syn::DeriveInput) -> Result<TokenStream, Error> {
     let data = match &ast.data {
@@ -172,7 +172,7 @@ mod util {
 }
 
 mod field_info {
-    use crate::props::type_from_inside_option;
+    use crate::props::{looks_like_store_type, looks_like_write_type, type_from_inside_option};
     use proc_macro2::TokenStream;
     use quote::{format_ident, quote};
     use syn::spanned::Spanned;
@@ -219,6 +219,11 @@ mod field_info {
                         builder_attr.auto_to_string = true;
                     }
                     builder_attr.auto_into = false;
+                }
+
+                // Write and Store fields automatically use impl Into
+                if looks_like_write_type(&field.ty) || looks_like_store_type(&field.ty) {
+                    builder_attr.auto_into = true;
                 }
 
                 // extended field is automatically empty
@@ -503,9 +508,9 @@ fn type_from_inside_option(ty: &Type) -> Option<&Type> {
     let seg = path.segments.last()?;
 
     // If the segment is a supported optional type, provide the inner type.
-    // Return the inner type if the pattern is `Option<T>` or `ReadOnlySignal<Option<T>>``
-    if seg.ident == "ReadOnlySignal" {
-        // Get the inner type. E.g. the `u16` in `ReadOnlySignal<u16>` or `Option` in `ReadOnlySignal<Option<bool>>`
+    // Return the inner type if the pattern is `Option<T>` or `ReadSignal<Option<T>>``
+    if seg.ident == "ReadOnlySignal" || seg.ident == "ReadSignal" {
+        // Get the inner type. E.g. the `u16` in `ReadSignal<u16>` or `Option` in `ReadSignal<Option<bool>>`
         let inner_type = extract_inner_type_from_segment(seg)?;
         let Type::Path(inner_path) = inner_type else {
             // If it isn't a path, the inner type isn't option
@@ -544,7 +549,7 @@ fn extract_inner_type_from_segment(segment: &PathSegment) -> Option<&Type> {
 mod struct_info {
     use convert_case::{Case, Casing};
     use proc_macro2::TokenStream;
-    use quote::quote;
+    use quote::{quote, ToTokens};
     use syn::parse::Error;
     use syn::punctuated::Punctuated;
     use syn::spanned::Spanned;
@@ -614,13 +619,13 @@ mod struct_info {
             generics
         }
 
-        /// Checks if the props have any fields that should be owned by the child. For example, when converting T to `ReadOnlySignal<T>`, the new signal should be owned by the child
+        /// Checks if the props have any fields that should be owned by the child. For example, when converting T to `ReadSignal<T>`, the new signal should be owned by the child
         fn has_child_owned_fields(&self) -> bool {
             self.fields.iter().any(|f| child_owned_type(f.ty))
         }
 
         fn memoize_impl(&self) -> Result<TokenStream, Error> {
-            // First check if there are any ReadOnlySignal fields, if there are not, we can just use the partialEq impl
+            // First check if there are any ReadSignal fields, if there are not, we can just use the partialEq impl
             let signal_fields: Vec<_> = self
                 .included_fields()
                 .filter(|f| looks_like_signal_type(f.ty))
@@ -884,7 +889,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                     _phantom: (#( #phantom_generics ),*),
                 }
 
-                impl #impl_generics dioxus_core::prelude::Properties for #name #ty_generics
+                impl #impl_generics dioxus_core::Properties for #name #ty_generics
                 #b_generics_where
                 {
                     type Builder = #builder_name #generics_with_empty;
@@ -1024,22 +1029,19 @@ Finally, call `.build()` to create the instance of `{name}`.
 
             Ok(quote! {
                 #[allow(dead_code, non_camel_case_types, missing_docs)]
-                impl #impl_generics dioxus_core::prelude::HasAttributes for #builder_name < #( #ty_generics ),* > #where_clause {
+                impl #impl_generics dioxus_core::HasAttributes for #builder_name < #( #ty_generics ),* > #where_clause {
                     fn push_attribute<L>(
                         mut self,
                         ____name: &'static str,
                         ____ns: Option<&'static str>,
-                        ____attr: impl dioxus_core::prelude::IntoAttributeValue<L>,
+                        ____attr: impl dioxus_core::IntoAttributeValue<L>,
                         ____volatile: bool
                     ) -> Self {
                         let ( #(#descructuring,)* ) = self.fields;
                         self.#field_name.push(
                             dioxus_core::Attribute::new(
                                 ____name,
-                                {
-                                    use dioxus_core::prelude::IntoAttributeValue;
-                                    ____attr.into_value()
-                                },
+                                dioxus_core::IntoAttributeValue::<L>::into_value(____attr),
                                 ____ns,
                                 ____volatile,
                             )
@@ -1150,16 +1152,16 @@ Finally, call `.build()` to create the instance of `{name}`.
                 let marker_ident = syn::Ident::new("__Marker", proc_macro2::Span::call_site());
                 marker = Some(marker_ident.clone());
                 (
-                    quote!(impl dioxus_core::prelude::SuperInto<#arg_type, #marker_ident>),
+                    quote!(impl dioxus_core::SuperInto<#arg_type, #marker_ident>),
                     // If this looks like a signal type, we automatically convert it with SuperInto and use the props struct as the owner
-                    quote!(with_owner(self.owner.clone(), move || dioxus_core::prelude::SuperInto::super_into(#field_name))),
+                    quote!(dioxus_core::with_owner(self.owner.clone(), move || dioxus_core::SuperInto::super_into(#field_name))),
                 )
             } else if field.builder_attr.auto_into || field.builder_attr.strip_option {
                 let marker_ident = syn::Ident::new("__Marker", proc_macro2::Span::call_site());
                 marker = Some(marker_ident.clone());
                 (
-                    quote!(impl dioxus_core::prelude::SuperInto<#arg_type, #marker_ident>),
-                    quote!(dioxus_core::prelude::SuperInto::super_into(#field_name)),
+                    quote!(impl dioxus_core::SuperInto<#arg_type, #marker_ident>),
+                    quote!(dioxus_core::SuperInto::super_into(#field_name)),
                 )
             } else if field.builder_attr.from_displayable {
                 (
@@ -1419,24 +1421,27 @@ Finally, call `.build()` to create the instance of `{name}`.
                     // If this is a signal type, we use super_into and the props struct as the owner
                     let is_child_owned_type = child_owned_type(field.ty);
 
-                    let mut into = quote!{};
 
-                    if !is_default {
+                    let body = if !is_default {
                         if is_child_owned_type {
-                            into = quote!{ .super_into() }
+                            quote!{ dioxus_core::SuperInto::super_into(#default) }
                         } else if field.builder_attr.auto_into {
-                            into = quote!{ .into() }
+                            quote!{ (#default).into() }
                         } else if field.builder_attr.auto_to_string {
-                            into = quote!{ .to_string() }
+                            quote!{ (#default).to_string() }
+                        } else {
+                            default.to_token_stream()
                         }
-                    }
+                    } else {
+                        default.to_token_stream()
+                    };
 
                     if field.builder_attr.skip {
-                        quote!(let #name = #default #into;)
+                        quote!(let #name = #body;)
                     } else if is_child_owned_type {
-                        quote!(let #name = #helper_trait_name::into_value(#name, || with_owner(self.owner.clone(), move || (#default) #into));)
+                        quote!(let #name = #helper_trait_name::into_value(#name, || dioxus_core::with_owner(self.owner.clone(), move || #body));)
                     } else {
-                        quote!(let #name = #helper_trait_name::into_value(#name, || #default #into);)
+                        quote!(let #name = #helper_trait_name::into_value(#name, || #body);)
                     }
                 } else {
                     quote!(let #name = #name.0;)
@@ -1484,15 +1489,15 @@ Finally, call `.build()` to create the instance of `{name}`.
                         /// Create a component from the props.
                         pub fn into_vcomponent<M: 'static>(
                             self,
-                            render_fn: impl dioxus_core::prelude::ComponentFunction<#original_name #ty_generics, M>,
+                            render_fn: impl dioxus_core::ComponentFunction<#original_name #ty_generics, M>,
                         ) -> dioxus_core::VComponent {
-                            use dioxus_core::prelude::ComponentFunction;
+                            use dioxus_core::ComponentFunction;
                             let component_name = ::std::any::type_name_of_val(&render_fn);
                             dioxus_core::VComponent::new(move |wrapper: Self| render_fn.rebuild(wrapper.inner), self, component_name)
                         }
                     }
 
-                    impl #original_impl_generics dioxus_core::prelude::Properties for #name #ty_generics #where_clause {
+                    impl #original_impl_generics dioxus_core::Properties for #name #ty_generics #where_clause {
                         type Builder = ();
                         fn builder() -> Self::Builder {
                             unreachable!()
@@ -1736,33 +1741,37 @@ fn remove_option_wrapper(type_: Type) -> Type {
 
 /// Check if a type should be owned by the child component after conversion
 fn child_owned_type(ty: &Type) -> bool {
-    looks_like_signal_type(ty) || looks_like_callback_type(ty)
+    looks_like_signal_type(ty) || looks_like_write_type(ty) || looks_like_callback_type(ty)
+}
+
+/// Check if the path without generics matches the type we are looking for
+fn last_segment_matches(ty: &Type, expected: &Ident) -> bool {
+    extract_base_type_without_generics(ty).is_some_and(|path_without_generics| {
+        path_without_generics
+            .segments
+            .last()
+            .is_some_and(|seg| seg.ident == *expected)
+    })
 }
 
 fn looks_like_signal_type(ty: &Type) -> bool {
-    match extract_base_type_without_generics(ty) {
-        Some(path_without_generics) => {
-            path_without_generics == parse_quote!(dioxus_core::prelude::ReadOnlySignal)
-                || path_without_generics == parse_quote!(prelude::ReadOnlySignal)
-                || path_without_generics == parse_quote!(ReadOnlySignal)
-        }
-        None => false,
-    }
+    last_segment_matches(ty, &parse_quote!(ReadOnlySignal))
+        || last_segment_matches(ty, &parse_quote!(ReadSignal))
+}
+
+fn looks_like_write_type(ty: &Type) -> bool {
+    last_segment_matches(ty, &parse_quote!(WriteSignal))
+}
+
+fn looks_like_store_type(ty: &Type) -> bool {
+    last_segment_matches(ty, &parse_quote!(Store))
+        || last_segment_matches(ty, &parse_quote!(ReadStore))
 }
 
 fn looks_like_callback_type(ty: &Type) -> bool {
     let type_without_option = remove_option_wrapper(ty.clone());
-    match extract_base_type_without_generics(&type_without_option) {
-        Some(path_without_generics) => {
-            path_without_generics == parse_quote!(dioxus_core::prelude::EventHandler)
-                || path_without_generics == parse_quote!(prelude::EventHandler)
-                || path_without_generics == parse_quote!(EventHandler)
-                || path_without_generics == parse_quote!(dioxus_core::prelude::Callback)
-                || path_without_generics == parse_quote!(prelude::Callback)
-                || path_without_generics == parse_quote!(Callback)
-        }
-        None => false,
-    }
+    last_segment_matches(&type_without_option, &parse_quote!(EventHandler))
+        || last_segment_matches(&type_without_option, &parse_quote!(Callback))
 }
 
 #[test]
@@ -1776,6 +1785,17 @@ fn test_looks_like_type() {
     ));
     assert!(looks_like_signal_type(&parse_quote!(
         ReadOnlySignal<Option<i32>, UnsyncStorage>
+    )));
+
+    assert!(!looks_like_signal_type(&parse_quote!(
+        Option<ReadSignal<i32>>
+    )));
+    assert!(looks_like_signal_type(&parse_quote!(ReadSignal<i32>)));
+    assert!(looks_like_signal_type(
+        &parse_quote!(ReadSignal<i32, SyncStorage>)
+    ));
+    assert!(looks_like_signal_type(&parse_quote!(
+        ReadSignal<Option<i32>, UnsyncStorage>
     )));
 
     assert!(looks_like_callback_type(&parse_quote!(
