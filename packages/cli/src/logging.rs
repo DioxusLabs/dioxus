@@ -24,21 +24,18 @@ use dioxus_dx_wire_format::StructuredOutput;
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::FutureExt;
 use itertools::Itertools;
+use serde_json::json;
 use std::{any::Any, backtrace::Backtrace, io::Read, str::FromStr, sync::Arc};
 use std::{borrow::Cow, sync::OnceLock};
 use std::{
     collections::HashMap,
     env,
     fmt::{Debug, Display, Write as _},
-    fs,
-    path::PathBuf,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Mutex,
-    },
+    sync::atomic::{AtomicBool, Ordering},
     time::Instant,
 };
 use std::{future::Future, panic::AssertUnwindSafe};
+use tower_http::ServiceExt;
 use tracing::{field::Visit, Level, Subscriber};
 use tracing_subscriber::{
     fmt::{
@@ -91,7 +88,7 @@ struct SavedLocation {
 }
 
 impl TraceController {
-    pub const HEARTBEAT: &str = "cli_heartbeat";
+    pub const EVENT_HEARTBEAT: &str = "cli_heartbeat";
 
     /// Initialize the CLI and set up the tracing infrastructure
     ///
@@ -331,12 +328,18 @@ impl TraceController {
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
         // Send off a heartbeat request. If this fails, we skip anything else.
-        self.send_heartbeat(heartbeat).await?;
+        self.send_heartbeat(heartbeat).await.inspect_err(|err| {
+            if cfg!(debug_assertions) {
+                tracing::warn!("Failed to send heartbeat: {}", err);
+            } else {
+                tracing::trace!("Failed to send heartbeat: {}", err);
+            }
+        })?;
 
         // Wait a few seconds to see if we can end up in `dx serve` or a long-running task
         // If we're in CI though, we do want to flush telemetry immediately
         if !CliSettings::is_ci() {
-            tokio::time::sleep(std::time::Duration::from_millis(5000)).await;
+            tokio::time::sleep(std::time::Duration::from_millis(3000)).await;
         }
 
         // Now start loading telemetry files, locking them, and then uploading them.
@@ -360,25 +363,26 @@ impl TraceController {
 
             // Now that we have the lock, we can read the file and upload it
             // todo: validate that _bytes_read is not greater than 20mb - this will fail to upload
-            let mut lines = String::new();
-            let Ok(_bytes_read) = file.read_to_string(&mut lines) else {
+            let mut jsonl_file = String::new();
+            let Ok(_bytes_read) = file.read_to_string(&mut jsonl_file) else {
                 continue;
             };
 
             // We assume since this is a jsonl file that every line is valid json. We just concat the lines together
             // and then send them using the batched client.
-            let request_body = format!(
-                r#"{{
-                    "historical_migration": false,
-                    "batch": [{batch_body}]
-                }}"#,
-                batch_body = lines.trim_end_matches('\n').replace('\n', ",")
-            );
+            let request_body = json!({
+                "historical_migration": false,
+                "batch": jsonl_file
+                    .lines()
+                    .map(|line| serde_json::from_str::<serde_json::Value>(line))
+                    .filter_map(Result::ok)
+                    .collect::<Vec<_>>()
+            });
 
             // Send the request
             // - If the request fails, we just log the error and continue
             // - If the request succeeds, we remove the file
-            match self.upload_to_posthog(request_body).await {
+            match self.upload_to_posthog(&request_body).await {
                 Ok(res) if res.status().is_success() => {
                     _ = std::fs::remove_file(e.path());
                 }
@@ -400,35 +404,47 @@ impl TraceController {
     }
 
     /// Uploads a single telemetry event to the PostHog endpoint.
-    async fn upload_to_posthog(&self, body: String) -> Result<reqwest::Response> {
+    async fn upload_to_posthog(&self, body: &serde_json::Value) -> Result<reqwest::Response> {
         use hyper::header::CONTENT_TYPE;
+
+        tracing::info!("Uploading telemetry event: {:#?}", body);
 
         let reporter = self.reporter.as_ref().context("No reporter initialized")?;
         let res = self
             .http_client
             .as_ref()
             .context("HTTP client not initialized")?
-            .post("https://dx.stats.dioxus.dev/api/v1/")
+            .post(Self::posthog_capture_endpoint())
             .header(CONTENT_TYPE, "application/json")
             .header("X-Reporter-ID", reporter.distinct_id.to_string())
-            .header("X-Untrusted-API-Key", Self::untrusted_api_key())
-            .body(body)
+            .json(&body)
             .send()
             .await
             .context("Failed to send telemetry data")?;
+
+        if !res.status().is_success() {
+            let res_status = res.status();
+            let res_err = res.text().await;
+            bail!(
+                "Failed to upload telemetry event: {:?}. Response: {:?}",
+                res_status,
+                res_err
+            );
+        }
 
         Ok(res)
     }
 
     async fn send_heartbeat(&self, heartbeat: TelemetryEventData) -> Result<()> {
         let reporter = self.reporter.as_ref().context("No reporter initialized")?;
-        let body = serde_json::to_string(&Self::telemetry_to_posthog(reporter, heartbeat))?;
-        self.upload_to_posthog(body)
-            .await?
-            .status()
-            .is_success()
-            .then_some(())
-            .context("Failed to send heartbeat")?;
+        let body = Self::telemetry_to_posthog(reporter, heartbeat);
+        let res = self.upload_to_posthog(&body).await?;
+
+        if !res.status().is_success() {
+            let status = res.status();
+            let body = res.text().await;
+            tracing::error!("Failed to send heartbeat: {}. Response: {:?}", status, body);
+        }
 
         Ok(())
     }
@@ -436,7 +452,7 @@ impl TraceController {
     /// Convert the dioxus-cli-telemetry event into a posthog event.
     ///
     /// We try to maintain the same structure for each telemetry event to do advanced filtering on the backend.
-    fn telemetry_to_posthog(reporter: &Reporter, event: TelemetryEventData) -> posthog_rs::Event {
+    fn telemetry_to_posthog(reporter: &Reporter, event: TelemetryEventData) -> serde_json::Value {
         let Reporter {
             is_ci,
             device_triple,
@@ -446,7 +462,7 @@ impl TraceController {
         } = reporter;
 
         let TelemetryEventData {
-            name,
+            action: name,
             module,
             message,
             stage,
@@ -465,17 +481,22 @@ impl TraceController {
         _ = ph_event.insert_prop("arch", target_lexicon::HOST.architecture.to_string());
 
         // And the TelemetryEventData fields
-        _ = ph_event.insert_prop("message", message);
-        _ = ph_event.insert_prop("module", module);
+        _ = ph_event.insert_prop("action", message);
         _ = ph_event.insert_prop("stage", stage);
-        _ = ph_event.insert_prop("timestamp", time);
+        _ = ph_event.insert_prop("module", module);
+        _ = ph_event.insert_prop("distinct_id", distinct_id.to_string());
 
         // And the rest of the event values
         for (key, value) in values {
             _ = ph_event.insert_prop(key, value);
         }
 
-        ph_event
+        // We need to go add the api key to the event, since posthog_rs doesn't expose it for us...
+        let mut value = serde_json::to_value(ph_event).unwrap();
+        value["api_key"] = serde_json::Value::String(Self::untrusted_api_key());
+        value["timestamp"] = serde_json::Value::String(time.to_rfc3339());
+
+        value
     }
 
     fn enroll_reporter() -> Result<Uuid> {
@@ -511,8 +532,16 @@ impl TraceController {
     ///
     /// Note that the key here is not the same key for the backend - our proxy fixes up the key to
     /// pass along. This way we can cycle keys on the backend without breaking the CLI.
-    fn untrusted_api_key() -> &'static str {
-        option_env!("DX_RELEASE_ANALYTICS_KEY").unwrap_or_else(|| "<untrusted>")
+    fn untrusted_api_key() -> String {
+        if cfg!(debug_assertions) {
+            if let Ok(key) = env::var("DX_REPORTER_API_KEY") {
+                return key;
+            }
+        }
+
+        option_env!("DX_REPORTER_API_KEY")
+            .unwrap_or_else(|| "<untrusted>")
+            .to_string()
     }
 
     /// Flush pending logs to the telemetry file.
@@ -569,14 +598,14 @@ impl TraceController {
             true => {
                 let mut msgs = self.telemetry_rx.lock().await;
 
-                let request_body = format!(
-                    r#"{{ "historical_migration": false, "batch": [{batch_body}] }}"#,
-                    batch_body = std::iter::from_fn(|| msgs.try_next().ok().flatten())
-                        .map(|msg| serde_json::to_string(&msg).unwrap())
-                        .join(",")
-                );
+                let request_body = json!({
+                    "historical_migration": false,
+                    "batch": std::iter::from_fn(|| msgs.try_next().ok().flatten())
+                        .filter_map(|msg| serde_json::to_value(msg).ok())
+                        .collect::<Vec<_>>()
+                });
 
-                self.upload_to_posthog(request_body).await?;
+                self.upload_to_posthog(&request_body).await?;
             }
 
             // Dump the logs to a the session file as jsonl
@@ -601,6 +630,22 @@ impl TraceController {
         }
 
         Ok(())
+    }
+
+    fn posthog_capture_endpoint() -> String {
+        let base = Self::posthog_endpoint();
+        format!("{}/capture/", base.trim_end_matches('/'))
+    }
+
+    fn posthog_endpoint() -> String {
+        // In dev mode we can override the endpoint with an environment variable
+        if cfg!(debug_assertions) {
+            if let Ok(endpoint) = env::var("DX_REPORTER_ENDPOINT") {
+                return endpoint;
+            }
+        }
+
+        "https://dx.stats.dioxus.dev/api/v1/".to_string()
     }
 }
 
@@ -933,3 +978,36 @@ async fn run_with_ctrl_c(
         res = f => res,
     }
 }
+
+// curl -X POST "https://us.i.posthog.com/i/v0/e/" \
+//      -H "Content-Type: application/json" \
+//      -d '{
+//          "api_key": "phc_d2jQTZMqAWxSkzv3NQ8TlxCP49vtBZ5ZmlYMIZLFNNU",
+//          "event": "$exception",
+//          "properties": {
+//              "distinct_id": "distinct_id_of_your_user",
+//              "$exception_list": [{
+//                  "type": "RangeError",
+//                  "value": "Maximum call stack size exceeded",
+//                  "mechanism": {
+//                      "handled": true,
+//                      "synthetic": false
+//                  },
+//                  "stacktrace": {
+//                      "type": "resolved",
+//                      "frames": [
+//                          {
+//                              "raw_id": "89f3907385ddb1bdc2feebd77625387d685e3da2f9a68bcf2634e3b3b39122e51f895e5c880def374525c558899b2e90eed214900ff9c8f949243e4b79eb32a9",
+//                              "mangled_name": "Array.forEach",
+//                              "in_app": false,
+//                              "resolved_name": "Array.forEach",
+//                              "lang": "javascript",
+//                              "resolved": true
+//                          },
+//                          /* Additional frames omitted for brevity */
+//                      ]
+//                  }
+//              }],
+//              "$exception_fingerprint": "209842d96784e19321e3a36b068d53fff7a01ebcb1da9e98df35c4c49db0b4f3b62aea7ee25a714470e61f8d36b4716f227f241c153477e5fa9adfda64ce9f71"
+//          },
+//      }'

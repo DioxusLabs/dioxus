@@ -70,7 +70,7 @@ pub struct Reporter {
 /// the stage as a marker.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct TelemetryEventData {
-    pub name: String,
+    pub action: String,
     pub module: String,
     pub message: String,
     pub stage: String,
@@ -87,7 +87,7 @@ impl TelemetryEventData {
     ) -> Self {
         Self {
             module: strip_paths(&module.to_string()),
-            name: strip_paths(&name.to_string()),
+            action: strip_paths(&name.to_string()),
             message: strip_paths(&message.to_string()),
             stage: strip_paths(&stage.to_string()),
             time: DateTime::<Utc>::from(SystemTime::now()),
