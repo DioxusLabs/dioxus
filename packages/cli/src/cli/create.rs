@@ -145,13 +145,7 @@ pub(crate) fn resolve_template_and_branch(
 /// with cargo-generate's prompts.
 ///
 /// See <https://github.com/DioxusLabs/dioxus/pull/2603>.
-pub(crate) fn restore_cursor_on_sigint() {
-    ctrlc::set_handler(move || {
-        _ = console::Term::stdout().show_cursor();
-        std::process::exit(1); // Ideally should mimic the INT signal.
-    })
-    .expect("ctrlc::set_handler");
-}
+pub(crate) fn restore_cursor_on_sigint() {}
 
 /// Extracts the last directory name from the `path`.
 pub(crate) fn name_from_path(path: &Path) -> Result<String> {

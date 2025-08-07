@@ -95,25 +95,26 @@ impl ServeArgs {
     /// higher log levels
     ///
     /// We also set up proper panic handling since the TUI has a tendency to corrupt the terminal.
-    pub(crate) async fn serve(self) -> Result<StructuredOutput> {
+    pub(crate) async fn serve(self, tracer: &TraceController) -> Result<StructuredOutput> {
         if std::env::var("RUST_BACKTRACE").is_err() {
             std::env::set_var("RUST_BACKTRACE", "1");
         }
 
-        let interactive = self.is_interactive_tty();
-
         // Redirect all logging the cli logger - if there's any pending after a panic, we flush it
-        let mut tracer = TraceController::redirect(interactive);
+        let is_interactive_tty = self.is_interactive_tty();
+        if is_interactive_tty {
+            tracer.redirect_to_tui();
+        }
 
-        let res = crate::serve::serve_all(self, &mut tracer).await;
+        let res = crate::serve::serve_all(self, &tracer).await;
 
         // Kill the screen so we don't ruin the terminal
-        _ = crate::serve::Output::remote_shutdown(interactive);
+        _ = crate::serve::Output::remote_shutdown(is_interactive_tty);
 
         // And drain the tracer as regular messages. All messages will be logged (including traces)
         // and then we can print the panic message
         if res.is_err() {
-            tracer.shutdown_panic();
+            tracer.shutdown_panic().await;
         }
 
         res.map(|_| StructuredOutput::Success)

@@ -22,10 +22,9 @@ use cargo_metadata::diagnostic::{Diagnostic, DiagnosticLevel};
 use clap::Parser;
 use dioxus_cli_telemetry::{Reporter, TelemetryEventData};
 use dioxus_dx_wire_format::StructuredOutput;
-use futures_channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
+use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::FutureExt;
 use itertools::Itertools;
-use krates::petgraph::Direction::Outgoing;
 use std::{any::Any, backtrace::Backtrace, io::Read, str::FromStr, sync::Arc};
 use std::{borrow::Cow, sync::OnceLock};
 use std::{
@@ -57,8 +56,6 @@ const LOG_ENV: &str = "DIOXUS_LOG";
 const DX_SRC_FLAG: &str = "dx_src";
 
 static BACKTRACE: OnceLock<CapturedBacktrace> = OnceLock::new();
-static TUI_ACTIVE: AtomicBool = AtomicBool::new(false);
-static TUI_TX: OnceLock<UnboundedSender<TraceMsg>> = OnceLock::new();
 
 pub static VERBOSITY: OnceLock<Verbosity> = OnceLock::new();
 
@@ -70,52 +67,60 @@ pub(crate) trait Anonymized {
 /// A custom layer that wraps our special interception logic based on the mode of the CLI and its verbosity.
 ///
 /// Redirects TUI logs, writes to files, and queues telemetry events.
+///
+/// It is cloned and passed directly as a layer to the tracing subscriber.
 #[derive(Clone)]
-pub struct DxLayer {
+pub struct TraceController {
+    http_client: Option<reqwest::Client>,
     reporter: Option<Reporter>,
     telemetry_tx: UnboundedSender<TelemetryEventData>,
-    telemetry_rx: Arc<Mutex<UnboundedReceiver<TelemetryEventData>>>,
+    telemetry_rx: Arc<tokio::sync::Mutex<UnboundedReceiver<TelemetryEventData>>>,
     log_to_file: Option<PathBuf>,
     log_tile_file_buffer: Arc<Mutex<String>>,
+    tui_active: Arc<AtomicBool>,
+    tui_tx: UnboundedSender<TraceMsg>,
+    tui_rx: Arc<tokio::sync::Mutex<UnboundedReceiver<TraceMsg>>>,
 }
 
-pub mod telemetry_events {
-    pub const HEARTBEAT: &str = "cli_heartbeat";
+struct CapturedBacktrace {
+    backtrace: Backtrace,
+    location: Option<SavedLocation>,
 }
 
-pub(crate) struct TraceController {
-    pub(crate) tui_rx: UnboundedReceiver<TraceMsg>,
+struct SavedLocation {
+    file: String,
+    line: u32,
+    column: u32,
 }
 
 impl TraceController {
+    pub const HEARTBEAT: &str = "cli_heartbeat";
+    pub const DX_STATS_ENDPOINT: &str = "https://dx.stats.dioxus.dev/api/v1/";
+
     /// Initialize the CLI and set up the tracing infrastructure
     ///
     /// This captures panics and flushes telemetry to a file after the CLI has run.
-    pub async fn main<F>(run_app: impl FnOnce(Commands) -> F) -> Result<StructuredOutput>
+    ///
+    /// We pass the TraceController around the CLI in a few places, namely the serve command so the TUI
+    /// can access things like the logs.
+    pub async fn main<F>(run_app: impl FnOnce(Commands, Self) -> F) -> Result<StructuredOutput>
     where
         F: Future<Output = Result<StructuredOutput>>,
     {
         let args = Cli::parse();
+        let tui_active = Arc::new(AtomicBool::new(false));
 
         VERBOSITY
             .set(args.verbosity.clone())
             .expect("verbosity should only be set once");
 
         // Set up a basic env-based filter for the logs
-        let env_filter = if env::var(LOG_ENV).is_ok() {
-            EnvFilter::from_env(LOG_ENV)
-        } else if matches!(args.action, Commands::Serve(_)) {
-            EnvFilter::new(
-                "error,dx=trace,dioxus_cli=trace,manganis_cli_support=trace,wasm_split_cli=trace,subsecond_cli_support=trace",
-            )
-        } else {
-            EnvFilter::new(format!(
+        let env_filter = match env::var(LOG_ENV) {
+            Ok(_) => EnvFilter::from_env(LOG_ENV),
+            _ if matches!(args.action, Commands::Serve(_)) => EnvFilter::new("error,dx=trace,dioxus_cli=trace,manganis_cli_support=trace,wasm_split_cli=trace,subsecond_cli_support=trace"),
+            _ => EnvFilter::new(format!(
                 "error,dx={our_level},dioxus_cli={our_level},manganis_cli_support={our_level},wasm_split_cli={our_level},subsecond_cli_support={our_level}",
-                our_level = if args.verbosity.verbose {
-                    "debug"
-                } else {
-                    "info"
-                }
+                our_level = if args.verbosity.verbose { "debug" } else { "info" }
             ))
         };
 
@@ -160,8 +165,9 @@ impl TraceController {
         } else {
             fmt_layer.boxed()
         }
-        .with_filter(tracing_subscriber::filter::filter_fn(|_| {
-            !TUI_ACTIVE.load(Ordering::Relaxed)
+        .with_filter(tracing_subscriber::filter::filter_fn({
+            let tui_active = tui_active.clone();
+            move |_| !tui_active.load(Ordering::Relaxed)
         }));
 
         // Set up the tokio console subscriber if enabled
@@ -171,21 +177,58 @@ impl TraceController {
         let console_layer = tracing_subscriber::layer::Identity::new();
 
         // Construct our custom layer that handles the TUI and file logging
-        let dx_layer = DxLayer::new(&args);
+        // Initialize the log file if we use it
+        let log_to_file = args.verbosity.log_to_file.as_deref().map(|file_path| {
+            if !file_path.exists() {
+                _ = std::fs::write(file_path, "");
+            }
+            file_path.to_path_buf()
+        });
+
+        // Create a new session ID for this invocation of the CLI
+        let reporter = Self::enroll_reporter().ok().map(|reporter_id| Reporter {
+            is_ci: std::env::var("CI").is_ok(),
+            device_triple: target_lexicon::Triple::host().to_string(),
+            cli_version: crate::VERSION.to_string(),
+            session_id: Uuid::new_v4().as_u128(),
+            distinct_id: reporter_id.as_u128(),
+        });
+
+        // Create a new telemetry uploader
+        let http_client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(5))
+            .build()
+            .inspect_err(|err| tracing::debug!("Failed to create tracing HTTP client: {}", err))
+            .ok();
+
+        // Create a new telemetry channel
+        // Note that we only drain the channel at the end of the CLI run, so it's not really being used as a channel - more of a vecdeque
+        let (telemetry_tx, telemetry_rx) = futures_channel::mpsc::unbounded();
+        let (tui_tx, tui_rx) = futures_channel::mpsc::unbounded();
+        let trace_controller = TraceController {
+            reporter,
+            telemetry_tx,
+            log_to_file,
+            tui_tx,
+            tui_rx: Arc::new(tokio::sync::Mutex::new(tui_rx)),
+            telemetry_rx: Arc::new(tokio::sync::Mutex::new(telemetry_rx)),
+            log_tile_file_buffer: Arc::new(Mutex::new(String::new())),
+            http_client,
+            tui_active,
+        };
 
         // Spawn the telemetry uploader in the background
-        if let Some(reporter) = dx_layer.reporter.clone() {
-            tokio::spawn(DxLayer::upload_telemetry(
-                args.action.to_heartbeat_event(),
-                reporter,
-            ));
-        }
+        tokio::spawn(
+            trace_controller
+                .clone()
+                .upload_telemetry_files(args.action.to_heartbeat_event()),
+        );
 
         // Construct the tracing subscriber
         tracing_subscriber::registry()
             .with(env_filter)
             .with(json_filter)
-            .with(dx_layer.clone())
+            .with(trace_controller.clone())
             .with(console_layer)
             .with(fmt_layer)
             .init();
@@ -196,10 +239,12 @@ impl TraceController {
         //
         // *All* panics make it into the telemetry collector
         // Only some get printed to the console.
-        let app_res = AssertUnwindSafe(run_app(args.action)).catch_unwind().await;
+        let app_res = AssertUnwindSafe(run_app(args.action, trace_controller.clone()))
+            .catch_unwind()
+            .await;
 
         // Write any in-flight logs to the file / telemetry queue
-        if let Err(e) = dx_layer.flush_telemetry(&app_res).await {
+        if let Err(e) = trace_controller.flush_telemetry(&app_res).await {
             tracing::trace!("Failed to finish logging: {}", e);
         }
 
@@ -224,34 +269,27 @@ impl TraceController {
         }
     }
 
-    /// Get a handle to the trace controller.
-    pub fn redirect(interactive: bool) -> Self {
-        let (tui_tx, tui_rx) = unbounded();
-
-        if interactive {
-            TUI_ACTIVE.store(true, Ordering::Relaxed);
-            TUI_TX.set(tui_tx.clone()).unwrap();
-        }
-
-        Self { tui_rx }
+    // Redirects the tracing logs to the TUI if it's active, otherwise it just collects them.
+    pub fn redirect_to_tui(&self) {
+        self.tui_active.store(true, Ordering::Relaxed);
     }
 
     /// Wait for the internal logger to send a message
-    pub(crate) async fn wait(&mut self) -> ServeUpdate {
+    pub(crate) async fn wait(&self) -> ServeUpdate {
         use futures_util::StreamExt;
 
-        let Some(log) = self.tui_rx.next().await else {
+        let Some(log) = self.tui_rx.lock().await.next().await else {
             return std::future::pending().await;
         };
 
         ServeUpdate::TracingLog { log }
     }
 
-    pub(crate) fn shutdown_panic(&mut self) {
-        TUI_ACTIVE.store(false, Ordering::Relaxed);
+    pub(crate) async fn shutdown_panic(&self) {
+        self.tui_active.store(false, Ordering::Relaxed);
 
         // re-emit any remaining messages
-        while let Ok(Some(msg)) = self.tui_rx.try_next() {
+        while let Ok(Some(msg)) = self.tui_rx.lock().await.try_next() {
             let content = match msg.content {
                 TraceContent::Text(text) => text,
                 TraceContent::Cargo(msg) => msg.message.to_string(),
@@ -265,55 +303,6 @@ impl TraceController {
             }
         }
     }
-}
-
-struct CapturedBacktrace {
-    backtrace: Backtrace,
-    location: Option<SavedLocation>,
-}
-
-struct SavedLocation {
-    file: String,
-    line: u32,
-    column: u32,
-}
-
-impl DxLayer {
-    fn new(args: &crate::cli::Cli) -> Self {
-        // Initialize the log file if we use it
-        let log_to_file = match args.verbosity.log_to_file.as_deref() {
-            Some(file_path) => {
-                if !file_path.exists() {
-                    _ = std::fs::write(file_path, "");
-                }
-                Some(file_path.to_path_buf())
-            }
-            None => None,
-        };
-
-        // Create a new session ID for this invocation of the CLI
-        let reporter = Self::enroll_reporter().ok().map(|reporter_id| Reporter {
-            is_ci: std::env::var("CI").is_ok(),
-            device_triple: target_lexicon::Triple::host().to_string(),
-            cli_version: crate::VERSION.to_string(),
-            session_id: Uuid::new_v4().as_u128(),
-            distinct_id: reporter_id.as_u128(),
-        });
-
-        // Create a new telemetry channel
-        // Note that we only drain the channel at the end of the CLI run, so it's not really being used as a channel - more of a vecdeque
-        let (telemetry_tx, telemetry_rx) = futures_channel::mpsc::unbounded();
-
-        Self {
-            reporter,
-            telemetry_tx,
-            log_to_file,
-            telemetry_rx: Arc::new(Mutex::new(telemetry_rx)),
-            log_tile_file_buffer: Arc::new(Mutex::new(String::new())),
-        }
-    }
-
-    const DX_STATS_ENDPOINT: &str = "https://dx.stats.dioxus.dev/api/v1/";
 
     /// Uploads telemetry logs from the filesystem to the telemetry endpoint.
     ///
@@ -336,30 +325,14 @@ impl DxLayer {
     ///       otherwise we might end up being flooded by telemetry events.
     ///
     /// We loop receive messages, pushing them into a batch.
-    async fn upload_telemetry(heartbeat: TelemetryEventData, reporter: Reporter) -> Result<()> {
+    async fn upload_telemetry_files(self, heartbeat: TelemetryEventData) -> Result<()> {
         use fs2::FileExt;
-        use reqwest::{header::CONTENT_TYPE, Client as HttpClient};
 
         // Wait a little bit to prevent abuse (spam loops) and not do extra work if it's a simple `--help` call
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
-        // Create the telemetry client
-        let client = HttpClient::builder()
-            .timeout(std::time::Duration::from_secs(5))
-            .build()?;
-
         // Send off a heartbeat request. If this fails, we skip anything else.
-        client
-            .post(Self::DX_STATS_ENDPOINT)
-            .header(CONTENT_TYPE, "application/json")
-            .header("X-Reporter-ID", reporter.distinct_id.to_string())
-            .json(&Self::telemetry_to_posthog(&reporter, heartbeat))
-            .send()
-            .await?
-            .status()
-            .is_success()
-            .then_some(())
-            .context("Failed to send heartbeat")?;
+        self.send_heartbeat(heartbeat).await?;
 
         // Wait a few seconds to see if we can end up in `dx serve` or a long-running task
         // If we're in CI though, we do want to flush telemetry immediately
@@ -404,19 +377,11 @@ impl DxLayer {
             );
 
             // Send the request
-            // If the request fails, we just log the error and continue
-            let res = client
-                .post(Self::DX_STATS_ENDPOINT)
-                .header(CONTENT_TYPE, "application/json")
-                .header("X-Reporter-ID", reporter.distinct_id.to_string())
-                .body(request_body)
-                .send()
-                .await;
-
-            // Delete the telemetry file if the upload was successful
-            match res {
+            // - If the request fails, we just log the error and continue
+            // - If the request succeeds, we remove the file
+            match self.upload_to_posthog(request_body).await {
                 Ok(res) if res.status().is_success() => {
-                    std::fs::remove_file(e.path());
+                    _ = std::fs::remove_file(e.path());
                 }
                 Ok(res) => {
                     tracing::trace!("Telemetry endpoint rejected: {}", e.path().display());
@@ -431,6 +396,42 @@ impl DxLayer {
                 }
             }
         }
+
+        Ok(())
+    }
+
+    async fn upload_to_posthog(&self, body: String) -> Result<reqwest::Response> {
+        use hyper::header::CONTENT_TYPE;
+
+        let client = self
+            .http_client
+            .as_ref()
+            .context("HTTP client not initialized")?;
+
+        let reporter = self.reporter.as_ref().context("No reporter initialized")?;
+
+        let res = client
+            .post(Self::DX_STATS_ENDPOINT)
+            .header(CONTENT_TYPE, "application/json")
+            .header("X-Reporter-ID", reporter.distinct_id.to_string())
+            .header("X-Untrusted-API-Key", Self::untrusted_api_key())
+            .body(body)
+            .send()
+            .await
+            .context("Failed to send telemetry data")?;
+
+        Ok(res)
+    }
+
+    async fn send_heartbeat(&self, heartbeat: TelemetryEventData) -> Result<()> {
+        let reporter = self.reporter.as_ref().context("No reporter initialized")?;
+        let body = serde_json::to_string(&Self::telemetry_to_posthog(reporter, heartbeat))?;
+        self.upload_to_posthog(body)
+            .await?
+            .status()
+            .is_success()
+            .then_some(())
+            .context("Failed to send heartbeat")?;
 
         Ok(())
     }
@@ -531,7 +532,7 @@ impl DxLayer {
 
         // Add the fatal error to the telemetry
         if let Ok(Err(err)) = res.as_ref() {
-            _ = self.telemetry_tx.unbounded_send(fatal_error(&err));
+            _ = self.telemetry_tx.unbounded_send(fatal_error(err));
         }
 
         // If there's a panic, we also want to capture that
@@ -565,23 +566,11 @@ impl DxLayer {
             // };
         }
 
-        let mut msgs = self
-            .telemetry_rx
-            .lock()
-            .ok()
-            .context("Failed to lock telemetry channel")?;
-
         // If we're in CI, we try to upload the telemetry immediately, with a short timeout (5 seconds or so)
         // Hopefully it doesn't fail! Not much we can do in CI.
         match std::env::var("CI") {
             Ok(t) if t == "true" || t == "1" => {
-                use reqwest::{header::CONTENT_TYPE, Client as HttpClient};
-                use std::time::Duration;
-
-                let client = HttpClient::builder()
-                    .timeout(Duration::from_secs(5))
-                    .build()
-                    .context("Failed to build telemetry client")?;
+                let mut msgs = self.telemetry_rx.lock().await;
 
                 let request_body = format!(
                     r#"{{ "historical_migration": false, "batch": [{batch_body}] }}"#,
@@ -590,17 +579,13 @@ impl DxLayer {
                         .join(",")
                 );
 
-                client
-                    .post(Self::DX_STATS_ENDPOINT)
-                    .header(CONTENT_TYPE, "application/json")
-                    .header("X-Reporter-ID", reporter.distinct_id.to_string())
-                    .body(request_body)
-                    .send()
-                    .await?;
+                self.upload_to_posthog(request_body).await?;
             }
 
             // Dump the logs to a the session file as jsonl
             _ => {
+                let mut msgs = self.telemetry_rx.lock().await;
+
                 let dest = Workspace::dioxus_data_dir()
                     .join("stats")
                     .join("sessions")
@@ -622,7 +607,7 @@ impl DxLayer {
     }
 }
 
-impl<S> Layer<S> for DxLayer
+impl<S> Layer<S> for TraceController
 where
     S: Subscriber + for<'a> LookupSpan<'a>,
 {
@@ -637,7 +622,7 @@ where
         let level = meta.level();
 
         // Redirect to the TUI if it's active
-        if TUI_ACTIVE.load(Ordering::Relaxed) {
+        if self.tui_active.load(Ordering::Relaxed) {
             let mut final_msg = String::new();
             write!(final_msg, "{} ", visitor.message).unwrap();
 
@@ -649,11 +634,9 @@ where
                 visitor.source = TraceSrc::Dev;
             }
 
-            _ = TUI_TX.get().unwrap().unbounded_send(TraceMsg::text(
-                visitor.source,
-                *level,
-                final_msg,
-            ));
+            _ = self
+                .tui_tx
+                .unbounded_send(TraceMsg::text(visitor.source, *level, final_msg));
         }
 
         // Send a telemetry event if we have a telemetry channel

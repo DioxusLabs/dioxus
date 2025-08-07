@@ -39,7 +39,7 @@ pub(crate) use update::*;
 /// - I'd love to be able to configure the CLI while it's running so we can change settings on the fly.
 /// - I want us to be able to detect a `server_fn` in the project and then upgrade from a static server
 ///   to a dynamic one on the fly.
-pub(crate) async fn serve_all(args: ServeArgs, tracer: &mut TraceController) -> Result<()> {
+pub(crate) async fn serve_all(args: ServeArgs, tracer: &TraceController) -> Result<()> {
     // Load the args into a plan, resolving all tooling, build dirs, arguments, decoding the multi-target, etc
     let exit_on_error = args.exit_on_error;
     let mut builder = AppServer::new(args).await?;

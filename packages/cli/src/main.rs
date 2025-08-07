@@ -49,8 +49,9 @@ async fn main() {
     }
 
     // Run under the tracing collector so we can capture errors/panics.
-    let result = TraceController::main(|args| async move {
+    let result = TraceController::main(|args, tracer| async move {
         match args {
+            Commands::Serve(opts) => opts.serve(&tracer).await,
             Commands::Translate(opts) => opts.translate(),
             Commands::New(opts) => opts.create().await,
             Commands::Init(opts) => opts.init().await,
@@ -58,7 +59,6 @@ async fn main() {
             Commands::Autoformat(opts) => opts.autoformat().await,
             Commands::Check(opts) => opts.check().await,
             Commands::Build(opts) => opts.build().await,
-            Commands::Serve(opts) => opts.serve().await,
             Commands::Bundle(opts) => opts.bundle().await,
             Commands::Run(opts) => opts.run().await,
             Commands::SelfUpdate(opts) => opts.self_update().await,
