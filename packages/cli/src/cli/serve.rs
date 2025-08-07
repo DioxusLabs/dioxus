@@ -106,9 +106,9 @@ impl ServeArgs {
             tracer.redirect_to_tui();
         }
 
-        let res = crate::serve::serve_all(self, tracer).await;
-
-        res.map(|_| StructuredOutput::Success)
+        crate::serve::serve_all(self, tracer)
+            .await
+            .map(|_| StructuredOutput::Success)
     }
 
     /// Check if the server is running in interactive mode. This involves checking the terminal as well

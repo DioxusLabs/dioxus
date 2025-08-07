@@ -520,8 +520,13 @@ impl TraceController {
         // Return the right UI and error
         match app_res {
             Ok(Ok(res)) => Ok(res),
-            Ok(Err(e)) => Err(e),
+            Ok(Err(e)) => {
+                println!();
+                Err(e)
+            }
             Err(panic_err) => {
+                println!();
+
                 // And then print the panic itself.
                 let as_str = if let Some(p) = panic_err.downcast_ref::<String>() {
                     p.as_ref()
@@ -531,7 +536,23 @@ impl TraceController {
                     "<unknown panic>"
                 };
 
-                Err(anyhow::anyhow!("DX panicked: {}", as_str))
+                // Pretty-print the backtrace if we have it
+                let message = match BACKTRACE.get() {
+                    Some(loc) => {
+                        let location_display = loc
+                            .location
+                            .as_ref()
+                            .map(|l| format!("{}:{}:{}", l.file, l.line, l.column))
+                            .unwrap_or_else(|| "<unknown>".to_string());
+
+                        let clean = clean_backtrace(&loc.backtrace);
+
+                        format!("dx panicked at {location_display}\n{as_str}\n\n{clean}")
+                    }
+                    None => format!("dx panicked: {as_str}"),
+                };
+
+                Err(anyhow::anyhow!(message))
             }
         }
     }
@@ -555,7 +576,6 @@ impl TraceController {
 
         // If there's a panic, we also want to capture that
         if let Err(panic_err) = res {
-            let backtrace = BACKTRACE.get();
             // if let Some(bt) = bt {
             //     println!("{:?}", bt);
             // }
@@ -569,34 +589,33 @@ impl TraceController {
                 "<unknown panic>"
             };
 
-            // println!("dx panicked: {}", as_str);
+            // Attempt to emulate the default panic hook
+            let message = match BACKTRACE.get() {
+                Some(loc) => {
+                    let location_display = loc
+                        .location
+                        .as_ref()
+                        .map(|l| format!("{}:{}:{}", l.file, l.line, l.column))
+                        .unwrap_or_else(|| "<unknown>".to_string());
 
-            // // Attempt to emulate the default panic hook
-            // let message = match BACKTRACE.get() {
-            //     Some((back, location)) => {
-            //         let location_display = location
-            //             .as_ref()
-            //             .map(|l| format!("{}:{}:{}", l.file, l.line, l.column))
-            //             .unwrap_or_else(|| "<unknown>".to_string());
+                    // let backtrace_display = clean_backtrace(back);
 
-            //         let backtrace_display = clean_backtrace(back);
+                    // // Add the fatal error to the telemetry
+                    // send_telemetry_event(TelemetryEvent::new(
+                    //     "panic",
+                    //     Some(location_display.clone()),
+                    //     &backtrace_display,
+                    //     "error",
+                    // ));
 
-            //         // Add the fatal error to the telemetry
-            //         send_telemetry_event(TelemetryEvent::new(
-            //             "panic",
-            //             Some(location_display.clone()),
-            //             &backtrace_display,
-            //             "error",
-            //         ));
-
-            //         format!("dx serve panicked at {location_display}\n{as_str}\n{backtrace_display} ___rust_try")
-            //     }
-            //     None => {
-            //         // Add the fatal error to the telemetry
-            //         send_telemetry_event(TelemetryEvent::new("panic", None, as_str, "error"));
-            //         format!("dx serve panicked: {as_str}")
-            //     }
-            // };
+                    format!("dx serve panicked at {location_display}\n{as_str}\n{location_display} ___rust_try")
+                }
+                None => {
+                    // Add the fatal error to the telemetry
+                    // send_telemetry_event(TelemetryEvent::new("panic", None, as_str, "error"));
+                    format!("dx serve panicked: {as_str}")
+                }
+            };
         }
 
         // If we're in CI, we try to upload the telemetry immediately, with a short timeout (5 seconds or so)
@@ -1093,7 +1112,7 @@ async fn run_with_ctrl_c(
     let (tx, rx) = tokio::sync::oneshot::channel();
     let mut tx = Some(tx);
 
-    ctrlc::set_handler(move || {
+    _ = ctrlc::set_handler(move || {
         match tx.take() {
             // If we have a sender, we unset the following `select!` and continue from there
             Some(tx) => _ = tx.send(()),
@@ -1104,8 +1123,7 @@ async fn run_with_ctrl_c(
                 std::process::exit(1);
             }
         }
-    })
-    .expect("ctrlc::set_handler");
+    });
 
     tokio::select! {
         _ = rx => Ok(StructuredOutput::ExitRequested),
