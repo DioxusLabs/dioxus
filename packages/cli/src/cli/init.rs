@@ -1,54 +1,53 @@
 use super::*;
 use cargo_generate::{GenerateArgs, TemplatePath, Vcs};
-use serde_json::json;
 
 #[derive(Clone, Debug, Default, Deserialize, Parser)]
 #[clap(name = "init")]
 pub struct Init {
     /// Create a new Dioxus project at PATH
     #[arg(default_value = ".")]
-    path: PathBuf,
+    pub path: PathBuf,
 
     /// Project name. Defaults to directory name
     #[arg(short, long)]
-    name: Option<String>,
+    pub name: Option<String>,
 
     /// Template path
     #[clap(short, long)]
-    template: Option<String>,
+    pub template: Option<String>,
 
     /// Branch to select when using `template` from a git repository.
     /// Mutually exclusive with: `--revision`, `--tag`.
     #[clap(long, conflicts_with_all(["revision", "tag"]))]
-    branch: Option<String>,
+    pub branch: Option<String>,
 
     /// A commit hash to select when using `template` from a git repository.
     /// Mutually exclusive with: `--branch`, `--tag`.
     #[clap(long, conflicts_with_all(["branch", "tag"]))]
-    revision: Option<String>,
+    pub revision: Option<String>,
 
     /// Tag to select when using `template` from a git repository.
     /// Mutually exclusive with: `--branch`, `--revision`.
     #[clap(long, conflicts_with_all(["branch", "revision"]))]
-    tag: Option<String>,
+    pub tag: Option<String>,
 
     /// Specify a sub-template within the template repository to be used as the actual template
     #[clap(long)]
-    subtemplate: Option<String>,
+    pub subtemplate: Option<String>,
 
     /// Pass `<option>=<value>` for the used template (e.g., `foo=bar`)
     #[clap(short, long)]
-    option: Vec<String>,
+    pub option: Vec<String>,
 
     /// Skip user interaction by using the default values for the used template.
     /// Default values can be overridden with `--option`
     #[clap(short, long)]
-    yes: bool,
+    pub yes: bool,
 
     /// Specify the VCS used to initialize the generated template.
     /// Options: `git`, `none`.
     #[arg(long, value_parser)]
-    vcs: Option<Vcs>,
+    pub vcs: Option<Vcs>,
 }
 
 impl Init {
@@ -90,21 +89,6 @@ impl Init {
         let path = cargo_generate::generate(args)?;
         _ = create::post_create(&path, &self.vcs.unwrap_or(Vcs::Git));
         Ok(StructuredOutput::Success)
-    }
-
-    pub(crate) fn command_anonymized(&self) -> (String, Value) {
-        (
-            "new".to_string(),
-            json!({
-                "subtemplate": self.subtemplate,
-                "option": self.option,
-                "yes": self.yes,
-                "vcs": self.vcs.map(|v| match v {
-                    Vcs::Git => "git",
-                    Vcs::None => "none",
-                }),
-            }),
-        )
     }
 }
 

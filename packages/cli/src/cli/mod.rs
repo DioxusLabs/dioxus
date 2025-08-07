@@ -116,41 +116,6 @@ pub enum BuildTools {
     BuildAssets(build_assets::BuildAssets),
 }
 
-impl Commands {
-    pub(crate) fn to_heartbeat_event(&self) -> TelemetryEventData {
-        let (name, anonymized) = self.command_anonymized();
-        TelemetryEventData::new("heartbeat", name, module_path!())
-            .with_value(
-                "raw_arguments",
-                std::env::args()
-                    .skip(1)
-                    .map(|s| dioxus_cli_telemetry::strip_paths(&s))
-                    .collect::<Vec<_>>(),
-            )
-            .with_value("arguments", anonymized)
-    }
-
-    pub(crate) fn command_anonymized(&self) -> (String, Value) {
-        match self {
-            Commands::New(new) => new.command_anonymized(),
-            Commands::Serve(serve) => serve.command_anonymized(),
-            Commands::Bundle(bundle) => bundle.command_anonymized(),
-            Commands::Build(build) => ("build".to_string(), build.anonymized()),
-            Commands::Run(run) => run.command_anonymized(),
-            Commands::Init(init) => init.command_anonymized(),
-            Commands::Doctor(doctor) => doctor.command_anonymized(),
-            Commands::Translate(translate) => translate.command_anonymized(),
-            Commands::Autoformat(autoformat) => autoformat.command_anonymized(),
-            Commands::Check(check) => check.command_anonymized(),
-            Commands::Config(config) => config.command_anonymized(),
-            Commands::SelfUpdate(self_update) => self_update.command_anonymized(),
-            Commands::Tools(tool) => match tool {
-                BuildTools::BuildAssets(build_assets) => build_assets.command_anonymized(),
-            },
-        }
-    }
-}
-
 pub(crate) static VERSION: LazyLock<String> = LazyLock::new(|| {
     format!(
         "{} ({})",

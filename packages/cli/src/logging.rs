@@ -23,6 +23,7 @@ use dioxus_cli_telemetry::{Reporter, TelemetryEventData};
 use dioxus_dx_wire_format::StructuredOutput;
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::{FutureExt, TryFutureExt};
+use serde_json::json;
 use std::{any::Any, backtrace::Backtrace, io::Read, str::FromStr, sync::Arc};
 use std::{borrow::Cow, sync::OnceLock};
 use std::{
@@ -216,7 +217,7 @@ impl TraceController {
         tokio::spawn(
             tracer
                 .clone()
-                .upload_telemetry_files(args.action.to_heartbeat_event())
+                .upload_telemetry_files(Self::to_heartbeat_event(&args.action))
                 .map_err(|err| tracing::error!("Failed to upload telemetry files: {}", err)),
         );
 
@@ -609,6 +610,109 @@ impl TraceController {
         }
 
         "https://dx-cli-stats.dioxus.dev/".to_string()
+    }
+
+    pub(crate) fn to_heartbeat_event(arg: &crate::Commands) -> TelemetryEventData {
+        let (name, anonymized) = Self::command_anonymized(arg);
+        TelemetryEventData::new("heartbeat", name, module_path!())
+            .with_value(
+                "raw_arguments",
+                std::env::args()
+                    .skip(1)
+                    .map(|s| dioxus_cli_telemetry::strip_paths(&s))
+                    .collect::<Vec<_>>(),
+            )
+            .with_value("arguments", anonymized)
+    }
+
+    /// Returns arguments that we're curious about
+    pub(crate) fn command_anonymized(arg: &crate::Commands) -> (String, serde_json::Value) {
+        use crate::BuildTools;
+        use cargo_generate::Vcs;
+
+        match arg {
+            Commands::New(new) => (
+                "new".to_string(),
+                json!({
+                    "subtemplate": new.subtemplate,
+                    "option": new.option,
+                    "yes": new.yes,
+                    "vcs": new.vcs.map(|v| match v {
+                        Vcs::Git => "git",
+                        Vcs::None => "none",
+                    }),
+                }),
+            ),
+            Commands::Serve(serve) => ("serve".to_string(), serve.anonymized()),
+            Commands::Bundle(bundle) => (
+                "bundle".to_string(),
+                json!({
+                    "package_types": bundle.package_types,
+                    "out_dir": bundle.out_dir.is_some(),
+                }),
+            ),
+            Commands::Build(build) => ("build".to_string(), build.anonymized()),
+            Commands::Run(run) => (
+                "run".to_string(),
+                json! {{
+                    "args": run.args.anonymized()
+                }},
+            ),
+            Commands::Init(cmd) => (
+                "new".to_string(),
+                json!({
+                    "subtemplate": cmd.subtemplate,
+                    "option": cmd.option,
+                    "yes": cmd.yes,
+                    "vcs": cmd.vcs.map(|v| match v {
+                        Vcs::Git => "git",
+                        Vcs::None => "none",
+                    }),
+                }),
+            ),
+            Commands::Doctor(_cmd) => ("doctor".to_string(), json!({})),
+            Commands::Translate(cmd) => (
+                "translate".to_string(),
+                json!({
+                    "file": cmd.file.is_some(),
+                    "raw": cmd.raw.is_some(),
+                    "output": cmd.output.is_some(),
+                    "component": cmd.component,
+                }),
+            ),
+            Commands::Autoformat(cmd) => (
+                "fmt".to_string(),
+                json!({
+                    "all_code": cmd.all_code,
+                    "check": cmd.check,
+                    "raw": cmd.raw.is_some(),
+                    "file": cmd.file.is_some(),
+                    "split_line_attributes": cmd.split_line_attributes,
+                    "package": cmd.package.is_some(),
+                }),
+            ),
+            Commands::Check(cmd) => (
+                "check".to_string(),
+                json!({
+                    "file": cmd.file.is_some(),
+                    "build_args": cmd.build_args.anonymized(),
+                }),
+            ),
+            Commands::Config(config) => config.command_anonymized(),
+            Commands::SelfUpdate(cmd) => (
+                "update".to_string(),
+                json!({
+                    "nightly": cmd.nightly,
+                    "version": cmd.version,
+                    "install": cmd.install,
+                    "list": cmd.list,
+                    "force": cmd.force,
+                }),
+            ),
+            Commands::Tools(tool) => match tool {
+                BuildTools::BuildAssets(_build_assets) => ("tools assets".to_string(), json!({})),
+            },
+        }
     }
 }
 

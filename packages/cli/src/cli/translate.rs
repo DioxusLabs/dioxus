@@ -46,18 +46,6 @@ impl Translate {
 
         Ok(StructuredOutput::HtmlTranslate { html })
     }
-
-    pub(crate) fn command_anonymized(&self) -> (String, Value) {
-        (
-            "translate".to_string(),
-            serde_json::json!({
-                "file": self.file.is_some(),
-                "raw": self.raw.is_some(),
-                "output": self.output.is_some(),
-                "component": self.component,
-            }),
-        )
-    }
 }
 
 pub fn convert_html_to_formatted_rsx(dom: &Dom, component: bool) -> String {

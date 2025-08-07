@@ -34,8 +34,4 @@ impl BuildAssets {
 
         Ok(StructuredOutput::Success)
     }
-
-    pub(crate) fn command_anonymized(&self) -> (String, Value) {
-        ("tools assets".to_string(), serde_json::json!({}))
-    }
 }

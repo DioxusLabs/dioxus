@@ -125,10 +125,6 @@ impl ServeArgs {
         use std::io::IsTerminal;
         std::io::stdout().is_terminal() && self.interactive.unwrap_or(true)
     }
-
-    pub(crate) fn command_anonymized(&self) -> (String, Value) {
-        ("serve".to_string(), self.anonymized())
-    }
 }
 
 impl Anonymized for ServeArgs {

@@ -50,16 +50,6 @@ impl Check {
 
         Ok(StructuredOutput::Success)
     }
-
-    pub(crate) fn command_anonymized(&self) -> (String, Value) {
-        (
-            "check".to_string(),
-            serde_json::json!({
-                "file": self.file.is_some(),
-                "build_args": self.build_args.anonymized(),
-            }),
-        )
-    }
 }
 
 async fn check_file_and_report(path: PathBuf) -> Result<()> {

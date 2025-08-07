@@ -165,13 +165,4 @@ impl RunArgs {
 
         Ok(StructuredOutput::Success)
     }
-
-    pub(crate) fn command_anonymized(&self) -> (String, serde_json::Value) {
-        (
-            "run".to_string(),
-            serde_json::json! {{
-                "args": self.args.command_anonymized()
-            }},
-        )
-    }
 }
