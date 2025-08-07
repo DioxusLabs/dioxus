@@ -108,15 +108,6 @@ impl ServeArgs {
 
         let res = crate::serve::serve_all(self, tracer).await;
 
-        // Kill the screen so we don't ruin the terminal
-        _ = crate::serve::Output::remote_shutdown(is_interactive_tty);
-
-        // And drain the tracer as regular messages. All messages will be logged (including traces)
-        // and then we can print the panic message
-        if res.is_err() {
-            tracer.shutdown_panic().await;
-        }
-
         res.map(|_| StructuredOutput::Success)
     }
 

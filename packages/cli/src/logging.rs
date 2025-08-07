@@ -230,35 +230,30 @@ impl TraceController {
             .with(fmt_layer)
             .init();
 
+        // Set the panic handler to capture backtraces but not print them. We will print them later.
+        std::panic::set_hook(Box::new(move |panic_info| {
+            _ = BACKTRACE.set(CapturedBacktrace {
+                backtrace: Backtrace::capture(),
+                location: panic_info.location().map(|l| SavedLocation {
+                    file: l.file().to_string(),
+                    line: l.line(),
+                    column: l.column(),
+                }),
+            });
+        }));
+
         // Run the app, catching panics and errors, early flushing if `ctrl_c` is pressed.
         let app_res = AssertUnwindSafe(run_with_ctrl_c(run_app(args.action, tracer.clone())))
             .catch_unwind()
             .await;
 
         // Write any in-flight logs to the file / telemetry queue
-        if let Err(e) = tracer.flush_telemetry(&app_res).await {
+        if let Err(e) = tracer.flush_logs(&app_res).await {
             tracing::trace!("Failed to finish logging: {}", e);
         }
 
-        // Return the right UI and error
-        match app_res {
-            Ok(Ok(res)) => Ok(res),
-            Ok(Err(e)) => Err(e),
-            Err(panic_err) => {
-                // And then print the panic itself.
-                let as_str = if let Some(p) = panic_err.downcast_ref::<String>() {
-                    p.as_ref()
-                } else if let Some(p) = panic_err.downcast_ref::<&str>() {
-                    p
-                } else {
-                    "<unknown panic>"
-                };
-
-                todo!()
-
-                // Err(anyhow::anyhow!(message))
-            }
-        }
+        // Do any final logging cleanup
+        tracer.cleanup_ui(app_res).await
     }
 
     // Redirects the tracing logs to the TUI if it's active, otherwise it just collects them.
@@ -275,25 +270,6 @@ impl TraceController {
         };
 
         ServeUpdate::TracingLog { log }
-    }
-
-    pub(crate) async fn shutdown_panic(&self) {
-        self.tui_active.store(false, Ordering::Relaxed);
-
-        // re-emit any remaining messages
-        while let Ok(Some(msg)) = self.tui_rx.lock().await.try_next() {
-            let content = match msg.content {
-                TraceContent::Text(text) => text,
-                TraceContent::Cargo(msg) => msg.message.to_string(),
-            };
-            match msg.level {
-                Level::ERROR => tracing::error!("{content}"),
-                Level::WARN => tracing::warn!("{content}"),
-                Level::INFO => tracing::info!("{content}"),
-                Level::DEBUG => tracing::debug!("{content}"),
-                Level::TRACE => tracing::trace!("{content}"),
-            }
-        }
     }
 
     /// Uploads telemetry logs from the filesystem to the telemetry endpoint.
@@ -356,6 +332,12 @@ impl TraceController {
             let Ok(_bytes_read) = file.read_to_string(&mut jsonl_file) else {
                 continue;
             };
+
+            // If the file is empty, we delete it and continue
+            if jsonl_file.trim().is_empty() {
+                _ = std::fs::remove_file(entry.path());
+                continue;
+            }
 
             // We assume since this is a jsonl file that every line is valid json. We just concat the lines together
             // and then send them using the batched client.
@@ -509,8 +491,53 @@ impl TraceController {
         Ok(reporter_id)
     }
 
+    async fn cleanup_ui(
+        &self,
+        app_res: Result<Result<StructuredOutput>, Box<dyn Any + Send>>,
+    ) -> Result<StructuredOutput> {
+        // Kill the screen so we don't ruin the terminal
+        _ = crate::serve::Output::remote_shutdown(true);
+
+        // And drain the tracer as regular messages. All messages will be logged (including traces)
+        // and then we can print the panic message
+        self.tui_active.store(false, Ordering::Relaxed);
+
+        // re-emit any remaining messages
+        while let Ok(Some(msg)) = self.tui_rx.lock().await.try_next() {
+            let content = match msg.content {
+                TraceContent::Text(text) => text,
+                TraceContent::Cargo(msg) => msg.message.to_string(),
+            };
+            match msg.level {
+                Level::ERROR => tracing::error!("{content}"),
+                Level::WARN => tracing::warn!("{content}"),
+                Level::INFO => tracing::info!("{content}"),
+                Level::DEBUG => tracing::debug!("{content}"),
+                Level::TRACE => tracing::trace!("{content}"),
+            }
+        }
+
+        // Return the right UI and error
+        match app_res {
+            Ok(Ok(res)) => Ok(res),
+            Ok(Err(e)) => Err(e),
+            Err(panic_err) => {
+                // And then print the panic itself.
+                let as_str = if let Some(p) = panic_err.downcast_ref::<String>() {
+                    p.as_ref()
+                } else if let Some(p) = panic_err.downcast_ref::<&str>() {
+                    p
+                } else {
+                    "<unknown panic>"
+                };
+
+                Err(anyhow::anyhow!("DX panicked: {}", as_str))
+            }
+        }
+    }
+
     /// Flush pending logs to the telemetry file.
-    async fn flush_telemetry(
+    async fn flush_logs(
         &self,
         res: &Result<Result<StructuredOutput>, Box<dyn Any + Send>>,
     ) -> Result<()> {
@@ -529,6 +556,21 @@ impl TraceController {
         // If there's a panic, we also want to capture that
         if let Err(panic_err) = res {
             let backtrace = BACKTRACE.get();
+            // if let Some(bt) = bt {
+            //     println!("{:?}", bt);
+            // }
+            // println!("dx panicked: {}", panic_err);
+            // And then print the panic itself.
+            let as_str = if let Some(p) = panic_err.downcast_ref::<String>() {
+                p.as_ref()
+            } else if let Some(p) = panic_err.downcast_ref::<&str>() {
+                p
+            } else {
+                "<unknown panic>"
+            };
+
+            // println!("dx panicked: {}", as_str);
+
             // // Attempt to emulate the default panic hook
             // let message = match BACKTRACE.get() {
             //     Some((back, location)) => {
@@ -574,19 +616,24 @@ impl TraceController {
             false => {
                 let mut msgs = self.telemetry_rx.lock().await;
 
-                let dest = Workspace::dioxus_data_dir()
-                    .join("stats")
-                    .join("sessions")
-                    .join(format!("{}.jsonl", reporter.session_id));
+                let msg_list =
+                    std::iter::from_fn(|| msgs.try_next().ok().flatten()).collect::<Vec<_>>();
 
-                let mut logfile = std::fs::OpenOptions::new()
-                    .append(true)
-                    .create(true)
-                    .open(dest)?;
+                if !msg_list.is_empty() {
+                    let dest = Workspace::dioxus_data_dir()
+                        .join("stats")
+                        .join("sessions")
+                        .join(format!("{}.jsonl", reporter.session_id));
 
-                while let Some(msg) = msgs.try_next().ok().flatten() {
-                    serde_json::to_writer(&mut logfile, &msg)?;
-                    writeln!(&mut logfile)?;
+                    let mut logfile = std::fs::OpenOptions::new()
+                        .append(true)
+                        .create(true)
+                        .open(dest)?;
+
+                    for msg in msg_list {
+                        serde_json::to_writer(&mut logfile, &msg)?;
+                        writeln!(logfile)?;
+                    }
                 }
             }
         }
