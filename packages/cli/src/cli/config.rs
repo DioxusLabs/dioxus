@@ -55,21 +55,6 @@ impl Display for Setting {
     }
 }
 
-impl Setting {
-    pub(crate) fn anonymized(&self) -> (String, Value) {
-        (
-            format!("config set {}", self),
-            match self {
-                Self::AlwaysHotReload { value } => json!({ "value": value }),
-                Self::AlwaysOpenBrowser { value } => json!({ "value": value }),
-                Self::AlwaysOnTop { value } => json!({ "value": value }),
-                Self::WSLFilePollInterval { value } => json!({ "value": value }),
-                Self::DisableTelemetry { value } => json!({ "value": value }),
-            },
-        )
-    }
-}
-
 // Clap complains if we use a bool directly and I can't find much info about it.
 // "Argument 'value` is positional and it must take a value but action is SetTrue"
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, clap::ValueEnum)]
@@ -138,19 +123,5 @@ impl Config {
         }
 
         Ok(StructuredOutput::Success)
-    }
-
-    pub(crate) fn command_anonymized(&self) -> (String, Value) {
-        match self {
-            Config::Init { force, .. } => (
-                "config init".to_string(),
-                json!({
-                    "force": force,
-                }),
-            ),
-            Config::FormatPrint {} => ("config format-print".to_string(), json!({})),
-            Config::CustomHtml {} => ("config custom-html".to_string(), json!({})),
-            Config::Set(setting) => setting.anonymized(),
-        }
     }
 }

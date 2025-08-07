@@ -627,6 +627,7 @@ impl TraceController {
 
     /// Returns arguments that we're curious about
     pub(crate) fn command_anonymized(arg: &crate::Commands) -> (String, serde_json::Value) {
+        use crate::cli::config::{Config, Setting};
         use crate::BuildTools;
         use cargo_generate::Vcs;
 
@@ -698,7 +699,26 @@ impl TraceController {
                     "build_args": cmd.build_args.anonymized(),
                 }),
             ),
-            Commands::Config(config) => config.command_anonymized(),
+            Commands::Config(config) => match config {
+                Config::Init { force, .. } => (
+                    "config init".to_string(),
+                    json!({
+                        "force": force,
+                    }),
+                ),
+                Config::FormatPrint {} => ("config format-print".to_string(), json!({})),
+                Config::CustomHtml {} => ("config custom-html".to_string(), json!({})),
+                Config::Set(setting) => (
+                    format!("config set {}", setting),
+                    match setting {
+                        Setting::AlwaysHotReload { value } => json!({ "value": value }),
+                        Setting::AlwaysOpenBrowser { value } => json!({ "value": value }),
+                        Setting::AlwaysOnTop { value } => json!({ "value": value }),
+                        Setting::WSLFilePollInterval { value } => json!({ "value": value }),
+                        Setting::DisableTelemetry { value } => json!({ "value": value }),
+                    },
+                ),
+            },
             Commands::SelfUpdate(cmd) => (
                 "update".to_string(),
                 json!({

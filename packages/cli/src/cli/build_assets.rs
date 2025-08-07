@@ -3,7 +3,6 @@ use std::{fs::create_dir_all, path::PathBuf};
 use crate::{extract_assets_from_file, Result, StructuredOutput};
 use clap::Parser;
 use dioxus_cli_opt::process_file_to;
-use serde_json::Value;
 use tracing::debug;
 
 #[derive(Clone, Debug, Parser)]

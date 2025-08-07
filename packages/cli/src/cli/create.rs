@@ -99,7 +99,6 @@ impl Create {
             ..Default::default()
         };
 
-        restore_cursor_on_sigint();
         tracing::debug!(dx_src = ?TraceSrc::Dev, "Creating new project with args: {args:#?}");
         let path = cargo_generate::generate(args)?;
 
@@ -125,12 +124,6 @@ pub(crate) fn resolve_template_and_branch(
         }
     };
 }
-
-/// Prevent hidden cursor if Ctrl+C is pressed when interacting
-/// with cargo-generate's prompts.
-///
-/// See <https://github.com/DioxusLabs/dioxus/pull/2603>.
-pub(crate) fn restore_cursor_on_sigint() {}
 
 /// Extracts the last directory name from the `path`.
 pub(crate) fn name_from_path(path: &Path) -> Result<String> {
