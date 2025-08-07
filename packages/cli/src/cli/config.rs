@@ -1,5 +1,3 @@
-use serde::Serialize;
-
 use super::*;
 use crate::{CliSettings, TraceSrc, Workspace};
 
@@ -56,7 +54,7 @@ impl Display for Setting {
 
 // Clap complains if we use a bool directly and I can't find much info about it.
 // "Argument 'value` is positional and it must take a value but action is SetTrue"
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, clap::ValueEnum)]
+#[derive(Debug, Clone, Copy, serde::Serialize, Deserialize, clap::ValueEnum)]
 pub(crate) enum BoolValue {
     True,
     False,
