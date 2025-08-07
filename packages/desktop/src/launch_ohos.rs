@@ -27,9 +27,7 @@ pub fn launch_virtual_dom_blocking(virtual_dom: VirtualDom, mut desktop_config: 
         }
 
         match window_event {
-            // For harmony, we can't use the start cause init event, so we need to handle it manually.
-            // Create a new webview need a UIContext, so we need to handle it manually.
-            Event::Resumed => app.handle_start_cause_init(),
+            Event::NewEvents(StartCause::Init) => app.handle_start_cause_init(),
             Event::LoopDestroyed => app.handle_loop_destroyed(),
             Event::WindowEvent {
                 event, window_id, ..
