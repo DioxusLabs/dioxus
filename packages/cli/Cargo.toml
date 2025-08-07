@@ -156,7 +156,6 @@ self_update = { version = "0.42.0", features = [
 self-replace = "1.5.0"
 cargo-config2 = { workspace = true }
 posthog-rs = "0.3.5"
-snafu = { version = "0.7.5", features = ["backtrace", "backtraces"] }
 serde_json5 = "0.2.1"
 fs2 = "0.4.3"
 

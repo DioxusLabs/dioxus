@@ -17,7 +17,6 @@ pub(crate) mod update;
 pub(crate) mod verbosity;
 
 pub(crate) use build::*;
-use dioxus_cli_telemetry::TelemetryEventData;
 pub(crate) use serve::*;
 pub(crate) use target::*;
 pub(crate) use verbosity::*;

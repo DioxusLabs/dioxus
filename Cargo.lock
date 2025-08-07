@@ -5128,7 +5128,6 @@ dependencies = [
  "serde_json",
  "serde_json5",
  "shell-words",
- "snafu",
  "strum 0.27.1",
  "subsecond-types",
  "syn 2.0.104",

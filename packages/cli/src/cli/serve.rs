@@ -106,7 +106,7 @@ impl ServeArgs {
             tracer.redirect_to_tui();
         }
 
-        let res = crate::serve::serve_all(self, &tracer).await;
+        let res = crate::serve::serve_all(self, tracer).await;
 
         // Kill the screen so we don't ruin the terminal
         _ = crate::serve::Output::remote_shutdown(is_interactive_tty);

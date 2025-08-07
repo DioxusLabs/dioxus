@@ -1,5 +1,4 @@
 use serde::Serialize;
-use serde_json::json;
 
 use super::*;
 use crate::{CliSettings, TraceSrc, Workspace};

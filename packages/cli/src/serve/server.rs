@@ -18,7 +18,6 @@ use axum::{
     routing::{get, get_service},
     Extension, Router,
 };
-use dioxus_cli_telemetry::TelemetryEventData;
 use dioxus_devtools_types::{DevserverMsg, HotReloadMsg};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::{
@@ -62,7 +61,6 @@ pub(crate) struct WebServer {
     new_hot_reload_sockets: UnboundedReceiver<ConnectedWsClient>,
     new_build_status_sockets: UnboundedReceiver<ConnectedWsClient>,
     build_status: SharedStatus,
-    last_build_status_identifier: &'static str,
     application_name: String,
     bundle: BundleFormat,
 }
@@ -121,7 +119,6 @@ impl WebServer {
 
         Ok(Self {
             build_status,
-            last_build_status_identifier: "",
             proxied_port,
             devserver_bind_ip,
             devserver_exposed_ip,
@@ -223,19 +220,7 @@ impl WebServer {
     pub(crate) async fn new_build_update(&mut self, update: &BuilderUpdate) {
         match update {
             BuilderUpdate::Progress { stage } => {
-                let identifier = stage.identifier();
-
-                // Only log the event if the identifier has changed
-                if self.last_build_status_identifier != identifier {
-                    self.last_build_status_identifier = identifier;
-                    tracing::trace!(
-                        telemetry = %TelemetryEventData::new(
-                            "build_stage",
-                            "Build stage update",
-                            module_path!(),
-                        ).with_value("build_stage", identifier)
-                    );
-                }
+                // Todo(miles): wire up more messages into the splash screen UI
                 match stage {
                     BuildStage::Success => {}
                     BuildStage::Failed => self.send_reload_failed().await,

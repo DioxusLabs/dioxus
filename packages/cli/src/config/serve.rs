@@ -1,5 +1,4 @@
 use clap::Parser;
-use serde_json::{json, Value};
 
 /// The arguments for the address the server will run on
 #[derive(Clone, Debug, Default, Parser)]
@@ -14,8 +13,8 @@ pub(crate) struct AddressArguments {
 }
 
 impl crate::Anonymized for AddressArguments {
-    fn anonymized(&self) -> Value {
-        json!({
+    fn anonymized(&self) -> serde_json::Value {
+        serde_json::json!({
             "port": self.port,
             "addr": self.addr.map(|addr| if addr.is_loopback() { "loopback" } else if addr.is_unspecified() { "unspecified" } else { "other" }),
         })
