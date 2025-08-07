@@ -75,8 +75,7 @@ pub struct TraceController {
     reporter: Option<Reporter>,
     telemetry_tx: UnboundedSender<TelemetryEventData>,
     telemetry_rx: Arc<tokio::sync::Mutex<UnboundedReceiver<TelemetryEventData>>>,
-    log_to_file: Option<PathBuf>,
-    log_tile_file_buffer: Arc<Mutex<String>>,
+    log_to_file: Option<Arc<tokio::sync::Mutex<std::fs::File>>>,
     tui_active: Arc<AtomicBool>,
     tui_tx: UnboundedSender<TraceMsg>,
     tui_rx: Arc<tokio::sync::Mutex<UnboundedReceiver<TraceMsg>>>,
@@ -95,7 +94,6 @@ struct SavedLocation {
 
 impl TraceController {
     pub const HEARTBEAT: &str = "cli_heartbeat";
-    pub const DX_STATS_ENDPOINT: &str = "https://dx.stats.dioxus.dev/api/v1/";
 
     /// Initialize the CLI and set up the tracing infrastructure
     ///
@@ -178,12 +176,21 @@ impl TraceController {
 
         // Construct our custom layer that handles the TUI and file logging
         // Initialize the log file if we use it
-        let log_to_file = args.verbosity.log_to_file.as_deref().map(|file_path| {
-            if !file_path.exists() {
-                _ = std::fs::write(file_path, "");
-            }
-            file_path.to_path_buf()
-        });
+        let log_to_file = args
+            .verbosity
+            .log_to_file
+            .as_deref()
+            .map(|file_path| {
+                if !file_path.exists() {
+                    _ = std::fs::write(file_path, "");
+                }
+                std::fs::OpenOptions::new()
+                    .append(true)
+                    .create(true)
+                    .open(file_path)
+                    .map(|file| Arc::new(tokio::sync::Mutex::new(file)))
+            })
+            .transpose()?;
 
         // Create a new session ID for this invocation of the CLI
         let reporter = Self::enroll_reporter().ok().map(|reporter_id| Reporter {
@@ -212,7 +219,6 @@ impl TraceController {
             tui_tx,
             tui_rx: Arc::new(tokio::sync::Mutex::new(tui_rx)),
             telemetry_rx: Arc::new(tokio::sync::Mutex::new(telemetry_rx)),
-            log_tile_file_buffer: Arc::new(Mutex::new(String::new())),
             http_client,
             tui_active,
         };
@@ -400,18 +406,16 @@ impl TraceController {
         Ok(())
     }
 
+    /// Uploads a single telemetry event to the PostHog endpoint.
     async fn upload_to_posthog(&self, body: String) -> Result<reqwest::Response> {
         use hyper::header::CONTENT_TYPE;
 
-        let client = self
+        let reporter = self.reporter.as_ref().context("No reporter initialized")?;
+        let res = self
             .http_client
             .as_ref()
-            .context("HTTP client not initialized")?;
-
-        let reporter = self.reporter.as_ref().context("No reporter initialized")?;
-
-        let res = client
-            .post(Self::DX_STATS_ENDPOINT)
+            .context("HTTP client not initialized")?
+            .post("https://dx.stats.dioxus.dev/api/v1/")
             .header(CONTENT_TYPE, "application/json")
             .header("X-Reporter-ID", reporter.distinct_id.to_string())
             .header("X-Untrusted-API-Key", Self::untrusted_api_key())
@@ -515,7 +519,7 @@ impl TraceController {
     /// Note that the key here is not the same key for the backend - our proxy fixes up the key to
     /// pass along. This way we can cycle keys on the backend without breaking the CLI.
     fn untrusted_api_key() -> &'static str {
-        option_env!("DX_RELEASE_ANALYTICS_KEY").unwrap_or_else(|| "untrusted")
+        option_env!("DX_RELEASE_ANALYTICS_KEY").unwrap_or_else(|| "<untrusted>")
     }
 
     /// Flush pending logs to the telemetry file.
@@ -697,7 +701,7 @@ where
         }
 
         // Write to a file if we need to.
-        if let Some(file_path) = self.log_to_file.as_ref() {
+        if let Some(open_file) = self.log_to_file.as_ref() {
             let new_line = if visitor.source == TraceSrc::Cargo {
                 Cow::Borrowed(visitor.message.as_str())
             } else {
@@ -720,9 +724,9 @@ where
             };
 
             let new_data = console::strip_ansi_codes(&new_line).to_string();
-            if let Ok(mut buf) = self.log_tile_file_buffer.lock() {
-                *buf += &new_data;
-                _ = fs::write(file_path, buf.as_bytes());
+            if let Ok(mut file) = open_file.try_lock() {
+                use std::io::Write;
+                _ = writeln!(file, "{}", new_data);
             }
         }
     }
