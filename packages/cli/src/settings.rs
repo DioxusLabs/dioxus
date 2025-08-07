@@ -149,6 +149,24 @@ impl CliSettings {
 
         *TELEMETRY_DISABLED
     }
+
+    pub(crate) fn is_ci() -> bool {
+        static CI: LazyLock<bool> = LazyLock::new(|| {
+            if matches!(std::env::var("CI"), Ok(val) if val.eq_ignore_ascii_case("true") || val == "1")
+            {
+                return true;
+            }
+
+            if matches!(std::env::var("DX_CI"), Ok(val) if val.eq_ignore_ascii_case("true") || val == "1")
+            {
+                return true;
+            }
+
+            false
+        });
+
+        *CI
+    }
 }
 
 fn default_wsl_file_poll_interval() -> Option<u16> {

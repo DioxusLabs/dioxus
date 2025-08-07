@@ -14,9 +14,8 @@
 //! 3. Build CLI layer for routing tracing logs to the TUI.
 //! 4. Build fmt layer for non-interactive logging with a custom writer that prevents output during interactive mode.
 
-use crate::Workspace;
 use crate::{serve::ServeUpdate, Cli, Commands, Verbosity};
-use crate::{BundleFormat, CliSettings};
+use crate::{BundleFormat, CliSettings, Workspace};
 use anyhow::{bail, Context, Result};
 use cargo_metadata::diagnostic::{Diagnostic, DiagnosticLevel};
 use clap::Parser;
@@ -56,7 +55,6 @@ const LOG_ENV: &str = "DIOXUS_LOG";
 const DX_SRC_FLAG: &str = "dx_src";
 
 static BACKTRACE: OnceLock<CapturedBacktrace> = OnceLock::new();
-
 pub static VERBOSITY: OnceLock<Verbosity> = OnceLock::new();
 
 /// A trait that emits an anonymous JSON representation of the object, suitable for telemetry.
@@ -194,7 +192,7 @@ impl TraceController {
 
         // Create a new session ID for this invocation of the CLI
         let reporter = Self::enroll_reporter().ok().map(|reporter_id| Reporter {
-            is_ci: std::env::var("CI").is_ok(),
+            is_ci: CliSettings::is_ci(),
             device_triple: target_lexicon::Triple::host().to_string(),
             cli_version: crate::VERSION.to_string(),
             session_id: Uuid::new_v4().as_u128(),
@@ -212,7 +210,7 @@ impl TraceController {
         // Note that we only drain the channel at the end of the CLI run, so it's not really being used as a channel - more of a vecdeque
         let (telemetry_tx, telemetry_rx) = futures_channel::mpsc::unbounded();
         let (tui_tx, tui_rx) = futures_channel::mpsc::unbounded();
-        let trace_controller = TraceController {
+        let tracer = TraceController {
             reporter,
             telemetry_tx,
             log_to_file,
@@ -225,7 +223,7 @@ impl TraceController {
 
         // Spawn the telemetry uploader in the background
         tokio::spawn(
-            trace_controller
+            tracer
                 .clone()
                 .upload_telemetry_files(args.action.to_heartbeat_event()),
         );
@@ -234,23 +232,18 @@ impl TraceController {
         tracing_subscriber::registry()
             .with(env_filter)
             .with(json_filter)
-            .with(trace_controller.clone())
+            .with(tracer.clone())
             .with(console_layer)
             .with(fmt_layer)
             .init();
 
-        // Construct a ctrl-c handler that attempts to exit the CLI gracefully
-
-        // Run the app, catching panics and errors
-        //
-        // *All* panics make it into the telemetry collector
-        // Only some get printed to the console.
-        let app_res = AssertUnwindSafe(run_app(args.action, trace_controller.clone()))
+        // Run the app, catching panics and errors, early flushing if `ctrl_c` is pressed.
+        let app_res = AssertUnwindSafe(run_with_ctrl_c(run_app(args.action, tracer.clone())))
             .catch_unwind()
             .await;
 
         // Write any in-flight logs to the file / telemetry queue
-        if let Err(e) = trace_controller.flush_telemetry(&app_res).await {
+        if let Err(e) = tracer.flush_telemetry(&app_res).await {
             tracing::trace!("Failed to finish logging: {}", e);
         }
 
@@ -342,7 +335,7 @@ impl TraceController {
 
         // Wait a few seconds to see if we can end up in `dx serve` or a long-running task
         // If we're in CI though, we do want to flush telemetry immediately
-        if std::env::var("CI").is_err() {
+        if !CliSettings::is_ci() {
             tokio::time::sleep(std::time::Duration::from_millis(5000)).await;
         }
 
@@ -572,8 +565,8 @@ impl TraceController {
 
         // If we're in CI, we try to upload the telemetry immediately, with a short timeout (5 seconds or so)
         // Hopefully it doesn't fail! Not much we can do in CI.
-        match std::env::var("CI") {
-            Ok(t) if t == "true" || t == "1" => {
+        match CliSettings::is_ci() {
+            true => {
                 let mut msgs = self.telemetry_rx.lock().await;
 
                 let request_body = format!(
@@ -587,7 +580,7 @@ impl TraceController {
             }
 
             // Dump the logs to a the session file as jsonl
-            _ => {
+            false => {
                 let mut msgs = self.telemetry_rx.lock().await;
 
                 let dest = Workspace::dioxus_data_dir()
@@ -913,8 +906,11 @@ pub fn clean_backtrace(backtrace: &Backtrace) -> String {
 
 /// Run the provided future and wait for it to complete, handling Ctrl-C gracefully.
 ///
-/// If ctrl-c is pressed twice, it exits immediately.
-async fn run_with_ctrl_c<T, E>(f: impl Future<Output = Result<T, E>>) -> Result<T, E> {
+/// If ctrl-c is pressed twice, it exits immediately, skipping our telemetry flush.
+/// Todo: maybe we want a side thread continuously flushing telemetry, esp if the user double ctrl-cs
+async fn run_with_ctrl_c(
+    f: impl Future<Output = Result<StructuredOutput>>,
+) -> Result<StructuredOutput> {
     let (tx, rx) = tokio::sync::oneshot::channel();
     let mut tx = Some(tx);
 
@@ -933,8 +929,7 @@ async fn run_with_ctrl_c<T, E>(f: impl Future<Output = Result<T, E>>) -> Result<
     .expect("ctrlc::set_handler");
 
     tokio::select! {
-        _ = rx => {}
+        _ = rx => Ok(StructuredOutput::ExitRequested),
+        res = f => res,
     }
-
-    f.await
 }

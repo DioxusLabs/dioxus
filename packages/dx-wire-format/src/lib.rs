@@ -46,6 +46,7 @@ pub enum StructuredOutput {
     },
     JsonEvent(serde_json::Value),
     Success,
+    ExitRequested,
     Error {
         message: String,
     },
