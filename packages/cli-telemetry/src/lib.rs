@@ -38,19 +38,14 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, time::SystemTime};
+use uuid::Uuid;
 
 /// We only store non-pii information in telemetry to track issues and performance
-/// across the CLI. This includes:
-/// - device triple (OS, arch, etc)
-/// - whether the CLI is running in CI
-/// - the CLI version
+/// across the CLI.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Reporter {
-    pub is_ci: bool,
-    pub device_triple: String,
-    pub cli_version: String,
-    pub session_id: u128,
-    pub distinct_id: u128,
+    pub session_id: Uuid,
+    pub distinct_id: Uuid,
 }
 
 /// An event's data, corresponding roughly to data collected from an individual trace.
@@ -63,33 +58,33 @@ pub struct Reporter {
 ///
 /// ```rust
 /// tracing::trace!(telemetry = "cli_did_thing", data = json!({ stage: "start", }))
-/// tracing::trace!(telemetry = "cli_did_thing", data = json!({ stage: "end", end: "bundling" }))
+/// tracing::trace!(telemetry = "cli_did_thing", data = json!({ stage: "end", }))
 /// ```
 ///
 /// On the analytics, side, we reconstruct the trace messages into a sequence of events, using
 /// the stage as a marker.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct TelemetryEventData {
+    /// The name of the command that was run, e.g. "build", "bundle", "heartbeat"
+    pub command: String,
+    /// The action that was taken, e.g. "build", "bundle", "heartbeat" (command run), etc
     pub action: String,
-    pub module: String,
+    /// An additional message to include in the event, e.g. "start", "end", "error", etc
     pub message: String,
-    pub stage: String,
+    pub module: String,
     pub time: DateTime<Utc>,
     pub values: HashMap<String, serde_json::Value>,
 }
 
 impl TelemetryEventData {
-    pub fn new(
-        name: impl ToString,
-        module: impl ToString,
-        message: impl ToString,
-        stage: impl ToString,
-    ) -> Self {
+    pub fn new(name: impl ToString, message: impl ToString, module: impl ToString) -> Self {
         Self {
+            command: std::env::args()
+                .nth(1)
+                .unwrap_or_else(|| "unknown".to_string()),
             module: strip_paths(&module.to_string()),
             action: strip_paths(&name.to_string()),
             message: strip_paths(&message.to_string()),
-            stage: strip_paths(&stage.to_string()),
             time: DateTime::<Utc>::from(SystemTime::now()),
             values: HashMap::new(),
         }
@@ -114,7 +109,7 @@ impl std::fmt::Display for TelemetryEventData {
 }
 
 // If the CLI is compiled locally, it can contain backtraces which contain the home path with the username in it.
-fn strip_paths(string: &str) -> String {
+pub fn strip_paths(string: &str) -> String {
     // Strip the home path from any paths in the backtrace
     let home_dir = dirs::home_dir().unwrap_or_default();
 

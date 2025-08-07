@@ -14,7 +14,7 @@
 //! 3. Build CLI layer for routing tracing logs to the TUI.
 //! 4. Build fmt layer for non-interactive logging with a custom writer that prevents output during interactive mode.
 
-use crate::{serve::ServeUpdate, Cli, Commands, Verbosity};
+use crate::{dx_build_info::GIT_COMMIT_HASH_SHORT, serve::ServeUpdate, Cli, Commands, Verbosity};
 use crate::{BundleFormat, CliSettings, Workspace};
 use anyhow::{bail, Context, Result};
 use cargo_metadata::diagnostic::{Diagnostic, DiagnosticLevel};
@@ -22,9 +22,7 @@ use clap::Parser;
 use dioxus_cli_telemetry::{Reporter, TelemetryEventData};
 use dioxus_dx_wire_format::StructuredOutput;
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
-use futures_util::FutureExt;
-use itertools::Itertools;
-use serde_json::json;
+use futures_util::{FutureExt, TryFutureExt};
 use std::{any::Any, backtrace::Backtrace, io::Read, str::FromStr, sync::Arc};
 use std::{borrow::Cow, sync::OnceLock};
 use std::{
@@ -35,7 +33,6 @@ use std::{
     time::Instant,
 };
 use std::{future::Future, panic::AssertUnwindSafe};
-use tower_http::ServiceExt;
 use tracing::{field::Visit, Level, Subscriber};
 use tracing_subscriber::{
     fmt::{
@@ -188,12 +185,9 @@ impl TraceController {
             .transpose()?;
 
         // Create a new session ID for this invocation of the CLI
-        let reporter = Self::enroll_reporter().ok().map(|reporter_id| Reporter {
-            is_ci: CliSettings::is_ci(),
-            device_triple: target_lexicon::Triple::host().to_string(),
-            cli_version: crate::VERSION.to_string(),
-            session_id: Uuid::new_v4().as_u128(),
-            distinct_id: reporter_id.as_u128(),
+        let reporter = Self::enroll_reporter().ok().map(|distinct_id| Reporter {
+            distinct_id,
+            session_id: Uuid::new_v4(),
         });
 
         // Create a new telemetry uploader
@@ -222,7 +216,8 @@ impl TraceController {
         tokio::spawn(
             tracer
                 .clone()
-                .upload_telemetry_files(args.action.to_heartbeat_event()),
+                .upload_telemetry_files(args.action.to_heartbeat_event())
+                .map_err(|err| tracing::error!("Failed to upload telemetry files: {}", err)),
         );
 
         // Construct the tracing subscriber
@@ -328,13 +323,7 @@ impl TraceController {
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
         // Send off a heartbeat request. If this fails, we skip anything else.
-        self.send_heartbeat(heartbeat).await.inspect_err(|err| {
-            if cfg!(debug_assertions) {
-                tracing::warn!("Failed to send heartbeat: {}", err);
-            } else {
-                tracing::trace!("Failed to send heartbeat: {}", err);
-            }
-        })?;
+        self.send_heartbeat(heartbeat).await?;
 
         // Wait a few seconds to see if we can end up in `dx serve` or a long-running task
         // If we're in CI though, we do want to flush telemetry immediately
@@ -342,16 +331,15 @@ impl TraceController {
             tokio::time::sleep(std::time::Duration::from_millis(3000)).await;
         }
 
+        tracing::info!("Uploading telemetry files...");
+
         // Now start loading telemetry files, locking them, and then uploading them.
         let stats_dir = Workspace::dioxus_data_dir().join("stats").join("sessions");
-        for e in stats_dir.read_dir()?.flatten() {
-            // Only handle jsonl files
-            if !e.path().ends_with(".jsonl") {
-                continue;
-            }
+        for entry in stats_dir.read_dir()?.flatten() {
+            tracing::info!("Processing telemetry file: {}", entry.path().display());
 
             // Try to open the file...
-            let Ok(mut file) = std::fs::File::open(e.path()) else {
+            let Ok(mut file) = std::fs::File::open(entry.path()) else {
                 continue;
             };
 
@@ -370,30 +358,27 @@ impl TraceController {
 
             // We assume since this is a jsonl file that every line is valid json. We just concat the lines together
             // and then send them using the batched client.
-            let request_body = json!({
-                "historical_migration": false,
-                "batch": jsonl_file
-                    .lines()
-                    .map(|line| serde_json::from_str::<serde_json::Value>(line))
-                    .filter_map(Result::ok)
-                    .collect::<Vec<_>>()
-            });
+            let reporter = self.reporter.as_ref().context("no reporter")?;
+            let session_id = entry
+                .path()
+                .file_stem()
+                .and_then(|s| Uuid::from_str(s.to_str()?).ok());
+            let request_body = jsonl_file
+                .lines()
+                .map(serde_json::from_str::<TelemetryEventData>)
+                .filter_map(Result::ok)
+                .map(|event| Self::telemetry_to_posthog(reporter, event, session_id))
+                .collect::<Vec<_>>();
 
             // Send the request
             // - If the request fails, we just log the error and continue
             // - If the request succeeds, we remove the file
             match self.upload_to_posthog(&request_body).await {
-                Ok(res) if res.status().is_success() => {
-                    _ = std::fs::remove_file(e.path());
-                }
-                Ok(res) => {
-                    tracing::trace!("Telemetry endpoint rejected: {}", e.path().display());
-                    tracing::trace!("Rejected because because {:?}", res.text().await);
-                }
+                Ok(()) => _ = std::fs::remove_file(entry.path()),
                 Err(err) => {
                     tracing::trace!(
                         "Failed to upload telemetry file: {} because {}",
-                        e.path().display(),
+                        entry.path().display(),
                         err
                     );
                 }
@@ -403,11 +388,9 @@ impl TraceController {
         Ok(())
     }
 
-    /// Uploads a single telemetry event to the PostHog endpoint.
-    async fn upload_to_posthog(&self, body: &serde_json::Value) -> Result<reqwest::Response> {
+    /// Uploads a set of telemetry events to the PostHog endpoint.
+    async fn upload_to_posthog(&self, body: &Vec<serde_json::Value>) -> Result<()> {
         use hyper::header::CONTENT_TYPE;
-
-        tracing::info!("Uploading telemetry event: {:#?}", body);
 
         let reporter = self.reporter.as_ref().context("No reporter initialized")?;
         let res = self
@@ -423,68 +406,63 @@ impl TraceController {
             .context("Failed to send telemetry data")?;
 
         if !res.status().is_success() {
-            let res_status = res.status();
-            let res_err = res.text().await;
             bail!(
                 "Failed to upload telemetry event: {:?}. Response: {:?}",
-                res_status,
-                res_err
+                res.status(),
+                res.text().await
             );
-        }
-
-        Ok(res)
-    }
-
-    async fn send_heartbeat(&self, heartbeat: TelemetryEventData) -> Result<()> {
-        let reporter = self.reporter.as_ref().context("No reporter initialized")?;
-        let body = Self::telemetry_to_posthog(reporter, heartbeat);
-        let res = self.upload_to_posthog(&body).await?;
-
-        if !res.status().is_success() {
-            let status = res.status();
-            let body = res.text().await;
-            tracing::error!("Failed to send heartbeat: {}. Response: {:?}", status, body);
         }
 
         Ok(())
     }
 
+    async fn send_heartbeat(&self, heartbeat: TelemetryEventData) -> Result<()> {
+        let reporter = self.reporter.as_ref().context("No reporter initialized")?;
+        let body = Self::telemetry_to_posthog(reporter, heartbeat, None);
+        self.upload_to_posthog(&vec![body]).await
+    }
+
     /// Convert the dioxus-cli-telemetry event into a posthog event.
     ///
     /// We try to maintain the same structure for each telemetry event to do advanced filtering on the backend.
-    fn telemetry_to_posthog(reporter: &Reporter, event: TelemetryEventData) -> serde_json::Value {
+    fn telemetry_to_posthog(
+        reporter: &Reporter,
+        event: TelemetryEventData,
+        custom_sesion: Option<Uuid>,
+    ) -> serde_json::Value {
         let Reporter {
-            is_ci,
-            device_triple,
-            cli_version,
             session_id,
             distinct_id,
         } = reporter;
 
         let TelemetryEventData {
-            action: name,
+            action,
             module,
             message,
-            stage,
             time,
             values,
+            command,
         } = event;
 
-        let mut ph_event = posthog_rs::Event::new(name, distinct_id.to_string());
+        let mut ph_event = posthog_rs::Event::new(action, distinct_id.to_string());
 
-        // The reporter fields
-        _ = ph_event.insert_prop("session_id", session_id);
-        _ = ph_event.insert_prop("device_triple", device_triple.clone());
-        _ = ph_event.insert_prop("is_ci", is_ci);
-        _ = ph_event.insert_prop("cli_version", cli_version.clone());
-        _ = ph_event.insert_prop("os", target_lexicon::HOST.operating_system.to_string());
-        _ = ph_event.insert_prop("arch", target_lexicon::HOST.architecture.to_string());
+        // The reporter's fields
+        _ = ph_event.insert_prop("is_ci", CliSettings::is_ci());
+        _ = ph_event.insert_prop("session_id", custom_sesion.unwrap_or(*session_id));
+        _ = ph_event.insert_prop("distinct_id", distinct_id.to_string());
+        _ = ph_event.insert_prop("host_os", target_lexicon::HOST.operating_system.to_string());
+        _ = ph_event.insert_prop("host_arch", target_lexicon::HOST.architecture.to_string());
+        _ = ph_event.insert_prop("host_triple", target_lexicon::Triple::host().to_string());
+        _ = ph_event.insert_prop("cli_version_major", crate::dx_build_info::PKG_VERSION_MAJOR);
+        _ = ph_event.insert_prop("cli_version_minor", crate::dx_build_info::PKG_VERSION_MINOR);
+        _ = ph_event.insert_prop("cli_version_patch", crate::dx_build_info::PKG_VERSION_PATCH);
+        _ = ph_event.insert_prop("cli_version_pre", crate::dx_build_info::PKG_VERSION_PRE);
+        _ = ph_event.insert_prop("cli_commit_hash", GIT_COMMIT_HASH_SHORT.unwrap_or_default());
 
         // And the TelemetryEventData fields
-        _ = ph_event.insert_prop("action", message);
-        _ = ph_event.insert_prop("stage", stage);
+        _ = ph_event.insert_prop("command", command);
+        _ = ph_event.insert_prop("message", message);
         _ = ph_event.insert_prop("module", module);
-        _ = ph_event.insert_prop("distinct_id", distinct_id.to_string());
 
         // And the rest of the event values
         for (key, value) in values {
@@ -493,8 +471,10 @@ impl TraceController {
 
         // We need to go add the api key to the event, since posthog_rs doesn't expose it for us...
         let mut value = serde_json::to_value(ph_event).unwrap();
-        value["api_key"] = serde_json::Value::String(Self::untrusted_api_key());
         value["timestamp"] = serde_json::Value::String(time.to_rfc3339());
+        value["api_key"] = serde_json::Value::String(
+            "phc_d2jQTZMqAWxSkzv3NQ8TlxCP49vtBZ5ZmlYMIZLFNNU".to_string(),
+        );
 
         value
     }
@@ -505,8 +485,9 @@ impl TraceController {
             bail!("Telemetry is disabled");
         }
 
-        // Create the sessions folder if it doesn't exist
-        let sessions_folder = Workspace::dioxus_data_dir().join("stats");
+        // Create the sessions folder if it doesn't exist\
+        let stats_folder = Workspace::dioxus_data_dir().join("stats");
+        let sessions_folder = stats_folder.join("sessions");
         if !sessions_folder.exists() {
             std::fs::create_dir_all(&sessions_folder)?;
         }
@@ -514,7 +495,7 @@ impl TraceController {
         // Create a reporter_id. If we find an invalid reporter_id, we use `nil` as the reporter ID.
         // If users want to enroll in telemetry but don't want a reporter ID, they can replace the
         // contents of the file with anything that is not a valid UUID.
-        let stable_session_file = sessions_folder.join("reporter_id.json");
+        let stable_session_file = stats_folder.join("reporter_id.json");
         let reporter_id = if stable_session_file.exists() {
             let contents = std::fs::read_to_string(stable_session_file)?;
             serde_json::from_str::<Uuid>(&contents).unwrap_or(Uuid::from_u128(1))
@@ -525,23 +506,6 @@ impl TraceController {
         };
 
         Ok(reporter_id)
-    }
-
-    /// When building the CLI in CI, we include a key used to sign telemetry events.
-    /// This lets us verify that the telemetry events are coming from a mostly trusted source.
-    ///
-    /// Note that the key here is not the same key for the backend - our proxy fixes up the key to
-    /// pass along. This way we can cycle keys on the backend without breaking the CLI.
-    fn untrusted_api_key() -> String {
-        if cfg!(debug_assertions) {
-            if let Ok(key) = env::var("DX_REPORTER_API_KEY") {
-                return key;
-            }
-        }
-
-        option_env!("DX_REPORTER_API_KEY")
-            .unwrap_or_else(|| "<untrusted>")
-            .to_string()
     }
 
     /// Flush pending logs to the telemetry file.
@@ -598,12 +562,9 @@ impl TraceController {
             true => {
                 let mut msgs = self.telemetry_rx.lock().await;
 
-                let request_body = json!({
-                    "historical_migration": false,
-                    "batch": std::iter::from_fn(|| msgs.try_next().ok().flatten())
-                        .filter_map(|msg| serde_json::to_value(msg).ok())
-                        .collect::<Vec<_>>()
-                });
+                let request_body = std::iter::from_fn(|| msgs.try_next().ok().flatten())
+                    .filter_map(|msg| serde_json::to_value(msg).ok())
+                    .collect::<Vec<_>>();
 
                 self.upload_to_posthog(&request_body).await?;
             }
@@ -615,7 +576,7 @@ impl TraceController {
                 let dest = Workspace::dioxus_data_dir()
                     .join("stats")
                     .join("sessions")
-                    .join(format!("stats-{}.jsonl", reporter.session_id));
+                    .join(format!("{}.jsonl", reporter.session_id));
 
                 let mut logfile = std::fs::OpenOptions::new()
                     .append(true)
@@ -633,8 +594,10 @@ impl TraceController {
     }
 
     fn posthog_capture_endpoint() -> String {
-        let base = Self::posthog_endpoint();
-        format!("{}/capture/", base.trim_end_matches('/'))
+        format!(
+            "{}/capture/",
+            Self::posthog_endpoint().trim_end_matches('/')
+        )
     }
 
     fn posthog_endpoint() -> String {
@@ -645,7 +608,7 @@ impl TraceController {
             }
         }
 
-        "https://dx.stats.dioxus.dev/api/v1/".to_string()
+        "https://dx-cli-stats.dioxus.dev/".to_string()
     }
 }
 
@@ -697,7 +660,7 @@ where
                 _ = self.telemetry_tx.unbounded_send(
                     serde_json::from_str::<TelemetryEventData>(raw_event)
                         .unwrap()
-                        .with_value("location", event_location()),
+                        .with_value("event_location", event_location()),
                 );
             }
 
@@ -719,13 +682,13 @@ where
 
                 let mut event = TelemetryEventData::new(
                     "tracing error",
+                    visitor.message.as_str(),
                     meta.module_path()
                         .map(ToString::to_string)
                         .unwrap_or_else(|| "<unknown>".to_string()),
-                    visitor.message.as_str(),
-                    stage,
                 )
-                .with_value("location", event_location());
+                .with_value("event_location", event_location())
+                .with_value("stage", stage);
 
                 for (field, value) in visitor.fields.iter() {
                     event = event.with_value(field, value);
@@ -922,7 +885,7 @@ impl FormatTime for PrettyUptime {
 
 pub fn fatal_error(error: &crate::Error) -> TelemetryEventData {
     let mut telemetry_event =
-        TelemetryEventData::new("fatal_error", module_path!(), error.to_string(), "error");
+        TelemetryEventData::new("fatal_error", error.to_string(), module_path!());
     let backtrace = error.backtrace();
     if backtrace.status() == std::backtrace::BacktraceStatus::Captured {
         telemetry_event = telemetry_event.with_value("backtrace", clean_backtrace(backtrace));

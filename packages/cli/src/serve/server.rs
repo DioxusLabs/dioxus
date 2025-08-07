@@ -231,10 +231,9 @@ impl WebServer {
                     tracing::trace!(
                         telemetry = %TelemetryEventData::new(
                             "build_stage",
-                            module_path!(),
                             "Build stage update",
-                            identifier,
-                        )
+                            module_path!(),
+                        ).with_value("build_stage", identifier)
                     );
                 }
                 match stage {

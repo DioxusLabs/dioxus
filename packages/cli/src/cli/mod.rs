@@ -119,7 +119,15 @@ pub enum BuildTools {
 impl Commands {
     pub(crate) fn to_heartbeat_event(&self) -> TelemetryEventData {
         let (name, anonymized) = self.command_anonymized();
-        TelemetryEventData::new("heartbeat", module_path!(), name, anonymized)
+        TelemetryEventData::new("heartbeat", name, module_path!())
+            .with_value(
+                "raw_arguments",
+                std::env::args()
+                    .skip(1)
+                    .map(|s| dioxus_cli_telemetry::strip_paths(&s))
+                    .collect::<Vec<_>>(),
+            )
+            .with_value("arguments", anonymized)
     }
 
     pub(crate) fn command_anonymized(&self) -> (String, Value) {
