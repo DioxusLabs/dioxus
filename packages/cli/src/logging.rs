@@ -40,7 +40,7 @@ use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::{FutureExt, TryFutureExt};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::{any::Any, backtrace::Backtrace, io::Read, str::FromStr, sync::Arc};
+use std::{any::Any, io::Read, str::FromStr, sync::Arc};
 use std::{borrow::Cow, sync::OnceLock};
 use std::{
     collections::HashMap,
@@ -92,7 +92,7 @@ pub struct TraceController {
 
 struct CapturedBacktrace {
     payload: String,
-    backtrace: Backtrace,
+    backtrace: backtrace::Backtrace,
     thread_name: Option<String>,
     location: Option<SavedLocation>,
 }
@@ -247,7 +247,7 @@ impl TraceController {
             .init();
 
         // Set the panic handler to capture backtraces in case of a panic
-        let initial_thread = std::thread::current();
+        // let initial_thread = std::thread::current();
         std::panic::set_hook(Box::new(move |panic_info| {
             let payload = if let Some(s) = panic_info.payload().downcast_ref::<String>() {
                 s.to_string()
@@ -257,17 +257,23 @@ impl TraceController {
                 "<unknown panic>".to_string()
             };
 
+            // Print the error using the anyhow printer.
             let current_thread = std::thread::current();
             let thread_name = current_thread.name().map(|s| s.to_string());
-
-            // if current_thread.id() != initial_thread.id() {
-            tracing::error!("{:?}", anyhow!(payload.clone()));
-            // }
+            let location = panic_info.location().unwrap();
+            let backtrace = backtrace::Backtrace::new();
+            tracing::error!(
+                "Thread {:?} panicked at {}:\n{}\n{:?}",
+                current_thread.id(),
+                location,
+                payload,
+                backtrace
+            );
 
             let captured = CapturedBacktrace {
                 payload,
                 thread_name,
-                backtrace: Backtrace::capture(),
+                backtrace,
                 location: panic_info.location().map(|l| SavedLocation {
                     file: l.file().to_string(),
                     line: l.line(),
@@ -574,11 +580,19 @@ impl TraceController {
 
         // Dequeue any pending backtraces and record them as telemetry events.
         while let Ok(Some(backtrace)) = self.backtrace_rx.lock().await.try_next() {
-            self.record_backtrace(backtrace);
+            _ = self.record_backtrace(backtrace);
         }
 
+        // If we have "safe" error, we we need to log it
+        if let Ok(Err(err)) = &res {
+            _ = self.telemetry_tx.unbounded_send(fatal_error(err));
+        }
+
+        // And then we can finally flush telemetry to disk
+        _ = self.flush_telemetry_to_disk().await;
+
         // Create the final output based on the result of the CLI run.
-        let cli_output = match res {
+        match res {
             // No printing needed for successful runs, we just return the output for JSON output.
             Ok(Ok(output)) => output,
 
@@ -590,7 +604,6 @@ impl TraceController {
                 let arg = std::env::args().nth(1).unwrap_or_else(|| "dx".to_string());
                 let message = format!("Error running {GLOW_STYLE}{}{GLOW_STYLE:#}: {:?}", arg, err);
                 eprintln!("{message}");
-                _ = self.telemetry_tx.unbounded_send(fatal_error(&err));
                 StructuredOutput::Error { message }
             }
 
@@ -605,11 +618,7 @@ impl TraceController {
                     "<unknown error>".to_string()
                 },
             },
-        };
-
-        _ = self.flush_telemetry_to_disk().await;
-
-        cli_output
+        }
     }
 
     /// Flush telemetry to disk.
@@ -804,7 +813,48 @@ impl TraceController {
     }
 
     fn record_backtrace(&self, backtrace: CapturedBacktrace) -> Result<()> {
-        todo!();
+        let stacktrace = sentry_backtrace::backtrace_to_stacktrace(&backtrace.backtrace);
+        let stack_frames = stacktrace
+            .unwrap_or_default()
+            .frames
+            .into_iter()
+            .map(|frame| {
+                // Convert the sentry type to the posthog type
+                dioxus_cli_telemetry::StackFrame {
+                    platform: "native".to_string(),
+                    filename: frame.filename,
+                    function: frame.function,
+                    module: frame.module,
+                    lineno: frame.lineno,
+                    colno: frame.colno,
+                    abs_path: frame.abs_path,
+                    context_line: frame.context_line,
+                    pre_context: frame.pre_context,
+                    post_context: frame.post_context,
+                    in_app: frame.in_app,
+                    instruction_addr: frame.instruction_addr.map(|addr| addr.to_string()),
+                    addr_mode: frame.addr_mode,
+                    vars: frame.vars,
+                    chunk_id: None,
+                }
+            })
+            .collect();
+
+        let (file, line, column) = backtrace
+            .location
+            .map(|l| (l.file, l.line, l.column))
+            .unwrap_or_else(|| ("<unknown>".to_string(), 0, 0));
+
+        let event = TelemetryEventData::new("backtrace", backtrace.payload.as_str())
+            .with_value("thread_name", backtrace.thread_name)
+            .with_error_type("RustPanic".into())
+            .with_error_handled(false)
+            .with_file(file)
+            .with_line_column(line, column)
+            .with_stack_frames(stack_frames);
+
+        _ = self.telemetry_tx.unbounded_send(event);
+
         Ok(())
     }
 }
@@ -1083,7 +1133,8 @@ pub fn fatal_error(error: &crate::Error) -> TelemetryEventData {
     let mut telemetry_event = TelemetryEventData::new("fatal_error", error.to_string());
     let backtrace = error.backtrace();
     if backtrace.status() == std::backtrace::BacktraceStatus::Captured {
-        telemetry_event = telemetry_event.with_value("backtrace", clean_backtrace(backtrace));
+        telemetry_event =
+            telemetry_event.with_value("backtrace", clean_backtrace(backtrace.to_string()));
     }
     let chain = error.chain();
     telemetry_event.with_value(
@@ -1092,9 +1143,7 @@ pub fn fatal_error(error: &crate::Error) -> TelemetryEventData {
     )
 }
 
-pub fn clean_backtrace(backtrace: &Backtrace) -> String {
-    let mut backtrace_display = backtrace.to_string();
-
+pub fn clean_backtrace(mut backtrace_display: String) -> String {
     // split at the line that ends with ___rust_try for short backtraces
     if std::env::var("RUST_BACKTRACE") == Ok("1".to_string()) {
         backtrace_display = backtrace_display

@@ -37,7 +37,10 @@
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, time::SystemTime};
+use std::{
+    collections::{BTreeMap, HashMap},
+    time::SystemTime,
+};
 
 /// An event's data, corresponding roughly to data collected from an individual trace.
 ///
@@ -191,10 +194,10 @@ pub struct StackFrame {
     pub module: Option<String>,
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub lineno: Option<u32>,
+    pub lineno: Option<u64>,
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub colno: Option<u32>,
+    pub colno: Option<u64>,
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub abs_path: Option<String>,
@@ -202,11 +205,11 @@ pub struct StackFrame {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub context_line: Option<String>,
 
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub pre_context: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub pre_context: Vec<String>,
 
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub post_context: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub post_context: Vec<String>,
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub in_app: Option<bool>,
@@ -217,8 +220,8 @@ pub struct StackFrame {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub addr_mode: Option<String>,
 
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub vars: Option<HashMap<String, serde_json::Value>>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub vars: BTreeMap<String, serde_json::Value>,
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub chunk_id: Option<String>,
