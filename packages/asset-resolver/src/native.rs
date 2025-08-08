@@ -21,6 +21,7 @@ pub enum AssetServeError {
 
 /// Try to resolve the path of an asset from a given URI path.
 pub(crate) fn resolve_native_asset_path(path: &str) -> Result<PathBuf, AssetPathError> {
+    #[allow(clippy::unnecessary_lazy_evaluations)]
     resolve_asset_path_from_filesystem(path).ok_or_else(|| {
         #[cfg(target_os = "android")]
         {
