@@ -8,7 +8,6 @@
 /// cargo run --package crates-io-readme
 /// ```
 use anyhow::{Context, Result};
-use ignore::gitignore;
 use pulldown_cmark::{CodeBlockKind, Event, Tag, TagEnd};
 use std::fs;
 use std::path::Path;
