@@ -513,7 +513,7 @@ impl TraceController {
                     "synthetic": false, // all errors/panics and "real", not emitted by sentry or the sdk
                 },
                 "stacktrace": {
-                    "type": "native", // debug symbols are generally used. this might be wrong?
+                    "type": "raw", // debug symbols are generally used. this might be wrong?
                     "frames": stack_frames
                 }
             }]);
@@ -568,6 +568,7 @@ impl TraceController {
             .map(|d| d.as_secs() > (30 * 60))
             .unwrap_or(true)
         {
+            reporter.created_at = SystemTime::now();
             reporter.session_id = Uuid::new_v7(uuid::Timestamp::now(
                 uuid::timestamp::context::ContextV7::new(),
             ));
@@ -852,6 +853,22 @@ impl TraceController {
                 // Convert the sentry type to the posthog type
                 dioxus_cli_telemetry::StackFrame {
                     platform: "native".to_string(),
+                    raw_id: frame
+                        .image_addr
+                        .map(|addr| addr.to_string())
+                        .unwrap_or_else(|| Uuid::new_v4().to_string()),
+                    mangled_name: frame
+                        .function
+                        .as_ref()
+                        .map(|f| f.to_string())
+                        .unwrap_or_else(|| "<unknown>".to_string()),
+                    resolved_name: frame
+                        .function
+                        .as_ref()
+                        .map(|f| f.to_string())
+                        .unwrap_or_else(|| "<unknown>".to_string()),
+                    lang: "rust".to_string(),
+                    resolved: true,
                     filename: frame.filename,
                     function: frame.function,
                     module: frame.module,

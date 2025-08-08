@@ -182,6 +182,16 @@ impl std::fmt::Display for TelemetryEventData {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "snake_case")]
 pub struct StackFrame {
+    pub raw_id: String,
+
+    pub mangled_name: String,
+
+    pub resolved_name: String,
+
+    pub lang: String,
+
+    pub resolved: bool,
+
     pub platform: String,
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
