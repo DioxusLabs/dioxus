@@ -1,7 +1,4 @@
-//! Parse the output of rustc's `.d` dep-info file.
-//!
-//! Used by the hot-reloading engine and other libraries to provide higher quality dependency analysis
-//! for the user's project.
+#![doc = include_str!("../README-docs-rs.md")]
 
 use std::path::{Path, PathBuf};
 

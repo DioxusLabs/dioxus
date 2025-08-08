@@ -1,5 +1,5 @@
 #![warn(missing_docs)]
-#![doc = include_str!("../README.md")]
+#![doc = include_str!("../README-docs-rs.md")]
 
 use base64::Engine;
 use dioxus_core::CapturedError;

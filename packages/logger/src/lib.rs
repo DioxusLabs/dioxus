@@ -1,3 +1,4 @@
+#![doc = include_str!("../README-docs-rs.md")]
 use tracing::{
     subscriber::{set_global_default, SetGlobalDefaultError},
     Level,

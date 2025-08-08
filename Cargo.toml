@@ -97,6 +97,9 @@ members = [
     "packages/subsecond/subsecond-tests/cross-tls-crate-dylib",
     "packages/subsecond/subsecond-tests/cross-tls-test",
 
+    # tools
+    "packages/crates-io-readme",
+
     # Full project examples
     "example-projects/fullstack-hackernews",
     "example-projects/ecommerce-site",
