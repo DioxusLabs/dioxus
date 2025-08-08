@@ -69,7 +69,9 @@ struct Data {
 
 fn LoadsAsset() -> Element {
     let data = use_resource(|| async {
-        let bytes = dioxus::asset_resolver::resolve_asset(&JSON).await.unwrap();
+        let bytes = dioxus::asset_resolver::read_asset_bytes(&JSON)
+            .await
+            .unwrap();
         serde_json::from_slice::<Data>(&bytes).unwrap()
     });
     match data() {

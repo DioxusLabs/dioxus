@@ -12,7 +12,7 @@ rust-version = "1.79.0"
 
 [dependencies]
 thiserror = { workspace = true }
-manganis-core.workspace = true
+manganis-core = { workspace = true }
 
 # native/fs resolver dependencies
 http = { workspace = true, optional = true }
@@ -31,6 +31,10 @@ jni = { version = "0.21.1" }
 ndk = { version = "0.9.0" }
 ndk-sys = { version = "0.6.0" }
 ndk-context = { version = "0.1.1" }
+
+[dev-dependencies]
+dioxus = { workspace = true }
+serde_json = { workspace = true }
 
 [features]
 default = []

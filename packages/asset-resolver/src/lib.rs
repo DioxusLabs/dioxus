@@ -1,4 +1,34 @@
 #![warn(missing_docs)]
+//! The asset resolver for the Dioxus bundle format. Each platform has its own way of resolving assets. This crate handles
+//! resolving assets in a cross-platform way.
+//!
+//! There are two broad locations for assets depending on the platform:
+//! - **Web**: Assets are stored on a remote server and fetched via HTTP requests.
+//! - **Native**: Assets are read from the local bundle. Each platform has its own bundle structure which may store assets
+//!   as a file at a specific path or in an opaque format like Android's AssetManager.
+//!
+//! [`read_asset_bytes`](crate::read_asset_bytes) abstracts over both of these methods, allowing you to read the bytes of an asset
+//! regardless of the platform.
+//!
+//! If you know you are on a desktop platform, you can use [`asset_path`](crate::asset_path) to resolve the path of an asset and read
+//! the contents with [`std::fs`].
+//!
+//! ## Example
+//! ```rust
+//! # async fn asset_example() {
+//! use dioxus::prelude::*;
+//!
+//! // Bundle the static JSON asset into the application
+//! static JSON_ASSET: Asset = asset!("assets/data.json");
+//!
+//! // Read the bytes of the JSON asset
+//! let bytes = dioxus::asset_resolver::read_asset_bytes(&JSON_ASSET).await.unwrap();
+//!
+//! // Deserialize the JSON data
+//! let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+//! assert_eq!(json["key"].as_str(), Some("value"));
+//! # }
+//! ```
 
 use manganis_core::Asset;
 use std::{fmt::Debug, path::PathBuf};
@@ -23,12 +53,38 @@ pub enum AssetPathError {
     CannotRepresentAsPath,
 }
 
-/// Platform behavior:
-/// - Desktop platforms (Linux, macOS, Windows): Resolves assets from the filesystem.
-/// - Android: Assets are bundled in the APK, they cannot be represented as paths.
-/// - Web: Assets are fetched via HTTP requests, they cannot be represented as paths.
+/// Tries to resolve the path of an asset from a given URI path. Depending on the platform, this may
+/// return an error even if the asset exists because some platforms cannot represent assets as paths.
+/// You should prefer [`read_asset_bytes`](crate::read_asset_bytes) to read the asset bytes directly
+/// for cross-platform compatibility.
+///
+/// ## Platform specific behavior
+///
+/// This function will only work on desktop platforms. It will always return an error in web and Android
+/// bundles. On Android assets are bundled in the APK, and cannot be represented as paths. In web bundles,
+/// Assets are fetched via HTTP requests and don't have a filesystem path.
+///
+/// ## Example
+/// ```rust
+/// use dioxus::prelude::*;
+///
+/// // Bundle the static JSON asset into the application
+/// static JSON_ASSET: Asset = asset!("assets/data.json");
+///
+/// // Resolve the path of the asset. This will not work in web or Android bundles
+/// let path = dioxus::asset_resolver::asset_path(&JSON_ASSET).unwrap();
+///
+/// println!("Asset path: {:?}", path);
+///
+/// // Read the bytes of the JSON asset
+/// let bytes = std::fs::read(path).unwrap();
+///
+/// // Deserialize the JSON data
+/// let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+/// assert_eq!(json["key"].as_str(), Some("value"));
+/// ```
 #[allow(unused)]
-pub fn resolve_asset_path(asset: &Asset) -> Result<PathBuf, AssetPathError> {
+pub fn asset_path(asset: &Asset) -> Result<PathBuf, AssetPathError> {
     #[cfg(all(feature = "web", target_arch = "wasm32"))]
     return Err(AssetPathError::CannotRepresentAsPath);
 
@@ -55,9 +111,32 @@ pub enum AssetResolveError {
     UnsupportedPlatform,
 }
 
-/// Read the bytes for an asset
+/// Read the bytes of an asset. This will work on both web and native platforms. On the web,
+/// it will fetch the asset via HTTP, and on native platforms, it will read the asset from the filesystem or bundle.
+///
+/// ## Errors
+/// This function will return an error if the asset cannot be found or if it fails to read which may be due to I/O errors or
+/// network issues.
+///
+/// ## Example
+///
+/// ```rust
+/// # async fn asset_example() {
+/// use dioxus::prelude::*;
+///
+/// // Bundle the static JSON asset into the application
+/// static JSON_ASSET: Asset = asset!("assets/data.json");
+///
+/// // Read the bytes of the JSON asset
+/// let bytes = dioxus::asset_resolver::read_asset_bytes(&JSON_ASSET).await.unwrap();
+///
+/// // Deserialize the JSON data
+/// let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+/// assert_eq!(json["key"].as_str(), Some("value"));
+/// # }
+/// ```
 #[allow(unused)]
-pub async fn resolve_asset(asset: &Asset) -> Result<Vec<u8>, AssetResolveError> {
+pub async fn read_asset_bytes(asset: &Asset) -> Result<Vec<u8>, AssetResolveError> {
     let path = asset.to_string();
 
     #[cfg(feature = "web")]
@@ -78,8 +157,8 @@ pub async fn resolve_asset(asset: &Asset) -> Result<Vec<u8>, AssetResolveError> 
 #[non_exhaustive]
 #[derive(Debug, thiserror::Error)]
 pub enum NativeAssetResolveError {
-    /// An IO error occurred while reading the asset from the filesystem.
-    #[error("Failed to serve asset: {0}")]
+    /// An I/O error occurred while reading the asset from the filesystem.
+    #[error("Failed to read asset: {0}")]
     IoError(#[from] std::io::Error),
 
     /// The asset resolver failed to complete and could not be joined.
@@ -96,7 +175,7 @@ pub struct WebAssetResolveError {
 
 impl Debug for WebAssetResolveError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut debug = f.debug_struct("WebAssetFetchError");
+        let mut debug = f.debug_struct("WebAssetResolveError");
         #[cfg(feature = "web")]
         debug.field("name", &self.error.name());
         #[cfg(feature = "web")]
