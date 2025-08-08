@@ -4966,6 +4966,7 @@ version = "0.7.0-alpha.3"
 dependencies = [
  "criterion",
  "dioxus",
+ "dioxus-asset-resolver",
  "dioxus-cli-config",
  "dioxus-config-macro",
  "dioxus-config-macros",
@@ -5010,6 +5011,7 @@ dependencies = [
  "infer",
  "jni 0.21.1",
  "js-sys",
+ "manganis-core",
  "ndk 0.9.0",
  "ndk-context",
  "ndk-sys 0.6.0+11769913",
@@ -5222,6 +5224,8 @@ dependencies = [
  "dioxus",
  "flate2",
  "reqwest 0.12.22",
+ "serde",
+ "serde_json",
  "tar",
 ]
 

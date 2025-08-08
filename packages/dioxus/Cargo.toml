@@ -30,6 +30,7 @@ dioxus-server = { workspace = true, optional = true }
 dioxus-ssr = { workspace = true, optional = true }
 dioxus-native = { workspace = true, optional = true }
 dioxus_server_macro = { workspace = true, optional = true }
+dioxus-asset-resolver = { workspace = true, optional = true }
 manganis = { workspace = true, features = ["dioxus"], optional = true }
 dioxus-logger = { workspace = true, optional = true }
 warnings = { workspace = true, optional = true }
@@ -69,7 +70,7 @@ hooks = ["dep:dioxus-hooks"]
 devtools = ["dep:dioxus-devtools", "dioxus-web?/devtools", "dioxus-fullstack?/devtools"]
 mounted = ["dioxus-web?/mounted"]
 file_engine = ["dioxus-web?/file_engine"]
-asset = ["dep:manganis"]
+asset = ["dep:manganis", "dep:dioxus-asset-resolver"]
 document = ["dioxus-web?/document", "dep:dioxus-document", "dep:dioxus-history"]
 logger = ["dep:dioxus-logger"]
 cli-config = ["dep:dioxus-cli-config"]
@@ -92,6 +93,7 @@ web = [
   "dioxus-config-macro/web",
   "dep:dioxus-cli-config",
   "dioxus-cli-config?/web",
+  "dioxus-asset-resolver?/web",
 ]
 ssr = ["dep:dioxus-ssr", "dioxus-config-macro/ssr"]
 liveview = ["dep:dioxus-liveview", "dioxus-config-macro/liveview"]

@@ -1,12 +1,10 @@
 #![warn(missing_docs)]
-//! Asset resolver for Dioxus applications.
 
-#[cfg(feature = "native")]
-mod native;
+use manganis_core::Asset;
 use std::{fmt::Debug, path::PathBuf};
 
 #[cfg(feature = "native")]
-pub use native::*;
+pub mod native;
 
 #[cfg(feature = "web")]
 mod web;
@@ -30,12 +28,12 @@ pub enum AssetPathError {
 /// - Android: Assets are bundled in the APK, they cannot be represented as paths.
 /// - Web: Assets are fetched via HTTP requests, they cannot be represented as paths.
 #[allow(unused)]
-pub fn resolve_asset_path(path: &str) -> Result<PathBuf, AssetPathError> {
+pub fn resolve_asset_path(asset: &Asset) -> Result<PathBuf, AssetPathError> {
     #[cfg(all(feature = "web", target_arch = "wasm32"))]
     return Err(AssetPathError::CannotRepresentAsPath);
 
     #[cfg(feature = "native")]
-    return native::resolve_native_asset_path(path);
+    return native::resolve_native_asset_path(asset.to_string().as_str());
 
     Err(AssetPathError::NotFound)
 }
@@ -58,15 +56,17 @@ pub enum AssetResolveError {
 }
 
 /// Read the bytes for an asset
-#[allow(unreachable_code)]
-pub async fn resolve_asset(path: &str) -> Result<Vec<u8>, AssetResolveError> {
+#[allow(unused)]
+pub async fn resolve_asset(asset: &Asset) -> Result<Vec<u8>, AssetResolveError> {
+    let path = asset.to_string();
+
     #[cfg(feature = "web")]
-    return web::resolve_web_asset(path)
+    return web::resolve_web_asset(&path)
         .await
         .map_err(AssetResolveError::Web);
 
     #[cfg(feature = "native")]
-    return tokio::task::spawn_blocking(move || native::resolve_native_asset(path))
+    return tokio::task::spawn_blocking(move || native::resolve_native_asset(&path))
         .await
         .map_err(|err| AssetResolveError::Native(NativeAssetResolveError::JoinError(err)))
         .and_then(|result| result.map_err(AssetResolveError::Native));
@@ -83,6 +83,7 @@ pub enum NativeAssetResolveError {
     IoError(#[from] std::io::Error),
 
     /// The asset resolver failed to complete and could not be joined.
+    #[cfg(feature = "native")]
     #[error("Asset resolver join failed: {0}")]
     JoinError(tokio::task::JoinError),
 }
@@ -105,11 +106,11 @@ impl Debug for WebAssetResolveError {
 }
 
 impl std::fmt::Display for WebAssetResolveError {
+    #[allow(unreachable_code)]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        #[cfg(not(feature = "web"))]
-        write!(f, "WebAssetResolveError")?;
         #[cfg(feature = "web")]
-        write!(f, "{}", self.error.message())
+        return write!(f, "{}", self.error.message());
+        write!(f, "WebAssetResolveError")
     }
 }
 

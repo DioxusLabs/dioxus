@@ -56,5 +56,33 @@ fn App() -> Element {
             id: "some_image_without_hash",
             src: "{SOME_IMAGE_WITHOUT_HASH}"
         }
+        LoadsAsset {}
+    }
+}
+
+const JSON: Asset = asset!("/assets/data.json");
+
+#[derive(Debug, Clone, serde::Deserialize)]
+struct Data {
+    list: Vec<i32>,
+}
+
+fn LoadsAsset() -> Element {
+    let data = use_resource(|| async {
+        let bytes = dioxus::asset_resolver::resolve_asset(&JSON).await.unwrap();
+        serde_json::from_slice::<Data>(&bytes).unwrap()
+    });
+    match data() {
+        Some(data) => rsx! {
+            div {
+                id: "resolved-data",
+                "List: {data.list:?}"
+            }
+        },
+        None => rsx! {
+            div {
+                "Loading..."
+            }
+        },
     }
 }
