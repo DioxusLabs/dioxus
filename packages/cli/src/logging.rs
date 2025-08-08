@@ -31,7 +31,7 @@
 
 use crate::{dx_build_info::GIT_COMMIT_HASH_SHORT, serve::ServeUpdate, Cli, Commands, Verbosity};
 use crate::{BundleFormat, CliSettings, Workspace};
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, Context, Error, Result};
 use cargo_metadata::diagnostic::{Diagnostic, DiagnosticLevel};
 use clap::Parser;
 use dioxus_cli_telemetry::TelemetryEventData;
@@ -91,8 +91,8 @@ pub struct TraceController {
 }
 
 struct CapturedBacktrace {
-    payload: String,
-    backtrace: backtrace::Backtrace,
+    error: Error,
+    error_type: String,
     thread_name: Option<String>,
     location: Option<SavedLocation>,
 }
@@ -254,23 +254,23 @@ impl TraceController {
                 "<unknown panic>".to_string()
             };
 
-            // Print the error using the anyhow printer.
             let current_thread = std::thread::current();
             let thread_name = current_thread.name().map(|s| s.to_string());
             let location = panic_info.location().unwrap();
-            let backtrace = backtrace::Backtrace::new();
+            let err = anyhow::anyhow!(payload);
+
             tracing::error!(
-                "Thread {:?} panicked at {}:\n{}\n{:?}",
-                current_thread.id(),
+                "Thread {:?} panicked at {}:\n{}\n{:#}",
+                thread_name,
                 location,
-                payload,
-                backtrace
+                err.root_cause(),
+                err.backtrace()
             );
 
             let captured = CapturedBacktrace {
-                payload,
+                error: err,
                 thread_name,
-                backtrace,
+                error_type: "Rust Panic".to_string(),
                 location: panic_info.location().map(|l| SavedLocation {
                     file: l.file().to_string(),
                     line: l.line(),
@@ -611,12 +611,17 @@ impl TraceController {
 
         // Dequeue any pending backtraces and record them as telemetry events.
         while let Ok(Some(backtrace)) = self.backtrace_rx.lock().await.try_next() {
-            _ = self.record_backtrace(backtrace);
+            _ = self.record_backtrace(
+                &backtrace.error,
+                &backtrace.error_type,
+                backtrace.thread_name.as_deref(),
+                backtrace.location.as_ref(),
+            );
         }
 
         // If we have "safe" error, we we need to log it
         if let Ok(Err(err)) = &res {
-            _ = self.telemetry_tx.unbounded_send(fatal_error(err));
+            _ = self.record_backtrace(err, "Fatal error", std::thread::current().name(), None);
         }
 
         // And then we can finally flush telemetry to disk
@@ -843,12 +848,19 @@ impl TraceController {
         }
     }
 
-    fn record_backtrace(&self, backtrace: CapturedBacktrace) -> Result<()> {
-        let stacktrace = sentry_backtrace::backtrace_to_stacktrace(&backtrace.backtrace);
-        let stack_frames = stacktrace
+    fn record_backtrace(
+        &self,
+        error: &Error,
+        error_type: &str,
+        thread_name: Option<&str>,
+        location: Option<&SavedLocation>,
+    ) -> Result<()> {
+        let stacktrace = sentry_backtrace::parse_stacktrace(&format!("{:#}", error.backtrace()));
+        let stack_frames: Vec<_> = stacktrace
             .unwrap_or_default()
             .frames
             .into_iter()
+            .rev()
             .map(|frame| {
                 // Convert the sentry type to the posthog type
                 dioxus_cli_telemetry::StackFrame {
@@ -887,14 +899,30 @@ impl TraceController {
             })
             .collect();
 
-        let (file, line, column) = backtrace
-            .location
-            .map(|l| (l.file, l.line, l.column))
+        let (mut file, mut line, mut column) = location
+            .as_ref()
+            .map(|l| (l.file.to_string(), l.line, l.column))
             .unwrap_or_else(|| ("<unknown>".to_string(), 0, 0));
 
-        let event = TelemetryEventData::new("backtrace", backtrace.payload.as_str())
-            .with_value("thread_name", backtrace.thread_name)
-            .with_error_type("RustPanic".into())
+        // If the location is not provided, we try to extract it from the backtrace.
+        // I eyeballed that 5 is enought to get to the actual panic location in most cases.
+        if location.is_none() {
+            if let Some(frame) = stack_frames.get(5) {
+                if let Some(abs_path) = &frame.abs_path {
+                    file = abs_path.to_string();
+                }
+                if let Some(lineno) = frame.lineno {
+                    line = lineno as _;
+                }
+                if let Some(colno) = frame.colno {
+                    column = colno as _;
+                }
+            }
+        }
+
+        let event = TelemetryEventData::new("panic", error.root_cause())
+            .with_value("thread_name", thread_name)
+            .with_error_type(error_type.to_string())
             .with_error_handled(false)
             .with_file(file)
             .with_line_column(line, column)
@@ -1174,20 +1202,6 @@ impl FormatTime for PrettyUptime {
         let e = self.epoch.elapsed();
         write!(w, "{:4}.{:2}s", e.as_secs(), e.subsec_millis())
     }
-}
-
-pub fn fatal_error(error: &crate::Error) -> TelemetryEventData {
-    let mut telemetry_event = TelemetryEventData::new("fatal_error", error.to_string());
-    let backtrace = error.backtrace();
-    if backtrace.status() == std::backtrace::BacktraceStatus::Captured {
-        telemetry_event =
-            telemetry_event.with_value("backtrace", clean_backtrace(backtrace.to_string()));
-    }
-    let chain = error.chain();
-    telemetry_event.with_value(
-        "error_chain",
-        chain.map(|e| format!("{e}")).collect::<Vec<_>>(),
-    )
 }
 
 pub fn clean_backtrace(mut backtrace_display: String) -> String {
