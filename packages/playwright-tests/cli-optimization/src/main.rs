@@ -67,6 +67,7 @@ struct Data {
     list: Vec<i32>,
 }
 
+#[component]
 fn LoadsAsset() -> Element {
     let data = use_resource(|| async {
         let bytes = dioxus::asset_resolver::read_asset_bytes(&JSON)

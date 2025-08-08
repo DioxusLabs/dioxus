@@ -7,10 +7,10 @@
 //! - **Native**: Assets are read from the local bundle. Each platform has its own bundle structure which may store assets
 //!   as a file at a specific path or in an opaque format like Android's AssetManager.
 //!
-//! [`read_asset_bytes`](crate::read_asset_bytes) abstracts over both of these methods, allowing you to read the bytes of an asset
+//! [`read_asset_bytes`]( abstracts over both of these methods, allowing you to read the bytes of an asset
 //! regardless of the platform.
 //!
-//! If you know you are on a desktop platform, you can use [`asset_path`](crate::asset_path) to resolve the path of an asset and read
+//! If you know you are on a desktop platform, you can use [`asset_path`] to resolve the path of an asset and read
 //! the contents with [`std::fs`].
 //!
 //! ## Example
@@ -55,7 +55,7 @@ pub enum AssetPathError {
 
 /// Tries to resolve the path of an asset from a given URI path. Depending on the platform, this may
 /// return an error even if the asset exists because some platforms cannot represent assets as paths.
-/// You should prefer [`read_asset_bytes`](crate::read_asset_bytes) to read the asset bytes directly
+/// You should prefer [`read_asset_bytes`] to read the asset bytes directly
 /// for cross-platform compatibility.
 ///
 /// ## Platform specific behavior
