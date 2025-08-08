@@ -285,6 +285,7 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &TraceController) -> Resu
             ServeUpdate::Exit { error } => {
                 _ = builder.shutdown().await;
                 _ = devserver.shutdown().await;
+                _ = screen.render(&builder, &devserver); // Final render to let logs flush
 
                 match error {
                     Some(err) => return Err(err),

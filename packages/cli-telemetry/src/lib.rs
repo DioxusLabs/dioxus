@@ -38,15 +38,6 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, time::SystemTime};
-use uuid::Uuid;
-
-/// We only store non-pii information in telemetry to track issues and performance
-/// across the CLI.
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct Reporter {
-    pub session_id: Uuid,
-    pub distinct_id: Uuid,
-}
 
 /// An event's data, corresponding roughly to data collected from an individual trace.
 ///
@@ -63,30 +54,68 @@ pub struct Reporter {
 ///
 /// On the analytics, side, we reconstruct the trace messages into a sequence of events, using
 /// the stage as a marker.
+///
+/// If the event contains a stack trace, it is considered a crash event and will be sent to the crash reporting service.
+///
+/// We store this type on disk without the reporter information or any information about the CLI.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct TelemetryEventData {
-    /// The name of the command that was run, e.g. "build", "bundle", "heartbeat"
+    /// The name of the command that was run, e.g. "dx build", "dx bundle", "dx serve"
     pub command: String,
-    /// The action that was taken, e.g. "build", "bundle", "heartbeat" (command run), etc
+
+    /// The action that was taken, e.g. "build", "bundle", "cli_invoked", "cli_crashed" etc
     pub action: String,
+
     /// An additional message to include in the event, e.g. "start", "end", "error", etc
     pub message: String,
-    pub module: String,
-    pub time: DateTime<Utc>,
+
+    /// The "name" of the error. In our case, usually" "RustError" or "RustPanic". In other languages
+    /// this might be the exception type. In Rust, this is usually the name of the error type. (e.g. "std::io::Error", etc)
+    pub error_type: Option<String>,
+
+    /// Whether the event was handled or not. Unhandled errors are the default, but some we recover from (like hotpatching issues).
+    pub error_handled: bool,
+
+    /// Additional values to include in the event, e.g. "duration", "enabled", etc.
     pub values: HashMap<String, serde_json::Value>,
+
+    /// Timestamp of the event, in UTC, derived from the user's system time. Might not be reliable.
+    pub time: DateTime<Utc>,
+
+    /// The module where the event occurred, stripped of paths for privacy.
+    pub module: Option<String>,
+
+    /// The file or module where the event occurred, stripped of paths for privacy, relative to the monorepo root.
+    pub file: Option<String>,
+
+    /// The line and column where the event occurred, if applicable.
+    pub line: Option<u32>,
+
+    /// The column where the event occurred, if applicable.
+    pub column: Option<u32>,
+
+    /// The stack frames of the event, if applicable.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub stack_frames: Vec<StackFrame>,
 }
 
 impl TelemetryEventData {
-    pub fn new(name: impl ToString, message: impl ToString, module: impl ToString) -> Self {
+    pub fn new(name: impl ToString, message: impl ToString) -> Self {
         Self {
             command: std::env::args()
                 .nth(1)
                 .unwrap_or_else(|| "unknown".to_string()),
-            module: strip_paths(&module.to_string()),
             action: strip_paths(&name.to_string()),
             message: strip_paths(&message.to_string()),
+            file: None,
+            module: None,
             time: DateTime::<Utc>::from(SystemTime::now()),
             values: HashMap::new(),
+            error_type: None,
+            column: None,
+            line: None,
+            stack_frames: vec![],
+            error_handled: false,
         }
     }
 
@@ -97,15 +126,102 @@ impl TelemetryEventData {
         self
     }
 
+    pub fn with_module(mut self, module: impl ToString) -> Self {
+        self.module = Some(strip_paths(&module.to_string()));
+        self
+    }
+
+    pub fn with_file(mut self, file: impl ToString) -> Self {
+        self.file = Some(strip_paths(&file.to_string()));
+        self
+    }
+
+    pub fn with_line_column(mut self, line: u32, column: u32) -> Self {
+        self.line = Some(line);
+        self.column = Some(column);
+        self
+    }
+
+    pub fn with_error_handled(mut self, error_handled: bool) -> Self {
+        self.error_handled = error_handled;
+        self
+    }
+
+    pub fn with_error_type(mut self, error_type: String) -> Self {
+        self.error_type = Some(error_type);
+        self
+    }
+
+    pub fn with_stack_frames(mut self, stack_frames: Vec<StackFrame>) -> Self {
+        self.stack_frames = stack_frames;
+        self
+    }
+
     pub fn to_json(&self) -> serde_json::Value {
         serde_json::to_value(self).unwrap()
     }
 }
 
+/// Display implementation for TelemetryEventData, such that you can use it in tracing macros with the "%" syntax.
 impl std::fmt::Display for TelemetryEventData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", serde_json::to_string(self).unwrap())
     }
+}
+
+/// A serialized stack frame, in a format that matches PostHog's stack frame format.
+///
+/// Read more:
+/// <https://github.com/PostHog/posthog-js/blob/6e35a639a4d06804f6844cbde15adf11a069b92b/packages/node/src/extensions/error-tracking/types.ts#L55>
+///
+/// Supposedly, this is compatible with Sentry's stack frames as well. In the CLI we use sentry-backtrace
+/// even though we don't actually use sentry.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "snake_case")]
+pub struct StackFrame {
+    pub platform: String,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub filename: Option<String>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub function: Option<String>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub module: Option<String>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lineno: Option<u32>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub colno: Option<u32>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub abs_path: Option<String>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub context_line: Option<String>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pre_context: Option<Vec<String>>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub post_context: Option<Vec<String>>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub in_app: Option<bool>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub instruction_addr: Option<String>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub addr_mode: Option<String>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub vars: Option<HashMap<String, serde_json::Value>>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chunk_id: Option<String>,
 }
 
 // If the CLI is compiled locally, it can contain backtraces which contain the home path with the username in it.

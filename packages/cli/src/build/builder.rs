@@ -424,7 +424,6 @@ impl AppBuilder {
                         }
                     }
 
-                    tracing::error!(?err, json = ?StructuredOutput::Error { message: err.to_string() });
                     return Err(err);
                 }
                 BuilderUpdate::StdoutReceived { .. } => {}

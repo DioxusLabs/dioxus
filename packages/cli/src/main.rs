@@ -67,25 +67,14 @@ async fn main() {
         }
     });
 
-    // Provide a structured output for third party tools that can consume the output of the CLI
-    match result.await.as_ref() {
-        Ok(output) => {
-            tracing::debug!(json = ?output);
-        }
-        Err(err) => {
-            tracing::error!(
-                json = ?StructuredOutput::Error {
-                    message: format!("{err:?}"),
-                },
-            );
-
-            eprintln!(
-                "{ERROR_STYLE}Failed{ERROR_STYLE:#}: {}",
-                crate::error::log_stacktrace(err, 1),
-                ERROR_STYLE = crate::styles::ERROR_STYLE,
-            );
-
+    // Print the structured output in JSON format for third-party tools to consume.
+    // Make sure we do this as the last step so you can always `tail -1` it
+    match result.await {
+        StructuredOutput::Error { message } => {
+            tracing::error!(json = ?StructuredOutput::Error { message });
             std::process::exit(1);
         }
+
+        output => tracing::debug!(json = ?output),
     }
 }

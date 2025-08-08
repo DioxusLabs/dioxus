@@ -13,16 +13,32 @@
 //! 2. Build file append layer for logging to a file. This file is reset on every CLI-run.
 //! 3. Build CLI layer for routing tracing logs to the TUI.
 //! 4. Build fmt layer for non-interactive logging with a custom writer that prevents output during interactive mode.
+//!
+//! ## Telemetry
+//!
+//! The CLI collects anonymized telemetry data to help us understand how the CLI is used. We primarily
+//! care about catching panics and fatal errors. Data is uploaded to PostHog through a custom proxy endpoint.
+//!
+//! Telemetry events are collected while the CLI is running and then flushed to disk at the end of the session.
+//! When the CLI starts again, it tries its best to upload the telemetry data from the FS. In CI,
+//! the telemetry data is uploaded immediately after the CLI completes with a 5 second timeout.
+//!
+//! You can opt out in a number of ways:
+//! - set TELEMETRY=false in your environment
+//! - set DX_TELEMETRY_ENABLED=false in your environment
+//! - set `dx config set disable-telemetry true`
+//!
 
 use crate::{dx_build_info::GIT_COMMIT_HASH_SHORT, serve::ServeUpdate, Cli, Commands, Verbosity};
 use crate::{BundleFormat, CliSettings, Workspace};
-use anyhow::{bail, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use cargo_metadata::diagnostic::{Diagnostic, DiagnosticLevel};
 use clap::Parser;
-use dioxus_cli_telemetry::{Reporter, TelemetryEventData};
+use dioxus_cli_telemetry::TelemetryEventData;
 use dioxus_dx_wire_format::StructuredOutput;
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::{FutureExt, TryFutureExt};
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::{any::Any, backtrace::Backtrace, io::Read, str::FromStr, sync::Arc};
 use std::{borrow::Cow, sync::OnceLock};
@@ -49,7 +65,6 @@ use uuid::Uuid;
 const LOG_ENV: &str = "DIOXUS_LOG";
 const DX_SRC_FLAG: &str = "dx_src";
 
-static BACKTRACE: OnceLock<CapturedBacktrace> = OnceLock::new();
 pub static VERBOSITY: OnceLock<Verbosity> = OnceLock::new();
 
 /// A trait that emits an anonymous JSON representation of the object, suitable for telemetry.
@@ -66,6 +81,7 @@ pub(crate) trait Anonymized {
 pub struct TraceController {
     http_client: Option<reqwest::Client>,
     reporter: Option<Reporter>,
+    backtrace_rx: Arc<tokio::sync::Mutex<UnboundedReceiver<CapturedBacktrace>>>,
     telemetry_tx: UnboundedSender<TelemetryEventData>,
     telemetry_rx: Arc<tokio::sync::Mutex<UnboundedReceiver<TelemetryEventData>>>,
     log_to_file: Option<Arc<tokio::sync::Mutex<std::fs::File>>>,
@@ -75,7 +91,9 @@ pub struct TraceController {
 }
 
 struct CapturedBacktrace {
+    payload: String,
     backtrace: Backtrace,
+    thread_name: Option<String>,
     location: Option<SavedLocation>,
 }
 
@@ -86,15 +104,13 @@ struct SavedLocation {
 }
 
 impl TraceController {
-    pub const EVENT_HEARTBEAT: &str = "cli_heartbeat";
-
     /// Initialize the CLI and set up the tracing infrastructure
     ///
     /// This captures panics and flushes telemetry to a file after the CLI has run.
     ///
     /// We pass the TraceController around the CLI in a few places, namely the serve command so the TUI
     /// can access things like the logs.
-    pub async fn main<F>(run_app: impl FnOnce(Commands, Self) -> F) -> Result<StructuredOutput>
+    pub async fn main<F>(run_app: impl FnOnce(Commands, Self) -> F) -> StructuredOutput
     where
         F: Future<Output = Result<StructuredOutput>>,
     {
@@ -168,22 +184,20 @@ impl TraceController {
         let console_layer = tracing_subscriber::layer::Identity::new();
 
         // Construct our custom layer that handles the TUI and file logging
-        // Initialize the log file if we use it
         let log_to_file = args
             .verbosity
             .log_to_file
             .as_deref()
             .map(|file_path| {
-                if !file_path.exists() {
-                    _ = std::fs::write(file_path, "");
-                }
                 std::fs::OpenOptions::new()
                     .append(true)
                     .create(true)
                     .open(file_path)
                     .map(|file| Arc::new(tokio::sync::Mutex::new(file)))
             })
-            .transpose()?;
+            .transpose()
+            .context("Failed to open specified log_file for writing")
+            .unwrap();
 
         // Create a new session ID for this invocation of the CLI
         let reporter = Self::enroll_reporter().ok().map(|distinct_id| Reporter {
@@ -202,12 +216,14 @@ impl TraceController {
         // Note that we only drain the channel at the end of the CLI run, so it's not really being used as a channel - more of a vecdeque
         let (telemetry_tx, telemetry_rx) = futures_channel::mpsc::unbounded();
         let (tui_tx, tui_rx) = futures_channel::mpsc::unbounded();
+        let (backtrace_tx, backtrace_rx) = futures_channel::mpsc::unbounded();
         let tracer = TraceController {
             reporter,
             telemetry_tx,
             log_to_file,
             tui_tx,
             tui_rx: Arc::new(tokio::sync::Mutex::new(tui_rx)),
+            backtrace_rx: Arc::new(tokio::sync::Mutex::new(backtrace_rx)),
             telemetry_rx: Arc::new(tokio::sync::Mutex::new(telemetry_rx)),
             http_client,
             tui_active,
@@ -217,7 +233,7 @@ impl TraceController {
         tokio::spawn(
             tracer
                 .clone()
-                .upload_telemetry_files(Self::to_heartbeat_event(&args.action))
+                .upload_telemetry_files(Self::to_invoked_event(&args.action))
                 .map_err(|err| tracing::error!("Failed to upload telemetry files: {}", err)),
         );
 
@@ -230,16 +246,36 @@ impl TraceController {
             .with(fmt_layer)
             .init();
 
-        // Set the panic handler to capture backtraces but not print them. We will print them later.
+        // Set the panic handler to capture backtraces in case of a panic
+        let initial_thread = std::thread::current();
         std::panic::set_hook(Box::new(move |panic_info| {
-            _ = BACKTRACE.set(CapturedBacktrace {
+            let payload = if let Some(s) = panic_info.payload().downcast_ref::<String>() {
+                s.to_string()
+            } else if let Some(s) = panic_info.payload().downcast_ref::<&str>() {
+                s.to_string()
+            } else {
+                "<unknown panic>".to_string()
+            };
+
+            let current_thread = std::thread::current();
+            let thread_name = current_thread.name().map(|s| s.to_string());
+
+            // if current_thread.id() != initial_thread.id() {
+            tracing::error!("{:?}", anyhow!(payload.clone()));
+            // }
+
+            let captured = CapturedBacktrace {
+                payload,
+                thread_name,
                 backtrace: Backtrace::capture(),
                 location: panic_info.location().map(|l| SavedLocation {
                     file: l.file().to_string(),
                     line: l.line(),
                     column: l.column(),
                 }),
-            });
+            };
+
+            _ = backtrace_tx.unbounded_send(captured);
         }));
 
         // Run the app, catching panics and errors, early flushing if `ctrl_c` is pressed.
@@ -247,13 +283,8 @@ impl TraceController {
             .catch_unwind()
             .await;
 
-        // Write any in-flight logs to the file / telemetry queue
-        if let Err(e) = tracer.flush_logs(&app_res).await {
-            tracing::trace!("Failed to finish logging: {}", e);
-        }
-
         // Do any final logging cleanup
-        tracer.cleanup_ui(app_res).await
+        tracer.finish(app_res).await
     }
 
     // Redirects the tracing logs to the TUI if it's active, otherwise it just collects them.
@@ -293,14 +324,14 @@ impl TraceController {
     ///       otherwise we might end up being flooded by telemetry events.
     ///
     /// We loop receive messages, pushing them into a batch.
-    async fn upload_telemetry_files(self, heartbeat: TelemetryEventData) -> Result<()> {
+    async fn upload_telemetry_files(self, invoked_event: TelemetryEventData) -> Result<()> {
         use fs2::FileExt;
 
         // Wait a little bit to prevent abuse (spam loops) and not do extra work if it's a simple `--help` call
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
         // Send off a heartbeat request. If this fails, we skip anything else.
-        self.send_heartbeat(heartbeat).await?;
+        self.send_invoked_event(invoked_event).await?;
 
         // Wait a few seconds to see if we can end up in `dx serve` or a long-running task
         // If we're in CI though, we do want to flush telemetry immediately
@@ -341,16 +372,19 @@ impl TraceController {
 
             // We assume since this is a jsonl file that every line is valid json. We just concat the lines together
             // and then send them using the batched client.
+            // The session ID is the file stem of the file, which is a UUID. If not, we just make up a
+            // new session ID on the fly.
             let reporter = self.reporter.as_ref().context("no reporter")?;
             let session_id = entry
                 .path()
                 .file_stem()
-                .and_then(|s| Uuid::from_str(s.to_str()?).ok());
+                .and_then(|s| Uuid::from_str(s.to_str()?).ok())
+                .unwrap_or_else(Uuid::new_v4);
             let request_body = jsonl_file
                 .lines()
                 .map(serde_json::from_str::<TelemetryEventData>)
                 .filter_map(Result::ok)
-                .map(|event| Self::telemetry_to_posthog(reporter, event, session_id))
+                .map(|event| Self::telemetry_to_posthog(session_id, reporter.distinct_id, event))
                 .collect::<Vec<_>>();
 
             // Send the request
@@ -399,9 +433,9 @@ impl TraceController {
         Ok(())
     }
 
-    async fn send_heartbeat(&self, heartbeat: TelemetryEventData) -> Result<()> {
+    async fn send_invoked_event(&self, heartbeat: TelemetryEventData) -> Result<()> {
         let reporter = self.reporter.as_ref().context("No reporter initialized")?;
-        let body = Self::telemetry_to_posthog(reporter, heartbeat, None);
+        let body = Self::telemetry_to_posthog(reporter.session_id, reporter.distinct_id, heartbeat);
         self.upload_to_posthog(&vec![body]).await
     }
 
@@ -409,29 +443,30 @@ impl TraceController {
     ///
     /// We try to maintain the same structure for each telemetry event to do advanced filtering on the backend.
     fn telemetry_to_posthog(
-        reporter: &Reporter,
+        session_id: Uuid,
+        distinct_id: Uuid,
         event: TelemetryEventData,
-        custom_sesion: Option<Uuid>,
     ) -> serde_json::Value {
-        let Reporter {
-            session_id,
-            distinct_id,
-        } = reporter;
-
         let TelemetryEventData {
             action,
-            module,
             message,
             time,
             values,
             command,
+            stack_frames,
+            file,
+            line,
+            column,
+            module,
+            error_type,
+            error_handled,
         } = event;
 
         let mut ph_event = posthog_rs::Event::new(action, distinct_id.to_string());
 
         // The reporter's fields
         _ = ph_event.insert_prop("is_ci", CliSettings::is_ci());
-        _ = ph_event.insert_prop("session_id", custom_sesion.unwrap_or(*session_id));
+        _ = ph_event.insert_prop("session_id", session_id.to_string());
         _ = ph_event.insert_prop("distinct_id", distinct_id.to_string());
         _ = ph_event.insert_prop("host_os", target_lexicon::HOST.operating_system.to_string());
         _ = ph_event.insert_prop("host_arch", target_lexicon::HOST.architecture.to_string());
@@ -441,11 +476,14 @@ impl TraceController {
         _ = ph_event.insert_prop("cli_version_patch", crate::dx_build_info::PKG_VERSION_PATCH);
         _ = ph_event.insert_prop("cli_version_pre", crate::dx_build_info::PKG_VERSION_PRE);
         _ = ph_event.insert_prop("cli_commit_hash", GIT_COMMIT_HASH_SHORT.unwrap_or_default());
+        _ = ph_event.insert_prop("cli_source_file", line);
+        _ = ph_event.insert_prop("cli_source_line", file);
+        _ = ph_event.insert_prop("cli_source_column", column);
+        _ = ph_event.insert_prop("cli_source_module", module);
 
         // And the TelemetryEventData fields
-        _ = ph_event.insert_prop("command", command);
-        _ = ph_event.insert_prop("message", message);
-        _ = ph_event.insert_prop("module", module);
+        _ = ph_event.insert_prop("command", &command);
+        _ = ph_event.insert_prop("message", &message);
 
         // And the rest of the event values
         for (key, value) in values {
@@ -458,6 +496,24 @@ impl TraceController {
         value["api_key"] = serde_json::Value::String(
             "phc_d2jQTZMqAWxSkzv3NQ8TlxCP49vtBZ5ZmlYMIZLFNNU".to_string(),
         );
+
+        // If the event is an error, we need to add the error properties so posthog picks it up.
+        // The stackframes should be transformed already.
+        if let Some(error_type) = error_type {
+            value["event"] = "$exception".into();
+            value["properties"]["$exception_list"] = json!([{
+                "type": error_type,
+                "value": &message,
+                "mechanism": {
+                    "handled": error_handled, // panics are not handled
+                    "synthetic": false, // all errors/panics and "real", not emitted by sentry or the sdk
+                    "stackframe": {
+                        "type": "native", // debug symbols are generally used. this might be wrong?
+                        "frames": stack_frames
+                    }
+                },
+            }]);
+        }
 
         value
     }
@@ -491,18 +547,17 @@ impl TraceController {
         Ok(reporter_id)
     }
 
-    async fn cleanup_ui(
+    async fn finish(
         &self,
-        app_res: Result<Result<StructuredOutput>, Box<dyn Any + Send>>,
-    ) -> Result<StructuredOutput> {
-        // Kill the screen so we don't ruin the terminal
+        res: Result<Result<StructuredOutput>, Box<dyn Any + Send>>,
+    ) -> StructuredOutput {
+        // Tear down the TUI if it's active at this point.
         _ = crate::serve::Output::remote_shutdown(true);
 
-        // And drain the tracer as regular messages. All messages will be logged (including traces)
-        // and then we can print the panic message
+        // And drain the tracer as regular messages.
         self.tui_active.store(false, Ordering::Relaxed);
 
-        // re-emit any remaining messages
+        // re-emit any remaining messages in case they're useful.
         while let Ok(Some(msg)) = self.tui_rx.lock().await.try_next() {
             let content = match msg.content {
                 TraceContent::Text(text) => text,
@@ -517,106 +572,54 @@ impl TraceController {
             }
         }
 
-        // Return the right UI and error
-        match app_res {
-            Ok(Ok(res)) => Ok(res),
-            Ok(Err(e)) => {
-                println!();
-                Err(e)
-            }
-            Err(panic_err) => {
-                println!();
-
-                // And then print the panic itself.
-                let as_str = if let Some(p) = panic_err.downcast_ref::<String>() {
-                    p.as_ref()
-                } else if let Some(p) = panic_err.downcast_ref::<&str>() {
-                    p
-                } else {
-                    "<unknown panic>"
-                };
-
-                // Pretty-print the backtrace if we have it
-                let message = match BACKTRACE.get() {
-                    Some(loc) => {
-                        let location_display = loc
-                            .location
-                            .as_ref()
-                            .map(|l| format!("{}:{}:{}", l.file, l.line, l.column))
-                            .unwrap_or_else(|| "<unknown>".to_string());
-
-                        let clean = clean_backtrace(&loc.backtrace);
-
-                        format!("dx panicked at {location_display}\n{as_str}\n\n{clean}")
-                    }
-                    None => format!("dx panicked: {as_str}"),
-                };
-
-                Err(anyhow::anyhow!(message))
-            }
+        // Dequeue any pending backtraces and record them as telemetry events.
+        while let Ok(Some(backtrace)) = self.backtrace_rx.lock().await.try_next() {
+            self.record_backtrace(backtrace);
         }
-    }
 
-    /// Flush pending logs to the telemetry file.
-    async fn flush_logs(
-        &self,
-        res: &Result<Result<StructuredOutput>, Box<dyn Any + Send>>,
-    ) -> Result<()> {
-        use std::io::Write;
+        // Create the final output based on the result of the CLI run.
+        let cli_output = match res {
+            // No printing needed for successful runs, we just return the output for JSON output.
+            Ok(Ok(output)) => output,
 
-        // Only flush telemetry if we have a reporter
-        let Some(reporter) = self.reporter.as_ref() else {
-            return Ok(());
+            // If the CLI run failed, we print the error and return it.
+            // Anyhow gives us a nice stack trace, so we can just print it.
+            // Eventually we might want to format this better since a full stack trace is kinda ugly.
+            Ok(Err(err)) => {
+                use crate::styles::GLOW_STYLE;
+                let arg = std::env::args().nth(1).unwrap_or_else(|| "dx".to_string());
+                let message = format!("Error running {GLOW_STYLE}{}{GLOW_STYLE:#}: {:?}", arg, err);
+                eprintln!("{message}");
+                _ = self.telemetry_tx.unbounded_send(fatal_error(&err));
+                StructuredOutput::Error { message }
+            }
+
+            // The top-level thread panicked entirely. The panic handler should print the error for us.
+            // Just return the error for the structured output.
+            Err(e) => StructuredOutput::Error {
+                message: if let Some(s) = e.downcast_ref::<String>() {
+                    s.to_string()
+                } else if let Some(s) = e.downcast_ref::<&str>() {
+                    s.to_string()
+                } else {
+                    "<unknown error>".to_string()
+                },
+            },
         };
 
-        // Add the fatal error to the telemetry
-        if let Ok(Err(err)) = res.as_ref() {
-            _ = self.telemetry_tx.unbounded_send(fatal_error(err));
-        }
+        _ = self.flush_telemetry_to_disk().await;
 
-        // If there's a panic, we also want to capture that
-        if let Err(panic_err) = res {
-            // if let Some(bt) = bt {
-            //     println!("{:?}", bt);
-            // }
-            // println!("dx panicked: {}", panic_err);
-            // And then print the panic itself.
-            let as_str = if let Some(p) = panic_err.downcast_ref::<String>() {
-                p.as_ref()
-            } else if let Some(p) = panic_err.downcast_ref::<&str>() {
-                p
-            } else {
-                "<unknown panic>"
-            };
+        cli_output
+    }
 
-            // Attempt to emulate the default panic hook
-            let message = match BACKTRACE.get() {
-                Some(loc) => {
-                    let location_display = loc
-                        .location
-                        .as_ref()
-                        .map(|l| format!("{}:{}:{}", l.file, l.line, l.column))
-                        .unwrap_or_else(|| "<unknown>".to_string());
+    /// Flush telemetry to disk.
+    ///
+    /// Maybe flush telemetry immediately if the command is a long-running command like `dx serve` or `dx run` and there's an error.
+    /// Currently just flushes telemetry immediately if we're in CI.
+    async fn flush_telemetry_to_disk(&self) -> Result<()> {
+        use std::io::Write;
 
-                    // let backtrace_display = clean_backtrace(back);
-
-                    // // Add the fatal error to the telemetry
-                    // send_telemetry_event(TelemetryEvent::new(
-                    //     "panic",
-                    //     Some(location_display.clone()),
-                    //     &backtrace_display,
-                    //     "error",
-                    // ));
-
-                    format!("dx serve panicked at {location_display}\n{as_str}\n{location_display} ___rust_try")
-                }
-                None => {
-                    // Add the fatal error to the telemetry
-                    // send_telemetry_event(TelemetryEvent::new("panic", None, as_str, "error"));
-                    format!("dx serve panicked: {as_str}")
-                }
-            };
-        }
+        let reporter = self.reporter.as_ref().context("No reporter initialized")?;
 
         // If we're in CI, we try to upload the telemetry immediately, with a short timeout (5 seconds or so)
         // Hopefully it doesn't fail! Not much we can do in CI.
@@ -628,7 +631,7 @@ impl TraceController {
                     .filter_map(|msg| serde_json::to_value(msg).ok())
                     .collect::<Vec<_>>();
 
-                self.upload_to_posthog(&request_body).await?;
+                _ = self.upload_to_posthog(&request_body).await;
             }
 
             // Dump the logs to a the session file as jsonl
@@ -678,20 +681,24 @@ impl TraceController {
         "https://dx-cli-stats.dioxus.dev/".to_string()
     }
 
-    pub(crate) fn to_heartbeat_event(arg: &crate::Commands) -> TelemetryEventData {
-        let (name, anonymized) = Self::command_anonymized(arg);
-        TelemetryEventData::new("heartbeat", name, module_path!())
-            .with_value(
-                "raw_arguments",
-                std::env::args()
-                    .skip(1)
-                    .map(|s| dioxus_cli_telemetry::strip_paths(&s))
-                    .collect::<Vec<_>>(),
-            )
+    /// Collect the raw arguments passed to the CLI and convert them into a telemetry event.
+    ///
+    /// This gives some usage information about which commands are being used and how. Especially useful
+    /// if a particular session is failing in some way.
+    pub(crate) fn to_invoked_event(arg: &crate::Commands) -> TelemetryEventData {
+        let (message, anonymized) = Self::command_anonymized(arg);
+        let raw_arguments = std::env::args()
+            .map(|s| dioxus_cli_telemetry::strip_paths(&s))
+            .collect::<Vec<_>>();
+        TelemetryEventData::new("cli_invoked", message)
+            .with_value("raw_arguments", raw_arguments)
             .with_value("arguments", anonymized)
     }
 
     /// Returns arguments that we're curious about
+    ///
+    /// The first return is the message, basically the command name in sequence
+    /// The second return is a JSON object with the anonymized arguments as a structured value.
     pub(crate) fn command_anonymized(arg: &crate::Commands) -> (String, serde_json::Value) {
         use crate::cli::config::{Config, Setting};
         use crate::BuildTools;
@@ -719,12 +726,7 @@ impl TraceController {
                 }),
             ),
             Commands::Build(build) => ("build".to_string(), build.anonymized()),
-            Commands::Run(run) => (
-                "run".to_string(),
-                json! {{
-                    "args": run.args.anonymized()
-                }},
-            ),
+            Commands::Run(run) => ("run".to_string(), run.args.anonymized()),
             Commands::Init(cmd) => (
                 "new".to_string(),
                 json!({
@@ -800,6 +802,11 @@ impl TraceController {
             },
         }
     }
+
+    fn record_backtrace(&self, backtrace: CapturedBacktrace) -> Result<()> {
+        todo!();
+        Ok(())
+    }
 }
 
 impl<S> Layer<S> for TraceController
@@ -870,15 +877,14 @@ where
                     TraceSrc::Unknown => "unknown",
                 };
 
-                let mut event = TelemetryEventData::new(
-                    "tracing error",
-                    visitor.message.as_str(),
-                    meta.module_path()
-                        .map(ToString::to_string)
-                        .unwrap_or_else(|| "<unknown>".to_string()),
-                )
-                .with_value("event_location", event_location())
-                .with_value("stage", stage);
+                let mut event = TelemetryEventData::new("tracing error", visitor.message.as_str())
+                    .with_module(
+                        meta.module_path()
+                            .map(ToString::to_string)
+                            .unwrap_or_else(|| "<unknown>".to_string()),
+                    )
+                    .with_value("event_location", event_location())
+                    .with_value("stage", stage);
 
                 for (field, value) in visitor.fields.iter() {
                     event = event.with_value(field, value);
@@ -1074,8 +1080,7 @@ impl FormatTime for PrettyUptime {
 }
 
 pub fn fatal_error(error: &crate::Error) -> TelemetryEventData {
-    let mut telemetry_event =
-        TelemetryEventData::new("fatal_error", error.to_string(), module_path!());
+    let mut telemetry_event = TelemetryEventData::new("fatal_error", error.to_string());
     let backtrace = error.backtrace();
     if backtrace.status() == std::backtrace::BacktraceStatus::Captured {
         telemetry_event = telemetry_event.with_value("backtrace", clean_backtrace(backtrace));
@@ -1131,35 +1136,10 @@ async fn run_with_ctrl_c(
     }
 }
 
-// curl -X POST "https://us.i.posthog.com/i/v0/e/" \
-//      -H "Content-Type: application/json" \
-//      -d '{
-//          "api_key": "phc_d2jQTZMqAWxSkzv3NQ8TlxCP49vtBZ5ZmlYMIZLFNNU",
-//          "event": "$exception",
-//          "properties": {
-//              "distinct_id": "distinct_id_of_your_user",
-//              "$exception_list": [{
-//                  "type": "RangeError",
-//                  "value": "Maximum call stack size exceeded",
-//                  "mechanism": {
-//                      "handled": true,
-//                      "synthetic": false
-//                  },
-//                  "stacktrace": {
-//                      "type": "resolved",
-//                      "frames": [
-//                          {
-//                              "raw_id": "89f3907385ddb1bdc2feebd77625387d685e3da2f9a68bcf2634e3b3b39122e51f895e5c880def374525c558899b2e90eed214900ff9c8f949243e4b79eb32a9",
-//                              "mangled_name": "Array.forEach",
-//                              "in_app": false,
-//                              "resolved_name": "Array.forEach",
-//                              "lang": "javascript",
-//                              "resolved": true
-//                          },
-//                          /* Additional frames omitted for brevity */
-//                      ]
-//                  }
-//              }],
-//              "$exception_fingerprint": "209842d96784e19321e3a36b068d53fff7a01ebcb1da9e98df35c4c49db0b4f3b62aea7ee25a714470e61f8d36b4716f227f241c153477e5fa9adfda64ce9f71"
-//          },
-//      }'
+/// We only store non-pii information in telemetry to track issues and performance
+/// across the CLI.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct Reporter {
+    pub session_id: Uuid,
+    pub distinct_id: Uuid,
+}

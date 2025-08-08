@@ -3,7 +3,7 @@ use crate::{
     serve::{ansi_buffer::ansi_string_to_line, ServeUpdate, WebServer},
     BuildId, BuildStage, BuilderUpdate, BundleFormat, TraceContent, TraceMsg, TraceSrc,
 };
-use anyhow::bail;
+use anyhow::{anyhow, bail};
 use cargo_metadata::diagnostic::Diagnostic;
 use crossterm::{
     cursor::{Hide, Show},
@@ -216,25 +216,6 @@ impl Output {
 
     /// Handle an input event, returning `true` if the event should cause the program to restart.
     fn handle_input(&mut self, input: Event) -> Result<Option<ServeUpdate>> {
-        // handle ctrlc
-        if let Event::Key(key) = input {
-            if let KeyCode::Char('c') = key.code {
-                if key.modifiers.contains(KeyModifiers::CONTROL) {
-                    return Ok(Some(ServeUpdate::Exit { error: None }));
-                }
-            }
-
-            if cfg!(debug_assertions) {
-                if let KeyCode::Char('Z') = key.code {
-                    panic!("z pressed so we panic");
-                }
-
-                if let KeyCode::Char('X') = key.code {
-                    bail!("x pressed so we bail");
-                }
-            }
-        }
-
         match input {
             Event::Key(key) if key.kind == KeyEventKind::Press => self.handle_keypress(key),
             _ => Ok(Some(ServeUpdate::Redraw)),
@@ -265,6 +246,20 @@ impl Output {
             KeyCode::Char('d') => {
                 return Ok(Some(ServeUpdate::OpenDebugger {
                     id: BuildId::CLIENT,
+                }));
+            }
+
+            // ctrl-c
+            KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                return Ok(Some(ServeUpdate::Exit { error: None }));
+            }
+
+            // Helpers for debugging
+            KeyCode::Char('Z') if cfg!(debug_assertions) => panic!("z pressed so we panic"),
+            KeyCode::Char('X') if cfg!(debug_assertions) => bail!("x pressed so we bail"),
+            KeyCode::Char('C') if cfg!(debug_assertions) => {
+                return Ok(Some(ServeUpdate::Exit {
+                    error: Some(anyhow!("C pressed, so exiting with safe error")),
                 }));
             }
 
@@ -406,7 +401,9 @@ impl Output {
         };
 
         // First, dequeue any logs that have built up from event handling
-        _ = self.drain_logs(term);
+        while let Some(log) = self.pending_logs.pop_back() {
+            _ = self.render_log(term, log);
+        }
 
         // Then, draw the frame, passing along all the state of the TUI so we can render it properly
         _ = term.draw(|frame| {
@@ -856,12 +853,12 @@ impl Output {
     /// TODO(jon): we could look into implementing scroll regions ourselves, but I think insert_before will
     /// land in a reasonable amount of time.
     #[deny(clippy::manual_saturating_arithmetic)]
-    fn drain_logs(&mut self, terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
+    fn render_log(
+        &mut self,
+        terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+        log: TraceMsg,
+    ) -> Result<()> {
         use unicode_segmentation::UnicodeSegmentation;
-
-        let Some(log) = self.pending_logs.pop_back() else {
-            return Ok(());
-        };
 
         // Only show debug logs if verbose is enabled
         if log.level == Level::DEBUG && !self.verbose {
