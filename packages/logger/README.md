@@ -26,7 +26,7 @@
 
 `dioxus-logger` is a basic cross-platform facade for logging in [Dioxus](https://dioxuslabs.com/) that uses the [tracing](https://crates.io/crates/tracing) crate.
 
-```rust
+```rust, no_run
 use dioxus::prelude::*;
 use dioxus_logger::tracing::{Level, info};
 
@@ -48,7 +48,7 @@ fn App() -> Element {
 
 As of v0.6, dioxus_logger is part of dioxus itself. Dioxus will call `init` with a default Level, though you can still override the default with `init`.
 
-```rust
+```rust, no_run
 use dioxus::prelude::*;
 use dioxus::logger::tracing::{Level, info};
 

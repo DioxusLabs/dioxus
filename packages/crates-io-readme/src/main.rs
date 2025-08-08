@@ -8,6 +8,7 @@
 /// cargo run --package crates-io-readme
 /// ```
 use anyhow::{Context, Result};
+use ignore::gitignore;
 use pulldown_cmark::{CodeBlockKind, Event, Tag, TagEnd};
 use std::fs;
 use std::path::Path;
@@ -15,9 +16,28 @@ use walkdir::WalkDir;
 
 fn main() -> Result<()> {
     let current_dir = std::env::current_dir()?;
+    // walk up looking for a git root
+    let mut git_root = current_dir.as_path();
+    while !git_root.join(".git").exists() {
+        if let Some(parent) = git_root.parent() {
+            git_root = parent;
+        } else {
+            break;
+        }
+    }
+    let git_folder = git_root.join(".git");
+    let gitignore_path = git_root.join(".gitignore");
+
+    // Ignore files in the gitignore
+    let (ignore, _) = ignore::gitignore::Gitignore::new(&gitignore_path);
 
     // Process all markdown files in the current directory
-    for entry in WalkDir::new(&current_dir) {
+    for entry in WalkDir::new(&current_dir).into_iter().filter_entry(|e| {
+        let path = e.path();
+        let is_dir = path.is_dir();
+        // Ignore files in the gitignore
+        ignore.matched(path, is_dir).is_none() && !path.starts_with(&git_folder)
+    }) {
         let entry = entry?;
         let path = entry.path();
 
@@ -27,7 +47,7 @@ fn main() -> Result<()> {
                 .and_then(|s| s.to_str())
                 .unwrap_or_default();
             if let Some(base_name) = stem_name.strip_suffix("-docs-rs") {
-                process_markdown_file(&path, &path.with_file_name(base_name).with_extension("md"))?;
+                process_markdown_file(path, &path.with_file_name(base_name).with_extension("md"))?;
             }
         }
     }

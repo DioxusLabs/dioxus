@@ -4226,6 +4226,7 @@ name = "crates-io-readme"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "ignore",
  "pulldown-cmark",
  "pulldown-cmark-to-cmark",
  "walkdir",

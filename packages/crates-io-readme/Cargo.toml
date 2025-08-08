@@ -9,3 +9,4 @@ pulldown-cmark = { version = "0.13.0", default-features = false, features = ["si
 anyhow = "1.0"
 walkdir = "2.5"
 pulldown-cmark-to-cmark = "21.0.0"
+ignore = "0.4.23"

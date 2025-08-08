@@ -21,12 +21,11 @@
   </a>
 </div>
 
------
+---
 
 `dioxus-logger` is a basic cross-platform facade for logging in [Dioxus](https://dioxuslabs.com/) that uses the [tracing](https://crates.io/crates/tracing) crate.
 
-
-```rust
+```rust, no_run
 use dioxus::prelude::*;
 use dioxus_logger::tracing::{Level, info};
 
@@ -48,7 +47,7 @@ fn App() -> Element {
 
 As of v0.6, dioxus_logger is part of dioxus itself. Dioxus will call `init` with a default Level, though you can still override the default with `init`.
 
-```rust
+```rust, no_run
 use dioxus::prelude::*;
 use dioxus::logger::tracing::{Level, info};
 
@@ -65,23 +64,26 @@ fn App() -> Element {
   }
 }
 ```
+
 For non-wasm targets, runtime filtering is based on the `RUST_LOG` environment variable. e.g. for `RUST_LOG=none,crateName=trace` only logs trace and above for `crateName` will be captured. See [here](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html#directives) for syntax. For crates with `-` in the name, these need to be changed to `_` in `RUST_LOG`.
 
 ## Platform Support
+
 Dioxus logger will eventually support every target that Dioxus does. Currently mobile and TUI are not supported.
 
 ## Installation
+
 `dioxus_logger` is part of Dioxus v0.6. If you're using Dioxus v0.6, then no installation is required!
 
-
 If you're on Dioxus v0.5 and below, you can add `dioxus-logger` to your application by adding it to your dependencies.
+
 ```toml
 [dependencies]
 dioxus-logger = "0.5"
 ```
 
-
 ## License
+
 This project is licensed under the [MIT license].
 
 [mit license]: ./LICENSE
