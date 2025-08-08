@@ -31,7 +31,7 @@
 
 use crate::{dx_build_info::GIT_COMMIT_HASH_SHORT, serve::ServeUpdate, Cli, Commands, Verbosity};
 use crate::{BundleFormat, CliSettings, Workspace};
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{bail, Context, Result};
 use cargo_metadata::diagnostic::{Diagnostic, DiagnosticLevel};
 use clap::Parser;
 use dioxus_cli_telemetry::TelemetryEventData;
@@ -40,7 +40,7 @@ use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::{FutureExt, TryFutureExt};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::{any::Any, io::Read, str::FromStr, sync::Arc};
+use std::{any::Any, io::Read, str::FromStr, sync::Arc, time::SystemTime};
 use std::{borrow::Cow, sync::OnceLock};
 use std::{
     collections::HashMap,
@@ -200,10 +200,7 @@ impl TraceController {
             .unwrap();
 
         // Create a new session ID for this invocation of the CLI
-        let reporter = Self::enroll_reporter().ok().map(|distinct_id| Reporter {
-            distinct_id,
-            session_id: Uuid::new_v4(),
-        });
+        let reporter = Self::enroll_reporter().ok();
 
         // Create a new telemetry uploader
         let http_client = reqwest::Client::builder()
@@ -507,30 +504,39 @@ impl TraceController {
         // The stackframes should be transformed already.
         if let Some(error_type) = error_type {
             value["event"] = "$exception".into();
+            value["properties"]["$session_id"] = session_id.to_string().into();
             value["properties"]["$exception_list"] = json!([{
                 "type": error_type,
                 "value": &message,
                 "mechanism": {
                     "handled": error_handled, // panics are not handled
                     "synthetic": false, // all errors/panics and "real", not emitted by sentry or the sdk
-                    "stackframe": {
-                        "type": "native", // debug symbols are generally used. this might be wrong?
-                        "frames": stack_frames
-                    }
                 },
+                "stacktrace": {
+                    "type": "native", // debug symbols are generally used. this might be wrong?
+                    "frames": stack_frames
+                }
             }]);
         }
 
         value
     }
 
-    fn enroll_reporter() -> Result<Uuid> {
+    fn enroll_reporter() -> Result<Reporter> {
+        #[derive(Debug, Deserialize, Serialize)]
+        struct ReporterSession {
+            reporter_id: Uuid,
+            session_id: Uuid,
+            created_at: SystemTime,
+            last_used: SystemTime,
+        }
+
         // If the user requests telemetry disabled, we don't enroll them
         if CliSettings::telemetry_disabled() {
             bail!("Telemetry is disabled");
         }
 
-        // Create the sessions folder if it doesn't exist\
+        // Create the sessions folder if it doesn't exist
         let stats_folder = Workspace::dioxus_data_dir().join("stats");
         let sessions_folder = stats_folder.join("sessions");
         if !sessions_folder.exists() {
@@ -538,19 +544,43 @@ impl TraceController {
         }
 
         // Create a reporter_id. If we find an invalid reporter_id, we use `nil` as the reporter ID.
-        // If users want to enroll in telemetry but don't want a reporter ID, they can replace the
-        // contents of the file with anything that is not a valid UUID.
-        let stable_session_file = stats_folder.join("reporter_id.json");
-        let reporter_id = if stable_session_file.exists() {
-            let contents = std::fs::read_to_string(stable_session_file)?;
-            serde_json::from_str::<Uuid>(&contents).unwrap_or(Uuid::from_u128(1))
-        } else {
-            let new_id = Uuid::new_v4();
-            std::fs::write(stable_session_file, serde_json::to_string(&new_id)?)?;
-            new_id
+        let distinct_id_file = stats_folder.join("reporter.json");
+        let reporter_session = std::fs::read_to_string(&distinct_id_file)
+            .map(|e| serde_json5::from_str::<ReporterSession>(&e));
+
+        // If we have a valid reporter session, we use it, otherwise we create a new one.
+        let mut reporter = match reporter_session {
+            Ok(Ok(session)) => session,
+            _ => ReporterSession {
+                reporter_id: Uuid::new_v4(),
+                session_id: Uuid::new_v7(uuid::Timestamp::now(
+                    uuid::timestamp::context::ContextV7::new(),
+                )),
+                created_at: SystemTime::now(),
+                last_used: SystemTime::now(),
+            },
         };
 
-        Ok(reporter_id)
+        // Update the last used time to now, updating the session ID if it's older than 30 minutes.
+        if reporter
+            .last_used
+            .duration_since(SystemTime::now())
+            .map(|d| d.as_secs() > (30 * 60))
+            .unwrap_or(true)
+        {
+            reporter.session_id = Uuid::new_v7(uuid::Timestamp::now(
+                uuid::timestamp::context::ContextV7::new(),
+            ));
+        }
+        reporter.last_used = SystemTime::now();
+
+        // Write the reporter session back to the file
+        std::fs::write(&distinct_id_file, serde_json5::to_string(&reporter)?)?;
+
+        Ok(Reporter {
+            distinct_id: reporter.reporter_id,
+            session_id: reporter.session_id,
+        })
     }
 
     async fn finish(
