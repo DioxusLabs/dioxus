@@ -3,7 +3,7 @@ use crate::{
     serve::{ansi_buffer::ansi_string_to_line, ServeUpdate, WebServer},
     BuildId, BuildStage, BuilderUpdate, BundleFormat, TraceContent, TraceMsg, TraceSrc,
 };
-use anyhow::{anyhow, bail};
+use anyhow::{anyhow, bail, Context};
 use cargo_metadata::diagnostic::Diagnostic;
 use crossterm::{
     cursor::{Hide, Show},
@@ -260,6 +260,14 @@ impl Output {
             }
             KeyCode::Char('X') if cfg!(debug_assertions) => {
                 bail!("x pressed so we bail -> {}", uuid::Uuid::new_v4())
+            }
+            KeyCode::Char('E') if cfg!(debug_assertions) => {
+                Err(anyhow!(
+                    "E pressed so we bail with context -> {}",
+                    uuid::Uuid::new_v4()
+                ))
+                .context("With a message")
+                .context("With a context")?;
             }
             KeyCode::Char('C') if cfg!(debug_assertions) => {
                 return Ok(Some(ServeUpdate::Exit {
@@ -1040,5 +1048,35 @@ impl Output {
         }
 
         lines
+    }
+}
+
+impl std::ops::Drop for Output {
+    fn drop(&mut self) {
+        if !self.interactive {
+            return;
+        }
+
+        // Get a handle to the terminal with a different lifetime so we can continue to call &self methods
+        let owned_term = self.term.clone();
+        let mut term = owned_term.borrow_mut();
+        let Some(term) = term.as_mut() else {
+            return;
+        };
+
+        // First, dequeue any logs that have built up from event handling
+        while let Some(log) = self.pending_logs.pop_back() {
+            _ = self.render_log(term, log);
+        }
+
+        // And then lets move the cursor to the bottom of the terminal
+        let frame_rect = term.get_frame().area();
+        _ = term.set_cursor_position(Position {
+            x: 0,
+            y: frame_rect.y + frame_rect.height,
+        });
+
+        // Tear down the TUI if it's active at this point.
+        _ = crate::serve::Output::remote_shutdown(self.interactive);
     }
 }

@@ -38,6 +38,7 @@ use dioxus_cli_telemetry::TelemetryEventData;
 use dioxus_dx_wire_format::StructuredOutput;
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::{FutureExt, TryFutureExt};
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::{any::Any, io::Read, str::FromStr, sync::Arc, time::SystemTime};
@@ -116,6 +117,7 @@ impl TraceController {
     {
         let args = Cli::parse();
         let tui_active = Arc::new(AtomicBool::new(false));
+        let is_serve_cmd = matches!(args.action, Commands::Serve(_));
 
         VERBOSITY
             .set(args.verbosity.clone())
@@ -124,7 +126,7 @@ impl TraceController {
         // Set up a basic env-based filter for the logs
         let env_filter = match env::var(LOG_ENV) {
             Ok(_) => EnvFilter::from_env(LOG_ENV),
-            _ if matches!(args.action, Commands::Serve(_)) => EnvFilter::new("error,dx=trace,dioxus_cli=trace,manganis_cli_support=trace,wasm_split_cli=trace,subsecond_cli_support=trace"),
+            _ if is_serve_cmd => EnvFilter::new("error,dx=trace,dioxus_cli=trace,manganis_cli_support=trace,wasm_split_cli=trace,subsecond_cli_support=trace"),
             _ => EnvFilter::new(format!(
                 "error,dx={our_level},dioxus_cli={our_level},manganis_cli_support={our_level},wasm_split_cli={our_level},subsecond_cli_support={our_level}",
                 our_level = if args.verbosity.verbose { "debug" } else { "info" }
@@ -174,7 +176,35 @@ impl TraceController {
         }
         .with_filter(tracing_subscriber::filter::filter_fn({
             let tui_active = tui_active.clone();
-            move |_| !tui_active.load(Ordering::Relaxed)
+            move |re| {
+                // If the TUI is active, we don't want to log to the console directly
+                if tui_active.load(Ordering::Relaxed) {
+                    return false;
+                }
+
+                // If the TUI is disabled, then we might be draining the logs during an error report.
+                // In this case, we only show debug logs if the verbosity is set to verbose.
+                //
+                // If we're not running the serve command at all, this isn't relevant, so let the log through.
+                if !is_serve_cmd {
+                    return true;
+                }
+
+                let verbosity = VERBOSITY.get().unwrap();
+
+                // If the verbosity is trace, let through trace logs (most verbose)
+                if verbosity.trace {
+                    return re.level() <= &Level::TRACE;
+                }
+
+                // if the verbosity is verbose, let through debug logs
+                if verbosity.verbose {
+                    return re.level() <= &Level::DEBUG;
+                }
+
+                // Otherwise, only let through info and higher level logs
+                re.level() <= &Level::INFO
+            }
         }));
 
         // Set up the tokio console subscriber if enabled
@@ -258,13 +288,16 @@ impl TraceController {
             let thread_name = current_thread.name().map(|s| s.to_string());
             let location = panic_info.location().unwrap();
             let err = anyhow::anyhow!(payload);
+            let err_display = format!("{:?}", err)
+                .lines()
+                .take_while(|line| !line.ends_with("___rust_try"))
+                .join("\n");
 
             tracing::error!(
-                "Thread {:?} panicked at {}:\n{}\n{:#}",
-                thread_name,
+                "Thread {} panicked at {}:\n\n               {}",
+                thread_name.as_deref().unwrap_or("<unknown>"),
                 location,
-                err.root_cause(),
-                err.backtrace()
+                err_display
             );
 
             let captured = CapturedBacktrace {
@@ -588,9 +621,6 @@ impl TraceController {
         &self,
         res: Result<Result<StructuredOutput>, Box<dyn Any + Send>>,
     ) -> StructuredOutput {
-        // Tear down the TUI if it's active at this point.
-        _ = crate::serve::Output::remote_shutdown(true);
-
         // And drain the tracer as regular messages.
         self.tui_active.store(false, Ordering::Relaxed);
 
@@ -636,10 +666,17 @@ impl TraceController {
             // Anyhow gives us a nice stack trace, so we can just print it.
             // Eventually we might want to format this better since a full stack trace is kinda ugly.
             Ok(Err(err)) => {
-                use crate::styles::GLOW_STYLE;
+                use crate::styles::{ERROR_STYLE, GLOW_STYLE};
                 let arg = std::env::args().nth(1).unwrap_or_else(|| "dx".to_string());
-                let message = format!("Error running {GLOW_STYLE}{}{GLOW_STYLE:#}: {:?}", arg, err);
-                eprintln!("{message}");
+                let err_display = format!("{err:?}")
+                    .lines()
+                    .take_while(|line| !line.ends_with("___rust_try"))
+                    .join("\n");
+                let message = format!(
+                    "{ERROR_STYLE}ERROR{ERROR_STYLE:#} {GLOW_STYLE}dx {}{GLOW_STYLE:#}: {}",
+                    arg, err_display
+                );
+                eprintln!("\n{message}");
                 StructuredOutput::Error { message }
             }
 
@@ -1203,20 +1240,6 @@ impl FormatTime for PrettyUptime {
         write!(w, "{:4}.{:2}s", e.as_secs(), e.subsec_millis())
     }
 }
-
-pub fn clean_backtrace(mut backtrace_display: String) -> String {
-    // split at the line that ends with ___rust_try for short backtraces
-    if std::env::var("RUST_BACKTRACE") == Ok("1".to_string()) {
-        backtrace_display = backtrace_display
-            .split(" ___rust_try\n")
-            .next()
-            .map(|f| format!("{f} ___rust_try"))
-            .unwrap_or_default();
-    }
-
-    backtrace_display
-}
-
 /// Run the provided future and wait for it to complete, handling Ctrl-C gracefully.
 ///
 /// If ctrl-c is pressed twice, it exits immediately, skipping our telemetry flush.
