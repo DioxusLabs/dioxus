@@ -852,7 +852,7 @@ impl TraceController {
             .map(|frame| {
                 // Convert the sentry type to the posthog type
                 dioxus_cli_telemetry::StackFrame {
-                    platform: "native".to_string(),
+                    platform: "custom".to_string(),
                     raw_id: frame
                         .image_addr
                         .map(|addr| addr.to_string())
