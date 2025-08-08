@@ -255,11 +255,18 @@ impl Output {
             }
 
             // Helpers for debugging
-            KeyCode::Char('Z') if cfg!(debug_assertions) => panic!("z pressed so we panic"),
-            KeyCode::Char('X') if cfg!(debug_assertions) => bail!("x pressed so we bail"),
+            KeyCode::Char('Z') if cfg!(debug_assertions) => {
+                panic!("z pressed so we panic -> {}", uuid::Uuid::new_v4())
+            }
+            KeyCode::Char('X') if cfg!(debug_assertions) => {
+                bail!("x pressed so we bail -> {}", uuid::Uuid::new_v4())
+            }
             KeyCode::Char('C') if cfg!(debug_assertions) => {
                 return Ok(Some(ServeUpdate::Exit {
-                    error: Some(anyhow!("C pressed, so exiting with safe error")),
+                    error: Some(anyhow!(
+                        "C pressed, so exiting with safe error -> {}",
+                        uuid::Uuid::new_v4()
+                    )),
                 }));
             }
 
