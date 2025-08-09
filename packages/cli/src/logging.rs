@@ -37,7 +37,7 @@ use clap::Parser;
 use dioxus_cli_telemetry::TelemetryEventData;
 use dioxus_dx_wire_format::StructuredOutput;
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
-use futures_util::{FutureExt, TryFutureExt};
+use futures_util::FutureExt;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -82,7 +82,6 @@ pub(crate) trait Anonymized {
 pub struct TraceController {
     http_client: Option<reqwest::Client>,
     reporter: Option<Reporter>,
-    backtrace_rx: Arc<tokio::sync::Mutex<UnboundedReceiver<CapturedBacktrace>>>,
     telemetry_tx: UnboundedSender<TelemetryEventData>,
     telemetry_rx: Arc<tokio::sync::Mutex<UnboundedReceiver<TelemetryEventData>>>,
     log_to_file: Option<Arc<tokio::sync::Mutex<std::fs::File>>>,
@@ -91,13 +90,27 @@ pub struct TraceController {
     tui_rx: Arc<tokio::sync::Mutex<UnboundedReceiver<TraceMsg>>>,
 }
 
-struct CapturedBacktrace {
-    error: Error,
+/// An error that contains information about a captured panic, including the error, thread name, and location.
+/// This is passed through to the tracing subscriber which is downcasted into a `CapturedPanicError`
+#[derive(Debug, Clone)]
+struct CapturedPanicError {
+    error: Arc<Error>,
     error_type: String,
     thread_name: Option<String>,
     location: Option<SavedLocation>,
 }
+impl std::fmt::Display for CapturedPanicError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "CapturedBacktrace {{ error: {}, error_type: {}, thread_name: {:?}, location: {:?} }}",
+            self.error, self.error_type, self.thread_name, self.location
+        )
+    }
+}
+impl std::error::Error for CapturedPanicError {}
 
+#[derive(Debug, Clone)]
 struct SavedLocation {
     file: String,
     line: u32,
@@ -243,14 +256,12 @@ impl TraceController {
         // Note that we only drain the channel at the end of the CLI run, so it's not really being used as a channel - more of a vecdeque
         let (telemetry_tx, telemetry_rx) = futures_channel::mpsc::unbounded();
         let (tui_tx, tui_rx) = futures_channel::mpsc::unbounded();
-        let (backtrace_tx, backtrace_rx) = futures_channel::mpsc::unbounded();
         let tracer = TraceController {
             reporter,
             telemetry_tx,
             log_to_file,
             tui_tx,
             tui_rx: Arc::new(tokio::sync::Mutex::new(tui_rx)),
-            backtrace_rx: Arc::new(tokio::sync::Mutex::new(backtrace_rx)),
             telemetry_rx: Arc::new(tokio::sync::Mutex::new(telemetry_rx)),
             http_client,
             tui_active,
@@ -260,8 +271,7 @@ impl TraceController {
         tokio::spawn(
             tracer
                 .clone()
-                .upload_telemetry_files(Self::to_invoked_event(&args.action))
-                .map_err(|err| tracing::error!("Failed to upload telemetry files: {}", err)),
+                .upload_telemetry_files(Self::to_invoked_event(&args.action)),
         );
 
         // Construct the tracing subscriber
@@ -293,25 +303,24 @@ impl TraceController {
                 .take_while(|line| !line.ends_with("___rust_try"))
                 .join("\n");
 
+            let boxed_panic: Box<dyn std::error::Error + Send + 'static> =
+                Box::new(CapturedPanicError {
+                    error: Arc::new(err),
+                    thread_name: thread_name.clone(),
+                    error_type: "Rust Panic".to_string(),
+                    location: panic_info.location().map(|l| SavedLocation {
+                        file: l.file().to_string(),
+                        line: l.line(),
+                        column: l.column(),
+                    }),
+                });
+
             tracing::error!(
-                "Thread {} panicked at {}:\n\n               {}",
+                telemetry = %json!({ "event": "Captured Panic" }),
+                backtrace = boxed_panic,
+                "Thread {} panicked at {location}:\n\n               {err_display}",
                 thread_name.as_deref().unwrap_or("<unknown>"),
-                location,
-                err_display
             );
-
-            let captured = CapturedBacktrace {
-                error: err,
-                thread_name,
-                error_type: "Rust Panic".to_string(),
-                location: panic_info.location().map(|l| SavedLocation {
-                    file: l.file().to_string(),
-                    line: l.line(),
-                    column: l.column(),
-                }),
-            };
-
-            _ = backtrace_tx.unbounded_send(captured);
         }));
 
         // Run the app, catching panics and errors, early flushing if `ctrl_c` is pressed.
@@ -621,8 +630,11 @@ impl TraceController {
         &self,
         res: Result<Result<StructuredOutput>, Box<dyn Any + Send>>,
     ) -> StructuredOutput {
-        // And drain the tracer as regular messages.
+        // Drain the tracer as regular messages.
         self.tui_active.store(false, Ordering::Relaxed);
+
+        // Show the term cursor
+        _ = console::Term::stdout().show_cursor();
 
         // re-emit any remaining messages in case they're useful.
         while let Ok(Some(msg)) = self.tui_rx.lock().await.try_next() {
@@ -639,19 +651,15 @@ impl TraceController {
             }
         }
 
-        // Dequeue any pending backtraces and record them as telemetry events.
-        while let Ok(Some(backtrace)) = self.backtrace_rx.lock().await.try_next() {
-            _ = self.record_backtrace(
-                &backtrace.error,
-                &backtrace.error_type,
-                backtrace.thread_name.as_deref(),
-                backtrace.location.as_ref(),
-            );
-        }
-
         // If we have "safe" error, we we need to log it
         if let Ok(Err(err)) = &res {
-            _ = self.record_backtrace(err, "Fatal error", std::thread::current().name(), None);
+            self.record_backtrace(
+                err,
+                "Fatal error",
+                std::thread::current().name(),
+                None,
+                Default::default(),
+            );
         }
 
         // And then we can finally flush telemetry to disk
@@ -891,7 +899,8 @@ impl TraceController {
         error_type: &str,
         thread_name: Option<&str>,
         location: Option<&SavedLocation>,
-    ) -> Result<()> {
+        extra: serde_json::Map<String, serde_json::Value>,
+    ) {
         let stacktrace = sentry_backtrace::parse_stacktrace(&format!("{:#}", error.backtrace()));
         let stack_frames: Vec<_> = stacktrace
             .unwrap_or_default()
@@ -957,17 +966,16 @@ impl TraceController {
             }
         }
 
-        let event = TelemetryEventData::new("panic", error.root_cause())
+        let event = TelemetryEventData::new(error_type.to_string(), error.root_cause())
             .with_value("thread_name", thread_name)
             .with_error_type(error_type.to_string())
             .with_error_handled(false)
             .with_file(file)
             .with_line_column(line, column)
-            .with_stack_frames(stack_frames);
+            .with_stack_frames(stack_frames)
+            .with_values(extra);
 
         _ = self.telemetry_tx.unbounded_send(event);
-
-        Ok(())
     }
 }
 
@@ -987,12 +995,7 @@ where
 
         // Redirect to the TUI if it's active
         if self.tui_active.load(Ordering::Relaxed) {
-            let mut final_msg = String::new();
-            write!(final_msg, "{} ", visitor.message).unwrap();
-
-            for (field, value) in visitor.fields.iter() {
-                write!(final_msg, "{} ", format_field(field, value)).unwrap();
-            }
+            let final_msg = visitor.pretty();
 
             if visitor.source == TraceSrc::Unknown {
                 visitor.source = TraceSrc::Dev;
@@ -1003,60 +1006,63 @@ where
                 .unbounded_send(TraceMsg::text(visitor.source, *level, final_msg));
         }
 
-        // Send a telemetry event if we have a telemetry channel
-        //
-        // the goal here is to enabled `dx::trace!(telemetry = %json! { a: 123, b: 123  });
-        let event_location = || {
-            meta.file()
-                .and_then(|f| Some((f, meta.line()?)))
-                .map(|(file, line)| format!("{file}:{line}"))
-                .unwrap_or_else(|| "<unknown>".to_string())
-        };
-        match visitor.fields.get("telemetry") {
-            // If the event has a telemetry field, we pass it through directly, but we also add the location
-            // Otherwise, we try to create it from the event metadata
-            Some(raw_event) => {
-                _ = self.telemetry_tx.unbounded_send(
-                    serde_json::from_str::<TelemetryEventData>(raw_event)
-                        .unwrap()
-                        .with_value("event_location", event_location()),
-                );
-            }
+        // if visitor.captured_panic.is_some() {
+        //     eprintln!("found captured panic to record!!!");
+        //     std::process::exit(1);
+        // }
 
-            // Only capture errors or explicit telemetry events
-            // We ignore Cargo and User messages
-            None if (*level == Level::ERROR
-                && matches!(
-                    visitor.source,
-                    TraceSrc::Dev | TraceSrc::Build | TraceSrc::Bundle | TraceSrc::Unknown
-                )) =>
-            {
-                let stage = match visitor.source {
-                    TraceSrc::Cargo | TraceSrc::App(_) => "",
-                    TraceSrc::Dev => "dev",
-                    TraceSrc::Build => "build",
-                    TraceSrc::Bundle => "bundle",
-                    TraceSrc::Unknown => "unknown",
+        // Handle telemetry events.
+        // Only tracing events annotated with `telemetry = %json! { ... }` will be captured.
+        // This applies to errors too - if you want an error to be captured, it must have a telemetry field!
+        //
+        // If the event is `error!()` it counts as a an "$exception" event in posthog
+        // If it has a backtrace, then we upload the backtrace as well.
+        if let Some(telemetry) = visitor.fields.get("telemetry") {
+            let extra =
+                serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(telemetry)
+                    .unwrap_or_default();
+
+            let stage = match visitor.source {
+                TraceSrc::Cargo | TraceSrc::App(_) => "",
+                TraceSrc::Dev => "dev",
+                TraceSrc::Build => "build",
+                TraceSrc::Bundle => "bundle",
+                TraceSrc::Unknown => "unknown",
+            };
+
+            // If the event has the captured panic attached, we record it through capture_backtrace directly.
+            // Otherwise, we wont have a backtrace to work with, so we just log the event as a telemetry event.
+            if let Some(error) = visitor.captured_panic {
+                self.record_backtrace(
+                    error.error.as_ref(),
+                    &error.error_type,
+                    error.thread_name.as_deref(),
+                    error.location.as_ref(),
+                    extra,
+                );
+            } else {
+                let is_err = level == &Level::ERROR;
+                let event_name = match visitor.fields.get("event") {
+                    Some(event) => event.clone(),
+                    None if is_err => "Runtime Error".into(),
+                    None => "Telemetry Event".into(),
                 };
 
-                let mut event = TelemetryEventData::new("tracing error", visitor.message.as_str())
-                    .with_module(
-                        meta.module_path()
-                            .map(ToString::to_string)
-                            .unwrap_or_else(|| "<unknown>".to_string()),
-                    )
-                    .with_value("event_location", event_location())
-                    .with_value("stage", stage);
+                let mut event = TelemetryEventData::new(event_name, visitor.message.as_str())
+                    .with_file(meta.file().unwrap_or("<unknown>").to_string())
+                    .with_line_column(meta.line().unwrap_or_default(), 0)
+                    .with_value("stage", stage)
+                    .with_values(extra)
+                    .with_values(visitor.fields_to_json());
 
-                for (field, value) in visitor.fields.iter() {
-                    event = event.with_value(field, value);
+                if is_err {
+                    event = event
+                        .with_error_type("Runtime Error".to_string())
+                        .with_error_handled(false);
                 }
 
                 _ = self.telemetry_tx.unbounded_send(event);
             }
-
-            // Otherwise, ignore it
-            _ => {}
         }
 
         // Write to a file if we need to.
@@ -1097,6 +1103,7 @@ struct CollectVisitor {
     message: String,
     source: TraceSrc,
     fields: HashMap<String, String>,
+    captured_panic: Option<CapturedPanicError>,
 }
 
 impl Visit for CollectVisitor {
@@ -1116,7 +1123,45 @@ impl Visit for CollectVisitor {
             return;
         }
 
+        if name == "json" || name == "backtrace" {
+            return;
+        }
+
         self.fields.insert(name.to_string(), value_string);
+    }
+
+    fn record_error(
+        &mut self,
+        field: &tracing::field::Field,
+        value: &(dyn std::error::Error + 'static),
+    ) {
+        if let Some(captured) = value.downcast_ref::<CapturedPanicError>() {
+            self.captured_panic = Some(captured.clone());
+        } else {
+            self.record_debug(field, &tracing::field::display(value));
+        }
+    }
+}
+impl CollectVisitor {
+    fn pretty(&self) -> String {
+        let mut final_msg = String::new();
+        write!(final_msg, "{} ", self.message).unwrap();
+
+        for (field, value) in self.fields.iter() {
+            if field == "json" || field == "telemetry" || field == "backtrace" {
+                continue;
+            }
+
+            write!(final_msg, "{} ", format_field(field, value)).unwrap();
+        }
+        final_msg
+    }
+
+    fn fields_to_json(&self) -> serde_json::Map<String, serde_json::Value> {
+        self.fields
+            .iter()
+            .map(|(k, v)| (k.clone(), serde_json::Value::String(v.clone())))
+            .collect()
     }
 }
 
@@ -1264,7 +1309,7 @@ async fn run_with_ctrl_c(
     });
 
     tokio::select! {
-        _ = rx => Ok(StructuredOutput::ExitRequested),
+        _ = rx => Ok(StructuredOutput::Success),
         res = f => res,
     }
 }

@@ -1927,7 +1927,7 @@ impl BuildRequest {
                         }
                     }
                     LinkerFlavor::Unsupported => {
-                        tracing::error!("Unsupported platform for fat linking");
+                        tracing::error!("Unsupported platform for fat linking: {}", self.triple);
                     }
                 };
             }

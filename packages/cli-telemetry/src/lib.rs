@@ -160,6 +160,13 @@ impl TelemetryEventData {
         self
     }
 
+    pub fn with_values(mut self, fields: serde_json::Map<String, serde_json::Value>) -> Self {
+        for (key, value) in fields {
+            self = self.with_value(key, value);
+        }
+        self
+    }
+
     pub fn to_json(&self) -> serde_json::Value {
         serde_json::to_value(self).unwrap()
     }
