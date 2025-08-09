@@ -249,7 +249,6 @@ impl TraceController {
         let http_client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(5))
             .build()
-            .inspect_err(|err| tracing::debug!("Failed to create tracing HTTP client: {}", err))
             .ok();
 
         // Create a new telemetry channel
@@ -384,13 +383,9 @@ impl TraceController {
             tokio::time::sleep(std::time::Duration::from_millis(3000)).await;
         }
 
-        tracing::info!("Uploading telemetry files...");
-
         // Now start loading telemetry files, locking them, and then uploading them.
         let stats_dir = Workspace::dioxus_data_dir().join("stats").join("sessions");
         for entry in stats_dir.read_dir()?.flatten() {
-            tracing::info!("Processing telemetry file: {}", entry.path().display());
-
             // Try to open the file...
             let Ok(mut file) = std::fs::File::open(entry.path()) else {
                 continue;
@@ -1005,11 +1000,6 @@ where
                 .tui_tx
                 .unbounded_send(TraceMsg::text(visitor.source, *level, final_msg));
         }
-
-        // if visitor.captured_panic.is_some() {
-        //     eprintln!("found captured panic to record!!!");
-        //     std::process::exit(1);
-        // }
 
         // Handle telemetry events.
         // Only tracing events annotated with `telemetry = %json! { ... }` will be captured.
