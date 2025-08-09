@@ -534,6 +534,10 @@ impl Workspace {
             })
             .to_path_buf()
     }
+
+    pub(crate) fn global_settings_file() -> PathBuf {
+        Self::dioxus_data_dir().join("settings.json")
+    }
 }
 
 impl std::fmt::Debug for Workspace {

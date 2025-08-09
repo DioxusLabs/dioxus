@@ -1,7 +1,4 @@
-use crate::BuildMode;
-use crate::{cli::*, AppBuilder, BuildRequest, Workspace};
-
-use super::target::TargetArgs;
+use crate::{cli::*, Anonymized, AppBuilder, BuildMode, BuildRequest, TargetArgs, Workspace};
 
 /// Build the Rust Dioxus app and all of its assets.
 ///
@@ -26,6 +23,16 @@ pub struct BuildArgs {
     /// Arguments for the build itself
     #[clap(flatten)]
     pub(crate) build_arguments: TargetArgs,
+}
+
+impl Anonymized for BuildArgs {
+    fn anonymized(&self) -> Value {
+        json! {{
+            "fullstack": self.fullstack,
+            "ssg": self.ssg,
+            "build_arguments": self.build_arguments.anonymized(),
+        }}
+    }
 }
 
 pub struct BuildTargets {
