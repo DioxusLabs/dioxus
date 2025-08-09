@@ -223,6 +223,34 @@ impl Output {
     }
 
     fn handle_keypress(&mut self, key: KeyEvent) -> Result<Option<ServeUpdate>> {
+        // Some dev helpers for testing panic propagation and error handling. Remove this eventually.
+        if cfg!(debug_assertions) && std::env::var("DEBUG_PANICS").is_ok() {
+            match key.code {
+                KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                    return Ok(Some(ServeUpdate::Exit { error: None }))
+                }
+                KeyCode::Char('Z') => panic!("z pressed so we panic -> {}", uuid::Uuid::new_v4()),
+                KeyCode::Char('X') => bail!("x pressed so we bail -> {}", uuid::Uuid::new_v4()),
+                KeyCode::Char('E') => {
+                    Err(anyhow!(
+                        "E pressed so we bail with context -> {}",
+                        uuid::Uuid::new_v4()
+                    ))
+                    .context("With a message")
+                    .context("With a context")?;
+                }
+                KeyCode::Char('C') => {
+                    return Ok(Some(ServeUpdate::Exit {
+                        error: Some(anyhow!(
+                            "C pressed, so exiting with safe error -> {}",
+                            uuid::Uuid::new_v4()
+                        )),
+                    }));
+                }
+                _ => {}
+            }
+        }
+
         match key.code {
             KeyCode::Char('r') => return Ok(Some(ServeUpdate::RequestRebuild)),
             KeyCode::Char('o') => return Ok(Some(ServeUpdate::OpenApp)),
@@ -248,36 +276,6 @@ impl Output {
                     id: BuildId::CLIENT,
                 }));
             }
-
-            // ctrl-c
-            KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                return Ok(Some(ServeUpdate::Exit { error: None }));
-            }
-
-            // Helpers for debugging
-            KeyCode::Char('Z') if cfg!(debug_assertions) => {
-                panic!("z pressed so we panic -> {}", uuid::Uuid::new_v4())
-            }
-            KeyCode::Char('X') if cfg!(debug_assertions) => {
-                bail!("x pressed so we bail -> {}", uuid::Uuid::new_v4())
-            }
-            KeyCode::Char('E') if cfg!(debug_assertions) => {
-                Err(anyhow!(
-                    "E pressed so we bail with context -> {}",
-                    uuid::Uuid::new_v4()
-                ))
-                .context("With a message")
-                .context("With a context")?;
-            }
-            KeyCode::Char('C') if cfg!(debug_assertions) => {
-                return Ok(Some(ServeUpdate::Exit {
-                    error: Some(anyhow!(
-                        "C pressed, so exiting with safe error -> {}",
-                        uuid::Uuid::new_v4()
-                    )),
-                }));
-            }
-
             KeyCode::Char('c') => {
                 stdout()
                     .execute(Clear(ClearType::All))?
