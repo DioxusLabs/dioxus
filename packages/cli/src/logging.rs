@@ -946,7 +946,7 @@ impl TraceController {
             .unwrap_or_else(|| ("<unknown>".to_string(), 0, 0));
 
         // If the location is not provided, we try to extract it from the backtrace.
-        // I eyeballed that 5 is enought to get to the actual panic location in most cases.
+        // I eyeballed that 5 is enough to get to the actual panic location in most cases.
         if location.is_none() {
             if let Some(frame) = stack_frames.get(5) {
                 if let Some(abs_path) = &frame.abs_path {
