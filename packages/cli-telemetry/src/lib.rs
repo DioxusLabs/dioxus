@@ -50,11 +50,6 @@ use std::{
 ///
 /// Note that this is just the data and does not include the reporter information.
 ///
-/// ```rust
-/// tracing::trace!(telemetry = "cli_did_thing", data = json!({ stage: "start", }))
-/// tracing::trace!(telemetry = "cli_did_thing", data = json!({ stage: "end", }))
-/// ```
-///
 /// On the analytics, side, we reconstruct the trace messages into a sequence of events, using
 /// the stage as a marker.
 ///
