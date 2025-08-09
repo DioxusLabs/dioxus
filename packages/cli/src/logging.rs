@@ -1041,7 +1041,11 @@ where
                 let mut event = TelemetryEventData::new(event_name, visitor.message.as_str())
                     .with_file(meta.file().unwrap_or("<unknown>").to_string())
                     .with_line_column(meta.line().unwrap_or_default(), 0)
-                    .with_value("stage", stage)
+                    .with_value("trace_stage", stage)
+                    .with_value("trace_level", meta.level().to_string())
+                    .with_value("trace_name", meta.name())
+                    .with_value("trace_target", meta.target())
+                    .with_value("trace_module_path", meta.module_path())
                     .with_values(extra)
                     .with_values(visitor.fields_to_json());
 
