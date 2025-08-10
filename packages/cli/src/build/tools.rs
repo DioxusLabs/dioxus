@@ -17,6 +17,7 @@ pub(crate) struct AndroidTools {
     pub(crate) ndk: PathBuf,
     pub(crate) adb: PathBuf,
     pub(crate) java_home: Option<PathBuf>,
+    pub(crate) min_sdk_version: u32,
 }
 
 pub fn get_android_tools() -> Option<Arc<AndroidTools>> {
@@ -112,12 +113,19 @@ pub fn get_android_tools() -> Option<Arc<AndroidTools>> {
 
             None
         });
+    
+    let min_sdk_version = std::env::var("ANDROID_MIN_SDK_VERSION")
+        .inspect_err(|_| tracing::trace!("ANDROID_MIN_SDK_VERSION not set"))
+        .ok()
+        .and_then(|value| value.parse::<u32>().ok())
+        .unwrap_or(24);
 
     Some(Arc::new(AndroidTools {
         ndk,
         adb,
         java_home,
         sdk,
+        min_sdk_version
     }))
 }
 
@@ -193,7 +201,7 @@ impl AndroidTools {
 
     // todo(jon): this should be configurable
     pub(crate) fn min_sdk_version(&self) -> u32 {
-        24
+        self.min_sdk_version
     }
 
     pub(crate) fn clang_folder(&self) -> PathBuf {
