@@ -226,9 +226,6 @@ impl Output {
         // Some dev helpers for testing panic propagation and error handling. Remove this eventually.
         if cfg!(debug_assertions) && std::env::var("DEBUG_PANICS").is_ok() {
             match key.code {
-                KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                    return Ok(Some(ServeUpdate::Exit { error: None }))
-                }
                 KeyCode::Char('Z') => panic!("z pressed so we panic -> {}", uuid::Uuid::new_v4()),
                 KeyCode::Char('X') => bail!("x pressed so we bail -> {}", uuid::Uuid::new_v4()),
                 KeyCode::Char('E') => {
@@ -252,6 +249,9 @@ impl Output {
         }
 
         match key.code {
+            KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                return Ok(Some(ServeUpdate::Exit { error: None }))
+            }
             KeyCode::Char('r') => return Ok(Some(ServeUpdate::RequestRebuild)),
             KeyCode::Char('o') => return Ok(Some(ServeUpdate::OpenApp)),
             KeyCode::Char('p') => return Ok(Some(ServeUpdate::ToggleShouldRebuild)),
