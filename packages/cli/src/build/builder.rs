@@ -977,7 +977,10 @@ impl AppBuilder {
                 .await?;
 
             if !output.status.success() {
-                bail!("Failed to install app: {output:?}");
+                bail!(
+                    "Failed to install app: {}",
+                    String::from_utf8_lossy(&output.stderr)
+                );
             }
 
             let json: Value = serde_json::from_str(&std::fs::read_to_string(tmpfile.path())?)
@@ -1047,6 +1050,92 @@ impl AppBuilder {
     }
 
     async fn codesign_ios(&self) -> Result<()> {
+        // We don't want to drop the entitlements file, until the end of the block, so we hoist it to this temporary.
+        let mut _saved_entitlements = None;
+
+        let mut app_dev_name = self.build.apple_team_id.clone();
+        if app_dev_name.is_none() {
+            app_dev_name =
+                Some(self.auto_provision_signing_name().await.context(
+                    "Failed to automatically provision signing name for iOS codesigning.",
+                )?);
+        }
+
+        let mut entitlements_file = self.build.apple_entitlements.clone();
+        if entitlements_file.is_none() {
+            let entitlements_xml = self
+                .auto_provision_entitlements()
+                .await
+                .context("Failed to auto-provision entitlements for iOS codesigning.")?;
+            let entitlements_temp_file = tempfile::NamedTempFile::new()?;
+            std::fs::write(entitlements_temp_file.path(), entitlements_xml)?;
+            entitlements_file = Some(entitlements_temp_file.path().to_path_buf());
+            _saved_entitlements = Some(entitlements_temp_file);
+        }
+
+        let entitlements_file = entitlements_file.as_ref().context(
+            "No entitlements file provided and could not provision entitlements to sign app.",
+        )?;
+        let app_dev_name = app_dev_name.as_ref().context(
+            "No Apple Development signing name provided and could not auto-provision one.",
+        )?;
+
+        tracing::debug!(
+            "Codesigning iOS app with entitlements: {} and dev name: {}",
+            entitlements_file.display(),
+            app_dev_name
+        );
+
+        // codesign the app
+        let output = Command::new("codesign")
+            .args([
+                "--force",
+                "--entitlements",
+                entitlements_file.to_str().unwrap(),
+                "--sign",
+                app_dev_name,
+            ])
+            .arg(self.build.root_dir())
+            .output()
+            .await
+            .context("Failed to codesign the app - is `codesign` in your path?")?;
+
+        if !output.status.success() {
+            bail!(
+                "Failed to codesign the app: {}",
+                String::from_utf8(output.stderr).unwrap_or_default()
+            );
+        }
+
+        Ok(())
+    }
+
+    async fn auto_provision_signing_name(&self) -> Result<String> {
+        let identities = Command::new("security")
+            .args(["find-identity", "-v", "-p", "codesigning"])
+            .output()
+            .await
+            .context("Failed to run `security find-identity -v -p codesigning` - is `security` in your path?")
+            .map(|e| {
+                String::from_utf8(e.stdout)
+                    .context("Failed to parse `security find-identity -v -p codesigning`")
+            })??;
+
+        // Parsing this:
+        // 1231231231231asdasdads123123 "Apple Development: foo@gmail.com (XYZYZY)"
+        let app_dev_name = regex::Regex::new(r#""Apple Development: (.+)""#)
+            .unwrap()
+            .captures(&identities)
+            .and_then(|caps| caps.get(1))
+            .map(|m| m.as_str())
+            .context(
+                "Failed to find Apple Development in `security find-identity -v -p codesigning`",
+            )?;
+
+        Ok(app_dev_name.to_string())
+    }
+
+    async fn auto_provision_entitlements(&self) -> Result<String> {
         const CODESIGN_ERROR: &str = r#"This is likely because you haven't
 - Created a provisioning profile before
 - Accepted the Apple Developer Program License Agreement
@@ -1080,27 +1169,6 @@ We checked the folders:
 "#
             )
         }
-
-        let identities = Command::new("security")
-            .args(["find-identity", "-v", "-p", "codesigning"])
-            .output()
-            .await
-            .context("Failed to run `security find-identity -v -p codesigning` - is `security` in your path?")
-            .map(|e| {
-                String::from_utf8(e.stdout)
-                    .context("Failed to parse `security find-identity -v -p codesigning`")
-            })??;
-
-        // Parsing this:
-        // 1231231231231asdasdads123123 "Apple Development: foo@gmail.com (XYZYZY)"
-        let app_dev_name = regex::Regex::new(r#""Apple Development: (.+)""#)
-            .unwrap()
-            .captures(&identities)
-            .and_then(|caps| caps.get(1))
-            .map(|m| m.as_str())
-            .context(
-                "Failed to find Apple Development in `security find-identity -v -p codesigning`",
-            )?;
 
         // Acquire the provision file
         let provision_file = profiles_folder
@@ -1152,7 +1220,7 @@ We checked the folders:
             keychain_access_groups: Vec<String>,
         }
 
-        let entielements_xml = format!(
+        Ok(format!(
             r#"
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -1172,34 +1240,7 @@ We checked the folders:
             APPLICATION_IDENTIFIER = mbfile.entitlements.application_identifier,
             APP_ID_ACCESS_GROUP = mbfile.entitlements.keychain_access_groups[0],
             TEAM_IDENTIFIER = mbfile.team_identifier[0],
-        );
-
-        // write to a temp file
-        let temp_file = tempfile::NamedTempFile::new()?;
-        std::fs::write(temp_file.path(), entielements_xml)?;
-
-        // codesign the app
-        let output = Command::new("codesign")
-            .args([
-                "--force",
-                "--entitlements",
-                temp_file.path().to_str().unwrap(),
-                "--sign",
-                app_dev_name,
-            ])
-            .arg(self.build.root_dir())
-            .output()
-            .await
-            .context("Failed to codesign the app - is `codesign` in your path?")?;
-
-        if !output.status.success() {
-            bail!(
-                "Failed to codesign the app: {}",
-                String::from_utf8(output.stderr).unwrap_or_default()
-            );
-        }
-
-        Ok(())
+        ))
     }
 
     /// Launch the Android simulator and deploy the application.

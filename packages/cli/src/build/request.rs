@@ -395,6 +395,8 @@ pub(crate) struct BuildRequest {
     pub(crate) command_file: Arc<NamedTempFile>,
     pub(crate) base_path: Option<String>,
     pub(crate) using_dioxus_explicitly: bool,
+    pub(crate) apple_entitlements: Option<PathBuf>,
+    pub(crate) apple_team_id: Option<String>,
 }
 
 /// dx can produce different "modes" of a build. A "regular" build is a "base" build. The Fat and Thin
@@ -826,6 +828,8 @@ impl BuildRequest {
             wasm_split: args.wasm_split,
             debug_symbols: args.debug_symbols,
             inject_loading_scripts: args.inject_loading_scripts,
+            apple_entitlements: args.apple_entitlements.clone(),
+            apple_team_id: args.apple_team_id.clone(),
         })
     }
 
