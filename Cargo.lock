@@ -4479,6 +4479,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "core-graphics"
+version = "0.25.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "064badf302c3194842cf2c5d61f56cc88e54a759313879cdf03abdd27d0c3b97"
+dependencies = [
+ "bitflags 2.9.4",
+ "core-foundation 0.10.1",
+ "core-graphics-types 0.2.0",
+ "foreign-types 0.5.0",
+ "libc",
+]
+
+[[package]]
 name = "core-graphics-types"
 version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6658,9 +6671,9 @@ dependencies = [
 
 [[package]]
 name = "dlopen2"
-version = "0.7.0"
+version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e1297103d2bbaea85724fcee6294c2d50b1081f9ad47d0f6f6f61eda65315a6"
+checksum = "5e2c5bd4158e66d1e215c49b837e11d62f3267b30c92f1d171c4d3105e3dc4d4"
 dependencies = [
  "dlopen2_derive",
  "libc",
@@ -12560,21 +12573,6 @@ dependencies = [
 
 [[package]]
 name = "ohos-arkui-binding"
-version = "0.0.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "731d879cf95234bbd12e525bdce7da6475a6786a86dd2362fac0f3cfca760373"
-dependencies = [
- "bitflags 2.9.4",
- "napi-ohos",
- "napi-sys-ohos",
- "ohos-arkui-sys",
- "ohos-xcomponent-binding 0.1.0",
- "ohos-xcomponent-sys",
- "ohos_enum_macro 0.0.2",
-]
-
-[[package]]
-name = "ohos-arkui-binding"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9352f0db69271fc23fb565ad1f034c2118a9ea9c727ece344834b451fe2c2865"
@@ -12583,7 +12581,7 @@ dependencies = [
  "napi-ohos",
  "napi-sys-ohos",
  "ohos-arkui-sys",
- "ohos-xcomponent-binding 0.2.0",
+ "ohos-xcomponent-binding",
  "ohos-xcomponent-sys",
  "ohos_enum_macro 0.0.2",
 ]
@@ -12645,21 +12643,6 @@ name = "ohos-web-sys"
 version = "0.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aa646f3223c2bc90a400641c3a5cda4b350387ffda1a904b8bfb3db92b81ecbc"
-
-[[package]]
-name = "ohos-xcomponent-binding"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a8f99c43b17408bb43ae53832a7b929dc6a359685f914624e82fec0a52e9d6ac"
-dependencies = [
- "napi-derive-ohos",
- "napi-ohos",
- "napi-sys-ohos",
- "ohos-display-binding",
- "ohos-xcomponent-sys",
- "ohos_enum_macro 0.0.2",
- "raw-window-handle 0.6.2",
-]
 
 [[package]]
 name = "ohos-xcomponent-binding"
@@ -12783,43 +12766,17 @@ dependencies = [
 [[package]]
 name = "openharmony-ability"
 version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b68b0a56a8968f31a85024951451a2bb084ecdf08814e77011b47fb957478c7e"
-dependencies = [
- "napi-derive-ohos",
- "napi-ohos",
- "ohos-arkui-binding 0.0.5",
- "ohos-display-binding",
- "ohos-ime-binding",
- "ohos-xcomponent-binding 0.1.0",
-]
-
-[[package]]
-name = "openharmony-ability"
-version = "0.3.0"
 source = "git+https://github.com/harmony-contrib/openharmony-ability.git#e199743a59ceb8c155856f233ca2d1762cfe5733"
 dependencies = [
  "futures-channel",
  "http 1.4.0",
  "napi-derive-ohos",
  "napi-ohos",
- "ohos-arkui-binding 0.1.0",
+ "ohos-arkui-binding",
  "ohos-display-binding",
  "ohos-ime-binding",
  "ohos-web-binding",
- "ohos-xcomponent-binding 0.2.0",
-]
-
-[[package]]
-name = "openharmony-ability-derive"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "da80e8fd70a5f6ebf88a804f969e299672ec6f39b259afcd5d39d23c12f12227"
-dependencies = [
- "darling 0.21.3",
- "proc-macro2",
- "quote",
- "syn 2.0.117",
+ "ohos-xcomponent-binding",
 ]
 
 [[package]]
@@ -17606,21 +17563,21 @@ dependencies = [
 
 [[package]]
 name = "tao"
-version = "0.34.0"
-source = "git+https://github.com/richerfu/tao.git#06861c4c82952919dd7cd640357cb8b0b5f2691b"
+version = "0.34.6"
+source = "git+https://github.com/richerfu/tao.git?branch=feat-ohos-webview#e04f395798848d461eca820d024a8daf205284ff"
 dependencies = [
  "bitflags 2.9.4",
+ "block2 0.6.2",
  "core-foundation 0.10.1",
- "core-graphics 0.24.0",
+ "core-graphics 0.25.0",
  "crossbeam-channel",
- "dispatch",
+ "dispatch2",
  "dlopen2",
  "dpi",
  "gdkwayland-sys",
  "gdkx11-sys",
  "gtk",
  "jni 0.21.1",
- "lazy_static",
  "libc",
  "log",
  "ndk 0.9.0",
@@ -17630,13 +17587,12 @@ dependencies = [
  "objc2-app-kit 0.3.2",
  "objc2-foundation 0.3.2",
  "once_cell",
- "openharmony-ability 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "openharmony-ability-derive 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "openharmony-ability",
+ "openharmony-ability-derive",
  "parking_lot",
  "raw-window-handle 0.5.2",
  "raw-window-handle 0.6.2",
- "scopeguard",
- "tao-macros 0.1.3 (git+https://github.com/richerfu/tao.git)",
+ "tao-macros 0.1.3 (git+https://github.com/richerfu/tao.git?branch=feat-ohos-webview)",
  "unicode-segmentation",
  "url",
  "windows 0.61.3",
@@ -17659,7 +17615,7 @@ dependencies = [
 [[package]]
 name = "tao-macros"
 version = "0.1.3"
-source = "git+https://github.com/richerfu/tao.git#06861c4c82952919dd7cd640357cb8b0b5f2691b"
+source = "git+https://github.com/richerfu/tao.git?branch=feat-ohos-webview#e04f395798848d461eca820d024a8daf205284ff"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -21101,8 +21057,8 @@ dependencies = [
  "objc2-ui-kit 0.3.2",
  "objc2-web-kit",
  "once_cell",
- "openharmony-ability 0.3.0 (git+https://github.com/harmony-contrib/openharmony-ability.git)",
- "openharmony-ability-derive 0.3.0 (git+https://github.com/harmony-contrib/openharmony-ability.git)",
+ "openharmony-ability",
+ "openharmony-ability-derive",
  "percent-encoding",
  "raw-window-handle 0.6.2",
  "sha2",

@@ -71,16 +71,14 @@ tray-icon = { workspace = true }
 objc = "0.2.7"
 objc_id = "0.1.1"
 
-# use rustls on android
 [target.'cfg(target_os = "android")'.dependencies]
-tungstenite = { workspace = true, features = ["rustls"] }
 jni = "0.21.1"
 ndk = { version = "0.9.0" }
 ndk-sys = { version = "0.6.0" }
 ndk-context = { version = "0.1.1" }
 
 # use native tls on other platforms
-[target.'cfg(not(target_os = "android"))'.dependencies]
+[target.'cfg(any(not(target_os = "android"), not(target_env = "ohos")))'.dependencies]
 tungstenite = { workspace = true, features = ["native-tls"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
@@ -92,11 +90,13 @@ objc = "0.2.7"
 lazy-js-bundle = { workspace = true }
 
 [features]
-default = ["tokio_runtime", "transparent", "devtools"]
+default = ["tokio_runtime", "transparent", "devtools", "openssl-vendored-android", "openssl-vendored-ohos"]
 tokio_runtime = ["dep:tokio"]
 fullscreen = ["wry/fullscreen"]
 devtools = ["wry/devtools", "dep:dioxus-devtools", "dioxus-signals"]
 transparent = ["wry/transparent"]
+openssl-vendored-android = ["openssl"]
+openssl-vendored-ohos = ["openssl"]
 gnu = []
 
 [package.metadata.docs.rs]
