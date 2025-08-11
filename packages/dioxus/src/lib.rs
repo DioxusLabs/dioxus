@@ -129,6 +129,11 @@ pub use wasm_splitter as wasm_split;
 
 pub use subsecond;
 
+#[cfg(feature = "asset")]
+#[cfg_attr(docsrs, doc(cfg(feature = "asset")))]
+#[doc(inline)]
+pub use dioxus_asset_resolver as asset_resolver;
+
 pub mod prelude {
     #[cfg(feature = "document")]
     #[cfg_attr(docsrs, doc(cfg(feature = "document")))]
