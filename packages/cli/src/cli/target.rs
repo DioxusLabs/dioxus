@@ -126,7 +126,9 @@ pub(crate) struct TargetArgs {
 
     /// The Apple team ID to use when signing the app bundle.
     ///
-    /// Usually this is an email or name associated with your Apple Developer account.
+    /// Usually this is an email or name associated with your Apple Developer account, usually in the
+    /// format `Signing Name (GXTEAMID123)`.
+    ///
     /// This is passed directly to the `codesign` tool.
     ///
     /// ```

@@ -977,7 +977,10 @@ impl AppBuilder {
                 .await?;
 
             if !output.status.success() {
-                bail!("Failed to install app: {output:?}");
+                bail!(
+                    "Failed to install app: {}",
+                    String::from_utf8_lossy(&output.stderr)
+                );
             }
 
             let json: Value = serde_json::from_str(&std::fs::read_to_string(tmpfile.path())?)
@@ -1076,6 +1079,12 @@ impl AppBuilder {
         let app_dev_name = app_dev_name.as_ref().context(
             "No Apple Development signing name provided and could not auto-provision one.",
         )?;
+
+        tracing::debug!(
+            "Codesigning iOS app with entitlements: {} and dev name: {}",
+            entitlements_file.display(),
+            app_dev_name
+        );
 
         // codesign the app
         let output = Command::new("codesign")
