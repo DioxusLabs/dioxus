@@ -834,6 +834,8 @@ impl BuildRequest {
     }
 
     pub(crate) async fn build(&self, ctx: &BuildContext) -> Result<BuildArtifacts> {
+        let time_start = SystemTime::now();
+
         // If we forget to do this, then we won't get the linker args since rust skips the full build
         // We need to make sure to not react to this though, so the filemap must cache it
         _ = self.bust_fingerprint(ctx);
@@ -886,6 +888,28 @@ impl BuildRequest {
         if matches!(ctx.mode, BuildMode::Fat) {
             artifacts.patch_cache = Some(Arc::new(self.create_patch_cache(&artifacts.exe).await?));
         }
+
+        // Calculate some final metadata for logging
+        let time_taken = SystemTime::now()
+            .duration_since(time_start)
+            .map(|d| d.as_millis())
+            .unwrap_or_default();
+        tracing::debug!(
+            telemetry = %serde_json::json!({
+                "event": "build_and_bundle_complete",
+                "time_taken": time_taken,
+                "mode": match ctx.mode {
+                    BuildMode::Base { .. } => "base",
+                    BuildMode::Fat => "fat",
+                    BuildMode::Thin { .. } => "thin",
+                },
+                "blah": 123,
+                "triple": self.triple.to_string(),
+                "format": self.bundle.to_string(),
+                "num_dependencies": self.workspace.krates.len(),
+            }),
+            "Build completed in {time_taken}ms",
+        );
 
         Ok(artifacts)
     }
@@ -1511,7 +1535,11 @@ impl BuildRequest {
         if !res.stderr.is_empty() {
             let errs = String::from_utf8_lossy(&res.stderr);
             if !self.patch_exe(artifacts.time_start).exists() || !res.status.success() {
-                tracing::error!("Failed to generate patch: {}", errs.trim());
+                tracing::error!(
+                    telemetry = %serde_json::json!({ "event": "hotpatch_linker_failed" }),
+                    "Failed to generate patch: {}",
+                    errs.trim()
+                );
             } else {
                 tracing::trace!("Linker output during thin linking: {}", errs.trim());
             }
@@ -2029,7 +2057,11 @@ impl BuildRequest {
         if !res.stderr.is_empty() {
             let errs = String::from_utf8_lossy(&res.stderr);
             if !res.status.success() {
-                tracing::error!("Failed to generate fat binary: {}", errs.trim());
+                tracing::error!(
+                    telemetry = %serde_json::json!({ "event": "hotpatch_fat_binary_generation_failed" }),
+                    "Failed to generate fat binary: {}",
+                    errs.trim()
+                );
             } else {
                 tracing::trace!("Warnings during fat linking: {}", errs.trim());
             }

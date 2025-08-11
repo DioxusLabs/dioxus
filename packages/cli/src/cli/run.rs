@@ -57,7 +57,12 @@ impl RunArgs {
                             _ = builder
                                 .open(&bundle, &mut devserver)
                                 .await
-                                .inspect_err(|e| tracing::error!("Failed to open app: {}", e));
+                                .inspect_err(|e| {
+                                    tracing::error!(
+                                        telemetry = %serde_json::json!({ "event": "failed_to_open_app_run" }),
+                                        "Failed to open app: {e}"
+                                    );
+                                });
 
                             if bundle_format == BundleFormat::Web {
                                 tracing::info!(

@@ -111,6 +111,7 @@ impl WasmOpt {
         if !res.status.success() {
             let err = String::from_utf8_lossy(&res.stderr);
             tracing::error!(
+                telemetry = %serde_json::json!({ "event": "wasm_opt_failed" }),
                 "wasm-opt failed with status code {}\nstderr: {}\nstdout: {}",
                 res.status,
                 err,
