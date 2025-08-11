@@ -6156,7 +6156,7 @@ version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "330c60081dcc4c72131f8eb70510f1ac07223e5d4163db481a04a0befcffa412"
 dependencies = [
- "libloading 0.8.8",
+ "libloading 0.7.4",
 ]
 
 [[package]]
@@ -7496,7 +7496,7 @@ dependencies = [
  "vec_map",
  "wasm-bindgen",
  "web-sys",
- "windows 0.61.3",
+ "windows 0.54.0",
 ]
 
 [[package]]
@@ -8814,7 +8814,7 @@ dependencies = [
  "js-sys",
  "log",
  "wasm-bindgen",
- "windows-core 0.61.2",
+ "windows-core 0.57.0",
 ]
 
 [[package]]
@@ -11827,8 +11827,9 @@ dependencies = [
 
 [[package]]
 name = "openharmony-ability"
-version = "0.1.5-beta.0"
-source = "git+https://github.com/harmony-contrib/openharmony-ability.git#2a70f8123f6aebcc901e2f32346f852922eed788"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0ef188801ee7d2356067f4d4d54eb1d1eaab58e9acce9a8f9cc9695f8327bc52"
 dependencies = [
  "http 1.3.1",
  "napi-derive-ohos",
@@ -11843,8 +11844,9 @@ dependencies = [
 
 [[package]]
 name = "openharmony-ability-derive"
-version = "0.1.5-beta.0"
-source = "git+https://github.com/harmony-contrib/openharmony-ability.git#2a70f8123f6aebcc901e2f32346f852922eed788"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1ba6d923f6fc667cb9db25ff570deece3cdffb3fc4b58b8bc04f0419ca5de1d3"
 dependencies = [
  "darling 0.21.0",
  "proc-macro2",
@@ -12385,7 +12387,7 @@ dependencies = [
  "aes-gcm",
  "aes-kw",
  "argon2",
- "base64 0.22.1",
+ "base64 0.21.7",
  "bitfield",
  "block-padding",
  "blowfish",
@@ -16417,8 +16419,8 @@ dependencies = [
 
 [[package]]
 name = "tao"
-version = "0.33.0"
-source = "git+https://github.com/richerfu/tao.git#e29ea121145b24663aed596d90aa558b85ed795f"
+version = "0.34.0"
+source = "git+https://github.com/richerfu/tao.git#7877ea48d6e47d0401aad8c4db13cf12db8bad99"
 dependencies = [
  "bitflags 2.9.1",
  "core-foundation 0.10.1",
@@ -16470,7 +16472,7 @@ dependencies = [
 [[package]]
 name = "tao-macros"
 version = "0.1.3"
-source = "git+https://github.com/richerfu/tao.git#e29ea121145b24663aed596d90aa558b85ed795f"
+source = "git+https://github.com/richerfu/tao.git#7877ea48d6e47d0401aad8c4db13cf12db8bad99"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -19543,7 +19545,7 @@ checksum = "ea2f10b9bb0928dfb1b42b65e1f9e36f7f54dbdf08457afefb38afcdec4fa2bb"
 [[package]]
 name = "wry"
 version = "0.52.1"
-source = "git+https://github.com/richerfu/wry.git#a4ae17b6bcacc0d8b6cebf45313374325aeb7728"
+source = "git+https://github.com/richerfu/wry.git#0747f2cb13e391986f1f9fdf4b252d4c882acaf9"
 dependencies = [
  "base64 0.22.1",
  "block2 0.6.1",

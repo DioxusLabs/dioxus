@@ -70,21 +70,26 @@ tray-icon = { workspace = true }
 objc = "0.2.7"
 objc_id = "0.1.1"
 
-# use rustls on android
 [target.'cfg(target_os = "android")'.dependencies]
-tungstenite = { workspace = true, features = ["rustls"] }
 jni = "0.21.1"
 ndk = { version = "0.9.0" }
 ndk-sys = { version = "0.6.0" }
 ndk-context = { version = "0.1.1" }
 
-# The `openssl` dependency generally does not know how to cross-compile for Android. To make the lives
+
+# use rustls on android and ohos
+[target.'cfg(any(target_os = "android", target_env = "ohos"))'.dependencies]
+tungstenite = { workspace = true, features = ["rustls"] }
+# The `openssl` dependency generally does not know how to cross-compile for Android or OpenHarmony. To make the lives
 # of our users easier, we automatically enable the `openssl` feature when building for Android.
 # Feature are additive, so users will need to "subtract" this feature if they do not want it.
+# For armv7a's ohos, we can't use the vendored openssl because openssl-sys will try to link atomic by default.But NDK don't support it.
+# If you want to build armv7a, you need to patch openssl-sys with https://github.com/richerfu/rust-openssl.git
+# See more details at https://github.com/sfackler/rust-openssl/pull/2239
 openssl = { version = "0.10", features = ["vendored"], optional = true }
 
 # use native tls on other platforms
-[target.'cfg(not(target_os = "android"))'.dependencies]
+[target.'cfg(any(not(target_os = "android"), not(target_env = "ohos")))'.dependencies]
 tungstenite = { workspace = true, features = ["native-tls"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
@@ -96,12 +101,13 @@ objc = "0.2.7"
 lazy-js-bundle = { workspace = true }
 
 [features]
-default = ["tokio_runtime", "transparent", "devtools", "openssl-vendored-android"]
+default = ["tokio_runtime", "transparent", "devtools", "openssl-vendored-android", "openssl-vendored-ohos"]
 tokio_runtime = ["dep:tokio"]
 fullscreen = ["wry/fullscreen"]
 devtools = ["wry/devtools", "dep:dioxus-devtools", "dioxus-signals"]
 transparent = ["wry/transparent"]
 openssl-vendored-android = ["openssl"]
+openssl-vendored-ohos = ["openssl"]
 gnu = []
 
 [package.metadata.docs.rs]
