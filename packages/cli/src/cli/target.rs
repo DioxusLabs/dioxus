@@ -117,6 +117,23 @@ pub(crate) struct TargetArgs {
     /// base path set in the `dioxus` config.
     #[clap(long, help_heading = HELP_HEADING)]
     pub(crate) base_path: Option<String>,
+
+    /// The path to the Apple entitlements file to used to sign the resulting app bundle.
+    ///
+    /// On iOS, this is required for deploy to a device and some configurations in the simulator.
+    #[clap(long, help_heading = HELP_HEADING)]
+    pub(crate) apple_entitlements: Option<PathBuf>,
+
+    /// The Apple team ID to use when signing the app bundle.
+    ///
+    /// Usually this is an email or name associated with your Apple Developer account.
+    /// This is passed directly to the `codesign` tool.
+    ///
+    /// ```
+    /// codesign --force --entitlements <entitlements_file> --sign <apple_team_id> <app_bundle>
+    /// ```
+    #[clap(long, help_heading = HELP_HEADING)]
+    pub(crate) apple_team_id: Option<String>,
 }
 
 impl Anonymized for TargetArgs {
