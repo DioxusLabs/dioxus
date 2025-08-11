@@ -6,6 +6,8 @@ members = [
     "packages/core-types",
     "packages/cli",
     "packages/cli-opt",
+    "packages/cli-config",
+    "packages/cli-telemetry",
     "packages/core-types",
     "packages/core-macro",
     "packages/config-macro",
@@ -22,8 +24,6 @@ members = [
     "packages/liveview",
     "packages/autofmt",
     "packages/check",
-    "packages/cli-config",
-    "packages/cli",
     "packages/config-macro",
     "packages/core-macro",
     "packages/core-types",
@@ -52,6 +52,8 @@ members = [
     "packages/rsx",
     "packages/server-macro",
     "packages/signals",
+    "packages/stores",
+    "packages/stores-macro",
     "packages/ssr",
     "packages/lazy-js-bundle",
     "packages/cli-config",
@@ -129,7 +131,7 @@ members = [
     "packages/playwright-tests/nested-suspense",
     "packages/playwright-tests/cli-optimization",
     "packages/playwright-tests/wasm-split-harness",
-    "packages/playwright-tests/default-features-disabled",
+    "packages/playwright-tests/default-features-disabled"
 ]
 
 [workspace.package]
@@ -138,6 +140,7 @@ version = "0.7.0-alpha.3"
 # dependencies that are shared across packages
 [workspace.dependencies]
 dioxus = { path = "packages/dioxus", version = "0.7.0-alpha.3" }
+dioxus-lib = { path = "packages/dioxus-lib", version = "0.7.0-alpha.3" }
 dioxus-core = { path = "packages/core", version = "0.7.0-alpha.3" }
 dioxus-core-types = { path = "packages/core-types", version = "0.7.0-alpha.3" }
 dioxus-core-macro = { path = "packages/core-macro", version = "0.7.0-alpha.3" }
@@ -153,6 +156,7 @@ dioxus-web = { path = "packages/web", version = "0.7.0-alpha.3", default-feature
 dioxus-isrg = { path = "packages/isrg", version = "0.7.0-alpha.3" }
 dioxus-ssr = { path = "packages/ssr", version = "0.7.0-alpha.3", default-features = false }
 dioxus-desktop = { path = "packages/desktop", version = "0.7.0-alpha.3", default-features = false }
+dioxus-mobile = { path = "packages/mobile", version = "0.7.0-alpha.3" }
 dioxus-interpreter-js = { path = "packages/interpreter", version = "0.7.0-alpha.3" }
 dioxus-liveview = { path = "packages/liveview", version = "0.7.0-alpha.3" }
 dioxus-autofmt = { path = "packages/autofmt", version = "0.7.0-alpha.3" }
@@ -161,8 +165,8 @@ dioxus-rsx = { path = "packages/rsx", version = "0.7.0-alpha.3" }
 dioxus-rsx-hotreload = { path = "packages/rsx-hotreload", version = "0.7.0-alpha.3" }
 dioxus-rsx-rosetta = { path = "packages/rsx-rosetta", version = "0.7.0-alpha.3" }
 dioxus-signals = { path = "packages/signals", version = "0.7.0-alpha.3" }
-dioxus-cli-config = { path = "packages/cli-config", version = "0.7.0-alpha.3" }
-dioxus-cli-opt = { path = "packages/cli-opt", version = "0.7.0-alpha.3" }
+dioxus-stores = { path = "packages/stores", version = "0.7.0-alpha.3" }
+dioxus-stores-macro = { path = "packages/stores-macro", version = "0.7.0-alpha.3" }
 dioxus-devtools = { path = "packages/devtools", version = "0.7.0-alpha.3" }
 dioxus-devtools-types = { path = "packages/devtools-types", version = "0.7.0-alpha.3" }
 dioxus-server = { path = "packages/server", version = "0.7.0-alpha.3" }
@@ -176,10 +180,18 @@ dioxus-native = { path = "packages/native", version = "0.7.0-alpha.3" }
 dioxus-native-dom = { path = "packages/native-dom", version = "0.7.0-alpha.3" }
 dioxus-asset-resolver = { path = "packages/asset-resolver", version = "0.7.0-alpha.3" }
 dioxus-config-macros = { path = "packages/config-macros", version = "0.7.0-alpha.3" }
-const-serialize = { path = "packages/const-serialize", version = "0.7.0-alpha.3" }
-const-serialize-macro = { path = "packages/const-serialize-macro", version = "0.7.0-alpha.3" }
+
 generational-box = { path = "packages/generational-box", version = "0.7.0-alpha.3" }
 lazy-js-bundle = { path = "packages/lazy-js-bundle", version = "0.7.0-alpha.3" }
+
+# cli
+dioxus-cli-opt = { path = "packages/cli-opt", version = "0.7.0-alpha.0" }
+dioxus-cli-telemetry = { path = "packages/cli-telemetry", version = "0.7.0-alpha.0" }
+dioxus-cli-config = { path = "packages/cli-config", version = "0.7.0-alpha.0" }
+
+# const-serializea
+const-serialize = { path = "packages/const-serialize", version = "0.7.0-alpha.0" }
+const-serialize-macro = { path = "packages/const-serialize-macro", version = "0.7.0-alpha.0" }
 
 # subsecond
 subsecond-types = { path = "packages/subsecond/subsecond-types", version = "0.7.0-alpha.3" }
@@ -366,7 +378,7 @@ winit = { version = "0.30.11", features = ["rwh_06"] }
 incremental = true
 
 # crank up the opt level for wasm-split-cli in dev mode
-# important here that lto is on and the debug symbols are present (since they're used by wasm-opt)a
+# important here that lto is on and the debug symbols are present (since they're used by wasm-opt)
 [profile.wasm-split-release]
 inherits = "release"
 opt-level = 'z'
@@ -431,6 +443,7 @@ wasm-splitter = { workspace = true, package = "wasm-split" }
 
 [dev-dependencies]
 dioxus = { workspace = true, features = ["router"] }
+dioxus-stores = { workspace = true }
 dioxus-ssr = { workspace = true }
 futures-util = { workspace = true }
 separator = { workspace = true }
@@ -447,10 +460,6 @@ tokio = { version = "1.46", default-features = false, features = ["sync", "macro
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 tokio = { version = "1.46", features = ["full"] }
-
-# force vendored openssl on android
-[target.'cfg(target_os = "android")'.dev-dependencies]
-openssl = { version = "0.10", features = ["vendored"] }
 
 # To make most examples faster to compile, we split out assets and http-related stuff
 # This trims off like 270 dependencies, leading to a significant speedup in compilation time

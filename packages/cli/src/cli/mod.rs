@@ -22,11 +22,13 @@ pub(crate) use target::*;
 pub(crate) use verbosity::*;
 
 use crate::platform_override::CommandWithPlatformOverrides;
+use crate::Anonymized;
 use crate::{error::Result, Error, StructuredOutput};
 use clap::builder::styling::{AnsiColor, Effects, Style, Styles};
 use clap::{Parser, Subcommand};
 use html_parser::Dom;
 use serde::Deserialize;
+use serde_json::{json, Value};
 use std::sync::LazyLock;
 use std::{
     fmt::Display,
@@ -111,26 +113,6 @@ pub enum BuildTools {
     /// Build the assets for a specific target.
     #[clap(name = "assets")]
     BuildAssets(build_assets::BuildAssets),
-}
-
-impl Display for Commands {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Commands::Build(_) => write!(f, "build"),
-            Commands::Translate(_) => write!(f, "translate"),
-            Commands::Serve(_) => write!(f, "serve"),
-            Commands::New(_) => write!(f, "create"),
-            Commands::Init(_) => write!(f, "init"),
-            Commands::Config(_) => write!(f, "config"),
-            Commands::Autoformat(_) => write!(f, "fmt"),
-            Commands::Check(_) => write!(f, "check"),
-            Commands::Bundle(_) => write!(f, "bundle"),
-            Commands::Run(_) => write!(f, "run"),
-            Commands::SelfUpdate(_) => write!(f, "self-update"),
-            Commands::Tools(_) => write!(f, "tools"),
-            Commands::Doctor(_) => write!(f, "doctor"),
-        }
-    }
 }
 
 pub(crate) static VERSION: LazyLock<String> = LazyLock::new(|| {

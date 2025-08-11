@@ -1,0 +1,13 @@
+[package]
+name = "dioxus-cli-telemetry"
+edition = "2021"
+version.workspace = true
+description = "Wire format for the dioxus CLI telemetry type"
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+chrono = { workspace = true, features = ["serde"] }
+rand = { workspace = true }
+serde_json = { workspace = true }
+dirs = { workspace = true }
+uuid = { workspace = true, features = ["serde", "v4"] }

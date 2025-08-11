@@ -8,11 +8,6 @@ pub(crate) fn should_force_entropy() -> bool {
     std::env::var("DIOXUS_FORCE_ENTRY").is_ok()
 }
 
-/// Should the CLI not download any additional tools?
-pub(crate) fn no_downloads() -> bool {
-    std::env::var("NO_DOWNLOADS").is_ok()
-}
-
 /// Should we test the installs?
 #[allow(dead_code)] // -> used in tests only
 pub(crate) fn test_installs() -> bool {

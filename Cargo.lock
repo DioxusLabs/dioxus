@@ -5036,6 +5036,7 @@ dependencies = [
  "dioxus-server",
  "dioxus-signals",
  "dioxus-ssr",
+ "dioxus-stores",
  "dioxus-web",
  "dioxus_server_macro",
  "env_logger 0.11.8",
@@ -5123,6 +5124,7 @@ dependencies = [
  "dioxus-check",
  "dioxus-cli-config",
  "dioxus-cli-opt",
+ "dioxus-cli-telemetry",
  "dioxus-core",
  "dioxus-core-types",
  "dioxus-devtools-types",
@@ -5138,6 +5140,7 @@ dependencies = [
  "env_logger 0.11.8",
  "escargot",
  "flate2",
+ "fs2",
  "futures-channel",
  "futures-util",
  "handlebars",
@@ -5162,6 +5165,7 @@ dependencies = [
  "path-absolutize",
  "pdb",
  "plist",
+ "posthog-rs",
  "prettyplease",
  "proc-macro2",
  "ratatui",
@@ -5171,8 +5175,10 @@ dependencies = [
  "rustls 0.23.29",
  "self-replace",
  "self_update",
+ "sentry-backtrace",
  "serde",
  "serde_json",
+ "serde_json5",
  "shell-words",
  "strum 0.27.1",
  "subsecond-types",
@@ -5269,6 +5275,18 @@ dependencies = [
  "flate2",
  "reqwest 0.12.22",
  "tar",
+]
+
+[[package]]
+name = "dioxus-cli-telemetry"
+version = "0.7.0-alpha.3"
+dependencies = [
+ "chrono",
+ "dirs 6.0.0",
+ "rand 0.9.1",
+ "serde",
+ "serde_json",
+ "uuid",
 ]
 
 [[package]]
@@ -5371,7 +5389,6 @@ dependencies = [
  "ndk-sys 0.6.0+11769913",
  "objc",
  "objc_id",
- "openssl",
  "percent-encoding",
  "rand 0.9.1",
  "reqwest 0.12.22",
@@ -5456,11 +5473,11 @@ dependencies = [
  "ciborium",
  "dioxus",
  "dioxus-ssr",
+ "dioxus-stores",
  "form_urlencoded",
  "futures-util",
  "getrandom 0.3.3",
  "http-range",
- "openssl",
  "ouroboros",
  "rand 0.9.1",
  "reqwest 0.12.22",
@@ -5717,7 +5734,6 @@ dependencies = [
  "dioxus-native-dom",
  "futures-util",
  "keyboard-types",
- "openssl",
  "rustc-hash 2.1.1",
  "tokio",
  "tracing",
@@ -5984,6 +6000,28 @@ dependencies = [
  "dioxus-core",
  "dioxus-core-types",
  "rustc-hash 2.1.1",
+]
+
+[[package]]
+name = "dioxus-stores"
+version = "0.7.0-alpha.3"
+dependencies = [
+ "dioxus",
+ "dioxus-core",
+ "dioxus-signals",
+ "dioxus-stores-macro",
+]
+
+[[package]]
+name = "dioxus-stores-macro"
+version = "0.7.0-alpha.3"
+dependencies = [
+ "convert_case 0.8.0",
+ "dioxus",
+ "dioxus-stores",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.104",
 ]
 
 [[package]]
@@ -7033,6 +7071,16 @@ checksum = "88d7be93788013f265201256d58f04936a8079ad5dc898743aa20525f503b683"
 dependencies = [
  "autocfg",
  "tokio",
+]
+
+[[package]]
+name = "fs2"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9564fc758e15025b46aa6643b1b77d047d1a56a1aea6e01002ac0c7026876213"
+dependencies = [
+ "libc",
+ "winapi",
 ]
 
 [[package]]
@@ -11887,15 +11935,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d05e27ee213611ffe7d6348b942e8f942b37114c00cc03cec254295a4a17852e"
 
 [[package]]
-name = "openssl-src"
-version = "300.5.1+3.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "735230c832b28c000e3bc117119e6466a663ec73506bc0a9907ea4187508e42a"
-dependencies = [
- "cc",
-]
-
-[[package]]
 name = "openssl-sys"
 version = "0.9.109"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11903,7 +11942,6 @@ checksum = "90096e2e47630d78b7d1c20952dc621f957103f8bc2c8359ec81290d75238571"
 dependencies = [
  "cc",
  "libc",
- "openssl-src",
  "pkg-config",
  "vcpkg",
 ]
@@ -12760,6 +12798,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d8a2f0d8d040d7848a709caf78912debcc3f33ee4b3cac47d73d1e1069e83507"
 dependencies = [
  "portable-atomic",
+]
+
+[[package]]
+name = "posthog-rs"
+version = "0.3.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ead24e7bd3ce35a88fffe1f9a4747b4844335fa837eddecf9e7ad9708f3e26b3"
+dependencies = [
+ "chrono",
+ "derive_builder",
+ "reqwest 0.11.27",
+ "semver",
+ "serde",
+ "serde_json",
+ "uuid",
 ]
 
 [[package]]
@@ -14464,6 +14517,46 @@ dependencies = [
 ]
 
 [[package]]
+name = "sentry-backtrace"
+version = "0.42.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "68e299dd3f7bcf676875eee852c9941e1d08278a743c32ca528e2debf846a653"
+dependencies = [
+ "backtrace",
+ "regex",
+ "sentry-core",
+]
+
+[[package]]
+name = "sentry-core"
+version = "0.42.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "deaa38b94e70820ff3f1f9db3c8b0aef053b667be130f618e615e0ff2492cbcc"
+dependencies = [
+ "sentry-types",
+ "serde",
+ "serde_json",
+ "url",
+]
+
+[[package]]
+name = "sentry-types"
+version = "0.42.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e477f4d4db08ddb4ab553717a8d3a511bc9e81dde0c808c680feacbb8105c412"
+dependencies = [
+ "debugid",
+ "hex",
+ "rand 0.9.1",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.12",
+ "time",
+ "url",
+ "uuid",
+]
+
+[[package]]
 name = "separator"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -14560,6 +14653,17 @@ dependencies = [
  "itoa",
  "memchr",
  "ryu",
+ "serde",
+]
+
+[[package]]
+name = "serde_json5"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5d34d03f54462862f2a42918391c9526337f53171eaa4d8894562be7f252edd3"
+dependencies = [
+ "pest",
+ "pest_derive",
  "serde",
 ]
 
