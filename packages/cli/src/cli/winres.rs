@@ -1,6 +1,6 @@
 #![cfg_attr(rustfmt, rustfmt_skip)]
 #![allow(clippy::all)]
-//! Modified version of https://github.com/BenjaminRi/winresource or https://github.com/tauri-apps/winres
+//! Modified version of <https://github.com/BenjaminRi/winresource> or <https://github.com/tauri-apps/winres>
 //!
 //! Rust Windows resource helper
 //!
@@ -61,7 +61,7 @@ use std::io::prelude::*;
 use std::path::{Path, PathBuf};
 use std::process;
 
-/// https://learn.microsoft.com/en-us/windows/win32/menurc/about-icons
+/// Values based on <https://learn.microsoft.com/en-us/windows/win32/menurc/about-icons>
 /// use to_str()
 #[allow(clippy::upper_case_acronyms)]
 pub enum IDI {
