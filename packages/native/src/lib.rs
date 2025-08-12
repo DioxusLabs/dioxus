@@ -139,6 +139,11 @@ pub fn launch_cfg_with_props<P: Clone + 'static, M: 'static>(
 
     let navigation_provider = Some(Arc::new(DioxusNativeNavigationProvider) as _);
 
+    #[cfg(feature = "html")]
+    let html_parser_provider = Some(std::sync::Arc::new(blitz_html::HtmlProvider) as _);
+    #[cfg(not(feature = "html"))]
+    let html_parser_provider = None;
+
     // Create document + window from the baked virtualdom
     let doc = DioxusDocument::new(
         vdom,

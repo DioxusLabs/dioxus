@@ -90,13 +90,11 @@ objc = "0.2.7"
 lazy-js-bundle = { workspace = true }
 
 [features]
-default = ["tokio_runtime", "transparent", "devtools", "openssl-vendored-android", "openssl-vendored-ohos"]
+default = ["tokio_runtime", "transparent", "devtools"]
 tokio_runtime = ["dep:tokio"]
 fullscreen = ["wry/fullscreen"]
 devtools = ["wry/devtools", "dep:dioxus-devtools", "dioxus-signals"]
 transparent = ["wry/transparent"]
-openssl-vendored-android = ["openssl"]
-openssl-vendored-ohos = ["openssl"]
 gnu = []
 
 [package.metadata.docs.rs]
