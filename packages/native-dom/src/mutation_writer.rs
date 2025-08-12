@@ -1,6 +1,6 @@
 //! Integration between Dioxus and Blitz
 use crate::{qual_name, trace, NodeId};
-use blitz_dom::{Attribute, BaseDocument, DocumentMutator};
+use blitz_dom::{BaseDocument, DocumentMutator};
 use blitz_traits::events::DomEventKind;
 use dioxus_core::{
     AttributeValue, ElementId, Template, TemplateAttribute, TemplateNode, WriteMutations,
@@ -327,11 +327,16 @@ fn set_attribute_inner(
     let name = qual_name(local_name, ns);
 
     // FIXME: more principled handling of special case attributes
-    if value.is_none() || (local_name == "checked" && is_falsy) {
-        docm.clear_attribute(node_id, name);
-    } else if local_name == "dangerous_inner_html" {
-        docm.set_inner_html(node_id, value.unwrap());
-    } else {
-        docm.set_attribute(node_id, name, value.unwrap());
+    match value {
+        None => docm.clear_attribute(node_id, name),
+        Some(value) => {
+            if local_name == "checked" && is_falsy {
+                docm.clear_attribute(node_id, name);
+            } else if local_name == "dangerous_inner_html" {
+                docm.set_inner_html(node_id, value);
+            } else {
+                docm.set_attribute(node_id, name, value);
+            }
+        }
     }
 }
