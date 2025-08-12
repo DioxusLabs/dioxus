@@ -314,12 +314,13 @@ fn set_attribute_inner(
 ) {
     trace!("set_attribute node_id:{node_id} ns: {ns:?} name:{local_name}, value:{value:?}");
 
-    dbg!(ns);
-    dbg!(local_name);
-
     // Dioxus has overloaded the style namespace to accumulate style attributes without a `style` block
     // TODO: accumulate style attributes into a single style element.
     if ns == Some("style") {
+        match value {
+            Some(value) => docm.set_style_property(node_id, local_name, value),
+            None => docm.remove_style_property(node_id, local_name),
+        }
         return;
     }
 
