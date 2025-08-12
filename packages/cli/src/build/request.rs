@@ -2368,14 +2368,8 @@ impl BuildRequest {
         }
 
         if self.triple.operating_system == OperatingSystem::Windows {
-            match self.write_winres() {
-                Ok(res) => {
-                    cargo_args.extend(["-L".to_string(), res.path, "-l".to_string(), res.lib]);
-                }
-                Err(err) => {
-                    tracing::error!("Winres file: {}", err);
-                }
-            }
+            let res = self.write_winres().expect("Winres file");
+            cargo_args.extend(["-L".to_string(), res.path, "-l".to_string(), res.lib]);
         }
         // Our fancy hot-patching engine needs a lot of customization to work properly.
         //
