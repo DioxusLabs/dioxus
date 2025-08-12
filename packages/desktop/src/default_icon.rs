@@ -1,11 +1,11 @@
-// TODO only implemented for windows, needs implementation for other platforms
-
+// only implemented for windows, other platforms will provide dioxus icon instead of user defined icon, needs implementation for other platforms
 pub trait DefaultIcon {
     fn get_icon() -> Self
     where
         Self: Sized;
 }
 
+// TODO we should not be including default icon bytes if user sets their own - it should be what the user provided in config
 #[cfg(not(target_os = "windows"))]
 static ICON: &[u8] = include_bytes!("./assets/default_icon.bin");
 

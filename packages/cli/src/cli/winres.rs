@@ -52,7 +52,6 @@
 
 use krates::semver::Version;
 
-use crate::BuildRequest;
 use std::collections::HashMap;
 use std::env;
 use std::fs;

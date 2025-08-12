@@ -2368,10 +2368,15 @@ impl BuildRequest {
         }
 
         if self.triple.operating_system == OperatingSystem::Windows {
-            let icon = self.winres_icon_path();
-            cargo_args.extend(["-L".to_string(), icon.path, "-l".to_string(), icon.lib]);
+            match self.write_winres() {
+                Ok(res) => {
+                    cargo_args.extend(["-L".to_string(), res.path, "-l".to_string(), res.lib]);
+                }
+                Err(err) => {
+                    tracing::error!("Winres file: {}", err);
+                }
+            }
         }
-
         // Our fancy hot-patching engine needs a lot of customization to work properly.
         //
         // These args are mostly intended to be passed when *fat* linking but are generally fine to
@@ -4769,7 +4774,8 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         todo!()
     }
 
-    fn write_winres_icon(&self) -> Result<crate::winres::WindowsResourceLinker> {
+    // needs to only run when tomls are updated
+    fn write_winres(&self) -> Result<crate::winres::WindowsResourceLinker> {
         use crate::winres::*;
         let bundle = &self.config.bundle;
         let package = self.package();
@@ -4801,7 +4807,9 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
             None => bundle.long_description.as_ref().unwrap_or(&binding),
         };
 
-        let output_dir = self.bundle_dir(self.platform).join("winres");
+        let output_dir = self
+            .build_dir(BundleFormat::Windows, self.release)
+            .join("winres");
         std::fs::create_dir_all(&output_dir)?;
 
         let mut winres = WindowsResource::new();

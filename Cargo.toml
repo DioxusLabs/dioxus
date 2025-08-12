@@ -342,12 +342,12 @@ dunce = "1.0.5"
 percent-encoding = "2.3.1"
 global-hotkey = "0.7.0"
 rfd = { version = "0.15.3", default-features = false }
-muda = "0.17.0"
+muda = "0.17"
 cocoa = "0.26"
 core-foundation = "0.10.1"
 objc = { version = "0.2.7", features = ["exception"] }
 objc_id = "0.1.1"
-tray-icon = "0.21.0"
+tray-icon = "0.21"
 open = "5.3.2"
 
 # web
