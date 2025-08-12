@@ -58,7 +58,7 @@ impl CommandWithPlatformOverrides<BuildArgs> {
     /// The `--fullstack` feature is basically the same as passing `--features fullstack`
     ///
     /// Some examples:
-    /// ```
+    /// ```shell, ignore
     /// dx serve --target wasm32-unknown-unknown --fullstack            # serves both client and server
     /// dx serve --target wasm32-unknown-unknown --features fullstack   # serves both client and server
     /// dx serve --target wasm32-unknown-unknown                        # only serves the client
