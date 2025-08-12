@@ -19,6 +19,12 @@ pub struct WheelData {
     inner: Box<dyn HasWheelData>,
 }
 
+impl Default for WheelData {
+    fn default() -> Self {
+        Self::new(crate::events::empty::EmptyEvent)
+    }
+}
+
 impl<E: HasWheelData> From<E> for WheelData {
     fn from(e: E) -> Self {
         Self { inner: Box::new(e) }

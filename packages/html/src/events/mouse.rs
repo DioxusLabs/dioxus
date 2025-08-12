@@ -12,6 +12,12 @@ pub struct MouseData {
     inner: Box<dyn HasMouseData>,
 }
 
+impl Default for MouseData {
+    fn default() -> Self {
+        Self::new(crate::events::empty::EmptyEvent)
+    }
+}
+
 impl<E: HasMouseData + 'static> From<E> for MouseData {
     fn from(e: E) -> Self {
         Self { inner: Box::new(e) }

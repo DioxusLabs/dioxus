@@ -17,6 +17,12 @@ pub struct DragData {
     inner: Box<dyn HasDragData>,
 }
 
+impl Default for DragData {
+    fn default() -> Self {
+        Self::new(crate::events::empty::EmptyEvent)
+    }
+}
+
 impl<E: HasDragData + 'static> From<E> for DragData {
     fn from(e: E) -> Self {
         Self { inner: Box::new(e) }

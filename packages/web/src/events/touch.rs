@@ -10,16 +10,30 @@ impl ModifiersInteraction for Synthetic<TouchEvent> {
     fn modifiers(&self) -> Modifiers {
         let mut modifiers = Modifiers::empty();
 
-        if self.event.alt_key() {
+        // Handle undefined modifier key values from browser autofill
+        // Convert JsValue to bool, defaulting to false if undefined
+        if wasm_bindgen::JsValue::from(self.event.alt_key())
+            .as_bool()
+            .unwrap_or(false)
+        {
             modifiers.insert(Modifiers::ALT);
         }
-        if self.event.ctrl_key() {
+        if wasm_bindgen::JsValue::from(self.event.ctrl_key())
+            .as_bool()
+            .unwrap_or(false)
+        {
             modifiers.insert(Modifiers::CONTROL);
         }
-        if self.event.meta_key() {
+        if wasm_bindgen::JsValue::from(self.event.meta_key())
+            .as_bool()
+            .unwrap_or(false)
+        {
             modifiers.insert(Modifiers::META);
         }
-        if self.event.shift_key() {
+        if wasm_bindgen::JsValue::from(self.event.shift_key())
+            .as_bool()
+            .unwrap_or(false)
+        {
             modifiers.insert(Modifiers::SHIFT);
         }
 
