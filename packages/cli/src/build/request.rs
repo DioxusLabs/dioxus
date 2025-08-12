@@ -372,7 +372,6 @@ pub(crate) struct BuildRequest {
     pub(crate) profile: String,
     pub(crate) release: bool,
     pub(crate) bundle: BundleFormat,
-    pub(crate) enabled_renderers: Vec<Renderer>,
     pub(crate) triple: Triple,
     pub(crate) device: bool,
     pub(crate) package: String,
@@ -619,12 +618,6 @@ impl BuildRequest {
             },
         };
 
-        // Just grab the renderers from the enabled renderers and discard the feature names
-        let enabled_renderers = enabled_renderers
-            .into_iter()
-            .map(|(renderer, _)| renderer)
-            .collect::<Vec<_>>();
-
         // We usually use the simulator unless --device is passed *or* a device is detected by probing.
         // For now, though, since we don't have probing, it just defaults to false
         // Tools like xcrun/adb can detect devices
@@ -808,7 +801,6 @@ impl BuildRequest {
             device,
             workspace,
             config,
-            enabled_renderers,
             target_dir,
             custom_linker,
             link_args_file,
