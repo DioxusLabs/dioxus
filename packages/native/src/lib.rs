@@ -119,15 +119,20 @@ pub fn launch_cfg_with_props<P: Clone + 'static, M: 'static>(
         let net_provider = DioxusNativeNetProvider::shared(proxy);
         Some(net_provider)
     };
-
     #[cfg(not(feature = "net"))]
     let net_provider = None;
+
+    #[cfg(feature = "html")]
+    let html_parser_provider = Some(std::sync::Arc::new(blitz_html::HtmlProvider) as _);
+    #[cfg(not(feature = "html"))]
+    let html_parser_provider = None;
 
     // Create document + window from the baked virtualdom
     let doc = DioxusDocument::new(
         vdom,
         DocumentConfig {
             net_provider,
+            html_parser_provider,
             ..Default::default()
         },
     );

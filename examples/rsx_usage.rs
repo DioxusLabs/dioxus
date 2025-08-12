@@ -78,6 +78,27 @@ fn app() -> Element {
                 h1 {"Headers and attributes!"}
             }
             div {
+                h1 {"Style attributes!"}
+                p {
+                    "hello"
+                    b {
+                        "world"
+                    }
+                    i {
+                        "foo"
+                    }
+                    span {
+                        style: "color: red;font-style:italic",
+                        "red"
+                    }
+                    span {
+                        color: "blue",
+                        font_weight: "bold",
+                        "attr_blue"
+                    }
+                }
+            }
+            div {
                 // pass simple rust expressions in
                 class: "{lazy_fmt}",
                 id: format_args!("attributes can be passed lazily with std::fmt::Arguments"),
