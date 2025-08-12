@@ -1,4 +1,7 @@
-use dioxus::prelude::*;
+use dioxus::{
+    core::{generation, needs_update},
+    prelude::*,
+};
 use dioxus_core::ElementId;
 use std::{any::Any, rc::Rc};
 
@@ -121,7 +124,7 @@ fn TakesEventHandler(click: EventHandler<usize>, number: usize) -> Element {
 }
 
 #[component]
-fn TakesSignal(sig: ReadOnlySignal<usize>, number: usize) -> Element {
+fn TakesSignal(sig: ReadSignal<usize>, number: usize) -> Element {
     let first_render_sig = use_hook(move || sig);
     if generation() > 0 {
         // Make sure the signal is memoized in place and never gets dropped
@@ -136,6 +139,8 @@ fn TakesSignal(sig: ReadOnlySignal<usize>, number: usize) -> Element {
 // Regression test for https://github.com/DioxusLabs/dioxus/issues/2582
 #[test]
 fn spreads_memorize_in_place() {
+    use dioxus_core::Properties;
+
     #[derive(Props, Clone, PartialEq)]
     struct CompProps {
         #[props(extends = GlobalAttributes)]
@@ -185,12 +190,12 @@ fn cloning_read_only_signal_components_work() {
     struct NonCloneable<T>(T);
 
     #[component]
-    fn TakesReadOnlySignalNum(sig: ReadOnlySignal<i32>) -> Element {
+    fn TakesReadOnlySignalNum(sig: ReadSignal<i32>) -> Element {
         rsx! {}
     }
 
     #[component]
-    fn TakesReadOnlySignalNonClone(sig: ReadOnlySignal<NonCloneable<i32>>) -> Element {
+    fn TakesReadOnlySignalNonClone(sig: ReadSignal<NonCloneable<i32>>) -> Element {
         rsx! {}
     }
 

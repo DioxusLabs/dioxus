@@ -21,6 +21,7 @@ use dioxus_history::{History, MemoryHistory};
 use dioxus_hooks::to_owned;
 use dioxus_html::{HasFileData, HtmlEvent, PlatformEventData};
 use futures_util::{pin_mut, FutureExt};
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::{cell::OnceCell, time::Duration};
 use std::{rc::Rc, task::Waker};
@@ -293,6 +294,8 @@ impl WebviewInstance {
             }
         };
 
+        let page_loaded = AtomicBool::new(false);
+
         let mut webview = WebViewBuilder::new_with_web_context(&mut web_context)
             .with_bounds(wry::Rect {
                 position: wry::dpi::Position::Logical(wry::dpi::LogicalPosition::new(0.0, 0.0)),
@@ -304,22 +307,35 @@ impl WebviewInstance {
             .with_transparent(cfg.window.window.transparent)
             .with_url("dioxus://index.html/")
             .with_ipc_handler(ipc_handler)
-            .with_navigation_handler(|var| {
+            .with_navigation_handler(move |var| {
                 // We don't want to allow any navigation
                 // We only want to serve the index file and assets
-                if var.starts_with("dioxus://") || var.starts_with("http://dioxus.") {
-                    true
+                if var.starts_with("dioxus://")
+                    || var.starts_with("http://dioxus.")
+                    || var.starts_with("https://dioxus.")
+                {
+                    // After the page has loaded once, don't allow any more navigation
+                    let page_loaded = page_loaded.swap(true, std::sync::atomic::Ordering::SeqCst);
+                    !page_loaded
                 } else {
                     if var.starts_with("http://")
                         || var.starts_with("https://")
                         || var.starts_with("mailto:")
                     {
-                        _ = open::that_detached(&var);
+                        _ = webbrowser::open(&var);
                     }
                     false
                 }
             }) // prevent all navigations
             .with_asynchronous_custom_protocol(String::from("dioxus"), request_handler);
+
+        // Enable https scheme on android, needed for secure context API, like the geolocation API
+        #[cfg(target_os = "android")]
+        {
+            use wry::WebViewBuilderExtAndroid as _;
+
+            webview = webview.with_https_scheme(true);
+        };
 
         // Disable the webview default shortcuts to disable the reload shortcut
         #[cfg(target_os = "windows")]

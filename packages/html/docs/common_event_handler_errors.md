@@ -81,13 +81,13 @@ fn MyComponent(string: String) -> Element {
 
 You can fix this issue by either:
 
-- Making your data `Copy` with `ReadOnlySignal`:
+- Making your data `Copy` with `ReadSignal`:
 
 ```rust, no_run
 # use dioxus::prelude::*;
-// `MyComponent` accepts `ReadOnlySignal<String>` which implements `Copy`
+// `MyComponent` accepts `ReadSignal<String>` which implements `Copy`
 #[component]
-fn MyComponent(string: ReadOnlySignal<String>) -> Element {
+fn MyComponent(string: ReadSignal<String>) -> Element {
     rsx! {
         button {
             // ✅ Because the `string` signal is `Copy`, we can copy it into the closure while still having access to it elsewhere

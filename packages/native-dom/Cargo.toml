@@ -19,8 +19,8 @@ autofocus = []
 
 [dependencies]
 # Blitz dependencies
-blitz-dom = { version = "=0.1.0-alpha.5", default-features = false }
-blitz-traits = { version = "=0.1.0-alpha.5" }
+blitz-dom = { workspace = true, default-features = false }
+blitz-traits = { workspace = true }
 
 # DioxusLabs dependencies
 dioxus-core = { workspace = true }
@@ -34,6 +34,9 @@ keyboard-types = { workspace = true }
 tracing = { workspace = true, optional = true }
 rustc-hash = { workspace = true }
 futures-util = { workspace = true }
+
+[dev-dependencies]
+dioxus = { workspace = true }
 
 [package.metadata.docs.rs]
 all-features = true

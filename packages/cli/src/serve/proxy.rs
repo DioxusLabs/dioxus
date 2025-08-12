@@ -143,15 +143,15 @@ pub(crate) fn proxy_to(
                     || uri.path().starts_with("/public/")
                     || uri.path().starts_with("/wasm/")
                 {
-                    tracing::trace!(dx_src = ?TraceSrc::Dev, "[{}] {}", res.status().as_u16(), uri);
+                    tracing::trace!(dx_src = ?TraceSrc::App(crate::BundleFormat::Server), "[{}] {}", res.status().as_u16(), uri);
                 } else {
-                    tracing::info!(dx_src = ?TraceSrc::Dev, "[{}] {}", res.status().as_u16(), uri);
+                    tracing::info!(dx_src = ?TraceSrc::App(crate::BundleFormat::Server), "[{}] {}", res.status().as_u16(), uri);
                 }
 
                 Ok(res.into_response())
             }
             Err(err) => {
-                tracing::error!(dx_src = ?TraceSrc::Dev, "[{}] {}", err.status().as_u16(), uri);
+                tracing::error!(dx_src = ?TraceSrc::App(crate::BundleFormat::Server), "[{}] {}", err.status().as_u16(), uri);
                 Err(err)
             }
         }
@@ -163,8 +163,7 @@ pub(crate) fn handle_proxy_error(e: Error) -> axum::http::Response<axum::body::B
     axum::http::Response::builder()
         .status(axum::http::StatusCode::INTERNAL_SERVER_ERROR)
         .body(axum::body::Body::from(format!(
-            "Proxy connection failed: {:#?}",
-            e
+            "Proxy connection failed: {e:#?}"
         )))
         .unwrap()
 }
@@ -229,7 +228,7 @@ mod test {
         let server_addr = setup_servers(config).await;
 
         assert_eq!(
-            reqwest::get(format!("http://{}/api", server_addr))
+            reqwest::get(format!("http://{server_addr}/api"))
                 .await
                 .unwrap()
                 .text()
@@ -239,7 +238,7 @@ mod test {
         );
 
         assert_eq!(
-            reqwest::get(format!("http://{}/api/", server_addr))
+            reqwest::get(format!("http://{server_addr}/api/"))
                 .await
                 .unwrap()
                 .text()

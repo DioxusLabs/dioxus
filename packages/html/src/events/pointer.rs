@@ -1,7 +1,7 @@
 use dioxus_core::Event;
 use keyboard_types::Modifiers;
 
-use crate::{geometry::*, input_data::*, prelude::*};
+use crate::{geometry::*, input_data::*, *};
 
 /// A synthetic event that wraps a web-style [`PointerEvent`](https://developer.mozilla.org/en-US/docs/Web/API/PointerEvent)
 pub type PointerEvent = Event<PointerData>;

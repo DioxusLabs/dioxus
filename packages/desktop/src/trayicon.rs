@@ -1,9 +1,6 @@
 //! tray icon
 
-use dioxus_core::{
-    prelude::{provide_context, try_consume_context},
-    use_hook,
-};
+use dioxus_core::{provide_context, try_consume_context, use_hook};
 
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 pub use tray_icon::*;

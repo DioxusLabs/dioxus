@@ -18,7 +18,7 @@ pub(crate) struct SelfUpdate {
     pub version: Option<String>,
 
     /// Install the update.
-    #[clap(long, default_value = "true")]
+    #[clap(long, default_value = "true", num_args = 0..=1)]
     pub install: bool,
 
     /// List available versions.
@@ -120,7 +120,7 @@ impl SelfUpdate {
                 })
                 .context("No suitable asset found")?;
 
-            let install_dir = Workspace::dioxus_home_dir().join("self-update");
+            let install_dir = Workspace::dioxus_data_dir().join("self-update");
             std::fs::create_dir_all(&install_dir).context("Failed to create install directory")?;
 
             tracing::info!("Downloading update from Github");

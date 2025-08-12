@@ -2,11 +2,12 @@
 resolver = "2"
 members = [
     "packages/dioxus",
-    "packages/dioxus-lib",
     "packages/core",
     "packages/core-types",
     "packages/cli",
     "packages/cli-opt",
+    "packages/cli-config",
+    "packages/cli-telemetry",
     "packages/core-types",
     "packages/core-macro",
     "packages/config-macro",
@@ -23,8 +24,6 @@ members = [
     "packages/liveview",
     "packages/autofmt",
     "packages/check",
-    "packages/cli-config",
-    "packages/cli",
     "packages/config-macro",
     "packages/core-macro",
     "packages/core-types",
@@ -32,7 +31,6 @@ members = [
     "packages/desktop",
     "packages/devtools-types",
     "packages/devtools",
-    "packages/dioxus-lib",
     "packages/dioxus",
     "packages/document",
     "packages/extension",
@@ -54,6 +52,8 @@ members = [
     "packages/rsx",
     "packages/server-macro",
     "packages/signals",
+    "packages/stores",
+    "packages/stores-macro",
     "packages/ssr",
     "packages/lazy-js-bundle",
     "packages/cli-config",
@@ -114,6 +114,8 @@ members = [
     "examples/fullstack-auth",
     "examples/fullstack-websockets",
     "examples/wgpu-texture",
+    "examples/native-headless",
+    "examples/native-headless-in-bevy",
     "examples/bevy",
 
     # Playwright tests
@@ -129,77 +131,96 @@ members = [
     "packages/playwright-tests/nested-suspense",
     "packages/playwright-tests/cli-optimization",
     "packages/playwright-tests/wasm-split-harness",
-    "packages/playwright-tests/default-features-disabled",
+    "packages/playwright-tests/default-features-disabled"
 ]
 
 [workspace.package]
-version = "0.7.0-alpha.2"
+version = "0.7.0-rc.0"
 
 # dependencies that are shared across packages
 [workspace.dependencies]
-dioxus = { path = "packages/dioxus", version = "0.7.0-alpha.2" }
-dioxus-lib = { path = "packages/dioxus-lib", version = "0.7.0-alpha.2", default-features = false }
-dioxus-core = { path = "packages/core", version = "0.7.0-alpha.2" }
-dioxus-core-types = { path = "packages/core-types", version = "0.7.0-alpha.2" }
-dioxus-core-macro = { path = "packages/core-macro", version = "0.7.0-alpha.2" }
-dioxus-config-macro = { path = "packages/config-macro", version = "0.7.0-alpha.2" }
-dioxus-router = { path = "packages/router", version = "0.7.0-alpha.2" }
-dioxus-router-macro = { path = "packages/router-macro", version = "0.7.0-alpha.2" }
-dioxus-document = { path = "packages/document", version = "0.7.0-alpha.2", default-features = false }
-dioxus-history = { path = "packages/history", version = "0.7.0-alpha.2", default-features = false }
-dioxus-html = { path = "packages/html", version = "0.7.0-alpha.2", default-features = false }
-dioxus-html-internal-macro = { path = "packages/html-internal-macro", version = "0.7.0-alpha.2" }
-dioxus-hooks = { path = "packages/hooks", version = "0.7.0-alpha.2" }
-dioxus-web = { path = "packages/web", version = "0.7.0-alpha.2", default-features = false }
-dioxus-isrg = { path = "packages/isrg", version = "0.7.0-alpha.2" }
-dioxus-ssr = { path = "packages/ssr", version = "0.7.0-alpha.2", default-features = false }
-dioxus-desktop = { path = "packages/desktop", version = "0.7.0-alpha.2", default-features = false }
-dioxus-interpreter-js = { path = "packages/interpreter", version = "0.7.0-alpha.2" }
-dioxus-liveview = { path = "packages/liveview", version = "0.7.0-alpha.2" }
-dioxus-autofmt = { path = "packages/autofmt", version = "0.7.0-alpha.2" }
-dioxus-check = { path = "packages/check", version = "0.7.0-alpha.2" }
-dioxus-rsx = { path = "packages/rsx", version = "0.7.0-alpha.2" }
-dioxus-rsx-hotreload = { path = "packages/rsx-hotreload", version = "0.7.0-alpha.2" }
-dioxus-rsx-rosetta = { path = "packages/rsx-rosetta", version = "0.7.0-alpha.2" }
-dioxus-signals = { path = "packages/signals", version = "0.7.0-alpha.2" }
-dioxus-cli-config = { path = "packages/cli-config", version = "0.7.0-alpha.2" }
-dioxus-cli-opt = { path = "packages/cli-opt", version = "0.7.0-alpha.2" }
-dioxus-devtools = { path = "packages/devtools", version = "0.7.0-alpha.2" }
-dioxus-devtools-types = { path = "packages/devtools-types", version = "0.7.0-alpha.2" }
-dioxus-server = { path = "packages/server", version = "0.7.0-alpha.2" }
-dioxus-fullstack = { path = "packages/fullstack", version = "0.7.0-alpha.2" }
-dioxus-fullstack-hooks = { path = "packages/fullstack-hooks", version = "0.7.0-alpha.2" }
-dioxus-fullstack-protocol = { path = "packages/fullstack-protocol", version = "0.7.0-alpha.2" }
-dioxus_server_macro = { path = "packages/server-macro", version = "0.7.0-alpha.2", default-features = false }
-dioxus-dx-wire-format = { path = "packages/dx-wire-format", version = "0.7.0-alpha.2" }
-dioxus-logger = { path = "packages/logger", version = "0.7.0-alpha.2" }
-dioxus-native = { path = "packages/native", version = "0.7.0-alpha.2" }
-dioxus-native-dom = { path = "packages/native-dom", version = "0.7.0-alpha.2" }
-dioxus-asset-resolver = { path = "packages/asset-resolver", version = "0.7.0-alpha.2" }
-dioxus-config-macros = { path = "packages/config-macros", version = "0.7.0-alpha.2" }
-const-serialize = { path = "packages/const-serialize", version = "0.7.0-alpha.2" }
-const-serialize-macro = { path = "packages/const-serialize-macro", version = "0.7.0-alpha.2" }
-generational-box = { path = "packages/generational-box", version = "0.7.0-alpha.2" }
-lazy-js-bundle = { path = "packages/lazy-js-bundle", version = "0.7.0-alpha.2" }
+dioxus = { path = "packages/dioxus", version = "0.7.0-rc.0" }
+dioxus-lib = { path = "packages/dioxus-lib", version = "0.7.0-rc.0" }
+dioxus-core = { path = "packages/core", version = "0.7.0-rc.0" }
+dioxus-core-types = { path = "packages/core-types", version = "0.7.0-rc.0" }
+dioxus-core-macro = { path = "packages/core-macro", version = "0.7.0-rc.0" }
+dioxus-config-macro = { path = "packages/config-macro", version = "0.7.0-rc.0" }
+dioxus-router = { path = "packages/router", version = "0.7.0-rc.0" }
+dioxus-router-macro = { path = "packages/router-macro", version = "0.7.0-rc.0" }
+dioxus-document = { path = "packages/document", version = "0.7.0-rc.0", default-features = false }
+dioxus-history = { path = "packages/history", version = "0.7.0-rc.0", default-features = false }
+dioxus-html = { path = "packages/html", version = "0.7.0-rc.0", default-features = false }
+dioxus-html-internal-macro = { path = "packages/html-internal-macro", version = "0.7.0-rc.0" }
+dioxus-hooks = { path = "packages/hooks", version = "0.7.0-rc.0" }
+dioxus-web = { path = "packages/web", version = "0.7.0-rc.0", default-features = false }
+dioxus-isrg = { path = "packages/isrg", version = "0.7.0-rc.0" }
+dioxus-ssr = { path = "packages/ssr", version = "0.7.0-rc.0", default-features = false }
+dioxus-desktop = { path = "packages/desktop", version = "0.7.0-rc.0", default-features = false }
+dioxus-mobile = { path = "packages/mobile", version = "0.7.0-rc.0" }
+dioxus-interpreter-js = { path = "packages/interpreter", version = "0.7.0-rc.0" }
+dioxus-liveview = { path = "packages/liveview", version = "0.7.0-rc.0" }
+dioxus-autofmt = { path = "packages/autofmt", version = "0.7.0-rc.0" }
+dioxus-check = { path = "packages/check", version = "0.7.0-rc.0" }
+dioxus-rsx = { path = "packages/rsx", version = "0.7.0-rc.0" }
+dioxus-rsx-hotreload = { path = "packages/rsx-hotreload", version = "0.7.0-rc.0" }
+dioxus-rsx-rosetta = { path = "packages/rsx-rosetta", version = "0.7.0-rc.0" }
+dioxus-signals = { path = "packages/signals", version = "0.7.0-rc.0" }
+dioxus-stores = { path = "packages/stores", version = "0.7.0-rc.0" }
+dioxus-stores-macro = { path = "packages/stores-macro", version = "0.7.0-rc.0" }
+dioxus-devtools = { path = "packages/devtools", version = "0.7.0-rc.0" }
+dioxus-devtools-types = { path = "packages/devtools-types", version = "0.7.0-rc.0" }
+dioxus-server = { path = "packages/server", version = "0.7.0-rc.0" }
+dioxus-fullstack = { path = "packages/fullstack", version = "0.7.0-rc.0" }
+dioxus-fullstack-hooks = { path = "packages/fullstack-hooks", version = "0.7.0-rc.0" }
+dioxus-fullstack-protocol = { path = "packages/fullstack-protocol", version = "0.7.0-rc.0" }
+dioxus_server_macro = { path = "packages/server-macro", version = "0.7.0-rc.0", default-features = false }
+dioxus-dx-wire-format = { path = "packages/dx-wire-format", version = "0.7.0-rc.0" }
+dioxus-logger = { path = "packages/logger", version = "0.7.0-rc.0" }
+dioxus-native = { path = "packages/native", version = "0.7.0-rc.0" }
+dioxus-native-dom = { path = "packages/native-dom", version = "0.7.0-rc.0" }
+dioxus-asset-resolver = { path = "packages/asset-resolver", version = "0.7.0-rc.0" }
+dioxus-config-macros = { path = "packages/config-macros", version = "0.7.0-rc.0" }
+
+generational-box = { path = "packages/generational-box", version = "0.7.0-rc.0" }
+lazy-js-bundle = { path = "packages/lazy-js-bundle", version = "0.7.0-rc.0" }
+
+# cli
+dioxus-cli-opt = { path = "packages/cli-opt", version = "0.7.0-rc.0" }
+dioxus-cli-telemetry = { path = "packages/cli-telemetry", version = "0.7.0-rc.0" }
+dioxus-cli-config = { path = "packages/cli-config", version = "0.7.0-rc.0" }
+
+# const-serializea
+const-serialize = { path = "packages/const-serialize", version = "0.7.0-rc.0" }
+const-serialize-macro = { path = "packages/const-serialize-macro", version = "0.7.0-rc.0" }
 
 # subsecond
-subsecond-types = { path = "packages/subsecond/subsecond-types", version = "0.7.0-alpha.2" }
-subsecond = { path = "packages/subsecond/subsecond", version = "0.7.0-alpha.2" }
+subsecond-types = { path = "packages/subsecond/subsecond-types", version = "0.7.0-rc.0" }
+subsecond = { path = "packages/subsecond/subsecond", version = "0.7.0-rc.0" }
 
 # manganis
-manganis = { path = "packages/manganis/manganis", version = "0.7.0-alpha.2" }
-manganis-core = { path = "packages/manganis/manganis-core", version = "0.7.0-alpha.2" }
-manganis-macro = { path = "packages/manganis/manganis-macro", version = "0.7.0-alpha.2" }
+manganis = { path = "packages/manganis/manganis", version = "0.7.0-rc.0" }
+manganis-core = { path = "packages/manganis/manganis-core", version = "0.7.0-rc.0" }
+manganis-macro = { path = "packages/manganis/manganis-macro", version = "0.7.0-rc.0" }
 
 # wasm-split
-wasm-splitter = { path = "packages/wasm-split/wasm-split", version = "0.7.0-alpha.2" }
-wasm-split-macro = { path = "packages/wasm-split/wasm-split-macro", version = "0.7.0-alpha.2" }
-wasm-split-cli = { path = "packages/wasm-split/wasm-split-cli", version = "0.7.0-alpha.2" }
-wasm-split-harness = { path = "packages/playwright-tests/wasm-split-harness", version = "0.7.0-alpha.2" }
-wasm-used = { path = "packages/wasm-split/wasm-used", version = "0.7.0-alpha.2" }
+wasm-splitter = { path = "packages/wasm-split/wasm-split", version = "0.7.0-rc.0" }
+wasm-split-macro = { path = "packages/wasm-split/wasm-split-macro", version = "0.7.0-rc.0" }
+wasm-split-cli = { path = "packages/wasm-split/wasm-split-cli", version = "0.7.0-rc.0" }
+wasm-split-harness = { path = "packages/playwright-tests/wasm-split-harness", version = "0.7.0-rc.0" }
+wasm-used = { path = "packages/wasm-split/wasm-used", version = "0.7.0-rc.0" }
 
-depinfo = { path = "packages/depinfo", version = "0.7.0-alpha.2" }
+depinfo = { path = "packages/depinfo", version = "0.7.0-rc.0" }
 warnings = { version = "0.2.1" }
+
+# blitz
+blitz-dom = { version = "=0.1.0-rc.2", default-features = false }
+blitz-net = { version = "=0.1.0-rc.2" }
+blitz-paint = { version = "=0.1.0-rc.2" }
+blitz-traits = { version = "=0.1.0-rc.2" }
+blitz-shell = { version = "=0.1.0-rc.2", default-features = false }
+anyrender = { version = "0.5", default-features = false }
+anyrender_vello = { version = "0.5", default-features = false }
+wgpu = { version = "24.0" }
 
 # a fork of pretty please for tests - let's get off of this if we can!
 prettier-please = { version = "0.3.0", features = ["verbatim"] }
@@ -234,8 +255,8 @@ lru = "0.16.0"
 async-trait = "0.1.88"
 axum = { version = "0.8.4", default-features = false }
 axum-server = { version = "0.7.2", default-features = false }
-server_fn = { version = "0.8.2", default-features = false }
-server_fn_macro = { version = "0.8.2" }
+server_fn = { version = "=0.8.3", default-features = false }
+server_fn_macro = { version = "=0.8.3" }
 tower = "0.5.2"
 http = "1.3.1"
 notify = { version = "8.1.0" }
@@ -272,7 +293,7 @@ fluent-uri = { version = "0.3.2", features = ["serde"] }
 internment = { version = "0.8.6" }
 proc-macro2-diagnostics = { version = "0.10", default-features = false }
 env_logger = "0.11.8"
-chrono = { version = "0.4.41" }
+chrono = { version = "0.4.39" }
 gloo = { version = "0.11.0" }
 gloo-utils = { version = "0.2.0" }
 rustversion = "1.0.21"
@@ -291,7 +312,7 @@ digest = "0.10.7"
 sha2 = "0.10.9"
 walrus = { version = "0.23.3", features = ["parallel"] }
 id-arena = "2.2.1"
-async-compression = { version = "0.4.25", features = ["futures-io", "gzip", "brotli"] }
+async-compression = { version = "0.4", features = ["futures-io", "gzip", "brotli"] }
 getrandom = { version = "0.3.3" }
 async-once-cell = { version = "0.5.4" }
 rayon = "1.10.0"
@@ -299,14 +320,14 @@ wasmparser = "0.235.0"
 itertools = "0.14.0"
 object = { version = "0.37.1" }
 bincode = "1.3.3"
-inventory = { version = "0.3.20" }
+inventory = { version = "0.3" }
 macro-string = "0.1.4"
 walkdir = "2.5.0"
-url = "2.5.4"
+url = "2"
 separator = "0.4.1"
-pretty_assertions = "1.4.1"
+pretty_assertions = "1"
 serde_repr = "0.1"
-hyper-util = "0.1.15"
+hyper-util = "0.1"
 krates = { version = "0.17.5" }
 libloading = "0.8.8"
 libc = "0.2.174"
@@ -353,7 +374,7 @@ winit = { version = "0.30.11", features = ["rwh_06"] }
 incremental = true
 
 # crank up the opt level for wasm-split-cli in dev mode
-# important here that lto is on and the debug symbols are present (since they're used by wasm-opt)a
+# important here that lto is on and the debug symbols are present (since they're used by wasm-opt)
 [profile.wasm-split-release]
 inherits = "release"
 opt-level = 'z'
@@ -405,19 +426,20 @@ documentation = "https://dioxuslabs.com"
 keywords = ["dom", "ui", "gui", "react", "wasm"]
 rust-version = "1.80.0"
 publish = false
-version = "0.7.0-alpha.2"
+version = "0.7.0-rc.0"
 
 [dependencies]
 reqwest = { workspace = true, features = ["json"], optional = true }
 ciborium = { workspace = true, optional = true }
 base64 = { workspace = true, optional = true }
 http-range = { version = "0.1.5", optional = true }
-wgpu = { version = "24.0", optional = true }
+wgpu = { workspace = true, optional = true }
 ouroboros = { version = "*", optional = true }
 wasm-splitter = { workspace = true, package = "wasm-split" }
 
 [dev-dependencies]
 dioxus = { workspace = true, features = ["router"] }
+dioxus-stores = { workspace = true }
 dioxus-ssr = { workspace = true }
 futures-util = { workspace = true }
 separator = { workspace = true }
@@ -434,10 +456,6 @@ tokio = { version = "1.46", default-features = false, features = ["sync", "macro
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 tokio = { version = "1.46", features = ["full"] }
-
-# force vendored openssl on android
-[target.'cfg(target_os = "android")'.dev-dependencies]
-openssl = { version = "0.10", features = ["vendored"] }
 
 # To make most examples faster to compile, we split out assets and http-related stuff
 # This trims off like 270 dependencies, leading to a significant speedup in compilation time

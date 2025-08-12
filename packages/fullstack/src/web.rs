@@ -1,6 +1,6 @@
 //! On the client, we use the [`WebDocument`] implementation to render the head for any elements that were not rendered on the server.
 
-use dioxus_lib::document::*;
+use dioxus_document::*;
 use dioxus_web::WebDocument;
 
 fn head_element_written_on_server() -> bool {

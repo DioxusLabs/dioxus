@@ -43,4 +43,8 @@ pub(crate) struct ApplicationConfig {
     /// `dx` will merge any required settings into this file required to build the app
     #[serde(default)]
     pub(crate) android_manifest: Option<PathBuf>,
+
+    /// Use this file for the MainActivity.kt associated with the Android app.
+    #[serde(default)]
+    pub(crate) android_main_activity: Option<PathBuf>,
 }

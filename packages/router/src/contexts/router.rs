@@ -5,12 +5,13 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use dioxus_core::{provide_context, Element, ReactiveContext, ScopeId};
 use dioxus_history::history;
-use dioxus_lib::prelude::*;
+use dioxus_signals::{CopyValue, ReadableExt, Signal, WritableExt};
 
 use crate::{
     components::child_router::consume_child_route_mapping, navigation::NavigationTarget,
-    prelude::SiteMapSegment, routable::Routable, router_cfg::RouterConfig,
+    routable::Routable, router_cfg::RouterConfig, SiteMapSegment,
 };
 
 /// An error that is thrown when the router fails to parse a route
@@ -268,7 +269,7 @@ impl RouterContext {
         match route {
             Ok(route) => route,
             Err(err) => {
-                throw_error(ParseRouteError { message: err });
+                dioxus_core::throw_error(ParseRouteError { message: err });
                 "/".parse().unwrap_or_else(|err| panic!("{err}"))
             }
         }

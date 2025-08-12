@@ -7,7 +7,7 @@ use generational_box::{Storage, SyncStorage, UnsyncStorage};
 
 #[test]
 fn reused() {
-    fn reused_test<S: Storage<i32>>() {
+    fn reused_test<S: Storage<i32> + 'static>() {
         let first_ptr;
         {
             let owner = S::owner();

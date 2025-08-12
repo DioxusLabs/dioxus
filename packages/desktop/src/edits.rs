@@ -19,10 +19,8 @@
 //! and key. The webview will then reconnect to the new port and continue receiving edits.
 
 use dioxus_interpreter_js::MutationState;
-use futures_channel::mpsc::UnboundedSender;
 use futures_channel::oneshot;
-use futures_util::{FutureExt, StreamExt};
-use pollster::FutureExt as _;
+use futures_util::FutureExt;
 use rand::{RngCore, SeedableRng};
 use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
@@ -299,14 +297,14 @@ impl EditWebsocket {
         };
 
         // Handle the websocket connection in a separate thread
-        let (edits_outgoing, mut edits_incoming_rx) = futures_channel::mpsc::unbounded::<MsgPair>();
+        let (edits_outgoing, edits_incoming_rx) = std::sync::mpsc::channel::<MsgPair>();
 
         let connections_ = connections.clone();
         // Spawn a task to handle the websocket connection
         std::thread::spawn(move || {
             let mut queued_message = None;
             // Wait until there are edits ready to send
-            'connection: while let Some(msg) = edits_incoming_rx.next().block_on() {
+            'connection: while let Ok(msg) = edits_incoming_rx.recv() {
                 let data = msg.edits.clone();
                 queued_message = Some(msg);
                 // Send the edits to the webview
@@ -353,7 +351,7 @@ impl EditWebsocket {
             // If there are pending edits, send them to the new connection
             Some(WebviewConnectionState::Pending { mut pending }) => {
                 while let Some(pair) = pending.pop_front() {
-                    _ = edits_outgoing.unbounded_send(pair);
+                    _ = edits_outgoing.send(pair);
                 }
             }
 
@@ -408,7 +406,7 @@ enum WebviewConnectionState {
         pending: VecDeque<MsgPair>,
     },
     Connected {
-        edits_outgoing: UnboundedSender<MsgPair>,
+        edits_outgoing: std::sync::mpsc::Sender<MsgPair>,
     },
 }
 
@@ -441,7 +439,7 @@ impl WebviewConnectionState {
                 queue.push_back(pair);
             }
             WebviewConnectionState::Connected { edits_outgoing } => {
-                _ = edits_outgoing.unbounded_send(pair);
+                _ = edits_outgoing.send(pair);
             }
         }
     }

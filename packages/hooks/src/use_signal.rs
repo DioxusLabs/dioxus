@@ -1,4 +1,4 @@
-use dioxus_core::prelude::*;
+use dioxus_core::use_hook;
 use dioxus_signals::{Signal, SignalData, Storage, SyncStorage, UnsyncStorage};
 
 /// Creates a new Signal. Signals are a Copy state management solution with automatic dependency tracking.

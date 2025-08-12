@@ -1,15 +1,12 @@
-use dioxus_core_types::DioxusFormattable;
-
-use crate::events::ListenerCallback;
-use crate::innerlude::VProps;
-use crate::prelude::RenderError;
-use crate::{any_props::BoxedAnyProps, innerlude::ScopeState};
-use crate::{arena::ElementId, Element, Event};
 use crate::{
-    innerlude::{ElementRef, MountId},
+    any_props::BoxedAnyProps,
+    arena::ElementId,
+    events::ListenerCallback,
+    innerlude::{ElementRef, MountId, ScopeState, VProps},
     properties::ComponentFunction,
+    Element, Event, Properties, RenderError, ScopeId, VirtualDom,
 };
-use crate::{Properties, ScopeId, VirtualDom};
+use dioxus_core_types::DioxusFormattable;
 use std::ops::Deref;
 use std::rc::Rc;
 use std::vec;

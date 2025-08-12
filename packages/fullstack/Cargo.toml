@@ -19,7 +19,8 @@ dioxus_server_macro = { workspace = true }
 axum = { workspace = true, optional = true }
 tower-http = { workspace = true, optional = true, features = ["fs"] }
 
-dioxus-lib = { workspace = true, features = ["html"] }
+dioxus-core = { workspace = true }
+dioxus-document = { workspace = true }
 generational-box = { workspace = true }
 
 # Dioxus + SSR
@@ -70,9 +71,11 @@ dioxus-cli-config = { workspace = true, optional = true }
 dioxus-devtools = { workspace = true, optional = true }
 aws-lc-rs = { version = "1.13.1", optional = true }
 dioxus-history = { workspace = true }
+http.workspace = true
 
 [dev-dependencies]
 dioxus = { workspace = true, features = ["fullstack"] }
+tokio = { workspace = true, features = ["full"] }
 
 [features]
 default = ["devtools", "document", "file_engine", "mounted"]
@@ -80,7 +83,7 @@ devtools = ["dioxus-web?/devtools", "dep:dioxus-devtools"]
 mounted = ["dioxus-web?/mounted"]
 file_engine = ["dioxus-web?/file_engine"]
 document = ["dioxus-web?/document"]
-web = ["dep:dioxus-web", "dep:web-sys", "dioxus-fullstack-hooks/web", "server_fn/browser"]
+web = ["dep:dioxus-web", "dep:web-sys", "dioxus-fullstack-hooks/web", "server_fn/browser", "dioxus_server_macro/browser"]
 desktop = ["server_fn/reqwest", "dioxus_server_macro/reqwest"]
 mobile = ["server_fn/reqwest", "dioxus_server_macro/reqwest"]
 default-tls = ["server_fn/default-tls"]

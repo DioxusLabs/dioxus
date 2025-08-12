@@ -2,7 +2,7 @@
 
 use std::{cell::RefCell, collections::HashSet, rc::Rc};
 
-use dioxus_core::{prelude::*, DynamicNode};
+use dioxus_core::{Attribute, DynamicNode, Element, RenderError, ScopeId, Template, TemplateNode};
 use dioxus_core_macro::*;
 
 mod link;
@@ -23,6 +23,8 @@ pub use title::*;
 fn use_update_warning<T: PartialEq + Clone + 'static>(value: &T, name: &'static str) {
     #[cfg(debug_assertions)]
     {
+        use dioxus_core::use_hook;
+
         let cloned_value = value.clone();
         let initial = use_hook(move || value.clone());
 

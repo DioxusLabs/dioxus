@@ -38,10 +38,13 @@ pub enum BuilderUpdate {
         message: Diagnostic,
     },
 
+    /// The build completed successfully and the artifacts are ready. The artifacts are dependent on
+    /// the build mode (fat vs thin vs base).
     BuildReady {
         bundle: BuildArtifacts,
     },
 
+    /// The build failed. This might be because of a compilation error, or an error internal to DX.
     BuildFailed {
         err: Error,
     },
@@ -62,6 +65,7 @@ pub enum BuilderUpdate {
         msg: String,
     },
 
+    /// The running app (DUT) has exited and is no longer running.
     ProcessExited {
         status: ExitStatus,
     },
@@ -105,7 +109,7 @@ impl BuildContext {
     }
 
     pub(crate) fn status_build_error(&self, line: String) {
-        tracing::debug!(dx_src = ?TraceSrc::Cargo, "{line}");
+        tracing::warn!(dx_src = ?TraceSrc::Cargo, "{line}");
     }
 
     pub(crate) fn status_build_message(&self, line: String) {

@@ -1,6 +1,6 @@
 #![allow(missing_docs)]
 use crate::{use_callback, use_hook_did_run, use_signal};
-use dioxus_core::prelude::*;
+use dioxus_core::{use_hook, Callback, Subscribers, Task};
 use dioxus_signals::*;
 use std::future::Future;
 use std::ops::Deref;
@@ -8,7 +8,7 @@ use std::ops::Deref;
 /// A hook that allows you to spawn a future the first time you render a component.
 ///
 ///
-/// This future will **not** run on the server. To run a future on the server, you should use [`spawn_isomorphic`] directly.
+/// This future will **not** run on the server. To run a future on the server, you should use [`dioxus_core::spawn_isomorphic`] directly.
 ///
 ///
 /// `use_future` **won't return a value**. If you want to return a value from a future, use [`crate::use_resource()`] instead.
@@ -50,7 +50,7 @@ where
 
     let callback = use_callback(move |_| {
         let fut = future();
-        spawn(async move {
+        dioxus_core::spawn(async move {
             state.set(UseFutureState::Pending);
             fut.await;
             state.set(UseFutureState::Ready);
@@ -152,12 +152,12 @@ impl UseFuture {
     }
 
     /// Get the current state of the future.
-    pub fn state(&self) -> ReadOnlySignal<UseFutureState> {
+    pub fn state(&self) -> ReadSignal<UseFutureState> {
         self.state.into()
     }
 }
 
-impl From<UseFuture> for ReadOnlySignal<UseFutureState> {
+impl From<UseFuture> for ReadSignal<UseFutureState> {
     fn from(val: UseFuture) -> Self {
         val.state.into()
     }
@@ -180,6 +180,10 @@ impl Readable for UseFuture {
     ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> {
         self.state.try_peek_unchecked()
     }
+
+    fn subscribers(&self) -> Subscribers {
+        self.state.subscribers()
+    }
 }
 
 /// Allow calling a signal with signal() syntax
@@ -189,6 +193,6 @@ impl Deref for UseFuture {
     type Target = dyn Fn() -> UseFutureState;
 
     fn deref(&self) -> &Self::Target {
-        unsafe { Readable::deref_impl(self) }
+        unsafe { ReadableExt::deref_impl(self) }
     }
 }

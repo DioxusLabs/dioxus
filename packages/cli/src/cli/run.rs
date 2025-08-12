@@ -1,7 +1,7 @@
 use super::*;
 use crate::{
     serve::{AppServer, ServeUpdate, WebServer},
-    BuilderUpdate, Platform, Result,
+    BuilderUpdate, BundleFormat, Result,
 };
 use anyhow::bail;
 use dioxus_dx_wire_format::BuildStage;
@@ -43,7 +43,7 @@ impl RunArgs {
 
             match msg {
                 ServeUpdate::BuilderUpdate { id, update } => {
-                    let platform = builder.get_build(id).unwrap().build.platform;
+                    let bundle_format = builder.get_build(id).unwrap().build.bundle;
 
                     // And then update the websocketed clients with the new build status in case they want it
                     devserver.new_build_update(&update).await;
@@ -57,9 +57,14 @@ impl RunArgs {
                             _ = builder
                                 .open(&bundle, &mut devserver)
                                 .await
-                                .inspect_err(|e| tracing::error!("Failed to open app: {}", e));
+                                .inspect_err(|e| {
+                                    tracing::error!(
+                                        telemetry = %serde_json::json!({ "event": "failed_to_open_app_run" }),
+                                        "Failed to open app: {e}"
+                                    );
+                                });
 
-                            if platform == Platform::Web {
+                            if bundle_format == BundleFormat::Web {
                                 tracing::info!(
                                     "Serving app at http://{}:{}",
                                     builder.devserver_bind_ip,
@@ -69,7 +74,7 @@ impl RunArgs {
                         }
                         BuilderUpdate::Progress { stage } => match stage {
                             BuildStage::Initializing => {
-                                tracing::info!("[{platform}] Initializing build")
+                                tracing::info!("[{bundle_format}] Initializing build")
                             }
                             BuildStage::Starting { .. } => {}
                             BuildStage::InstallingTooling => {}
@@ -79,15 +84,15 @@ impl RunArgs {
                                 krate,
                             } => {
                                 tracing::debug!(
-                                    "[{platform}] ({current}/{total}) Compiling {krate} ",
+                                    "[{bundle_format}] ({current}/{total}) Compiling {krate} ",
                                 )
                             }
                             BuildStage::RunningBindgen => {
-                                tracing::info!("[{platform}] Running WASM bindgen")
+                                tracing::info!("[{bundle_format}] Running WASM bindgen")
                             }
                             BuildStage::SplittingBundle => {}
                             BuildStage::OptimizingWasm => {
-                                tracing::info!("[{platform}] Optimizing WASM with `wasm-opt`")
+                                tracing::info!("[{bundle_format}] Optimizing WASM with `wasm-opt`")
                             }
                             BuildStage::Linking => tracing::info!("Linking app"),
                             BuildStage::Hotpatching => {}
@@ -96,49 +101,51 @@ impl RunArgs {
                                 total,
                                 path,
                             } => tracing::info!(
-                                "[{platform}] Copying asset {} ({current}/{total})",
+                                "[{bundle_format}] Copying asset {} ({current}/{total})",
                                 path.display(),
                             ),
-                            BuildStage::Bundling => tracing::info!("[{platform}] Bundling app"),
+                            BuildStage::Bundling => {
+                                tracing::info!("[{bundle_format}] Bundling app")
+                            }
                             BuildStage::RunningGradle => {
-                                tracing::info!("[{platform}] Running Gradle")
+                                tracing::info!("[{bundle_format}] Running Gradle")
                             }
                             BuildStage::Success => {}
                             BuildStage::Restarting => {}
                             BuildStage::CompressingAssets => {}
                             BuildStage::ExtractingAssets => {}
                             BuildStage::Prerendering => {
-                                tracing::info!("[{platform}] Prerendering app")
+                                tracing::info!("[{bundle_format}] Prerendering app")
                             }
                             BuildStage::Failed => {
-                                tracing::error!("[{platform}] Build failed");
-                                bail!("Build failed for platform: {platform}");
+                                tracing::error!("[{bundle_format}] Build failed");
+                                bail!("Build failed for platform: {bundle_format}");
                             }
                             BuildStage::Aborted => {
-                                tracing::error!("[{platform}] Build aborted");
-                                bail!("Build aborted for platform: {platform}");
+                                tracing::error!("[{bundle_format}] Build aborted");
+                                bail!("Build aborted for platform: {bundle_format}");
                             }
                             _ => {}
                         },
                         BuilderUpdate::CompilerMessage { message } => {
-                            print!("{}", message);
+                            print!("{message}");
                         }
                         BuilderUpdate::BuildFailed { err } => {
                             tracing::error!("❌ Build failed: {}", err);
                             return Err(err);
                         }
                         BuilderUpdate::StdoutReceived { msg } => {
-                            tracing::info!("[{platform}] {msg}");
+                            tracing::info!("[{bundle_format}] {msg}");
                         }
                         BuilderUpdate::StderrReceived { msg } => {
-                            tracing::error!("[{platform}] {msg}");
+                            tracing::error!("[{bundle_format}] {msg}");
                         }
                         BuilderUpdate::ProcessExited { status } => {
                             if !status.success() {
                                 tracing::error!(
-                                    "Application [{platform}] exited with error: {status}"
+                                    "Application [{bundle_format}] exited with error: {status}"
                                 );
-                                bail!("Application [{platform}] exited with error: {status}");
+                                bail!("Application [{bundle_format}] exited with error: {status}");
                             }
 
                             break;

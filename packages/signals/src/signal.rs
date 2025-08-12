@@ -1,21 +1,16 @@
-use crate::{default_impl, fmt_impls, write_impls, Global};
-use crate::{read::*, write::*, CopyValue, GlobalMemo, GlobalSignal, ReadableRef};
-use crate::{Memo, WritableRef};
-use dioxus_core::prelude::*;
-use generational_box::{AnyStorage, BorrowResult, Storage, SyncStorage, UnsyncStorage};
-use std::sync::Arc;
-use std::{
-    any::Any,
-    collections::HashSet,
-    ops::{Deref, DerefMut},
-    sync::Mutex,
+use crate::{
+    default_impl, fmt_impls, read::*, write::*, write_impls, CopyValue, Global, GlobalMemo,
+    GlobalSignal, Memo, ReadableRef, WritableRef,
 };
+use dioxus_core::{IntoAttributeValue, IntoDynNode, ReactiveContext, ScopeId, Subscribers};
+use generational_box::{BorrowResult, Storage, SyncStorage, UnsyncStorage};
+use std::{collections::HashSet, ops::Deref, sync::Arc, sync::Mutex};
 
 #[doc = include_str!("../docs/signals.md")]
 #[doc(alias = "State")]
 #[doc(alias = "UseState")]
 #[doc(alias = "UseRef")]
-pub struct Signal<T: 'static, S: Storage<SignalData<T>> = UnsyncStorage> {
+pub struct Signal<T, S: 'static = UnsyncStorage> {
     pub(crate) inner: CopyValue<SignalData<T>, S>,
 }
 
@@ -144,11 +139,14 @@ impl<T: PartialEq + 'static> Signal<T> {
     }
 }
 
-impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
+impl<T, S: Storage<SignalData<T>>> Signal<T, S> {
     /// Creates a new Signal. Signals are a Copy state management solution with automatic dependency tracking.
     #[track_caller]
     #[tracing::instrument(skip(value))]
-    pub fn new_maybe_sync(value: T) -> Self {
+    pub fn new_maybe_sync(value: T) -> Self
+    where
+        T: 'static,
+    {
         Self {
             inner: CopyValue::<SignalData<T>, S>::new_maybe_sync(SignalData {
                 subscribers: Default::default(),
@@ -170,7 +168,10 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
     ///     use_hook(move || Signal::new_with_caller(function(), caller))
     /// }
     /// ```
-    pub fn new_with_caller(value: T, caller: &'static std::panic::Location<'static>) -> Self {
+    pub fn new_with_caller(value: T, caller: &'static std::panic::Location<'static>) -> Self
+    where
+        T: 'static,
+    {
         Self {
             inner: CopyValue::new_with_caller(
                 SignalData {
@@ -183,7 +184,10 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
     }
 
     /// Create a new Signal without an owner. This will leak memory if you don't manually drop it.
-    pub fn leak_with_caller(value: T, caller: &'static std::panic::Location<'static>) -> Self {
+    pub fn leak_with_caller(value: T, caller: &'static std::panic::Location<'static>) -> Self
+    where
+        T: 'static,
+    {
         Self {
             inner: CopyValue::leak_with_caller(
                 SignalData {
@@ -222,7 +226,10 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
     }
 
     /// Point to another signal. This will subscribe the other signal to all subscribers of this signal.
-    pub fn point_to(&self, other: Self) -> BorrowResult {
+    pub fn point_to(&self, other: Self) -> BorrowResult
+    where
+        T: 'static,
+    {
         #[allow(clippy::mutable_key_type)]
         let this_subscribers = self.inner.value.read().subscribers.lock().unwrap().clone();
         let other_read = other.inner.value.read();
@@ -233,7 +240,10 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
     }
 
     /// Drop the value out of the signal, invalidating the signal in the process.
-    pub fn manually_drop(&self) {
+    pub fn manually_drop(&self)
+    where
+        T: 'static,
+    {
         self.inner.manually_drop()
     }
 
@@ -242,7 +252,10 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
         self.inner.origin_scope()
     }
 
-    fn update_subscribers(&self) {
+    fn update_subscribers(&self)
+    where
+        T: 'static,
+    {
         {
             let inner = self.inner.read();
 
@@ -260,7 +273,7 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
         self.inner.id()
     }
 
-    /// **This pattern is no longer recommended. Prefer [`peek`](Signal::peek) or creating new signals instead.**
+    /// **This pattern is no longer recommended. Prefer [`peek`](ReadableExt::peek) or creating new signals instead.**
     ///
     /// This function is the equivalent of the [write_silent](https://docs.rs/dioxus/latest/dioxus/prelude/struct.UseRef.html#method.write_silent) method on use_ref.
     ///
@@ -288,7 +301,7 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
     /// *signal.write_silent() += 1;
     /// ```
     ///
-    /// Instead you can use the [`peek`](Signal::peek) and [`write`](Signal::write) methods instead. The peek method will not subscribe to the current scope which will avoid an infinite loop if you are reading and writing to the same signal in the same scope.
+    /// Instead you can use the [`peek`](ReadableExt::peek) and [`write`](WritableExt::write) methods instead. The peek method will not subscribe to the current scope which will avoid an infinite loop if you are reading and writing to the same signal in the same scope.
     /// ```rust, no_run
     /// # use dioxus::prelude::*;
     /// let mut signal = use_signal(|| 0);
@@ -341,7 +354,7 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
     /// }
     /// ```
     ///
-    /// Instead [`peek`](Signal::peek) locally opts out of automatic state updates explicitly for a specific read which is easier to reason about.
+    /// Instead [`peek`](ReadableExt::peek) locally opts out of automatic state updates explicitly for a specific read which is easier to reason about.
     ///
     /// Here is the same example using peek:
     /// main.rs:
@@ -377,8 +390,10 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
     /// ```
     #[track_caller]
     #[deprecated = "This pattern is no longer recommended. Prefer `peek` or creating new signals instead."]
-    pub fn write_silent(&self) -> S::Mut<'static, T> {
-        S::map_mut(self.inner.write_unchecked(), |inner| &mut inner.value)
+    pub fn write_silent(&self) -> WriteLock<'static, T, S> {
+        WriteLock::map(self.inner.write_unchecked(), |inner: &mut SignalData<T>| {
+            &mut inner.value
+        })
     }
 }
 
@@ -387,7 +402,10 @@ impl<T, S: Storage<SignalData<T>>> Readable for Signal<T, S> {
     type Storage = S;
 
     #[track_caller]
-    fn try_read_unchecked(&self) -> BorrowResult<ReadableRef<'static, Self>> {
+    fn try_read_unchecked(&self) -> BorrowResult<ReadableRef<'static, Self>>
+    where
+        T: 'static,
+    {
         let inner = self.inner.try_read_unchecked()?;
 
         if let Some(reactive_context) = ReactiveContext::current() {
@@ -402,39 +420,25 @@ impl<T, S: Storage<SignalData<T>>> Readable for Signal<T, S> {
     ///
     /// If the signal has been dropped, this will panic.
     #[track_caller]
-    fn try_peek_unchecked(&self) -> BorrowResult<ReadableRef<'static, Self>> {
+    fn try_peek_unchecked(&self) -> BorrowResult<ReadableRef<'static, Self>>
+    where
+        T: 'static,
+    {
         self.inner
             .try_read_unchecked()
             .map(|inner| S::map(inner, |v| &v.value))
     }
+
+    fn subscribers(&self) -> Subscribers
+    where
+        T: 'static,
+    {
+        self.inner.read().subscribers.clone().into()
+    }
 }
 
 impl<T: 'static, S: Storage<SignalData<T>>> Writable for Signal<T, S> {
-    type Mut<'a, R: ?Sized + 'static> = Write<'a, R, S>;
-
-    fn map_mut<I: ?Sized, U: ?Sized + 'static, F: FnOnce(&mut I) -> &mut U>(
-        ref_: Self::Mut<'_, I>,
-        f: F,
-    ) -> Self::Mut<'_, U> {
-        Write::map(ref_, f)
-    }
-
-    fn try_map_mut<
-        I: ?Sized + 'static,
-        U: ?Sized + 'static,
-        F: FnOnce(&mut I) -> Option<&mut U>,
-    >(
-        ref_: Self::Mut<'_, I>,
-        f: F,
-    ) -> Option<Self::Mut<'_, U>> {
-        Write::filter_map(ref_, f)
-    }
-
-    fn downcast_lifetime_mut<'a: 'b, 'b, R: ?Sized + 'static>(
-        mut_: Self::Mut<'a, R>,
-    ) -> Self::Mut<'b, R> {
-        Write::downcast_lifetime(mut_)
-    }
+    type WriteMetadata = SignalSubscriberDrop<T, S>;
 
     #[track_caller]
     fn try_write_unchecked(
@@ -443,22 +447,22 @@ impl<T: 'static, S: Storage<SignalData<T>>> Writable for Signal<T, S> {
         #[cfg(debug_assertions)]
         let origin = std::panic::Location::caller();
         self.inner.try_write_unchecked().map(|inner| {
-            let borrow = S::map_mut(inner, |v| &mut v.value);
-            Write {
-                write: borrow,
-                drop_signal: Box::new(SignalSubscriberDrop {
+            let borrow = S::map_mut(inner.into_inner(), |v| &mut v.value);
+            WriteLock::new_with_metadata(
+                borrow,
+                SignalSubscriberDrop {
                     signal: *self,
                     #[cfg(debug_assertions)]
                     origin,
-                }),
-            }
+                },
+            )
         })
     }
 }
 
 impl<T> IntoAttributeValue for Signal<T>
 where
-    T: Clone + IntoAttributeValue,
+    T: Clone + IntoAttributeValue + 'static,
 {
     fn into_value(self) -> dioxus_core::AttributeValue {
         self.with(|f| f.clone().into_value())
@@ -467,34 +471,34 @@ where
 
 impl<T> IntoDynNode for Signal<T>
 where
-    T: Clone + IntoDynNode,
+    T: Clone + IntoDynNode + 'static,
 {
     fn into_dyn_node(self) -> dioxus_core::DynamicNode {
         self().into_dyn_node()
     }
 }
 
-impl<T: 'static, S: Storage<SignalData<T>>> PartialEq for Signal<T, S> {
+impl<T, S: Storage<SignalData<T>>> PartialEq for Signal<T, S> {
     fn eq(&self, other: &Self) -> bool {
         self.inner == other.inner
     }
 }
 
-impl<T: 'static, S: Storage<SignalData<T>>> Eq for Signal<T, S> {}
+impl<T, S: Storage<SignalData<T>>> Eq for Signal<T, S> {}
 
 /// Allow calling a signal with signal() syntax
 ///
 /// Currently only limited to copy types, though could probably specialize for string/arc/rc
-impl<T: Clone, S: Storage<SignalData<T>> + 'static> Deref for Signal<T, S> {
+impl<T: Clone + 'static, S: Storage<SignalData<T>> + 'static> Deref for Signal<T, S> {
     type Target = dyn Fn() -> T;
 
     fn deref(&self) -> &Self::Target {
-        unsafe { Readable::deref_impl(self) }
+        unsafe { ReadableExt::deref_impl(self) }
     }
 }
 
 #[cfg(feature = "serialize")]
-impl<T: serde::Serialize + 'static, Store: Storage<SignalData<T>>> serde::Serialize
+impl<T: serde::Serialize + 'static, Store: Storage<SignalData<T>> + 'static> serde::Serialize
     for Signal<T, Store>
 {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
@@ -503,7 +507,7 @@ impl<T: serde::Serialize + 'static, Store: Storage<SignalData<T>>> serde::Serial
 }
 
 #[cfg(feature = "serialize")]
-impl<'de, T: serde::Deserialize<'de> + 'static, Store: Storage<SignalData<T>>>
+impl<'de, T: serde::Deserialize<'de> + 'static, Store: Storage<SignalData<T>> + 'static>
     serde::Deserialize<'de> for Signal<T, Store>
 {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
@@ -511,180 +515,16 @@ impl<'de, T: serde::Deserialize<'de> + 'static, Store: Storage<SignalData<T>>>
     }
 }
 
-/// A mutable reference to a signal's value. This reference acts similarly to [`std::cell::RefMut`], but it has extra debug information
-/// and integrates with the reactive system to automatically update dependents.
-///
-/// [`Write`] implements [`DerefMut`] which means you can call methods on the inner value just like you would on a mutable reference
-/// to the inner value. If you need to get the inner reference directly, you can call [`Write::deref_mut`].
-///
-/// # Example
-/// ```rust
-/// # use dioxus::prelude::*;
-/// fn app() -> Element {
-///     let mut value = use_signal(|| String::from("hello"));
-///     
-///     rsx! {
-///         button {
-///             onclick: move |_| {
-///                 let mut mutable_reference = value.write();
-///
-///                 // You call methods like `push_str` on the reference just like you would with the inner String
-///                 mutable_reference.push_str("world");
-///             },
-///             "Click to add world to the string"
-///         }
-///         div { "{value}" }
-///     }
-/// }
-/// ```
-///
-/// ## Matching on Write
-///
-/// You need to get the inner mutable reference with [`Write::deref_mut`] before you match the inner value. If you try to match
-/// without calling [`Write::deref_mut`], you will get an error like this:
-///
-/// ```compile_fail
-/// # use dioxus::prelude::*;
-/// #[derive(Debug)]
-/// enum Colors {
-///     Red(u32),
-///     Green
-/// }
-/// fn app() -> Element {
-///     let mut value = use_signal(|| Colors::Red(0));
-///
-///     rsx! {
-///         button {
-///             onclick: move |_| {
-///                 let mut mutable_reference = value.write();
-///
-///                 match mutable_reference {
-///                     // Since we are matching on the `Write` type instead of &mut Colors, we can't match on the enum directly
-///                     Colors::Red(brightness) => *brightness += 1,
-///                     Colors::Green => {}
-///                 }
-///             },
-///             "Click to add brightness to the red color"
-///         }
-///         div { "{value:?}" }
-///     }
-/// }
-/// ```
-///
-/// ```text
-/// error[E0308]: mismatched types
-///   --> src/main.rs:18:21
-///    |
-/// 16 |                 match mutable_reference {
-///    |                       ----------------- this expression has type `dioxus::prelude::Write<'_, Colors>`
-/// 17 |                     // Since we are matching on the `Write` t...
-/// 18 |                     Colors::Red(brightness) => *brightness += 1,
-///    |                     ^^^^^^^^^^^^^^^^^^^^^^^ expected `Write<'_, Colors>`, found `Colors`
-///    |
-///    = note: expected struct `dioxus::prelude::Write<'_, Colors, >`
-///                found enum `Colors`
-/// ```
-///
-/// Instead, you need to call deref mut on the reference to get the inner value **before** you match on it:
-///
-/// ```rust
-/// use std::ops::DerefMut;
-/// # use dioxus::prelude::*;
-/// #[derive(Debug)]
-/// enum Colors {
-///     Red(u32),
-///     Green
-/// }
-/// fn app() -> Element {
-///     let mut value = use_signal(|| Colors::Red(0));
-///
-///     rsx! {
-///         button {
-///             onclick: move |_| {
-///                 let mut mutable_reference = value.write();
-///
-///                 // DerefMut converts the `Write` into a `&mut Colors`
-///                 match mutable_reference.deref_mut() {
-///                     // Now we can match on the inner value
-///                     Colors::Red(brightness) => *brightness += 1,
-///                     Colors::Green => {}
-///                 }
-///             },
-///             "Click to add brightness to the red color"
-///         }
-///         div { "{value:?}" }
-///     }
-/// }
-/// ```
-///
-/// ## Generics
-/// - T is the current type of the write
-/// - S is the storage type of the signal. This type determines if the signal is local to the current thread, or it can be shared across threads.
-pub struct Write<'a, T: ?Sized + 'static, S: AnyStorage = UnsyncStorage> {
-    write: S::Mut<'a, T>,
-    drop_signal: Box<dyn Any>,
-}
-
-impl<'a, T: ?Sized + 'static, S: AnyStorage> Write<'a, T, S> {
-    /// Map the mutable reference to the signal's value to a new type.
-    pub fn map<O: ?Sized>(myself: Self, f: impl FnOnce(&mut T) -> &mut O) -> Write<'a, O, S> {
-        let Self {
-            write, drop_signal, ..
-        } = myself;
-        Write {
-            write: S::map_mut(write, f),
-            drop_signal,
-        }
-    }
-
-    /// Try to map the mutable reference to the signal's value to a new type
-    pub fn filter_map<O: ?Sized>(
-        myself: Self,
-        f: impl FnOnce(&mut T) -> Option<&mut O>,
-    ) -> Option<Write<'a, O, S>> {
-        let Self {
-            write, drop_signal, ..
-        } = myself;
-        let write = S::try_map_mut(write, f);
-        write.map(|write| Write { write, drop_signal })
-    }
-
-    /// Downcast the lifetime of the mutable reference to the signal's value.
-    ///
-    /// This function enforces the variance of the lifetime parameter `'a` in Mut.  Rust will typically infer this cast with a concrete type, but it cannot with a generic type.
-    pub fn downcast_lifetime<'b>(mut_: Self) -> Write<'b, T, S>
-    where
-        'a: 'b,
-    {
-        Write {
-            write: S::downcast_lifetime_mut(mut_.write),
-            drop_signal: mut_.drop_signal,
-        }
-    }
-}
-
-impl<T: ?Sized + 'static, S: AnyStorage> Deref for Write<'_, T, S> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        &self.write
-    }
-}
-
-impl<T: ?Sized, S: AnyStorage> DerefMut for Write<'_, T, S> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.write
-    }
-}
-
-struct SignalSubscriberDrop<T: 'static, S: Storage<SignalData<T>>> {
+#[doc(hidden)]
+/// A drop guard that will update the subscribers of the signal when it is dropped.
+pub struct SignalSubscriberDrop<T: 'static, S: Storage<SignalData<T>> + 'static> {
     signal: Signal<T, S>,
     #[cfg(debug_assertions)]
     origin: &'static std::panic::Location<'static>,
 }
 
 #[allow(clippy::no_effect)]
-impl<T: 'static, S: Storage<SignalData<T>>> Drop for SignalSubscriberDrop<T, S> {
+impl<T: 'static, S: Storage<SignalData<T>> + 'static> Drop for SignalSubscriberDrop<T, S> {
     fn drop(&mut self) {
         #[cfg(debug_assertions)]
         {
@@ -701,10 +541,10 @@ fmt_impls!(Signal<T, S: Storage<SignalData<T>>>);
 default_impl!(Signal<T, S: Storage<SignalData<T>>>);
 write_impls!(Signal<T, S: Storage<SignalData<T>>>);
 
-impl<T: 'static, S: Storage<SignalData<T>>> Clone for Signal<T, S> {
+impl<T, S> Clone for Signal<T, S> {
     fn clone(&self) -> Self {
         *self
     }
 }
 
-impl<T: 'static, S: Storage<SignalData<T>>> Copy for Signal<T, S> {}
+impl<T, S> Copy for Signal<T, S> {}

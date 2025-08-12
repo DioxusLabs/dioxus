@@ -775,7 +775,7 @@ pub fn create_undefined_symbol_stub(
     let mut defined_symbols = HashSet::new();
 
     for path in sorted {
-        let bytes = std::fs::read(path).with_context(|| format!("failed to read {:?}", path))?;
+        let bytes = std::fs::read(path).with_context(|| format!("failed to read {path:?}"))?;
         let file = File::parse(bytes.deref() as &[u8])?;
         for symbol in file.symbols() {
             if symbol.is_undefined() {
@@ -853,7 +853,7 @@ pub fn create_undefined_symbol_stub(
     if aslr_reference < aslr_ref_address {
         return Err(PatchError::InvalidModule(
             format!(
-            "ASLR reference is less than the main module's address - is there a `main`?. {:x} < {:x}", aslr_reference, aslr_ref_address )
+            "ASLR reference is less than the main module's address - is there a `main`?. {aslr_reference:x} < {aslr_ref_address:x}" )
         ));
     }
 

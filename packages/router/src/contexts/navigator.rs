@@ -1,4 +1,4 @@
-use crate::prelude::{ExternalNavigationFailure, NavigationTarget, RouterContext};
+use crate::{ExternalNavigationFailure, NavigationTarget, RouterContext};
 
 /// Acquire the navigator without subscribing to updates.
 ///
@@ -9,7 +9,7 @@ use crate::prelude::{ExternalNavigationFailure, NavigationTarget, RouterContext}
 /// Panics if there is no router present.
 pub fn navigator() -> Navigator {
     Navigator(
-        dioxus_lib::prelude::try_consume_context::<RouterContext>()
+        dioxus_core::try_consume_context::<RouterContext>()
             .expect("A router must be present to use navigator"),
     )
 }

@@ -7,7 +7,10 @@ use wry::{
     RequestAsyncResponder,
 };
 
-#[cfg(any(target_os = "android", target_os = "windows"))]
+#[cfg(target_os = "android")]
+const EVENTS_PATH: &str = "https://dioxus.index.html/__events";
+
+#[cfg(target_os = "windows")]
 const EVENTS_PATH: &str = "http://dioxus.index.html/__events";
 
 #[cfg(not(any(target_os = "android", target_os = "windows")))]
@@ -63,7 +66,7 @@ pub(super) fn desktop_handler(
         }
     }
 
-    match dioxus_asset_resolver::serve_asset(request.uri().path()) {
+    match dioxus_asset_resolver::native::serve_asset(request.uri().path()) {
         Ok(res) => responder.respond(res),
         Err(_e) => responder.respond(
             Response::builder()

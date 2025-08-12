@@ -21,7 +21,6 @@ pub struct Workspace {
     pub(crate) ignore: Gitignore,
     pub(crate) cargo_toml: cargo_toml::Manifest,
     pub(crate) android_tools: Option<Arc<AndroidTools>>,
-    pub(crate) xcode: Option<PathBuf>,
 }
 
 impl Workspace {
@@ -86,19 +85,12 @@ impl Workspace {
         };
 
         let settings = CliSettings::global_or_default();
-        let sysroot = Command::new("rustc")
-            .args(["--print", "sysroot"])
-            .output()
+        let sysroot = Self::get_rustc_sysroot()
             .await
-            .map(|out| String::from_utf8(out.stdout))?
-            .context("Failed to extract rustc sysroot output")?;
-
-        let rustc_version = Command::new("rustc")
-            .args(["--version"])
-            .output()
+            .context("Failed to get rustc sysroot")?;
+        let rustc_version = Self::get_rustc_version()
             .await
-            .map(|out| String::from_utf8(out.stdout))?
-            .context("Failed to extract rustc version output")?;
+            .context("Failed to get rustc version")?;
 
         let wasm_opt = which::which("wasm-opt").ok();
 
@@ -110,13 +102,6 @@ impl Workspace {
 
         let android_tools = crate::build::get_android_tools();
 
-        let xcode = Command::new("xcode-select")
-            .arg("-p")
-            .output()
-            .await
-            .ok()
-            .map(|s| String::from_utf8_lossy(&s.stdout).trim().to_string().into());
-
         let workspace = Arc::new(Self {
             krates,
             settings,
@@ -126,7 +111,6 @@ impl Workspace {
             ignore,
             cargo_toml,
             android_tools,
-            xcode,
         });
 
         tracing::debug!(
@@ -261,6 +245,13 @@ impl Workspace {
 
     pub fn wasm_ld(&self) -> PathBuf {
         self.gcc_ld_dir().join("wasm-ld")
+    }
+
+    pub fn select_ranlib() -> Option<PathBuf> {
+        // prefer the modern llvm-ranlib if they have it
+        which::which("llvm-ranlib")
+            .or_else(|_| which::which("ranlib"))
+            .ok()
     }
 
     /// Return the version of the wasm-bindgen crate if it exists
@@ -484,15 +475,68 @@ impl Workspace {
             .context("Failed to find directory containing Cargo.toml")
     }
 
+    pub async fn get_xcode_path() -> Option<PathBuf> {
+        let xcode = Command::new("xcode-select")
+            .arg("-p")
+            .output()
+            .await
+            .ok()
+            .map(|s| String::from_utf8_lossy(&s.stdout).trim().to_string().into());
+        xcode
+    }
+
+    pub async fn get_rustc_sysroot() -> Result<String, anyhow::Error> {
+        let sysroot = Command::new("rustc")
+            .args(["--print", "sysroot"])
+            .output()
+            .await
+            .map(|out| String::from_utf8(out.stdout).map(|s| s.trim().to_string()))?
+            .context("Failed to extract rustc sysroot output")?;
+        Ok(sysroot)
+    }
+
+    pub async fn get_rustc_version() -> Result<String> {
+        let rustc_version = Command::new("rustc")
+            .args(["--version"])
+            .output()
+            .await
+            .map(|out| String::from_utf8(out.stdout))?
+            .context("Failed to extract rustc version output")?;
+        Ok(rustc_version)
+    }
+
     /// Returns the properly canonicalized path to the dx executable, used for linking and wrapping rustc
     pub(crate) fn path_to_dx() -> Result<PathBuf> {
         dunce::canonicalize(std::env::current_exe().context("Failed to find dx")?)
             .context("Failed to find dx")
     }
 
-    /// Returns the path to the dioxus home directory, used to install tools and other things
-    pub(crate) fn dioxus_home_dir() -> PathBuf {
-        dirs::home_dir().unwrap().join(".dioxus")
+    /// Returns the path to the dioxus data directory, used to install tools, store configs, and other things
+    ///
+    /// On macOS, we prefer to not put this dir in Application Support, but rather in the home directory.
+    /// On Windows, we prefer to keep it in the home directory so the `dx` install dir matches the install script.
+    pub(crate) fn dioxus_data_dir() -> PathBuf {
+        static DX_HOME: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+        DX_HOME
+            .get_or_init(|| {
+                if let Some(path) = std::env::var_os("DX_HOME") {
+                    return PathBuf::from(path);
+                }
+
+                if cfg!(target_os = "macos") || cfg!(target_os = "windows") {
+                    dirs::home_dir().unwrap().join(".dx")
+                } else {
+                    dirs::data_dir()
+                        .or_else(dirs::home_dir)
+                        .unwrap()
+                        .join(".dx")
+                }
+            })
+            .to_path_buf()
+    }
+
+    pub(crate) fn global_settings_file() -> PathBuf {
+        Self::dioxus_data_dir().join("settings.json")
     }
 }
 

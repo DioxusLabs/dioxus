@@ -10,10 +10,9 @@ use crate::{
         VComponent, WriteMutations,
     },
     nodes::{AsVNode, VNode},
-    prelude::SuspenseContext,
     scopes::ScopeId,
     virtual_dom::VirtualDom,
-    Element,
+    Element, SuspenseContext,
 };
 
 impl VirtualDom {

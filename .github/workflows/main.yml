@@ -142,6 +142,27 @@ jobs:
         env:
           RUSTDOCFLAGS: -Dwarnings --document-private-items
 
+  test-docs:
+    if: github.event.pull_request.draft == false
+    name: Test Docs
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: libwebkit2gtk-4.1-dev libgtk-3-dev libasound2-dev libudev-dev libayatana-appindicator3-dev libxdo-dev libglib2.0-dev
+          version: 1.0
+      - name: Install Rust ${{ env.rust_nightly }}
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          toolchain: ${{ env.rust_nightly }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-all-crates: "true"
+      - name: "doc --lib --all-features"
+        run: |
+          cargo test --doc --workspace --all-features
+
   check:
     if: github.event.pull_request.draft == false
     name: Check

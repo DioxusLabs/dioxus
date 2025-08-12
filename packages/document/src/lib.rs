@@ -12,7 +12,7 @@ pub use eval::*;
 
 /// Get the document provider for the current platform or a no-op provider if the platform doesn't document functionality.
 pub fn document() -> Rc<dyn Document> {
-    match dioxus_core::prelude::try_consume_context::<Rc<dyn Document>>() {
+    match dioxus_core::try_consume_context::<Rc<dyn Document>>() {
         Some(document) => document,
         None => {
             tracing::error!(

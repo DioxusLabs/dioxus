@@ -1,5 +1,8 @@
 use crate::cli::*;
+use crate::BundleFormat;
 use crate::Platform;
+use crate::RendererArg;
+use crate::TargetAlias;
 use target_lexicon::Triple;
 
 const HELP_HEADING: &str = "Target Options";
@@ -7,7 +10,25 @@ const HELP_HEADING: &str = "Target Options";
 /// A single target to build for
 #[derive(Clone, Debug, Default, Deserialize, Parser)]
 pub(crate) struct TargetArgs {
-    /// Build platform: support Web & Desktop [default: "default_platform"]
+    /// The target alias to use for this build. Supports wasm, macos, windows, linux, ios, android, and host [default: "host"]
+    #[clap(flatten)]
+    pub(crate) target_alias: TargetAlias,
+
+    /// Build renderer: supports web, webview, native, server, and liveview
+    #[clap(flatten)]
+    pub(crate) renderer: RendererArg,
+
+    /// The bundle format to target for the build: supports web, macos, windows, linux, ios, android, and server
+    #[clap(long, value_enum, help_heading = HELP_HEADING)]
+    pub(crate) bundle: Option<BundleFormat>,
+
+    /// Build platform: supports Web, MacOS, Windows, Linux, iOS, Android, and Server
+    ///
+    /// The platform implies a combination of the target alias, renderer, and bundle format flags.
+    ///
+    /// You should generally prefer to use the `--web`, `--webview`, or `--native` flags to set the renderer
+    /// or the `--wasm`, `--macos`, `--windows`, `--linux`, `--ios`, or `--android` flags to set the target alias
+    /// instead of this flag. The renderer, target alias, and bundle format will be inferred if you only pass one.
     #[clap(long, value_enum, help_heading = HELP_HEADING)]
     pub(crate) platform: Option<Platform>,
 
@@ -73,7 +94,7 @@ pub(crate) struct TargetArgs {
     pub(crate) skip_assets: bool,
 
     /// Inject scripts to load the wasm and js files for your dioxus app if they are not already present [default: true]
-    #[clap(long, default_value_t = true, help_heading = HELP_HEADING)]
+    #[clap(long, default_value_t = true, help_heading = HELP_HEADING, num_args = 0..=1)]
     pub(crate) inject_loading_scripts: bool,
 
     /// Experimental: Bundle split the wasm binary into multiple chunks based on `#[wasm_split]` annotations [default: false]
@@ -84,7 +105,7 @@ pub(crate) struct TargetArgs {
     ///
     /// This will make the binary larger and take longer to compile, but will allow you to debug the
     /// wasm binary
-    #[clap(long, default_value_t = true, help_heading = HELP_HEADING)]
+    #[clap(long, default_value_t = true, help_heading = HELP_HEADING, num_args = 0..=1)]
     pub(crate) debug_symbols: bool,
 
     /// Are we building for a device or just the simulator.
@@ -96,4 +117,51 @@ pub(crate) struct TargetArgs {
     /// base path set in the `dioxus` config.
     #[clap(long, help_heading = HELP_HEADING)]
     pub(crate) base_path: Option<String>,
+
+    /// The path to the Apple entitlements file to used to sign the resulting app bundle.
+    ///
+    /// On iOS, this is required for deploy to a device and some configurations in the simulator.
+    #[clap(long, help_heading = HELP_HEADING)]
+    pub(crate) apple_entitlements: Option<PathBuf>,
+
+    /// The Apple team ID to use when signing the app bundle.
+    ///
+    /// Usually this is an email or name associated with your Apple Developer account, usually in the
+    /// format `Signing Name (GXTEAMID123)`.
+    ///
+    /// This is passed directly to the `codesign` tool.
+    ///
+    /// ```
+    /// codesign --force --entitlements <entitlements_file> --sign <apple_team_id> <app_bundle>
+    /// ```
+    #[clap(long, help_heading = HELP_HEADING)]
+    pub(crate) apple_team_id: Option<String>,
+}
+
+impl Anonymized for TargetArgs {
+    fn anonymized(&self) -> Value {
+        json! {{
+            "target_alias": self.target_alias,
+            "renderer": self.renderer,
+            "bundle": self.bundle,
+            "platform": self.platform,
+            "release": self.release,
+            "package": self.package,
+            "bin": self.bin,
+            "example": self.example.is_some(),
+            "profile": self.profile.is_some(),
+            "features": !self.features.is_empty(),
+            "no_default_features": self.no_default_features,
+            "all_features": self.all_features,
+            "target": self.target.as_ref().map(|t| t.to_string()),
+            "skip_assets": self.skip_assets,
+            "inject_loading_scripts": self.inject_loading_scripts,
+            "wasm_split": self.wasm_split,
+            "debug_symbols": self.debug_symbols,
+            "device": self.device,
+            "base_path": self.base_path.is_some(),
+            "cargo_args": self.cargo_args.is_some(),
+            "rustc_args": self.rustc_args.is_some(),
+        }}
+    }
 }
