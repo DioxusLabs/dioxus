@@ -391,7 +391,7 @@ impl<T, S: Storage<SignalData<T>>> Signal<T, S> {
     #[track_caller]
     #[deprecated = "This pattern is no longer recommended. Prefer `peek` or creating new signals instead."]
     pub fn write_silent(&self) -> WriteLock<'static, T, S> {
-        WriteLock::map(self.inner.write_unchecked(), |inner: &mut SignalData<T>| {
+        WriteLock::map(self.inner.write_extended(), |inner: &mut SignalData<T>| {
             &mut inner.value
         })
     }
@@ -402,11 +402,11 @@ impl<T, S: Storage<SignalData<T>>> Readable for Signal<T, S> {
     type Storage = S;
 
     #[track_caller]
-    fn try_read_unchecked(&self) -> BorrowResult<ReadableRef<'static, Self>>
+    fn try_read_extended(&self) -> BorrowResult<ReadableRef<'static, Self>>
     where
         T: 'static,
     {
-        let inner = self.inner.try_read_unchecked()?;
+        let inner = self.inner.try_read_extended()?;
 
         if let Some(reactive_context) = ReactiveContext::current() {
             tracing::trace!("Subscribing to the reactive context {}", reactive_context);
@@ -420,12 +420,12 @@ impl<T, S: Storage<SignalData<T>>> Readable for Signal<T, S> {
     ///
     /// If the signal has been dropped, this will panic.
     #[track_caller]
-    fn try_peek_unchecked(&self) -> BorrowResult<ReadableRef<'static, Self>>
+    fn try_peek_extended(&self) -> BorrowResult<ReadableRef<'static, Self>>
     where
         T: 'static,
     {
         self.inner
-            .try_read_unchecked()
+            .try_read_extended()
             .map(|inner| S::map(inner, |v| &v.value))
     }
 
@@ -441,12 +441,12 @@ impl<T: 'static, S: Storage<SignalData<T>>> Writable for Signal<T, S> {
     type WriteMetadata = SignalSubscriberDrop<T, S>;
 
     #[track_caller]
-    fn try_write_unchecked(
+    fn try_write_extended(
         &self,
     ) -> Result<WritableRef<'static, Self>, generational_box::BorrowMutError> {
         #[cfg(debug_assertions)]
         let origin = std::panic::Location::caller();
-        self.inner.try_write_unchecked().map(|inner| {
+        self.inner.try_write_extended().map(|inner| {
             let borrow = S::map_mut(inner.into_inner(), |v| &mut v.value);
             WriteLock::new_with_metadata(
                 borrow,

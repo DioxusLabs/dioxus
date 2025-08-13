@@ -164,14 +164,12 @@ where
     type Storage = UnsyncStorage;
 
     #[track_caller]
-    fn try_read_unchecked(
-        &self,
-    ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError>
+    fn try_read_extended(&self) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError>
     where
         T: 'static,
     {
         // Read the inner generational box instead of the signal so we have more fine grained control over exactly when the subscription happens
-        let read = self.inner.inner.try_read_unchecked()?;
+        let read = self.inner.inner.try_read_extended()?;
 
         let needs_update = self
             .update
@@ -182,7 +180,7 @@ where
             drop(read);
             // We shouldn't be subscribed to the value here so we don't trigger the scope we are currently in to rerun even though that scope got the latest value because we synchronously update the value: https://github.com/DioxusLabs/dioxus/issues/2416
             self.recompute();
-            self.inner.inner.try_read_unchecked()
+            self.inner.inner.try_read_extended()
         } else {
             Ok(read)
         };
@@ -200,11 +198,11 @@ where
     ///
     /// If the signal has been dropped, this will panic.
     #[track_caller]
-    fn try_peek_unchecked(&self) -> BorrowResult<ReadableRef<'static, Self>>
+    fn try_peek_extended(&self) -> BorrowResult<ReadableRef<'static, Self>>
     where
         T: 'static,
     {
-        self.inner.try_peek_unchecked()
+        self.inner.try_peek_extended()
     }
 
     fn subscribers(&self) -> Subscribers

@@ -78,7 +78,7 @@ fn Doggo() -> Element {
         }
     })?;
 
-    match value.read_unchecked().as_ref() {
+    match value.read_extended().as_ref() {
         Ok(resp) => rsx! {
             button { onclick: move |_| resource.restart(), "Click to fetch another doggo" }
             div { img { max_width: "500px", max_height: "500px", src: "{resp.message}" } }

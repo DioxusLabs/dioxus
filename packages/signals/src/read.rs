@@ -42,10 +42,10 @@ pub trait Readable {
     /// The type of the storage this readable uses.
     type Storage: AnyStorage;
 
-    /// Try to get a reference to the value without checking the lifetime. This will subscribe the current scope to the signal.
+    /// Try to get a reference to the value without checking the lifetime - extending the lifetime to 'static. This will subscribe the current scope to the signal.
     ///
     /// NOTE: This method is completely safe because borrow checking is done at runtime.
-    fn try_read_unchecked(
+    fn try_read_extended(
         &self,
     ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError>
     where
@@ -55,7 +55,7 @@ pub trait Readable {
     /// been dropped, this will return an error.
     ///
     /// NOTE: This method is completely safe because borrow checking is done at runtime.
-    fn try_peek_unchecked(
+    fn try_peek_extended(
         &self,
     ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError>
     where
@@ -86,19 +86,19 @@ pub trait ReadableExt: Readable {
     where
         Self::Target: 'static,
     {
-        self.try_read_unchecked()
+        self.try_read_extended()
             .map(Self::Storage::downcast_lifetime_ref)
     }
 
-    /// Get a reference to the value without checking the lifetime. This will subscribe the current scope to the signal.
+    /// Get a reference to the value without checking the lifetime - extending the lifetime to 'static. This will subscribe the current scope to the signal.
     ///
     /// NOTE: This method is completely safe because borrow checking is done at runtime.
     #[track_caller]
-    fn read_unchecked(&self) -> ReadableRef<'static, Self>
+    fn read_extended(&self) -> ReadableRef<'static, Self>
     where
         Self::Target: 'static,
     {
-        self.try_read_unchecked().unwrap()
+        self.try_read_extended().unwrap()
     }
 
     /// Get the current value of the state without subscribing to updates. If the value has been dropped, this will panic.
@@ -140,7 +140,7 @@ pub trait ReadableExt: Readable {
     where
         Self::Target: 'static,
     {
-        Self::Storage::downcast_lifetime_ref(self.peek_unchecked())
+        Self::Storage::downcast_lifetime_ref(self.peek_extended())
     }
 
     /// Try to peek the current value of the signal without subscribing to updates. If the value has
@@ -150,19 +150,19 @@ pub trait ReadableExt: Readable {
     where
         Self::Target: 'static,
     {
-        self.try_peek_unchecked()
+        self.try_peek_extended()
             .map(Self::Storage::downcast_lifetime_ref)
     }
 
-    /// Get the current value of the signal without checking the lifetime. **Unlike read, this will not subscribe the current scope to the signal which can cause parts of your UI to not update.**
+    /// Get the current value of the signal without checking the lifetime - extending the lifetime to 'static. **Unlike read, this will not subscribe the current scope to the signal which can cause parts of your UI to not update.**
     ///
     /// If the signal has been dropped, this will panic.
     #[track_caller]
-    fn peek_unchecked(&self) -> ReadableRef<'static, Self>
+    fn peek_extended(&self) -> ReadableRef<'static, Self>
     where
         Self::Target: 'static,
     {
-        self.try_peek_unchecked().unwrap()
+        self.try_peek_extended().unwrap()
     }
 
     /// Map the references of the readable value to a new type. This lets you provide a view

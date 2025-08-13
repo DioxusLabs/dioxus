@@ -79,7 +79,7 @@ impl<Lens: Readable<Target = HashMap<K, V, St>> + 'static, K: 'static, V: 'stati
         Lens: Clone,
     {
         self.selector().track_shallow();
-        let keys: Vec<_> = self.selector().peek_unchecked().keys().cloned().collect();
+        let keys: Vec<_> = self.selector().peek_extended().keys().cloned().collect();
         keys.into_iter().map(move |key| {
             let value = self.clone().get(key.clone()).unwrap();
             (key, value)
@@ -286,11 +286,11 @@ where
 
     type Storage = Write::Storage;
 
-    fn try_read_unchecked(&self) -> Result<dioxus_signals::ReadableRef<'static, Self>, BorrowError>
+    fn try_read_extended(&self) -> Result<dioxus_signals::ReadableRef<'static, Self>, BorrowError>
     where
         Self::Target: 'static,
     {
-        self.write.try_read_unchecked().map(|value| {
+        self.write.try_read_extended().map(|value| {
             Self::Storage::map(value, |value: &Write::Target| {
                 value
                     .get(&self.index)
@@ -299,11 +299,11 @@ where
         })
     }
 
-    fn try_peek_unchecked(&self) -> Result<dioxus_signals::ReadableRef<'static, Self>, BorrowError>
+    fn try_peek_extended(&self) -> Result<dioxus_signals::ReadableRef<'static, Self>, BorrowError>
     where
         Self::Target: 'static,
     {
-        self.write.try_peek_unchecked().map(|value| {
+        self.write.try_peek_extended().map(|value| {
             Self::Storage::map(value, |value: &Write::Target| {
                 value
                     .get(&self.index)
@@ -329,13 +329,13 @@ where
 {
     type WriteMetadata = Write::WriteMetadata;
 
-    fn try_write_unchecked(
+    fn try_write_extended(
         &self,
     ) -> Result<dioxus_signals::WritableRef<'static, Self>, BorrowMutError>
     where
         Self::Target: 'static,
     {
-        self.write.try_write_unchecked().map(|value| {
+        self.write.try_write_extended().map(|value| {
             WriteLock::map(value, |value: &mut Write::Target| {
                 value
                     .get_mut(&self.index)

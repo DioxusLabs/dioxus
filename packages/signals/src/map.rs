@@ -55,15 +55,15 @@ where
     type Target = O;
     type Storage = V::Storage;
 
-    fn try_read_unchecked(
+    fn try_read_extended(
         &self,
     ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> {
-        let value = self.value.try_read_unchecked()?;
+        let value = self.value.try_read_extended()?;
         Ok(V::Storage::map(value, |v| (self.map_fn)(v)))
     }
 
-    fn try_peek_unchecked(&self) -> BorrowResult<ReadableRef<'static, Self>> {
-        let value = self.value.try_peek_unchecked()?;
+    fn try_peek_extended(&self) -> BorrowResult<ReadableRef<'static, Self>> {
+        let value = self.value.try_peek_extended()?;
         Ok(V::Storage::map(value, |v| (self.map_fn)(v)))
     }
 
