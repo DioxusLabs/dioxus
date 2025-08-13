@@ -7,6 +7,7 @@ use wasm_bindgen::JsCast;
 use web_sys::{Document, Element, Event};
 
 mod animation;
+mod cancel;
 mod clipboard;
 mod composition;
 mod drag;
@@ -58,6 +59,14 @@ impl HtmlEventConverter for WebEventConverter {
         event: &dioxus_html::PlatformEventData,
     ) -> dioxus_html::AnimationData {
         Synthetic::<web_sys::AnimationEvent>::from(downcast_event(event).raw.clone()).into()
+    }
+
+    #[inline(always)]
+    fn convert_cancel_data(
+        &self,
+        event: &dioxus_html::PlatformEventData,
+    ) -> dioxus_html::CancelData {
+        Synthetic::new(downcast_event(event).raw.clone()).into()
     }
 
     #[inline(always)]
