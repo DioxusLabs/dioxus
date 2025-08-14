@@ -738,7 +738,8 @@ impl BuildRequest {
 
         // If no custom linker is set, then android falls back to us as the linker
         if custom_linker.is_none() && bundle == BundleFormat::Android {
-            custom_linker = Some(workspace.android_tools()?.android_cc(&triple));
+            let min_sdk_version = config.application.android_min_sdk_version.unwrap_or(24);
+            custom_linker = Some(workspace.android_tools()?.android_cc(&triple, min_sdk_version));
         }
 
         let target_dir = std::env::var("CARGO_TARGET_DIR")
@@ -2540,9 +2541,10 @@ impl BuildRequest {
 
         let mut env_vars: Vec<(Cow<'static, str>, String)> = vec![];
 
+        let min_sdk_version = self.min_sdk_version_or_default();
+
         let tools = self.workspace.android_tools()?;
-        let linker = tools.android_cc(&self.triple);
-        let min_sdk_version = tools.min_sdk_version();
+        let linker = tools.android_cc(&self.triple, min_sdk_version);
         let ar_path = tools.ar_path();
         let target_cc = tools.target_cc();
         let target_cxx = tools.target_cxx();
@@ -4246,7 +4248,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
     /// will do its best to fill in the missing bits by exploring the sdk structure
     /// IE will attempt to use the Java installed from android studio if possible.
     async fn verify_android_tooling(&self) -> Result<()> {
-        let linker = self.workspace.android_tools()?.android_cc(&self.triple);
+        let linker = self.workspace.android_tools()?.android_cc(&self.triple, self.min_sdk_version_or_default());
 
         tracing::debug!("Verifying android linker: {linker:?}");
 
@@ -4534,6 +4536,11 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
             .unwrap()
             .to_path_buf()
             .into()
+    }
+
+    /// Returns the min sdk version set in config. If not set 24 is returned as a default.
+    pub (crate) fn min_sdk_version_or_default(&self) -> u32 {
+        self.config.application.android_min_sdk_version.unwrap_or(24)    
     }
 
     pub(crate) async fn start_simulators(&self) -> Result<()> {
