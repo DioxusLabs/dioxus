@@ -273,7 +273,7 @@ impl TraceController {
             tui_rx: Arc::new(tokio::sync::Mutex::new(tui_rx)),
             telemetry_rx: Arc::new(tokio::sync::Mutex::new(telemetry_rx)),
             http_client,
-            tui_active: tui_active.clone(),
+            tui_active,
         };
 
         // Spawn the telemetry uploader in the background
