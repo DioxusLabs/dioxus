@@ -31,6 +31,7 @@
 use std::{
     io::{Cursor, Read, Seek, Write},
     path::{Path, PathBuf},
+    time::Instant,
 };
 
 use crate::Result;
@@ -295,22 +296,26 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
 /// Then return an `AssetManifest` containing all the assets found in the file.
 pub(crate) fn extract_assets_from_file(path: impl AsRef<Path>) -> Result<AssetManifest> {
     let path = path.as_ref();
+    // On windows, the anti-virus can sometimes lock the file before we open it.
+    // If it does, retry every 100ms up to 5 seconds
+    let start_time = Instant::now();
+    let timeout = std::time::Duration::from_secs(5);
     let mut file = loop {
         match std::fs::File::options().write(true).read(true).open(path) {
             Ok(file) => break file,
             Err(e) => {
-                if e.raw_os_error() == Some(32) && cfg!(windows) {
-                    
-                    
+                // Retry if another file is using the file and the timeout has not been reached
+                if cfg!(windows) && e.raw_os_error() == Some(32) && start_time.elapsed() < timeout {
                     // File is already open, wait and retry
-                tracing::trace!("Failed to open file because another process is using it. Retrying...");
+                    tracing::trace!(
+                        "Failed to open file because another process is using it. Retrying..."
+                    );
                     std::thread::sleep(std::time::Duration::from_millis(100));
                     continue;
                 } else {
                     return Err(e.into());
                 }
             }
-
         }
     };
     let mut file_contents = Vec::new();
