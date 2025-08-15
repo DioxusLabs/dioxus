@@ -68,6 +68,16 @@ const DX_SRC_FLAG: &str = "dx_src";
 
 pub static VERBOSITY: OnceLock<Verbosity> = OnceLock::new();
 
+fn reset_cursor() {
+    use std::io::IsTerminal;
+
+    // if we are running in a terminal, reset the cursor. The tui_active flag is not set for
+    // the cargo generate TUI, but we still want to reset the cursor.
+    if std::io::stdout().is_terminal() {
+        _ = console::Term::stdout().show_cursor();
+    }
+}
+
 /// A trait that emits an anonymous JSON representation of the object, suitable for telemetry.
 pub(crate) trait Anonymized {
     fn anonymized(&self) -> serde_json::Value;
@@ -625,11 +635,9 @@ impl TraceController {
         &self,
         res: Result<Result<StructuredOutput>, Box<dyn Any + Send>>,
     ) -> StructuredOutput {
-        // Drain the tracer as regular messages.
+        // Drain the tracer as regular messages
         self.tui_active.store(false, Ordering::Relaxed);
-
-        // Show the term cursor
-        _ = console::Term::stdout().show_cursor();
+        reset_cursor();
 
         // re-emit any remaining messages in case they're useful.
         while let Ok(Some(msg)) = self.tui_rx.lock().await.try_next() {
@@ -1296,7 +1304,7 @@ async fn run_with_ctrl_c(
 
             // If we get a second ctrl-c, we just exit immediately
             None => {
-                _ = console::Term::stdout().show_cursor();
+                reset_cursor();
                 std::process::exit(1);
             }
         }
