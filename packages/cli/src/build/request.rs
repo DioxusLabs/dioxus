@@ -2884,10 +2884,11 @@ impl BuildRequest {
 
     fn platform_exe_name(&self) -> String {
         match self.bundle {
-            BundleFormat::MacOS => self.executable_name().to_string(),
-            BundleFormat::Ios => self.executable_name().to_string(),
-            BundleFormat::Server => self.executable_name().to_string(),
-            BundleFormat::Windows => format!("{}.exe", self.executable_name()),
+            // On desktop platforms, the executable name is based on the target os
+            BundleFormat::MacOS| BundleFormat::Ios|BundleFormat::Server| BundleFormat::Windows => match self.triple.operating_system {
+                OperatingSystem::Windows => format!("{}.exe", self.executable_name()),
+                _ => self.executable_name().to_string(),
+            },
 
             // from the apk spec, the root exe is a shared library
             // we include the user's rust code as a shared library with a fixed namespace
@@ -3455,7 +3456,7 @@ impl BuildRequest {
     ///
     /// todo(jon): we should name the app properly instead of making up the exe name. It's kinda okay for dev mode, but def not okay for prod
     pub(crate) fn main_exe(&self) -> PathBuf {
-        self.exe_dir().join(self.platform_exe_name())
+        dbg!(self.exe_dir().join(self.platform_exe_name()))
     }
 
     fn is_wasm_or_wasi(&self) -> bool {
