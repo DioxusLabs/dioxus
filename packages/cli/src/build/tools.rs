@@ -164,12 +164,8 @@ impl AndroidTools {
             ""
         };
 
-        self.android_tools_dir().join(format!(
-            "{}{}-clang{}",
-            triple,
-            sdk_version,
-            suffix
-        ))
+        self.android_tools_dir()
+            .join(format!("{}{}-clang{}", triple, sdk_version, suffix))
     }
 
     pub(crate) fn sysroot(&self) -> PathBuf {

@@ -39,7 +39,7 @@ pub(crate) struct ApplicationConfig {
     #[serde(default)]
     pub(crate) android_main_activity: Option<PathBuf>,
 
-    /// Specified minimum sdk version for gradle to build the app with. 
+    /// Specified minimum sdk version for gradle to build the app with.
     #[serde(default)]
     pub(crate) android_min_sdk_version: Option<u32>,
 }
