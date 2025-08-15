@@ -8,9 +8,6 @@ use crate::{
     MappedSignal, Memo, Readable, ReadableExt, ReadableRef, Signal, Writable, WritableExt,
 };
 
-/// A signal that can only be read from.
-pub type ReadOnlySignal<T> = ReadSignal<T>;
-
 /// A boxed version of [Readable] that can be used to store any readable type.
 pub struct ReadSignal<T: ?Sized> {
     value: CopyValue<Box<dyn Readable<Target = T, Storage = UnsyncStorage>>>,
