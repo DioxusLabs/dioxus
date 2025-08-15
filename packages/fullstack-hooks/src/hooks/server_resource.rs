@@ -16,17 +16,17 @@ use std::future::Future;
 ///
 /// ```rust, no_run
 /// # use dioxus::prelude::*;
-/// // ❌ The future inside of use_server_future is not reactive
+/// // ❌ The future inside of use_server_resource is not reactive
 /// let id = use_signal(|| 0);
-/// use_server_future(move || {
+/// use_server_resource(move || {
 ///     async move {
 ///          // But the future is not reactive which means that the future will not subscribe to any reads here
 ///          println!("{id}");
 ///     }
 /// });
-/// // ✅ The closure that creates the future for use_server_future is reactive
+/// // ✅ The closure that creates the future for use_server_resource is reactive
 /// let id = use_signal(|| 0);
-/// use_server_future(move || {
+/// use_server_resource(move || {
 ///     // The closure itself is reactive which means the future will subscribe to any signals you read here
 ///     let cloned_id = id();
 ///     async move {
@@ -47,10 +47,10 @@ use std::future::Future;
 ///
 /// fn App() -> Element {
 ///     let mut article_id = use_signal(|| 0);
-///     // `use_server_future` will spawn a task that runs on the server and serializes the result to send to the client.
+///     // `use_server_resource` will spawn a task that runs on the server and serializes the result to send to the client.
 ///     // The future will rerun any time the
 ///     // Since we bubble up the suspense with `?`, the server will wait for the future to resolve before rendering
-///     let article = use_server_future(move || fetch_article(article_id()))?;
+///     let article = use_server_resource(move || fetch_article(article_id()))?;
 ///
 ///     rsx! {
 ///         "{article().unwrap()}"
@@ -59,7 +59,7 @@ use std::future::Future;
 /// ```
 #[must_use = "Consider using `cx.spawn` to run a future without reading its value"]
 #[track_caller]
-pub fn use_server_future<T, F>(
+pub fn use_server_resource<T, F>(
     mut future: impl FnMut() -> F + 'static,
 ) -> Result<Resource<T>, RenderError>
 where

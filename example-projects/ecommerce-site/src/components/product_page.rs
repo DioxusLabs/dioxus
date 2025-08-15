@@ -40,7 +40,7 @@ pub fn product_page(product_id: ReadSignal<usize>) -> Element {
     let mut quantity = use_signal(|| 1);
     let mut size = use_signal(Size::default);
 
-    let product = use_server_future(move || fetch_product(product_id()))?;
+    let product = use_server_resource(move || fetch_product(product_id()))?;
 
     let Product {
         title,

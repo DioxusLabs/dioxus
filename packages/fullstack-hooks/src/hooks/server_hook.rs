@@ -13,7 +13,7 @@ use serde::{de::DeserializeOwned, Serialize};
 /// use dioxus::prelude::*;
 ///
 /// fn app() -> Element {
-///    let state1 = use_server_cached(|| {
+///    let state1 = use_server_hook(|| {
 ///       1234
 ///    });
 ///
@@ -21,7 +21,7 @@ use serde::{de::DeserializeOwned, Serialize};
 /// }
 /// ```
 #[track_caller]
-pub fn use_server_cached<O: 'static + Clone + Serialize + DeserializeOwned>(
+pub fn use_server_hook<O: 'static + Clone + Serialize + DeserializeOwned>(
     server_fn: impl Fn() -> O,
 ) -> O {
     let location = std::panic::Location::caller();
