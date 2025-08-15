@@ -4,10 +4,12 @@ use dioxus_signals::ReadableExt;
 use serde::{de::DeserializeOwned, Serialize};
 use std::future::Future;
 
-/// Runs a future with a manual list of dependencies and returns a resource with the result if the future is finished or a suspended error if it is still running.
+/// Runs a future and returns a result with a resource if the future is finished or a suspended error if it is still running. The future may run on the server *during hydration*.
+/// - When compiled as server, the closure's future is ran to completion and the resulting data is serialized on the server and sent to the client.
+/// - When compiled as web client, the data is deserialized from the server if already available, otherwise runs on the client. Data is usually only available if this hook exists in a component during hydration.
+/// - When otherwise compiled, the closure is run directly with no serialization.
 ///
-///
-/// On the server, this will wait until the future is resolved before continuing to render. When the future is resolved, the result will be serialized into the page and hydrated on the client without rerunning the future.
+/// On the server, this will wait until the future is resolved before continuing to render. Thus, this blocks other subsequent server hooks. The result is cached.
 ///
 ///
 /// <div class="warning">
@@ -57,7 +59,6 @@ use std::future::Future;
 ///     }
 /// }
 /// ```
-#[must_use = "Consider using `cx.spawn` to run a future without reading its value"]
 #[track_caller]
 pub fn use_server_future<T, F>(
     mut future: impl FnMut() -> F + 'static,
