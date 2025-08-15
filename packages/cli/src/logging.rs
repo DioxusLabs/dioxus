@@ -263,7 +263,7 @@ impl TraceController {
             tui_rx: Arc::new(tokio::sync::Mutex::new(tui_rx)),
             telemetry_rx: Arc::new(tokio::sync::Mutex::new(telemetry_rx)),
             http_client,
-            tui_active,
+            tui_active: tui_active.clone(),
         };
 
         // Spawn the telemetry uploader in the background
@@ -323,9 +323,12 @@ impl TraceController {
         }));
 
         // Run the app, catching panics and errors, early flushing if `ctrl_c` is pressed.
-        let app_res = AssertUnwindSafe(run_with_ctrl_c(run_app(args.action, tracer.clone())))
-            .catch_unwind()
-            .await;
+        let app_res = AssertUnwindSafe(run_with_ctrl_c(
+            run_app(args.action, tracer.clone()),
+            tui_active,
+        ))
+        .catch_unwind()
+        .await;
 
         // Do any final logging cleanup
         tracer.finish(app_res).await
@@ -625,11 +628,11 @@ impl TraceController {
         &self,
         res: Result<Result<StructuredOutput>, Box<dyn Any + Send>>,
     ) -> StructuredOutput {
-        // Drain the tracer as regular messages.
-        self.tui_active.store(false, Ordering::Relaxed);
-
-        // Show the term cursor
-        _ = console::Term::stdout().show_cursor();
+        // Drain the tracer as regular messages
+        if self.tui_active.swap(false, Ordering::Relaxed) {
+            // if the tui was active, show the term cursor
+            _ = console::Term::stdout().show_cursor();
+        }
 
         // re-emit any remaining messages in case they're useful.
         while let Ok(Some(msg)) = self.tui_rx.lock().await.try_next() {
@@ -1285,6 +1288,7 @@ impl FormatTime for PrettyUptime {
 /// Todo: maybe we want a side thread continuously flushing telemetry, esp if the user double ctrl-cs
 async fn run_with_ctrl_c(
     f: impl Future<Output = Result<StructuredOutput>>,
+    tui_active: Arc<AtomicBool>,
 ) -> Result<StructuredOutput> {
     let (tx, rx) = tokio::sync::oneshot::channel();
     let mut tx = Some(tx);
@@ -1296,7 +1300,9 @@ async fn run_with_ctrl_c(
 
             // If we get a second ctrl-c, we just exit immediately
             None => {
-                _ = console::Term::stdout().show_cursor();
+                if tui_active.load(Ordering::Relaxed) {
+                    _ = console::Term::stdout().show_cursor();
+                }
                 std::process::exit(1);
             }
         }
