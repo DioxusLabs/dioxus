@@ -2885,7 +2885,10 @@ impl BuildRequest {
     fn platform_exe_name(&self) -> String {
         match self.bundle {
             // On desktop platforms, the executable name is based on the target os
-            BundleFormat::MacOS| BundleFormat::Ios|BundleFormat::Server| BundleFormat::Windows => match self.triple.operating_system {
+            BundleFormat::MacOS
+            | BundleFormat::Ios
+            | BundleFormat::Server
+            | BundleFormat::Windows => match self.triple.operating_system {
                 OperatingSystem::Windows => format!("{}.exe", self.executable_name()),
                 _ => self.executable_name().to_string(),
             },
