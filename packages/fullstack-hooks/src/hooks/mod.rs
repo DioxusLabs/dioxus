@@ -1,4 +1,4 @@
-mod server_cached;
-pub use server_cached::*;
-mod server_future;
-pub use server_future::*;
+mod hydration_hook;
+pub use hydration_hook::*;
+mod hydration_resource;
+pub use hydration_resource::*;

@@ -9,7 +9,9 @@ fn main() {
 }
 
 fn app() -> Element {
-    let server_features = use_server_future(get_server_features)?.unwrap().unwrap();
+    let server_features = use_hydration_resource(get_server_features)?
+        .unwrap()
+        .unwrap();
     let mut client_features = use_signal(Vec::new);
 
     use_effect(move || {

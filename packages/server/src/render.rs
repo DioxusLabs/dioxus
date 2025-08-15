@@ -231,7 +231,7 @@ impl SsrRendererPool {
                         break;
                     }
 
-                    // Wait for new async work that runs during suspense (mainly use_server_futures)
+                    // Wait for new async work that runs during suspense (mainly use_hydration_resources)
                     virtual_dom.wait_for_suspense_work().await;
 
                     // Do that async work
@@ -679,8 +679,8 @@ impl FullstackHTMLTemplate {
     ) -> Result<(), dioxus_isrg::IncrementalRendererError> {
         let ServeConfig { index, .. } = &self.cfg;
 
-        // Collect the initial server data from the root node. For most apps, no use_server_futures will be resolved initially, so this will be full on `None`s.
-        // Sending down those Nones are still important to tell the client not to run the use_server_futures that are already running on the backend
+        // Collect the initial server data from the root node. For most apps, no use_hydration_resources will be resolved initially, so this will be full on `None`s.
+        // Sending down those Nones are still important to tell the client not to run the use_hydration_resources that are already running on the backend
         let resolved_data = serialize_server_data(virtual_dom, ScopeId::ROOT);
         // We always send down the data required to hydrate components on the client
         let raw_data = resolved_data.data;

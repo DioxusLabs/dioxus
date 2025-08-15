@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 fn app() -> Element {
     let mut count = use_signal(|| 0);
     let mut text = use_signal(|| "...".to_string());
-    let server_future = use_server_future(get_server_data)?;
+    let server_future = use_hydration_resource(get_server_data)?;
 
     rsx! {
         document::Link { href: asset!("/assets/hello.css"), rel: "stylesheet" }
