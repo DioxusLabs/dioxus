@@ -157,19 +157,15 @@ impl AndroidTools {
     /// "~/Library/Android/sdk/ndk/25.2.9519653/toolchains/llvm/prebuilt/darwin-x86_64/bin/ld"
     ///
     /// However, for our purposes, we only go through the cc driver and not the linker directly.
-    pub(crate) fn android_cc(&self, triple: &Triple) -> PathBuf {
+    pub(crate) fn android_cc(&self, triple: &Triple, sdk_version: u32) -> PathBuf {
         let suffix = if cfg!(target_os = "windows") {
             ".cmd"
         } else {
             ""
         };
 
-        self.android_tools_dir().join(format!(
-            "{}{}-clang{}",
-            triple,
-            self.min_sdk_version(),
-            suffix
-        ))
+        self.android_tools_dir()
+            .join(format!("{}{}-clang{}", triple, sdk_version, suffix))
     }
 
     pub(crate) fn sysroot(&self) -> PathBuf {
@@ -189,11 +185,6 @@ impl AndroidTools {
 
     pub(crate) fn emulator(&self) -> PathBuf {
         self.sdk().join("emulator").join("emulator")
-    }
-
-    // todo(jon): this should be configurable
-    pub(crate) fn min_sdk_version(&self) -> u32 {
-        24
     }
 
     pub(crate) fn clang_folder(&self) -> PathBuf {
