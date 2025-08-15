@@ -69,6 +69,7 @@ impl StreamingContext {
 /// }
 /// ```
 pub fn commit_initial_chunk() {
+    crate::history::finalize_route();
     if let Some(mut streaming) = try_consume_context::<StreamingContext>() {
         streaming.commit_initial_chunk();
     }

@@ -4,7 +4,7 @@
 use base64::Engine;
 use dioxus_core::CapturedError;
 use serde::Serialize;
-use std::{cell::RefCell, io::Cursor, rc::Rc};
+use std::{cell::RefCell, fmt::Debug, io::Cursor, rc::Rc};
 
 #[cfg(feature = "web")]
 thread_local! {
@@ -126,6 +126,15 @@ impl<T> Clone for SerializeContextEntry<T> {
     }
 }
 
+impl<T> Debug for SerializeContextEntry<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SerializeContextEntry")
+            .field("index", &self.index)
+            .field("type", &std::any::type_name::<T>())
+            .finish()
+    }
+}
+
 impl<T> SerializeContextEntry<T> {
     /// Insert data into an entry that was created with [`HydrationContext::create_entry`]
     pub fn insert(self, value: &T, location: &'static std::panic::Location<'static>)
@@ -238,6 +247,7 @@ impl HTMLData {
     fn create_entry(&mut self) -> usize {
         let id = self.cursor;
         self.cursor += 1;
+        tracing::info!("Creating new entry with id {id}");
         self.create_entry_with_id(id)
     }
 

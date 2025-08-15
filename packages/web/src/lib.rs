@@ -64,7 +64,8 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
     #[cfg(all(feature = "devtools", debug_assertions))]
     let mut hotreload_rx = devtools::init();
 
-    let should_hydrate = web_config.hydrate;
+    // If the hydrate feature is enabled, launch the client with hydration enabled
+    let should_hydrate = web_config.hydrate || cfg!(feature = "hydrate");
 
     let mut websys_dom = WebsysDom::new(web_config, runtime);
 
@@ -134,6 +135,10 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
                 virtual_dom.in_runtime(|| dioxus_core::ScopeId::APP.throw_error(error));
             }
             server_data.in_context(|| {
+                #[cfg(feature = "document")]
+                virtual_dom.in_runtime(|| {
+                    document::init_fullstack_document();
+                });
                 virtual_dom.rebuild(&mut websys_dom);
             });
             websys_dom.skip_mutations = false;
