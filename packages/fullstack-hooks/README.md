@@ -10,7 +10,7 @@ To start using this crate, you can run the following command:
 cargo add dioxus-fullstack-hooks
 ```
 
-Then you can use hooks like `use_server_resource` in your components:
+Then you can use hooks like `use_hydration_resource` in your components:
 
 ```rust
 use dioxus::prelude::*;
@@ -20,10 +20,10 @@ async fn fetch_article(id: u32) -> String {
 
 fn App() -> Element {
     let mut article_id = use_signal(|| 0);
-    // `use_server_resource` will spawn a task that runs on the server and serializes the result to send to the client.
+    // `use_hydration_resource` will spawn a task that runs on the server and serializes the result to send to the client.
     // The future will rerun any time the
     // Since we bubble up the suspense with `?`, the server will wait for the future to resolve before rendering
-    let article = use_server_resource(move || fetch_article(article_id()))?;
+    let article = use_hydration_resource(move || fetch_article(article_id()))?;
 
     rsx! {
         "{article().unwrap()}"

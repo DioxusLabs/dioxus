@@ -61,7 +61,7 @@ fn Homepage(story: ReadSignal<PreviewState>) -> Element {
 
 #[component]
 fn Stories() -> Element {
-    let stories: Resource<dioxus::Result<Vec<i64>>> = use_server_resource(move || async move {
+    let stories: Resource<dioxus::Result<Vec<i64>>> = use_hydration_resource(move || async move {
         let url = format!("{}topstories.json", BASE_API_URL);
         let mut stories_ids = reqwest::get(&url).await?.json::<Vec<i64>>().await?;
         stories_ids.truncate(30);
@@ -85,7 +85,7 @@ fn Stories() -> Element {
 
 #[component]
 fn StoryListing(story: ReadSignal<i64>) -> Element {
-    let story = use_server_resource(move || get_story(story()))?;
+    let story = use_hydration_resource(move || get_story(story()))?;
 
     let StoryItem {
         title,
@@ -175,7 +175,7 @@ fn Preview(story: ReadSignal<PreviewState>) -> Element {
         return rsx! {"Click on a story to preview it here"};
     };
 
-    let story = use_server_resource(use_reactive!(|id| get_story(id)))?;
+    let story = use_hydration_resource(use_reactive!(|id| get_story(id)))?;
 
     let story = story().unwrap()?;
 
@@ -196,7 +196,7 @@ fn Preview(story: ReadSignal<PreviewState>) -> Element {
 #[component]
 fn Comment(comment: i64) -> Element {
     let comment: Resource<dioxus::Result<CommentData>> =
-        use_server_resource(use_reactive!(|comment| async move {
+        use_hydration_resource(use_reactive!(|comment| async move {
             let url = format!("{}{}{}.json", BASE_API_URL, ITEM_API, comment);
             let mut comment = reqwest::get(&url).await?.json::<CommentData>().await?;
             Ok(comment)

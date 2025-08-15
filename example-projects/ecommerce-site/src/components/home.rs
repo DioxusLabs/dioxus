@@ -8,7 +8,7 @@ use crate::{
 use dioxus::prelude::*;
 
 pub(crate) fn Home() -> Element {
-    let products = use_server_resource(|| fetch_products(10, Sort::Ascending))?;
+    let products = use_hydration_resource(|| fetch_products(10, Sort::Ascending))?;
     let products = products().unwrap()?;
 
     rsx! {

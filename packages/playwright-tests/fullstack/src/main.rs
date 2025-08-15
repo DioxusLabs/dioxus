@@ -66,7 +66,7 @@ fn OnMounted() -> Element {
 
 #[component]
 fn DefaultServerFnCodec() -> Element {
-    let resource = use_server_resource(|| get_server_data_empty_vec(Vec::new()))?;
+    let resource = use_hydration_resource(|| get_server_data_empty_vec(Vec::new()))?;
     let empty_vec = resource.unwrap().unwrap();
     assert!(empty_vec.is_empty());
 
@@ -138,7 +138,7 @@ fn Errors() -> Element {
 
 #[component]
 pub fn ThrowsError() -> Element {
-    use_server_resource(server_error)?.unwrap()?;
+    use_hydration_resource(server_error)?.unwrap()?;
     rsx! {
         "success"
     }

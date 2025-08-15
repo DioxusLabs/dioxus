@@ -1,4 +1,4 @@
-mod server_hook;
-pub use server_hook::*;
-mod server_resource;
-pub use server_resource::*;
+mod hydration_hook;
+pub use hydration_hook::*;
+mod hydration_resource;
+pub use hydration_resource::*;
