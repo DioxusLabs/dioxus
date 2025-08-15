@@ -104,8 +104,8 @@ where
 ///
 ///     // Since our resource may not be ready yet, the value is an Option. Our request may also fail, so the get function returns a Result
 ///     // The complete type we need to match is `Option<Result<String, reqwest::Error>>`
-///     // We can use `read_unchecked` to keep our matching code in one statement while avoiding a temporary variable error (this is still completely safe because dioxus checks the borrows at runtime)
-///     match &*resource.read_unchecked() {
+///     // We can use `read_extended` to keep our matching code in one statement while avoiding a temporary variable error (this is still completely safe because dioxus checks the borrows at runtime)
+///     match &*resource.read_extended() {
 ///         Some(Ok(value)) => rsx! { "{value:?}" },
 ///         Some(Err(err)) => rsx! { "Error: {err}" },
 ///         None => rsx! { "Loading..." },
@@ -402,8 +402,8 @@ impl<T> Resource<T> {
     ///
     ///     // Since our resource may not be ready yet, the value is an Option. Our request may also fail, so the get function returns a Result
     ///     // The complete type we need to match is `Option<Result<String, reqwest::Error>>`
-    ///     // We can use `read_unchecked` to keep our matching code in one statement while avoiding a temporary variable error (this is still completely safe because dioxus checks the borrows at runtime)
-    ///     match &*value.read_unchecked() {
+    ///     // We can use `read_extended` to keep our matching code in one statement while avoiding a temporary variable error (this is still completely safe because dioxus checks the borrows at runtime)
+    ///     match &*value.read_extended() {
     ///         Some(Ok(value)) => rsx! { "{value:?}" },
     ///         Some(Err(err)) => rsx! { "Error: {err}" },
     ///         None => rsx! { "Loading..." },
@@ -441,17 +441,17 @@ impl<T> Readable for Resource<T> {
     type Storage = UnsyncStorage;
 
     #[track_caller]
-    fn try_read_unchecked(
+    fn try_read_extended(
         &self,
     ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> {
-        self.value.try_read_unchecked()
+        self.value.try_read_extended()
     }
 
     #[track_caller]
-    fn try_peek_unchecked(
+    fn try_peek_extended(
         &self,
     ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> {
-        self.value.try_peek_unchecked()
+        self.value.try_peek_extended()
     }
 
     fn subscribers(&self) -> Subscribers {

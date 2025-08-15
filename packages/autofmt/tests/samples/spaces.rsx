@@ -1,5 +1,5 @@
 rsx! {
-    if let Some(Some(record)) = &*records.read_unchecked() {
+    if let Some(Some(record)) = &*records.read_extended() {
         {
             let (label, value): (Vec<String>, Vec<f64>) = record
                 .iter()
