@@ -68,6 +68,16 @@ const DX_SRC_FLAG: &str = "dx_src";
 
 pub static VERBOSITY: OnceLock<Verbosity> = OnceLock::new();
 
+fn reset_cursor() {
+    use std::io::IsTerminal;
+
+    // if we are running in a terminal, reset the cursor. The tui_active flag is not set for
+    // the cargo generate TUI, but we still want to reset the cursor.
+    if std::io::stdout().is_terminal() {
+        _ = console::Term::stdout().show_cursor();
+    }
+}
+
 /// A trait that emits an anonymous JSON representation of the object, suitable for telemetry.
 pub(crate) trait Anonymized {
     fn anonymized(&self) -> serde_json::Value;
@@ -323,12 +333,9 @@ impl TraceController {
         }));
 
         // Run the app, catching panics and errors, early flushing if `ctrl_c` is pressed.
-        let app_res = AssertUnwindSafe(run_with_ctrl_c(
-            run_app(args.action, tracer.clone()),
-            tui_active,
-        ))
-        .catch_unwind()
-        .await;
+        let app_res = AssertUnwindSafe(run_with_ctrl_c(run_app(args.action, tracer.clone())))
+            .catch_unwind()
+            .await;
 
         // Do any final logging cleanup
         tracer.finish(app_res).await
@@ -629,10 +636,8 @@ impl TraceController {
         res: Result<Result<StructuredOutput>, Box<dyn Any + Send>>,
     ) -> StructuredOutput {
         // Drain the tracer as regular messages
-        if self.tui_active.swap(false, Ordering::Relaxed) {
-            // if the tui was active, show the term cursor
-            _ = console::Term::stdout().show_cursor();
-        }
+        self.tui_active.store(false, Ordering::Relaxed);
+        reset_cursor();
 
         // re-emit any remaining messages in case they're useful.
         while let Ok(Some(msg)) = self.tui_rx.lock().await.try_next() {
@@ -1288,7 +1293,6 @@ impl FormatTime for PrettyUptime {
 /// Todo: maybe we want a side thread continuously flushing telemetry, esp if the user double ctrl-cs
 async fn run_with_ctrl_c(
     f: impl Future<Output = Result<StructuredOutput>>,
-    tui_active: Arc<AtomicBool>,
 ) -> Result<StructuredOutput> {
     let (tx, rx) = tokio::sync::oneshot::channel();
     let mut tx = Some(tx);
@@ -1300,9 +1304,7 @@ async fn run_with_ctrl_c(
 
             // If we get a second ctrl-c, we just exit immediately
             None => {
-                if tui_active.load(Ordering::Relaxed) {
-                    _ = console::Term::stdout().show_cursor();
-                }
+                reset_cursor();
                 std::process::exit(1);
             }
         }
