@@ -192,18 +192,16 @@ impl SsrRendererPool {
             virtual_dom.provide_root_context(document.clone());
             // If there is a base path, trim the base path from the route and add the base path formatting to the
             // history provider
-            let history;
-            if let Some(base_path) = base_path() {
+            let history = if let Some(base_path) = base_path() {
                 let base_path = base_path.trim_matches('/');
                 let base_path = format!("/{base_path}");
                 let route = route.strip_prefix(&base_path).unwrap_or(&route);
-                history =
-                    dioxus_history::MemoryHistory::with_initial_path(route).with_prefix(base_path);
+                dioxus_history::MemoryHistory::with_initial_path(route).with_prefix(base_path)
             } else {
-                history = dioxus_history::MemoryHistory::with_initial_path(&route);
-            }
+                dioxus_history::MemoryHistory::with_initial_path(&route)
+            };
             // Wrap the memory history in a fullstack history provider to provide the initial route for hydration
-            let history = FullstackHistory::new_server(history);
+            let history = in_root_scope(&virtual_dom, || FullstackHistory::new(history));
 
             let streaming_context = in_root_scope(&virtual_dom, StreamingContext::new);
             virtual_dom.provide_root_context(Rc::new(history) as Rc<dyn dioxus_history::History>);
@@ -212,6 +210,10 @@ impl SsrRendererPool {
 
             // rebuild the virtual dom
             virtual_dom.rebuild_in_place();
+
+            tracing::info!(
+                "Starting SSR render for route: {route} with streaming mode {streaming_mode:?}"
+            );
 
             // If streaming is disabled, wait for the virtual dom to finish all suspense work
             // before rendering anything

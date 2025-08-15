@@ -4,15 +4,9 @@
 #![warn(missing_docs)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
-#[cfg(all(feature = "web", feature = "document"))]
-mod web;
-
 mod error;
 #[doc(hidden)]
 pub mod mock_client;
-
-#[cfg(all(feature = "web", feature = "document"))]
-pub use web::FullstackWebDocument;
 
 pub use dioxus_fullstack_hooks::history::FullstackHistory;
 

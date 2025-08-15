@@ -1,10 +1,10 @@
 //! A history provider for fullstack apps that is compatible with hydration.
 
-use std::cell::OnceCell;
+use std::{cell::RefCell, rc::Rc};
 
-use dioxus_core::{queue_effect, schedule_update};
-use dioxus_fullstack_protocol::is_hydrating;
-use dioxus_history::History;
+use dioxus_core::{consume_context, provide_context, queue_effect, schedule_update, try_consume_context};
+use dioxus_fullstack_protocol::{is_hydrating, SerializeContextEntry};
+use dioxus_history::{history, History};
 
 // If we are currently in a scope and this is the first run then queue a rerender
 // for after hydration
@@ -21,51 +21,61 @@ fn match_hydration<O>(
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct ResolvedRouteContext {
+    route: String,
+}
+
+pub(crate) fn finalize_route() {
+    let entry = consume_context::<RouteEntry>();
+    let entry = entry.entry.borrow_mut().take().expect("Failed to get initial route from hydration context");
+    if cfg!(feature = "server") {
+        let history = history();
+        let initial_route = history.current_route();
+        entry.insert(&initial_route, std::panic::Location::caller());
+        provide_context(ResolvedRouteContext {
+            route: initial_route,
+        });
+    } else if cfg!(feature = "web") {
+        let initial_route = entry
+            .get()
+            .expect("Failed to get initial route from hydration context");
+        provide_context(ResolvedRouteContext {
+            route: initial_route,
+        });
+    }
+}
+
+#[derive(Debug, Clone)]
+struct RouteEntry {
+    entry: Rc<RefCell<Option<SerializeContextEntry<String>>>>,
+}
+
 /// A history provider for fullstack apps that is compatible with hydration.
 #[derive(Clone)]
 pub struct FullstackHistory<H> {
-    initial_route: OnceCell<String>,
-    #[cfg(feature = "server")]
-    in_hydration_context: std::cell::Cell<bool>,
     history: H,
 }
 
 impl<H> FullstackHistory<H> {
     /// Create a new `FullstackHistory` with the given history.
     pub fn new(history: H) -> Self {
-        Self {
-            initial_route: OnceCell::new(),
-            #[cfg(feature = "server")]
-            in_hydration_context: std::cell::Cell::new(false),
-            history,
-        }
-    }
-
-    /// Create a new `FullstackHistory` with the given history and initial route.
-    pub fn new_server(history: H) -> Self
-    where
-        H: History,
-    {
-        let initial_route = history.current_route();
-        let history = Self::new(history);
-        history.initial_route.set(initial_route).unwrap();
-        history
+        let entry = dioxus_fullstack_protocol::serialize_context().create_entry();
+        provide_context(RouteEntry {
+            entry: Rc::new(RefCell::new(Some(entry.clone()))),
+        });
+        Self { history }
     }
 
     /// Get the initial route of the history.
-    fn initial_route(&self) -> String {
-        let entry = dioxus_fullstack_protocol::serialize_context().create_entry();
-        let route = self.initial_route.get_or_init(|| {
-            entry
-                .get()
-                .expect("Failed to get initial route from hydration context")
-        });
-        #[cfg(feature = "server")]
-        if !self.in_hydration_context.get() {
-            entry.insert(route, std::panic::Location::caller());
-            self.in_hydration_context.set(true);
+    fn initial_route(&self) -> String
+    where
+        H: History,
+    {
+        match try_consume_context::<ResolvedRouteContext>() {
+            Some(context) => context.route,
+            None => self.history.current_route(),
         }
-        route.clone()
     }
 }
 

@@ -633,6 +633,7 @@ impl VirtualDom {
     #[instrument(skip(self), level = "trace", name = "VirtualDom::wait_for_suspense")]
     pub async fn wait_for_suspense(&mut self) {
         loop {
+            tracing::info!("suspended tasks: {}", self.runtime.suspended_tasks.get());
             if !self.suspended_tasks_remaining() {
                 break;
             }

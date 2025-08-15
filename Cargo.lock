@@ -5533,6 +5533,7 @@ version = "0.7.0-rc.0"
 dependencies = [
  "dioxus",
  "dioxus-core",
+ "dioxus-document",
  "dioxus-fullstack",
  "dioxus-fullstack-protocol",
  "dioxus-history",
@@ -5540,6 +5541,7 @@ dependencies = [
  "dioxus-signals",
  "futures-channel",
  "serde",
+ "tracing",
 ]
 
 [[package]]
@@ -6024,6 +6026,7 @@ dependencies = [
  "dioxus-core-types",
  "dioxus-devtools",
  "dioxus-document",
+ "dioxus-fullstack-hooks",
  "dioxus-fullstack-protocol",
  "dioxus-history",
  "dioxus-html",
