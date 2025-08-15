@@ -30,7 +30,7 @@ async fn test_for_memory_leaks() {
                     div {
                         onclick: move |_| { println!("click"); },
                     }
-                    AcceptsEventHandlerAndReadOnlySignal {
+                    AcceptsEventHandlerAndReadSignal {
                         event_handler: move |_| { println!("click"); },
                         signal: el,
                     }
@@ -39,10 +39,10 @@ async fn test_for_memory_leaks() {
         }
     }
 
-    // Event handlers and ReadOnlySignals have extra logic on component boundaries that has caused memory leaks
+    // Event handlers and ReadSignals have extra logic on component boundaries that has caused memory leaks
     // in the past
     #[component]
-    fn AcceptsEventHandlerAndReadOnlySignal(
+    fn AcceptsEventHandlerAndReadSignal(
         event_handler: EventHandler<MouseEvent>,
         signal: ReadSignal<i32>,
     ) -> Element {

@@ -509,7 +509,7 @@ fn type_from_inside_option(ty: &Type) -> Option<&Type> {
 
     // If the segment is a supported optional type, provide the inner type.
     // Return the inner type if the pattern is `Option<T>` or `ReadSignal<Option<T>>``
-    if seg.ident == "ReadOnlySignal" || seg.ident == "ReadSignal" {
+    if seg.ident == "ReadSignal" {
         // Get the inner type. E.g. the `u16` in `ReadSignal<u16>` or `Option` in `ReadSignal<Option<bool>>`
         let inner_type = extract_inner_type_from_segment(seg)?;
         let Type::Path(inner_path) = inner_type else {
@@ -1755,8 +1755,7 @@ fn last_segment_matches(ty: &Type, expected: &Ident) -> bool {
 }
 
 fn looks_like_signal_type(ty: &Type) -> bool {
-    last_segment_matches(ty, &parse_quote!(ReadOnlySignal))
-        || last_segment_matches(ty, &parse_quote!(ReadSignal))
+    last_segment_matches(ty, &parse_quote!(ReadSignal))
 }
 
 fn looks_like_write_type(ty: &Type) -> bool {
@@ -1776,17 +1775,6 @@ fn looks_like_callback_type(ty: &Type) -> bool {
 
 #[test]
 fn test_looks_like_type() {
-    assert!(!looks_like_signal_type(&parse_quote!(
-        Option<ReadOnlySignal<i32>>
-    )));
-    assert!(looks_like_signal_type(&parse_quote!(ReadOnlySignal<i32>)));
-    assert!(looks_like_signal_type(
-        &parse_quote!(ReadOnlySignal<i32, SyncStorage>)
-    ));
-    assert!(looks_like_signal_type(&parse_quote!(
-        ReadOnlySignal<Option<i32>, UnsyncStorage>
-    )));
-
     assert!(!looks_like_signal_type(&parse_quote!(
         Option<ReadSignal<i32>>
     )));

@@ -430,7 +430,6 @@ mod tests {
             "/dioxus/packages/signals/src/memo.rs",
             "/dioxus/packages/signals/src/props.rs",
             "/dioxus/packages/signals/src/read.rs",
-            "/dioxus/packages/signals/src/read_only_signal.rs",
             "/dioxus/packages/signals/src/set_compare.rs",
             "/dioxus/packages/signals/src/signal.rs",
             "/dioxus/packages/signals/src/warnings.rs",

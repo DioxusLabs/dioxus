@@ -169,33 +169,33 @@ fn spreads_memorize_in_place() {
 
 // Regression test for https://github.com/DioxusLabs/dioxus/issues/2331
 #[test]
-fn cloning_read_only_signal_components_work() {
+fn cloning_read_signal_components_work() {
     fn app() -> Element {
         if generation() < 5 {
             println!("Generating new props");
             needs_update();
         }
 
-        let read_only_signal_rsx = rsx! {
-            TakesReadOnlySignalNonClone { sig: NonCloneable(generation() as i32) }
-            TakesReadOnlySignalNum { sig: generation() as i32 }
+        let read_signal_rsx = rsx! {
+            TakesReadSignalNonClone { sig: NonCloneable(generation() as i32) }
+            TakesReadSignalNum { sig: generation() as i32 }
         };
 
         rsx! {
-            {read_only_signal_rsx.clone()}
-            {read_only_signal_rsx}
+            {read_signal_rsx.clone()}
+            {read_signal_rsx}
         }
     }
 
     struct NonCloneable<T>(T);
 
     #[component]
-    fn TakesReadOnlySignalNum(sig: ReadSignal<i32>) -> Element {
+    fn TakesReadSignalNum(sig: ReadSignal<i32>) -> Element {
         rsx! {}
     }
 
     #[component]
-    fn TakesReadOnlySignalNonClone(sig: ReadSignal<NonCloneable<i32>>) -> Element {
+    fn TakesReadSignalNonClone(sig: ReadSignal<NonCloneable<i32>>) -> Element {
         rsx! {}
     }
 
