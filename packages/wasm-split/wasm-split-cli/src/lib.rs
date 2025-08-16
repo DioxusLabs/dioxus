@@ -167,7 +167,8 @@ impl<'a> Splitter<'a> {
         //    When the side modules load, they will initialize functions into the table where the "holes" are.
         self.replace_segments_with_holes(&mut out, &unused_symbols);
 
-        // 2. Wipe away the unused functions and data symbols
+        // 2. Wipe away the split point exports and clean up data symbols
+        // Note: Function cleanup is left to the GC which handles it safely
         self.prune_main_symbols(&mut out, &unused_symbols)?;
 
         // 3. Change the functions called from split modules to be local functions that call the indirect function
@@ -421,6 +422,7 @@ impl<'a> Splitter<'a> {
             // this is okay since we're in the main module
             let import_func = self.split_points[idx].import_func;
             let import_id = self.split_points[idx].import_id;
+
             let ty_id = out.funcs.get(import_func).ty();
             let stub_idx = segment_start + ifuncs.len();
 
@@ -495,9 +497,10 @@ impl<'a> Splitter<'a> {
         // And then any actual symbols from the callgraph
         for symbol in unused_symbols.iter().cloned() {
             match symbol {
-                // Simply delete functions
-                Node::Function(id) => {
-                    out.funcs.delete(id);
+                // Skip function deletion - still causing reference issues
+                Node::Function(_id) => {
+                    // Even with improved unused detection, we're still deleting functions
+                    // that have references elsewhere. Let GC handle cleanup safely.
                 }
 
                 // Otherwise, zero out the data segment, which should lead to elimination by wasm-opt
@@ -902,12 +905,23 @@ impl<'a> Splitter<'a> {
     }
 
     fn unused_main_symbols(&self) -> HashSet<Node> {
+        // Instead of guessing what's unused, let's be more conservative
+        // and only delete symbols that are:
+        // 1. Only used by split modules (not main)
+        // 2. Not exported
+        // 3. Not shared symbols (needed for indirect function table)
+
         self.split_points
             .iter()
             .flat_map(|split| split.reachable_graph.iter())
             .filter(|sym| {
                 // Make sure the symbol isn't in the main graph
                 if self.main_graph.contains(sym) {
+                    return false;
+                }
+
+                // Don't delete shared symbols - they're needed for the indirect function table
+                if self.shared_symbols.contains(sym) {
                     return false;
                 }
 
@@ -1322,15 +1336,19 @@ impl<'a> ModuleWithRelocations<'a> {
     /// This might panic if the source module isn't built properly. Make sure to enable LTO and `--emit-relocs`
     /// when building the source module.
     fn get_symbol_dep_node(&self, index: usize) -> Result<Option<Node>> {
+        if index >= self.symbols.len() {
+            return Ok(None);
+        }
+
         let res = match self.symbols[index] {
             SymbolInfo::Data { .. } => Some(Node::DataSymbol(index)),
-            SymbolInfo::Func { name, .. } => Some(Node::Function(
-                *self
-                    .names_to_funcs
-                    .get(name.expect("local func symbol without name?"))
-                    .unwrap(),
-            )),
+            SymbolInfo::Func { name, .. } => {
+                let func_name = name.expect("local func symbol without name?");
 
+                self.names_to_funcs
+                    .get(func_name)
+                    .map(|func_id| Node::Function(*func_id))
+            }
             _ => None,
         };
 
