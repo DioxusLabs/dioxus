@@ -1250,7 +1250,10 @@ impl BuildRequest {
                     Architecture::Arm(_) => "armeabi-v7a",
                     Architecture::X86_32(_) => "x86",
                     Architecture::X86_64 => "x86_64",
-                    _ => panic!("Unsupported architecture for Android: {:?}", self.triple.architecture),
+                    _ => panic!(
+                        "Unsupported architecture for Android: {:?}",
+                        self.triple.architecture
+                    ),
                 };
 
                 self.root_dir()
@@ -1259,7 +1262,7 @@ impl BuildRequest {
                     .join("main")
                     .join("jniLibs")
                     .join(arch)
-            },
+            }
             OperatingSystem::Linux | OperatingSystem::Windows => self.root_dir(),
             _ => self.root_dir(),
         }
