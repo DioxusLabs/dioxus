@@ -106,7 +106,7 @@ pub fn init_fullstack_document() {
 
     init_document_with(
         || {
-            provide_context(Rc::new(FullstackWebDocument::from(WebDocument)));
+            provide_context(Rc::new(FullstackWebDocument::from(WebDocument)) as Rc<dyn Document>);
         },
         || provide_fullstack_history_context(WebHistory::default()),
     );
