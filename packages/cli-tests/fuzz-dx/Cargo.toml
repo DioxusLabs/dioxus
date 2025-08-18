@@ -8,3 +8,7 @@ quote.workspace = true
 headless_chrome = "1.0.17"
 anyhow.workspace = true
 reqwest = { workspace = true, features = ["blocking"] }
+toml = { workspace = true }
+cargo_toml = { workspace = true, features = ["features"] }
+convert_case = { workspace = true }
+rand.workspace = true

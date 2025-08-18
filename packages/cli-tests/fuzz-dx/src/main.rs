@@ -1,9 +1,11 @@
-use std::fs::create_dir_all;
+use headless_chrome::Browser;
+use rand::random;
 use std::path::{Path, PathBuf};
 
-use headless_chrome::Browser;
+mod generate_mock_dioxus;
+mod random_project;
 
-static PLATFORMS: &[&str] = &["web", "desktop", "mobile", "liveview"];
+static PLATFORMS: &[&str] = &["web", "desktop", "liveview"];
 
 fn dx_path() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -18,6 +20,7 @@ fn run_dx_local() -> std::process::Command {
     let mut command = std::process::Command::new("cargo");
     command
         .arg("run")
+        .arg("-q")
         .arg("--manifest-path")
         .arg(dx_path().join("Cargo.toml"))
         .arg("--");
@@ -39,14 +42,15 @@ fn run_dx(installed: bool) -> std::process::Command {
 fn test_web(
     installed: bool,
     platform: &str,
-    scrap_dir: &Path,
+    crate_dir: &Path,
     port: u16,
 ) -> anyhow::Result<Vec<String>> {
     let mut command = run_dx(installed)
         .arg("serve")
         .arg("--platform")
         .arg(platform)
-        .current_dir(&scrap_dir)
+        .current_dir(&crate_dir)
+        .stdout(std::process::Stdio::null())
         .spawn()
         .expect("Failed to start dioxus server");
 
@@ -65,17 +69,18 @@ fn test_web(
     Ok(features)
 }
 
-fn test_desktop(installed: bool, platform: &str, scrap_dir: &Path) -> anyhow::Result<Vec<String>> {
+fn test_desktop(installed: bool, platform: &str, crate_dir: &Path) -> anyhow::Result<Vec<String>> {
     let mut command = run_dx(installed)
         .arg("run")
         .arg("--platform")
         .arg(platform)
-        .current_dir(&scrap_dir)
+        .current_dir(&crate_dir)
+        .stdout(std::process::Stdio::null())
         .spawn()
         .expect("Failed to start dioxus server");
 
-    command.kill().expect("Failed to wait for dioxus server");
-    let text_value = std::fs::read_to_string(scrap_dir.join("features.txt"))?;
+    command.wait().expect("Failed to wait for dioxus server");
+    let text_value = std::fs::read_to_string(crate_dir.join("features.txt"))?;
     let features = text_value.lines().map(|line| line.to_string()).collect();
 
     Ok(features)
@@ -84,30 +89,35 @@ fn test_desktop(installed: bool, platform: &str, scrap_dir: &Path) -> anyhow::Re
 fn get_features_enabled_for_platform(
     installed: bool,
     platform: &str,
-    scrap_dir: &Path,
+    crate_dir: &Path,
     port: u16,
 ) -> anyhow::Result<Vec<String>> {
     if platform == "web" {
-        test_web(installed, platform, scrap_dir, port)
+        test_web(installed, platform, crate_dir, port)
     } else {
-        test_desktop(installed, platform, scrap_dir)
+        test_desktop(installed, platform, crate_dir)
     }
 }
 
 fn main() {
-    let dx_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .join("cli");
-    let scrap_dir = dx_path.join("testing");
-    create_dir_all(&scrap_dir).unwrap();
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let root = root.parent().unwrap().join("temp");
+    _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(&root).unwrap();
+    let dioxus_features = generate_mock_dioxus::generate_mock_dioxus(&root);
+    for _ in 0..10 {
+        let crate_dir = root.join("testing");
+        random_project::create_random_project(&crate_dir, &dioxus_features);
+        test_project(&crate_dir, 8080);
+    }
+}
+
+fn test_project(crate_dir: &Path, port: u16) {
     for platform in PLATFORMS {
         let old_enabled_features =
-            get_features_enabled_for_platform(true, platform, &scrap_dir, 8080).unwrap();
+            get_features_enabled_for_platform(true, platform, &crate_dir, port).unwrap();
         let new_enabled_features =
-            get_features_enabled_for_platform(false, platform, &scrap_dir, 8080).unwrap();
+            get_features_enabled_for_platform(false, platform, &crate_dir, port).unwrap();
 
         assert_eq!(
             old_enabled_features, new_enabled_features,

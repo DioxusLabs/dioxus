@@ -132,7 +132,6 @@ members = [
     "packages/playwright-tests/cli-optimization",
     "packages/playwright-tests/wasm-split-harness",
     "packages/playwright-tests/default-features-disabled",
-    "packages/cli-tests/generate-mock-dioxus",
     "packages/cli-tests/fuzz-dx"
 ]
 

@@ -1,13 +1,18 @@
-use std::{collections::BTreeMap, io::Write};
+use std::{
+    collections::BTreeMap,
+    io::Write,
+    path::{Path, PathBuf},
+};
 
-use cargo_toml::{Dependency, Manifest, Workspace};
+use cargo_toml::{Dependency, DependencyDetail, Manifest, Workspace};
 use convert_case::Casing;
 use toml::Value;
 
-fn main() {
-    let root_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let root_path = root_path.parent().unwrap();
-    let toml_path = root_path
+pub(crate) fn generate_mock_dioxus(root_path: &Path) -> Vec<String> {
+    let dioxus_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let toml_path = dioxus_path
+        .parent()
+        .unwrap()
         .parent()
         .unwrap()
         .join("dioxus")
@@ -17,7 +22,16 @@ fn main() {
     let features: BTreeMap<_, Vec<_>> = dioxus_crate
         .features
         .keys()
-        .map(|k| (k.clone(), Vec::new()))
+        .map(|k| {
+            (
+                k.clone(),
+                if k == "web" {
+                    vec!["wasm-bindgen".to_string()]
+                } else {
+                    Vec::new()
+                },
+            )
+        })
         .collect();
 
     let feature_enum_names = dioxus_crate
@@ -25,6 +39,7 @@ fn main() {
         .keys()
         .map(|f| f.to_case(convert_case::Case::UpperCamel))
         .collect::<Vec<_>>();
+    let features_string = features.keys().cloned().collect::<Vec<_>>();
 
     // Create a toml for the mock dioxus crate
     let feature_only_toml = Manifest::<Value> {
@@ -41,10 +56,14 @@ fn main() {
             lints: Default::default(),
         }),
         dependencies: [
-            // wasm-bindgen = "0.2.100"
+            // wasm-bindgen = { version = "0.2.100", optional = true }
             (
                 "wasm-bindgen".to_string(),
-                Dependency::Simple("0.2.100".to_string()),
+                Dependency::Detailed(Box::new(DependencyDetail {
+                    version: Some("0.2.100".to_string()),
+                    optional: true,
+                    ..Default::default()
+                })),
             ),
         ]
         .into_iter()
@@ -124,8 +143,12 @@ fn main() {
     writeln!(&mut buf, "}}").unwrap();
 
     writeln!(&mut buf, "\n").unwrap();
-    writeln!(&mut buf, "pub fn launch() {{").unwrap();
-    writeln!(&mut buf, "    let features_string: Vec<_> = ENABLED_FEATURES.iter().map(|f| f.to_string()).collect();").unwrap();
+    writeln!(
+        &mut buf,
+        "pub fn launch(features: impl std::iter::IntoIterator<Item = String>) {{"
+    )
+    .unwrap();
+    writeln!(&mut buf, "    let features_string: Vec<_> = features.into_iter().chain(ENABLED_FEATURES.iter().map(|f| format!(\"dioxus/{{f}}\"))).collect();").unwrap();
     writeln!(&mut buf, "    #[cfg(target_arch = \"wasm32\")]").unwrap();
     writeln!(&mut buf, "    show_features(features_string);").unwrap();
     writeln!(&mut buf, "    #[cfg(not(target_arch = \"wasm32\"))]").unwrap();
@@ -135,4 +158,6 @@ fn main() {
     )
     .unwrap();
     writeln!(&mut buf, "}}").unwrap();
+
+    features_string
 }

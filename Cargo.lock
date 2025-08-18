@@ -7305,9 +7305,13 @@ name = "fuzz-dx"
 version = "0.7.0-rc.0"
 dependencies = [
  "anyhow",
+ "cargo_toml",
+ "convert_case 0.8.0",
  "headless_chrome",
  "quote",
+ "rand 0.9.1",
  "reqwest 0.12.22",
+ "toml 0.8.23",
 ]
 
 [[package]]
@@ -7402,15 +7406,6 @@ dependencies = [
  "libc",
  "system-deps",
  "x11",
-]
-
-[[package]]
-name = "generate-mock-dioxus"
-version = "0.7.0-rc.0"
-dependencies = [
- "cargo_toml",
- "convert_case 0.8.0",
- "toml 0.8.23",
 ]
 
 [[package]]
