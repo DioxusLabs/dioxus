@@ -1,5 +1,5 @@
 use headless_chrome::Browser;
-use rand::random;
+use rand::{random, seq::IndexedRandom};
 use std::path::{Path, PathBuf};
 
 mod generate_mock_dioxus;
@@ -42,15 +42,31 @@ fn run_dx(installed: bool) -> std::process::Command {
 fn test_web(
     installed: bool,
     platform: &str,
+    features: &[String],
     crate_dir: &Path,
     port: u16,
 ) -> anyhow::Result<Vec<String>> {
+    _ = run_dx(installed)
+        .arg("build")
+        .arg("--platform")
+        .arg(platform)
+        .arg("--features")
+        .arg(features.join(","))
+        .current_dir(&crate_dir)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::piped())
+        .output()
+        .expect("Failed to start dioxus server");
+
     let mut command = run_dx(installed)
         .arg("serve")
         .arg("--platform")
         .arg(platform)
+        .arg("--features")
+        .arg(features.join(","))
         .current_dir(&crate_dir)
         .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::piped())
         .spawn()
         .expect("Failed to start dioxus server");
 
@@ -69,13 +85,21 @@ fn test_web(
     Ok(features)
 }
 
-fn test_desktop(installed: bool, platform: &str, crate_dir: &Path) -> anyhow::Result<Vec<String>> {
+fn test_desktop(
+    installed: bool,
+    platform: &str,
+    features: &[String],
+    crate_dir: &Path,
+) -> anyhow::Result<Vec<String>> {
     let mut command = run_dx(installed)
         .arg("run")
         .arg("--platform")
         .arg(platform)
+        .arg("--features")
+        .arg(features.join(","))
         .current_dir(&crate_dir)
         .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::piped())
         .spawn()
         .expect("Failed to start dioxus server");
 
@@ -89,41 +113,56 @@ fn test_desktop(installed: bool, platform: &str, crate_dir: &Path) -> anyhow::Re
 fn get_features_enabled_for_platform(
     installed: bool,
     platform: &str,
+    features: &[String],
     crate_dir: &Path,
     port: u16,
 ) -> anyhow::Result<Vec<String>> {
     if platform == "web" {
-        test_web(installed, platform, crate_dir, port)
+        test_web(installed, platform, features, crate_dir, port)
     } else {
-        test_desktop(installed, platform, crate_dir)
+        test_desktop(installed, platform, features, crate_dir)
     }
 }
 
 fn main() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let root = root.parent().unwrap().join("temp");
-    _ = std::fs::remove_dir_all(&root);
     std::fs::create_dir_all(&root).unwrap();
     let dioxus_features = generate_mock_dioxus::generate_mock_dioxus(&root);
-    for _ in 0..10 {
-        let crate_dir = root.join("testing");
-        random_project::create_random_project(&crate_dir, &dioxus_features);
-        test_project(&crate_dir, 8080);
+    for _ in 0..100 {
+        let crate_dir = root.join("random-dioxus");
+        let features = random_project::create_random_project(&crate_dir, &dioxus_features);
+        // Print the toml
+        println!(
+            "Testing with toml:\n{}",
+            std::fs::read_to_string(crate_dir.join("Cargo.toml")).unwrap()
+        );
+        test_project(&crate_dir, &features, 8080);
     }
+    _ = std::fs::remove_dir_all(&root);
 }
 
-fn test_project(crate_dir: &Path, port: u16) {
-    for platform in PLATFORMS {
-        let old_enabled_features =
-            get_features_enabled_for_platform(true, platform, &crate_dir, port).unwrap();
-        let new_enabled_features =
-            get_features_enabled_for_platform(false, platform, &crate_dir, port).unwrap();
+fn test_project(crate_dir: &Path, features: &[String], port: u16) {
+    // Enable features randomly
+    let enabled_features: Vec<_> = features
+        .iter()
+        .filter(|_| random::<bool>())
+        .cloned()
+        .collect();
+    // Choose a random platform
+    let platform = PLATFORMS.choose(&mut rand::rng()).unwrap();
+    println!("Testing platform {platform} with features {enabled_features:?}");
+    let old_enabled_features =
+        get_features_enabled_for_platform(true, platform, &enabled_features, &crate_dir, port)
+            .unwrap();
+    let new_enabled_features =
+        get_features_enabled_for_platform(false, platform, &enabled_features, &crate_dir, port)
+            .unwrap();
 
-        assert_eq!(
-            old_enabled_features, new_enabled_features,
-            "Features do not match for platform {platform}"
-        );
-    }
+    assert_eq!(
+        old_enabled_features, new_enabled_features,
+        "Features do not match for platform {platform} and features {enabled_features:?}"
+    );
 }
 
 fn features_enabled_web(url: &str) -> anyhow::Result<Vec<String>> {

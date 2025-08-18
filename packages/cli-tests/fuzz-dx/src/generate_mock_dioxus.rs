@@ -4,7 +4,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use cargo_toml::{Dependency, DependencyDetail, Manifest, Workspace};
+use cargo_toml::{Dependency, Manifest, Workspace};
 use convert_case::Casing;
 use toml::Value;
 
@@ -22,16 +22,7 @@ pub(crate) fn generate_mock_dioxus(root_path: &Path) -> Vec<String> {
     let features: BTreeMap<_, Vec<_>> = dioxus_crate
         .features
         .keys()
-        .map(|k| {
-            (
-                k.clone(),
-                if k == "web" {
-                    vec!["wasm-bindgen".to_string()]
-                } else {
-                    Vec::new()
-                },
-            )
-        })
+        .map(|k| (k.clone(), Vec::new()))
         .collect();
 
     let feature_enum_names = dioxus_crate
@@ -59,11 +50,13 @@ pub(crate) fn generate_mock_dioxus(root_path: &Path) -> Vec<String> {
             // wasm-bindgen = { version = "0.2.100", optional = true }
             (
                 "wasm-bindgen".to_string(),
-                Dependency::Detailed(Box::new(DependencyDetail {
-                    version: Some("0.2.100".to_string()),
-                    optional: true,
-                    ..Default::default()
-                })),
+                // TODO: dx panics if wasm bindgen is optional on web builds, but it shouldn't
+                // Dependency::Detailed(Box::new(DependencyDetail {
+                //     version: Some("0.2.100".to_string()),
+                //     optional: true,
+                //     ..Default::default()
+                // })),
+                Dependency::Simple("0.2.100".to_string()),
             ),
         ]
         .into_iter()

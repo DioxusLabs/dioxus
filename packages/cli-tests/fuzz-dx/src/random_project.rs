@@ -2,17 +2,22 @@ use cargo_toml::Manifest;
 use rand::Rng;
 use std::io::Write;
 
-pub(crate) fn create_random_project(root_path: &std::path::Path, dioxus_features: &[String]) {
+pub(crate) fn create_random_project(
+    root_path: &std::path::Path,
+    dioxus_features: &[String],
+) -> Vec<String> {
     std::fs::create_dir_all(&root_path).unwrap();
 
     let mut manifest = Manifest::from_str(
         r#"[package]
-name = "testing"
+name = "random-dioxus"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
 dioxus = { path = "../mock-dioxus" }
+# TODO: This shouldn't be required because wasm bindgen is pulled in by mock dioxus
+wasm-bindgen = "0.2.100"
 
 [workspace]"#,
     )
@@ -20,14 +25,14 @@ dioxus = { path = "../mock-dioxus" }
 
     // Add a random list of features
     let mut rng = rand::rng();
-    for _ in 0..rng.random_range(0..=5) {
+    for _ in 0..rng.random_range(0..=15) {
         let feature_name = format!("feature_{}", rng.random_range(1..=1000));
         manifest.features.insert(feature_name.clone(), vec![]);
     }
     // Add random connections between features
     let feature_names: Vec<_> = manifest.features.keys().cloned().collect();
     if !feature_names.is_empty() {
-        for _ in 0..rng.random_range(0..=5) {
+        for _ in 0..rng.random_range(0..=15) {
             let feature_a = feature_names[rng.random_range(0..feature_names.len())].clone();
             let feature_b = feature_names[rng.random_range(0..feature_names.len())].clone();
             if feature_a != feature_b {
@@ -39,7 +44,7 @@ dioxus = { path = "../mock-dioxus" }
             }
         }
         // Add random dioxus features
-        for _ in 0..rng.random_range(0..=5) {
+        for _ in 0..rng.random_range(0..=15) {
             let crate_features = feature_names[rng.random_range(0..feature_names.len())].clone();
             let dioxus_feature = dioxus_features
                 .get(rng.random_range(0..dioxus_features.len()))
@@ -78,4 +83,6 @@ dioxus = { path = "../mock-dioxus" }
     }
     writeln!(&mut buf, "    dioxus::launch(features);").unwrap();
     writeln!(&mut buf, "}}").unwrap();
+
+    features
 }
