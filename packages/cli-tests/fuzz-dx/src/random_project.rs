@@ -25,6 +25,7 @@ wasm-bindgen = "0.2.100"
 
     // Add a random list of features
     let mut rng = rand::rng();
+    manifest.features.insert("default".into(), vec![]);
     for _ in 0..rng.random_range(0..=15) {
         let feature_name = format!("feature_{}", rng.random_range(1..=1000));
         manifest.features.insert(feature_name.clone(), vec![]);

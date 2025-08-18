@@ -57,7 +57,7 @@ fn add_args(
         .stderr(std::process::Stdio::piped());
 }
 
-fn test_web(
+fn test_port(
     installed: bool,
     platform: Option<&str>,
     features: &[String],
@@ -74,32 +74,23 @@ fn test_web(
 
     // Wait until the server is alive
     let url = format!("http://127.0.0.1:{port}");
-    loop {
+    let mut hit = false;
+    for _ in 0..5 {
         let response = reqwest::blocking::get(&url).map_or(false, |r| r.status().is_success());
+        std::thread::sleep(std::time::Duration::from_millis(100));
         if response {
+            hit = true;
             break;
         }
     }
-    let features = features_enabled_web(&url).expect("Failed to get features");
+    let features = if hit {
+        features_enabled_web(&url).expect("Failed to get features")
+    } else {
+        let text_value = std::fs::read_to_string(crate_dir.join("features.txt"))?;
+        text_value.lines().map(|line| line.to_string()).collect()
+    };
 
     output.kill()?;
-
-    Ok(features)
-}
-
-fn test_desktop(
-    installed: bool,
-    platform: Option<&str>,
-    features: &[String],
-    crate_dir: &Path,
-) -> anyhow::Result<Vec<String>> {
-    let mut command = run_dx(installed);
-    command.arg("run");
-    add_args(&mut command, platform, features, crate_dir);
-    command.output()?;
-
-    let text_value = std::fs::read_to_string(crate_dir.join("features.txt"))?;
-    let features = text_value.lines().map(|line| line.to_string()).collect();
 
     Ok(features)
 }
@@ -111,11 +102,7 @@ fn get_features_enabled_for_platform(
     crate_dir: &Path,
     port: u16,
 ) -> anyhow::Result<Vec<String>> {
-    if platform == Some("web") {
-        test_web(installed, platform, features, crate_dir, port)
-    } else {
-        test_desktop(installed, platform, features, crate_dir)
-    }
+    test_port(installed, platform, features, crate_dir, port)
 }
 
 fn main() {
@@ -157,8 +144,11 @@ fn test_project(crate_dir: &Path, features: &[String], port: u16) {
                 old_features, new_features,
                 "Features do not match for platform {platform:?} and features {enabled_features:?}"
             );
+            println!("✅ Passed!\n");
         }
-        (Err(_), Err(_)) => {}
+        (Err(_), Err(_)) => {
+            println!("❓ Both versions of dx failed\n");
+        }
         (Ok(_), Err(new_error)) => {
             panic!("New features failed to load: {new_error}");
         }

@@ -150,7 +150,31 @@ pub(crate) fn generate_mock_dioxus(root_path: &Path) -> Vec<String> {
         "    std::fs::write(\"features.txt\", features_string.join(\"\\n\")).unwrap();"
     )
     .unwrap();
+    writeln!(&mut buf, "    #[cfg(features = \"server\")]").unwrap();
+    writeln!(&mut buf, "    launch_server(features_string);").unwrap();
+
     writeln!(&mut buf, "}}").unwrap();
+
+    let launch_server = r#"#[cfg(features = "server")]
+fn launch_server(features_string: Vec<String>) {
+    use std::{
+        io::{BufReader, prelude::*},
+        net::{TcpListener, TcpStream},
+    };
+    let port = std::env::var("PORT").unwrap_or_else(|_| "8080".into());
+    let listener = TcpListener::bind(format!("127.0.0.1:{}", port)).unwrap();
+    for stream in listener.incoming() {
+        let stream = stream.unwrap();
+        handle_connection(stream, features_string.clone());
+    }
+    fn handle_connection(mut stream: TcpStream, features_string: Vec<String>) {
+        stream.write_all(b"HTTP/1.1 200 OK\r\n\r\n<html><body><pre>").unwrap();
+        stream.write_all(features_string.join("\n").as_bytes()).unwrap();
+        stream.write_all(b"</pre></body></html>").unwrap();
+    }
+}"#;
+
+    writeln!(&mut buf, "{}", launch_server).unwrap();
 
     features_string
 }
