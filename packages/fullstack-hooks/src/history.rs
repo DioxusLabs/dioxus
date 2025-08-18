@@ -2,9 +2,7 @@
 
 use std::{cell::RefCell, rc::Rc};
 
-use dioxus_core::{
-    consume_context, provide_context, queue_effect, schedule_update, try_consume_context,
-};
+use dioxus_core::{provide_context, queue_effect, schedule_update, try_consume_context};
 use dioxus_fullstack_protocol::{is_hydrating, SerializeContextEntry};
 use dioxus_history::{history, provide_history_context, History};
 
@@ -29,7 +27,11 @@ pub(crate) struct ResolvedRouteContext {
 }
 
 pub(crate) fn finalize_route() {
-    let entry = consume_context::<RouteEntry>();
+    // This may run in tests without the full hydration context set up, if it does, then just
+    // return without modifying the context
+    let Some(entry) = try_consume_context::<RouteEntry>() else {
+        return;
+    };
     let entry = entry
         .entry
         .borrow_mut()
