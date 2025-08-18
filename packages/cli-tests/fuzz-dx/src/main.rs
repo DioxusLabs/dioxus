@@ -92,7 +92,7 @@ fn test_port(
         }
     }
     let features = if hit {
-        features_enabled_web(&url).expect("Failed to get features")
+        features_enabled_web(&url)?
     } else {
         let text_value = std::fs::read_to_string(crate_dir.join("features.txt"))?;
         text_value.lines().map(|line| line.to_string()).collect()
@@ -127,12 +127,12 @@ fn main() {
             "Testing with toml:\n{}",
             std::fs::read_to_string(crate_dir.join("Cargo.toml")).unwrap()
         );
-        test_project(&crate_dir, &features, 8080);
+        test_project(&crate_dir, &features, 8080, 8081);
     }
     _ = std::fs::remove_dir_all(&root);
 }
 
-fn test_project(crate_dir: &Path, features: &[String], port: u16) {
+fn test_project(crate_dir: &Path, features: &[String], port1: u16, port2: u16) {
     // Enable features randomly
     let enabled_features: Vec<_> = features
         .iter()
@@ -152,7 +152,7 @@ fn test_project(crate_dir: &Path, features: &[String], port: u16) {
         &enabled_features,
         fullstack,
         &crate_dir,
-        port,
+        port1,
     );
     let new_enabled_features = get_features_enabled_for_platform(
         false,
@@ -160,7 +160,7 @@ fn test_project(crate_dir: &Path, features: &[String], port: u16) {
         &enabled_features,
         fullstack,
         &crate_dir,
-        port,
+        port2,
     );
 
     match (old_enabled_features, new_enabled_features) {

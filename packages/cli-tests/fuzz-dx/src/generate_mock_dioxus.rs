@@ -152,7 +152,7 @@ pub(crate) fn generate_mock_dioxus(root_path: &Path) -> Vec<String> {
     .unwrap();
     writeln!(
         &mut buf,
-        "    #[cfg(all(not(target_arch = \"wasm32\"), features = \"server\"))]"
+        "    #[cfg(all(not(target_arch = \"wasm32\"), any(features = \"server\", features = \"liveview\")))]"
     )
     .unwrap();
     writeln!(&mut buf, "    launch_server(features_string);").unwrap();
@@ -174,7 +174,7 @@ fn launch_server(features_string: Vec<String>) {
     fn handle_connection(mut stream: TcpStream, features_string: Vec<String>) {
         let status = b"HTTP/1.1 200 OK\r\n";
         stream.write_all(status).unwrap();
-        let content = format!("<html><body><pre>{}</pre></body></html>", features_string.join("\n"));
+        let content = format!("<html><body><pre id = "features">{}</pre></body></html>", features_string.join("\n"));
         stream.write_all(format!("Content-Length: {}\r\n\r\n", content.len()).as_bytes()).unwrap();
         stream.write_all(content.as_bytes()).unwrap();
     }
