@@ -7308,6 +7308,7 @@ dependencies = [
  "cargo_toml",
  "convert_case 0.8.0",
  "headless_chrome",
+ "pretty_assertions",
  "quote",
  "rand 0.9.1",
  "reqwest 0.12.22",

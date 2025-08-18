@@ -12,3 +12,4 @@ toml = { workspace = true }
 cargo_toml = { workspace = true, features = ["features"] }
 convert_case = { workspace = true }
 rand.workspace = true
+pretty_assertions.workspace = true

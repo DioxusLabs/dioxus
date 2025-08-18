@@ -1,4 +1,5 @@
 use headless_chrome::Browser;
+use pretty_assertions::assert_eq;
 use rand::{random, seq::IndexedRandom};
 use std::path::{Path, PathBuf};
 
