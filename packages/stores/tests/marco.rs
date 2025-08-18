@@ -93,6 +93,48 @@ mod macro_tests {
         store.check();
     }
 
+    fn derive_generic_struct_with_bounds() {
+        #[derive(Store)]
+        struct Item<T: ?Sized + 'static> {
+            checked: bool,
+            contents: &'static T,
+        }
+
+        #[store]
+        impl<T: ?Sized + 'static> Store<Item<T>> {
+            fn is_checked(&self) -> bool
+            where
+                T: 'static,
+            {
+                self.checked().cloned()
+            }
+
+            fn check(&mut self)
+            where
+                T: 'static,
+            {
+                self.checked().set(true);
+            }
+        }
+
+        let mut store = use_store(|| Item {
+            checked: false,
+            contents: "Learn about stores",
+        });
+
+        let checked: Store<bool, _> = store.checked();
+        let contents: Store<&'static str, _> = store.contents();
+        let checked: bool = checked();
+        let contents: &'static str = contents();
+
+        let ItemStoreTransposed { checked, contents } = store.transpose();
+        let checked: bool = checked();
+        let contents: &'static str = contents();
+
+        let is_checked = store.is_checked();
+        store.check();
+    }
+
     fn derive_tuple() {
         #[derive(Store, PartialEq, Clone, Debug)]
         struct Item(bool, String);
@@ -231,5 +273,67 @@ mod macro_tests {
 
         let is_foo_or_bar = store.is_foo_or_bar();
         store.make_foo();
+    }
+
+    fn derive_generic_enum_with_bounds() {
+        #[derive(Store, PartialEq, Clone, Debug)]
+        #[non_exhaustive]
+        enum Enum<T: ?Sized + 'static> {
+            Foo,
+            Bar(&'static T),
+            Baz { foo: i32, bar: &'static T },
+            FooBar(u32, &'static T),
+            BarFoo { foo: &'static T },
+        }
+
+        #[store]
+        impl<T: ?Sized + 'static> Store<Enum<T>> {
+            fn is_foo_or_bar(&self) -> bool
+            where
+                T: Clone + 'static,
+            {
+                matches!(self.cloned(), Enum::Foo | Enum::Bar(_))
+            }
+
+            fn make_foo(&mut self)
+            where
+                T: 'static,
+            {
+                self.set(Enum::Foo);
+            }
+        }
+
+        let mut store = use_store(|| Enum::Bar("Hello"));
+
+        let foo = store.is_foo();
+        let bar = store.is_bar();
+        let baz = store.is_baz();
+        let foobar = store.is_foo_bar();
+        let barfoo = store.is_bar_foo();
+
+        let foo = store.bar().unwrap();
+        let foo: &'static str = foo();
+        let bar = store.bar_foo().unwrap();
+        let bar: &'static str = bar();
+
+        let transposed = store.transpose();
+        use EnumStoreTransposed::*;
+        match transposed {
+            EnumStoreTransposed::Foo => {}
+            Bar(bar) => {
+                let bar: &'static str = bar();
+            }
+            Baz { foo, bar } => {
+                let foo: i32 = foo();
+                let bar: &'static str = bar();
+            }
+            FooBar(foo, bar) => {
+                let foo: u32 = foo();
+                let bar: &'static str = bar();
+            }
+            BarFoo { foo } => {
+                let foo: &'static str = foo();
+            }
+        }
     }
 }
