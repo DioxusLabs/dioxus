@@ -487,7 +487,7 @@ pub(crate) struct IndexHtml {
 }
 
 /// The streaming mode to use while rendering the page
-#[derive(Clone, Copy, Default, PartialEq, Debug)]
+#[derive(Clone, Copy, Default, PartialEq)]
 pub enum StreamingMode {
     /// Streaming is disabled; all server futures should be resolved before hydrating the page on the client
     #[default]

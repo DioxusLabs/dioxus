@@ -72,7 +72,6 @@ where
     #[allow(unused)]
     let storage_entry: dioxus_fullstack_protocol::SerializeContextEntry<T> =
         use_hook(|| serialize_context.create_entry());
-    tracing::info!("entry: {storage_entry:?}");
 
     #[cfg(feature = "server")]
     let caller = std::panic::Location::caller();
@@ -97,38 +96,26 @@ where
             #[cfg(feature = "web")]
             match initial_web_result.take() {
                 // The data was deserialized successfully from the server
-                Some(Ok(o)) => {
-                    tracing::info!("Resolved server future from cache");
-                    return o;
-                }
+                Some(Ok(o)) => return o,
 
                 // The data is still pending from the server. Don't try to resolve it on the client
                 Some(Err(dioxus_fullstack_protocol::TakeDataError::DataPending)) => {
-                    tracing::info!("Server future is still pending on the client, suspending");
                     std::future::pending::<()>().await
                 }
 
                 // The data was not available on the server, rerun the future
-                Some(Err(err)) => {
-                    tracing::error!("Failed to resolve server future from cache: {err}");
-                }
+                Some(Err(_)) => {}
 
                 // This isn't the first run, so we don't need do anything
-                None => {
-                    tracing::info!("Server future is still pending on the client, suspending");
-                }
+                None => {}
             }
 
             // Otherwise just run the future itself
-            tracing::info!("Running server future");
             let out = user_fut.await;
 
             // If this is the first run and we are on the server, cache the data in the slot we reserved for it
             #[cfg(feature = "server")]
-            {
-                tracing::info!("Caching server future result");
-                storage_entry.insert(&out, caller);
-            }
+            storage_entry.insert(&out, caller);
 
             out
         }
@@ -143,7 +130,6 @@ where
     if resource.state().cloned() == UseResourceState::Pending {
         let task = resource.task();
         if !task.paused() {
-            tracing::info!("Suspending task");
             return Err(suspend(task).unwrap_err());
         }
     }

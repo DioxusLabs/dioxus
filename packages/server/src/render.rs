@@ -211,10 +211,6 @@ impl SsrRendererPool {
             // rebuild the virtual dom
             virtual_dom.rebuild_in_place();
 
-            tracing::info!(
-                "Starting SSR render for route: {route} with streaming mode {streaming_mode:?}"
-            );
-
             // If streaming is disabled, wait for the virtual dom to finish all suspense work
             // before rendering anything
             if streaming_mode == StreamingMode::Disabled {

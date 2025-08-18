@@ -5541,7 +5541,6 @@ dependencies = [
  "dioxus-signals",
  "futures-channel",
  "serde",
- "tracing",
 ]
 
 [[package]]
