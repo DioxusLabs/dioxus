@@ -74,7 +74,9 @@ fn test_port(
     add_args(&mut command, platform, features, fullstack, crate_dir);
     command.output()?;
     let mut command = run_dx(installed);
+    command.arg("serve");
     add_args(&mut command, platform, features, fullstack, crate_dir);
+    println!("command: {:?}", command);
     let mut output = command.spawn()?;
 
     // Wait until the server is alive
@@ -166,7 +168,7 @@ fn test_project(crate_dir: &Path, features: &[String], port: u16) {
                 old_features, new_features,
                 "Features do not match for platform {platform:?} and features {enabled_features:?}"
             );
-            println!("✅ Passed!\n");
+            println!("✅ Passed! {old_features:?} == {new_features:?}\n");
         }
         (Err(_), Err(_)) => {
             println!("❓ Both versions of dx failed\n");
