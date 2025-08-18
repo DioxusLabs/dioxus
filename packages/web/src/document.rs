@@ -1,3 +1,4 @@
+use dioxus_core::provide_context;
 use dioxus_core::queue_effect;
 use dioxus_core::ScopeId;
 use dioxus_document::{
@@ -66,39 +67,49 @@ extern "C" {
 
 }
 
+fn init_document_with(document: impl FnOnce(), history: impl FnOnce()) {
+    use dioxus_core::has_context;
+
+    ScopeId::ROOT.in_runtime(|| {
+        if has_context::<Rc<dyn Document>>().is_none() {
+            document();
+        }
+        if has_context::<Rc<dyn History>>().is_none() {
+            history();
+        }
+    })
+}
+
 /// Provides the Document through [`ScopeId::provide_context`].
 pub fn init_document() {
     // If hydrate is enabled, we add the FullstackWebDocument with the initial hydration data
     #[cfg(not(feature = "hydrate"))]
     {
-        let provider: Rc<dyn Document> = Rc::new(WebDocument);
-        if ScopeId::ROOT.has_context::<Rc<dyn Document>>().is_none() {
-            ScopeId::ROOT.provide_context(provider);
-        }
-        let history_provider: Rc<dyn History> = Rc::new(WebHistory::default());
-        if ScopeId::ROOT.has_context::<Rc<dyn History>>().is_none() {
-            ScopeId::ROOT.provide_context(history_provider);
-        }
+        use dioxus_history::provide_history_context;
+
+        init_document_with(
+            || {
+                provide_context(Rc::new(WebDocument) as Rc<dyn Document>);
+            },
+            || {
+                provide_history_context(Rc::new(WebHistory::default()));
+            },
+        );
     }
 }
 
 #[cfg(feature = "hydrate")]
 pub fn init_fullstack_document() {
-    use dioxus_core::{has_context, provide_context};
-    use dioxus_fullstack_hooks::{document::FullstackWebDocument, history::FullstackHistory};
+    use dioxus_fullstack_hooks::{
+        document::FullstackWebDocument, history::provide_fullstack_history_context,
+    };
 
-    ScopeId::ROOT.in_runtime(|| {
-        let document =
-            std::rc::Rc::new(FullstackWebDocument::from(WebDocument)) as std::rc::Rc<dyn Document>;
-        if has_context::<Rc<dyn Document>>().is_none() {
-            provide_context(document);
-        }
-        let history = std::rc::Rc::new(FullstackHistory::new(WebHistory::default()))
-            as std::rc::Rc<dyn History>;
-        if has_context::<Rc<dyn History>>().is_none() {
-            provide_context(history);
-        }
-    })
+    init_document_with(
+        || {
+            provide_context(Rc::new(FullstackWebDocument::from(WebDocument)));
+        },
+        || provide_fullstack_history_context(WebHistory::default()),
+    );
 }
 
 /// The web-target's document provider.

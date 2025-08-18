@@ -8,7 +8,7 @@ mod error;
 #[doc(hidden)]
 pub mod mock_client;
 
-pub use dioxus_fullstack_hooks::history::FullstackHistory;
+pub use dioxus_fullstack_hooks::history::provide_fullstack_history_context;
 
 pub use crate::error::{ServerFnError, ServerFnResult};
 #[doc(inline)]

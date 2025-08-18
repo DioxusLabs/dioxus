@@ -2,9 +2,11 @@
 
 use std::{cell::RefCell, rc::Rc};
 
-use dioxus_core::{consume_context, provide_context, queue_effect, schedule_update, try_consume_context};
+use dioxus_core::{
+    consume_context, provide_context, queue_effect, schedule_update, try_consume_context,
+};
 use dioxus_fullstack_protocol::{is_hydrating, SerializeContextEntry};
-use dioxus_history::{history, History};
+use dioxus_history::{history, provide_history_context, History};
 
 // If we are currently in a scope and this is the first run then queue a rerender
 // for after hydration
@@ -28,7 +30,11 @@ pub(crate) struct ResolvedRouteContext {
 
 pub(crate) fn finalize_route() {
     let entry = consume_context::<RouteEntry>();
-    let entry = entry.entry.borrow_mut().take().expect("Failed to get initial route from hydration context");
+    let entry = entry
+        .entry
+        .borrow_mut()
+        .take()
+        .expect("Failed to get initial route from hydration context");
     if cfg!(feature = "server") {
         let history = history();
         let initial_route = history.current_route();
@@ -46,24 +52,30 @@ pub(crate) fn finalize_route() {
     }
 }
 
-#[derive(Debug, Clone)]
+/// Provide the fullstack history context. This interacts with the hydration context so it must
+/// be called in the same order on the client and server after the hydration context is created
+pub fn provide_fullstack_history_context<H: History + 'static>(history: H) {
+    let entry = dioxus_fullstack_protocol::serialize_context().create_entry();
+    provide_context(RouteEntry {
+        entry: Rc::new(RefCell::new(Some(entry.clone()))),
+    });
+    provide_history_context(Rc::new(FullstackHistory::new(history)));
+}
+
+#[derive(Clone)]
 struct RouteEntry {
     entry: Rc<RefCell<Option<SerializeContextEntry<String>>>>,
 }
 
 /// A history provider for fullstack apps that is compatible with hydration.
 #[derive(Clone)]
-pub struct FullstackHistory<H> {
+struct FullstackHistory<H> {
     history: H,
 }
 
 impl<H> FullstackHistory<H> {
     /// Create a new `FullstackHistory` with the given history.
     pub fn new(history: H) -> Self {
-        let entry = dioxus_fullstack_protocol::serialize_context().create_entry();
-        provide_context(RouteEntry {
-            entry: Rc::new(RefCell::new(Some(entry.clone()))),
-        });
         Self { history }
     }
 

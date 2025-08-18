@@ -9,7 +9,7 @@ use dioxus_core::{
     has_context, provide_error_boundary, DynamicNode, ErrorContext, ScopeId, SuspenseContext,
     VNode, VirtualDom,
 };
-use dioxus_fullstack_hooks::history::FullstackHistory;
+use dioxus_fullstack_hooks::history::provide_fullstack_history_context;
 use dioxus_fullstack_hooks::{StreamingContext, StreamingStatus};
 use dioxus_fullstack_protocol::{HydrationContext, SerializedHydrationData};
 use dioxus_isrg::{CachedRender, IncrementalRendererError, RenderFreshness};
@@ -200,13 +200,13 @@ impl SsrRendererPool {
             } else {
                 dioxus_history::MemoryHistory::with_initial_path(&route)
             };
-            // Wrap the memory history in a fullstack history provider to provide the initial route for hydration
-            let history = in_root_scope(&virtual_dom, || FullstackHistory::new(history));
 
             let streaming_context = in_root_scope(&virtual_dom, StreamingContext::new);
-            virtual_dom.provide_root_context(Rc::new(history) as Rc<dyn dioxus_history::History>);
             virtual_dom.provide_root_context(document.clone() as Rc<dyn dioxus_document::Document>);
             virtual_dom.provide_root_context(streaming_context);
+
+            // Wrap the memory history in a fullstack history provider to provide the initial route for hydration
+            in_root_scope(&virtual_dom, || provide_fullstack_history_context(history));
 
             // rebuild the virtual dom
             virtual_dom.rebuild_in_place();
