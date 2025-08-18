@@ -1,0 +1,15 @@
+[package]
+name = "generate-mock-dioxus"
+publish = false
+edition = "2021"
+version.workspace = true
+authors = ["Dioxus Labs"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/DioxusLabs/dioxus/"
+homepage = "https://dioxuslabs.com"
+rust-version = "1.79.0"
+
+[dependencies]
+toml = { workspace = true }
+cargo_toml = { workspace = true, features = ["features"] }
+convert_case = { workspace = true }

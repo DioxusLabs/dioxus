@@ -1,0 +1,51 @@
+[package]
+name = "dioxus"
+version = "0.7.0-rc.0"
+edition = "2021"
+rust-version = "1.80.0"
+authors = ["Jonathan Kelley", "Dioxus Labs", "ealmloff"]
+description = "Build fullstack web, desktop, and mobile apps with a single codebase."
+homepage = "https://dioxuslabs.com"
+readme = "README.md"
+keywords = ["web", "desktop", "mobile", "gui", "wasm"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/DioxusLabs/dioxus/"
+
+[package.metadata.docs.rs]
+cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
+features = ["router", "ssr", "web", "fullstack", "signals", "hooks", "html", "liveview", "server", "warnings"]
+
+[workspace]
+members = []
+
+[dependencies]
+wasm-bindgen = "0.2.100"
+
+[features]
+asset = []
+cli-config = []
+default = []
+desktop = []
+devtools = []
+document = []
+file_engine = []
+fullstack = []
+hooks = []
+html = []
+launch = []
+lib = []
+liveview = []
+logger = []
+macro = []
+minimal = []
+mobile = []
+mounted = []
+native = []
+router = []
+server = []
+signals = []
+ssr = []
+third-party-renderer = []
+warnings = []
+wasm-split = []
+web = []

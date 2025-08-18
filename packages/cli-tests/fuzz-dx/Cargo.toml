@@ -1,0 +1,10 @@
+[package]
+name = "fuzz-dx"
+edition = "2024"
+version.workspace = true
+
+[dependencies]
+quote.workspace = true
+headless_chrome = "1.0.17"
+anyhow.workspace = true
+reqwest = { workspace = true, features = ["blocking"] }
