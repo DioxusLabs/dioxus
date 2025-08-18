@@ -95,7 +95,10 @@ mod macro_tests {
 
     fn derive_generic_struct_with_bounds() {
         #[derive(Store)]
-        struct Item<T: ?Sized + 'static> {
+        struct Item<T: ?Sized>
+        where
+            T: 'static,
+        {
             checked: bool,
             contents: &'static T,
         }
@@ -278,7 +281,10 @@ mod macro_tests {
     fn derive_generic_enum_with_bounds() {
         #[derive(Store, PartialEq, Clone, Debug)]
         #[non_exhaustive]
-        enum Enum<T: ?Sized + 'static> {
+        enum Enum<T: ?Sized>
+        where
+            T: 'static,
+        {
             Foo,
             Bar(&'static T),
             Baz { foo: i32, bar: &'static T },

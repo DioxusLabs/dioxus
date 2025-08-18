@@ -133,7 +133,7 @@ fn derive_store_struct(
 
     // Expand to the extension trait and its implementation for the store alongside the transposed struct
     Ok(quote! {
-        #visibility trait #extension_trait_name #extension_impl_generics where #extension_where_clause {
+        #visibility trait #extension_trait_name #extension_impl_generics #extension_where_clause {
             #(
                 #definitions
             )*
@@ -362,7 +362,7 @@ fn derive_store_enum(
 
     // Expand to the extension trait and its implementation for the store alongside the transposed enum
     Ok(quote! {
-        #visibility trait #extension_trait_name #extension_impl_generics where #extension_where_clause {
+        #visibility trait #extension_trait_name #extension_impl_generics #extension_where_clause {
             #(
                 #definitions
             )*
