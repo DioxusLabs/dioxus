@@ -150,7 +150,11 @@ pub(crate) fn generate_mock_dioxus(root_path: &Path) -> Vec<String> {
         "    std::fs::write(\"features.txt\", features_string.join(\"\\n\")).unwrap();"
     )
     .unwrap();
-    writeln!(&mut buf, "    #[cfg(features = \"server\")]").unwrap();
+    writeln!(
+        &mut buf,
+        "    #[cfg(all(not(target_arch = \"wasm32\"), features = \"server\"))]"
+    )
+    .unwrap();
     writeln!(&mut buf, "    launch_server(features_string);").unwrap();
 
     writeln!(&mut buf, "}}").unwrap();
@@ -168,9 +172,11 @@ fn launch_server(features_string: Vec<String>) {
         handle_connection(stream, features_string.clone());
     }
     fn handle_connection(mut stream: TcpStream, features_string: Vec<String>) {
-        stream.write_all(b"HTTP/1.1 200 OK\r\n\r\n<html><body><pre>").unwrap();
-        stream.write_all(features_string.join("\n").as_bytes()).unwrap();
-        stream.write_all(b"</pre></body></html>").unwrap();
+        let status = b"HTTP/1.1 200 OK\r\n";
+        stream.write_all(status).unwrap();
+        let content = format!("<html><body><pre>{}</pre></body></html>", features_string.join("\n"));
+        stream.write_all(format!("Content-Length: {}\r\n\r\n", content.len()).as_bytes()).unwrap();
+        stream.write_all(content.as_bytes()).unwrap();
     }
 }"#;
 

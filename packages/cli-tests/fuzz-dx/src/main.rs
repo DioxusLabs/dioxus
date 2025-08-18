@@ -43,6 +43,7 @@ fn add_args(
     command: &mut std::process::Command,
     platform: Option<&str>,
     features: &[String],
+    fullstack: bool,
     crate_dir: &Path,
 ) {
     if let Some(platform) = platform {
@@ -50,6 +51,9 @@ fn add_args(
     }
     if !features.is_empty() {
         command.arg("--features").arg(features.join(","));
+    }
+    if fullstack {
+        command.arg("--fullstack");
     }
     command
         .current_dir(crate_dir)
@@ -61,15 +65,16 @@ fn test_port(
     installed: bool,
     platform: Option<&str>,
     features: &[String],
+    fullstack: bool,
     crate_dir: &Path,
     port: u16,
 ) -> anyhow::Result<Vec<String>> {
     let mut command = run_dx(installed);
     command.arg("build");
-    add_args(&mut command, platform, features, crate_dir);
+    add_args(&mut command, platform, features, fullstack, crate_dir);
     command.output()?;
     let mut command = run_dx(installed);
-    add_args(&mut command, platform, features, crate_dir);
+    add_args(&mut command, platform, features, fullstack, crate_dir);
     let mut output = command.spawn()?;
 
     // Wait until the server is alive
@@ -99,10 +104,11 @@ fn get_features_enabled_for_platform(
     installed: bool,
     platform: Option<&str>,
     features: &[String],
+    fullstack: bool,
     crate_dir: &Path,
     port: u16,
 ) -> anyhow::Result<Vec<String>> {
-    test_port(installed, platform, features, crate_dir, port)
+    test_port(installed, platform, features, fullstack, crate_dir, port)
 }
 
 fn main() {
@@ -132,11 +138,27 @@ fn test_project(crate_dir: &Path, features: &[String], port: u16) {
         .collect();
     // Choose a random platform
     let platform = rand::random_bool(0.8).then(|| *PLATFORMS.choose(&mut rand::rng()).unwrap());
-    println!("Testing platform {platform:?} with features {enabled_features:?}");
-    let old_enabled_features =
-        get_features_enabled_for_platform(true, platform, &enabled_features, &crate_dir, port);
-    let new_enabled_features =
-        get_features_enabled_for_platform(false, platform, &enabled_features, &crate_dir, port);
+    // Randomly set fullstack
+    let fullstack = rand::random_bool(0.2);
+    println!(
+        "Testing platform {platform:?} with features {enabled_features:?} and fullstack {fullstack}"
+    );
+    let old_enabled_features = get_features_enabled_for_platform(
+        true,
+        platform,
+        &enabled_features,
+        fullstack,
+        &crate_dir,
+        port,
+    );
+    let new_enabled_features = get_features_enabled_for_platform(
+        false,
+        platform,
+        &enabled_features,
+        fullstack,
+        &crate_dir,
+        port,
+    );
 
     match (old_enabled_features, new_enabled_features) {
         (Ok(old_features), Ok(new_features)) => {
