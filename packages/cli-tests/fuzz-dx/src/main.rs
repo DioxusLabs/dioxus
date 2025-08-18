@@ -39,36 +39,38 @@ fn run_dx(installed: bool) -> std::process::Command {
     }
 }
 
+fn add_args(
+    command: &mut std::process::Command,
+    platform: Option<&str>,
+    features: &[String],
+    crate_dir: &Path,
+) {
+    if let Some(platform) = platform {
+        command.arg("--platform").arg(platform);
+    }
+    if !features.is_empty() {
+        command.arg("--features").arg(features.join(","));
+    }
+    command
+        .current_dir(crate_dir)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::piped());
+}
+
 fn test_web(
     installed: bool,
-    platform: &str,
+    platform: Option<&str>,
     features: &[String],
     crate_dir: &Path,
     port: u16,
 ) -> anyhow::Result<Vec<String>> {
-    _ = run_dx(installed)
-        .arg("build")
-        .arg("--platform")
-        .arg(platform)
-        .arg("--features")
-        .arg(features.join(","))
-        .current_dir(&crate_dir)
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::piped())
-        .output()
-        .expect("Failed to start dioxus server");
-
-    let mut command = run_dx(installed)
-        .arg("serve")
-        .arg("--platform")
-        .arg(platform)
-        .arg("--features")
-        .arg(features.join(","))
-        .current_dir(&crate_dir)
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
-        .expect("Failed to start dioxus server");
+    let mut command = run_dx(installed);
+    command.arg("build");
+    add_args(&mut command, platform, features, crate_dir);
+    command.output()?;
+    let mut command = run_dx(installed);
+    add_args(&mut command, platform, features, crate_dir);
+    let mut output = command.spawn()?;
 
     // Wait until the server is alive
     let url = format!("http://127.0.0.1:{port}");
@@ -80,30 +82,22 @@ fn test_web(
     }
     let features = features_enabled_web(&url).expect("Failed to get features");
 
-    command.kill().expect("Failed to wait for dioxus server");
+    output.kill()?;
 
     Ok(features)
 }
 
 fn test_desktop(
     installed: bool,
-    platform: &str,
+    platform: Option<&str>,
     features: &[String],
     crate_dir: &Path,
 ) -> anyhow::Result<Vec<String>> {
-    let mut command = run_dx(installed)
-        .arg("run")
-        .arg("--platform")
-        .arg(platform)
-        .arg("--features")
-        .arg(features.join(","))
-        .current_dir(&crate_dir)
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
-        .expect("Failed to start dioxus server");
+    let mut command = run_dx(installed);
+    command.arg("run");
+    add_args(&mut command, platform, features, crate_dir);
+    command.output()?;
 
-    command.wait().expect("Failed to wait for dioxus server");
     let text_value = std::fs::read_to_string(crate_dir.join("features.txt"))?;
     let features = text_value.lines().map(|line| line.to_string()).collect();
 
@@ -112,12 +106,12 @@ fn test_desktop(
 
 fn get_features_enabled_for_platform(
     installed: bool,
-    platform: &str,
+    platform: Option<&str>,
     features: &[String],
     crate_dir: &Path,
     port: u16,
 ) -> anyhow::Result<Vec<String>> {
-    if platform == "web" {
+    if platform == Some("web") {
         test_web(installed, platform, features, crate_dir, port)
     } else {
         test_desktop(installed, platform, features, crate_dir)
@@ -150,19 +144,28 @@ fn test_project(crate_dir: &Path, features: &[String], port: u16) {
         .cloned()
         .collect();
     // Choose a random platform
-    let platform = PLATFORMS.choose(&mut rand::rng()).unwrap();
-    println!("Testing platform {platform} with features {enabled_features:?}");
+    let platform = rand::random_bool(0.8).then(|| *PLATFORMS.choose(&mut rand::rng()).unwrap());
+    println!("Testing platform {platform:?} with features {enabled_features:?}");
     let old_enabled_features =
-        get_features_enabled_for_platform(true, platform, &enabled_features, &crate_dir, port)
-            .unwrap();
+        get_features_enabled_for_platform(true, platform, &enabled_features, &crate_dir, port);
     let new_enabled_features =
-        get_features_enabled_for_platform(false, platform, &enabled_features, &crate_dir, port)
-            .unwrap();
+        get_features_enabled_for_platform(false, platform, &enabled_features, &crate_dir, port);
 
-    assert_eq!(
-        old_enabled_features, new_enabled_features,
-        "Features do not match for platform {platform} and features {enabled_features:?}"
-    );
+    match (old_enabled_features, new_enabled_features) {
+        (Ok(old_features), Ok(new_features)) => {
+            assert_eq!(
+                old_features, new_features,
+                "Features do not match for platform {platform:?} and features {enabled_features:?}"
+            );
+        }
+        (Err(_), Err(_)) => {}
+        (Ok(_), Err(new_error)) => {
+            panic!("New features failed to load: {new_error}");
+        }
+        (Err(old_error), Ok(_)) => {
+            panic!("Old features failed to load: {old_error}");
+        }
+    }
 }
 
 fn features_enabled_web(url: &str) -> anyhow::Result<Vec<String>> {
