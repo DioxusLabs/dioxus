@@ -649,19 +649,19 @@ impl AppBuilder {
                 .as_mut()
                 .context("No artifacts to hotpatch")?;
 
-            if original_artifacts.assets.contains(bundled) {
+            if original_artifacts.assets.manifest.contains(bundled) {
                 continue;
             }
 
             // If this is a new asset, insert it into the artifacts so we can track it when hot reloading
-            original_artifacts.assets.insert_asset(*bundled);
+            original_artifacts.assets.manifest.insert_asset(*bundled);
 
             let from = dunce::canonicalize(PathBuf::from(bundled.absolute_source_path()))?;
 
             let to = asset_dir.join(bundled.bundled_path());
 
             tracing::debug!("Copying asset from patch: {}", from.display());
-            if let Err(e) = dioxus_cli_opt::process_file_to(bundled.options(), &from, &to) {
+            if let Err(e) = dioxus_cli_opt::process_file_to(bundled.options(), &from, &to, true) {
                 tracing::error!("Failed to copy asset: {e}");
                 continue;
             }
@@ -762,7 +762,10 @@ impl AppBuilder {
             .ok()?;
 
         // The asset might've been renamed thanks to the manifest, let's attempt to reload that too
-        let resources = artifacts.assets.get_assets_for_source(&changed_file)?;
+        let resources = artifacts
+            .assets
+            .manifest
+            .get_assets_for_source(&changed_file)?;
         let mut bundled_names = Vec::new();
         for resource in resources {
             let output_path = asset_dir.join(resource.bundled_path());
@@ -776,7 +779,7 @@ impl AppBuilder {
             // the asset would be in a new location because the contents and hash have changed. Since we are
             // hotreloading, we need to use the old asset location it was originally written to.
             let options = *resource.options();
-            let res = process_file_to(&options, &changed_file, &output_path);
+            let res = process_file_to(&options, &changed_file, &output_path, true);
             let bundled_name = PathBuf::from(resource.bundled_path());
             if let Err(e) = res {
                 tracing::debug!("Failed to hotreload asset {e}");

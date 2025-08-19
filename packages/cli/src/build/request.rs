@@ -320,16 +320,16 @@
 //! - xbuild: <https://github.com/rust-mobile/xbuild/blob/master/xbuild/src/command/build.rs>
 
 use crate::{
-    AndroidTools, BuildContext, BundleFormat, DioxusConfig, Error, LinkAction, LinkerFlavor,
-    Renderer, Result, RustcArgs, TargetAlias, TargetArgs, TraceSrc, WasmBindgen, WasmOptConfig,
-    Workspace, DX_RUSTC_WRAPPER_ENV_VAR,
+    AndroidTools, BuildAssets, BuildContext, BundleFormat, DioxusConfig, Error, LinkAction,
+    LinkerFlavor, Renderer, Result, RustcArgs, TargetAlias, TargetArgs, TraceSrc, WasmBindgen,
+    WasmOptConfig, Workspace, DX_RUSTC_WRAPPER_ENV_VAR,
 };
 use anyhow::{bail, Context};
 use cargo_metadata::diagnostic::Diagnostic;
 use depinfo::RustcDepInfo;
 use dioxus_cli_config::{format_base_path_meta_element, PRODUCT_NAME_ENV};
 use dioxus_cli_config::{APP_TITLE_ENV, ASSET_ROOT_ENV};
-use dioxus_cli_opt::{process_file_to, AssetManifest};
+use dioxus_cli_opt::{create_bundled_asset, process_file_to, AssetManifest};
 use itertools::Itertools;
 use krates::{cm::TargetKind, NodeId};
 use manganis::AssetOptions;
@@ -452,7 +452,7 @@ pub struct BuildArtifacts {
     pub(crate) direct_rustc: RustcArgs,
     pub(crate) time_start: SystemTime,
     pub(crate) time_end: SystemTime,
-    pub(crate) assets: AssetManifest,
+    pub(crate) assets: BuildAssets,
     pub(crate) mode: BuildMode,
     pub(crate) patch_cache: Option<Arc<HotpatchModuleCache>>,
     pub(crate) depinfo: RustcDepInfo,
@@ -1074,6 +1074,7 @@ impl BuildRequest {
         }
 
         let assets = self.collect_assets(&exe, ctx)?;
+        let assets = BuildAssets::new(assets);
         let time_end = SystemTime::now();
         let mode = ctx.mode.clone();
         let bundle = self.bundle;
@@ -1122,7 +1123,7 @@ impl BuildRequest {
         &self,
         ctx: &BuildContext,
         exe: &Path,
-        assets: &mut AssetManifest,
+        assets: &mut BuildAssets,
     ) -> Result<()> {
         match self.bundle {
             // Run wasm-bindgen on the wasm binary and set its output to be in the bundle folder
@@ -1277,7 +1278,7 @@ impl BuildRequest {
     /// Copy the assets out of the manifest and into the target location
     ///
     /// Should be the same on all platforms - just copy over the assets from the manifest into the output directory
-    async fn write_assets(&self, ctx: &BuildContext, assets: &AssetManifest) -> Result<()> {
+    async fn write_assets(&self, ctx: &BuildContext, assets: &BuildAssets) -> Result<()> {
         // Server doesn't need assets - web will provide them
         if self.bundle == BundleFormat::Server {
             return Ok(());
@@ -1364,7 +1365,7 @@ impl BuildRequest {
                         "Starting asset copy {processing}/{asset_count} from {from_:?}"
                     );
 
-                    let res = process_file_to(options, from, to);
+                    let res = process_file_to(options, from, to, true);
                     if let Err(err) = res.as_ref() {
                         tracing::error!("Failed to copy asset {from:?}: {err}");
                     }
@@ -1384,7 +1385,7 @@ impl BuildRequest {
         .map_err(|e| anyhow::anyhow!("A task failed while trying to copy assets: {e}"))??;
 
         // Remove the wasm dir if we packaged it to an "asset"-type app
-        if self.should_bundle_to_asset() {
+        if self.should_optimize_wasm_bindgen_to_asset() {
             _ = std::fs::remove_dir_all(self.wasm_bindgen_out_dir());
         }
 
@@ -1578,7 +1579,8 @@ impl BuildRequest {
         }
 
         // Now extract the assets from the fat binary
-        artifacts.assets = self.collect_assets(&self.patch_exe(artifacts.time_start), ctx)?;
+        artifacts.assets.manifest =
+            self.collect_assets(&self.patch_exe(artifacts.time_start), ctx)?;
 
         // If this is a web build, reset the index.html file in case it was modified by SSG
         self.write_index_html(&artifacts.assets)
@@ -3624,7 +3626,7 @@ impl BuildRequest {
     }
 
     /// Check if the wasm output should be bundled to an asset type app.
-    fn should_bundle_to_asset(&self) -> bool {
+    fn should_optimize_wasm_bindgen_to_asset(&self) -> bool {
         self.release && !self.wasm_split && self.bundle == BundleFormat::Web
     }
 
@@ -3637,7 +3639,7 @@ impl BuildRequest {
         &self,
         ctx: &BuildContext,
         exe: &Path,
-        assets: &mut AssetManifest,
+        assets: &mut BuildAssets,
     ) -> Result<()> {
         use crate::{wasm_bindgen::WasmBindgen, wasm_opt};
         use std::fmt::Write;
@@ -3741,6 +3743,7 @@ impl BuildRequest {
                 writeln!(
                     glue, "export const __wasm_split_load_chunk_{idx} = makeLoad(\"/assets/{url}\", [], fusedImports);",
                     url = assets
+                    .manifest
                         .register_asset(&path, AssetOptions::builder().into_asset_options())?.bundled_path(),
                 )?;
             }
@@ -3769,6 +3772,7 @@ impl BuildRequest {
 
                     // Again, register this wasm with the asset system
                     url = assets
+                        .manifest
                         .register_asset(&path, AssetOptions::builder().into_asset_options())?
                         .bundled_path(),
 
@@ -3816,9 +3820,9 @@ impl BuildRequest {
             wasm_opt::optimize(&post_bindgen_wasm, &post_bindgen_wasm, &wasm_opt_options).await?;
         }
 
-        if self.should_bundle_to_asset() {
+        if self.should_optimize_wasm_bindgen_to_asset() {
             // Make sure to register the main wasm file with the asset system
-            assets.register_asset(
+            assets.manifest.register_asset(
                 &post_bindgen_wasm,
                 AssetOptions::builder().into_asset_options(),
             )?;
@@ -3827,15 +3831,48 @@ impl BuildRequest {
         // Now that the wasm is registered as an asset, we can write the js glue shim
         self.write_js_glue_shim(assets)?;
 
-        if self.should_bundle_to_asset() {
-            // Register the main.js with the asset system so it bundles in the snippets and optimizes
-            assets.register_asset(
-                &self.wasm_bindgen_js_output_file(),
-                AssetOptions::js()
-                    .with_minify(true)
-                    .with_preload(true)
-                    .into_asset_options(),
-            )?;
+        // Register the main.js with the asset system so it bundles in the snippets and optimizes
+        if self.should_optimize_wasm_bindgen_to_asset() {
+            let try_bundle_js = || {
+                let asset = create_bundled_asset(
+                    &self.wasm_bindgen_js_output_file(),
+                    AssetOptions::js()
+                        .with_minify(true)
+                        .with_preload(true)
+                        .into_asset_options(),
+                    false,
+                )?;
+                process_file_to(
+                    asset.options(),
+                    Path::new(asset.absolute_source_path()),
+                    &self.asset_dir().join(asset.bundled_path()),
+                    false,
+                )?;
+                anyhow::Ok(asset)
+            };
+            let mut bundled = true;
+
+            let asset = match try_bundle_js() {
+                Ok(asset) => asset,
+                // If bundling the js fails, bundle the whole folder instead
+                Err(err) => {
+                    tracing::warn!("Failed to bundle the wasm-bindgen javascript: {err}. Copying the whole folder instead.");
+                    let asset = create_bundled_asset(
+                        &self.wasm_bindgen_out_dir(),
+                        AssetOptions::builder().into_asset_options(),
+                        false,
+                    )?;
+                    bundled = false;
+                    process_file_to(
+                        asset.options(),
+                        Path::new(asset.absolute_source_path()),
+                        &self.asset_dir().join(asset.bundled_path()),
+                        false,
+                    )?;
+                    asset
+                }
+            };
+            assets.set_wasm_bindgen_js(asset, bundled);
         }
 
         // Write the index.html file with the pre-configured contents we got from pre-rendering
@@ -3844,7 +3881,7 @@ impl BuildRequest {
         Ok(())
     }
 
-    fn write_js_glue_shim(&self, assets: &AssetManifest) -> Result<()> {
+    fn write_js_glue_shim(&self, assets: &BuildAssets) -> Result<()> {
         let wasm_path = self.bundled_wasm_path(assets);
 
         // Load and initialize wasm without requiring a separate javascript file.
@@ -3879,7 +3916,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
 
     /// Write the index.html file to the output directory. This must be called after the wasm and js
     /// assets are registered with the asset system if this is a release build.
-    pub(crate) fn write_index_html(&self, assets: &AssetManifest) -> Result<()> {
+    pub(crate) fn write_index_html(&self, assets: &BuildAssets) -> Result<()> {
         let wasm_path = self.bundled_wasm_path(assets);
         let js_path = self.bundled_js_path(assets);
 
@@ -3892,13 +3929,19 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         Ok(())
     }
 
-    fn bundled_js_path(&self, assets: &AssetManifest) -> String {
+    fn bundled_js_path(&self, assets: &BuildAssets) -> String {
         let wasm_bindgen_js_out = self.wasm_bindgen_js_output_file();
-        if self.should_bundle_to_asset() {
-            let name = assets
-                .get_first_asset_for_source(&wasm_bindgen_js_out)
-                .expect("The js source must exist before creating index.html");
-            format!("assets/{}", name.bundled_path())
+        if let Some(bundle) = assets.wasm_bindgen_js() {
+            let path = bundle.bundled_path();
+            if assets.wasm_js_bundled() {
+                format!("assets/{path}")
+            } else {
+                // If the assets are not bundled, we can just use the file name
+                format!(
+                    "assets/{path}/{}",
+                    self.wasm_bindgen_js_root().to_string_lossy()
+                )
+            }
         } else {
             format!(
                 "wasm/{}",
@@ -3908,10 +3951,11 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
     }
 
     /// Get the path to the wasm-bindgen output files. Either the direct file or the opitmized one depending on the build mode
-    fn bundled_wasm_path(&self, assets: &AssetManifest) -> String {
+    fn bundled_wasm_path(&self, assets: &BuildAssets) -> String {
         let wasm_bindgen_wasm_out = self.wasm_bindgen_wasm_output_file();
-        if self.should_bundle_to_asset() {
+        if self.should_optimize_wasm_bindgen_to_asset() {
             let name = assets
+                .manifest
                 .get_first_asset_for_source(&wasm_bindgen_wasm_out)
                 .expect("The wasm source must exist before creating index.html");
             format!("assets/{}", name.bundled_path())
@@ -4193,11 +4237,15 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         self.root_dir().join("wasm")
     }
 
+    /// Get the root of the wasm_bindgen js file
+    fn wasm_bindgen_js_root(&self) -> PathBuf {
+        PathBuf::from(self.executable_name()).with_extension("js")
+    }
+
     /// Get the path to the wasm bindgen javascript output file
     pub(crate) fn wasm_bindgen_js_output_file(&self) -> PathBuf {
         self.wasm_bindgen_out_dir()
-            .join(self.executable_name())
-            .with_extension("js")
+            .join(self.wasm_bindgen_js_root())
     }
 
     /// Get the path to the wasm bindgen wasm output file
@@ -4441,7 +4489,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
     /// web's index.html is weird since it's not just a bundle format but also a *content* format
     pub(crate) fn prepare_html(
         &self,
-        assets: &AssetManifest,
+        assets: &BuildAssets,
         wasm_path: &str,
         js_path: &str,
     ) -> Result<String> {
@@ -4480,7 +4528,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
     // Inject any resources from the config into the html
     fn inject_resources(
         &self,
-        assets: &AssetManifest,
+        assets: &BuildAssets,
         wasm_path: &str,
         html: &mut String,
     ) -> Result<()> {
@@ -4562,7 +4610,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
     }
 
     /// Inject loading scripts if they are not already present
-    fn inject_loading_scripts(&self, assets: &AssetManifest, html: &mut String) {
+    fn inject_loading_scripts(&self, assets: &BuildAssets, html: &mut String) {
         // If the current build opted out of injecting loading scripts, don't inject anything
         if !self.inject_loading_scripts {
             return;

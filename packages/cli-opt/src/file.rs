@@ -15,8 +15,9 @@ pub fn process_file_to(
     options: &AssetOptions,
     source: &Path,
     output_path: &Path,
+    allow_fallback: bool,
 ) -> anyhow::Result<()> {
-    process_file_to_with_options(options, source, output_path, false)
+    process_file_to_with_options(options, source, output_path, false, allow_fallback)
 }
 
 /// Process a specific file asset with additional options
@@ -25,6 +26,7 @@ pub(crate) fn process_file_to_with_options(
     source: &Path,
     output_path: &Path,
     in_folder: bool,
+    allow_fallback: bool,
 ) -> anyhow::Result<()> {
     // If the file already exists and this is a hashed asset, then we must have a file
     // with the same hash already. The hash has the file contents and options, so if we
@@ -52,25 +54,25 @@ pub(crate) fn process_file_to_with_options(
 
     match &resolved_options {
         ResolvedAssetType::Css(options) => {
-            process_css(options, source, &temp_path)?;
+            process_css(options, source, &temp_path, allow_fallback)?;
         }
         ResolvedAssetType::CssModule(options) => {
-            process_css_module(options, source, output_path, &temp_path)?;
+            process_css_module(options, source, output_path, &temp_path, allow_fallback)?;
         }
         ResolvedAssetType::Scss(options) => {
             process_scss(options, source, &temp_path)?;
         }
         ResolvedAssetType::Js(options) => {
-            process_js(options, source, &temp_path, !in_folder)?;
+            process_js(options, source, &temp_path, !in_folder, allow_fallback)?;
         }
         ResolvedAssetType::Image(options) => {
-            process_image(options, source, &temp_path)?;
+            process_image(options, source, &temp_path, allow_fallback)?;
         }
         ResolvedAssetType::Json => {
-            process_json(source, &temp_path)?;
+            process_json(source, &temp_path, allow_fallback)?;
         }
         ResolvedAssetType::Folder(_) => {
-            process_folder(source, &temp_path)?;
+            process_folder(source, &temp_path, allow_fallback)?;
         }
         ResolvedAssetType::File => {
             let source_file = std::fs::File::open(source)?;

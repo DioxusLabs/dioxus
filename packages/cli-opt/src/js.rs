@@ -243,11 +243,20 @@ pub(crate) fn process_js(
     source: &Path,
     output_path: &Path,
     bundle: bool,
+    allow_fallback: bool,
 ) -> anyhow::Result<()> {
     let mut writer = std::io::BufWriter::new(std::fs::File::create(output_path)?);
     if js_options.minified() {
         if let Err(err) = bundle_js_to_writer(source.to_path_buf(), bundle, true, &mut writer) {
-            tracing::error!("Failed to minify js. Falling back to non-minified: {err}");
+            if allow_fallback {
+                tracing::error!("Failed to minify js. Falling back to non-minified: {err:?}");
+            } else {
+                return Err(anyhow::anyhow!(
+                    "Failed to minify js from {}: {}",
+                    source.display(),
+                    err
+                ));
+            }
         } else {
             return Ok(());
         }
@@ -281,10 +290,21 @@ pub(crate) fn hash_js(
     source: &Path,
     hasher: &mut impl Hasher,
     bundle: bool,
+    allow_fallback: bool,
 ) -> anyhow::Result<()> {
     if js_options.minified() {
         if let Err(err) = hash_js_module(source.to_path_buf(), hasher, bundle) {
-            tracing::error!("Failed to minify js. Falling back to non-minified: {err}");
+            if allow_fallback {
+                tracing::error!(
+                    "Failed to hash js. Falling back to just hashing the individual file: {err:?}"
+                );
+            } else {
+                return Err(anyhow::anyhow!(
+                    "Failed to hash js from {}: {}",
+                    source.display(),
+                    err
+                ));
+            }
             hash_file_contents(source, hasher)?;
         }
     } else {

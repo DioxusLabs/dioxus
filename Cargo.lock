@@ -5482,6 +5482,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "dioxus-external-wasm-bindgen-link-test"
+version = "0.0.1"
+dependencies = [
+ "dioxus",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "dioxus-fullstack"
 version = "0.7.0-rc.0"
 dependencies = [

@@ -72,12 +72,6 @@ members = [
     "packages/depinfo",
     "packages/server",
 
-    # Playwright tests
-    "packages/playwright-tests/liveview",
-    "packages/playwright-tests/web",
-    "packages/playwright-tests/fullstack",
-    "packages/playwright-tests/suspense-carousel",
-    "packages/playwright-tests/nested-suspense",
 
     # manganis
     "packages/manganis/manganis",
@@ -130,6 +124,7 @@ members = [
     "packages/playwright-tests/suspense-carousel",
     "packages/playwright-tests/nested-suspense",
     "packages/playwright-tests/cli-optimization",
+    "packages/playwright-tests/external-wasm-bindgen-link",
     "packages/playwright-tests/wasm-split-harness",
     "packages/playwright-tests/default-features-disabled"
 ]
