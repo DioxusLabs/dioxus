@@ -1,3 +1,4 @@
+use dioxus_core::provide_context;
 use dioxus_core::queue_effect;
 use dioxus_core::ScopeId;
 use dioxus_document::{
@@ -66,16 +67,49 @@ extern "C" {
 
 }
 
+fn init_document_with(document: impl FnOnce(), history: impl FnOnce()) {
+    use dioxus_core::has_context;
+
+    ScopeId::ROOT.in_runtime(|| {
+        if has_context::<Rc<dyn Document>>().is_none() {
+            document();
+        }
+        if has_context::<Rc<dyn History>>().is_none() {
+            history();
+        }
+    })
+}
+
 /// Provides the Document through [`ScopeId::provide_context`].
 pub fn init_document() {
-    let provider: Rc<dyn Document> = Rc::new(WebDocument);
-    if ScopeId::ROOT.has_context::<Rc<dyn Document>>().is_none() {
-        ScopeId::ROOT.provide_context(provider);
+    // If hydrate is enabled, we add the FullstackWebDocument with the initial hydration data
+    #[cfg(not(feature = "hydrate"))]
+    {
+        use dioxus_history::provide_history_context;
+
+        init_document_with(
+            || {
+                provide_context(Rc::new(WebDocument) as Rc<dyn Document>);
+            },
+            || {
+                provide_history_context(Rc::new(WebHistory::default()));
+            },
+        );
     }
-    let history_provider: Rc<dyn History> = Rc::new(WebHistory::default());
-    if ScopeId::ROOT.has_context::<Rc<dyn History>>().is_none() {
-        ScopeId::ROOT.provide_context(history_provider);
-    }
+}
+
+#[cfg(feature = "hydrate")]
+pub fn init_fullstack_document() {
+    use dioxus_fullstack_hooks::{
+        document::FullstackWebDocument, history::provide_fullstack_history_context,
+    };
+
+    init_document_with(
+        || {
+            provide_context(Rc::new(FullstackWebDocument::from(WebDocument)) as Rc<dyn Document>);
+        },
+        || provide_fullstack_history_context(WebHistory::default()),
+    );
 }
 
 /// The web-target's document provider.
