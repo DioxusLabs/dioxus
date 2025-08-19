@@ -147,7 +147,7 @@ pub(crate) fn generate_mock_dioxus(root_path: &Path) -> Vec<String> {
     writeln!(&mut buf, "    #[cfg(not(target_arch = \"wasm32\"))]").unwrap();
     writeln!(
         &mut buf,
-        "    std::fs::write(\"features.txt\", features_string.join(\"\\n\")).unwrap();"
+        "    std::fs::write(if cfg!(feature = \"server\") {{ \"server-features.txt\" }} else {{ \"features.txt\" }}, features_string.join(\"\\n\")).unwrap();"
     )
     .unwrap();
     writeln!(

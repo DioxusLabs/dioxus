@@ -71,7 +71,7 @@ fn test_port(
     fullstack: bool,
     crate_dir: &Path,
     port: u16,
-) -> anyhow::Result<Vec<String>> {
+) -> anyhow::Result<(Vec<String>, Option<Vec<String>>)> {
     let mut command = run_dx(installed);
     command.arg("build");
     add_args(&mut command, platform, features, fullstack, crate_dir);
@@ -85,12 +85,17 @@ fn test_port(
     // Wait until the server is alive
     let url = format!("http://127.0.0.1:{port}");
 
-    let path = crate_dir.join("features.txt");
+    let client_features_path = crate_dir.join("features.txt");
+    let server_features_path = crate_dir.join("server-features.txt");
+    std::thread::sleep(std::time::Duration::from_millis(500));
     let features = loop {
         // Wait until the server is alive or the features file is created
-        if let Ok(text) = std::fs::read_to_string(&path) {
-            println!("Features file created at {}", path.display());
-            std::fs::remove_file(path)?;
+        if let Ok(text) = std::fs::read_to_string(&client_features_path) {
+            println!(
+                "Features file created at {}",
+                client_features_path.display()
+            );
+            std::fs::remove_file(client_features_path)?;
             break text.lines().map(|line| line.to_string()).collect();
         }
         if check_port(&url) {
@@ -100,15 +105,20 @@ fn test_port(
         std::thread::sleep(std::time::Duration::from_millis(100));
     };
 
+    let server_features = std::fs::read_to_string(&server_features_path)
+        .ok()
+        .map(|text| {
+            text.lines()
+                .map(|line| line.to_string())
+                .collect::<Vec<_>>()
+        });
+    _ = std::fs::remove_file(server_features_path);
+
     output.kill()?;
     output.kill()?;
     output.wait()?;
-    // Wait until the server is dead
-    while check_port(&url) {
-        std::thread::sleep(std::time::Duration::from_millis(100));
-    }
 
-    Ok(features)
+    Ok((features, server_features))
 }
 
 fn check_port(url: &str) -> bool {
@@ -132,17 +142,6 @@ fn check_port(url: &str) -> bool {
                 && !f.contains("We're building your app now")
                 && !f.contains("The backend is likely still starting up.")
         })
-}
-
-fn get_features_enabled_for_platform(
-    installed: bool,
-    platform: Option<&str>,
-    features: &[String],
-    fullstack: bool,
-    crate_dir: &Path,
-    port: u16,
-) -> anyhow::Result<Vec<String>> {
-    test_port(installed, platform, features, fullstack, crate_dir, port)
 }
 
 fn main() {
@@ -177,7 +176,7 @@ fn test_project(crate_dir: &Path, features: &[String], port1: u16, port2: u16) {
     println!(
         "Testing platform {platform:?} with features {enabled_features:?} and fullstack {fullstack}"
     );
-    let old_enabled_features = get_features_enabled_for_platform(
+    let old_enabled_features = test_port(
         true,
         platform,
         &enabled_features,
@@ -185,7 +184,7 @@ fn test_project(crate_dir: &Path, features: &[String], port1: u16, port2: u16) {
         &crate_dir,
         port1,
     );
-    let new_enabled_features = get_features_enabled_for_platform(
+    let new_enabled_features = test_port(
         false,
         platform,
         &enabled_features,
