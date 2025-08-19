@@ -569,7 +569,8 @@ impl AppBuilder {
             }
 
             BundleFormat::Android => {
-                self.open_android_sim(false, devserver_ip, envs).await?;
+                self.open_android(false, devserver_ip, envs, self.build.device.clone())
+                    .await?;
             }
 
             // These are all just basically running the main exe, but with slightly different resource dir paths
@@ -914,15 +915,22 @@ impl AppBuilder {
 
     /// Upload the app to the device and launch it
     async fn open_ios_device(&self, device_query: &str) -> Result<()> {
-        // 1. Find an active device
-        let device_uuid = Self::get_ios_device_uuid(device_query).await?;
+        let device_query = device_query.to_string();
+        let root_dir = self.build.root_dir().clone();
+        tokio::task::spawn(async move {
+            // 1. Find an active device
+            let device_uuid = Self::get_ios_device_uuid(&device_query).await?;
 
-        // 2. Get the installation URL of the app
-        let installation_url =
-            Self::get_ios_installation_url(&device_uuid, &self.build.root_dir()).await?;
+            tracing::info!("Uploading app to iOS device, this might take a while...");
 
-        // 3. Launch the app into the background, paused
-        Self::launch_ios_app_paused(&device_uuid, &installation_url).await?;
+            // 2. Get the installation URL of the app
+            let installation_url = Self::get_ios_installation_url(&device_uuid, &root_dir).await?;
+
+            // 3. Launch the app into the background, paused
+            Self::launch_ios_app_paused(&device_uuid, &installation_url).await?;
+
+            Result::Ok(()) as Result<()>
+        });
 
         Ok(())
     }
@@ -1019,6 +1027,12 @@ impl AppBuilder {
                             device_idx = idx;
                         }
                     }
+                }
+
+                if best_score == 0 {
+                    tracing::warn!(
+                        "No device found matching query: {device_name_query}. Using first available device."
+                    );
                 }
             }
 
@@ -1182,11 +1196,12 @@ impl AppBuilder {
     ///
     /// # Resources:
     /// - <https://developer.android.com/studio/run/emulator-commandline>
-    async fn open_android_sim(
+    async fn open_android(
         &self,
         root: bool,
         devserver_socket: SocketAddr,
         envs: Vec<(String, String)>,
+        device_name_query: Option<String>,
     ) -> Result<()> {
         let apk_path = self.build.debug_apk_path();
         let session_cache = self.build.session_cache_dir();
@@ -1202,19 +1217,14 @@ impl AppBuilder {
                 }
             }
 
-            let port = devserver_socket.port();
-            if let Err(e) = Command::new(&adb)
-                .arg("reverse")
-                .arg(format!("tcp:{port}"))
-                .arg(format!("tcp:{port}"))
-                .output()
-                .await
-            {
-                tracing::error!("failed to forward port {port}: {e}");
-            }
+            // Try to get the transport ID for the device in case there are multiple specified devices
+            // All future commands should use this since its the most recent.
+            let transport_id_args =
+                Self::get_android_device_transport_id(&adb, device_name_query).await;
 
             // Wait for device to be ready
             let cmd = Command::new(&adb)
+                .args(transport_id_args)
                 .arg("wait-for-device")
                 .arg("shell")
                 .arg(r#"while [[ -z $(getprop sys.boot_completed) ]]; do sleep 1; done;"#)
@@ -1227,6 +1237,17 @@ impl AppBuilder {
                     tracing::info!("Waiting for android emulator to be ready...");
                     _ = cmd_future.await;
                 }
+            }
+
+            let port = devserver_socket.port();
+            if let Err(e) = Command::new(&adb)
+                .arg("reverse")
+                .arg(format!("tcp:{port}"))
+                .arg(format!("tcp:{port}"))
+                .output()
+                .await
+            {
+                tracing::error!("failed to forward port {port}: {e}");
             }
 
             // Install
@@ -1553,5 +1574,61 @@ impl AppBuilder {
             .spawn();
 
         Ok(())
+    }
+
+    async fn get_android_device_transport_id(
+        adb: &PathBuf,
+        device_name_query: Option<String>,
+    ) -> Vec<String> {
+        // If there are multiple devices, we pick the one matching the query
+        let mut device_specifier_args = vec![];
+
+        if let Some(device_name_query) = device_name_query {
+            if let Ok(res) = Command::new(adb).arg("devices").arg("-l").output().await {
+                let devices = String::from_utf8_lossy(&res.stdout);
+                let mut best_score = 0;
+                let mut device_identifier = "".to_string();
+                use nucleo::{chars, Config, Matcher, Utf32Str};
+                let mut matcher = Matcher::new(Config::DEFAULT);
+                let normalize = |c: char| chars::to_lower_case(chars::normalize(c));
+                let needle = device_name_query.chars().map(normalize).collect::<Vec<_>>();
+
+                for line in devices.lines() {
+                    let device_name = line.split_whitespace().next().unwrap_or("");
+                    let Some(transport_id) = line
+                        .split_whitespace()
+                        .find(|s| s.starts_with("transport_id:"))
+                        .map(|s| s.trim_start_matches("transport_id:"))
+                    else {
+                        continue;
+                    };
+
+                    let device_name = device_name.chars().map(normalize).collect::<Vec<_>>();
+                    let score = matcher
+                        .fuzzy_match(Utf32Str::Unicode(&device_name), Utf32Str::Unicode(&needle));
+                    if let Some(score) = score {
+                        if score > best_score {
+                            best_score = score;
+                            device_identifier = transport_id.to_string();
+                        }
+                    }
+                }
+
+                if best_score != 0 {
+                    device_specifier_args.push("-t".to_string());
+                    device_specifier_args.push(device_identifier.to_string());
+                }
+            }
+
+            if device_specifier_args.is_empty() {
+                tracing::warn!(
+                    "No device found matching query: {device_name_query}. Using default transport ID."
+                );
+            }
+        }
+
+        tracing::info!("using transport ID: {:?}", device_specifier_args);
+
+        device_specifier_args
     }
 }

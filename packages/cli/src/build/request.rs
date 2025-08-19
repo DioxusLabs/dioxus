@@ -624,8 +624,6 @@ impl BuildRequest {
         // Tools like xcrun/adb can detect devices
         let device = args.device.clone();
 
-        tracing::info!("The device is {device:?}");
-
         // Resolve the target alias and renderer into a concrete target alias.
         // If the user didn't pass a platform, but we have a renderer, get the default platform for that renderer
         if let (TargetAlias::Unknown, Some(renderer)) = (target_alias, renderer) {
