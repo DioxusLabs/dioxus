@@ -561,7 +561,7 @@ impl AppBuilder {
             }
 
             BundleFormat::Ios => {
-                if let Some(device) = self.build.device.as_deref() {
+                if let Some(device) = self.build.device_name.as_deref() {
                     self.open_ios_device(device).await?
                 } else {
                     self.open_ios_sim(envs).await?
@@ -569,7 +569,7 @@ impl AppBuilder {
             }
 
             BundleFormat::Android => {
-                self.open_android(false, devserver_ip, envs, self.build.device.clone())
+                self.open_android(false, devserver_ip, envs, self.build.device_name.clone())
                     .await?;
             }
 

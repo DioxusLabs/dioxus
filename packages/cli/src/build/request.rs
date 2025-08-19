@@ -373,7 +373,7 @@ pub(crate) struct BuildRequest {
     pub(crate) release: bool,
     pub(crate) bundle: BundleFormat,
     pub(crate) triple: Triple,
-    pub(crate) device: Option<String>,
+    pub(crate) device_name: Option<String>,
     pub(crate) should_codesign: bool,
     pub(crate) package: String,
     pub(crate) main_target: String,
@@ -803,7 +803,7 @@ impl BuildRequest {
             crate_target,
             profile,
             triple,
-            device,
+            device_name: device,
             workspace,
             config,
             target_dir,
@@ -4617,7 +4617,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
     }
 
     pub(crate) async fn start_simulators(&self) -> Result<()> {
-        if self.device.is_some() {
+        if self.device_name.is_some() {
             return Ok(());
         }
 
