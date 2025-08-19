@@ -141,12 +141,9 @@ pub(crate) fn name_from_path(path: &Path) -> Result<String> {
 
 /// Post-creation actions for newly setup crates.
 pub(crate) fn post_create(path: &Path, vcs: &Vcs) -> Result<()> {
-    let parent_dir = path.parent();
-    let metadata = if parent_dir.is_none() {
-        None
-    } else {
+    let metadata = if let Some(parent_dir) = path.parent() {
         match cargo_metadata::MetadataCommand::new()
-            .current_dir(parent_dir.unwrap())
+            .current_dir(parent_dir)
             .exec()
         {
             Ok(v) => Some(v),
@@ -156,6 +153,8 @@ pub(crate) fn post_create(path: &Path, vcs: &Vcs) -> Result<()> {
                 anyhow::bail!("Couldn't retrieve cargo metadata: {:?}", err)
             }
         }
+    } else {
+        None
     };
 
     // 1. Add the new project to the workspace, if it exists.

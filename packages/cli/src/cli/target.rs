@@ -108,15 +108,21 @@ pub(crate) struct TargetArgs {
     #[clap(long, default_value_t = true, help_heading = HELP_HEADING, num_args = 0..=1)]
     pub(crate) debug_symbols: bool,
 
-    /// Are we building for a device or just the simulator.
-    /// If device is false, then we'll build for the simulator
-    #[clap(long, default_value_t = false, help_heading = HELP_HEADING)]
-    pub(crate) device: bool,
+    /// The name of the device we are hoping to upload to. By default, dx tries to upload to the active
+    /// simulator. If the device name is passed, we will upload to that device instead.
+    ///
+    /// This performs a search among devices, and fuzzy matches might be found.
+    #[arg(long, default_missing_value=None, num_args=0..=1)]
+    pub(crate) device: Option<String>,
 
     /// The base path the build will fetch assets relative to. This will override the
     /// base path set in the `dioxus` config.
     #[clap(long, help_heading = HELP_HEADING)]
     pub(crate) base_path: Option<String>,
+
+    /// Should dx attempt to codesign the app bundle?
+    #[clap(long, default_value_t = false, help_heading = HELP_HEADING, num_args = 0..=1)]
+    pub(crate) codesign: bool,
 
     /// The path to the Apple entitlements file to used to sign the resulting app bundle.
     ///

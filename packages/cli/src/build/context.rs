@@ -102,6 +102,12 @@ impl BuildContext {
         })
     }
 
+    pub(crate) fn status_codesigning(&self) {
+        _ = self.tx.unbounded_send(BuilderUpdate::Progress {
+            stage: BuildStage::CodeSigning,
+        });
+    }
+
     pub(crate) fn status_build_diagnostic(&self, message: Diagnostic) {
         _ = self
             .tx
