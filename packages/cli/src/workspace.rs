@@ -273,12 +273,6 @@ impl Workspace {
             .join("gcc-ld")
     }
 
-    pub fn has_wasm32_unknown_unknown(&self) -> bool {
-        self.sysroot
-            .join("lib/rustlib/wasm32-unknown-unknown")
-            .exists()
-    }
-
     /// Find the "main" package in the workspace. There might not be one!
     pub fn find_main_package(&self, package: Option<String>) -> Result<NodeId> {
         if let Some(package) = package {

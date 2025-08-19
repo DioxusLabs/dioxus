@@ -1627,8 +1627,6 @@ impl AppBuilder {
             }
         }
 
-        tracing::info!("using transport ID: {:?}", device_specifier_args);
-
         device_specifier_args
     }
 }

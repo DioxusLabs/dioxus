@@ -4202,6 +4202,8 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
     pub(crate) async fn verify_tooling(&self, ctx: &BuildContext) -> Result<()> {
         ctx.status_installing_tooling();
 
+        self.verify_toolchain_installed().await?;
+
         match self.bundle {
             BundleFormat::Web => self.verify_web_tooling().await?,
             BundleFormat::Ios => self.verify_ios_tooling().await?,
@@ -4213,25 +4215,59 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         Ok(())
     }
 
-    async fn verify_web_tooling(&self) -> Result<()> {
+    async fn verify_toolchain_installed(&self) -> Result<()> {
+        let toolchain_dir = self.workspace.sysroot.join("lib/rustlib");
+        let triple = self.triple.to_string();
+
         // Install target using rustup.
-        #[cfg(not(feature = "no-downloads"))]
-        if !self.workspace.has_wasm32_unknown_unknown() {
+        if !toolchain_dir.join(&triple).exists() {
             tracing::info!(
-                "Web platform requires wasm32-unknown-unknown to be installed. Installing..."
+                "{} platform requires {} to be installed. Installing...",
+                self.bundle,
+                triple
             );
 
-            let _ = tokio::process::Command::new("rustup")
-                .args(["target", "add", "wasm32-unknown-unknown"])
-                .output()
-                .await?;
+            let mut child = tokio::process::Command::new("rustup")
+                .args(["target", "add"])
+                .arg(&triple)
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .kill_on_drop(true)
+                .spawn()?;
+
+            let stdout = tokio::io::BufReader::new(child.stdout.take().unwrap());
+            let stderr = tokio::io::BufReader::new(child.stderr.take().unwrap());
+            let mut stdout_lines = stdout.lines();
+            let mut stderr_lines = stderr.lines();
+            loop {
+                tokio::select! {
+                    line = stdout_lines.next_line() => {
+                        match line {
+                            Ok(Some(line)) => tracing::info!("{}", line),
+                            Err(err) => tracing::error!("{}", err),
+                            Ok(_) => break,
+                        }
+                    }
+                    line = stderr_lines.next_line() => {
+                        match line {
+                            Ok(Some(line)) => tracing::info!("{}", line),
+                            Err(err) => tracing::error!("{}", err),
+                            Ok(_) => break,
+                        }
+                    }
+                }
+            }
         }
 
         // Ensure target is installed.
-        if !self.workspace.has_wasm32_unknown_unknown() {
-            bail!("Missing target wasm32-unknown-unknown.");
+        if !toolchain_dir.join(&triple).exists() {
+            bail!("Missing rust target {}", triple);
         }
 
+        Ok(())
+    }
+
+    async fn verify_web_tooling(&self) -> Result<()> {
         // Wasm bindgen
         let krate_bindgen_version =
             self.workspace
