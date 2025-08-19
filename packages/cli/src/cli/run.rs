@@ -110,6 +110,9 @@ impl RunArgs {
                             BuildStage::RunningGradle => {
                                 tracing::info!("[{bundle_format}] Running Gradle")
                             }
+                            BuildStage::CodeSigning => {
+                                tracing::info!("[{bundle_format}] Code signing app")
+                            }
                             BuildStage::Success => {}
                             BuildStage::Restarting => {}
                             BuildStage::CompressingAssets => {}

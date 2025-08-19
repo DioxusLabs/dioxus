@@ -202,6 +202,10 @@
 //!           libmyapp.so
 //!       arm64-v8a/
 //!           libmyapp.so
+//!       x86/
+//!           libmyapp.so
+//!       x86_64/
+//!           libmyapp.so
 //! ```
 //! Notice that we *could* feasibly build this ourselves :)
 //!
@@ -344,7 +348,7 @@ use std::{
     },
     time::{SystemTime, UNIX_EPOCH},
 };
-use target_lexicon::{Environment, OperatingSystem, Triple};
+use target_lexicon::{Architecture, Environment, OperatingSystem, Triple};
 use tempfile::{NamedTempFile, TempDir};
 use tokio::{io::AsyncBufReadExt, process::Command};
 use uuid::Uuid;
@@ -373,7 +377,8 @@ pub(crate) struct BuildRequest {
     pub(crate) release: bool,
     pub(crate) bundle: BundleFormat,
     pub(crate) triple: Triple,
-    pub(crate) device: bool,
+    pub(crate) device_name: Option<String>,
+    pub(crate) should_codesign: bool,
     pub(crate) package: String,
     pub(crate) main_target: String,
     pub(crate) features: Vec<String>,
@@ -621,7 +626,7 @@ impl BuildRequest {
         // We usually use the simulator unless --device is passed *or* a device is detected by probing.
         // For now, though, since we don't have probing, it just defaults to false
         // Tools like xcrun/adb can detect devices
-        let device = args.device;
+        let device = args.device.clone();
 
         // Resolve the target alias and renderer into a concrete target alias.
         // If the user didn't pass a platform, but we have a renderer, get the default platform for that renderer
@@ -635,7 +640,7 @@ impl BuildRequest {
             // If there is an explicit target, use it
             (Some(target), _) => target,
             // If there is a platform, use it to determine the target triple
-            (None, platform) => platform.into_target(device, &workspace).await?,
+            (None, platform) => platform.into_target(device.is_some(), &workspace).await?,
         };
 
         // If the user didn't pass a renderer, and we didn't find a good default renderer, but they are using dioxus explicitly,
@@ -677,6 +682,10 @@ impl BuildRequest {
             &profile,
             args.release,
         );
+
+        // Determine if we should codesign
+        let should_codesign =
+            args.codesign || device.is_some() || args.apple_entitlements.is_some();
 
         // Determining release mode is based on the profile, actually, so we need to check that
         let release = workspace.is_release_profile(&profile);
@@ -803,7 +812,7 @@ impl BuildRequest {
             crate_target,
             profile,
             triple,
-            device,
+            device_name: device,
             workspace,
             config,
             target_dir,
@@ -820,6 +829,7 @@ impl BuildRequest {
             main_target,
             rustflags,
             using_dioxus_explicitly,
+            should_codesign,
             skip_assets: args.skip_assets,
             base_path: args.base_path.clone(),
             wasm_split: args.wasm_split,
@@ -1171,6 +1181,7 @@ impl BuildRequest {
 
     async fn write_frameworks(&self, _ctx: &BuildContext, direct_rustc: &RustcArgs) -> Result<()> {
         let framework_dir = self.frameworks_folder();
+        _ = std::fs::create_dir_all(&framework_dir);
 
         // We have some prebuilt stuff that needs to be copied into the framework dir
         let openssl_dir = AndroidTools::openssl_lib_dir(&self.triple);
@@ -1187,8 +1198,6 @@ impl BuildRequest {
                 _ = std::fs::remove_file(&to);
 
                 tracing::debug!("Copying framework from {from:?} to {to:?}");
-
-                _ = std::fs::create_dir_all(&framework_dir);
 
                 // in dev and on normal oses, we want to symlink the file
                 // otherwise, just copy it (since in release you want to distribute the framework)
@@ -1219,13 +1228,15 @@ impl BuildRequest {
 
             // Copy over libssl and libcrypto if they are present in the link args
             if self.bundle == BundleFormat::Android && arg.contains(openssl_dir_disp.as_str()) {
-                let libssl = openssl_dir.join("libssl.so");
-                let libcrypto = openssl_dir.join("libcrypto.so");
-                std::fs::copy(&libssl, framework_dir.join("libssl.so")).with_context(|| {
-                    format!("Failed to copy libssl.so into bundle from {libssl:?}")
+                let libssl_source = openssl_dir.join("libssl.so");
+                let libcrypto_source = openssl_dir.join("libcrypto.so");
+                let libssl_target = framework_dir.join("libssl.so");
+                let libcrypto_target = framework_dir.join("libcrypto.so");
+                std::fs::copy(&libssl_source, &libssl_target).with_context(|| {
+                    format!("Failed to copy libssl.so into bundle\nfrom {libssl_source:?}\nto {libssl_target:?}")
                 })?;
-                std::fs::copy(&libcrypto, framework_dir.join("libcrypto.so")).with_context(
-                    || format!("Failed to copy libcrypto.so into bundle from {libcrypto:?}"),
+                std::fs::copy(&libcrypto_source, &libcrypto_target).with_context(
+                    || format!("Failed to copy libcrypto.so into bundle\nfrom {libcrypto_source:?}\nto {libcrypto_target:?}"),
                 )?;
             }
         }
@@ -1239,13 +1250,25 @@ impl BuildRequest {
                 self.root_dir().join("Contents").join("Frameworks")
             }
             OperatingSystem::IOS(_) => self.root_dir().join("Frameworks"),
-            OperatingSystem::Linux if self.bundle == BundleFormat::Android => self
-                .root_dir()
-                .join("app")
-                .join("src")
-                .join("main")
-                .join("jniLibs")
-                .join("arm64-v8a"),
+            OperatingSystem::Linux if self.bundle == BundleFormat::Android => {
+                let arch = match self.triple.architecture {
+                    Architecture::Aarch64(_) => "arm64-v8a",
+                    Architecture::Arm(_) => "armeabi-v7a",
+                    Architecture::X86_32(_) => "x86",
+                    Architecture::X86_64 => "x86_64",
+                    _ => panic!(
+                        "Unsupported architecture for Android: {:?}",
+                        self.triple.architecture
+                    ),
+                };
+
+                self.root_dir()
+                    .join("app")
+                    .join("src")
+                    .join("main")
+                    .join("jniLibs")
+                    .join(arch)
+            }
             OperatingSystem::Linux | OperatingSystem::Windows => self.root_dir(),
             _ => self.root_dir(),
         }
@@ -3962,28 +3985,38 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
     ///
     /// This might include codesigning, zipping, creating an appimage, etc
     async fn assemble(&self, ctx: &BuildContext) -> Result<()> {
-        if self.bundle == BundleFormat::Android {
-            ctx.status_running_gradle();
+        match self.bundle {
+            BundleFormat::Android => {
+                ctx.status_running_gradle();
 
-            // When the build mode is set to release and there is an Android signature configuration, use assembleRelease
-            let build_type = if self.release && self.config.bundle.android.is_some() {
-                "assembleRelease"
-            } else {
-                "assembleDebug"
-            };
+                // When the build mode is set to release and there is an Android signature configuration, use assembleRelease
+                let build_type = if self.release && self.config.bundle.android.is_some() {
+                    "assembleRelease"
+                } else {
+                    "assembleDebug"
+                };
 
-            let output = Command::new(self.gradle_exe()?)
-                .arg(build_type)
-                .current_dir(self.root_dir())
-                .output()
-                .await?;
+                let output = Command::new(self.gradle_exe()?)
+                    .arg(build_type)
+                    .current_dir(self.root_dir())
+                    .output()
+                    .await?;
 
-            if !output.status.success() {
-                bail!(
-                    "Failed to assemble apk: {}",
-                    String::from_utf8_lossy(&output.stderr)
-                );
+                if !output.status.success() {
+                    bail!(
+                        "Failed to assemble apk: {}",
+                        String::from_utf8_lossy(&output.stderr)
+                    );
+                }
             }
+            BundleFormat::Ios => {
+                if self.should_codesign {
+                    ctx.status_codesigning();
+                    self.codesign_ios().await?;
+                }
+            }
+
+            _ => {}
         }
 
         Ok(())
@@ -4198,6 +4231,8 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
     pub(crate) async fn verify_tooling(&self, ctx: &BuildContext) -> Result<()> {
         ctx.status_installing_tooling();
 
+        self.verify_toolchain_installed().await?;
+
         match self.bundle {
             BundleFormat::Web => self.verify_web_tooling().await?,
             BundleFormat::Ios => self.verify_ios_tooling().await?,
@@ -4209,25 +4244,59 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         Ok(())
     }
 
-    async fn verify_web_tooling(&self) -> Result<()> {
+    async fn verify_toolchain_installed(&self) -> Result<()> {
+        let toolchain_dir = self.workspace.sysroot.join("lib/rustlib");
+        let triple = self.triple.to_string();
+
         // Install target using rustup.
-        #[cfg(not(feature = "no-downloads"))]
-        if !self.workspace.has_wasm32_unknown_unknown() {
+        if !toolchain_dir.join(&triple).exists() {
             tracing::info!(
-                "Web platform requires wasm32-unknown-unknown to be installed. Installing..."
+                "{} platform requires {} to be installed. Installing...",
+                self.bundle,
+                triple
             );
 
-            let _ = tokio::process::Command::new("rustup")
-                .args(["target", "add", "wasm32-unknown-unknown"])
-                .output()
-                .await?;
+            let mut child = tokio::process::Command::new("rustup")
+                .args(["target", "add"])
+                .arg(&triple)
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .kill_on_drop(true)
+                .spawn()?;
+
+            let stdout = tokio::io::BufReader::new(child.stdout.take().unwrap());
+            let stderr = tokio::io::BufReader::new(child.stderr.take().unwrap());
+            let mut stdout_lines = stdout.lines();
+            let mut stderr_lines = stderr.lines();
+            loop {
+                tokio::select! {
+                    line = stdout_lines.next_line() => {
+                        match line {
+                            Ok(Some(line)) => tracing::info!("{}", line),
+                            Err(err) => tracing::error!("{}", err),
+                            Ok(_) => break,
+                        }
+                    }
+                    line = stderr_lines.next_line() => {
+                        match line {
+                            Ok(Some(line)) => tracing::info!("{}", line),
+                            Err(err) => tracing::error!("{}", err),
+                            Ok(_) => break,
+                        }
+                    }
+                }
+            }
         }
 
         // Ensure target is installed.
-        if !self.workspace.has_wasm32_unknown_unknown() {
-            bail!("Missing target wasm32-unknown-unknown.");
+        if !toolchain_dir.join(&triple).exists() {
+            bail!("Missing rust target {}", triple);
         }
 
+        Ok(())
+    }
+
+    async fn verify_web_tooling(&self) -> Result<()> {
         // Wasm bindgen
         let krate_bindgen_version =
             self.workspace
@@ -4588,7 +4657,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
     }
 
     pub(crate) async fn start_simulators(&self) -> Result<()> {
-        if self.device {
+        if self.device_name.is_some() {
             return Ok(());
         }
 
@@ -4781,5 +4850,198 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         }
 
         Ok(())
+    }
+
+    pub async fn codesign_ios(&self) -> Result<()> {
+        // We don't want to drop the entitlements file, until the end of the block, so we hoist it to this temporary.
+        let mut _saved_entitlements = None;
+
+        let mut app_dev_name = self.apple_team_id.clone();
+        if app_dev_name.is_none() {
+            app_dev_name =
+                Some(Self::auto_provision_signing_name().await.context(
+                    "Failed to automatically provision signing name for iOS codesigning.",
+                )?);
+        }
+
+        let mut entitlements_file = self.apple_entitlements.clone();
+        if entitlements_file.is_none() {
+            let entitlements_xml = Self::auto_provision_entitlements()
+                .await
+                .context("Failed to auto-provision entitlements for iOS codesigning.")?;
+            let entitlements_temp_file = tempfile::NamedTempFile::new()?;
+            std::fs::write(entitlements_temp_file.path(), entitlements_xml)?;
+            entitlements_file = Some(entitlements_temp_file.path().to_path_buf());
+            _saved_entitlements = Some(entitlements_temp_file);
+        }
+
+        let entitlements_file = entitlements_file.as_ref().context(
+            "No entitlements file provided and could not provision entitlements to sign app.",
+        )?;
+        let app_dev_name = app_dev_name.as_ref().context(
+            "No Apple Development signing name provided and could not auto-provision one.",
+        )?;
+
+        tracing::debug!(
+            "Codesigning iOS app with entitlements: {} and dev name: {}",
+            entitlements_file.display(),
+            app_dev_name
+        );
+
+        // codesign the app
+        let output = Command::new("codesign")
+            .args([
+                "--force",
+                "--entitlements",
+                entitlements_file.to_str().unwrap(),
+                "--sign",
+                app_dev_name,
+            ])
+            .arg(self.root_dir())
+            .output()
+            .await
+            .context("Failed to codesign the app - is `codesign` in your path?")?;
+
+        if !output.status.success() {
+            bail!(
+                "Failed to codesign the app: {}",
+                String::from_utf8(output.stderr).unwrap_or_default()
+            );
+        }
+
+        Ok(())
+    }
+
+    async fn auto_provision_signing_name() -> Result<String> {
+        let identities = Command::new("security")
+            .args(["find-identity", "-v", "-p", "codesigning"])
+            .output()
+            .await
+            .context("Failed to run `security find-identity -v -p codesigning` - is `security` in your path?")
+            .map(|e| {
+                String::from_utf8(e.stdout)
+                    .context("Failed to parse `security find-identity -v -p codesigning`")
+            })??;
+
+        // Parsing this:
+        // 1231231231231asdasdads123123 "Apple Development: foo@gmail.com (XYZYZY)"
+        let app_dev_name = regex::Regex::new(r#""Apple Development: (.+)""#)
+            .unwrap()
+            .captures(&identities)
+            .and_then(|caps| caps.get(1))
+            .map(|m| m.as_str())
+            .context(
+                "Failed to find Apple Development in `security find-identity -v -p codesigning`",
+            )?;
+
+        Ok(app_dev_name.to_string())
+    }
+
+    async fn auto_provision_entitlements() -> Result<String> {
+        const CODESIGN_ERROR: &str = r#"This is likely because you haven't
+- Created a provisioning profile before
+- Accepted the Apple Developer Program License Agreement
+
+The agreement changes frequently and might need to be accepted again.
+To accept the agreement, go to https://developer.apple.com/account
+
+To create a provisioning profile, follow the instructions here:
+https://developer.apple.com/documentation/xcode/sharing-your-teams-signing-certificates"#;
+
+        // Check the xcode 16 location first
+        let mut profiles_folder = dirs::home_dir()
+            .context("Your machine has no home-dir")?
+            .join("Library/Developer/Xcode/UserData/Provisioning Profiles");
+
+        // If it doesn't exist, check the old location
+        if !profiles_folder.exists() {
+            profiles_folder = dirs::home_dir()
+                .context("Your machine has no home-dir")?
+                .join("Library/MobileDevice/Provisioning Profiles");
+        }
+
+        if !profiles_folder.exists() || profiles_folder.read_dir()?.next().is_none() {
+            tracing::error!(
+                r#"No provisioning profiles found when trying to codesign the app.
+We checked the folders:
+- XCode16: ~/Library/Developer/Xcode/UserData/Provisioning Profiles
+- XCode15: ~/Library/MobileDevice/Provisioning Profiles
+
+{CODESIGN_ERROR}
+"#
+            )
+        }
+
+        // Acquire the provision file
+        let provision_file = profiles_folder
+            .read_dir()?
+            .flatten()
+            .find(|entry| {
+                entry
+                    .file_name()
+                    .to_str()
+                    .map(|s| s.contains("mobileprovision"))
+                    .unwrap_or_default()
+            })
+            .context("Failed to find a provisioning profile. \n\n{CODESIGN_ERROR}")?;
+
+        // The .mobileprovision file has some random binary thrown into into, but it's still basically a plist
+        // Let's use the plist markers to find the start and end of the plist
+        fn cut_plist(bytes: &[u8], byte_match: &[u8]) -> Option<usize> {
+            bytes
+                .windows(byte_match.len())
+                .enumerate()
+                .rev()
+                .find(|(_, slice)| *slice == byte_match)
+                .map(|(i, _)| i + byte_match.len())
+        }
+        let bytes = std::fs::read(provision_file.path())?;
+        let cut1 = cut_plist(&bytes, b"<plist").context("Failed to parse .mobileprovision file")?;
+        let cut2 = cut_plist(&bytes, r#"</dict>"#.as_bytes())
+            .context("Failed to parse .mobileprovision file")?;
+        let sub_bytes = &bytes[(cut1 - 6)..cut2];
+        let mbfile: ProvisioningProfile =
+            plist::from_bytes(sub_bytes).context("Failed to parse .mobileprovision file")?;
+
+        #[derive(serde::Deserialize, Debug)]
+        struct ProvisioningProfile {
+            #[serde(rename = "TeamIdentifier")]
+            team_identifier: Vec<String>,
+            #[serde(rename = "Entitlements")]
+            entitlements: Entitlements,
+            #[allow(dead_code)]
+            #[serde(rename = "ApplicationIdentifierPrefix")]
+            application_identifier_prefix: Vec<String>,
+        }
+
+        #[derive(serde::Deserialize, Debug)]
+        struct Entitlements {
+            #[serde(rename = "application-identifier")]
+            application_identifier: String,
+            #[serde(rename = "keychain-access-groups")]
+            keychain_access_groups: Vec<String>,
+        }
+
+        Ok(format!(
+            r#"
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+    <key>application-identifier</key>
+    <string>{APPLICATION_IDENTIFIER}</string>
+    <key>keychain-access-groups</key>
+    <array>
+        <string>{APP_ID_ACCESS_GROUP}.*</string>
+    </array>
+    <key>get-task-allow</key>
+    <true/>
+    <key>com.apple.developer.team-identifier</key>
+    <string>{TEAM_IDENTIFIER}</string>
+</dict></plist>
+        "#,
+            APPLICATION_IDENTIFIER = mbfile.entitlements.application_identifier,
+            APP_ID_ACCESS_GROUP = mbfile.entitlements.keychain_access_groups[0],
+            TEAM_IDENTIFIER = mbfile.team_identifier[0],
+        ))
     }
 }
