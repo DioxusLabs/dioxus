@@ -1073,7 +1073,7 @@ impl BuildRequest {
             );
         }
 
-        let assets = self.collect_assets(&exe, ctx)?;
+        let assets = self.collect_assets(&exe, ctx).await?;
         let time_end = SystemTime::now();
         let mode = ctx.mode.clone();
         let bundle = self.bundle;
@@ -1100,14 +1100,14 @@ impl BuildRequest {
 
     /// Collect the assets from the final executable and modify the binary in place to point to the right
     /// hashed asset location.
-    fn collect_assets(&self, exe: &Path, ctx: &BuildContext) -> Result<AssetManifest> {
+    async fn collect_assets(&self, exe: &Path, ctx: &BuildContext) -> Result<AssetManifest> {
         // walk every file in the incremental cache dir, reading and inserting items into the manifest.
         let mut manifest = AssetManifest::default();
 
         // And then add from the exe directly, just in case it's LTO compiled and has no incremental cache
         if !self.skip_assets {
             ctx.status_extracting_assets();
-            manifest = super::assets::extract_assets_from_file(exe)?;
+            manifest = super::assets::extract_assets_from_file(exe).await?;
         }
 
         Ok(manifest)
@@ -1578,7 +1578,9 @@ impl BuildRequest {
         }
 
         // Now extract the assets from the fat binary
-        artifacts.assets = self.collect_assets(&self.patch_exe(artifacts.time_start), ctx)?;
+        artifacts.assets = self
+            .collect_assets(&self.patch_exe(artifacts.time_start), ctx)
+            .await?;
 
         // If this is a web build, reset the index.html file in case it was modified by SSG
         self.write_index_html(&artifacts.assets)
@@ -2907,10 +2909,14 @@ impl BuildRequest {
 
     fn platform_exe_name(&self) -> String {
         match self.bundle {
-            BundleFormat::MacOS => self.executable_name().to_string(),
-            BundleFormat::Ios => self.executable_name().to_string(),
-            BundleFormat::Server => self.executable_name().to_string(),
-            BundleFormat::Windows => format!("{}.exe", self.executable_name()),
+            // mac/ios are unixy and dont have an exe extension
+            BundleFormat::MacOS | BundleFormat::Ios => self.executable_name().to_string(),
+
+            // "server" and windows can be the same
+            BundleFormat::Server | BundleFormat::Windows => match self.triple.operating_system {
+                OperatingSystem::Windows => format!("{}.exe", self.executable_name()),
+                _ => self.executable_name().to_string(),
+            },
 
             // from the apk spec, the root exe is a shared library
             // we include the user's rust code as a shared library with a fixed namespace

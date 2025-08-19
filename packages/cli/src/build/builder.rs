@@ -1317,12 +1317,14 @@ impl AppBuilder {
         let name = id.to_string();
         let some_entropy = name.split('-').next().unwrap();
 
+        // Split up the exe into the file stem and extension
+        let extension = exe.extension().unwrap_or_default();
+        let file_stem = exe.file_stem().unwrap().to_str().unwrap();
+
         // Make a copy of the server exe with a new name
-        let entropy_server_exe = exe.with_file_name(format!(
-            "{}-{}",
-            exe.file_name().unwrap().to_str().unwrap(),
-            some_entropy
-        ));
+        let entropy_server_exe = exe
+            .with_file_name(format!("{}-{}", file_stem, some_entropy))
+            .with_extension(extension);
 
         std::fs::copy(exe, &entropy_server_exe).unwrap();
 
