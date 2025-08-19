@@ -1,10 +1,8 @@
 use headless_chrome::Browser;
 use pretty_assertions::assert_eq;
 use rand::{random, seq::IndexedRandom};
-use std::{
-    io::Write,
-    path::{Path, PathBuf},
-};
+use reqwest::blocking::Client;
+use std::path::{Path, PathBuf};
 
 mod generate_mock_dioxus;
 mod random_project;
@@ -79,37 +77,61 @@ fn test_port(
     add_args(&mut command, platform, features, fullstack, crate_dir);
     command.output()?;
     let mut command = run_dx(installed);
-    command.arg("serve");
+    command.arg("serve").arg("--port").arg(port.to_string());
     add_args(&mut command, platform, features, fullstack, crate_dir);
     println!("command: {:?}", command);
     let mut output = command.spawn()?;
 
     // Wait until the server is alive
     let url = format!("http://127.0.0.1:{port}");
-    let mut hit = false;
-    for _ in 0..5 {
-        let response = reqwest::blocking::get(&url)
-            .and_then(|resp| resp.text())
-            .map_or(false, |f| {
-                // Some versions of dx return a 404 response with a 200 code
-                !f.contains("dioxus is not currently serving a web app")
-            });
-        std::thread::sleep(std::time::Duration::from_millis(100));
-        if response {
-            hit = true;
-            break;
+
+    let path = crate_dir.join("features.txt");
+    let features = loop {
+        // Wait until the server is alive or the features file is created
+        if let Ok(text) = std::fs::read_to_string(&path) {
+            println!("Features file created at {}", path.display());
+            std::fs::remove_file(path)?;
+            break text.lines().map(|line| line.to_string()).collect();
         }
-    }
-    let features = if hit {
-        features_enabled_web(&url)?
-    } else {
-        let text_value = std::fs::read_to_string(crate_dir.join("features.txt"))?;
-        text_value.lines().map(|line| line.to_string()).collect()
+        if check_port(&url) {
+            println!("Server is alive at {}", url);
+            break features_enabled_web(&url)?;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
     };
 
     output.kill()?;
+    output.kill()?;
+    output.wait()?;
+    // Wait until the server is dead
+    while check_port(&url) {
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
 
     Ok(features)
+}
+
+fn check_port(url: &str) -> bool {
+    let client = Client::builder()
+        .timeout(std::time::Duration::from_millis(100))
+        .build()
+        .unwrap();
+    client
+        .get(url)
+        .send()
+        .ok()
+        .and_then(|resp| {
+            resp.status()
+                .is_success()
+                .then(|| resp.text().ok())
+                .flatten()
+        })
+        .map_or(false, |f| {
+            // Some versions of dx return a 404 response with a 200 code
+            !f.contains("dioxus is not currently serving a web app")
+                && !f.contains("We're building your app now")
+                && !f.contains("The backend is likely still starting up.")
+        })
 }
 
 fn get_features_enabled_for_platform(
