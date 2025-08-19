@@ -1,7 +1,10 @@
 use headless_chrome::Browser;
 use pretty_assertions::assert_eq;
 use rand::{random, seq::IndexedRandom};
-use std::path::{Path, PathBuf};
+use std::{
+    io::Write,
+    path::{Path, PathBuf},
+};
 
 mod generate_mock_dioxus;
 mod random_project;
@@ -59,6 +62,7 @@ fn add_args(
     command
         .current_dir(crate_dir)
         .stdout(std::process::Stdio::null())
+        .stdin(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
 }
 
@@ -84,7 +88,12 @@ fn test_port(
     let url = format!("http://127.0.0.1:{port}");
     let mut hit = false;
     for _ in 0..5 {
-        let response = reqwest::blocking::get(&url).map_or(false, |r| r.status().is_success());
+        let response = reqwest::blocking::get(&url)
+            .and_then(|resp| resp.text())
+            .map_or(false, |f| {
+                // Some versions of dx return a 404 response with a 200 code
+                !f.contains("dioxus is not currently serving a web app")
+            });
         std::thread::sleep(std::time::Duration::from_millis(100));
         if response {
             hit = true;
