@@ -250,7 +250,7 @@ impl ErrorContext {
     }
 
     /// Get all errors thrown from child components
-    pub fn errors(&self) -> Ref<[CapturedError]> {
+    pub fn errors(&self) -> Ref<'_, [CapturedError]> {
         Ref::map(self.errors.borrow(), |errors| errors.as_slice())
     }
 

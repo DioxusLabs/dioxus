@@ -197,7 +197,7 @@ mod field_info {
             ordinal: usize,
             field: &syn::Field,
             field_defaults: FieldBuilderAttr,
-        ) -> Result<FieldInfo, Error> {
+        ) -> Result<FieldInfo<'_>, Error> {
             if let Some(ref name) = field.ident {
                 let mut builder_attr = field_defaults.with(&field.attrs)?;
 
