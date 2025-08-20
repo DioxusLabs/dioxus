@@ -9,6 +9,10 @@ use crate::{
 };
 
 /// A signal that can only be read from.
+#[deprecated(
+    since = "0.7.0",
+    note = "Use `ReadSignal` instead. Will be removed in 0.8"
+)]
 pub type ReadOnlySignal<T> = ReadSignal<T>;
 
 /// A boxed version of [Readable] that can be used to store any readable type.
