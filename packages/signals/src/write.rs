@@ -46,6 +46,24 @@ pub trait Writable: Readable {
     ) -> Result<WritableRef<'static, Self>, generational_box::BorrowMutError>
     where
         Self::Target: 'static;
+
+    #[deprecated(
+        since = "0.7",
+        note = "Use `try_write_extended` instead. \
+            If you are on Rust 2024 edition, \
+            you can usually use `try_write` directly \
+            (due to lifetime improvements). \
+            This function will be removed in 0.8."
+    )]
+    #[allow(missing_docs)]
+    fn try_write_unchecked(
+        &self,
+    ) -> Result<WritableRef<'static, Self>, generational_box::BorrowMutError>
+    where
+        Self::Target: 'static,
+    {
+        self.try_write_extended()
+    }
 }
 
 /// A mutable reference to a writable value. This reference acts similarly to [`std::cell::RefMut`], but it has extra debug information

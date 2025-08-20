@@ -51,6 +51,24 @@ pub trait Readable {
     where
         Self::Target: 'static;
 
+    #[deprecated(
+        since = "0.7",
+        note = "Use `try_read_extended` instead. \
+            If you are on Rust 2024 edition, \
+            you can usually use `try_read` directly \
+            (due to lifetime improvements). \
+            This function will be removed in 0.8."
+    )]
+    #[allow(missing_docs)]
+    fn try_read_unchecked(
+        &self,
+    ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError>
+    where
+        Self::Target: 'static,
+    {
+        self.try_read_extended()
+    }
+
     /// Try to peek the current value of the signal without subscribing to updates. If the value has
     /// been dropped, this will return an error.
     ///
@@ -60,6 +78,24 @@ pub trait Readable {
     ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError>
     where
         Self::Target: 'static;
+
+    #[deprecated(
+        since = "0.7",
+        note = "Use `try_peak_extended` instead. \
+            If you are on Rust 2024 edition, \
+            you can usually use `try_peak` directly \
+            (due to lifetime improvements). \
+            This function will be removed in 0.8."
+    )]
+    #[allow(missing_docs)]
+    fn try_peek_unchecked(
+        &self,
+    ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError>
+    where
+        Self::Target: 'static,
+    {
+        self.try_peek_extended()
+    }
 
     /// Get the underlying subscriber list for this readable. This is used to track when the value changes and notify subscribers.
     fn subscribers(&self) -> Subscribers
