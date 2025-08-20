@@ -141,7 +141,7 @@ impl ReactiveContext {
         #[allow(clippy::mutable_key_type)]
         let old_subscribers = std::mem::take(&mut self.inner.write().subscribers);
         for subscriber in old_subscribers {
-            subscriber.0.lock().unwrap().remove(self);
+            subscriber.0.remove(self);
         }
     }
 
@@ -150,7 +150,7 @@ impl ReactiveContext {
         #[allow(clippy::mutable_key_type)]
         let subscribers = &self.inner.read().subscribers;
         for subscriber in subscribers.iter() {
-            subscriber.0.lock().unwrap().insert(*self);
+            subscriber.0.add(*self);
         }
     }
 
@@ -238,11 +238,14 @@ impl ReactiveContext {
     }
 
     /// Subscribe to this context. The reactive context will automatically remove itself from the subscriptions when it is reset.
-    pub fn subscribe(&self, subscriptions: Arc<Mutex<HashSet<ReactiveContext>>>) {
+    pub fn subscribe(&self, subscriptions: impl Into<Subscribers>) {
         match self.inner.try_write() {
             Ok(mut inner) => {
-                subscriptions.lock().unwrap().insert(*self);
-                inner.subscribers.insert(PointerHash(subscriptions));
+                let subscriptions = subscriptions.into();
+                subscriptions.add(*self);
+                inner
+                    .subscribers
+                    .insert(PointerHash(subscriptions.inner.clone()));
             }
             // If the context was dropped, we don't need to subscribe to it anymore
             Err(BorrowMutError::Dropped(_)) => {}
@@ -266,29 +269,27 @@ impl Hash for ReactiveContext {
     }
 }
 
-struct PointerHash<T>(Arc<T>);
+struct PointerHash<T: ?Sized>(Arc<T>);
 
-impl<T> Hash for PointerHash<T> {
+impl<T: ?Sized> Hash for PointerHash<T> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         std::sync::Arc::<T>::as_ptr(&self.0).hash(state);
     }
 }
 
-impl<T> PartialEq for PointerHash<T> {
+impl<T: ?Sized> PartialEq for PointerHash<T> {
     fn eq(&self, other: &Self) -> bool {
-        std::sync::Arc::<T>::as_ptr(&self.0) == std::sync::Arc::<T>::as_ptr(&other.0)
+        std::sync::Arc::ptr_eq(&self.0, &other.0)
     }
 }
 
-impl<T> Eq for PointerHash<T> {}
+impl<T: ?Sized> Eq for PointerHash<T> {}
 
-impl<T> Clone for PointerHash<T> {
+impl<T: ?Sized> Clone for PointerHash<T> {
     fn clone(&self) -> Self {
         Self(self.0.clone())
     }
 }
-
-type SubscriberMap = Mutex<HashSet<ReactiveContext>>;
 
 struct Inner {
     self_: Option<ReactiveContext>,
@@ -297,7 +298,7 @@ struct Inner {
     update: Box<dyn FnMut() + Send + Sync>,
 
     // Subscribers to this context
-    subscribers: HashSet<PointerHash<SubscriberMap>>,
+    subscribers: HashSet<PointerHash<dyn SubscriberList + Send + Sync>>,
 
     // Debug information for signal subscriptions
     #[cfg(debug_assertions)]
@@ -315,9 +316,103 @@ impl Drop for Inner {
         };
 
         for subscriber in std::mem::take(&mut self.subscribers) {
-            if let Ok(mut subscriber) = subscriber.0.lock() {
-                subscriber.remove(&self_);
-            }
+            subscriber.0.remove(&self_);
+        }
+    }
+}
+
+/// A list of [ReactiveContext]s that are subscribed. This is used to notify subscribers when the value changes.
+#[derive(Clone)]
+pub struct Subscribers {
+    /// The list of subscribers.
+    pub(crate) inner: Arc<dyn SubscriberList + Send + Sync>,
+}
+
+impl Default for Subscribers {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Subscribers {
+    /// Create a new no-op list of subscribers.
+    pub fn new_noop() -> Self {
+        struct NoopSubscribers;
+        impl SubscriberList for NoopSubscribers {
+            fn add(&self, _subscriber: ReactiveContext) {}
+
+            fn remove(&self, _subscriber: &ReactiveContext) {}
+
+            fn visit(&self, _f: &mut dyn FnMut(&ReactiveContext)) {}
+        }
+        Subscribers {
+            inner: Arc::new(NoopSubscribers),
+        }
+    }
+
+    /// Create a new list of subscribers.
+    pub fn new() -> Self {
+        Subscribers {
+            inner: Arc::new(Mutex::new(HashSet::new())),
+        }
+    }
+
+    /// Add a subscriber to the list.
+    pub fn add(&self, subscriber: ReactiveContext) {
+        self.inner.add(subscriber);
+    }
+
+    /// Remove a subscriber from the list.
+    pub fn remove(&self, subscriber: &ReactiveContext) {
+        self.inner.remove(subscriber);
+    }
+
+    /// Visit all subscribers in the list.
+    pub fn visit(&self, mut f: impl FnMut(&ReactiveContext)) {
+        self.inner.visit(&mut f);
+    }
+}
+
+impl<S: SubscriberList + Send + Sync + 'static> From<Arc<S>> for Subscribers {
+    fn from(inner: Arc<S>) -> Self {
+        Subscribers { inner }
+    }
+}
+
+/// A list of subscribers that can be notified when the value changes. This is used to track when the value changes and notify subscribers.
+pub trait SubscriberList: Send + Sync {
+    /// Add a subscriber to the list.
+    fn add(&self, subscriber: ReactiveContext);
+
+    /// Remove a subscriber from the list.
+    fn remove(&self, subscriber: &ReactiveContext);
+
+    /// Visit all subscribers in the list.
+    fn visit(&self, f: &mut dyn FnMut(&ReactiveContext));
+}
+
+impl SubscriberList for Mutex<HashSet<ReactiveContext>> {
+    fn add(&self, subscriber: ReactiveContext) {
+        if let Ok(mut lock) = self.lock() {
+            lock.insert(subscriber);
+        } else {
+            tracing::warn!("Failed to lock subscriber list to add subscriber: {subscriber}");
+        }
+    }
+
+    fn remove(&self, subscriber: &ReactiveContext) {
+        if let Ok(mut lock) = self.lock() {
+            lock.remove(subscriber);
+        } else {
+            tracing::warn!("Failed to lock subscriber list to remove subscriber: {subscriber}");
+        }
+    }
+
+    fn visit(&self, f: &mut dyn FnMut(&ReactiveContext)) {
+        if let Ok(lock) = self.lock() {
+            lock.iter().for_each(f);
+        } else {
+            tracing::warn!("Failed to lock subscriber list to visit subscribers");
         }
     }
 }

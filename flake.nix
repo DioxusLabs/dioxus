@@ -9,11 +9,20 @@
     # crane.inputs.nixpkgs.follows = "nixpkgs";
   };
 
-  outputs = inputs:
+  outputs =
+    inputs:
     inputs.flake-parts.lib.mkFlake { inherit inputs; } {
       systems = import inputs.systems;
 
-      perSystem = { config, self', pkgs, lib, system, ... }:
+      perSystem =
+        {
+          config,
+          self',
+          pkgs,
+          lib,
+          system,
+          ...
+        }:
         let
           rustToolchain = pkgs.rust-bin.stable.latest.default.override {
             extensions = [
@@ -26,19 +35,61 @@
             pkgs.openssl
             pkgs.libiconv
             pkgs.pkg-config
-          ] ++ lib.optionals pkgs.stdenv.isLinux [
+          ]
+          ++ lib.optionals pkgs.stdenv.isLinux [
             pkgs.glib
             pkgs.gtk3
             pkgs.libsoup_3
             pkgs.webkitgtk_4_1
             pkgs.xdotool
-          ] ++ lib.optionals pkgs.stdenv.isDarwin (with pkgs.darwin.apple_sdk.frameworks; [
-            IOKit
-            Carbon
-            WebKit
-            Security
-            Cocoa
-          ]);
+          ]
+          ++ lib.optionals pkgs.stdenv.isDarwin (
+            with pkgs.darwin.apple_sdk.frameworks;
+            [
+              IOKit
+              Carbon
+              WebKit
+              Security
+              Cocoa
+            ]
+          );
+
+          cargoToml = builtins.fromTOML (builtins.readFile ./Cargo.toml);
+
+          rustPackage =
+            package:
+            {
+              binary ? package,
+              features ? [ ],
+            }:
+            (pkgs.makeRustPlatform {
+              cargo = rustToolchain;
+              rustc = rustToolchain;
+            }).buildRustPackage
+              {
+                pname = package;
+                version = cargoToml.package.version;
+                src = pkgs.lib.cleanSource ./.;
+                cargoLock.lockFile = ./Cargo.lock;
+                buildInputs = rustBuildInputs;
+                nativeBuildInputs = [
+                  rustToolchain
+                  pkgs.pkg-config
+                ];
+                buildPhase = ''
+                  mkdir -p .cargo
+                  cp ${./Cargo.lock} Cargo.lock
+                  cargo build --release --package ${package} ${
+                    lib.concatStringsSep " " (map (f: "--features ${f}") features)
+                  }
+                '';
+                installPhase = ''
+                  mkdir -p $out/bin
+                  ls -alR target/release
+                  cp target/release/${binary} $out/bin/
+                '';
+                doCheck = false; # Disable tests to avoid building deps for them
+              };
 
           # This is useful when building crates as packages
           # Note that it does require a `Cargo.lock` which this repo does not have
@@ -51,6 +102,13 @@
               inputs.rust-overlay.overlays.default
             ];
           };
+
+          packages.dioxus-cli = (
+            rustPackage "dioxus-cli" {
+              binary = "dx";
+              features = [ "no-downloads" ];
+            }
+          );
 
           devShells.default = pkgs.mkShell {
             name = "dioxus-dev";

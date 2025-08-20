@@ -115,7 +115,7 @@ impl AppServer {
 
         let open_browser = args
             .open
-            .unwrap_or_else(|| workspace.settings.always_open_browser.unwrap_or(true))
+            .unwrap_or_else(|| workspace.settings.always_open_browser.unwrap_or(false))
             && interactive;
 
         let wsl_file_poll_interval = args
@@ -166,18 +166,11 @@ impl AppServer {
         let client = AppBuilder::new(&client)?;
         let server = server.map(|server| AppBuilder::new(&server)).transpose()?;
 
-        // Only start Tailwind watcher for client builds that serve assets (not server builds or fullstack mode)
-        // In fullstack mode, the client build's prebuild() handles Tailwind generation to avoid race conditions
-        let tw_watcher = if client.build.bundle != BundleFormat::Server && !fullstack {
-            TailwindCli::serve(
-                client.build.package_manifest_dir(),
-                client.build.config.application.tailwind_input.clone(),
-                client.build.config.application.tailwind_output.clone(),
-            )
-        } else {
-            // Return a dummy task that immediately completes for server builds or fullstack mode
-            tokio::spawn(async { Ok(()) })
-        };
+        let tw_watcher = TailwindCli::serve(
+            client.build.package_manifest_dir(),
+            client.build.config.application.tailwind_input.clone(),
+            client.build.config.application.tailwind_output.clone(),
+        );
 
         _ = client.build.start_simulators().await;
 
@@ -492,7 +485,7 @@ impl AppServer {
 
         // todo - we need to distinguish between hotpatchable rebuilds and true full rebuilds.
         //        A full rebuild is required when the user modifies static initializers which we haven't wired up yet.
-        if needs_full_rebuild {
+        if needs_full_rebuild && self.automatic_rebuilds {
             if self.use_hotpatch_engine {
                 self.client.patch_rebuild(files.to_vec());
                 if let Some(server) = self.server.as_mut() {
@@ -525,6 +518,14 @@ impl AppServer {
             let file = files[0].display().to_string();
             let file =
                 file.trim_start_matches(&self.client.build.crate_dir().display().to_string());
+
+            if needs_full_rebuild && !self.automatic_rebuilds {
+                use crate::styles::NOTE_STYLE;
+                tracing::warn!(
+                    "Ignoring full rebuild for: {NOTE_STYLE}{}{NOTE_STYLE:#}",
+                    file
+                );
+            }
 
             // Only send a hotreload message for templates and assets - otherwise we'll just get a full rebuild
             //

@@ -66,7 +66,7 @@ pub(super) fn desktop_handler(
         }
     }
 
-    match dioxus_asset_resolver::serve_asset(request.uri().path()) {
+    match dioxus_asset_resolver::native::serve_asset(request.uri().path()) {
         Ok(res) => responder.respond(res),
         Err(_e) => responder.respond(
             Response::builder()

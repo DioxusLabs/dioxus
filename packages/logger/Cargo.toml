@@ -22,7 +22,6 @@ default = []
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 tracing-wasm = { workspace = true }
-console_error_panic_hook = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tracing-subscriber = { workspace = true, features = ["fmt"] }

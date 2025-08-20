@@ -1466,7 +1466,7 @@ struct DataSymbol {
 /// We need to do this for data symbols because walrus doesn't provide the right range and offset
 /// information for data segments. Fortunately, it provides it for code sections, so we only need to
 /// do a small amount extra of parsing here.
-fn parse_bytes_to_data_segment(bytes: &[u8]) -> Result<RawDataSection> {
+fn parse_bytes_to_data_segment(bytes: &[u8]) -> Result<RawDataSection<'_>> {
     let parser = wasmparser::Parser::new(0);
     let mut parser = parser.parse_all(bytes);
     let mut segments = vec![];

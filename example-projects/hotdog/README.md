@@ -2,7 +2,7 @@
 
 A Dioxus demo app for the new tutorial!
 
-![Demo](/assets/screenshot.png)
+![Demo](assets/screenshot.png)
 
 ## To run
 

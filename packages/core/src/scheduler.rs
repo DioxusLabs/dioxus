@@ -17,7 +17,7 @@
 //! }
 //!
 //! #[component]
-//! fn ChildComponent(signal: Signal<Option<i32>>) -> Element {
+//! fn ChildComponent(signal: WriteSignal<Option<i32>>) -> Element {
 //!     // It feels safe to assume that signal is some because the parent component checked that it was some
 //!     rsx! { "{signal.read().unwrap()}" }
 //! }
@@ -265,15 +265,14 @@ impl Borrow<ScopeOrder> for DirtyTasks {
     }
 }
 
-impl PartialOrd for DirtyTasks {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.order.cmp(&other.order))
-    }
-}
-
 impl Ord for DirtyTasks {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.order.cmp(&other.order)
+    }
+}
+impl PartialOrd for DirtyTasks {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
     }
 }
 

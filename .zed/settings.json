@@ -1,0 +1,13 @@
+{
+  "languages": {
+    "TOML": {
+      "format_on_save": "off"
+    },
+    "HTML": {
+      "format_on_save": "off"
+    },
+    "JavaScript": {
+      "format_on_save": "off"
+    }
+  }
+}

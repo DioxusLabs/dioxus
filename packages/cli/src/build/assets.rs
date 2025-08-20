@@ -293,9 +293,14 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
 
 /// Find all assets in the given file, hash them, and write them back to the file.
 /// Then return an `AssetManifest` containing all the assets found in the file.
-pub(crate) fn extract_assets_from_file(path: impl AsRef<Path>) -> Result<AssetManifest> {
+pub(crate) async fn extract_assets_from_file(path: impl AsRef<Path>) -> Result<AssetManifest> {
     let path = path.as_ref();
-    let mut file = std::fs::File::options().write(true).read(true).open(path)?;
+    let mut file = open_file_for_writing_with_timeout(
+        path,
+        std::fs::OpenOptions::new().write(true).read(true),
+    )
+    .await?;
+
     let mut file_contents = Vec::new();
     file.read_to_end(&mut file_contents)?;
     let mut reader = Cursor::new(&file_contents);
@@ -368,4 +373,31 @@ pub(crate) fn extract_assets_from_file(path: impl AsRef<Path>) -> Result<AssetMa
     }
 
     Ok(manifest)
+}
+
+/// Try to open a file for writing, retrying if the file is already open by another process.
+///
+/// This is useful on windows where antivirus software might grab the executable before we have a chance to read it.
+async fn open_file_for_writing_with_timeout(
+    file: &Path,
+    options: &mut std::fs::OpenOptions,
+) -> Result<std::fs::File> {
+    let start_time = std::time::Instant::now();
+    let timeout = std::time::Duration::from_secs(5);
+    loop {
+        match options.open(file) {
+            Ok(file) => return Ok(file),
+            Err(e) => {
+                if cfg!(windows) && e.raw_os_error() == Some(32) && start_time.elapsed() < timeout {
+                    // File is already open, wait and retry
+                    tracing::trace!(
+                        "Failed to open file because another process is using it. Retrying..."
+                    );
+                    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+                } else {
+                    return Err(e.into());
+                }
+            }
+        }
+    }
 }

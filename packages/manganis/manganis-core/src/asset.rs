@@ -94,6 +94,7 @@ impl BundledAsset {
 ///     img { src: ASSET }
 /// };
 /// ```
+#[allow(unpredictable_function_pointer_comparisons)]
 #[derive(PartialEq, Clone, Copy)]
 pub struct Asset {
     /// A function that returns a pointer to the bundled asset. This will be resolved after the linker has run and

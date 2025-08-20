@@ -1,7 +1,9 @@
+use crate::Result;
 use crate::{
     serve::{ansi_buffer::ansi_string_to_line, ServeUpdate, WebServer},
     BuildId, BuildStage, BuilderUpdate, BundleFormat, TraceContent, TraceMsg, TraceSrc,
 };
+use anyhow::{anyhow, bail, Context};
 use cargo_metadata::diagnostic::Diagnostic;
 use crossterm::{
     cursor::{Hide, Show},
@@ -104,7 +106,7 @@ impl Output {
 
     /// Call the startup functions that might mess with the terminal settings.
     /// This is meant to be paired with "shutdown" to restore the terminal to its original state.
-    fn startup(&mut self) -> io::Result<()> {
+    fn startup(&mut self) -> Result<()> {
         if self.interactive {
             // Check if writing the terminal is going to block infinitely.
             // If it does, we should disable interactive mode. This ensures we work with programs like `bg`
@@ -138,7 +140,7 @@ impl Output {
     ///
     /// This lets us check if writing to tty is going to block forever and then recover, allowing
     /// interopability with programs like `bg`.
-    fn enable_raw_mode() -> io::Result<()> {
+    fn enable_raw_mode() -> Result<()> {
         #[cfg(unix)]
         {
             use tokio::signal::unix::{signal, SignalKind};
@@ -152,7 +154,7 @@ impl Output {
         use std::io::IsTerminal;
 
         if !stdout().is_terminal() {
-            return io::Result::Err(io::Error::other("Not a terminal"));
+            bail!("Cannot enable raw mode on a non-terminal output");
         }
 
         enable_raw_mode()?;
@@ -164,7 +166,7 @@ impl Output {
         Ok(())
     }
 
-    pub(crate) fn remote_shutdown(interactive: bool) -> io::Result<()> {
+    pub(crate) fn remote_shutdown(interactive: bool) -> Result<()> {
         if interactive && crossterm::terminal::is_raw_mode_enabled().unwrap_or(true) {
             stdout()
                 .execute(Show)?
@@ -213,24 +215,43 @@ impl Output {
     }
 
     /// Handle an input event, returning `true` if the event should cause the program to restart.
-    fn handle_input(&mut self, input: Event) -> io::Result<Option<ServeUpdate>> {
-        // handle ctrlc
-        if let Event::Key(key) = input {
-            if let KeyCode::Char('c') = key.code {
-                if key.modifiers.contains(KeyModifiers::CONTROL) {
-                    return Ok(Some(ServeUpdate::Exit { error: None }));
-                }
-            }
-        }
-
+    fn handle_input(&mut self, input: Event) -> Result<Option<ServeUpdate>> {
         match input {
             Event::Key(key) if key.kind == KeyEventKind::Press => self.handle_keypress(key),
             _ => Ok(Some(ServeUpdate::Redraw)),
         }
     }
 
-    fn handle_keypress(&mut self, key: KeyEvent) -> io::Result<Option<ServeUpdate>> {
+    fn handle_keypress(&mut self, key: KeyEvent) -> Result<Option<ServeUpdate>> {
+        // Some dev helpers for testing panic propagation and error handling. Remove this eventually.
+        if cfg!(debug_assertions) && std::env::var("DEBUG_PANICS").is_ok() {
+            match key.code {
+                KeyCode::Char('Z') => panic!("z pressed so we panic -> {}", uuid::Uuid::new_v4()),
+                KeyCode::Char('X') => bail!("x pressed so we bail -> {}", uuid::Uuid::new_v4()),
+                KeyCode::Char('E') => {
+                    Err(anyhow!(
+                        "E pressed so we bail with context -> {}",
+                        uuid::Uuid::new_v4()
+                    ))
+                    .context("With a message")
+                    .context("With a context")?;
+                }
+                KeyCode::Char('C') => {
+                    return Ok(Some(ServeUpdate::Exit {
+                        error: Some(anyhow!(
+                            "C pressed, so exiting with safe error -> {}",
+                            uuid::Uuid::new_v4()
+                        )),
+                    }));
+                }
+                _ => {}
+            }
+        }
+
         match key.code {
+            KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                return Ok(Some(ServeUpdate::Exit { error: None }))
+            }
             KeyCode::Char('r') => return Ok(Some(ServeUpdate::RequestRebuild)),
             KeyCode::Char('o') => return Ok(Some(ServeUpdate::OpenApp)),
             KeyCode::Char('p') => return Ok(Some(ServeUpdate::ToggleShouldRebuild)),
@@ -255,7 +276,6 @@ impl Output {
                     id: BuildId::CLIENT,
                 }));
             }
-
             KeyCode::Char('c') => {
                 stdout()
                     .execute(Clear(ClearType::All))?
@@ -394,7 +414,9 @@ impl Output {
         };
 
         // First, dequeue any logs that have built up from event handling
-        _ = self.drain_logs(term);
+        while let Some(log) = self.pending_logs.pop_back() {
+            _ = self.render_log(term, log);
+        }
 
         // Then, draw the frame, passing along all the state of the TUI so we can render it properly
         _ = term.draw(|frame| {
@@ -524,6 +546,7 @@ impl Output {
             BuildStage::CompressingAssets => lines.push("Compressing assets".yellow()),
             BuildStage::RunningBindgen => lines.push("Running wasm-bindgen".yellow()),
             BuildStage::RunningGradle => lines.push("Running gradle assemble".yellow()),
+            BuildStage::CodeSigning => lines.push("Code signing app".yellow()),
             BuildStage::Bundling => lines.push("Bundling app".yellow()),
             BuildStage::CopyingAssets {
                 current,
@@ -844,15 +867,12 @@ impl Output {
     /// TODO(jon): we could look into implementing scroll regions ourselves, but I think insert_before will
     /// land in a reasonable amount of time.
     #[deny(clippy::manual_saturating_arithmetic)]
-    fn drain_logs(
+    fn render_log(
         &mut self,
         terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
-    ) -> io::Result<()> {
+        log: TraceMsg,
+    ) -> Result<()> {
         use unicode_segmentation::UnicodeSegmentation;
-
-        let Some(log) = self.pending_logs.pop_back() else {
-            return Ok(());
-        };
 
         // Only show debug logs if verbose is enabled
         if log.level == Level::DEBUG && !self.verbose {
@@ -1027,5 +1047,35 @@ impl Output {
         }
 
         lines
+    }
+}
+
+impl std::ops::Drop for Output {
+    fn drop(&mut self) {
+        if !self.interactive {
+            return;
+        }
+
+        // Get a handle to the terminal with a different lifetime so we can continue to call &self methods
+        let owned_term = self.term.clone();
+        let mut term = owned_term.borrow_mut();
+        let Some(term) = term.as_mut() else {
+            return;
+        };
+
+        // First, dequeue any logs that have built up from event handling
+        while let Some(log) = self.pending_logs.pop_back() {
+            _ = self.render_log(term, log);
+        }
+
+        // And then lets move the cursor to the bottom of the terminal
+        let frame_rect = term.get_frame().area();
+        _ = term.set_cursor_position(Position {
+            x: 0,
+            y: frame_rect.y + frame_rect.height,
+        });
+
+        // Tear down the TUI if it's active at this point.
+        _ = crate::serve::Output::remote_shutdown(self.interactive);
     }
 }

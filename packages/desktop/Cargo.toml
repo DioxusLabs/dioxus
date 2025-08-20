@@ -17,7 +17,7 @@ dioxus-document = { workspace = true }
 dioxus-signals = { workspace = true, optional = true }
 dioxus-interpreter-js = { workspace = true, features = ["binary-protocol", "serialize"] }
 dioxus-cli-config = { workspace = true }
-dioxus-asset-resolver = { workspace = true }
+dioxus-asset-resolver = { workspace = true, features = ["native"] }
 generational-box = { workspace = true }
 dioxus-devtools = { workspace = true, optional = true }
 
@@ -78,11 +78,6 @@ ndk = { version = "0.9.0" }
 ndk-sys = { version = "0.6.0" }
 ndk-context = { version = "0.1.1" }
 
-# The `openssl` dependency generally does not know how to cross-compile for Android. To make the lives
-# of our users easier, we automatically enable the `openssl` feature when building for Android.
-# Feature are additive, so users will need to "subtract" this feature if they do not want it.
-openssl = { version = "0.10", features = ["vendored"], optional = true }
-
 # use native tls on other platforms
 [target.'cfg(not(target_os = "android"))'.dependencies]
 tungstenite = { workspace = true, features = ["native-tls"] }
@@ -96,12 +91,11 @@ objc = "0.2.7"
 lazy-js-bundle = { workspace = true }
 
 [features]
-default = ["tokio_runtime", "transparent", "devtools", "openssl-vendored-android"]
+default = ["tokio_runtime", "transparent", "devtools"]
 tokio_runtime = ["dep:tokio"]
 fullscreen = ["wry/fullscreen"]
 devtools = ["wry/devtools", "dep:dioxus-devtools", "dioxus-signals"]
 transparent = ["wry/transparent"]
-openssl-vendored-android = ["openssl"]
 gnu = []
 
 [package.metadata.docs.rs]

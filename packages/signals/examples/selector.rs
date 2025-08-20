@@ -18,6 +18,6 @@ fn app() -> Element {
 }
 
 #[component]
-fn Child(signal: ReadOnlySignal<usize>) -> Element {
+fn Child(signal: ReadSignal<usize>) -> Element {
     rsx! { "{signal}" }
 }

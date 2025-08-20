@@ -1,6 +1,6 @@
 //! Integration between Dioxus and Blitz
 use crate::{qual_name, trace, NodeId};
-use blitz_dom::{Attribute, BaseDocument, DocumentMutator};
+use blitz_dom::{BaseDocument, DocumentMutator};
 use blitz_traits::events::DomEventKind;
 use dioxus_core::{
     AttributeValue, ElementId, Template, TemplateAttribute, TemplateNode, WriteMutations,
@@ -183,14 +183,6 @@ impl WriteMutations for MutationWriter<'_> {
         id: ElementId,
     ) {
         let node_id = self.state.element_to_node_id(id);
-        trace!("set_attribute node_id:{node_id} ns: {ns:?} name:{local_name}, value:{value:?}");
-
-        // Dioxus has overloaded the style namespace to accumulate style attributes without a `style` block
-        // TODO: accumulate style attributes into a single style element.
-        if ns == Some("style") {
-            return;
-        }
-
         fn is_falsy(val: &AttributeValue) -> bool {
             match val {
                 AttributeValue::None => true,
@@ -202,31 +194,30 @@ impl WriteMutations for MutationWriter<'_> {
             }
         }
 
-        let name = qual_name(local_name, ns);
-
-        // FIXME: more principled handling of special case attributes
-        if value == &AttributeValue::None || (local_name == "checked" && is_falsy(value)) {
-            self.docm.clear_attribute(node_id, name);
-        } else {
-            match value {
-                AttributeValue::Text(value) => self.docm.set_attribute(node_id, name, value),
-                AttributeValue::Float(value) => {
-                    let value = value.to_string();
-                    self.docm.set_attribute(node_id, name, &value);
-                }
-                AttributeValue::Int(value) => {
-                    let value = value.to_string();
-                    self.docm.set_attribute(node_id, name, &value);
-                }
-                AttributeValue::Bool(value) => {
-                    let value = value.to_string();
-                    self.docm.set_attribute(node_id, name, &value);
-                }
-                _ => {
-                    // FIXME: support all attribute types
-                }
-            };
-        }
+        let falsy = is_falsy(value);
+        match value {
+            AttributeValue::None => {
+                set_attribute_inner(&mut self.docm, local_name, ns, None, falsy, node_id)
+            }
+            AttributeValue::Text(value) => {
+                set_attribute_inner(&mut self.docm, local_name, ns, Some(value), falsy, node_id)
+            }
+            AttributeValue::Float(value) => {
+                let value = value.to_string();
+                set_attribute_inner(&mut self.docm, local_name, ns, Some(&value), falsy, node_id);
+            }
+            AttributeValue::Int(value) => {
+                let value = value.to_string();
+                set_attribute_inner(&mut self.docm, local_name, ns, Some(&value), falsy, node_id);
+            }
+            AttributeValue::Bool(value) => {
+                let value = value.to_string();
+                set_attribute_inner(&mut self.docm, local_name, ns, Some(&value), falsy, node_id);
+            }
+            _ => {
+                // FIXME: support all attribute types
+            }
+        };
     }
 
     fn load_template(&mut self, template: Template, index: usize, id: ElementId) {
@@ -283,8 +274,21 @@ fn create_template_node(docm: &mut DocumentMutator<'_>, node: &TemplateNode) -> 
             children,
         } => {
             let name = qual_name(tag, *namespace);
-            let attrs = attrs.iter().filter_map(map_template_attr).collect();
-            let node_id = docm.create_element(name, attrs);
+            // let attrs = attrs.iter().filter_map(map_template_attr).collect();
+            let node_id = docm.create_element(name, Vec::new());
+
+            for attr in attrs.iter() {
+                let TemplateAttribute::Static {
+                    name,
+                    value,
+                    namespace,
+                } = attr
+                else {
+                    continue;
+                };
+                let falsy = *value == "false";
+                set_attribute_inner(docm, name, *namespace, Some(value), falsy, node_id);
+            }
 
             let child_ids: Vec<NodeId> = children
                 .iter()
@@ -300,17 +304,39 @@ fn create_template_node(docm: &mut DocumentMutator<'_>, node: &TemplateNode) -> 
     }
 }
 
-fn map_template_attr(attr: &TemplateAttribute) -> Option<Attribute> {
-    let TemplateAttribute::Static {
-        name,
-        value,
-        namespace,
-    } = attr
-    else {
-        return None;
-    };
+fn set_attribute_inner(
+    docm: &mut DocumentMutator<'_>,
+    local_name: &'static str,
+    ns: Option<&'static str>,
+    value: Option<&str>,
+    is_falsy: bool,
+    node_id: usize,
+) {
+    trace!("set_attribute node_id:{node_id} ns: {ns:?} name:{local_name}, value:{value:?}");
 
-    let name = qual_name(name, *namespace);
-    let value = value.to_string();
-    Some(Attribute { name, value })
+    // Dioxus has overloaded the style namespace to accumulate style attributes without a `style` block
+    // TODO: accumulate style attributes into a single style element.
+    if ns == Some("style") {
+        match value {
+            Some(value) => docm.set_style_property(node_id, local_name, value),
+            None => docm.remove_style_property(node_id, local_name),
+        }
+        return;
+    }
+
+    let name = qual_name(local_name, ns);
+
+    // FIXME: more principled handling of special case attributes
+    match value {
+        None => docm.clear_attribute(node_id, name),
+        Some(value) => {
+            if local_name == "checked" && is_falsy {
+                docm.clear_attribute(node_id, name);
+            } else if local_name == "dangerous_inner_html" {
+                docm.set_inner_html(node_id, value);
+            } else {
+                docm.set_attribute(node_id, name, value);
+            }
+        }
+    }
 }

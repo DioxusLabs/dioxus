@@ -108,13 +108,66 @@ pub(crate) struct TargetArgs {
     #[clap(long, default_value_t = true, help_heading = HELP_HEADING, num_args = 0..=1)]
     pub(crate) debug_symbols: bool,
 
-    /// Are we building for a device or just the simulator.
-    /// If device is false, then we'll build for the simulator
-    #[clap(long, default_value_t = false, help_heading = HELP_HEADING)]
-    pub(crate) device: bool,
+    /// The name of the device we are hoping to upload to. By default, dx tries to upload to the active
+    /// simulator. If the device name is passed, we will upload to that device instead.
+    ///
+    /// This performs a search among devices, and fuzzy matches might be found.
+    #[arg(long, default_missing_value=None, num_args=0..=1)]
+    pub(crate) device: Option<String>,
 
     /// The base path the build will fetch assets relative to. This will override the
     /// base path set in the `dioxus` config.
     #[clap(long, help_heading = HELP_HEADING)]
     pub(crate) base_path: Option<String>,
+
+    /// Should dx attempt to codesign the app bundle?
+    #[clap(long, default_value_t = false, help_heading = HELP_HEADING, num_args = 0..=1)]
+    pub(crate) codesign: bool,
+
+    /// The path to the Apple entitlements file to used to sign the resulting app bundle.
+    ///
+    /// On iOS, this is required for deploy to a device and some configurations in the simulator.
+    #[clap(long, help_heading = HELP_HEADING)]
+    pub(crate) apple_entitlements: Option<PathBuf>,
+
+    /// The Apple team ID to use when signing the app bundle.
+    ///
+    /// Usually this is an email or name associated with your Apple Developer account, usually in the
+    /// format `Signing Name (GXTEAMID123)`.
+    ///
+    /// This is passed directly to the `codesign` tool.
+    ///
+    /// ```
+    /// codesign --force --entitlements <entitlements_file> --sign <apple_team_id> <app_bundle>
+    /// ```
+    #[clap(long, help_heading = HELP_HEADING)]
+    pub(crate) apple_team_id: Option<String>,
+}
+
+impl Anonymized for TargetArgs {
+    fn anonymized(&self) -> Value {
+        json! {{
+            "target_alias": self.target_alias,
+            "renderer": self.renderer,
+            "bundle": self.bundle,
+            "platform": self.platform,
+            "release": self.release,
+            "package": self.package,
+            "bin": self.bin,
+            "example": self.example.is_some(),
+            "profile": self.profile.is_some(),
+            "features": !self.features.is_empty(),
+            "no_default_features": self.no_default_features,
+            "all_features": self.all_features,
+            "target": self.target.as_ref().map(|t| t.to_string()),
+            "skip_assets": self.skip_assets,
+            "inject_loading_scripts": self.inject_loading_scripts,
+            "wasm_split": self.wasm_split,
+            "debug_symbols": self.debug_symbols,
+            "device": self.device,
+            "base_path": self.base_path.is_some(),
+            "cargo_args": self.cargo_args.is_some(),
+            "rustc_args": self.rustc_args.is_some(),
+        }}
+    }
 }

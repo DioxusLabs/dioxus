@@ -45,3 +45,15 @@ test("unused external assets are bundled", async ({ page }) => {
   // make sure the response is an image
   expect(response.headers()["content-type"]).toBe("image/png");
 });
+
+test("assets are resolved", async ({ page }) => {
+  await page.goto("http://localhost:8989");
+
+  // Expect the page to contain an element with the id "resolved-data"
+  const resolvedData = page.locator("#resolved-data");
+  await expect(resolvedData).toBeVisible();
+  // Expect the element to contain the text "List: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]"
+  await expect(resolvedData).toContainText(
+    "List: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]"
+  );
+});

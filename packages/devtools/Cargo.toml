@@ -19,6 +19,9 @@ serde_json = { workspace = true }
 subsecond = { workspace = true }
 thiserror = { workspace = true }
 
+futures-util = { workspace = true, features = ["sink", "async-await-macro"], optional = true }
+futures-channel = { workspace = true, optional = true }
+
 # hot reloading serve
 tracing = { workspace = true }
 warnings = { workspace = true }
@@ -32,3 +35,7 @@ serde_json = { workspace = true }
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
+
+[features]
+default = []
+serve = ["dep:futures-util", "dep:futures-channel"]

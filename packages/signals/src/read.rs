@@ -1,15 +1,16 @@
-use std::{mem::MaybeUninit, ops::Index, rc::Rc};
+use std::{mem::MaybeUninit, ops::Index};
 
-use generational_box::AnyStorage;
+use dioxus_core::Subscribers;
+use generational_box::{AnyStorage, UnsyncStorage};
 
-use crate::MappedSignal;
+use crate::{MappedSignal, ReadSignal};
 
 /// A reference to a value that can be read from.
 #[allow(type_alias_bounds)]
 pub type ReadableRef<'a, T: Readable, O = <T as Readable>::Target> =
     <T::Storage as AnyStorage>::Ref<'a, O>;
 
-/// A trait for states that can be read from like [`crate::Signal`], [`crate::GlobalSignal`], or [`crate::ReadOnlySignal`]. You may choose to accept this trait as a parameter instead of the concrete type to allow for more flexibility in your API. For example, instead of creating two functions, one that accepts a [`crate::Signal`] and one that accepts a [`crate::GlobalSignal`], you can create one function that accepts a [`Readable`] type.
+/// A trait for states that can be read from like [`crate::Signal`], [`crate::GlobalSignal`], or [`crate::ReadSignal`]. You may choose to accept this trait as a parameter instead of the concrete type to allow for more flexibility in your API. For example, instead of creating two functions, one that accepts a [`crate::Signal`] and one that accepts a [`crate::GlobalSignal`], you can create one function that accepts a [`Readable`] type.
 ///
 /// # Example
 /// ```rust
@@ -21,7 +22,7 @@ pub type ReadableRef<'a, T: Readable, O = <T as Readable>::Target> =
 /// static COUNT: GlobalSignal<i32> = Signal::global(|| 0);
 ///
 /// fn MyComponent(count: Signal<i32>) -> Element {
-///     // Since we defined the function in terms of the readable trait, we can use it with any readable type (Signal, GlobalSignal, ReadOnlySignal, etc)
+///     // Since we defined the function in terms of the readable trait, we can use it with any readable type (Signal, GlobalSignal, ReadSignal, etc)
 ///     let doubled = use_memo(move || double(&count));
 ///     let global_count_doubled = use_memo(|| double(&COUNT));
 ///     rsx! {
@@ -36,80 +37,55 @@ pub type ReadableRef<'a, T: Readable, O = <T as Readable>::Target> =
 /// ```
 pub trait Readable {
     /// The target type of the reference.
-    type Target: ?Sized + 'static;
+    type Target: ?Sized;
 
     /// The type of the storage this readable uses.
     type Storage: AnyStorage;
 
-    /// Map the readable type to a new type. This lets you provide a view into a readable type without needing to clone the inner value.
+    /// Try to get a reference to the value without checking the lifetime. This will subscribe the current scope to the signal.
     ///
-    /// Anything that subscribes to the readable value will be rerun whenever the original value changes, even if the view does not change. If you want to memorize the view, you can use a [`crate::Memo`] instead.
-    ///
-    /// # Example
-    /// ```rust
-    /// # use dioxus::prelude::*;
-    /// fn List(list: Signal<Vec<i32>>) -> Element {
-    ///     rsx! {
-    ///         for index in 0..list.len() {
-    ///             // We can use the `map` method to provide a view into the single item in the list that the child component will render
-    ///             Item { item: list.map(move |v| &v[index]) }
-    ///         }
-    ///     }
-    /// }
-    ///
-    /// // The child component doesn't need to know that the mapped value is coming from a list
-    /// #[component]
-    /// fn Item(item: MappedSignal<i32>) -> Element {
-    ///     rsx! {
-    ///         div { "Item: {item}" }
-    ///     }
-    /// }
-    /// ```
-    fn map<O>(self, f: impl Fn(&Self::Target) -> &O + 'static) -> MappedSignal<O, Self::Storage>
+    /// NOTE: This method is completely safe because borrow checking is done at runtime.
+    fn try_read_unchecked(
+        &self,
+    ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError>
     where
-        Self: Clone + Sized + 'static,
-    {
-        let mapping = Rc::new(f);
-        let try_read = Rc::new({
-            let self_ = self.clone();
-            let mapping = mapping.clone();
-            move || {
-                self_
-                    .try_read_unchecked()
-                    .map(|ref_| <Self::Storage as AnyStorage>::map(ref_, |r| mapping(r)))
-            }
-        })
-            as Rc<
-                dyn Fn() -> Result<ReadableRef<'static, Self, O>, generational_box::BorrowError>
-                    + 'static,
-            >;
-        let try_peek = Rc::new({
-            let self_ = self.clone();
-            let mapping = mapping.clone();
-            move || {
-                self_
-                    .try_peek_unchecked()
-                    .map(|ref_| <Self::Storage as AnyStorage>::map(ref_, |r| mapping(r)))
-            }
-        })
-            as Rc<
-                dyn Fn() -> Result<ReadableRef<'static, Self, O>, generational_box::BorrowError>
-                    + 'static,
-            >;
-        MappedSignal::new(try_read, try_peek)
-    }
+        Self::Target: 'static;
 
+    /// Try to peek the current value of the signal without subscribing to updates. If the value has
+    /// been dropped, this will return an error.
+    ///
+    /// NOTE: This method is completely safe because borrow checking is done at runtime.
+    fn try_peek_unchecked(
+        &self,
+    ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError>
+    where
+        Self::Target: 'static;
+
+    /// Get the underlying subscriber list for this readable. This is used to track when the value changes and notify subscribers.
+    fn subscribers(&self) -> Subscribers
+    where
+        Self::Target: 'static;
+}
+
+/// An extension trait for `Readable` types that provides some convenience methods.
+pub trait ReadableExt: Readable {
     /// Get the current value of the state. If this is a signal, this will subscribe the current scope to the signal.
     /// If the value has been dropped, this will panic. Calling this on a Signal is the same as
     /// using the signal() syntax to read and subscribe to its value
     #[track_caller]
-    fn read(&self) -> ReadableRef<Self> {
+    fn read(&self) -> ReadableRef<'_, Self>
+    where
+        Self::Target: 'static,
+    {
         self.try_read().unwrap()
     }
 
     /// Try to get the current value of the state. If this is a signal, this will subscribe the current scope to the signal.
     #[track_caller]
-    fn try_read(&self) -> Result<ReadableRef<Self>, generational_box::BorrowError> {
+    fn try_read(&self) -> Result<ReadableRef<'_, Self>, generational_box::BorrowError>
+    where
+        Self::Target: 'static,
+    {
         self.try_read_unchecked()
             .map(Self::Storage::downcast_lifetime_ref)
     }
@@ -118,16 +94,12 @@ pub trait Readable {
     ///
     /// NOTE: This method is completely safe because borrow checking is done at runtime.
     #[track_caller]
-    fn read_unchecked(&self) -> ReadableRef<'static, Self> {
+    fn read_unchecked(&self) -> ReadableRef<'static, Self>
+    where
+        Self::Target: 'static,
+    {
         self.try_read_unchecked().unwrap()
     }
-
-    /// Try to get a reference to the value without checking the lifetime. This will subscribe the current scope to the signal.
-    ///
-    /// NOTE: This method is completely safe because borrow checking is done at runtime.
-    fn try_read_unchecked(
-        &self,
-    ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError>;
 
     /// Get the current value of the state without subscribing to updates. If the value has been dropped, this will panic.
     ///
@@ -164,14 +136,20 @@ pub trait Readable {
     /// }
     /// ```
     #[track_caller]
-    fn peek(&self) -> ReadableRef<Self> {
+    fn peek(&self) -> ReadableRef<'_, Self>
+    where
+        Self::Target: 'static,
+    {
         Self::Storage::downcast_lifetime_ref(self.peek_unchecked())
     }
 
     /// Try to peek the current value of the signal without subscribing to updates. If the value has
     /// been dropped, this will return an error.
     #[track_caller]
-    fn try_peek(&self) -> Result<ReadableRef<Self>, generational_box::BorrowError> {
+    fn try_peek(&self) -> Result<ReadableRef<'_, Self>, generational_box::BorrowError>
+    where
+        Self::Target: 'static,
+    {
         self.try_peek_unchecked()
             .map(Self::Storage::downcast_lifetime_ref)
     }
@@ -180,44 +158,83 @@ pub trait Readable {
     ///
     /// If the signal has been dropped, this will panic.
     #[track_caller]
-    fn peek_unchecked(&self) -> ReadableRef<'static, Self> {
+    fn peek_unchecked(&self) -> ReadableRef<'static, Self>
+    where
+        Self::Target: 'static,
+    {
         self.try_peek_unchecked().unwrap()
     }
 
-    /// Try to peek the current value of the signal without subscribing to updates. If the value has
-    /// been dropped, this will return an error.
+    /// Map the references of the readable value to a new type. This lets you provide a view
+    /// into the readable value without creating a new signal or cloning the value.
     ///
-    /// NOTE: This method is completely safe because borrow checking is done at runtime.
-    fn try_peek_unchecked(
-        &self,
-    ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError>;
+    /// Anything that subscribes to the readable value will be rerun whenever the original value changes, even if the view does not
+    /// change. If you want to memorize the view, you can use a [`crate::Memo`] instead. For fine grained scoped updates, use
+    /// stores instead
+    ///
+    /// # Example
+    /// ```rust
+    /// # use dioxus::prelude::*;
+    /// fn List(list: Signal<Vec<i32>>) -> Element {
+    ///     rsx! {
+    ///         for index in 0..list.len() {
+    ///             // We can use the `map` method to provide a view into the single item in the list that the child component will render
+    ///             Item { item: list.map(move |v| &v[index]) }
+    ///         }
+    ///     }
+    /// }
+    ///
+    /// // The child component doesn't need to know that the mapped value is coming from a list
+    /// #[component]
+    /// fn Item(item: ReadSignal<i32>) -> Element {
+    ///     rsx! {
+    ///         div { "Item: {item}" }
+    ///     }
+    /// }
+    /// ```
+    fn map<F, O>(self, f: F) -> MappedSignal<O, Self, F>
+    where
+        Self: Clone + Sized,
+        F: Fn(&Self::Target) -> &O,
+    {
+        MappedSignal::new(self, f)
+    }
 
     /// Clone the inner value and return it. If the value has been dropped, this will panic.
     #[track_caller]
     fn cloned(&self) -> Self::Target
     where
-        Self::Target: Clone,
+        Self::Target: Clone + 'static,
     {
         self.read().clone()
     }
 
     /// Run a function with a reference to the value. If the value has been dropped, this will panic.
     #[track_caller]
-    fn with<O>(&self, f: impl FnOnce(&Self::Target) -> O) -> O {
+    fn with<O>(&self, f: impl FnOnce(&Self::Target) -> O) -> O
+    where
+        Self::Target: 'static,
+    {
         f(&*self.read())
     }
 
     /// Run a function with a reference to the value. If the value has been dropped, this will panic.
     #[track_caller]
-    fn with_peek<O>(&self, f: impl FnOnce(&Self::Target) -> O) -> O {
+    fn with_peek<O>(&self, f: impl FnOnce(&Self::Target) -> O) -> O
+    where
+        Self::Target: 'static,
+    {
         f(&*self.peek())
     }
 
     /// Index into the inner value and return a reference to the result. If the value has been dropped or the index is invalid, this will panic.
     #[track_caller]
-    fn index<I>(&self, index: I) -> ReadableRef<Self, <Self::Target as std::ops::Index<I>>::Output>
+    fn index<I>(
+        &self,
+        index: I,
+    ) -> ReadableRef<'_, Self, <Self::Target as std::ops::Index<I>>::Output>
     where
-        Self::Target: std::ops::Index<I>,
+        Self::Target: std::ops::Index<I> + 'static,
     {
         <Self::Storage as AnyStorage>::map(self.read(), |v| v.index(index))
     }
@@ -229,7 +246,7 @@ pub trait Readable {
     unsafe fn deref_impl<'a>(&self) -> &'a dyn Fn() -> Self::Target
     where
         Self: Sized + 'a,
-        Self::Target: Clone,
+        Self::Target: Clone + 'static,
     {
         // https://github.com/dtolnay/case-studies/tree/master/callable-types
 
@@ -263,35 +280,64 @@ pub trait Readable {
     }
 }
 
+impl<R: Readable + ?Sized> ReadableExt for R {}
+
+/// An extension trait for `Readable` types that can be boxed into a trait object.
+pub trait ReadableBoxExt: Readable<Storage = UnsyncStorage> {
+    /// Box the readable value into a trait object. This is useful for passing around readable values without knowing their concrete type.
+    fn boxed(self) -> ReadSignal<Self::Target>
+    where
+        Self: Sized + 'static,
+    {
+        ReadSignal::new(self)
+    }
+}
+impl<R: Readable<Storage = UnsyncStorage> + ?Sized> ReadableBoxExt for R {}
+
 /// An extension trait for `Readable<Vec<T>>` that provides some convenience methods.
-pub trait ReadableVecExt<T: 'static>: Readable<Target = Vec<T>> {
+pub trait ReadableVecExt<T>: Readable<Target = Vec<T>> {
     /// Returns the length of the inner vector.
     #[track_caller]
-    fn len(&self) -> usize {
+    fn len(&self) -> usize
+    where
+        T: 'static,
+    {
         self.with(|v| v.len())
     }
 
     /// Returns true if the inner vector is empty.
     #[track_caller]
-    fn is_empty(&self) -> bool {
+    fn is_empty(&self) -> bool
+    where
+        T: 'static,
+    {
         self.with(|v| v.is_empty())
     }
 
     /// Get the first element of the inner vector.
     #[track_caller]
-    fn first(&self) -> Option<ReadableRef<Self, T>> {
+    fn first(&self) -> Option<ReadableRef<'_, Self, T>>
+    where
+        T: 'static,
+    {
         <Self::Storage as AnyStorage>::try_map(self.read(), |v| v.first())
     }
 
     /// Get the last element of the inner vector.
     #[track_caller]
-    fn last(&self) -> Option<ReadableRef<Self, T>> {
+    fn last(&self) -> Option<ReadableRef<'_, Self, T>>
+    where
+        T: 'static,
+    {
         <Self::Storage as AnyStorage>::try_map(self.read(), |v| v.last())
     }
 
     /// Get the element at the given index of the inner vector.
     #[track_caller]
-    fn get(&self, index: usize) -> Option<ReadableRef<Self, T>> {
+    fn get(&self, index: usize) -> Option<ReadableRef<'_, Self, T>>
+    where
+        T: 'static,
+    {
         <Self::Storage as AnyStorage>::try_map(self.read(), |v| v.get(index))
     }
 
@@ -324,45 +370,39 @@ impl<'a, T: 'static, R: Readable<Target = Vec<T>>> Iterator for ReadableValueIte
     }
 }
 
-impl<T, R> ReadableVecExt<T> for R
-where
-    T: 'static,
-    R: Readable<Target = Vec<T>>,
-{
-}
+impl<T, R> ReadableVecExt<T> for R where R: Readable<Target = Vec<T>> {}
 
 /// An extension trait for `Readable<Option<T>>` that provides some convenience methods.
-pub trait ReadableOptionExt<T: 'static>: Readable<Target = Option<T>> {
+pub trait ReadableOptionExt<T>: Readable<Target = Option<T>> {
     /// Unwraps the inner value and clones it.
     #[track_caller]
     fn unwrap(&self) -> T
     where
-        T: Clone,
+        T: Clone + 'static,
     {
         self.as_ref().unwrap().clone()
     }
 
     /// Attempts to read the inner value of the Option.
     #[track_caller]
-    fn as_ref(&self) -> Option<ReadableRef<Self, T>> {
+    fn as_ref(&self) -> Option<ReadableRef<'_, Self, T>>
+    where
+        T: 'static,
+    {
         <Self::Storage as AnyStorage>::try_map(self.read(), |v| v.as_ref())
     }
 }
 
-impl<T, R> ReadableOptionExt<T> for R
-where
-    T: 'static,
-    R: Readable<Target = Option<T>>,
-{
-}
+impl<T, R> ReadableOptionExt<T> for R where R: Readable<Target = Option<T>> {}
 
 /// An extension trait for `Readable<Option<T>>` that provides some convenience methods.
-pub trait ReadableResultExt<T: 'static, E: 'static>: Readable<Target = Result<T, E>> {
+pub trait ReadableResultExt<T, E>: Readable<Target = Result<T, E>> {
     /// Unwraps the inner value and clones it.
     #[track_caller]
     fn unwrap(&self) -> T
     where
-        T: Clone,
+        T: Clone + 'static,
+        E: 'static,
     {
         self.as_ref()
             .unwrap_or_else(|_| panic!("Tried to unwrap a Result that was an error"))
@@ -371,17 +411,15 @@ pub trait ReadableResultExt<T: 'static, E: 'static>: Readable<Target = Result<T,
 
     /// Attempts to read the inner value of the Option.
     #[track_caller]
-    fn as_ref(&self) -> Result<ReadableRef<Self, T>, ReadableRef<Self, E>> {
+    fn as_ref(&self) -> Result<ReadableRef<'_, Self, T>, ReadableRef<'_, Self, E>>
+    where
+        T: 'static,
+        E: 'static,
+    {
         <Self::Storage as AnyStorage>::try_map(self.read(), |v| v.as_ref().ok()).ok_or(
             <Self::Storage as AnyStorage>::map(self.read(), |v| v.as_ref().err().unwrap()),
         )
     }
 }
 
-impl<T, E, R> ReadableResultExt<T, E> for R
-where
-    T: 'static,
-    E: 'static,
-    R: Readable<Target = Result<T, E>>,
-{
-}
+impl<T, E, R> ReadableResultExt<T, E> for R where R: Readable<Target = Result<T, E>> {}

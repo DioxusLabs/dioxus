@@ -13,7 +13,7 @@ use syn::spanned::Spanned;
 use syn::{parse::Error, PathArguments};
 
 use quote::quote;
-use syn::{parse_quote, GenericArgument, PathSegment, Type};
+use syn::{parse_quote, GenericArgument, Ident, PathSegment, Type};
 
 pub fn impl_my_derive(ast: &syn::DeriveInput) -> Result<TokenStream, Error> {
     let data = match &ast.data {
@@ -172,7 +172,7 @@ mod util {
 }
 
 mod field_info {
-    use crate::props::type_from_inside_option;
+    use crate::props::{looks_like_store_type, looks_like_write_type, type_from_inside_option};
     use proc_macro2::TokenStream;
     use quote::{format_ident, quote};
     use syn::spanned::Spanned;
@@ -197,7 +197,7 @@ mod field_info {
             ordinal: usize,
             field: &syn::Field,
             field_defaults: FieldBuilderAttr,
-        ) -> Result<FieldInfo, Error> {
+        ) -> Result<FieldInfo<'_>, Error> {
             if let Some(ref name) = field.ident {
                 let mut builder_attr = field_defaults.with(&field.attrs)?;
 
@@ -219,6 +219,11 @@ mod field_info {
                         builder_attr.auto_to_string = true;
                     }
                     builder_attr.auto_into = false;
+                }
+
+                // Write and Store fields automatically use impl Into
+                if looks_like_write_type(&field.ty) || looks_like_store_type(&field.ty) {
+                    builder_attr.auto_into = true;
                 }
 
                 // extended field is automatically empty
@@ -503,9 +508,9 @@ fn type_from_inside_option(ty: &Type) -> Option<&Type> {
     let seg = path.segments.last()?;
 
     // If the segment is a supported optional type, provide the inner type.
-    // Return the inner type if the pattern is `Option<T>` or `ReadOnlySignal<Option<T>>``
-    if seg.ident == "ReadOnlySignal" {
-        // Get the inner type. E.g. the `u16` in `ReadOnlySignal<u16>` or `Option` in `ReadOnlySignal<Option<bool>>`
+    // Return the inner type if the pattern is `Option<T>` or `ReadSignal<Option<T>>``
+    if seg.ident == "ReadSignal" || seg.ident == "ReadOnlySignal" {
+        // Get the inner type. E.g. the `u16` in `ReadSignal<u16>` or `Option` in `ReadSignal<Option<bool>>`
         let inner_type = extract_inner_type_from_segment(seg)?;
         let Type::Path(inner_path) = inner_type else {
             // If it isn't a path, the inner type isn't option
@@ -614,13 +619,13 @@ mod struct_info {
             generics
         }
 
-        /// Checks if the props have any fields that should be owned by the child. For example, when converting T to `ReadOnlySignal<T>`, the new signal should be owned by the child
+        /// Checks if the props have any fields that should be owned by the child. For example, when converting T to `ReadSignal<T>`, the new signal should be owned by the child
         fn has_child_owned_fields(&self) -> bool {
             self.fields.iter().any(|f| child_owned_type(f.ty))
         }
 
         fn memoize_impl(&self) -> Result<TokenStream, Error> {
-            // First check if there are any ReadOnlySignal fields, if there are not, we can just use the partialEq impl
+            // First check if there are any ReadSignal fields, if there are not, we can just use the partialEq impl
             let signal_fields: Vec<_> = self
                 .included_fields()
                 .filter(|f| looks_like_signal_type(f.ty))
@@ -1736,33 +1741,37 @@ fn remove_option_wrapper(type_: Type) -> Type {
 
 /// Check if a type should be owned by the child component after conversion
 fn child_owned_type(ty: &Type) -> bool {
-    looks_like_signal_type(ty) || looks_like_callback_type(ty)
+    looks_like_signal_type(ty) || looks_like_write_type(ty) || looks_like_callback_type(ty)
+}
+
+/// Check if the path without generics matches the type we are looking for
+fn last_segment_matches(ty: &Type, expected: &Ident) -> bool {
+    extract_base_type_without_generics(ty).is_some_and(|path_without_generics| {
+        path_without_generics
+            .segments
+            .last()
+            .is_some_and(|seg| seg.ident == *expected)
+    })
 }
 
 fn looks_like_signal_type(ty: &Type) -> bool {
-    match extract_base_type_without_generics(ty) {
-        Some(path_without_generics) => {
-            path_without_generics == parse_quote!(dioxus_core::ReadOnlySignal)
-                || path_without_generics == parse_quote!(prelude::ReadOnlySignal)
-                || path_without_generics == parse_quote!(ReadOnlySignal)
-        }
-        None => false,
-    }
+    last_segment_matches(ty, &parse_quote!(ReadOnlySignal))
+        || last_segment_matches(ty, &parse_quote!(ReadSignal))
+}
+
+fn looks_like_write_type(ty: &Type) -> bool {
+    last_segment_matches(ty, &parse_quote!(WriteSignal))
+}
+
+fn looks_like_store_type(ty: &Type) -> bool {
+    last_segment_matches(ty, &parse_quote!(Store))
+        || last_segment_matches(ty, &parse_quote!(ReadStore))
 }
 
 fn looks_like_callback_type(ty: &Type) -> bool {
     let type_without_option = remove_option_wrapper(ty.clone());
-    match extract_base_type_without_generics(&type_without_option) {
-        Some(path_without_generics) => {
-            path_without_generics == parse_quote!(dioxus_core::EventHandler)
-                || path_without_generics == parse_quote!(prelude::EventHandler)
-                || path_without_generics == parse_quote!(EventHandler)
-                || path_without_generics == parse_quote!(dioxus_core::Callback)
-                || path_without_generics == parse_quote!(prelude::Callback)
-                || path_without_generics == parse_quote!(Callback)
-        }
-        None => false,
-    }
+    last_segment_matches(&type_without_option, &parse_quote!(EventHandler))
+        || last_segment_matches(&type_without_option, &parse_quote!(Callback))
 }
 
 #[test]
@@ -1776,6 +1785,17 @@ fn test_looks_like_type() {
     ));
     assert!(looks_like_signal_type(&parse_quote!(
         ReadOnlySignal<Option<i32>, UnsyncStorage>
+    )));
+
+    assert!(!looks_like_signal_type(&parse_quote!(
+        Option<ReadSignal<i32>>
+    )));
+    assert!(looks_like_signal_type(&parse_quote!(ReadSignal<i32>)));
+    assert!(looks_like_signal_type(
+        &parse_quote!(ReadSignal<i32, SyncStorage>)
+    ));
+    assert!(looks_like_signal_type(&parse_quote!(
+        ReadSignal<Option<i32>, UnsyncStorage>
     )));
 
     assert!(looks_like_callback_type(&parse_quote!(

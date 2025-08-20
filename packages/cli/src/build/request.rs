@@ -202,6 +202,10 @@
 //!           libmyapp.so
 //!       arm64-v8a/
 //!           libmyapp.so
+//!       x86/
+//!           libmyapp.so
+//!       x86_64/
+//!           libmyapp.so
 //! ```
 //! Notice that we *could* feasibly build this ourselves :)
 //!
@@ -344,7 +348,7 @@ use std::{
     },
     time::{SystemTime, UNIX_EPOCH},
 };
-use target_lexicon::{Environment, OperatingSystem, Triple};
+use target_lexicon::{Architecture, Environment, OperatingSystem, Triple};
 use tempfile::{NamedTempFile, TempDir};
 use tokio::{io::AsyncBufReadExt, process::Command};
 use uuid::Uuid;
@@ -372,9 +376,9 @@ pub(crate) struct BuildRequest {
     pub(crate) profile: String,
     pub(crate) release: bool,
     pub(crate) bundle: BundleFormat,
-    pub(crate) enabled_renderers: Vec<Renderer>,
     pub(crate) triple: Triple,
-    pub(crate) device: bool,
+    pub(crate) device_name: Option<String>,
+    pub(crate) should_codesign: bool,
     pub(crate) package: String,
     pub(crate) main_target: String,
     pub(crate) features: Vec<String>,
@@ -395,6 +399,8 @@ pub(crate) struct BuildRequest {
     pub(crate) command_file: Arc<NamedTempFile>,
     pub(crate) base_path: Option<String>,
     pub(crate) using_dioxus_explicitly: bool,
+    pub(crate) apple_entitlements: Option<PathBuf>,
+    pub(crate) apple_team_id: Option<String>,
 }
 
 /// dx can produce different "modes" of a build. A "regular" build is a "base" build. The Fat and Thin
@@ -617,16 +623,10 @@ impl BuildRequest {
             },
         };
 
-        // Just grab the renderers from the enabled renderers and discard the feature names
-        let enabled_renderers = enabled_renderers
-            .into_iter()
-            .map(|(renderer, _)| renderer)
-            .collect::<Vec<_>>();
-
         // We usually use the simulator unless --device is passed *or* a device is detected by probing.
         // For now, though, since we don't have probing, it just defaults to false
         // Tools like xcrun/adb can detect devices
-        let device = args.device;
+        let device = args.device.clone();
 
         // Resolve the target alias and renderer into a concrete target alias.
         // If the user didn't pass a platform, but we have a renderer, get the default platform for that renderer
@@ -640,7 +640,7 @@ impl BuildRequest {
             // If there is an explicit target, use it
             (Some(target), _) => target,
             // If there is a platform, use it to determine the target triple
-            (None, platform) => platform.into_target(device, &workspace).await?,
+            (None, platform) => platform.into_target(device.is_some(), &workspace).await?,
         };
 
         // If the user didn't pass a renderer, and we didn't find a good default renderer, but they are using dioxus explicitly,
@@ -682,6 +682,10 @@ impl BuildRequest {
             &profile,
             args.release,
         );
+
+        // Determine if we should codesign
+        let should_codesign =
+            args.codesign || device.is_some() || args.apple_entitlements.is_some();
 
         // Determining release mode is based on the profile, actually, so we need to check that
         let release = workspace.is_release_profile(&profile);
@@ -738,7 +742,12 @@ impl BuildRequest {
 
         // If no custom linker is set, then android falls back to us as the linker
         if custom_linker.is_none() && bundle == BundleFormat::Android {
-            custom_linker = Some(workspace.android_tools()?.android_cc(&triple));
+            let min_sdk_version = config.application.android_min_sdk_version.unwrap_or(28);
+            custom_linker = Some(
+                workspace
+                    .android_tools()?
+                    .android_cc(&triple, min_sdk_version),
+            );
         }
 
         let target_dir = std::env::var("CARGO_TARGET_DIR")
@@ -746,6 +755,21 @@ impl BuildRequest {
             .map(PathBuf::from)
             .or_else(|| cargo_config.build.target_dir.clone())
             .unwrap_or_else(|| workspace.workspace_root().join("target"));
+
+        // If the user provided a profile and wasm_split is enabled, we should check that LTO=true and debug=true
+        if args.wasm_split {
+            if let Some(profile_data) = workspace.cargo_toml.profile.custom.get(&profile) {
+                use cargo_toml::{DebugSetting, LtoSetting};
+                if matches!(profile_data.lto, Some(LtoSetting::None) | None) {
+                    tracing::warn!("wasm-split requires LTO to be enabled in the profile. \
+                        Please set `lto = true` in the `[profile.{profile}]` section of your Cargo.toml");
+                }
+                if matches!(profile_data.debug, Some(DebugSetting::None) | None) {
+                    tracing::warn!("wasm-split requires debug symbols to be enabled in the profile. \
+                        Please set `debug = true` in the `[profile.{profile}]` section of your Cargo.toml");
+                }
+            }
+        }
 
         // Set up some tempfiles so we can do some IPC between us and the linker/rustc wrapper (which is occasionally us!)
         let link_args_file = Arc::new(
@@ -803,10 +827,9 @@ impl BuildRequest {
             crate_target,
             profile,
             triple,
-            device,
+            device_name: device,
             workspace,
             config,
-            enabled_renderers,
             target_dir,
             custom_linker,
             link_args_file,
@@ -821,15 +844,20 @@ impl BuildRequest {
             main_target,
             rustflags,
             using_dioxus_explicitly,
+            should_codesign,
             skip_assets: args.skip_assets,
             base_path: args.base_path.clone(),
             wasm_split: args.wasm_split,
             debug_symbols: args.debug_symbols,
             inject_loading_scripts: args.inject_loading_scripts,
+            apple_entitlements: args.apple_entitlements.clone(),
+            apple_team_id: args.apple_team_id.clone(),
         })
     }
 
     pub(crate) async fn build(&self, ctx: &BuildContext) -> Result<BuildArtifacts> {
+        let time_start = SystemTime::now();
+
         // If we forget to do this, then we won't get the linker args since rust skips the full build
         // We need to make sure to not react to this though, so the filemap must cache it
         _ = self.bust_fingerprint(ctx);
@@ -882,6 +910,28 @@ impl BuildRequest {
         if matches!(ctx.mode, BuildMode::Fat) {
             artifacts.patch_cache = Some(Arc::new(self.create_patch_cache(&artifacts.exe).await?));
         }
+
+        // Calculate some final metadata for logging
+        let time_taken = SystemTime::now()
+            .duration_since(time_start)
+            .map(|d| d.as_millis())
+            .unwrap_or_default();
+        tracing::debug!(
+            telemetry = %serde_json::json!({
+                "event": "build_and_bundle_complete",
+                "time_taken": time_taken,
+                "mode": match ctx.mode {
+                    BuildMode::Base { .. } => "base",
+                    BuildMode::Fat => "fat",
+                    BuildMode::Thin { .. } => "thin",
+                },
+                "blah": 123,
+                "triple": self.triple.to_string(),
+                "format": self.bundle.to_string(),
+                "num_dependencies": self.workspace.krates.len(),
+            }),
+            "Build completed in {time_taken}ms",
+        );
 
         Ok(artifacts)
     }
@@ -1038,7 +1088,7 @@ impl BuildRequest {
             );
         }
 
-        let assets = self.collect_assets(&exe, ctx)?;
+        let assets = self.collect_assets(&exe, ctx).await?;
         let time_end = SystemTime::now();
         let mode = ctx.mode.clone();
         let bundle = self.bundle;
@@ -1065,14 +1115,14 @@ impl BuildRequest {
 
     /// Collect the assets from the final executable and modify the binary in place to point to the right
     /// hashed asset location.
-    fn collect_assets(&self, exe: &Path, ctx: &BuildContext) -> Result<AssetManifest> {
+    async fn collect_assets(&self, exe: &Path, ctx: &BuildContext) -> Result<AssetManifest> {
         // walk every file in the incremental cache dir, reading and inserting items into the manifest.
         let mut manifest = AssetManifest::default();
 
         // And then add from the exe directly, just in case it's LTO compiled and has no incremental cache
         if !self.skip_assets {
             ctx.status_extracting_assets();
-            manifest = super::assets::extract_assets_from_file(exe)?;
+            manifest = super::assets::extract_assets_from_file(exe).await?;
         }
 
         Ok(manifest)
@@ -1146,6 +1196,11 @@ impl BuildRequest {
 
     async fn write_frameworks(&self, _ctx: &BuildContext, direct_rustc: &RustcArgs) -> Result<()> {
         let framework_dir = self.frameworks_folder();
+        _ = std::fs::create_dir_all(&framework_dir);
+
+        // We have some prebuilt stuff that needs to be copied into the framework dir
+        let openssl_dir = AndroidTools::openssl_lib_dir(&self.triple);
+        let openssl_dir_disp = openssl_dir.display().to_string();
 
         for arg in &direct_rustc.link_args {
             // todo - how do we handle windows dlls? we don't want to bundle the system dlls
@@ -1158,8 +1213,6 @@ impl BuildRequest {
                 _ = std::fs::remove_file(&to);
 
                 tracing::debug!("Copying framework from {from:?} to {to:?}");
-
-                _ = std::fs::create_dir_all(&framework_dir);
 
                 // in dev and on normal oses, we want to symlink the file
                 // otherwise, just copy it (since in release you want to distribute the framework)
@@ -1180,12 +1233,26 @@ impl BuildRequest {
 
             // On android, the c++_shared flag means we need to copy the libc++_shared.so precompiled
             // library to the jniLibs folder
-            if arg.contains("-lc++_shared") && self.bundle == BundleFormat::Android {
+            if self.bundle == BundleFormat::Android && arg.contains("-lc++_shared") {
                 std::fs::copy(
                     self.workspace.android_tools()?.libcpp_shared(&self.triple),
                     framework_dir.join("libc++_shared.so"),
                 )
                 .with_context(|| "Failed to copy libc++_shared.so into bundle")?;
+            }
+
+            // Copy over libssl and libcrypto if they are present in the link args
+            if self.bundle == BundleFormat::Android && arg.contains(openssl_dir_disp.as_str()) {
+                let libssl_source = openssl_dir.join("libssl.so");
+                let libcrypto_source = openssl_dir.join("libcrypto.so");
+                let libssl_target = framework_dir.join("libssl.so");
+                let libcrypto_target = framework_dir.join("libcrypto.so");
+                std::fs::copy(&libssl_source, &libssl_target).with_context(|| {
+                    format!("Failed to copy libssl.so into bundle\nfrom {libssl_source:?}\nto {libssl_target:?}")
+                })?;
+                std::fs::copy(&libcrypto_source, &libcrypto_target).with_context(
+                    || format!("Failed to copy libcrypto.so into bundle\nfrom {libcrypto_source:?}\nto {libcrypto_target:?}"),
+                )?;
             }
         }
 
@@ -1198,13 +1265,25 @@ impl BuildRequest {
                 self.root_dir().join("Contents").join("Frameworks")
             }
             OperatingSystem::IOS(_) => self.root_dir().join("Frameworks"),
-            OperatingSystem::Linux if self.bundle == BundleFormat::Android => self
-                .root_dir()
-                .join("app")
-                .join("src")
-                .join("main")
-                .join("jniLibs")
-                .join("arm64-v8a"),
+            OperatingSystem::Linux if self.bundle == BundleFormat::Android => {
+                let arch = match self.triple.architecture {
+                    Architecture::Aarch64(_) => "arm64-v8a",
+                    Architecture::Arm(_) => "armeabi-v7a",
+                    Architecture::X86_32(_) => "x86",
+                    Architecture::X86_64 => "x86_64",
+                    _ => panic!(
+                        "Unsupported architecture for Android: {:?}",
+                        self.triple.architecture
+                    ),
+                };
+
+                self.root_dir()
+                    .join("app")
+                    .join("src")
+                    .join("main")
+                    .join("jniLibs")
+                    .join(arch)
+            }
             OperatingSystem::Linux | OperatingSystem::Windows => self.root_dir(),
             _ => self.root_dir(),
         }
@@ -1491,7 +1570,11 @@ impl BuildRequest {
         if !res.stderr.is_empty() {
             let errs = String::from_utf8_lossy(&res.stderr);
             if !self.patch_exe(artifacts.time_start).exists() || !res.status.success() {
-                tracing::error!("Failed to generate patch: {}", errs.trim());
+                tracing::error!(
+                    telemetry = %serde_json::json!({ "event": "hotpatch_linker_failed" }),
+                    "Failed to generate patch: {}",
+                    errs.trim()
+                );
             } else {
                 tracing::trace!("Linker output during thin linking: {}", errs.trim());
             }
@@ -1510,7 +1593,9 @@ impl BuildRequest {
         }
 
         // Now extract the assets from the fat binary
-        artifacts.assets = self.collect_assets(&self.patch_exe(artifacts.time_start), ctx)?;
+        artifacts.assets = self
+            .collect_assets(&self.patch_exe(artifacts.time_start), ctx)
+            .await?;
 
         // If this is a web build, reset the index.html file in case it was modified by SSG
         self.write_index_html(&artifacts.assets)
@@ -1927,7 +2012,7 @@ impl BuildRequest {
                         }
                     }
                     LinkerFlavor::Unsupported => {
-                        tracing::error!("Unsupported platform for fat linking");
+                        tracing::error!("Unsupported platform for fat linking: {}", self.triple);
                     }
                 };
             }
@@ -2009,7 +2094,11 @@ impl BuildRequest {
         if !res.stderr.is_empty() {
             let errs = String::from_utf8_lossy(&res.stderr);
             if !res.status.success() {
-                tracing::error!("Failed to generate fat binary: {}", errs.trim());
+                tracing::error!(
+                    telemetry = %serde_json::json!({ "event": "hotpatch_fat_binary_generation_failed" }),
+                    "Failed to generate fat binary: {}",
+                    errs.trim()
+                );
             } else {
                 tracing::trace!("Warnings during fat linking: {}", errs.trim());
             }
@@ -2524,9 +2613,10 @@ impl BuildRequest {
 
         let mut env_vars: Vec<(Cow<'static, str>, String)> = vec![];
 
+        let min_sdk_version = self.min_sdk_version_or_default();
+
         let tools = self.workspace.android_tools()?;
-        let linker = tools.android_cc(&self.triple);
-        let min_sdk_version = tools.min_sdk_version();
+        let linker = tools.android_cc(&self.triple, min_sdk_version);
         let ar_path = tools.ar_path();
         let target_cc = tools.target_cc();
         let target_cxx = tools.target_cxx();
@@ -2590,17 +2680,21 @@ impl BuildRequest {
 
         // choose the clang target with the highest version
         // Should we filter for only numbers?
-        let clang_builtins_target = std::fs::read_dir(clang_folder)
-            .expect("Unable to get clang target directory")
-            .filter_map(|a| a.ok())
-            .max_by(|a, b| a.file_name().cmp(&b.file_name()))
-            .expect("Unable to get clang target")
-            .path();
-        let clang_rt = format!(
-            "-L{} -lstatic=clang_rt.builtins-{}-android",
-            clang_builtins_target.join("lib").join("linux").display(),
-            rt_builtins(&triple)
-        );
+        let clang_rt = std::fs::read_dir(&clang_folder)
+            .map(|dir| {
+                let clang_builtins_target = dir
+                    .filter_map(|a| a.ok())
+                    .max_by(|a, b| a.file_name().cmp(&b.file_name()))
+                    .map(|s| s.path())
+                    .unwrap_or_else(|| clang_folder.join("clang"));
+
+                format!(
+                    "-L{} -lstatic=clang_rt.builtins-{}-android",
+                    clang_builtins_target.join("lib").join("linux").display(),
+                    rt_builtins(&triple)
+                )
+            })
+            .unwrap_or_default();
 
         let extra_include: String = format!(
             "{}/usr/include/{}",
@@ -2613,6 +2707,17 @@ impl BuildRequest {
             &cargo_ndk_sysroot_path.display(),
             extra_include
         );
+
+        // Load up the OpenSSL environment variables, using our defaults if not set.
+        // if the user specifies `/vendor`, then they get vendored, unless OPENSSL_NO_VENDOR is passed (implicitly...)
+        let openssl_lib_dir = std::env::var("OPENSSL_LIB_DIR")
+            .map(PathBuf::from)
+            .unwrap_or_else(|_| AndroidTools::openssl_lib_dir(&self.triple));
+        let openssl_include_dir = std::env::var("OPENSSL_INCLUDE_DIR")
+            .map(PathBuf::from)
+            .unwrap_or_else(|_| AndroidTools::openssl_include_dir());
+        let openssl_libs =
+            std::env::var("OPENSSL_LIBS").unwrap_or_else(|_| "ssl:crypto".to_string());
 
         for env in [
             (cc_key, target_cc.clone().into_os_string()),
@@ -2651,6 +2756,15 @@ impl BuildRequest {
                 linker.into_os_string(),
             ),
             ("ANDROID_NDK_ROOT".to_string(), ndk_home.into_os_string()),
+            (
+                "OPENSSL_LIB_DIR".to_string(),
+                openssl_lib_dir.into_os_string(),
+            ),
+            (
+                "OPENSSL_INCLUDE_DIR".to_string(),
+                openssl_include_dir.into_os_string(),
+            ),
+            ("OPENSSL_LIBS".to_string(), openssl_libs.into()),
             // Set the wry env vars - this is where wry will dump its kotlin files.
             // Their setup is really annyoing and requires us to hardcode `dx` to specific versions of tao/wry.
             (
@@ -2810,10 +2924,14 @@ impl BuildRequest {
 
     fn platform_exe_name(&self) -> String {
         match self.bundle {
-            BundleFormat::MacOS => self.executable_name().to_string(),
-            BundleFormat::Ios => self.executable_name().to_string(),
-            BundleFormat::Server => self.executable_name().to_string(),
-            BundleFormat::Windows => format!("{}.exe", self.executable_name()),
+            // mac/ios are unixy and dont have an exe extension
+            BundleFormat::MacOS | BundleFormat::Ios => self.executable_name().to_string(),
+
+            // "server" and windows can be the same
+            BundleFormat::Server | BundleFormat::Windows => match self.triple.operating_system {
+                OperatingSystem::Windows => format!("{}.exe", self.executable_name()),
+                _ => self.executable_name().to_string(),
+            },
 
             // from the apk spec, the root exe is a shared library
             // we include the user's rust code as a shared library with a fixed namespace
@@ -3882,28 +4000,38 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
     ///
     /// This might include codesigning, zipping, creating an appimage, etc
     async fn assemble(&self, ctx: &BuildContext) -> Result<()> {
-        if self.bundle == BundleFormat::Android {
-            ctx.status_running_gradle();
+        match self.bundle {
+            BundleFormat::Android => {
+                ctx.status_running_gradle();
 
-            // When the build mode is set to release and there is an Android signature configuration, use assembleRelease
-            let build_type = if self.release && self.config.bundle.android.is_some() {
-                "assembleRelease"
-            } else {
-                "assembleDebug"
-            };
+                // When the build mode is set to release and there is an Android signature configuration, use assembleRelease
+                let build_type = if self.release && self.config.bundle.android.is_some() {
+                    "assembleRelease"
+                } else {
+                    "assembleDebug"
+                };
 
-            let output = Command::new(self.gradle_exe()?)
-                .arg(build_type)
-                .current_dir(self.root_dir())
-                .output()
-                .await?;
+                let output = Command::new(self.gradle_exe()?)
+                    .arg(build_type)
+                    .current_dir(self.root_dir())
+                    .output()
+                    .await?;
 
-            if !output.status.success() {
-                bail!(
-                    "Failed to assemble apk: {}",
-                    String::from_utf8_lossy(&output.stderr)
-                );
+                if !output.status.success() {
+                    bail!(
+                        "Failed to assemble apk: {}",
+                        String::from_utf8_lossy(&output.stderr)
+                    );
+                }
             }
+            BundleFormat::Ios => {
+                if self.should_codesign {
+                    ctx.status_codesigning();
+                    self.codesign_ios().await?;
+                }
+            }
+
+            _ => {}
         }
 
         Ok(())
@@ -4118,6 +4246,8 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
     pub(crate) async fn verify_tooling(&self, ctx: &BuildContext) -> Result<()> {
         ctx.status_installing_tooling();
 
+        self.verify_toolchain_installed().await?;
+
         match self.bundle {
             BundleFormat::Web => self.verify_web_tooling().await?,
             BundleFormat::Ios => self.verify_ios_tooling().await?,
@@ -4129,25 +4259,59 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         Ok(())
     }
 
-    async fn verify_web_tooling(&self) -> Result<()> {
+    async fn verify_toolchain_installed(&self) -> Result<()> {
+        let toolchain_dir = self.workspace.sysroot.join("lib/rustlib");
+        let triple = self.triple.to_string();
+
         // Install target using rustup.
-        #[cfg(not(feature = "no-downloads"))]
-        if !self.workspace.has_wasm32_unknown_unknown() {
+        if !toolchain_dir.join(&triple).exists() {
             tracing::info!(
-                "Web platform requires wasm32-unknown-unknown to be installed. Installing..."
+                "{} platform requires {} to be installed. Installing...",
+                self.bundle,
+                triple
             );
 
-            let _ = tokio::process::Command::new("rustup")
-                .args(["target", "add", "wasm32-unknown-unknown"])
-                .output()
-                .await?;
+            let mut child = tokio::process::Command::new("rustup")
+                .args(["target", "add"])
+                .arg(&triple)
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .kill_on_drop(true)
+                .spawn()?;
+
+            let stdout = tokio::io::BufReader::new(child.stdout.take().unwrap());
+            let stderr = tokio::io::BufReader::new(child.stderr.take().unwrap());
+            let mut stdout_lines = stdout.lines();
+            let mut stderr_lines = stderr.lines();
+            loop {
+                tokio::select! {
+                    line = stdout_lines.next_line() => {
+                        match line {
+                            Ok(Some(line)) => tracing::info!("{}", line),
+                            Err(err) => tracing::error!("{}", err),
+                            Ok(_) => break,
+                        }
+                    }
+                    line = stderr_lines.next_line() => {
+                        match line {
+                            Ok(Some(line)) => tracing::info!("{}", line),
+                            Err(err) => tracing::error!("{}", err),
+                            Ok(_) => break,
+                        }
+                    }
+                }
+            }
         }
 
         // Ensure target is installed.
-        if !self.workspace.has_wasm32_unknown_unknown() {
-            bail!("Missing target wasm32-unknown-unknown.");
+        if !toolchain_dir.join(&triple).exists() {
+            bail!("Missing rust target {}", triple);
         }
 
+        Ok(())
+    }
+
+    async fn verify_web_tooling(&self) -> Result<()> {
         // Wasm bindgen
         let krate_bindgen_version =
             self.workspace
@@ -4206,7 +4370,10 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
     /// will do its best to fill in the missing bits by exploring the sdk structure
     /// IE will attempt to use the Java installed from android studio if possible.
     async fn verify_android_tooling(&self) -> Result<()> {
-        let linker = self.workspace.android_tools()?.android_cc(&self.triple);
+        let linker = self
+            .workspace
+            .android_tools()?
+            .android_cc(&self.triple, self.min_sdk_version_or_default());
 
         tracing::debug!("Verifying android linker: {linker:?}");
 
@@ -4496,8 +4663,16 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
             .into()
     }
 
+    /// Returns the min sdk version set in config. If not set 24 is returned as a default.
+    pub(crate) fn min_sdk_version_or_default(&self) -> u32 {
+        self.config
+            .application
+            .android_min_sdk_version
+            .unwrap_or(24)
+    }
+
     pub(crate) async fn start_simulators(&self) -> Result<()> {
-        if self.device {
+        if self.device_name.is_some() {
             return Ok(());
         }
 
@@ -4659,9 +4834,13 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         // Note that typically in release builds, you would strip debuginfo, but we actually choose to do
         // that with wasm-opt tooling instead.
         if matches!(self.bundle, BundleFormat::Web) {
-            match self.release {
-                true => args.push(r#"profile.web.opt-level="s""#.to_string()),
-                false => args.push(r#"profile.web.opt-level="1""#.to_string()),
+            if self.release {
+                args.push(format!(r#"profile.{profile}.opt-level="s""#));
+            }
+
+            if self.wasm_split {
+                args.push(format!(r#"profile.{profile}.lto=true"#));
+                args.push(format!(r#"profile.{profile}.debug=true"#));
             }
         }
 
@@ -4684,6 +4863,204 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         )
         .await?;
 
+        // We want to copy over the prebuilt OpenSSL binaries to ~/.dx/prebuilt/openssl-<version>
+        if self.bundle == BundleFormat::Android {
+            AndroidTools::unpack_prebuilt_openssl()?;
+        }
+
         Ok(())
+    }
+
+    pub async fn codesign_ios(&self) -> Result<()> {
+        // We don't want to drop the entitlements file, until the end of the block, so we hoist it to this temporary.
+        let mut _saved_entitlements = None;
+
+        let mut app_dev_name = self.apple_team_id.clone();
+        if app_dev_name.is_none() {
+            app_dev_name =
+                Some(Self::auto_provision_signing_name().await.context(
+                    "Failed to automatically provision signing name for iOS codesigning.",
+                )?);
+        }
+
+        let mut entitlements_file = self.apple_entitlements.clone();
+        if entitlements_file.is_none() {
+            let entitlements_xml = Self::auto_provision_entitlements()
+                .await
+                .context("Failed to auto-provision entitlements for iOS codesigning.")?;
+            let entitlements_temp_file = tempfile::NamedTempFile::new()?;
+            std::fs::write(entitlements_temp_file.path(), entitlements_xml)?;
+            entitlements_file = Some(entitlements_temp_file.path().to_path_buf());
+            _saved_entitlements = Some(entitlements_temp_file);
+        }
+
+        let entitlements_file = entitlements_file.as_ref().context(
+            "No entitlements file provided and could not provision entitlements to sign app.",
+        )?;
+        let app_dev_name = app_dev_name.as_ref().context(
+            "No Apple Development signing name provided and could not auto-provision one.",
+        )?;
+
+        tracing::debug!(
+            "Codesigning iOS app with entitlements: {} and dev name: {}",
+            entitlements_file.display(),
+            app_dev_name
+        );
+
+        // codesign the app
+        let output = Command::new("codesign")
+            .args([
+                "--force",
+                "--entitlements",
+                entitlements_file.to_str().unwrap(),
+                "--sign",
+                app_dev_name,
+            ])
+            .arg(self.root_dir())
+            .output()
+            .await
+            .context("Failed to codesign the app - is `codesign` in your path?")?;
+
+        if !output.status.success() {
+            bail!(
+                "Failed to codesign the app: {}",
+                String::from_utf8(output.stderr).unwrap_or_default()
+            );
+        }
+
+        Ok(())
+    }
+
+    async fn auto_provision_signing_name() -> Result<String> {
+        let identities = Command::new("security")
+            .args(["find-identity", "-v", "-p", "codesigning"])
+            .output()
+            .await
+            .context("Failed to run `security find-identity -v -p codesigning` - is `security` in your path?")
+            .map(|e| {
+                String::from_utf8(e.stdout)
+                    .context("Failed to parse `security find-identity -v -p codesigning`")
+            })??;
+
+        // Parsing this:
+        // 1231231231231asdasdads123123 "Apple Development: foo@gmail.com (XYZYZY)"
+        let app_dev_name = regex::Regex::new(r#""Apple Development: (.+)""#)
+            .unwrap()
+            .captures(&identities)
+            .and_then(|caps| caps.get(1))
+            .map(|m| m.as_str())
+            .context(
+                "Failed to find Apple Development in `security find-identity -v -p codesigning`",
+            )?;
+
+        Ok(app_dev_name.to_string())
+    }
+
+    async fn auto_provision_entitlements() -> Result<String> {
+        const CODESIGN_ERROR: &str = r#"This is likely because you haven't
+- Created a provisioning profile before
+- Accepted the Apple Developer Program License Agreement
+
+The agreement changes frequently and might need to be accepted again.
+To accept the agreement, go to https://developer.apple.com/account
+
+To create a provisioning profile, follow the instructions here:
+https://developer.apple.com/documentation/xcode/sharing-your-teams-signing-certificates"#;
+
+        // Check the xcode 16 location first
+        let mut profiles_folder = dirs::home_dir()
+            .context("Your machine has no home-dir")?
+            .join("Library/Developer/Xcode/UserData/Provisioning Profiles");
+
+        // If it doesn't exist, check the old location
+        if !profiles_folder.exists() {
+            profiles_folder = dirs::home_dir()
+                .context("Your machine has no home-dir")?
+                .join("Library/MobileDevice/Provisioning Profiles");
+        }
+
+        if !profiles_folder.exists() || profiles_folder.read_dir()?.next().is_none() {
+            tracing::error!(
+                r#"No provisioning profiles found when trying to codesign the app.
+We checked the folders:
+- XCode16: ~/Library/Developer/Xcode/UserData/Provisioning Profiles
+- XCode15: ~/Library/MobileDevice/Provisioning Profiles
+
+{CODESIGN_ERROR}
+"#
+            )
+        }
+
+        // Acquire the provision file
+        let provision_file = profiles_folder
+            .read_dir()?
+            .flatten()
+            .find(|entry| {
+                entry
+                    .file_name()
+                    .to_str()
+                    .map(|s| s.contains("mobileprovision"))
+                    .unwrap_or_default()
+            })
+            .context("Failed to find a provisioning profile. \n\n{CODESIGN_ERROR}")?;
+
+        // The .mobileprovision file has some random binary thrown into into, but it's still basically a plist
+        // Let's use the plist markers to find the start and end of the plist
+        fn cut_plist(bytes: &[u8], byte_match: &[u8]) -> Option<usize> {
+            bytes
+                .windows(byte_match.len())
+                .enumerate()
+                .rev()
+                .find(|(_, slice)| *slice == byte_match)
+                .map(|(i, _)| i + byte_match.len())
+        }
+        let bytes = std::fs::read(provision_file.path())?;
+        let cut1 = cut_plist(&bytes, b"<plist").context("Failed to parse .mobileprovision file")?;
+        let cut2 = cut_plist(&bytes, r#"</dict>"#.as_bytes())
+            .context("Failed to parse .mobileprovision file")?;
+        let sub_bytes = &bytes[(cut1 - 6)..cut2];
+        let mbfile: ProvisioningProfile =
+            plist::from_bytes(sub_bytes).context("Failed to parse .mobileprovision file")?;
+
+        #[derive(serde::Deserialize, Debug)]
+        struct ProvisioningProfile {
+            #[serde(rename = "TeamIdentifier")]
+            team_identifier: Vec<String>,
+            #[serde(rename = "Entitlements")]
+            entitlements: Entitlements,
+            #[allow(dead_code)]
+            #[serde(rename = "ApplicationIdentifierPrefix")]
+            application_identifier_prefix: Vec<String>,
+        }
+
+        #[derive(serde::Deserialize, Debug)]
+        struct Entitlements {
+            #[serde(rename = "application-identifier")]
+            application_identifier: String,
+            #[serde(rename = "keychain-access-groups")]
+            keychain_access_groups: Vec<String>,
+        }
+
+        Ok(format!(
+            r#"
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+    <key>application-identifier</key>
+    <string>{APPLICATION_IDENTIFIER}</string>
+    <key>keychain-access-groups</key>
+    <array>
+        <string>{APP_ID_ACCESS_GROUP}.*</string>
+    </array>
+    <key>get-task-allow</key>
+    <true/>
+    <key>com.apple.developer.team-identifier</key>
+    <string>{TEAM_IDENTIFIER}</string>
+</dict></plist>
+        "#,
+            APPLICATION_IDENTIFIER = mbfile.entitlements.application_identifier,
+            APP_ID_ACCESS_GROUP = mbfile.entitlements.keychain_access_groups[0],
+            TEAM_IDENTIFIER = mbfile.team_identifier[0],
+        ))
     }
 }
