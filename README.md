@@ -93,7 +93,7 @@ fn app() -> Element {
 
 ## Instant hot-reloading
 
-With one command, `dx serve` and your app is running. Edit your markup, styles, and even Rust code and see changes in milliseconds.
+With one command, `dx serve` and your app is running. Edit your markup, styles, and see changes in milliseconds. Use our experimental `dx serve --hotpatch` to update Rust code in real time.
 
 <div align="center">
   <img src="https://raw.githubusercontent.com/DioxusLabs/screenshots/refs/heads/main/blitz/hotreload-video.webp">
