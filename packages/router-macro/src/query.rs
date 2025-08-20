@@ -3,6 +3,7 @@ use syn::{Ident, Type};
 
 use proc_macro2::TokenStream as TokenStream2;
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
 pub enum QuerySegment {
     Single(FullQuerySegment),

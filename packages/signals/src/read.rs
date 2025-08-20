@@ -73,7 +73,7 @@ pub trait ReadableExt: Readable {
     /// If the value has been dropped, this will panic. Calling this on a Signal is the same as
     /// using the signal() syntax to read and subscribe to its value
     #[track_caller]
-    fn read(&self) -> ReadableRef<Self>
+    fn read(&self) -> ReadableRef<'_, Self>
     where
         Self::Target: 'static,
     {
@@ -82,7 +82,7 @@ pub trait ReadableExt: Readable {
 
     /// Try to get the current value of the state. If this is a signal, this will subscribe the current scope to the signal.
     #[track_caller]
-    fn try_read(&self) -> Result<ReadableRef<Self>, generational_box::BorrowError>
+    fn try_read(&self) -> Result<ReadableRef<'_, Self>, generational_box::BorrowError>
     where
         Self::Target: 'static,
     {
@@ -136,7 +136,7 @@ pub trait ReadableExt: Readable {
     /// }
     /// ```
     #[track_caller]
-    fn peek(&self) -> ReadableRef<Self>
+    fn peek(&self) -> ReadableRef<'_, Self>
     where
         Self::Target: 'static,
     {
@@ -146,7 +146,7 @@ pub trait ReadableExt: Readable {
     /// Try to peek the current value of the signal without subscribing to updates. If the value has
     /// been dropped, this will return an error.
     #[track_caller]
-    fn try_peek(&self) -> Result<ReadableRef<Self>, generational_box::BorrowError>
+    fn try_peek(&self) -> Result<ReadableRef<'_, Self>, generational_box::BorrowError>
     where
         Self::Target: 'static,
     {
@@ -229,7 +229,10 @@ pub trait ReadableExt: Readable {
 
     /// Index into the inner value and return a reference to the result. If the value has been dropped or the index is invalid, this will panic.
     #[track_caller]
-    fn index<I>(&self, index: I) -> ReadableRef<Self, <Self::Target as std::ops::Index<I>>::Output>
+    fn index<I>(
+        &self,
+        index: I,
+    ) -> ReadableRef<'_, Self, <Self::Target as std::ops::Index<I>>::Output>
     where
         Self::Target: std::ops::Index<I> + 'static,
     {
@@ -313,7 +316,7 @@ pub trait ReadableVecExt<T>: Readable<Target = Vec<T>> {
 
     /// Get the first element of the inner vector.
     #[track_caller]
-    fn first(&self) -> Option<ReadableRef<Self, T>>
+    fn first(&self) -> Option<ReadableRef<'_, Self, T>>
     where
         T: 'static,
     {
@@ -322,7 +325,7 @@ pub trait ReadableVecExt<T>: Readable<Target = Vec<T>> {
 
     /// Get the last element of the inner vector.
     #[track_caller]
-    fn last(&self) -> Option<ReadableRef<Self, T>>
+    fn last(&self) -> Option<ReadableRef<'_, Self, T>>
     where
         T: 'static,
     {
@@ -331,7 +334,7 @@ pub trait ReadableVecExt<T>: Readable<Target = Vec<T>> {
 
     /// Get the element at the given index of the inner vector.
     #[track_caller]
-    fn get(&self, index: usize) -> Option<ReadableRef<Self, T>>
+    fn get(&self, index: usize) -> Option<ReadableRef<'_, Self, T>>
     where
         T: 'static,
     {
@@ -382,7 +385,7 @@ pub trait ReadableOptionExt<T>: Readable<Target = Option<T>> {
 
     /// Attempts to read the inner value of the Option.
     #[track_caller]
-    fn as_ref(&self) -> Option<ReadableRef<Self, T>>
+    fn as_ref(&self) -> Option<ReadableRef<'_, Self, T>>
     where
         T: 'static,
     {
@@ -408,7 +411,7 @@ pub trait ReadableResultExt<T, E>: Readable<Target = Result<T, E>> {
 
     /// Attempts to read the inner value of the Option.
     #[track_caller]
-    fn as_ref(&self) -> Result<ReadableRef<Self, T>, ReadableRef<Self, E>>
+    fn as_ref(&self) -> Result<ReadableRef<'_, Self, T>, ReadableRef<'_, Self, E>>
     where
         T: 'static,
         E: 'static,
