@@ -101,6 +101,32 @@ With one command, `dx serve` and your app is running. Edit your markup, styles, 
   <!-- <video src="https://private-user-images.githubusercontent.com/10237910/386919031-6da371d5-3340-46da-84ff-628216851ba6.mov" width="500"></video> -->
 </div>
 
+## Experimental Native Renderer
+
+Render using web-sys, webview, server-side-rendering, liveview, or even with our experimental WGPU-based renderer. Embed Dioxus in Bevy, WGPU, or even run on embedded Linux!
+
+<div align="center">
+  <img src="https://raw.githubusercontent.com/DioxusLabs/screenshots/refs/heads/main/blitz/native-blitz-wgpu.webp">
+</div>
+
+
+## First-party primitive components
+
+Get started quickly with a complete set of primitives modeled after shadcn/ui and Radix-Primitives.
+
+<div align="center">
+  <img src="./notes/primitive-components.avif">
+</div>
+
+## First-class Android and iOS support
+
+Dioxus is the fastest way to build native mobile apps with Rust. Simply run `dx serve --platform android` and your app is running in an emulator or on device in seconds. Call directly into JNI and Native APIs.
+
+<div align="center">
+  <img src="./notes/android_and_ios2.avif" width="500">
+</div>
+
+
 ## Productive, typesafe, fullstack web framework
 
 Directly call your backend from your frontend with our built-in type-safe RPC using [`server_fn`](http://crates.io/crates/server_fn). Supports streaming, suspense, bundle splitting, websockets, and more.
@@ -123,22 +149,6 @@ async fn fetch_fortune() -> ServerFnResult<String> {
   "Dioxus is super productive!".to_string()
 }
 ```
-
-## First-party primitive components
-
-Get started quickly with a complete set of primitives modeled after shadcn/ui and Radix-Primitives.
-
-<div align="center">
-  <img src="./notes/primitive-components.avif">
-</div>
-
-## First-class Android and iOS support
-
-Dioxus is the fastest way to build native mobile apps with Rust. Simply run `dx serve --platform android` and your app is running in an emulator or on device in seconds. Call directly into JNI and Native APIs.
-
-<div align="center">
-  <img src="./notes/android_and_ios2.avif" width="500">
-</div>
 
 ## Bundle for web, desktop, and mobile
 
