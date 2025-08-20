@@ -109,3 +109,104 @@ pub fn connect_at(endpoint: String, mut callback: impl FnMut(DevserverMsg) + Sen
         }
     });
 }
+
+/// Run this asynchronous future to completion.
+///
+/// Whenever your code changes, the future is dropped and a new one is created using the new function.
+///
+/// This is useful for using subsecond outside of dioxus, like with axum. To pass args to the underyling
+/// function, you can use the `serve_subsecond_with_args` function.
+///
+/// ```rust, ignore
+/// #[tokio::main]
+/// async fn main() {
+///     dioxus_devtools::serve_subsecond(router_main).await;
+/// }
+///
+/// async fn router_main() {
+///     use axum::{Router, routing::get};
+///
+///     let app = Router::new().route("/", get(test_route));
+///
+///     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
+///     println!("Server running on http://localhost:3000");
+///
+///     axum::serve(listener, app.clone()).await.unwrap()
+/// }
+///
+/// async fn test_route() -> axum::response::Html<&'static str> {
+///     "axum works!!!!!".into()
+/// }
+/// ```
+#[cfg(feature = "serve")]
+#[cfg(not(target_family = "wasm"))]
+pub async fn serve_subsecond<O, F>(mut callback: impl FnMut() -> F)
+where
+    F: std::future::Future<Output = O> + 'static,
+{
+    serve_subsecond_with_args((), move |_args| callback()).await
+}
+
+/// Run this asynchronous future to completion.
+///
+/// Whenever your code changes, the future is dropped and a new one is created using the new function.
+///
+/// ```rust, ignore
+/// #[tokio::main]
+/// async fn main() {
+///     let args = ("abc".to_string(),);
+///     dioxus_devtools::serve_subsecond_with_args(args, router_main).await;
+/// }
+///
+/// async fn router_main(args: (String,)) {
+///     use axum::{Router, routing::get};
+///
+///     let app = Router::new().route("/", get(test_route));
+///
+///     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
+///     println!("Server running on http://localhost:3000 -> {}", args.0);
+///
+///     axum::serve(listener, app.clone()).await.unwrap()
+/// }
+///
+/// async fn test_route() -> axum::response::Html<&'static str> {
+///     "axum works!!!!!".into()
+/// }
+/// ```
+#[cfg(feature = "serve")]
+pub async fn serve_subsecond_with_args<A: Clone, O, F>(args: A, mut callback: impl FnMut(A) -> F)
+where
+    F: std::future::Future<Output = O> + 'static,
+{
+    let (tx, mut rx) = futures_channel::mpsc::unbounded();
+
+    connect(move |msg| {
+        if let DevserverMsg::HotReload(hot_reload_msg) = msg {
+            if let Some(jumptable) = hot_reload_msg.jump_table {
+                if hot_reload_msg.for_pid == Some(std::process::id()) {
+                    unsafe { subsecond::apply_patch(jumptable).unwrap() };
+                    tx.unbounded_send(()).unwrap();
+                }
+            }
+        }
+    });
+
+    let wrapped = move |args| -> std::pin::Pin<Box<dyn std::future::Future<Output = O>>> {
+        Box::pin(callback(args))
+    };
+
+    let mut hotfn = subsecond::HotFn::current(wrapped);
+    let mut cur_future = hotfn.call((args.clone(),));
+
+    loop {
+        use futures_util::StreamExt;
+        let res = futures_util::future::select(cur_future, rx.next()).await;
+
+        match res {
+            futures_util::future::Either::Left(_completed) => _ = rx.next().await,
+            futures_util::future::Either::Right(_reload) => {}
+        }
+
+        cur_future = hotfn.call((args.clone(),));
+    }
+}
