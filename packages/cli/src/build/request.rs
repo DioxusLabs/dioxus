@@ -742,7 +742,7 @@ impl BuildRequest {
 
         // If no custom linker is set, then android falls back to us as the linker
         if custom_linker.is_none() && bundle == BundleFormat::Android {
-            let min_sdk_version = config.application.android_min_sdk_version.unwrap_or(24);
+            let min_sdk_version = config.application.android_min_sdk_version.unwrap_or(28);
             custom_linker = Some(
                 workspace
                     .android_tools()?
