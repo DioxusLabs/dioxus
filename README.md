@@ -106,7 +106,7 @@ With one command, `dx serve` and your app is running. Edit your markup, styles, 
 Dioxus apps are styled with HTML and CSS. Use the built-in TailwindCSS support or load your favorite CSS library. Easily call into native code (bjc, JNI, Web-Sys) for a perfect native touch.
 
 <div align="center">
-  <img src="./notes/ebou.avif">
+  <img src="./notes/ebou2.avif">
 </div>
 
 
