@@ -11,14 +11,32 @@ keywords = ["web", "desktop", "mobile", "gui", "wasm"]
 rust-version = "1.79.0"
 
 [dependencies]
-http = { workspace = true }
-percent-encoding = { workspace = true }
-infer = { workspace = true }
 thiserror = { workspace = true }
-dioxus-cli-config = { workspace = true }
+manganis-core = { workspace = true }
+
+# native/fs resolver dependencies
+http = { workspace = true, optional = true }
+percent-encoding = { workspace = true, optional = true }
+infer = { workspace = true, optional = true }
+dioxus-cli-config = { workspace = true, optional = true }
+tokio = { workspace = true, features = ["rt"], optional = true }
+
+# browser resolver dependencies
+web-sys = { workspace = true, features = ['Headers', 'Request', 'RequestInit', 'Response', 'Window'], optional = true }
+js-sys = { workspace = true, optional = true }
+wasm-bindgen-futures = { workspace = true, optional = true }
 
 [target.'cfg(target_os = "android")'.dependencies]
-jni = "0.21.1"
+jni = { version = "0.21.1" }
 ndk = { version = "0.9.0" }
 ndk-sys = { version = "0.6.0" }
 ndk-context = { version = "0.1.1" }
+
+[dev-dependencies]
+dioxus = { workspace = true }
+serde_json = { workspace = true }
+
+[features]
+default = []
+web = ["dep:web-sys", "dep:js-sys", "dep:wasm-bindgen-futures"]
+native = ["dep:http", "dep:percent-encoding", "dep:infer", "dep:dioxus-cli-config", "dep:tokio"]

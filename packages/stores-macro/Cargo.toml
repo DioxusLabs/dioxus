@@ -1,0 +1,26 @@
+[package]
+name = "dioxus-stores-macro"
+version = { workspace = true }
+edition = "2021"
+repository = "https://github.com/DioxusLabs/dioxus/"
+homepage = "https://dioxuslabs.com/docs/0.5/guide/en/getting_started/fullstack.html"
+keywords = ["dom", "ui", "gui", "react", "liveview"]
+authors = ["Jonathan Kelley", "Evan Almloff"]
+license = "MIT OR Apache-2.0"
+description = "Server function macros for Dioxus"
+
+[dependencies]
+proc-macro2 = { workspace = true }
+quote = { workspace = true }
+syn = { workspace = true, features = ["full"] }
+convert_case = { workspace = true }
+
+[dev-dependencies]
+dioxus = { workspace = true }
+dioxus-stores = { workspace = true }
+
+[lib]
+proc-macro = true
+
+[package.metadata.docs.rs]
+cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]

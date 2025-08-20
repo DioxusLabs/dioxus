@@ -74,9 +74,11 @@ impl WebHistory {
     }
 
     fn scroll_pos(&self) -> ScrollPosition {
-        self.do_scroll_restoration
-            .then(|| ScrollPosition::of_window(&self.window))
-            .unwrap_or_default()
+        if self.do_scroll_restoration {
+            ScrollPosition::of_window(&self.window)
+        } else {
+            Default::default()
+        }
     }
 
     fn create_state(&self) -> [f64; 2] {
@@ -239,9 +241,11 @@ impl HashHistory {
     }
 
     fn scroll_pos(&self) -> ScrollPosition {
-        self.do_scroll_restoration
-            .then(|| ScrollPosition::of_window(&self.window))
-            .unwrap_or_default()
+        if self.do_scroll_restoration {
+            ScrollPosition::of_window(&self.window)
+        } else {
+            Default::default()
+        }
     }
 
     fn create_state(&self) -> [f64; 2] {

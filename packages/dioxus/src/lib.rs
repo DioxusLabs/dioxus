@@ -47,6 +47,10 @@ pub use dioxus_hooks as hooks;
 #[cfg_attr(docsrs, doc(cfg(feature = "signals")))]
 pub use dioxus_signals as signals;
 
+#[cfg(feature = "signals")]
+#[cfg_attr(docsrs, doc(cfg(feature = "signals")))]
+pub use dioxus_stores as stores;
+
 pub mod events {
     #[cfg(feature = "html")]
     #[cfg_attr(docsrs, doc(cfg(feature = "html")))]
@@ -125,6 +129,11 @@ pub use wasm_splitter as wasm_split;
 
 pub use subsecond;
 
+#[cfg(feature = "asset")]
+#[cfg_attr(docsrs, doc(cfg(feature = "asset")))]
+#[doc(inline)]
+pub use dioxus_asset_resolver as asset_resolver;
+
 pub mod prelude {
     #[cfg(feature = "document")]
     #[cfg_attr(docsrs, doc(cfg(feature = "document")))]
@@ -150,6 +159,9 @@ pub mod prelude {
     #[cfg_attr(docsrs, doc(cfg(feature = "signals")))]
     #[doc(inline)]
     pub use dioxus_signals::*;
+
+    #[cfg(feature = "signals")]
+    pub use dioxus_stores::{self, store, use_store, ReadStore, Store, WriteStore};
 
     #[cfg(feature = "macro")]
     #[cfg_attr(docsrs, doc(cfg(feature = "macro")))]

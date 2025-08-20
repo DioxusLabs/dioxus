@@ -11,3 +11,12 @@ pub(crate) struct AddressArguments {
     #[clap(long)]
     pub(crate) addr: Option<std::net::IpAddr>,
 }
+
+impl crate::Anonymized for AddressArguments {
+    fn anonymized(&self) -> serde_json::Value {
+        serde_json::json!({
+            "port": self.port,
+            "addr": self.addr.map(|addr| if addr.is_loopback() { "loopback" } else if addr.is_unspecified() { "unspecified" } else { "other" }),
+        })
+    }
+}

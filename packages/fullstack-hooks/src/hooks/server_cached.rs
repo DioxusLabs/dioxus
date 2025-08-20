@@ -2,9 +2,12 @@ use dioxus_core::use_hook;
 use dioxus_fullstack_protocol::SerializeContextEntry;
 use serde::{de::DeserializeOwned, Serialize};
 
-/// This allows you to send data from the server to the client. The data is serialized into the HTML on the server and hydrated on the client.
+/// This allows you to send data from the server to the client *during hydration*.
+/// - When compiled as server, the closure is ran and the resulting data is serialized on the server and sent to the client.
+/// - When compiled as web client, the data is deserialized from the server if already available, otherwise runs on the client. Data is usually only available if this hook exists in a component during hydration.
+/// - When otherwise compiled, the closure is run directly with no serialization.
 ///
-/// When you run this function on the client, you need to be careful to insure the order you run it initially is the same order you run it on the server.
+/// The order this function is run on the client needs to be the same order initially run on the server.
 ///
 /// If Dioxus fullstack cannot find the data on the client, it will run the closure again to get the data.
 ///

@@ -694,6 +694,7 @@ impl RouteEnum {
     }
 }
 
+#[allow(clippy::large_enum_variant)]
 enum RouteEndpoint {
     Route(Route),
     Redirect(Redirect),
@@ -751,6 +752,7 @@ impl ToTokens for SiteMapSegment {
     }
 }
 
+#[allow(clippy::large_enum_variant)]
 enum SegmentType {
     Static(String),
     Dynamic(String),

@@ -110,7 +110,7 @@ fn app() -> Element {
 }
 
 #[component]
-fn TodoHeader(mut todos: Signal<HashMap<u32, TodoItem>>) -> Element {
+fn TodoHeader(mut todos: WriteSignal<HashMap<u32, TodoItem>>) -> Element {
     let mut draft = use_signal(|| "".to_string());
     let mut todo_id = use_signal(|| 0);
 
@@ -146,7 +146,7 @@ fn TodoHeader(mut todos: Signal<HashMap<u32, TodoItem>>) -> Element {
 /// This takes the ID of the todo and the todos signal as props
 /// We can use these together to memoize the todo contents and checked state
 #[component]
-fn TodoEntry(mut todos: Signal<HashMap<u32, TodoItem>>, id: u32) -> Element {
+fn TodoEntry(mut todos: WriteSignal<HashMap<u32, TodoItem>>, id: u32) -> Element {
     let mut is_editing = use_signal(|| false);
 
     // To avoid re-rendering this component when the todo list changes, we isolate our reads to memos
@@ -208,9 +208,9 @@ fn TodoEntry(mut todos: Signal<HashMap<u32, TodoItem>>, id: u32) -> Element {
 
 #[component]
 fn ListFooter(
-    mut todos: Signal<HashMap<u32, TodoItem>>,
-    active_todo_count: ReadOnlySignal<usize>,
-    mut filter: Signal<FilterState>,
+    mut todos: WriteSignal<HashMap<u32, TodoItem>>,
+    active_todo_count: ReadSignal<usize>,
+    mut filter: WriteSignal<FilterState>,
 ) -> Element {
     // We use a memoized signal to calculate whether we should show the "Clear completed" button.
     // This will recompute whenever the todos change, and if the value is true, the button will be shown.

@@ -9,7 +9,7 @@ use dioxus_core::{
     has_context, provide_error_boundary, DynamicNode, ErrorContext, ScopeId, SuspenseContext,
     VNode, VirtualDom,
 };
-use dioxus_fullstack_hooks::history::FullstackHistory;
+use dioxus_fullstack_hooks::history::provide_fullstack_history_context;
 use dioxus_fullstack_hooks::{StreamingContext, StreamingStatus};
 use dioxus_fullstack_protocol::{HydrationContext, SerializedHydrationData};
 use dioxus_isrg::{CachedRender, IncrementalRendererError, RenderFreshness};
@@ -40,9 +40,11 @@ where
         static TASK_POOL: std::sync::OnceLock<LocalPoolHandle> = std::sync::OnceLock::new();
 
         let pool = TASK_POOL.get_or_init(|| {
-            let threads = std::thread::available_parallelism()
-                .unwrap_or(std::num::NonZeroUsize::new(1).unwrap());
-            LocalPoolHandle::new(threads.into())
+            LocalPoolHandle::new(
+                std::thread::available_parallelism()
+                    .map(usize::from)
+                    .unwrap_or(1),
+            )
         });
 
         pool.spawn_pinned(f)
@@ -192,23 +194,21 @@ impl SsrRendererPool {
             virtual_dom.provide_root_context(document.clone());
             // If there is a base path, trim the base path from the route and add the base path formatting to the
             // history provider
-            let history;
-            if let Some(base_path) = base_path() {
+            let history = if let Some(base_path) = base_path() {
                 let base_path = base_path.trim_matches('/');
                 let base_path = format!("/{base_path}");
                 let route = route.strip_prefix(&base_path).unwrap_or(&route);
-                history =
-                    dioxus_history::MemoryHistory::with_initial_path(route).with_prefix(base_path);
+                dioxus_history::MemoryHistory::with_initial_path(route).with_prefix(base_path)
             } else {
-                history = dioxus_history::MemoryHistory::with_initial_path(&route);
-            }
-            // Wrap the memory history in a fullstack history provider to provide the initial route for hydration
-            let history = FullstackHistory::new_server(history);
+                dioxus_history::MemoryHistory::with_initial_path(&route)
+            };
 
             let streaming_context = in_root_scope(&virtual_dom, StreamingContext::new);
-            virtual_dom.provide_root_context(Rc::new(history) as Rc<dyn dioxus_history::History>);
             virtual_dom.provide_root_context(document.clone() as Rc<dyn dioxus_document::Document>);
             virtual_dom.provide_root_context(streaming_context);
+
+            // Wrap the memory history in a fullstack history provider to provide the initial route for hydration
+            in_root_scope(&virtual_dom, || provide_fullstack_history_context(history));
 
             // rebuild the virtual dom
             virtual_dom.rebuild_in_place();

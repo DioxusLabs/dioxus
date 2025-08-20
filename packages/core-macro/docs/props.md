@@ -47,7 +47,7 @@ You can use the `#[props()]` attribute to modify the behavior of the props deriv
 Props also act slightly differently when used with:
 
 - [`Option<T>`](#optional-props) - The field is automatically optional with a default value of `None`.
-- [`ReadOnlySignal<T>`](#reactive-props) - The props macro will automatically convert `T` into `ReadOnlySignal<T>` when it is passed as a prop.
+- [`ReadSignal<T>`](#reactive-props) - The props macro will automatically convert `T` into `ReadSignal<T>` when it is passed as a prop.
 - [`String`](#formatted-props) - The props macro will accept formatted strings for any prop field with the type `String`.
 - [`children`](#children-props) - The props macro will accept child elements if you include the `children` prop.
 
@@ -270,14 +270,14 @@ fn Counter(count: i32) -> Element {
 
 To fix this issue you can either:
 
-1. Make the prop reactive by wrapping it in `ReadOnlySignal` (recommended):
+1. Make the prop reactive by wrapping it in `ReadSignal` (recommended):
 
-`ReadOnlySignal` is a `Copy` reactive value. Dioxus will automatically convert any value into a `ReadOnlySignal` when it is passed as a prop.
+`ReadSignal` is a `Copy` reactive value. Dioxus will automatically convert any value into a `ReadSignal` when it is passed as a prop.
 
 ```rust, no_run
 # use dioxus::prelude::*;
 #[component]
-fn Counter(count: ReadOnlySignal<i32>) -> Element {
+fn Counter(count: ReadSignal<i32>) -> Element {
     // Since we made count reactive, the memo will automatically rerun when count changes.
     let doubled_count = use_memo(move || count() * 2);
     rsx! {

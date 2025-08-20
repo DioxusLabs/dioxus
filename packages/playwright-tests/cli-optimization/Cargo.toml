@@ -8,6 +8,8 @@ publish = false
 
 [dependencies]
 dioxus = { workspace = true, features = ["web"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
 
 [build-dependencies]
 reqwest = { workspace = true, features = ["blocking"] }

@@ -1,9 +1,9 @@
 use super::{Global, InitializeFromFunction};
-use crate::read::Readable;
+use crate::read::ReadableExt;
 use crate::read_impls;
 use crate::Memo;
 
-impl<T: PartialEq> InitializeFromFunction<T> for Memo<T> {
+impl<T: PartialEq + 'static> InitializeFromFunction<T> for Memo<T> {
     fn initialize_from_function(f: fn() -> T) -> Self {
         Memo::new(f)
     }

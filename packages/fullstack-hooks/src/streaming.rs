@@ -1,5 +1,5 @@
 use dioxus_core::try_consume_context;
-use dioxus_signals::{Readable, Signal, Writable};
+use dioxus_signals::{ReadableExt, Signal, WritableExt};
 
 /// The status of the streaming response
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -69,6 +69,7 @@ impl StreamingContext {
 /// }
 /// ```
 pub fn commit_initial_chunk() {
+    crate::history::finalize_route();
     if let Some(mut streaming) = try_consume_context::<StreamingContext>() {
         streaming.commit_initial_chunk();
     }

@@ -21,9 +21,6 @@ pub(crate) enum Config {
     /// Create a custom html file.
     CustomHtml {},
 
-    /// Print the location of the CLI log file.
-    LogFile {},
-
     /// Set CLI settings.
     #[command(subcommand)]
     Set(Setting),
@@ -39,6 +36,8 @@ pub(crate) enum Setting {
     AlwaysOnTop { value: BoolValue },
     /// Set the interval that file changes are polled on WSL for hot reloading.
     WSLFilePollInterval { value: u16 },
+    /// Disable the built-in telemetry for the CLI
+    DisableTelemetry { value: BoolValue },
 }
 
 impl Display for Setting {
@@ -48,13 +47,14 @@ impl Display for Setting {
             Self::AlwaysOpenBrowser { value: _ } => write!(f, "always-open-browser"),
             Self::AlwaysOnTop { value: _ } => write!(f, "always-on-top"),
             Self::WSLFilePollInterval { value: _ } => write!(f, "wsl-file-poll-interval"),
+            Self::DisableTelemetry { value: _ } => write!(f, "disable-telemetry"),
         }
     }
 }
 
 // Clap complains if we use a bool directly and I can't find much info about it.
 // "Argument 'value` is positional and it must take a value but action is SetTrue"
-#[derive(Debug, Clone, Copy, Deserialize, clap::ValueEnum)]
+#[derive(Debug, Clone, Copy, serde::Serialize, Deserialize, clap::ValueEnum)]
 pub(crate) enum BoolValue {
     True,
     False,
@@ -98,10 +98,6 @@ impl Config {
                 file.write_all(content.as_bytes())?;
                 tracing::info!(dx_src = ?TraceSrc::Dev, "🚩 Create custom html file done.");
             }
-            Config::LogFile {} => {
-                let log_path = crate::logging::FileAppendLayer::log_path();
-                tracing::info!(dx_src = ?TraceSrc::Dev, "Log file is located at {}", log_path.display());
-            }
             // Handle CLI settings.
             Config::Set(setting) => {
                 CliSettings::modify_settings(|settings| match setting {
@@ -114,6 +110,9 @@ impl Config {
                     }
                     Setting::WSLFilePollInterval { value } => {
                         settings.wsl_file_poll_interval = Some(value)
+                    }
+                    Setting::DisableTelemetry { value } => {
+                        settings.disable_telemetry = Some(value.into());
                     }
                 })?;
                 tracing::info!(dx_src = ?TraceSrc::Dev, "🚩 CLI setting `{setting}` has been set.");

@@ -66,7 +66,7 @@ pub enum IpcMethod<'a> {
 }
 
 impl IpcMessage {
-    pub(crate) fn method(&self) -> IpcMethod {
+    pub(crate) fn method(&self) -> IpcMethod<'_> {
         match self.method.as_str() {
             "file_dialog" => IpcMethod::FileDialog,
             "user_event" => IpcMethod::UserEvent,
