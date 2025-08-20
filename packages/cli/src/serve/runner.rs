@@ -579,12 +579,16 @@ impl AppServer {
             if self.client.builds_opened == 0 {
                 tracing::info!(
                     "Build completed successfully in {GLOW_STYLE}{}{GLOW_STYLE:#}, launching app! 💫",
-                    humantime::format_duration(time_taken)
+                    // Format duration with millisecond precision to avoid microsecond/nanosecond noise.
+                    // See: https://github.com/chronotope/humantime/issues/35
+                    humantime::format_duration(Duration::from_millis(time_taken.as_millis() as u64))
                 );
             } else {
                 tracing::info!(
                     "Build completed in {GLOW_STYLE}{}{GLOW_STYLE:#}",
-                    humantime::format_duration(time_taken)
+                    humantime::format_duration(
+                        Duration::from_millis(time_taken.as_millis() as u64)
+                    )
                 );
             }
 
