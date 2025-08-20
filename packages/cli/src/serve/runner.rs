@@ -492,7 +492,7 @@ impl AppServer {
 
         // todo - we need to distinguish between hotpatchable rebuilds and true full rebuilds.
         //        A full rebuild is required when the user modifies static initializers which we haven't wired up yet.
-        if needs_full_rebuild {
+        if needs_full_rebuild && self.automatic_rebuilds {
             if self.use_hotpatch_engine {
                 self.client.patch_rebuild(files.to_vec());
                 if let Some(server) = self.server.as_mut() {
@@ -525,6 +525,14 @@ impl AppServer {
             let file = files[0].display().to_string();
             let file =
                 file.trim_start_matches(&self.client.build.crate_dir().display().to_string());
+
+            if needs_full_rebuild && !self.automatic_rebuilds {
+                use crate::styles::NOTE_STYLE;
+                tracing::warn!(
+                    "Ignoring full rebuild for: {NOTE_STYLE}{}{NOTE_STYLE:#}",
+                    file
+                );
+            }
 
             // Only send a hotreload message for templates and assets - otherwise we'll just get a full rebuild
             //
