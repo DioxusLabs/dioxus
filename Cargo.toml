@@ -98,11 +98,11 @@ members = [
     "packages/subsecond/subsecond-tests/cross-tls-test",
 
     # Full project examples
-    "example-projects/fullstack-hackernews",
-    "example-projects/ecommerce-site",
-    "example-projects/bluetooth-scanner",
-    "example-projects/file-explorer",
-    "example-projects/hotdog",
+    "examples/fullstack-hackernews",
+    "examples/ecommerce-site",
+    "examples/bluetooth-scanner",
+    "examples/file-explorer",
+    "examples/hotdog",
 
     # Simple examples that require a crate
     "examples/tailwind",

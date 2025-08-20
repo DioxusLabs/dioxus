@@ -43,7 +43,7 @@
   <h3>
     <a href="https://dioxuslabs.com"> Website </a>
     <span> | </span>
-    <a href="https://github.com/DioxusLabs/example-projects"> Examples </a>
+    <a href="https://github.com/DioxusLabs/examples"> Examples </a>
     <span> | </span>
     <a href="https://dioxuslabs.com/learn/0.6/guide"> Guide </a>
     <span> | </span>
