@@ -4668,7 +4668,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         self.config
             .application
             .android_min_sdk_version
-            .unwrap_or(24)
+            .unwrap_or(28)
     }
 
     pub(crate) async fn start_simulators(&self) -> Result<()> {
