@@ -321,7 +321,7 @@
 
 use crate::{
     AndroidTools, BuildContext, BundleFormat, DioxusConfig, Error, LinkAction, LinkerFlavor,
-    Renderer, Result, RustcArgs, TargetAlias, TargetArgs, TraceSrc, WasmBindgen, WasmOptConfig,
+    Platform, Renderer, Result, RustcArgs, TargetArgs, TraceSrc, WasmBindgen, WasmOptConfig,
     Workspace, DX_RUSTC_WRAPPER_ENV_VAR,
 };
 use anyhow::{bail, Context};
@@ -556,6 +556,11 @@ impl BuildRequest {
             })?
             .clone();
 
+        // We usually use the simulator unless --device is passed *or* a device is detected by probing.
+        // For now, though, since we don't have probing, it just defaults to false
+        // Tools like xcrun/adb can detect devices
+        let device = args.device.clone();
+
         // The crate might enable multiple platforms or no platforms at
         // We collect all the platforms it enables first and then select based on the --platform arg
         let enabled_renderers =
@@ -568,94 +573,151 @@ impl BuildRequest {
         let mut features = args.features.clone();
         let mut no_default_features = args.no_default_features;
 
+        // Walk through the enabled renderers in the default-features list
+
         // Apply the platform alias if present
-        let mut target_alias = args.target_alias;
+        let mut triple = args.target.clone();
         let mut renderer = args.renderer;
-        let mut bundle = args.bundle;
-        if let Some(platform) = args.platform {
-            let (default_target, default_renderer, default_bundle) = platform.into_triple();
-            target_alias = target_alias.or(default_target);
-            renderer.renderer = Some(renderer.renderer.unwrap_or(default_renderer));
-            bundle = Some(bundle.unwrap_or(default_bundle));
-        }
+        let mut bundle_format = args.bundle;
+        match args.platform {
+            // A vanilla "dx serve". We try to autodetect from the default features
+            Platform::Unknown => {}
 
-        let mut renderer: Option<Renderer> = match renderer.into() {
-            Some(renderer) => match enabled_renderers.len() {
-                0 => Some(renderer),
+            Platform::Web => {
+                renderer = renderer.or(Some(Renderer::Web));
+                bundle_format = bundle_format.or(Some(BundleFormat::Web));
+                triple = triple.or(Some("wasm32-unknown-unknown".parse()?));
+            }
+            Platform::MacOS => {
+                renderer = renderer.or(Some(Renderer::Webview));
+                bundle_format = bundle_format.or(Some(BundleFormat::MacOS));
+                triple = triple.or(Some(Triple::host()));
+            }
+            Platform::Windows => {
+                renderer = renderer.or(Some(Renderer::Webview));
+                bundle_format = bundle_format.or(Some(BundleFormat::Windows));
+                triple = triple.or(Some(Triple::host()));
+            }
+            Platform::Linux => {
+                renderer = renderer.or(Some(Renderer::Webview));
+                bundle_format = bundle_format.or(Some(BundleFormat::Linux));
+                triple = triple.or(Some(Triple::host()));
+            }
+            Platform::Ios => {
+                renderer = renderer.or(Some(Renderer::Webview));
+                bundle_format = bundle_format.or(Some(BundleFormat::Ios));
+                match device.is_some() {
+                    // If targetting device, we want to build for the device which is always aarch64
+                    true => triple = triple.or(Some("aarch64-apple-ios".parse()?)),
 
-                // The user passed --platform XYZ but already has `default = ["ABC"]` in their Cargo.toml or dioxus = { features = ["abc"] }
-                // We want to strip out the default platform and use the one they passed, setting no-default-features
-                _ => {
-                    features.extend(Self::rendererless_features(main_package));
-                    no_default_features = true;
-                    Some(renderer)
-                }
-            },
-            None if !using_dioxus_explicitly => None,
-            None => match enabled_renderers.as_slice() {
-                [] => None, // Wait until we resolve everything else first then we will resolve it from the triple
-                [(renderer, feature)] => {
-                    let targeting_mobile = match (&args.target, target_alias) {
-                        (_, TargetAlias::Android | TargetAlias::Ios) => true,
-                        (Some(target), _) => {
-                            matches!(
-                                (target.environment, target.operating_system),
-                                (Environment::Android, OperatingSystem::IOS(_))
-                            )
-                        }
-                        _ => false,
-                    };
-                    // The renderer usually maps directly to a feature flag, but the mobile crate is an exception.
-                    // If we see the `desktop` renderer in the default features, but the user is targeting mobile,
-                    // we should remove the default `desktop` feature, but still target webview. The feature selection
-                    // logic below will handle adding back in the `mobile` feature flag
-                    if targeting_mobile && feature == "desktop" {
-                        features.extend(Self::rendererless_features(main_package));
-                        no_default_features = true;
+                    // If the host is aarch64, we assume the user wants to build for iOS simulator
+                    false if matches!(Triple::host().architecture, Architecture::Aarch64(_)) => {
+                        triple = triple.or(Some("aarch64-apple-ios-sim".parse()?))
                     }
-                    Some(*renderer)
+
+                    // Otherwise, it's the x86_64 simulator, which is just x86_64-apple-ios
+                    _ => triple = triple.or(Some("x86_64-apple-ios".parse()?)),
                 }
-                _ => {
-                    bail!(
-                        "Multiple platforms enabled in Cargo.toml. Please specify a platform with `--web`, `--webview`, or `--native` or set a default platform in Cargo.toml"
-                    );
-                }
-            },
-        };
-
-        // We usually use the simulator unless --device is passed *or* a device is detected by probing.
-        // For now, though, since we don't have probing, it just defaults to false
-        // Tools like xcrun/adb can detect devices
-        let device = args.device.clone();
-
-        // Resolve the target alias and renderer into a concrete target alias.
-        // If the user didn't pass a platform, but we have a renderer, get the default platform for that renderer
-        if let (TargetAlias::Unknown, Some(renderer)) = (target_alias, renderer) {
-            target_alias = renderer.default_platform();
-        };
-
-        // We want a real triple to build with, so we'll autodetect it if it's not provided
-        // The triple ends up being a source of truth for us later hence all this work to figure it out
-        let triple = match (args.target.clone(), target_alias) {
-            // If there is an explicit target, use it
-            (Some(target), _) => target,
-            // If there is a platform, use it to determine the target triple
-            (None, platform) => platform.into_target(device.is_some(), &workspace).await?,
-        };
-
-        // If the user didn't pass a renderer, and we didn't find a good default renderer, but they are using dioxus explicitly,
-        // then we can try to guess the renderer based on the target triple.
-        if renderer.is_none() && using_dioxus_explicitly {
-            renderer = Some(Renderer::from_target(&triple));
+            }
+            Platform::Android => {
+                renderer = renderer.or(Some(Renderer::Webview));
+                bundle_format = bundle_format.or(Some(BundleFormat::Android));
+                triple = triple.or(Some(Triple::host()));
+            }
+            Platform::Server => {
+                renderer = renderer.or(Some(Renderer::Server));
+                bundle_format = bundle_format.or(Some(BundleFormat::Server));
+                triple = triple.or(Some(Triple::host()));
+            }
+            Platform::Liveview => {
+                renderer = renderer.or(Some(Renderer::Liveview));
+                bundle_format = bundle_format.or(Some(BundleFormat::Server));
+                triple = triple.or(Some(Triple::host()));
+            }
         }
 
-        // Resolve the bundle format based on the combination of the target triple and renderer
-        let bundle = match bundle {
-            // If there is an explicit bundle format, use it
-            Some(bundle) => bundle,
-            // Otherwise guess a bundle format based on the target triple and renderer
-            None => BundleFormat::from_target(&triple, renderer)?,
-        };
+        let renderer = renderer;
+        let triple = triple.unwrap();
+        let bundle_format = bundle_format.unwrap();
+        // let renderer = renderer.unwrap();
+
+        // let (default_target, default_renderer, default_bundle) = platform.into_triple();
+        // target_alias = target_alias.or(default_target);
+        // renderer.renderer = Some(renderer.renderer.unwrap_or(default_renderer));
+        // bundle = Some(bundle.unwrap_or(default_bundle));
+
+        // let mut renderer: Option<Renderer> = match renderer.into() {
+        //     Some(renderer) => match enabled_renderers.len() {
+        //         0 => Some(renderer),
+
+        //         // The user passed --platform XYZ but already has `default = ["ABC"]` in their Cargo.toml or dioxus = { features = ["abc"] }
+        //         // We want to strip out the default platform and use the one they passed, setting no-default-features
+        //         _ => {
+        //             features.extend(Self::rendererless_features(main_package));
+        //             no_default_features = true;
+        //             Some(renderer)
+        //         }
+        //     },
+        //     None if !using_dioxus_explicitly => None,
+        //     None => match enabled_renderers.as_slice() {
+        //         [] => None, // Wait until we resolve everything else first then we will resolve it from the triple
+        //         [(renderer, feature)] => {
+        //             let targeting_mobile = match (&args.target, target_alias) {
+        //                 (_, TargetAlias::Android | TargetAlias::Ios) => true,
+        //                 (Some(target), _) => {
+        //                     matches!(
+        //                         (target.environment, target.operating_system),
+        //                         (Environment::Android, OperatingSystem::IOS(_))
+        //                     )
+        //                 }
+        //                 _ => false,
+        //             };
+        //             // The renderer usually maps directly to a feature flag, but the mobile crate is an exception.
+        //             // If we see the `desktop` renderer in the default features, but the user is targeting mobile,
+        //             // we should remove the default `desktop` feature, but still target webview. The feature selection
+        //             // logic below will handle adding back in the `mobile` feature flag
+        //             if targeting_mobile && feature == "desktop" {
+        //                 features.extend(Self::rendererless_features(main_package));
+        //                 no_default_features = true;
+        //             }
+        //             Some(*renderer)
+        //         }
+        //         _ => {
+        //             bail!(
+        //                 "Multiple platforms enabled in Cargo.toml. Please specify a platform with `--web`, `--webview`, or `--native` or set a default platform in Cargo.toml"
+        //             );
+        //         }
+        //     },
+        // };
+
+        // // Resolve the target alias and renderer into a concrete target alias.
+        // // If the user didn't pass a platform, but we have a renderer, get the default platform for that renderer
+        // if let (TargetAlias::Unknown, Some(renderer)) = (target_alias, renderer) {
+        //     target_alias = renderer.default_platform();
+        // };
+
+        // // We want a real triple to build with, so we'll autodetect it if it's not provided
+        // // The triple ends up being a source of truth for us later hence all this work to figure it out
+        // let triple = match (args.target.clone(), target_alias) {
+        //     // If there is an explicit target, use it
+        //     (Some(target), _) => target,
+        //     // If there is a platform, use it to determine the target triple
+        //     (None, platform) => platform.into_target(device.is_some(), &workspace).await?,
+        // };
+
+        // // If the user didn't pass a renderer, and we didn't find a good default renderer, but they are using dioxus explicitly,
+        // // then we can try to guess the renderer based on the target triple.
+        // if renderer.is_none() && using_dioxus_explicitly {
+        //     renderer = Some(Renderer::from_target(&triple));
+        // }
+
+        // // Resolve the bundle format based on the combination of the target triple and renderer
+        // let bundle = match bundle {
+        //     // If there is an explicit bundle format, use it
+        //     Some(bundle) => bundle,
+        //     // Otherwise guess a bundle format based on the target triple and renderer
+        //     None => BundleFormat::from_target(&triple, renderer)?,
+        // };
 
         // Add any features required to turn on the client
         if let Some(renderer) = renderer {
@@ -671,7 +733,7 @@ impl BuildRequest {
         // We might want to move some of these profiles into dioxus.toml and make them "virtual".
         let profile = match args.profile.clone() {
             Some(profile) => profile,
-            None => bundle.profile_name(args.release),
+            None => bundle_format.profile_name(args.release),
         };
 
         // Warn if the user is trying to build with strip and using manganis
@@ -707,7 +769,7 @@ impl BuildRequest {
         let mut custom_linker = cargo_config.linker(triple.to_string()).ok().flatten();
         let mut rustflags = cargo_config2::Flags::default();
 
-        if matches!(bundle, BundleFormat::Android) {
+        if matches!(bundle_format, BundleFormat::Android) {
             rustflags.flags.extend([
                 "-Clink-arg=-landroid".to_string(),
                 "-Clink-arg=-llog".to_string(),
@@ -741,7 +803,7 @@ impl BuildRequest {
         }
 
         // If no custom linker is set, then android falls back to us as the linker
-        if custom_linker.is_none() && bundle == BundleFormat::Android {
+        if custom_linker.is_none() && bundle_format == BundleFormat::Android {
             let min_sdk_version = config.application.android_min_sdk_version.unwrap_or(28);
             custom_linker = Some(
                 workspace
@@ -801,7 +863,7 @@ impl BuildRequest {
             r#"Target Info:
                 • features: {features:?}
                 • triple: {triple}
-                • bundle format: {bundle:?}"#
+                • bundle format: {bundle_format:?}"#
         );
         tracing::debug!(
             r#"Log Files:
@@ -821,7 +883,7 @@ impl BuildRequest {
 
         Ok(Self {
             features,
-            bundle,
+            bundle: bundle_format,
             no_default_features,
             crate_package,
             crate_target,
@@ -4668,7 +4730,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         self.config
             .application
             .android_min_sdk_version
-            .unwrap_or(24)
+            .unwrap_or(28)
     }
 
     pub(crate) async fn start_simulators(&self) -> Result<()> {

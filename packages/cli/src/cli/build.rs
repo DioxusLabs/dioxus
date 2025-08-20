@@ -100,8 +100,8 @@ impl CommandWithPlatformOverrides<BuildArgs> {
                 }
                 None => {
                     let mut args = self.shared.build_arguments.clone();
-                    args.platform = Some(crate::Platform::Server);
-                    args.renderer.renderer = Some(crate::Renderer::Server);
+                    args.platform = crate::Platform::Server;
+                    args.renderer = Some(crate::Renderer::Server);
                     args.target = Some(target_lexicon::Triple::host());
                     server = Some(BuildRequest::new(&args, None, workspace.clone()).await?);
                 }
