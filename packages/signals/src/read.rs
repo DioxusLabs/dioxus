@@ -52,7 +52,7 @@ pub trait Readable {
         Self::Target: 'static;
 
     #[deprecated(
-        since = "0.7",
+        since = "0.7.0",
         note = "Use `try_read_extended` instead. \
             If you are on Rust 2024 edition, \
             you can usually use `try_read` directly \
@@ -80,7 +80,7 @@ pub trait Readable {
         Self::Target: 'static;
 
     #[deprecated(
-        since = "0.7",
+        since = "0.7.0",
         note = "Use `try_peak_extended` instead. \
             If you are on Rust 2024 edition, \
             you can usually use `try_peak` directly \

@@ -48,7 +48,7 @@ pub trait Writable: Readable {
         Self::Target: 'static;
 
     #[deprecated(
-        since = "0.7",
+        since = "0.7.0",
         note = "Use `try_write_extended` instead. \
             If you are on Rust 2024 edition, \
             you can usually use `try_write` directly \
