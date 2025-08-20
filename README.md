@@ -179,7 +179,12 @@ We've put a ton of effort into building clean, readable, and comprehensive docum
 
 ## Modular and Customizable
 
-Build your own renderer!
+Build your own renderer, or use a community renderer like [Freya](http://freyaui.dev).
+
+
+<div align="center">
+  <img src="https://raw.githubusercontent.com/DioxusLabs/screenshots/refs/heads/main/blitz/freya-todo-example.webp">
+</div>
 
 ## Community
 
