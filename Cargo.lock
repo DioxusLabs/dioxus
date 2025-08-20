@@ -5398,6 +5398,8 @@ dependencies = [
  "dioxus-core",
  "dioxus-devtools-types",
  "dioxus-signals",
+ "futures-channel",
+ "futures-util",
  "serde",
  "serde_json",
  "subsecond",
@@ -7236,9 +7238,9 @@ checksum = "9e5c1b78ca4aae1ac06c48a526a655760685149f0d465d21f37abfe57ce075c6"
 
 [[package]]
 name = "futures-lite"
-version = "2.6.0"
+version = "2.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f5edaec856126859abb19ed65f39e90fea3a9574b9707f13539acf4abf7eb532"
+checksum = "f78e10609fe0e0b3f4157ffab1876319b5b0db102a2c60dc4626306dc46b44ad"
 dependencies = [
  "fastrand",
  "futures-core",
