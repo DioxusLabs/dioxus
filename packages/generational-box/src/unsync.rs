@@ -13,8 +13,9 @@ use std::{
 };
 
 type RefCellStorageEntryRef = Ref<'static, StorageEntry<RefCellStorageEntryData>>;
-
 type RefCellStorageEntryMut = RefMut<'static, StorageEntry<RefCellStorageEntryData>>;
+type AnyRef = Ref<'static, Box<dyn Any>>;
+type AnyRefMut = RefMut<'static, Box<dyn Any>>;
 
 thread_local! {
     static UNSYNC_RUNTIME: RefCell<Vec<&'static UnsyncStorage>> = const { RefCell::new(Vec::new()) };
@@ -54,7 +55,7 @@ pub struct UnsyncStorage {
 impl UnsyncStorage {
     pub(crate) fn read(
         pointer: GenerationalPointer<Self>,
-    ) -> BorrowResult<(Ref<'static, Box<dyn Any>>, GenerationalPointer)> {
+    ) -> BorrowResult<(AnyRef, GenerationalPointer<Self>)> {
         Self::get_split_ref(pointer).map(|(resolved, guard)| {
             (
                 Ref::map(guard, |data| match &data.data {
@@ -101,7 +102,7 @@ impl UnsyncStorage {
 
     pub(crate) fn write(
         pointer: GenerationalPointer<Self>,
-    ) -> BorrowMutResult<(RefMut<'static, Box<dyn Any>>, GenerationalPointer<Self>)> {
+    ) -> BorrowMutResult<(AnyRefMut, GenerationalPointer<Self>)> {
         Self::get_split_mut(pointer).map(|(resolved, guard)| {
             (
                 RefMut::map(guard, |data| match &mut data.data {

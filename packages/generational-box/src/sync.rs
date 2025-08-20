@@ -19,6 +19,9 @@ use crate::{
 type RwLockStorageEntryRef = RwLockReadGuard<'static, StorageEntry<RwLockStorageEntryData>>;
 type RwLockStorageEntryMut = RwLockWriteGuard<'static, StorageEntry<RwLockStorageEntryData>>;
 
+type AnyRef = MappedRwLockReadGuard<'static, Box<dyn Any + Send + Sync + 'static>>;
+type AnyRefMut = MappedRwLockWriteGuard<'static, Box<dyn Any + Send + Sync + 'static>>;
+
 pub(crate) enum RwLockStorageEntryData {
     Reference(GenerationalPointer<SyncStorage>),
     Rc(RcStorageEntry<Box<dyn Any + Send + Sync>>),
@@ -59,10 +62,7 @@ pub struct SyncStorage {
 impl SyncStorage {
     pub(crate) fn read(
         pointer: GenerationalPointer<Self>,
-    ) -> BorrowResult<(
-        MappedRwLockReadGuard<'static, Box<dyn Any + Send + Sync + 'static>>,
-        GenerationalPointer<Self>,
-    )> {
+    ) -> BorrowResult<(AnyRef, GenerationalPointer<Self>)> {
         Self::get_split_ref(pointer).map(|(resolved, guard)| {
             (
                 RwLockReadGuard::map(guard, |data| match &data.data {
@@ -105,10 +105,7 @@ impl SyncStorage {
 
     pub(crate) fn write(
         pointer: GenerationalPointer<Self>,
-    ) -> BorrowMutResult<(
-        MappedRwLockWriteGuard<'static, Box<dyn Any + Send + Sync + 'static>>,
-        GenerationalPointer<Self>,
-    )> {
+    ) -> BorrowMutResult<(AnyRefMut, GenerationalPointer<Self>)> {
         Self::get_split_mut(pointer).map(|(resolved, guard)| {
             (
                 RwLockWriteGuard::map(guard, |data| match &mut data.data {
