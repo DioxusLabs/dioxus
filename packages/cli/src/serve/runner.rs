@@ -578,13 +578,13 @@ impl AppServer {
 
             if self.client.builds_opened == 0 {
                 tracing::info!(
-                    "Build completed successfully in {GLOW_STYLE}{:?}ms{GLOW_STYLE:#}, launching app! 💫",
-                    time_taken.as_millis()
+                    "Build completed successfully in {GLOW_STYLE}{}{GLOW_STYLE:#}, launching app! 💫",
+                    humantime::format_duration(time_taken)
                 );
             } else {
                 tracing::info!(
-                    "Build completed in {GLOW_STYLE}{:?}ms{GLOW_STYLE:#}",
-                    time_taken.as_millis()
+                    "Build completed in {GLOW_STYLE}{}{GLOW_STYLE:#}",
+                    humantime::format_duration(time_taken)
                 );
             }
 
