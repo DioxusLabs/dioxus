@@ -593,7 +593,18 @@ impl BuildRequest {
             },
             None if !using_dioxus_explicitly => None,
             None => match enabled_renderers.as_slice() {
-                [] => None, // Wait until we resolve everything else first then we will resolve it from the triple
+                // Wait until we resolve everything else first then we will resolve it from the triple if there are no
+                // default renderers that are compatible with the target args
+                [] => None,
+                [(renderer, _)] if !renderer.compatible_with(&args.target, target_alias) => {
+                    // The user passed --target desktop, but the default renderer was web. Disable the web renderer and re-enable the features for the
+                    // desktop or mobile platform later
+                    features.extend(Self::rendererless_features(main_package));
+                    no_default_features = true;
+                    None
+                }
+
+                // If there is a single default renderer that is compatible with the current target, use it
                 [(renderer, feature)] => {
                     let targeting_mobile = match (&args.target, target_alias) {
                         (_, TargetAlias::Android | TargetAlias::Ios) => true,
@@ -3503,10 +3514,8 @@ impl BuildRequest {
     }
 
     fn is_wasm_or_wasi(&self) -> bool {
-        matches!(
-            self.triple.architecture,
-            target_lexicon::Architecture::Wasm32 | target_lexicon::Architecture::Wasm64
-        ) || self.triple.operating_system == target_lexicon::OperatingSystem::Wasi
+        triple_is_wasm(&self.triple)
+            || self.triple.operating_system == target_lexicon::OperatingSystem::Wasi
     }
 
     /// Does the app specify:
@@ -5063,4 +5072,11 @@ We checked the folders:
             TEAM_IDENTIFIER = mbfile.team_identifier[0],
         ))
     }
+}
+
+pub(crate) fn triple_is_wasm(triple: &Triple) -> bool {
+    matches!(
+        triple.architecture,
+        Architecture::Wasm32 | Architecture::Wasm64
+    )
 }
