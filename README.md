@@ -101,6 +101,15 @@ With one command, `dx serve` and your app is running. Edit your markup, styles, 
   <!-- <video src="https://private-user-images.githubusercontent.com/10237910/386919031-6da371d5-3340-46da-84ff-628216851ba6.mov" width="500"></video> -->
 </div>
 
+## Build Beautiful Apps
+
+Dioxus apps are styled with HTML and CSS. Use the built-in TailwindCSS support or load your favorite CSS library. Easily call into native code (bjc, JNI, Web-Sys) for a perfect native touch.
+
+<div align="center">
+  <img src="./notes/ebou.avif">
+</div>
+
+
 ## Experimental Native Renderer
 
 Render using web-sys, webview, server-side-rendering, liveview, or even with our experimental WGPU-based renderer. Embed Dioxus in Bevy, WGPU, or even run on embedded Linux!
@@ -166,6 +175,11 @@ We've put a ton of effort into building clean, readable, and comprehensive docum
 <div align="center">
   <img src="./notes/docs.avif">
 </div>
+
+
+## Modular and Customizable
+
+Build your own renderer!
 
 ## Community
 
