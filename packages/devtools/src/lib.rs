@@ -114,7 +114,7 @@ pub fn connect_at(endpoint: String, mut callback: impl FnMut(DevserverMsg) + Sen
 ///
 /// Whenever your code changes, the future is dropped and a new one is created using the new function.
 ///
-/// This is useful for using subsecond outside of dioxus, like with axum. To pass args to the underyling
+/// This is useful for using subsecond outside of dioxus, like with axum. To pass args to the underlying
 /// function, you can use the `serve_subsecond_with_args` function.
 ///
 /// ```rust, ignore
