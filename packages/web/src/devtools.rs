@@ -3,12 +3,12 @@
 //! This sets up a websocket connection to the devserver and handles messages from it.
 //! We also set up a little recursive timer that will attempt to reconnect if the connection is lost.
 
-use std::fmt::Display;
-use std::time::Duration;
-
 use dioxus_devtools::{DevserverMsg, HotReloadMsg};
 use futures_channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
 use js_sys::JsString;
+use std::fmt::Display;
+use std::time::Duration;
+use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::{closure::Closure, JsValue};
 use web_sys::{window, CloseEvent, MessageEvent, WebSocket};
@@ -21,14 +21,22 @@ const POLL_INTERVAL_SCALE_FACTOR: i32 = 2;
 const TOAST_TIMEOUT: Duration = Duration::from_secs(5);
 const TOAST_TIMEOUT_LONG: Duration = Duration::from_secs(3600); // Duration::MAX is too long for JS.
 
-pub(crate) fn init() -> UnboundedReceiver<HotReloadMsg> {
+pub(crate) fn init(config: &crate::Config) -> UnboundedReceiver<HotReloadMsg> {
     // Create the tx/rx pair that we'll use for the top-level future in the dioxus loop
     let (tx, rx) = unbounded();
 
     // Wire up the websocket to the devserver
     make_ws(tx.clone(), POLL_INTERVAL_MIN, false);
 
+    // Set up the playground
     playground(tx);
+
+    // Set up the panic hook
+    if config.panic_hook {
+        std::panic::set_hook(Box::new(|info| {
+            hook_impl(info);
+        }));
+    }
 
     rx
 }
@@ -223,7 +231,7 @@ pub(crate) fn show_toast(
     _ = js_sys::eval(&format!(
         r#"
             if (typeof {js_fn_name} !== "undefined") {{
-                window.{js_fn_name}("{header_text}", "{message}", "{level}", {as_ms});
+                window.{js_fn_name}(`{header_text}`, `{message}`, `{level}`, {as_ms});
             }}
             "#,
     ));
@@ -288,4 +296,54 @@ fn playground(tx: UnboundedSender<HotReloadMsg>) {
         .expect("event listener should be added successfully");
 
     binding.forget();
+}
+
+fn hook_impl(info: &std::panic::PanicHookInfo) {
+    #[wasm_bindgen]
+    extern "C" {
+        #[wasm_bindgen(js_namespace = console)]
+        fn error(msg: String);
+
+        type Error;
+
+        #[wasm_bindgen(constructor)]
+        fn new() -> Error;
+
+        #[wasm_bindgen(structural, method, getter)]
+        fn stack(error: &Error) -> String;
+    }
+
+    let mut msg = info.to_string();
+
+    // Add the error stack to our message.
+    //
+    // This ensures that even if the `console` implementation doesn't
+    // include stacks for `console.error`, the stack is still available
+    // for the user. Additionally, Firefox's console tries to clean up
+    // stack traces, and ruins Rust symbols in the process
+    // (https://bugzilla.mozilla.org/show_bug.cgi?id=1519569) but since
+    // it only touches the logged message's associated stack, and not
+    // the message's contents, by including the stack in the message
+    // contents we make sure it is available to the user.
+    msg.push_str("\n\nStack:\n\n");
+    let e = Error::new();
+    let stack = e.stack();
+    msg.push_str(&stack);
+
+    // Safari's devtools, on the other hand, _do_ mess with logged
+    // messages' contents, so we attempt to break their heuristics for
+    // doing that by appending some whitespace.
+    // https://github.com/rustwasm/console_error_panic_hook/issues/7
+    msg.push_str("\n\n");
+
+    // Log the panic with `console.error`!
+    error(msg.clone());
+
+    show_toast(
+        "App panicked! See console for details.",
+        &msg,
+        ToastLevel::Error,
+        TOAST_TIMEOUT_LONG,
+        false,
+    )
 }
