@@ -307,7 +307,6 @@ criterion = { version = "0.6" }
 cargo_metadata = "0.19.2"
 parking_lot = "0.12.4"
 tracing-wasm = "0.2.1"
-console_error_panic_hook = "0.1.7"
 base16 = "0.2.1"
 digest = "0.10.7"
 sha2 = "0.10.9"

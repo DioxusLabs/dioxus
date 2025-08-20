@@ -51,6 +51,9 @@ pub use hydration::*;
 /// wasm_bindgen_futures::spawn_local(app_fut);
 /// ```
 pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
+    #[cfg(all(feature = "devtools", debug_assertions))]
+    let mut hotreload_rx = devtools::init(&web_config);
+
     #[cfg(feature = "document")]
     if let Some(history) = web_config.history.clone() {
         virtual_dom.in_runtime(|| dioxus_core::ScopeId::ROOT.provide_context(history));
@@ -60,9 +63,6 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
     virtual_dom.in_runtime(document::init_document);
 
     let runtime = virtual_dom.runtime();
-
-    #[cfg(all(feature = "devtools", debug_assertions))]
-    let mut hotreload_rx = devtools::init();
 
     // If the hydrate feature is enabled, launch the client with hydration enabled
     let should_hydrate = web_config.hydrate || cfg!(feature = "hydrate");

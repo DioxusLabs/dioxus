@@ -5686,7 +5686,6 @@ dependencies = [
 name = "dioxus-logger"
 version = "0.7.0-rc.0"
 dependencies = [
- "console_error_panic_hook",
  "dioxus",
  "dioxus-cli-config",
  "tracing",
