@@ -756,6 +756,21 @@ impl BuildRequest {
             .or_else(|| cargo_config.build.target_dir.clone())
             .unwrap_or_else(|| workspace.workspace_root().join("target"));
 
+        // If the user provided a profile and wasm_split is enabled, we should check that LTO=true and debug=true
+        if args.wasm_split {
+            if let Some(profile_data) = workspace.cargo_toml.profile.custom.get(&profile) {
+                use cargo_toml::{DebugSetting, LtoSetting};
+                if matches!(profile_data.lto, Some(LtoSetting::None) | None) {
+                    tracing::warn!("wasm-split requires LTO to be enabled in the profile. \
+                        Please set `lto = true` in the `[profile.{profile}]` section of your Cargo.toml");
+                }
+                if matches!(profile_data.debug, Some(DebugSetting::None) | None) {
+                    tracing::warn!("wasm-split requires debug symbols to be enabled in the profile. \
+                        Please set `debug = true` in the `[profile.{profile}]` section of your Cargo.toml");
+                }
+            }
+        }
+
         // Set up some tempfiles so we can do some IPC between us and the linker/rustc wrapper (which is occasionally us!)
         let link_args_file = Arc::new(
             NamedTempFile::with_suffix(".txt")
@@ -4819,9 +4834,13 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         // Note that typically in release builds, you would strip debuginfo, but we actually choose to do
         // that with wasm-opt tooling instead.
         if matches!(self.bundle, BundleFormat::Web) {
-            match self.release {
-                true => args.push(r#"profile.web.opt-level="s""#.to_string()),
-                false => args.push(r#"profile.web.opt-level="1""#.to_string()),
+            if self.release {
+                args.push(format!(r#"profile.{profile}.opt-level="s""#));
+            }
+
+            if self.wasm_split {
+                args.push(format!(r#"profile.{profile}.lto=true"#));
+                args.push(format!(r#"profile.{profile}.debug=true"#));
             }
         }
 
