@@ -5,11 +5,11 @@ use dioxus_html::{
     point_interaction::{
         InteractionElementOffset, InteractionLocation, ModifiersInteraction, PointerInteraction,
     },
-    AnimationData, ClipboardData, CompositionData, DragData, FocusData, FormData, FormValue,
-    HasFileData, HasFocusData, HasFormData, HasKeyboardData, HasMouseData, HtmlEventConverter,
-    ImageData, KeyboardData, MediaData, MountedData, MouseData, PlatformEventData, PointerData,
-    ResizeData, ScrollData, SelectionData, ToggleData, TouchData, TransitionData, VisibleData,
-    WheelData,
+    AnimationData, CancelData, ClipboardData, CompositionData, DragData, FocusData, FormData,
+    FormValue, HasFileData, HasFocusData, HasFormData, HasKeyboardData, HasMouseData,
+    HtmlEventConverter, ImageData, KeyboardData, MediaData, MountedData, MouseData,
+    PlatformEventData, PointerData, ResizeData, ScrollData, SelectionData, ToggleData, TouchData,
+    TransitionData, VisibleData, WheelData,
 };
 use keyboard_types::{Code, Key, Location, Modifiers};
 use std::any::Any;
@@ -18,6 +18,10 @@ use std::collections::HashMap;
 pub struct NativeConverter {}
 
 impl HtmlEventConverter for NativeConverter {
+    fn convert_cancel_data(&self, _event: &PlatformEventData) -> CancelData {
+        todo!("todo: convert_cancel_data in dioxus-native. requires support in blitz")
+    }
+
     fn convert_form_data(&self, event: &PlatformEventData) -> FormData {
         event.downcast::<NativeFormData>().unwrap().clone().into()
     }
