@@ -6,6 +6,12 @@ pub struct ClipboardData {
     inner: Box<dyn HasClipboardData>,
 }
 
+impl Default for ClipboardData {
+    fn default() -> Self {
+        Self::new(crate::events::empty::EmptyEvent)
+    }
+}
+
 impl<E: HasClipboardData> From<E> for ClipboardData {
     fn from(e: E) -> Self {
         Self { inner: Box::new(e) }

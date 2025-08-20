@@ -9,6 +9,12 @@ pub struct TouchData {
     inner: Box<dyn HasTouchData>,
 }
 
+impl Default for TouchData {
+    fn default() -> Self {
+        Self::new(crate::events::empty::EmptyEvent)
+    }
+}
+
 impl<E: HasTouchData> From<E> for TouchData {
     fn from(e: E) -> Self {
         Self { inner: Box::new(e) }

@@ -14,6 +14,18 @@ export function serializeEvent(
   event: Event,
   target: EventTarget
 ): SerializedEvent {
+  if ((event as any).altKey === undefined) {
+    (event as any).altKey = false;
+  }
+  if ((event as any).ctrlKey === undefined) {
+    (event as any).ctrlKey = false;
+  }
+  if ((event as any).metaKey === undefined) {
+    (event as any).metaKey = false;
+  }
+  if ((event as any).shiftKey === undefined) {
+    (event as any).shiftKey = false;
+  }
   let contents = {};
 
   // merge the object into the contents
@@ -218,10 +230,10 @@ function serializeWheelEvent(event: WheelEvent): SerializedEvent {
 
 function serializeTouchEvent(event: TouchEvent): SerializedEvent {
   return {
-    alt_key: event.altKey,
-    ctrl_key: event.ctrlKey,
-    meta_key: event.metaKey,
-    shift_key: event.shiftKey,
+    alt_key: event.altKey ?? false,
+    ctrl_key: event.ctrlKey ?? false,
+    meta_key: event.metaKey ?? false,
+    shift_key: event.shiftKey ?? false,
     changed_touches: serializeTouchList(event.changedTouches),
     target_touches: serializeTouchList(event.targetTouches),
     touches: serializeTouchList(event.touches),
@@ -230,18 +242,18 @@ function serializeTouchEvent(event: TouchEvent): SerializedEvent {
 
 function serializePointerEvent(event: PointerEvent): SerializedEvent {
   return {
-    alt_key: event.altKey,
+    alt_key: event.altKey ?? false,
     button: event.button,
     buttons: event.buttons,
     client_x: event.clientX,
     client_y: event.clientY,
-    ctrl_key: event.ctrlKey,
-    meta_key: event.metaKey,
+    ctrl_key: event.ctrlKey ?? false,
+    meta_key: event.metaKey ?? false,
     page_x: event.pageX,
     page_y: event.pageY,
     screen_x: event.screenX,
     screen_y: event.screenY,
-    shift_key: event.shiftKey,
+    shift_key: event.shiftKey ?? false,
     pointer_id: event.pointerId,
     width: event.width,
     height: event.height,
@@ -278,20 +290,20 @@ function serializeTouchList(touchList: TouchList) {
 
 function serializeMouseEvent(event: MouseEvent): SerializedEvent {
   return {
-    alt_key: event.altKey,
+    alt_key: event.altKey ?? false,
     button: event.button,
     buttons: event.buttons,
     client_x: event.clientX,
     client_y: event.clientY,
-    ctrl_key: event.ctrlKey,
-    meta_key: event.metaKey,
+    ctrl_key: event.ctrlKey ?? false,
+    meta_key: event.metaKey ?? false,
     offset_x: event.offsetX,
     offset_y: event.offsetY,
     page_x: event.pageX,
     page_y: event.pageY,
     screen_x: event.screenX,
     screen_y: event.screenY,
-    shift_key: event.shiftKey,
+    shift_key: event.shiftKey ?? false,
   };
 }
 
@@ -299,16 +311,16 @@ function serializeKeyboardEvent(event: KeyboardEvent): SerializedEvent {
   return {
     char_code: event.charCode,
     is_composing: event.isComposing,
-    key: event.key,
-    alt_key: event.altKey,
-    ctrl_key: event.ctrlKey,
-    meta_key: event.metaKey,
+    key: event.key ?? "Unidentified",
+    alt_key: event.altKey ?? false,
+    ctrl_key: event.ctrlKey ?? false,
+    meta_key: event.metaKey ?? false,
     key_code: event.keyCode,
-    shift_key: event.shiftKey,
+    shift_key: event.shiftKey ?? false,
     location: event.location,
     repeat: event.repeat,
     which: event.which,
-    code: event.code,
+    code: event.code ?? "Unidentified",
   };
 }
 
@@ -334,10 +346,10 @@ function serializeDragEvent(event: DragEvent): SerializedEvent {
   }
   return {
     mouse: {
-      alt_key: event.altKey,
-      ctrl_key: event.ctrlKey,
-      meta_key: event.metaKey,
-      shift_key: event.shiftKey,
+      alt_key: event.altKey ?? false,
+      ctrl_key: event.ctrlKey ?? false,
+      meta_key: event.metaKey ?? false,
+      shift_key: event.shiftKey ?? false,
       ...serializeMouseEvent(event),
     },
     files,

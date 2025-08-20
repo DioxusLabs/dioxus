@@ -19,6 +19,12 @@ pub struct KeyboardData {
     inner: Box<dyn HasKeyboardData>,
 }
 
+impl Default for KeyboardData {
+    fn default() -> Self {
+        Self::new(crate::events::empty::EmptyEvent)
+    }
+}
+
 impl<E: HasKeyboardData> From<E> for KeyboardData {
     fn from(e: E) -> Self {
         Self { inner: Box::new(e) }
@@ -105,9 +111,13 @@ pub struct SerializedKeyboardData {
     key_code: KeyCode,
     #[serde(deserialize_with = "resilient_deserialize_code")]
     code: Code,
+    #[serde(default)]
     alt_key: bool,
+    #[serde(default)]
     ctrl_key: bool,
+    #[serde(default)]
     meta_key: bool,
+    #[serde(default)]
     shift_key: bool,
     location: usize,
     repeat: bool,

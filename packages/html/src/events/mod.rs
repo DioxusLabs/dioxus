@@ -275,6 +275,210 @@ impl From<&PlatformEventData> for WheelData {
     }
 }
 
+pub(crate) mod empty {
+    use crate::{
+        geometry::{ClientPoint, ElementPoint, PagePoint, ScreenPoint, WheelDelta},
+        input_data::{MouseButton, MouseButtonSet},
+        keyboard_types::{Code, Key, Location, Modifiers},
+        HasDragData, HasFileData, HasFocusData, HasKeyboardData, HasMouseData, HasPointerData,
+        HasTouchData, HasWheelData, InteractionElementOffset, InteractionLocation,
+        ModifiersInteraction, PointerInteraction, TouchPoint,
+    };
+
+    #[derive(Debug, Clone, PartialEq)]
+    pub(crate) struct EmptyEvent;
+
+    impl HasDragData for EmptyEvent {
+        fn as_any(&self) -> &dyn std::any::Any {
+            self
+        }
+    }
+    impl HasFileData for EmptyEvent {
+        fn files(&self) -> Option<std::sync::Arc<dyn crate::FileEngine>> {
+            None
+        }
+    }
+    impl HasMouseData for EmptyEvent {
+        fn as_any(&self) -> &dyn std::any::Any {
+            self
+        }
+    }
+    impl HasPointerData for EmptyEvent {
+        fn pointer_id(&self) -> i32 {
+            0
+        }
+
+        fn width(&self) -> i32 {
+            0
+        }
+
+        fn height(&self) -> i32 {
+            0
+        }
+
+        fn pressure(&self) -> f32 {
+            0.0
+        }
+
+        fn tangential_pressure(&self) -> f32 {
+            0.0
+        }
+
+        fn tilt_x(&self) -> i32 {
+            0
+        }
+
+        fn tilt_y(&self) -> i32 {
+            0
+        }
+
+        fn twist(&self) -> i32 {
+            0
+        }
+
+        fn pointer_type(&self) -> String {
+            "mouse".to_string()
+        }
+
+        fn is_primary(&self) -> bool {
+            false
+        }
+
+        fn as_any(&self) -> &dyn std::any::Any {
+            self
+        }
+    }
+    impl HasTouchData for EmptyEvent {
+        fn as_any(&self) -> &dyn std::any::Any {
+            self
+        }
+
+        fn touches_changed(&self) -> Vec<TouchPoint> {
+            Vec::new()
+        }
+
+        fn target_touches(&self) -> Vec<TouchPoint> {
+            Vec::new()
+        }
+
+        fn touches(&self) -> Vec<TouchPoint> {
+            Vec::new()
+        }
+    }
+    impl HasWheelData for EmptyEvent {
+        fn delta(&self) -> WheelDelta {
+            WheelDelta::lines(0.0, 0.0, 0.0)
+        }
+
+        fn as_any(&self) -> &dyn std::any::Any {
+            self
+        }
+    }
+    impl super::animation::HasAnimationData for EmptyEvent {
+        fn animation_name(&self) -> String {
+            String::new()
+        }
+        fn pseudo_element(&self) -> String {
+            String::new()
+        }
+        fn elapsed_time(&self) -> f32 {
+            0.0
+        }
+        fn as_any(&self) -> &dyn std::any::Any {
+            self
+        }
+    }
+    impl super::clipboard::HasClipboardData for EmptyEvent {
+        fn as_any(&self) -> &dyn std::any::Any {
+            self
+        }
+    }
+    impl super::composition::HasCompositionData for EmptyEvent {
+        fn data(&self) -> String {
+            String::new()
+        }
+        fn as_any(&self) -> &dyn std::any::Any {
+            self
+        }
+    }
+    impl super::transition::HasTransitionData for EmptyEvent {
+        fn property_name(&self) -> String {
+            String::new()
+        }
+        fn pseudo_element(&self) -> String {
+            String::new()
+        }
+        fn elapsed_time(&self) -> f32 {
+            0.0
+        }
+        fn as_any(&self) -> &dyn std::any::Any {
+            self
+        }
+    }
+    impl HasKeyboardData for EmptyEvent {
+        fn key(&self) -> Key {
+            Key::Unidentified
+        }
+
+        fn code(&self) -> Code {
+            Code::Unidentified
+        }
+
+        fn location(&self) -> Location {
+            Location::Standard
+        }
+
+        fn is_auto_repeating(&self) -> bool {
+            false
+        }
+
+        fn is_composing(&self) -> bool {
+            false
+        }
+
+        fn as_any(&self) -> &dyn std::any::Any {
+            self
+        }
+    }
+    impl HasFocusData for EmptyEvent {
+        fn as_any(&self) -> &dyn std::any::Any {
+            self
+        }
+    }
+    impl InteractionLocation for EmptyEvent {
+        fn client_coordinates(&self) -> ClientPoint {
+            Default::default()
+        }
+
+        fn page_coordinates(&self) -> PagePoint {
+            Default::default()
+        }
+
+        fn screen_coordinates(&self) -> ScreenPoint {
+            Default::default()
+        }
+    }
+    impl InteractionElementOffset for EmptyEvent {
+        fn element_coordinates(&self) -> ElementPoint {
+            Default::default()
+        }
+    }
+    impl ModifiersInteraction for EmptyEvent {
+        fn modifiers(&self) -> Modifiers {
+            Modifiers::empty()
+        }
+    }
+    impl PointerInteraction for EmptyEvent {
+        fn held_buttons(&self) -> MouseButtonSet {
+            Default::default()
+        }
+
+        fn trigger_button(&self) -> Option<MouseButton> {
+            None
+        }
+    }
+}
+
 mod animation;
 mod clipboard;
 mod composition;

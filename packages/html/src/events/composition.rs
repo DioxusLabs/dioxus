@@ -14,6 +14,12 @@ impl std::fmt::Debug for CompositionData {
     }
 }
 
+impl Default for CompositionData {
+    fn default() -> Self {
+        Self::new(crate::events::empty::EmptyEvent)
+    }
+}
+
 impl<E: HasCompositionData> From<E> for CompositionData {
     fn from(e: E) -> Self {
         Self { inner: Box::new(e) }

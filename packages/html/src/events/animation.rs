@@ -36,6 +36,12 @@ impl AnimationData {
     }
 }
 
+impl Default for AnimationData {
+    fn default() -> Self {
+        Self::new(crate::events::empty::EmptyEvent)
+    }
+}
+
 impl<E: HasAnimationData> From<E> for AnimationData {
     fn from(e: E) -> Self {
         Self { inner: Box::new(e) }
