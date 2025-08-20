@@ -40,9 +40,11 @@ where
         static TASK_POOL: std::sync::OnceLock<LocalPoolHandle> = std::sync::OnceLock::new();
 
         let pool = TASK_POOL.get_or_init(|| {
-            let threads = std::thread::available_parallelism()
-                .unwrap_or(std::num::NonZeroUsize::new(1).unwrap());
-            LocalPoolHandle::new(threads.into())
+            LocalPoolHandle::new(
+                std::thread::available_parallelism()
+                    .map(usize::from)
+                    .unwrap_or(1),
+            )
         });
 
         pool.spawn_pinned(f)

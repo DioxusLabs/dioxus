@@ -101,7 +101,11 @@ async fn serve_server(
         base_path().map(|s| s.to_string()),
     );
 
-    let task_pool = LocalPoolHandle::new(5);
+    let task_pool = LocalPoolHandle::new(
+        std::thread::available_parallelism()
+            .map(usize::from)
+            .unwrap_or(1),
+    );
     let mut make_service = router.into_make_service();
 
     let listener = tokio::net::TcpListener::bind(address).await.unwrap();
