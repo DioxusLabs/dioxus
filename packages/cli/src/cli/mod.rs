@@ -9,6 +9,7 @@ pub(crate) mod doctor;
 pub(crate) mod init;
 pub(crate) mod link;
 pub(crate) mod platform_override;
+pub(crate) mod print;
 pub(crate) mod run;
 pub(crate) mod serve;
 pub(crate) mod target;
@@ -80,6 +81,12 @@ pub(crate) enum Commands {
     /// Diagnose installed tools and system configuration.
     #[clap(name = "doctor")]
     Doctor(doctor::Doctor),
+
+    /// Print project information in a structured format, like cargo args, linker args, and other
+    /// flags DX sets that might be useful in third-party tools.
+    #[clap(name = "print")]
+    #[clap(subcommand)]
+    Print(print::Print),
 
     /// Translate a source file into Dioxus code.
     #[clap(name = "translate")]

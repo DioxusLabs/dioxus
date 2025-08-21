@@ -947,13 +947,13 @@ impl BuildRequest {
         // "Thin" builds only build the final exe, so we only need to build one crate
         let crate_count = match ctx.mode {
             BuildMode::Thin { .. } => 1,
-            _ => self.get_unit_count_estimate(ctx).await,
+            _ => self.get_unit_count_estimate(&ctx.mode).await,
         };
 
         // Update the status to show that we're starting the build and how many crates we expect to build
         ctx.status_starting_build(crate_count);
 
-        let mut cmd = self.build_command(ctx)?;
+        let mut cmd = self.build_command(&ctx.mode)?;
         tracing::debug!(dx_src = ?TraceSrc::Build, "Executing cargo for {} using {}", self.bundle, self.triple);
 
         let mut child = cmd
@@ -2226,8 +2226,8 @@ impl BuildRequest {
     ///
     /// When processing the output of this command, you need to make sure to handle both cases which
     /// both have different formats (but with json output for both).
-    fn build_command(&self, ctx: &BuildContext) -> Result<Command> {
-        match &ctx.mode {
+    fn build_command(&self, build_mode: &BuildMode) -> Result<Command> {
+        match build_mode {
             // We're assembling rustc directly, so we need to be *very* careful. Cargo sets rustc's
             // env up very particularly, and we want to match it 1:1 but with some changes.
             //
@@ -2248,7 +2248,7 @@ impl BuildRequest {
                 cmd.env_remove("RUSTC_WRAPPER");
                 cmd.env_remove(DX_RUSTC_WRAPPER_ENV_VAR);
                 cmd.envs(
-                    self.cargo_build_env_vars(ctx)?
+                    self.cargo_build_env_vars(build_mode)?
                         .iter()
                         .map(|(k, v)| (k.as_ref(), v)),
                 );
@@ -2276,12 +2276,12 @@ impl BuildRequest {
             _ => {
                 let mut cmd = Command::new("cargo");
 
-                let env = self.cargo_build_env_vars(ctx)?;
-                let args = self.cargo_build_arguments(ctx);
+                let env = self.cargo_build_env_vars(build_mode)?;
+                let args = self.cargo_build_arguments(build_mode);
 
                 tracing::trace!("Building with cargo rustc");
                 for e in env.iter() {
-                    tracing::trace!(": {}={}", e.0, e.1);
+                    tracing::trace!(": {}={}", e.0, e.1.to_string_lossy());
                 }
 
                 for a in args.iter() {
@@ -2295,7 +2295,7 @@ impl BuildRequest {
                     .args(args)
                     .envs(env.iter().map(|(k, v)| (k.as_ref(), v)));
 
-                if matches!(ctx.mode, BuildMode::Fat | BuildMode::Base { run: true }) {
+                if matches!(build_mode, BuildMode::Fat | BuildMode::Base { run: true }) {
                     cmd.env(
                         DX_RUSTC_WRAPPER_ENV_VAR,
                         dunce::canonicalize(self.rustc_wrapper_args_file.path())
@@ -2319,7 +2319,7 @@ impl BuildRequest {
     /// We always use `cargo rustc` *or* `rustc` directly. This means we can pass extra flags like
     /// `-C` arguments directly to the compiler.
     #[allow(clippy::vec_init_then_push)]
-    fn cargo_build_arguments(&self, ctx: &BuildContext) -> Vec<String> {
+    pub(crate) fn cargo_build_arguments(&self, build_mode: &BuildMode) -> Vec<String> {
         let mut cargo_args = Vec::with_capacity(4);
 
         // Set the `--config profile.{profile}.{key}={value}` flags for the profile, filling in adhoc profile
@@ -2383,7 +2383,7 @@ impl BuildRequest {
 
         // dx *always* links android and thin builds
         if self.custom_linker.is_some()
-            || matches!(ctx.mode, BuildMode::Thin { .. } | BuildMode::Fat)
+            || matches!(build_mode, BuildMode::Thin { .. } | BuildMode::Fat)
         {
             cargo_args.push(format!(
                 "-Clinker={}",
@@ -2420,7 +2420,7 @@ impl BuildRequest {
         // We need save-temps and no-dead-strip in both cases though. When we run `cargo rustc` with
         // these args, they will be captured and re-ran for the fast compiles in the future, so whatever
         // we set here will be set for all future hot patches too.
-        if matches!(ctx.mode, BuildMode::Thin { .. } | BuildMode::Fat) {
+        if matches!(build_mode, BuildMode::Thin { .. } | BuildMode::Fat) {
             // rustc gives us some portable flags required:
             // - link-dead-code: prevents rust from passing -dead_strip to the linker since that's the default.
             // - save-temps=true: keeps the incremental object files around, which we need for manually linking.
@@ -2497,7 +2497,10 @@ impl BuildRequest {
         cargo_args
     }
 
-    fn cargo_build_env_vars(&self, ctx: &BuildContext) -> Result<Vec<(Cow<'static, str>, String)>> {
+    pub(crate) fn cargo_build_env_vars(
+        &self,
+        build_mode: &BuildMode,
+    ) -> Result<Vec<(Cow<'static, str>, OsString)>> {
         let mut env_vars = vec![];
 
         // Make sure to set all the crazy android flags. Cross-compiling is hard, man.
@@ -2509,10 +2512,13 @@ impl BuildRequest {
         // todo: should we even be doing this? might be better being a build.rs or something else.
         if self.release {
             if let Some(base_path) = self.base_path() {
-                env_vars.push((ASSET_ROOT_ENV.into(), base_path.to_string()));
+                env_vars.push((ASSET_ROOT_ENV.into(), base_path.to_string().into()));
             }
-            env_vars.push((APP_TITLE_ENV.into(), self.config.web.app.title.clone()));
-            env_vars.push((PRODUCT_NAME_ENV.into(), self.bundled_app_name()));
+            env_vars.push((
+                APP_TITLE_ENV.into(),
+                self.config.web.app.title.clone().into(),
+            ));
+            env_vars.push((PRODUCT_NAME_ENV.into(), self.bundled_app_name().into()));
         }
 
         // Assemble the rustflags by peering into the `.cargo/config.toml` file
@@ -2520,7 +2526,7 @@ impl BuildRequest {
 
         // Disable reference types on wasm when using hotpatching
         // https://blog.rust-lang.org/2024/09/24/webassembly-targets-change-in-default-target-features/#disabling-on-by-default-webassembly-proposals
-        if self.is_wasm_or_wasi() && matches!(ctx.mode, BuildMode::Thin { .. } | BuildMode::Fat) {
+        if self.is_wasm_or_wasi() && matches!(build_mode, BuildMode::Thin { .. } | BuildMode::Fat) {
             rust_flags.flags.push("-Ctarget-cpu=mvp".to_string());
         }
 
@@ -2530,13 +2536,14 @@ impl BuildRequest {
                 "RUSTFLAGS".into(),
                 rust_flags
                     .encode_space_separated()
-                    .context("Failed to encode RUSTFLAGS")?,
+                    .context("Failed to encode RUSTFLAGS")?
+                    .into(),
             ));
         }
 
         // If we're either zero-linking or using a custom linker, make `dx` itself do the linking.
         if self.custom_linker.is_some()
-            || matches!(ctx.mode, BuildMode::Thin { .. } | BuildMode::Fat)
+            || matches!(build_mode, BuildMode::Thin { .. } | BuildMode::Fat)
         {
             LinkAction {
                 triple: self.triple.clone(),
@@ -2563,7 +2570,7 @@ impl BuildRequest {
     /// cargo-ndk is MIT licensed.
     ///
     /// <https://github.com/bbqsrc/cargo-ndk>
-    fn android_env_vars(&self) -> Result<Vec<(Cow<'static, str>, String)>> {
+    fn android_env_vars(&self) -> Result<Vec<(Cow<'static, str>, OsString)>> {
         // Derived from getenv_with_target_prefixes in `cc` crate.
         fn cc_env(var_base: &str, triple: &str) -> (String, Option<String>) {
             #[inline]
@@ -2611,7 +2618,7 @@ impl BuildRequest {
             }) as _
         }
 
-        let mut env_vars: Vec<(Cow<'static, str>, String)> = vec![];
+        let mut env_vars: Vec<(Cow<'static, str>, OsString)> = vec![];
 
         let min_sdk_version = self.min_sdk_version_or_default();
 
@@ -2635,7 +2642,7 @@ impl BuildRequest {
 
         if let Some(java_home) = java_home {
             tracing::debug!("Setting JAVA_HOME to {java_home:?}");
-            env_vars.push(("JAVA_HOME".into(), java_home.display().to_string()));
+            env_vars.push(("JAVA_HOME".into(), java_home.into_os_string()));
         }
 
         let triple = self.triple.to_string();
@@ -2786,13 +2793,7 @@ impl BuildRequest {
             // https://github.com/KyleMayes/clang-sys?tab=readme-ov-file#environment-variables
             ("CLANG_PATH".into(), target_cc.with_extension("exe").into()),
         ] {
-            env_vars.push((
-                env.0.into(),
-                env.1
-                    .to_str()
-                    .expect("Failed to convert env var value to string")
-                    .to_string(),
-            ));
+            env_vars.push((env.0.into(), env.1));
         }
 
         if std::env::var("MSYSTEM").is_ok() || std::env::var("CYGWIN").is_ok() {
@@ -2800,7 +2801,7 @@ impl BuildRequest {
                 // Convert windows paths to unix-style paths
                 // This is a workaround for the fact that the `cc` crate expects unix-style paths
                 // and will fail if it encounters windows-style paths.
-                var.1 = var.1.replace('\\', "/");
+                var.1 = var.1.to_string_lossy().replace('\\', "/").into();
             }
         }
 
@@ -2811,9 +2812,9 @@ impl BuildRequest {
     /// will return an estimate of the number of units in the crate based on cargo metadata.
     ///
     /// TODO: always use <https://doc.rust-lang.org/nightly/cargo/reference/unstable.html#unit-graph> once it is stable
-    async fn get_unit_count_estimate(&self, ctx: &BuildContext) -> usize {
+    async fn get_unit_count_estimate(&self, build_mode: &BuildMode) -> usize {
         // Try to get it from nightly
-        if let Ok(count) = self.get_unit_count(ctx).await {
+        if let Ok(count) = self.get_unit_count(build_mode).await {
             return count;
         }
 
@@ -2833,7 +2834,7 @@ impl BuildRequest {
     /// available with the current version of rustc the user has installed.
     ///
     /// It also might not be super reliable - I think in practice it occasionally returns 2x the units.
-    async fn get_unit_count(&self, ctx: &BuildContext) -> crate::Result<usize> {
+    async fn get_unit_count(&self, build_mode: &BuildMode) -> crate::Result<usize> {
         #[derive(Debug, Deserialize)]
         struct UnitGraph {
             units: Vec<serde_json::Value>,
@@ -2845,9 +2846,9 @@ impl BuildRequest {
             .arg("--unit-graph")
             .arg("-Z")
             .arg("unstable-options")
-            .args(self.cargo_build_arguments(ctx))
+            .args(self.cargo_build_arguments(build_mode))
             .envs(
-                self.cargo_build_env_vars(ctx)?
+                self.cargo_build_env_vars(build_mode)?
                     .iter()
                     .map(|(k, v)| (k.as_ref(), v)),
             )

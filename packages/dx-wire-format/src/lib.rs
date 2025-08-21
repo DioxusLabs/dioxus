@@ -1,6 +1,6 @@
 use cargo_metadata::{diagnostic::Diagnostic, CompilerMessage};
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::{borrow::Cow, ffi::OsString, path::PathBuf};
 
 pub use cargo_metadata;
 
@@ -25,6 +25,10 @@ pub enum StructuredOutput {
     BuildsFinished {
         client: PathBuf,
         server: Option<PathBuf>,
+    },
+    PrintCargoArgs {
+        args: Vec<String>,
+        env: Vec<(Cow<'static, str>, OsString)>,
     },
     BuildFinished {
         path: PathBuf,
