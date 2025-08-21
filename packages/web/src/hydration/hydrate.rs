@@ -10,7 +10,7 @@ use dioxus_core::{
 };
 use dioxus_fullstack_protocol::HydrationContext;
 use futures_channel::mpsc::UnboundedReceiver;
-use std::fmt::Write;
+use std::{fmt::Write, iter::Peekable};
 use RehydrationError::*;
 
 use super::SuspenseMessage;
@@ -357,6 +357,7 @@ impl WebsysDom {
                 );
             }
             dioxus_core::DynamicNode::Component(comp) => {
+                tracing::info!("Rehydrating component {:?}", comp);
                 let scope = comp
                     .mounted_scope(dynamic_node_index, vnode, dom)
                     .ok_or(VNodeNotInitialized)?;
