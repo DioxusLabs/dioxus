@@ -4,7 +4,7 @@
 use base64::Engine;
 use dioxus_core::CapturedError;
 use serde::Serialize;
-use std::{cell::RefCell, fmt::Debug, io::Cursor, rc::Rc};
+use std::{cell::RefCell, io::Cursor, rc::Rc};
 
 #[cfg(feature = "web")]
 thread_local! {
@@ -69,9 +69,7 @@ impl HydrationContext {
 
     /// Extend this data with the data from another [`HydrationContext`]
     pub fn extend(&self, other: &Self) {
-        let other = other.data.borrow();
-        tracing::info!("Extending data from other context {:?}", other);
-        self.data.borrow_mut().extend(&other);
+        self.data.borrow_mut().extend(&other.data.borrow());
     }
 
     #[cfg(feature = "web")]
@@ -208,18 +206,6 @@ impl Default for HTMLData {
             #[cfg(debug_assertions)]
             debug_locations: Vec::new(),
         }
-    }
-}
-
-impl Debug for HTMLData {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut s = f.debug_struct("HTMLData");
-        s.field("cursor", &self.cursor);
-        #[cfg(debug_assertions)]
-        s.field("debug_types", &self.debug_types);
-        #[cfg(debug_assertions)]
-        s.field("debug_locations", &self.debug_locations);
-        s.finish()
     }
 }
 
