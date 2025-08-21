@@ -549,6 +549,8 @@ fn take_from_scope(context: &HydrationContext, vdom: &VirtualDom, scope: ScopeId
     }
 }
 
+// This should have the same behavior as the collect_dyn_node_range method in core
+// Find the index of the first and last dynamic node under a root index
 fn collect_dyn_node_range(
     dynamic_nodes: &mut Peekable<impl Iterator<Item = (usize, &'static [u8])>>,
     root_idx: u8,
@@ -579,14 +581,14 @@ fn take_from_vnode(context: &HydrationContext, vdom: &VirtualDom, vnode: &VNode)
     for (root_idx, node) in template.roots.iter().enumerate() {
         match node {
             TemplateNode::Element { .. } => {
+                // dioxus core runs nodes in an odd order to not mess up template order. We need to match
+                // that order here
                 let (start, end) =
                     match collect_dyn_node_range(&mut dynamic_nodes_iter, root_idx as u8) {
                         Some((a, b)) => (a, b),
-                        None => return,
+                        None => continue,
                     };
 
-                // dioxus core runs nodes in an odd order to not mess up template order. We need to match
-                // that order here
                 let reversed_iter = (start..=end).rev();
 
                 for dynamic_node_id in reversed_iter {

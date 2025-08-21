@@ -44,6 +44,10 @@ fn app() -> Element {
         }
         OnMounted {}
         DefaultServerFnCodec {}
+        // Adjacent server components that both use server functions shouldn't cause
+        // hydration issues
+        // https://github.com/DioxusLabs/dioxus/issues/4595
+        ServerFunctionWithDifferentType {}
         DocumentElements {}
         Assets {}
         WebSockets {}
@@ -69,6 +73,14 @@ fn DefaultServerFnCodec() -> Element {
     let resource = use_server_future(|| get_server_data_empty_vec(Vec::new()))?;
     let empty_vec = resource.unwrap().unwrap();
     assert!(empty_vec.is_empty());
+
+    rsx! {}
+}
+
+#[component]
+fn ServerFunctionWithDifferentType() -> Element {
+    let resource = use_server_future(|| get_server_data())?;
+    assert_eq!(resource().unwrap().unwrap(), "Hello from the server!");
 
     rsx! {}
 }
