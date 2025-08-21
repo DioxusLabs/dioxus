@@ -147,11 +147,8 @@ pub(crate) enum Renderer {
     /// Targeting the static generation platform using SSR and Dioxus-Fullstack
     Liveview,
 
-    /// Targeting the web renderer
+    /// Targeting the web-sys renderer
     Web,
-
-    /// Targetting a custom renderer
-    Custom,
 }
 
 impl Renderer {
@@ -166,12 +163,6 @@ impl Renderer {
             Renderer::Server => "server",
             Renderer::Liveview => "liveview",
             Renderer::Web => "web",
-            Self::Webview => todo!(),
-            Self::Native => todo!(),
-            Self::Server => todo!(),
-            Self::Liveview => todo!(),
-            Self::Web => todo!(),
-            Self::Custom => todo!(),
         }
     }
 
@@ -186,14 +177,35 @@ impl Renderer {
         }
     }
 
-    // pub(crate) fn default_platform(&self) -> TargetAlias {
-    //     match self {
-    //         Renderer::Webview | Renderer::Native | Renderer::Server | Renderer::Liveview => {
-    //             TargetAlias::TARGET_PLATFORM.unwrap()
-    //         }
-    //         Renderer::Web => TargetAlias::Wasm,
-    //     }
-    // }
+    pub(crate) fn default_triple(&self) -> Triple {
+        match self {
+            Self::Webview => Triple::host(),
+            Self::Native => Triple::host(),
+            Self::Server => Triple::host(),
+            Self::Liveview => Triple::host(),
+            Self::Web => "wasm32-unknown-unknown".parse().unwrap(),
+            // Self::Custom => Triple::host(),
+        }
+    }
+
+    pub(crate) fn default_bundle_format(&self) -> BundleFormat {
+        match self {
+            Self::Webview | Self::Native => {
+                if cfg!(target_os = "macos") {
+                    BundleFormat::MacOS
+                } else if cfg!(target_os = "windows") {
+                    BundleFormat::Windows
+                } else if cfg!(unix) {
+                    BundleFormat::Linux
+                } else {
+                    BundleFormat::Linux
+                }
+            }
+            Self::Server => BundleFormat::Server,
+            Self::Liveview => BundleFormat::Server,
+            Self::Web => BundleFormat::Web,
+        }
+    }
 
     pub(crate) fn from_target(triple: &Triple) -> Self {
         match triple.architecture {
@@ -244,7 +256,7 @@ impl Display for Renderer {
             Self::Server => todo!(),
             Self::Liveview => todo!(),
             Self::Web => todo!(),
-            Self::Custom => todo!(),
+            // Self::Custom => todo!(),
         })
     }
 }
@@ -288,48 +300,6 @@ pub(crate) enum BundleFormat {
     Android,
 }
 
-#[derive(Debug)]
-pub(crate) struct UnknownBundleFormatError;
-
-impl std::error::Error for UnknownBundleFormatError {}
-
-impl std::fmt::Display for UnknownBundleFormatError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Unknown bundle format")
-    }
-}
-
-impl FromStr for BundleFormat {
-    type Err = UnknownBundleFormatError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "web" => Ok(Self::Web),
-            "macos" => Ok(Self::MacOS),
-            "windows" => Ok(Self::Windows),
-            "linux" => Ok(Self::Linux),
-            "server" => Ok(Self::Server),
-            "ios" => Ok(Self::Ios),
-            "android" => Ok(Self::Android),
-            _ => Err(UnknownBundleFormatError),
-        }
-    }
-}
-
-impl Display for BundleFormat {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(match self {
-            BundleFormat::Web => "web",
-            BundleFormat::MacOS => "macos",
-            BundleFormat::Windows => "windows",
-            BundleFormat::Linux => "linux",
-            BundleFormat::Server => "server",
-            BundleFormat::Ios => "ios",
-            BundleFormat::Android => "android",
-        })
-    }
-}
-
 impl BundleFormat {
     #[cfg(target_os = "macos")]
     pub(crate) const TARGET_PLATFORM: Option<Self> = Some(Self::MacOS);
@@ -339,6 +309,18 @@ impl BundleFormat {
     pub(crate) const TARGET_PLATFORM: Option<Self> = Some(Self::Linux);
     #[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos")))]
     pub(crate) const TARGET_PLATFORM: Option<Self> = None;
+
+    pub(crate) fn host() -> Self {
+        if cfg!(target_os = "macos") {
+            Self::MacOS
+        } else if cfg!(target_os = "windows") {
+            Self::Windows
+        } else if cfg!(target_os = "linux") {
+            Self::Linux
+        } else {
+            Self::Web
+        }
+    }
 
     /// Get the name of the folder we need to generate for this platform
     ///
@@ -408,6 +390,48 @@ impl BundleFormat {
                 "failed to determine bundle format. Try setting the `--bundle` flag manually",
             ),
         }
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct UnknownBundleFormatError;
+
+impl std::error::Error for UnknownBundleFormatError {}
+
+impl std::fmt::Display for UnknownBundleFormatError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Unknown bundle format")
+    }
+}
+
+impl FromStr for BundleFormat {
+    type Err = UnknownBundleFormatError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "web" => Ok(Self::Web),
+            "macos" => Ok(Self::MacOS),
+            "windows" => Ok(Self::Windows),
+            "linux" => Ok(Self::Linux),
+            "server" => Ok(Self::Server),
+            "ios" => Ok(Self::Ios),
+            "android" => Ok(Self::Android),
+            _ => Err(UnknownBundleFormatError),
+        }
+    }
+}
+
+impl Display for BundleFormat {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            BundleFormat::Web => "web",
+            BundleFormat::MacOS => "macos",
+            BundleFormat::Windows => "windows",
+            BundleFormat::Linux => "linux",
+            BundleFormat::Server => "server",
+            BundleFormat::Ios => "ios",
+            BundleFormat::Android => "android",
+        })
     }
 }
 

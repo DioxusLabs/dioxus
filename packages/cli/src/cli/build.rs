@@ -102,6 +102,7 @@ impl CommandWithPlatformOverrides<BuildArgs> {
                     let mut args = self.shared.build_arguments.clone();
                     args.platform = crate::Platform::Server;
                     args.renderer = Some(crate::Renderer::Server);
+                    args.bundle = Some(crate::BundleFormat::Server);
                     args.target = Some(target_lexicon::Triple::host());
                     server = Some(BuildRequest::new(&args, None, workspace.clone()).await?);
                 }

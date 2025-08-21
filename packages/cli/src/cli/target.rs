@@ -115,7 +115,7 @@ pub(crate) struct TargetArgs {
     /// simulator. If the device name is passed, we will upload to that device instead.
     ///
     /// This performs a search among devices, and fuzzy matches might be found.
-    #[arg(long, default_missing_value=None, num_args=0..=1)]
+    #[arg(long, default_missing_value=Some("".into()), num_args=0..=1)]
     pub(crate) device: Option<String>,
 
     /// The base path the build will fetch assets relative to. This will override the
