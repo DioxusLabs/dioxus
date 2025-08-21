@@ -579,16 +579,12 @@ impl AppServer {
             if self.client.builds_opened == 0 {
                 tracing::info!(
                     "Build completed successfully in {GLOW_STYLE}{}{GLOW_STYLE:#}, launching app! 💫",
-                    // Format duration with millisecond precision to avoid microsecond/nanosecond noise.
-                    // See: https://github.com/chronotope/humantime/issues/35
-                    humantime::format_duration(Duration::from_millis(time_taken.as_millis() as u64))
+                    format_duration_ms(time_taken)
                 );
             } else {
                 tracing::info!(
                     "Build completed in {GLOW_STYLE}{}{GLOW_STYLE:#}",
-                    humantime::format_duration(
-                        Duration::from_millis(time_taken.as_millis() as u64)
-                    )
+                    format_duration_ms(time_taken)
                 );
             }
 
@@ -1231,4 +1227,11 @@ fn is_wsl() -> bool {
     }
 
     false
+}
+
+/// Format a Duration for human-readable output with millisecond precision.
+fn format_duration_ms(d: Duration) -> String {
+    // Format duration with millisecond precision to avoid microsecond/nanosecond noise.
+    // See: https://github.com/chronotope/humantime/issues/35
+    humantime::format_duration(Duration::from_millis(d.as_millis() as u64)).to_string()
 }
