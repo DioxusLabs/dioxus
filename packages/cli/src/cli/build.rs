@@ -68,7 +68,7 @@ impl CommandWithPlatformOverrides<BuildArgs> {
     /// ```
     ///
     /// Currently it is not possible to serve the server without the client, but this could be added in the future.
-    pub async fn into_targets(self) -> Result<BuildTargets> {
+    pub async fn into_targets(mut self) -> Result<BuildTargets> {
         let workspace = Workspace::current().await?;
 
         // do some logging to ensure dx matches the dioxus version since we're not always API compatible
@@ -78,24 +78,20 @@ impl CommandWithPlatformOverrides<BuildArgs> {
         let client_args = &self.client.as_ref().unwrap_or(&self.shared).build_arguments;
 
         // Create the client build request
-        let client = BuildRequest::new(client_args, None, workspace.clone()).await?;
+        let client = BuildRequest::new(client_args, workspace.clone()).await?;
 
         // Create the server build request if needed
-        // This happens when 1) fullstack is enabled, 2)
         let mut server = None;
         if matches!(self.shared.fullstack, Some(true))
             || client.fullstack_feature_enabled()
             || self.server.is_some()
         {
-            match self.server.as_ref() {
+            match self.server.as_mut() {
                 Some(server_args) => {
+                    // Make sure we set the client target here so @server knows to place its output into the @client target directory.
+                    server_args.build_arguments.client_target = Some(client.main_target.clone());
                     server = Some(
-                        BuildRequest::new(
-                            &server_args.build_arguments,
-                            Some(client.main_target.clone()),
-                            workspace.clone(),
-                        )
-                        .await?,
+                        BuildRequest::new(&server_args.build_arguments, workspace.clone()).await?,
                     );
                 }
                 None => {
@@ -103,7 +99,7 @@ impl CommandWithPlatformOverrides<BuildArgs> {
                     args.platform = Some(crate::Platform::Server);
                     args.renderer.renderer = Some(crate::Renderer::Server);
                     args.target = Some(target_lexicon::Triple::host());
-                    server = Some(BuildRequest::new(&args, None, workspace.clone()).await?);
+                    server = Some(BuildRequest::new(&args, workspace.clone()).await?);
                 }
             }
         }

@@ -476,11 +476,7 @@ impl BuildRequest {
     ///
     /// Note: Build requests are typically created only when the CLI is invoked or when significant
     /// changes are detected in the `Cargo.toml` (e.g., features added or removed).
-    pub(crate) async fn new(
-        args: &TargetArgs,
-        main_target: Option<String>,
-        workspace: Arc<Workspace>,
-    ) -> Result<Self> {
+    pub(crate) async fn new(args: &TargetArgs, workspace: Arc<Workspace>) -> Result<Self> {
         let crate_package = workspace.find_main_package(args.package.clone())?;
 
         let config = workspace
@@ -524,8 +520,8 @@ impl BuildRequest {
             .unwrap_or(workspace.krates[crate_package].name.clone());
 
         // Use the main_target for the client + server build if it is set, otherwise use the target name for this
-        // specific build
-        let main_target = main_target.unwrap_or(target_name.clone());
+        // specific build. This is important for @client @server syntax so we use the client's output directory for the bundle.
+        let main_target = args.client_target.clone().unwrap_or(target_name.clone());
 
         let crate_target = main_package
             .targets
@@ -1077,8 +1073,9 @@ impl BuildRequest {
 
         // Fat builds need to be linked with the fat linker. Would also like to link here for thin builds
         if matches!(ctx.mode, BuildMode::Fat) {
+            ctx.status_starting_link();
             let link_start = SystemTime::now();
-            self.run_fat_link(ctx, &exe, &direct_rustc).await?;
+            self.run_fat_link(&exe, &direct_rustc).await?;
             tracing::debug!(
                 "Fat linking completed in {}us",
                 SystemTime::now()
@@ -1828,14 +1825,7 @@ impl BuildRequest {
     ///
     /// todo: I think we can traverse our immediate dependencies and inspect their symbols, unless they `pub use` a crate
     /// todo: we should try and make this faster with memmapping
-    pub(crate) async fn run_fat_link(
-        &self,
-        ctx: &BuildContext,
-        exe: &Path,
-        rustc_args: &RustcArgs,
-    ) -> Result<()> {
-        ctx.status_starting_link();
-
+    pub(crate) async fn run_fat_link(&self, exe: &Path, rustc_args: &RustcArgs) -> Result<()> {
         // Filter out the rlib files from the arguments
         let rlibs = rustc_args
             .link_args

@@ -112,13 +112,18 @@ pub(crate) struct TargetArgs {
     /// simulator. If the device name is passed, we will upload to that device instead.
     ///
     /// This performs a search among devices, and fuzzy matches might be found.
-    #[arg(long, default_missing_value=None, num_args=0..=1)]
+    #[arg(long, default_missing_value=None, num_args=0..=1, help_heading = HELP_HEADING)]
     pub(crate) device: Option<String>,
 
     /// The base path the build will fetch assets relative to. This will override the
     /// base path set in the `dioxus` config.
     #[clap(long, help_heading = HELP_HEADING)]
     pub(crate) base_path: Option<String>,
+
+    /// The target for the client build, used for specifying which target the server should end up in
+    /// when merging `@client and @server` targets together.
+    #[clap(long, help_heading = HELP_HEADING)]
+    pub(crate) client_target: Option<String>,
 
     /// Should dx attempt to codesign the app bundle?
     #[clap(long, default_value_t = false, help_heading = HELP_HEADING, num_args = 0..=1)]
