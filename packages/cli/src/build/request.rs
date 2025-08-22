@@ -719,7 +719,7 @@ impl BuildRequest {
                 bundle_format = bundle_format.or(Some(BundleFormat::Ios));
                 no_default_features = true;
                 match device.is_some() {
-                    // If targetting device, we want to build for the device which is always aarch64
+                    // If targeting device, we want to build for the device which is always aarch64
                     true => triple = triple.or(Some("aarch64-apple-ios".parse()?)),
 
                     // If the host is aarch64, we assume the user wants to build for iOS simulator
