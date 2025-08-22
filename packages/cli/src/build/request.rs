@@ -606,8 +606,6 @@ impl BuildRequest {
         let mut bundle_format = args.bundle;
         let mut platform = args.platform;
 
-        tracing::info!(features = ?features, no_default_features = no_default_features, triple = ?triple, renderer = ?renderer, bundle_format = ?bundle_format, platform = ?platform);
-
         // the crate might be selecting renderers but the user also passes a renderer. this is weird
         // ie dioxus = { features = ["web"] } but also --platform desktop
         // anyways, we collect it here in the event we need it if platform is not specified.
@@ -798,7 +796,7 @@ impl BuildRequest {
         };
 
         // The bundle format will be the bundle format passed or the host.
-        let bundle_format = if using_dioxus_explicitly {
+        let bundle = if using_dioxus_explicitly {
             bundle_format.context("Could not automatically detect bundle format")?
         } else {
             bundle_format.unwrap_or(BundleFormat::host())
@@ -819,7 +817,7 @@ impl BuildRequest {
         // We might want to move some of these profiles into dioxus.toml and make them "virtual".
         let profile = match args.profile.clone() {
             Some(profile) => profile,
-            None => bundle_format.profile_name(args.release),
+            None => bundle.profile_name(args.release),
         };
 
         // Warn if the user is trying to build with strip and using manganis
@@ -855,7 +853,7 @@ impl BuildRequest {
         let mut custom_linker = cargo_config.linker(triple.to_string()).ok().flatten();
         let mut rustflags = cargo_config2::Flags::default();
 
-        if matches!(bundle_format, BundleFormat::Android) {
+        if matches!(bundle, BundleFormat::Android) {
             rustflags.flags.extend([
                 "-Clink-arg=-landroid".to_string(),
                 "-Clink-arg=-llog".to_string(),
@@ -889,7 +887,7 @@ impl BuildRequest {
         }
 
         // If no custom linker is set, then android falls back to us as the linker
-        if custom_linker.is_none() && bundle_format == BundleFormat::Android {
+        if custom_linker.is_none() && bundle == BundleFormat::Android {
             let min_sdk_version = config.application.android_min_sdk_version.unwrap_or(28);
             custom_linker = Some(
                 workspace
@@ -934,7 +932,7 @@ impl BuildRequest {
             r#"Target Info:
                 • features: {features:?}
                 • triple: {triple}
-                • bundle format: {bundle_format:?}
+                • bundle format: {bundle:?}
                 • session cache dir: {session_cache_dir:?}
                 • linker: {custom_linker:?}
                 • target_dir: {target_dir:?}"#,
@@ -942,7 +940,7 @@ impl BuildRequest {
 
         Ok(Self {
             features,
-            bundle: bundle_format,
+            bundle,
             no_default_features,
             crate_package,
             crate_target,
