@@ -96,24 +96,6 @@ impl AssetManifest {
         serde_json::from_str(&src)
             .with_context(|| format!("Failed to parse asset manifest from {path:?}\n{src}"))
     }
-
-    /// Load the manifest from a hashmap of assets
-    ///
-    /// Note that is an "unstable" method, and we are free to change its implementation in a breaking
-    /// way between versions.
-    #[doc(hidden)]
-    pub fn from_asset_map(assets: HashMap<PathBuf, HashSet<BundledAsset>>) -> Self {
-        Self { assets }
-    }
-
-    /// Convert the manifest to a hashmap of assets, useful for serialziation.
-    ///
-    /// Note that is an "unstable" method, and we are free to change its implementation in a breaking
-    /// way between versions.
-    #[doc(hidden)]
-    pub fn to_asset_map(&self) -> HashMap<PathBuf, HashSet<BundledAsset>> {
-        self.assets.clone()
-    }
 }
 
 /// Optimize a list of assets in parallel

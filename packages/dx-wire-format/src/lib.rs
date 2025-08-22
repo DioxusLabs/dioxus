@@ -1,11 +1,6 @@
 use cargo_metadata::{diagnostic::Diagnostic, CompilerMessage};
-use manganis_core::BundledAsset;
 use serde::{Deserialize, Serialize};
-use std::{
-    borrow::Cow,
-    collections::{HashMap, HashSet},
-    path::PathBuf,
-};
+use std::{borrow::Cow, path::PathBuf};
 use subsecond_types::JumpTable;
 
 pub use cargo_metadata;
@@ -79,7 +74,6 @@ pub struct StructuredBuildArtifacts {
     pub rustc_args: Vec<String>,
     pub rustc_envs: Vec<(String, String)>,
     pub link_args: Vec<String>,
-    pub asset_map: HashMap<PathBuf, HashSet<BundledAsset>>,
 }
 
 /// The current stage of the ongoing build

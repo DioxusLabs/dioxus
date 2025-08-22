@@ -202,7 +202,6 @@ impl BuildArtifacts {
             rustc_args: self.direct_rustc.args,
             rustc_envs: self.direct_rustc.envs,
             link_args: self.direct_rustc.link_args,
-            asset_map: self.assets.to_asset_map(),
         }
     }
 }
