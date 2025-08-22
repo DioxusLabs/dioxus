@@ -8385,6 +8385,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "harness-renderer-swap"
+version = "0.0.1"
+dependencies = [
+ "dioxus",
+]
+
+[[package]]
 name = "harness-simple-dedicated-client"
 version = "0.0.1"
 dependencies = [
@@ -8404,6 +8411,20 @@ dependencies = [
 
 [[package]]
 name = "harness-simple-fullstack"
+version = "0.0.1"
+dependencies = [
+ "dioxus",
+]
+
+[[package]]
+name = "harness-simple-fullstack-native-with-default"
+version = "0.0.1"
+dependencies = [
+ "dioxus",
+]
+
+[[package]]
+name = "harness-simple-fullstack-with-default"
 version = "0.0.1"
 dependencies = [
  "dioxus",

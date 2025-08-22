@@ -56,6 +56,32 @@ async fn test_harnesses() {
                 assert_eq!(server.bundle, BundleFormat::Server);
                 assert_eq!(server.triple, Triple::host());
             }),
+        TestHarnessBuilder::new("harness-simple-fullstack-with-default")
+            .deps(r#"dioxus = { workspace = true, features = ["fullstack"] }"#)
+            .fetr(r#"default=["web", "server"]"#)
+            .fetr(r#"web=["dioxus/web"]"#)
+            .fetr(r#"server=["dioxus/server"]"#)
+            .asrt(r#"dx build"#, |targets| async move {
+                let t = targets.unwrap();
+                assert_eq!(t.client.bundle, BundleFormat::Web);
+                let server = t.server.unwrap();
+                assert_eq!(server.bundle, BundleFormat::Server);
+                assert_eq!(server.triple, Triple::host());
+            }),
+        TestHarnessBuilder::new("harness-simple-fullstack-native-with-default")
+            .deps(r#"dioxus = { workspace = true, features = ["fullstack"] }"#)
+            .fetr(r#"default=["native", "server"]"#)
+            .fetr(r#"native=["dioxus/native"]"#)
+            .fetr(r#"server=["dioxus/server"]"#)
+            .asrt(r#"dx build"#, |targets| async move {
+                let t = targets.unwrap();
+                assert_eq!(t.client.bundle, BundleFormat::host());
+                assert_eq!(t.client.features.len(), 1);
+                assert_eq!(t.client.features[0], "native");
+                let server = t.server.unwrap();
+                assert_eq!(server.bundle, BundleFormat::Server);
+                assert_eq!(server.triple, Triple::host());
+            }),
         TestHarnessBuilder::new("harness-fullstack-multi-target")
             .deps(r#"dioxus = { workspace = true, features = ["fullstack"] }"#)
             .fetr(r#"default=["web", "desktop", "mobile", "server"]"#)
@@ -156,6 +182,19 @@ async fn test_harnesses() {
                 assert_eq!(s.bundle, BundleFormat::Server);
                 assert_eq!(s.triple, "wasm32-unknown-unknown".parse().unwrap());
             }),
+        TestHarnessBuilder::new("harness-renderer-swap")
+            .deps(r#"dioxus = { workspace = true, features = ["fullstack"] }"#)
+            .fetr(r#"default=["desktop", "server"]"#)
+            .fetr(r#"desktop=["dioxus/desktop"]"#)
+            .fetr(r#"native=["dioxus/native"]"#)
+            .fetr(r#"server=["dioxus/server"]"#)
+            .asrt(r#"dx build --desktop --renderer native"#, |targets| async move {
+                let t = targets.unwrap();
+                assert_eq!(t.client.bundle, BundleFormat::host());
+                let server = t.server.unwrap();
+                assert_eq!(server.bundle, BundleFormat::Server);
+                assert_eq!(server.triple, Triple::host());
+            })
     ])
     .await;
 }
@@ -165,10 +204,6 @@ struct TestHarnessBuilder {
     name: String,
     dependencies: String,
     features: String,
-
-    server_dependencies: Option<String>,
-    server_features: Option<String>,
-
     futures: Vec<TestHarnessTestCase>,
 }
 
@@ -185,8 +220,6 @@ impl TestHarnessBuilder {
             dependencies: Default::default(),
             features: Default::default(),
             futures: Default::default(),
-            server_dependencies: Default::default(),
-            server_features: Default::default(),
         }
     }
     fn deps(mut self, dependencies: impl Into<String>) -> Self {
@@ -258,11 +291,14 @@ publish = false
         );
 
         std::fs::write(test_dir.join("Cargo.toml"), cargo_toml).unwrap();
-        std::fs::write(
-            test_dir.join("src/main.rs"),
-            r#"fn main() { println!("Hello, world!"); }"#,
-        )
-        .unwrap();
+
+        let contents = if features.contains("dioxus") {
+            r#"use dioxus::prelude::*; fn main() { dioxus::launch(|| rsx!{ "hello world!"}) }"#
+        } else {
+            r#"fn main() { println!("Hello, world!"); }"#
+        };
+
+        std::fs::write(test_dir.join("src/main.rs"), contents).unwrap();
     }
 }
 
@@ -315,5 +351,5 @@ async fn run_harnesses(harnesses: Vec<TestHarnessBuilder>) {
 
     let _workspace = Workspace::current().await.unwrap();
 
-    while let Some(res) = futures.next().await {}
+    while let Some(_res) = futures.next().await {}
 }

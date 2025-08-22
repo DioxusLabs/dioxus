@@ -604,7 +604,7 @@ impl BuildRequest {
         let mut triple = args.target.clone();
         let mut renderer = args.renderer;
         let mut bundle_format = args.bundle;
-        let mut platform = args.platform.clone();
+        let mut platform = args.platform;
 
         tracing::info!(features = ?features, no_default_features = no_default_features, triple = ?triple, renderer = ?renderer, bundle_format = ?bundle_format, platform = ?platform);
 
@@ -612,7 +612,7 @@ impl BuildRequest {
         // ie dioxus = { features = ["web"] } but also --platform desktop
         // anyways, we collect it here in the event we need it if platform is not specified.
         let dioxus_direct_renderer = Self::renderer_enabled_by_dioxus_dependency(main_package);
-        let know_features_as_renderers = Self::features_that_enable_renderers(main_package);
+        let known_features_as_renderers = Self::features_that_enable_renderers(main_package);
 
         // The crate might enable multiple platforms or no platforms at
         // We collect all the platforms it enables first and then select based on the --platform arg
@@ -637,7 +637,7 @@ impl BuildRequest {
                     }
                 })
                 .or_else(|| {
-                    let non_server_features = know_features_as_renderers
+                    let non_server_features = known_features_as_renderers
                         .iter()
                         .filter(|f| f.1.as_str() != "server")
                         .collect::<Vec<_>>();
@@ -668,6 +668,7 @@ impl BuildRequest {
                     Renderer::Liveview => platform = Platform::Liveview,
                     Renderer::Web => platform = Platform::Web,
                 }
+                renderer = renderer.or(Some(direct));
             }
         }
 
