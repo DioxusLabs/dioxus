@@ -464,7 +464,7 @@ impl AppBuilder {
             ),
             (
                 dioxus_cli_config::SESSION_CACHE_DIR.into(),
-                self.build.session_cache().display().to_string(),
+                self.build.session_cache_dir().display().to_string(),
             ),
             (dioxus_cli_config::BUILD_ID.into(), build_id.0.to_string()),
             (
@@ -1204,7 +1204,7 @@ impl AppBuilder {
         device_name_query: Option<String>,
     ) -> Result<()> {
         let apk_path = self.build.debug_apk_path();
-        let session_cache = self.build.session_cache();
+        let session_cache = self.build.session_cache_dir();
         let application_id = self.build.bundle_identifier();
         let adb = self.build.workspace.android_tools()?.adb.clone();
 

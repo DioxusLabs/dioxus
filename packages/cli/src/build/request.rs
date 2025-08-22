@@ -3163,26 +3163,26 @@ impl BuildRequest {
     }
 
     pub(crate) fn rustc_wrapper_args_file(&self) -> PathBuf {
-        self.session_cache().join("rustc_wrapper_args.txt")
+        self.session_cache_dir().join("rustc_wrapper_args.txt")
     }
 
     fn link_err_file(&self) -> PathBuf {
-        self.session_cache().join("link_err.txt")
+        self.session_cache_dir().join("link_err.txt")
     }
 
     fn link_args_file(&self) -> PathBuf {
-        self.session_cache().join("link_args.json")
+        self.session_cache_dir().join("link_args.json")
     }
 
     fn windows_command_file(&self) -> PathBuf {
-        self.session_cache().join("windows_command.txt")
+        self.session_cache_dir().join("windows_command.txt")
     }
 
     /// Get the directory where this app can write to for this session that's guaranteed to be stable
     /// for the same app. This is useful for emitting state like window position and size.
     ///
     /// The directory is specific for this app and might be
-    pub(crate) fn session_cache(&self) -> PathBuf {
+    pub(crate) fn session_cache_dir(&self) -> PathBuf {
         self.session_cache_dir.join(self.bundle.to_string())
     }
 
@@ -4237,7 +4237,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
     }
 
     fn flush_session_cache(&self) {
-        let cache_dir = self.session_cache();
+        let cache_dir = self.session_cache_dir();
         _ = std::fs::remove_dir_all(&cache_dir);
         _ = std::fs::create_dir_all(&cache_dir);
     }
