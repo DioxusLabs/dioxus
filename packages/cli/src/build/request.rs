@@ -818,6 +818,14 @@ impl BuildRequest {
     }
 
     pub(crate) async fn prebuild(&self, ctx: &BuildContext) -> Result<()> {
+        // Create the session cache directory
+        let cache_dir = self.session_cache_dir();
+        _ = std::fs::create_dir_all(&cache_dir);
+        _ = std::fs::File::create_new(self.rustc_wrapper_args_file());
+        _ = std::fs::File::create_new(self.link_err_file());
+        _ = std::fs::File::create_new(self.link_args_file());
+        _ = std::fs::File::create_new(self.windows_command_file());
+
         if !matches!(ctx.mode, BuildMode::Thin { .. }) {
             self.prepare_build_dir()?;
         }
@@ -1411,13 +1419,6 @@ impl BuildRequest {
     ) -> Result<()> {
         ctx.status_hotpatching();
 
-        // tracing::debug!(
-        //     "Original builds for patch: {}",
-        //     self.link_args_file.path().display()
-        // );
-        // let raw_args = std::fs::read_to_string(self.link_args_file.path())
-        //     .context("Failed to read link args from file")?;
-        // let args = raw_args.lines().map(|s| s.to_string()).collect::<Vec<_>>();
         let args = artifacts.direct_rustc.link_args.clone();
 
         // Extract out the incremental object files.
@@ -4117,8 +4118,6 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
                 _ = remove_dir_all(self.exe_dir());
             }
 
-            self.flush_session_cache();
-
             create_dir_all(self.root_dir())?;
             create_dir_all(self.exe_dir())?;
             create_dir_all(self.asset_dir())?;
@@ -4228,16 +4227,6 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
     /// Get the path to the asset optimizer version file
     pub(crate) fn asset_optimizer_version_file(&self) -> PathBuf {
         self.platform_dir().join(".cli-version")
-    }
-
-    fn flush_session_cache(&self) {
-        let cache_dir = self.session_cache_dir();
-        _ = std::fs::remove_dir_all(&cache_dir);
-        _ = std::fs::create_dir_all(&cache_dir);
-        _ = std::fs::File::create_new(self.rustc_wrapper_args_file());
-        _ = std::fs::File::create_new(self.link_err_file());
-        _ = std::fs::File::create_new(self.link_args_file());
-        _ = std::fs::File::create_new(self.windows_command_file());
     }
 
     /// Check for tooling that might be required for this build.

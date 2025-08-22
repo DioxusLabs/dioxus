@@ -89,7 +89,6 @@ impl AssetManifest {
             .filter(move |asset| seen.insert(asset.bundled_path()))
     }
 
-    /// Load the asset manifest from a file
     pub fn load_from_file(path: &Path) -> anyhow::Result<Self> {
         let src = std::fs::read_to_string(path)?;
 
