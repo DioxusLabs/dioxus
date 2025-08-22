@@ -348,7 +348,7 @@ use std::{
     },
     time::{SystemTime, UNIX_EPOCH},
 };
-use target_lexicon::{Architecture, Environment, OperatingSystem, Triple};
+use target_lexicon::{Architecture, OperatingSystem, Triple};
 use tempfile::TempDir;
 use tokio::{io::AsyncBufReadExt, process::Command};
 use uuid::Uuid;
@@ -917,7 +917,7 @@ impl BuildRequest {
             r#"Target Info:
                 • features: {features:?}
                 • triple: {triple}
-                • bundle format: {bundle:?}
+                • bundle format: {bundle_format:?}
                 • session cache dir: {session_cache_dir:?}
                 • linker: {custom_linker:?}
                 • target_dir: {target_dir:?}"#,
