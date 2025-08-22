@@ -2,7 +2,13 @@ use crate::{BuildTargets, BundleFormat, Cli, Commands, Workspace};
 use anyhow::Result;
 use clap::Parser;
 use futures_util::{stream::FuturesUnordered, StreamExt};
-use std::{collections::HashSet, fmt::Write, path::PathBuf, pin::Pin, prelude::rust_2024::Future};
+use std::{
+    collections::HashSet,
+    fmt::Write,
+    path::{Path, PathBuf},
+    pin::Pin,
+    prelude::rust_2024::Future,
+};
 use target_lexicon::Triple;
 use tracing_subscriber::{prelude::*, util::SubscriberInitExt, EnvFilter, Layer};
 
@@ -288,24 +294,10 @@ impl TestHarnessBuilder {
     }
 
     /// Write the test harness to the filesystem.
-    fn build(&self) {
+    fn build(&self, harness_dir: &Path) {
         let name = self.name.clone();
         let dependencies = self.dependencies.clone();
         let features = self.features.clone();
-
-        let cargo_manifest_dir = std::env::var("CARGO_MANIFEST_DIR")
-            .map(PathBuf::from)
-            .unwrap();
-
-        let harness_dir = cargo_manifest_dir.parent().unwrap().join("cli-harnesses");
-
-        // make sure we don't start deleting random stuff.
-        if !harness_dir.exists() {
-            panic!(
-                "cli-harnesses directory does not exist, aborting: {:?}",
-                harness_dir
-            );
-        }
 
         let test_dir = harness_dir.join(&name);
 
@@ -354,6 +346,28 @@ publish = false
             frozen: false,
         });
 
+        let cargo_manifest_dir = std::env::var("CARGO_MANIFEST_DIR")
+            .map(PathBuf::from)
+            .unwrap();
+
+        let harness_dir = cargo_manifest_dir.parent().unwrap().join("cli-harnesses");
+
+        // make sure we don't start deleting random stuff.
+        if !harness_dir.exists() {
+            panic!(
+                "cli-harnesses directory does not exist, aborting: {:?}",
+                harness_dir
+            );
+        }
+
+        // Erase old entries in the harness directory, but keep files (ie README.md) around
+        for entry in std::fs::read_dir(&harness_dir).unwrap() {
+            let entry = entry.unwrap();
+            if entry.file_type().unwrap().is_dir() {
+                std::fs::remove_dir_all(entry.path()).unwrap();
+            }
+        }
+
         // Now that the harnesses are written to the filesystem, we can call cargo_metadata
         // It will be cached from here
         let mut futures = FuturesUnordered::new();
@@ -364,7 +378,7 @@ publish = false
                 panic!("Duplicate test harness name found: {}", harness.name);
             }
 
-            harness.build();
+            harness.build(&harness_dir);
 
             for case in harness.futures {
                 let mut escaped = shell_words::split(&case.args).unwrap();
