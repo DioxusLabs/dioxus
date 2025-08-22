@@ -184,6 +184,10 @@ impl TraceController {
                         return Ok(());
                     }
 
+                    if field.name() == "telemetry" {
+                        return Ok(());
+                    }
+
                     write!(writer, "{}", format_field(field.name(), value))
                 })
                 .delimited(" "),
@@ -794,7 +798,7 @@ impl TraceController {
     /// The second return is a JSON object with the anonymized arguments as a structured value.
     pub(crate) fn command_anonymized(arg: &crate::Commands) -> (String, serde_json::Value) {
         use crate::cli::config::{Config, Setting};
-        use crate::BuildTools;
+        use crate::{print::Print, BuildTools};
         use cargo_generate::Vcs;
 
         match arg {
@@ -892,6 +896,11 @@ impl TraceController {
             ),
             Commands::Tools(tool) => match tool {
                 BuildTools::BuildAssets(_build_assets) => ("tools assets".to_string(), json!({})),
+                BuildTools::HotpatchTip(_hotpatch_tip) => ("tools hotpatch".to_string(), json!({})),
+            },
+            Commands::Print(print) => match print {
+                Print::ClientArgs(_args) => ("print client-args".to_string(), json!({})),
+                Print::ServerArgs(_args) => ("print server-args".to_string(), json!({})),
             },
         }
     }

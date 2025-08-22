@@ -145,6 +145,17 @@ pub(crate) struct TargetArgs {
     /// ```
     #[clap(long, help_heading = HELP_HEADING)]
     pub(crate) apple_team_id: Option<String>,
+
+    /// The folder where DX stores its temporary artifacts for things like hotpatching, build caches,
+    /// window position, etc. This is meant to be stable within an invocation of the CLI, but you can
+    /// persist it by setting this flag.
+    #[clap(long, help_heading = HELP_HEADING)]
+    pub(crate) session_cache_dir: Option<PathBuf>,
+
+    /// The target for the client build, used for specifying which target the server should end up in
+    /// when merging `@client and @server` targets together.
+    #[clap(long, help_heading = HELP_HEADING)]
+    pub(crate) client_target: Option<String>,
 }
 
 impl Anonymized for TargetArgs {

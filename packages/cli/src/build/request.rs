@@ -349,7 +349,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 use target_lexicon::{Architecture, Environment, OperatingSystem, Triple};
-use tempfile::{NamedTempFile, TempDir};
+use tempfile::TempDir;
 use tokio::{io::AsyncBufReadExt, process::Command};
 use uuid::Uuid;
 
@@ -392,15 +392,11 @@ pub(crate) struct BuildRequest {
     pub(crate) debug_symbols: bool,
     pub(crate) inject_loading_scripts: bool,
     pub(crate) custom_linker: Option<PathBuf>,
-    pub(crate) session_cache_dir: Arc<TempDir>,
-    pub(crate) link_args_file: Arc<NamedTempFile>,
-    pub(crate) link_err_file: Arc<NamedTempFile>,
-    pub(crate) rustc_wrapper_args_file: Arc<NamedTempFile>,
-    pub(crate) command_file: Arc<NamedTempFile>,
     pub(crate) base_path: Option<String>,
     pub(crate) using_dioxus_explicitly: bool,
     pub(crate) apple_entitlements: Option<PathBuf>,
     pub(crate) apple_team_id: Option<String>,
+    pub(crate) session_cache_dir: PathBuf,
 }
 
 /// dx can produce different "modes" of a build. A "regular" build is a "base" build. The Fat and Thin
@@ -447,6 +443,7 @@ pub enum BuildMode {
 /// The patch cache is only populated on fat builds and then used for thin builds (see `BuildMode::Thin`).
 #[derive(Clone, Debug)]
 pub struct BuildArtifacts {
+    pub(crate) root_dir: PathBuf,
     pub(crate) bundle: BundleFormat,
     pub(crate) exe: PathBuf,
     pub(crate) direct_rustc: RustcArgs,
@@ -476,11 +473,7 @@ impl BuildRequest {
     ///
     /// Note: Build requests are typically created only when the CLI is invoked or when significant
     /// changes are detected in the `Cargo.toml` (e.g., features added or removed).
-    pub(crate) async fn new(
-        args: &TargetArgs,
-        main_target: Option<String>,
-        workspace: Arc<Workspace>,
-    ) -> Result<Self> {
+    pub(crate) async fn new(args: &TargetArgs, workspace: Arc<Workspace>) -> Result<Self> {
         let crate_package = workspace.find_main_package(args.package.clone())?;
 
         let config = workspace
@@ -524,8 +517,8 @@ impl BuildRequest {
             .unwrap_or(workspace.krates[crate_package].name.clone());
 
         // Use the main_target for the client + server build if it is set, otherwise use the target name for this
-        // specific build
-        let main_target = main_target.unwrap_or(target_name.clone());
+        // specific build. This is important for @client @server syntax so we use the client's output directory for the bundle.
+        let main_target = args.client_target.clone().unwrap_or(target_name.clone());
 
         let crate_target = main_package
             .targets
@@ -909,25 +902,10 @@ impl BuildRequest {
             }
         }
 
-        // Set up some tempfiles so we can do some IPC between us and the linker/rustc wrapper (which is occasionally us!)
-        let link_args_file = Arc::new(
-            NamedTempFile::with_suffix(".txt")
-                .context("Failed to create temporary file for linker args")?,
-        );
-        let link_err_file = Arc::new(
-            NamedTempFile::with_suffix(".txt")
-                .context("Failed to create temporary file for linker args")?,
-        );
-        let rustc_wrapper_args_file = Arc::new(
-            NamedTempFile::with_suffix(".json")
-                .context("Failed to create temporary file for rustc wrapper args")?,
-        );
-        let session_cache_dir = Arc::new(
-            TempDir::new().context("Failed to create temporary directory for session cache")?,
-        );
-        let command_file = Arc::new(
-            NamedTempFile::new().context("Failed to create temporary file for linker args")?,
-        );
+        let session_cache_dir = args
+            .session_cache_dir
+            .clone()
+            .unwrap_or_else(|| TempDir::new().unwrap().into_path());
 
         let extra_rustc_args = shell_words::split(&args.rustc_args.clone().unwrap_or_default())
             .context("Failed to parse rustc args")?;
@@ -939,22 +917,10 @@ impl BuildRequest {
             r#"Target Info:
                 • features: {features:?}
                 • triple: {triple}
-                • bundle format: {bundle_format:?}"#
-        );
-        tracing::debug!(
-            r#"Log Files:
-                • link_args_file: {},
-                • link_err_file: {},
-                • rustc_wrapper_args_file: {},
-                • session_cache_dir: {}
-                • linker: {:?}
-                • target_dir: {:?}"#,
-            link_args_file.path().display(),
-            link_err_file.path().display(),
-            rustc_wrapper_args_file.path().display(),
-            session_cache_dir.path().display(),
-            custom_linker,
-            target_dir,
+                • bundle format: {bundle:?}
+                • session cache dir: {session_cache_dir:?}
+                • linker: {custom_linker:?}
+                • target_dir: {target_dir:?}"#,
         );
 
         Ok(Self {
@@ -970,11 +936,6 @@ impl BuildRequest {
             config,
             target_dir,
             custom_linker,
-            link_args_file,
-            link_err_file,
-            command_file,
-            session_cache_dir,
-            rustc_wrapper_args_file,
             extra_rustc_args,
             extra_cargo_args,
             release,
@@ -983,6 +944,7 @@ impl BuildRequest {
             rustflags,
             using_dioxus_explicitly,
             should_codesign,
+            session_cache_dir,
             skip_assets: args.skip_assets,
             base_path: args.base_path.clone(),
             wasm_split: args.wasm_split,
@@ -993,15 +955,45 @@ impl BuildRequest {
         })
     }
 
+    pub(crate) async fn prebuild(&self, ctx: &BuildContext) -> Result<()> {
+        // Create the session cache directory
+        let cache_dir = self.session_cache_dir();
+        _ = std::fs::create_dir_all(&cache_dir);
+        _ = std::fs::File::create_new(self.rustc_wrapper_args_file());
+        _ = std::fs::File::create_new(self.link_err_file());
+        _ = std::fs::File::create_new(self.link_args_file());
+        _ = std::fs::File::create_new(self.windows_command_file());
+
+        if !matches!(ctx.mode, BuildMode::Thin { .. }) {
+            self.prepare_build_dir()?;
+        }
+
+        if self.bundle == BundleFormat::Server {
+            return Ok(());
+        }
+
+        // Run the tailwind build before bundling anything else
+        _ = crate::TailwindCli::run_once(
+            self.package_manifest_dir(),
+            self.config.application.tailwind_input.clone(),
+            self.config.application.tailwind_output.clone(),
+        )
+        .await;
+
+        // We want to copy over the prebuilt OpenSSL binaries to ~/.dx/prebuilt/openssl-<version>
+        if self.bundle == BundleFormat::Android {
+            AndroidTools::unpack_prebuilt_openssl()?;
+        }
+
+        Ok(())
+    }
+
     pub(crate) async fn build(&self, ctx: &BuildContext) -> Result<BuildArtifacts> {
         let time_start = SystemTime::now();
 
         // If we forget to do this, then we won't get the linker args since rust skips the full build
         // We need to make sure to not react to this though, so the filemap must cache it
         _ = self.bust_fingerprint(ctx);
-
-        // Run any pre-build steps like tailwind, etc
-        self.prebuild().await?;
 
         // Run the cargo build to produce our artifacts
         let mut artifacts = self.cargo_build(ctx).await?;
@@ -1046,7 +1038,7 @@ impl BuildRequest {
 
         // Populate the patch cache if we're in fat mode
         if matches!(ctx.mode, BuildMode::Fat) {
-            artifacts.patch_cache = Some(Arc::new(self.create_patch_cache(&artifacts.exe).await?));
+            artifacts.patch_cache = Some(Arc::new(self.create_patch_cache(&artifacts.exe)?));
         }
 
         // Calculate some final metadata for logging
@@ -1085,13 +1077,13 @@ impl BuildRequest {
         // "Thin" builds only build the final exe, so we only need to build one crate
         let crate_count = match ctx.mode {
             BuildMode::Thin { .. } => 1,
-            _ => self.get_unit_count_estimate(ctx).await,
+            _ => self.get_unit_count_estimate(&ctx.mode).await,
         };
 
         // Update the status to show that we're starting the build and how many crates we expect to build
         ctx.status_starting_build(crate_count);
 
-        let mut cmd = self.build_command(ctx)?;
+        let mut cmd = self.build_command(&ctx.mode)?;
         tracing::debug!(dx_src = ?TraceSrc::Build, "Executing cargo for {} using {}", self.bundle, self.triple);
 
         let mut child = cmd
@@ -1187,14 +1179,14 @@ impl BuildRequest {
 
         // Accumulate the rustc args from the wrapper, if they exist and can be parsed.
         let mut direct_rustc = RustcArgs::default();
-        if let Ok(res) = std::fs::read_to_string(self.rustc_wrapper_args_file.path()) {
+        if let Ok(res) = std::fs::read_to_string(self.rustc_wrapper_args_file()) {
             if let Ok(res) = serde_json::from_str(&res) {
                 direct_rustc = res;
             }
         }
 
         // If there's any warnings from the linker, we should print them out
-        if let Ok(linker_warnings) = std::fs::read_to_string(self.link_err_file.path()) {
+        if let Ok(linker_warnings) = std::fs::read_to_string(self.link_err_file()) {
             if !linker_warnings.is_empty() {
                 if output_location.is_none() {
                     tracing::error!("Linker warnings: {}", linker_warnings);
@@ -1205,7 +1197,7 @@ impl BuildRequest {
         }
 
         // Collect the linker args from the and update the rustc args
-        direct_rustc.link_args = std::fs::read_to_string(self.link_args_file.path())
+        direct_rustc.link_args = std::fs::read_to_string(self.link_args_file())
             .context("Failed to read link args from file")?
             .lines()
             .map(|s| s.to_string())
@@ -1215,8 +1207,9 @@ impl BuildRequest {
 
         // Fat builds need to be linked with the fat linker. Would also like to link here for thin builds
         if matches!(ctx.mode, BuildMode::Fat) {
+            ctx.status_starting_link();
             let link_start = SystemTime::now();
-            self.run_fat_link(ctx, &exe, &direct_rustc).await?;
+            self.run_fat_link(&exe, &direct_rustc).await?;
             tracing::debug!(
                 "Fat linking completed in {}us",
                 SystemTime::now()
@@ -1247,6 +1240,7 @@ impl BuildRequest {
             assets,
             mode,
             depinfo,
+            root_dir: self.root_dir(),
             patch_cache: None,
         })
     }
@@ -1563,13 +1557,7 @@ impl BuildRequest {
     ) -> Result<()> {
         ctx.status_hotpatching();
 
-        tracing::debug!(
-            "Original builds for patch: {}",
-            self.link_args_file.path().display()
-        );
-        let raw_args = std::fs::read_to_string(self.link_args_file.path())
-            .context("Failed to read link args from file")?;
-        let args = raw_args.lines().collect::<Vec<_>>();
+        let args = artifacts.direct_rustc.link_args.clone();
 
         // Extract out the incremental object files.
         //
@@ -1689,9 +1677,9 @@ impl BuildRequest {
                 .iter()
                 .map(|s| format!("\"{}\"", s.to_string_lossy()))
                 .join(" ");
-            std::fs::write(self.command_file.path(), cmd_contents)
+            std::fs::write(self.windows_command_file(), cmd_contents)
                 .context("Failed to write linker command file")?;
-            out_args = vec![format!("@{}", self.command_file.path().display()).into()];
+            out_args = vec![format!("@{}", self.windows_command_file().display()).into()];
         }
 
         // Run the linker directly!
@@ -1727,7 +1715,7 @@ impl BuildRequest {
         // Fortunately, this binary exists in two places - the deps dir and the target out dir. We
         // can just remove the one in the deps dir and the problem goes away.
         if let Some(idx) = args.iter().position(|arg| *arg == "-o") {
-            _ = std::fs::remove_file(PathBuf::from(args[idx + 1]));
+            _ = std::fs::remove_file(PathBuf::from(args[idx + 1].as_str()));
         }
 
         // Now extract the assets from the fat binary
@@ -1752,7 +1740,7 @@ impl BuildRequest {
     ///
     /// This is basically just stripping away the rlibs and other libraries that will be satisfied
     /// by our stub step.
-    fn thin_link_args(&self, original_args: &[&str]) -> Result<Vec<String>> {
+    fn thin_link_args(&self, original_args: &[String]) -> Result<Vec<String>> {
         let mut out_args = vec![];
 
         match self.linker_flavor() {
@@ -1966,14 +1954,7 @@ impl BuildRequest {
     ///
     /// todo: I think we can traverse our immediate dependencies and inspect their symbols, unless they `pub use` a crate
     /// todo: we should try and make this faster with memmapping
-    pub(crate) async fn run_fat_link(
-        &self,
-        ctx: &BuildContext,
-        exe: &Path,
-        rustc_args: &RustcArgs,
-    ) -> Result<()> {
-        ctx.status_starting_link();
-
+    pub(crate) async fn run_fat_link(&self, exe: &Path, rustc_args: &RustcArgs) -> Result<()> {
         // Filter out the rlib files from the arguments
         let rlibs = rustc_args
             .link_args
@@ -2216,9 +2197,9 @@ impl BuildRequest {
         let mut out_args = args.clone();
         if cfg!(windows) {
             let cmd_contents: String = out_args.iter().map(|f| format!("\"{f}\"")).join(" ");
-            std::fs::write(self.command_file.path(), cmd_contents)
+            std::fs::write(self.windows_command_file(), cmd_contents)
                 .context("Failed to write linker command file")?;
-            out_args = vec![format!("@{}", self.command_file.path().display())];
+            out_args = vec![format!("@{}", self.windows_command_file().display())];
         }
 
         // Run the linker directly!
@@ -2364,8 +2345,8 @@ impl BuildRequest {
     ///
     /// When processing the output of this command, you need to make sure to handle both cases which
     /// both have different formats (but with json output for both).
-    fn build_command(&self, ctx: &BuildContext) -> Result<Command> {
-        match &ctx.mode {
+    fn build_command(&self, build_mode: &BuildMode) -> Result<Command> {
+        match build_mode {
             // We're assembling rustc directly, so we need to be *very* careful. Cargo sets rustc's
             // env up very particularly, and we want to match it 1:1 but with some changes.
             //
@@ -2386,7 +2367,7 @@ impl BuildRequest {
                 cmd.env_remove("RUSTC_WRAPPER");
                 cmd.env_remove(DX_RUSTC_WRAPPER_ENV_VAR);
                 cmd.envs(
-                    self.cargo_build_env_vars(ctx)?
+                    self.cargo_build_env_vars(build_mode)?
                         .iter()
                         .map(|(k, v)| (k.as_ref(), v)),
                 );
@@ -2414,12 +2395,12 @@ impl BuildRequest {
             _ => {
                 let mut cmd = Command::new("cargo");
 
-                let env = self.cargo_build_env_vars(ctx)?;
-                let args = self.cargo_build_arguments(ctx);
+                let env = self.cargo_build_env_vars(build_mode)?;
+                let args = self.cargo_build_arguments(build_mode);
 
                 tracing::trace!("Building with cargo rustc");
                 for e in env.iter() {
-                    tracing::trace!(": {}={}", e.0, e.1);
+                    tracing::trace!(": {}={}", e.0, e.1.to_string_lossy());
                 }
 
                 for a in args.iter() {
@@ -2433,11 +2414,11 @@ impl BuildRequest {
                     .args(args)
                     .envs(env.iter().map(|(k, v)| (k.as_ref(), v)));
 
-                if matches!(ctx.mode, BuildMode::Fat | BuildMode::Base { run: true }) {
+                if matches!(build_mode, BuildMode::Fat | BuildMode::Base { run: true }) {
                     cmd.env(
                         DX_RUSTC_WRAPPER_ENV_VAR,
-                        dunce::canonicalize(self.rustc_wrapper_args_file.path())
-                            .unwrap()
+                        dunce::canonicalize(self.rustc_wrapper_args_file())
+                            .context("Failed to canonicalize rustc wrapper args file")?
                             .display()
                             .to_string(),
                     );
@@ -2457,7 +2438,7 @@ impl BuildRequest {
     /// We always use `cargo rustc` *or* `rustc` directly. This means we can pass extra flags like
     /// `-C` arguments directly to the compiler.
     #[allow(clippy::vec_init_then_push)]
-    fn cargo_build_arguments(&self, ctx: &BuildContext) -> Vec<String> {
+    pub(crate) fn cargo_build_arguments(&self, build_mode: &BuildMode) -> Vec<String> {
         let mut cargo_args = Vec::with_capacity(4);
 
         // Set the `--config profile.{profile}.{key}={value}` flags for the profile, filling in adhoc profile
@@ -2521,7 +2502,7 @@ impl BuildRequest {
 
         // dx *always* links android and thin builds
         if self.custom_linker.is_some()
-            || matches!(ctx.mode, BuildMode::Thin { .. } | BuildMode::Fat)
+            || matches!(build_mode, BuildMode::Thin { .. } | BuildMode::Fat)
         {
             cargo_args.push(format!(
                 "-Clinker={}",
@@ -2558,7 +2539,7 @@ impl BuildRequest {
         // We need save-temps and no-dead-strip in both cases though. When we run `cargo rustc` with
         // these args, they will be captured and re-ran for the fast compiles in the future, so whatever
         // we set here will be set for all future hot patches too.
-        if matches!(ctx.mode, BuildMode::Thin { .. } | BuildMode::Fat) {
+        if matches!(build_mode, BuildMode::Thin { .. } | BuildMode::Fat) {
             // rustc gives us some portable flags required:
             // - link-dead-code: prevents rust from passing -dead_strip to the linker since that's the default.
             // - save-temps=true: keeps the incremental object files around, which we need for manually linking.
@@ -2635,7 +2616,10 @@ impl BuildRequest {
         cargo_args
     }
 
-    fn cargo_build_env_vars(&self, ctx: &BuildContext) -> Result<Vec<(Cow<'static, str>, String)>> {
+    pub(crate) fn cargo_build_env_vars(
+        &self,
+        build_mode: &BuildMode,
+    ) -> Result<Vec<(Cow<'static, str>, OsString)>> {
         let mut env_vars = vec![];
 
         // Make sure to set all the crazy android flags. Cross-compiling is hard, man.
@@ -2647,10 +2631,13 @@ impl BuildRequest {
         // todo: should we even be doing this? might be better being a build.rs or something else.
         if self.release {
             if let Some(base_path) = self.base_path() {
-                env_vars.push((ASSET_ROOT_ENV.into(), base_path.to_string()));
+                env_vars.push((ASSET_ROOT_ENV.into(), base_path.to_string().into()));
             }
-            env_vars.push((APP_TITLE_ENV.into(), self.config.web.app.title.clone()));
-            env_vars.push((PRODUCT_NAME_ENV.into(), self.bundled_app_name()));
+            env_vars.push((
+                APP_TITLE_ENV.into(),
+                self.config.web.app.title.clone().into(),
+            ));
+            env_vars.push((PRODUCT_NAME_ENV.into(), self.bundled_app_name().into()));
         }
 
         // Assemble the rustflags by peering into the `.cargo/config.toml` file
@@ -2658,7 +2645,7 @@ impl BuildRequest {
 
         // Disable reference types on wasm when using hotpatching
         // https://blog.rust-lang.org/2024/09/24/webassembly-targets-change-in-default-target-features/#disabling-on-by-default-webassembly-proposals
-        if self.is_wasm_or_wasi() && matches!(ctx.mode, BuildMode::Thin { .. } | BuildMode::Fat) {
+        if self.is_wasm_or_wasi() && matches!(build_mode, BuildMode::Thin { .. } | BuildMode::Fat) {
             rust_flags.flags.push("-Ctarget-cpu=mvp".to_string());
         }
 
@@ -2668,19 +2655,20 @@ impl BuildRequest {
                 "RUSTFLAGS".into(),
                 rust_flags
                     .encode_space_separated()
-                    .context("Failed to encode RUSTFLAGS")?,
+                    .context("Failed to encode RUSTFLAGS")?
+                    .into(),
             ));
         }
 
         // If we're either zero-linking or using a custom linker, make `dx` itself do the linking.
         if self.custom_linker.is_some()
-            || matches!(ctx.mode, BuildMode::Thin { .. } | BuildMode::Fat)
+            || matches!(build_mode, BuildMode::Thin { .. } | BuildMode::Fat)
         {
             LinkAction {
                 triple: self.triple.clone(),
                 linker: self.custom_linker.clone(),
-                link_err_file: dunce::canonicalize(self.link_err_file.path())?,
-                link_args_file: dunce::canonicalize(self.link_args_file.path())?,
+                link_err_file: dunce::canonicalize(self.link_err_file())?,
+                link_args_file: dunce::canonicalize(self.link_args_file())?,
             }
             .write_env_vars(&mut env_vars)?;
         }
@@ -2701,7 +2689,7 @@ impl BuildRequest {
     /// cargo-ndk is MIT licensed.
     ///
     /// <https://github.com/bbqsrc/cargo-ndk>
-    fn android_env_vars(&self) -> Result<Vec<(Cow<'static, str>, String)>> {
+    fn android_env_vars(&self) -> Result<Vec<(Cow<'static, str>, OsString)>> {
         // Derived from getenv_with_target_prefixes in `cc` crate.
         fn cc_env(var_base: &str, triple: &str) -> (String, Option<String>) {
             #[inline]
@@ -2749,7 +2737,7 @@ impl BuildRequest {
             }) as _
         }
 
-        let mut env_vars: Vec<(Cow<'static, str>, String)> = vec![];
+        let mut env_vars: Vec<(Cow<'static, str>, OsString)> = vec![];
 
         let min_sdk_version = self.min_sdk_version_or_default();
 
@@ -2773,7 +2761,7 @@ impl BuildRequest {
 
         if let Some(java_home) = java_home {
             tracing::debug!("Setting JAVA_HOME to {java_home:?}");
-            env_vars.push(("JAVA_HOME".into(), java_home.display().to_string()));
+            env_vars.push(("JAVA_HOME".into(), java_home.into_os_string()));
         }
 
         let triple = self.triple.to_string();
@@ -2924,13 +2912,7 @@ impl BuildRequest {
             // https://github.com/KyleMayes/clang-sys?tab=readme-ov-file#environment-variables
             ("CLANG_PATH".into(), target_cc.with_extension("exe").into()),
         ] {
-            env_vars.push((
-                env.0.into(),
-                env.1
-                    .to_str()
-                    .expect("Failed to convert env var value to string")
-                    .to_string(),
-            ));
+            env_vars.push((env.0.into(), env.1));
         }
 
         if std::env::var("MSYSTEM").is_ok() || std::env::var("CYGWIN").is_ok() {
@@ -2938,7 +2920,7 @@ impl BuildRequest {
                 // Convert windows paths to unix-style paths
                 // This is a workaround for the fact that the `cc` crate expects unix-style paths
                 // and will fail if it encounters windows-style paths.
-                var.1 = var.1.replace('\\', "/");
+                var.1 = var.1.to_string_lossy().replace('\\', "/").into();
             }
         }
 
@@ -2949,9 +2931,9 @@ impl BuildRequest {
     /// will return an estimate of the number of units in the crate based on cargo metadata.
     ///
     /// TODO: always use <https://doc.rust-lang.org/nightly/cargo/reference/unstable.html#unit-graph> once it is stable
-    async fn get_unit_count_estimate(&self, ctx: &BuildContext) -> usize {
+    async fn get_unit_count_estimate(&self, build_mode: &BuildMode) -> usize {
         // Try to get it from nightly
-        if let Ok(count) = self.get_unit_count(ctx).await {
+        if let Ok(count) = self.get_unit_count(build_mode).await {
             return count;
         }
 
@@ -2971,7 +2953,7 @@ impl BuildRequest {
     /// available with the current version of rustc the user has installed.
     ///
     /// It also might not be super reliable - I think in practice it occasionally returns 2x the units.
-    async fn get_unit_count(&self, ctx: &BuildContext) -> crate::Result<usize> {
+    async fn get_unit_count(&self, build_mode: &BuildMode) -> crate::Result<usize> {
         #[derive(Debug, Deserialize)]
         struct UnitGraph {
             units: Vec<serde_json::Value>,
@@ -2983,9 +2965,9 @@ impl BuildRequest {
             .arg("--unit-graph")
             .arg("-Z")
             .arg("unstable-options")
-            .args(self.cargo_build_arguments(ctx))
+            .args(self.cargo_build_arguments(build_mode))
             .envs(
-                self.cargo_build_env_vars(ctx)?
+                self.cargo_build_env_vars(build_mode)?
                     .iter()
                     .map(|(k, v)| (k.as_ref(), v)),
             )
@@ -3318,7 +3300,23 @@ impl BuildRequest {
     ///
     /// The directory is specific for this app and might be
     pub(crate) fn session_cache_dir(&self) -> PathBuf {
-        self.session_cache_dir.path().to_path_buf()
+        self.session_cache_dir.join(self.bundle.to_string())
+    }
+
+    pub(crate) fn rustc_wrapper_args_file(&self) -> PathBuf {
+        self.session_cache_dir().join("rustc_wrapper_args.txt")
+    }
+
+    fn link_err_file(&self) -> PathBuf {
+        self.session_cache_dir().join("link_err.txt")
+    }
+
+    fn link_args_file(&self) -> PathBuf {
+        self.session_cache_dir().join("link_args.json")
+    }
+
+    fn windows_command_file(&self) -> PathBuf {
+        self.session_cache_dir().join("windows_command.txt")
     }
 
     /// Get the outdir specified by the Dioxus.toml, relative to the crate directory.
@@ -4279,8 +4277,6 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
                 _ = remove_dir_all(self.exe_dir());
             }
 
-            self.flush_session_cache();
-
             create_dir_all(self.root_dir())?;
             create_dir_all(self.exe_dir())?;
             create_dir_all(self.asset_dir())?;
@@ -4390,12 +4386,6 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
     /// Get the path to the asset optimizer version file
     pub(crate) fn asset_optimizer_version_file(&self) -> PathBuf {
         self.platform_dir().join(".cli-version")
-    }
-
-    fn flush_session_cache(&self) {
-        let cache_dir = self.session_cache_dir();
-        _ = std::fs::remove_dir_all(&cache_dir);
-        _ = std::fs::create_dir_all(&cache_dir);
     }
 
     /// Check for tooling that might be required for this build.
@@ -4592,13 +4582,18 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         Ok(())
     }
 
-    async fn create_patch_cache(&self, exe: &Path) -> Result<HotpatchModuleCache> {
-        let exe = match self.bundle {
+    pub(crate) fn patch_cache_exe(&self, exe: &Path) -> PathBuf {
+        match self.bundle {
             BundleFormat::Web => self.wasm_bindgen_wasm_output_file(),
             _ => exe.to_path_buf(),
-        };
+        }
+    }
 
-        Ok(HotpatchModuleCache::new(&exe, &self.triple)?)
+    pub(crate) fn create_patch_cache(&self, exe: &Path) -> Result<HotpatchModuleCache> {
+        Ok(HotpatchModuleCache::new(
+            &self.patch_cache_exe(exe),
+            &self.triple,
+        )?)
     }
 
     /// Users create an index.html for their SPA if they want it
@@ -5007,27 +5002,6 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         args.into_iter()
             .flat_map(|arg| ["--config".to_string(), arg])
             .collect()
-    }
-
-    async fn prebuild(&self) -> Result<()> {
-        if self.bundle == BundleFormat::Server {
-            return Ok(());
-        }
-
-        // Run the tailwind build before bundling anything else
-        crate::TailwindCli::run_once(
-            self.package_manifest_dir(),
-            self.config.application.tailwind_input.clone(),
-            self.config.application.tailwind_output.clone(),
-        )
-        .await?;
-
-        // We want to copy over the prebuilt OpenSSL binaries to ~/.dx/prebuilt/openssl-<version>
-        if self.bundle == BundleFormat::Android {
-            AndroidTools::unpack_prebuilt_openssl()?;
-        }
-
-        Ok(())
     }
 
     pub async fn codesign_ios(&self) -> Result<()> {
