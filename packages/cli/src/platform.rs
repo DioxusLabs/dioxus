@@ -184,7 +184,6 @@ impl Renderer {
             Self::Server => Triple::host(),
             Self::Liveview => Triple::host(),
             Self::Web => "wasm32-unknown-unknown".parse().unwrap(),
-            // Self::Custom => Triple::host(),
         }
     }
 
@@ -251,12 +250,6 @@ impl Display for Renderer {
             Renderer::Server => "server",
             Renderer::Liveview => "liveview",
             Renderer::Web => "web",
-            Self::Webview => todo!(),
-            Self::Native => todo!(),
-            Self::Server => todo!(),
-            Self::Liveview => todo!(),
-            Self::Web => todo!(),
-            // Self::Custom => todo!(),
         })
     }
 }

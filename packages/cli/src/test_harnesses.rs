@@ -12,10 +12,6 @@ async fn run_harness() {
 }
 
 #[allow(dead_code)]
-pub async fn test_harnesses_used() {
-    test_harnesses().await;
-}
-
 async fn test_harnesses() {
     let env_filter = EnvFilter::new("error,dx=debug,dioxus_cli=debug,manganis_cli_support=debug,wasm_split_cli=debug,subsecond_cli_support=debug",);
     tracing_subscriber::registry()
@@ -113,6 +109,29 @@ async fn test_harnesses() {
                 assert_eq!(t.client.bundle, BundleFormat::Android);
                 assert_eq!(t.client.triple, "aarch64-linux-android".parse().unwrap());
             }),
+        TestHarnessBuilder::new("harness-fullstack-multi-target-no-default")
+            .deps(r#"dioxus = { workspace = true, features = ["fullstack"] }"#)
+            .fetr(r#"web=["dioxus/web"]"#)
+            .fetr(r#"desktop=["dioxus/desktop"]"#)
+            .fetr(r#"mobile=["dioxus/mobile"]"#)
+            .fetr(r#"server=["dioxus/server"]"#)
+            .asrt(r#"dx build"#, |targets| async move {
+                assert!(targets.is_err())
+            })
+            .asrt(r#"dx build --desktop"#, |targets| async move {
+                let t = targets.unwrap();
+                assert_eq!(t.client.bundle, BundleFormat::host());
+                let server = t.server.unwrap();
+                assert_eq!(server.bundle, BundleFormat::Server);
+                assert_eq!(server.triple, Triple::host());
+            })
+            .asrt(r#"dx build --ios"#, |targets| async move {
+                let t = targets.unwrap();
+                assert_eq!(t.client.bundle, BundleFormat::Ios);
+                let server = t.server.unwrap();
+                assert_eq!(server.bundle, BundleFormat::Server);
+                assert_eq!(server.triple, Triple::host());
+            }),
         TestHarnessBuilder::new("harness-fullstack-desktop")
             .deps(r#"dioxus = { workspace = true, features = ["fullstack"] }"#)
             .fetr(r#"desktop=["dioxus/desktop"]"#)
@@ -169,12 +188,13 @@ async fn test_harnesses() {
                 assert!(t.server.is_none());
             })
             .asrt(r#"dx build @client --package harness-simple-dedicated-client @server --package harness-simple-dedicated-server"#, |targets| async move {
-                let t = targets.unwrap();
-                assert_eq!(t.client.bundle, BundleFormat::Web);
-                let s = t.server.unwrap();
-                assert_eq!(s.bundle, BundleFormat::Server);
-                assert_eq!(s.triple, Triple::host());
-            })
+                    let t = targets.unwrap();
+                    assert_eq!(t.client.bundle, BundleFormat::Web);
+                    let s = t.server.unwrap();
+                    assert_eq!(s.bundle, BundleFormat::Server);
+                    assert_eq!(s.triple, Triple::host());
+                },
+            )
             .asrt(r#"dx build @client --package harness-simple-dedicated-client @server --package harness-simple-dedicated-server --target wasm32-unknown-unknown"#, |targets| async move {
                 let t = targets.unwrap();
                 assert_eq!(t.client.bundle, BundleFormat::Web);
@@ -188,13 +208,16 @@ async fn test_harnesses() {
             .fetr(r#"desktop=["dioxus/desktop"]"#)
             .fetr(r#"native=["dioxus/native"]"#)
             .fetr(r#"server=["dioxus/server"]"#)
-            .asrt(r#"dx build --desktop --renderer native"#, |targets| async move {
-                let t = targets.unwrap();
-                assert_eq!(t.client.bundle, BundleFormat::host());
-                let server = t.server.unwrap();
-                assert_eq!(server.bundle, BundleFormat::Server);
-                assert_eq!(server.triple, Triple::host());
-            })
+            .asrt(
+                r#"dx build --desktop --renderer native"#,
+                |targets| async move {
+                    let t = targets.unwrap();
+                    assert_eq!(t.client.bundle, BundleFormat::host());
+                    let server = t.server.unwrap();
+                    assert_eq!(server.bundle, BundleFormat::Server);
+                    assert_eq!(server.triple, Triple::host());
+                },
+            ),
     ])
     .await;
 }
