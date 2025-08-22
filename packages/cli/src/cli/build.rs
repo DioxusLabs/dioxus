@@ -202,6 +202,7 @@ impl BuildArtifacts {
             rustc_args: self.direct_rustc.args,
             rustc_envs: self.direct_rustc.envs,
             link_args: self.direct_rustc.link_args,
+            assets: self.assets.unique_assets().cloned().collect(),
         }
     }
 }

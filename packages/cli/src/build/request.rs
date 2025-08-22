@@ -818,12 +818,6 @@ impl BuildRequest {
     }
 
     pub(crate) async fn prebuild(&self, ctx: &BuildContext) -> Result<()> {
-        // Initialize the session cache temp files
-        _ = std::fs::File::create_new(self.rustc_wrapper_args_file());
-        _ = std::fs::File::create_new(self.link_err_file());
-        _ = std::fs::File::create_new(self.link_args_file());
-        _ = std::fs::File::create_new(self.windows_command_file());
-
         if !matches!(ctx.mode, BuildMode::Thin { .. }) {
             self.prepare_build_dir()?;
         }
@@ -2285,7 +2279,7 @@ impl BuildRequest {
                     cmd.env(
                         DX_RUSTC_WRAPPER_ENV_VAR,
                         dunce::canonicalize(self.rustc_wrapper_args_file())
-                            .unwrap()
+                            .context("Failed to canonicalize rustc wrapper args file")?
                             .display()
                             .to_string(),
                     );
@@ -3162,6 +3156,14 @@ impl BuildRequest {
         kotlin_dir
     }
 
+    /// Get the directory where this app can write to for this session that's guaranteed to be stable
+    /// for the same app. This is useful for emitting state like window position and size.
+    ///
+    /// The directory is specific for this app and might be
+    pub(crate) fn session_cache_dir(&self) -> PathBuf {
+        self.session_cache_dir.join(self.bundle.to_string())
+    }
+
     pub(crate) fn rustc_wrapper_args_file(&self) -> PathBuf {
         self.session_cache_dir().join("rustc_wrapper_args.txt")
     }
@@ -3176,14 +3178,6 @@ impl BuildRequest {
 
     fn windows_command_file(&self) -> PathBuf {
         self.session_cache_dir().join("windows_command.txt")
-    }
-
-    /// Get the directory where this app can write to for this session that's guaranteed to be stable
-    /// for the same app. This is useful for emitting state like window position and size.
-    ///
-    /// The directory is specific for this app and might be
-    pub(crate) fn session_cache_dir(&self) -> PathBuf {
-        self.session_cache_dir.join(self.bundle.to_string())
     }
 
     /// Get the outdir specified by the Dioxus.toml, relative to the crate directory.
@@ -4240,6 +4234,10 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         let cache_dir = self.session_cache_dir();
         _ = std::fs::remove_dir_all(&cache_dir);
         _ = std::fs::create_dir_all(&cache_dir);
+        _ = std::fs::File::create_new(self.rustc_wrapper_args_file());
+        _ = std::fs::File::create_new(self.link_err_file());
+        _ = std::fs::File::create_new(self.link_args_file());
+        _ = std::fs::File::create_new(self.windows_command_file());
     }
 
     /// Check for tooling that might be required for this build.
