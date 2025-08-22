@@ -89,11 +89,30 @@ impl AssetManifest {
             .filter(move |asset| seen.insert(asset.bundled_path()))
     }
 
+    /// Load the asset manifest from a file
     pub fn load_from_file(path: &Path) -> anyhow::Result<Self> {
         let src = std::fs::read_to_string(path)?;
 
         serde_json::from_str(&src)
             .with_context(|| format!("Failed to parse asset manifest from {path:?}\n{src}"))
+    }
+
+    /// Load the manifest from a hashmap of assets
+    ///
+    /// Note that is an "unstable" method, and we are free to change its implementation in a breaking
+    /// way between versions.
+    #[doc(hidden)]
+    pub fn from_asset_map(assets: HashMap<PathBuf, HashSet<BundledAsset>>) -> Self {
+        Self { assets }
+    }
+
+    /// Convert the manifest to a hashmap of assets, useful for serialziation.
+    ///
+    /// Note that is an "unstable" method, and we are free to change its implementation in a breaking
+    /// way between versions.
+    #[doc(hidden)]
+    pub fn to_asset_map(&self) -> HashMap<PathBuf, HashSet<BundledAsset>> {
+        self.assets.clone()
     }
 }
 

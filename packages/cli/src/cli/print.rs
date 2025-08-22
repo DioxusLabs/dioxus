@@ -66,7 +66,13 @@ impl Print {
                 let args = targets.client.cargo_build_arguments(&mode);
                 let env = targets.client.cargo_build_env_vars(&mode)?;
                 Self::print_as_unified_command(&env, &args, &opts.style);
-                Ok(StructuredOutput::PrintCargoArgs { args, env })
+                Ok(StructuredOutput::PrintCargoArgs {
+                    args,
+                    env: env
+                        .into_iter()
+                        .map(|(k, v)| (k, v.to_string_lossy().to_string()))
+                        .collect::<Vec<_>>(),
+                })
             }
             Self::ServerArgs(print_cargo_args) => {
                 let targets = print_cargo_args.args.into_targets().await?;
@@ -77,7 +83,13 @@ impl Print {
                 let args = server.cargo_build_arguments(&mode);
                 let env = server.cargo_build_env_vars(&mode)?;
                 Self::print_as_unified_command(&env, &args, &print_cargo_args.style);
-                Ok(StructuredOutput::PrintCargoArgs { args, env })
+                Ok(StructuredOutput::PrintCargoArgs {
+                    args,
+                    env: env
+                        .into_iter()
+                        .map(|(k, v)| (k, v.to_string_lossy().to_string()))
+                        .collect::<Vec<_>>(),
+                })
             }
         }
     }

@@ -349,7 +349,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 use target_lexicon::{Architecture, Environment, OperatingSystem, Triple};
-use tempfile::{NamedTempFile, TempDir};
+use tempfile::TempDir;
 use tokio::{io::AsyncBufReadExt, process::Command};
 use uuid::Uuid;
 
@@ -392,15 +392,11 @@ pub(crate) struct BuildRequest {
     pub(crate) debug_symbols: bool,
     pub(crate) inject_loading_scripts: bool,
     pub(crate) custom_linker: Option<PathBuf>,
-    pub(crate) session_cache_dir: Arc<TempDir>,
-    pub(crate) link_args_file: Arc<NamedTempFile>,
-    pub(crate) link_err_file: Arc<NamedTempFile>,
-    pub(crate) rustc_wrapper_args_file: Arc<NamedTempFile>,
-    pub(crate) command_file: Arc<NamedTempFile>,
     pub(crate) base_path: Option<String>,
     pub(crate) using_dioxus_explicitly: bool,
     pub(crate) apple_entitlements: Option<PathBuf>,
     pub(crate) apple_team_id: Option<String>,
+    pub(crate) session_cache_dir: PathBuf,
 }
 
 /// dx can produce different "modes" of a build. A "regular" build is a "base" build. The Fat and Thin
@@ -447,6 +443,7 @@ pub enum BuildMode {
 /// The patch cache is only populated on fat builds and then used for thin builds (see `BuildMode::Thin`).
 #[derive(Clone, Debug)]
 pub struct BuildArtifacts {
+    pub(crate) root_dir: PathBuf,
     pub(crate) bundle: BundleFormat,
     pub(crate) exe: PathBuf,
     pub(crate) direct_rustc: RustcArgs,
@@ -767,25 +764,10 @@ impl BuildRequest {
             }
         }
 
-        // Set up some tempfiles so we can do some IPC between us and the linker/rustc wrapper (which is occasionally us!)
-        let link_args_file = Arc::new(
-            NamedTempFile::with_suffix(".txt")
-                .context("Failed to create temporary file for linker args")?,
-        );
-        let link_err_file = Arc::new(
-            NamedTempFile::with_suffix(".txt")
-                .context("Failed to create temporary file for linker args")?,
-        );
-        let rustc_wrapper_args_file = Arc::new(
-            NamedTempFile::with_suffix(".json")
-                .context("Failed to create temporary file for rustc wrapper args")?,
-        );
-        let session_cache_dir = Arc::new(
-            TempDir::new().context("Failed to create temporary directory for session cache")?,
-        );
-        let command_file = Arc::new(
-            NamedTempFile::new().context("Failed to create temporary file for linker args")?,
-        );
+        let session_cache_dir = args
+            .session_cache_dir
+            .clone()
+            .unwrap_or_else(|| TempDir::new().unwrap().into_path());
 
         let extra_rustc_args = shell_words::split(&args.rustc_args.clone().unwrap_or_default())
             .context("Failed to parse rustc args")?;
@@ -797,22 +779,10 @@ impl BuildRequest {
             r#"Target Info:
                 • features: {features:?}
                 • triple: {triple}
-                • bundle format: {bundle:?}"#
-        );
-        tracing::debug!(
-            r#"Log Files:
-                • link_args_file: {},
-                • link_err_file: {},
-                • rustc_wrapper_args_file: {},
-                • session_cache_dir: {}
-                • linker: {:?}
-                • target_dir: {:?}"#,
-            link_args_file.path().display(),
-            link_err_file.path().display(),
-            rustc_wrapper_args_file.path().display(),
-            session_cache_dir.path().display(),
-            custom_linker,
-            target_dir,
+                • bundle format: {bundle:?}
+                • session cache dir: {session_cache_dir:?}
+                • linker: {custom_linker:?}
+                • target_dir: {target_dir:?}"#,
         );
 
         Ok(Self {
@@ -828,11 +798,6 @@ impl BuildRequest {
             config,
             target_dir,
             custom_linker,
-            link_args_file,
-            link_err_file,
-            command_file,
-            session_cache_dir,
-            rustc_wrapper_args_file,
             extra_rustc_args,
             extra_cargo_args,
             release,
@@ -841,6 +806,7 @@ impl BuildRequest {
             rustflags,
             using_dioxus_explicitly,
             should_codesign,
+            session_cache_dir,
             skip_assets: args.skip_assets,
             base_path: args.base_path.clone(),
             wasm_split: args.wasm_split,
@@ -904,7 +870,7 @@ impl BuildRequest {
 
         // Populate the patch cache if we're in fat mode
         if matches!(ctx.mode, BuildMode::Fat) {
-            artifacts.patch_cache = Some(Arc::new(self.create_patch_cache(&artifacts.exe).await?));
+            artifacts.patch_cache = Some(Arc::new(self.create_patch_cache(&artifacts.exe)?));
         }
 
         // Calculate some final metadata for logging
@@ -1045,14 +1011,14 @@ impl BuildRequest {
 
         // Accumulate the rustc args from the wrapper, if they exist and can be parsed.
         let mut direct_rustc = RustcArgs::default();
-        if let Ok(res) = std::fs::read_to_string(self.rustc_wrapper_args_file.path()) {
+        if let Ok(res) = std::fs::read_to_string(self.rustc_wrapper_args_file()) {
             if let Ok(res) = serde_json::from_str(&res) {
                 direct_rustc = res;
             }
         }
 
         // If there's any warnings from the linker, we should print them out
-        if let Ok(linker_warnings) = std::fs::read_to_string(self.link_err_file.path()) {
+        if let Ok(linker_warnings) = std::fs::read_to_string(self.link_err_file()) {
             if !linker_warnings.is_empty() {
                 if output_location.is_none() {
                     tracing::error!("Linker warnings: {}", linker_warnings);
@@ -1063,7 +1029,7 @@ impl BuildRequest {
         }
 
         // Collect the linker args from the and update the rustc args
-        direct_rustc.link_args = std::fs::read_to_string(self.link_args_file.path())
+        direct_rustc.link_args = std::fs::read_to_string(self.link_args_file())
             .context("Failed to read link args from file")?
             .lines()
             .map(|s| s.to_string())
@@ -1106,6 +1072,7 @@ impl BuildRequest {
             assets,
             mode,
             depinfo,
+            root_dir: self.root_dir(),
             patch_cache: None,
         })
     }
@@ -1422,13 +1389,14 @@ impl BuildRequest {
     ) -> Result<()> {
         ctx.status_hotpatching();
 
-        tracing::debug!(
-            "Original builds for patch: {}",
-            self.link_args_file.path().display()
-        );
-        let raw_args = std::fs::read_to_string(self.link_args_file.path())
-            .context("Failed to read link args from file")?;
-        let args = raw_args.lines().collect::<Vec<_>>();
+        // tracing::debug!(
+        //     "Original builds for patch: {}",
+        //     self.link_args_file.path().display()
+        // );
+        // let raw_args = std::fs::read_to_string(self.link_args_file.path())
+        //     .context("Failed to read link args from file")?;
+        // let args = raw_args.lines().map(|s| s.to_string()).collect::<Vec<_>>();
+        let args = artifacts.direct_rustc.link_args.clone();
 
         // Extract out the incremental object files.
         //
@@ -1548,9 +1516,9 @@ impl BuildRequest {
                 .iter()
                 .map(|s| format!("\"{}\"", s.to_string_lossy()))
                 .join(" ");
-            std::fs::write(self.command_file.path(), cmd_contents)
+            std::fs::write(self.windows_command_file(), cmd_contents)
                 .context("Failed to write linker command file")?;
-            out_args = vec![format!("@{}", self.command_file.path().display()).into()];
+            out_args = vec![format!("@{}", self.windows_command_file().display()).into()];
         }
 
         // Run the linker directly!
@@ -1586,7 +1554,7 @@ impl BuildRequest {
         // Fortunately, this binary exists in two places - the deps dir and the target out dir. We
         // can just remove the one in the deps dir and the problem goes away.
         if let Some(idx) = args.iter().position(|arg| *arg == "-o") {
-            _ = std::fs::remove_file(PathBuf::from(args[idx + 1]));
+            _ = std::fs::remove_file(PathBuf::from(args[idx + 1].as_str()));
         }
 
         // Now extract the assets from the fat binary
@@ -1611,7 +1579,7 @@ impl BuildRequest {
     ///
     /// This is basically just stripping away the rlibs and other libraries that will be satisfied
     /// by our stub step.
-    fn thin_link_args(&self, original_args: &[&str]) -> Result<Vec<String>> {
+    fn thin_link_args(&self, original_args: &[String]) -> Result<Vec<String>> {
         let mut out_args = vec![];
 
         match self.linker_flavor() {
@@ -2068,9 +2036,9 @@ impl BuildRequest {
         let mut out_args = args.clone();
         if cfg!(windows) {
             let cmd_contents: String = out_args.iter().map(|f| format!("\"{f}\"")).join(" ");
-            std::fs::write(self.command_file.path(), cmd_contents)
+            std::fs::write(self.windows_command_file(), cmd_contents)
                 .context("Failed to write linker command file")?;
-            out_args = vec![format!("@{}", self.command_file.path().display())];
+            out_args = vec![format!("@{}", self.windows_command_file().display())];
         }
 
         // Run the linker directly!
@@ -2288,7 +2256,7 @@ impl BuildRequest {
                 if matches!(build_mode, BuildMode::Fat | BuildMode::Base { run: true }) {
                     cmd.env(
                         DX_RUSTC_WRAPPER_ENV_VAR,
-                        dunce::canonicalize(self.rustc_wrapper_args_file.path())
+                        dunce::canonicalize(self.rustc_wrapper_args_file())
                             .unwrap()
                             .display()
                             .to_string(),
@@ -2538,8 +2506,8 @@ impl BuildRequest {
             LinkAction {
                 triple: self.triple.clone(),
                 linker: self.custom_linker.clone(),
-                link_err_file: dunce::canonicalize(self.link_err_file.path())?,
-                link_args_file: dunce::canonicalize(self.link_args_file.path())?,
+                link_err_file: dunce::canonicalize(self.link_err_file())?,
+                link_args_file: dunce::canonicalize(self.link_args_file())?,
             }
             .write_env_vars(&mut env_vars)?;
         }
@@ -3166,12 +3134,28 @@ impl BuildRequest {
         kotlin_dir
     }
 
+    pub(crate) fn rustc_wrapper_args_file(&self) -> PathBuf {
+        self.session_cache().join("rustc_wrapper_args.txt")
+    }
+
+    fn link_err_file(&self) -> PathBuf {
+        self.session_cache().join("link_err.txt")
+    }
+
+    fn link_args_file(&self) -> PathBuf {
+        self.session_cache().join("link_args.json")
+    }
+
+    fn windows_command_file(&self) -> PathBuf {
+        self.session_cache().join("windows_command.txt")
+    }
+
     /// Get the directory where this app can write to for this session that's guaranteed to be stable
     /// for the same app. This is useful for emitting state like window position and size.
     ///
     /// The directory is specific for this app and might be
-    pub(crate) fn session_cache_dir(&self) -> PathBuf {
-        self.session_cache_dir.path().to_path_buf()
+    pub(crate) fn session_cache(&self) -> PathBuf {
+        self.session_cache_dir.join(self.bundle.to_string())
     }
 
     /// Get the outdir specified by the Dioxus.toml, relative to the crate directory.
@@ -4225,7 +4209,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
     }
 
     fn flush_session_cache(&self) {
-        let cache_dir = self.session_cache_dir();
+        let cache_dir = self.session_cache();
         _ = std::fs::remove_dir_all(&cache_dir);
         _ = std::fs::create_dir_all(&cache_dir);
     }
@@ -4424,13 +4408,18 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         Ok(())
     }
 
-    async fn create_patch_cache(&self, exe: &Path) -> Result<HotpatchModuleCache> {
-        let exe = match self.bundle {
+    pub(crate) fn patch_cache_exe(&self, exe: &Path) -> PathBuf {
+        match self.bundle {
             BundleFormat::Web => self.wasm_bindgen_wasm_output_file(),
             _ => exe.to_path_buf(),
-        };
+        }
+    }
 
-        Ok(HotpatchModuleCache::new(&exe, &self.triple)?)
+    pub(crate) fn create_patch_cache(&self, exe: &Path) -> Result<HotpatchModuleCache> {
+        Ok(HotpatchModuleCache::new(
+            &self.patch_cache_exe(exe),
+            &self.triple,
+        )?)
     }
 
     /// Users create an index.html for their SPA if they want it
@@ -4842,6 +4831,11 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
     }
 
     async fn prebuild(&self) -> Result<()> {
+        _ = std::fs::File::create_new(self.rustc_wrapper_args_file());
+        _ = std::fs::File::create_new(self.link_err_file());
+        _ = std::fs::File::create_new(self.link_args_file());
+        _ = std::fs::File::create_new(self.windows_command_file());
+
         if self.bundle == BundleFormat::Server {
             return Ok(());
         }

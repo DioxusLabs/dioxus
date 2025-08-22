@@ -1,4 +1,8 @@
-use crate::{cli::*, Anonymized, AppBuilder, BuildMode, BuildRequest, TargetArgs, Workspace};
+use dioxus_dx_wire_format::StructuredBuildArtifacts;
+
+use crate::{
+    cli::*, Anonymized, AppBuilder, BuildArtifacts, BuildMode, BuildRequest, TargetArgs, Workspace,
+};
 
 /// Build the Rust Dioxus app and all of its assets.
 ///
@@ -20,9 +24,31 @@ pub struct BuildArgs {
     #[clap(long)]
     pub(crate) ssg: bool,
 
+    /// Force a "fat" binary, required to use `dx build-tools hotpatch`
+    #[clap(long)]
+    pub(crate) fat_binary: bool,
+
+    /// This flag only applies to fullstack builds. By default fullstack builds will run the server
+    /// and client builds in parallel. This flag will force the build to run the server build first, then the client build. [default: false]
+    ///
+    /// If CI is enabled, this will be set to true by default.
+    ///
+    #[clap(
+        long, default_missing_value = "true",
+        num_args = 0..=1,
+    )]
+    pub(crate) force_sequential: Option<bool>,
+
     /// Arguments for the build itself
     #[clap(flatten)]
     pub(crate) build_arguments: TargetArgs,
+}
+
+impl BuildArgs {
+    pub(crate) fn force_sequential_build(&self) -> bool {
+        self.force_sequential
+            .unwrap_or_else(|| std::env::var("CI").is_ok())
+    }
 }
 
 impl Anonymized for BuildArgs {
@@ -110,31 +136,73 @@ impl CommandWithPlatformOverrides<BuildArgs> {
     pub async fn build(self) -> Result<StructuredOutput> {
         tracing::info!("Building project...");
 
+        let force_sequential = self.shared.force_sequential_build();
         let ssg = self.shared.ssg;
+        let mode = match self.shared.fat_binary {
+            true => BuildMode::Fat,
+            false => BuildMode::Base { run: false },
+        };
         let targets = self.into_targets().await?;
 
-        AppBuilder::started(&targets.client, BuildMode::Base { run: false })?
-            .finish_build()
-            .await?;
+        let build_client = Self::build_client_inner(&targets.client, mode.clone());
+        let build_server = Self::build_server_inner(&targets.server, mode.clone(), ssg);
 
-        tracing::info!(path = ?targets.client.root_dir(), "Client build completed successfully! 🚀");
-
-        if let Some(server) = targets.server.as_ref() {
-            // If the server is present, we need to build it as well
-            let mut server_build = AppBuilder::started(server, BuildMode::Base { run: false })?;
-            server_build.finish_build().await?;
-
-            // Run SSG and cache static routes
-            if ssg {
-                crate::pre_render_static_routes(None, &mut server_build, None).await?;
-            }
-
-            tracing::info!(path = ?targets.client.root_dir(), "Server build completed successfully! 🚀");
-        }
+        let (client, server) = match force_sequential {
+            true => (build_client.await, build_server.await),
+            false => tokio::join!(build_client, build_server),
+        };
 
         Ok(StructuredOutput::BuildsFinished {
-            client: targets.client.root_dir(),
-            server: targets.server.map(|s| s.root_dir()),
+            client: client?.into_structured_output(),
+            server: server?.map(|s| s.into_structured_output()),
         })
+    }
+
+    pub(crate) async fn build_client_inner(
+        request: &BuildRequest,
+        mode: BuildMode,
+    ) -> Result<BuildArtifacts> {
+        AppBuilder::started(request, mode)?
+            .finish_build()
+            .await
+            .inspect(|_| {
+                tracing::info!(path = ?request.root_dir(), "Client build completed successfully! 🚀");
+            })
+    }
+
+    pub(crate) async fn build_server_inner(
+        request: &Option<BuildRequest>,
+        mode: BuildMode,
+        ssg: bool,
+    ) -> Result<Option<BuildArtifacts>> {
+        let Some(server) = request.as_ref() else {
+            return Ok(None);
+        };
+
+        // If the server is present, we need to build it as well
+        let mut server_build = AppBuilder::started(server, mode)?;
+        let server_artifacts = server_build.finish_build().await?;
+
+        // Run SSG and cache static routes
+        if ssg {
+            crate::pre_render_static_routes(None, &mut server_build, None).await?;
+        }
+
+        tracing::info!(path = ?server.root_dir(), "Server build completed successfully! 🚀");
+
+        Ok(Some(server_artifacts))
+    }
+}
+
+impl BuildArtifacts {
+    pub(crate) fn into_structured_output(self) -> StructuredBuildArtifacts {
+        StructuredBuildArtifacts {
+            path: self.root_dir,
+            exe: self.exe,
+            rustc_args: self.direct_rustc.args,
+            rustc_envs: self.direct_rustc.envs,
+            link_args: self.direct_rustc.link_args,
+            asset_map: self.assets.to_asset_map(),
+        }
     }
 }
