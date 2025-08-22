@@ -1,34 +1,10 @@
-// [package]
-// name = "dx-cli-harness-simple-web"
-// version = "0.0.1"
-// edition = "2021"
-// license = "MIT OR Apache-2.0"
-// publish = false
-
-// [dependencies]
-// dioxus = { workspace = true, features = ["web"] }
-
-// fn main() {
-//     println!("Hello, world!");
-// }
-
-use anyhow::{bail, Result};
+use crate::{BuildTargets, BundleFormat, Cli, Commands, Workspace};
+use anyhow::Result;
 use clap::Parser;
-use futures_util::{
-    stream::{futures_unordered, FuturesUnordered},
-    StreamExt,
-};
+use futures_util::{stream::FuturesUnordered, StreamExt};
 use std::{collections::HashSet, fmt::Write, path::PathBuf, pin::Pin, prelude::rust_2024::Future};
 use target_lexicon::Triple;
-use tokio::task::{JoinSet, LocalSet};
-use tracing_subscriber::{
-    prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer,
-};
-
-use crate::{
-    platform_override::CommandWithPlatformOverrides, workspace, BuildArgs, BuildTargets,
-    BundleFormat, Cli, Commands, Workspace,
-};
+use tracing_subscriber::{prelude::*, util::SubscriberInitExt, EnvFilter, Layer};
 
 #[tokio::test]
 async fn run_harness() {
@@ -158,6 +134,28 @@ async fn test_harnesses() {
                 assert_eq!(t.client.bundle, BundleFormat::host());
                 assert!(t.server.is_none());
             }),
+        TestHarnessBuilder::new("harness-simple-dedicated-server"),
+        TestHarnessBuilder::new("harness-simple-dedicated-client")
+            .deps(r#"dioxus = { workspace = true, features = ["web"] }"#)
+            .asrt(r#"dx build"#, |targets| async move {
+                let t = targets.unwrap();
+                assert_eq!(t.client.bundle, BundleFormat::Web);
+                assert!(t.server.is_none());
+            })
+            .asrt(r#"dx build @client --package harness-simple-dedicated-client @server --package harness-simple-dedicated-server"#, |targets| async move {
+                let t = targets.unwrap();
+                assert_eq!(t.client.bundle, BundleFormat::Web);
+                let s = t.server.unwrap();
+                assert_eq!(s.bundle, BundleFormat::Server);
+                assert_eq!(s.triple, Triple::host());
+            })
+            .asrt(r#"dx build @client --package harness-simple-dedicated-client @server --package harness-simple-dedicated-server --target wasm32-unknown-unknown"#, |targets| async move {
+                let t = targets.unwrap();
+                assert_eq!(t.client.bundle, BundleFormat::Web);
+                let s = t.server.unwrap();
+                assert_eq!(s.bundle, BundleFormat::Server);
+                assert_eq!(s.triple, "wasm32-unknown-unknown".parse().unwrap());
+            }),
     ])
     .await;
 }
@@ -176,6 +174,7 @@ struct TestHarnessBuilder {
 
 struct TestHarnessTestCase {
     args: String,
+    #[allow(clippy::type_complexity)]
     callback: Box<dyn FnOnce(Result<BuildTargets>) -> Pin<Box<dyn Future<Output = ()>>>>,
 }
 
@@ -288,12 +287,17 @@ async fn run_harnesses(harnesses: Vec<TestHarnessBuilder>) {
             panic!("Duplicate test harness name found: {}", harness.name);
         }
 
-        _ = harness.build();
+        harness.build();
 
         for case in harness.futures {
             let mut escaped = shell_words::split(&case.args).unwrap();
-            escaped.push("--package".to_string());
-            escaped.push(harness.name.clone());
+            if !(escaped.contains(&"--package".to_string())
+                || escaped.contains(&"@server".to_string())
+                || escaped.contains(&"@client".to_string()))
+            {
+                escaped.push("--package".to_string());
+                escaped.push(harness.name.clone());
+            }
             let args = Cli::try_parse_from(escaped).unwrap();
             let Commands::Build(build_args) = args.action else {
                 panic!("Expected build command");
@@ -308,7 +312,8 @@ async fn run_harnesses(harnesses: Vec<TestHarnessBuilder>) {
 
     // Give a moment for fs to catch up
     std::thread::sleep(std::time::Duration::from_secs(1));
-    let workspace = Workspace::current().await.unwrap();
+
+    let _workspace = Workspace::current().await.unwrap();
 
     while let Some(res) = futures.next().await {}
 }

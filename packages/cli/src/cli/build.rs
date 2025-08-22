@@ -116,6 +116,7 @@ impl CommandWithPlatformOverrides<BuildArgs> {
                 Some(server_args) => {
                     // Make sure we set the client target here so @server knows to place its output into the @client target directory.
                     server_args.build_arguments.client_target = Some(client.main_target.clone());
+                    server_args.build_arguments.platform = crate::Platform::Server;
                     server = Some(
                         BuildRequest::new(&server_args.build_arguments, workspace.clone()).await?,
                     );

@@ -8385,6 +8385,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "harness-simple-dedicated-client"
+version = "0.0.1"
+dependencies = [
+ "dioxus",
+]
+
+[[package]]
+name = "harness-simple-dedicated-server"
+version = "0.0.1"
+
+[[package]]
 name = "harness-simple-desktop"
 version = "0.0.1"
 dependencies = [
