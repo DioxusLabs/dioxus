@@ -120,11 +120,6 @@ pub(crate) struct TargetArgs {
     #[clap(long, help_heading = HELP_HEADING)]
     pub(crate) base_path: Option<String>,
 
-    /// The target for the client build, used for specifying which target the server should end up in
-    /// when merging `@client and @server` targets together.
-    #[clap(long, help_heading = HELP_HEADING)]
-    pub(crate) client_target: Option<String>,
-
     /// Should dx attempt to codesign the app bundle?
     #[clap(long, default_value_t = false, help_heading = HELP_HEADING, num_args = 0..=1)]
     pub(crate) codesign: bool,
@@ -153,6 +148,11 @@ pub(crate) struct TargetArgs {
     /// persist it by setting this flag.
     #[clap(long, help_heading = HELP_HEADING)]
     pub(crate) session_cache_dir: Option<PathBuf>,
+
+    /// The target for the client build, used for specifying which target the server should end up in
+    /// when merging `@client and @server` targets together.
+    #[clap(long, help_heading = HELP_HEADING)]
+    pub(crate) client_target: Option<String>,
 }
 
 impl Anonymized for TargetArgs {

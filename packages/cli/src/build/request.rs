@@ -833,12 +833,12 @@ impl BuildRequest {
         }
 
         // Run the tailwind build before bundling anything else
-        crate::TailwindCli::run_once(
+        _ = crate::TailwindCli::run_once(
             self.package_manifest_dir(),
             self.config.application.tailwind_input.clone(),
             self.config.application.tailwind_output.clone(),
         )
-        .await?;
+        .await;
 
         // We want to copy over the prebuilt OpenSSL binaries to ~/.dx/prebuilt/openssl-<version>
         if self.bundle == BundleFormat::Android {

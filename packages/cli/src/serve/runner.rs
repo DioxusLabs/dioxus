@@ -97,13 +97,8 @@ impl AppServer {
 
         // Resolve the simpler args
         let interactive = args.is_interactive_tty();
+        let force_sequential = args.platform_args.shared.targets.force_sequential_build();
         let cross_origin_policy = args.cross_origin_policy;
-        let force_sequential = args
-            .platform_args
-            .shared
-            .targets
-            .force_sequential
-            .unwrap_or_default();
 
         // Find the launch args for the client and server
         let split_args = |args: &str| args.split(' ').map(|s| s.to_string()).collect::<Vec<_>>();

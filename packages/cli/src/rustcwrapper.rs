@@ -25,7 +25,7 @@ pub fn is_wrapping_rustc() -> bool {
 pub struct RustcArgs {
     pub args: Vec<String>,
     pub envs: Vec<(String, String)>,
-    pub link_args: Vec<String>,
+    pub link_args: Vec<String>, // I don't believe this is used anymore
 }
 
 /// Check if the arguments indicate a linking step, including those in command files.
