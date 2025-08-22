@@ -8392,6 +8392,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "harness-fullstack-with-optional-tokio"
+version = "0.0.1"
+dependencies = [
+ "dioxus",
+ "serde",
+ "tokio",
+]
+
+[[package]]
 name = "harness-no-dioxus"
 version = "0.0.1"
 dependencies = [

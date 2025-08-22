@@ -238,6 +238,24 @@ async fn test_harnesses() {
                     assert!(t.client.no_default_features);
                 },
             ),
+        TestHarnessBuilder::new("harness-fullstack-with-optional-tokio")
+            .deps(r#"dioxus = { workspace = true, features = ["fullstack"] }"#)
+            .deps(r#"serde = "1.0.219""#)
+            .deps(r#"tokio = { workspace = true, features = ["full"], optional = true }"#)
+            .fetr(r#"default = []"#)
+            .fetr(r#"server = ["dioxus/server", "dep:tokio"]"#)
+            .fetr(r#"web = ["dioxus/web"]"#)
+            // .asrt(r#"dx build"#, |targets| async move {
+            //     assert!(targets.is_err())
+            // })
+            .asrt(r#"dx build --web"#, |targets| async move {
+                let t = targets.unwrap();
+                assert_eq!(t.client.bundle, BundleFormat::Web);
+                assert_eq!(t.client.triple, "wasm32-unknown-unknown".parse().unwrap());
+                let server = t.server.unwrap();
+                assert_eq!(server.bundle, BundleFormat::Server);
+                assert_eq!(server.triple, Triple::host());
+            })
     ])
     .await;
 }
