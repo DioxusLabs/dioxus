@@ -8378,6 +8378,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "harness-no-dioxus"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+]
+
+[[package]]
 name = "harness-simple-desktop"
 version = "0.0.1"
 dependencies = [

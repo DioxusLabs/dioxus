@@ -149,6 +149,15 @@ async fn test_harnesses() {
                 assert_eq!(server.bundle, BundleFormat::Server);
                 assert_eq!(server.triple, Triple::host());
             }),
+        TestHarnessBuilder::new("harness-no-dioxus")
+            .deps(r#"anyhow = { workspace = true, optional = true }"#)
+            .fetr(r#"web=["dep:anyhow"]"#)
+            .fetr(r#"server=[]"#)
+            .asrt(r#"dx build"#, |targets| async move {
+                let t = targets.unwrap();
+                assert_eq!(t.client.bundle, BundleFormat::host());
+                assert!(t.server.is_none());
+            }),
     ])
     .await;
 }

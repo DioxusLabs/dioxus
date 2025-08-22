@@ -626,7 +626,8 @@ impl BuildRequest {
         // - if the user has `dioxus = { features = ["web"] }`
         // - if the `default =["web"]` or `default = ["dioxus/web"]`
         // - if there's only one non-server platform ie `web = ["dioxus/web"], server = ["dioxus/server"]`
-        if matches!(platform, Platform::Unknown) {
+        // Only do this if we're explicitly using dioxus
+        if matches!(platform, Platform::Unknown) && using_dioxus_explicitly {
             let auto = dioxus_direct_renderer
                 .or_else(|| {
                     if enabled_renderers.len() == 1 {
