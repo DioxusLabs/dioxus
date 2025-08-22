@@ -13,12 +13,11 @@ async fn run_harness() {
 
 #[allow(dead_code)]
 async fn test_harnesses() {
-    let env_filter = EnvFilter::new("error,dx=debug,dioxus_cli=debug,manganis_cli_support=debug,wasm_split_cli=debug,subsecond_cli_support=debug",);
     tracing_subscriber::registry()
-        .with(tracing_subscriber::fmt::layer().with_filter(env_filter))
+        .with(tracing_subscriber::fmt::layer().with_filter(EnvFilter::new("error,dx=debug,dioxus_cli=debug,manganis_cli_support=debug,wasm_split_cli=debug,subsecond_cli_support=debug",)))
         .init();
 
-    run_harnesses(vec![
+    TestHarnessBuilder::run(vec![
         TestHarnessBuilder::new("harness-simple-web")
             .deps(r#"dioxus = { workspace = true, features = ["web"] }"#)
             .asrt(r#"dx build"#, |targets| async move {
@@ -218,6 +217,20 @@ async fn test_harnesses() {
                     assert_eq!(server.triple, Triple::host());
                 },
             ),
+        TestHarnessBuilder::new("harness-default-to-non-default")
+            .deps(r#"dioxus = { workspace = true, features = [] }"#)
+            .fetr(r#"default=["web"]"#)
+            .fetr(r#"web=["dioxus/web"]"#)
+            .asrt(
+                r#"dx build --ios"#,
+                |targets| async move {
+                    let t = targets.unwrap();
+                    assert!(t.server.is_none());
+                    assert_eq!(t.client.bundle, BundleFormat::Ios);
+                    assert_eq!(t.client.triple, "aarch64-apple-ios-sim".parse().unwrap());
+                    assert!(t.client.no_default_features);
+                },
+            ),
     ])
     .await;
 }
@@ -245,15 +258,20 @@ impl TestHarnessBuilder {
             futures: Default::default(),
         }
     }
+
+    /// Add a dependency to the test harness.
     fn deps(mut self, dependencies: impl Into<String>) -> Self {
         writeln!(&mut self.dependencies, "{}", dependencies.into()).unwrap();
         self
     }
+
+    /// Add a feature to the test harness.
     fn fetr(mut self, features: impl Into<String>) -> Self {
         writeln!(&mut self.features, "{}", features.into()).unwrap();
         self
     }
 
+    /// Assert the expected behavior of the test harness.
     fn asrt<F>(
         mut self,
         args: impl Into<String>,
@@ -269,6 +287,7 @@ impl TestHarnessBuilder {
         self
     }
 
+    /// Write the test harness to the filesystem.
     fn build(&self) {
         let name = self.name.clone();
         let dependencies = self.dependencies.clone();
@@ -323,56 +342,56 @@ publish = false
 
         std::fs::write(test_dir.join("src/main.rs"), contents).unwrap();
     }
-}
 
-async fn run_harnesses(harnesses: Vec<TestHarnessBuilder>) {
-    _ = crate::VERBOSITY.set(crate::Verbosity {
-        verbose: true,
-        trace: true,
-        json_output: false,
-        log_to_file: None,
-        locked: false,
-        offline: false,
-        frozen: false,
-    });
+    async fn run(harnesses: Vec<Self>) {
+        _ = crate::VERBOSITY.set(crate::Verbosity {
+            verbose: true,
+            trace: true,
+            json_output: false,
+            log_to_file: None,
+            locked: false,
+            offline: false,
+            frozen: false,
+        });
 
-    // Now that the harnesses are written to the filesystem, we can call cargo_metadata
-    // It will be cached from here
-    let mut futures = FuturesUnordered::new();
-    let mut seen_names = HashSet::new();
+        // Now that the harnesses are written to the filesystem, we can call cargo_metadata
+        // It will be cached from here
+        let mut futures = FuturesUnordered::new();
+        let mut seen_names = HashSet::new();
 
-    for harness in harnesses {
-        if !seen_names.insert(harness.name.clone()) {
-            panic!("Duplicate test harness name found: {}", harness.name);
-        }
-
-        harness.build();
-
-        for case in harness.futures {
-            let mut escaped = shell_words::split(&case.args).unwrap();
-            if !(escaped.contains(&"--package".to_string())
-                || escaped.contains(&"@server".to_string())
-                || escaped.contains(&"@client".to_string()))
-            {
-                escaped.push("--package".to_string());
-                escaped.push(harness.name.clone());
+        for harness in harnesses {
+            if !seen_names.insert(harness.name.clone()) {
+                panic!("Duplicate test harness name found: {}", harness.name);
             }
-            let args = Cli::try_parse_from(escaped).unwrap();
-            let Commands::Build(build_args) = args.action else {
-                panic!("Expected build command");
-            };
 
-            futures.push(async move {
-                let targets = build_args.into_targets().await;
-                (case.callback)(targets).await;
-            });
+            harness.build();
+
+            for case in harness.futures {
+                let mut escaped = shell_words::split(&case.args).unwrap();
+                if !(escaped.contains(&"--package".to_string())
+                    || escaped.contains(&"@server".to_string())
+                    || escaped.contains(&"@client".to_string()))
+                {
+                    escaped.push("--package".to_string());
+                    escaped.push(harness.name.clone());
+                }
+                let args = Cli::try_parse_from(escaped).unwrap();
+                let Commands::Build(build_args) = args.action else {
+                    panic!("Expected build command");
+                };
+
+                futures.push(async move {
+                    let targets = build_args.into_targets().await;
+                    (case.callback)(targets).await;
+                });
+            }
         }
+
+        // Give a moment for fs to catch up
+        std::thread::sleep(std::time::Duration::from_secs(1));
+
+        let _workspace = Workspace::current().await.unwrap();
+
+        while let Some(_res) = futures.next().await {}
     }
-
-    // Give a moment for fs to catch up
-    std::thread::sleep(std::time::Duration::from_secs(1));
-
-    let _workspace = Workspace::current().await.unwrap();
-
-    while let Some(_res) = futures.next().await {}
 }

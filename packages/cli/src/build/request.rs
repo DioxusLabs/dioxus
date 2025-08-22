@@ -744,11 +744,18 @@ impl BuildRequest {
 
                 // maybe probe adb?
                 if let Some(_device_name) = device.as_ref() {
-                    triple = triple.or(Some("aarch64-linux-android".parse()?));
+                    if triple.is_none() {
+                        triple = Some(
+                            crate::get_android_tools()
+                                .context("Failed to get android tools")?
+                                .autodetect_android_device_triple()
+                                .await,
+                        );
+                    }
                 } else {
                     triple = triple.or(Some({
                         match Triple::host().architecture {
-                            Architecture::X86_32(_) => "i686linux-android".parse()?,
+                            Architecture::X86_32(_) => "i686-linux-android".parse()?,
                             Architecture::X86_64 => "x86_64-linux-android".parse()?,
                             Architecture::Aarch64(_) => "aarch64-linux-android".parse()?,
                             _ => "aarch64-linux-android".parse()?,

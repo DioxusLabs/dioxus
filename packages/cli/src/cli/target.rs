@@ -24,13 +24,6 @@ pub(crate) struct TargetArgs {
     #[clap(long, value_enum, help_heading = HELP_HEADING)]
     pub(crate) renderer: Option<Renderer>,
 
-    // /// The target alias to use for this build. Supports wasm, macos, windows, linux, ios, android, and host [default: "host"]
-    // #[clap(flatten)]
-    // pub(crate) target_alias: TargetAlias,
-
-    // /// Build renderer: supports web, webview, native, server, and liveview
-    // #[clap(flatten)]
-    // pub(crate) renderer: RendererArg,
     /// The bundle format to target for the build: supports web, macos, windows, linux, ios, android, and server
     #[clap(long, value_enum, help_heading = HELP_HEADING)]
     pub(crate) bundle: Option<BundleFormat>,
@@ -161,7 +154,6 @@ pub(crate) struct TargetArgs {
 impl Anonymized for TargetArgs {
     fn anonymized(&self) -> Value {
         json! {{
-            // "target_alias": self.target_alias,
             "renderer": self.renderer,
             "bundle": self.bundle,
             "platform": self.platform,

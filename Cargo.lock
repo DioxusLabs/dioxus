@@ -8348,6 +8348,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "harness-default-to-non-default"
+version = "0.0.1"
+dependencies = [
+ "dioxus",
+]
+
+[[package]]
 name = "harness-fullstack-desktop"
 version = "0.0.1"
 dependencies = [
@@ -8372,6 +8379,13 @@ dependencies = [
 
 [[package]]
 name = "harness-fullstack-multi-target"
+version = "0.0.1"
+dependencies = [
+ "dioxus",
+]
+
+[[package]]
+name = "harness-fullstack-multi-target-no-default"
 version = "0.0.1"
 dependencies = [
  "dioxus",
