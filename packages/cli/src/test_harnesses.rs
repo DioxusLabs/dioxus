@@ -328,13 +328,15 @@ publish = false
         std::fs::write(test_dir.join("Cargo.toml"), cargo_toml).unwrap();
 
         let contents = if features.contains("dioxus") {
-            r#"use dioxus::prelude::*;
+            r#"#![rustfmt::skip]
+use dioxus::prelude::*;
 fn main() {
     dioxus::launch(|| rsx! { "hello world!" })
 }
 "#
         } else {
-            r#"fn main() {
+            r#"#![rustfmt::skip]
+fn main() {
     println!("Hello, world!");
 }
 "#
