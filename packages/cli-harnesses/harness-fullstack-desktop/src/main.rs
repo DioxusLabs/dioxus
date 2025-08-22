@@ -1,4 +1,4 @@
 use dioxus::prelude::*;
 fn main() {
-    dioxus::launch(|| rsx!{ "hello world!"})
+    dioxus::launch(|| rsx! { "hello world!" })
 }

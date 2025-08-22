@@ -330,12 +330,14 @@ publish = false
         let contents = if features.contains("dioxus") {
             r#"use dioxus::prelude::*;
 fn main() {
-    dioxus::launch(|| rsx!{ "hello world!"})
-}"#
+    dioxus::launch(|| rsx! { "hello world!" })
+}
+"#
         } else {
             r#"fn main() {
     println!("Hello, world!");
-}"#
+}
+"#
         };
 
         std::fs::write(test_dir.join("src/main.rs"), contents).unwrap();
