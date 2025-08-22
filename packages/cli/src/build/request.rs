@@ -781,11 +781,19 @@ impl BuildRequest {
             features.sort();
         }
 
-        // The triple will be the triple passed or the host.
-        let triple = triple.unwrap_or(Triple::host());
+        // The triple will be the triple passed or the host if using dioxus.
+        let triple = if using_dioxus_explicitly {
+            triple.context("Could not automatically detect target triple")?
+        } else {
+            triple.unwrap_or(Triple::host())
+        };
 
         // The bundle format will be the bundle format passed or the host.
-        let bundle_format = bundle_format.unwrap_or(BundleFormat::host());
+        let bundle_format = if using_dioxus_explicitly {
+            bundle_format.context("Could not automatically detect bundle format")?
+        } else {
+            bundle_format.unwrap_or(BundleFormat::host())
+        };
 
         // Add any features required to turn on the client
         if let Some(renderer) = renderer {

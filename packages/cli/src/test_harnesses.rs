@@ -18,7 +18,7 @@ use futures_util::{
     stream::{futures_unordered, FuturesUnordered},
     StreamExt,
 };
-use std::{fmt::Write, path::PathBuf, pin::Pin, prelude::rust_2024::Future};
+use std::{collections::HashSet, fmt::Write, path::PathBuf, pin::Pin, prelude::rust_2024::Future};
 use target_lexicon::Triple;
 use tokio::task::{JoinSet, LocalSet};
 use tracing_subscriber::{
@@ -50,23 +50,20 @@ async fn test_harnesses() {
         TestHarnessBuilder::new("harness-simple-web")
             .deps(r#"dioxus = { workspace = true, features = ["web"] }"#)
             .asrt(r#"dx build"#, |targets| async move {
-                let targets = targets.unwrap();
-                assert_eq!(targets.client.bundle, BundleFormat::Web);
-                assert_eq!(
-                    targets.client.triple,
-                    "wasm32-unknown-unknown".parse().unwrap()
-                );
-                assert!(targets.server.is_none());
+                let t = targets.unwrap();
+                assert_eq!(t.client.bundle, BundleFormat::Web);
+                assert_eq!(t.client.triple, "wasm32-unknown-unknown".parse().unwrap());
+                assert!(t.server.is_none());
             }),
         TestHarnessBuilder::new("harness-simple-desktop")
             .deps(r#"dioxus = { workspace = true, features = ["desktop"] }"#)
             .asrt(r#"dx build"#, |targets| async move {
-                let targets = targets.unwrap();
-                assert_eq!(targets.client.bundle, BundleFormat::host());
-                assert_eq!(targets.client.triple, Triple::host());
-                assert!(targets.server.is_none());
+                let t = targets.unwrap();
+                assert_eq!(t.client.bundle, BundleFormat::host());
+                assert_eq!(t.client.triple, Triple::host());
+                assert!(t.server.is_none());
             }),
-        TestHarnessBuilder::new("harness-simple-web")
+        TestHarnessBuilder::new("harness-simple-mobile")
             .deps(r#"dioxus = { workspace = true, features = ["mobile"] }"#)
             .asrt(
                 "dx build",
@@ -77,9 +74,9 @@ async fn test_harnesses() {
             .fetr(r#"web=["dioxus/web"]"#)
             .fetr(r#"server=["dioxus/server"]"#)
             .asrt(r#"dx build"#, |targets| async move {
-                let targets = targets.unwrap();
-                assert_eq!(targets.client.bundle, BundleFormat::Web);
-                let server = targets.server.unwrap();
+                let t = targets.unwrap();
+                assert_eq!(t.client.bundle, BundleFormat::Web);
+                let server = t.server.unwrap();
                 assert_eq!(server.bundle, BundleFormat::Server);
                 assert_eq!(server.triple, Triple::host());
             }),
@@ -88,31 +85,69 @@ async fn test_harnesses() {
             .fetr(r#"default=["web", "desktop", "mobile", "server"]"#)
             .fetr(r#"web=["dioxus/web"]"#)
             .fetr(r#"desktop=["dioxus/desktop"]"#)
+            .fetr(r#"mobile=["dioxus/mobile"]"#)
             .fetr(r#"server=["dioxus/server"]"#)
-            .asrt(
-                r#"dx build"#,
-                |targets| async move { assert!(targets.is_err()) },
-            )
+            .asrt(r#"dx build"#, |t| async move { assert!(t.is_err()) })
             .asrt(r#"dx build --web"#, |targets| async move {
-                let targets = targets.unwrap();
-                assert_eq!(targets.client.bundle, BundleFormat::Web);
+                let t = targets.unwrap();
+                assert_eq!(t.client.bundle, BundleFormat::Web);
             })
             .asrt(r#"dx build --desktop"#, |targets| async move {
-                let targets = targets.unwrap();
-                assert_eq!(targets.client.bundle, BundleFormat::host());
+                let t = targets.unwrap();
+                assert_eq!(t.client.bundle, BundleFormat::host());
             })
             .asrt(r#"dx build --ios"#, |targets| async move {
-                let targets = targets.unwrap();
-                assert_eq!(targets.client.bundle, BundleFormat::Ios);
-                assert_eq!(
-                    targets.client.triple,
-                    "aarch64-apple-ios-sim".parse().unwrap()
-                );
+                let t = targets.unwrap();
+                assert_eq!(t.client.bundle, BundleFormat::Ios);
+                assert_eq!(t.client.triple, "aarch64-apple-ios-sim".parse().unwrap());
             })
             .asrt(r#"dx build --ios --device"#, |targets| async move {
                 let targets = targets.unwrap();
                 assert_eq!(targets.client.bundle, BundleFormat::Ios);
                 assert_eq!(targets.client.triple, "aarch64-apple-ios".parse().unwrap());
+            })
+            .asrt(r#"dx build --android --device"#, |targets| async move {
+                let t = targets.unwrap();
+                assert_eq!(t.client.bundle, BundleFormat::Android);
+                assert_eq!(t.client.triple, "aarch64-linux-android".parse().unwrap());
+            }),
+        TestHarnessBuilder::new("harness-fullstack-desktop")
+            .deps(r#"dioxus = { workspace = true, features = ["fullstack"] }"#)
+            .fetr(r#"desktop=["dioxus/desktop"]"#)
+            .fetr(r#"server=["dioxus/server"]"#)
+            .asrt(r#"dx build"#, |targets| async move {
+                let t = targets.unwrap();
+                assert_eq!(t.client.bundle, BundleFormat::host());
+                let server = t.server.unwrap();
+                assert_eq!(server.bundle, BundleFormat::Server);
+                assert_eq!(server.triple, Triple::host());
+            }),
+        TestHarnessBuilder::new("harness-fullstack-desktop-with-features")
+            .deps(r#"dioxus = { workspace = true, features = ["fullstack"] }"#)
+            .deps(r#"anyhow = { workspace = true, optional = true }"#)
+            .fetr(r#"desktop=["dioxus/desktop", "has_anyhow"]"#)
+            .fetr(r#"has_anyhow=["dep:anyhow"]"#)
+            .fetr(r#"server=["dioxus/server"]"#)
+            .asrt(r#"dx build"#, |targets| async move {
+                let t = targets.unwrap();
+                assert_eq!(t.client.bundle, BundleFormat::host());
+                let server = t.server.unwrap();
+                assert_eq!(server.bundle, BundleFormat::Server);
+                assert_eq!(server.triple, Triple::host());
+            }),
+        TestHarnessBuilder::new("harness-fullstack-desktop-with-default")
+            .deps(r#"dioxus = { workspace = true, features = ["fullstack"] }"#)
+            .deps(r#"anyhow = { workspace = true, optional = true }"#)
+            .fetr(r#"default=["desktop"]"#)
+            .fetr(r#"desktop=["dioxus/desktop", "has_anyhow"]"#)
+            .fetr(r#"has_anyhow=["dep:anyhow"]"#)
+            .fetr(r#"server=["dioxus/server"]"#)
+            .asrt(r#"dx build"#, |targets| async move {
+                let t = targets.unwrap();
+                assert_eq!(t.client.bundle, BundleFormat::host());
+                let server = t.server.unwrap();
+                assert_eq!(server.bundle, BundleFormat::Server);
+                assert_eq!(server.triple, Triple::host());
             }),
     ])
     .await;
@@ -236,19 +271,24 @@ async fn run_harnesses(harnesses: Vec<TestHarnessBuilder>) {
 
     // Now that the harnesses are written to the filesystem, we can call cargo_metadata
     // It will be cached from here
-    let workspace = Workspace::current().await.unwrap();
     let mut futures = FuturesUnordered::new();
+    let mut seen_names = HashSet::new();
 
     for harness in harnesses {
+        if !seen_names.insert(harness.name.clone()) {
+            panic!("Duplicate test harness name found: {}", harness.name);
+        }
+
         _ = harness.build();
+
         for case in harness.futures {
-            let escaped = shell_words::split(&case.args).unwrap();
+            let mut escaped = shell_words::split(&case.args).unwrap();
+            escaped.push("--package".to_string());
+            escaped.push(harness.name.clone());
             let args = Cli::try_parse_from(escaped).unwrap();
-            let Commands::Build(mut build_args) = args.action else {
+            let Commands::Build(build_args) = args.action else {
                 panic!("Expected build command");
             };
-
-            build_args.shared.build_arguments.package = Some(harness.name.clone());
 
             futures.push(async move {
                 let targets = build_args.into_targets().await;
@@ -256,6 +296,10 @@ async fn run_harnesses(harnesses: Vec<TestHarnessBuilder>) {
             });
         }
     }
+
+    // Give a moment for fs to catch up
+    std::thread::sleep(std::time::Duration::from_secs(1));
+    let workspace = Workspace::current().await.unwrap();
 
     while let Some(res) = futures.next().await {}
 }

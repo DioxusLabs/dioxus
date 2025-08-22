@@ -8348,6 +8348,64 @@ dependencies = [
 ]
 
 [[package]]
+name = "harness-fullstack-desktop"
+version = "0.0.1"
+dependencies = [
+ "dioxus",
+]
+
+[[package]]
+name = "harness-fullstack-desktop-with-default"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "dioxus",
+]
+
+[[package]]
+name = "harness-fullstack-desktop-with-features"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "dioxus",
+]
+
+[[package]]
+name = "harness-fullstack-multi-target"
+version = "0.0.1"
+dependencies = [
+ "dioxus",
+]
+
+[[package]]
+name = "harness-simple-desktop"
+version = "0.0.1"
+dependencies = [
+ "dioxus",
+]
+
+[[package]]
+name = "harness-simple-fullstack"
+version = "0.0.1"
+dependencies = [
+ "dioxus",
+]
+
+[[package]]
+name = "harness-simple-mobile"
+version = "0.0.1"
+dependencies = [
+ "dioxus",
+]
+
+[[package]]
+name = "harness-simple-web"
+version = "0.0.1"
+dependencies = [
+ "dioxus",
+]
+
+[[package]]
 name = "hash32"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -14786,31 +14844,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3a9fe34e3e7a50316060351f37187a3f546bce95496156754b601a5fa71b76e"
 
 [[package]]
-name = "simple-desktop"
-version = "0.0.1"
-dependencies = [
- "dioxus",
-]
-
-[[package]]
 name = "simple-file-manifest"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5dd19be0257552dd56d1bb6946f89f193c6e5b9f13cc9327c4bc84a357507c74"
-
-[[package]]
-name = "simple-mobile"
-version = "0.0.1"
-dependencies = [
- "dioxus",
-]
-
-[[package]]
-name = "simple-web"
-version = "0.0.1"
-dependencies = [
- "dioxus",
-]
 
 [[package]]
 name = "simplecss"
