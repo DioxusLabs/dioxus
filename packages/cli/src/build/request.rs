@@ -3522,8 +3522,6 @@ impl BuildRequest {
             }
         }
 
-        tracing::info!("Found renderers: {:?}", renderers);
-
         if renderers.len() != 1 {
             return None;
         }

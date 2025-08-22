@@ -324,13 +324,7 @@ impl LaunchBuilder {
             }
         }
 
-        // Server must come first in priority since it needs to override all other renderers
-        #[cfg(feature = "server")]
-        if matches!(platform, KnownPlatform::Server) {
-            return dioxus_server::launch_cfg(app, contexts, configs);
-        }
-
-        // If native is specified, we override the webview launcher (mobile/desktop flags)
+        // If native is specified, we override the webview launcher
         #[cfg(feature = "native")]
         if matches!(platform, KnownPlatform::Native) {
             return dioxus_native::launch_cfg(app, contexts, configs);
@@ -346,12 +340,16 @@ impl LaunchBuilder {
             return dioxus_desktop::launch::launch(app, contexts, configs);
         }
 
+        #[cfg(feature = "server")]
+        if matches!(platform, KnownPlatform::Server) {
+            return dioxus_server::launch_cfg(app, contexts, configs);
+        }
+
         #[cfg(feature = "web")]
         if matches!(platform, KnownPlatform::Web) {
             return dioxus_web::launch::launch(app, contexts, configs);
         }
 
-        // Liveview last since we're phasing it out.
         #[cfg(feature = "liveview")]
         if matches!(platform, KnownPlatform::Liveview) {
             return dioxus_liveview::launch::launch(app, contexts, configs);
