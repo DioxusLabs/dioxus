@@ -102,7 +102,7 @@ async fn test_harnesses() {
             .asrt(r#"dx build --ios"#, |targets| async move {
                 let t = targets.unwrap();
                 assert_eq!(t.client.bundle, BundleFormat::Ios);
-                assert_eq!(t.client.triple, "aarch64-apple-ios-sim".parse().unwrap());
+                assert_eq!(t.client.triple, TestHarnessBuilder::host_ios_triple_sim());
             })
             .asrt(r#"dx build --ios --device"#, |targets| async move {
                 let targets = targets.unwrap();
@@ -133,6 +133,7 @@ async fn test_harnesses() {
             .asrt(r#"dx build --ios"#, |targets| async move {
                 let t = targets.unwrap();
                 assert_eq!(t.client.bundle, BundleFormat::Ios);
+                assert_eq!(t.client.triple, TestHarnessBuilder::host_ios_triple_sim());
                 let server = t.server.unwrap();
                 assert_eq!(server.bundle, BundleFormat::Server);
                 assert_eq!(server.triple, Triple::host());
@@ -233,7 +234,7 @@ async fn test_harnesses() {
                     let t = targets.unwrap();
                     assert!(t.server.is_none());
                     assert_eq!(t.client.bundle, BundleFormat::Ios);
-                    assert_eq!(t.client.triple, "aarch64-apple-ios-sim".parse().unwrap());
+                    assert_eq!(t.client.triple, TestHarnessBuilder::host_ios_triple_sim());
                     assert!(t.client.no_default_features);
                 },
             ),
@@ -407,5 +408,13 @@ publish = false
         let _workspace = Workspace::current().await.unwrap();
 
         while let Some(_res) = futures.next().await {}
+    }
+
+    fn host_ios_triple_sim() -> Triple {
+        if cfg!(target_arch = "aarch64") {
+            "aarch64-apple-ios-sim".parse().unwrap()
+        } else {
+            "x86_64-apple-ios".parse().unwrap()
+        }
     }
 }
