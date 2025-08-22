@@ -310,6 +310,7 @@ impl BundleFormat {
     #[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos")))]
     pub(crate) const TARGET_PLATFORM: Option<Self> = None;
 
+    /// The native "desktop" host app format.
     pub(crate) fn host() -> Self {
         if cfg!(target_os = "macos") {
             Self::MacOS
