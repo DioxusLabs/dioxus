@@ -5,7 +5,7 @@ use std::fmt::Display;
 use std::str::FromStr;
 use target_lexicon::{Architecture, Environment, OperatingSystem, Triple};
 
-use crate::Workspace;
+use crate::{triple_is_wasm, Workspace};
 
 #[derive(
     Copy, Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Debug, Default,
@@ -276,6 +276,24 @@ impl Renderer {
             Architecture::Wasm32 | Architecture::Wasm64 => Self::Web,
             // Otherwise, assume webview for native targets
             _ => Self::Webview,
+        }
+    }
+
+    pub(crate) fn compatible_with(
+        &self,
+        target: &Option<Triple>,
+        target_alias: TargetAlias,
+    ) -> bool {
+        let web_target = match (target, target_alias) {
+            (Some(triple), _) if triple_is_wasm(triple) => true,
+            (None, TargetAlias::Wasm) => true,
+            _ => false,
+        };
+        // Web builds are only compatible with the web, liveview, and server renderers
+        if web_target {
+            matches!(self, Self::Web | Self::Liveview | Self::Server)
+        } else {
+            false
         }
     }
 }
