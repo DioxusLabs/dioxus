@@ -817,15 +817,43 @@ impl BuildRequest {
         })
     }
 
+    pub(crate) async fn prebuild(&self, ctx: &BuildContext) -> Result<()> {
+        // Initialize the session cache temp files
+        _ = std::fs::File::create_new(self.rustc_wrapper_args_file());
+        _ = std::fs::File::create_new(self.link_err_file());
+        _ = std::fs::File::create_new(self.link_args_file());
+        _ = std::fs::File::create_new(self.windows_command_file());
+
+        if !matches!(ctx.mode, BuildMode::Thin { .. }) {
+            self.prepare_build_dir()?;
+        }
+
+        if self.bundle == BundleFormat::Server {
+            return Ok(());
+        }
+
+        // Run the tailwind build before bundling anything else
+        crate::TailwindCli::run_once(
+            self.package_manifest_dir(),
+            self.config.application.tailwind_input.clone(),
+            self.config.application.tailwind_output.clone(),
+        )
+        .await?;
+
+        // We want to copy over the prebuilt OpenSSL binaries to ~/.dx/prebuilt/openssl-<version>
+        if self.bundle == BundleFormat::Android {
+            AndroidTools::unpack_prebuilt_openssl()?;
+        }
+
+        Ok(())
+    }
+
     pub(crate) async fn build(&self, ctx: &BuildContext) -> Result<BuildArtifacts> {
         let time_start = SystemTime::now();
 
         // If we forget to do this, then we won't get the linker args since rust skips the full build
         // We need to make sure to not react to this though, so the filemap must cache it
         _ = self.bust_fingerprint(ctx);
-
-        // Run any pre-build steps like tailwind, etc
-        self.prebuild().await?;
 
         // Run the cargo build to produce our artifacts
         let mut artifacts = self.cargo_build(ctx).await?;
@@ -4828,32 +4856,6 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         args.into_iter()
             .flat_map(|arg| ["--config".to_string(), arg])
             .collect()
-    }
-
-    async fn prebuild(&self) -> Result<()> {
-        _ = std::fs::File::create_new(self.rustc_wrapper_args_file());
-        _ = std::fs::File::create_new(self.link_err_file());
-        _ = std::fs::File::create_new(self.link_args_file());
-        _ = std::fs::File::create_new(self.windows_command_file());
-
-        if self.bundle == BundleFormat::Server {
-            return Ok(());
-        }
-
-        // Run the tailwind build before bundling anything else
-        crate::TailwindCli::run_once(
-            self.package_manifest_dir(),
-            self.config.application.tailwind_input.clone(),
-            self.config.application.tailwind_output.clone(),
-        )
-        .await?;
-
-        // We want to copy over the prebuilt OpenSSL binaries to ~/.dx/prebuilt/openssl-<version>
-        if self.bundle == BundleFormat::Android {
-            AndroidTools::unpack_prebuilt_openssl()?;
-        }
-
-        Ok(())
     }
 
     pub async fn codesign_ios(&self) -> Result<()> {

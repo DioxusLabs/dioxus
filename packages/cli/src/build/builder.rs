@@ -170,17 +170,7 @@ impl AppBuilder {
                     tx: tx.clone(),
                 };
                 request.verify_tooling(&ctx).await?;
-
-                match &ctx.mode {
-                    // If we're starting with a hotpatch, don't clear anything, just write the cached values back to the fs
-                    BuildMode::Thin { rustc_args, .. } => {
-                        // request.write_cached_rustc_args(rustc_args).await?;
-                    }
-
-                    // Otherwise, cleanup our build dir
-                    _ => request.prepare_build_dir()?,
-                }
-
+                request.prebuild(&ctx).await?;
                 request.build(&ctx).await
             }
         });
