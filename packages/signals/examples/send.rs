@@ -7,15 +7,6 @@ fn main() {
 fn app() -> Element {
     let mut signal = use_signal_sync(|| 0);
 
-    rsx! {
-        button { onclick: move |_| signal += 1, "Increase" }
-        "{signal}"
-        Child { signal }
-    }
-}
-
-#[component]
-fn Child(signal: WriteSignal<u32, SyncStorage>) -> Element {
     use_hook(|| {
         std::thread::spawn(move || loop {
             std::thread::sleep(std::time::Duration::from_secs(1));
@@ -23,5 +14,8 @@ fn Child(signal: WriteSignal<u32, SyncStorage>) -> Element {
         });
     });
 
-    rsx! {}
+    rsx! {
+        button { onclick: move |_| signal += 1, "Increase" }
+        "{signal}"
+    }
 }
