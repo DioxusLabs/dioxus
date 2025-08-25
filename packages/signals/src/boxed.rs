@@ -24,54 +24,78 @@ mod sealed {
     impl Sealed for SyncStorage {}
 
     pub struct SealedToken;
-}
 
-/// A trait for creating boxed readable and writable signals. This is implemented for
-/// [UnsyncStorage] and [SyncStorage].
-pub trait ReadOnlySignalStorage<T: ?Sized>:
-    Storage<Box<Self::DynReadable>> + Storage<Box<Self::DynWritable>> + sealed::Sealed + 'static
-{
-    #[doc(hidden)]
-    type DynReadable: Readable<Target = T, Storage = Self> + ?Sized;
-    #[doc(hidden)]
-    type DynWritable: Writable<Target = T, Storage = Self, WriteMetadata = Box<dyn Any>> + ?Sized;
+    pub trait SealedTokenTrait {}
+    impl SealedTokenTrait for SealedToken {}
 }
 
 /// A trait for creating boxed readable and writable signals. This is implemented for
 /// [UnsyncStorage] and [SyncStorage].
 ///
-/// The storage type must implement `CreateReadOnlySignalStorage` for the specific readable type
-/// to be used with `ReadSignal` and `WriteSignal`.
-pub trait CreateReadOnlySignalStorage<T: Readable + ?Sized>:
-    ReadOnlySignalStorage<T::Target> + 'static
+/// You may need to add this trait as a bound when you use [ReadSignal] or [WriteSignal] while
+/// remaining generic over syncness.
+pub trait BoxedSignalStorage<T: ?Sized>:
+    Storage<Box<Self::DynReadable<sealed::SealedToken>>>
+    + Storage<Box<Self::DynWritable<sealed::SealedToken>>>
+    + sealed::Sealed
+    + 'static
 {
+    // This is not a public api, and is sealed to prevent external usage and implementations
     #[doc(hidden)]
-    fn new_readable(value: T, _: sealed::SealedToken) -> Box<Self::DynReadable>
+    type DynReadable<Seal: sealed::SealedTokenTrait>: Readable<Target = T, Storage = Self> + ?Sized;
+    // This is not a public api, and is sealed to prevent external usage and implementations
+    #[doc(hidden)]
+    type DynWritable<Seal: sealed::SealedTokenTrait>: Writable<Target = T, Storage = Self, WriteMetadata = Box<dyn Any>>
+        + ?Sized;
+}
+
+/// A trait for creating boxed readable and writable signals. This is implemented for
+/// [UnsyncStorage] and [SyncStorage].
+///
+/// The storage type must implement `CreateReadOnlySignalStorage<T>` for every readable `T` type
+/// to be used with `ReadSignal` and `WriteSignal`.
+///
+/// You may need to add this trait as a bound when you call [ReadSignal::new_maybe_sync] or
+/// [WriteSignal::new_maybe_sync] while remaining generic over syncness.
+pub trait CreateBoxedSignalStorage<T: Readable + ?Sized>:
+    BoxedSignalStorage<T::Target> + 'static
+{
+    // This is not a public api, and is sealed to prevent external usage and implementations
+    #[doc(hidden)]
+    fn new_readable(
+        value: T,
+        _: sealed::SealedToken,
+    ) -> Box<Self::DynReadable<sealed::SealedToken>>
     where
         T: Sized;
 
+    // This is not a public api, and is sealed to prevent external usage and implementations
     #[doc(hidden)]
-    fn new_writable(value: T, _: sealed::SealedToken) -> Box<Self::DynWritable>
+    fn new_writable(
+        value: T,
+        _: sealed::SealedToken,
+    ) -> Box<Self::DynWritable<sealed::SealedToken>>
     where
         T: Writable + Sized;
 }
 
-impl<T: ?Sized + 'static> ReadOnlySignalStorage<T> for UnsyncStorage {
-    type DynReadable = dyn Readable<Target = T, Storage = Self>;
-    type DynWritable = dyn Writable<Target = T, Storage = Self, WriteMetadata = Box<dyn Any>>;
+impl<T: ?Sized + 'static> BoxedSignalStorage<T> for UnsyncStorage {
+    type DynReadable<Seal: sealed::SealedTokenTrait> = dyn Readable<Target = T, Storage = Self>;
+    type DynWritable<Seal: sealed::SealedTokenTrait> =
+        dyn Writable<Target = T, Storage = Self, WriteMetadata = Box<dyn Any>>;
 }
 
-impl<T: Readable<Storage = UnsyncStorage> + ?Sized + 'static> CreateReadOnlySignalStorage<T>
+impl<T: Readable<Storage = UnsyncStorage> + ?Sized + 'static> CreateBoxedSignalStorage<T>
     for UnsyncStorage
 {
-    fn new_readable(value: T, _: sealed::SealedToken) -> Box<Self::DynReadable>
+    fn new_readable(value: T, _: sealed::SealedToken) -> Box<Self::DynReadable<sealed::SealedToken>>
     where
         T: Sized,
     {
         Box::new(value)
     }
 
-    fn new_writable(value: T, _: sealed::SealedToken) -> Box<Self::DynWritable>
+    fn new_writable(value: T, _: sealed::SealedToken) -> Box<Self::DynWritable<sealed::SealedToken>>
     where
         T: Writable + Sized,
     {
@@ -79,23 +103,24 @@ impl<T: Readable<Storage = UnsyncStorage> + ?Sized + 'static> CreateReadOnlySign
     }
 }
 
-impl<T: ?Sized + 'static> ReadOnlySignalStorage<T> for SyncStorage {
-    type DynReadable = dyn Readable<Target = T, Storage = Self> + Send + Sync;
-    type DynWritable =
+impl<T: ?Sized + 'static> BoxedSignalStorage<T> for SyncStorage {
+    type DynReadable<Seal: sealed::SealedTokenTrait> =
+        dyn Readable<Target = T, Storage = Self> + Send + Sync;
+    type DynWritable<Seal: sealed::SealedTokenTrait> =
         dyn Writable<Target = T, Storage = Self, WriteMetadata = Box<dyn Any>> + Send + Sync;
 }
 
 impl<T: Readable<Storage = SyncStorage> + Sync + Send + ?Sized + 'static>
-    CreateReadOnlySignalStorage<T> for SyncStorage
+    CreateBoxedSignalStorage<T> for SyncStorage
 {
-    fn new_readable(value: T, _: sealed::SealedToken) -> Box<Self::DynReadable>
+    fn new_readable(value: T, _: sealed::SealedToken) -> Box<Self::DynReadable<sealed::SealedToken>>
     where
         T: Sized,
     {
         Box::new(value)
     }
 
-    fn new_writable(value: T, _: sealed::SealedToken) -> Box<Self::DynWritable>
+    fn new_writable(value: T, _: sealed::SealedToken) -> Box<Self::DynWritable<sealed::SealedToken>>
     where
         T: Writable + Sized,
     {
@@ -104,8 +129,8 @@ impl<T: Readable<Storage = SyncStorage> + Sync + Send + ?Sized + 'static>
 }
 
 /// A boxed version of [Readable] that can be used to store any readable type.
-pub struct ReadSignal<T: ?Sized, S: ReadOnlySignalStorage<T> = UnsyncStorage> {
-    value: CopyValue<Box<S::DynReadable>, S>,
+pub struct ReadSignal<T: ?Sized, S: BoxedSignalStorage<T> = UnsyncStorage> {
+    value: CopyValue<Box<S::DynReadable<sealed::SealedToken>>, S>,
 }
 
 impl<T: ?Sized + 'static> ReadSignal<T> {
@@ -115,11 +140,11 @@ impl<T: ?Sized + 'static> ReadSignal<T> {
     }
 }
 
-impl<T: ?Sized + 'static, S: ReadOnlySignalStorage<T>> ReadSignal<T, S> {
+impl<T: ?Sized + 'static, S: BoxedSignalStorage<T>> ReadSignal<T, S> {
     /// Create a new boxed readable value which may be sync
     pub fn new_maybe_sync<R>(value: R) -> Self
     where
-        S: CreateReadOnlySignalStorage<R>,
+        S: CreateBoxedSignalStorage<R>,
         R: Readable<Target = T>,
     {
         Self {
@@ -155,15 +180,15 @@ impl<T: ?Sized + 'static, S: ReadOnlySignalStorage<T>> ReadSignal<T, S> {
     }
 }
 
-impl<T: ?Sized, S: ReadOnlySignalStorage<T>> Clone for ReadSignal<T, S> {
+impl<T: ?Sized, S: BoxedSignalStorage<T>> Clone for ReadSignal<T, S> {
     fn clone(&self) -> Self {
         *self
     }
 }
 
-impl<T: ?Sized, S: ReadOnlySignalStorage<T>> Copy for ReadSignal<T, S> {}
+impl<T: ?Sized, S: BoxedSignalStorage<T>> Copy for ReadSignal<T, S> {}
 
-impl<T: ?Sized, S: ReadOnlySignalStorage<T>> PartialEq for ReadSignal<T, S> {
+impl<T: ?Sized, S: BoxedSignalStorage<T>> PartialEq for ReadSignal<T, S> {
     fn eq(&self, other: &Self) -> bool {
         self.value == other.value
     }
@@ -171,9 +196,7 @@ impl<T: ?Sized, S: ReadOnlySignalStorage<T>> PartialEq for ReadSignal<T, S> {
 
 impl<
         T: Default + 'static,
-        S: CreateReadOnlySignalStorage<Signal<T, S>>
-            + ReadOnlySignalStorage<T>
-            + Storage<SignalData<T>>,
+        S: CreateBoxedSignalStorage<Signal<T, S>> + BoxedSignalStorage<T> + Storage<SignalData<T>>,
     > Default for ReadSignal<T, S>
 {
     fn default() -> Self {
@@ -181,9 +204,9 @@ impl<
     }
 }
 
-read_impls!(ReadSignal<T, S: ReadOnlySignalStorage<T>>);
+read_impls!(ReadSignal<T, S: BoxedSignalStorage<T>>);
 
-impl<T, S: ReadOnlySignalStorage<T>> IntoAttributeValue for ReadSignal<T, S>
+impl<T, S: BoxedSignalStorage<T>> IntoAttributeValue for ReadSignal<T, S>
 where
     T: Clone + IntoAttributeValue + 'static,
 {
@@ -195,14 +218,14 @@ where
 impl<T, S> IntoDynNode for ReadSignal<T, S>
 where
     T: Clone + IntoDynNode + 'static,
-    S: ReadOnlySignalStorage<T>,
+    S: BoxedSignalStorage<T>,
 {
     fn into_dyn_node(self) -> dioxus_core::DynamicNode {
         self.with(|f| f.clone().into_dyn_node())
     }
 }
 
-impl<T: Clone + 'static, S: ReadOnlySignalStorage<T>> Deref for ReadSignal<T, S> {
+impl<T: Clone + 'static, S: BoxedSignalStorage<T>> Deref for ReadSignal<T, S> {
     type Target = dyn Fn() -> T;
 
     fn deref(&self) -> &Self::Target {
@@ -210,7 +233,7 @@ impl<T: Clone + 'static, S: ReadOnlySignalStorage<T>> Deref for ReadSignal<T, S>
     }
 }
 
-impl<T: ?Sized, S: ReadOnlySignalStorage<T>> Readable for ReadSignal<T, S> {
+impl<T: ?Sized, S: BoxedSignalStorage<T>> Readable for ReadSignal<T, S> {
     type Target = T;
     type Storage = S;
 
@@ -251,9 +274,7 @@ impl<T: ?Sized, S: ReadOnlySignalStorage<T>> Readable for ReadSignal<T, S> {
 // all specific readable types
 impl<
         T: 'static,
-        S: CreateReadOnlySignalStorage<Signal<T, S>>
-            + ReadOnlySignalStorage<T>
-            + Storage<SignalData<T>>,
+        S: CreateBoxedSignalStorage<Signal<T, S>> + BoxedSignalStorage<T> + Storage<SignalData<T>>,
     > From<Signal<T, S>> for ReadSignal<T, S>
 {
     fn from(value: Signal<T, S>) -> Self {
@@ -267,7 +288,7 @@ impl<T: PartialEq + 'static> From<Memo<T>> for ReadSignal<T> {
 }
 impl<
         T: 'static,
-        S: CreateReadOnlySignalStorage<CopyValue<T, S>> + ReadOnlySignalStorage<T> + Storage<T>,
+        S: CreateBoxedSignalStorage<CopyValue<T, S>> + BoxedSignalStorage<T> + Storage<T>,
     > From<CopyValue<T, S>> for ReadSignal<T, S>
 {
     fn from(value: CopyValue<T, S>) -> Self {
@@ -288,7 +309,7 @@ where
     O: ?Sized + 'static,
     V: Readable<Storage = S> + 'static,
     F: Fn(&V::Target) -> &O + 'static,
-    S: ReadOnlySignalStorage<O> + CreateReadOnlySignalStorage<MappedSignal<O, V, F>>,
+    S: BoxedSignalStorage<O> + CreateBoxedSignalStorage<MappedSignal<O, V, F>>,
 {
     fn from(value: MappedSignal<O, V, F>) -> Self {
         Self::new_maybe_sync(value)
@@ -300,7 +321,7 @@ where
     V: Readable<Storage = S> + 'static,
     F: Fn(&V::Target) -> &O + 'static,
     FMut: 'static,
-    S: ReadOnlySignalStorage<O> + CreateReadOnlySignalStorage<MappedMutSignal<O, V, F, FMut>>,
+    S: BoxedSignalStorage<O> + CreateBoxedSignalStorage<MappedMutSignal<O, V, F, FMut>>,
 {
     fn from(value: MappedMutSignal<O, V, F, FMut>) -> Self {
         Self::new_maybe_sync(value)
@@ -308,7 +329,7 @@ where
 }
 impl<T: ?Sized + 'static, S> From<WriteSignal<T, S>> for ReadSignal<T, S>
 where
-    S: ReadOnlySignalStorage<T> + CreateReadOnlySignalStorage<WriteSignal<T, S>>,
+    S: BoxedSignalStorage<T> + CreateBoxedSignalStorage<WriteSignal<T, S>>,
 {
     fn from(value: WriteSignal<T, S>) -> Self {
         Self::new_maybe_sync(value)
@@ -316,8 +337,8 @@ where
 }
 
 /// A boxed version of [Writable] that can be used to store any writable type.
-pub struct WriteSignal<T: ?Sized, S: ReadOnlySignalStorage<T> = UnsyncStorage> {
-    value: CopyValue<Box<S::DynWritable>, S>,
+pub struct WriteSignal<T: ?Sized, S: BoxedSignalStorage<T> = UnsyncStorage> {
+    value: CopyValue<Box<S::DynWritable<sealed::SealedToken>>, S>,
 }
 
 impl<T: ?Sized + 'static> WriteSignal<T> {
@@ -329,12 +350,12 @@ impl<T: ?Sized + 'static> WriteSignal<T> {
     }
 }
 
-impl<T: ?Sized + 'static, S: ReadOnlySignalStorage<T>> WriteSignal<T, S> {
+impl<T: ?Sized + 'static, S: BoxedSignalStorage<T>> WriteSignal<T, S> {
     /// Create a new boxed writable value which may be sync
     pub fn new_maybe_sync<R>(value: R) -> Self
     where
         R: Writable<Target = T, WriteMetadata: 'static>,
-        S: CreateReadOnlySignalStorage<R>,
+        S: CreateBoxedSignalStorage<R>,
     {
         Self {
             value: CopyValue::new_maybe_sync(S::new_writable(value, sealed::SealedToken)),
@@ -402,27 +423,27 @@ where
     }
 }
 
-impl<T: ?Sized, S: ReadOnlySignalStorage<T>> Clone for WriteSignal<T, S> {
+impl<T: ?Sized, S: BoxedSignalStorage<T>> Clone for WriteSignal<T, S> {
     fn clone(&self) -> Self {
         *self
     }
 }
 
-impl<T: ?Sized, S: ReadOnlySignalStorage<T>> Copy for WriteSignal<T, S> {}
+impl<T: ?Sized, S: BoxedSignalStorage<T>> Copy for WriteSignal<T, S> {}
 
-impl<T: ?Sized, S: ReadOnlySignalStorage<T>> PartialEq for WriteSignal<T, S> {
+impl<T: ?Sized, S: BoxedSignalStorage<T>> PartialEq for WriteSignal<T, S> {
     fn eq(&self, other: &Self) -> bool {
         self.value == other.value
     }
 }
 
-read_impls!(WriteSignal<T, S: ReadOnlySignalStorage<T>>);
-write_impls!(WriteSignal<T, S: ReadOnlySignalStorage<T>>);
+read_impls!(WriteSignal<T, S: BoxedSignalStorage<T>>);
+write_impls!(WriteSignal<T, S: BoxedSignalStorage<T>>);
 
 impl<T, S> IntoAttributeValue for WriteSignal<T, S>
 where
     T: Clone + IntoAttributeValue + 'static,
-    S: ReadOnlySignalStorage<T>,
+    S: BoxedSignalStorage<T>,
 {
     fn into_value(self) -> dioxus_core::AttributeValue {
         self.with(|f| f.clone().into_value())
@@ -432,14 +453,14 @@ where
 impl<T, S> IntoDynNode for WriteSignal<T, S>
 where
     T: Clone + IntoDynNode + 'static,
-    S: ReadOnlySignalStorage<T>,
+    S: BoxedSignalStorage<T>,
 {
     fn into_dyn_node(self) -> dioxus_core::DynamicNode {
         self.with(|f| f.clone().into_dyn_node())
     }
 }
 
-impl<T: Clone + 'static, S: ReadOnlySignalStorage<T>> Deref for WriteSignal<T, S> {
+impl<T: Clone + 'static, S: BoxedSignalStorage<T>> Deref for WriteSignal<T, S> {
     type Target = dyn Fn() -> T;
 
     fn deref(&self) -> &Self::Target {
@@ -447,7 +468,7 @@ impl<T: Clone + 'static, S: ReadOnlySignalStorage<T>> Deref for WriteSignal<T, S
     }
 }
 
-impl<T: ?Sized, S: ReadOnlySignalStorage<T>> Readable for WriteSignal<T, S> {
+impl<T: ?Sized, S: BoxedSignalStorage<T>> Readable for WriteSignal<T, S> {
     type Target = T;
     type Storage = S;
 
@@ -483,7 +504,7 @@ impl<T: ?Sized, S: ReadOnlySignalStorage<T>> Readable for WriteSignal<T, S> {
     }
 }
 
-impl<T: ?Sized, S: ReadOnlySignalStorage<T>> Writable for WriteSignal<T, S> {
+impl<T: ?Sized, S: BoxedSignalStorage<T>> Writable for WriteSignal<T, S> {
     type WriteMetadata = Box<dyn Any>;
 
     fn try_write_unchecked(
@@ -504,9 +525,7 @@ impl<T: ?Sized, S: ReadOnlySignalStorage<T>> Writable for WriteSignal<T, S> {
 // all specific readable types
 impl<
         T: 'static,
-        S: CreateReadOnlySignalStorage<Signal<T, S>>
-            + ReadOnlySignalStorage<T>
-            + Storage<SignalData<T>>,
+        S: CreateBoxedSignalStorage<Signal<T, S>> + BoxedSignalStorage<T> + Storage<SignalData<T>>,
     > From<Signal<T, S>> for WriteSignal<T, S>
 {
     fn from(value: Signal<T, S>) -> Self {
@@ -515,7 +534,7 @@ impl<
 }
 impl<
         T: 'static,
-        S: CreateReadOnlySignalStorage<CopyValue<T, S>> + ReadOnlySignalStorage<T> + Storage<T>,
+        S: CreateBoxedSignalStorage<CopyValue<T, S>> + BoxedSignalStorage<T> + Storage<T>,
     > From<CopyValue<T, S>> for WriteSignal<T, S>
 {
     fn from(value: CopyValue<T, S>) -> Self {
@@ -537,7 +556,7 @@ where
     V: Writable<Storage = S> + 'static,
     F: Fn(&V::Target) -> &O + 'static,
     FMut: Fn(&mut V::Target) -> &mut O + 'static,
-    S: CreateReadOnlySignalStorage<MappedMutSignal<O, V, F, FMut>> + ReadOnlySignalStorage<O>,
+    S: CreateBoxedSignalStorage<MappedMutSignal<O, V, F, FMut>> + BoxedSignalStorage<O>,
 {
     fn from(value: MappedMutSignal<O, V, F, FMut>) -> Self {
         Self::new_maybe_sync(value)

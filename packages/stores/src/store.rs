@@ -6,9 +6,9 @@ use dioxus_core::{
     use_hook, AttributeValue, DynamicNode, IntoAttributeValue, IntoDynNode, Subscribers, SuperInto,
 };
 use dioxus_signals::{
-    read_impls, write_impls, BorrowError, BorrowMutError, CopyValue, CreateReadOnlySignalStorage,
-    Global, InitializeFromFunction, MappedMutSignal, ReadOnlySignalStorage, ReadSignal, Readable,
-    ReadableExt, ReadableRef, Storage, UnsyncStorage, Writable, WritableExt, WritableRef,
+    read_impls, write_impls, BorrowError, BorrowMutError, BoxedSignalStorage, CopyValue,
+    CreateBoxedSignalStorage, Global, InitializeFromFunction, MappedMutSignal, ReadSignal,
+    Readable, ReadableExt, ReadableRef, Storage, UnsyncStorage, Writable, WritableExt, WritableRef,
     WriteSignal,
 };
 use std::marker::PhantomData;
@@ -188,8 +188,7 @@ where
     Lens: Writable<Storage = S> + 'static,
     __F: Fn(&Lens::Target) -> &T + 'static,
     __FMut: Fn(&mut Lens::Target) -> &mut T + 'static,
-    S: ReadOnlySignalStorage<T>
-        + CreateReadOnlySignalStorage<MappedMutSignal<T, Lens, __F, __FMut>>,
+    S: BoxedSignalStorage<T> + CreateBoxedSignalStorage<MappedMutSignal<T, Lens, __F, __FMut>>,
     T: 'static,
 {
     fn from(value: MappedStore<T, Lens, __F, __FMut>) -> Self {
@@ -205,8 +204,7 @@ where
     Lens: Writable<Storage = S> + 'static,
     __F: Fn(&Lens::Target) -> &T + 'static,
     __FMut: Fn(&mut Lens::Target) -> &mut T + 'static,
-    S: ReadOnlySignalStorage<T>
-        + CreateReadOnlySignalStorage<MappedMutSignal<T, Lens, __F, __FMut>>,
+    S: BoxedSignalStorage<T> + CreateBoxedSignalStorage<MappedMutSignal<T, Lens, __F, __FMut>>,
     T: 'static,
 {
     fn from(value: MappedStore<T, Lens, __F, __FMut>) -> Self {
@@ -219,7 +217,7 @@ where
 impl<T, S> ::std::convert::From<WriteStore<T, S>> for ReadStore<T, S>
 where
     T: ?Sized + 'static,
-    S: ReadOnlySignalStorage<T> + CreateReadOnlySignalStorage<WriteSignal<T, S>>,
+    S: BoxedSignalStorage<T> + CreateBoxedSignalStorage<WriteSignal<T, S>>,
 {
     fn from(value: Store<T, WriteSignal<T, S>>) -> Self {
         Self {
@@ -231,7 +229,7 @@ where
 impl<T, S> ::std::convert::From<Store<T, CopyValue<T, S>>> for ReadStore<T, S>
 where
     T: 'static,
-    S: ReadOnlySignalStorage<T> + CreateReadOnlySignalStorage<CopyValue<T, S>> + Storage<T>,
+    S: BoxedSignalStorage<T> + CreateBoxedSignalStorage<CopyValue<T, S>> + Storage<T>,
 {
     fn from(value: Store<T, CopyValue<T, S>>) -> Self {
         Self {
@@ -243,7 +241,7 @@ where
 impl<T, S> ::std::convert::From<Store<T, CopyValue<T, S>>> for WriteStore<T, S>
 where
     T: 'static,
-    S: ReadOnlySignalStorage<T> + CreateReadOnlySignalStorage<CopyValue<T, S>> + Storage<T>,
+    S: BoxedSignalStorage<T> + CreateBoxedSignalStorage<CopyValue<T, S>> + Storage<T>,
 {
     fn from(value: Store<T, CopyValue<T, S>>) -> Self {
         Self {
@@ -259,7 +257,7 @@ impl<T, S, Lens> SuperInto<ReadSignal<T, S>, SuperIntoReadSignalMarker> for Stor
 where
     T: ?Sized + 'static,
     Lens: Readable<Target = T, Storage = S> + 'static,
-    S: CreateReadOnlySignalStorage<Store<T, Lens>> + ReadOnlySignalStorage<T>,
+    S: CreateBoxedSignalStorage<Store<T, Lens>> + BoxedSignalStorage<T>,
 {
     fn super_into(self) -> ReadSignal<T, S> {
         ReadSignal::new_maybe_sync(self)
@@ -272,7 +270,7 @@ impl<T, S, Lens> SuperInto<WriteSignal<T, S>, SuperIntoWriteSignalMarker> for St
 where
     T: ?Sized + 'static,
     Lens: Writable<Target = T, Storage = S> + 'static,
-    S: CreateReadOnlySignalStorage<Store<T, Lens>> + ReadOnlySignalStorage<T>,
+    S: CreateBoxedSignalStorage<Store<T, Lens>> + BoxedSignalStorage<T>,
 {
     fn super_into(self) -> WriteSignal<T, S> {
         WriteSignal::new_maybe_sync(self)
