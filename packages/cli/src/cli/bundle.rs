@@ -39,7 +39,8 @@ impl Bundle {
 
         let BuildTargets { client, server } = self.args.into_targets().await?;
 
-        AppBuilder::started(&client, BuildMode::Base { run: false })?
+        let mut server_artifacts = None;
+        let client_artifacts = AppBuilder::started(&client, BuildMode::Base { run: false })?
             .finish_build()
             .await?;
 
@@ -47,9 +48,11 @@ impl Bundle {
 
         if let Some(server) = server.as_ref() {
             // If the server is present, we need to build it as well
-            AppBuilder::started(server, BuildMode::Base { run: false })?
-                .finish_build()
-                .await?;
+            server_artifacts = Some(
+                AppBuilder::started(server, BuildMode::Base { run: false })?
+                    .finish_build()
+                    .await?,
+            );
 
             tracing::info!(path = ?client.root_dir(), "Server build completed successfully! 🚀");
         }
@@ -134,7 +137,14 @@ impl Bundle {
             );
         }
 
-        Ok(StructuredOutput::BundleOutput { bundles })
+        let client = client_artifacts.into_structured_output();
+        let server = server_artifacts.map(|s| s.into_structured_output());
+
+        Ok(StructuredOutput::BundleOutput {
+            bundles,
+            client,
+            server,
+        })
     }
 
     fn bundle_desktop(

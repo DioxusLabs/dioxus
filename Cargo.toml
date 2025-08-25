@@ -98,11 +98,11 @@ members = [
     "packages/subsecond/subsecond-tests/cross-tls-test",
 
     # Full project examples
-    "example-projects/fullstack-hackernews",
-    "example-projects/ecommerce-site",
-    "example-projects/bluetooth-scanner",
-    "example-projects/file-explorer",
-    "example-projects/hotdog",
+    "examples/fullstack-hackernews",
+    "examples/ecommerce-site",
+    "examples/bluetooth-scanner",
+    "examples/file-explorer",
+    "examples/hotdog",
 
     # Simple examples that require a crate
     "examples/tailwind",
@@ -213,11 +213,12 @@ depinfo = { path = "packages/depinfo", version = "0.7.0-rc.0" }
 warnings = { version = "0.2.1" }
 
 # blitz
-blitz-dom = { version = "=0.1.0-rc.2", default-features = false }
-blitz-net = { version = "=0.1.0-rc.2" }
-blitz-paint = { version = "=0.1.0-rc.2" }
-blitz-traits = { version = "=0.1.0-rc.2" }
-blitz-shell = { version = "=0.1.0-rc.2", default-features = false }
+blitz-dom = { version = "=0.1.0-rc.3", default-features = false }
+blitz-net = { version = "=0.1.0-rc.3" }
+blitz-html = { version = "=0.1.0-rc.3" }
+blitz-paint = { version = "=0.1.0-rc.3" }
+blitz-traits = { version = "=0.1.0-rc.3" }
+blitz-shell = { version = "=0.1.0-rc.3", default-features = false }
 anyrender = { version = "0.5", default-features = false }
 anyrender_vello = { version = "0.5", default-features = false }
 wgpu = { version = "24.0" }
@@ -306,7 +307,6 @@ criterion = { version = "0.6" }
 cargo_metadata = "0.19.2"
 parking_lot = "0.12.4"
 tracing-wasm = "0.2.1"
-console_error_panic_hook = "0.1.7"
 base16 = "0.2.1"
 digest = "0.10.7"
 sha2 = "0.10.9"

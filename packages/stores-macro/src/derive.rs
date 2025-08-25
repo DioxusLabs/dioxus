@@ -121,19 +121,19 @@ fn derive_store_struct(
     // Generate the transposed struct definition
     let transposed_struct = match &structure.fields {
         Fields::Named(_) => {
-            quote! { #visibility struct #transposed_name #extension_generics #extension_where_clause {#(#transposed_fields),*} }
+            quote! { #visibility struct #transposed_name #extension_impl_generics #extension_where_clause {#(#transposed_fields),*} }
         }
         Fields::Unnamed(_) => {
-            quote! { #visibility struct #transposed_name #extension_generics (#(#transposed_fields),*) #extension_where_clause; }
+            quote! { #visibility struct #transposed_name #extension_impl_generics (#(#transposed_fields),*) #extension_where_clause; }
         }
         Fields::Unit => {
-            quote! {#visibility struct #transposed_name #extension_generics #extension_where_clause;}
+            quote! {#visibility struct #transposed_name #extension_impl_generics #extension_where_clause;}
         }
     };
 
     // Expand to the extension trait and its implementation for the store alongside the transposed struct
     Ok(quote! {
-        #visibility trait #extension_trait_name #extension_generics where #extension_where_clause {
+        #visibility trait #extension_trait_name #extension_impl_generics #extension_where_clause {
             #(
                 #definitions
             )*
@@ -358,11 +358,11 @@ fn derive_store_enum(
     };
     implementations.push(implementation);
 
-    let transposed_enum = quote! { #visibility enum #transposed_name #extension_generics #extension_where_clause {#(#transposed_variants),*} };
+    let transposed_enum = quote! { #visibility enum #transposed_name #extension_impl_generics #extension_where_clause {#(#transposed_variants),*} };
 
     // Expand to the extension trait and its implementation for the store alongside the transposed enum
     Ok(quote! {
-        #visibility trait #extension_trait_name #extension_generics where #extension_where_clause {
+        #visibility trait #extension_trait_name #extension_impl_generics #extension_where_clause {
             #(
                 #definitions
             )*

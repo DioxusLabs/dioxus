@@ -197,7 +197,7 @@ mod field_info {
             ordinal: usize,
             field: &syn::Field,
             field_defaults: FieldBuilderAttr,
-        ) -> Result<FieldInfo, Error> {
+        ) -> Result<FieldInfo<'_>, Error> {
             if let Some(ref name) = field.ident {
                 let mut builder_attr = field_defaults.with(&field.attrs)?;
 
@@ -509,7 +509,7 @@ fn type_from_inside_option(ty: &Type) -> Option<&Type> {
 
     // If the segment is a supported optional type, provide the inner type.
     // Return the inner type if the pattern is `Option<T>` or `ReadSignal<Option<T>>``
-    if seg.ident == "ReadOnlySignal" || seg.ident == "ReadSignal" {
+    if seg.ident == "ReadSignal" || seg.ident == "ReadOnlySignal" {
         // Get the inner type. E.g. the `u16` in `ReadSignal<u16>` or `Option` in `ReadSignal<Option<bool>>`
         let inner_type = extract_inner_type_from_segment(seg)?;
         let Type::Path(inner_path) = inner_type else {

@@ -16,7 +16,7 @@ pub struct BuildAssets {
 
 impl BuildAssets {
     pub async fn run(self) -> Result<StructuredOutput> {
-        let manifest = extract_assets_from_file(&self.executable)?;
+        let manifest = extract_assets_from_file(&self.executable).await?;
 
         create_dir_all(&self.destination)?;
         for asset in manifest.unique_assets() {

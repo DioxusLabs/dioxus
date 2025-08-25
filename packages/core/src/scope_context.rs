@@ -294,7 +294,7 @@ impl Scope {
         for ctx in contexts.iter_mut() {
             // Swap the ptr directly
             if let Some(ctx) = ctx.downcast_mut::<T>() {
-                std::mem::swap(ctx, &mut value.clone());
+                *ctx = value.clone();
                 return value;
             }
         }

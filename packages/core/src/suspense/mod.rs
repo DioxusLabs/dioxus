@@ -170,7 +170,7 @@ impl SuspenseContext {
     }
 
     /// Get all suspended tasks
-    pub fn suspended_futures(&self) -> Ref<[SuspendedFuture]> {
+    pub fn suspended_futures(&self) -> Ref<'_, [SuspendedFuture]> {
         Ref::map(self.inner.suspended_tasks.borrow(), |tasks| {
             tasks.as_slice()
         })

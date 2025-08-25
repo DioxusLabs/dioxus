@@ -267,13 +267,14 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &TraceController) -> Resu
             }
 
             ServeUpdate::ToggleShouldRebuild => {
+                use crate::styles::{ERROR, NOTE_STYLE};
                 builder.automatic_rebuilds = !builder.automatic_rebuilds;
                 tracing::info!(
                     "Automatic rebuilds are currently: {}",
                     if builder.automatic_rebuilds {
-                        "enabled"
+                        format!("{NOTE_STYLE}enabled{NOTE_STYLE:#}")
                     } else {
-                        "disabled"
+                        format!("{ERROR}disabled{ERROR:#}")
                     }
                 )
             }

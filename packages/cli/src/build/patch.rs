@@ -1329,7 +1329,7 @@ fn name_is_bindgen_symbol(name: &str) -> bool {
 /// We need to do this for data symbols because walrus doesn't provide the right range and offset
 /// information for data segments. Fortunately, it provides it for code sections, so we only need to
 /// do a small amount extra of parsing here.
-fn parse_bytes_to_data_segment(bytes: &[u8]) -> Result<RawDataSection> {
+fn parse_bytes_to_data_segment(bytes: &[u8]) -> Result<RawDataSection<'_>> {
     let parser = wasmparser::Parser::new(0);
     let mut parser = parser.parse_all(bytes);
     let mut segments = vec![];
@@ -1441,7 +1441,7 @@ struct ParsedModule<'a> {
 
 /// Parse a module and return the mapping of index to FunctionID.
 /// We'll use this mapping to remap ModuleIDs
-fn parse_module_with_ids(bindgened: &[u8]) -> Result<ParsedModule> {
+fn parse_module_with_ids(bindgened: &[u8]) -> Result<ParsedModule<'_>> {
     let ids = Arc::new(RwLock::new(Vec::new()));
     let ids_ = ids.clone();
     let module = Module::from_buffer_with_config(

@@ -18,7 +18,8 @@
 //! - Heartbeat: helps us track version distribution of the CLI and critical "failures on launch" useful during new version rollouts.
 //! - Rollups: helps us track performance and issues over time, as well as usage of various commands.
 //!
-//! If you don't run the CLI, then we won't send any data. Rollups are not done in background processes.
+//! Rollups are not done in background processes, but rather directly by the `dx` CLI.
+//! If you don't run the CLI, then we won't send any data.
 //!
 //! We don't collect any PII, but we do collect three "controversial" pieces of data:
 //! - the target triple of your system (OS, arch, etc)

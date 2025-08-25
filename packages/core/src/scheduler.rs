@@ -265,15 +265,14 @@ impl Borrow<ScopeOrder> for DirtyTasks {
     }
 }
 
-impl PartialOrd for DirtyTasks {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.order.cmp(&other.order))
-    }
-}
-
 impl Ord for DirtyTasks {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.order.cmp(&other.order)
+    }
+}
+impl PartialOrd for DirtyTasks {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
     }
 }
 
