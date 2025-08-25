@@ -147,6 +147,24 @@ impl Bundle {
         })
     }
 
+    #[allow(deprecated)]
+    fn windows_icon_override(
+        krate: &BuildRequest,
+        bundle_settings: &mut BundleSettings,
+        windows_icon: Option<String>,
+    ) {
+        let has_windows_icon_override = match krate.config.bundle.windows.as_ref() {
+            Some(windows) => windows.icon_path.is_some(),
+            None => false,
+        };
+
+        if !has_windows_icon_override {
+            let icon = windows_icon.unwrap();
+            // for now it still needs to be set even though it's deprecated
+            bundle_settings.windows.icon_path = PathBuf::from(icon);
+        }
+    }
+
     fn bundle_desktop(
         build: &BuildRequest,
         package_types: &Option<Vec<crate::PackageType>>,
@@ -201,17 +219,7 @@ impl Bundle {
                 bundle_settings.icon.get_or_insert_with(Vec::new).push(path);
             }
 
-            let has_windows_icon_override = match krate.config.bundle.windows.as_ref() {
-                Some(windows) => windows.icon_path.is_some(),
-                None => false,
-            };
-
-            if !has_windows_icon_override {
-                let icon = windows_icon.unwrap();
-                // for now it still needs to be set even though it's deprecated
-                #[allow(deprecated)]
-                bundle_settings.windows.icon_path = PathBuf::from(icon);
-            }
+            Self::windows_icon_override(krate, &mut bundle_settings, windows_icon);
         }
 
         if bundle_settings.resources_map.is_none() {
