@@ -59,7 +59,7 @@ pub trait Writable: Readable {
 /// # use dioxus::prelude::*;
 /// fn app() -> Element {
 ///     let mut value = use_signal(|| String::from("hello"));
-///     
+///
 ///     rsx! {
 ///         button {
 ///             onclick: move |_| {

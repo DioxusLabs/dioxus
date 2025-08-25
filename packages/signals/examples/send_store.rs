@@ -5,21 +5,21 @@ fn main() {
 }
 
 fn app() -> Element {
-    let mut signal = use_signal_sync(|| 0);
+    let mut store = use_hook(|| Store::new_maybe_sync(0u32));
 
     rsx! {
-        button { onclick: move |_| signal += 1, "Increase" }
-        "{signal}"
-        Child { signal }
+        button { onclick: move |_| store += 1, "Increase" }
+        "{store}"
+        Child { store }
     }
 }
 
 #[component]
-fn Child(signal: WriteSignal<u32, SyncStorage>) -> Element {
+fn Child(store: WriteStore<u32, SyncStorage>) -> Element {
     use_hook(|| {
         std::thread::spawn(move || loop {
             std::thread::sleep(std::time::Duration::from_secs(1));
-            signal += 1;
+            store += 1;
         });
     });
 
