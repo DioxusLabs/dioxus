@@ -153,7 +153,7 @@ impl<T, S: Storage<T>> Readable for CopyValue<T, S> {
     type Storage = S;
 
     #[track_caller]
-    fn try_read_unchecked(
+    fn try_read_extended(
         &self,
     ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> {
         crate::warnings::copy_value_hoisted(self, std::panic::Location::caller());
@@ -161,7 +161,7 @@ impl<T, S: Storage<T>> Readable for CopyValue<T, S> {
     }
 
     #[track_caller]
-    fn try_peek_unchecked(&self) -> BorrowResult<ReadableRef<'static, Self>> {
+    fn try_peek_extended(&self) -> BorrowResult<ReadableRef<'static, Self>> {
         crate::warnings::copy_value_hoisted(self, std::panic::Location::caller());
         self.value.try_read()
     }
@@ -175,7 +175,7 @@ impl<T, S: Storage<T>> Writable for CopyValue<T, S> {
     type WriteMetadata = ();
 
     #[track_caller]
-    fn try_write_unchecked(
+    fn try_write_extended(
         &self,
     ) -> Result<WritableRef<'static, Self>, generational_box::BorrowMutError> {
         crate::warnings::copy_value_hoisted(self, std::panic::Location::caller());
