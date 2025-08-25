@@ -209,6 +209,7 @@ impl Bundle {
             if !has_windows_icon_override {
                 let icon = windows_icon.unwrap();
                 // for now it still needs to be set even though it's deprecated
+                #[allow(deprecated)]
                 bundle_settings.windows.icon_path = PathBuf::from(icon);
             }
         }

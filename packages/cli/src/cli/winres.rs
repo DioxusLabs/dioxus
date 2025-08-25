@@ -570,7 +570,7 @@ impl WindowsResource {
 
     /// Write a resource file with the set values
     pub fn write_resource_file<P: AsRef<Path>>(&self, path: P) -> io::Result<()> {
-        let mut f = fs::File::create(path)?;
+        let mut f = File::create(path)?;
 
         // use UTF8 as an encoding
         // this makes it easier since in rust all string are UTF8
