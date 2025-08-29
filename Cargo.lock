@@ -2790,9 +2790,9 @@ dependencies = [
 
 [[package]]
 name = "blitz-dom"
-version = "0.1.0-rc.3"
+version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "214e9e87e3eccaea98ae35eb6a9e0451048ef1b6175c99500b23a331c1a941b8"
+checksum = "9684c4041ad76528d5fce5c4194068bef7ae315148b71e308b6fc600ee683ca0"
 dependencies = [
  "accesskit 0.17.1",
  "app_units",
@@ -2814,6 +2814,7 @@ dependencies = [
  "peniko",
  "percent-encoding",
  "selectors 0.31.0",
+ "skrifa",
  "slab",
  "smallvec",
  "stylo",
@@ -2830,9 +2831,9 @@ dependencies = [
 
 [[package]]
 name = "blitz-html"
-version = "0.1.0-rc.3"
+version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "28a627d02a71432bffcf4cdc6100f138e9b8dc7d62f132a27ef9678f3c80223d"
+checksum = "58dcb1b0ff3be0a452e39f84d3f9117a28df98a99c25351d8506910ea142d3cd"
 dependencies = [
  "blitz-dom",
  "blitz-traits",
@@ -2842,9 +2843,9 @@ dependencies = [
 
 [[package]]
 name = "blitz-net"
-version = "0.1.0-rc.3"
+version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "24ed18ece8779731ec9a1e453194ac133885c48b2bcfb1d70e4054b27a4574f8"
+checksum = "2434788de88b5b6b10a4b71b08284be3126633caa53c15063a2bf322ef6c6202"
 dependencies = [
  "blitz-traits",
  "data-url 0.3.1",
@@ -2854,9 +2855,9 @@ dependencies = [
 
 [[package]]
 name = "blitz-paint"
-version = "0.1.0-rc.3"
+version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3756d12f7c3781cfccfdf4a18366a93e5ddbd60216785aae178296340ee76918"
+checksum = "5442484c1401ff358249d7390783c0bf3c71fd6968551fcc8c55809a0db47a87"
 dependencies = [
  "anyrender",
  "anyrender_svg",
@@ -2875,9 +2876,9 @@ dependencies = [
 
 [[package]]
 name = "blitz-shell"
-version = "0.1.0-rc.3"
+version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "53fe4abf8326d54d31e5be846d5177a8e9dc11392fadead4653dfd8f0ac4dd70"
+checksum = "14603c202d692b179db363ff1819578f80ee266f9ce6bd8b4efb3e7122cbdbc0"
 dependencies = [
  "accesskit 0.17.1",
  "accesskit_winit 0.23.1",
@@ -2894,9 +2895,9 @@ dependencies = [
 
 [[package]]
 name = "blitz-traits"
-version = "0.1.0-rc.3"
+version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4021acefe0ac35c70aef3f06481bb3f8c1049f61dec1fff09a98abe07fb4c463"
+checksum = "28632c6f78fa8a70c11f88df2c0fe459c1391acf2cf1032040a57e991f4b5512"
 dependencies = [
  "bitflags 2.9.1",
  "bytes",
@@ -15558,9 +15559,9 @@ checksum = "62601d73eb8743eaed1f227bde2374f672ae8de7db1fedcbe5aca055e3de566b"
 
 [[package]]
 name = "stylo_taffy"
-version = "0.1.0-rc.3"
+version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "90b50aae96a5ef64f675eddc26adc60945748588519926d32077804004a48d9d"
+checksum = "4919f25cd55489a3d0a5b27b70c7a27d7671ab4ccb448a305102ce5f38618f6d"
 dependencies = [
  "stylo",
  "stylo_atoms",
