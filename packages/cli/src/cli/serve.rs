@@ -64,10 +64,6 @@ pub(crate) struct ServeArgs {
     #[clap(long, default_missing_value = "true")]
     pub(crate) watch: Option<bool>,
 
-    /// This flag only applies to fullstack builds. By default fullstack builds will run the server and client builds in parallel. This flag will force the build to run the server build first, then the client build. [default: false]
-    #[clap(long)]
-    pub(crate) force_sequential: bool,
-
     /// Exit the CLI after running into an error. This is mainly used to test hot patching internally
     #[clap(long)]
     #[clap(hide = true)]
@@ -130,7 +126,6 @@ impl Anonymized for ServeArgs {
             "interactive": self.interactive,
             "hot_patch": self.hot_patch,
             "watch": self.watch,
-            "force_sequential": self.force_sequential,
             "exit_on_error": self.exit_on_error,
             "platform_args": self.platform_args.anonymized(),
         }}

@@ -5442,8 +5442,10 @@ name = "dioxus-dx-wire-format"
 version = "0.7.0-rc.0"
 dependencies = [
  "cargo_metadata",
+ "manganis-core",
  "serde",
  "serde_json",
+ "subsecond-types",
 ]
 
 [[package]]

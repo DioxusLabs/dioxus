@@ -1,6 +1,8 @@
 use cargo_metadata::{diagnostic::Diagnostic, CompilerMessage};
+use manganis_core::BundledAsset;
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::{borrow::Cow, collections::HashSet, path::PathBuf};
+use subsecond_types::JumpTable;
 
 pub use cargo_metadata;
 
@@ -20,17 +22,25 @@ pub use cargo_metadata;
 /// but they are not guaranteed to be, such that we can provide better error messages for the user.
 #[allow(clippy::large_enum_variant)]
 #[non_exhaustive]
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum StructuredOutput {
     BuildsFinished {
-        client: PathBuf,
-        server: Option<PathBuf>,
+        client: StructuredBuildArtifacts,
+        server: Option<StructuredBuildArtifacts>,
+    },
+    PrintCargoArgs {
+        args: Vec<String>,
+        env: Vec<(Cow<'static, str>, String)>,
     },
     BuildFinished {
-        path: PathBuf,
+        artifacts: StructuredBuildArtifacts,
     },
     BuildUpdate {
         stage: BuildStage,
+    },
+    Hotpatch {
+        jump_table: JumpTable,
+        artifacts: StructuredBuildArtifacts,
     },
     CargoOutput {
         message: CompilerMessage,
@@ -40,6 +50,8 @@ pub enum StructuredOutput {
     },
     BundleOutput {
         bundles: Vec<PathBuf>,
+        client: StructuredBuildArtifacts,
+        server: Option<StructuredBuildArtifacts>,
     },
     HtmlTranslate {
         html: String,
@@ -50,10 +62,20 @@ pub enum StructuredOutput {
     },
 }
 
-impl std::fmt::Debug for StructuredOutput {
+impl std::fmt::Display for StructuredOutput {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(&serde_json::to_string(self).map_err(|_e| std::fmt::Error)?)
     }
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct StructuredBuildArtifacts {
+    pub path: PathBuf,
+    pub exe: PathBuf,
+    pub rustc_args: Vec<String>,
+    pub rustc_envs: Vec<(String, String)>,
+    pub link_args: Vec<String>,
+    pub assets: HashSet<BundledAsset>, // the serialized asset manifest
 }
 
 /// The current stage of the ongoing build
