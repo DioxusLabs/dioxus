@@ -1,7 +1,8 @@
 use dioxus_dx_wire_format::StructuredBuildArtifacts;
 
 use crate::{
-    cli::*, Anonymized, AppBuilder, BuildArtifacts, BuildMode, BuildRequest, TargetArgs, Workspace,
+    cli::*, Anonymized, AppBuilder, BuildArtifacts, BuildMode, BuildRequest, BundleFormat,
+    TargetArgs, Workspace,
 };
 
 /// Build the Rust Dioxus app and all of its assets.
@@ -116,14 +117,22 @@ impl CommandWithPlatformOverrides<BuildArgs> {
                 Some(server_args) => {
                     // Make sure we set the client target here so @server knows to place its output into the @client target directory.
                     server_args.build_arguments.client_target = Some(client.main_target.clone());
+
+                    // We don't override anything except the bundle format since @server usually implies a server output
+                    server_args.build_arguments.bundle = server_args
+                        .build_arguments
+                        .bundle
+                        .or(Some(BundleFormat::Server));
+
                     server = Some(
                         BuildRequest::new(&server_args.build_arguments, workspace.clone()).await?,
                     );
                 }
                 None => {
                     let mut args = self.shared.build_arguments.clone();
-                    args.platform = Some(crate::Platform::Server);
-                    args.renderer.renderer = Some(crate::Renderer::Server);
+                    args.platform = crate::Platform::Server;
+                    args.renderer = Some(crate::Renderer::Server);
+                    args.bundle = Some(crate::BundleFormat::Server);
                     args.target = Some(target_lexicon::Triple::host());
                     server = Some(BuildRequest::new(&args, workspace.clone()).await?);
                 }

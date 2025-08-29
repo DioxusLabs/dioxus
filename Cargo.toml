@@ -72,6 +72,9 @@ members = [
     "packages/depinfo",
     "packages/server",
 
+    # CLI harnesses, all included
+    "packages/cli-harnesses/*",
+
     # Playwright tests
     "packages/playwright-tests/liveview",
     "packages/playwright-tests/web",
