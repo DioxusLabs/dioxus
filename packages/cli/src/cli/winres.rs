@@ -715,8 +715,10 @@ impl WindowsResource {
         };
 
         if cfg!(target_env = "msvc") {
+            tracing::info!("Compiling Windows resource file with msvc toolkit");
             self.compile_with_toolkit_msvc(rc.as_str())
         } else if cfg!(target_env = "gnu") {
+            tracing::info!("Compiling Windows resource file with gnu toolkit");
             self.compile_with_toolkit_gnu(rc.as_str())
         } else {
             Err(io::Error::new(
@@ -727,37 +729,46 @@ impl WindowsResource {
     }
 
     fn compile_with_toolkit_gnu(&mut self, input: &str) -> io::Result<()> {
-        let output = PathBuf::from(&self.output_directory).join("resource.o");
         let input = PathBuf::from(input);
+        tracing::debug!("Input file: '{}'", input.display());
+        let output = PathBuf::from(&self.output_directory).join("resource.o");
+        tracing::debug!("Output object file: '{}'", output.display());
         let manifest = match &self.assets_path {
             Some(val) => val,
             None => &std::env::var("CARGO_MANIFEST_DIR").unwrap(),
         };
+
+        tracing::debug!("Selected toolkit path: '{}'", &self.toolkit_path.display());
+        tracing::debug!("Selected windres path: '{:?}'", &self.windres_path);
+        tracing::debug!("Selected ar path: '{:?}'", &self.ar_path);
 
         let status = process::Command::new(&self.windres_path)
             .current_dir(&self.toolkit_path)
             .arg(format!("-I{}", manifest))
             .arg(format!("{}", input.display()))
             .arg(format!("{}", output.display()))
-            .status()?;
-        if !status.success() {
+            .output()?;
+
+        if !status.status.success() {
             return Err(io::Error::new(
                 io::ErrorKind::Other,
-                "Could not compile resource file",
+                format!("Compiling resource file {:?}", &status.stderr),
             ));
         }
 
         let libname = PathBuf::from(&self.output_directory).join("libresource.a");
+        tracing::debug!("Output lib file: '{}'", output.display());
         let status = process::Command::new(&self.ar_path)
             .current_dir(&self.toolkit_path)
             .arg("rsc")
             .arg(format!("{}", libname.display()))
             .arg(format!("{}", output.display()))
-            .status()?;
-        if !status.success() {
+            .output()?;
+
+        if !status.status.success() {
             return Err(io::Error::new(
                 io::ErrorKind::Other,
-                "Could not create static library for resource file",
+                format!("Creating static library for resource file {:?}", &status.stderr),
             ));
         }
 
@@ -792,15 +803,17 @@ impl WindowsResource {
             None => &std::env::var("CARGO_MANIFEST_DIR").unwrap(),
         };
 
-        println!("Selected RC path: '{}'", rc_exe.display());
-        let output = PathBuf::from(&self.output_directory).join("resource.lib");
+        tracing::debug!("Selected toolkit path: '{}'", rc_exe.display());
         let input = PathBuf::from(input);
+        tracing::debug!("Input file: '{}'", input.display());
+        let output = PathBuf::from(&self.output_directory).join("resource.lib");
+        tracing::debug!("Output file: '{}'", output.display());
         let mut command = process::Command::new(&rc_exe);
         let command = command.arg(format!("/I{}", manifest));
 
         if self.add_toolkit_include {
             let root = win_sdk_include_root(&rc_exe);
-            println!("Adding toolkit include: {}", root.display());
+            tracing::debug!("Adding toolkit include: {}", root.display());
             command.arg(format!("/I{}", root.join("um").display()));
             command.arg(format!("/I{}", root.join("shared").display()));
         }
@@ -810,18 +823,11 @@ impl WindowsResource {
             .arg(format!("{}", input.display()))
             .output()?;
 
-        println!(
-            "RC Output:\n{}\n------",
-            String::from_utf8_lossy(&status.stdout)
-        );
-        println!(
-            "RC Error:\n{}\n------",
-            String::from_utf8_lossy(&status.stderr)
-        );
+
         if !status.status.success() {
             return Err(io::Error::new(
                 io::ErrorKind::Other,
-                "Could not compile resource file",
+                format!("Compiling resource file {:?}", &status.stderr),
             ));
         }
 
@@ -879,7 +885,6 @@ fn get_sdk() -> io::Result<Vec<PathBuf>> {
             };
 
             if rc.exists() {
-                println!("{:?}", rc);
                 kits.push(rc.parent().unwrap().to_owned());
             }
 
@@ -891,7 +896,6 @@ fn get_sdk() -> io::Result<Vec<PathBuf>> {
                         e.path().join(r"x86\rc.exe")
                     };
                     if p.exists() {
-                        println!("{:?}", p);
                         kits.push(p.parent().unwrap().to_owned());
                     }
                 }
