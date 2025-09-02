@@ -623,10 +623,10 @@ impl AppBundle {
 
         let name = self.build.krate.executable_name().to_string();
         let keep_debug =
-            // if we're in debug mode, or we're generating debug symbols, keep debug info
-            (self.build.krate.config.web.wasm_opt.debug || self.build.build.debug_symbols)
-            // but only if we're not in release mode
-            && !self.build.build.release;
+            // Always keep debug info if --debug-symbols is explicitly enabled
+            self.build.build.debug_symbols
+            // Or if we're in debug mode and debug is configured
+            || (self.build.krate.config.web.wasm_opt.debug && !self.build.build.release);
 
         let start = std::time::Instant::now();
 
@@ -691,6 +691,11 @@ impl AppBundle {
 
             tracing::info!(dx_src = ?TraceSrc::Build, "Running optimization with wasm-opt...");
 
+            // Always keep debug info if --debug-symbols is explicitly enabled
+            // Otherwise respect the config setting only in debug builds
+            let keep_debug = self.build.build.debug_symbols
+                || (self.build.krate.config.web.wasm_opt.debug && !self.build.build.release);
+
             let mut options = match self.build.krate.config.web.wasm_opt.level {
                 WasmOptLevel::Z => {
                     wasm_opt::OptimizationOptions::new_optimize_for_size_aggressively()
@@ -705,12 +710,27 @@ impl AppBundle {
             let wasm_file =
                 bindgen_outdir.join(format!("{}_bg.wasm", self.build.krate.executable_name()));
             let old_size = wasm_file.metadata()?.len();
-            options
+            
+            // Use a temporary output file to avoid in-place modification issues
+            let temp_wasm_file = wasm_file.with_extension("wasm.tmp");
+            tracing::debug!("wasm-opt input: {:?}, output: {:?}, keep_debug: {}", wasm_file, temp_wasm_file, keep_debug);
+            
+            let result = options
                 // WASM bindgen relies on reference types
                 .enable_feature(wasm_opt::Feature::ReferenceTypes)
-                .debug_info(self.build.krate.config.web.wasm_opt.debug)
-                .run(&wasm_file, &wasm_file)
-                .map_err(|err| crate::Error::Other(anyhow::anyhow!(err)))?;
+                .debug_info(keep_debug)
+                .run(&wasm_file, &temp_wasm_file);
+            
+            if let Err(ref err) = result {
+                tracing::error!("wasm-opt failed: {:?}", err);
+                tracing::debug!("Input file exists: {}", wasm_file.exists());
+                tracing::debug!("Temp file exists: {}", temp_wasm_file.exists());
+            }
+            
+            result.map_err(|err| crate::Error::Other(anyhow::anyhow!(err)))?;
+            
+            // Move the temporary file back to the original location
+            std::fs::rename(&temp_wasm_file, &wasm_file)?;
 
             let new_size = wasm_file.metadata()?.len();
             tracing::debug!(
