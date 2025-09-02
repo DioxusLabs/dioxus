@@ -9,11 +9,10 @@ name: Release Fixed DX Binary
 on:
   push:
     tags:
-      - 'v*-fix.*'  # Matches tags like v0.6.3-fix.1, v0.6.3-fix.2, etc.
+      - "v*-fix.*" # Matches tags like v0.6.3-fix.1, v0.6.3-fix.2, etc.
   workflow_dispatch:
     inputs:
       tag:
-        name: "Release Tag"
         required: true
         description: "Release tag (e.g., v0.6.3-fix.1)"
         type: string
@@ -32,7 +31,7 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        
+
       - name: Create release
         id: create_release
         uses: softprops/action-gh-release@v1
@@ -41,19 +40,19 @@ jobs:
           name: "Fixed DX Binary ${{ env.RELEASE_TAG }}"
           body: |
             ## Fixed DX Binary Release ${{ env.RELEASE_TAG }}
-            
+
             This is a custom build of the Dioxus CLI (dx) with bug fixes for team use.
-            
+
             ### Features
             - ✅ Built with `optimizations` feature (includes wasm-opt)
             - ✅ Cross-platform binaries (Windows, macOS, Linux)
             - ✅ Bug fixes and improvements
             - ✅ Compatible with Dioxus v0.6.3
-            
+
             Binaries are being built and will be available shortly...
           draft: false
           prerelease: ${{ contains(env.RELEASE_TAG, '-fix.') }}
-  
+
   release-cli:
     name: Build and Release DX Binary
     needs: create-release
@@ -68,17 +67,17 @@ jobs:
             os: windows-latest
           - target: aarch64-pc-windows-msvc
             os: windows-latest
-          
-          # macOS builds  
+
+          # macOS builds
           - target: x86_64-apple-darwin
             os: macos-13
           - target: aarch64-apple-darwin
             os: macos-latest
-          
+
           # Linux builds
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-22.04
-          
+
           # Uncomment for ARM Linux if needed
           # - target: aarch64-unknown-linux-gnu
           #   os: ubuntu-latest
@@ -98,7 +97,7 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: "1.81.0"  # Use the MSRV for v0.6.3
+          toolchain: "1.81.0" # Use the MSRV for v0.6.3
           targets: ${{ matrix.platform.target }}
 
       - name: Setup Rust cache
@@ -124,8 +123,8 @@ jobs:
           archive: dx-$target-${{ env.RELEASE_TAG }}
           checksum: sha256
           manifest_path: packages/cli/Cargo.toml
-          features: optimizations  # Use optimizations feature (includes wasm-opt)
-          
+          features: optimizations # Use optimizations feature (includes wasm-opt)
+
   create-release-notes:
     name: Create Release Notes
     needs: release-cli
@@ -135,7 +134,7 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        
+
       - name: Create or update release
         uses: softprops/action-gh-release@v1
         with:
@@ -143,23 +142,23 @@ jobs:
           name: "Fixed DX Binary ${{ env.RELEASE_TAG }}"
           body: |
             ## Fixed DX Binary Release ${{ env.RELEASE_TAG }}
-            
+
             This is a custom build of the Dioxus CLI (dx) with bug fixes for team use.
-            
+
             ### Installation
-            
+
             #### Quick Install (Linux/macOS)
             ```bash
             # Linux x64
             curl -L https://github.com/akesson/dioxus/releases/download/${{ env.RELEASE_TAG }}/dx-x86_64-unknown-linux-gnu-${{ env.RELEASE_TAG }}.tar.gz | tar -xz && sudo mv dx /usr/local/bin/
-            
+
             # macOS Intel
             curl -L https://github.com/akesson/dioxus/releases/download/${{ env.RELEASE_TAG }}/dx-x86_64-apple-darwin-${{ env.RELEASE_TAG }}.tar.gz | tar -xz && sudo mv dx /usr/local/bin/
-            
+
             # macOS Apple Silicon
             curl -L https://github.com/akesson/dioxus/releases/download/${{ env.RELEASE_TAG }}/dx-aarch64-apple-darwin-${{ env.RELEASE_TAG }}.tar.gz | tar -xz && sudo mv dx /usr/local/bin/
             ```
-            
+
             #### CI Installation
             ```yaml
             - name: Install fixed dx
@@ -168,13 +167,13 @@ jobs:
                 chmod +x dx
                 sudo mv dx /usr/local/bin/
             ```
-            
+
             ### Features
             - ✅ Built with `optimizations` feature (includes wasm-opt)
             - ✅ Cross-platform binaries (Windows, macOS, Linux)
             - ✅ Bug fixes and improvements
             - ✅ Compatible with Dioxus v0.6.3
-            
+
             ### Verification
             ```bash
             dx --version  # Should show: dioxus 0.6.3 (custom build)
