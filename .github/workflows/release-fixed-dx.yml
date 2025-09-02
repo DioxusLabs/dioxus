@@ -22,8 +22,41 @@ env:
   RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
 
 jobs:
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      release_created: ${{ steps.create_release.outputs.release_created }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Create release
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: "Fixed DX Binary ${{ env.RELEASE_TAG }}"
+          body: |
+            ## Fixed DX Binary Release ${{ env.RELEASE_TAG }}
+            
+            This is a custom build of the Dioxus CLI (dx) with bug fixes for team use.
+            
+            ### Features
+            - ✅ Built with `optimizations` feature (includes wasm-opt)
+            - ✅ Cross-platform binaries (Windows, macOS, Linux)
+            - ✅ Bug fixes and improvements
+            - ✅ Compatible with Dioxus v0.6.3
+            
+            Binaries are being built and will be available shortly...
+          draft: false
+          prerelease: ${{ contains(env.RELEASE_TAG, '-fix.') }}
+  
   release-cli:
     name: Build and Release DX Binary
+    needs: create-release
     permissions:
       contents: write
     runs-on: ${{ matrix.platform.os }}
