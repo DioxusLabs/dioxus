@@ -136,7 +136,7 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
             }
             server_data.in_context(|| {
                 virtual_dom.in_runtime(|| {
-                    // Provide a hydration compatable create error boundary method
+                    // Provide a hydration compatible create error boundary method
                     dioxus_core::ScopeId::ROOT.in_runtime(|| {
                         dioxus_core::provide_create_error_boundary(
                             dioxus_fullstack_hooks::errors::init_error_boundary,

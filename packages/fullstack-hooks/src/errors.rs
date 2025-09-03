@@ -1,10 +1,10 @@
-//! Contains a hydration compatable error boundary context.
+//! Contains a hydration compatible error boundary context.
 
 use dioxus_core::{spawn_isomorphic, CapturedError, ErrorContext, ReactiveContext};
 use dioxus_fullstack_protocol::serialize_context;
 use futures_util::StreamExt;
 
-/// Initializes an error boundary context that is compatable with hydration.
+/// Initializes an error boundary context that is compatible with hydration.
 pub fn init_error_boundary() -> ErrorContext {
     let initial_errors = serialize_context().create_entry::<Vec<CapturedError>>();
     let (rx_context, mut rx) = ReactiveContext::new();

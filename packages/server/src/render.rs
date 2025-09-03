@@ -210,7 +210,7 @@ impl SsrRendererPool {
             in_root_scope(&virtual_dom, || {
                 // Wrap the memory history in a fullstack history provider to provide the initial route for hydration
                 provide_fullstack_history_context(history);
-                // Provide a hydration compatable error boundary that serializes errors for the client
+                // Provide a hydration compatible error boundary that serializes errors for the client
                 dioxus_core::provide_create_error_boundary(
                     dioxus_fullstack_hooks::errors::init_error_boundary,
                 );

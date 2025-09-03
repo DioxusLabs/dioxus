@@ -53,13 +53,13 @@ impl Default for CreateErrorBoundary {
 }
 
 /// Provides a method that is used to create error boundaries in `use_error_boundary_provider`.
-/// This is only called from fullstack to create a hydration compatable error boundary
+/// This is only called from fullstack to create a hydration compatible error boundary
 #[doc(hidden)]
 pub fn provide_create_error_boundary(create_error_boundary: fn() -> ErrorContext) {
     provide_context(CreateErrorBoundary(create_error_boundary));
 }
 
-/// Create an error boundary with the current error boundary factory (either hydration compatable or default)
+/// Create an error boundary with the current error boundary factory (either hydration compatible or default)
 fn create_error_boundary() -> ErrorContext {
     let create_error_boundary: CreateErrorBoundary = try_consume_context().unwrap_or_default();
     (create_error_boundary.0)()
