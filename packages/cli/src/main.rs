@@ -63,7 +63,9 @@ async fn main() {
             Commands::Run(opts) => opts.run().await,
             Commands::SelfUpdate(opts) => opts.self_update().await,
             Commands::Tools(BuildTools::BuildAssets(opts)) => opts.run().await,
+            Commands::Tools(BuildTools::HotpatchTip(opts)) => opts.run().await,
             Commands::Doctor(opts) => opts.doctor().await,
+            Commands::Print(opts) => opts.print().await,
         }
     });
 
@@ -71,10 +73,10 @@ async fn main() {
     // Make sure we do this as the last step so you can always `tail -1` it
     match result.await {
         StructuredOutput::Error { message } => {
-            tracing::error!(json = ?StructuredOutput::Error { message });
+            tracing::error!(json = %StructuredOutput::Error { message });
             std::process::exit(1);
         }
 
-        output => tracing::debug!(json = ?output),
+        output => tracing::info!(json = %output),
     }
 }

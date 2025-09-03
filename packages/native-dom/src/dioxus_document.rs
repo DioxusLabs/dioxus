@@ -277,7 +277,7 @@ impl EventHandler for DioxusEventHandler<'_> {
             // Get dioxus vdom id for node
             let dioxus_id = mutr.doc.get_node(node_id).and_then(get_dioxus_id);
             let Some(id) = dioxus_id else {
-                return;
+                continue;
             };
 
             // Handle event in vdom

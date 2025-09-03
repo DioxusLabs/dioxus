@@ -170,7 +170,7 @@ impl AppBuilder {
                     tx: tx.clone(),
                 };
                 request.verify_tooling(&ctx).await?;
-                request.prepare_build_dir()?;
+                request.prebuild(&ctx).await?;
                 request.build(&ctx).await
             }
         });
@@ -406,14 +406,14 @@ impl AppBuilder {
                         _ => {}
                     }
 
-                    tracing::info!(json = ?StructuredOutput::BuildUpdate { stage: stage.clone() });
+                    tracing::info!(json = %StructuredOutput::BuildUpdate { stage: stage.clone() });
                 }
                 BuilderUpdate::CompilerMessage { message } => {
-                    tracing::info!(json = ?StructuredOutput::RustcOutput { message: message.clone() }, %message);
+                    tracing::info!(json = %StructuredOutput::RustcOutput { message: message.clone() }, %message);
                 }
                 BuilderUpdate::BuildReady { bundle } => {
-                    tracing::debug!(json = ?StructuredOutput::BuildFinished {
-                        path: self.build.root_dir(),
+                    tracing::debug!(json = %StructuredOutput::BuildFinished {
+                        artifacts: bundle.clone().into_structured_output(),
                     });
                     return Ok(bundle);
                 }
@@ -421,7 +421,7 @@ impl AppBuilder {
                     // Flush remaining compiler messages
                     while let Ok(Some(msg)) = self.rx.try_next() {
                         if let BuilderUpdate::CompilerMessage { message } = msg {
-                            tracing::info!(json = ?StructuredOutput::RustcOutput { message: message.clone() }, %message);
+                            tracing::info!(json = %StructuredOutput::RustcOutput { message: message.clone() }, %message);
                         }
                     }
 
@@ -517,7 +517,7 @@ impl AppBuilder {
         }
 
         // If there's any CARGO vars in the rustc_wrapper files, push those too
-        if let Ok(res) = std::fs::read_to_string(self.build.rustc_wrapper_args_file.path()) {
+        if let Ok(res) = std::fs::read_to_string(self.build.rustc_wrapper_args_file()) {
             if let Ok(res) = serde_json::from_str::<RustcArgs>(&res) {
                 for (key, value) in res.envs {
                     if key.starts_with("CARGO_") {
