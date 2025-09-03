@@ -1,6 +1,7 @@
 use crate::{
-    global_context::current_scope_id, innerlude::provide_context, use_hook, Element, IntoDynNode,
-    Properties, ScopeId, Template, TemplateAttribute, TemplateNode, VNode,
+    global_context::current_scope_id, innerlude::provide_context, try_consume_context, use_hook,
+    Element, IntoDynNode, Properties, ReactiveContext, ScopeId, Subscribers, Template,
+    TemplateAttribute, TemplateNode, VNode,
 };
 use std::{
     any::Any,
@@ -39,12 +40,29 @@ impl Display for CapturedPanic {
 
 impl Error for CapturedPanic {}
 
+#[derive(Clone, Copy)]
+struct CreateErrorBoundary(fn() -> ErrorContext);
+
+impl Default for CreateErrorBoundary {
+    fn default() -> Self {
+        Self(|| ErrorContext::new(Vec::new()))
+    }
+}
+
+#[doc(hidden)]
+pub fn provide_create_error_boundary(create_error_boundary: fn() -> ErrorContext) {
+    provide_context(CreateErrorBoundary(create_error_boundary));
+}
+
+fn create_error_boundary() -> ErrorContext {
+    let create_error_boundary: CreateErrorBoundary = try_consume_context().unwrap_or_default();
+    tracing::info!("creating error boundary");
+    (create_error_boundary.0)()
+}
+
 /// Provide an error boundary to catch errors from child components
-pub fn provide_error_boundary() -> ErrorContext {
-    provide_context(ErrorContext::new(
-        Vec::new(),
-        current_scope_id().unwrap_or_else(|e| panic!("{}", e)),
-    ))
+pub fn use_error_boundary_provider() -> ErrorContext {
+    use_hook(|| provide_context(create_error_boundary()))
 }
 
 /// A trait for any type that can be downcast to a concrete type and implements Debug. This is automatically implemented for all types that implement Any + Debug.
@@ -228,10 +246,18 @@ impl<T: Any + Error> AnyError for T {
 }
 
 /// A context with information about suspended components
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ErrorContext {
     errors: Rc<RefCell<Vec<CapturedError>>>,
-    id: ScopeId,
+    subscribers: Subscribers,
+}
+
+impl Debug for ErrorContext {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ErrorContext")
+            .field("errors", &self.errors)
+            .finish()
+    }
 }
 
 impl PartialEq for ErrorContext {
@@ -241,16 +267,19 @@ impl PartialEq for ErrorContext {
 }
 
 impl ErrorContext {
-    /// Create a new suspense boundary in a specific scope
-    pub(crate) fn new(errors: Vec<CapturedError>, id: ScopeId) -> Self {
+    /// Create a new error context
+    pub fn new(errors: Vec<CapturedError>) -> Self {
         Self {
             errors: Rc::new(RefCell::new(errors)),
-            id,
+            subscribers: Subscribers::default(),
         }
     }
 
     /// Get all errors thrown from child components
     pub fn errors(&self) -> Ref<'_, [CapturedError]> {
+        if let Some(rc) = ReactiveContext::current() {
+            self.subscribers.add(rc);
+        }
         Ref::map(self.errors.borrow(), |errors| errors.as_slice())
     }
 
@@ -262,13 +291,23 @@ impl ErrorContext {
     /// Push an error into this Error Boundary
     pub fn insert_error(&self, error: CapturedError) {
         self.errors.borrow_mut().push(error);
-        self.id.needs_update();
+        self.mark_dirty()
     }
 
     /// Clear all errors from this Error Boundary
     pub fn clear_errors(&self) {
         self.errors.borrow_mut().clear();
-        self.id.needs_update();
+        self.mark_dirty();
+    }
+
+    fn mark_dirty(&self) {
+        let mut this_subscribers_vec = Vec::new();
+        self.subscribers
+            .visit(|subscriber| this_subscribers_vec.push(*subscriber));
+        for subscriber in this_subscribers_vec {
+            self.subscribers.remove(&subscriber);
+            subscriber.mark_dirty();
+        }
     }
 }
 
@@ -800,7 +839,7 @@ impl<
 /// ```
 #[allow(non_upper_case_globals, non_snake_case)]
 pub fn ErrorBoundary(props: ErrorBoundaryProps) -> Element {
-    let error_boundary = use_hook(provide_error_boundary);
+    let error_boundary = use_error_boundary_provider();
     let errors = error_boundary.errors();
     let has_errors = !errors.is_empty();
     // Drop errors before running user code that might borrow the error lock

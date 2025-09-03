@@ -5543,6 +5543,7 @@ dependencies = [
  "dioxus-hooks",
  "dioxus-signals",
  "futures-channel",
+ "futures-util",
  "serde",
 ]
 

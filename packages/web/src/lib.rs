@@ -135,8 +135,14 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
                 virtual_dom.in_runtime(|| dioxus_core::ScopeId::APP.throw_error(error));
             }
             server_data.in_context(|| {
-                #[cfg(feature = "document")]
                 virtual_dom.in_runtime(|| {
+                    // Provide a hydration compatable create error boundary method
+                    dioxus_core::ScopeId::ROOT.in_runtime(|| {
+                        dioxus_core::provide_create_error_boundary(
+                            dioxus_fullstack_hooks::errors::init_error_boundary,
+                        );
+                    });
+                    #[cfg(feature = "document")]
                     document::init_fullstack_document();
                 });
                 virtual_dom.rebuild(&mut websys_dom);
