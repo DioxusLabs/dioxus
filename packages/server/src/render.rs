@@ -488,7 +488,7 @@ fn streaming_render_component_callback(
 /// Start capturing errors at a suspense boundary. If the parent suspense boundary is frozen, we need to capture the errors in the suspense boundary
 /// and send them to the client to continue bubbling up
 fn start_capturing_errors(suspense_scope: ScopeId) {
-    // Add an error boundary to the scope. We serialize the suspense error boundary seperately so we can use
+    // Add an error boundary to the scope. We serialize the suspense error boundary separately so we can use
     // the normal in memory ErrorContext here
     suspense_scope.in_runtime(|| dioxus_core::provide_context(ErrorContext::new(Vec::new())));
 }
