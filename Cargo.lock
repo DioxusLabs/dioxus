@@ -5750,6 +5750,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "dioxus-playwright-fullstack-errors-test"
+version = "0.1.0"
+dependencies = [
+ "dioxus",
+ "serde",
+ "tokio",
+]
+
+[[package]]
 name = "dioxus-playwright-fullstack-mounted-test"
 version = "0.1.0"
 dependencies = [
