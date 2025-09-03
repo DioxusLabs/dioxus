@@ -1,0 +1,5 @@
+error: expected `->`
+ --> tests/invalid/no_return.rs:4:26
+  |
+4 | pub async fn no_return() {}
+  |                          ^

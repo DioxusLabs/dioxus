@@ -1,0 +1,84 @@
+error[E0277]: the trait bound `InvalidError: FromServerFnError` is not satisfied
+  --> tests/invalid/aliased_return_part.rs:11:1
+   |
+11 | #[server]
+   | ^^^^^^^^^ the trait `FromServerFnError` is not implemented for `InvalidError`
+   |
+   = help: the trait `FromServerFnError` is implemented for `ServerFnError<CustErr>`
+   = note: required for `BrowserClient` to implement `Client<InvalidError>`
+note: required by a bound in `server_fn::ServerFn::Client`
+  --> src/lib.rs
+   |
+   |       type Client: Client<
+   |  __________________^
+   | |         Self::Error,
+   | |         Self::InputStreamError,
+   | |         Self::OutputStreamError,
+   | |     >;
+   | |_____^ required by this bound in `ServerFn::Client`
+   = note: this error originates in the attribute macro `server` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: the trait bound `InvalidError: FromServerFnError` is not satisfied
+  --> tests/invalid/aliased_return_part.rs:11:1
+   |
+11 | #[server]
+   | ^^^^^^^^^ the trait `FromServerFnError` is not implemented for `InvalidError`
+   |
+   = help: the trait `FromServerFnError` is implemented for `ServerFnError<CustErr>`
+   = note: required for `BrowserClient` to implement `Client<InvalidError>`
+   = note: required for `Http<PostUrl, Post<JsonEncoding>>` to implement `Protocol<PartAliasResult, std::string::String, BrowserClient, BrowserMockServer, InvalidError>`
+note: required by a bound in `server_fn::ServerFn::Protocol`
+  --> src/lib.rs
+   |
+   |       type Protocol: Protocol<
+   |  ____________________^
+   | |         Self,
+   | |         Self::Output,
+   | |         Self::Client,
+...  |
+   | |         Self::OutputStreamError,
+   | |     >;
+   | |_____^ required by this bound in `ServerFn::Protocol`
+   = note: this error originates in the attribute macro `server` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: the trait bound `InvalidError: FromServerFnError` is not satisfied
+  --> tests/invalid/aliased_return_part.rs:11:1
+   |
+11 | #[server]
+   | ^^^^^^^^^ the trait `FromServerFnError` is not implemented for `InvalidError`
+   |
+   = help: the trait `FromServerFnError` is implemented for `ServerFnError<CustErr>`
+note: required by a bound in `server_fn::ServerFn::Error`
+  --> src/lib.rs
+   |
+   |     type Error: FromServerFnError + Send + Sync;
+   |                 ^^^^^^^^^^^^^^^^^ required by this bound in `ServerFn::Error`
+   = note: this error originates in the attribute macro `server` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: the trait bound `InvalidError: FromServerFnError` is not satisfied
+  --> tests/invalid/aliased_return_part.rs:11:1
+   |
+11 | #[server]
+   | ^^^^^^^^^ the trait `FromServerFnError` is not implemented for `InvalidError`
+   |
+   = help: the trait `FromServerFnError` is implemented for `ServerFnError<CustErr>`
+note: required by a bound in `server_fn::ServerFn::InputStreamError`
+  --> src/lib.rs
+   |
+   |     type InputStreamError: FromServerFnError + Send + Sync;
+   |                            ^^^^^^^^^^^^^^^^^ required by this bound in `ServerFn::InputStreamError`
+   = note: this error originates in the attribute macro `server` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: the trait bound `InvalidError: FromServerFnError` is not satisfied
+  --> tests/invalid/aliased_return_part.rs:11:1
+   |
+11 | #[server]
+   | ^^^^^^^^^ the trait `FromServerFnError` is not implemented for `InvalidError`
+   |
+   = help: the trait `FromServerFnError` is implemented for `ServerFnError<CustErr>`
+note: required by a bound in `server_fn::ServerFn::OutputStreamError`
+  --> src/lib.rs
+   |
+   |     type OutputStreamError: FromServerFnError + Send + Sync;
+   |                             ^^^^^^^^^^^^^^^^^ required by this bound in `ServerFn::OutputStreamError`
+   = note: this error originates in the attribute macro `server` (in Nightly builds, run with -Z macro-backtrace for more info)

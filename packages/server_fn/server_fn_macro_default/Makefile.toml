@@ -1,0 +1,4 @@
+extend = { path = "../../cargo-make/main.toml" }
+
+[tasks.check-format]
+env = { LEPTOS_PROJECT_DIRECTORY = "../../" }

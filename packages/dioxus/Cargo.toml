@@ -101,8 +101,8 @@ native = ["dep:dioxus-native",  "dioxus-fullstack?/desktop"] # todo(jon): decomp
 server = [
   "dep:dioxus-server",
   "dep:dioxus_server_macro",
-  "dioxus_server_macro/server",
-  "dioxus_server_macro/axum",
+  # "dioxus_server_macro",
+  # "dioxus_server_macro",
   "ssr",
   "dioxus-liveview?/axum",
   "dioxus-fullstack?/server",

@@ -1,0 +1,13 @@
+error: expected `async`
+ --> tests/invalid/not_async.rs:5:5
+  |
+5 | pub fn not_async() -> Result<String, ServerFnError> {
+  |     ^^
+
+warning: unused import: `server_fn::error::ServerFnError`
+ --> tests/invalid/not_async.rs:2:5
+  |
+2 | use server_fn::error::ServerFnError;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default

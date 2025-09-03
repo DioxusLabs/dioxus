@@ -13,7 +13,7 @@ description = "Server function macros for Dioxus"
 proc-macro2 = { workspace = true }
 quote = { workspace = true }
 syn = { workspace = true, features = ["full"] }
-server_fn_macro = { workspace = true }
+server_fn_macro_dioxus = { workspace = true }
 
 
 [dev-dependencies]
@@ -26,11 +26,16 @@ axum = { workspace = true }
 proc-macro = true
 
 [features]
-axum = ["server_fn_macro/axum"]
-server = ["server_fn_macro/ssr"]
-browser = []
-reqwest = ["server_fn_macro/reqwest"]
-generic = ["server_fn_macro/generic"]
+# axum = []
+# server = []
+# browser = []
+# reqwest = []
+# generic = []
+# axum = ["server_fn_macro/axum"]
+# server = ["server_fn_macro/ssr"]
+# browser = []
+# reqwest = ["server_fn_macro/reqwest"]
+# generic = ["server_fn_macro/generic"]
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]

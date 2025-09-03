@@ -71,6 +71,7 @@ members = [
     "packages/asset-resolver",
     "packages/depinfo",
     "packages/server",
+    "packages/server_fn_macro",
 
     # CLI harnesses, all included
     "packages/cli-harnesses/*",
@@ -212,6 +213,10 @@ wasm-split-cli = { path = "packages/wasm-split/wasm-split-cli", version = "0.7.0
 wasm-split-harness = { path = "packages/playwright-tests/wasm-split-harness", version = "0.7.0-rc.0" }
 wasm-used = { path = "packages/wasm-split/wasm-used", version = "0.7.0-rc.0" }
 
+# rpc
+server_fn = { version = "=0.8.3", default-features = false }
+server_fn_macro_dioxus = {path = "packages/server_fn_macro", version = "0.7.0-rc.0" }
+
 depinfo = { path = "packages/depinfo", version = "0.7.0-rc.0" }
 warnings = { version = "0.2.1" }
 
@@ -259,8 +264,6 @@ lru = "0.16.0"
 async-trait = "0.1.88"
 axum = { version = "0.8.4", default-features = false }
 axum-server = { version = "0.7.2", default-features = false }
-server_fn = { version = "=0.8.3", default-features = false }
-server_fn_macro = { version = "=0.8.3" }
 tower = "0.5.2"
 http = "1.3.1"
 notify = { version = "8.1.0" }
@@ -336,6 +339,7 @@ libloading = "0.8.8"
 libc = "0.2.174"
 memmap2 = "0.9.5"
 memfd = "0.6.4"
+xxhash-rust = {version = "0.8.15", default-features = false}
 
 # desktop
 wry = { version = "0.52.1", default-features = false }

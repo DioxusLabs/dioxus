@@ -83,22 +83,22 @@ devtools = ["dioxus-web?/devtools", "dep:dioxus-devtools"]
 mounted = ["dioxus-web?/mounted"]
 file_engine = ["dioxus-web?/file_engine"]
 document = ["dioxus-web?/document"]
-web = ["dep:dioxus-web", "dep:web-sys", "dioxus-fullstack-hooks/web", "server_fn/browser", "dioxus_server_macro/browser"]
-desktop = ["server_fn/reqwest", "dioxus_server_macro/reqwest"]
-mobile = ["server_fn/reqwest", "dioxus_server_macro/reqwest"]
+web = ["dep:dioxus-web", "dep:web-sys", "dioxus-fullstack-hooks/web", "server_fn/browser"]
+desktop = ["server_fn/reqwest"]
+mobile = ["server_fn/reqwest"]
 default-tls = ["server_fn/default-tls"]
 rustls = ["server_fn/rustls", "dep:rustls", "dep:hyper-rustls"]
 server = [
     "server-core" ,
     "default-tls",
-    "server_fn/axum",
+    # "server_fn/axum",
 ]
 server-core = [
-    "server_fn/axum-no-default",
-    "dioxus_server_macro/axum",
-    "server_fn/reqwest",
-    "server_fn/ssr",
-    "dioxus_server_macro/reqwest",
+    # "server_fn/axum-no-default",
+    # "dioxus_server_macro/axum",
+    # "server_fn/reqwest",
+    # "server_fn/ssr",
+    # "dioxus_server_macro/reqwest",
     "dioxus-fullstack-hooks/server",
     "dep:dioxus-server",
     "dioxus-interpreter-js",

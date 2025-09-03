@@ -6065,7 +6065,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "serde",
- "server_fn_macro",
+ "server_fn_macro_dioxus",
  "syn 2.0.104",
  "tower-http",
 ]
@@ -14743,6 +14743,18 @@ checksum = "ca7abc92ed696648275ed9ff171131a83d571af11748593dc2e6eb6a4e22a5b9"
 dependencies = [
  "server_fn_macro",
  "syn 2.0.104",
+]
+
+[[package]]
+name = "server_fn_macro_dioxus"
+version = "0.7.0-rc.0"
+dependencies = [
+ "const_format",
+ "convert_case 0.8.0",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.104",
+ "xxhash-rust",
 ]
 
 [[package]]

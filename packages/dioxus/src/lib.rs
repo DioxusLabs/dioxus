@@ -138,7 +138,7 @@ pub mod prelude {
     #[cfg(feature = "document")]
     #[cfg_attr(docsrs, doc(cfg(feature = "document")))]
     #[doc(inline)]
-    pub use dioxus_document as document;
+    pub use dioxus_document::{self as document, Meta, Stylesheet, Title};
 
     #[cfg(feature = "document")]
     #[cfg_attr(docsrs, doc(cfg(feature = "document")))]
