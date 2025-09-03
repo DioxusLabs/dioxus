@@ -6,8 +6,7 @@ use crate::{
 };
 use dioxus_cli_config::base_path;
 use dioxus_core::{
-    has_context, DynamicNode, ErrorContext, ScopeId, SuspenseContext, TemplateNode, VNode,
-    VirtualDom,
+    has_context, DynamicNode, ErrorContext, ScopeId, SuspenseContext, VNode, VirtualDom,
 };
 use dioxus_fullstack_hooks::history::provide_fullstack_history_context;
 use dioxus_fullstack_hooks::{StreamingContext, StreamingStatus};

@@ -20,8 +20,7 @@ pub fn init_error_boundary() -> ErrorContext {
         async move {
             if rx.next().await.is_some() {
                 rx_context.run_in(|| {
-                    initial_errors
-                        .insert(&errors.errors().to_vec(), &std::panic::Location::caller())
+                    initial_errors.insert(&errors.errors().to_vec(), std::panic::Location::caller())
                 });
             }
         }
