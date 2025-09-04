@@ -8,12 +8,29 @@ use dioxus_cli_opt::{process_file_to, AssetManifest};
 use manganis::{AssetOptions, JsAssetOptions};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use std::collections::HashSet;
+use std::fs::File;
 use std::future::Future;
+use std::io::{BufReader, BufWriter};
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
 use std::sync::atomic::Ordering;
 use std::{sync::atomic::AtomicUsize, time::Duration};
 use tokio::process::Command;
+use uuid::Uuid;
+use wasmbin::sections::{CustomSection, Section};
+use wasmbin::Module;
+
+fn as_custom_section(section: &Section) -> Option<&CustomSection> {
+    section.try_as()?.try_contents().ok()
+}
+
+/// Returns `true` if this section should be stripped.
+fn is_strippable_section(section: &Section, strip_names: bool) -> bool {
+    as_custom_section(section).is_some_and(|section| match section {
+        CustomSection::Name(_) => strip_names,
+        other => other.name().starts_with(".debug_"),
+    })
+}
 
 /// The end result of a build.
 ///
@@ -284,6 +301,17 @@ impl AppBundle {
             .await
             .context("Failed to write assets")?;
         bundle.write_metadata().await?;
+
+        // Process WASM with wasm-split: add build ID and split debug info before compression
+        if let Platform::Web = bundle.build.build.platform() {
+            // Find the final WASM asset path from the asset manifest
+            let wasm_bindgen_output = bundle.build.wasm_bindgen_wasm_output_file();
+            if let Some(bundled_asset) = bundle.app.assets.assets.get(&wasm_bindgen_output) {
+                let final_wasm_path = bundle.build.asset_dir().join(bundled_asset.bundled_path());
+                bundle.process_wasm_split(&final_wasm_path).await?;
+            }
+        }
+
         bundle.optimize().await?;
         bundle.pre_render_ssg_routes().await?;
         bundle
@@ -710,25 +738,30 @@ impl AppBundle {
             let wasm_file =
                 bindgen_outdir.join(format!("{}_bg.wasm", self.build.krate.executable_name()));
             let old_size = wasm_file.metadata()?.len();
-            
+
             // Use a temporary output file to avoid in-place modification issues
             let temp_wasm_file = wasm_file.with_extension("wasm.tmp");
-            tracing::debug!("wasm-opt input: {:?}, output: {:?}, keep_debug: {}", wasm_file, temp_wasm_file, keep_debug);
-            
+            tracing::debug!(
+                "wasm-opt input: {:?}, output: {:?}, keep_debug: {}",
+                wasm_file,
+                temp_wasm_file,
+                keep_debug
+            );
+
             let result = options
                 // WASM bindgen relies on reference types
                 .enable_feature(wasm_opt::Feature::ReferenceTypes)
                 .debug_info(keep_debug)
                 .run(&wasm_file, &temp_wasm_file);
-            
+
             if let Err(ref err) = result {
                 tracing::error!("wasm-opt failed: {:?}", err);
                 tracing::debug!("Input file exists: {}", wasm_file.exists());
                 tracing::debug!("Temp file exists: {}", temp_wasm_file.exists());
             }
-            
+
             result.map_err(|err| crate::Error::Other(anyhow::anyhow!(err)))?;
-            
+
             // Move the temporary file back to the original location
             std::fs::rename(&temp_wasm_file, &wasm_file)?;
 
@@ -884,6 +917,68 @@ impl AppBundle {
         // https://github.com/rust-mobile/xbuild/blob/master/xbuild/template/lib.rs
         // https://github.com/rust-mobile/xbuild/blob/master/apk/src/lib.rs#L19
         std::fs::copy(source, destination)?;
+        Ok(())
+    }
+
+    /// Process WASM file with wasm-split functionality: add build ID and optionally split debug info
+    async fn process_wasm_split(&self, wasm_path: &Path) -> Result<()> {
+        if self.build.build.platform() != Platform::Web || !self.build.build.debug_symbols {
+            return Ok(());
+        }
+
+        tracing::info!(
+            "Processing WASM file with wasm-split: {}",
+            wasm_path.display()
+        );
+
+        let mut module = Module::decode_from(BufReader::new(File::open(wasm_path)?))
+            .map_err(|e| anyhow::anyhow!("Failed to decode WASM module: {}", e))?;
+
+        // Try to see if we already have a build ID. If not, create one.
+        let build_id = module
+            .sections
+            .iter()
+            .filter_map(as_custom_section)
+            .find_map(|section| match section {
+                CustomSection::BuildId(build_id) => Some(build_id.clone()),
+                _ => None,
+            })
+            .unwrap_or_else(|| {
+                let new_id = Uuid::new_v4().as_bytes().to_vec();
+                module
+                    .sections
+                    .push(CustomSection::BuildId(new_id.clone()).into());
+                new_id
+            });
+
+        let debug_file = wasm_path.with_extension("debug.wasm");
+        // Write the complete module (including debug info) to the debug file
+        module
+            .encode_into(BufWriter::new(File::create(&debug_file)?))
+            .map_err(|e| anyhow::anyhow!("Failed to encode debug WASM file: {}", e))?;
+        tracing::debug!("Created debug companion file: {}", debug_file.display());
+
+        // Strip debug sections from main file if we created a debug companion
+        module
+            .sections
+            .retain(|section| !is_strippable_section(section, false));
+
+        // Add external debug info reference if we have a debug file
+        if let Some(debug_file_name) = debug_file.file_name().and_then(|n| n.to_str()) {
+            module
+                .sections
+                .push(CustomSection::ExternalDebugInfo(debug_file_name.to_string().into()).into());
+        }
+
+        // Write the main module
+        module
+            .encode_into(BufWriter::new(File::create(wasm_path)?))
+            .map_err(|e| anyhow::anyhow!("Failed to encode main WASM file: {}", e))?;
+
+        tracing::debug!(
+            "WASM processing complete, build ID: {}",
+            hex::encode(build_id)
+        );
         Ok(())
     }
 }

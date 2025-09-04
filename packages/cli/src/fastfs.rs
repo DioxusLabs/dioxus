@@ -5,6 +5,7 @@
 
 use std::{
     ffi::OsString,
+    io::BufWriter,
     path::{Path, PathBuf},
 };
 
@@ -51,7 +52,13 @@ pub(crate) fn pre_compress_folder(path: &Path, pre_compress: bool) -> std::io::R
     for entry in walk_dir.into_iter().filter_map(|e| e.ok()) {
         let entry_path = entry.path();
         if entry_path.is_file() {
-            if pre_compress {
+            let is_dwarf = entry_path
+                .file_name()
+                .map(|n| n.to_str().map(|name| name.ends_with(".debug.wasm")))
+                .flatten()
+                .unwrap_or(false);
+
+            if pre_compress && !is_dwarf {
                 if let Err(err) = pre_compress_file(entry_path) {
                     tracing::error!("Failed to pre-compress file {entry_path:?}: {err}");
                 }
