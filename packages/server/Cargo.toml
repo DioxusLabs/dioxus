@@ -19,9 +19,6 @@ dioxus-document = { workspace = true }
 dioxus-html = { workspace = true }
 generational-box = { workspace = true }
 
-# server functions
-server_fn = { workspace = true, default-features = false }
-
 # axum + native deps
 axum = { workspace = true, default-features = false }
 tower-http = { workspace = true, features = ["fs"], optional = true }
@@ -37,6 +34,7 @@ http = { workspace = true }
 dioxus-ssr = { workspace = true }
 dioxus-isrg = { workspace = true }
 dioxus-router = { workspace = true, features = ["streaming"] }
+dioxus-fullstack = { workspace = true }
 dioxus-fullstack-hooks = { workspace = true }
 dioxus-fullstack-protocol = { workspace = true }
 dioxus-interpreter-js = { workspace = true, optional = true }
@@ -88,7 +86,6 @@ dioxus = { workspace = true, features = ["fullstack"] }
 default = ["devtools", "full"]
 full = [
     "core",
-    "server_fn/ssr",
     "dep:tower-http",
     "default-tls",
     "dep:tower",
@@ -98,15 +95,11 @@ full = [
     "dep:hyper-util",
     "axum/default",
 ]
-core = [
-    "server_fn/axum-no-default",
-    "server_fn/ssr",
-    "document",
-]
+core = [ "document" ]
 devtools = ["dep:dioxus-devtools"]
 document = ["dep:dioxus-interpreter-js"]
-default-tls = ["server_fn/default-tls"]
-rustls = ["server_fn/rustls", "dep:rustls", "dep:hyper-rustls"]
+default-tls = []
+rustls = ["dep:rustls", "dep:hyper-rustls"]
 aws-lc-rs = ["dep:aws-lc-rs"]
 
 [package.metadata.docs.rs]

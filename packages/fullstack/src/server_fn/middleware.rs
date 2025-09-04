@@ -30,10 +30,7 @@ impl<Req, Res> BoxedService<Req, Res> {
     }
 
     /// Converts a request into a response by running the inner service.
-    pub fn run(
-        &mut self,
-        req: Req,
-    ) -> Pin<Box<dyn Future<Output = Res> + Send>> {
+    pub fn run(&mut self, req: Req) -> Pin<Box<dyn Future<Output = Res> + Send>> {
         self.service.run(req, self.ser)
     }
 }
@@ -72,26 +69,18 @@ mod axum {
             let inner = self.call(req);
             Box::pin(async move {
                 inner.await.unwrap_or_else(|e| {
-                    let err =
-                        ser(ServerFnErrorErr::MiddlewareError(e.to_string()));
+                    let err = ser(ServerFnErrorErr::MiddlewareError(e.to_string()));
                     Response::<Body>::error_response(&path, err)
                 })
             })
         }
     }
 
-    impl tower::Service<Request<Body>>
-        for BoxedService<Request<Body>, Response<Body>>
-    {
+    impl tower::Service<Request<Body>> for BoxedService<Request<Body>, Response<Body>> {
         type Response = Response<Body>;
         type Error = ServerFnError;
-        type Future = Pin<
-            Box<
-                dyn std::future::Future<
-                        Output = Result<Self::Response, Self::Error>,
-                    > + Send,
-            >,
-        >;
+        type Future =
+            Pin<Box<dyn std::future::Future<Output = Result<Self::Response, Self::Error>> + Send>>;
 
         fn poll_ready(
             &mut self,
@@ -108,10 +97,7 @@ mod axum {
 
     impl<L> super::Layer<Request<Body>, Response<Body>> for L
     where
-        L: tower_layer::Layer<BoxedService<Request<Body>, Response<Body>>>
-            + Sync
-            + Send
-            + 'static,
+        L: tower_layer::Layer<BoxedService<Request<Body>, Response<Body>>> + Sync + Send + 'static,
         L::Service: Service<Request<Body>, Response<Body>> + Send + 'static,
     {
         fn layer(
@@ -119,64 +105,6 @@ mod axum {
             inner: BoxedService<Request<Body>, Response<Body>>,
         ) -> BoxedService<Request<Body>, Response<Body>> {
             BoxedService::new(inner.ser, self.layer(inner))
-        }
-    }
-}
-
-#[cfg(feature = "actix-no-default")]
-mod actix {
-    use crate::{
-        error::ServerFnErrorErr,
-        request::actix::ActixRequest,
-        response::{actix::ActixResponse, Res},
-    };
-    use actix_web::{HttpRequest, HttpResponse};
-    use bytes::Bytes;
-    use std::{future::Future, pin::Pin};
-
-    impl<S> super::Service<HttpRequest, HttpResponse> for S
-    where
-        S: actix_web::dev::Service<HttpRequest, Response = HttpResponse>,
-        S::Future: Send + 'static,
-        S::Error: std::fmt::Display + Send + 'static,
-    {
-        fn run(
-            &mut self,
-            req: HttpRequest,
-            ser: fn(ServerFnErrorErr) -> Bytes,
-        ) -> Pin<Box<dyn Future<Output = HttpResponse> + Send>> {
-            let path = req.uri().path().to_string();
-            let inner = self.call(req);
-            Box::pin(async move {
-                inner.await.unwrap_or_else(|e| {
-                    let err =
-                        ser(ServerFnErrorErr::MiddlewareError(e.to_string()));
-                    ActixResponse::error_response(&path, err).take()
-                })
-            })
-        }
-    }
-
-    impl<S> super::Service<ActixRequest, ActixResponse> for S
-    where
-        S: actix_web::dev::Service<HttpRequest, Response = HttpResponse>,
-        S::Future: Send + 'static,
-        S::Error: std::fmt::Display + Send + 'static,
-    {
-        fn run(
-            &mut self,
-            req: ActixRequest,
-            ser: fn(ServerFnErrorErr) -> Bytes,
-        ) -> Pin<Box<dyn Future<Output = ActixResponse> + Send>> {
-            let path = req.0 .0.uri().path().to_string();
-            let inner = self.call(req.0.take().0);
-            Box::pin(async move {
-                ActixResponse::from(inner.await.unwrap_or_else(|e| {
-                    let err =
-                        ser(ServerFnErrorErr::MiddlewareError(e.to_string()));
-                    ActixResponse::error_response(&path, err).take()
-                }))
-            })
         }
     }
 }

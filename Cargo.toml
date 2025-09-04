@@ -71,7 +71,7 @@ members = [
     "packages/asset-resolver",
     "packages/depinfo",
     "packages/server",
-    "packages/server_fn_macro",
+    "packages/server-macro",
 
     # CLI harnesses, all included
     "packages/cli-harnesses/*",
@@ -213,9 +213,6 @@ wasm-split-cli = { path = "packages/wasm-split/wasm-split-cli", version = "0.7.0
 wasm-split-harness = { path = "packages/playwright-tests/wasm-split-harness", version = "0.7.0-rc.0" }
 wasm-used = { path = "packages/wasm-split/wasm-used", version = "0.7.0-rc.0" }
 
-# rpc
-server_fn = { version = "=0.8.3", default-features = false }
-server_fn_macro_dioxus = {path = "packages/server_fn_macro", version = "0.7.0-rc.0" }
 
 depinfo = { path = "packages/depinfo", version = "0.7.0-rc.0" }
 warnings = { version = "0.2.1" }

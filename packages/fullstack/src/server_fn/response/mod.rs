@@ -1,6 +1,3 @@
-/// Response types for Actix.
-#[cfg(feature = "actix-no-default")]
-pub mod actix;
 /// Response types for the browser.
 #[cfg(feature = "browser")]
 pub mod browser;
@@ -55,10 +52,7 @@ pub trait ClientRes<E> {
     /// Attempts to extract a binary stream from an HTTP response.
     fn try_into_stream(
         self,
-    ) -> Result<
-        impl Stream<Item = Result<Bytes, Bytes>> + Send + Sync + 'static,
-        E,
-    >;
+    ) -> Result<impl Stream<Item = Result<Bytes, Bytes>> + Send + Sync + 'static, E>;
 
     /// HTTP status code of the response.
     fn status(&self) -> u16;

@@ -14,8 +14,8 @@ use http::{
 use http_body_util::BodyExt;
 use std::borrow::Cow;
 
-impl<Error, InputStreamError, OutputStreamError>
-    Req<Error, InputStreamError, OutputStreamError> for Request<Body>
+impl<Error, InputStreamError, OutputStreamError> Req<Error, InputStreamError, OutputStreamError>
+    for Request<Body>
 where
     Error: FromServerFnError + Send,
     InputStreamError: FromServerFnError + Send,
@@ -48,28 +48,24 @@ where
     async fn try_into_bytes(self) -> Result<Bytes, Error> {
         let (_parts, body) = self.into_parts();
 
-        body.collect().await.map(|c| c.to_bytes()).map_err(|e| {
-            ServerFnErrorErr::Deserialization(e.to_string()).into_app_error()
-        })
+        body.collect()
+            .await
+            .map(|c| c.to_bytes())
+            .map_err(|e| ServerFnErrorErr::Deserialization(e.to_string()).into_app_error())
     }
 
     async fn try_into_string(self) -> Result<String, Error> {
         let bytes = Req::<Error>::try_into_bytes(self).await?;
-        String::from_utf8(bytes.to_vec()).map_err(|e| {
-            ServerFnErrorErr::Deserialization(e.to_string()).into_app_error()
-        })
+        String::from_utf8(bytes.to_vec())
+            .map_err(|e| ServerFnErrorErr::Deserialization(e.to_string()).into_app_error())
     }
 
     fn try_into_stream(
         self,
-    ) -> Result<impl Stream<Item = Result<Bytes, Bytes>> + Send + 'static, Error>
-    {
+    ) -> Result<impl Stream<Item = Result<Bytes, Bytes>> + Send + 'static, Error> {
         Ok(self.into_body().into_data_stream().map(|chunk| {
             chunk.map_err(|e| {
-                Error::from_server_fn_error(ServerFnErrorErr::Deserialization(
-                    e.to_string(),
-                ))
-                .ser()
+                Error::from_server_fn_error(ServerFnErrorErr::Deserialization(e.to_string())).ser()
             })
         }))
     }
@@ -88,9 +84,7 @@ where
         {
             Err::<
                 (
-                    futures::stream::Once<
-                        std::future::Ready<Result<Bytes, Bytes>>,
-                    >,
+                    futures::stream::Once<std::future::Ready<Result<Bytes, Bytes>>>,
                     futures::sink::Drain<Bytes>,
                     Self::WebsocketResponse,
                 ),
@@ -103,23 +97,20 @@ where
                 ),
             ))
         }
+
         #[cfg(feature = "axum")]
         {
             use axum::extract::{ws::Message, FromRequest};
             use futures::FutureExt;
 
-            let upgrade =
-                axum::extract::ws::WebSocketUpgrade::from_request(self, &())
-                    .await
-                    .map_err(|err| {
-                        Error::from_server_fn_error(ServerFnErrorErr::Request(
-                            err.to_string(),
-                        ))
-                    })?;
+            let upgrade = axum::extract::ws::WebSocketUpgrade::from_request(self, &())
+                .await
+                .map_err(|err| {
+                    Error::from_server_fn_error(ServerFnErrorErr::Request(err.to_string()))
+                })?;
             let (mut outgoing_tx, outgoing_rx) =
                 futures::channel::mpsc::channel::<Result<Bytes, Bytes>>(2048);
-            let (incoming_tx, mut incoming_rx) =
-                futures::channel::mpsc::channel::<Bytes>(2048);
+            let (incoming_tx, mut incoming_rx) = futures::channel::mpsc::channel::<Bytes>(2048);
             let response = upgrade
         .on_failed_upgrade({
             let mut outgoing_tx = outgoing_tx.clone();

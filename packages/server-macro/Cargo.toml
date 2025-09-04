@@ -3,18 +3,22 @@ name = "dioxus_server_macro"
 version = { workspace = true }
 edition = "2021"
 repository = "https://github.com/DioxusLabs/dioxus/"
-homepage = "https://dioxuslabs.com/docs/0.5/guide/en/getting_started/fullstack.html"
 keywords = ["dom", "ui", "gui", "react", "liveview"]
 authors = ["Jonathan Kelley", "Evan Almloff"]
 license = "MIT OR Apache-2.0"
 description = "Server function macros for Dioxus"
 
 [dependencies]
-proc-macro2 = { workspace = true }
-quote = { workspace = true }
-syn = { workspace = true, features = ["full"] }
-server_fn_macro_dioxus = { workspace = true }
-
+quote = { workspace = true, default-features = true }
+syn = { features = [
+  "full",
+  "parsing",
+  "extra-traits",
+], workspace = true, default-features = true }
+proc-macro2 = { workspace = true, default-features = true }
+xxhash-rust = { features = ["const_xxh64" ], workspace = true, default-features = true }
+const_format = { workspace = true, default-features = true }
+convert_case = { workspace = true, default-features = true }
 
 [dev-dependencies]
 dioxus = { workspace = true, features = ["fullstack"] }
@@ -24,18 +28,3 @@ axum = { workspace = true }
 
 [lib]
 proc-macro = true
-
-[features]
-# axum = []
-# server = []
-# browser = []
-# reqwest = []
-# generic = []
-# axum = ["server_fn_macro/axum"]
-# server = ["server_fn_macro/ssr"]
-# browser = []
-# reqwest = ["server_fn_macro/reqwest"]
-# generic = ["server_fn_macro/generic"]
-
-[package.metadata.docs.rs]
-cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]

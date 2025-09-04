@@ -12,6 +12,7 @@ edition.workspace = true
 [dependencies]
 throw_error = { workspace = true }
 server_fn_macro_default = { workspace = true }
+
 # used for hashing paths in #[server] macro
 const_format = { workspace = true, default-features = true }
 const-str = { workspace = true, default-features = true }
@@ -19,6 +20,7 @@ rustversion = { workspace = true, default-features = true }
 xxhash-rust = { features = [
   "const_xxh64",
 ], workspace = true, default-features = true }
+
 # used across multiple features
 serde = { features = ["derive"], workspace = true, default-features = true }
 send_wrapper = { features = [
@@ -29,11 +31,6 @@ thiserror = { workspace = true, default-features = true }
 # registration system
 inventory = { optional = true, workspace = true, default-features = true }
 dashmap = { workspace = true, default-features = true }
-
-## servers
-# actix
-actix-web = { optional = true, workspace = true, default-features = false }
-actix-ws = { optional = true, workspace = true, default-features = true }
 
 # axum
 axum = { optional = true, default-features = false, features = [
@@ -108,8 +105,6 @@ axum-no-default = [
   "dep:tower-layer",
 ]
 form-redirects = []
-actix-no-default = ["ssr", "dep:actix-web", "dep:actix-ws", "dep:send_wrapper"]
-actix = ["actix-web/default", "actix-no-default"]
 axum = ["axum/default", "axum-no-default", "axum/ws", "dep:tokio"]
 browser = [
   "dep:gloo-net",
@@ -156,16 +151,13 @@ denylist = [
 ]
 skip_feature_sets = [
   [
-    "actix",
     "axum",
   ],
   [
-    "actix",
     "generic",
   ],
   [
     "browser",
-    "actix",
   ],
   [
     "browser",
@@ -189,7 +181,6 @@ skip_feature_sets = [
   ],
   [
     "axum-no-default",
-    "actix",
   ],
   [
     "axum-no-default",
