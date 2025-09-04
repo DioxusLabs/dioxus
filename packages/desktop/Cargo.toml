@@ -50,7 +50,7 @@ base64 = { workspace = true }
 libc = "0.2.174"
 rand = { workspace = true, features = ["std_rng"] }
 subtle = { version = "2.6", features = ["const-generics"] }
-webbrowser = { version = "1.0" }
+webbrowser = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
 signal-hook = "0.3.18"

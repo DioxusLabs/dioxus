@@ -47,6 +47,7 @@ keyboard-types = { workspace = true }
 
 # IO & Networking
 tokio = { workspace = true, features = ["rt-multi-thread"], optional = true }
+webbrowser = { workspace = true }
 
 # Other dependencies
 tracing = { workspace = true, optional = true }
