@@ -4,7 +4,7 @@ use object::{
     macho::{self},
     read::File,
     write::{MachOBuildVersion, SectionId, StandardSection, Symbol, SymbolId, SymbolSection},
-    Endianness, Object, ObjectSymbol, SymbolFlags, SymbolKind, SymbolScope,
+    Endianness, Object, ObjectSection, ObjectSymbol, SymbolFlags, SymbolKind, SymbolScope,
 };
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use std::{
@@ -78,9 +78,11 @@ pub struct HotpatchModuleCache {
     pub symbol_table: HashMap<String, CachedSymbol>,
 }
 
+#[derive(Debug)]
 pub struct CachedSymbol {
     pub address: u64,
     pub kind: SymbolKind,
+    pub standard_section: StandardSection,
     pub is_undefined: bool,
     pub is_weak: bool,
     pub size: u64,
@@ -137,6 +139,11 @@ impl HotpatchModuleCache {
                                     } else {
                                         SymbolKind::Data
                                     },
+                                    standard_section: if data.function {
+                                        StandardSection::Text
+                                    } else {
+                                        StandardSection::Data
+                                    },
                                     is_undefined,
                                     is_weak: false,
                                     size: 0,
@@ -157,6 +164,7 @@ impl HotpatchModuleCache {
                                 CachedSymbol {
                                     address: rva.0 as u64,
                                     kind: SymbolKind::Data,
+                                    standard_section: StandardSection::Data,
                                     is_undefined,
                                     is_weak: false,
                                     size: 0,
@@ -264,6 +272,29 @@ impl HotpatchModuleCache {
                             _ => SymbolFlags::None,
                         };
 
+                        let standard_section = match s.kind() {
+                            SymbolKind::Text => StandardSection::Text,
+                            SymbolKind::Data => StandardSection::Data,
+                            SymbolKind::Tls => {
+                                let section_name = obj
+                                    .section_by_index(s.section_index().unwrap())
+                                    .unwrap()
+                                    .name()
+                                    .unwrap_or_default();
+                                tracing::info!(
+                                    "tls: {}\n{section_name:?}\n {:#?}",
+                                    s.name().ok()?,
+                                    s
+                                );
+                                if section_name.starts_with("__thread_vars") {
+                                    StandardSection::TlsVariables
+                                } else {
+                                    StandardSection::Tls
+                                }
+                            }
+                            _ => StandardSection::Text,
+                        };
+
                         Some((
                             s.name().ok()?.to_string(),
                             CachedSymbol {
@@ -272,6 +303,7 @@ impl HotpatchModuleCache {
                                 is_weak: s.is_weak(),
                                 kind: s.kind(),
                                 size: s.size(),
+                                standard_section,
                                 flags,
                             },
                         ))
@@ -1053,6 +1085,8 @@ pub fn create_undefined_symbol_stub(
                 });
             }
 
+            // https://stackoverflow.com/questions/72955200/how-does-macos-dyld-prepare-the-thread-local
+            //
             // Rust code typically generates Tls accessors as functions (text), but they are referenced
             // indirectly as data symbols. We end up handling this by adding the TLS symbol as a data
             // symbol with the initializer as the address of the original tls initializer. That way
@@ -1082,44 +1116,107 @@ pub fn create_undefined_symbol_stub(
             //    b       0x10005acac
             // ```
             SymbolKind::Tls => {
-                let tls_section = obj.section_id(StandardSection::Tls);
+                tracing::info!("tls: {} {:#?}", name, sym);
+                match sym.standard_section {
+                    StandardSection::TlsVariables => {
+                        // let data_section = obj.section_id(StandardSection::Data);
 
-                let pointer_width = match triple.pointer_width().unwrap() {
-                    PointerWidth::U16 => 2,
-                    PointerWidth::U32 => 4,
-                    PointerWidth::U64 => 8,
-                };
+                        // obj.add_symbol(Symbol {
+                        //     name: name.as_bytes()[name_offset..].to_vec(),
+                        //     value: abs_addr,
+                        //     size: 8,
+                        //     scope: SymbolScope::Linkage,
+                        //     kind: SymbolKind::Tls,
+                        //     weak: false,
+                        //     section: SymbolSection::Section(data_section),
+                        //     flags: SymbolFlags::None, // ignore for these stubs
+                        // });
+                        let tls_section = obj.section_id(StandardSection::Tls);
+                        // let tls_section = obj.section_id(sym.standard_section);
 
-                let size = if sym.size == 0 {
-                    pointer_width
-                } else {
-                    sym.size
-                };
+                        let pointer_width = match triple.pointer_width().unwrap() {
+                            PointerWidth::U16 => 2,
+                            PointerWidth::U32 => 4,
+                            PointerWidth::U64 => 8,
+                        };
 
-                let align = size.min(pointer_width).next_power_of_two();
-                let mut init = vec![0u8; size as usize];
+                        let size = if sym.size == 0 {
+                            pointer_width
+                        } else {
+                            sym.size
+                        };
 
-                // write the contents of the symbol to the init vec
-                init.iter_mut()
-                    .zip(match triple.endianness() {
-                        Ok(target_lexicon::Endianness::Little) => abs_addr.to_le_bytes(),
-                        Ok(target_lexicon::Endianness::Big) => abs_addr.to_be_bytes(),
-                        _ => return Err(PatchError::UnsupportedPlatform(triple.to_string())),
-                    })
-                    .for_each(|(b, v)| *b = v);
+                        let align = size.min(pointer_width).next_power_of_two();
+                        let mut init = vec![0u8; size as usize];
 
-                let offset = obj.append_section_data(tls_section, &init, align);
+                        // write the contents of the symbol to the init vec
+                        init.iter_mut()
+                            .zip(match triple.endianness() {
+                                Ok(target_lexicon::Endianness::Little) => abs_addr.to_le_bytes(),
+                                Ok(target_lexicon::Endianness::Big) => abs_addr.to_be_bytes(),
+                                _ => {
+                                    return Err(PatchError::UnsupportedPlatform(triple.to_string()))
+                                }
+                            })
+                            .for_each(|(b, v)| *b = v);
 
-                obj.add_symbol(Symbol {
-                    name: name.as_bytes()[name_offset..].to_vec(),
-                    value: offset, // offset inside .tdata
-                    size,
-                    scope: SymbolScope::Linkage,
-                    kind: SymbolKind::Tls,
-                    weak: false,
-                    section: SymbolSection::Section(tls_section),
-                    flags: SymbolFlags::None, // ignore for these stubs
-                });
+                        let offset = obj.append_section_data(tls_section, &init, align);
+
+                        obj.add_symbol(Symbol {
+                            name: name.as_bytes()[name_offset..].to_vec(),
+                            value: offset, // offset inside .tdata
+                            size,
+                            scope: SymbolScope::Linkage,
+                            kind: SymbolKind::Tls,
+                            weak: false,
+                            section: SymbolSection::Section(tls_section),
+                            flags: SymbolFlags::None, // ignore for these stubs
+                        });
+                    }
+                    _ => {
+                        let tls_section = obj.section_id(StandardSection::Tls);
+                        // let tls_section = obj.section_id(sym.standard_section);
+
+                        let pointer_width = match triple.pointer_width().unwrap() {
+                            PointerWidth::U16 => 2,
+                            PointerWidth::U32 => 4,
+                            PointerWidth::U64 => 8,
+                        };
+
+                        let size = if sym.size == 0 {
+                            pointer_width
+                        } else {
+                            sym.size
+                        };
+
+                        let align = size.min(pointer_width).next_power_of_two();
+                        let mut init = vec![0u8; size as usize];
+
+                        // write the contents of the symbol to the init vec
+                        init.iter_mut()
+                            .zip(match triple.endianness() {
+                                Ok(target_lexicon::Endianness::Little) => abs_addr.to_le_bytes(),
+                                Ok(target_lexicon::Endianness::Big) => abs_addr.to_be_bytes(),
+                                _ => {
+                                    return Err(PatchError::UnsupportedPlatform(triple.to_string()))
+                                }
+                            })
+                            .for_each(|(b, v)| *b = v);
+
+                        let offset = obj.append_section_data(tls_section, &init, align);
+
+                        obj.add_symbol(Symbol {
+                            name: name.as_bytes()[name_offset..].to_vec(),
+                            value: offset, // offset inside .tdata
+                            size,
+                            scope: SymbolScope::Linkage,
+                            kind: SymbolKind::Tls,
+                            weak: false,
+                            section: SymbolSection::Section(tls_section),
+                            flags: SymbolFlags::None, // ignore for these stubs
+                        });
+                    }
+                }
             }
 
             // We just assume all non-text symbols are data (globals, statics, etc)
