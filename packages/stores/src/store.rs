@@ -254,11 +254,11 @@ where
 {
     type Storage = Lens::Storage;
     type Target = T;
-    fn try_read_unchecked(&self) -> Result<ReadableRef<'static, Self>, BorrowError> {
-        self.selector.try_read_unchecked()
+    fn try_read_extended(&self) -> Result<ReadableRef<'static, Self>, BorrowError> {
+        self.selector.try_read_extended()
     }
-    fn try_peek_unchecked(&self) -> Result<ReadableRef<'static, Self>, BorrowError> {
-        self.selector.try_peek_unchecked()
+    fn try_peek_extended(&self) -> Result<ReadableRef<'static, Self>, BorrowError> {
+        self.selector.try_peek_extended()
     }
     fn subscribers(&self) -> Subscribers {
         self.selector.subscribers()
@@ -270,8 +270,8 @@ where
     T: 'static,
 {
     type WriteMetadata = Lens::WriteMetadata;
-    fn try_write_unchecked(&self) -> Result<WritableRef<'static, Self>, BorrowMutError> {
-        self.selector.try_write_unchecked()
+    fn try_write_extended(&self) -> Result<WritableRef<'static, Self>, BorrowMutError> {
+        self.selector.try_write_extended()
     }
 }
 impl<T, Lens> IntoAttributeValue for Store<T, Lens>
