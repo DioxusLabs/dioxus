@@ -43,7 +43,7 @@ impl CliSettings {
         CliSettings::from_global().unwrap_or_default()
     }
 
-    /// Get the path to the settings toml file.
+    /// Get the path to the settings json file.
     pub(crate) fn get_settings_path() -> PathBuf {
         crate::Workspace::global_settings_file()
     }
@@ -70,14 +70,14 @@ impl CliSettings {
         Some(data)
     }
 
-    /// Save the current structure to the global settings toml.
+    /// Save the current structure to the global settings json.
     /// This does not save to project-level settings.
     pub(crate) fn save(&self) -> Result<()> {
         let path = Self::get_settings_path();
 
-        let data = toml::to_string_pretty(&self).map_err(|e| {
-            error!(dx_src = ?TraceSrc::Dev, ?self, "failed to parse config into toml");
-            anyhow::anyhow!("failed to parse config into toml: {e}")
+        let data = serde_json5::to_string(&self).map_err(|e| {
+            error!(dx_src = ?TraceSrc::Dev, ?self, "failed to parse config into json");
+            anyhow::anyhow!("failed to parse config into json: {e}")
         })?;
 
         // Create the directory structure if it doesn't exist.
@@ -102,7 +102,7 @@ impl CliSettings {
         Ok(())
     }
 
-    /// Modify the settings toml file - doesn't change the settings for this session
+    /// Modify the settings json file - doesn't change the settings for this session
     pub(crate) fn modify_settings(with: impl FnOnce(&mut CliSettings)) -> Result<()> {
         let mut _settings = CliSettings::load();
         let settings: &mut CliSettings = Arc::make_mut(&mut _settings);
