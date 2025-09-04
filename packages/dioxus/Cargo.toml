@@ -97,15 +97,15 @@ web = [
 ]
 ssr = ["dep:dioxus-ssr", "dioxus-config-macro/ssr"]
 liveview = ["dep:dioxus-liveview", "dioxus-config-macro/liveview"]
-native = ["dep:dioxus-native"] # todo(jon): decompose the desktop crate such that "webview" is the default and native is opt-in
+native = ["dep:dioxus-native",  "dioxus-fullstack?/desktop"] # todo(jon): decompose the desktop crate such that "webview" is the default and native is opt-in
 server = [
   "dep:dioxus-server",
   "dep:dioxus_server_macro",
-  "dioxus_server_macro/server",
-  "dioxus_server_macro/axum",
+  # "dioxus_server_macro",
+  # "dioxus_server_macro",
   "ssr",
   "dioxus-liveview?/axum",
-  "dioxus-fullstack?/server",
+  # "dioxus-fullstack?/server",
 ]
 
 # This feature just disables the no-renderer-enabled warning

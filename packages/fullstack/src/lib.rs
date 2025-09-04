@@ -13,11 +13,15 @@ pub use dioxus_fullstack_hooks::history::provide_fullstack_history_context;
 pub use crate::error::{ServerFnError, ServerFnResult};
 #[doc(inline)]
 pub use dioxus_fullstack_hooks::*;
-#[cfg(feature = "server")]
-#[doc(inline)]
-pub use dioxus_server::*;
+// #[cfg(feature = "server")]
+// #[doc(inline)]
+// pub use dioxus_server::*;
+pub mod server_fn;
+// pub(crate) use crate::server_fn::client::Client;
+// pub(crate) use crate::server_fn::server::Server;
 #[doc(inline)]
 pub use dioxus_server_macro::*;
+pub use server_fn;
 pub use server_fn::ServerFn as _;
 #[doc(inline)]
 pub use server_fn::{

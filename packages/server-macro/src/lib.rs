@@ -5,8 +5,9 @@
 //! This crate contains the dioxus implementation of the #[macro@crate::server] macro without additional context from the server.
 //! See the [server_fn_macro] crate for more information.
 
+mod server_fn_macro_dioxus;
 use proc_macro::TokenStream;
-use server_fn_macro::ServerFnCall;
+use server_fn_macro_dioxus::ServerFnCall;
 use syn::{__private::ToTokens, parse_quote};
 
 /// Declares that a function is a [server function](https://docs.rs/server_fn/).
@@ -211,17 +212,6 @@ pub fn server(args: proc_macro::TokenStream, body: TokenStream) -> TokenStream {
         Ok(parsed) => parsed,
         Err(e) => return e.to_compile_error().into(),
     };
-
-    #[cfg(not(any(feature = "browser", feature = "reqwest")))]
-    {
-        let client = &mut parsed.get_args_mut().client;
-        // If no client is enabled, use the mock client
-        if client.is_none() {
-            *client = Some(parse_quote!(
-                dioxus::fullstack::mock_client::MockServerFnClient
-            ));
-        }
-    }
 
     parsed
         .default_protocol(Some(

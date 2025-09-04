@@ -2,8 +2,8 @@
 
 use std::future::Future;
 
+use crate::server_fn::{request::ClientReq, response::ClientRes};
 use futures_util::Stream;
-use server_fn::{request::ClientReq, response::ClientRes};
 
 /// A placeholder [`server_fn::client::Client`] used when no client feature is enabled. The
 /// [`server_fn::client::browser::BrowserClient`] is used on web clients, and [`server_fn::client::reqwest::ReqwestClient`]
@@ -31,7 +31,7 @@ impl<Error, InputStreamError, OutputStreamError>
 
     type Response = MockServerFnClientResponse;
 
-    async fn send(_: Self::Request) -> Result<Self::Response, Error> {
+    async fn send(_: MockServerFnClientRequest) -> Result<Self::Response, Error> {
         unimplemented!()
     }
 
