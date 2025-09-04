@@ -36,8 +36,10 @@ pub(crate) fn pre_compress_file(path: &Path) -> std::io::Result<()> {
 
     let file = std::fs::File::open(path)?;
     let mut stream = std::io::BufReader::new(file);
-    let mut buffer = std::fs::File::create(compressed_path)?;
-    let params = BrotliEncoderParams::default();
+    let compressed_file = std::fs::File::create(compressed_path)?;
+    let mut buffer = BufWriter::new(compressed_file);
+    let mut params = BrotliEncoderParams::default();
+    params.quality = 9;
     brotli::BrotliCompress(&mut stream, &mut buffer, &params)?;
 
     Ok(())
