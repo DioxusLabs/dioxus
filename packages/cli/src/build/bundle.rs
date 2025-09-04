@@ -469,6 +469,11 @@ impl AppBundle {
         for (asset, bundled) in &self.app.assets.assets {
             let from = asset.clone();
             let to = asset_dir.join(bundled.bundled_path());
+
+            // Force recopy WASM files when debug symbols are enabled
+            if self.build.build.debug_symbols && to.extension().map_or(false, |ext| ext == "wasm") {
+                let _ = std::fs::remove_file(&to); // Remove existing file to force recopy
+            }
             tracing::debug!("Copying asset {from:?} to {to:?}");
             assets_to_transfer.push((from, to, *bundled.options()));
         }
@@ -935,21 +940,24 @@ impl AppBundle {
             .map_err(|e| anyhow::anyhow!("Failed to decode WASM module: {}", e))?;
 
         // Try to see if we already have a build ID. If not, create one.
-        let build_id = module
+        let has_build_id = module
             .sections
             .iter()
             .filter_map(as_custom_section)
-            .find_map(|section| match section {
-                CustomSection::BuildId(build_id) => Some(build_id.clone()),
-                _ => None,
-            })
-            .unwrap_or_else(|| {
-                let new_id = Uuid::new_v4().as_bytes().to_vec();
-                module
-                    .sections
-                    .push(CustomSection::BuildId(new_id.clone()).into());
-                new_id
+            .any(|section| match section {
+                CustomSection::BuildId(_) => true,
+                _ => false,
             });
+        if has_build_id {
+            // if there was already a build ID, then it was added at a previous build
+            // and there were no changes to the wasm this build.
+            // a bit hacky...
+            return Ok(());
+        }
+        let build_id = Uuid::new_v4().as_bytes().to_vec();
+        module
+            .sections
+            .push(CustomSection::BuildId(build_id.clone()).into());
 
         let debug_file = wasm_path.with_extension("debug.wasm");
         // Write the complete module (including debug info) to the debug file
