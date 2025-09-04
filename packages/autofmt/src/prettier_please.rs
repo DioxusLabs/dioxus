@@ -164,7 +164,7 @@ fn unwrapped(raw: String) -> String {
         .strip_suffix("}\n")
         .unwrap()
         .lines()
-        .map(|line| line.strip_prefix("    ").unwrap()) // todo: set this to tab level
+        .map(|line| line.strip_prefix("    ").unwrap_or_default()) // todo: set this to tab level
         .collect::<Vec<_>>()
         .join("\n");
 
