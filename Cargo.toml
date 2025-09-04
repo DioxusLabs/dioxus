@@ -221,12 +221,12 @@ depinfo = { path = "packages/depinfo", version = "0.7.0-rc.0" }
 warnings = { version = "0.2.1" }
 
 # blitz
-blitz-dom = { version = "=0.1.0-rc.3", default-features = false }
-blitz-net = { version = "=0.1.0-rc.3" }
-blitz-html = { version = "=0.1.0-rc.3" }
-blitz-paint = { version = "=0.1.0-rc.3" }
-blitz-traits = { version = "=0.1.0-rc.3" }
-blitz-shell = { version = "=0.1.0-rc.3", default-features = false }
+blitz-dom = { version = "0.1", default-features = false }
+blitz-net = { version = "0.1" }
+blitz-html = { version = "0.1" }
+blitz-paint = { version = "0.1" }
+blitz-traits = { version = "0.1" }
+blitz-shell = { version = "0.1", default-features = false }
 anyrender = { version = "0.5", default-features = false }
 anyrender_vello = { version = "0.5", default-features = false }
 wgpu = { version = "24.0" }

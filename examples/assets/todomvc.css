@@ -211,7 +211,6 @@ body {
     padding: 15px 15px 15px 60px;
     display: block;
     line-height: 1.2;
-    transition: color 0.4s;
 }
 
 .todo-list li.completed label {
@@ -231,7 +230,6 @@ body {
     font-size: 30px;
     color: #cc9a9a;
     margin-bottom: 11px;
-    transition: color 0.2s ease-out;
 }
 
 .todo-list li .destroy:hover {
