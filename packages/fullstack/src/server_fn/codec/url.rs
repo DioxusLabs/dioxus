@@ -1,5 +1,5 @@
 use super::{Encoding, FromReq, IntoReq};
-use crate::{
+use crate::server_fn::{
     error::{FromServerFnError, IntoAppError, ServerFnErrorErr},
     request::{ClientReq, Req},
     ContentType,
@@ -43,9 +43,8 @@ where
     E: FromServerFnError,
 {
     fn into_req(self, path: &str, accepts: &str) -> Result<Request, E> {
-        let data = serde_qs::to_string(&self).map_err(|e| {
-            ServerFnErrorErr::Serialization(e.to_string()).into_app_error()
-        })?;
+        let data = serde_qs::to_string(&self)
+            .map_err(|e| ServerFnErrorErr::Serialization(e.to_string()).into_app_error())?;
         Request::try_new_get(path, accepts, GetUrl::CONTENT_TYPE, &data)
     }
 }
@@ -60,9 +59,7 @@ where
         let string_data = req.as_query().unwrap_or_default();
         let args = serde_qs::Config::new(5, false)
             .deserialize_str::<Self>(string_data)
-            .map_err(|e| {
-                ServerFnErrorErr::Args(e.to_string()).into_app_error()
-            })?;
+            .map_err(|e| ServerFnErrorErr::Args(e.to_string()).into_app_error())?;
         Ok(args)
     }
 }
@@ -82,9 +79,8 @@ where
     E: FromServerFnError,
 {
     fn into_req(self, path: &str, accepts: &str) -> Result<Request, E> {
-        let qs = serde_qs::to_string(&self).map_err(|e| {
-            ServerFnErrorErr::Serialization(e.to_string()).into_app_error()
-        })?;
+        let qs = serde_qs::to_string(&self)
+            .map_err(|e| ServerFnErrorErr::Serialization(e.to_string()).into_app_error())?;
         Request::try_new_post(path, accepts, PostUrl::CONTENT_TYPE, qs)
     }
 }
@@ -99,9 +95,7 @@ where
         let string_data = req.try_into_string().await?;
         let args = serde_qs::Config::new(5, false)
             .deserialize_str::<Self>(&string_data)
-            .map_err(|e| {
-                ServerFnErrorErr::Args(e.to_string()).into_app_error()
-            })?;
+            .map_err(|e| ServerFnErrorErr::Args(e.to_string()).into_app_error())?;
         Ok(args)
     }
 }
@@ -121,9 +115,8 @@ where
     E: FromServerFnError,
 {
     fn into_req(self, path: &str, accepts: &str) -> Result<Request, E> {
-        let data = serde_qs::to_string(&self).map_err(|e| {
-            ServerFnErrorErr::Serialization(e.to_string()).into_app_error()
-        })?;
+        let data = serde_qs::to_string(&self)
+            .map_err(|e| ServerFnErrorErr::Serialization(e.to_string()).into_app_error())?;
         Request::try_new_delete(path, accepts, GetUrl::CONTENT_TYPE, &data)
     }
 }
@@ -138,9 +131,7 @@ where
         let string_data = req.as_query().unwrap_or_default();
         let args = serde_qs::Config::new(5, false)
             .deserialize_str::<Self>(string_data)
-            .map_err(|e| {
-                ServerFnErrorErr::Args(e.to_string()).into_app_error()
-            })?;
+            .map_err(|e| ServerFnErrorErr::Args(e.to_string()).into_app_error())?;
         Ok(args)
     }
 }
@@ -160,9 +151,8 @@ where
     E: FromServerFnError,
 {
     fn into_req(self, path: &str, accepts: &str) -> Result<Request, E> {
-        let data = serde_qs::to_string(&self).map_err(|e| {
-            ServerFnErrorErr::Serialization(e.to_string()).into_app_error()
-        })?;
+        let data = serde_qs::to_string(&self)
+            .map_err(|e| ServerFnErrorErr::Serialization(e.to_string()).into_app_error())?;
         Request::try_new_patch(path, accepts, GetUrl::CONTENT_TYPE, data)
     }
 }
@@ -177,9 +167,7 @@ where
         let string_data = req.as_query().unwrap_or_default();
         let args = serde_qs::Config::new(5, false)
             .deserialize_str::<Self>(string_data)
-            .map_err(|e| {
-                ServerFnErrorErr::Args(e.to_string()).into_app_error()
-            })?;
+            .map_err(|e| ServerFnErrorErr::Args(e.to_string()).into_app_error())?;
         Ok(args)
     }
 }
@@ -199,9 +187,8 @@ where
     E: FromServerFnError,
 {
     fn into_req(self, path: &str, accepts: &str) -> Result<Request, E> {
-        let data = serde_qs::to_string(&self).map_err(|e| {
-            ServerFnErrorErr::Serialization(e.to_string()).into_app_error()
-        })?;
+        let data = serde_qs::to_string(&self)
+            .map_err(|e| ServerFnErrorErr::Serialization(e.to_string()).into_app_error())?;
         Request::try_new_put(path, accepts, GetUrl::CONTENT_TYPE, data)
     }
 }
@@ -216,9 +203,7 @@ where
         let string_data = req.as_query().unwrap_or_default();
         let args = serde_qs::Config::new(5, false)
             .deserialize_str::<Self>(string_data)
-            .map_err(|e| {
-                ServerFnErrorErr::Args(e.to_string()).into_app_error()
-            })?;
+            .map_err(|e| ServerFnErrorErr::Args(e.to_string()).into_app_error())?;
         Ok(args)
     }
 }

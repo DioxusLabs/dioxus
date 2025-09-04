@@ -1,5 +1,5 @@
 use super::{Encoding, FromReq, FromRes, IntoReq};
-use crate::{
+use crate::server_fn::{
     error::{FromServerFnError, ServerFnErrorErr},
     request::{ClientReq, Req},
     response::{ClientRes, TryRes},
@@ -39,12 +39,7 @@ where
     E: FromServerFnError,
 {
     fn into_req(self, path: &str, accepts: &str) -> Result<Request, E> {
-        Request::try_new_post_streaming(
-            path,
-            accepts,
-            Streaming::CONTENT_TYPE,
-            self,
-        )
+        Request::try_new_post_streaming(path, accepts, Streaming::CONTENT_TYPE, self)
     }
 }
 
@@ -73,9 +68,7 @@ where
 /// end before the output will begin.
 ///
 /// Streaming requests are only allowed over HTTP2 or HTTP3.
-pub struct ByteStream<E = ServerFnError>(
-    Pin<Box<dyn Stream<Item = Result<Bytes, E>> + Send>>,
-);
+pub struct ByteStream<E = ServerFnError>(Pin<Box<dyn Stream<Item = Result<Bytes, E>> + Send>>);
 
 impl<E> ByteStream<E> {
     /// Consumes the wrapper, returning a stream of bytes.
@@ -92,9 +85,7 @@ impl<E> Debug for ByteStream<E> {
 
 impl<E> ByteStream<E> {
     /// Creates a new `ByteStream` from the given stream.
-    pub fn new<T>(
-        value: impl Stream<Item = Result<T, E>> + Send + 'static,
-    ) -> Self
+    pub fn new<T>(value: impl Stream<Item = Result<T, E>> + Send + 'static) -> Self
     where
         T: Into<Bytes>,
     {
@@ -170,9 +161,7 @@ impl Encoding for StreamingText {
 /// end before the output will begin.
 ///
 /// Streaming requests are only allowed over HTTP2 or HTTP3.
-pub struct TextStream<E = ServerFnError>(
-    Pin<Box<dyn Stream<Item = Result<String, E>> + Send>>,
-);
+pub struct TextStream<E = ServerFnError>(Pin<Box<dyn Stream<Item = Result<String, E>> + Send>>);
 
 impl<E> Debug for TextStream<E> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -182,9 +171,7 @@ impl<E> Debug for TextStream<E> {
 
 impl<E> TextStream<E> {
     /// Creates a new `TextStream` from the given stream.
-    pub fn new(
-        value: impl Stream<Item = Result<String, E>> + Send + 'static,
-    ) -> Self {
+    pub fn new(value: impl Stream<Item = Result<String, E>> + Send + 'static) -> Self {
         Self(Box::pin(value.map(|value| value)))
     }
 }
@@ -234,9 +221,7 @@ where
         let s = TextStream::new(data.map(|chunk| match chunk {
             Ok(bytes) => {
                 let de = String::from_utf8(bytes.to_vec()).map_err(|e| {
-                    E::from_server_fn_error(ServerFnErrorErr::Deserialization(
-                        e.to_string(),
-                    ))
+                    E::from_server_fn_error(ServerFnErrorErr::Deserialization(e.to_string()))
                 })?;
                 Ok(de)
             }
@@ -270,9 +255,7 @@ where
         Ok(TextStream(Box::pin(stream.map(|chunk| match chunk {
             Ok(bytes) => {
                 let de = String::from_utf8(bytes.into()).map_err(|e| {
-                    E::from_server_fn_error(ServerFnErrorErr::Deserialization(
-                        e.to_string(),
-                    ))
+                    E::from_server_fn_error(ServerFnErrorErr::Deserialization(e.to_string()))
                 })?;
                 Ok(de)
             }

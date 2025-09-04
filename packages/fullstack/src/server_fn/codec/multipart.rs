@@ -1,5 +1,5 @@
 use super::{Encoding, FromReq};
-use crate::{
+use crate::server_fn::{
     error::{FromServerFnError, ServerFnErrorWrapper},
     request::{browser::BrowserFormData, ClientReq, Req},
     ContentType, IntoReq,
@@ -59,19 +59,14 @@ impl From<FormData> for MultipartData {
     }
 }
 
-impl<E: FromServerFnError, T, Request> IntoReq<MultipartFormData, Request, E>
-    for T
+impl<E: FromServerFnError, T, Request> IntoReq<MultipartFormData, Request, E> for T
 where
     Request: ClientReq<E, FormData = BrowserFormData>,
     T: Into<MultipartData>,
 {
     fn into_req(self, path: &str, accepts: &str) -> Result<Request, E> {
         let multi = self.into();
-        Request::try_new_post_multipart(
-            path,
-            accepts,
-            multi.into_client_data().unwrap(),
-        )
+        Request::try_new_post_multipart(path, accepts, multi.into_client_data().unwrap())
     }
 }
 

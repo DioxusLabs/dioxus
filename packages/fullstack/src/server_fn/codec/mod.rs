@@ -14,41 +14,41 @@
 //! This genuinely is an and/or: while some encodings can be used for both input and output (`Json`, `Cbor`, `Rkyv`),
 //! others can only be used for input (`GetUrl`, `MultipartData`).
 
-#[cfg(feature = "cbor")]
-mod cbor;
-#[cfg(feature = "cbor")]
-pub use cbor::*;
+// #[cfg(feature = "cbor")]
+// mod cbor;
+// #[cfg(feature = "cbor")]
+// pub use cbor::*;
 
 mod json;
 pub use json::*;
 
-#[cfg(feature = "serde-lite")]
-mod serde_lite;
-#[cfg(feature = "serde-lite")]
-pub use serde_lite::*;
+// #[cfg(feature = "serde-lite")]
+// mod serde_lite;
+// #[cfg(feature = "serde-lite")]
+// pub use serde_lite::*;
 
-#[cfg(feature = "rkyv")]
-mod rkyv;
-#[cfg(feature = "rkyv")]
-pub use rkyv::*;
+// #[cfg(feature = "rkyv")]
+// mod rkyv;
+// #[cfg(feature = "rkyv")]
+// pub use rkyv::*;
 
 mod url;
 pub use url::*;
 
-#[cfg(feature = "multipart")]
-mod multipart;
-#[cfg(feature = "multipart")]
-pub use multipart::*;
+// #[cfg(feature = "multipart")]
+// mod multipart;
+// #[cfg(feature = "multipart")]
+// pub use multipart::*;
 
-#[cfg(feature = "msgpack")]
-mod msgpack;
-#[cfg(feature = "msgpack")]
-pub use msgpack::*;
+// #[cfg(feature = "msgpack")]
+// mod msgpack;
+// #[cfg(feature = "msgpack")]
+// pub use msgpack::*;
 
-#[cfg(feature = "postcard")]
-mod postcard;
-#[cfg(feature = "postcard")]
-pub use postcard::*;
+// #[cfg(feature = "postcard")]
+// mod postcard;
+// #[cfg(feature = "postcard")]
+// pub use postcard::*;
 
 mod patch;
 pub use patch::*;

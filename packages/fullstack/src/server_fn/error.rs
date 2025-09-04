@@ -1,6 +1,6 @@
 #![allow(deprecated)]
 
-use crate::{ContentType, Decodes, Encodes, Format, FormatType};
+use crate::server_fn::{ContentType, Decodes, Encodes, Format, FormatType};
 use base64::{engine::general_purpose::URL_SAFE, Engine as _};
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
@@ -22,18 +22,7 @@ impl From<ServerFnError> for Error {
 
 /// An empty value indicating that there is no custom error type associated
 /// with this server function.
-#[derive(
-    Debug,
-    Deserialize,
-    Serialize,
-    PartialEq,
-    Eq,
-    Hash,
-    PartialOrd,
-    Ord,
-    Clone,
-    Copy,
-)]
+#[derive(Debug, Deserialize, Serialize, PartialEq, Eq, Hash, PartialOrd, Ord, Clone, Copy)]
 #[cfg_attr(
     feature = "rkyv",
     derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
@@ -224,26 +213,20 @@ where
             f,
             "{}",
             match self {
-                ServerFnError::Registration(s) => format!(
-                    "error while trying to register the server function: {s}"
-                ),
-                ServerFnError::Request(s) => format!(
-                    "error reaching server to call server function: {s}"
-                ),
-                ServerFnError::ServerError(s) =>
-                    format!("error running server function: {s}"),
-                ServerFnError::MiddlewareError(s) =>
-                    format!("error running middleware: {s}"),
+                ServerFnError::Registration(s) =>
+                    format!("error while trying to register the server function: {s}"),
+                ServerFnError::Request(s) =>
+                    format!("error reaching server to call server function: {s}"),
+                ServerFnError::ServerError(s) => format!("error running server function: {s}"),
+                ServerFnError::MiddlewareError(s) => format!("error running middleware: {s}"),
                 ServerFnError::Deserialization(s) =>
                     format!("error deserializing server function results: {s}"),
                 ServerFnError::Serialization(s) =>
                     format!("error serializing server function arguments: {s}"),
-                ServerFnError::Args(s) => format!(
-                    "error deserializing server function arguments: {s}"
-                ),
+                ServerFnError::Args(s) =>
+                    format!("error deserializing server function arguments: {s}"),
                 ServerFnError::MissingArg(s) => format!("missing argument {s}"),
-                ServerFnError::Response(s) =>
-                    format!("error generating HTTP response: {s}"),
+                ServerFnError::Response(s) => format!("error generating HTTP response: {s}"),
                 ServerFnError::WrappedServerError(e) => format!("{e}"),
             }
         )
@@ -314,32 +297,18 @@ where
             .map_err(|err| format!("UTF-8 conversion error: {err}"))?;
 
         data.split_once('|')
-            .ok_or_else(|| {
-                format!("Invalid format: missing delimiter in {data:?}")
-            })
+            .ok_or_else(|| format!("Invalid format: missing delimiter in {data:?}"))
             .and_then(|(ty, data)| match ty {
                 "WrappedServerFn" => CustErr::from_str(data)
                     .map(ServerFnError::WrappedServerError)
-                    .map_err(|_| {
-                        format!("Failed to parse CustErr from {data:?}")
-                    }),
-                "Registration" => {
-                    Ok(ServerFnError::Registration(data.to_string()))
-                }
+                    .map_err(|_| format!("Failed to parse CustErr from {data:?}")),
+                "Registration" => Ok(ServerFnError::Registration(data.to_string())),
                 "Request" => Ok(ServerFnError::Request(data.to_string())),
                 "Response" => Ok(ServerFnError::Response(data.to_string())),
-                "ServerError" => {
-                    Ok(ServerFnError::ServerError(data.to_string()))
-                }
-                "MiddlewareError" => {
-                    Ok(ServerFnError::MiddlewareError(data.to_string()))
-                }
-                "Deserialization" => {
-                    Ok(ServerFnError::Deserialization(data.to_string()))
-                }
-                "Serialization" => {
-                    Ok(ServerFnError::Serialization(data.to_string()))
-                }
+                "ServerError" => Ok(ServerFnError::ServerError(data.to_string())),
+                "MiddlewareError" => Ok(ServerFnError::MiddlewareError(data.to_string())),
+                "Deserialization" => Ok(ServerFnError::Deserialization(data.to_string())),
+                "Serialization" => Ok(ServerFnError::Serialization(data.to_string())),
                 "Args" => Ok(ServerFnError::Args(data.to_string())),
                 "MissingArg" => Ok(ServerFnError::MissingArg(data.to_string())),
                 _ => Err(format!("Unknown error type: {ty}")),
@@ -355,30 +324,16 @@ where
 
     fn from_server_fn_error(value: ServerFnErrorErr) -> Self {
         match value {
-            ServerFnErrorErr::Registration(value) => {
-                ServerFnError::Registration(value)
-            }
+            ServerFnErrorErr::Registration(value) => ServerFnError::Registration(value),
             ServerFnErrorErr::Request(value) => ServerFnError::Request(value),
-            ServerFnErrorErr::ServerError(value) => {
-                ServerFnError::ServerError(value)
-            }
-            ServerFnErrorErr::MiddlewareError(value) => {
-                ServerFnError::MiddlewareError(value)
-            }
-            ServerFnErrorErr::Deserialization(value) => {
-                ServerFnError::Deserialization(value)
-            }
-            ServerFnErrorErr::Serialization(value) => {
-                ServerFnError::Serialization(value)
-            }
+            ServerFnErrorErr::ServerError(value) => ServerFnError::ServerError(value),
+            ServerFnErrorErr::MiddlewareError(value) => ServerFnError::MiddlewareError(value),
+            ServerFnErrorErr::Deserialization(value) => ServerFnError::Deserialization(value),
+            ServerFnErrorErr::Serialization(value) => ServerFnError::Serialization(value),
             ServerFnErrorErr::Args(value) => ServerFnError::Args(value),
-            ServerFnErrorErr::MissingArg(value) => {
-                ServerFnError::MissingArg(value)
-            }
+            ServerFnErrorErr::MissingArg(value) => ServerFnError::MissingArg(value),
             ServerFnErrorErr::Response(value) => ServerFnError::Response(value),
-            ServerFnErrorErr::UnsupportedRequestMethod(value) => {
-                ServerFnError::Request(value)
-            }
+            ServerFnErrorErr::UnsupportedRequestMethod(value) => ServerFnError::Request(value),
         }
     }
 }
@@ -397,9 +352,7 @@ where
 }
 
 /// Type for errors that can occur when using server functions. If you need to return a custom error type from a server function, implement `FromServerFnError` for your custom error type.
-#[derive(
-    thiserror::Error, Debug, Clone, PartialEq, Eq, Serialize, Deserialize,
-)]
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(
     feature = "rkyv",
     derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
@@ -506,8 +459,7 @@ impl<E: FromServerFnError> ServerFnUrlError<E> {
         let decoded = match URL_SAFE.decode(err) {
             Ok(decoded) => decoded,
             Err(err) => {
-                return ServerFnErrorErr::Deserialization(err.to_string())
-                    .into_app_error();
+                return ServerFnErrorErr::Deserialization(err.to_string()).into_app_error();
             }
         };
         E::de(decoded.into())
@@ -545,12 +497,8 @@ impl<E: FromServerFnError> FromStr for ServerFnErrorWrapper<E> {
     type Err = base64::DecodeError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let bytes =
-            <E::Encoder as FormatType>::from_encoded_string(s).map_err(|e| {
-                E::from_server_fn_error(ServerFnErrorErr::Deserialization(
-                    e.to_string(),
-                ))
-            });
+        let bytes = <E::Encoder as FormatType>::from_encoded_string(s)
+            .map_err(|e| E::from_server_fn_error(ServerFnErrorErr::Deserialization(e.to_string())));
         let bytes = match bytes {
             Ok(bytes) => bytes,
             Err(err) => return Ok(Self(err)),
@@ -583,9 +531,8 @@ pub trait FromServerFnError: std::fmt::Debug + Sized + 'static {
 
     /// Deserializes the custom error type from a [`&str`].
     fn de(data: Bytes) -> Self {
-        Self::Encoder::decode(data).unwrap_or_else(|e| {
-            ServerFnErrorErr::Deserialization(e.to_string()).into_app_error()
-        })
+        Self::Encoder::decode(data)
+            .unwrap_or_else(|e| ServerFnErrorErr::Deserialization(e.to_string()).into_app_error())
     }
 }
 

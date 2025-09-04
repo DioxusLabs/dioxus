@@ -11,7 +11,7 @@
 //! computations using libraries you don’t want to ship down to the client, accessing
 //! APIs that need to be called from the server rather than the client for CORS reasons
 //! or because you need a secret API key that’s stored on the server and definitely
-//! shouldn’t be shipped down to a user’s browser.
+//! shouldn’t be shipped down to a user’s .
 //!
 //! Traditionally, this is done by separating your server and client code, and by setting
 //! up something like a REST API or GraphQL API to allow your client to fetch and mutate
@@ -33,7 +33,7 @@
 //! crate that is enabled).
 //!
 //! **Important**: Before calling a server function on a non-web platform, you must set the server URL by calling
-//! [`set_server_url`](crate::client::set_server_url).
+//! [`set_server_url`](server_fn::client::set_server_url).
 //!
 //! ```rust,ignore
 //! #[server]
@@ -170,12 +170,15 @@ use std::{
 #[doc(hidden)]
 pub use xxhash_rust;
 
-type ServerFnServerRequest<Fn> = <<Fn as ServerFn>::Server as crate::Server<
+pub use client::Client;
+pub use server::Server;
+
+type ServerFnServerRequest<Fn> = <<Fn as ServerFn>::Server as server_fn::Server<
     <Fn as ServerFn>::Error,
     <Fn as ServerFn>::InputStreamError,
     <Fn as ServerFn>::OutputStreamError,
 >>::Request;
-type ServerFnServerResponse<Fn> = <<Fn as ServerFn>::Server as crate::Server<
+type ServerFnServerResponse<Fn> = <<Fn as ServerFn>::Server as server_fn::Server<
     <Fn as ServerFn>::Error,
     <Fn as ServerFn>::InputStreamError,
     <Fn as ServerFn>::OutputStreamError,
@@ -277,6 +280,7 @@ pub trait ServerFn: Send + Sized {
             .accepts()
             .map(|n| n.contains("text/html"))
             .unwrap_or(false);
+
         #[cfg(feature = "form-redirects")]
         let mut referer = req.referer().as_deref().map(ToOwned::to_owned);
 
@@ -288,7 +292,7 @@ pub trait ServerFn: Send + Sized {
                 .map(|res| (res, None))
                 .unwrap_or_else(|e| {
                     (
-                        <<Self as ServerFn>::Server as crate::Server<
+                        <<Self as ServerFn>::Server as server_fn::Server<
                             Self::Error,
                             Self::InputStreamError,
                             Self::OutputStreamError,
@@ -340,8 +344,8 @@ pub trait Protocol<
     InputStreamError = Error,
     OutputStreamError = Error,
 > where
-    Server: crate::Server<Error, InputStreamError, OutputStreamError>,
-    Client: crate::Client<Error, InputStreamError, OutputStreamError>,
+    Server: server_fn::Server<Error, InputStreamError, OutputStreamError>,
+    Client: server_fn::Client<Error, InputStreamError, OutputStreamError>,
 {
     /// The HTTP method used for requests.
     const METHOD: Method;
@@ -410,8 +414,8 @@ where
     E: FromServerFnError,
     InputProtocol: Encoding,
     OutputProtocol: Encoding,
-    Client: crate::Client<E>,
-    Server: crate::Server<E>,
+    Client: server_fn::Client<E>,
+    Server: server_fn::Server<E>,
 {
     const METHOD: Method = InputProtocol::METHOD;
 
@@ -434,7 +438,7 @@ where
 
     async fn run_client(path: &str, input: Input) -> Result<Output, E>
     where
-        Client: crate::Client<E>,
+        Client: server_fn::Client<E>,
     {
         // create and send request on client
         let req = input.into_req(path, OutputProtocol::CONTENT_TYPE)?;
@@ -579,8 +583,8 @@ where
     InputStreamError: FromServerFnError + Send,
     OutputStreamError: FromServerFnError + Send,
     Error: FromServerFnError + Send,
-    Server: crate::Server<Error, InputStreamError, OutputStreamError>,
-    Client: crate::Client<Error, InputStreamError, OutputStreamError>,
+    Server: server_fn::Server<Error, InputStreamError, OutputStreamError>,
+    Client: server_fn::Client<Error, InputStreamError, OutputStreamError>,
     OutputItem: Send + 'static,
     InputItem: Send + 'static,
 {
@@ -794,6 +798,10 @@ pub trait Decodes<T> {
 #[doc(hidden)]
 pub use inventory;
 
+use server_fn::server_fn;
+
+use crate::server_fn;
+
 /// Uses the `inventory` crate to initialize a map between paths and server functions.
 #[macro_export]
 macro_rules! initialize_server_fn_map {
@@ -825,7 +833,7 @@ impl<Req, Res> ServerFnTraitObj<Req, Res> {
     /// Converts the relevant parts of a server function into a trait object.
     pub const fn new<
         S: ServerFn<
-            Server: crate::Server<
+            Server: server_fn::Server<
                 S::Error,
                 S::InputStreamError,
                 S::OutputStreamError,
@@ -976,7 +984,7 @@ pub mod axum {
     pub fn register_explicit<T>()
     where
         T: ServerFn<
-                Server: crate::Server<
+                Server: server_fn::Server<
                     T::Error,
                     T::InputStreamError,
                     T::OutputStreamError,
@@ -1051,7 +1059,7 @@ pub mod mock {
     pub struct BrowserMockServer;
 
     impl<Error, InputStreamError, OutputStreamError>
-        crate::server::Server<Error, InputStreamError, OutputStreamError> for BrowserMockServer
+        server_fn::server::Server<Error, InputStreamError, OutputStreamError> for BrowserMockServer
     where
         Error: Send + 'static,
         InputStreamError: Send + 'static,
@@ -1085,6 +1093,7 @@ mod tests {
             Self::ServerFnError(value)
         }
     }
+
     #[test]
     fn test_result_serialization() {
         // Test Ok variant

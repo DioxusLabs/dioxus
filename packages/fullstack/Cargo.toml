@@ -50,6 +50,19 @@ base64 = { workspace = true }
 rustls = { workspace = true, optional = true }
 hyper-rustls = { workspace = true, optional = true }
 
+url = { workspace = true, default-features = true }
+serde_json = { workspace = true }
+
+serde_qs = { workspace = true, default-features = true }
+multer = { optional = true, workspace = true, default-features = true }
+
+# reqwest client
+reqwest = { default-features = false, optional = true, features = [
+  "multipart",
+  "stream",
+], workspace = true }
+futures = { workspace = true, default-features = true }
+
 pin-project = { version = "1.1.10", optional = true }
 thiserror = { workspace = true, optional = true }
 bytes = "1.10.1"
@@ -66,7 +79,7 @@ web-sys = { version = "0.3.77", optional = true, features = [
 ] }
 
 dioxus-cli-config = { workspace = true, optional = true }
-
+tokio-tungstenite = { workspace = true }
 dioxus-devtools = { workspace = true, optional = true }
 aws-lc-rs = { version = "1.13.1", optional = true }
 dioxus-history = { workspace = true }

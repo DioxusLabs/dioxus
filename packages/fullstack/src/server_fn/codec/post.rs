@@ -1,5 +1,5 @@
 use super::{Encoding, FromReq, FromRes, IntoReq, IntoRes};
-use crate::{
+use crate::server_fn::{
     error::{FromServerFnError, IntoAppError, ServerFnErrorErr},
     request::{ClientReq, Req},
     response::{ClientRes, TryRes},
@@ -25,9 +25,8 @@ where
     E: FromServerFnError,
 {
     fn into_req(self, path: &str, accepts: &str) -> Result<Request, E> {
-        let data = Encoding::encode(&self).map_err(|e| {
-            ServerFnErrorErr::Serialization(e.to_string()).into_app_error()
-        })?;
+        let data = Encoding::encode(&self)
+            .map_err(|e| ServerFnErrorErr::Serialization(e.to_string()).into_app_error())?;
         Request::try_new_post_bytes(path, accepts, Encoding::CONTENT_TYPE, data)
     }
 }
@@ -40,9 +39,8 @@ where
 {
     async fn from_req(req: Request) -> Result<Self, E> {
         let data = req.try_into_bytes().await?;
-        let s = Encoding::decode(data).map_err(|e| {
-            ServerFnErrorErr::Deserialization(e.to_string()).into_app_error()
-        })?;
+        let s = Encoding::decode(data)
+            .map_err(|e| ServerFnErrorErr::Deserialization(e.to_string()).into_app_error())?;
         Ok(s)
     }
 }
@@ -55,9 +53,8 @@ where
     T: Send,
 {
     async fn into_res(self) -> Result<Response, E> {
-        let data = Encoding::encode(&self).map_err(|e| {
-            ServerFnErrorErr::Serialization(e.to_string()).into_app_error()
-        })?;
+        let data = Encoding::encode(&self)
+            .map_err(|e| ServerFnErrorErr::Serialization(e.to_string()).into_app_error())?;
         Response::try_from_bytes(Encoding::CONTENT_TYPE, data)
     }
 }
@@ -70,9 +67,8 @@ where
 {
     async fn from_res(res: Response) -> Result<Self, E> {
         let data = res.try_into_bytes().await?;
-        let s = Encoding::decode(data).map_err(|e| {
-            ServerFnErrorErr::Deserialization(e.to_string()).into_app_error()
-        })?;
+        let s = Encoding::decode(data)
+            .map_err(|e| ServerFnErrorErr::Deserialization(e.to_string()).into_app_error())?;
         Ok(s)
     }
 }

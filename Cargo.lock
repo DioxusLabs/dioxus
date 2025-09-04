@@ -1320,7 +1320,6 @@ dependencies = [
  "matchit 0.8.4",
  "memchr",
  "mime",
- "multer",
  "percent-encoding",
  "pin-project-lite",
  "rustversion",
@@ -3940,12 +3939,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "const-str"
-version = "0.6.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e991226a70654b49d34de5ed064885f0bef0348a8e70018b8ff1ac80aa984a2"
-
-[[package]]
 name = "const-str-proc-macro"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5506,30 +5499,34 @@ dependencies = [
  "dioxus-fullstack-protocol",
  "dioxus-history",
  "dioxus-interpreter-js",
- "dioxus-isrg",
  "dioxus-router",
- "dioxus-server",
  "dioxus-web",
  "dioxus_server_macro",
+ "futures",
  "futures-channel",
  "futures-util",
  "generational-box",
  "http 1.3.1",
  "hyper-rustls 0.27.7",
+ "multer",
  "parking_lot",
  "pin-project",
+ "reqwest 0.12.22",
  "rustls 0.23.29",
  "serde",
- "server_fn",
+ "serde_json",
+ "serde_qs",
  "thiserror 2.0.12",
  "tokio",
  "tokio-stream",
+ "tokio-tungstenite 0.27.0",
  "tokio-util",
  "tower 0.5.2",
  "tower-http",
  "tower-layer",
  "tracing",
  "tracing-futures",
+ "url",
  "web-sys",
 ]
 
@@ -5921,6 +5918,7 @@ dependencies = [
  "dioxus-core-macro",
  "dioxus-devtools",
  "dioxus-document",
+ "dioxus-fullstack",
  "dioxus-fullstack-hooks",
  "dioxus-fullstack-protocol",
  "dioxus-history",
@@ -5943,7 +5941,6 @@ dependencies = [
  "pin-project",
  "rustls 0.23.29",
  "serde",
- "server_fn",
  "subsecond",
  "thiserror 2.0.12",
  "tokio",
@@ -6062,13 +6059,15 @@ name = "dioxus_server_macro"
 version = "0.7.0-rc.0"
 dependencies = [
  "axum 0.8.4",
+ "const_format",
+ "convert_case 0.8.0",
  "dioxus",
  "proc-macro2",
  "quote",
  "serde",
- "server_fn_macro_dioxus",
  "syn 2.0.104",
  "tower-http",
+ "xxhash-rust",
 ]
 
 [[package]]
@@ -7999,27 +7998,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "gloo-net"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c06f627b1a58ca3d42b45d6104bf1e1a03799df472df00988b6ba21accc10580"
-dependencies = [
- "futures-channel",
- "futures-core",
- "futures-sink",
- "gloo-utils",
- "http 1.3.1",
- "js-sys",
- "pin-project",
- "serde",
- "serde_json",
- "thiserror 1.0.69",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "web-sys",
-]
-
-[[package]]
 name = "gloo-timers"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8029,19 +8007,6 @@ dependencies = [
  "futures-core",
  "js-sys",
  "wasm-bindgen",
-]
-
-[[package]]
-name = "gloo-utils"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b5555354113b18c547c1d3a98fbf7fb32a9ff4f6fa112ce823a21641a0ba3aa"
-dependencies = [
- "js-sys",
- "serde",
- "serde_json",
- "wasm-bindgen",
- "web-sys",
 ]
 
 [[package]]
@@ -10165,7 +10130,7 @@ dependencies = [
  "ahash 0.8.12",
  "bitflags 2.9.1",
  "browserslist-rs 0.18.2",
- "const-str 0.3.2",
+ "const-str",
  "cssparser 0.33.0",
  "cssparser-color",
  "dashmap 5.5.3",
@@ -14417,9 +14382,6 @@ name = "send_wrapper"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cd0b0ec5f1c1ca621c432a25813d8d60c88abe6d3e08a3eb9cf37d97a0fe3d73"
-dependencies = [
- "futures-core",
-]
 
 [[package]]
 name = "sentry-backtrace"
@@ -14677,85 +14639,6 @@ dependencies = [
  "ryu",
  "serde",
  "unsafe-libyaml",
-]
-
-[[package]]
-name = "server_fn"
-version = "0.8.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9c27fbd25ecc066481e383e2ed62ab2480e708aa3fe46cba36e95f58e61dfd04"
-dependencies = [
- "axum 0.8.4",
- "base64 0.22.1",
- "bytes",
- "const-str 0.6.2",
- "const_format",
- "dashmap 6.1.0",
- "futures",
- "gloo-net",
- "http 1.3.1",
- "http-body-util",
- "hyper 1.6.0",
- "inventory",
- "js-sys",
- "pin-project-lite",
- "reqwest 0.12.22",
- "rustc_version",
- "rustversion",
- "send_wrapper",
- "serde",
- "serde_json",
- "serde_qs",
- "server_fn_macro_default",
- "thiserror 2.0.12",
- "throw_error",
- "tokio",
- "tokio-tungstenite 0.27.0",
- "tower 0.5.2",
- "tower-layer",
- "url",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "wasm-streams",
- "web-sys",
- "xxhash-rust",
-]
-
-[[package]]
-name = "server_fn_macro"
-version = "0.8.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b9d530c872590473016016679c94e3bddf47372941fc924f687ffd11a1778a71"
-dependencies = [
- "const_format",
- "convert_case 0.8.0",
- "proc-macro2",
- "quote",
- "rustc_version",
- "syn 2.0.104",
- "xxhash-rust",
-]
-
-[[package]]
-name = "server_fn_macro_default"
-version = "0.8.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ca7abc92ed696648275ed9ff171131a83d571af11748593dc2e6eb6a4e22a5b9"
-dependencies = [
- "server_fn_macro",
- "syn 2.0.104",
-]
-
-[[package]]
-name = "server_fn_macro_dioxus"
-version = "0.7.0-rc.0"
-dependencies = [
- "const_format",
- "convert_case 0.8.0",
- "proc-macro2",
- "quote",
- "syn 2.0.104",
- "xxhash-rust",
 ]
 
 [[package]]
@@ -16755,15 +16638,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "throw_error"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "41e42a6afdde94f3e656fae18f837cb9bbe500a5ac5de325b09f3ec05b9c28e3"
-dependencies = [
- "pin-project-lite",
-]
-
-[[package]]
 name = "tiff"
 version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -17004,7 +16878,6 @@ checksum = "489a59b6730eda1b0171fcfda8b121f4bee2b35cba8645ca35c5f7ba3eb736c1"
 dependencies = [
  "futures-util",
  "log",
- "rustls 0.23.29",
  "tokio",
  "tungstenite 0.27.0",
 ]

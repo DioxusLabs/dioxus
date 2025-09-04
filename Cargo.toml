@@ -174,7 +174,7 @@ dioxus-stores-macro = { path = "packages/stores-macro", version = "0.7.0-rc.0" }
 dioxus-devtools = { path = "packages/devtools", version = "0.7.0-rc.0" }
 dioxus-devtools-types = { path = "packages/devtools-types", version = "0.7.0-rc.0" }
 dioxus-server = { path = "packages/server", version = "0.7.0-rc.0" }
-dioxus-fullstack = { path = "packages/fullstack", version = "0.7.0-rc.0" }
+dioxus-fullstack = { path = "packages/fullstack", version = "0.7.0-rc.0", default-features = false}
 dioxus-fullstack-hooks = { path = "packages/fullstack-hooks", version = "0.7.0-rc.0" }
 dioxus-fullstack-protocol = { path = "packages/fullstack-protocol", version = "0.7.0-rc.0" }
 dioxus_server_macro = { path = "packages/server-macro", version = "0.7.0-rc.0", default-features = false }
@@ -337,6 +337,9 @@ libc = "0.2.174"
 memmap2 = "0.9.5"
 memfd = "0.6.4"
 xxhash-rust = {version = "0.8.15", default-features = false}
+serde_qs = "0.15.0"
+multer = "3.1.0"
+
 
 # desktop
 wry = { version = "0.52.1", default-features = false }
