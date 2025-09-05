@@ -326,6 +326,7 @@ use crate::{
 };
 use anyhow::{bail, Context};
 use cargo_metadata::diagnostic::Diagnostic;
+use cargo_toml::{Profile, Profiles, StripSetting};
 use depinfo::RustcDepInfo;
 use dioxus_cli_config::{format_base_path_meta_element, PRODUCT_NAME_ENV};
 use dioxus_cli_config::{APP_TITLE_ENV, ASSET_ROOT_ENV};
@@ -3337,9 +3338,28 @@ impl BuildRequest {
             (_, false) => ("dev", cargo_toml.profile.dev.as_ref()),
         };
 
-        let Some(profile) = profile else { return };
+        let Some(profile) = profile else {
+            return;
+        };
 
-        let Some(strip) = profile.strip.as_ref() else {
+        // Get the strip setting from the profile or the profile it inherits from
+        fn get_strip(profile: &Profile, profiles: &Profiles) -> Option<StripSetting> {
+            profile.strip.clone().or_else(|| {
+                // If we can't find the strip setting, check if we inherit from another profile
+                profile.inherits.as_ref().and_then(|inherits| {
+                    let profile = match inherits.as_str() {
+                        "dev" => profiles.dev.as_ref(),
+                        "release" => profiles.release.as_ref(),
+                        "test" => profiles.test.as_ref(),
+                        "bench" => profiles.bench.as_ref(),
+                        other => profiles.custom.get(&*other),
+                    };
+                    profile.and_then(|p| get_strip(p, profiles))
+                })
+            })
+        }
+
+        let Some(strip) = get_strip(profile, &cargo_toml.profile) else {
             // If the profile doesn't have a strip option, we don't need to warn
             return;
         };
