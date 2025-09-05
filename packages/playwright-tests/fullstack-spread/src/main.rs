@@ -1,4 +1,4 @@
-//! Regression test for https://github.com/DioxusLabs/dioxus/issues/4646
+//! Regression test for <https://github.com/DioxusLabs/dioxus/issues/4646>
 
 use dioxus::prelude::*;
 
