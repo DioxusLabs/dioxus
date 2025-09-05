@@ -69,7 +69,12 @@ impl HydrationContext {
 
     /// Extend this data with the data from another [`HydrationContext`]
     pub fn extend(&self, other: &Self) {
+<<<<<<< Updated upstream
         self.data.borrow_mut().extend(&other.data.borrow());
+=======
+        let other = other.data.borrow();
+        self.data.borrow_mut().extend(&other);
+>>>>>>> Stashed changes
     }
 
     #[cfg(feature = "web")]
