@@ -3352,7 +3352,7 @@ impl BuildRequest {
                         "release" => profiles.release.as_ref(),
                         "test" => profiles.test.as_ref(),
                         "bench" => profiles.bench.as_ref(),
-                        other => profiles.custom.get(&*other),
+                        other => profiles.custom.get(other),
                     };
                     profile.and_then(|p| get_strip(p, profiles))
                 })
