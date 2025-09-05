@@ -126,6 +126,7 @@ members = [
     "packages/playwright-tests/barebones-template",
     "packages/playwright-tests/fullstack",
     "packages/playwright-tests/fullstack-mounted",
+    "packages/playwright-tests/fullstack-spread",
     "packages/playwright-tests/fullstack-routing",
     "packages/playwright-tests/suspense-carousel",
     "packages/playwright-tests/nested-suspense",
