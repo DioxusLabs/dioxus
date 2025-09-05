@@ -1,5 +1,5 @@
 use super::{Encoding, FromReq, FromRes, IntoReq, IntoRes};
-use crate::server_fn::{
+use crate::{
     error::{FromServerFnError, IntoAppError, ServerFnErrorErr},
     request::{ClientReq, Req},
     response::{ClientRes, TryRes},
@@ -7,18 +7,18 @@ use crate::server_fn::{
 };
 use std::marker::PhantomData;
 
-/// A codec that encodes the data in the patch body
-pub struct Patch<Codec>(PhantomData<Codec>);
+/// A codec that encodes the data in the post body
+pub struct Post<Codec>(PhantomData<Codec>);
 
-impl<Codec: ContentType> ContentType for Patch<Codec> {
+impl<Codec: ContentType> ContentType for Post<Codec> {
     const CONTENT_TYPE: &'static str = Codec::CONTENT_TYPE;
 }
 
-impl<Codec: ContentType> Encoding for Patch<Codec> {
-    const METHOD: http::Method = http::Method::PATCH;
+impl<Codec: ContentType> Encoding for Post<Codec> {
+    const METHOD: http::Method = http::Method::POST;
 }
 
-impl<E, T, Encoding, Request> IntoReq<Patch<Encoding>, Request, E> for T
+impl<E, T, Encoding, Request> IntoReq<Post<Encoding>, Request, E> for T
 where
     Request: ClientReq<E>,
     Encoding: Encodes<T>,
@@ -27,11 +27,11 @@ where
     fn into_req(self, path: &str, accepts: &str) -> Result<Request, E> {
         let data = Encoding::encode(&self)
             .map_err(|e| ServerFnErrorErr::Serialization(e.to_string()).into_app_error())?;
-        Request::try_new_patch_bytes(path, accepts, Encoding::CONTENT_TYPE, data)
+        Request::try_new_post_bytes(path, accepts, Encoding::CONTENT_TYPE, data)
     }
 }
 
-impl<E, T, Request, Encoding> FromReq<Patch<Encoding>, Request, E> for T
+impl<E, T, Request, Encoding> FromReq<Post<Encoding>, Request, E> for T
 where
     Request: Req<E> + Send + 'static,
     Encoding: Decodes<T>,
@@ -45,7 +45,7 @@ where
     }
 }
 
-impl<E, Response, Encoding, T> IntoRes<Patch<Encoding>, Response, E> for T
+impl<E, Response, Encoding, T> IntoRes<Post<Encoding>, Response, E> for T
 where
     Response: TryRes<E>,
     Encoding: Encodes<T>,
@@ -59,7 +59,7 @@ where
     }
 }
 
-impl<E, Encoding, Response, T> FromRes<Patch<Encoding>, Response, E> for T
+impl<E, Encoding, Response, T> FromRes<Post<Encoding>, Response, E> for T
 where
     Response: ClientRes<E> + Send,
     Encoding: Decodes<T>,

@@ -1,5 +1,5 @@
 use super::{Encoding, FromReq};
-use crate::server_fn::{
+use crate::{
     error::{FromServerFnError, ServerFnErrorWrapper},
     request::{browser::BrowserFormData, ClientReq, Req},
     ContentType, IntoReq,

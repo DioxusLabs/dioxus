@@ -1,4 +1,4 @@
-use crate::server_fn::error::ServerFnErrorErr;
+use crate::error::ServerFnErrorErr;
 use bytes::Bytes;
 use std::{future::Future, pin::Pin};
 

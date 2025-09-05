@@ -19,9 +19,7 @@ pub(crate) static REDIRECT_HOOK: OnceLock<RedirectHook> = OnceLock::new();
 
 /// Sets a function that will be called if a server function returns a `3xx` status
 /// or the [`REDIRECT_HEADER`]. Returns `Err(_)` if the hook has already been set.
-pub fn set_redirect_hook(
-    hook: impl Fn(&str) + Send + Sync + 'static,
-) -> Result<(), RedirectHook> {
+pub fn set_redirect_hook(hook: impl Fn(&str) + Send + Sync + 'static) -> Result<(), RedirectHook> {
     REDIRECT_HOOK.set(Box::new(hook))
 }
 

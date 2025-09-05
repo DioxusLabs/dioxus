@@ -28,7 +28,7 @@ send_wrapper = { features = [
 ], optional = true, workspace = true, default-features = true }
 thiserror = { workspace = true, default-features = true }
 
-# registration system
+# registration
 inventory = { optional = true, workspace = true, default-features = true }
 dashmap = { workspace = true, default-features = true }
 

@@ -1,5 +1,5 @@
-use crate::server_fn::error::{FromServerFnError, IntoAppError, ServerFnErrorErr};
-use crate::server_fn::ClientRes;
+use crate::error::{FromServerFnError, IntoAppError, ServerFnErrorErr};
+use crate::ClientRes;
 use bytes::Bytes;
 use futures::{Stream, TryStreamExt};
 use reqwest::Response;

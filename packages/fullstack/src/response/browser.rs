@@ -39,10 +39,10 @@ impl<E: FromServerFnError> ClientRes<E> for BrowserResponse {
         // the browser won't send this async work between threads (because it's single-threaded)
         // so we can safely wrap this
         SendWrapper::new(async move {
-            self.0.text().await.map_err(|e| {
-                ServerFnErrorErr::Deserialization(e.to_string())
-                    .into_app_error()
-            })
+            self.0
+                .text()
+                .await
+                .map_err(|e| ServerFnErrorErr::Deserialization(e.to_string()).into_app_error())
         })
     }
 
@@ -50,26 +50,23 @@ impl<E: FromServerFnError> ClientRes<E> for BrowserResponse {
         // the browser won't send this async work between threads (because it's single-threaded)
         // so we can safely wrap this
         SendWrapper::new(async move {
-            self.0.binary().await.map(Bytes::from).map_err(|e| {
-                ServerFnErrorErr::Deserialization(e.to_string())
-                    .into_app_error()
-            })
+            self.0
+                .binary()
+                .await
+                .map(Bytes::from)
+                .map_err(|e| ServerFnErrorErr::Deserialization(e.to_string()).into_app_error())
         })
     }
 
     fn try_into_stream(
         self,
-    ) -> Result<impl Stream<Item = Result<Bytes, Bytes>> + Send + 'static, E>
-    {
+    ) -> Result<impl Stream<Item = Result<Bytes, Bytes>> + Send + 'static, E> {
         let stream = ReadableStream::from_raw(self.0.body().unwrap())
             .into_stream()
             .map(|data| match data {
                 Err(e) => {
                     web_sys::console::error_1(&e);
-                    Err(E::from_server_fn_error(ServerFnErrorErr::Request(
-                        format!("{e:?}"),
-                    ))
-                    .ser())
+                    Err(E::from_server_fn_error(ServerFnErrorErr::Request(format!("{e:?}"))).ser())
                 }
                 Ok(data) => {
                     let data = data.unchecked_into::<Uint8Array>();

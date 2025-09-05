@@ -213,13 +213,44 @@ pub fn server(args: proc_macro::TokenStream, body: TokenStream) -> TokenStream {
         Err(e) => return e.to_compile_error().into(),
     };
 
+    // parse_quote!(server_fn::Http<server_fn::codec::Json, server_fn::codec::Json>),
     parsed
         .default_protocol(Some(
-            parse_quote!(server_fn::Http<server_fn::codec::Json, server_fn::codec::Json>),
+            parse_quote!(dioxus_fullstack::Http<dioxus_fullstack::codec::Json, dioxus_fullstack::codec::Json>),
         ))
-        .default_input_encoding(Some(parse_quote!(server_fn::codec::Json)))
-        .default_output_encoding(Some(parse_quote!(server_fn::codec::Json)))
-        .default_server_fn_path(Some(parse_quote!(server_fn)))
+        .default_input_encoding(Some(parse_quote!(dioxus_fullstack::codec::Json)))
+        .default_output_encoding(Some(parse_quote!(dioxus_fullstack::codec::Json)))
+        .default_server_fn_path(Some(parse_quote!(dioxus_fullstack)))
         .to_token_stream()
         .into()
+}
+
+#[proc_macro_attribute]
+pub fn get(args: proc_macro::TokenStream, body: TokenStream) -> TokenStream {
+    todo!()
+}
+
+#[proc_macro_attribute]
+pub fn post(args: proc_macro::TokenStream, body: TokenStream) -> TokenStream {
+    todo!()
+}
+
+#[proc_macro_attribute]
+pub fn put(args: proc_macro::TokenStream, body: TokenStream) -> TokenStream {
+    todo!()
+}
+
+#[proc_macro_attribute]
+pub fn delete(args: proc_macro::TokenStream, body: TokenStream) -> TokenStream {
+    todo!()
+}
+
+#[proc_macro_attribute]
+pub fn patch(args: proc_macro::TokenStream, body: TokenStream) -> TokenStream {
+    todo!()
+}
+
+#[proc_macro_attribute]
+pub fn route(args: proc_macro::TokenStream, body: TokenStream) -> TokenStream {
+    todo!()
 }

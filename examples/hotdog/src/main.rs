@@ -1,8 +1,8 @@
 mod backend;
-mod components;
+mod frontend;
 
-use components::{DogView, Favorites, NavBar};
 use dioxus::prelude::*;
+use frontend::*;
 
 #[derive(Routable, PartialEq, Clone)]
 enum Route {

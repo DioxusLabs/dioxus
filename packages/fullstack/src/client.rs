@@ -1,4 +1,4 @@
-use crate::server_fn::{request::ClientReq, response::ClientRes};
+use crate::{request::ClientReq, response::ClientRes};
 use bytes::Bytes;
 use futures::{Sink, Stream};
 use std::{future::Future, sync::OnceLock};

@@ -1,12 +1,12 @@
-//! A mock [`server_fn::client::Client`] implementation used when no client feature is enabled.
+//! A mock [`crate::client::Client`] implementation used when no client feature is enabled.
 
 use std::future::Future;
 
-use crate::server_fn::{request::ClientReq, response::ClientRes};
+use crate::{request::ClientReq, response::ClientRes};
 use futures_util::Stream;
 
-/// A placeholder [`server_fn::client::Client`] used when no client feature is enabled. The
-/// [`server_fn::client::browser::BrowserClient`] is used on web clients, and [`server_fn::client::reqwest::ReqwestClient`]
+/// A placeholder [`crate::client::Client`] used when no client feature is enabled. The
+/// [`crate::client::browser::BrowserClient`] is used on web clients, and [`crate::client::reqwest::ReqwestClient`]
 /// is used on native clients
 #[non_exhaustive]
 pub struct MockServerFnClient {}
@@ -25,7 +25,7 @@ impl MockServerFnClient {
 }
 
 impl<Error, InputStreamError, OutputStreamError>
-    server_fn::client::Client<Error, InputStreamError, OutputStreamError> for MockServerFnClient
+    crate::client::Client<Error, InputStreamError, OutputStreamError> for MockServerFnClient
 {
     type Request = MockServerFnClientRequest;
 
@@ -40,8 +40,8 @@ impl<Error, InputStreamError, OutputStreamError>
         _: &str,
     ) -> Result<
         (
-            impl Stream<Item = Result<server_fn::Bytes, server_fn::Bytes>> + std::marker::Send + 'static,
-            impl futures_util::Sink<server_fn::Bytes> + std::marker::Send + 'static,
+            impl Stream<Item = Result<crate::Bytes, crate::Bytes>> + std::marker::Send + 'static,
+            impl futures_util::Sink<crate::Bytes> + std::marker::Send + 'static,
         ),
         Error,
     > {
@@ -49,7 +49,7 @@ impl<Error, InputStreamError, OutputStreamError>
             as Result<
                 (
                     futures_util::stream::Once<futures_util::future::Pending<_>>,
-                    futures_util::sink::Drain<server_fn::Bytes>,
+                    futures_util::sink::Drain<crate::Bytes>,
                 ),
                 _,
             >

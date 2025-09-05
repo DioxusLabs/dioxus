@@ -74,7 +74,7 @@ members = [
     "packages/server-macro",
 
     # CLI harnesses, all included
-    "packages/cli-harnesses/*",
+    # "packages/cli-harnesses/*",
 
     # Playwright tests
     "packages/playwright-tests/liveview",
@@ -339,7 +339,7 @@ memfd = "0.6.4"
 xxhash-rust = {version = "0.8.15", default-features = false}
 serde_qs = "0.15.0"
 multer = "3.1.0"
-
+const-str = "0.7.0"
 
 # desktop
 wry = { version = "0.52.1", default-features = false }
@@ -628,4 +628,8 @@ doc-scrape-examples = true
 
 [[example]]
 name = "logging"
+doc-scrape-examples = true
+
+[[example]]
+name = "string_router"
 doc-scrape-examples = true

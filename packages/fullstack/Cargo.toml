@@ -28,6 +28,8 @@ generational-box = { workspace = true }
 dioxus-router = { workspace = true, features = ["streaming"], optional = true }
 dioxus-fullstack-hooks = { workspace = true }
 dioxus-fullstack-protocol = { workspace = true }
+dashmap = "6.1.0"
+inventory = { workspace = true , optional = true }
 
 # Web Integration
 dioxus-web = { workspace = true, features = ["hydrate"], default-features = false, optional = true }
@@ -64,7 +66,7 @@ reqwest = { default-features = false, optional = true, features = [
 futures = { workspace = true, default-features = true }
 
 pin-project = { version = "1.1.10", optional = true }
-thiserror = { workspace = true, optional = true }
+thiserror = { workspace = true }
 bytes = "1.10.1"
 tower = { workspace = true, features = ["util"], optional = true }
 tower-layer = { version = "0.3.3", optional = true }
@@ -85,12 +87,20 @@ aws-lc-rs = { version = "1.13.1", optional = true }
 dioxus-history = { workspace = true }
 http.workspace = true
 
+throw_error = "0.3.0"
+const_format = { workspace = true, default-features = true }
+const-str = { workspace = true, default-features = true }
+rustversion = { workspace = true, default-features = true }
+xxhash-rust = { features = [
+  "const_xxh64",
+], workspace = true, default-features = true }
+
 [dev-dependencies]
 dioxus = { workspace = true, features = ["fullstack"] }
 tokio = { workspace = true, features = ["full"] }
 
 [features]
-default = ["devtools", "document", "file_engine", "mounted"]
+default = ["devtools", "document", "file_engine", "mounted", "client"]
 devtools = ["dioxus-web?/devtools", "dep:dioxus-devtools"]
 mounted = ["dioxus-web?/mounted"]
 file_engine = ["dioxus-web?/file_engine"]
@@ -100,6 +110,12 @@ desktop = []
 mobile = []
 default-tls = []
 rustls = ["dep:rustls", "dep:hyper-rustls"]
+client = ["reqwest"]
+ssr = ["dep:inventory"]
+reqwest = ["dep:reqwest"]
+server = ["dep:axum", "ssr"]
+axum = ["server"]
+axum-no-default = ["server"]
 # server = [
 #     "server-core" ,
 #     "default-tls",

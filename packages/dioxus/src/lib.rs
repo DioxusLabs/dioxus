@@ -200,7 +200,8 @@ pub mod prelude {
     #[cfg_attr(docsrs, doc(cfg(feature = "fullstack")))]
     #[doc(inline)]
     pub use dioxus_fullstack::{
-        server, use_server_cached, use_server_future, ServerFnError, ServerFnResult,
+        self, delete, get, patch, post, put, server, use_server_cached, use_server_future,
+        ServerFnError, ServerFnResult,
     };
 
     #[cfg(feature = "server")]

@@ -1,5 +1,5 @@
 use super::{Encoding, FromReq, FromRes, IntoReq};
-use crate::server_fn::{
+use crate::{
     error::{FromServerFnError, ServerFnErrorErr},
     request::{ClientReq, Req},
     response::{ClientRes, TryRes},

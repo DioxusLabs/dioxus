@@ -1,43 +1,63 @@
-use dioxus::prelude::*;
+use dioxus::{fullstack::request, prelude::*};
 
 #[cfg(feature = "server")]
-thread_local! {
-    static DB: rusqlite::Connection = {
-        let conn = rusqlite::Connection::open("hotdogdb/hotdog.db").expect("Failed to open database");
+static DB: ServerState<rusqlite::Connection> = ServerState::new(|| {
+    let conn = rusqlite::Connection::open("hotdogdb/hotdog.db").expect("Failed to open database");
 
-        conn.execute_batch(
-            "CREATE TABLE IF NOT EXISTS dogs (
-                id INTEGER PRIMARY KEY,
-                url TEXT NOT NULL
-            );",
-        ).unwrap();
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS dogs (
+            id INTEGER PRIMARY KEY,
+            url TEXT NOT NULL
+        );",
+    )
+    .unwrap();
 
-        conn
-    };
-}
+    conn
+});
 
-#[server(endpoint = "list_dogs")]
-pub async fn list_dogs() -> Result<Vec<(usize, String)>, ServerFnError> {
-    let dogs = DB.with(|f| {
-        f.prepare("SELECT id, url FROM dogs ORDER BY id DESC LIMIT 10")
-            .unwrap()
-            .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
-            .unwrap()
-            .map(|r| r.unwrap())
-            .collect()
-    });
-
-    Ok(dogs)
-}
-
-#[server(endpoint = "remove_dog")]
-pub async fn remove_dog(id: usize) -> Result<(), ServerFnError> {
-    DB.with(|f| f.execute("DELETE FROM dogs WHERE id = ?1", [&id]))?;
+#[middleware("/")]
+pub async fn logging_middleware(request: &mut Request<()>) -> Result<()> {
+    todo!();
     Ok(())
 }
 
-#[server(endpoint = "save_dog")]
-pub async fn save_dog(image: String) -> Result<(), ServerFnError> {
-    _ = DB.with(|f| f.execute("INSERT INTO dogs (url) VALUES (?1)", [&image]));
+#[middleware("/admin-api/")]
+pub async fn admin_middleware(request: &mut Request<()>) -> Result<()> {
+    if request
+        .headers()
+        .get("Authorization")
+        .and_then(|h| h.to_str().ok())
+        != Some("Bearer admin-token")
+    {
+        return Err(dioxus::fullstack::Error::new(
+            dioxus::fullstack::ErrorKind::Unauthorized,
+            "Unauthorized",
+        ));
+    }
+
     Ok(())
+}
+
+#[get("/api/dogs")]
+pub async fn list_dogs() -> Result<Vec<(usize, String)>> {
+    DB.prepare("SELECT id, url FROM dogs ORDER BY id DESC LIMIT 10")?
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
+        .collect()
+}
+
+#[delete("/api/dogs/{id}")]
+pub async fn remove_dog(id: usize) -> Result<()> {
+    DB.execute("DELETE FROM dogs WHERE id = ?1", [&id])?;
+    Ok(())
+}
+
+#[post("/api/dogs")]
+pub async fn save_dog(image: String) -> Result<()> {
+    DB.execute("INSERT INTO dogs (url) VALUES (?1)", [&image])?;
+    Ok(())
+}
+
+#[layer("/admin-api/")]
+pub async fn admin_layer(request: &mut Request<()>) -> Result<()> {
+    todo!();
 }

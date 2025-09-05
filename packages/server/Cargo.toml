@@ -34,7 +34,7 @@ http = { workspace = true }
 dioxus-ssr = { workspace = true }
 dioxus-isrg = { workspace = true }
 dioxus-router = { workspace = true, features = ["streaming"] }
-dioxus-fullstack = { workspace = true }
+dioxus-fullstack = { workspace = true, features = ["server"] }
 dioxus-fullstack-hooks = { workspace = true }
 dioxus-fullstack-protocol = { workspace = true }
 dioxus-interpreter-js = { workspace = true, optional = true }

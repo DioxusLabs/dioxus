@@ -10,8 +10,8 @@ use axum::{
 };
 
 use dioxus_core::{Element, VirtualDom};
+use dioxus_fullstack::{AxumServerFn, ServerFnTraitObj};
 use http::header::*;
-use server_fn::ServerFnTraitObj;
 use std::path::Path;
 use std::sync::Arc;
 use tower::util::MapResponse;
@@ -229,8 +229,6 @@ where
         _ => unimplemented!("Unsupported server function method: {}", method),
     }
 }
-
-pub type AxumServerFn = ServerFnTraitObj<http::Request<Body>, http::Response<Body>>;
 
 pub(crate) fn collect_raw_server_fns() -> Vec<&'static AxumServerFn> {
     inventory::iter::<AxumServerFn>().collect()
