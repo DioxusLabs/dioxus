@@ -1,4 +1,7 @@
-use crate::Route;
+use crate::{
+    backend::{list_dogs, remove_dog, save_dog},
+    Route,
+};
 use dioxus::prelude::*;
 
 #[component]
@@ -37,10 +40,13 @@ pub fn NavBar() -> Element {
 #[component]
 pub fn DogView() -> Element {
     let mut img_src = use_loader(|| async move {
-        Ok(reqwest::get("https://dog.ceo/api/breeds/image/random")
-            .await?
-            .json::<serde_json::Value>()
-            .await?["message"])
+        anyhow::Ok(
+            reqwest::get("https://dog.ceo/api/breeds/image/random")
+                .await?
+                .json::<serde_json::Value>()
+                .await?["message"]
+                .to_string(),
+        )
     })?;
 
     rsx! {

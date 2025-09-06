@@ -13,6 +13,7 @@ resolver = "2"
 [dependencies]
 # server functions
 dioxus_server_macro = { workspace = true }
+anyhow = { workspace = true }
 
 # axum
 axum = { workspace = true, optional = true }
@@ -25,6 +26,8 @@ generational-box = { workspace = true }
 # Dioxus + SSR
 # dioxus-server = { workspace = true, optional = true }
 # dioxus-isrg = { workspace = true, optional = true }
+dioxus-signals = { workspace = true }
+dioxus-hooks = { workspace = true }
 dioxus-router = { workspace = true, features = ["streaming"], optional = true }
 dioxus-fullstack-hooks = { workspace = true }
 dioxus-fullstack-protocol = { workspace = true }

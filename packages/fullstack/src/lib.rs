@@ -102,6 +102,53 @@ use std::{
 #[doc(hidden)]
 pub use xxhash_rust;
 
+pub mod prelude {
+    use dioxus_core::RenderError;
+    use dioxus_hooks::Resource;
+    use dioxus_signals::{Loader, Signal};
+    use std::{marker::PhantomData, prelude::rust_2024::Future};
+
+    pub use crate::layer;
+    pub use crate::middleware;
+    pub use http::Request;
+
+    pub fn use_loader<F: Future<Output = Result<T, E>>, T: 'static, E: Into<anyhow::Error>>(
+        f: impl FnMut() -> F,
+    ) -> Result<Loader<T>, RenderError> {
+        todo!()
+    }
+
+    pub struct ServerState<T> {
+        _t: PhantomData<*const T>,
+    }
+
+    impl<T> ServerState<T> {
+        fn get(&self) -> &T {
+            todo!()
+        }
+
+        pub const fn new(f: fn() -> T) -> Self {
+            Self { _t: PhantomData }
+        }
+    }
+
+    impl<T> std::ops::Deref for ServerState<T> {
+        type Target = T;
+
+        fn deref(&self) -> &Self::Target {
+            todo!()
+        }
+    }
+    impl<T> std::ops::DerefMut for ServerState<T> {
+        fn deref_mut(&mut self) -> &mut Self::Target {
+            todo!()
+        }
+    }
+
+    unsafe impl<T> Send for ServerState<T> {}
+    unsafe impl<T> Sync for ServerState<T> {}
+}
+
 type ServerFnServerRequest<Fn> = <<Fn as ServerFn>::Server as Server<
     <Fn as ServerFn>::Error,
     <Fn as ServerFn>::InputStreamError,

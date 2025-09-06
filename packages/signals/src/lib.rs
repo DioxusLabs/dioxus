@@ -10,6 +10,9 @@ pub use copy_value::*;
 pub(crate) mod signal;
 pub use signal::*;
 
+mod loader;
+pub use loader::*;
+
 mod map;
 pub use map::*;
 

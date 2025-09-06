@@ -1,4 +1,5 @@
-use dioxus::{fullstack::request, prelude::*};
+use anyhow::Result;
+use dioxus::prelude::*;
 
 #[cfg(feature = "server")]
 static DB: ServerState<rusqlite::Connection> = ServerState::new(|| {
@@ -29,10 +30,7 @@ pub async fn admin_middleware(request: &mut Request<()>) -> Result<()> {
         .and_then(|h| h.to_str().ok())
         != Some("Bearer admin-token")
     {
-        return Err(dioxus::fullstack::Error::new(
-            dioxus::fullstack::ErrorKind::Unauthorized,
-            "Unauthorized",
-        ));
+        todo!("unauthorizeda");
     }
 
     Ok(())
@@ -40,9 +38,10 @@ pub async fn admin_middleware(request: &mut Request<()>) -> Result<()> {
 
 #[get("/api/dogs")]
 pub async fn list_dogs() -> Result<Vec<(usize, String)>> {
-    DB.prepare("SELECT id, url FROM dogs ORDER BY id DESC LIMIT 10")?
+    Ok(DB
+        .prepare("SELECT id, url FROM dogs ORDER BY id DESC LIMIT 10")?
         .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
-        .collect()
+        .collect::<Result<Vec<(usize, String)>, rusqlite::Error>>()?)
 }
 
 #[delete("/api/dogs/{id}")]

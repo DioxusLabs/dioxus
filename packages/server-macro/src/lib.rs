@@ -8,7 +8,7 @@
 mod server_fn_macro_dioxus;
 use proc_macro::TokenStream;
 use server_fn_macro_dioxus::ServerFnCall;
-use syn::{__private::ToTokens, parse_quote};
+use syn::{__private::ToTokens, parse_macro_input, parse_quote, ItemFn};
 
 /// Declares that a function is a [server function](https://docs.rs/server_fn/).
 /// This means that its body will only run on the server, i.e., when the `ssr`
@@ -227,30 +227,62 @@ pub fn server(args: proc_macro::TokenStream, body: TokenStream) -> TokenStream {
 
 #[proc_macro_attribute]
 pub fn get(args: proc_macro::TokenStream, body: TokenStream) -> TokenStream {
-    todo!()
+    route_impl(body)
 }
 
 #[proc_macro_attribute]
 pub fn post(args: proc_macro::TokenStream, body: TokenStream) -> TokenStream {
-    todo!()
+    route_impl(body)
 }
 
 #[proc_macro_attribute]
 pub fn put(args: proc_macro::TokenStream, body: TokenStream) -> TokenStream {
-    todo!()
+    route_impl(body)
 }
 
 #[proc_macro_attribute]
 pub fn delete(args: proc_macro::TokenStream, body: TokenStream) -> TokenStream {
-    todo!()
+    route_impl(body)
 }
 
 #[proc_macro_attribute]
 pub fn patch(args: proc_macro::TokenStream, body: TokenStream) -> TokenStream {
-    todo!()
+    route_impl(body)
 }
 
 #[proc_macro_attribute]
 pub fn route(args: proc_macro::TokenStream, body: TokenStream) -> TokenStream {
-    todo!()
+    route_impl(body)
+}
+#[proc_macro_attribute]
+pub fn middleware(args: proc_macro::TokenStream, body: TokenStream) -> TokenStream {
+    route_impl(body)
+}
+#[proc_macro_attribute]
+pub fn layer(args: proc_macro::TokenStream, body: TokenStream) -> TokenStream {
+    route_impl(body)
+}
+
+fn route_impl(body: TokenStream) -> TokenStream {
+    let f: ItemFn = parse_macro_input!(body);
+
+    let ItemFn {
+        attrs,
+        vis,
+        sig,
+        block,
+    } = f;
+
+    quote::quote! {
+        #vis #sig {
+            #[cfg(feature = "server")] {
+                #block
+            }
+
+            #[cfg(not(feature = "server"))] {
+                todo!()
+            }
+        }
+    }
+    .into()
 }
