@@ -27,19 +27,19 @@ use url::Url;
 /// A custom header that can be used to indicate a server function returned an error.
 pub const SERVER_FN_ERROR_HEADER: &str = "serverfnerror";
 
-impl From<ServerFnError> for Error {
-    fn from(e: ServerFnError) -> Self {
-        Error::from(ServerFnErrorWrapper(e))
-    }
-}
+// impl From<ServerFnError> for Error {
+//     fn from(e: ServerFnError) -> Self {
+//         Error::from(ServerFnErrorWrapper(e))
+//     }
+// }
 
 /// An empty value indicating that there is no custom error type associated
 /// with this server function.
 #[derive(Debug, Deserialize, Serialize, PartialEq, Eq, Hash, PartialOrd, Ord, Clone, Copy)]
-#[cfg_attr(
-    feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
-)]
+// #[cfg_attr(
+//     feature = "rkyv",
+//     derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+// )]
 #[deprecated(
     since = "0.8.0",
     note = "Now server_fn can return any error type other than ServerFnError, \
@@ -165,10 +165,10 @@ impl<E> ViaError<E> for WrapError<E> {
 /// This means that other error types can easily be converted into it using the
 /// `?` operator.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(
-    feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
-)]
+// #[cfg_attr(
+//     feature = "rkyv",
+//     derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+// )]
 pub enum ServerFnError<E = NoCustomError> {
     #[deprecated(
         since = "0.8.0",
@@ -366,10 +366,10 @@ where
 
 /// Type for errors that can occur when using server functions. If you need to return a custom error type from a server function, implement `FromServerFnError` for your custom error type.
 #[derive(thiserror::Error, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(
-    feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
-)]
+// #[cfg_attr(
+//     feature = "rkyv",
+//     derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+// )]
 pub enum ServerFnErrorErr {
     /// Error while trying to register the server function (only occurs in case of poisoned RwLock).
     #[error("error while trying to register the server function: {0}")]
@@ -609,7 +609,8 @@ fn assert_from_server_fn_error_impl() {
 ///     Ok(parsed_number)
 /// }
 /// ```
-pub type ServerFnResult<T = (), E = String> = std::result::Result<T, ServerFnError<E>>;
+pub type ServerFnResult<T = ()> = std::result::Result<T, ServerFnErrorErr>;
+// pub type ServerFnResult<T = (), E = String> = std::result::Result<T, ServerFnErrorErr<E>>;
 
 // /// An error type for server functions. This may either be an error that occurred while running the server
 // /// function logic, or an error that occurred while communicating with the server inside the server function crate.
@@ -805,8 +806,19 @@ impl From<ServerFnError> for RenderError {
     }
 }
 
+// impl<E: std::error::Error> Into<E> for ServerFnError {
+//     fn into(self) -> E {
+//         todo!()
+//     }
+// }
 // impl<E: std::error::Error> From<E> for ServerFnError {
 //     fn from(error: E) -> Self {
 //         Self::ServerError(error.to_string())
+//     }
+// }
+
+// impl Into<RenderError> for ServerFnError {
+//     fn into(self) -> RenderError {
+//         todo!()
 //     }
 // }

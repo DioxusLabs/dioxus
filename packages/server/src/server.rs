@@ -208,6 +208,9 @@ where
     }
 }
 
+// pub type AxumServerFn =
+//     ServerFnTraitObj<http::Request<::axum::body::Body>, http::Response<::axum::body::Body>>;
+
 pub fn register_server_fn_on_router<S>(
     f: &'static AxumServerFn,
     router: Router<S>,

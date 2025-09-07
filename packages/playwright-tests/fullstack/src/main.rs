@@ -5,14 +5,17 @@
 // - Hydration
 
 #![allow(non_snake_case)]
-use dioxus::fullstack::{codec::JsonEncoding, commit_initial_chunk, BoxedStream, Websocket};
+use dioxus::fullstack::{
+    codec::JsonEncoding, commit_initial_chunk, BoxedStream, ServerFnErrorErr, Websocket,
+};
 use dioxus::prelude::*;
 use futures::{channel::mpsc, SinkExt, StreamExt};
 
 fn main() {
     dioxus::LaunchBuilder::new()
         .with_cfg(server_only! {
-            dioxus::fullstack::ServeConfig::builder().enable_out_of_order_streaming()
+            dioxus::server::ServeConfig::builder().enable_out_of_order_streaming()
+            // dioxus::fullstack::ServeConfig::builder().enable_out_of_order_streaming()
         })
         .with_context(1234u32)
         .launch(app);

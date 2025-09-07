@@ -13,7 +13,8 @@ use svg_attributes::to;
 fn main() {
     LaunchBuilder::new()
         .with_cfg(server_only! {
-            dioxus::fullstack::ServeConfig::builder().enable_out_of_order_streaming()
+            dioxus::server::ServeConfig::builder().enable_out_of_order_streaming()
+            // dioxus::fullstack::ServeConfig::builder().enable_out_of_order_streaming()
         })
         .launch(|| rsx! { Router::<Route> {} });
 }

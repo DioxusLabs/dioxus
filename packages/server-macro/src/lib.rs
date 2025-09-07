@@ -206,23 +206,24 @@ use syn::{__private::ToTokens, parse_macro_input, parse_quote, ItemFn};
 /// ```
 #[proc_macro_attribute]
 pub fn server(args: proc_macro::TokenStream, body: TokenStream) -> TokenStream {
-    // If there is no input codec, use json as the default
-    #[allow(unused_mut)]
-    let mut parsed = match ServerFnCall::parse("/api", args.into(), body.into()) {
-        Ok(parsed) => parsed,
-        Err(e) => return e.to_compile_error().into(),
-    };
+    // // If there is no input codec, use json as the default
+    // #[allow(unused_mut)]
+    // let mut parsed = match ServerFnCall::parse("/api", args.into(), body.into()) {
+    //     Ok(parsed) => parsed,
+    //     Err(e) => return e.to_compile_error().into(),
+    // };
 
-    // parse_quote!(server_fn::Http<server_fn::codec::Json, server_fn::codec::Json>),
-    parsed
-        .default_protocol(Some(
-            parse_quote!(dioxus_fullstack::Http<dioxus_fullstack::codec::Json, dioxus_fullstack::codec::Json>),
-        ))
-        .default_input_encoding(Some(parse_quote!(dioxus_fullstack::codec::Json)))
-        .default_output_encoding(Some(parse_quote!(dioxus_fullstack::codec::Json)))
-        .default_server_fn_path(Some(parse_quote!(dioxus_fullstack)))
-        .to_token_stream()
-        .into()
+    // // parse_quote!(server_fn::Http<server_fn::codec::Json, server_fn::codec::Json>),
+    // parsed
+    //     .default_protocol(Some(
+    //         parse_quote!(dioxus_fullstack::Http<dioxus_fullstack::codec::Json, dioxus_fullstack::codec::Json>),
+    //     ))
+    //     .default_input_encoding(Some(parse_quote!(dioxus_fullstack::codec::Json)))
+    //     .default_output_encoding(Some(parse_quote!(dioxus_fullstack::codec::Json)))
+    //     .default_server_fn_path(Some(parse_quote!(dioxus_fullstack)))
+    //     .to_token_stream()
+    //     .into()
+    route_impl(body)
 }
 
 #[proc_macro_attribute]

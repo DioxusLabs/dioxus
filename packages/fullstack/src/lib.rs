@@ -75,7 +75,7 @@ pub use const_str;
 use dashmap::DashMap;
 #[cfg(feature = "form-redirects")]
 use error::ServerFnUrlError;
-use error::{FromServerFnError, ServerFnErrorErr};
+pub use error::{FromServerFnError, ServerFnErrorErr};
 pub use error::{ServerFnError, ServerFnResult};
 use futures::{pin_mut, SinkExt, Stream, StreamExt};
 use http::Method;
@@ -101,6 +101,8 @@ use std::{
 };
 #[doc(hidden)]
 pub use xxhash_rust;
+
+pub use client::{get_server_url, set_server_url};
 
 pub mod prelude {
     use dioxus_core::RenderError;

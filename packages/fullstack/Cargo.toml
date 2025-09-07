@@ -116,18 +116,20 @@ rustls = ["dep:rustls", "dep:hyper-rustls"]
 client = ["reqwest"]
 ssr = ["dep:inventory"]
 reqwest = ["dep:reqwest"]
-server = ["dep:axum", "ssr"]
 axum = ["server"]
 axum-no-default = ["server"]
-# server = [
-#     "server-core" ,
-#     "default-tls",
-# ]
-# server-core = [
-#     "dioxus-fullstack-hooks/server",
-#     "dep:dioxus-server",
-#     "dioxus-interpreter-js",
-# ]
+# server = ["dep:axum", "ssr"]
+server = [
+    "server-core" ,
+    "default-tls",
+    "dep:axum",
+    "ssr"
+]
+server-core = [
+    # "dioxus-fullstack-hooks/server",
+    # "dep:dioxus-server",
+    "dioxus-interpreter-js",
+]
 aws-lc-rs = ["dep:aws-lc-rs"]
 
 [package.metadata.docs.rs]

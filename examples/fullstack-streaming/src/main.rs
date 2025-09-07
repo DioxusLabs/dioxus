@@ -1,6 +1,6 @@
+use dioxus::fullstack::codec::{StreamingText, TextStream};
 use dioxus::prelude::*;
 use futures::StreamExt;
-use server_fn::codec::{StreamingText, TextStream};
 
 fn app() -> Element {
     let mut response = use_signal(String::new);
