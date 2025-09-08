@@ -23,7 +23,7 @@ pub fn load_manifest_from_path(path: &Path) -> Result<Manifest, cargo_toml::Erro
 fn cargo_home() -> Option<PathBuf> {
     // If the cargo home env var is set, use that
     if let Some(cargo_home) = std::env::var_os("CARGO_HOME") {
-        return Some(PathBuf::from(cargo_home).join("config.toml"));
+        return Some(PathBuf::from(cargo_home));
     }
     // Otherwise, use the default location
     if cfg!(windows) {
