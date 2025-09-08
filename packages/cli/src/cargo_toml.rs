@@ -19,19 +19,26 @@ pub fn load_manifest_from_path(path: &Path) -> Result<Manifest, cargo_toml::Erro
     Ok(original)
 }
 
-/// Get the global cargo config path if it exists
-fn global_cargo_config_path() -> Option<PathBuf> {
+/// Get the path to cargo home
+fn cargo_home() -> Option<PathBuf> {
+    // If the cargo home env var is set, use that
+    if let Some(cargo_home) = std::env::var_os("CARGO_HOME") {
+        return Some(PathBuf::from(cargo_home).join("config.toml"));
+    }
+    // Otherwise, use the default location
     if cfg!(windows) {
-        std::env::var_os("USERPROFILE").map(|user_profile| {
-            PathBuf::from(user_profile)
-                .join(".cargo")
-                .join("config.toml")
-        })
+        std::env::var_os("USERPROFILE")
+            .map(|user_profile| PathBuf::from(user_profile).join(".cargo"))
     } else if cfg!(unix) {
-        dirs::home_dir().map(|home_dir| home_dir.join(".cargo").join("config.toml"))
+        dirs::home_dir().map(|home_dir| home_dir.join(".cargo"))
     } else {
         None
     }
+}
+
+/// Get the global cargo config path if it exists
+fn global_cargo_config_path() -> Option<PathBuf> {
+    cargo_home().map(|cargo_home| cargo_home.join("config.toml"))
 }
 
 // Extend a manifest with a config.toml if it exists
