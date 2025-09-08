@@ -41,7 +41,8 @@ impl Display for RenderError {
 
 impl<E: std::error::Error + 'static> From<E> for RenderError {
     fn from(e: E) -> Self {
-        Self::Aborted(CapturedError::from(e))
+        todo!()
+        // Self::Aborted(CapturedError::from(e))
     }
 }
 

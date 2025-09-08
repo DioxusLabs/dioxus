@@ -5285,6 +5285,7 @@ version = "0.7.0-rc.0"
 name = "dioxus-core"
 version = "0.7.0-rc.0"
 dependencies = [
+ "anyhow",
  "const_format",
  "dioxus",
  "dioxus-core-types",
@@ -5502,7 +5503,6 @@ dependencies = [
  "dioxus",
  "dioxus-cli-config",
  "dioxus-core",
- "dioxus-desktop",
  "dioxus-devtools",
  "dioxus-document",
  "dioxus-fullstack-hooks",
@@ -8515,6 +8515,18 @@ dependencies = [
 
 [[package]]
 name = "hotdog"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "dioxus",
+ "reqwest 0.12.22",
+ "rusqlite",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "hotdog-simpler"
 version = "0.1.0"
 dependencies = [
  "anyhow",

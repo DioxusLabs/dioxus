@@ -220,7 +220,7 @@ pub mod prelude {
     #[doc(inline)]
     pub use dioxus_router::{
         hooks::*, navigator, use_navigator, GoBackButton, GoForwardButton, Link, NavigationTarget,
-        Outlet, Routable, Router,
+        Outlet, Routable, Route, Router,
     };
 
     #[cfg(feature = "asset")]
@@ -235,8 +235,8 @@ pub mod prelude {
     #[doc(inline)]
     pub use dioxus_core::{
         consume_context, provide_context, spawn, suspend, try_consume_context, use_hook, Attribute,
-        Callback, Component, Context, Element, ErrorBoundary, ErrorContext, Event, EventHandler,
-        Fragment, HasAttributes, IntoDynNode, RenderError, ScopeId, SuspenseBoundary,
+        Callback, Component, Element, ErrorBoundary, ErrorContext, Event, EventHandler, Fragment,
+        HasAttributes, IntoDynNode, RenderError, RsxContext, ScopeId, SuspenseBoundary,
         SuspenseContext, SuspenseExtension, VNode, VirtualDom,
     };
 }

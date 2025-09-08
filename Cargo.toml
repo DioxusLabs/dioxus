@@ -107,6 +107,7 @@ members = [
     "examples/bluetooth-scanner",
     "examples/file-explorer",
     "examples/hotdog",
+    "examples/hotdog-simpler",
 
     # Simple examples that require a crate
     "examples/tailwind",

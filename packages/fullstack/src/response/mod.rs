@@ -1,9 +1,9 @@
-/// Response types for the browser.
-#[cfg(feature = "browser")]
-pub mod browser;
+// /// Response types for the browser.
+// #[cfg(feature = "browser")]
+// pub mod browser;
 
-#[cfg(feature = "generic")]
-pub mod generic;
+// #[cfg(feature = "generic")]
+// pub mod generic;
 
 /// Response types for Axum.
 #[cfg(feature = "axum-no-default")]
@@ -70,37 +70,37 @@ pub trait ClientRes<E> {
     fn has_redirect(&self) -> bool;
 }
 
-/// A mocked response type that can be used in place of the actual server response,
-/// when compiling for the browser.
-///
-/// ## Panics
-/// This always panics if its methods are called. It is used solely to stub out the
-/// server response type when compiling for the client.
-pub struct BrowserMockRes;
+// /// A mocked response type that can be used in place of the actual server response,
+// /// when compiling for the browser.
+// ///
+// /// ## Panics
+// /// This always panics if its methods are called. It is used solely to stub out the
+// /// server response type when compiling for the client.
+// pub struct BrowserMockRes;
 
-impl<E> TryRes<E> for BrowserMockRes {
-    fn try_from_string(_content_type: &str, _data: String) -> Result<Self, E> {
-        unreachable!()
-    }
+// impl<E> TryRes<E> for BrowserMockRes {
+//     fn try_from_string(_content_type: &str, _data: String) -> Result<Self, E> {
+//         unreachable!()
+//     }
 
-    fn try_from_bytes(_content_type: &str, _data: Bytes) -> Result<Self, E> {
-        unreachable!()
-    }
+//     fn try_from_bytes(_content_type: &str, _data: Bytes) -> Result<Self, E> {
+//         unreachable!()
+//     }
 
-    fn try_from_stream(
-        _content_type: &str,
-        _data: impl Stream<Item = Result<Bytes, Bytes>>,
-    ) -> Result<Self, E> {
-        unreachable!()
-    }
-}
+//     fn try_from_stream(
+//         _content_type: &str,
+//         _data: impl Stream<Item = Result<Bytes, Bytes>>,
+//     ) -> Result<Self, E> {
+//         unreachable!()
+//     }
+// }
 
-impl Res for BrowserMockRes {
-    fn error_response(_path: &str, _err: Bytes) -> Self {
-        unreachable!()
-    }
+// impl Res for BrowserMockRes {
+//     fn error_response(_path: &str, _err: Bytes) -> Self {
+//         unreachable!()
+//     }
 
-    fn redirect(&mut self, _path: &str) {
-        unreachable!()
-    }
-}
+//     fn redirect(&mut self, _path: &str) {
+//         unreachable!()
+//     }
+// }

@@ -1,9 +1,10 @@
 use super::{Encoding, FromReq, FromRes, IntoReq};
 use crate::{
+    codec::IntoRes,
     error::{FromServerFnError, ServerFnErrorErr},
     request::{ClientReq, Req},
     response::{ClientRes, TryRes},
-    ContentType, IntoRes, ServerFnError,
+    ContentType, ServerFnError,
 };
 use bytes::Bytes;
 use futures::{Stream, StreamExt, TryStreamExt};

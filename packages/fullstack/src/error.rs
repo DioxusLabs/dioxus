@@ -169,15 +169,16 @@ impl<E> ViaError<E> for WrapError<E> {
 //     feature = "rkyv",
 //     derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
 // )]
-pub enum ServerFnError<E = NoCustomError> {
-    #[deprecated(
-        since = "0.8.0",
-        note = "Now server_fn can return any error type other than \
-                ServerFnError, so users should place their custom error type \
-                instead of ServerFnError"
-    )]
-    /// A user-defined custom error type, which defaults to [`NoCustomError`].
-    WrappedServerError(E),
+pub enum ServerFnError {
+    // pub enum ServerFnError<E = NoCustomError> {
+    // #[deprecated(
+    //     since = "0.8.0",
+    //     note = "Now server_fn can return any error type other than \
+    //             ServerFnError, so users should place their custom error type \
+    //             instead of ServerFnError"
+    // )]
+    // /// A user-defined custom error type, which defaults to [`NoCustomError`].
+    // WrappedServerError(E),
     /// Error while trying to register the server function (only occurs in case of poisoned RwLock).
     Registration(String),
     /// Occurs on the client if there is a network error while trying to run function on server.
@@ -596,6 +597,95 @@ fn assert_from_server_fn_error_impl() {
     assert_impl::<ServerFnError>();
 }
 
+impl<T> ServerFnError<T> {
+    /// Returns true if the error is a server error
+    pub fn is_server_error(&self) -> bool {
+        matches!(self, ServerFnError::ServerError(_))
+    }
+
+    /// Returns true if the error is a communication error
+    pub fn is_communication_error(&self) -> bool {
+        todo!()
+        // matches!(self, ServerFnError::CommunicationError(_))
+    }
+
+    /// Returns a reference to the server error if it is a server error
+    /// or `None` if it is a communication error.
+    pub fn server_error(&self) -> Option<&T> {
+        todo!()
+        // match self {
+        //     ServerFnError::ServerError(err) => Some(err),
+        //     ServerFnError::CommunicationError(_) => None,
+        // }
+    }
+
+    /// Returns a reference to the communication error if it is a communication error
+    /// or `None` if it is a server error.
+    pub fn communication_error(&self) -> Option<&ServerFnErrorErr> {
+        todo!()
+        // match self {
+        //     ServerFnError::ServerError(_) => None,
+        //     ServerFnError::WrappedServerError(err) => Some(err),
+        // }
+    }
+}
+
+impl From<ServerFnError> for CapturedError {
+    fn from(error: ServerFnError) -> Self {
+        Self::from_display(error)
+    }
+}
+
+impl From<ServerFnError> for RenderError {
+    fn from(error: ServerFnError) -> Self {
+        RenderError::Aborted(CapturedError::from(error))
+    }
+}
+
+// impl<E: std::error::Error> Into<E> for ServerFnError {
+//     fn into(self) -> E {
+//         todo!()
+//     }
+// }
+// impl<E: std::error::Error> From<E> for ServerFnError {
+//     fn from(error: E) -> Self {
+//         Self::ServerError(error.to_string())
+//     }
+// }
+
+// impl Into<RenderError> for ServerFnError {
+//     fn into(self) -> RenderError {
+//         todo!()
+//     }
+// }
+
+// impl<T: Serialize + DeserializeOwned + std::fmt::Debug + 'static> FromServerFnError
+//     for ServerFnError<T>
+// {
+//     type Encoder = crate::codec::JsonEncoding;
+
+//     fn from_server_fn_error(err: ServerFnErrorErr) -> Self {
+//         Self::CommunicationError(err)
+//     }
+// }
+
+// impl<T: FromStr> FromStr for ServerFnError<T> {
+//     type Err = <T as FromStr>::Err;
+
+//     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+//         std::result::Result::Ok(Self::ServerError(T::from_str(s)?))
+//     }
+// }
+
+// impl<T: Display> Display for ServerFnError<T> {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         match self {
+//             ServerFnError::ServerError(err) => write!(f, "Server error: {err}"),
+//             ServerFnError::CommunicationError(err) => write!(f, "Communication error: {err}"),
+//         }
+//     }
+// }
+
 /// A default result type for server functions, which can either be successful or contain an error. The [`ServerFnResult`] type
 /// is a convenient alias for a `Result` type that uses [`ServerFnError`] as the error type.
 ///
@@ -731,94 +821,5 @@ pub type ServerFnResult<T = ()> = std::result::Result<T, ServerFnErrorErr>;
 //     /// ```
 //     pub fn new(error: impl ToString) -> Self {
 //         Self::ServerError(error.to_string())
-//     }
-// }
-
-impl<T> ServerFnError<T> {
-    /// Returns true if the error is a server error
-    pub fn is_server_error(&self) -> bool {
-        matches!(self, ServerFnError::ServerError(_))
-    }
-
-    /// Returns true if the error is a communication error
-    pub fn is_communication_error(&self) -> bool {
-        todo!()
-        // matches!(self, ServerFnError::CommunicationError(_))
-    }
-
-    /// Returns a reference to the server error if it is a server error
-    /// or `None` if it is a communication error.
-    pub fn server_error(&self) -> Option<&T> {
-        todo!()
-        // match self {
-        //     ServerFnError::ServerError(err) => Some(err),
-        //     ServerFnError::CommunicationError(_) => None,
-        // }
-    }
-
-    /// Returns a reference to the communication error if it is a communication error
-    /// or `None` if it is a server error.
-    pub fn communication_error(&self) -> Option<&ServerFnErrorErr> {
-        todo!()
-        // match self {
-        //     ServerFnError::ServerError(_) => None,
-        //     ServerFnError::WrappedServerError(err) => Some(err),
-        // }
-    }
-}
-
-// impl<T: Serialize + DeserializeOwned + std::fmt::Debug + 'static> FromServerFnError
-//     for ServerFnError<T>
-// {
-//     type Encoder = crate::codec::JsonEncoding;
-
-//     fn from_server_fn_error(err: ServerFnErrorErr) -> Self {
-//         Self::CommunicationError(err)
-//     }
-// }
-
-// impl<T: FromStr> FromStr for ServerFnError<T> {
-//     type Err = <T as FromStr>::Err;
-
-//     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
-//         std::result::Result::Ok(Self::ServerError(T::from_str(s)?))
-//     }
-// }
-
-// impl<T: Display> Display for ServerFnError<T> {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         match self {
-//             ServerFnError::ServerError(err) => write!(f, "Server error: {err}"),
-//             ServerFnError::CommunicationError(err) => write!(f, "Communication error: {err}"),
-//         }
-//     }
-// }
-
-impl From<ServerFnError> for CapturedError {
-    fn from(error: ServerFnError) -> Self {
-        Self::from_display(error)
-    }
-}
-
-impl From<ServerFnError> for RenderError {
-    fn from(error: ServerFnError) -> Self {
-        RenderError::Aborted(CapturedError::from(error))
-    }
-}
-
-// impl<E: std::error::Error> Into<E> for ServerFnError {
-//     fn into(self) -> E {
-//         todo!()
-//     }
-// }
-// impl<E: std::error::Error> From<E> for ServerFnError {
-//     fn from(error: E) -> Self {
-//         Self::ServerError(error.to_string())
-//     }
-// }
-
-// impl Into<RenderError> for ServerFnError {
-//     fn into(self) -> RenderError {
-//         todo!()
 //     }
 // }

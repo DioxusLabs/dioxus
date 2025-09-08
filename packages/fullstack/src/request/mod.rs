@@ -4,13 +4,17 @@ use http::Method;
 use std::{borrow::Cow, future::Future};
 
 /// Request types for Axum.
-#[cfg(feature = "axum-no-default")]
+// #[cfg(feature = "axum-no-default")]
+// #[cfg(feature = "axum-no-default")]
+#[cfg(feature = "server")]
 pub mod axum;
-/// Request types for the browser.
-#[cfg(feature = "browser")]
-pub mod browser;
-#[cfg(feature = "generic")]
-pub mod generic;
+
+// /// Request types for the browser.
+// #[cfg(feature = "browser")]
+// pub mod browser;
+// #[cfg(feature = "generic")]
+// pub mod generic;
+
 /// Request types for [`reqwest`].
 #[cfg(feature = "reqwest")]
 pub mod reqwest;
@@ -291,64 +295,64 @@ where
     > + Send;
 }
 
-/// A mocked request type that can be used in place of the actual server request,
-/// when compiling for the browser.
-pub struct BrowserMockReq;
+// /// A mocked request type that can be used in place of the actual server request,
+// /// when compiling for the browser.
+// pub struct BrowserMockReq;
 
-impl<Error, InputStreamError, OutputStreamError> Req<Error, InputStreamError, OutputStreamError>
-    for BrowserMockReq
-where
-    Error: Send + 'static,
-    InputStreamError: Send + 'static,
-    OutputStreamError: Send + 'static,
-{
-    type WebsocketResponse = crate::response::BrowserMockRes;
+// impl<Error, InputStreamError, OutputStreamError> Req<Error, InputStreamError, OutputStreamError>
+//     for BrowserMockReq
+// where
+//     Error: Send + 'static,
+//     InputStreamError: Send + 'static,
+//     OutputStreamError: Send + 'static,
+// {
+//     type WebsocketResponse = crate::response::BrowserMockRes;
 
-    fn as_query(&self) -> Option<&str> {
-        unreachable!()
-    }
+//     fn as_query(&self) -> Option<&str> {
+//         unreachable!()
+//     }
 
-    fn to_content_type(&self) -> Option<Cow<'_, str>> {
-        unreachable!()
-    }
+//     fn to_content_type(&self) -> Option<Cow<'_, str>> {
+//         unreachable!()
+//     }
 
-    fn accepts(&self) -> Option<Cow<'_, str>> {
-        unreachable!()
-    }
+//     fn accepts(&self) -> Option<Cow<'_, str>> {
+//         unreachable!()
+//     }
 
-    fn referer(&self) -> Option<Cow<'_, str>> {
-        unreachable!()
-    }
-    async fn try_into_bytes(self) -> Result<Bytes, Error> {
-        unreachable!()
-    }
+//     fn referer(&self) -> Option<Cow<'_, str>> {
+//         unreachable!()
+//     }
+//     async fn try_into_bytes(self) -> Result<Bytes, Error> {
+//         unreachable!()
+//     }
 
-    async fn try_into_string(self) -> Result<String, Error> {
-        unreachable!()
-    }
+//     async fn try_into_string(self) -> Result<String, Error> {
+//         unreachable!()
+//     }
 
-    fn try_into_stream(self) -> Result<impl Stream<Item = Result<Bytes, Bytes>> + Send, Error> {
-        Ok(futures::stream::once(async { unreachable!() }))
-    }
+//     fn try_into_stream(self) -> Result<impl Stream<Item = Result<Bytes, Bytes>> + Send, Error> {
+//         Ok(futures::stream::once(async { unreachable!() }))
+//     }
 
-    async fn try_into_websocket(
-        self,
-    ) -> Result<
-        (
-            impl Stream<Item = Result<Bytes, Bytes>> + Send + 'static,
-            impl Sink<Bytes> + Send + 'static,
-            Self::WebsocketResponse,
-        ),
-        Error,
-    > {
-        #[allow(unreachable_code)]
-        Err::<
-            (
-                futures::stream::Once<std::future::Ready<Result<Bytes, Bytes>>>,
-                futures::sink::Drain<Bytes>,
-                Self::WebsocketResponse,
-            ),
-            _,
-        >(unreachable!())
-    }
-}
+//     async fn try_into_websocket(
+//         self,
+//     ) -> Result<
+//         (
+//             impl Stream<Item = Result<Bytes, Bytes>> + Send + 'static,
+//             impl Sink<Bytes> + Send + 'static,
+//             Self::WebsocketResponse,
+//         ),
+//         Error,
+//     > {
+//         #[allow(unreachable_code)]
+//         Err::<
+//             (
+//                 futures::stream::Once<std::future::Ready<Result<Bytes, Bytes>>>,
+//                 futures::sink::Drain<Bytes>,
+//                 Self::WebsocketResponse,
+//             ),
+//             _,
+//         >(unreachable!())
+//     }
+// }

@@ -1,8 +1,24 @@
-use crate::{
-    backend::{list_dogs, remove_dog, save_dog},
-    Route,
-};
 use dioxus::prelude::*;
+
+mod backend;
+use backend::{list_dogs, remove_dog, save_dog};
+
+fn main() {
+    #[cfg(not(feature = "server"))]
+    server_fn::client::set_server_url("https://hot-dog.fly.dev");
+
+    dioxus::launch(|| {
+        rsx! {
+            Stylesheet { href: asset!("/assets/main.css") }
+            div { id: "title",
+                Link { to: "/", h1 { "🌭 HotDog! " } }
+                Link { to: "/favroites", id: "heart", "♥️" }
+            }
+            Route { to: "/", DogView { } }
+            Route { to: "/", Favorites { } }
+        }
+    });
+}
 
 #[component]
 pub fn Favorites() -> Element {
@@ -10,7 +26,7 @@ pub fn Favorites() -> Element {
 
     rsx! {
         div { id: "favorites",
-            for (id , url) in favorites.cloned() {
+            for (id, url) in favorites.cloned() {
                 div { class: "favorite-dog", key: "{id}",
                     img { src: "{url}" }
                     button {
@@ -27,27 +43,13 @@ pub fn Favorites() -> Element {
 }
 
 #[component]
-pub fn NavBar() -> Element {
-    rsx! {
-        div { id: "title",
-            span {}
-            Link { to: Route::DogView, h1 { "🌭 HotDog! " } }
-            Link { to: Route::Favorites, id: "heart", "♥️" }
-        }
-        Outlet::<Route> {}
-    }
-}
-
-#[component]
 pub fn DogView() -> Element {
     let mut img_src = use_loader(|| async move {
-        anyhow::Ok(
-            reqwest::get("https://dog.ceo/api/breeds/image/random")
-                .await?
-                .json::<serde_json::Value>()
-                .await?["message"]
-                .to_string(),
-        )
+        Ok(reqwest::get("https://dog.ceo/api/breeds/image/random")
+            .await?
+            .json::<serde_json::Value>()
+            .await?["message"]
+            .to_string())
     })?;
 
     rsx! {

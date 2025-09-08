@@ -1,5 +1,5 @@
 use anyhow::Result;
-use dioxus::{fullstack::ServerFn, prelude::*};
+use dioxus::prelude::*;
 
 #[cfg(feature = "server")]
 static DB: ServerState<rusqlite::Connection> = ServerState::new(|| {
@@ -15,54 +15,6 @@ static DB: ServerState<rusqlite::Connection> = ServerState::new(|| {
 
     conn
 });
-
-// #[server]
-// pub async fn do_thing(abc: i32, def: String) -> Result<String> {
-//     Ok("Hello from the backend!".to_string())
-// }
-
-pub async fn do_thing_expanded() -> Result<String> {
-    struct DoThingExpandedArgs {
-        abc: i32,
-        def: String,
-    }
-
-    impl ServerFn for DoThingExpandedArgs {
-        const PATH: &'static str;
-
-        // type Client;
-
-        // type Server;
-
-        type Protocol;
-
-        type Output;
-
-        type Error;
-
-        type InputStreamError;
-
-        type OutputStreamError;
-
-        fn run_body(
-            self,
-        ) -> impl std::prelude::rust_2024::Future<
-            Output = std::result::Result<Self::Output, Self::Error>,
-        > + Send {
-            todo!()
-        }
-    }
-
-    #[cfg(feature = "server")]
-    {
-        todo!()
-    }
-
-    #[cfg(not(feature = "server"))]
-    {
-        Ok("Hello from the backend!".to_string())
-    }
-}
 
 #[get("/api/dogs")]
 pub async fn list_dogs() -> Result<Vec<(usize, String)>> {

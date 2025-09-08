@@ -85,8 +85,8 @@ router = ["dep:dioxus-router"]
 
 # Platforms
 fullstack = ["dep:dioxus-fullstack", "dioxus-config-macro/fullstack", "dep:serde"]
-desktop = ["dep:dioxus-desktop", "dioxus-fullstack?/desktop", "dioxus-config-macro/desktop"]
-mobile = ["dep:dioxus-desktop", "dioxus-fullstack?/mobile", "dioxus-config-macro/mobile"]
+desktop = ["dep:dioxus-desktop", "dioxus-config-macro/desktop"]
+mobile = ["dep:dioxus-desktop", "dioxus-config-macro/mobile"]
 web = [
   "dep:dioxus-web",
   "dioxus-fullstack?/web",
@@ -97,14 +97,14 @@ web = [
 ]
 ssr = ["dep:dioxus-ssr", "dioxus-config-macro/ssr"]
 liveview = ["dep:dioxus-liveview", "dioxus-config-macro/liveview"]
-native = ["dep:dioxus-native",  "dioxus-fullstack?/desktop"] # todo(jon): decompose the desktop crate such that "webview" is the default and native is opt-in
+native = ["dep:dioxus-native"] # todo(jon): decompose the desktop crate such that "webview" is the default and native is opt-in
 server = [
   "dep:dioxus-server",
   "dep:dioxus_server_macro",
-  # "dioxus_server_macro",
-  # "dioxus_server_macro",
   "ssr",
   "dioxus-liveview?/axum",
+  # "dioxus_server_macro",
+  # "dioxus_server_macro",
   # "dioxus-fullstack?/server",
 ]
 

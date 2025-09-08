@@ -38,9 +38,6 @@ inventory = { workspace = true , optional = true }
 dioxus-web = { workspace = true, features = ["hydrate"], default-features = false, optional = true }
 dioxus-interpreter-js = { workspace = true, optional = true }
 
-# Desktop Integration
-dioxus-desktop = { workspace = true, optional = true }
-
 tracing = { workspace = true }
 tracing-futures = { workspace = true, optional = true }
 tokio-util = { workspace = true, features = ["rt"], optional = true }
@@ -103,27 +100,23 @@ dioxus = { workspace = true, features = ["fullstack"] }
 tokio = { workspace = true, features = ["full"] }
 
 [features]
-default = ["devtools", "document", "file_engine", "mounted", "client"]
+default = ["devtools", "document", "file_engine", "mounted", "client", "server"]
 devtools = ["dioxus-web?/devtools", "dep:dioxus-devtools"]
 mounted = ["dioxus-web?/mounted"]
 file_engine = ["dioxus-web?/file_engine"]
 document = ["dioxus-web?/document"]
 web = ["dep:dioxus-web", "dep:web-sys", "dioxus-fullstack-hooks/web"]
-desktop = []
-mobile = []
 default-tls = []
 rustls = ["dep:rustls", "dep:hyper-rustls"]
 client = ["reqwest"]
-ssr = ["dep:inventory"]
 reqwest = ["dep:reqwest"]
 axum = ["server"]
 axum-no-default = ["server"]
-# server = ["dep:axum", "ssr"]
 server = [
     "server-core" ,
     "default-tls",
     "dep:axum",
-    "ssr"
+    "dep:inventory"
 ]
 server-core = [
     # "dioxus-fullstack-hooks/server",
