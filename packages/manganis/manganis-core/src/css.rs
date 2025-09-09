@@ -17,6 +17,7 @@ use const_serialize::SerializeConst;
 pub struct CssAssetOptions {
     minify: bool,
     preload: bool,
+    dynamic: bool,
 }
 
 impl Default for CssAssetOptions {
@@ -36,12 +37,18 @@ impl CssAssetOptions {
         Self {
             preload: false,
             minify: true,
+            dynamic: false,
         }
     }
 
     /// Check if the asset is preloaded
     pub const fn preloaded(&self) -> bool {
         self.preload
+    }
+
+    /// Check if the asset is dynamically inserted
+    pub const fn dynamic(&self) -> bool {
+        self.dynamic
     }
 
     /// Check if the asset is minified
@@ -76,9 +83,24 @@ impl AssetOptionsBuilder<CssAssetOptions> {
         self
     }
 
+    /// Make the asset dynamically inserted (default: false)
+    ///
+    /// Dynamically inserting the file will use js to add it to the DOM, otherwise the file will
+    /// be available at the initial rendering of the page.
+    ///
+    /// ```rust
+    /// # use manganis::{asset, Asset, AssetOptions};
+    /// const _: Asset = asset!("/assets/style.css", AssetOptions::css().with_dynamic(true));
+    /// ```
+    #[allow(unused)]
+    pub const fn with_dynamic(mut self, dynamic: bool) -> Self {
+        self.variant.dynamic = dynamic;
+        self
+    }
+
     /// Make the asset preloaded
     ///
-    /// Preloading css will make the image start to load as soon as possible. This is useful for css that is used soon after the page loads or css that may not be used immediately, but should start loading sooner
+    /// Preloading css will make the file start to load as soon as possible. This is useful for css that is used soon after the page loads or css that may not be used immediately, but should start loading sooner
     ///
     /// ```rust
     /// # use manganis::{asset, Asset, AssetOptions};
