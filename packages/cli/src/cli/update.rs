@@ -1,4 +1,4 @@
-use super::*;
+use super::{Parser, StructuredOutput, Read, Write};
 use crate::{Result, Workspace};
 use anyhow::{bail, Context};
 use itertools::Itertools;
@@ -8,7 +8,7 @@ use self_update::cargo_crate_version;
 ///
 /// This is a shorthand for `dx serve` with interactive mode and hot-reload disabled.
 #[derive(Clone, Debug, Parser)]
-pub(crate) struct SelfUpdate {
+pub struct SelfUpdate {
     /// Use the latest nightly build.
     #[clap(long, default_value = "false")]
     pub nightly: bool,
@@ -127,11 +127,11 @@ impl SelfUpdate {
             tracing::debug!("Download URL: {}", asset.download_url);
             let body = latest.body.unwrap_or_default();
             let brief = vec![
-                latest.name.to_string(),
-                "".to_string(),
-                latest.date.to_string(),
-                asset.download_url.to_string(),
-                "".to_string(),
+                latest.name.clone(),
+                String::new(),
+                latest.date.clone(),
+                asset.download_url.clone(),
+                String::new(),
             ]
             .into_iter()
             .chain(body.lines().map(ToString::to_string).take(7))
@@ -194,7 +194,7 @@ impl SelfUpdate {
 
                 self_update::self_replace::self_replace(executable)?;
                 let time_taken = start.elapsed().as_millis();
-                tracing::info!("Done in {} ms! 💫", time_taken)
+                tracing::info!("Done in {} ms! 💫", time_taken);
             } else {
                 tracing::info!("Update downloaded to {}", install_dir.display());
                 tracing::info!("Run `dx self-update --install` to install the update");

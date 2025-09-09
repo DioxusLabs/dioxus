@@ -1,12 +1,12 @@
 use std::{borrow::Cow, ffi::OsString};
 
-use super::*;
+use super::{Subcommand, Parser, CommandWithPlatformOverrides, build, StructuredOutput, Read};
 use crate::{BuildMode, Result};
 use anyhow::Context;
 
 /// Perform a system analysis to verify the system install is working correctly.
 #[derive(Clone, Debug, Subcommand)]
-pub(crate) enum Print {
+pub enum Print {
     /// Print the cargo args dioxus uses to build the server app.
     /// Environment variables will be set with the `env` command.
     #[clap(name = "client-args")]
@@ -19,7 +19,7 @@ pub(crate) enum Print {
 }
 
 #[derive(Clone, Debug, Parser)]
-pub(crate) struct PrintCargoArgs {
+pub struct PrintCargoArgs {
     #[clap(flatten)]
     pub(crate) args: CommandWithPlatformOverrides<build::BuildArgs>,
 
@@ -36,7 +36,7 @@ pub(crate) struct PrintCargoArgs {
 }
 
 #[derive(Clone, Debug, clap::ValueEnum)]
-pub(crate) enum PrintStyle {
+pub enum PrintStyle {
     /// Print the arguments as a list of arguments, one per line.
     /// Does not include the `cargo rustc` command itself
     Args,
@@ -114,7 +114,7 @@ impl Print {
         match style {
             PrintStyle::Args => {
                 for arg in args {
-                    println!("{}", arg);
+                    println!("{arg}");
                 }
             }
 
@@ -137,7 +137,7 @@ impl Print {
                 for arg in args {
                     cmd.push_str(&format!(" {}", shell_words::quote(arg)));
                 }
-                println!("{}", cmd);
+                println!("{cmd}");
             }
             PrintStyle::Cmd => {
                 let mut cmd = String::new();
@@ -155,7 +155,7 @@ impl Print {
                         Self::escape_windows(Cow::Borrowed(arg.as_str()))
                     ));
                 }
-                println!("{}", cmd);
+                println!("{cmd}");
             }
             PrintStyle::Json | PrintStyle::PrettyJson => {
                 let output = serde_json::json!({
@@ -195,7 +195,7 @@ impl Print {
         let mut chars = s.chars().peekable();
         loop {
             let mut nslashes = 0;
-            while let Some(&'\\') = chars.peek() {
+            while chars.peek() == Some(&'\\') {
                 chars.next();
                 nslashes += 1;
             }

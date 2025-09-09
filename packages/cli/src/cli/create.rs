@@ -1,10 +1,10 @@
-use super::*;
+use super::{Deserialize, Parser, PathBuf, Result, StructuredOutput, create, Command, Display, Write};
 use crate::TraceSrc;
 use anyhow::{bail, Context};
 use cargo_generate::{GenerateArgs, TemplatePath, Vcs};
 use std::path::Path;
 
-pub(crate) static DEFAULT_TEMPLATE: &str = "gh:dioxuslabs/dioxus-template";
+pub static DEFAULT_TEMPLATE: &str = "gh:dioxuslabs/dioxus-template";
 
 #[derive(Clone, Debug, Default, Deserialize, Parser)]
 #[clap(name = "new")]
@@ -94,8 +94,7 @@ impl Create {
             },
             verbose: crate::logging::VERBOSITY
                 .get()
-                .map(|f| f.verbose)
-                .unwrap_or(false),
+                .is_some_and(|f| f.verbose),
             ..Default::default()
         };
 
@@ -111,7 +110,7 @@ impl Create {
 /// If no template is specified, use the default one and set the branch to the latest release.
 ///
 /// Allows us to version templates under the v0.5/v0.6 scheme on the templates repo.
-pub(crate) fn resolve_template_and_branch(
+pub fn resolve_template_and_branch(
     template: &mut Option<String>,
     branch: &mut Option<String>,
 ) {
@@ -122,11 +121,11 @@ pub(crate) fn resolve_template_and_branch(
         if branch.is_none() {
             *branch = Some(format!("v{PKG_VERSION_MAJOR}.{PKG_VERSION_MINOR}"));
         }
-    };
+    }
 }
 
 /// Extracts the last directory name from the `path`.
-pub(crate) fn name_from_path(path: &Path) -> Result<String> {
+pub fn name_from_path(path: &Path) -> Result<String> {
     use path_absolutize::Absolutize;
 
     Ok(path
@@ -140,7 +139,7 @@ pub(crate) fn name_from_path(path: &Path) -> Result<String> {
 }
 
 /// Post-creation actions for newly setup crates.
-pub(crate) fn post_create(path: &Path, vcs: &Vcs) -> Result<()> {
+pub fn post_create(path: &Path, vcs: &Vcs) -> Result<()> {
     let metadata = if let Some(parent_dir) = path.parent() {
         match cargo_metadata::MetadataCommand::new()
             .current_dir(parent_dir)
@@ -238,11 +237,10 @@ fn remove_triple_newlines(string: &str) -> String {
 
 /// Perform a health check against github itself before we attempt to download any templates hosted
 /// on github.
-pub(crate) async fn connectivity_check() -> Result<()> {
+pub async fn connectivity_check() -> Result<()> {
     if crate::VERBOSITY
         .get()
-        .map(|f| f.offline)
-        .unwrap_or_default()
+        .is_some_and(|f| f.offline)
     {
         return Ok(());
     }
@@ -257,10 +255,10 @@ pub(crate) async fn connectivity_check() -> Result<()> {
                 }
                 tokio::time::sleep(std::time::Duration::from_millis(2000)).await;
             },
-            _ = tokio::time::sleep(std::time::Duration::from_millis(if x == 1 { 500 } else { 2000 })) => {}
+            () = tokio::time::sleep(std::time::Duration::from_millis(if x == 1 { 500 } else { 2000 })) => {}
         }
         if x == 0 {
-            eprintln!("{GLOW_STYLE}warning{GLOW_STYLE:#}: Waiting for {LINK_STYLE}https://github.com/dioxuslabs{LINK_STYLE:#}...")
+            eprintln!("{GLOW_STYLE}warning{GLOW_STYLE:#}: Waiting for {LINK_STYLE}https://github.com/dioxuslabs{LINK_STYLE:#}...");
         } else {
             eprintln!(
                 "{GLOW_STYLE}warning{GLOW_STYLE:#}: ({x}/5) Taking a while, maybe your internet is down?"

@@ -11,7 +11,7 @@ use axum::{
     routing::{any, MethodRouter},
     Router,
 };
-use hyper::header::*;
+use hyper::header::UPGRADE;
 use hyper::{Request, Response, Uri};
 use hyper_util::{
     client::legacy::{self, connect::HttpConnector},
@@ -58,7 +58,7 @@ impl ProxyClient {
 /// - the exact path of the proxy config's backend URL, e.g. /api
 /// - the exact path with a trailing slash, e.g. /api/
 /// - any subpath of the backend URL, e.g. /api/foo/bar
-pub(crate) fn add_proxy(mut router: Router, proxy: &WebProxyConfig) -> Result<Router> {
+pub fn add_proxy(mut router: Router, proxy: &WebProxyConfig) -> Result<Router> {
     let url: Uri = proxy.backend.parse()?;
     let path = url.path().to_string();
     let trimmed_path = path.trim_start_matches('/');
@@ -94,7 +94,7 @@ pub(crate) fn add_proxy(mut router: Router, proxy: &WebProxyConfig) -> Result<Ro
     Ok(router)
 }
 
-pub(crate) fn proxy_to(
+pub fn proxy_to(
     url: Uri,
     nocache: bool,
     handle_error: fn(Error) -> Response<Body>,
@@ -118,8 +118,8 @@ pub(crate) fn proxy_to(
         );
 
         let upgrade = req.headers().get(UPGRADE);
-        if req.uri().scheme().map(|f| f.as_str()) == Some("ws")
-            || req.uri().scheme().map(|f| f.as_str()) == Some("wss")
+        if req.uri().scheme().map(hyper::http::uri::Scheme::as_str) == Some("ws")
+            || req.uri().scheme().map(hyper::http::uri::Scheme::as_str) == Some("wss")
             || upgrade.is_some_and(|h| h.as_bytes().eq_ignore_ascii_case(b"websocket"))
         {
             return super::proxy_ws::proxy_websocket(parts, req, &url).await;
@@ -158,7 +158,7 @@ pub(crate) fn proxy_to(
     })
 }
 
-pub(crate) fn handle_proxy_error(e: Error) -> axum::http::Response<axum::body::Body> {
+pub fn handle_proxy_error(e: Error) -> axum::http::Response<axum::body::Body> {
     tracing::error!(dx_src = ?TraceSrc::Dev, "Proxy error: {}", e);
     axum::http::Response::builder()
         .status(axum::http::StatusCode::INTERNAL_SERVER_ERROR)

@@ -1,11 +1,11 @@
-use super::*;
+use super::{Parser, StructuredOutput, PathBuf};
 use crate::{Result, Workspace};
 use anyhow::{bail, Context};
 use itertools::Itertools;
 
 /// Perform a system analysis to verify the system install is working correctly.
 #[derive(Clone, Debug, Parser)]
-pub(crate) struct Doctor {}
+pub struct Doctor {}
 
 impl Doctor {
     pub async fn doctor(self) -> Result<StructuredOutput> {
@@ -33,7 +33,7 @@ impl Doctor {
         if let Ok(workspace) = Workspace::current().await {
             let wbg_version = workspace.wasm_bindgen_version();
             if let Some(vers) = &wbg_version {
-                wbg_version_msg = vers.to_string();
+                wbg_version_msg = vers.clone();
 
                 wasm_bindgen_location =
                     match crate::wasm_bindgen::WasmBindgen::new(vers).get_binary_path() {
@@ -105,7 +105,7 @@ impl Doctor {
             if rf.emulator().exists() {
                 emulator = rf.emulator().display().to_string();
             }
-        };
+        }
 
         let mut simulator_location = "not found".to_string();
         let mut xcode_install = "not found".to_string();
@@ -196,9 +196,9 @@ impl Doctor {
         // - current rust version and rust-related things
         // - installed toolchains
         // -
-        use crate::styles::*;
+        use crate::styles::{LINK_STYLE, GLOW_STYLE, HINT_STYLE};
         println!(
-            r#"{LINK_STYLE}Setup{LINK_STYLE:#}
+            r"{LINK_STYLE}Setup{LINK_STYLE:#}
  {GLOW_STYLE}Web{GLOW_STYLE:#}: wasm-bindgen, wasm-opt, and TailwindCSS are downloaded automatically
  {GLOW_STYLE}iOS{GLOW_STYLE:#}: Install iOS SDK and developer tools and through XCode
  {GLOW_STYLE}Android{GLOW_STYLE:#}: Install Android Studio, NDK, and then set ANDROID_HOME and ANDROID_NDK_HOME
@@ -253,7 +253,7 @@ impl Doctor {
 
 Get help: {LINK_STYLE}https://discord.gg/XgGxMSkvUM{LINK_STYLE:#}
 More info: {LINK_STYLE}https://dioxuslabs.com/learn/0.6/{LINK_STYLE:#}
-"#
+"
         );
 
         Ok(StructuredOutput::Success)

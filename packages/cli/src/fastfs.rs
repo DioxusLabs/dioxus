@@ -29,7 +29,7 @@ fn compressed_path(path: &Path) -> Option<PathBuf> {
 }
 
 /// pre-compress a file with brotli
-pub(crate) fn pre_compress_file(path: &Path) -> std::io::Result<()> {
+pub fn pre_compress_file(path: &Path) -> std::io::Result<()> {
     let Some(compressed_path) = compressed_path(path) else {
         return Ok(());
     };
@@ -44,9 +44,9 @@ pub(crate) fn pre_compress_file(path: &Path) -> std::io::Result<()> {
 }
 
 /// pre-compress all files in a folder
-pub(crate) fn pre_compress_folder(path: &Path, pre_compress: bool) -> std::io::Result<()> {
+pub fn pre_compress_folder(path: &Path, pre_compress: bool) -> std::io::Result<()> {
     let walk_dir = WalkDir::new(path);
-    for entry in walk_dir.into_iter().filter_map(|e| e.ok()) {
+    for entry in walk_dir.into_iter().filter_map(std::result::Result::ok) {
         let entry_path = entry.path();
         if entry_path.is_file() {
             if pre_compress {

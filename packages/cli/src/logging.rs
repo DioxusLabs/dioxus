@@ -17,7 +17,7 @@
 //! ## Telemetry
 //!
 //! The CLI collects anonymized telemetry data to help us understand how the CLI is used. We primarily
-//! care about catching panics and fatal errors. Data is uploaded to PostHog through a custom proxy endpoint.
+//! care about catching panics and fatal errors. Data is uploaded to `PostHog` through a custom proxy endpoint.
 //!
 //! Telemetry events are collected while the CLI is running and then flushed to disk at the end of the session.
 //! When the CLI starts again, it tries its best to upload the telemetry data from the FS. In CI,
@@ -25,7 +25,7 @@
 //!
 //! You can opt out in a number of ways:
 //! - set TELEMETRY=false in your environment
-//! - set DX_TELEMETRY_ENABLED=false in your environment
+//! - set `DX_TELEMETRY_ENABLED=false` in your environment
 //! - set `dx config set disable-telemetry true`
 //!
 
@@ -79,7 +79,7 @@ fn reset_cursor() {
 }
 
 /// A trait that emits an anonymous JSON representation of the object, suitable for telemetry.
-pub(crate) trait Anonymized {
+pub trait Anonymized {
     fn anonymized(&self) -> serde_json::Value;
 }
 
@@ -132,7 +132,7 @@ impl TraceController {
     ///
     /// This captures panics and flushes telemetry to a file after the CLI has run.
     ///
-    /// We pass the TraceController around the CLI in a few places, namely the serve command so the TUI
+    /// We pass the `TraceController` around the CLI in a few places, namely the serve command so the TUI
     /// can access things like the logs.
     pub async fn main<F>(run_app: impl FnOnce(Commands, Self) -> F) -> StructuredOutput
     where
@@ -269,7 +269,7 @@ impl TraceController {
         // Note that we only drain the channel at the end of the CLI run, so it's not really being used as a channel - more of a vecdeque
         let (telemetry_tx, telemetry_rx) = futures_channel::mpsc::unbounded();
         let (tui_tx, tui_rx) = futures_channel::mpsc::unbounded();
-        let tracer = TraceController {
+        let tracer = Self {
             reporter,
             telemetry_tx,
             log_to_file,
@@ -300,18 +300,18 @@ impl TraceController {
         // let initial_thread = std::thread::current();
         std::panic::set_hook(Box::new(move |panic_info| {
             let payload = if let Some(s) = panic_info.payload().downcast_ref::<String>() {
-                s.to_string()
+                s.clone()
             } else if let Some(s) = panic_info.payload().downcast_ref::<&str>() {
-                s.to_string()
+                (*s).to_string()
             } else {
                 "<unknown panic>".to_string()
             };
 
             let current_thread = std::thread::current();
-            let thread_name = current_thread.name().map(|s| s.to_string());
+            let thread_name = current_thread.name().map(std::string::ToString::to_string);
             let location = panic_info.location().unwrap();
             let err = anyhow::anyhow!(payload);
-            let err_display = format!("{:?}", err)
+            let err_display = format!("{err:?}")
                 .lines()
                 .take_while(|line| !line.ends_with("___rust_try"))
                 .join("\n");
@@ -363,7 +363,7 @@ impl TraceController {
 
     /// Uploads telemetry logs from the filesystem to the telemetry endpoint.
     ///
-    /// As the app runs, we simply fire off messages into the TelemetryTx handle.
+    /// As the app runs, we simply fire off messages into the `TelemetryTx` handle.
     ///
     /// Once the session is over, or the tx is flushed manually, we then log to a file.
     /// This prevents any performance issues from building up during long session.
@@ -409,7 +409,7 @@ impl TraceController {
             // This prevents multiple processes from trying to upload the same file at the same time which would cause duplicate uploads
             if file.try_lock_exclusive().is_err() {
                 continue;
-            };
+            }
 
             // Now that we have the lock, we can read the file and upload it
             // todo: validate that _bytes_read is not greater than 20mb - this will fail to upload
@@ -459,7 +459,7 @@ impl TraceController {
         Ok(())
     }
 
-    /// Uploads a set of telemetry events to the PostHog endpoint.
+    /// Uploads a set of telemetry events to the `PostHog` endpoint.
     async fn upload_to_posthog(&self, body: &Vec<serde_json::Value>) -> Result<()> {
         use hyper::header::CONTENT_TYPE;
 
@@ -647,7 +647,7 @@ impl TraceController {
         while let Ok(Some(msg)) = self.tui_rx.lock().await.try_next() {
             let content = match msg.content {
                 TraceContent::Text(text) => text,
-                TraceContent::Cargo(msg) => msg.message.to_string(),
+                TraceContent::Cargo(msg) => msg.message.clone(),
             };
             match msg.level {
                 Level::ERROR => tracing::error!("{content}"),
@@ -688,8 +688,7 @@ impl TraceController {
                     .take_while(|line| !line.ends_with("___rust_try"))
                     .join("\n");
                 let message = format!(
-                    "{ERROR_STYLE}ERROR{ERROR_STYLE:#} {GLOW_STYLE}dx {}{GLOW_STYLE:#}: {}",
-                    arg, err_display
+                    "{ERROR_STYLE}ERROR{ERROR_STYLE:#} {GLOW_STYLE}dx {arg}{GLOW_STYLE:#}: {err_display}"
                 );
                 eprintln!("\n{message}");
                 StructuredOutput::Error { message }
@@ -699,9 +698,9 @@ impl TraceController {
             // Just return the error for the structured output.
             Err(e) => StructuredOutput::Error {
                 message: if let Some(s) = e.downcast_ref::<String>() {
-                    s.to_string()
+                    s.clone()
                 } else if let Some(s) = e.downcast_ref::<&str>() {
-                    s.to_string()
+                    (*s).to_string()
                 } else {
                     "<unknown error>".to_string()
                 },
@@ -720,39 +719,34 @@ impl TraceController {
 
         // If we're in CI, we try to upload the telemetry immediately, with a short timeout (5 seconds or so)
         // Hopefully it doesn't fail! Not much we can do in CI.
-        match CliSettings::is_ci() {
-            true => {
-                let mut msgs = self.telemetry_rx.lock().await;
+        if CliSettings::is_ci() {
+            let mut msgs = self.telemetry_rx.lock().await;
 
-                let request_body = std::iter::from_fn(|| msgs.try_next().ok().flatten())
-                    .filter_map(|msg| serde_json::to_value(msg).ok())
-                    .collect::<Vec<_>>();
+            let request_body = std::iter::from_fn(|| msgs.try_next().ok().flatten())
+                .filter_map(|msg| serde_json::to_value(msg).ok())
+                .collect::<Vec<_>>();
 
-                _ = self.upload_to_posthog(&request_body).await;
-            }
+            _ = self.upload_to_posthog(&request_body).await;
+        } else {
+            let mut msgs = self.telemetry_rx.lock().await;
 
-            // Dump the logs to a the session file as jsonl
-            false => {
-                let mut msgs = self.telemetry_rx.lock().await;
+            let msg_list =
+                std::iter::from_fn(|| msgs.try_next().ok().flatten()).collect::<Vec<_>>();
 
-                let msg_list =
-                    std::iter::from_fn(|| msgs.try_next().ok().flatten()).collect::<Vec<_>>();
+            if !msg_list.is_empty() {
+                let dest = Workspace::dioxus_data_dir()
+                    .join("stats")
+                    .join("sessions")
+                    .join(format!("{}.jsonl", reporter.session_id));
 
-                if !msg_list.is_empty() {
-                    let dest = Workspace::dioxus_data_dir()
-                        .join("stats")
-                        .join("sessions")
-                        .join(format!("{}.jsonl", reporter.session_id));
+                let mut logfile = std::fs::OpenOptions::new()
+                    .append(true)
+                    .create(true)
+                    .open(dest)?;
 
-                    let mut logfile = std::fs::OpenOptions::new()
-                        .append(true)
-                        .create(true)
-                        .open(dest)?;
-
-                    for msg in msg_list {
-                        serde_json::to_writer(&mut logfile, &msg)?;
-                        writeln!(logfile)?;
-                    }
+                for msg in msg_list {
+                    serde_json::to_writer(&mut logfile, &msg)?;
+                    writeln!(logfile)?;
                 }
             }
         }
@@ -874,7 +868,7 @@ impl TraceController {
                 Config::FormatPrint {} => ("config format-print".to_string(), json!({})),
                 Config::CustomHtml {} => ("config custom-html".to_string(), json!({})),
                 Config::Set(setting) => (
-                    format!("config set {}", setting),
+                    format!("config set {setting}"),
                     match setting {
                         Setting::AlwaysHotReload { value } => json!({ "value": value }),
                         Setting::AlwaysOpenBrowser { value } => json!({ "value": value }),
@@ -924,18 +918,16 @@ impl TraceController {
                 dioxus_cli_telemetry::StackFrame {
                     platform: "custom".to_string(),
                     raw_id: frame
-                        .image_addr
-                        .map(|addr| addr.to_string())
-                        .unwrap_or_else(|| Uuid::new_v4().to_string()),
+                        .image_addr.map_or_else(|| Uuid::new_v4().to_string(), |addr| addr.to_string()),
                     mangled_name: frame
                         .function
                         .as_ref()
-                        .map(|f| f.to_string())
+                        .map(|f| f.clone())
                         .unwrap_or_else(|| "<unknown>".to_string()),
                     resolved_name: frame
                         .function
                         .as_ref()
-                        .map(|f| f.to_string())
+                        .map(|f| f.clone())
                         .unwrap_or_else(|| "<unknown>".to_string()),
                     lang: "rust".to_string(),
                     resolved: true,
@@ -959,7 +951,7 @@ impl TraceController {
 
         let (mut file, mut line, mut column) = location
             .as_ref()
-            .map(|l| (l.file.to_string(), l.line, l.column))
+            .map(|l| (l.file.clone(), l.line, l.column))
             .unwrap_or_else(|| ("<unknown>".to_string(), 0, 0));
 
         // If the location is not provided, we try to extract it from the backtrace.
@@ -967,7 +959,7 @@ impl TraceController {
         if location.is_none() {
             if let Some(frame) = stack_frames.get(5) {
                 if let Some(abs_path) = &frame.abs_path {
-                    file = abs_path.to_string();
+                    file = abs_path.clone();
                 }
                 if let Some(lineno) = frame.lineno {
                     line = lineno as _;
@@ -1092,7 +1084,7 @@ where
                     visitor.message.as_str()
                 );
 
-                for (field, value) in visitor.fields.iter() {
+                for (field, value) in &visitor.fields {
                     _ = write!(final_msg, "{} ", format_field(field, value));
                 }
                 _ = writeln!(final_msg);
@@ -1102,7 +1094,7 @@ where
             let new_data = console::strip_ansi_codes(&new_line).to_string();
             if let Ok(mut file) = open_file.try_lock() {
                 use std::io::Write;
-                _ = writeln!(file, "{}", new_data);
+                _ = writeln!(file, "{new_data}");
             }
         }
     }
@@ -1158,7 +1150,7 @@ impl CollectVisitor {
         let mut final_msg = String::new();
         write!(final_msg, "{} ", self.message).unwrap();
 
-        for (field, value) in self.fields.iter() {
+        for (field, value) in &self.fields {
             if field == "json" || field == "telemetry" || field == "backtrace" {
                 continue;
             }
@@ -1192,7 +1184,7 @@ pub struct TraceMsg {
     pub timestamp: chrono::DateTime<chrono::Local>,
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Eq)]
 #[allow(clippy::large_enum_variant)]
 pub enum TraceContent {
     Cargo(Diagnostic),
@@ -1230,7 +1222,7 @@ impl TraceMsg {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Default)]
+#[derive(Clone, Copy, PartialEq, Eq, Default)]
 pub enum TraceSrc {
     App(BundleFormat),
     Dev,
@@ -1254,9 +1246,7 @@ impl From<String> for TraceSrc {
             "dev" => Self::Dev,
             "bld" => Self::Build,
             "cargo" => Self::Cargo,
-            other => BundleFormat::from_str(other)
-                .map(Self::App)
-                .unwrap_or_else(|_| Self::Unknown),
+            other => BundleFormat::from_str(other).map_or_else(|_| Self::Unknown, Self::App),
         }
     }
 }

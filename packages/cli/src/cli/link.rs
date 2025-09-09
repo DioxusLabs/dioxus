@@ -24,7 +24,7 @@ use target_lexicon::Triple;
 ///             rustc doesn't provide a "real" way of granularly stepping through the compile process
 ///             so this is basically a hack.
 ///
-/// We use "BaseLink" when a linker is specified, and "NoLink" when it is not. Both generate a resulting
+/// We use "`BaseLink`" when a linker is specified, and "`NoLink`" when it is not. Both generate a resulting
 /// object file.
 
 #[derive(Debug)]
@@ -39,7 +39,7 @@ pub struct LinkAction {
 /// We're imitating the rustc linker flavors here.
 ///
 /// <https://doc.rust-lang.org/beta/nightly-rustc/rustc_target/spec/enum.LinkerFlavor.html>
-#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub enum LinkerFlavor {
     Gnu,
     Darwin,
@@ -163,15 +163,12 @@ impl LinkAction {
             }
             None => {
                 // Extract the out path - we're going to write a dummy object file to satisfy the linker
-                let out_file: PathBuf = match self.triple.operating_system {
-                    target_lexicon::OperatingSystem::Windows => {
-                        let out_arg = args.iter().find(|arg| arg.starts_with("/OUT")).unwrap();
-                        out_arg.trim_start_matches("/OUT:").to_string().into()
-                    }
-                    _ => {
-                        let out = args.iter().position(|arg| arg == "-o").unwrap();
-                        args[out + 1].clone().into()
-                    }
+                let out_file: PathBuf = if self.triple.operating_system == target_lexicon::OperatingSystem::Windows {
+                    let out_arg = args.iter().find(|arg| arg.starts_with("/OUT")).unwrap();
+                    out_arg.trim_start_matches("/OUT:").to_string().into()
+                } else {
+                    let out = args.iter().position(|arg| arg == "-o").unwrap();
+                    args[out + 1].clone().into()
                 };
 
                 // This creates an object file that satisfies rust's use of llvm-objcopy
@@ -208,7 +205,7 @@ impl LinkAction {
                 let endian = match triple.endianness() {
                     Ok(target_lexicon::Endianness::Little) => object::Endianness::Little,
                     Ok(target_lexicon::Endianness::Big) => object::Endianness::Big,
-                    Err(_) => todo!("Endianness not supported"),
+                    Err(()) => todo!("Endianness not supported"),
                 };
 
                 let bytes = object::write::Object::new(format, arch, endian)
