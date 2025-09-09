@@ -1,4 +1,4 @@
-use super::{Parser, StructuredOutput, PathBuf};
+use super::{Parser, PathBuf, StructuredOutput};
 use crate::{Result, Workspace};
 use anyhow::{bail, Context};
 use itertools::Itertools;
@@ -196,7 +196,7 @@ impl Doctor {
         // - current rust version and rust-related things
         // - installed toolchains
         // -
-        use crate::styles::{LINK_STYLE, GLOW_STYLE, HINT_STYLE};
+        use crate::styles::{GLOW_STYLE, HINT_STYLE, LINK_STYLE};
         println!(
             r"{LINK_STYLE}Setup{LINK_STYLE:#}
  {GLOW_STYLE}Web{GLOW_STYLE:#}: wasm-bindgen, wasm-opt, and TailwindCSS are downloaded automatically

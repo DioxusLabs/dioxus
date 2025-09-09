@@ -148,7 +148,7 @@ pub const CARGO_STYLING: Styles = Styles::styled()
     .invalid(styles::INVALID);
 
 pub mod styles {
-    use super::{Style, AnsiColor, Effects};
+    use super::{AnsiColor, Effects, Style};
     pub const HEADER: Style = AnsiColor::Green.on_default().effects(Effects::BOLD);
     pub const USAGE: Style = AnsiColor::Green.on_default().effects(Effects::BOLD);
     pub const LITERAL: Style = AnsiColor::Cyan.on_default().effects(Effects::BOLD);

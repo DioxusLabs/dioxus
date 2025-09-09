@@ -543,7 +543,11 @@ fn build_serve_dir(runner: &AppServer) -> axum::routing::MethodRouter {
         HeaderValue::from_static("same-origin"),
     );
 
-    let (coep, coop) = if runner.cross_origin_policy { CORS_REQUIRE.clone() } else { CORS_UNSAFE.clone() };
+    let (coep, coop) = if runner.cross_origin_policy {
+        CORS_REQUIRE.clone()
+    } else {
+        CORS_UNSAFE.clone()
+    };
 
     let app = &runner.client;
     let cfg = &runner.client.build.config;

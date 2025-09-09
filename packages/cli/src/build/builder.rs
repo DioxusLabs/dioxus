@@ -179,7 +179,7 @@ impl AppBuilder {
     /// Wait for any new updates to the builder - either it completed or gave us a message etc
     pub(crate) async fn wait(&mut self) -> BuilderUpdate {
         use futures_util::StreamExt;
-        use BuilderUpdate::{StdoutReceived, StderrReceived, ProcessExited, ProcessWaitFailed};
+        use BuilderUpdate::{ProcessExited, ProcessWaitFailed, StderrReceived, StdoutReceived};
 
         // Wait for the build to finish or for it to emit a status message
         let update = tokio::select! {
@@ -484,10 +484,7 @@ impl AppBuilder {
             ));
         }
 
-        if crate::VERBOSITY
-            .get()
-            .is_some_and(|f| f.verbose)
-        {
+        if crate::VERBOSITY.get().is_some_and(|f| f.verbose) {
             envs.push(("RUST_BACKTRACE".into(), "1".to_string()));
         }
 
@@ -701,8 +698,8 @@ impl AppBuilder {
             //
             // ie we would've shipped `/Users/foo/Projects/dioxus/target/dx/project/debug/web/public/wasm/lib.wasm`
             //    but we want to ship `/wasm/lib.wasm`
-            jump_table.lib =
-                PathBuf::from("/").join(jump_table.lib.strip_prefix(self.build.root_dir()).unwrap());
+            jump_table.lib = PathBuf::from("/")
+                .join(jump_table.lib.strip_prefix(self.build.root_dir()).unwrap());
         }
 
         let changed_files = match &res.mode {
