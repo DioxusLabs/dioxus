@@ -993,68 +993,59 @@ impl AppBuilder {
         // by default, we just pick the first available device and then look for better fits.
         let mut device_idx = 0;
 
-        match device_name_query.is_empty() {
-            // If the user provided a query, then we look through the device list looking for the right one.
-            // This searches both UUIDs and names, making it possible to paste an ID or a name.
-            false => {
-                use nucleo::{chars, Config, Matcher, Utf32Str};
-                let normalize = |c: char| chars::to_lower_case(chars::normalize(c));
-                let mut matcher = Matcher::new(Config::DEFAULT);
-                let mut best_score = 0;
-                let needle = device_name_query.chars().map(normalize).collect::<String>();
-                for (idx, device) in devices.iter().enumerate() {
-                    let device_name = device
-                        .get("deviceProperties")
-                        .and_then(|f| f.get("name"))
-                        .and_then(|n| n.as_str())
-                        .unwrap_or_default();
-                    let device_uuid = device
-                        .get("identifier")
-                        .and_then(|n| n.as_str())
-                        .unwrap_or_default();
-                    let haystack = format!("{device_name} {device_uuid}")
-                        .chars()
-                        .map(normalize)
-                        .collect::<String>();
-                    let name_score = matcher.fuzzy_match(
-                        Utf32Str::Ascii(haystack.as_bytes()),
-                        Utf32Str::Ascii(needle.as_bytes()),
-                    );
-                    if let Some(score) = name_score {
-                        if score > best_score {
-                            best_score = score;
-                            device_idx = idx;
-                        }
-                    }
-                }
+        if device_name_query.is_empty() {
+            for (idx, device) in devices.iter().enumerate() {
+                let is_paired = device
+                    .get("connectionProperties")
+                    .and_then(|g| g.get("pairingState"))
+                    .is_some_and(|s| s.as_str() == Some("paired"));
 
-                if best_score == 0 {
-                    tracing::warn!(
-                        "No device found matching query: {device_name_query}. Using first available device."
-                    );
+                let is_ios_device = matches!(
+                    device.get("deviceType").and_then(|s| s.as_str()),
+                    Some("iPhone" | "iPad" | "iPod")
+                );
+
+                if is_paired && is_ios_device {
+                    device_idx = idx;
+                    break;
+                }
+            }
+        } else {
+            use nucleo::{chars, Config, Matcher, Utf32Str};
+            let normalize = |c: char| chars::to_lower_case(chars::normalize(c));
+            let mut matcher = Matcher::new(Config::DEFAULT);
+            let mut best_score = 0;
+            let needle = device_name_query.chars().map(normalize).collect::<String>();
+            for (idx, device) in devices.iter().enumerate() {
+                let device_name = device
+                    .get("deviceProperties")
+                    .and_then(|f| f.get("name"))
+                    .and_then(|n| n.as_str())
+                    .unwrap_or_default();
+                let device_uuid = device
+                    .get("identifier")
+                    .and_then(|n| n.as_str())
+                    .unwrap_or_default();
+                let haystack = format!("{device_name} {device_uuid}")
+                    .chars()
+                    .map(normalize)
+                    .collect::<String>();
+                let name_score = matcher.fuzzy_match(
+                    Utf32Str::Ascii(haystack.as_bytes()),
+                    Utf32Str::Ascii(needle.as_bytes()),
+                );
+                if let Some(score) = name_score {
+                    if score > best_score {
+                        best_score = score;
+                        device_idx = idx;
+                    }
                 }
             }
 
-            // If the query is empty, then we just find the first connected/available device
-            // This is somewhat based on the bundle format, since we don't want to accidentally upload
-            // iOS apps to watches/tvs
-            true => {
-                for (idx, device) in devices.iter().enumerate() {
-                    let is_paired = device
-                        .get("connectionProperties")
-                        .and_then(|g| g.get("pairingState"))
-                        .is_some_and(|s| s.as_str() == Some("paired"));
-
-                    let is_ios_device = matches!(
-                        device.get("deviceType").and_then(|s| s.as_str()),
-                        Some("iPhone" | "iPad" | "iPod")
-                    );
-
-                    if is_paired && is_ios_device {
-                        device_idx = idx;
-                        break;
-                    }
-                }
+            if best_score == 0 {
+                tracing::warn!(
+                    "No device found matching query: {device_name_query}. Using first available device."
+                );
             }
         }
 

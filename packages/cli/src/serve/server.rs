@@ -172,10 +172,9 @@ impl WebServer {
                 panic!("Could not receive a socket - the devtools could not boot - the port is likely already in use");
             }
             Some((idx, message)) = new_message.next() => {
-                if let Some(Ok(msg)) = message { return ServeUpdate::WsMessage { msg, bundle: BundleFormat::Web } } else {
-                    drop(new_message);
-                    _ = self.hot_reload_sockets.remove(idx);
-                }
+                if let Some(Ok(msg)) = message { return ServeUpdate::WsMessage { msg, bundle: BundleFormat::Web } }
+                drop(new_message);
+                _ = self.hot_reload_sockets.remove(idx);
             }
         }
 
