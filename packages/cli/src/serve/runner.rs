@@ -101,7 +101,11 @@ impl AppServer {
         let cross_origin_policy = args.cross_origin_policy;
 
         // Find the launch args for the client and server
-        let split_args = |args: &str| args.split(' ').map(std::string::ToString::to_string).collect::<Vec<_>>();
+        let split_args = |args: &str| {
+            args.split(' ')
+                .map(std::string::ToString::to_string)
+                .collect::<Vec<_>>()
+        };
         let server_args = args.platform_args.with_server_or_shared(|c| &c.args);
         let server_args = split_args(server_args);
         let client_args = args.platform_args.with_client_or_shared(|c| &c.args);
@@ -225,7 +229,11 @@ impl AppServer {
     }
 
     pub(crate) fn initialize(&mut self) {
-        let build_mode = if self.use_hotpatch_engine { BuildMode::Fat } else { BuildMode::Base { run: true } };
+        let build_mode = if self.use_hotpatch_engine {
+            BuildMode::Fat
+        } else {
+            BuildMode::Base { run: true }
+        };
 
         self.client.start(build_mode.clone());
         if let Some(server) = self.server.as_mut() {
@@ -259,7 +267,7 @@ impl AppServer {
         let server = self.server.as_mut();
 
         let client_wait = client.wait();
-        let server_wait = OptionFuture::from(server.map(crate::AppBuilder::wait));
+        let server_wait = OptionFuture::from(server.map(AppBuilder::wait));
         let watcher_wait = self.watcher_rx.next();
 
         tokio::select! {
@@ -563,7 +571,10 @@ impl AppServer {
         }
 
         let should_open = self.client.stage == BuildStage::Success
-            && (self.server.as_ref().map_or(true, |s| s.stage == BuildStage::Success));
+            && (self
+                .server
+                .as_ref()
+                .map_or(true, |s| s.stage == BuildStage::Success));
 
         use crate::cli::styles::GLOW_STYLE;
 
@@ -684,7 +695,11 @@ impl AppServer {
     /// Perform a full rebuild of the app, equivalent to `cargo rustc` from scratch with no incremental
     /// hot-patch engine integration.
     pub(crate) async fn full_rebuild(&mut self) {
-        let build_mode = if self.use_hotpatch_engine { BuildMode::Fat } else { BuildMode::Base { run: true } };
+        let build_mode = if self.use_hotpatch_engine {
+            BuildMode::Fat
+        } else {
+            BuildMode::Base { run: true }
+        };
 
         self.client.start_rebuild(build_mode.clone());
         if let Some(s) = self.server.as_mut() {

@@ -29,7 +29,7 @@ pub async fn pre_render_static_routes(
 
     // Use the address passed in through environment variables or default to localhost:9999. We need
     // to default to a value that is different than the CLI default address to avoid conflicts
-    let ip = server_ip().unwrap_or_else(|| IpAddr::V4(Ipv4Addr::LOCALHOST));
+    let ip = server_ip().unwrap_or(IpAddr::V4(Ipv4Addr::LOCALHOST));
     let port = server_port().unwrap_or(9999);
     let fullstack_address = SocketAddr::new(ip, port);
     let address = fullstack_address.ip().to_string();

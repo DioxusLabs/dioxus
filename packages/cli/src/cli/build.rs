@@ -153,7 +153,7 @@ impl CommandWithPlatformOverrides<BuildArgs> {
 
         Ok(StructuredOutput::BuildsFinished {
             client: client?.into_structured_output(),
-            server: server?.map(crate::BuildArtifacts::into_structured_output),
+            server: server?.map(BuildArtifacts::into_structured_output),
         })
     }
 

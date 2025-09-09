@@ -243,23 +243,18 @@ pub async fn serve_all(args: ServeArgs, tracer: &TraceController) -> Result<()> 
                 screen.push_log(log);
             }
 
-            ServeUpdate::OpenApp => match builder.use_hotpatch_engine {
-                true if !matches!(builder.client.build.bundle, BundleFormat::Web) => {
-                    tracing::warn!(
-                        "Opening a native app with hotpatching enabled requires a full rebuild..."
-                    );
-                    builder.full_rebuild().await;
-                    devserver.send_reload_start().await;
-                    devserver.start_build().await;
-                }
-                _ => {
-                    if let Err(err) = builder.open_all(&devserver, true).await {
-                        tracing::error!(
-                            "Failed to open app: {}",
-                            crate::error::log_stacktrace(&err, 15)
-                        );
-                    }
-                }
+            ServeUpdate::OpenApp => if builder.use_hotpatch_engine && !matches!(builder.client.build.bundle, BundleFormat::Web) {
+                tracing::warn!(
+                    "Opening a native app with hotpatching enabled requires a full rebuild..."
+                );
+                builder.full_rebuild().await;
+                devserver.send_reload_start().await;
+                devserver.start_build().await;
+            } else if let Err(err) = builder.open_all(&devserver, true).await {
+                tracing::error!(
+                    "Failed to open app: {}",
+                    crate::error::log_stacktrace(&err, 15)
+                );
             },
 
             ServeUpdate::Redraw => {

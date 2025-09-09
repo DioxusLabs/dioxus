@@ -920,14 +920,10 @@ impl TraceController {
                     raw_id: frame
                         .image_addr.map_or_else(|| Uuid::new_v4().to_string(), |addr| addr.to_string()),
                     mangled_name: frame
-                        .function
-                        .as_ref()
-                        .map(|f| f.clone())
+                        .function.clone()
                         .unwrap_or_else(|| "<unknown>".to_string()),
                     resolved_name: frame
-                        .function
-                        .as_ref()
-                        .map(|f| f.clone())
+                        .function.clone()
                         .unwrap_or_else(|| "<unknown>".to_string()),
                     lang: "rust".to_string(),
                     resolved: true,
@@ -950,9 +946,7 @@ impl TraceController {
             .collect();
 
         let (mut file, mut line, mut column) = location
-            .as_ref()
-            .map(|l| (l.file.clone(), l.line, l.column))
-            .unwrap_or_else(|| ("<unknown>".to_string(), 0, 0));
+            .as_ref().map_or_else(|| ("<unknown>".to_string(), 0, 0), |l| (l.file.clone(), l.line, l.column));
 
         // If the location is not provided, we try to extract it from the backtrace.
         // I eyeballed that 5 is enough to get to the actual panic location in most cases.
