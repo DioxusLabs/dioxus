@@ -24,7 +24,7 @@ use target_lexicon::Triple;
 ///             rustc doesn't provide a "real" way of granularly stepping through the compile process
 ///             so this is basically a hack.
 ///
-/// We use "`BaseLink`" when a linker is specified, and "`NoLink`" when it is not. Both generate a resulting
+/// We use "BaseLink" when a linker is specified, and "NoLink" when it is not. Both generate a resulting
 /// object file.
 
 #[derive(Debug)]
@@ -39,7 +39,7 @@ pub struct LinkAction {
 /// We're imitating the rustc linker flavors here.
 ///
 /// <https://doc.rust-lang.org/beta/nightly-rustc/rustc_target/spec/enum.LinkerFlavor.html>
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub enum LinkerFlavor {
     Gnu,
     Darwin,
@@ -140,83 +140,88 @@ impl LinkAction {
 
         // If there's a linker specified, we use that. Otherwise, we write a dummy object file to satisfy
         // any post-processing steps that rustc does.
-        if let Some(linker) = self.linker {
-            let mut cmd = std::process::Command::new(linker);
-            match cfg!(target_os = "windows") {
-                true => cmd.arg(format!("@{}", &self.link_args_file.display())),
-                false => cmd.args(args.iter().skip(1)),
-            };
-            let res = cmd.output().expect("Failed to run linker");
+        match self.linker {
+            Some(linker) => {
+                let mut cmd = std::process::Command::new(linker);
+                match cfg!(target_os = "windows") {
+                    true => cmd.arg(format!("@{}", &self.link_args_file.display())),
+                    false => cmd.args(args.iter().skip(1)),
+                };
+                let res = cmd.output().expect("Failed to run linker");
 
-            if !res.stderr.is_empty() || !res.stdout.is_empty() {
-                _ = std::fs::create_dir_all(self.link_err_file.parent().unwrap());
-                _ = std::fs::write(
-                    self.link_err_file,
-                    format!(
-                        "Linker error: {}\n{}",
-                        String::from_utf8_lossy(&res.stdout),
-                        String::from_utf8_lossy(&res.stderr)
-                    ),
-                );
+                if !res.stderr.is_empty() || !res.stdout.is_empty() {
+                    _ = std::fs::create_dir_all(self.link_err_file.parent().unwrap());
+                    _ = std::fs::write(
+                        self.link_err_file,
+                        format!(
+                            "Linker error: {}\n{}",
+                            String::from_utf8_lossy(&res.stdout),
+                            String::from_utf8_lossy(&res.stderr)
+                        ),
+                    );
+                }
             }
-        } else {
-            // Extract the out path - we're going to write a dummy object file to satisfy the linker
-            let out_file: PathBuf =
-                if self.triple.operating_system == target_lexicon::OperatingSystem::Windows {
-                    let out_arg = args.iter().find(|arg| arg.starts_with("/OUT")).unwrap();
-                    out_arg.trim_start_matches("/OUT:").to_string().into()
-                } else {
-                    let out = args.iter().position(|arg| arg == "-o").unwrap();
-                    args[out + 1].clone().into()
+            None => {
+                // Extract the out path - we're going to write a dummy object file to satisfy the linker
+                let out_file: PathBuf = match self.triple.operating_system {
+                    target_lexicon::OperatingSystem::Windows => {
+                        let out_arg = args.iter().find(|arg| arg.starts_with("/OUT")).unwrap();
+                        out_arg.trim_start_matches("/OUT:").to_string().into()
+                    }
+                    _ => {
+                        let out = args.iter().position(|arg| arg == "-o").unwrap();
+                        args[out + 1].clone().into()
+                    }
                 };
 
-            // This creates an object file that satisfies rust's use of llvm-objcopy
-            //
-            // I'd rather we *not* do this and instead generate a truly linked file (and then delete it) but
-            // this at least lets us delay linking until the host compiler is ready.
-            //
-            // This is because our host compiler is a stateful server and not a stateless linker.
-            //
-            // todo(jon): do we use Triple::host or the target triple? I think I ran into issues
-            // using the target triple, hence the use of "host" but it might not even matter?
-            let triple = Triple::host();
-            let format = match triple.binary_format {
-                target_lexicon::BinaryFormat::Elf => object::BinaryFormat::Elf,
-                target_lexicon::BinaryFormat::Coff => object::BinaryFormat::Coff,
-                target_lexicon::BinaryFormat::Macho => object::BinaryFormat::MachO,
-                target_lexicon::BinaryFormat::Wasm => object::BinaryFormat::Wasm,
-                target_lexicon::BinaryFormat::Xcoff => object::BinaryFormat::Xcoff,
-                target_lexicon::BinaryFormat::Unknown => todo!(),
-                _ => todo!("Binary format not supported"),
-            };
+                // This creates an object file that satisfies rust's use of llvm-objcopy
+                //
+                // I'd rather we *not* do this and instead generate a truly linked file (and then delete it) but
+                // this at least lets us delay linking until the host compiler is ready.
+                //
+                // This is because our host compiler is a stateful server and not a stateless linker.
+                //
+                // todo(jon): do we use Triple::host or the target triple? I think I ran into issues
+                // using the target triple, hence the use of "host" but it might not even matter?
+                let triple = Triple::host();
+                let format = match triple.binary_format {
+                    target_lexicon::BinaryFormat::Elf => object::BinaryFormat::Elf,
+                    target_lexicon::BinaryFormat::Coff => object::BinaryFormat::Coff,
+                    target_lexicon::BinaryFormat::Macho => object::BinaryFormat::MachO,
+                    target_lexicon::BinaryFormat::Wasm => object::BinaryFormat::Wasm,
+                    target_lexicon::BinaryFormat::Xcoff => object::BinaryFormat::Xcoff,
+                    target_lexicon::BinaryFormat::Unknown => todo!(),
+                    _ => todo!("Binary format not supported"),
+                };
 
-            let arch = match triple.architecture {
-                target_lexicon::Architecture::Wasm32 => object::Architecture::Wasm32,
-                target_lexicon::Architecture::Wasm64 => object::Architecture::Wasm64,
-                target_lexicon::Architecture::X86_64 => object::Architecture::X86_64,
-                target_lexicon::Architecture::Arm(_) => object::Architecture::Arm,
-                target_lexicon::Architecture::Aarch64(_) => object::Architecture::Aarch64,
-                target_lexicon::Architecture::LoongArch64 => object::Architecture::LoongArch64,
-                target_lexicon::Architecture::Unknown => object::Architecture::Unknown,
-                _ => todo!("Architecture not supported"),
-            };
+                let arch = match triple.architecture {
+                    target_lexicon::Architecture::Wasm32 => object::Architecture::Wasm32,
+                    target_lexicon::Architecture::Wasm64 => object::Architecture::Wasm64,
+                    target_lexicon::Architecture::X86_64 => object::Architecture::X86_64,
+                    target_lexicon::Architecture::Arm(_) => object::Architecture::Arm,
+                    target_lexicon::Architecture::Aarch64(_) => object::Architecture::Aarch64,
+                    target_lexicon::Architecture::LoongArch64 => object::Architecture::LoongArch64,
+                    target_lexicon::Architecture::Unknown => object::Architecture::Unknown,
+                    _ => todo!("Architecture not supported"),
+                };
 
-            let endian = match triple.endianness() {
-                Ok(target_lexicon::Endianness::Little) => object::Endianness::Little,
-                Ok(target_lexicon::Endianness::Big) => object::Endianness::Big,
-                Err(()) => todo!("Endianness not supported"),
-            };
+                let endian = match triple.endianness() {
+                    Ok(target_lexicon::Endianness::Little) => object::Endianness::Little,
+                    Ok(target_lexicon::Endianness::Big) => object::Endianness::Big,
+                    Err(_) => todo!("Endianness not supported"),
+                };
 
-            let bytes = object::write::Object::new(format, arch, endian)
-                .write()
-                .context("Failed to emit stub link file")?;
+                let bytes = object::write::Object::new(format, arch, endian)
+                    .write()
+                    .context("Failed to emit stub link file")?;
 
-            // Write a dummy object file to satisfy rust/linker since it'll run llvm-objcopy
-            // ... I wish it *didn't* do that but I can't tell how to disable the linker without
-            // using --emit=obj which is not exactly what we want since that will still pull in
-            // the dependencies.
-            std::fs::create_dir_all(out_file.parent().unwrap())?;
-            std::fs::write(out_file, bytes)?;
+                // Write a dummy object file to satisfy rust/linker since it'll run llvm-objcopy
+                // ... I wish it *didn't* do that but I can't tell how to disable the linker without
+                // using --emit=obj which is not exactly what we want since that will still pull in
+                // the dependencies.
+                std::fs::create_dir_all(out_file.parent().unwrap())?;
+                std::fs::write(out_file, bytes)?;
+            }
         }
 
         Ok(())

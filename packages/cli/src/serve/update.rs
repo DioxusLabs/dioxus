@@ -6,7 +6,7 @@ use std::path::PathBuf;
 ///
 /// Thanks to libraries like winit for the inspiration
 #[allow(clippy::large_enum_variant)]
-pub enum ServeUpdate {
+pub(crate) enum ServeUpdate {
     NewConnection {
         id: BuildId,
         aslr_reference: Option<u64>,
@@ -17,7 +17,7 @@ pub enum ServeUpdate {
         msg: WsMessage,
     },
 
-    /// An update regarding the state of the build and running app from an `AppBuilder`
+    /// An update regarding the state of the build and running app from an AppBuilder
     BuilderUpdate {
         id: BuildId,
         update: BuilderUpdate,

@@ -21,7 +21,7 @@ pub fn is_wrapping_rustc() -> bool {
     std::env::var(DX_RUSTC_WRAPPER_ENV_VAR).is_ok()
 }
 
-#[derive(Default, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Default, Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct RustcArgs {
     pub args: Vec<String>,
     pub envs: Vec<(String, String)>,

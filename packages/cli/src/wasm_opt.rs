@@ -66,10 +66,10 @@ impl WasmOpt {
             args.push("--memory-packing");
         }
 
-        if self.cfg.debug {
-            args.push("--debuginfo");
-        } else {
+        if !self.cfg.debug {
             args.push("--strip-debug");
+        } else {
+            args.push("--debuginfo");
         }
 
         for extra in &self.cfg.extra_features {
@@ -108,9 +108,7 @@ impl WasmOpt {
         let mut command = self.build_command();
         let res = command.output().await?;
 
-        if res.status.success() {
-            std::fs::copy(self.temporary_output_path.path(), &self.output_path).unwrap();
-        } else {
+        if !res.status.success() {
             let err = String::from_utf8_lossy(&res.stderr);
             tracing::error!(
                 telemetry = %serde_json::json!({ "event": "wasm_opt_failed" }),
@@ -123,6 +121,8 @@ impl WasmOpt {
             if self.input_path != self.output_path {
                 std::fs::copy(&self.input_path, &self.output_path).unwrap();
             }
+        } else {
+            std::fs::copy(self.temporary_output_path.path(), &self.output_path).unwrap();
         }
 
         Ok(())
@@ -143,7 +143,7 @@ async fn find_latest_wasm_opt_download_url() -> anyhow::Result<String> {
         return Ok("https://github.com/WebAssembly/binaryen/releases/download/version_123/binaryen-version_123-x86_64-macos.tar.gz".to_string());
     } else if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
         return Ok("https://github.com/WebAssembly/binaryen/releases/download/version_123/binaryen-version_123-arm64-macos.tar.gz".to_string());
-    }
+    };
 
     let url = "https://api.github.com/repos/WebAssembly/binaryen/releases/latest";
     let client = reqwest::Client::new();
@@ -212,8 +212,9 @@ pub async fn get_binary_path() -> anyhow::Result<PathBuf> {
     if CliSettings::prefer_no_downloads() {
         if let Ok(existing) = which::which("wasm-opt") {
             return Ok(existing);
+        } else {
+            return Err(anyhow!("Missing wasm-opt"));
         }
-        return Err(anyhow!("Missing wasm-opt"));
     }
 
     tracing::info!("Installing wasm-opt");
@@ -234,8 +235,9 @@ pub fn installed_location() -> Option<PathBuf> {
     if CliSettings::prefer_no_downloads() {
         if let Ok(existing) = which::which("wasm-opt") {
             return Some(existing);
+        } else {
+            return None;
         }
-        return None;
     }
 
     None
@@ -245,7 +247,7 @@ fn install_dir() -> PathBuf {
     Workspace::dioxus_data_dir().join("binaryen")
 }
 
-const fn installed_bin_name() -> &'static str {
+fn installed_bin_name() -> &'static str {
     if cfg!(windows) {
         "wasm-opt.exe"
     } else {

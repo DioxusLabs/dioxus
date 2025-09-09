@@ -18,7 +18,7 @@ use crate::{AssetOptions, AssetOptionsBuilder, AssetVariant};
 pub struct JsAssetOptions {
     minify: bool,
     preload: bool,
-    dynamic: bool,
+    static_head: bool,
 }
 
 impl Default for JsAssetOptions {
@@ -38,7 +38,7 @@ impl JsAssetOptions {
         Self {
             preload: false,
             minify: true,
-            dynamic: false,
+            static_head: false,
         }
     }
 
@@ -47,9 +47,9 @@ impl JsAssetOptions {
         self.preload
     }
 
-    /// Check if the asset is dynamically created
-    pub const fn dynamic(&self) -> bool {
-        self.dynamic
+    /// Check if the asset is statically created
+    pub const fn static_head(&self) -> bool {
+        self.static_head
     }
 
     /// Check if the asset is minified
@@ -96,7 +96,7 @@ impl AssetOptionsBuilder<JsAssetOptions> {
     /// ```
     #[allow(unused)]
     pub const fn with_dynamic(mut self, dynamic: bool) -> Self {
-        self.variant.dynamic = dynamic;
+        self.variant.static_head = dynamic;
         self
     }
 

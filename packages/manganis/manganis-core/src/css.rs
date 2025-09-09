@@ -17,7 +17,7 @@ use const_serialize::SerializeConst;
 pub struct CssAssetOptions {
     minify: bool,
     preload: bool,
-    dynamic: bool,
+    static_head: bool,
 }
 
 impl Default for CssAssetOptions {
@@ -37,7 +37,7 @@ impl CssAssetOptions {
         Self {
             preload: false,
             minify: true,
-            dynamic: false,
+            static_head: false,
         }
     }
 
@@ -46,9 +46,9 @@ impl CssAssetOptions {
         self.preload
     }
 
-    /// Check if the asset is dynamically inserted
-    pub const fn dynamic(&self) -> bool {
-        self.dynamic
+    /// Check if the asset is statically created
+    pub const fn static_head(&self) -> bool {
+        self.static_head
     }
 
     /// Check if the asset is minified
@@ -94,7 +94,7 @@ impl AssetOptionsBuilder<CssAssetOptions> {
     /// ```
     #[allow(unused)]
     pub const fn with_dynamic(mut self, dynamic: bool) -> Self {
-        self.variant.dynamic = dynamic;
+        self.variant.static_head = dynamic;
         self
     }
 

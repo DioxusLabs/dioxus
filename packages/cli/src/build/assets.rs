@@ -12,7 +12,7 @@
 //!
 //! We use the same lessons learned from the hot-patching engine which parses the binary file and its
 //! symbol table to find symbols that match the `__MANGANIS__` prefix. These symbols are ideally data
-//! symbols and contain the `BundledAsset` data type which implements `ConstSerialize` and `ConstDeserialize`.
+//! symbols and contain the BundledAsset data type which implements ConstSerialize and ConstDeserialize.
 //!
 //! When the binary is built, the `dioxus asset!()` macro will emit its metadata into the __MANGANIS__
 //! symbols, which we process here. After reading the metadata directly from the executable, we then
@@ -147,7 +147,7 @@ fn find_pdb_symbol_offsets(pdb_file: &Path) -> Result<Vec<u64>> {
                 .get(rva.section as usize - 1)
                 .expect("Section index out of bounds");
 
-            addresses.push(u64::from(section.pointer_to_raw_data + rva.offset));
+            addresses.push((section.pointer_to_raw_data + rva.offset) as u64);
         }
     }
     Ok(addresses)
@@ -168,10 +168,9 @@ fn find_native_symbol_offsets<'a, R: ReadRef<'a>>(file: &File<'a, R>) -> Result<
             continue;
         };
         // Translate the section_relative_address to the file offset
-        let section_relative_address: u64 = (i128::from(virtual_address)
-            - i128::from(section.address()))
-        .try_into()
-        .expect("Virtual address should be greater than or equal to section address");
+        let section_relative_address: u64 = (virtual_address as i128 - section.address() as i128)
+            .try_into()
+            .expect("Virtual address should be greater than or equal to section address");
         let file_offset = section_range_start + section_relative_address;
         offsets.push(file_offset);
     }
@@ -280,10 +279,10 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
             continue;
         };
 
-        let section_relative_address: u64 = (i128::from(virtual_address)
-            - i128::from(main_memory_offset))
-        .try_into()
-        .expect("Virtual address should be greater than or equal to section address");
+        let section_relative_address: u64 = ((virtual_address as i128)
+            - main_memory_offset as i128)
+            .try_into()
+            .expect("Virtual address should be greater than or equal to section address");
         let file_offset = data_start_offset + section_relative_address;
 
         offsets.push(file_offset);
@@ -294,7 +293,7 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
 
 /// Find all assets in the given file, hash them, and write them back to the file.
 /// Then return an `AssetManifest` containing all the assets found in the file.
-pub async fn extract_assets_from_file(path: impl AsRef<Path>) -> Result<AssetManifest> {
+pub(crate) async fn extract_assets_from_file(path: impl AsRef<Path>) -> Result<AssetManifest> {
     let path = path.as_ref();
     let mut file = open_file_for_writing_with_timeout(
         path,

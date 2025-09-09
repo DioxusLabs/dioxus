@@ -12,7 +12,7 @@ use tokio::process::Command;
 ///
 /// <https://gist.github.com/Pulimet/5013acf2cd5b28e55036c82c91bd56d8?permalink_comment_id=3678614>
 #[derive(Debug, Clone)]
-pub struct AndroidTools {
+pub(crate) struct AndroidTools {
     pub(crate) sdk: Option<PathBuf>,
     pub(crate) ndk: PathBuf,
     pub(crate) adb: PathBuf,
@@ -43,7 +43,7 @@ pub fn get_android_tools() -> Option<Arc<AndroidTools>> {
                 .map(|dir| (dir.file_name(), dir.path()))
                 .sorted()
                 .next_back()
-                .map(|(_, path)| path.clone())
+                .map(|(_, path)| path.to_path_buf())
         })?;
 
     // Look for ADB in the SDK. If it's not there we'll use `adb` from the PATH
@@ -114,10 +114,10 @@ pub fn get_android_tools() -> Option<Arc<AndroidTools>> {
         });
 
     Some(Arc::new(AndroidTools {
-        sdk,
         ndk,
         adb,
         java_home,
+        sdk,
     }))
 }
 
@@ -165,7 +165,7 @@ impl AndroidTools {
         };
 
         self.android_tools_dir()
-            .join(format!("{triple}{sdk_version}-clang{suffix}"))
+            .join(format!("{}{}-clang{}", triple, sdk_version, suffix))
     }
 
     pub(crate) fn sysroot(&self) -> PathBuf {
@@ -253,7 +253,7 @@ impl AndroidTools {
             Ok(Ok(out)) => match out.trim() {
                 "armv7l" => triple.architecture = Architecture::Arm(ArmArchitecture::Arm),
                 "aarch64" => {
-                    triple.architecture = Architecture::Aarch64(Aarch64Architecture::Aarch64);
+                    triple.architecture = Architecture::Aarch64(Aarch64Architecture::Aarch64)
                 }
                 "i386" => triple.architecture = Architecture::X86_32(X86_32Architecture::I386),
                 "x86_64" => {
@@ -272,7 +272,7 @@ impl AndroidTools {
             Err(err) => {
                 tracing::debug!("ADB command failed: {:?}", err);
             }
-        }
+        };
 
         triple
     }
@@ -295,7 +295,7 @@ impl AndroidTools {
         }) as _
     }
 
-    pub(crate) const fn openssl_prebuilt_aar() -> &'static [u8] {
+    pub(crate) fn openssl_prebuilt_aar() -> &'static [u8] {
         include_bytes!("../../assets/android/prebuilt/openssl-1.1.1q-beta-1.tar.gz")
     }
 
@@ -323,8 +323,8 @@ impl AndroidTools {
 
     /// Unzip the prebuilt OpenSSL AAR file into the `.dx/prebuilt/openssl-<version>` directory
     pub(crate) fn unpack_prebuilt_openssl() -> Result<()> {
-        let raw_aar = Self::openssl_prebuilt_aar();
-        let aar_dest = Self::openssl_prebuilt_dest();
+        let raw_aar = AndroidTools::openssl_prebuilt_aar();
+        let aar_dest = AndroidTools::openssl_prebuilt_dest();
 
         if aar_dest.exists() {
             tracing::trace!("Prebuilt OpenSSL already exists at {:?}", aar_dest);

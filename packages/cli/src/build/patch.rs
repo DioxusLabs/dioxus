@@ -9,7 +9,7 @@ use object::{
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
-    ops::Range,
+    ops::{Deref, Range},
     path::Path,
     path::PathBuf,
     sync::{Arc, RwLock},
@@ -131,7 +131,7 @@ impl HotpatchModuleCache {
                             symbol_table.insert(
                                 data.name.to_string().to_string(),
                                 CachedSymbol {
-                                    address: u64::from(rva.0),
+                                    address: rva.0 as u64,
                                     kind: if data.function {
                                         SymbolKind::Text
                                     } else {
@@ -155,7 +155,7 @@ impl HotpatchModuleCache {
                             symbol_table.insert(
                                 data.name.to_string().to_string(),
                                 CachedSymbol {
-                                    address: u64::from(rva.0),
+                                    address: rva.0 as u64,
                                     kind: SymbolKind::Data,
                                     is_undefined,
                                     is_weak: false,
@@ -169,7 +169,7 @@ impl HotpatchModuleCache {
                     }
                 }
 
-                Self {
+                HotpatchModuleCache {
                     symbol_table,
                     path: original.to_path_buf(),
                     ..Default::default()
@@ -224,22 +224,22 @@ impl HotpatchModuleCache {
 
                 let symbol_ifunc_map = name_to_ifunc_old
                     .par_iter()
-                    .map(|(name, idx)| ((*name).to_string(), *idx))
+                    .map(|(name, idx)| (name.to_string(), *idx))
                     .collect::<HashMap<_, _>>();
 
                 let old_exports = module
                     .exports
                     .iter()
-                    .map(|e| e.name.clone())
+                    .map(|e| e.name.to_string())
                     .collect::<HashSet<_>>();
 
                 let old_imports = module
                     .imports
                     .iter()
-                    .map(|i| i.name.clone())
+                    .map(|i| i.name.to_string())
                     .collect::<HashSet<_>>();
 
-                Self {
+                HotpatchModuleCache {
                     path: original.to_path_buf(),
                     old_bytes: bytes,
                     symbol_ifunc_map,
@@ -277,7 +277,7 @@ impl HotpatchModuleCache {
                         ))
                     })
                     .collect::<HashMap<_, _>>();
-                Self {
+                HotpatchModuleCache {
                     symbol_table,
                     path: original.to_path_buf(),
                     old_bytes,
@@ -321,13 +321,13 @@ fn create_windows_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> Resul
         if let Ok(pdb::SymbolData::Public(data)) = symbol.parse() {
             let rva = data.offset.to_rva(&address_map);
             if let Some(rva) = rva {
-                new_name_to_addr.insert(data.name.to_string(), u64::from(rva.0));
+                new_name_to_addr.insert(data.name.to_string(), rva.0 as u64);
             }
         }
     }
 
     let mut map = AddressMap::default();
-    for (new_name, new_addr) in &new_name_to_addr {
+    for (new_name, new_addr) in new_name_to_addr.iter() {
         if let Some(old_addr) = old_name_to_addr.get(new_name.as_ref()) {
             map.insert(old_addr.address, *new_addr);
         }
@@ -335,7 +335,7 @@ fn create_windows_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> Resul
 
     let new_base_address = new_name_to_addr
         .get("main")
-        .copied()
+        .cloned()
         .context("failed to find 'main' symbol in patch")?;
 
     let aslr_reference = old_name_to_addr
@@ -378,7 +378,7 @@ fn create_native_jump_table(
         .map(|s| (s.name(), s.address()))
         .collect::<HashMap<_, _>>();
 
-    for (new_name, new_addr) in &new_name_to_addr {
+    for (new_name, new_addr) in new_name_to_addr.iter() {
         if let Some(old_addr) = old_name_to_addr.get(*new_name) {
             map.insert(old_addr.address, *new_addr);
         }
@@ -387,7 +387,7 @@ fn create_native_jump_table(
     let sentinel = main_sentinel(triple);
     let new_base_address = new_name_to_addr
         .get(sentinel)
-        .copied()
+        .cloned()
         .context("failed to find 'main' symbol in base - are deubg symbols enabled?")?;
     let aslr_reference = old_name_to_addr
         .get(sentinel)
@@ -449,7 +449,7 @@ fn create_wasm_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> Result<J
     for import in new.imports.iter() {
         match import.module.as_str() {
             "GOT.func" => {
-                let Some(entry) = name_to_ifunc_old.get(import.name.as_str()).copied() else {
+                let Some(entry) = name_to_ifunc_old.get(import.name.as_str()).cloned() else {
                     return Err(PatchError::InvalidModule(format!(
                         "Expected to find GOT.func entry in ifunc table: {}",
                         import.name.as_str()
@@ -658,7 +658,7 @@ fn create_wasm_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> Result<J
     let name_to_ifunc_new = collect_func_ifuncs(&new);
     let ifunc_count = name_to_ifunc_new.len() as u64;
     let mut map = AddressMap::default();
-    for (name, idx) in &name_to_ifunc_new {
+    for (name, idx) in name_to_ifunc_new.iter() {
         if let Some(old_idx) = name_to_ifunc_old.get(*name) {
             map.insert(*old_idx as u64, *idx as u64);
         }
@@ -696,7 +696,7 @@ fn convert_import_to_ifunc_call(
     let mut body = builder.name(name).func_body();
 
     // Push the params onto the stack
-    for arg in &locals {
+    for arg in locals.iter() {
         body.local_get(*arg);
     }
 
@@ -776,7 +776,7 @@ pub fn create_undefined_symbol_stub(
 
     for path in sorted {
         let bytes = std::fs::read(path).with_context(|| format!("failed to read {path:?}"))?;
-        let file = File::parse(&*bytes as &[u8])?;
+        let file = File::parse(bytes.deref() as &[u8])?;
         for symbol in file.symbols() {
             if symbol.is_undefined() {
                 undefined_symbols.insert(symbol.name()?.to_string());
@@ -963,22 +963,22 @@ pub fn create_undefined_symbol_stub(
 
                             // MOVZ X16, #imm16_0 (bits 0-15 of address)
                             let imm16_0 = (abs_addr & 0xFFFF) as u16;
-                            let movz = 0xD2800010u32 | (u32::from(imm16_0) << 5);
+                            let movz = 0xD2800010u32 | ((imm16_0 as u32) << 5);
                             code.extend_from_slice(&movz.to_le_bytes());
 
                             // MOVK X16, #imm16_1, LSL #16 (bits 16-31 of address)
                             let imm16_1 = ((abs_addr >> 16) & 0xFFFF) as u16;
-                            let movk1 = 0xF2A00010u32 | (u32::from(imm16_1) << 5);
+                            let movk1 = 0xF2A00010u32 | ((imm16_1 as u32) << 5);
                             code.extend_from_slice(&movk1.to_le_bytes());
 
                             // MOVK X16, #imm16_2, LSL #32 (bits 32-47 of address)
                             let imm16_2 = ((abs_addr >> 32) & 0xFFFF) as u16;
-                            let movk2 = 0xF2C00010u32 | (u32::from(imm16_2) << 5);
+                            let movk2 = 0xF2C00010u32 | ((imm16_2 as u32) << 5);
                             code.extend_from_slice(&movk2.to_le_bytes());
 
                             // MOVK X16, #imm16_3, LSL #48 (bits 48-63 of address)
                             let imm16_3 = ((abs_addr >> 48) & 0xFFFF) as u16;
-                            let movk3 = 0xF2E00010u32 | (u32::from(imm16_3) << 5);
+                            let movk3 = 0xF2E00010u32 | ((imm16_3 as u32) << 5);
                             code.extend_from_slice(&movk3.to_le_bytes());
 
                             // BR X16 (Branch to address in X16)
@@ -1219,7 +1219,7 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
                 .map(|ty| module.locals.add(*ty))
                 .collect::<Vec<_>>();
 
-            for l in &locals {
+            for l in locals.iter() {
                 body.local_get(*l);
             }
 
@@ -1235,7 +1235,7 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
         }
     }
 
-    for (name, index) in &symbols.code_symbol_map {
+    for (name, index) in symbols.code_symbol_map.iter() {
         if name_is_bindgen_symbol(name) {
             continue;
         }
@@ -1309,7 +1309,7 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
 
 /// Check if the name is a wasm-bindgen symbol
 ///
-/// todo(jon): I believe we can just look at all the functions the `wasm_bindgen` describe export references.
+/// todo(jon): I believe we can just look at all the functions the wasm_bindgen describe export references.
 /// this is kinda hacky on slow.
 ///
 /// Uses the heuristics from the wasm-bindgen source code itself:
@@ -1343,7 +1343,7 @@ fn parse_bytes_to_data_segment(bytes: &[u8]) -> Result<RawDataSection<'_>> {
                 data_range = section.range();
                 segments = section
                     .into_iter()
-                    .collect::<Result<Vec<_>, BinaryReaderError>>()?;
+                    .collect::<Result<Vec<_>, BinaryReaderError>>()?
             }
             Payload::CustomSection(section) if section.name() == "linking" => {
                 let reader = BinaryReader::new(section.data(), 0);
@@ -1439,8 +1439,8 @@ struct ParsedModule<'a> {
     symbols: RawDataSection<'a>,
 }
 
-/// Parse a module and return the mapping of index to `FunctionID`.
-/// We'll use this mapping to remap `ModuleIDs`
+/// Parse a module and return the mapping of index to FunctionID.
+/// We'll use this mapping to remap ModuleIDs
 fn parse_module_with_ids(bindgened: &[u8]) -> Result<ParsedModule<'_>> {
     let ids = Arc::new(RwLock::new(Vec::new()));
     let ids_ = ids.clone();
@@ -1474,7 +1474,7 @@ fn parse_module_with_ids(bindgened: &[u8]) -> Result<ParsedModule<'_>> {
 ///
 /// We need to special case darwin since `main` is the entrypoint but `_main` is the actual symbol.
 /// The entrypoint ends up outside the text section, seemingly, and breaks our aslr detection.
-const fn main_sentinel(triple: &Triple) -> &'static str {
+fn main_sentinel(triple: &Triple) -> &'static str {
     match triple.operating_system {
         // The symbol in the symtab is called "_main" but in the dysymtab it is called "main"
         OperatingSystem::MacOSX(_) | OperatingSystem::Darwin(_) | OperatingSystem::IOS(_) => {

@@ -13,7 +13,7 @@ use crate::BuildId;
 use super::{AppBuilder, BuilderUpdate};
 
 /// Pre-render the static routes, performing static-site generation
-pub async fn pre_render_static_routes(
+pub(crate) async fn pre_render_static_routes(
     devserver_ip: Option<SocketAddr>,
     builder: &mut AppBuilder,
     updates: Option<&futures_channel::mpsc::UnboundedSender<BuilderUpdate>>,
@@ -29,7 +29,7 @@ pub async fn pre_render_static_routes(
 
     // Use the address passed in through environment variables or default to localhost:9999. We need
     // to default to a value that is different than the CLI default address to avoid conflicts
-    let ip = server_ip().unwrap_or(IpAddr::V4(Ipv4Addr::LOCALHOST));
+    let ip = server_ip().unwrap_or_else(|| IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)));
     let port = server_port().unwrap_or(9999);
     let fullstack_address = SocketAddr::new(ip, port);
     let address = fullstack_address.ip().to_string();

@@ -46,7 +46,7 @@ use super::{BuildContext, BuildId, BuildMode, HotpatchModuleCache};
 /// duper useful.
 ///
 /// todo: restructure this such that "open" is a running task instead of blocking the main thread
-pub struct AppBuilder {
+pub(crate) struct AppBuilder {
     pub tx: ProgressTx,
     pub rx: ProgressRx,
 
@@ -179,7 +179,7 @@ impl AppBuilder {
     /// Wait for any new updates to the builder - either it completed or gave us a message etc
     pub(crate) async fn wait(&mut self) -> BuilderUpdate {
         use futures_util::StreamExt;
-        use BuilderUpdate::{ProcessExited, ProcessWaitFailed, StderrReceived, StdoutReceived};
+        use BuilderUpdate::*;
 
         // Wait for the build to finish or for it to emit a status message
         let update = tokio::select! {
@@ -193,13 +193,13 @@ impl AppBuilder {
                     Err(err) => BuilderUpdate::BuildFailed { err: anyhow::anyhow!("Build panicked! {err:#?}") },
                 }
             },
-            Some(Ok(Some(msg))) = OptionFuture::from(self.stdout.as_mut().map(tokio::io::Lines::next_line)) => {
+            Some(Ok(Some(msg))) = OptionFuture::from(self.stdout.as_mut().map(|f| f.next_line())) => {
                 StdoutReceived {  msg }
             },
-            Some(Ok(Some(msg))) = OptionFuture::from(self.stderr.as_mut().map(tokio::io::Lines::next_line)) => {
+            Some(Ok(Some(msg))) = OptionFuture::from(self.stderr.as_mut().map(|f| f.next_line())) => {
                 StderrReceived {  msg }
             },
-            Some(status) = OptionFuture::from(self.child.as_mut().map(tokio::process::Child::wait)) => {
+            Some(status) = OptionFuture::from(self.child.as_mut().map(|f| f.wait())) => {
                 match status {
                     Ok(status) => {
                         self.child = None;
@@ -292,7 +292,7 @@ impl AppBuilder {
 
     pub(crate) fn patch_rebuild(&mut self, changed_files: Vec<PathBuf>) {
         // We need the rustc args from the original build to pass to the new build
-        let Some(artifacts) = self.artifacts.clone() else {
+        let Some(artifacts) = self.artifacts.as_ref().cloned() else {
             tracing::warn!("Ignoring patch rebuild since there is no existing build.");
             return;
         };
@@ -484,7 +484,11 @@ impl AppBuilder {
             ));
         }
 
-        if crate::VERBOSITY.get().is_some_and(|f| f.verbose) {
+        if crate::VERBOSITY
+            .get()
+            .map(|f| f.verbose)
+            .unwrap_or_default()
+        {
             envs.push(("RUST_BACKTRACE".into(), "1".to_string()));
         }
 
@@ -558,9 +562,9 @@ impl AppBuilder {
 
             BundleFormat::Ios => {
                 if let Some(device) = self.build.device_name.as_deref() {
-                    self.open_ios_device(device).await?;
+                    self.open_ios_device(device).await?
                 } else {
-                    self.open_ios_sim(envs).await?;
+                    self.open_ios_sim(envs).await?
                 }
             }
 
@@ -574,7 +578,7 @@ impl AppBuilder {
             | BundleFormat::MacOS
             | BundleFormat::Windows
             | BundleFormat::Linux => self.open_with_main_exe(envs, args)?,
-        }
+        };
 
         self.builds_opened += 1;
 
@@ -619,7 +623,7 @@ impl AppBuilder {
         // join the wait with a 100ms timeout
         futures_util::select! {
             _ = process.wait().fuse() => {}
-            () = tokio::time::sleep(std::time::Duration::from_millis(1000)).fuse() => {}
+            _ = tokio::time::sleep(std::time::Duration::from_millis(1000)).fuse() => {}
         };
 
         // Wipe out the entropy executables if they exist
@@ -670,7 +674,7 @@ impl AppBuilder {
         }
 
         // Make sure to add `include!()` calls to the watcher so we can watch changes as they evolve
-        for file in &res.depinfo.files {
+        for file in res.depinfo.files.iter() {
             let original_artifacts = self
                 .artifacts
                 .as_mut()
@@ -698,8 +702,8 @@ impl AppBuilder {
             //
             // ie we would've shipped `/Users/foo/Projects/dioxus/target/dx/project/debug/web/public/wasm/lib.wasm`
             //    but we want to ship `/wasm/lib.wasm`
-            jump_table.lib = PathBuf::from("/")
-                .join(jump_table.lib.strip_prefix(self.build.root_dir()).unwrap());
+            jump_table.lib =
+                PathBuf::from("/").join(jump_table.lib.strip_prefix(self.build.root_dir()).unwrap())
         }
 
         let changed_files = match &res.mode {
@@ -748,7 +752,7 @@ impl AppBuilder {
         // Use the build dir if there's no runtime asset dir as the override. For the case of ios apps,
         // we won't actually be using the build dir.
         let asset_dir = match self.runtime_asset_dir.as_ref() {
-            Some(dir) => dir.clone().join("assets/"),
+            Some(dir) => dir.to_path_buf().join("assets/"),
             None => self.build.asset_dir(),
         };
 
@@ -856,7 +860,7 @@ impl AppBuilder {
         let protocol = if https { "https" } else { "http" };
         let base_path = match base_path {
             Some(base_path) => format!("/{}", base_path.trim_matches('/')),
-            None => String::new(),
+            None => "".to_owned(),
         };
         _ = open::that_detached(format!("{protocol}://{address}{base_path}"));
     }
@@ -912,7 +916,7 @@ impl AppBuilder {
     /// Upload the app to the device and launch it
     async fn open_ios_device(&self, device_query: &str) -> Result<()> {
         let device_query = device_query.to_string();
-        let root_dir = self.build.root_dir();
+        let root_dir = self.build.root_dir().clone();
         tokio::task::spawn(async move {
             // 1. Find an active device
             let device_uuid = Self::get_ios_device_uuid(&device_query).await?;
@@ -990,59 +994,69 @@ impl AppBuilder {
         // by default, we just pick the first available device and then look for better fits.
         let mut device_idx = 0;
 
-        if device_name_query.is_empty() {
-            for (idx, device) in devices.iter().enumerate() {
-                let is_paired = device
-                    .get("connectionProperties")
-                    .and_then(|g| g.get("pairingState"))
-                    .is_some_and(|s| s.as_str() == Some("paired"));
-
-                let is_ios_device = matches!(
-                    device.get("deviceType").and_then(|s| s.as_str()),
-                    Some("iPhone" | "iPad" | "iPod")
-                );
-
-                if is_paired && is_ios_device {
-                    device_idx = idx;
-                    break;
-                }
-            }
-        } else {
-            use nucleo::{chars, Config, Matcher, Utf32Str};
-            let normalize = |c: char| chars::to_lower_case(chars::normalize(c));
-            let mut matcher = Matcher::new(Config::DEFAULT);
-            let mut best_score = 0;
-            let needle = device_name_query.chars().map(normalize).collect::<String>();
-            for (idx, device) in devices.iter().enumerate() {
-                let device_name = device
-                    .get("deviceProperties")
-                    .and_then(|f| f.get("name"))
-                    .and_then(|n| n.as_str())
-                    .unwrap_or_default();
-                let device_uuid = device
-                    .get("identifier")
-                    .and_then(|n| n.as_str())
-                    .unwrap_or_default();
-                let haystack = format!("{device_name} {device_uuid}")
-                    .chars()
-                    .map(normalize)
-                    .collect::<String>();
-                let name_score = matcher.fuzzy_match(
-                    Utf32Str::Ascii(haystack.as_bytes()),
-                    Utf32Str::Ascii(needle.as_bytes()),
-                );
-                if let Some(score) = name_score {
-                    if score > best_score {
-                        best_score = score;
-                        device_idx = idx;
+        match device_name_query.is_empty() {
+            // If the user provided a query, then we look through the device list looking for the right one.
+            // This searches both UUIDs and names, making it possible to paste an ID or a name.
+            false => {
+                use nucleo::{chars, Config, Matcher, Utf32Str};
+                let normalize = |c: char| chars::to_lower_case(chars::normalize(c));
+                let mut matcher = Matcher::new(Config::DEFAULT);
+                let mut best_score = 0;
+                let needle = device_name_query.chars().map(normalize).collect::<String>();
+                for (idx, device) in devices.iter().enumerate() {
+                    let device_name = device
+                        .get("deviceProperties")
+                        .and_then(|f| f.get("name"))
+                        .and_then(|n| n.as_str())
+                        .unwrap_or_default();
+                    let device_uuid = device
+                        .get("identifier")
+                        .and_then(|n| n.as_str())
+                        .unwrap_or_default();
+                    let haystack = format!("{device_name} {device_uuid}")
+                        .chars()
+                        .map(normalize)
+                        .collect::<String>();
+                    let name_score = matcher.fuzzy_match(
+                        Utf32Str::Ascii(haystack.as_bytes()),
+                        Utf32Str::Ascii(needle.as_bytes()),
+                    );
+                    if let Some(score) = name_score {
+                        if score > best_score {
+                            best_score = score;
+                            device_idx = idx;
+                        }
                     }
                 }
+
+                if best_score == 0 {
+                    tracing::warn!(
+                        "No device found matching query: {device_name_query}. Using first available device."
+                    );
+                }
             }
 
-            if best_score == 0 {
-                tracing::warn!(
-                    "No device found matching query: {device_name_query}. Using first available device."
-                );
+            // If the query is empty, then we just find the first connected/available device
+            // This is somewhat based on the bundle format, since we don't want to accidentally upload
+            // iOS apps to watches/tvs
+            true => {
+                for (idx, device) in devices.iter().enumerate() {
+                    let is_paired = device
+                        .get("connectionProperties")
+                        .and_then(|g| g.get("pairingState"))
+                        .map(|s| s.as_str() == Some("paired"))
+                        .unwrap_or(false);
+
+                    let is_ios_device = matches!(
+                        device.get("deviceType").and_then(|s| s.as_str()),
+                        Some("iPhone") | Some("iPad") | Some("iPod")
+                    );
+
+                    if is_paired && is_ios_device {
+                        device_idx = idx;
+                        break;
+                    }
+                }
             }
         }
 
@@ -1051,7 +1065,7 @@ impl AppBuilder {
             .context("No devices found")?
             .get("identifier")
             .and_then(|id| id.as_str())
-            .map(std::string::ToString::to_string)
+            .map(|s| s.to_string())
             .context("Failed to extract device UUID")
     }
 
@@ -1213,13 +1227,13 @@ impl AppBuilder {
                 .args(transport_id_args)
                 .arg("wait-for-device")
                 .arg("shell")
-                .arg(r"while [[ -z $(getprop sys.boot_completed) ]]; do sleep 1; done;")
+                .arg(r#"while [[ -z $(getprop sys.boot_completed) ]]; do sleep 1; done;"#)
                 .output();
             let cmd_future = cmd.fuse();
             pin_mut!(cmd_future);
             tokio::select! {
                 _ = &mut cmd_future => {}
-                () = tokio::time::sleep(Duration::from_millis(50)) => {
+                _ = tokio::time::sleep(Duration::from_millis(50)) => {
                     tracing::info!("Waiting for android emulator to be ready...");
                     _ = cmd_future.await;
                 }
@@ -1309,7 +1323,7 @@ impl AppBuilder {
 
         // Make a copy of the server exe with a new name
         let entropy_server_exe = exe
-            .with_file_name(format!("{file_stem}-{some_entropy}"))
+            .with_file_name(format!("{}-{}", file_stem, some_entropy))
             .with_extension(extension);
 
         std::fs::copy(exe, &entropy_server_exe).unwrap();
@@ -1378,11 +1392,11 @@ impl AppBuilder {
         self.compiled_crates as f64 / self.expected_crates as f64
     }
 
-    pub(crate) const fn bundle_progress(&self) -> f64 {
+    pub(crate) fn bundle_progress(&self) -> f64 {
         self.bundling_progress
     }
 
-    pub(crate) const fn is_finished(&self) -> bool {
+    pub(crate) fn is_finished(&self) -> bool {
         match self.stage {
             BuildStage::Success => true,
             BuildStage::Failed => true,
@@ -1393,7 +1407,7 @@ impl AppBuilder {
     }
 
     /// Check if the queued build is blocking hotreloads
-    pub(crate) const fn can_receive_hotreloads(&self) -> bool {
+    pub(crate) fn can_receive_hotreloads(&self) -> bool {
         matches!(&self.stage, BuildStage::Success | BuildStage::Failed)
     }
 
@@ -1422,7 +1436,7 @@ impl AppBuilder {
                 let protocol = if https { "https" } else { "http" };
                 let base_path = match base_path {
                     Some(base_path) => format!("/{}", base_path.trim_matches('/')),
-                    None => String::new(),
+                    None => "".to_owned(),
                 };
                 format!("vscode://DioxusLabs.dioxus/debugger?uri={protocol}://{address}{base_path}")
             }
@@ -1520,7 +1534,7 @@ impl AppBuilder {
                 // start the server - running it multiple times will make the subsequent ones fail (which is fine)
                 _ = Command::new(&tools.adb)
                     .arg("shell")
-                    .arg(r"cd /tmp && ./lldb-server platform --server --listen '*:10086'")
+                    .arg(r#"cd /tmp && ./lldb-server platform --server --listen '*:10086'"#)
                     .kill_on_drop(false)
                     .stdin(Stdio::null())
                     .stdout(Stdio::piped())
@@ -1549,7 +1563,7 @@ impl AppBuilder {
                     program_path = program_path.display(),
                 )
                 .lines()
-                .map(str::trim)
+                .map(|line| line.trim())
                 .join("")
             }
         };
@@ -1575,7 +1589,7 @@ impl AppBuilder {
             if let Ok(res) = Command::new(adb).arg("devices").arg("-l").output().await {
                 let devices = String::from_utf8_lossy(&res.stdout);
                 let mut best_score = 0;
-                let mut device_identifier = String::new();
+                let mut device_identifier = "".to_string();
                 use nucleo::{chars, Config, Matcher, Utf32Str};
                 let mut matcher = Matcher::new(Config::DEFAULT);
                 let normalize = |c: char| chars::to_lower_case(chars::normalize(c));
@@ -1604,7 +1618,7 @@ impl AppBuilder {
 
                 if best_score != 0 {
                     device_specifier_args.push("-t".to_string());
-                    device_specifier_args.push(device_identifier.clone());
+                    device_specifier_args.push(device_identifier.to_string());
                 }
             }
 
