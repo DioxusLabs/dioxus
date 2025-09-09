@@ -25,7 +25,7 @@ pub struct Workspace {
 
 impl Workspace {
     /// Load the workspace from the current directory. This is cached and will only be loaded once.
-    pub async fn current() -> Result<Arc<Workspace>> {
+    pub async fn current() -> Result<Arc<Self>> {
         static WS: tokio::sync::Mutex<Option<Arc<Workspace>>> = tokio::sync::Mutex::const_new(None);
 
         // Lock the workspace to prevent multiple threads from loading it at the same time
@@ -81,7 +81,7 @@ impl Workspace {
                 }
                 res?
             },
-            _ = spin_future => bail!("cargo metadata took too long to respond, try again with --offline"),
+            () = spin_future => bail!("cargo metadata took too long to respond, try again with --offline"),
         };
 
         let settings = CliSettings::global_or_default();
@@ -114,18 +114,18 @@ impl Workspace {
         });
 
         tracing::debug!(
-            r#"Initialized workspace:
+            r"Initialized workspace:
                • sysroot: {sysroot}
                • rustc version: {rustc_version}
                • workspace root: {workspace_root}
-               • dioxus versions: [{dioxus_versions:?}]"#,
+               • dioxus versions: [{dioxus_versions:?}]",
             sysroot = workspace.sysroot.display(),
             rustc_version = workspace.rustc_version,
             workspace_root = workspace.workspace_root().display(),
             dioxus_versions = workspace
                 .dioxus_versions()
                 .iter()
-                .map(|v| v.to_string())
+                .map(std::string::ToString::to_string)
                 .collect::<Vec<_>>()
                 .join(", ")
         );
@@ -195,12 +195,12 @@ impl Workspace {
             || dioxus_versions.iter().any(|f| f.pre != dx_semver.pre)
         {
             tracing::error!(
-                r#"🚫dx and dioxus versions are incompatible!
+                r"🚫dx and dioxus versions are incompatible!
                   • dx version: {dx_semver}
-                  • dioxus versions: [{}]"#,
+                  • dioxus versions: [{}]",
                 dioxus_versions
                     .iter()
-                    .map(|v| v.to_string())
+                    .map(std::string::ToString::to_string)
                     .collect::<Vec<_>>()
                     .join(", ")
             );
@@ -299,7 +299,7 @@ impl Workspace {
             let kid = found.ok_or_else(|| anyhow::anyhow!("Failed to find package {package}"))?;
 
             return Ok(self.krates.nid_for_kid(kid).unwrap());
-        };
+        }
 
         // Otherwise find the package that is the closest parent of the current directory
         let current_dir = std::env::current_dir()?;
@@ -525,8 +525,7 @@ impl Workspace {
                         .unwrap()
                         .join(".dx")
                 }
-            })
-            .to_path_buf()
+            }).clone()
     }
 
     pub(crate) fn global_settings_file() -> PathBuf {

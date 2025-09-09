@@ -13,7 +13,7 @@ use tracing::{error, trace, warn};
 ///
 /// This allows users to control the cli settings with ease.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub(crate) struct CliSettings {
+pub struct CliSettings {
     /// Describes whether hot reload should always be on.
     pub(crate) always_hot_reload: Option<bool>,
     /// Describes whether the CLI should always open the browser for Web targets.
@@ -40,7 +40,7 @@ impl CliSettings {
     }
 
     pub fn global_or_default() -> Self {
-        CliSettings::from_global().unwrap_or_default()
+        Self::from_global().unwrap_or_default()
     }
 
     /// Get the path to the settings toml file.
@@ -62,7 +62,7 @@ impl CliSettings {
             return None;
         };
 
-        let Some(data) = serde_json5::from_str::<CliSettings>(&data).ok() else {
+        let Some(data) = serde_json5::from_str::<Self>(&data).ok() else {
             warn!("failed to parse global settings file");
             return None;
         };
@@ -103,9 +103,9 @@ impl CliSettings {
     }
 
     /// Modify the settings toml file - doesn't change the settings for this session
-    pub(crate) fn modify_settings(with: impl FnOnce(&mut CliSettings)) -> Result<()> {
-        let mut _settings = CliSettings::load();
-        let settings: &mut CliSettings = Arc::make_mut(&mut _settings);
+    pub(crate) fn modify_settings(with: impl FnOnce(&mut Self)) -> Result<()> {
+        let mut _settings = Self::load();
+        let settings: &mut Self = Arc::make_mut(&mut _settings);
         with(settings);
         settings.save()?;
 
@@ -122,7 +122,7 @@ impl CliSettings {
             return true;
         }
 
-        CliSettings::load().no_downloads.unwrap_or_default()
+        Self::load().no_downloads.unwrap_or_default()
     }
 
     /// Check if telemetry is disabled
@@ -169,6 +169,6 @@ impl CliSettings {
     }
 }
 
-fn default_wsl_file_poll_interval() -> Option<u16> {
+const fn default_wsl_file_poll_interval() -> Option<u16> {
     Some(2)
 }

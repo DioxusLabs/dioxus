@@ -1,27 +1,27 @@
-pub(crate) mod autoformat;
-pub(crate) mod build;
-pub(crate) mod build_assets;
-pub(crate) mod bundle;
-pub(crate) mod check;
-pub(crate) mod config;
-pub(crate) mod create;
-pub(crate) mod doctor;
-pub(crate) mod hotpatch;
-pub(crate) mod init;
-pub(crate) mod link;
-pub(crate) mod platform_override;
-pub(crate) mod print;
-pub(crate) mod run;
-pub(crate) mod serve;
-pub(crate) mod target;
-pub(crate) mod translate;
-pub(crate) mod update;
-pub(crate) mod verbosity;
+pub mod autoformat;
+pub mod build;
+pub mod build_assets;
+pub mod bundle;
+pub mod check;
+pub mod config;
+pub mod create;
+pub mod doctor;
+pub mod hotpatch;
+pub mod init;
+pub mod link;
+pub mod platform_override;
+pub mod print;
+pub mod run;
+pub mod serve;
+pub mod target;
+pub mod translate;
+pub mod update;
+pub mod verbosity;
 
-pub(crate) use build::*;
-pub(crate) use serve::*;
-pub(crate) use target::*;
-pub(crate) use verbosity::*;
+pub use build::*;
+pub use serve::*;
+pub use target::*;
+pub use verbosity::*;
 
 use crate::platform_override::CommandWithPlatformOverrides;
 use crate::Anonymized;
@@ -44,7 +44,7 @@ use std::{
 #[derive(Parser)]
 #[clap(name = "dioxus", version = VERSION.as_str())]
 #[clap(styles = CARGO_STYLING)]
-pub(crate) struct Cli {
+pub struct Cli {
     #[command(subcommand)]
     pub(crate) action: Commands,
 
@@ -53,7 +53,7 @@ pub(crate) struct Cli {
 }
 
 #[derive(Subcommand)]
-pub(crate) enum Commands {
+pub enum Commands {
     /// Create a new Dioxus project.
     #[clap(name = "new")]
     New(create::Create),
@@ -128,7 +128,7 @@ pub enum BuildTools {
     HotpatchTip(hotpatch::HotpatchTip),
 }
 
-pub(crate) static VERSION: LazyLock<String> = LazyLock::new(|| {
+pub static VERSION: LazyLock<String> = LazyLock::new(|| {
     format!(
         "{} ({})",
         crate::dx_build_info::PKG_VERSION,
@@ -138,7 +138,7 @@ pub(crate) static VERSION: LazyLock<String> = LazyLock::new(|| {
 
 /// Cargo's color style
 /// [source](https://github.com/crate-ci/clap-cargo/blob/master/src/style.rs)
-pub(crate) const CARGO_STYLING: Styles = Styles::styled()
+pub const CARGO_STYLING: Styles = Styles::styled()
     .header(styles::HEADER)
     .usage(styles::USAGE)
     .literal(styles::LITERAL)
@@ -148,21 +148,21 @@ pub(crate) const CARGO_STYLING: Styles = Styles::styled()
     .invalid(styles::INVALID);
 
 pub mod styles {
-    use super::*;
-    pub(crate) const HEADER: Style = AnsiColor::Green.on_default().effects(Effects::BOLD);
-    pub(crate) const USAGE: Style = AnsiColor::Green.on_default().effects(Effects::BOLD);
-    pub(crate) const LITERAL: Style = AnsiColor::Cyan.on_default().effects(Effects::BOLD);
-    pub(crate) const PLACEHOLDER: Style = AnsiColor::Cyan.on_default();
-    pub(crate) const ERROR: Style = AnsiColor::Red.on_default().effects(Effects::BOLD);
+    use super::{Style, AnsiColor, Effects};
+    pub const HEADER: Style = AnsiColor::Green.on_default().effects(Effects::BOLD);
+    pub const USAGE: Style = AnsiColor::Green.on_default().effects(Effects::BOLD);
+    pub const LITERAL: Style = AnsiColor::Cyan.on_default().effects(Effects::BOLD);
+    pub const PLACEHOLDER: Style = AnsiColor::Cyan.on_default();
+    pub const ERROR: Style = AnsiColor::Red.on_default().effects(Effects::BOLD);
 
-    pub(crate) const VALID: Style = AnsiColor::Cyan.on_default().effects(Effects::BOLD);
-    pub(crate) const INVALID: Style = AnsiColor::Yellow.on_default().effects(Effects::BOLD);
+    pub const VALID: Style = AnsiColor::Cyan.on_default().effects(Effects::BOLD);
+    pub const INVALID: Style = AnsiColor::Yellow.on_default().effects(Effects::BOLD);
 
     // extra styles for styling logs
     // we can style stuff using the ansi sequences like: "hotpatched in {GLOW_STYLE}{}{GLOW_STYLE:#}ms"
-    pub(crate) const GLOW_STYLE: Style = AnsiColor::Yellow.on_default();
-    pub(crate) const NOTE_STYLE: Style = AnsiColor::Green.on_default();
-    pub(crate) const LINK_STYLE: Style = AnsiColor::Blue.on_default();
-    pub(crate) const ERROR_STYLE: Style = AnsiColor::Red.on_default();
-    pub(crate) const HINT_STYLE: Style = clap::builder::styling::Ansi256Color(244).on_default();
+    pub const GLOW_STYLE: Style = AnsiColor::Yellow.on_default();
+    pub const NOTE_STYLE: Style = AnsiColor::Green.on_default();
+    pub const LINK_STYLE: Style = AnsiColor::Blue.on_default();
+    pub const ERROR_STYLE: Style = AnsiColor::Red.on_default();
+    pub const HINT_STYLE: Style = clap::builder::styling::Ansi256Color(244).on_default();
 }

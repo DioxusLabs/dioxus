@@ -3,7 +3,7 @@
 //! For reference, the rustfmt main.rs file
 //! <https://github.com/rust-lang/rustfmt/blob/master/src/bin/main.rs>
 
-use super::*;
+use super::{Parser, PathBuf, CommandWithPlatformOverrides, BuildArgs, Result, StructuredOutput, BuildTargets};
 use crate::BuildRequest;
 use anyhow::{anyhow, Context};
 use futures_util::{stream::FuturesUnordered, StreamExt};
@@ -11,7 +11,7 @@ use std::path::Path;
 
 /// Check the Rust files in the project for issues.
 #[derive(Clone, Debug, Parser)]
-pub(crate) struct Check {
+pub struct Check {
     /// Input file
     #[clap(short, long)]
     pub(crate) file: Option<PathBuf>,
@@ -107,7 +107,7 @@ async fn check_files_and_report(files_to_check: Vec<PathBuf>) -> Result<()> {
 
     let total_issues = issue_reports.iter().map(|r| r.issues.len()).sum::<usize>();
 
-    for report in issue_reports.into_iter() {
+    for report in issue_reports {
         if !report.issues.is_empty() {
             tracing::info!("{}", report);
         }
@@ -123,7 +123,7 @@ async fn check_files_and_report(files_to_check: Vec<PathBuf>) -> Result<()> {
     }
 }
 
-pub(crate) fn collect_rs_files(folder: &Path, files: &mut Vec<PathBuf>) {
+pub fn collect_rs_files(folder: &Path, files: &mut Vec<PathBuf>) {
     for entry in ignore::Walk::new(folder).flatten() {
         if entry.path().extension() == Some("rs".as_ref()) {
             files.push(entry.path().to_path_buf());

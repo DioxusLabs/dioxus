@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use std::{collections::HashMap, str::FromStr};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub(crate) struct BundleConfig {
+pub struct BundleConfig {
     #[serde(default)]
     pub(crate) identifier: Option<String>,
     #[serde(default)]
@@ -33,7 +33,7 @@ pub(crate) struct BundleConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub(crate) struct DebianSettings {
+pub struct DebianSettings {
     // OS-specific settings:
     /// the list of debian dependencies.
     #[serde(default)]
@@ -89,7 +89,7 @@ pub(crate) struct DebianSettings {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub(crate) struct WixSettings {
+pub struct WixSettings {
     #[serde(default)]
     pub(crate) language: Vec<(String, Option<PathBuf>)>,
     #[serde(default)]
@@ -141,7 +141,7 @@ pub(crate) struct WixSettings {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub(crate) struct MacOsSettings {
+pub struct MacOsSettings {
     #[serde(default)]
     pub(crate) bundle_version: Option<String>,
     #[serde(default)]
@@ -173,12 +173,12 @@ pub(crate) struct MacOsSettings {
     pub hardened_runtime: bool,
 }
 
-fn default_hardened_runtime() -> bool {
+const fn default_hardened_runtime() -> bool {
     true
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub(crate) struct WindowsSettings {
+pub struct WindowsSettings {
     #[serde(default)]
     pub(crate) digest_algorithm: Option<String>,
     #[serde(default)]
@@ -216,7 +216,7 @@ pub(crate) struct WindowsSettings {
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
-pub(crate) struct NsisSettings {
+pub struct NsisSettings {
     #[serde(default)]
     pub(crate) template: Option<PathBuf>,
     #[serde(default)]
@@ -239,15 +239,15 @@ pub(crate) struct NsisSettings {
     pub(crate) start_menu_folder: Option<String>,
     #[serde(default)]
     pub(crate) installer_hooks: Option<PathBuf>,
-    /// Try to ensure that the WebView2 version is equal to or newer than this version,
-    /// if the user's WebView2 is older than this version,
-    /// the installer will try to trigger a WebView2 update.
+    /// Try to ensure that the `WebView2` version is equal to or newer than this version,
+    /// if the user's `WebView2` is older than this version,
+    /// the installer will try to trigger a `WebView2` update.
     #[serde(default)]
     pub minimum_webview2_version: Option<String>,
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
-pub(crate) enum NSISInstallerMode {
+pub enum NSISInstallerMode {
     #[default]
     CurrentUser,
     PerMachine,
@@ -255,7 +255,7 @@ pub(crate) enum NSISInstallerMode {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub(crate) enum WebviewInstallMode {
+pub enum WebviewInstallMode {
     Skip,
     DownloadBootstrapper { silent: bool },
     EmbedBootstrapper { silent: bool },
@@ -271,7 +271,7 @@ impl Default for WebviewInstallMode {
 
 // Because all four fields must appear at the same time, there is no need for an Option
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub(crate) struct AndroidSettings {
+pub struct AndroidSettings {
     pub(crate) jks_file: PathBuf,
     pub(crate) jks_password: String,
     pub(crate) key_alias: String,
@@ -289,7 +289,7 @@ pub struct CustomSignCommandSettings {
 }
 
 #[derive(Clone, Copy, Debug, clap::ValueEnum, Serialize)]
-pub(crate) enum PackageType {
+pub enum PackageType {
     /// The macOS application bundle (.app).
     #[clap(name = "macos")]
     MacOsBundle,
@@ -314,7 +314,7 @@ pub(crate) enum PackageType {
     #[clap(name = "rpm")]
     Rpm,
 
-    /// The Linux AppImage bundle (.AppImage).
+    /// The Linux `AppImage` bundle (.`AppImage`).
     #[clap(name = "appimage")]
     AppImage,
 
@@ -332,15 +332,15 @@ impl FromStr for PackageType {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "macos" => Ok(PackageType::MacOsBundle),
-            "ios" => Ok(PackageType::IosBundle),
-            "msi" => Ok(PackageType::WindowsMsi),
-            "nsis" => Ok(PackageType::Nsis),
-            "deb" => Ok(PackageType::Deb),
-            "rpm" => Ok(PackageType::Rpm),
-            "appimage" => Ok(PackageType::AppImage),
-            "dmg" => Ok(PackageType::Dmg),
-            "updater" => Ok(PackageType::Updater),
+            "macos" => Ok(Self::MacOsBundle),
+            "ios" => Ok(Self::IosBundle),
+            "msi" => Ok(Self::WindowsMsi),
+            "nsis" => Ok(Self::Nsis),
+            "deb" => Ok(Self::Deb),
+            "rpm" => Ok(Self::Rpm),
+            "appimage" => Ok(Self::AppImage),
+            "dmg" => Ok(Self::Dmg),
+            "updater" => Ok(Self::Updater),
             _ => Err(format!("{s} is not a valid package type")),
         }
     }

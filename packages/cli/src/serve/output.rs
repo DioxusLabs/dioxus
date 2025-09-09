@@ -320,7 +320,7 @@ impl Output {
         Ok(Some(ServeUpdate::Redraw))
     }
 
-    /// Push a TraceMsg to be printed on the next render
+    /// Push a `TraceMsg` to be printed on the next render
     pub fn push_log(&mut self, message: TraceMsg) {
         self.pending_logs.push_front(message);
     }
@@ -334,8 +334,8 @@ impl Output {
     }
 
     /// Add a message from stderr to the logs
-    /// This will queue the stderr message as a TraceMsg and print it on the next render
-    /// We'll use the `App` TraceSrc for the msg, and whatever level is provided
+    /// This will queue the stderr message as a `TraceMsg` and print it on the next render
+    /// We'll use the `App` `TraceSrc` for the msg, and whatever level is provided
     pub fn push_stdio(&mut self, bundle: BundleFormat, msg: String, level: Level) {
         self.push_log(TraceMsg::text(TraceSrc::App(bundle), level, msg));
     }
@@ -446,10 +446,7 @@ impl Output {
         frame.render_widget(
             Line::from(vec![
                 " ".dark_gray(),
-                match self.more_modal_open {
-                    true => "/:more".light_yellow(),
-                    false => "/:more".dark_gray(),
-                },
+                if self.more_modal_open { "/:more".light_yellow() } else { "/:more".dark_gray() },
                 " ".dark_gray(),
             ])
             .right_aligned(),
@@ -525,9 +522,9 @@ impl Output {
             BuildStage::Initializing => lines.push("Initializing".yellow()),
             BuildStage::Starting { patch, .. } => {
                 if *patch {
-                    lines.push("Hot-patching...".yellow())
+                    lines.push("Hot-patching...".yellow());
                 } else {
-                    lines.push("Starting build".yellow())
+                    lines.push("Starting build".yellow());
                 }
             }
             BuildStage::InstallingTooling => lines.push("Installing tooling".yellow()),
@@ -539,7 +536,7 @@ impl Output {
             } => {
                 lines.push("Compiling ".yellow());
                 lines.push(format!("{current}/{total} ").gray());
-                lines.push(krate.as_str().dark_gray())
+                lines.push(krate.as_str().dark_gray());
             }
             BuildStage::OptimizingWasm => lines.push("Optimizing wasm".yellow()),
             BuildStage::SplittingBundle => lines.push("Splitting bundle".yellow()),
@@ -556,7 +553,7 @@ impl Output {
                 lines.push("Copying asset ".yellow());
                 lines.push(format!("{current}/{total} ").gray());
                 if let Some(name) = path.file_name().and_then(|f| f.to_str()) {
-                    lines.push(name.dark_gray())
+                    lines.push(name.dark_gray());
                 }
             }
             BuildStage::Success => {
@@ -575,7 +572,7 @@ impl Output {
             BuildStage::ExtractingAssets => lines.push("Extracting assets".yellow()),
             BuildStage::Prerendering => lines.push("Pre-rendering...".yellow()),
             _ => {}
-        };
+        }
 
         frame.render_widget(Line::from(lines), status_line);
     }
@@ -609,7 +606,7 @@ impl Output {
                 .unfilled_style(Style::default().fg(Color::DarkGray))
                 .label(label.gray())
                 .line_set(symbols::line::THICK)
-                .ratio(if !failed { value } else { 1.0 }),
+                .ratio(if failed { 1.0 } else { value }),
             gauge_row,
         );
 
@@ -618,7 +615,17 @@ impl Output {
             .constraints([Constraint::Length(3), Constraint::Fill(1)])
             .areas(icon);
 
-        if value != 1.0 {
+        if value == 1.0 {
+            frame.render_widget(
+                Line::from(vec![if failed {
+                    "❌ ".white()
+                } else {
+                    "🎉 ".white()
+                }])
+                .left_aligned(),
+                throbber_frame,
+            );
+        } else {
             let throb = throbber_widgets_tui::Throbber::default()
                 .style(ratatui::style::Style::default().fg(ratatui::style::Color::Cyan))
                 .throbber_style(
@@ -629,16 +636,6 @@ impl Output {
                 .throbber_set(throbber_widgets_tui::BLACK_CIRCLE)
                 .use_type(throbber_widgets_tui::WhichUse::Spin);
             frame.render_stateful_widget(throb, throbber_frame, &mut self.throbber.borrow_mut());
-        } else {
-            frame.render_widget(
-                Line::from(vec![if failed {
-                    "❌ ".white()
-                } else {
-                    "🎉 ".white()
-                }])
-                .left_aligned(),
-                throbber_frame,
-            );
         }
 
         if let Some(time_taken) = time_taken {
@@ -860,11 +857,11 @@ impl Output {
     /// to be comlpetely erased and rewritten. This is slower since we're going around ratatui's diff
     /// logic, but it's the only way to do this that gives us "true println!" semantics.
     ///
-    /// In the future, Ratatui's insert_before method will get scroll regions, which will make this logic
+    /// In the future, Ratatui's `insert_before` method will get scroll regions, which will make this logic
     /// much simpler. In that future, we'll simply insert a line into the scrollregion which should automatically
     /// force that portion of the terminal to scroll up.
     ///
-    /// TODO(jon): we could look into implementing scroll regions ourselves, but I think insert_before will
+    /// TODO(jon): we could look into implementing scroll regions ourselves, but I think `insert_before` will
     /// land in a reasonable amount of time.
     #[deny(clippy::manual_saturating_arithmetic)]
     fn render_log(
@@ -963,11 +960,8 @@ impl Output {
         Ok(())
     }
 
-    fn viewport_current_height(&self) -> u16 {
-        match self.more_modal_open {
-            true => VIEWPORT_HEIGHT_BIG,
-            false => VIEWPORT_HEIGHT_SMALL,
-        }
+    const fn viewport_current_height(&self) -> u16 {
+        if self.more_modal_open { VIEWPORT_HEIGHT_BIG } else { VIEWPORT_HEIGHT_SMALL }
     }
 
     fn tracemsg_to_ansi_string(log: TraceMsg) -> Vec<String> {
@@ -1076,6 +1070,6 @@ impl std::ops::Drop for Output {
         });
 
         // Tear down the TUI if it's active at this point.
-        _ = crate::serve::Output::remote_shutdown(self.interactive);
+        _ = Self::remote_shutdown(self.interactive);
     }
 }
