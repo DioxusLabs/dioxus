@@ -26,10 +26,9 @@ dioxus-web = { workspace = true, default-features = false, optional = true }
 dioxus-desktop = { workspace = true, default-features = true, optional = true }
 dioxus-fullstack = { workspace = true, default-features = true, optional = true }
 dioxus-liveview = { workspace = true, optional = true }
-dioxus-server = { workspace = true, optional = true }
 dioxus-ssr = { workspace = true, optional = true }
 dioxus-native = { workspace = true, optional = true }
-dioxus_server_macro = { workspace = true, optional = true }
+dioxus-fullstack-macro = { workspace = true, optional = true }
 dioxus-asset-resolver = { workspace = true, optional = true }
 manganis = { workspace = true, features = ["dioxus"], optional = true }
 dioxus-logger = { workspace = true, optional = true }
@@ -99,8 +98,8 @@ ssr = ["dep:dioxus-ssr", "dioxus-config-macro/ssr"]
 liveview = ["dep:dioxus-liveview", "dioxus-config-macro/liveview"]
 native = ["dep:dioxus-native"] # todo(jon): decompose the desktop crate such that "webview" is the default and native is opt-in
 server = [
-  "dep:dioxus-server",
-  "dep:dioxus_server_macro",
+  "dep:dioxus-fullstack",
+  "dep:dioxus-fullstack-macro",
   "ssr",
   "dioxus-liveview?/axum",
   # "dioxus_server_macro",

@@ -1,10 +1,10 @@
 use super::{Encoding, FromReq, FromRes, IntoReq};
 use crate::{
     codec::IntoRes,
-    error::{FromServerFnError, ServerFnErrorErr},
-    request::{ClientReq, Req},
+    error::{FromServerFnError, ServerFnError},
+    request::ClientReq,
     response::{ClientRes, TryRes},
-    ContentType, ServerFnError,
+    ContentType,
 };
 use bytes::Bytes;
 use futures::{Stream, StreamExt, TryStreamExt};
@@ -222,7 +222,7 @@ where
         let s = TextStream::new(data.map(|chunk| match chunk {
             Ok(bytes) => {
                 let de = String::from_utf8(bytes.to_vec()).map_err(|e| {
-                    E::from_server_fn_error(ServerFnErrorErr::Deserialization(e.to_string()))
+                    E::from_server_fn_error(ServerFnError::Deserialization(e.to_string()))
                 })?;
                 Ok(de)
             }
@@ -256,7 +256,7 @@ where
         Ok(TextStream(Box::pin(stream.map(|chunk| match chunk {
             Ok(bytes) => {
                 let de = String::from_utf8(bytes.into()).map_err(|e| {
-                    E::from_server_fn_error(ServerFnErrorErr::Deserialization(e.to_string()))
+                    E::from_server_fn_error(ServerFnError::Deserialization(e.to_string()))
                 })?;
                 Ok(de)
             }

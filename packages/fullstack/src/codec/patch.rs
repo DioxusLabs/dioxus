@@ -1,9 +1,8 @@
-use super::{Encoding, FromReq, FromRes, IntoReq, IntoRes};
+use super::Encoding;
+// use super::{Encoding, FromReq, FromRes, IntoReq, IntoRes};
 use crate::{
-    error::{FromServerFnError, IntoAppError, ServerFnErrorErr},
-    request::{ClientReq, Req},
-    response::{ClientRes, TryRes},
-    ContentType, Decodes, Encodes,
+    error::{FromServerFnError, IntoAppError, ServerFnError},
+    ContentType, Decodes, Encodes, HybridError, HybridResponse,
 };
 use std::marker::PhantomData;
 
@@ -18,57 +17,51 @@ impl<Codec: ContentType> Encoding for Patch<Codec> {
     const METHOD: http::Method = http::Method::PATCH;
 }
 
-impl<E, T, Encoding, Request> IntoReq<Patch<Encoding>, Request, E> for T
-where
-    Request: ClientReq<E>,
-    Encoding: Encodes<T>,
-    E: FromServerFnError,
-{
-    fn into_req(self, path: &str, accepts: &str) -> Result<Request, E> {
-        let data = Encoding::encode(&self)
-            .map_err(|e| ServerFnErrorErr::Serialization(e.to_string()).into_app_error())?;
-        Request::try_new_patch_bytes(path, accepts, Encoding::CONTENT_TYPE, data)
-    }
-}
+// type Request = crate::HybridRequest;
 
-impl<E, T, Request, Encoding> FromReq<Patch<Encoding>, Request, E> for T
-where
-    Request: Req<E> + Send + 'static,
-    Encoding: Decodes<T>,
-    E: FromServerFnError,
-{
-    async fn from_req(req: Request) -> Result<Self, E> {
-        let data = req.try_into_bytes().await?;
-        let s = Encoding::decode(data)
-            .map_err(|e| ServerFnErrorErr::Deserialization(e.to_string()).into_app_error())?;
-        Ok(s)
-    }
-}
+// impl<T, Encoding> IntoReq<Patch<Encoding>> for T
+// where
+//     Encoding: Encodes<T>,
+// {
+//     fn into_req(self, path: &str, accepts: &str) -> Result<Request, HybridError> {
+//         let data = Encoding::encode(&self)
+//             .map_err(|e| ServerFnError::Serialization(e.to_string()).into_app_error())?;
+//         Request::try_new_patch_bytes(path, accepts, Encoding::CONTENT_TYPE, data)
+//     }
+// }
 
-impl<E, Response, Encoding, T> IntoRes<Patch<Encoding>, Response, E> for T
-where
-    Response: TryRes<E>,
-    Encoding: Encodes<T>,
-    E: FromServerFnError + Send,
-    T: Send,
-{
-    async fn into_res(self) -> Result<Response, E> {
-        let data = Encoding::encode(&self)
-            .map_err(|e| ServerFnErrorErr::Serialization(e.to_string()).into_app_error())?;
-        Response::try_from_bytes(Encoding::CONTENT_TYPE, data)
-    }
-}
+// impl<T, Encoding> FromReq<Patch<Encoding>> for T
+// where
+//     Encoding: Decodes<T>,
+// {
+//     async fn from_req(req: Request) -> Result<Self, HybridError> {
+//         let data = req.try_into_bytes().await?;
+//         let s = Encoding::decode(data)
+//             .map_err(|e| ServerFnError::Deserialization(e.to_string()).into_app_error())?;
+//         Ok(s)
+//     }
+// }
 
-impl<E, Encoding, Response, T> FromRes<Patch<Encoding>, Response, E> for T
-where
-    Response: ClientRes<E> + Send,
-    Encoding: Decodes<T>,
-    E: FromServerFnError,
-{
-    async fn from_res(res: Response) -> Result<Self, E> {
-        let data = res.try_into_bytes().await?;
-        let s = Encoding::decode(data)
-            .map_err(|e| ServerFnErrorErr::Deserialization(e.to_string()).into_app_error())?;
-        Ok(s)
-    }
-}
+// impl<Encoding, T> IntoRes<Patch<Encoding>> for T
+// where
+//     Encoding: Encodes<T>,
+//     T: Send,
+// {
+//     async fn into_res(self) -> Result<HybridResponse, HybridError> {
+//         let data = Encoding::encode(&self)
+//             .map_err(|e| ServerFnError::Serialization(e.to_string()).into_app_error())?;
+//         HybridResponse::try_from_bytes(Encoding::CONTENT_TYPE, data)
+//     }
+// }
+
+// impl<Encoding, T> FromRes<Patch<Encoding>> for T
+// where
+//     Encoding: Decodes<T>,
+// {
+//     async fn from_res(res: HybridResponse) -> Result<Self, HybridError> {
+//         let data = res.try_into_bytes().await?;
+//         let s = Encoding::decode(data)
+//             .map_err(|e| ServerFnError::Deserialization(e.to_string()).into_app_error())?;
+//         Ok(s)
+//     }
+// }

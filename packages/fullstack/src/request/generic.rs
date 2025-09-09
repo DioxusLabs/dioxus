@@ -13,7 +13,7 @@
 //!   crate under the hood.
 
 use crate::{
-    error::{FromServerFnError, IntoAppError, ServerFnErrorErr},
+    error::{FromServerFnError, IntoAppError, ServerFnError},
     request::Req,
 };
 use bytes::Bytes;
@@ -39,7 +39,7 @@ where
 
     async fn try_into_string(self) -> Result<String, Error> {
         String::from_utf8(self.into_body().into()).map_err(|err| {
-            ServerFnErrorErr::Deserialization(err.to_string()).into_app_error()
+            ServerFnError::Deserialization(err.to_string()).into_app_error()
         })
     }
 
@@ -92,7 +92,7 @@ where
             ),
             _,
         >(Error::from_server_fn_error(
-            crate::ServerFnErrorErr::Response(
+            crate::ServerFnError::Response(
                 "Websockets are not supported on this platform.".to_string(),
             ),
         ))

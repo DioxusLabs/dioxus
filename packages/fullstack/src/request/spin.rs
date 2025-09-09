@@ -38,14 +38,14 @@ where
         let (_parts, body) = self.into_parts();
 
         body.collect().await.map(|c| c.to_bytes()).map_err(|e| {
-            ServerFnErrorErr::Deserialization(e.to_string()).into()
+            ServerFnError::Deserialization(e.to_string()).into()
         })
     }
 
     async fn try_into_string(self) -> Result<String, E> {
         let bytes = self.try_into_bytes().await?;
         String::from_utf8(bytes.to_vec()).map_err(|e| {
-            ServerFnErrorErr::Deserialization(e.to_string()).into()
+            ServerFnError::Deserialization(e.to_string()).into()
         })
     }
 
@@ -55,7 +55,7 @@ where
     {
         Ok(self.into_body().into_data_stream().map(|chunk| {
             chunk.map_err(|e| {
-                E::from_server_fn_error(ServerFnErrorErr::Deserialization(
+                E::from_server_fn_error(ServerFnError::Deserialization(
                     e.to_string(),
                 ))
                 .ser()

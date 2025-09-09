@@ -4,13 +4,13 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 enum TestError {
-    ServerFnError(ServerFnErrorErr),
+    ServerFnError(ServerFnError),
 }
 
 impl FromServerFnError for TestError {
     type Encoder = JsonEncoding;
 
-    fn from_server_fn_error(value: ServerFnErrorErr) -> Self {
+    fn from_server_fn_error(value: ServerFnError) -> Self {
         Self::ServerFnError(value)
     }
 }

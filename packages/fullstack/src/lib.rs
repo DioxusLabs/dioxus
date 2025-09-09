@@ -5,16 +5,23 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![forbid(unexpected_cfgs)]
 
+pub mod http_fn;
+pub mod ws_fn;
+
+pub mod fetch;
+
+pub mod streams;
+
+mod old;
+
 #[cfg(test)]
 mod tests;
 
 mod serverfn;
 pub use serverfn::*;
 
-pub mod global;
-
-#[doc(hidden)]
-pub mod mock_client;
+mod encoding;
+pub use encoding::*;
 
 pub use dioxus_fullstack_hooks::history::provide_fullstack_history_context;
 
@@ -22,8 +29,8 @@ pub use dioxus_fullstack_hooks::history::provide_fullstack_history_context;
 pub use dioxus_fullstack_hooks::*;
 
 #[doc(inline)]
-pub use dioxus_server_macro::*;
-pub use ServerFn as _;
+pub use dioxus_fullstack_macro::*;
+// pub use ServerFn as _;
 
 /// Implementations of the client side of the server function call.
 pub mod client;
@@ -55,8 +62,7 @@ pub mod response;
 // dependency on `bytes`
 pub use bytes::Bytes;
 pub use client::{get_server_url, set_server_url};
-pub use error::{FromServerFnError, ServerFnErrorErr};
-pub use error::{ServerFnError, ServerFnResult};
+pub use error::{FromServerFnError, ServerFnError, ServerFnResult};
 #[doc(hidden)]
 pub use xxhash_rust;
 
@@ -146,3 +152,30 @@ pub mod prelude {
     unsafe impl<T> Send for ServerState<T> {}
     unsafe impl<T> Sync for ServerState<T> {}
 }
+
+pub mod config;
+pub mod context;
+
+pub(crate) mod document;
+pub(crate) mod render;
+pub(crate) mod streaming;
+
+pub(crate) use config::*;
+
+pub use crate::config::{ServeConfig, ServeConfigBuilder};
+pub use crate::context::Axum;
+pub use crate::render::{FullstackHTMLTemplate, SSRState};
+pub use crate::server::*;
+pub use config::*;
+pub use context::{
+    extract, server_context, with_server_context, DioxusServerContext, FromContext,
+    FromServerContext, ProvideServerContext,
+};
+pub use dioxus_isrg::{IncrementalRenderer, IncrementalRendererConfig};
+pub use document::ServerDocument;
+
+#[cfg(not(target_arch = "wasm32"))]
+mod launch;
+
+#[cfg(not(target_arch = "wasm32"))]
+pub use launch::{launch, launch_cfg};

@@ -1,4 +1,5 @@
-use crate::{request::ClientReq, response::ClientRes};
+use crate::{HybridError, HybridRequest, HybridResponse};
+// use crate::{response::ClientRes, HybridError, HybridRequest, HybridResponse};
 use bytes::Bytes;
 use futures::{Sink, Stream};
 use std::{future::Future, sync::OnceLock};
@@ -23,14 +24,9 @@ pub fn get_server_url() -> &'static str {
 /// This trait is implemented for things like a browser `fetch` request or for
 /// the `reqwest` trait. It should almost never be necessary to implement it
 /// yourself, unless you’re trying to use an alternative HTTP crate on the client side.
-pub trait Client<Error, InputStreamError = Error, OutputStreamError = Error> {
-    /// The type of a request sent by this client.
-    type Request: ClientReq<Error> + Send + 'static;
-    /// The type of a response received by this client.
-    type Response: ClientRes<Error> + Send + 'static;
-
+pub trait Client<Error = HybridError, InputStreamError = Error, OutputStreamError = Error> {
     /// Sends the request and receives a response.
-    fn send(req: Self::Request) -> impl Future<Output = Result<Self::Response, Error>> + Send;
+    fn send(req: HybridRequest) -> impl Future<Output = Result<HybridResponse, Error>> + Send;
 
     /// Opens a websocket connection to the server.
     #[allow(clippy::type_complexity)]
@@ -45,9 +41,38 @@ pub trait Client<Error, InputStreamError = Error, OutputStreamError = Error> {
             Error,
         >,
     > + Send;
+}
 
-    /// Spawn a future that runs in the background.
-    fn spawn(future: impl Future<Output = ()> + Send + 'static);
+pub mod current {
+    use futures::FutureExt;
+
+    use super::*;
+
+    /// Sends the request and receives a response.
+    pub async fn send(req: HybridRequest) -> Result<HybridResponse, HybridError> {
+        todo!()
+    }
+
+    // /// Opens a websocket connection to the server.
+    // #[allow(clippy::type_complexity)]
+    // pub fn open_websocket(
+    //     path: &str,
+    // ) -> impl Future<
+    //     Output = Result<
+    //         (
+    //             impl Stream<Item = Result<Bytes, Bytes>> + Send + 'static,
+    //             impl Sink<Bytes> + Send + 'static,
+    //         ),
+    //         HybridError,
+    //     >,
+    // > + Send {
+    //     async {
+    //         Ok((
+    //             async move { todo!() }.into_stream(),
+    //             async move { todo!() }.into_stream(),
+    //         ))
+    //     }
+    // }
 }
 
 // #[cfg(feature = "browser")]
@@ -55,7 +80,7 @@ pub trait Client<Error, InputStreamError = Error, OutputStreamError = Error> {
 // pub mod browser {
 //     use super::Client;
 //     use crate::{
-//         error::{FromServerFnError, IntoAppError, ServerFnErrorErr},
+//         error::{FromServerFnError, IntoAppError, ServerFnError},
 //         request::browser::{BrowserRequest, RequestInner},
 //         response::browser::BrowserResponse,
 //     };
@@ -92,7 +117,7 @@ pub trait Client<Error, InputStreamError = Error, OutputStreamError = Error> {
 //                     .await
 //                     .map(|res| BrowserResponse(SendWrapper::new(res)))
 //                     .map_err(|e| {
-//                         ServerFnErrorErr::Request(e.to_string())
+//                         ServerFnError::Request(e.to_string())
 //                             .into_app_error()
 //                     });
 
@@ -124,7 +149,7 @@ pub trait Client<Error, InputStreamError = Error, OutputStreamError = Error> {
 //                         .map_err(|err| {
 //                             web_sys::console::error_1(&err.to_string().into());
 //                             Error::from_server_fn_error(
-//                                 ServerFnErrorErr::Request(err.to_string()),
+//                                 ServerFnError::Request(err.to_string()),
 //                             )
 //                         })?;
 //                 let (sink, stream) = websocket.split();
@@ -137,7 +162,7 @@ pub trait Client<Error, InputStreamError = Error, OutputStreamError = Error> {
 //                     Err(err) => {
 //                         web_sys::console::error_1(&err.to_string().into());
 //                         Err(OutputStreamError::from_server_fn_error(
-//                             ServerFnErrorErr::Request(err.to_string()),
+//                             ServerFnError::Request(err.to_string()),
 //                         )
 //                         .ser())
 //                     }
@@ -211,79 +236,76 @@ pub trait Client<Error, InputStreamError = Error, OutputStreamError = Error> {
 //     }
 // }
 
-// #[cfg(feature = "reqwest")]
-/// Implements [`Client`] for a request made by [`reqwest`].
-pub mod reqwest {
-    use super::{get_server_url, Client};
-    use crate::{
-        error::{FromServerFnError, IntoAppError, ServerFnErrorErr},
-        request::reqwest::CLIENT,
-    };
-    use bytes::Bytes;
-    use futures::{SinkExt, StreamExt, TryFutureExt};
-    use reqwest::{Request, Response};
-    use std::future::Future;
+// // #[cfg(feature = "reqwest")]
+// /// Implements [`Client`] for a request made by [`reqwest`].
+// pub mod reqwest {
+//     use super::{get_server_url, Client};
+//     use crate::{
+//         error::{FromServerFnError, IntoAppError, ServerFnError},
+//         request::reqwest::CLIENT,
+//         HybridRequest, HybridResponse,
+//     };
+//     use bytes::Bytes;
+//     use futures::{SinkExt, StreamExt, TryFutureExt};
+//     use reqwest::{Request, Response};
+//     use std::future::Future;
 
-    /// Implements [`Client`] for a request made by [`reqwest`].
-    pub struct ReqwestClient;
+//     /// Implements [`Client`] for a request made by [`reqwest`].
+//     pub struct ReqwestClient;
 
-    impl<
-            Error: FromServerFnError,
-            InputStreamError: FromServerFnError,
-            OutputStreamError: FromServerFnError,
-        > Client<Error, InputStreamError, OutputStreamError> for ReqwestClient
-    {
-        type Request = Request;
-        type Response = Response;
+//     impl<
+//             Error: FromServerFnError,
+//             InputStreamError: FromServerFnError,
+//             OutputStreamError: FromServerFnError,
+//         > Client<Error, InputStreamError, OutputStreamError> for ReqwestClient
+//     {
+//         fn send(req: HybridRequest) -> impl Future<Output = Result<HybridResponse, Error>> + Send {
+//             // CLIENT
+//             //     .execute(req)
+//             //     .map_err(|e| ServerFnError::Request(e.to_string()).into_app_error())
 
-        fn send(req: Self::Request) -> impl Future<Output = Result<Self::Response, Error>> + Send {
-            CLIENT
-                .execute(req)
-                .map_err(|e| ServerFnErrorErr::Request(e.to_string()).into_app_error())
-        }
+//             async { Ok(HybridResponse {}) }
+//         }
 
-        async fn open_websocket(
-            path: &str,
-        ) -> Result<
-            (
-                impl futures::Stream<Item = Result<Bytes, Bytes>> + Send + 'static,
-                impl futures::Sink<Bytes> + Send + 'static,
-            ),
-            Error,
-        > {
-            let mut websocket_server_url = get_server_url().to_string();
-            if let Some(postfix) = websocket_server_url.strip_prefix("http://") {
-                websocket_server_url = format!("ws://{postfix}");
-            } else if let Some(postfix) = websocket_server_url.strip_prefix("https://") {
-                websocket_server_url = format!("wss://{postfix}");
-            }
-            let url = format!("{websocket_server_url}{path}");
-            let (ws_stream, _) = tokio_tungstenite::connect_async(url).await.map_err(|e| {
-                Error::from_server_fn_error(ServerFnErrorErr::Request(e.to_string()))
-            })?;
+//         async fn open_websocket(
+//             path: &str,
+//         ) -> Result<
+//             (
+//                 impl futures::Stream<Item = Result<Bytes, Bytes>> + Send + 'static,
+//                 impl futures::Sink<Bytes> + Send + 'static,
+//             ),
+//             Error,
+//         > {
+//             let mut websocket_server_url = get_server_url().to_string();
+//             if let Some(postfix) = websocket_server_url.strip_prefix("http://") {
+//                 websocket_server_url = format!("ws://{postfix}");
+//             } else if let Some(postfix) = websocket_server_url.strip_prefix("https://") {
+//                 websocket_server_url = format!("wss://{postfix}");
+//             }
+//             let url = format!("{websocket_server_url}{path}");
+//             let (ws_stream, _) = tokio_tungstenite::connect_async(url)
+//                 .await
+//                 .map_err(|e| Error::from_server_fn_error(ServerFnError::Request(e.to_string())))?;
 
-            let (write, read) = ws_stream.split();
+//             let (write, read) = ws_stream.split();
 
-            Ok((
-                read.map(|msg| match msg {
-                    Ok(msg) => Ok(msg.into_data()),
-                    Err(e) => Err(OutputStreamError::from_server_fn_error(
-                        ServerFnErrorErr::Request(e.to_string()),
-                    )
-                    .ser()),
-                }),
-                write.with(|msg: Bytes| async move {
-                    Ok::<
-                        tokio_tungstenite::tungstenite::Message,
-                        tokio_tungstenite::tungstenite::Error,
-                    >(tokio_tungstenite::tungstenite::Message::Binary(msg))
-                }),
-            ))
-        }
-
-        fn spawn(future: impl Future<Output = ()> + Send + 'static) {
-            todo!()
-            // tokio::spawn(future);
-        }
-    }
-}
+//             Ok((
+//                 read.map(|msg| match msg {
+//                     Ok(msg) => Ok(msg.into_data()),
+//                     Err(e) => Err(
+//                         OutputStreamError::from_server_fn_error(ServerFnError::Request(
+//                             e.to_string(),
+//                         ))
+//                         .ser(),
+//                     ),
+//                 }),
+//                 write.with(|msg: Bytes| async move {
+//                     Ok::<
+//                         tokio_tungstenite::tungstenite::Message,
+//                         tokio_tungstenite::tungstenite::Error,
+//                     >(tokio_tungstenite::tungstenite::Message::Binary(msg))
+//                 }),
+//             ))
+//         }
+//     }
+// }

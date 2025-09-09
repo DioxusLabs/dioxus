@@ -35,6 +35,7 @@ members = [
     "packages/document",
     "packages/extension",
     "packages/fullstack",
+    "packages/fullstack-macro",
     "packages/fullstack-hooks",
     "packages/fullstack-protocol",
     "packages/generational-box",
@@ -50,7 +51,6 @@ members = [
     "packages/rsx-hotreload",
     "packages/rsx-rosetta",
     "packages/rsx",
-    "packages/server-macro",
     "packages/signals",
     "packages/stores",
     "packages/stores-macro",
@@ -70,8 +70,6 @@ members = [
     "packages/native-dom",
     "packages/asset-resolver",
     "packages/depinfo",
-    "packages/server",
-    "packages/server-macro",
 
     # CLI harnesses, all included
     # "packages/cli-harnesses/*",
@@ -174,11 +172,10 @@ dioxus-stores = { path = "packages/stores", version = "0.7.0-rc.0" }
 dioxus-stores-macro = { path = "packages/stores-macro", version = "0.7.0-rc.0" }
 dioxus-devtools = { path = "packages/devtools", version = "0.7.0-rc.0" }
 dioxus-devtools-types = { path = "packages/devtools-types", version = "0.7.0-rc.0" }
-dioxus-server = { path = "packages/server", version = "0.7.0-rc.0" }
 dioxus-fullstack = { path = "packages/fullstack", version = "0.7.0-rc.0", default-features = false}
+dioxus-fullstack-macro = { path = "packages/fullstack-macro", version = "0.7.0-rc.0", default-features = false }
 dioxus-fullstack-hooks = { path = "packages/fullstack-hooks", version = "0.7.0-rc.0" }
 dioxus-fullstack-protocol = { path = "packages/fullstack-protocol", version = "0.7.0-rc.0" }
-dioxus_server_macro = { path = "packages/server-macro", version = "0.7.0-rc.0", default-features = false }
 dioxus-dx-wire-format = { path = "packages/dx-wire-format", version = "0.7.0-rc.0" }
 dioxus-logger = { path = "packages/logger", version = "0.7.0-rc.0" }
 dioxus-native = { path = "packages/native", version = "0.7.0-rc.0" }

@@ -1,5 +1,5 @@
 [package]
-name = "dioxus_server_macro"
+name = "dioxus-fullstack-macro"
 version = { workspace = true }
 edition = "2021"
 repository = "https://github.com/DioxusLabs/dioxus/"

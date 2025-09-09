@@ -30,19 +30,9 @@ pub async fn do_thing_expanded() -> Result<String> {
     impl ServerFn for DoThingExpandedArgs {
         const PATH: &'static str;
 
-        // type Client;
-
-        // type Server;
-
         type Protocol;
 
         type Output;
-
-        type Error;
-
-        type InputStreamError;
-
-        type OutputStreamError;
 
         fn run_body(
             self,

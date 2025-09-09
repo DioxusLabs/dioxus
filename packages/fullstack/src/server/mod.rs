@@ -9,14 +9,16 @@ use axum::{
     response::IntoResponse,
 };
 
+use crate::{AxumServerFn, ServerFnObj};
 use dioxus_core::{Element, VirtualDom};
-use dioxus_fullstack::{AxumServerFn, ServerFnTraitObj};
 use http::header::*;
 use std::path::Path;
 use std::sync::Arc;
 use tower::util::MapResponse;
 use tower::ServiceExt;
 use tower_http::services::{fs::ServeFileSystemResponseBody, ServeDir};
+
+pub mod register;
 
 /// A extension trait with utilities for integrating Dioxus with your Axum router.
 pub trait DioxusRouterExt<S>: DioxusRouterFnExt<S> {
@@ -208,9 +210,6 @@ where
     }
 }
 
-// pub type AxumServerFn =
-//     ServerFnTraitObj<http::Request<::axum::body::Body>, http::Response<::axum::body::Body>>;
-
 pub fn register_server_fn_on_router<S>(
     f: &'static AxumServerFn,
     router: Router<S>,
@@ -273,10 +272,13 @@ async fn handle_server_fns_inner(
         service
     };
 
+    let req = crate::HybridRequest { req };
+
     // actually run the server fn (which may use the server context)
     let fut = with_server_context(server_context.clone(), || service.run(req));
 
     let mut res = ProvideServerContext::new(fut, server_context.clone()).await;
+    let mut res = res.res;
 
     // it it accepts text/html (i.e., is a plain form post) and doesn't already have a
     // Location set, then redirect to Referer

@@ -1,4 +1,4 @@
-use crate::error::ServerFnErrorErr;
+use crate::error::ServerFnError;
 use bytes::Bytes;
 use std::{future::Future, pin::Pin};
 
@@ -11,8 +11,9 @@ pub trait Layer<Req, Res>: Send + Sync + 'static {
 
 /// A type-erased service, which takes an HTTP request and returns a response.
 pub struct BoxedService<Req, Res> {
-    /// A function that converts a [`ServerFnErrorErr`] into a string.
-    pub ser: fn(ServerFnErrorErr) -> Bytes,
+    /// A function that converts a [`ServerFnError`] into a string.
+    pub ser: fn(ServerFnError) -> Bytes,
+
     /// The inner service.
     pub service: Box<dyn Service<Req, Res> + Send>,
 }
@@ -20,7 +21,7 @@ pub struct BoxedService<Req, Res> {
 impl<Req, Res> BoxedService<Req, Res> {
     /// Constructs a type-erased service from this service.
     pub fn new(
-        ser: fn(ServerFnErrorErr) -> Bytes,
+        ser: fn(ServerFnError) -> Bytes,
         service: impl Service<Req, Res> + Send + 'static,
     ) -> Self {
         Self {
@@ -41,14 +42,14 @@ pub trait Service<Request, Response> {
     fn run(
         &mut self,
         req: Request,
-        ser: fn(ServerFnErrorErr) -> Bytes,
+        ser: fn(ServerFnError) -> Bytes,
     ) -> Pin<Box<dyn Future<Output = Response> + Send>>;
 }
 
 #[cfg(feature = "axum-no-default")]
 mod axum {
     use super::{BoxedService, Service};
-    use crate::{error::ServerFnErrorErr, response::Res, ServerFnError};
+    use crate::error::ServerFnError;
     use axum::body::Body;
     use bytes::Bytes;
     use http::{Request, Response};
@@ -63,16 +64,17 @@ mod axum {
         fn run(
             &mut self,
             req: Request<Body>,
-            ser: fn(ServerFnErrorErr) -> Bytes,
+            ser: fn(ServerFnError) -> Bytes,
         ) -> Pin<Box<dyn Future<Output = Response<Body>> + Send>> {
             let path = req.uri().path().to_string();
             let inner = self.call(req);
-            Box::pin(async move {
-                inner.await.unwrap_or_else(|e| {
-                    let err = ser(ServerFnErrorErr::MiddlewareError(e.to_string()));
-                    Response::<Body>::error_response(&path, err)
-                })
-            })
+            todo!()
+            // Box::pin(async move {
+            //     inner.await.unwrap_or_else(|e| {
+            //         let err = ser(ServerFnError::MiddlewareError(e.to_string()));
+            //         Response::<Body>::error_response(&path, err)
+            //     })
+            // })
         }
     }
 

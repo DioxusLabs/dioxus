@@ -1,7 +1,7 @@
 use super::ClientReq;
 use crate::{
     client::get_server_url,
-    error::{FromServerFnError, IntoAppError, ServerFnErrorErr},
+    error::{FromServerFnError, IntoAppError, ServerFnError},
 };
 use bytes::Bytes;
 use futures::{Stream, StreamExt};
@@ -29,7 +29,7 @@ where
     ) -> Result<Self, E> {
         let url = format!("{}{}", get_server_url(), path);
         let mut url = Url::try_from(url.as_str()).map_err(|e| {
-            E::from_server_fn_error(ServerFnErrorErr::Request(e.to_string()))
+            E::from_server_fn_error(ServerFnError::Request(e.to_string()))
         })?;
         url.set_query(Some(query));
         let req = match method {
@@ -41,7 +41,7 @@ where
             Method::PUT => CLIENT.put(url),
             m => {
                 return Err(E::from_server_fn_error(
-                    ServerFnErrorErr::UnsupportedRequestMethod(m.to_string()),
+                    ServerFnError::UnsupportedRequestMethod(m.to_string()),
                 ))
             }
         }
@@ -49,7 +49,7 @@ where
         .header(ACCEPT, accepts)
         .build()
         .map_err(|e| {
-            E::from_server_fn_error(ServerFnErrorErr::Request(e.to_string()))
+            E::from_server_fn_error(ServerFnError::Request(e.to_string()))
         })?;
         Ok(req)
     }
@@ -68,7 +68,7 @@ where
             Method::PATCH => CLIENT.patch(url),
             m => {
                 return Err(E::from_server_fn_error(
-                    ServerFnErrorErr::UnsupportedRequestMethod(m.to_string()),
+                    ServerFnError::UnsupportedRequestMethod(m.to_string()),
                 ))
             }
         }
@@ -76,7 +76,7 @@ where
         .header(ACCEPT, accepts)
         .body(body)
         .build()
-        .map_err(|e| ServerFnErrorErr::Request(e.to_string()).into_app_error())
+        .map_err(|e| ServerFnError::Request(e.to_string()).into_app_error())
     }
 
     fn try_new_req_bytes(
@@ -93,7 +93,7 @@ where
             Method::PUT => CLIENT.put(url),
             m => {
                 return Err(E::from_server_fn_error(
-                    ServerFnErrorErr::UnsupportedRequestMethod(m.to_string()),
+                    ServerFnError::UnsupportedRequestMethod(m.to_string()),
                 ))
             }
         }
@@ -101,7 +101,7 @@ where
         .header(ACCEPT, accepts)
         .body(body)
         .build()
-        .map_err(|e| ServerFnErrorErr::Request(e.to_string()).into_app_error())
+        .map_err(|e| ServerFnError::Request(e.to_string()).into_app_error())
     }
 
     fn try_new_req_multipart(
@@ -116,14 +116,14 @@ where
             Method::PATCH => CLIENT.patch(path),
             m => {
                 return Err(E::from_server_fn_error(
-                    ServerFnErrorErr::UnsupportedRequestMethod(m.to_string()),
+                    ServerFnError::UnsupportedRequestMethod(m.to_string()),
                 ))
             }
         }
         .header(ACCEPT, accepts)
         .multipart(body)
         .build()
-        .map_err(|e| ServerFnErrorErr::Request(e.to_string()).into_app_error())
+        .map_err(|e| ServerFnError::Request(e.to_string()).into_app_error())
     }
 
     fn try_new_req_form_data(
@@ -139,7 +139,7 @@ where
             Method::PUT => CLIENT.put(path),
             m => {
                 return Err(E::from_server_fn_error(
-                    ServerFnErrorErr::UnsupportedRequestMethod(m.to_string()),
+                    ServerFnError::UnsupportedRequestMethod(m.to_string()),
                 ))
             }
         }
@@ -147,7 +147,7 @@ where
         .header(ACCEPT, accepts)
         .multipart(body)
         .build()
-        .map_err(|e| ServerFnErrorErr::Request(e.to_string()).into_app_error())
+        .map_err(|e| ServerFnError::Request(e.to_string()).into_app_error())
     }
 
     fn try_new_req_streaming(
@@ -159,7 +159,7 @@ where
     ) -> Result<Self, E> {
         let url = format!("{}{}", get_server_url(), path);
         let body = Body::wrap_stream(
-            body.map(|chunk| Ok(chunk) as Result<Bytes, ServerFnErrorErr>),
+            body.map(|chunk| Ok(chunk) as Result<Bytes, ServerFnError>),
         );
         match method {
             Method::POST => CLIENT.post(url),
@@ -167,7 +167,7 @@ where
             Method::PATCH => CLIENT.patch(url),
             m => {
                 return Err(E::from_server_fn_error(
-                    ServerFnErrorErr::UnsupportedRequestMethod(m.to_string()),
+                    ServerFnError::UnsupportedRequestMethod(m.to_string()),
                 ))
             }
         }
@@ -175,6 +175,6 @@ where
         .header(ACCEPT, accepts)
         .body(body)
         .build()
-        .map_err(|e| ServerFnErrorErr::Request(e.to_string()).into_app_error())
+        .map_err(|e| ServerFnError::Request(e.to_string()).into_app_error())
     }
 }

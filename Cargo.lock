@@ -4996,6 +4996,7 @@ dependencies = [
  "dioxus-devtools",
  "dioxus-document",
  "dioxus-fullstack",
+ "dioxus-fullstack-macro",
  "dioxus-history",
  "dioxus-hooks",
  "dioxus-html",
@@ -5003,12 +5004,10 @@ dependencies = [
  "dioxus-logger",
  "dioxus-native",
  "dioxus-router",
- "dioxus-server",
  "dioxus-signals",
  "dioxus-ssr",
  "dioxus-stores",
  "dioxus-web",
- "dioxus_server_macro",
  "env_logger 0.11.8",
  "futures-util",
  "manganis",
@@ -5503,23 +5502,31 @@ dependencies = [
  "dioxus",
  "dioxus-cli-config",
  "dioxus-core",
+ "dioxus-core-macro",
  "dioxus-devtools",
  "dioxus-document",
  "dioxus-fullstack-hooks",
+ "dioxus-fullstack-macro",
  "dioxus-fullstack-protocol",
  "dioxus-history",
  "dioxus-hooks",
+ "dioxus-html",
  "dioxus-interpreter-js",
+ "dioxus-isrg",
  "dioxus-router",
  "dioxus-signals",
+ "dioxus-ssr",
  "dioxus-web",
- "dioxus_server_macro",
+ "enumset",
  "futures",
  "futures-channel",
  "futures-util",
  "generational-box",
  "http 1.3.1",
+ "http-body-util",
+ "hyper 1.6.0",
  "hyper-rustls 0.27.7",
+ "hyper-util",
  "inventory",
  "multer",
  "parking_lot",
@@ -5530,6 +5537,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_qs",
+ "subsecond",
  "thiserror 2.0.12",
  "throw_error",
  "tokio",
@@ -5560,6 +5568,22 @@ dependencies = [
  "dioxus-signals",
  "futures-channel",
  "serde",
+]
+
+[[package]]
+name = "dioxus-fullstack-macro"
+version = "0.7.0-rc.0"
+dependencies = [
+ "axum 0.8.4",
+ "const_format",
+ "convert_case 0.8.0",
+ "dioxus",
+ "proc-macro2",
+ "quote",
+ "serde",
+ "syn 2.0.104",
+ "tower-http",
+ "xxhash-rust",
 ]
 
 [[package]]
@@ -5918,59 +5942,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dioxus-server"
-version = "0.7.0-rc.0"
-dependencies = [
- "async-trait",
- "aws-lc-rs",
- "axum 0.8.4",
- "base64 0.22.1",
- "bytes",
- "ciborium",
- "dashmap 6.1.0",
- "dioxus",
- "dioxus-cli-config",
- "dioxus-core",
- "dioxus-core-macro",
- "dioxus-devtools",
- "dioxus-document",
- "dioxus-fullstack",
- "dioxus-fullstack-hooks",
- "dioxus-fullstack-protocol",
- "dioxus-history",
- "dioxus-html",
- "dioxus-interpreter-js",
- "dioxus-isrg",
- "dioxus-router",
- "dioxus-signals",
- "dioxus-ssr",
- "enumset",
- "futures-channel",
- "futures-util",
- "generational-box",
- "http 1.3.1",
- "hyper 1.6.0",
- "hyper-rustls 0.27.7",
- "hyper-util",
- "inventory",
- "parking_lot",
- "pin-project",
- "rustls 0.23.29",
- "serde",
- "subsecond",
- "thiserror 2.0.12",
- "tokio",
- "tokio-stream",
- "tokio-util",
- "tower 0.5.2",
- "tower-http",
- "tower-layer",
- "tracing",
- "tracing-futures",
- "web-sys",
-]
-
-[[package]]
 name = "dioxus-signals"
 version = "0.7.0-rc.0"
 dependencies = [
@@ -6068,22 +6039,6 @@ dependencies = [
  "wasm-bindgen-futures",
  "wasm-bindgen-test",
  "web-sys",
-]
-
-[[package]]
-name = "dioxus_server_macro"
-version = "0.7.0-rc.0"
-dependencies = [
- "axum 0.8.4",
- "const_format",
- "convert_case 0.8.0",
- "dioxus",
- "proc-macro2",
- "quote",
- "serde",
- "syn 2.0.104",
- "tower-http",
- "xxhash-rust",
 ]
 
 [[package]]
