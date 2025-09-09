@@ -1,8 +1,7 @@
 use dioxus_dx_wire_format::StructuredBuildArtifacts;
 
 use crate::{
-    cli::{json, CommandWithPlatformOverrides, Parser, Result, StructuredOutput, Value},
-    Anonymized, AppBuilder, BuildArtifacts, BuildMode, BuildRequest, TargetArgs, Workspace,
+    cli::*, Anonymized, AppBuilder, BuildArtifacts, BuildMode, BuildRequest, TargetArgs, Workspace,
 };
 
 /// Build the Rust Dioxus app and all of its assets.
@@ -113,17 +112,21 @@ impl CommandWithPlatformOverrides<BuildArgs> {
             || client.fullstack_feature_enabled()
             || self.server.is_some()
         {
-            if let Some(server_args) = self.server.as_mut() {
-                // Make sure we set the client target here so @server knows to place its output into the @client target directory.
-                server_args.build_arguments.client_target = Some(client.main_target.clone());
-                server =
-                    Some(BuildRequest::new(&server_args.build_arguments, workspace.clone()).await?);
-            } else {
-                let mut args = self.shared.build_arguments.clone();
-                args.platform = Some(crate::Platform::Server);
-                args.renderer.renderer = Some(crate::Renderer::Server);
-                args.target = Some(target_lexicon::Triple::host());
-                server = Some(BuildRequest::new(&args, workspace.clone()).await?);
+            match self.server.as_mut() {
+                Some(server_args) => {
+                    // Make sure we set the client target here so @server knows to place its output into the @client target directory.
+                    server_args.build_arguments.client_target = Some(client.main_target.clone());
+                    server = Some(
+                        BuildRequest::new(&server_args.build_arguments, workspace.clone()).await?,
+                    );
+                }
+                None => {
+                    let mut args = self.shared.build_arguments.clone();
+                    args.platform = Some(crate::Platform::Server);
+                    args.renderer.renderer = Some(crate::Renderer::Server);
+                    args.target = Some(target_lexicon::Triple::host());
+                    server = Some(BuildRequest::new(&args, workspace.clone()).await?);
+                }
             }
         }
 
@@ -135,25 +138,23 @@ impl CommandWithPlatformOverrides<BuildArgs> {
 
         let force_sequential = self.shared.force_sequential_build();
         let ssg = self.shared.ssg;
-        let mode = if self.shared.fat_binary {
-            BuildMode::Fat
-        } else {
-            BuildMode::Base { run: false }
+        let mode = match self.shared.fat_binary {
+            true => BuildMode::Fat,
+            false => BuildMode::Base { run: false },
         };
         let targets = self.into_targets().await?;
 
         let build_client = Self::build_client_inner(&targets.client, mode.clone());
         let build_server = Self::build_server_inner(&targets.server, mode.clone(), ssg);
 
-        let (client, server) = if force_sequential {
-            (build_client.await, build_server.await)
-        } else {
-            tokio::join!(build_client, build_server)
+        let (client, server) = match force_sequential {
+            true => (build_client.await, build_server.await),
+            false => tokio::join!(build_client, build_server),
         };
 
         Ok(StructuredOutput::BuildsFinished {
             client: client?.into_structured_output(),
-            server: server?.map(BuildArtifacts::into_structured_output),
+            server: server?.map(|s| s.into_structured_output()),
         })
     }
 
@@ -201,7 +202,7 @@ impl BuildArtifacts {
             rustc_args: self.direct_rustc.args,
             rustc_envs: self.direct_rustc.envs,
             link_args: self.direct_rustc.link_args,
-            assets: self.assets.unique_assets().copied().collect(),
+            assets: self.assets.unique_assets().cloned().collect(),
         }
     }
 }

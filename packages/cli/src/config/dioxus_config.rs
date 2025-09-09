@@ -1,11 +1,8 @@
-use super::{
-    default_title, ApplicationConfig, BundleConfig, WebAppConfig, WebConfig, WebDevResourceConfig,
-    WebHttpsConfig, WebResourceConfig,
-};
+use super::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DioxusConfig {
+pub(crate) struct DioxusConfig {
     pub(crate) application: ApplicationConfig,
 
     #[serde(default)]

@@ -22,32 +22,19 @@ mod wasm_bindgen;
 mod wasm_opt;
 mod workspace;
 
-pub(crate) use build::{
-    extract_assets_from_file, pre_render_static_routes, AndroidTools, AppBuilder, BuildArtifacts,
-    BuildContext, BuildId, BuildMode, BuildRequest, BuilderUpdate, HotpatchModuleCache, ProgressRx,
-    ProgressTx,
-};
-pub(crate) use cli::{
-    link, platform_override, print, styles, update, BuildArgs, BuildTargets, BuildTools, Cli,
-    Commands, ServeArgs, TargetArgs, Verbosity, VERSION,
-};
-pub(crate) use config::{
-    AddressArguments, AndroidSettings, CustomSignCommandSettings, DebianSettings, DioxusConfig,
-    MacOsSettings, NSISInstallerMode, NsisSettings, PackageType, WasmOptConfig, WebviewInstallMode,
-    WindowsSettings, WixSettings,
-};
-pub(crate) use dioxus_dx_wire_format::{BuildStage, StructuredOutput};
-pub(crate) use error::{Error, Result};
-pub(crate) use link::{LinkAction, LinkerFlavor};
-pub(crate) use logging::{
-    Anonymized, TraceContent, TraceController, TraceMsg, TraceSrc, VERBOSITY,
-};
-pub(crate) use platform::{BundleFormat, Platform, Renderer, RendererArg, TargetAlias};
-pub(crate) use rustcwrapper::{RustcArgs, DX_RUSTC_WRAPPER_ENV_VAR};
-pub(crate) use settings::CliSettings;
-pub(crate) use tailwind::TailwindCli;
-pub(crate) use wasm_bindgen::WasmBindgen;
-pub(crate) use workspace::Workspace;
+pub(crate) use build::*;
+pub(crate) use cli::*;
+pub(crate) use config::*;
+pub(crate) use dioxus_dx_wire_format::*;
+pub(crate) use error::*;
+pub(crate) use link::*;
+pub(crate) use logging::*;
+pub(crate) use platform::*;
+pub(crate) use rustcwrapper::*;
+pub(crate) use settings::*;
+pub(crate) use tailwind::*;
+pub(crate) use wasm_bindgen::*;
+pub(crate) use workspace::*;
 
 #[tokio::main]
 async fn main() {

@@ -7,7 +7,7 @@ use std::{
 use tokio::process::Command;
 
 #[derive(Debug)]
-pub struct TailwindCli {
+pub(crate) struct TailwindCli {
     version: String,
 }
 
@@ -15,7 +15,7 @@ impl TailwindCli {
     const V3_TAG: &'static str = "v3.4.15";
     const V4_TAG: &'static str = "v4.1.5";
 
-    pub(crate) const fn new(version: String) -> Self {
+    pub(crate) fn new(version: String) -> Self {
         Self { version }
     }
 
