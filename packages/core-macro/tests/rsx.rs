@@ -146,3 +146,79 @@ mod test_optional_signals {
         rsx! { "hi!" }
     }
 }
+
+/// This test ensures that the rsx macro runs in order.
+///
+/// These are compile-time tests.
+/// See https://github.com/DioxusLabs/dioxus/issues/3737
+#[cfg(test)]
+#[allow(unused)]
+mod rsx_ordering {
+    mod attribute_then_component {
+        use dioxus::prelude::*;
+
+        #[derive(Clone, PartialEq, Eq)]
+        struct TestOuter;
+
+        impl TestOuter {
+            fn borrow(&self) -> String {
+                "".to_string()
+            }
+        }
+
+        #[component]
+        fn Child(outer: TestOuter) -> Element {
+            rsx! {
+                div { "Hello" }
+            }
+        }
+
+        #[component]
+        fn Parent() -> Element {
+            let outer = TestOuter;
+
+            rsx! {
+                div { width: outer.borrow(),
+                    Child { outer }
+                }
+            }
+        }
+    }
+    mod component_then_attribute {
+        use dioxus::prelude::*;
+
+        #[derive(Clone, PartialEq, Eq)]
+        struct TestOuter;
+
+        impl From<&str> for TestOuter {
+            fn from(_: &str) -> Self {
+                TestOuter
+            }
+        }
+
+        impl TestOuter {
+            fn borrow(&self) -> String {
+                "".to_string()
+            }
+        }
+
+        #[component]
+        fn Child(#[props(into)] outer: TestOuter) -> Element {
+            rsx! {
+                div { "Hello" }
+            }
+        }
+
+        #[component]
+        fn Parent() -> Element {
+            let outer = "hello".to_string();
+
+            rsx! {
+                div {
+                    Child { outer: &*outer }
+                }
+                div { width: outer }
+            }
+        }
+    }
+}
