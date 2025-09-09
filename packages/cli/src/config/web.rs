@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub(crate) struct WebConfig {
+pub struct WebConfig {
     #[serde(default)]
     pub(crate) app: WebAppConfig,
 
@@ -43,7 +43,7 @@ impl Default for WebConfig {
 
 /// The wasm-opt configuration
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub(crate) struct WasmOptConfig {
+pub struct WasmOptConfig {
     /// The wasm-opt level to use for release builds [default: s]
     /// Options:
     /// - z: optimize aggressively for size
@@ -76,7 +76,7 @@ pub(crate) struct WasmOptConfig {
 
 /// The wasm-opt level to use for release web builds [default: Z]
 #[derive(Default, Debug, Copy, Clone, Serialize, Deserialize)]
-pub(crate) enum WasmOptLevel {
+pub enum WasmOptLevel {
     /// Optimize aggressively for size
     #[serde(rename = "z")]
     #[default]
@@ -102,7 +102,7 @@ pub(crate) enum WasmOptLevel {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub(crate) struct WebAppConfig {
+pub struct WebAppConfig {
     #[serde(default = "default_title")]
     pub(crate) title: String,
     pub(crate) base_path: Option<String>,
@@ -118,12 +118,12 @@ impl Default for WebAppConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub(crate) struct WebProxyConfig {
+pub struct WebProxyConfig {
     pub(crate) backend: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub(crate) struct WebWatcherConfig {
+pub struct WebWatcherConfig {
     #[serde(default = "watch_path_default")]
     pub(crate) watch_path: Vec<PathBuf>,
 
@@ -149,14 +149,14 @@ fn watch_path_default() -> Vec<PathBuf> {
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
-pub(crate) struct WebResourceConfig {
+pub struct WebResourceConfig {
     pub(crate) dev: WebDevResourceConfig,
     pub(crate) style: Option<Vec<PathBuf>>,
     pub(crate) script: Option<Vec<PathBuf>>,
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
-pub(crate) struct WebDevResourceConfig {
+pub struct WebDevResourceConfig {
     #[serde(default)]
     pub(crate) style: Vec<PathBuf>,
     #[serde(default)]
@@ -164,21 +164,21 @@ pub(crate) struct WebDevResourceConfig {
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
-pub(crate) struct WebHttpsConfig {
+pub struct WebHttpsConfig {
     pub(crate) enabled: Option<bool>,
     pub(crate) mkcert: Option<bool>,
     pub(crate) key_path: Option<String>,
     pub(crate) cert_path: Option<String>,
 }
 
-fn true_bool() -> bool {
+const fn true_bool() -> bool {
     true
 }
 
-fn false_bool() -> bool {
+const fn false_bool() -> bool {
     false
 }
 
-pub(crate) fn default_title() -> String {
+pub fn default_title() -> String {
     "dioxus | ⛺".into()
 }

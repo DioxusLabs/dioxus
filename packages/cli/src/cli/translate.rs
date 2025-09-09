@@ -1,11 +1,11 @@
-use super::*;
+use super::{Parser, PathBuf, Dom, Read};
 use crate::{Result, StructuredOutput};
 use anyhow::bail;
 use dioxus_rsx::{BodyNode, CallBody, TemplateBody};
 
 /// Translate some source file into Dioxus code
 #[derive(Clone, Debug, Parser)]
-pub(crate) struct Translate {
+pub struct Translate {
     /// Activate debug mode
     // short and long flags (-d, --debug) will be deduced from the field's name
     #[clap(short, long)]
@@ -51,10 +51,7 @@ impl Translate {
 pub fn convert_html_to_formatted_rsx(dom: &Dom, component: bool) -> String {
     let callbody = dioxus_rsx_rosetta::rsx_from_html(dom);
 
-    match component {
-        true => write_callbody_with_icon_section(callbody),
-        false => dioxus_autofmt::write_block_out(&callbody).unwrap(),
-    }
+    if component { write_callbody_with_icon_section(callbody) } else { dioxus_autofmt::write_block_out(&callbody).unwrap() }
 }
 
 fn write_callbody_with_icon_section(mut callbody: CallBody) -> String {

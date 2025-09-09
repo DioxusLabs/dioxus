@@ -1,4 +1,4 @@
-use super::*;
+use super::{Parser, json, CommandWithPlatformOverrides, Result, StructuredOutput, Value};
 use crate::{AddressArguments, Anonymized, BuildArgs, TraceController};
 /// Serve the project
 ///
@@ -24,7 +24,7 @@ use crate::{AddressArguments, Anonymized, BuildArgs, TraceController};
 /// ```
 #[derive(Clone, Debug, Default, Parser)]
 #[command(group = clap::ArgGroup::new("release-incompatible").multiple(true).conflicts_with("release"))]
-pub(crate) struct ServeArgs {
+pub struct ServeArgs {
     /// The arguments for the address the server will run on
     #[clap(flatten)]
     pub(crate) address: AddressArguments,
@@ -75,7 +75,7 @@ pub(crate) struct ServeArgs {
 }
 
 #[derive(Clone, Debug, Default, Parser)]
-pub(crate) struct PlatformServeArgs {
+pub struct PlatformServeArgs {
     #[clap(flatten)]
     pub(crate) targets: BuildArgs,
 
@@ -104,7 +104,7 @@ impl ServeArgs {
 
         crate::serve::serve_all(self, tracer)
             .await
-            .map(|_| StructuredOutput::Success)
+            .map(|()| StructuredOutput::Success)
     }
 
     /// Check if the server is running in interactive mode. This involves checking the terminal as well

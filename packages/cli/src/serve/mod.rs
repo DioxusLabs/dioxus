@@ -14,10 +14,10 @@ mod update;
 
 use anyhow::bail;
 use dioxus_dx_wire_format::BuildStage;
-pub(crate) use output::*;
-pub(crate) use runner::*;
-pub(crate) use server::*;
-pub(crate) use update::*;
+pub use output::*;
+pub use runner::*;
+pub use server::*;
+pub use update::*;
 
 /// For *all* builds, the CLI spins up a dedicated webserver, file watcher, and build infrastructure to serve the project.
 ///
@@ -26,7 +26,7 @@ pub(crate) use update::*;
 /// Platform specifics:
 /// -------------------
 /// - Web:         We need to attach a filesystem server to our devtools webserver to serve the project. We
-///                want to emulate GithubPages here since most folks are deploying there and expect things like
+///                want to emulate `GithubPages` here since most folks are deploying there and expect things like
 ///                basepath to match.
 /// - Desktop:     We spin up the dev server but without a filesystem server.
 /// - Mobile:      Basically the same as desktop.
@@ -39,7 +39,7 @@ pub(crate) use update::*;
 /// - I'd love to be able to configure the CLI while it's running so we can change settings on the fly.
 /// - I want us to be able to detect a `server_fn` in the project and then upgrade from a static server
 ///   to a dynamic one on the fly.
-pub(crate) async fn serve_all(args: ServeArgs, tracer: &TraceController) -> Result<()> {
+pub async fn serve_all(args: ServeArgs, tracer: &TraceController) -> Result<()> {
     // Load the args into a plan, resolving all tooling, build dirs, arguments, decoding the multi-target, etc
     let exit_on_error = args.exit_on_error;
     let mut builder = AppServer::new(args).await?;
@@ -49,14 +49,14 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &TraceController) -> Resu
     // This is our default splash screen. We might want to make this a fancier splash screen in the future
     // Also, these commands might not be the most important, but it's all we've got enabled right now
     tracing::info!(
-        r#"-----------------------------------------------------------------
+        r"-----------------------------------------------------------------
                 Serving your app: {binname}! 🚀
                 • Press {GLOW_STYLE}`ctrl+c`{GLOW_STYLE:#} to exit the server
                 • Press {GLOW_STYLE}`r`{GLOW_STYLE:#} to rebuild the app
                 • Press {GLOW_STYLE}`p`{GLOW_STYLE:#} to toggle automatic rebuilds
                 • Press {GLOW_STYLE}`v`{GLOW_STYLE:#} to toggle verbose logging
                 • Press {GLOW_STYLE}`/`{GLOW_STYLE:#} for more commands and shortcuts{extra}
-               ----------------------------------------------------------------"#,
+               ----------------------------------------------------------------",
         binname = builder.client.build.executable_name(),
         extra = if builder.client.build.using_dioxus_explicitly {
             format!(
@@ -183,7 +183,7 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &TraceController) -> Resu
                                         BuildId::CLIENT => builder.client.pid,
                                         _ => builder.server.as_ref().and_then(|s| s.pid),
                                     };
-                                    devserver.send_patch(jumptable, elapsed, id, pid).await
+                                    devserver.send_patch(jumptable, elapsed, id, pid).await;
                                 }
                                 Err(err) => {
                                     tracing::error!("Failed to hot-patch app: {err}");
@@ -215,9 +215,9 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &TraceController) -> Resu
                     BuilderUpdate::ProcessExited { status } => {
                         if status.success() {
                             tracing::info!(
-                                r#"Application [{bundle_format}] exited gracefully.
+                                r"Application [{bundle_format}] exited gracefully.
                • To restart the app, press `r` to rebuild or `o` to open
-               • To exit the server, press `ctrl+c`"#
+               • To exit the server, press `ctrl+c`"
                             );
                         } else {
                             tracing::error!(
@@ -257,7 +257,7 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &TraceController) -> Resu
                         tracing::error!(
                             "Failed to open app: {}",
                             crate::error::log_stacktrace(&err, 15)
-                        )
+                        );
                     }
                 }
             },
@@ -276,7 +276,7 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &TraceController) -> Resu
                     } else {
                         format!("{ERROR}disabled{ERROR:#}")
                     }
-                )
+                );
             }
 
             ServeUpdate::OpenDebugger { id } => {
@@ -285,7 +285,7 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &TraceController) -> Resu
 
             ServeUpdate::Exit { error } => {
                 _ = builder.shutdown().await;
-                _ = devserver.shutdown().await;
+                () = devserver.shutdown().await;
 
                 match error {
                     Some(err) => return Err(err),

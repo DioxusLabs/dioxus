@@ -11,7 +11,7 @@ use crate::Workspace;
     Copy, Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Debug, Default,
 )]
 #[non_exhaustive]
-pub(crate) enum TargetAlias {
+pub enum TargetAlias {
     /// Targeting the WASM architecture
     Wasm,
 
@@ -147,7 +147,7 @@ impl TargetAlias {
 #[derive(
     Copy, Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Debug, Default,
 )]
-pub(crate) struct RendererArg {
+pub struct RendererArg {
     pub(crate) renderer: Option<Renderer>,
 }
 
@@ -215,7 +215,7 @@ impl From<RendererArg> for Option<Renderer> {
 
 #[derive(Copy, Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Debug)]
 #[non_exhaustive]
-pub(crate) enum Renderer {
+pub enum Renderer {
     /// Targeting webview renderer
     Webview,
 
@@ -237,16 +237,16 @@ pub(crate) enum Renderer {
 
 impl Renderer {
     /// Get the feature name for the platform in the dioxus crate
-    pub(crate) fn feature_name(&self, target: &Triple) -> &str {
+    pub(crate) const fn feature_name(&self, target: &Triple) -> &str {
         match self {
-            Renderer::Webview => match (target.environment, target.operating_system) {
+            Self::Webview => match (target.environment, target.operating_system) {
                 (Environment::Android, _) | (_, OperatingSystem::IOS(_)) => "mobile",
                 _ => "desktop",
             },
-            Renderer::Native => "native",
-            Renderer::Server => "server",
-            Renderer::Liveview => "liveview",
-            Renderer::Web => "web",
+            Self::Native => "native",
+            Self::Server => "server",
+            Self::Liveview => "liveview",
+            Self::Web => "web",
         }
     }
 
@@ -263,14 +263,14 @@ impl Renderer {
 
     pub(crate) fn default_platform(&self) -> TargetAlias {
         match self {
-            Renderer::Webview | Renderer::Native | Renderer::Server | Renderer::Liveview => {
+            Self::Webview | Self::Native | Self::Server | Self::Liveview => {
                 TargetAlias::TARGET_PLATFORM.unwrap()
             }
-            Renderer::Web => TargetAlias::Wasm,
+            Self::Web => TargetAlias::Wasm,
         }
     }
 
-    pub(crate) fn from_target(triple: &Triple) -> Self {
+    pub(crate) const fn from_target(triple: &Triple) -> Self {
         match triple.architecture {
             // Assume any wasm32 or wasm64 target is a web target
             Architecture::Wasm32 | Architecture::Wasm64 => Self::Web,
@@ -281,7 +281,7 @@ impl Renderer {
 }
 
 #[derive(Debug)]
-pub(crate) struct UnknownRendererError;
+pub struct UnknownRendererError;
 
 impl std::error::Error for UnknownRendererError {}
 
@@ -309,11 +309,11 @@ impl FromStr for Renderer {
 impl Display for Renderer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
-            Renderer::Webview => "webview",
-            Renderer::Native => "native",
-            Renderer::Server => "server",
-            Renderer::Liveview => "liveview",
-            Renderer::Web => "web",
+            Self::Webview => "webview",
+            Self::Native => "native",
+            Self::Server => "server",
+            Self::Liveview => "liveview",
+            Self::Web => "web",
         })
     }
 }
@@ -321,7 +321,7 @@ impl Display for Renderer {
     Copy, Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Debug, Default,
 )]
 #[non_exhaustive]
-pub(crate) enum BundleFormat {
+pub enum BundleFormat {
     /// Targeting the web bundle structure
     #[serde(rename = "web")]
     #[default]
@@ -358,7 +358,7 @@ pub(crate) enum BundleFormat {
 }
 
 #[derive(Debug)]
-pub(crate) struct UnknownBundleFormatError;
+pub struct UnknownBundleFormatError;
 
 impl std::error::Error for UnknownBundleFormatError {}
 
@@ -388,13 +388,13 @@ impl FromStr for BundleFormat {
 impl Display for BundleFormat {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
-            BundleFormat::Web => "web",
-            BundleFormat::MacOS => "macos",
-            BundleFormat::Windows => "windows",
-            BundleFormat::Linux => "linux",
-            BundleFormat::Server => "server",
-            BundleFormat::Ios => "ios",
-            BundleFormat::Android => "android",
+            Self::Web => "web",
+            Self::MacOS => "macos",
+            Self::Windows => "windows",
+            Self::Linux => "linux",
+            Self::Server => "server",
+            Self::Ios => "ios",
+            Self::Android => "android",
         })
     }
 }
@@ -412,7 +412,7 @@ impl BundleFormat {
     /// Get the name of the folder we need to generate for this platform
     ///
     /// Note that web and server share the same platform folder since we'll export the web folder as a bundle on its own
-    pub(crate) fn build_folder_name(&self) -> &'static str {
+    pub(crate) const fn build_folder_name(&self) -> &'static str {
         match self {
             Self::Web => "web",
             Self::Server => "web",
@@ -438,7 +438,7 @@ impl BundleFormat {
         format!("{base_profile}-{opt_level}")
     }
 
-    pub(crate) fn expected_name(&self) -> &'static str {
+    pub(crate) const fn expected_name(&self) -> &'static str {
         match self {
             Self::Web => "Web",
             Self::MacOS => "MacOS",
@@ -450,7 +450,7 @@ impl BundleFormat {
         }
     }
 
-    pub(crate) fn from_target(target: &Triple, renderer: Option<Renderer>) -> Result<BundleFormat> {
+    pub(crate) fn from_target(target: &Triple, renderer: Option<Renderer>) -> Result<Self> {
         match (
             renderer,
             target.architecture,
@@ -458,22 +458,22 @@ impl BundleFormat {
             target.operating_system,
         ) {
             // The server always uses the server bundle format
-            (Some(Renderer::Server), _, _, _) => Ok(BundleFormat::Server),
+            (Some(Renderer::Server), _, _, _) => Ok(Self::Server),
             // The web renderer always uses the web bundle format
-            (Some(Renderer::Web), _, _, _) => Ok(BundleFormat::Web),
+            (Some(Renderer::Web), _, _, _) => Ok(Self::Web),
             // Otherwise, guess it based on the target
             // Assume any wasm32 or wasm64 target is a web target
-            (_, Architecture::Wasm32 | Architecture::Wasm64, _, _) => Ok(BundleFormat::Web),
+            (_, Architecture::Wasm32 | Architecture::Wasm64, _, _) => Ok(Self::Web),
             // For native targets, we need to determine the bundle format based on the OS
-            (_, _, Environment::Android, _) => Ok(BundleFormat::Android),
-            (_, _, _, OperatingSystem::IOS(_)) => Ok(BundleFormat::Ios),
+            (_, _, Environment::Android, _) => Ok(Self::Android),
+            (_, _, _, OperatingSystem::IOS(_)) => Ok(Self::Ios),
             (_, _, _, OperatingSystem::MacOSX(_) | OperatingSystem::Darwin(_)) => {
-                Ok(BundleFormat::MacOS)
+                Ok(Self::MacOS)
             }
-            (_, _, _, OperatingSystem::Linux) => Ok(BundleFormat::Linux),
-            (_, _, _, OperatingSystem::Windows) => Ok(BundleFormat::Windows),
+            (_, _, _, OperatingSystem::Linux) => Ok(Self::Linux),
+            (_, _, _, OperatingSystem::Windows) => Ok(Self::Windows),
             // If we don't recognize the target, default to desktop
-            _ => BundleFormat::TARGET_PLATFORM.context(
+            _ => Self::TARGET_PLATFORM.context(
                 "failed to determine bundle format. Try setting the `--bundle` flag manually",
             ),
         }
@@ -495,7 +495,7 @@ impl BundleFormat {
     clap::ValueEnum,
 )]
 #[non_exhaustive]
-pub(crate) enum Platform {
+pub enum Platform {
     /// Alias for `--wasm --web --bundle-format web`
     #[clap(name = "web")]
     #[serde(rename = "web")]
@@ -544,22 +544,22 @@ pub(crate) enum Platform {
 impl Platform {
     pub(crate) fn into_triple(self) -> (TargetAlias, Renderer, BundleFormat) {
         match self {
-            Platform::Web => (TargetAlias::Wasm, Renderer::Web, BundleFormat::Web),
-            Platform::MacOS => (TargetAlias::MacOS, Renderer::Webview, BundleFormat::MacOS),
-            Platform::Windows => (
+            Self::Web => (TargetAlias::Wasm, Renderer::Web, BundleFormat::Web),
+            Self::MacOS => (TargetAlias::MacOS, Renderer::Webview, BundleFormat::MacOS),
+            Self::Windows => (
                 TargetAlias::Windows,
                 Renderer::Webview,
                 BundleFormat::Windows,
             ),
-            Platform::Linux => (TargetAlias::Linux, Renderer::Webview, BundleFormat::Linux),
-            Platform::Ios => (TargetAlias::Ios, Renderer::Webview, BundleFormat::Ios),
-            Platform::Android => (
+            Self::Linux => (TargetAlias::Linux, Renderer::Webview, BundleFormat::Linux),
+            Self::Ios => (TargetAlias::Ios, Renderer::Webview, BundleFormat::Ios),
+            Self::Android => (
                 TargetAlias::Android,
                 Renderer::Webview,
                 BundleFormat::Android,
             ),
-            Platform::Server => (TargetAlias::Host, Renderer::Server, BundleFormat::Server),
-            Platform::Liveview => (
+            Self::Server => (TargetAlias::Host, Renderer::Server, BundleFormat::Server),
+            Self::Liveview => (
                 TargetAlias::Host,
                 Renderer::Liveview,
                 BundleFormat::TARGET_PLATFORM.unwrap(),

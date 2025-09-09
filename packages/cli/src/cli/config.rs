@@ -1,9 +1,9 @@
-use super::*;
+use super::{Deserialize, Subcommand, Display, Write, Result, StructuredOutput, File};
 use crate::{CliSettings, TraceSrc, Workspace};
 
 /// Dioxus config file controls
 #[derive(Clone, Debug, Deserialize, Subcommand)]
-pub(crate) enum Config {
+pub enum Config {
     /// Init `Dioxus.toml` for project/folder.
     Init {
         /// Init project name
@@ -27,7 +27,7 @@ pub(crate) enum Config {
 }
 
 #[derive(Debug, Clone, Copy, Deserialize, Subcommand)]
-pub(crate) enum Setting {
+pub enum Setting {
     /// Set the value of the always-hot-reload setting.
     AlwaysHotReload { value: BoolValue },
     /// Set the value of the always-open-browser setting.
@@ -55,7 +55,7 @@ impl Display for Setting {
 // Clap complains if we use a bool directly and I can't find much info about it.
 // "Argument 'value` is positional and it must take a value but action is SetTrue"
 #[derive(Debug, Clone, Copy, serde::Serialize, Deserialize, clap::ValueEnum)]
-pub(crate) enum BoolValue {
+pub enum BoolValue {
     True,
     False,
 }
@@ -73,7 +73,7 @@ impl Config {
     pub(crate) async fn config(self) -> Result<StructuredOutput> {
         let crate_root = Workspace::crate_root_from_path()?;
         match self {
-            Config::Init { name, force } => {
+            Self::Init { name, force } => {
                 let conf_path = crate_root.join("Dioxus.toml");
                 if conf_path.is_file() && !force {
                     tracing::warn!(
@@ -87,11 +87,11 @@ impl Config {
                 file.write_all(content.as_bytes())?;
                 tracing::info!(dx_src = ?TraceSrc::Dev, "🚩 Init config file completed.");
             }
-            Config::FormatPrint {} => {
+            Self::FormatPrint {} => {
                 let workspace = Workspace::current().await?;
                 tracing::info!("{:#?}", workspace.settings);
             }
-            Config::CustomHtml {} => {
+            Self::CustomHtml {} => {
                 let html_path = crate_root.join("index.html");
                 let mut file = File::create(html_path)?;
                 let content = include_str!("../../assets/web/dev.index.html");
@@ -99,17 +99,17 @@ impl Config {
                 tracing::info!(dx_src = ?TraceSrc::Dev, "🚩 Create custom html file done.");
             }
             // Handle CLI settings.
-            Config::Set(setting) => {
+            Self::Set(setting) => {
                 CliSettings::modify_settings(|settings| match setting {
                     Setting::AlwaysOnTop { value } => settings.always_on_top = Some(value.into()),
                     Setting::AlwaysHotReload { value } => {
-                        settings.always_hot_reload = Some(value.into())
+                        settings.always_hot_reload = Some(value.into());
                     }
                     Setting::AlwaysOpenBrowser { value } => {
-                        settings.always_open_browser = Some(value.into())
+                        settings.always_open_browser = Some(value.into());
                     }
                     Setting::WSLFilePollInterval { value } => {
-                        settings.wsl_file_poll_interval = Some(value)
+                        settings.wsl_file_poll_interval = Some(value);
                     }
                     Setting::DisableTelemetry { value } => {
                         settings.disable_telemetry = Some(value.into());

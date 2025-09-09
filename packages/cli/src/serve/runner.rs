@@ -38,9 +38,9 @@ use tokio::process::Command;
 /// hotreloads, asset updates, etc.
 ///
 /// Since we resolve the build request before initializing the CLI, it also serves as a place to store
-/// resolved "serve" arguments, which is why it takes ServeArgs instead of BuildArgs. Simply wrap the
-/// BuildArgs in a default ServeArgs and pass it in.
-pub(crate) struct AppServer {
+/// resolved "serve" arguments, which is why it takes `ServeArgs` instead of `BuildArgs`. Simply wrap the
+/// `BuildArgs` in a default `ServeArgs` and pass it in.
+pub struct AppServer {
     /// the platform of the "primary" crate (ie the first)
     pub(crate) workspace: Arc<Workspace>,
 
@@ -84,14 +84,14 @@ pub(crate) struct AppServer {
     pub(crate) tw_watcher: tokio::task::JoinHandle<Result<()>>,
 }
 
-pub(crate) struct CachedFile {
+pub struct CachedFile {
     contents: String,
     most_recent: Option<String>,
     templates: HashMap<TemplateGlobalKey, HotReloadedTemplate>,
 }
 
 impl AppServer {
-    /// Create the AppRunner and then initialize the filemap with the crate directory.
+    /// Create the `AppRunner` and then initialize the filemap with the crate directory.
     pub(crate) async fn new(args: ServeArgs) -> Result<Self> {
         let workspace = Workspace::current().await?;
 
@@ -101,7 +101,7 @@ impl AppServer {
         let cross_origin_policy = args.cross_origin_policy;
 
         // Find the launch args for the client and server
-        let split_args = |args: &str| args.split(' ').map(|s| s.to_string()).collect::<Vec<_>>();
+        let split_args = |args: &str| args.split(' ').map(std::string::ToString::to_string).collect::<Vec<_>>();
         let server_args = args.platform_args.with_server_or_shared(|c| &c.args);
         let server_args = split_args(server_args);
         let client_args = args.platform_args.with_client_or_shared(|c| &c.args);
@@ -138,7 +138,7 @@ impl AppServer {
 
         // Spin up the file watcher
         let (watcher_tx, watcher_rx) = futures_channel::mpsc::unbounded();
-        let watcher = create_notify_watcher(watcher_tx.clone(), wsl_file_poll_interval as u64);
+        let watcher = create_notify_watcher(watcher_tx.clone(), u64::from(wsl_file_poll_interval));
 
         let ssg = args.platform_args.shared.targets.ssg;
         let target_args = CommandWithPlatformOverrides {
@@ -225,10 +225,7 @@ impl AppServer {
     }
 
     pub(crate) fn initialize(&mut self) {
-        let build_mode = match self.use_hotpatch_engine {
-            true => BuildMode::Fat,
-            false => BuildMode::Base { run: true },
-        };
+        let build_mode = if self.use_hotpatch_engine { BuildMode::Fat } else { BuildMode::Base { run: true } };
 
         self.client.start(build_mode.clone());
         if let Some(server) = self.server.as_mut() {
@@ -262,7 +259,7 @@ impl AppServer {
         let server = self.server.as_mut();
 
         let client_wait = client.wait();
-        let server_wait = OptionFuture::from(server.map(|s| s.wait()));
+        let server_wait = OptionFuture::from(server.map(crate::AppBuilder::wait));
         let watcher_wait = self.watcher_rx.next();
 
         tokio::select! {
@@ -459,7 +456,7 @@ impl AppServer {
                         // if the template is the same, don't send its
                         if cached_file.templates.get(&key) == Some(&template) {
                             continue;
-                        };
+                        }
 
                         cached_file.templates.insert(key.clone(), template.clone());
                         templates.push(HotReloadTemplateWithLocation { template, key });
@@ -480,7 +477,7 @@ impl AppServer {
 
         // If the client is in a failed state, any changes to rsx should trigger a rebuild/hotpatch
         if self.client.stage == BuildStage::Failed && !templates.is_empty() {
-            needs_full_rebuild = true
+            needs_full_rebuild = true;
         }
 
         // todo - we need to distinguish between hotpatchable rebuilds and true full rebuilds.
@@ -566,7 +563,7 @@ impl AppServer {
         }
 
         let should_open = self.client.stage == BuildStage::Success
-            && (self.server.as_ref().map(|s| s.stage == BuildStage::Success)).unwrap_or(true);
+            && (self.server.as_ref().map_or(true, |s| s.stage == BuildStage::Success));
 
         use crate::cli::styles::GLOW_STYLE;
 
@@ -595,7 +592,7 @@ impl AppServer {
             tokio::time::sleep(Duration::from_millis(300)).await;
 
             // Update the screen + devserver with the new handle info
-            devserver.send_reload_command().await
+            devserver.send_reload_command().await;
         }
 
         Ok(())
@@ -687,14 +684,11 @@ impl AppServer {
     /// Perform a full rebuild of the app, equivalent to `cargo rustc` from scratch with no incremental
     /// hot-patch engine integration.
     pub(crate) async fn full_rebuild(&mut self) {
-        let build_mode = match self.use_hotpatch_engine {
-            true => BuildMode::Fat,
-            false => BuildMode::Base { run: true },
-        };
+        let build_mode = if self.use_hotpatch_engine { BuildMode::Fat } else { BuildMode::Base { run: true } };
 
         self.client.start_rebuild(build_mode.clone());
         if let Some(s) = self.server.as_mut() {
-            s.start_rebuild(build_mode)
+            s.start_rebuild(build_mode);
         }
 
         self.clear_hot_reload_changes();
@@ -727,7 +721,7 @@ impl AppServer {
         Ok(jump_table)
     }
 
-    pub(crate) fn get_build(&self, id: BuildId) -> Option<&AppBuilder> {
+    pub(crate) const fn get_build(&self, id: BuildId) -> Option<&AppBuilder> {
         match id {
             BuildId::CLIENT => Some(&self.client),
             BuildId::SERVER => self.server.as_ref(),
@@ -735,7 +729,7 @@ impl AppServer {
         }
     }
 
-    pub(crate) fn client(&self) -> &AppBuilder {
+    pub(crate) const fn client(&self) -> &AppBuilder {
         &self.client
     }
 
@@ -994,7 +988,7 @@ impl AppServer {
                     continue;
                 }
 
-                watched_paths.push(entry.path().to_path_buf());
+                watched_paths.push(entry.path().clone());
             }
         }
 
@@ -1084,7 +1078,7 @@ impl AppServer {
     }
 
     /// Check if this is a fullstack build. This means that there is an additional build with the `server` platform.
-    pub(crate) fn is_fullstack(&self) -> bool {
+    pub(crate) const fn is_fullstack(&self) -> bool {
         self.fullstack
     }
 
@@ -1187,10 +1181,10 @@ fn handle_notify_error(err: notify::Error) {
     tracing::debug!("Failed to watch path: {}", err);
     match err.kind {
         notify::ErrorKind::Io(error) if error.kind() == std::io::ErrorKind::PermissionDenied => {
-            tracing::error!("Failed to watch path: permission denied. {:?}", err.paths)
+            tracing::error!("Failed to watch path: permission denied. {:?}", err.paths);
         }
         notify::ErrorKind::MaxFilesWatch => {
-            tracing::error!("Failed to set up file watcher: too many files to watch")
+            tracing::error!("Failed to set up file watcher: too many files to watch");
         }
         _ => {}
     }

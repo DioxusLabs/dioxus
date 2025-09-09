@@ -12,7 +12,7 @@ use tokio_tungstenite::tungstenite::protocol::{
     CloseFrame as ServerCloseFrame, Message as ServerMessage,
 };
 
-pub(crate) async fn proxy_websocket(
+pub async fn proxy_websocket(
     mut parts: Parts,
     req: Request<Body>,
     backend_url: &Uri,
@@ -29,7 +29,7 @@ pub(crate) async fn proxy_websocket(
         match handle_ws_connection(client_ws, proxied_request).await {
             Ok(()) => tracing::info!(dx_src = ?TraceSrc::Dev, "Websocket connection closed"),
             Err(e) => {
-                tracing::error!(dx_src = ?TraceSrc::Dev, "Error proxying websocket connection: {e}")
+                tracing::error!(dx_src = ?TraceSrc::Dev, "Error proxying websocket connection: {e}");
             }
         }
     }))
@@ -75,10 +75,7 @@ async fn handle_ws_connection(
         tokio::select! {
             Some(server_msg) = server_ws.next() => {
                 closed = matches!(server_msg, Ok(ServerMessage::Close(..)));
-                match server_msg.map_err(WsError::FromServer)?.into_msg() {
-                    Ok(msg) => client_ws.send(msg).await.map_err(WsError::ToClient)?,
-                    Err(UnexpectedRawFrame) => tracing::warn!(dx_src = ?TraceSrc::Dev, "Dropping unexpected raw websocket frame"),
-                }
+                if let Ok(msg) = server_msg.map_err(WsError::FromServer)?.into_msg() { client_ws.send(msg).await.map_err(WsError::ToClient)? } else { tracing::warn!(dx_src = ?TraceSrc::Dev, "Dropping unexpected raw websocket frame") }
             },
             Some(client_msg) = client_ws.next() => {
                 closed = matches!(client_msg, Ok(ClientMessage::Close(..)));
