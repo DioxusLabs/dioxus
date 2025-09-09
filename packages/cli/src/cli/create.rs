@@ -1,4 +1,4 @@
-use super::{Deserialize, Parser, PathBuf, Result, StructuredOutput, create, Command, Display, Write};
+use super::{create, Command, Deserialize, Parser, PathBuf, Result, StructuredOutput, Write};
 use crate::TraceSrc;
 use anyhow::{bail, Context};
 use cargo_generate::{GenerateArgs, TemplatePath, Vcs};
@@ -92,9 +92,7 @@ impl Create {
                 tag: self.tag,
                 ..Default::default()
             },
-            verbose: crate::logging::VERBOSITY
-                .get()
-                .is_some_and(|f| f.verbose),
+            verbose: crate::logging::VERBOSITY.get().is_some_and(|f| f.verbose),
             ..Default::default()
         };
 
@@ -110,10 +108,7 @@ impl Create {
 /// If no template is specified, use the default one and set the branch to the latest release.
 ///
 /// Allows us to version templates under the v0.5/v0.6 scheme on the templates repo.
-pub fn resolve_template_and_branch(
-    template: &mut Option<String>,
-    branch: &mut Option<String>,
-) {
+pub fn resolve_template_and_branch(template: &mut Option<String>, branch: &mut Option<String>) {
     if template.is_none() {
         use crate::dx_build_info::{PKG_VERSION_MAJOR, PKG_VERSION_MINOR};
         *template = Some(DEFAULT_TEMPLATE.to_string());
@@ -238,10 +233,7 @@ fn remove_triple_newlines(string: &str) -> String {
 /// Perform a health check against github itself before we attempt to download any templates hosted
 /// on github.
 pub async fn connectivity_check() -> Result<()> {
-    if crate::VERBOSITY
-        .get()
-        .is_some_and(|f| f.offline)
-    {
+    if crate::VERBOSITY.get().is_some_and(|f| f.offline) {
         return Ok(());
     }
 

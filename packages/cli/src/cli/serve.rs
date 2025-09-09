@@ -1,4 +1,4 @@
-use super::{Parser, json, CommandWithPlatformOverrides, Result, StructuredOutput, Value};
+use super::{json, CommandWithPlatformOverrides, Parser, Result, StructuredOutput, Value};
 use crate::{AddressArguments, Anonymized, BuildArgs, TraceController};
 /// Serve the project
 ///

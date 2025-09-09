@@ -1,4 +1,4 @@
-use super::{Parser, PathBuf, Dom, Read};
+use super::{Dom, Parser, PathBuf, Read};
 use crate::{Result, StructuredOutput};
 use anyhow::bail;
 use dioxus_rsx::{BodyNode, CallBody, TemplateBody};
@@ -51,7 +51,11 @@ impl Translate {
 pub fn convert_html_to_formatted_rsx(dom: &Dom, component: bool) -> String {
     let callbody = dioxus_rsx_rosetta::rsx_from_html(dom);
 
-    if component { write_callbody_with_icon_section(callbody) } else { dioxus_autofmt::write_block_out(&callbody).unwrap() }
+    if component {
+        write_callbody_with_icon_section(callbody)
+    } else {
+        dioxus_autofmt::write_block_out(&callbody).unwrap()
+    }
 }
 
 fn write_callbody_with_icon_section(mut callbody: CallBody) -> String {

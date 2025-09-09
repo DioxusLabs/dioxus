@@ -22,14 +22,27 @@ mod wasm_bindgen;
 mod wasm_opt;
 mod workspace;
 
-pub(crate) use build::{BuildArtifacts, BuildRequest, BuilderUpdate, ProgressRx, ProgressTx, BuildId, AndroidTools, BuildContext, AppBuilder, BuildMode, extract_assets_from_file, HotpatchModuleCache, pre_render_static_routes};
-pub(crate) use cli::{link, styles, TargetArgs, BuildArgs, platform_override, Cli, Commands, Verbosity, print, BuildTools, ServeArgs, BuildTargets, VERSION, update};
-pub(crate) use config::{DioxusConfig, WasmOptConfig, CustomSignCommandSettings, DebianSettings, MacOsSettings, NSISInstallerMode, NsisSettings, PackageType, WebviewInstallMode, WindowsSettings, WixSettings, AddressArguments, AndroidSettings};
+pub(crate) use build::{
+    extract_assets_from_file, pre_render_static_routes, AndroidTools, AppBuilder, BuildArtifacts,
+    BuildContext, BuildId, BuildMode, BuildRequest, BuilderUpdate, HotpatchModuleCache, ProgressRx,
+    ProgressTx,
+};
+pub(crate) use cli::{
+    link, platform_override, print, styles, update, BuildArgs, BuildTargets, BuildTools, Cli,
+    Commands, ServeArgs, TargetArgs, Verbosity, VERSION,
+};
+pub(crate) use config::{
+    AddressArguments, AndroidSettings, CustomSignCommandSettings, DebianSettings, DioxusConfig,
+    MacOsSettings, NSISInstallerMode, NsisSettings, PackageType, WasmOptConfig, WebviewInstallMode,
+    WindowsSettings, WixSettings,
+};
 pub(crate) use dioxus_dx_wire_format::{BuildStage, StructuredOutput};
-pub(crate) use error::{Result, Error};
+pub(crate) use error::{Error, Result};
 pub(crate) use link::{LinkAction, LinkerFlavor};
-pub(crate) use logging::{TraceSrc, Anonymized, TraceController, TraceContent, TraceMsg, VERBOSITY};
-pub(crate) use platform::{BundleFormat, Renderer, TargetAlias, Platform, RendererArg};
+pub(crate) use logging::{
+    Anonymized, TraceContent, TraceController, TraceMsg, TraceSrc, VERBOSITY,
+};
+pub(crate) use platform::{BundleFormat, Platform, Renderer, RendererArg, TargetAlias};
 pub(crate) use rustcwrapper::{RustcArgs, DX_RUSTC_WRAPPER_ENV_VAR};
 pub(crate) use settings::CliSettings;
 pub(crate) use tailwind::TailwindCli;

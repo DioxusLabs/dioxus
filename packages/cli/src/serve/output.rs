@@ -446,7 +446,11 @@ impl Output {
         frame.render_widget(
             Line::from(vec![
                 " ".dark_gray(),
-                if self.more_modal_open { "/:more".light_yellow() } else { "/:more".dark_gray() },
+                if self.more_modal_open {
+                    "/:more".light_yellow()
+                } else {
+                    "/:more".dark_gray()
+                },
                 " ".dark_gray(),
             ])
             .right_aligned(),
@@ -961,7 +965,11 @@ impl Output {
     }
 
     const fn viewport_current_height(&self) -> u16 {
-        if self.more_modal_open { VIEWPORT_HEIGHT_BIG } else { VIEWPORT_HEIGHT_SMALL }
+        if self.more_modal_open {
+            VIEWPORT_HEIGHT_BIG
+        } else {
+            VIEWPORT_HEIGHT_SMALL
+        }
     }
 
     fn tracemsg_to_ansi_string(log: TraceMsg) -> Vec<String> {

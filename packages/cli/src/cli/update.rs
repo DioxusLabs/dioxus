@@ -1,4 +1,4 @@
-use super::{Parser, StructuredOutput, Read, Write};
+use super::{Parser, StructuredOutput, Write};
 use crate::{Result, Workspace};
 use anyhow::{bail, Context};
 use itertools::Itertools;

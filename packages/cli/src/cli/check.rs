@@ -3,7 +3,10 @@
 //! For reference, the rustfmt main.rs file
 //! <https://github.com/rust-lang/rustfmt/blob/master/src/bin/main.rs>
 
-use super::{Parser, PathBuf, CommandWithPlatformOverrides, BuildArgs, Result, StructuredOutput, BuildTargets};
+use super::{
+    BuildArgs, BuildTargets, CommandWithPlatformOverrides, Parser, PathBuf, Result,
+    StructuredOutput,
+};
 use crate::BuildRequest;
 use anyhow::{anyhow, Context};
 use futures_util::{stream::FuturesUnordered, StreamExt};

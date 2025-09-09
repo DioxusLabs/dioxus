@@ -1,4 +1,4 @@
-use super::{Deserialize, Subcommand, Display, Write, Result, StructuredOutput, File};
+use super::{Deserialize, Display, File, Result, StructuredOutput, Subcommand, Write};
 use crate::{CliSettings, TraceSrc, Workspace};
 
 /// Dioxus config file controls

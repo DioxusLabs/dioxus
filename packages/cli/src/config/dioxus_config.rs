@@ -1,4 +1,7 @@
-use super::{ApplicationConfig, WebConfig, BundleConfig, WebAppConfig, default_title, WebResourceConfig, WebDevResourceConfig, WebHttpsConfig};
+use super::{
+    default_title, ApplicationConfig, BundleConfig, WebAppConfig, WebConfig, WebDevResourceConfig,
+    WebHttpsConfig, WebResourceConfig,
+};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
