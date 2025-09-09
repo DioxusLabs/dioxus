@@ -1,4 +1,4 @@
-use super::{Deserialize, Parser, PathBuf, Result, StructuredOutput, create};
+use super::{create, Deserialize, Parser, PathBuf, Result, StructuredOutput};
 use cargo_generate::{GenerateArgs, TemplatePath, Vcs};
 
 #[derive(Clone, Debug, Default, Deserialize, Parser)]

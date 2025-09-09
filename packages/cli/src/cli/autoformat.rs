@@ -1,4 +1,4 @@
-use super::{check::collect_rs_files, Parser, Result, StructuredOutput, Error, Read};
+use super::{check::collect_rs_files, Error, Parser, Read, Result, StructuredOutput};
 use crate::Workspace;
 use anyhow::{bail, Context};
 use dioxus_autofmt::{IndentOptions, IndentType};

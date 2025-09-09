@@ -480,7 +480,11 @@ impl BuildRequest {
             .load_dioxus_config(crate_package)?
             .unwrap_or_default();
 
-        let target_kind = if args.example.is_some() { TargetKind::Example } else { TargetKind::Bin };
+        let target_kind = if args.example.is_some() {
+            TargetKind::Example
+        } else {
+            TargetKind::Bin
+        };
 
         let main_package = &workspace.krates[crate_package];
 
@@ -1015,7 +1019,11 @@ impl BuildRequest {
                     }
 
                     // Note that previous text lines might have set emitting_error to true
-                    if emitting_error { ctx.status_build_error(line) } else { ctx.status_build_message(line) }
+                    if emitting_error {
+                        ctx.status_build_error(line)
+                    } else {
+                        ctx.status_build_message(line)
+                    }
                 }
                 Message::CompilerArtifact(artifact) => {
                     units_compiled += 1;
@@ -2559,7 +2567,11 @@ impl BuildRequest {
             env_var_with_key(most_specific_key.clone())
                 .or_else(|| env_var_with_key(format!("{var_base}_{triple_u}")))
                 .or_else(|| env_var_with_key(format!("TARGET_{var_base}")))
-                .or_else(|| env_var_with_key(var_base.to_string())).map_or_else(|| (most_specific_key, None), |(key, value)| (key, Some(value)))
+                .or_else(|| env_var_with_key(var_base.to_string()))
+                .map_or_else(
+                    || (most_specific_key, None),
+                    |(key, value)| (key, Some(value)),
+                )
         }
 
         fn cargo_env_target_cfg(triple: &str, key: &str) -> String {
@@ -2664,7 +2676,8 @@ impl BuildRequest {
             .map(|dir| {
                 let clang_builtins_target = dir
                     .filter_map(std::result::Result::ok)
-                    .max_by(|a, b| a.file_name().cmp(&b.file_name())).map_or_else(|| clang_folder.join("clang"), |s| s.path());
+                    .max_by(|a, b| a.file_name().cmp(&b.file_name()))
+                    .map_or_else(|| clang_folder.join("clang"), |s| s.path());
 
                 format!(
                     "-L{} -lstatic=clang_rt.builtins-{}-android",
@@ -2688,8 +2701,12 @@ impl BuildRequest {
 
         // Load up the OpenSSL environment variables, using our defaults if not set.
         // if the user specifies `/vendor`, then they get vendored, unless OPENSSL_NO_VENDOR is passed (implicitly...)
-        let openssl_lib_dir = std::env::var("OPENSSL_LIB_DIR").map_or_else(|_| AndroidTools::openssl_lib_dir(&self.triple), PathBuf::from);
-        let openssl_include_dir = std::env::var("OPENSSL_INCLUDE_DIR").map_or_else(|_| AndroidTools::openssl_include_dir(), PathBuf::from);
+        let openssl_lib_dir = std::env::var("OPENSSL_LIB_DIR").map_or_else(
+            |_| AndroidTools::openssl_lib_dir(&self.triple),
+            PathBuf::from,
+        );
+        let openssl_include_dir = std::env::var("OPENSSL_INCLUDE_DIR")
+            .map_or_else(|_| AndroidTools::openssl_include_dir(), PathBuf::from);
         let openssl_libs =
             std::env::var("OPENSSL_LIBS").unwrap_or_else(|_| "ssl:crypto".to_string());
 
@@ -3472,7 +3489,9 @@ impl BuildRequest {
             // Maybe it's acceptable for the CLI to panic directly when this error occurs.
             // And if we change it to a Result type, the `client_connected` function in serve/runner.rs does not return a Result and cannot call `?`,
             // We also need to handle the error in place, otherwise it will expand the scope of modifications further.
-            panic!("Invalid bundle identifier: {identifier:?}. E.g. `com.example`, `com.example.app`");
+            panic!(
+                "Invalid bundle identifier: {identifier:?}. E.g. `com.example`, `com.example.app`"
+            );
         }
 
         format!("com.example.{}", self.bundled_app_name())
@@ -4452,7 +4471,11 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
 
             let crate_root: &Path = &self.crate_dir();
             let custom_html_file = crate_root.join("index.html");
-            let default_html = if self.release { PROD_DEFAULT_HTML } else { DEV_DEFAULT_HTML };
+            let default_html = if self.release {
+                PROD_DEFAULT_HTML
+            } else {
+                DEV_DEFAULT_HTML
+            };
             std::fs::read_to_string(custom_html_file).unwrap_or_else(|_| String::from(default_html))
         };
 
@@ -4987,8 +5010,8 @@ We checked the folders:
         }
         let bytes = std::fs::read(provision_file.path())?;
         let cut1 = cut_plist(&bytes, b"<plist").context("Failed to parse .mobileprovision file")?;
-        let cut2 = cut_plist(&bytes, br"</dict>")
-            .context("Failed to parse .mobileprovision file")?;
+        let cut2 =
+            cut_plist(&bytes, br"</dict>").context("Failed to parse .mobileprovision file")?;
         let sub_bytes = &bytes[(cut1 - 6)..cut2];
         let mbfile: ProvisioningProfile =
             plist::from_bytes(sub_bytes).context("Failed to parse .mobileprovision file")?;

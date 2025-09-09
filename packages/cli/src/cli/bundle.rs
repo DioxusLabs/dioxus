@@ -7,8 +7,7 @@ use tauri_bundler::{BundleBinary, BundleSettings, PackageSettings, SettingsBuild
 use walkdir::WalkDir;
 
 use super::{
-    BuildTargets, CommandWithPlatformOverrides, Error, Parser, PathBuf, Read, Result,
-    StructuredOutput,
+    BuildTargets, CommandWithPlatformOverrides, Error, Parser, PathBuf, Result, StructuredOutput,
 };
 
 /// Bundle an app and its assets.

@@ -1,6 +1,6 @@
 use std::{borrow::Cow, ffi::OsString};
 
-use super::{Subcommand, Parser, CommandWithPlatformOverrides, build, StructuredOutput, Read};
+use super::{build, CommandWithPlatformOverrides, Parser, StructuredOutput, Subcommand};
 use crate::{BuildMode, Result};
 use anyhow::Context;
 

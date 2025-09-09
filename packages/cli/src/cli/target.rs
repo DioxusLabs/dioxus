@@ -1,4 +1,4 @@
-use crate::cli::{Deserialize, Parser, json, PathBuf, Anonymized, Value};
+use crate::cli::{json, Anonymized, Deserialize, Parser, PathBuf, Value};
 use crate::BundleFormat;
 use crate::Platform;
 use crate::RendererArg;

@@ -161,13 +161,14 @@ impl LinkAction {
             }
         } else {
             // Extract the out path - we're going to write a dummy object file to satisfy the linker
-            let out_file: PathBuf = if self.triple.operating_system == target_lexicon::OperatingSystem::Windows {
-                let out_arg = args.iter().find(|arg| arg.starts_with("/OUT")).unwrap();
-                out_arg.trim_start_matches("/OUT:").to_string().into()
-            } else {
-                let out = args.iter().position(|arg| arg == "-o").unwrap();
-                args[out + 1].clone().into()
-            };
+            let out_file: PathBuf =
+                if self.triple.operating_system == target_lexicon::OperatingSystem::Windows {
+                    let out_arg = args.iter().find(|arg| arg.starts_with("/OUT")).unwrap();
+                    out_arg.trim_start_matches("/OUT:").to_string().into()
+                } else {
+                    let out = args.iter().position(|arg| arg == "-o").unwrap();
+                    args[out + 1].clone().into()
+                };
 
             // This creates an object file that satisfies rust's use of llvm-objcopy
             //

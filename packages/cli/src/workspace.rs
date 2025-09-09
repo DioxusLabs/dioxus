@@ -525,7 +525,8 @@ impl Workspace {
                         .unwrap()
                         .join(".dx")
                 }
-            }).clone()
+            })
+            .clone()
     }
 
     pub(crate) fn global_settings_file() -> PathBuf {

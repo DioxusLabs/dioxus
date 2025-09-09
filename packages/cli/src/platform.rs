@@ -467,9 +467,7 @@ impl BundleFormat {
             // For native targets, we need to determine the bundle format based on the OS
             (_, _, Environment::Android, _) => Ok(Self::Android),
             (_, _, _, OperatingSystem::IOS(_)) => Ok(Self::Ios),
-            (_, _, _, OperatingSystem::MacOSX(_) | OperatingSystem::Darwin(_)) => {
-                Ok(Self::MacOS)
-            }
+            (_, _, _, OperatingSystem::MacOSX(_) | OperatingSystem::Darwin(_)) => Ok(Self::MacOS),
             (_, _, _, OperatingSystem::Linux) => Ok(Self::Linux),
             (_, _, _, OperatingSystem::Windows) => Ok(Self::Windows),
             // If we don't recognize the target, default to desktop

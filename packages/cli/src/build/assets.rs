@@ -168,9 +168,10 @@ fn find_native_symbol_offsets<'a, R: ReadRef<'a>>(file: &File<'a, R>) -> Result<
             continue;
         };
         // Translate the section_relative_address to the file offset
-        let section_relative_address: u64 = (i128::from(virtual_address) - i128::from(section.address()))
-            .try_into()
-            .expect("Virtual address should be greater than or equal to section address");
+        let section_relative_address: u64 = (i128::from(virtual_address)
+            - i128::from(section.address()))
+        .try_into()
+        .expect("Virtual address should be greater than or equal to section address");
         let file_offset = section_range_start + section_relative_address;
         offsets.push(file_offset);
     }
@@ -281,8 +282,8 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
 
         let section_relative_address: u64 = (i128::from(virtual_address)
             - i128::from(main_memory_offset))
-            .try_into()
-            .expect("Virtual address should be greater than or equal to section address");
+        .try_into()
+        .expect("Virtual address should be greater than or equal to section address");
         let file_offset = data_start_offset + section_relative_address;
 
         offsets.push(file_offset);
