@@ -12,7 +12,10 @@ use dioxus_core::{
 use dioxus_fullstack_hooks::history::provide_fullstack_history_context;
 use dioxus_fullstack_hooks::{StreamingContext, StreamingStatus};
 use dioxus_fullstack_protocol::{HydrationContext, SerializedHydrationData};
-use dioxus_isrg::{CachedRender, IncrementalRendererError, RenderFreshness};
+use dioxus_isrg::{
+    CachedRender, IncrementalRenderer, IncrementalRendererConfig, IncrementalRendererError,
+    RenderFreshness,
+};
 use dioxus_router::ParseRouteError;
 use dioxus_ssr::Renderer;
 use futures_channel::mpsc::Sender;
@@ -26,6 +29,7 @@ use crate::StreamingMode;
 pub enum SSRError {
     /// An error from the incremental renderer. This should result in a 500 code
     Incremental(IncrementalRendererError),
+
     /// An error from the dioxus router. This should result in a 404 code
     Routing(ParseRouteError),
 }
@@ -38,14 +42,11 @@ struct PendingSuspenseBoundary {
 
 pub(crate) struct SsrRendererPool {
     renderers: RwLock<Vec<Renderer>>,
-    incremental_cache: Option<RwLock<dioxus_isrg::IncrementalRenderer>>,
+    incremental_cache: Option<RwLock<IncrementalRenderer>>,
 }
 
 impl SsrRendererPool {
-    pub(crate) fn new(
-        initial_size: usize,
-        incremental: Option<dioxus_isrg::IncrementalRendererConfig>,
-    ) -> Self {
+    pub(crate) fn new(initial_size: usize, incremental: Option<IncrementalRendererConfig>) -> Self {
         let renderers = RwLock::new((0..initial_size).map(|_| Self::pre_renderer()).collect());
         Self {
             renderers,
@@ -171,12 +172,12 @@ impl SsrRendererPool {
                 dioxus_history::MemoryHistory::with_initial_path(&route)
             };
 
-            let streaming_context = in_root_scope(&virtual_dom, StreamingContext::new);
+            let streaming_context = virtual_dom.in_scope(ScopeId::ROOT, StreamingContext::new);
             virtual_dom.provide_root_context(document.clone() as Rc<dyn dioxus_document::Document>);
             virtual_dom.provide_root_context(streaming_context);
 
             // Wrap the memory history in a fullstack history provider to provide the initial route for hydration
-            in_root_scope(&virtual_dom, || provide_fullstack_history_context(history));
+            virtual_dom.in_scope(ScopeId::ROOT, || provide_fullstack_history_context(history));
 
             // rebuild the virtual dom
             virtual_dom.rebuild_in_place();
@@ -190,9 +191,9 @@ impl SsrRendererPool {
             else {
                 loop {
                     // Check if the router has finished and set the streaming context to finished
-                    let streaming_context_finished =
-                        in_root_scope(&virtual_dom, || streaming_context.current_status())
-                            == StreamingStatus::InitialChunkCommitted;
+                    let streaming_context_finished = virtual_dom
+                        .in_scope(ScopeId::ROOT, || streaming_context.current_status())
+                        == StreamingStatus::InitialChunkCommitted;
                     // Or if this app isn't using the router and has finished suspense
                     let suspense_finished = !virtual_dom.suspended_tasks_remaining();
                     if streaming_context_finished || suspense_finished {
@@ -360,7 +361,7 @@ impl SsrRendererPool {
             myself.renderers.write().unwrap().push(renderer);
         };
 
-        let join_handle = spawn_platform(move || {
+        let join_handle = Self::spawn_platform(move || {
             ProvideServerContext::new(create_render_future(), server_context)
         });
 
@@ -643,35 +644,32 @@ impl SsrRendererPool {
 
         Ok(())
     }
-}
 
-/// Spawn a task in the background. If wasm is enabled, this will use the single threaded tokio runtime
-fn spawn_platform<Fut>(f: impl FnOnce() -> Fut + Send + 'static) -> JoinHandle<Fut::Output>
-where
-    Fut: Future + 'static,
-    Fut::Output: Send + 'static,
-{
-    #[cfg(not(target_arch = "wasm32"))]
+    /// Spawn a task in the background. If wasm is enabled, this will use the single threaded tokio runtime
+    fn spawn_platform<Fut>(f: impl FnOnce() -> Fut + Send + 'static) -> JoinHandle<Fut::Output>
+    where
+        Fut: Future + 'static,
+        Fut::Output: Send + 'static,
     {
-        use tokio_util::task::LocalPoolHandle;
-        static TASK_POOL: std::sync::OnceLock<LocalPoolHandle> = std::sync::OnceLock::new();
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            use tokio_util::task::LocalPoolHandle;
+            static TASK_POOL: std::sync::OnceLock<LocalPoolHandle> = std::sync::OnceLock::new();
 
-        let pool = TASK_POOL.get_or_init(|| {
-            LocalPoolHandle::new(
-                std::thread::available_parallelism()
-                    .map(usize::from)
-                    .unwrap_or(1),
-            )
-        });
+            let pool = TASK_POOL.get_or_init(|| {
+                LocalPoolHandle::new(
+                    std::thread::available_parallelism()
+                        .map(usize::from)
+                        .unwrap_or(1),
+                )
+            });
 
-        pool.spawn_pinned(f)
+            pool.spawn_pinned(f)
+        }
+
+        #[cfg(target_arch = "wasm32")]
+        {
+            tokio::task::spawn_local(f())
+        }
     }
-    #[cfg(target_arch = "wasm32")]
-    {
-        tokio::task::spawn_local(f())
-    }
-}
-
-fn in_root_scope<T>(virtual_dom: &VirtualDom, f: impl FnOnce() -> T) -> T {
-    virtual_dom.in_runtime(|| ScopeId::ROOT.in_runtime(f))
 }

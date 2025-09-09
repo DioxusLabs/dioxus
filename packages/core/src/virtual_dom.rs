@@ -351,6 +351,11 @@ impl VirtualDom {
         f()
     }
 
+    /// Run a closure inside a specific scope
+    pub fn in_scope<T>(&self, scope: ScopeId, f: impl FnOnce() -> T) -> T {
+        self.in_runtime(|| scope.in_runtime(f))
+    }
+
     /// Build the virtualdom with a global context inserted into the base scope
     ///
     /// This is useful for what is essentially dependency injection when building the app
