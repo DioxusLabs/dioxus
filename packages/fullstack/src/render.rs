@@ -22,42 +22,6 @@ use tokio::task::JoinHandle;
 
 use crate::StreamingMode;
 
-/// State used in server side rendering. This utilizes a pool of [`dioxus_ssr::Renderer`]s to cache static templates between renders.
-#[derive(Clone)]
-pub struct SSRState {
-    // We keep a pool of renderers to avoid re-creating them on every request. They are boxed to make them very cheap to move
-    renderers: Arc<SsrRendererPool>,
-}
-
-impl SSRState {
-    /// Create a new [`SSRState`].
-    pub fn new(cfg: &ServeConfig) -> Self {
-        Self {
-            renderers: Arc::new(SsrRendererPool::new(4, cfg.incremental.clone())),
-        }
-    }
-
-    /// Render the application to HTML.
-    pub async fn render<'a>(
-        &'a self,
-        route: String,
-        cfg: &'a ServeConfig,
-        virtual_dom_factory: impl FnOnce() -> VirtualDom + Send + Sync + 'static,
-        server_context: &'a DioxusServerContext,
-    ) -> Result<
-        (
-            RenderFreshness,
-            impl Stream<Item = Result<String, dioxus_isrg::IncrementalRendererError>>,
-        ),
-        SSRError,
-    > {
-        self.renderers
-            .clone()
-            .render_to(cfg, route, virtual_dom_factory, server_context)
-            .await
-    }
-}
-
 /// Errors that can occur during server side rendering before the initial chunk is sent down
 pub enum SSRError {
     /// An error from the incremental renderer. This should result in a 500 code
@@ -123,7 +87,7 @@ impl SsrRendererPool {
 
     /// Render a virtual dom into a stream. This method will return immediately and continue streaming the result in the background
     /// The streaming is canceled when the stream the function returns is dropped
-    async fn render_to(
+    pub(crate) async fn render_to(
         self: Arc<Self>,
         cfg: &ServeConfig,
         route: String,
@@ -180,8 +144,6 @@ impl SsrRendererPool {
             ));
         }
 
-        let wrapper = FullstackHTMLTemplate { cfg: cfg.clone() };
-
         let server_context = server_context.clone();
         let mut renderer = self
             .renderers
@@ -193,6 +155,7 @@ impl SsrRendererPool {
         let myself = self.clone();
         let streaming_mode = cfg.streaming_mode;
 
+        let cfg = cfg.clone();
         let create_render_future = move || async move {
             let mut virtual_dom = virtual_dom_factory();
             let document = Rc::new(ServerDocument::default());
@@ -280,7 +243,7 @@ impl SsrRendererPool {
 
             let mut pre_body = String::new();
 
-            if let Err(err) = wrapper.render_head(&mut pre_body, &virtual_dom) {
+            if let Err(err) = Self::render_head(&cfg, &mut pre_body, &virtual_dom) {
                 _ = into.start_send(Err(err));
                 return;
             }
@@ -309,7 +272,7 @@ impl SsrRendererPool {
             let mut initial_frame = renderer.render(&virtual_dom);
 
             // Along with the initial frame, we render the html after the main element, but before the body tag closes. This should include the script that starts loading the wasm bundle.
-            if let Err(err) = wrapper.render_after_main(&mut initial_frame, &virtual_dom) {
+            if let Err(err) = Self::render_after_main(&cfg, &mut initial_frame, &virtual_dom) {
                 throw_error!(err);
             }
             stream.render(initial_frame);
@@ -367,21 +330,21 @@ impl SsrRendererPool {
             // After suspense is done, we render the html after the body
             let mut post_streaming = String::new();
 
-            if let Err(err) = wrapper.render_after_body(&mut post_streaming) {
+            if let Err(err) = Self::render_after_body(&cfg, &mut post_streaming) {
                 throw_error!(err);
             }
 
             // If incremental rendering is enabled, add the new render to the cache without the streaming bits
             if let Some(incremental) = &self.incremental_cache {
                 let mut cached_render = String::new();
-                if let Err(err) = wrapper.render_head(&mut cached_render, &virtual_dom) {
+                if let Err(err) = Self::render_head(&cfg, &mut cached_render, &virtual_dom) {
                     throw_error!(err);
                 }
                 renderer.reset_hydration();
                 if let Err(err) = renderer.render_to(&mut cached_render, &virtual_dom) {
                     throw_error!(dioxus_isrg::IncrementalRendererError::RenderError(err));
                 }
-                if let Err(err) = wrapper.render_after_main(&mut cached_render, &virtual_dom) {
+                if let Err(err) = Self::render_after_main(&cfg, &mut cached_render, &virtual_dom) {
                     throw_error!(err);
                 }
                 cached_render.push_str(&post_streaming);
@@ -575,28 +538,14 @@ impl SsrRendererPool {
             }
         }
     }
-}
 
-/// The template that wraps the body of the HTML for a fullstack page. This template contains the data needed to hydrate server functions that were run on the server.
-pub struct FullstackHTMLTemplate {
-    cfg: ServeConfig,
-}
-
-impl FullstackHTMLTemplate {
-    /// Create a new [`FullstackHTMLTemplate`].
-    pub fn new(cfg: &ServeConfig) -> Self {
-        Self { cfg: cfg.clone() }
-    }
-}
-
-impl FullstackHTMLTemplate {
     /// Render any content before the head of the page.
     pub fn render_head<R: std::fmt::Write>(
-        &self,
+        cfg: &ServeConfig,
         to: &mut R,
         virtual_dom: &VirtualDom,
     ) -> Result<(), dioxus_isrg::IncrementalRendererError> {
-        let ServeConfig { index, .. } = &self.cfg;
+        let ServeConfig { index, .. } = cfg;
 
         let title = {
             let document: Option<Rc<ServerDocument>> =
@@ -623,17 +572,17 @@ impl FullstackHTMLTemplate {
             document.start_streaming();
         }
 
-        self.render_before_body(to)?;
+        Self::render_before_body(cfg, to)?;
 
         Ok(())
     }
 
     /// Render any content before the body of the page.
     fn render_before_body<R: std::fmt::Write>(
-        &self,
+        cfg: &ServeConfig,
         to: &mut R,
     ) -> Result<(), dioxus_isrg::IncrementalRendererError> {
-        let ServeConfig { index, .. } = &self.cfg;
+        let ServeConfig { index, .. } = cfg;
 
         to.write_str(&index.close_head)?;
 
@@ -648,11 +597,11 @@ impl FullstackHTMLTemplate {
 
     /// Render all content after the main element of the page.
     pub fn render_after_main<R: std::fmt::Write>(
-        &self,
+        cfg: &ServeConfig,
         to: &mut R,
         virtual_dom: &VirtualDom,
     ) -> Result<(), dioxus_isrg::IncrementalRendererError> {
-        let ServeConfig { index, .. } = &self.cfg;
+        let ServeConfig { index, .. } = cfg;
 
         // Collect the initial server data from the root node. For most apps, no use_server_futures will be resolved initially, so this will be full on `None`s.
         // Sending down those Nones are still important to tell the client not to run the use_server_futures that are already running on the backend
@@ -685,10 +634,10 @@ impl FullstackHTMLTemplate {
 
     /// Render all content after the body of the page.
     pub fn render_after_body<R: std::fmt::Write>(
-        &self,
+        cfg: &ServeConfig,
         to: &mut R,
     ) -> Result<(), dioxus_isrg::IncrementalRendererError> {
-        let ServeConfig { index, .. } = &self.cfg;
+        let ServeConfig { index, .. } = cfg;
 
         to.write_str(&index.after_closing_body_tag)?;
 

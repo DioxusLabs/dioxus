@@ -168,7 +168,6 @@ pub(crate) use config::*;
 
 pub use crate::config::{ServeConfig, ServeConfigBuilder};
 pub use crate::context::Axum;
-pub use crate::render::{FullstackHTMLTemplate, SSRState};
 pub use crate::server::*;
 pub use config::*;
 pub use context::{

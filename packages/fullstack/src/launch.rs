@@ -1,9 +1,6 @@
 //! A launch function that creates an axum router for the LaunchBuilder
 
-use crate::{
-    render_handler, server::DioxusRouterExt, RenderHandleState, SSRState, ServeConfig,
-    ServeConfigBuilder,
-};
+use crate::{server::DioxusRouterExt, RenderHandleState, ServeConfig, ServeConfigBuilder};
 use axum::{
     body::Body,
     extract::{Request, State},
@@ -182,11 +179,11 @@ async fn serve_server(
 
                                 crate::document::reset_renderer();
 
-                                let state = RenderHandleState::new(new_cfg.clone(), new_root)
-                                    .with_ssr_state(SSRState::new(&new_cfg));
+                                let state = RenderHandleState::new(new_cfg.clone(), new_root);
 
                                 let fallback_handler =
-                                    axum::routing::get(render_handler).with_state(state);
+                                    axum::routing::get(RenderHandleState::render_handler)
+                                        .with_state(state);
 
                                 make_service = apply_base_path(
                                     new_router.fallback(fallback_handler),
@@ -276,14 +273,13 @@ fn apply_base_path(
         ) -> impl IntoResponse {
             // The root of the base path always looks like the root from dioxus fullstack
             *request.uri_mut() = "/".parse().unwrap();
-            render_handler(state, request).await
+            RenderHandleState::render_handler(state, request).await
         }
 
-        let ssr_state = SSRState::new(&cfg);
         router = router.route(
             &format!("/{base_path}"),
             axum::routing::method_routing::get(root_render_handler)
-                .with_state(RenderHandleState::new(cfg, root).with_ssr_state(ssr_state)),
+                .with_state(RenderHandleState::new(cfg, root)),
         )
     }
 
