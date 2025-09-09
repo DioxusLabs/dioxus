@@ -51,7 +51,7 @@ use super::AppServer;
 /// todo(jon): we should merge the build status and hotreload sockets into just a "devtools" socket
 /// which carries all the message types. This would make it easier for us to add more message types
 /// and better tooling on the pages that we serve.
-pub struct WebServer {
+pub(crate) struct WebServer {
     devserver_exposed_ip: IpAddr,
     devserver_bind_ip: IpAddr,
     devserver_port: u16,
@@ -65,7 +65,7 @@ pub struct WebServer {
     bundle: BundleFormat,
 }
 
-pub struct ConnectedWsClient {
+pub(crate) struct ConnectedWsClient {
     socket: WebSocket,
     build_id: Option<BuildId>,
     aslr_reference: Option<u64>,
@@ -73,7 +73,7 @@ pub struct ConnectedWsClient {
 }
 
 impl WebServer {
-    pub const SELF_IP: IpAddr = IpAddr::V4(Ipv4Addr::LOCALHOST);
+    pub const SELF_IP: IpAddr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
 
     /// Start the development server.
     /// This will set up the default http server if there's no server specified (usually via fullstack).
@@ -154,8 +154,9 @@ impl WebServer {
                     self.hot_reload_sockets.push(new_socket);
 
                     return ServeUpdate::NewConnection { aslr_reference, id, pid };
+                } else {
+                    panic!("Could not receive a socket - the devtools could not boot - the port is likely already in use");
                 }
-                panic!("Could not receive a socket - the devtools could not boot - the port is likely already in use");
             }
             new_build_status_socket = &mut new_build_status_socket => {
                 if let Some(mut new_socket) = new_build_status_socket {
@@ -168,13 +169,18 @@ impl WebServer {
                         self.build_status_sockets.push(new_socket);
                     }
                     return future::pending::<ServeUpdate>().await;
+                } else {
+                    panic!("Could not receive a socket - the devtools could not boot - the port is likely already in use");
                 }
-                panic!("Could not receive a socket - the devtools could not boot - the port is likely already in use");
             }
             Some((idx, message)) = new_message.next() => {
-                if let Some(Ok(msg)) = message { return ServeUpdate::WsMessage { msg, bundle: BundleFormat::Web } }
-                drop(new_message);
-                _ = self.hot_reload_sockets.remove(idx);
+                match message {
+                    Some(Ok(msg)) => return ServeUpdate::WsMessage { msg, bundle: BundleFormat::Web },
+                    _ => {
+                        drop(new_message);
+                        _ = self.hot_reload_sockets.remove(idx);
+                    }
+                }
             }
         }
 
@@ -349,7 +355,7 @@ impl WebServer {
 
     /// Sends a devserver message to all connected clients.
     async fn send_devserver_message_to_all(&mut self, msg: DevserverMsg) {
-        for socket in &mut self.hot_reload_sockets {
+        for socket in self.hot_reload_sockets.iter_mut() {
             _ = socket
                 .socket
                 .send(Message::Text(serde_json::to_string(&msg).unwrap().into()))
@@ -358,7 +364,7 @@ impl WebServer {
     }
 
     /// Get the address the devserver should run on
-    pub const fn devserver_address(&self) -> SocketAddr {
+    pub fn devserver_address(&self) -> SocketAddr {
         SocketAddr::new(self.devserver_exposed_ip, self.devserver_port)
     }
 
@@ -384,8 +390,8 @@ impl WebServer {
         // Set the port to the devserver port since that's usually what people expect
         address.set_port(self.devserver_port);
 
-        if self.devserver_bind_ip == IpAddr::V4(Ipv4Addr::UNSPECIFIED) {
-            address = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), address.port());
+        if self.devserver_bind_ip == IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)) {
+            address = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), address.port());
         }
 
         Some(address)
@@ -439,7 +445,7 @@ fn build_devserver_router(
     let build = runner.client();
 
     // Setup proxy for the endpoint specified in the config
-    for proxy_config in &build.build.config.web.proxy {
+    for proxy_config in build.build.config.web.proxy.iter() {
         router = super::proxy::add_proxy(router, proxy_config)?;
     }
 
@@ -543,10 +549,9 @@ fn build_serve_dir(runner: &AppServer) -> axum::routing::MethodRouter {
         HeaderValue::from_static("same-origin"),
     );
 
-    let (coep, coop) = if runner.cross_origin_policy {
-        CORS_REQUIRE.clone()
-    } else {
-        CORS_UNSAFE.clone()
+    let (coep, coop) = match runner.cross_origin_policy {
+        true => CORS_REQUIRE.clone(),
+        false => CORS_UNSAFE.clone(),
     };
 
     let app = &runner.client;
@@ -590,7 +595,7 @@ fn no_cache(
         let fallback = out_dir.join("index.html");
         let contents = std::fs::read_to_string(fallback).unwrap_or_else(|_| {
             String::from(
-                r"
+                r#"
             <!DOCTYPE html>
             <html>
                 <head>
@@ -600,7 +605,7 @@ fn no_cache(
                 <p>Err 404 - dioxus is not currently serving a web app</p>
                 </body>
             </html>
-            ",
+            "#,
             )
         });
         let body = Body::from(contents);
@@ -609,14 +614,14 @@ fn no_cache(
             .status(StatusCode::OK)
             .body(body)
             .unwrap();
-    }
+    };
 
     insert_no_cache_headers(response.headers_mut());
 
     response
 }
 
-pub fn insert_no_cache_headers(headers: &mut HeaderMap) {
+pub(crate) fn insert_no_cache_headers(headers: &mut HeaderMap) {
     headers.insert(CACHE_CONTROL, HeaderValue::from_static("no-cache"));
     headers.insert(PRAGMA, HeaderValue::from_static("no-cache"));
     headers.insert(EXPIRES, HeaderValue::from_static("0"));
@@ -628,8 +633,9 @@ async fn get_rustls(web_config: &WebHttpsConfig) -> Result<(String, String)> {
         if let (Some(key), Some(cert)) = (web_config.key_path.clone(), web_config.cert_path.clone())
         {
             return Ok((cert, key));
+        } else {
+            bail!("https is enabled but cert or key path is missing");
         }
-        bail!("https is enabled but cert or key path is missing");
     }
 
     const DEFAULT_KEY_PATH: &str = "ssl/key.pem";
@@ -668,12 +674,12 @@ async fn get_rustls(web_config: &WebHttpsConfig) -> Result<(String, String)> {
         Err(e) => {
             match e.kind() {
                 io::ErrorKind::NotFound => {
-                    tracing::error!(dx_src = ?TraceSrc::Dev, "`mkcert` is not installed. See https://github.com/FiloSottile/mkcert#installation for installation instructions.");
+                    tracing::error!(dx_src = ?TraceSrc::Dev, "`mkcert` is not installed. See https://github.com/FiloSottile/mkcert#installation for installation instructions.")
                 }
                 e => {
-                    tracing::error!(dx_src = ?TraceSrc::Dev, "An error occurred while generating mkcert certificates: {}", e.to_string());
+                    tracing::error!(dx_src = ?TraceSrc::Dev, "An error occurred while generating mkcert certificates: {}", e.to_string())
                 }
-            }
+            };
             bail!("failed to generate mkcert certificates");
         }
         Ok(mut cmd) => {
@@ -696,7 +702,7 @@ async fn build_status_middleware(
         .and_then(|v| v.to_str().ok())
         .map(|v| v.contains("text/html"));
 
-    if accepts_html == Some(true) {
+    if let Some(true) = accepts_html {
         let status = state.get();
         if status != Status::Ready {
             let html = include_str!("../../assets/web/dev.loading.html");

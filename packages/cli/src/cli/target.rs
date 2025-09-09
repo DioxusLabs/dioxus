@@ -1,4 +1,4 @@
-use crate::cli::{json, Anonymized, Deserialize, Parser, PathBuf, Value};
+use crate::cli::*;
 use crate::BundleFormat;
 use crate::Platform;
 use crate::RendererArg;
@@ -9,7 +9,7 @@ const HELP_HEADING: &str = "Target Options";
 
 /// A single target to build for
 #[derive(Clone, Debug, Default, Deserialize, Parser)]
-pub struct TargetArgs {
+pub(crate) struct TargetArgs {
     /// The target alias to use for this build. Supports wasm, macos, windows, linux, ios, android, and host [default: "host"]
     #[clap(flatten)]
     pub(crate) target_alias: TargetAlias,
@@ -22,7 +22,7 @@ pub struct TargetArgs {
     #[clap(long, value_enum, help_heading = HELP_HEADING)]
     pub(crate) bundle: Option<BundleFormat>,
 
-    /// Build platform: supports Web, `MacOS`, Windows, Linux, iOS, Android, and Server
+    /// Build platform: supports Web, MacOS, Windows, Linux, iOS, Android, and Server
     ///
     /// The platform implies a combination of the target alias, renderer, and bundle format flags.
     ///
@@ -170,7 +170,7 @@ impl Anonymized for TargetArgs {
             "features": !self.features.is_empty(),
             "no_default_features": self.no_default_features,
             "all_features": self.all_features,
-            "target": self.target.as_ref().map(std::string::ToString::to_string),
+            "target": self.target.as_ref().map(|t| t.to_string()),
             "skip_assets": self.skip_assets,
             "inject_loading_scripts": self.inject_loading_scripts,
             "wasm_split": self.wasm_split,

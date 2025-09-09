@@ -7,9 +7,9 @@ use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use serde::{Deserialize, Serialize};
 use std::{path::PathBuf, process::ExitStatus};
 
-/// The context of the build process. While the `BuildRequest` is a "plan" for the build, the `BuildContext`
+/// The context of the build process. While the BuildRequest is a "plan" for the build, the BuildContext
 /// provides some dynamic configuration that is only known at runtime. For example, the Progress channel
-/// and the `BuildMode` can change while serving.
+/// and the BuildMode can change while serving.
 ///
 /// The structure of this is roughly taken from cargo itself which uses a similar pattern.
 #[derive(Debug, Clone)]
@@ -99,7 +99,7 @@ impl BuildContext {
     pub(crate) fn status_running_gradle(&self) {
         _ = self.tx.unbounded_send(BuilderUpdate::Progress {
             stage: BuildStage::RunningGradle,
-        });
+        })
     }
 
     pub(crate) fn status_codesigning(&self) {

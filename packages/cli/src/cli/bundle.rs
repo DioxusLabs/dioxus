@@ -6,9 +6,7 @@ use tauri_bundler::{BundleBinary, BundleSettings, PackageSettings, SettingsBuild
 
 use walkdir::WalkDir;
 
-use super::{
-    BuildTargets, CommandWithPlatformOverrides, Error, Parser, PathBuf, Result, StructuredOutput,
-};
+use super::*;
 
 /// Bundle an app and its assets.
 ///
@@ -22,7 +20,7 @@ pub struct Bundle {
     /// The directory in which the final bundle will be placed.
     ///
     /// Relative paths will be placed relative to the current working directory if specified.
-    /// Otherwise, the `out_dir` path specified in Dioxus.toml will be used (relative to the crate root).
+    /// Otherwise, the out_dir path specified in Dioxus.toml will be used (relative to the crate root).
     ///
     /// We will flatten the artifacts into this directory - there will be no differentiation between
     /// artifacts produced by different platforms.
@@ -85,7 +83,7 @@ impl Bundle {
             BundleFormat::Web => bundles.push(client.root_dir()),
             BundleFormat::Ios => {
                 tracing::warn!("iOS bundles are not currently codesigned! You will need to codesign the app before distributing.");
-                bundles.push(client.root_dir());
+                bundles.push(client.root_dir())
             }
             BundleFormat::Server => bundles.push(client.root_dir()),
 
@@ -96,7 +94,7 @@ impl Bundle {
                     .context("Failed to run gradle bundleRelease")?;
                 bundles.push(aab);
             }
-        }
+        };
 
         // Copy the bundles to the output directory if one was specified
         let crate_outdir = client.crate_out_dir();
@@ -109,7 +107,7 @@ impl Bundle {
 
             std::fs::create_dir_all(&outdir)?;
 
-            for bundle_path in &mut bundles {
+            for bundle_path in bundles.iter_mut() {
                 let destination = outdir.join(bundle_path.file_name().unwrap());
 
                 tracing::debug!(
@@ -132,7 +130,7 @@ impl Bundle {
             }
         }
 
-        for bundle_path in &bundles {
+        for bundle_path in bundles.iter() {
             tracing::info!(
                 "Bundled app at: {}",
                 bundle_path.absolutize().unwrap().display()
@@ -140,7 +138,7 @@ impl Bundle {
         }
 
         let client = client_artifacts.into_structured_output();
-        let server = server_artifacts.map(crate::BuildArtifacts::into_structured_output);
+        let server = server_artifacts.map(|s| s.into_structured_output());
 
         Ok(StructuredOutput::BundleOutput {
             bundles,
@@ -194,7 +192,7 @@ impl Bundle {
 
                 if let Some(icon_path) = icon_path {
                     bundle_settings.icon = Some(vec![icon_path.into()]);
-                }
+                };
             }
         }
 
@@ -230,7 +228,7 @@ impl Bundle {
                 .resources_map
                 .as_mut()
                 .expect("to be set")
-                .insert(resource_path, String::new());
+                .insert(resource_path, "".to_string());
         }
 
         let mut settings = SettingsBuilder::new()

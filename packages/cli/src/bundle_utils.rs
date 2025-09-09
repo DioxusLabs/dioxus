@@ -5,7 +5,7 @@ use crate::{
 
 impl From<NsisSettings> for tauri_bundler::NsisSettings {
     fn from(val: NsisSettings) -> Self {
-        Self {
+        tauri_bundler::NsisSettings {
             header_image: val.header_image,
             sidebar_image: val.sidebar_image,
             installer_icon: val.installer_icon,
@@ -24,7 +24,7 @@ impl From<NsisSettings> for tauri_bundler::NsisSettings {
 
 impl From<BundleConfig> for tauri_bundler::BundleSettings {
     fn from(val: BundleConfig) -> Self {
-        Self {
+        tauri_bundler::BundleSettings {
             identifier: val.identifier,
             publisher: val.publisher,
             icon: val.icon,
@@ -44,7 +44,7 @@ impl From<BundleConfig> for tauri_bundler::BundleSettings {
 
 impl From<DebianSettings> for tauri_bundler::DebianSettings {
     fn from(val: DebianSettings) -> Self {
-        Self {
+        tauri_bundler::DebianSettings {
             depends: val.depends,
             files: val.files,
             desktop_template: val.desktop_template,
@@ -65,7 +65,7 @@ impl From<DebianSettings> for tauri_bundler::DebianSettings {
 
 impl From<WixSettings> for tauri_bundler::WixSettings {
     fn from(val: WixSettings) -> Self {
-        Self {
+        tauri_bundler::WixSettings {
             language: tauri_bundler::bundle::WixLanguage({
                 let mut languages: Vec<_> = val
                     .language
@@ -103,7 +103,7 @@ impl From<WixSettings> for tauri_bundler::WixSettings {
 
 impl From<MacOsSettings> for tauri_bundler::MacOsSettings {
     fn from(val: MacOsSettings) -> Self {
-        Self {
+        tauri_bundler::MacOsSettings {
             frameworks: val.frameworks,
             minimum_system_version: val.minimum_system_version,
             exception_domain: val.exception_domain,
@@ -122,7 +122,7 @@ impl From<MacOsSettings> for tauri_bundler::MacOsSettings {
 #[allow(deprecated)]
 impl From<WindowsSettings> for tauri_bundler::WindowsSettings {
     fn from(val: WindowsSettings) -> Self {
-        Self {
+        tauri_bundler::WindowsSettings {
             digest_algorithm: val.digest_algorithm,
             certificate_thumbprint: val.certificate_thumbprint,
             timestamp_url: val.timestamp_url,
@@ -141,9 +141,9 @@ impl From<WindowsSettings> for tauri_bundler::WindowsSettings {
 impl From<NSISInstallerMode> for tauri_utils::config::NSISInstallerMode {
     fn from(val: NSISInstallerMode) -> Self {
         match val {
-            NSISInstallerMode::CurrentUser => Self::CurrentUser,
-            NSISInstallerMode::PerMachine => Self::PerMachine,
-            NSISInstallerMode::Both => Self::Both,
+            NSISInstallerMode::CurrentUser => tauri_utils::config::NSISInstallerMode::CurrentUser,
+            NSISInstallerMode::PerMachine => tauri_utils::config::NSISInstallerMode::PerMachine,
+            NSISInstallerMode::Both => tauri_utils::config::NSISInstallerMode::Both,
         }
     }
 }
@@ -186,7 +186,7 @@ impl WebviewInstallMode {
 
 impl From<CustomSignCommandSettings> for tauri_bundler::CustomSignCommandSettings {
     fn from(val: CustomSignCommandSettings) -> Self {
-        Self {
+        tauri_bundler::CustomSignCommandSettings {
             cmd: val.cmd,
             args: val.args,
         }

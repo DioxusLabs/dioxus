@@ -1,10 +1,10 @@
-use super::{create, Command, Deserialize, Parser, PathBuf, Result, StructuredOutput, Write};
+use super::*;
 use crate::TraceSrc;
 use anyhow::{bail, Context};
 use cargo_generate::{GenerateArgs, TemplatePath, Vcs};
 use std::path::Path;
 
-pub static DEFAULT_TEMPLATE: &str = "gh:dioxuslabs/dioxus-template";
+pub(crate) static DEFAULT_TEMPLATE: &str = "gh:dioxuslabs/dioxus-template";
 
 #[derive(Clone, Debug, Default, Deserialize, Parser)]
 #[clap(name = "new")]
@@ -92,7 +92,10 @@ impl Create {
                 tag: self.tag,
                 ..Default::default()
             },
-            verbose: crate::logging::VERBOSITY.get().is_some_and(|f| f.verbose),
+            verbose: crate::logging::VERBOSITY
+                .get()
+                .map(|f| f.verbose)
+                .unwrap_or(false),
             ..Default::default()
         };
 
@@ -108,7 +111,10 @@ impl Create {
 /// If no template is specified, use the default one and set the branch to the latest release.
 ///
 /// Allows us to version templates under the v0.5/v0.6 scheme on the templates repo.
-pub fn resolve_template_and_branch(template: &mut Option<String>, branch: &mut Option<String>) {
+pub(crate) fn resolve_template_and_branch(
+    template: &mut Option<String>,
+    branch: &mut Option<String>,
+) {
     if template.is_none() {
         use crate::dx_build_info::{PKG_VERSION_MAJOR, PKG_VERSION_MINOR};
         *template = Some(DEFAULT_TEMPLATE.to_string());
@@ -116,11 +122,11 @@ pub fn resolve_template_and_branch(template: &mut Option<String>, branch: &mut O
         if branch.is_none() {
             *branch = Some(format!("v{PKG_VERSION_MAJOR}.{PKG_VERSION_MINOR}"));
         }
-    }
+    };
 }
 
 /// Extracts the last directory name from the `path`.
-pub fn name_from_path(path: &Path) -> Result<String> {
+pub(crate) fn name_from_path(path: &Path) -> Result<String> {
     use path_absolutize::Absolutize;
 
     Ok(path
@@ -134,7 +140,7 @@ pub fn name_from_path(path: &Path) -> Result<String> {
 }
 
 /// Post-creation actions for newly setup crates.
-pub fn post_create(path: &Path, vcs: &Vcs) -> Result<()> {
+pub(crate) fn post_create(path: &Path, vcs: &Vcs) -> Result<()> {
     let metadata = if let Some(parent_dir) = path.parent() {
         match cargo_metadata::MetadataCommand::new()
             .current_dir(parent_dir)
@@ -232,8 +238,12 @@ fn remove_triple_newlines(string: &str) -> String {
 
 /// Perform a health check against github itself before we attempt to download any templates hosted
 /// on github.
-pub async fn connectivity_check() -> Result<()> {
-    if crate::VERBOSITY.get().is_some_and(|f| f.offline) {
+pub(crate) async fn connectivity_check() -> Result<()> {
+    if crate::VERBOSITY
+        .get()
+        .map(|f| f.offline)
+        .unwrap_or_default()
+    {
         return Ok(());
     }
 
@@ -247,10 +257,10 @@ pub async fn connectivity_check() -> Result<()> {
                 }
                 tokio::time::sleep(std::time::Duration::from_millis(2000)).await;
             },
-            () = tokio::time::sleep(std::time::Duration::from_millis(if x == 1 { 500 } else { 2000 })) => {}
+            _ = tokio::time::sleep(std::time::Duration::from_millis(if x == 1 { 500 } else { 2000 })) => {}
         }
         if x == 0 {
-            eprintln!("{GLOW_STYLE}warning{GLOW_STYLE:#}: Waiting for {LINK_STYLE}https://github.com/dioxuslabs{LINK_STYLE:#}...");
+            eprintln!("{GLOW_STYLE}warning{GLOW_STYLE:#}: Waiting for {LINK_STYLE}https://github.com/dioxuslabs{LINK_STYLE:#}...")
         } else {
             eprintln!(
                 "{GLOW_STYLE}warning{GLOW_STYLE:#}: ({x}/5) Taking a while, maybe your internet is down?"

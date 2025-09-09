@@ -39,8 +39,8 @@ where
     fn anonymized(&self) -> Value {
         json!({
             "shared": self.shared.anonymized(),
-            "server": self.server.as_ref().map(super::super::logging::Anonymized::anonymized),
-            "client": self.client.as_ref().map(super::super::logging::Anonymized::anonymized),
+            "server": self.server.as_ref().map(|s| s.anonymized()),
+            "client": self.client.as_ref().map(|c| c.anonymized()),
         })
     }
 }
@@ -130,7 +130,7 @@ where
 
 #[derive(Debug, Subcommand, Clone)]
 #[command(subcommand_precedence_over_arg = true)]
-pub enum PlatformOverrides<T: Args> {
+pub(crate) enum PlatformOverrides<T: Args> {
     /// Specify the arguments for the client build
     #[clap(name = "@client")]
     Client(ChainedCommand<T, PlatformOverrides<T>>),

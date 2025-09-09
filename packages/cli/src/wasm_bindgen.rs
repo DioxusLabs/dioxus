@@ -6,7 +6,7 @@ use tar::Archive;
 use tempfile::TempDir;
 use tokio::process::Command;
 
-pub struct WasmBindgen {
+pub(crate) struct WasmBindgen {
     version: String,
     input_path: PathBuf,
     out_dir: PathBuf,
@@ -417,7 +417,7 @@ impl WasmBindgen {
         format!("wasm-bindgen-cli@{}", self.version)
     }
 
-    const fn downloaded_bin_name(&self) -> &'static str {
+    fn downloaded_bin_name(&self) -> &'static str {
         if cfg!(windows) {
             "wasm-bindgen.exe"
         } else {

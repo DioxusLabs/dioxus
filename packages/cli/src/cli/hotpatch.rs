@@ -11,7 +11,7 @@ const HELP_HEADING: &str = "Hotpatching a binary";
 
 /// Patches a single binary, but takes the same arguments as a `cargo build`.
 ///
-/// By default, patches the client, but you can set `patch_server` to true to patch the server instead.
+/// By default, patches the client, but you can set patch_server to true to patch the server instead.
 #[derive(Clone, Debug, Parser)]
 pub struct HotpatchTip {
     /// Should we patch the server or the client? False = client, True = server

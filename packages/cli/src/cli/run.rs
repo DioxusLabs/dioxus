@@ -1,4 +1,4 @@
-use super::{Parser, ServeArgs, StructuredOutput};
+use super::*;
 use crate::{
     serve::{AppServer, ServeUpdate, WebServer},
     BuilderUpdate, BundleFormat, Result,
@@ -13,7 +13,7 @@ use dioxus_dx_wire_format::BuildStage;
 /// Unlike `dx serve`, errors during build and run will cascade out as an error, rather than being
 /// handled by the TUI, making it more suitable for scripting, automation, or CI/CD pipelines.
 #[derive(Clone, Debug, Parser)]
-pub struct RunArgs {
+pub(crate) struct RunArgs {
     /// Information about the target to build
     #[clap(flatten)]
     pub(crate) args: ServeArgs,
@@ -74,7 +74,7 @@ impl RunArgs {
                         }
                         BuilderUpdate::Progress { stage } => match stage {
                             BuildStage::Initializing => {
-                                tracing::info!("[{bundle_format}] Initializing build");
+                                tracing::info!("[{bundle_format}] Initializing build")
                             }
                             BuildStage::Starting { .. } => {}
                             BuildStage::InstallingTooling => {}
@@ -85,14 +85,14 @@ impl RunArgs {
                             } => {
                                 tracing::debug!(
                                     "[{bundle_format}] ({current}/{total}) Compiling {krate} ",
-                                );
+                                )
                             }
                             BuildStage::RunningBindgen => {
-                                tracing::info!("[{bundle_format}] Running WASM bindgen");
+                                tracing::info!("[{bundle_format}] Running WASM bindgen")
                             }
                             BuildStage::SplittingBundle => {}
                             BuildStage::OptimizingWasm => {
-                                tracing::info!("[{bundle_format}] Optimizing WASM with `wasm-opt`");
+                                tracing::info!("[{bundle_format}] Optimizing WASM with `wasm-opt`")
                             }
                             BuildStage::Linking => tracing::info!("Linking app"),
                             BuildStage::Hotpatching => {}
@@ -105,20 +105,20 @@ impl RunArgs {
                                 path.display(),
                             ),
                             BuildStage::Bundling => {
-                                tracing::info!("[{bundle_format}] Bundling app");
+                                tracing::info!("[{bundle_format}] Bundling app")
                             }
                             BuildStage::RunningGradle => {
-                                tracing::info!("[{bundle_format}] Running Gradle");
+                                tracing::info!("[{bundle_format}] Running Gradle")
                             }
                             BuildStage::CodeSigning => {
-                                tracing::info!("[{bundle_format}] Code signing app");
+                                tracing::info!("[{bundle_format}] Code signing app")
                             }
                             BuildStage::Success => {}
                             BuildStage::Restarting => {}
                             BuildStage::CompressingAssets => {}
                             BuildStage::ExtractingAssets => {}
                             BuildStage::Prerendering => {
-                                tracing::info!("[{bundle_format}] Prerendering app");
+                                tracing::info!("[{bundle_format}] Prerendering app")
                             }
                             BuildStage::Failed => {
                                 tracing::error!("[{bundle_format}] Build failed");

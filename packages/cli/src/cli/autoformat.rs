@@ -1,4 +1,4 @@
-use super::{check::collect_rs_files, Error, Parser, Read, Result, StructuredOutput};
+use super::{check::collect_rs_files, *};
 use crate::Workspace;
 use anyhow::{bail, Context};
 use dioxus_autofmt::{IndentOptions, IndentType};
@@ -10,7 +10,7 @@ use std::{borrow::Cow, fs, path::Path};
 
 /// Format some rsx
 #[derive(Clone, Debug, Parser)]
-pub struct Autoformat {
+pub(crate) struct Autoformat {
     /// Format rust code before the formatting the rsx macros
     #[clap(long)]
     pub(crate) all_code: bool,
@@ -39,7 +39,7 @@ pub struct Autoformat {
 
 impl Autoformat {
     pub(crate) async fn autoformat(self) -> Result<StructuredOutput> {
-        let Self {
+        let Autoformat {
             check,
             raw,
             file,
@@ -56,7 +56,7 @@ impl Autoformat {
             let indent = indentation_for(".", self.split_line_attributes)?;
             let formatted =
                 dioxus_autofmt::fmt_block(&raw, 0, indent).context("error formatting codeblock")?;
-            println!("{formatted}");
+            println!("{}", formatted);
         } else {
             // Default to formatting the project.
             let crate_dir = if let Some(package) = self.package {
