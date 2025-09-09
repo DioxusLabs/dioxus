@@ -111,6 +111,7 @@ impl DioxusNativeApplication {
 
 impl ApplicationHandler<BlitzShellEvent> for DioxusNativeApplication {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        #[cfg(feature = "tracing")]
         tracing::debug!("Injecting document provider into all windows");
 
         if let Some(config) = self.pending_window.take() {

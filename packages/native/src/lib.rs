@@ -82,10 +82,12 @@ pub fn launch_cfg_with_props<P: Clone + 'static, M: 'static>(
     let event_loop = create_default_event_loop::<BlitzShellEvent>();
 
     // Turn on the runtime and enter it
+    #[cfg(feature = "net")]
     let rt = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
         .unwrap();
+    #[cfg(feature = "net")]
     let _guard = rt.enter();
 
     // Setup hot-reloading if enabled.
