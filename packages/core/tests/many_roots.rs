@@ -49,9 +49,9 @@ fn many_roots() {
             // Set the width attribute first
             AssignId { path: &[2], id: ElementId(2,) },
             SetAttribute {
-                name: "width",
-                ns: Some("style",),
-                value: AttributeValue::Text("100%".to_string()),
+                name: "style",
+                ns: None,
+                value: AttributeValue::Text("width: 100%;".to_string()),
                 id: ElementId(2,),
             },
             // Load MyOutlet next
