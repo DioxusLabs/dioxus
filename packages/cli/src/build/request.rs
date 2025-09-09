@@ -1380,7 +1380,7 @@ impl BuildRequest {
                         from.clone(),
                     );
 
-                    res.map(|()| ())
+                    res
                 })
         })
         .await
@@ -2559,9 +2559,7 @@ impl BuildRequest {
             env_var_with_key(most_specific_key.clone())
                 .or_else(|| env_var_with_key(format!("{var_base}_{triple_u}")))
                 .or_else(|| env_var_with_key(format!("TARGET_{var_base}")))
-                .or_else(|| env_var_with_key(var_base.to_string()))
-                .map(|(key, value)| (key, Some(value)))
-                .unwrap_or_else(|| (most_specific_key, None))
+                .or_else(|| env_var_with_key(var_base.to_string())).map_or_else(|| (most_specific_key, None), |(key, value)| (key, Some(value)))
         }
 
         fn cargo_env_target_cfg(triple: &str, key: &str) -> String {
@@ -2666,9 +2664,7 @@ impl BuildRequest {
             .map(|dir| {
                 let clang_builtins_target = dir
                     .filter_map(std::result::Result::ok)
-                    .max_by(|a, b| a.file_name().cmp(&b.file_name()))
-                    .map(|s| s.path())
-                    .unwrap_or_else(|| clang_folder.join("clang"));
+                    .max_by(|a, b| a.file_name().cmp(&b.file_name())).map_or_else(|| clang_folder.join("clang"), |s| s.path());
 
                 format!(
                     "-L{} -lstatic=clang_rt.builtins-{}-android",
@@ -4957,13 +4953,13 @@ https://developer.apple.com/documentation/xcode/sharing-your-teams-signing-certi
 
         if !profiles_folder.exists() || profiles_folder.read_dir()?.next().is_none() {
             tracing::error!(
-                r#"No provisioning profiles found when trying to codesign the app.
+                r"No provisioning profiles found when trying to codesign the app.
 We checked the folders:
 - XCode16: ~/Library/Developer/Xcode/UserData/Provisioning Profiles
 - XCode15: ~/Library/MobileDevice/Provisioning Profiles
 
 {CODESIGN_ERROR}
-"#
+"
             );
         }
 
@@ -4991,7 +4987,7 @@ We checked the folders:
         }
         let bytes = std::fs::read(provision_file.path())?;
         let cut1 = cut_plist(&bytes, b"<plist").context("Failed to parse .mobileprovision file")?;
-        let cut2 = cut_plist(&bytes, br#"</dict>"#)
+        let cut2 = cut_plist(&bytes, br"</dict>")
             .context("Failed to parse .mobileprovision file")?;
         let sub_bytes = &bytes[(cut1 - 6)..cut2];
         let mbfile: ProvisioningProfile =

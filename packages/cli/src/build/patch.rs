@@ -9,7 +9,7 @@ use object::{
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
-    ops::{Deref, Range},
+    ops::Range,
     path::Path,
     path::PathBuf,
     sync::{Arc, RwLock},
