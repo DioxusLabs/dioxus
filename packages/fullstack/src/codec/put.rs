@@ -1,7 +1,6 @@
 // use super::{Encoding, FromReq, FromRes, IntoReq, IntoRes};
 use super::Encoding;
 use crate::{
-    codec::Codec,
     error::{FromServerFnError, IntoAppError, ServerFnError},
     ContentType, Decodes, Encodes, HybridRequest,
 };

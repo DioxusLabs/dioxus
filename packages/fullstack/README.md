@@ -57,10 +57,18 @@ fn App() -> Element {
     }
 }
 
+   #[get("/item/:id?amount&offset", codec = (Json, Json))]
+   async fn handler(id: u32, amount: Option<u32>, offset: Option<u32>, body: u32) -> u32 {
+// async fn handler(id: u32, amount: Option<u32>, offset: Option<u32>, body: Json<u32>) -> Json<u32> {
+    todo!()
+}
+
+
 #[server]
 async fn get_meaning(of: String) -> ServerFnResult<Option<u32>> {
     Ok(of.contains("life").then(|| 42))
 }
+
 ```
 
 ## Axum Integration

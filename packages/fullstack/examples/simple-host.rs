@@ -1,5 +1,8 @@
 use dioxus::prelude::*;
-use dioxus_fullstack::{codec::Json, make_server_fn, Http, ServerFunction, WebSocket};
+use dioxus_fullstack::{
+    codec::Json, make_server_fn, middleware::Service, ServerFunction, WebSocket,
+};
+use serde::Serialize;
 use std::future::Future;
 
 #[tokio::main]
@@ -26,6 +29,8 @@ async fn do_thing(a: i32, b: String) -> dioxus::Result<()> {
     // if we do have the server feature, we can run the code directly
     #[cfg(feature = "server")]
     {
+        use dioxus_fullstack::{codec::GetUrl, HybridRequest};
+
         async fn run_user_code(a: i32, b: String) -> dioxus::Result<()> {
             println!("Doing the thing on the server with {a} and {b}");
             Ok(())
@@ -36,8 +41,7 @@ async fn do_thing(a: i32, b: String) -> dioxus::Result<()> {
                 http::Method::GET,
                 "/thing",
                 |req| {
-                    // this_protocol::run_on_server(req)
-                    // this_protocol::run_on_client(req)
+
                     todo!()
                 },
                 None
@@ -54,14 +58,55 @@ async fn do_thing(a: i32, b: String) -> dioxus::Result<()> {
 }
 
 async fn make_websocket() -> dioxus::Result<WebSocket> {
+    // use axum::extract::z;
+    // let r = axum::routing::get(|| async { "Hello, World!" });
+
     Ok(WebSocket::new(|tx, rx| async move {
         //
     }))
 }
 
+/*
+parse out URL params
+rest need to implement axum's FromRequest / extract
+body: String
+body: Bytes
+payload: T where T: Deserialize (auto to Json, can wrap in other codecs)
+extra items get merged as body, unless theyre also extractors?
+hoist up FromRequest objects if they're just bounds
+no State<T> extractors, use ServerState instead?
+
+if there's a single trailing item, it's used as the body?
+
+or, an entirely custom system, maybe based on names?
+or, hoist up FromRequest objects into the signature?
+*/
+
 make_server_fn!(
-    #[get("/thing/:a/:b")]
-    pub async fn do_thing2(a: i32, b: String) -> dioxus::Result<()> {
+    #[get("/thing/{a}/{b}?amount&offset")]
+    pub async fn do_thing2(
+        a: i32,
+        b: String,
+        amount: Option<u32>,
+        offset: Option<u32>,
+    ) -> dioxus::Result<()> {
         Ok(())
     }
 );
+
+#[get("/thing/{a}/{b}?amount&offset")]
+pub async fn do_thing23(
+    a: i32,
+    b: String,
+    amount: Option<u32>,
+    offset: Option<u32>,
+    #[cfg(feature = "server")] headers: http::HeaderMap,
+    #[cfg(feature = "server")] body: axum::body::Bytes,
+) -> dioxus::Result<()> {
+    Ok(())
+}
+
+fn register_some_serverfn() {
+    // let r = axum::routing::get(handler);
+    // let r = axum::routing::get_service(handler);
+}

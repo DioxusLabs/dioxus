@@ -1,8 +1,16 @@
 use base64::{engine::general_purpose::STANDARD_NO_PAD, DecodeError, Engine};
 
 use crate::{
-    codec::Codec, ContentType, ContextProviders, Decodes, DioxusServerContext, Encodes, FormatType,
-    FromServerFnError, ProvideServerContext, ServerFnError,
+    ContentType,
+    ContextProviders,
+    Decodes,
+    DioxusServerContext,
+    Encodes,
+    FormatType,
+    FromServerFnError,
+    ProvideServerContext,
+    ServerFnError,
+    // FromServerFnError, Protocol, ProvideServerContext, ServerFnError,
 };
 
 // use super::client::Client;

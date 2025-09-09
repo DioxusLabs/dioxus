@@ -123,7 +123,7 @@ default-tls = []
 rustls = ["dep:rustls", "dep:hyper-rustls"]
 client = ["reqwest"]
 reqwest = ["dep:reqwest"]
-axum = ["server", "dep:axum", "axum/default", "axum/ws"]
+axum = ["server", "dep:axum", "axum/default", "axum/ws", "axum/macros"]
 axum-no-default = ["server"]
 server = [
     "server-core" ,
