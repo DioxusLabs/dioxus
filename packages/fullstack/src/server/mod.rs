@@ -9,7 +9,7 @@ use axum::{
     response::IntoResponse,
 };
 
-use crate::{AxumServerFn, ServerFnObj};
+use crate::{AxumServerFn, ServerFunction};
 use dioxus_core::{Element, VirtualDom};
 use http::header::*;
 use std::path::Path;

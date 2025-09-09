@@ -10,7 +10,8 @@ pub mod ws_fn;
 
 pub mod fetch;
 
-pub mod streams;
+pub mod websocket;
+pub use websocket::*;
 
 mod old;
 
@@ -179,3 +180,56 @@ mod launch;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub use launch::{launch, launch_cfg};
+
+#[macro_export]
+macro_rules! make_server_fn {
+    (
+        #[$method:ident($path:literal)]
+        pub async fn $name:ident ( $( $arg_name:ident : $arg_ty:ty ),* $(,)? ) -> $ret:ty $body:block
+    ) => {
+        pub async fn $name( $( $arg_name : $arg_ty ),* ) -> $ret {
+            // If no server feature, we always make a request to the server
+            if cfg!(not(feature = "server")) {
+                return Ok(dioxus_fullstack::fetch::fetch("/thing")
+                    .method("POST")
+                    // .json(&serde_json::json!({ "a": a, "b": b }))
+                    .send()
+                    .await?
+                    .json::<()>()
+                    .await?);
+            }
+
+            // if we do have the server feature, we can run the code directly
+            #[cfg(feature = "server")]
+            {
+                async fn run_user_code(
+                    $( $arg_name : $arg_ty ),*
+                ) -> $ret {
+                    $body
+                }
+
+                inventory::submit! {
+                    AxumServerFn::new(
+                        http::Method::GET,
+                        "/thing",
+                        |req| {
+                            Box::pin(async move {
+                                todo!()
+                            })
+                        },
+                        None
+                    )
+                }
+
+                return run_user_code(
+                    $( $arg_name ),*
+                ).await;
+            }
+
+            #[allow(unreachable_code)]
+            {
+                unreachable!()
+            }
+        }
+    };
+}

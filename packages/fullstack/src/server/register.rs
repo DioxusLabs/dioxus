@@ -1,6 +1,6 @@
 use crate::{
     initialize_server_fn_map, middleware::BoxedService, HybridRequest, HybridResponse,
-    LazyServerFnMap, ServerFnObj,
+    LazyServerFnMap, ServerFunction,
 };
 use axum::body::Body;
 use http::{Method, Response, StatusCode};

@@ -4,7 +4,7 @@ use crate::{
     codec::Codec, ContentType, Decodes, Encodes, FormatType, FromServerFnError, ServerFnError,
 };
 
-use super::client::Client;
+// use super::client::Client;
 use super::codec::Encoding;
 // use super::codec::{Encoding, FromReq, FromRes, IntoReq, IntoRes};
 
@@ -30,16 +30,119 @@ use std::{
     sync::{Arc, LazyLock},
 };
 
+type Req = HybridRequest;
+type Res = HybridResponse;
+
+/// A function endpoint that can be called from the client.
+pub struct ServerFunction {
+    path: &'static str,
+    method: Method,
+    handler: fn(Req) -> Pin<Box<dyn Future<Output = Res> + Send>>,
+    pub(crate) middleware: fn() -> MiddlewareSet<Req, Res>,
+    ser: fn(ServerFnError) -> Bytes,
+}
+
+impl ServerFunction {
+    /// Create a new server function object.
+    pub const fn new(
+        method: Method,
+        path: &'static str,
+        handler: fn(Req) -> Pin<Box<dyn Future<Output = Res> + Send>>,
+        middlewares: Option<fn() -> MiddlewareSet<Req, Res>>,
+    ) -> Self {
+        fn default_middlewares<Req, Res>() -> MiddlewareSet<Req, Res> {
+            Vec::new()
+        }
+
+        Self {
+            path,
+            method,
+            handler,
+            ser: |e| HybridError::from_server_fn_error(e).ser(),
+            middleware: match middlewares {
+                Some(m) => m,
+                None => default_middlewares,
+            },
+        }
+    }
+
+    /// The path of the server function.
+    pub fn path(&self) -> &'static str {
+        self.path
+    }
+
+    /// The HTTP method the server function expects.
+    pub fn method(&self) -> Method {
+        self.method.clone()
+    }
+
+    /// The handler for this server function.
+    pub fn handler(&self, req: Req) -> impl Future<Output = Res> + Send {
+        (self.handler)(req)
+    }
+
+    /// The set of middleware that should be applied to this function.
+    pub fn middleware(&self) -> MiddlewareSet<Req, Res> {
+        (self.middleware)()
+    }
+
+    /// Converts the server function into a boxed service.
+    pub fn boxed(self) -> BoxedService<Req, Res>
+    where
+        Self: Service<Req, Res>,
+        Req: 'static,
+        Res: 'static,
+    {
+        BoxedService::new(self.ser, self)
+    }
+}
+
+impl<Req, Res> Service<Req, Res> for ServerFunction<Req, Res>
+where
+    Req: Send + 'static,
+    Res: 'static,
+{
+    fn run(
+        &mut self,
+        req: Req,
+        _ser: fn(ServerFnError) -> Bytes,
+    ) -> Pin<Box<dyn Future<Output = Res> + Send>> {
+        let handler = self.handler;
+        Box::pin(async move { handler(req).await })
+    }
+}
+
+impl<Req, Res> Clone for ServerFunction<Req, Res> {
+    fn clone(&self) -> Self {
+        Self {
+            path: self.path,
+            method: self.method.clone(),
+            handler: self.handler,
+            middleware: self.middleware,
+            ser: self.ser,
+        }
+    }
+}
+
+#[allow(unused)] // used by server integrations
+pub type LazyServerFnMap<Req, Res> = LazyLock<DashMap<(String, Method), ServerFunction<Req, Res>>>;
+
+impl<Req: 'static, Res: 'static> inventory::Collect for ServerFunction<Req, Res> {
+    #[inline]
+    fn registry() -> &'static inventory::Registry {
+        static REGISTRY: inventory::Registry = inventory::Registry::new();
+        &REGISTRY
+    }
+}
+
 pub struct HybridRequest {
     pub(crate) req: http::Request<axum::body::Body>,
 }
 
-unsafe impl Send for HybridRequest {}
 pub struct HybridResponse {
     pub(crate) res: http::Response<axum::body::Body>,
 }
 pub struct HybridStreamError {}
-// pub struct HybridError {}
 pub type HybridError = ServerFnError;
 
 /// The http protocol with specific input and output encodings for the request and response. This is
@@ -369,7 +472,7 @@ type OutputStreamError = HybridError;
 macro_rules! initialize_server_fn_map {
     ($req:ty, $res:ty) => {
         std::sync::LazyLock::new(|| {
-            $crate::inventory::iter::<ServerFnObj<$req, $res>>
+            $crate::inventory::iter::<ServerFunction<$req, $res>>
                 .into_iter()
                 .map(|obj| ((obj.path().to_string(), obj.method()), obj.clone()))
                 .collect()
@@ -379,110 +482,3 @@ macro_rules! initialize_server_fn_map {
 
 /// A list of middlewares that can be applied to a server function.
 pub type MiddlewareSet<Req, Res> = Vec<Arc<dyn Layer<Req, Res>>>;
-
-/// A trait object that allows multiple server functions that take the same
-/// request type and return the same response type to be gathered into a single
-/// collection.
-pub struct ServerFnObj<Req = HybridRequest, Res = HybridResponse> {
-    path: &'static str,
-    method: Method,
-    handler: fn(Req) -> Pin<Box<dyn Future<Output = Res> + Send>>,
-    pub(crate) middleware: fn() -> MiddlewareSet<Req, Res>,
-    ser: fn(ServerFnError) -> Bytes,
-}
-
-/// A type alias for a server function that uses Axum's request and response types.
-pub type AxumServerFn = ServerFnObj;
-
-impl<Req, Res> ServerFnObj<Req, Res> {
-    pub const fn new(
-        method: Method,
-        path: &'static str,
-        handler: fn(Req) -> Pin<Box<dyn Future<Output = Res> + Send>>,
-        middlewares: Option<fn() -> MiddlewareSet<Req, Res>>,
-    ) -> Self {
-        fn default_middlewares<Req, Res>() -> MiddlewareSet<Req, Res> {
-            Vec::new()
-        }
-
-        Self {
-            path,
-            method,
-            handler,
-            ser: |e| HybridError::from_server_fn_error(e).ser(),
-            middleware: match middlewares {
-                Some(m) => m,
-                None => default_middlewares,
-            },
-        }
-    }
-
-    /// The path of the server function.
-    pub fn path(&self) -> &'static str {
-        self.path
-    }
-
-    /// The HTTP method the server function expects.
-    pub fn method(&self) -> Method {
-        self.method.clone()
-    }
-
-    /// The handler for this server function.
-    pub fn handler(&self, req: Req) -> impl Future<Output = Res> + Send {
-        (self.handler)(req)
-    }
-
-    /// The set of middleware that should be applied to this function.
-    pub fn middleware(&self) -> MiddlewareSet<Req, Res> {
-        (self.middleware)()
-    }
-
-    /// Converts the server function into a boxed service.
-    pub fn boxed(self) -> BoxedService<Req, Res>
-    where
-        Self: Service<Req, Res>,
-        Req: 'static,
-        Res: 'static,
-    {
-        BoxedService::new(self.ser, self)
-    }
-}
-
-impl<Req, Res> Service<Req, Res> for ServerFnObj<Req, Res>
-where
-    Req: Send + 'static,
-    Res: 'static,
-{
-    fn run(
-        &mut self,
-        req: Req,
-        _ser: fn(ServerFnError) -> Bytes,
-    ) -> Pin<Box<dyn Future<Output = Res> + Send>> {
-        let handler = self.handler;
-        Box::pin(async move { handler(req).await })
-    }
-}
-
-impl Clone for ServerFnObj {
-    // impl<Req, Res> Clone for ServerFnTraitObj<Req, Res> {
-    fn clone(&self) -> Self {
-        Self {
-            path: self.path,
-            method: self.method.clone(),
-            handler: self.handler,
-            middleware: self.middleware,
-            ser: self.ser,
-        }
-    }
-}
-
-#[allow(unused)] // used by server integrations
-pub type LazyServerFnMap<Req, Res> = LazyLock<DashMap<(String, Method), ServerFnObj<Req, Res>>>;
-
-impl<Req: 'static, Res: 'static> inventory::Collect for ServerFnObj<Req, Res> {
-    #[inline]
-    fn registry() -> &'static inventory::Registry {
-        static REGISTRY: inventory::Registry = inventory::Registry::new();
-        &REGISTRY
-    }
-}

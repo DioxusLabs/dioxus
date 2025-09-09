@@ -18,31 +18,6 @@ pub fn get_server_url() -> &'static str {
     ROOT_URL.get().copied().unwrap_or("")
 }
 
-/// A client defines a pair of request/response types and the logic to send
-/// and receive them.
-///
-/// This trait is implemented for things like a browser `fetch` request or for
-/// the `reqwest` trait. It should almost never be necessary to implement it
-/// yourself, unless you’re trying to use an alternative HTTP crate on the client side.
-pub trait Client<Error = HybridError, InputStreamError = Error, OutputStreamError = Error> {
-    /// Sends the request and receives a response.
-    fn send(req: HybridRequest) -> impl Future<Output = Result<HybridResponse, Error>> + Send;
-
-    /// Opens a websocket connection to the server.
-    #[allow(clippy::type_complexity)]
-    fn open_websocket(
-        path: &str,
-    ) -> impl Future<
-        Output = Result<
-            (
-                impl Stream<Item = Result<Bytes, Bytes>> + Send + 'static,
-                impl Sink<Bytes> + Send + 'static,
-            ),
-            Error,
-        >,
-    > + Send;
-}
-
 pub mod current {
     use futures::FutureExt;
 

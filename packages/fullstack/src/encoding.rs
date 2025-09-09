@@ -2,7 +2,7 @@ use base64::{engine::general_purpose::STANDARD_NO_PAD, DecodeError, Engine};
 
 use crate::{FromServerFnError, ServerFnError};
 
-use super::client::Client;
+// use super::client::Client;
 // use super::codec::{Encoding, FromReq, FromRes, IntoReq, IntoRes};
 
 // #[cfg(feature = "form-redirects")]
@@ -49,6 +49,7 @@ pub trait Decodes<T> {
 pub enum Format {
     /// Binary representation
     Binary,
+
     /// utf-8 compatible text representation
     Text,
 }

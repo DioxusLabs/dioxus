@@ -1,4 +1,4 @@
-use crate::ServerFnError;
+use crate::{Encodes, ServerFnError};
 
 pub fn fetch(url: &str) -> RequestBuilder {
     RequestBuilder::new(url)
@@ -18,6 +18,10 @@ impl RequestBuilder {
     pub fn json(&mut self, _json: &serde_json::Value) -> &mut Self {
         self
     }
+
+    // pub fn body<E: Encodes<T>>(&mut self, _body: &E) -> &mut Self {
+    //     self
+    // }
 
     pub async fn send(&self) -> Result<Response, ServerFnError> {
         Ok(Response {})
