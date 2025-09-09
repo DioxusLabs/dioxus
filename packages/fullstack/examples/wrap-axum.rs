@@ -7,7 +7,7 @@ use http::StatusCode;
 #[tokio::main]
 async fn main() {
     // Create the app
-    let mut app: Router<Arc<DioxusAppState>> = Router::new();
+    let mut app: Router<Arc<DioxusServerState>> = Router::new();
 
     for sf in inventory::iter::<NewServerFunction> {
         app = app.route(sf.path, (sf.make_routing)());
@@ -18,9 +18,8 @@ async fn main() {
         .await
         .unwrap();
     println!("listening on http://127.0.0.1:3000");
-    axum::serve(listener, app.with_state(Arc::new(DioxusAppState {})))
-        .await
-        .unwrap();
+    let out = app.with_state(Arc::new(DioxusServerState {}));
+    axum::serve(listener, out).await.unwrap();
 }
 
 #[derive(serde::Deserialize)]
@@ -36,12 +35,12 @@ struct BodyData {
     // bytes: Bytes,
 }
 
-struct DioxusAppState {}
+struct DioxusServerState {}
 
 // #[get("/thing/{a}/{b}?amount&offset")]
 #[axum::debug_handler]
 async fn do_thing23(
-    state: axum::extract::State<Arc<DioxusAppState>>,
+    state: axum::extract::State<Arc<DioxusServerState>>,
     params: axum::extract::Query<QueryParams>,
     #[cfg(feature = "server")] headers: http::HeaderMap,
     // #[cfg(feature = "server")] body: axum::extract::Json<BodyData>,
@@ -67,12 +66,12 @@ inventory::submit!(NewServerFunction {
 
 #[derive(Clone)]
 struct NewServerFunction {
-    make_routing: fn() -> axum::routing::MethodRouter<Arc<DioxusAppState>>,
+    make_routing: fn() -> axum::routing::MethodRouter<Arc<DioxusServerState>>,
     method: http::Method,
     path: &'static str,
 }
 
-fn make_routing() -> axum::routing::MethodRouter<Arc<DioxusAppState>> {
+fn make_routing() -> axum::routing::MethodRouter<Arc<DioxusServerState>> {
     axum::routing::get(do_thing23)
 }
 

@@ -22,41 +22,40 @@ use tokio::task::JoinHandle;
 
 use crate::StreamingMode;
 
-/// A suspense boundary that is pending with a placeholder in the client
-struct PendingSuspenseBoundary {
-    mount: Mount,
-    children: Vec<ScopeId>,
+/// State used in server side rendering. This utilizes a pool of [`dioxus_ssr::Renderer`]s to cache static templates between renders.
+#[derive(Clone)]
+pub struct SSRState {
+    // We keep a pool of renderers to avoid re-creating them on every request. They are boxed to make them very cheap to move
+    renderers: Arc<SsrRendererPool>,
 }
 
-/// Spawn a task in the background. If wasm is enabled, this will use the single threaded tokio runtime
-fn spawn_platform<Fut>(f: impl FnOnce() -> Fut + Send + 'static) -> JoinHandle<Fut::Output>
-where
-    Fut: Future + 'static,
-    Fut::Output: Send + 'static,
-{
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        use tokio_util::task::LocalPoolHandle;
-        static TASK_POOL: std::sync::OnceLock<LocalPoolHandle> = std::sync::OnceLock::new();
-
-        let pool = TASK_POOL.get_or_init(|| {
-            LocalPoolHandle::new(
-                std::thread::available_parallelism()
-                    .map(usize::from)
-                    .unwrap_or(1),
-            )
-        });
-
-        pool.spawn_pinned(f)
+impl SSRState {
+    /// Create a new [`SSRState`].
+    pub fn new(cfg: &ServeConfig) -> Self {
+        Self {
+            renderers: Arc::new(SsrRendererPool::new(4, cfg.incremental.clone())),
+        }
     }
-    #[cfg(target_arch = "wasm32")]
-    {
-        tokio::task::spawn_local(f())
-    }
-}
 
-fn in_root_scope<T>(virtual_dom: &VirtualDom, f: impl FnOnce() -> T) -> T {
-    virtual_dom.in_runtime(|| ScopeId::ROOT.in_runtime(f))
+    /// Render the application to HTML.
+    pub async fn render<'a>(
+        &'a self,
+        route: String,
+        cfg: &'a ServeConfig,
+        virtual_dom_factory: impl FnOnce() -> VirtualDom + Send + Sync + 'static,
+        server_context: &'a DioxusServerContext,
+    ) -> Result<
+        (
+            RenderFreshness,
+            impl Stream<Item = Result<String, dioxus_isrg::IncrementalRendererError>>,
+        ),
+        SSRError,
+    > {
+        self.renderers
+            .clone()
+            .render_to(cfg, route, virtual_dom_factory, server_context)
+            .await
+    }
 }
 
 /// Errors that can occur during server side rendering before the initial chunk is sent down
@@ -67,17 +66,23 @@ pub enum SSRError {
     Routing(ParseRouteError),
 }
 
-struct SsrRendererPool {
+/// A suspense boundary that is pending with a placeholder in the client
+struct PendingSuspenseBoundary {
+    mount: Mount,
+    children: Vec<ScopeId>,
+}
+
+pub(crate) struct SsrRendererPool {
     renderers: RwLock<Vec<Renderer>>,
     incremental_cache: Option<RwLock<dioxus_isrg::IncrementalRenderer>>,
 }
 
 impl SsrRendererPool {
-    fn new(
+    pub(crate) fn new(
         initial_size: usize,
         incremental: Option<dioxus_isrg::IncrementalRendererConfig>,
     ) -> Self {
-        let renderers = RwLock::new((0..initial_size).map(|_| pre_renderer()).collect());
+        let renderers = RwLock::new((0..initial_size).map(|_| Self::pre_renderer()).collect());
         Self {
             renderers,
             incremental_cache: incremental.map(|cache| RwLock::new(cache.build())),
@@ -183,7 +188,7 @@ impl SsrRendererPool {
             .write()
             .unwrap()
             .pop()
-            .unwrap_or_else(pre_renderer);
+            .unwrap_or_else(Self::pre_renderer);
 
         let myself = self.clone();
         let streaming_mode = cfg.streaming_mode;
@@ -287,7 +292,7 @@ impl SsrRendererPool {
             {
                 let scope_to_mount_mapping = scope_to_mount_mapping.clone();
                 let stream = stream.clone();
-                renderer.set_render_components(streaming_render_component_callback(
+                renderer.set_render_components(Self::streaming_render_component_callback(
                     stream,
                     scope_to_mount_mapping,
                 ));
@@ -328,7 +333,7 @@ impl SsrRendererPool {
                             renderer.reset_hydration();
                             renderer.render_scope(into, &virtual_dom, scope)
                         };
-                        let resolved_data = serialize_server_data(&virtual_dom, scope);
+                        let resolved_data = Self::serialize_server_data(&virtual_dom, scope);
                         if let Err(err) = stream.replace_placeholder(
                             pending_suspense_boundary.mount,
                             render_suspense,
@@ -351,7 +356,7 @@ impl SsrRendererPool {
                             // we need to capture the errors and send them to the client as it resolves
                             virtual_dom.in_runtime(|| {
                                 for &suspense_scope in pending_suspense_boundary.children.iter() {
-                                    start_capturing_errors(suspense_scope);
+                                    Self::start_capturing_errors(suspense_scope);
                                 }
                             });
                         }
@@ -409,196 +414,166 @@ impl SsrRendererPool {
             },
         ))
     }
-}
 
-/// Create the streaming render component callback. It will keep track of what scopes are mounted to what pending
-/// suspense boundaries in the DOM.
-///
-/// This mapping is used to replace the DOM mount with the resolved contents once the suspense boundary is finished.
-fn streaming_render_component_callback(
-    stream: Arc<StreamingRenderer<IncrementalRendererError>>,
-    scope_to_mount_mapping: Arc<RwLock<HashMap<ScopeId, PendingSuspenseBoundary>>>,
-) -> impl Fn(&mut Renderer, &mut dyn Write, &VirtualDom, ScopeId) -> std::fmt::Result
-       + Send
-       + Sync
-       + 'static {
-    // We use a stack to keep track of what suspense boundaries we are nested in to add children to the correct boundary
-    // The stack starts with the root scope because the root is a suspense boundary
-    let pending_suspense_boundaries_stack = RwLock::new(vec![]);
-    move |renderer, to, vdom, scope| {
-        let is_suspense_boundary =
-            SuspenseContext::downcast_suspense_boundary_from_scope(&vdom.runtime(), scope)
-                .filter(|s| s.has_suspended_tasks())
-                .is_some();
-        if is_suspense_boundary {
-            let mount = stream.render_placeholder(
-                |to| {
-                    {
-                        pending_suspense_boundaries_stack
-                            .write()
-                            .unwrap()
-                            .push(scope);
-                    }
-                    let out = renderer.render_scope(to, vdom, scope);
-                    {
-                        pending_suspense_boundaries_stack.write().unwrap().pop();
-                    }
-                    out
-                },
-                &mut *to,
-            )?;
-            // Add the suspense boundary to the list of pending suspense boundaries
-            // We will replace the mount with the resolved contents later once the suspense boundary is resolved
-            let mut scope_to_mount_mapping_write = scope_to_mount_mapping.write().unwrap();
-            scope_to_mount_mapping_write.insert(
-                scope,
-                PendingSuspenseBoundary {
-                    mount,
-                    children: vec![],
-                },
-            );
-            // Add the scope to the list of children of the parent suspense boundary
-            let pending_suspense_boundaries_stack =
-                pending_suspense_boundaries_stack.read().unwrap();
-            // If there is a parent suspense boundary, add the scope to the list of children
-            // This suspense boundary will start capturing errors when the parent is resolved
-            if let Some(parent) = pending_suspense_boundaries_stack.last() {
-                let parent = scope_to_mount_mapping_write.get_mut(parent).unwrap();
-                parent.children.push(scope);
-            }
-            // Otherwise this is a root suspense boundary, so we need to start capturing errors immediately
-            else {
-                vdom.in_runtime(|| {
-                    start_capturing_errors(scope);
-                });
-            }
-        } else {
-            renderer.render_scope(to, vdom, scope)?
-        }
-        Ok(())
+    fn pre_renderer() -> Renderer {
+        let mut renderer = Renderer::default();
+        renderer.pre_render = true;
+        renderer
     }
-}
 
-/// Start capturing errors at a suspense boundary. If the parent suspense boundary is frozen, we need to capture the errors in the suspense boundary
-/// and send them to the client to continue bubbling up
-fn start_capturing_errors(suspense_scope: ScopeId) {
-    // Add an error boundary to the scope
-    suspense_scope.in_runtime(provide_error_boundary);
-}
-
-fn serialize_server_data(virtual_dom: &VirtualDom, scope: ScopeId) -> SerializedHydrationData {
-    // After we replace the placeholder in the dom with javascript, we need to send down the resolved data so that the client can hydrate the node
-    // Extract any data we serialized for hydration (from server futures)
-    let html_data = extract_from_suspense_boundary(virtual_dom, scope);
-
-    // serialize the server state into a base64 string
-    html_data.serialized()
-}
-
-/// Walks through the suspense boundary in a depth first order and extracts the data from the context API.
-/// We use depth first order instead of relying on the order the hooks are called in because during suspense on the server, the order that futures are run in may be non deterministic.
-pub(crate) fn extract_from_suspense_boundary(
-    vdom: &VirtualDom,
-    scope: ScopeId,
-) -> HydrationContext {
-    let data = HydrationContext::default();
-    serialize_errors(&data, vdom, scope);
-    take_from_scope(&data, vdom, scope);
-    data
-}
-
-/// Get the errors from the suspense boundary
-fn serialize_errors(context: &HydrationContext, vdom: &VirtualDom, scope: ScopeId) {
-    // If there is an error boundary on the suspense boundary, grab the error from the context API
-    // and throw it on the client so that it bubbles up to the nearest error boundary
-    let error = vdom.in_runtime(|| {
-        scope
-            .consume_context::<ErrorContext>()
-            .and_then(|error_context| error_context.errors().first().cloned())
-    });
-    context
-        .error_entry()
-        .insert(&error, std::panic::Location::caller());
-}
-
-fn take_from_scope(context: &HydrationContext, vdom: &VirtualDom, scope: ScopeId) {
-    vdom.in_runtime(|| {
-        scope.in_runtime(|| {
-            // Grab any serializable server context from this scope
-            let other: Option<HydrationContext> = has_context();
-            if let Some(other) = other {
-                context.extend(&other);
+    /// Create the streaming render component callback. It will keep track of what scopes are mounted to what pending
+    /// suspense boundaries in the DOM.
+    ///
+    /// This mapping is used to replace the DOM mount with the resolved contents once the suspense boundary is finished.
+    fn streaming_render_component_callback(
+        stream: Arc<StreamingRenderer<IncrementalRendererError>>,
+        scope_to_mount_mapping: Arc<RwLock<HashMap<ScopeId, PendingSuspenseBoundary>>>,
+    ) -> impl Fn(&mut Renderer, &mut dyn Write, &VirtualDom, ScopeId) -> std::fmt::Result
+           + Send
+           + Sync
+           + 'static {
+        // We use a stack to keep track of what suspense boundaries we are nested in to add children to the correct boundary
+        // The stack starts with the root scope because the root is a suspense boundary
+        let pending_suspense_boundaries_stack = RwLock::new(vec![]);
+        move |renderer, to, vdom, scope| {
+            let is_suspense_boundary =
+                SuspenseContext::downcast_suspense_boundary_from_scope(&vdom.runtime(), scope)
+                    .filter(|s| s.has_suspended_tasks())
+                    .is_some();
+            if is_suspense_boundary {
+                let mount = stream.render_placeholder(
+                    |to| {
+                        {
+                            pending_suspense_boundaries_stack
+                                .write()
+                                .unwrap()
+                                .push(scope);
+                        }
+                        let out = renderer.render_scope(to, vdom, scope);
+                        {
+                            pending_suspense_boundaries_stack.write().unwrap().pop();
+                        }
+                        out
+                    },
+                    &mut *to,
+                )?;
+                // Add the suspense boundary to the list of pending suspense boundaries
+                // We will replace the mount with the resolved contents later once the suspense boundary is resolved
+                let mut scope_to_mount_mapping_write = scope_to_mount_mapping.write().unwrap();
+                scope_to_mount_mapping_write.insert(
+                    scope,
+                    PendingSuspenseBoundary {
+                        mount,
+                        children: vec![],
+                    },
+                );
+                // Add the scope to the list of children of the parent suspense boundary
+                let pending_suspense_boundaries_stack =
+                    pending_suspense_boundaries_stack.read().unwrap();
+                // If there is a parent suspense boundary, add the scope to the list of children
+                // This suspense boundary will start capturing errors when the parent is resolved
+                if let Some(parent) = pending_suspense_boundaries_stack.last() {
+                    let parent = scope_to_mount_mapping_write.get_mut(parent).unwrap();
+                    parent.children.push(scope);
+                }
+                // Otherwise this is a root suspense boundary, so we need to start capturing errors immediately
+                else {
+                    vdom.in_runtime(|| {
+                        Self::start_capturing_errors(scope);
+                    });
+                }
+            } else {
+                renderer.render_scope(to, vdom, scope)?
             }
+            Ok(())
+        }
+    }
+
+    /// Start capturing errors at a suspense boundary. If the parent suspense boundary is frozen, we need to capture the errors in the suspense boundary
+    /// and send them to the client to continue bubbling up
+    fn start_capturing_errors(suspense_scope: ScopeId) {
+        // Add an error boundary to the scope
+        suspense_scope.in_runtime(provide_error_boundary);
+    }
+
+    fn serialize_server_data(virtual_dom: &VirtualDom, scope: ScopeId) -> SerializedHydrationData {
+        // After we replace the placeholder in the dom with javascript, we need to send down the resolved data so that the client can hydrate the node
+        // Extract any data we serialized for hydration (from server futures)
+        let html_data = Self::extract_from_suspense_boundary(virtual_dom, scope);
+
+        // serialize the server state into a base64 string
+        html_data.serialized()
+    }
+
+    /// Walks through the suspense boundary in a depth first order and extracts the data from the context API.
+    /// We use depth first order instead of relying on the order the hooks are called in because during suspense on the server, the order that futures are run in may be non deterministic.
+    pub(crate) fn extract_from_suspense_boundary(
+        vdom: &VirtualDom,
+        scope: ScopeId,
+    ) -> HydrationContext {
+        let data = HydrationContext::default();
+        Self::serialize_errors(&data, vdom, scope);
+        Self::take_from_scope(&data, vdom, scope);
+        data
+    }
+
+    /// Get the errors from the suspense boundary
+    fn serialize_errors(context: &HydrationContext, vdom: &VirtualDom, scope: ScopeId) {
+        // If there is an error boundary on the suspense boundary, grab the error from the context API
+        // and throw it on the client so that it bubbles up to the nearest error boundary
+        let error = vdom.in_runtime(|| {
+            scope
+                .consume_context::<ErrorContext>()
+                .and_then(|error_context| error_context.errors().first().cloned())
         });
-    });
-
-    // then continue to any children
-    if let Some(scope) = vdom.get_scope(scope) {
-        // If this is a suspense boundary, move into the children first (even if they are suspended) because that will be run first on the client
-        if let Some(suspense_boundary) =
-            SuspenseContext::downcast_suspense_boundary_from_scope(&vdom.runtime(), scope.id())
-        {
-            if let Some(node) = suspense_boundary.suspended_nodes() {
-                take_from_vnode(context, vdom, &node);
-            }
-        }
-        if let Some(node) = scope.try_root_node() {
-            take_from_vnode(context, vdom, node);
-        }
+        context
+            .error_entry()
+            .insert(&error, std::panic::Location::caller());
     }
-}
 
-fn take_from_vnode(context: &HydrationContext, vdom: &VirtualDom, vnode: &VNode) {
-    for (dynamic_node_index, dyn_node) in vnode.dynamic_nodes.iter().enumerate() {
-        match dyn_node {
-            DynamicNode::Component(comp) => {
-                if let Some(scope) = comp.mounted_scope(dynamic_node_index, vnode, vdom) {
-                    take_from_scope(context, vdom, scope.id());
+    fn take_from_scope(context: &HydrationContext, vdom: &VirtualDom, scope: ScopeId) {
+        vdom.in_runtime(|| {
+            scope.in_runtime(|| {
+                // Grab any serializable server context from this scope
+                let other: Option<HydrationContext> = has_context();
+                if let Some(other) = other {
+                    context.extend(&other);
+                }
+            });
+        });
+
+        // then continue to any children
+        if let Some(scope) = vdom.get_scope(scope) {
+            // If this is a suspense boundary, move into the children first (even if they are suspended) because that will be run first on the client
+            if let Some(suspense_boundary) =
+                SuspenseContext::downcast_suspense_boundary_from_scope(&vdom.runtime(), scope.id())
+            {
+                if let Some(node) = suspense_boundary.suspended_nodes() {
+                    Self::take_from_vnode(context, vdom, &node);
                 }
             }
-            DynamicNode::Fragment(nodes) => {
-                for node in nodes {
-                    take_from_vnode(context, vdom, node);
-                }
+            if let Some(node) = scope.try_root_node() {
+                Self::take_from_vnode(context, vdom, node);
             }
-            _ => {}
-        }
-    }
-}
-
-/// State used in server side rendering. This utilizes a pool of [`dioxus_ssr::Renderer`]s to cache static templates between renders.
-#[derive(Clone)]
-pub struct SSRState {
-    // We keep a pool of renderers to avoid re-creating them on every request. They are boxed to make them very cheap to move
-    renderers: Arc<SsrRendererPool>,
-}
-
-impl SSRState {
-    /// Create a new [`SSRState`].
-    pub fn new(cfg: &ServeConfig) -> Self {
-        Self {
-            renderers: Arc::new(SsrRendererPool::new(4, cfg.incremental.clone())),
         }
     }
 
-    /// Render the application to HTML.
-    pub async fn render<'a>(
-        &'a self,
-        route: String,
-        cfg: &'a ServeConfig,
-        virtual_dom_factory: impl FnOnce() -> VirtualDom + Send + Sync + 'static,
-        server_context: &'a DioxusServerContext,
-    ) -> Result<
-        (
-            RenderFreshness,
-            impl Stream<Item = Result<String, dioxus_isrg::IncrementalRendererError>>,
-        ),
-        SSRError,
-    > {
-        self.renderers
-            .clone()
-            .render_to(cfg, route, virtual_dom_factory, server_context)
-            .await
+    fn take_from_vnode(context: &HydrationContext, vdom: &VirtualDom, vnode: &VNode) {
+        for (dynamic_node_index, dyn_node) in vnode.dynamic_nodes.iter().enumerate() {
+            match dyn_node {
+                DynamicNode::Component(comp) => {
+                    if let Some(scope) = comp.mounted_scope(dynamic_node_index, vnode, vdom) {
+                        Self::take_from_scope(context, vdom, scope.id());
+                    }
+                }
+                DynamicNode::Fragment(nodes) => {
+                    for node in nodes {
+                        Self::take_from_vnode(context, vdom, node);
+                    }
+                }
+                _ => {}
+            }
+        }
     }
 }
 
@@ -681,7 +656,7 @@ impl FullstackHTMLTemplate {
 
         // Collect the initial server data from the root node. For most apps, no use_server_futures will be resolved initially, so this will be full on `None`s.
         // Sending down those Nones are still important to tell the client not to run the use_server_futures that are already running on the backend
-        let resolved_data = serialize_server_data(virtual_dom, ScopeId::ROOT);
+        let resolved_data = SsrRendererPool::serialize_server_data(virtual_dom, ScopeId::ROOT);
         // We always send down the data required to hydrate components on the client
         let raw_data = resolved_data.data;
         write!(
@@ -721,8 +696,33 @@ impl FullstackHTMLTemplate {
     }
 }
 
-fn pre_renderer() -> Renderer {
-    let mut renderer = Renderer::default();
-    renderer.pre_render = true;
-    renderer
+/// Spawn a task in the background. If wasm is enabled, this will use the single threaded tokio runtime
+fn spawn_platform<Fut>(f: impl FnOnce() -> Fut + Send + 'static) -> JoinHandle<Fut::Output>
+where
+    Fut: Future + 'static,
+    Fut::Output: Send + 'static,
+{
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        use tokio_util::task::LocalPoolHandle;
+        static TASK_POOL: std::sync::OnceLock<LocalPoolHandle> = std::sync::OnceLock::new();
+
+        let pool = TASK_POOL.get_or_init(|| {
+            LocalPoolHandle::new(
+                std::thread::available_parallelism()
+                    .map(usize::from)
+                    .unwrap_or(1),
+            )
+        });
+
+        pool.spawn_pinned(f)
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        tokio::task::spawn_local(f())
+    }
+}
+
+fn in_root_scope<T>(virtual_dom: &VirtualDom, f: impl FnOnce() -> T) -> T {
+    virtual_dom.in_runtime(|| ScopeId::ROOT.in_runtime(f))
 }

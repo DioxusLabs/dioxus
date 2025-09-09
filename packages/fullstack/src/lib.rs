@@ -16,6 +16,7 @@ pub mod websocket;
 pub use websocket::*;
 
 mod old;
+pub mod state;
 
 #[cfg(test)]
 mod tests;

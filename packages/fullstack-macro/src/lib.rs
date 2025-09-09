@@ -7,8 +7,13 @@
 
 mod server_fn_macro_dioxus;
 use proc_macro::TokenStream;
-use server_fn_macro_dioxus::ServerFnCall;
-use syn::{__private::ToTokens, parse_macro_input, parse_quote, ItemFn};
+mod typed_parser;
+// use server_fn_macro_dioxus::ServerFnCall;
+use syn::{
+    __private::ToTokens, parse::Parse, parse_macro_input, parse_quote, Ident, ItemFn, LitStr,
+};
+
+use crate::typed_parser::Method;
 
 /// Declares that a function is a [server function](https://docs.rs/server_fn/).
 /// This means that its body will only run on the server, i.e., when the `ssr`
@@ -206,84 +211,55 @@ use syn::{__private::ToTokens, parse_macro_input, parse_quote, ItemFn};
 /// ```
 #[proc_macro_attribute]
 pub fn server(args: proc_macro::TokenStream, body: TokenStream) -> TokenStream {
-    // // If there is no input codec, use json as the default
-    // #[allow(unused_mut)]
-    // let mut parsed = match ServerFnCall::parse("/api", args.into(), body.into()) {
-    //     Ok(parsed) => parsed,
-    //     Err(e) => return e.to_compile_error().into(),
-    // };
+    route_impl(args, body, None)
+}
 
-    // // parse_quote!(server_fn::Http<server_fn::codec::Json, server_fn::codec::Json>),
-    // parsed
-    //     .default_protocol(Some(
-    //         parse_quote!(dioxus_fullstack::Http<dioxus_fullstack::codec::Json, dioxus_fullstack::codec::Json>),
-    //     ))
-    //     .default_input_encoding(Some(parse_quote!(dioxus_fullstack::codec::Json)))
-    //     .default_output_encoding(Some(parse_quote!(dioxus_fullstack::codec::Json)))
-    //     .default_server_fn_path(Some(parse_quote!(dioxus_fullstack)))
-    //     .to_token_stream()
-    //     .into()
-    route_impl(body)
+#[proc_macro_attribute]
+pub fn route(attr: TokenStream, mut item: TokenStream) -> TokenStream {
+    route_impl(attr, item, None)
 }
 
 #[proc_macro_attribute]
 pub fn get(args: proc_macro::TokenStream, body: TokenStream) -> TokenStream {
-    route_impl(body)
+    route_impl(args, body, Some(Method::new_from_string("GET")))
 }
 
 #[proc_macro_attribute]
 pub fn post(args: proc_macro::TokenStream, body: TokenStream) -> TokenStream {
-    route_impl(body)
+    route_impl(args, body, Some(Method::new_from_string("POST")))
 }
 
 #[proc_macro_attribute]
 pub fn put(args: proc_macro::TokenStream, body: TokenStream) -> TokenStream {
-    route_impl(body)
+    route_impl(args, body, Some(Method::new_from_string("PUT")))
 }
 
 #[proc_macro_attribute]
 pub fn delete(args: proc_macro::TokenStream, body: TokenStream) -> TokenStream {
-    route_impl(body)
+    route_impl(args, body, Some(Method::new_from_string("DELETE")))
 }
 
 #[proc_macro_attribute]
 pub fn patch(args: proc_macro::TokenStream, body: TokenStream) -> TokenStream {
-    route_impl(body)
+    route_impl(args, body, Some(Method::new_from_string("PATCH")))
 }
 
 #[proc_macro_attribute]
-pub fn route(args: proc_macro::TokenStream, body: TokenStream) -> TokenStream {
-    route_impl(body)
-}
-#[proc_macro_attribute]
 pub fn middleware(args: proc_macro::TokenStream, body: TokenStream) -> TokenStream {
-    route_impl(body)
+    route_impl(args, body, None)
 }
 #[proc_macro_attribute]
 pub fn layer(args: proc_macro::TokenStream, body: TokenStream) -> TokenStream {
-    route_impl(body)
+    route_impl(args, body, None)
 }
 
-fn route_impl(body: TokenStream) -> TokenStream {
-    let f: ItemFn = parse_macro_input!(body);
-
-    let ItemFn {
-        attrs,
-        vis,
-        sig,
-        block,
-    } = f;
-
-    quote::quote! {
-        #vis #sig {
-            #[cfg(feature = "server")] {
-                #block
-            }
-
-            #[cfg(not(feature = "server"))] {
-                todo!()
-            }
+fn route_impl(attr: TokenStream, mut item: TokenStream, method: Option<Method>) -> TokenStream {
+    match typed_parser::route_impl(attr, item.clone(), false, method) {
+        Ok(tokens) => tokens.into(),
+        Err(err) => {
+            let err: TokenStream = err.to_compile_error().into();
+            item.extend(err);
+            item
         }
     }
-    .into()
 }

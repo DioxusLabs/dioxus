@@ -13,7 +13,7 @@ use super::codec::Encoding;
 // #[cfg(feature = "form-redirects")]
 // use super::error::ServerFnUrlError;
 
-use super::middleware::{BoxedService, Layer, Service};
+// use super::middleware::{BoxedService, Layer, Service};
 use super::redirect::call_redirect_hook;
 // use super::response::{Res, TryRes};
 // use super::response::{ClientRes, Res, TryRes};

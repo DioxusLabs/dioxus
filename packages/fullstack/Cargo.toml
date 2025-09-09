@@ -89,7 +89,7 @@ web-sys = { version = "0.3.77", optional = true, features = [
 subsecond = { workspace =  true }
 dioxus-cli-config = { workspace = true, optional = true }
 tokio-tungstenite = { workspace = true }
-dioxus-devtools = { workspace = true }
+dioxus-devtools = { workspace = true, features = ["serve"] }
 aws-lc-rs = { version = "1.13.1", optional = true }
 dioxus-history = { workspace = true }
 http.workspace = true

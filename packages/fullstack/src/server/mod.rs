@@ -20,6 +20,7 @@ use tower_http::services::{fs::ServeFileSystemResponseBody, ServeDir};
 
 pub mod register;
 pub mod renderer;
+pub mod router;
 
 /// A extension trait with utilities for integrating Dioxus with your Axum router.
 pub trait DioxusRouterExt<S>: DioxusRouterFnExt<S> {
