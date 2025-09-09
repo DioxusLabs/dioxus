@@ -32,22 +32,15 @@ pub(crate) fn finalize_route() {
     let Some(entry) = try_consume_context::<RouteEntry>() else {
         return;
     };
-    let entry = entry
-        .entry
-        .borrow_mut()
-        .take()
-        .expect("Failed to get initial route from hydration context");
+    let Some(entry) = entry.entry.borrow_mut().take() else {
+        // If it was already taken, then just return. This can happen if commit_initial_chunk is called twice
+        return;
+    };
     if cfg!(feature = "server") {
         let history = history();
         let initial_route = history.current_route();
         entry.insert(&initial_route, std::panic::Location::caller());
-        provide_context(ResolvedRouteContext {
-            route: initial_route,
-        });
-    } else if cfg!(feature = "web") {
-        let initial_route = entry
-            .get()
-            .expect("Failed to get initial route from hydration context");
+
         provide_context(ResolvedRouteContext {
             route: initial_route,
         });
@@ -86,10 +79,19 @@ impl<H> FullstackHistory<H> {
     where
         H: History,
     {
-        match try_consume_context::<ResolvedRouteContext>() {
-            Some(context) => context.route,
-            None => self.history.current_route(),
+        // If the route hydration entry is set, use that instead of the histories current route
+        // for better hydration behavior. The client may be rendering from a ssg route that was
+        // rendered at a different url
+        if let Some(entry) = try_consume_context::<RouteEntry>() {
+            let entry = entry.entry.borrow();
+            if let Some(entry) = &*entry {
+                if let Ok(initial_route) = entry.get() {
+                    return initial_route;
+                }
+            }
         }
+
+        self.history.current_route()
     }
 }
 
