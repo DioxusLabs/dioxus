@@ -83,18 +83,17 @@ impl AssetOptionsBuilder<CssAssetOptions> {
         self
     }
 
-    /// Make the asset dynamically inserted (default: false)
+    /// Make the asset statically inserted (default: false)
     ///
-    /// Dynamically inserting the file will use js to add it to the DOM, otherwise the file will
-    /// be available at the initial rendering of the page.
+    /// Statically insert the file at compile time.
     ///
     /// ```rust
     /// # use manganis::{asset, Asset, AssetOptions};
-    /// const _: Asset = asset!("/assets/style.css", AssetOptions::css().with_dynamic(true));
+    /// const _: Asset = asset!("/assets/style.css", AssetOptions::css().with_static_head(true));
     /// ```
     #[allow(unused)]
-    pub const fn with_dynamic(mut self, dynamic: bool) -> Self {
-        self.variant.static_head = dynamic;
+    pub const fn with_static_head(mut self, static_head: bool) -> Self {
+        self.variant.static_head = static_head;
         self
     }
 
