@@ -1,8 +1,8 @@
 //! A launch function that creates an axum router for the LaunchBuilder
 
 use crate::{
-    collect_raw_server_fns, render_handler, server::DioxusRouterExt, RenderHandleState, SSRState,
-    ServeConfig, ServeConfigBuilder,
+    render_handler, server::DioxusRouterExt, RenderHandleState, SSRState, ServeConfig,
+    ServeConfigBuilder,
 };
 use axum::{
     body::Body,
@@ -147,12 +147,14 @@ async fn serve_server(
                     DevserverMsg::HotReload(hot_reload_msg) => {
                         if hot_reload_msg.for_build_id == Some(dioxus_cli_config::build_id()) {
                             if let Some(table) = hot_reload_msg.jump_table {
+                                use crate::ServerFunction;
+
                                 unsafe { dioxus_devtools::subsecond::apply_patch(table).unwrap() };
 
                                 let mut new_router = axum::Router::new().serve_static_assets();
                                 let new_cfg = ServeConfig::new().unwrap();
 
-                                let server_fn_iter = collect_raw_server_fns();
+                                let server_fn_iter = ServerFunction::collect_static();
 
                                 // de-duplicate iteratively by preferring the most recent (first, since it's linked)
                                 let mut server_fn_map: HashMap<_, _> = HashMap::new();
@@ -166,8 +168,7 @@ async fn serve_server(
                                         fn_.path(),
                                         fn_.method()
                                     );
-                                    new_router = crate::register_server_fn_on_router(
-                                        fn_,
+                                    new_router = fn_.register_server_fn_on_router(
                                         new_router,
                                         new_cfg.context_providers.clone(),
                                     );

@@ -1,7 +1,7 @@
 #![doc = include_str!("../README.md")]
 #![doc(html_logo_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
-#![warn(missing_docs)]
+// #![warn(missing_docs)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![forbid(unexpected_cfgs)]
 
@@ -9,6 +9,8 @@ pub mod http_fn;
 pub mod ws_fn;
 
 pub mod fetch;
+pub mod protocols;
+pub use protocols::*;
 
 pub mod websocket;
 pub use websocket::*;
@@ -209,7 +211,7 @@ macro_rules! make_server_fn {
                 }
 
                 inventory::submit! {
-                    AxumServerFn::new(
+                    ServerFunction::new(
                         http::Method::GET,
                         "/thing",
                         |req| {

@@ -5,13 +5,13 @@ use bytes::Bytes;
 use crate::ServerFnError;
 
 /// A WebSocket connection that can send and receive messages of type `In` and `Out`.
-pub struct Websocket<In = Bytes, Out = Bytes> {
+pub struct WebSocket<In = Bytes, Out = Bytes> {
     _in: std::marker::PhantomData<In>,
     _out: std::marker::PhantomData<Out>,
 }
 
 /// Create a new WebSocket connection that uses the provided function to handle incoming messages
-impl Websocket {
+impl WebSocket {
     pub fn new<F: Future<Output = ()>>(f: impl Fn((), ()) -> F) -> Self {
         Self {
             _in: std::marker::PhantomData,

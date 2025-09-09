@@ -148,28 +148,6 @@
 // InputStreamError = Error,
 // OutputStreamError = Error,
 
-// /// The protocol that a server function uses to communicate with the client. This trait handles
-// /// the server and client side of running a server function. It is implemented for the [`Http`] and
-// /// [`Websocket`] protocols and can be used to implement custom protocols.
-// pub trait Protocol<Input, Output> {
-//     /// The HTTP method used for requests.
-//     const METHOD: Method;
-
-//     /// Run the server function on the server. The implementation should handle deserializing the
-//     /// input, running the server function, and serializing the output.
-//     async fn run_server<F, Fut>(
-//         request: HybridRequest,
-//         server_fn: F,
-//     ) -> Result<HybridResponse, HybridError>
-//     where
-//         F: Fn(Input) -> Fut + Send,
-//         Fut: Future<Output = Result<Output, HybridError>>;
-
-//     /// Run the server function on the client. The implementation should handle serializing the
-//     /// input, sending the request, and deserializing the output.
-//     async fn run_client(path: &str, input: Input) -> Result<Output, HybridError>;
-// }
-
 // /// A client defines a pair of request/response types and the logic to send
 // /// and receive them.
 // ///

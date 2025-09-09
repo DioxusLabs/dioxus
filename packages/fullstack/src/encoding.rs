@@ -8,23 +8,23 @@ use crate::{FromServerFnError, ServerFnError};
 // #[cfg(feature = "form-redirects")]
 // use super::error::ServerFnUrlError;
 
-use super::middleware::{BoxedService, Layer, Service};
-use super::redirect::call_redirect_hook;
+// use super::middleware::{BoxedService, Layer, Service};
+// use super::redirect::call_redirect_hook;
 // use super::response::{Res, TryRes};
 // use super::response::{ClientRes, Res, TryRes};
 use bytes::{BufMut, Bytes, BytesMut};
-use dashmap::DashMap;
-use futures::{pin_mut, SinkExt, Stream, StreamExt};
-use http::Method;
+// use dashmap::DashMap;
+// use futures::{pin_mut, SinkExt, Stream, StreamExt};
+// use http::Method;
 
 // use super::server::Server;
 use std::{
     fmt::{Debug, Display},
-    future::Future,
-    marker::PhantomData,
-    ops::{Deref, DerefMut},
-    pin::Pin,
-    sync::{Arc, LazyLock},
+    // future::Future,
+    // marker::PhantomData,
+    // ops::{Deref, DerefMut},
+    // pin::Pin,
+    // sync::{Arc, LazyLock},
 };
 
 /// A trait for types that can be encoded into a bytes for a request body.
@@ -87,7 +87,7 @@ pub trait FormatType {
 // Format: [tag: u8][content: Bytes]
 // - Tag 0: Ok variant
 // - Tag 1: Err variant
-pub fn serialize_result(result: Result<Bytes, Bytes>) -> Bytes {
+pub(crate) fn serialize_result(result: Result<Bytes, Bytes>) -> Bytes {
     match result {
         Ok(bytes) => {
             let mut buf = BytesMut::with_capacity(1 + bytes.len());
@@ -105,7 +105,7 @@ pub fn serialize_result(result: Result<Bytes, Bytes>) -> Bytes {
 }
 
 // Deserializes a Bytes instance back into a Result<Bytes, Bytes>.
-pub fn deserialize_result<E: FromServerFnError>(bytes: Bytes) -> Result<Bytes, Bytes> {
+pub(crate) fn deserialize_result<E: FromServerFnError>(bytes: Bytes) -> Result<Bytes, Bytes> {
     if bytes.is_empty() {
         return Err(E::from_server_fn_error(ServerFnError::Deserialization(
             "Data is empty".into(),

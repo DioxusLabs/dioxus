@@ -5,6 +5,8 @@ use std::collections::HashMap;
 use std::sync::atomic::AtomicU32;
 use std::sync::Arc;
 
+use crate::ContextProviders;
+
 type SendSyncAnyMap = std::collections::HashMap<std::any::TypeId, ContextType>;
 
 #[derive(EnumSetType)]
@@ -90,6 +92,15 @@ impl Default for DioxusServerContext {
             )),
             parts: Arc::new(RwLock::new(http::request::Request::new(()).into_parts().0)),
             response_sent: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        }
+    }
+}
+
+impl DioxusServerContext {
+    pub(crate) fn add_server_context(&self, context_providers: &ContextProviders) {
+        for index in 0..context_providers.len() {
+            let context_providers = context_providers.clone();
+            self.insert_boxed_factory(Box::new(move || context_providers[index]()));
         }
     }
 }

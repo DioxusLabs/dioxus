@@ -1,5 +1,5 @@
 use dioxus::prelude::*;
-use dioxus_fullstack::{codec::Json, make_server_fn, AxumServerFn, Http, Websocket};
+use dioxus_fullstack::{codec::Json, make_server_fn, Http, ServerFunction, WebSocket};
 use std::future::Future;
 
 #[tokio::main]
@@ -32,13 +32,13 @@ async fn do_thing(a: i32, b: String) -> dioxus::Result<()> {
         }
 
         inventory::submit! {
-            AxumServerFn::new(
+            ServerFunction::new(
                 http::Method::GET,
                 "/thing",
                 |req| {
-                    Box::pin(async move {
-                        todo!()
-                    })
+                    // this_protocol::run_on_server(req)
+                    // this_protocol::run_on_client(req)
+                    todo!()
                 },
                 None
             )
@@ -53,8 +53,8 @@ async fn do_thing(a: i32, b: String) -> dioxus::Result<()> {
     }
 }
 
-async fn make_websocket() -> dioxus::Result<Websocket> {
-    Ok(Websocket::new(|tx, rx| async move {
+async fn make_websocket() -> dioxus::Result<WebSocket> {
+    Ok(WebSocket::new(|tx, rx| async move {
         //
     }))
 }

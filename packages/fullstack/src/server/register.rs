@@ -1,14 +1,20 @@
-use crate::{
-    initialize_server_fn_map, middleware::BoxedService, HybridRequest, HybridResponse,
-    LazyServerFnMap, ServerFunction,
-};
+use std::sync::LazyLock;
+
+use crate::{middleware::BoxedService, HybridRequest, HybridResponse, ServerFunction};
 use axum::body::Body;
+use dashmap::DashMap;
 use http::{Method, Response, StatusCode};
 
-static REGISTERED_SERVER_FUNCTIONS: LazyServerFnMap<HybridRequest, HybridResponse> =
-    initialize_server_fn_map!(HybridRequest, HybridResponse);
+type LazyServerFnMap = LazyLock<DashMap<(String, Method), ServerFunction>>;
 
-// /// Explicitly register a server function. This is only necessary if you are
+static REGISTERED_SERVER_FUNCTIONS: LazyServerFnMap = std::sync::LazyLock::new(|| {
+    crate::inventory::iter::<ServerFunction>
+        .into_iter()
+        .map(|obj| ((obj.path().to_string(), obj.method()), obj.clone()))
+        .collect()
+});
+
+/// Explicitly register a server function. This is only necessary if you are
 // /// running the server in a WASM environment (or a rare environment that the
 // /// `inventory` crate won't work in.).
 // pub fn register_explicit<T>()
@@ -55,7 +61,7 @@ pub async fn handle_server_fn(req: HybridRequest) -> HybridResponse {
 }
 
 /// Returns the server function at the given path as a service that can be modified.
-pub fn get_server_fn_service(
+fn get_server_fn_service(
     path: &str,
     method: Method,
 ) -> Option<BoxedService<HybridRequest, HybridResponse>> {

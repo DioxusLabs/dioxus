@@ -9,7 +9,7 @@ use axum::{
     response::IntoResponse,
 };
 
-use crate::{AxumServerFn, ServerFunction};
+use crate::ServerFunction;
 use dioxus_core::{Element, VirtualDom};
 use http::header::*;
 use std::path::Path;
@@ -19,6 +19,7 @@ use tower::ServiceExt;
 use tower_http::services::{fs::ServeFileSystemResponseBody, ServeDir};
 
 pub mod register;
+pub mod renderer;
 
 /// A extension trait with utilities for integrating Dioxus with your Axum router.
 pub trait DioxusRouterExt<S>: DioxusRouterFnExt<S> {
@@ -181,16 +182,13 @@ pub trait DioxusRouterFnExt<S> {
         Self: Sized;
 }
 
-impl<S> DioxusRouterFnExt<S> for Router<S>
-where
-    S: Send + Sync + Clone + 'static,
-{
+impl<S: Send + Sync + Clone + 'static> DioxusRouterFnExt<S> for Router<S> {
     fn register_server_functions_with_context(
         mut self,
         context_providers: ContextProviders,
     ) -> Self {
-        for f in collect_raw_server_fns() {
-            self = register_server_fn_on_router(f, self, context_providers.clone());
+        for f in ServerFunction::collect_static() {
+            self = f.register_server_fn_on_router(self, context_providers.clone());
         }
         self
     }
@@ -207,104 +205,6 @@ where
             get(render_handler)
                 .with_state(RenderHandleState::new(cfg, app).with_ssr_state(ssr_state)),
         )
-    }
-}
-
-pub fn register_server_fn_on_router<S>(
-    f: &'static AxumServerFn,
-    router: Router<S>,
-    context_providers: ContextProviders,
-) -> Router<S>
-where
-    S: Send + Sync + Clone + 'static,
-{
-    use http::method::Method;
-    let path = f.path();
-    let method = f.method();
-
-    tracing::trace!("Registering server function: {} {}", method, path);
-    let handler = move |req| handle_server_fns_inner(f, context_providers, req);
-    match method {
-        Method::GET => router.route(path, get(handler)),
-        Method::POST => router.route(path, post(handler)),
-        Method::PUT => router.route(path, put(handler)),
-        _ => unimplemented!("Unsupported server function method: {}", method),
-    }
-}
-
-pub(crate) fn collect_raw_server_fns() -> Vec<&'static AxumServerFn> {
-    inventory::iter::<AxumServerFn>().collect()
-}
-
-/// A handler for Dioxus server functions. This will run the server function and return the result.
-async fn handle_server_fns_inner(
-    f: &AxumServerFn,
-    additional_context: ContextProviders,
-    req: Request<Body>,
-) -> Response<axum::body::Body> {
-    let (parts, body) = req.into_parts();
-    let req = Request::from_parts(parts.clone(), body);
-
-    // Create the server context with info from the request
-    let server_context = DioxusServerContext::new(parts);
-
-    // Provide additional context from the render state
-    add_server_context(&server_context, &additional_context);
-
-    // store Accepts and Referrer in case we need them for redirect (below)
-    let accepts_html = req
-        .headers()
-        .get(ACCEPT)
-        .and_then(|v| v.to_str().ok())
-        .map(|v| v.contains("text/html"))
-        .unwrap_or(false);
-    let referrer = req.headers().get(REFERER).cloned();
-
-    // this is taken from server_fn source...
-    //
-    // [`server_fn::axum::get_server_fn_service`]
-    let mut service = {
-        let middleware = f.middleware();
-        let mut service = f.clone().boxed();
-        for middleware in middleware {
-            service = middleware.layer(service);
-        }
-        service
-    };
-
-    let req = crate::HybridRequest { req };
-
-    // actually run the server fn (which may use the server context)
-    let fut = with_server_context(server_context.clone(), || service.run(req));
-
-    let mut res = ProvideServerContext::new(fut, server_context.clone()).await;
-    let mut res = res.res;
-
-    // it it accepts text/html (i.e., is a plain form post) and doesn't already have a
-    // Location set, then redirect to Referer
-    if accepts_html {
-        if let Some(referrer) = referrer {
-            let has_location = res.headers().get(LOCATION).is_some();
-            if !has_location {
-                *res.status_mut() = StatusCode::FOUND;
-                res.headers_mut().insert(LOCATION, referrer);
-            }
-        }
-    }
-
-    // apply the response parts from the server context to the response
-    server_context.send_response(&mut res);
-
-    res
-}
-
-pub(crate) fn add_server_context(
-    server_context: &DioxusServerContext,
-    context_providers: &ContextProviders,
-) {
-    for index in 0..context_providers.len() {
-        let context_providers = context_providers.clone();
-        server_context.insert_boxed_factory(Box::new(move || context_providers[index]()));
     }
 }
 
@@ -420,7 +320,7 @@ pub async fn render_handler(
     // Create the server context with info from the request
     let server_context = DioxusServerContext::from_shared_parts(parts.clone());
     // Provide additional context from the render state
-    add_server_context(&server_context, &state.config.context_providers);
+    server_context.add_server_context(&state.config.context_providers);
 
     match ssr_state
         .render(url, cfg, build_virtual_dom, &server_context)

@@ -14,10 +14,7 @@ impl FormatType for JsonEncoding {
     const FORMAT_TYPE: Format = Format::Text;
 }
 
-impl<T> Encodes<T> for JsonEncoding
-where
-    T: Serialize,
-{
+impl<T: Serialize> Encodes<T> for JsonEncoding {
     type Error = serde_json::Error;
 
     fn encode(output: &T) -> Result<Bytes, Self::Error> {
@@ -25,10 +22,7 @@ where
     }
 }
 
-impl<T> Decodes<T> for JsonEncoding
-where
-    T: DeserializeOwned,
-{
+impl<T: DeserializeOwned> Decodes<T> for JsonEncoding {
     type Error = serde_json::Error;
 
     fn decode(bytes: Bytes) -> Result<T, Self::Error> {

@@ -5516,7 +5516,6 @@ dependencies = [
  "dioxus-router",
  "dioxus-signals",
  "dioxus-ssr",
- "dioxus-web",
  "enumset",
  "futures",
  "futures-channel",

@@ -63,11 +63,11 @@ use futures::Future;
 use http::Method;
 // pub use stream::*;
 
-pub trait Codec<Encoding>: Sized {
+pub trait Codec<Encoding>: Sized + Send {
     fn into_req(self, path: &str, accepts: &str) -> Result<HybridRequest, HybridError>;
-    async fn from_req(req: HybridRequest) -> Result<Self, HybridError>;
-    async fn into_res(self) -> Result<HybridResponse, HybridError>;
-    async fn from_res(res: HybridResponse) -> Result<Self, HybridError>;
+    fn from_req(req: HybridRequest) -> impl Future<Output = Result<Self, HybridError>> + Send;
+    fn into_res(self) -> impl Future<Output = Result<HybridResponse, HybridError>> + Send;
+    fn from_res(res: HybridResponse) -> impl Future<Output = Result<Self, HybridError>> + Send;
 }
 
 /// Defines a particular encoding format, which can be used for serializing or deserializing data.
