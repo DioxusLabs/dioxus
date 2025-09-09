@@ -18,6 +18,7 @@ use crate::{AssetOptions, AssetOptionsBuilder, AssetVariant};
 pub struct JsAssetOptions {
     minify: bool,
     preload: bool,
+    dynamic: bool,
 }
 
 impl Default for JsAssetOptions {
@@ -37,12 +38,18 @@ impl JsAssetOptions {
         Self {
             preload: false,
             minify: true,
+            dynamic: false,
         }
     }
 
     /// Check if the asset is preloaded
     pub const fn preloaded(&self) -> bool {
         self.preload
+    }
+
+    /// Check if the asset is dynamically created
+    pub const fn dynamic(&self) -> bool {
+        self.dynamic
     }
 
     /// Check if the asset is minified
@@ -75,6 +82,21 @@ impl AssetOptionsBuilder<JsAssetOptions> {
     #[allow(unused)]
     pub const fn with_minify(mut self, minify: bool) -> Self {
         self.variant.minify = minify;
+        self
+    }
+
+    /// Make the asset dynamically inserted (default: false)
+    ///
+    /// Dynamically inserting the file will use js to add it to the DOM, otherwise the file will
+    /// be available at the initial rendering of the page.
+    ///
+    /// ```rust
+    /// # use manganis::{asset, Asset, AssetOptions};
+    /// const _: Asset = asset!("/assets/script.js", AssetOptions::js().with_dynamic(true));
+    /// ```
+    #[allow(unused)]
+    pub const fn with_dynamic(mut self, dynamic: bool) -> Self {
+        self.variant.dynamic = dynamic;
         self
     }
 
