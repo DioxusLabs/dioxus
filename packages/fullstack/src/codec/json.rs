@@ -30,15 +30,15 @@ impl<T: DeserializeOwned> Decodes<T> for JsonEncoding {
     }
 }
 
-/// Pass arguments and receive responses as JSON in the body of a `POST` request.
-pub type Json = Post<JsonEncoding>;
+// /// Pass arguments and receive responses as JSON in the body of a `POST` request.
+// pub type Json = Post<JsonEncoding>;
 
-/// Pass arguments and receive responses as JSON in the body of a `PATCH` request.
-/// **Note**: Browser support for `PATCH` requests without JS/WASM may be poor.
-/// Consider using a `POST` request if functionality without JS/WASM is required.
-pub type PatchJson = Patch<JsonEncoding>;
+// /// Pass arguments and receive responses as JSON in the body of a `PATCH` request.
+// /// **Note**: Browser support for `PATCH` requests without JS/WASM may be poor.
+// /// Consider using a `POST` request if functionality without JS/WASM is required.
+// pub type PatchJson = Patch<JsonEncoding>;
 
-/// Pass arguments and receive responses as JSON in the body of a `PUT` request.
-/// **Note**: Browser support for `PUT` requests without JS/WASM may be poor.
-/// Consider using a `POST` request if functionality without JS/WASM is required.
-pub type PutJson = Put<JsonEncoding>;
+// /// Pass arguments and receive responses as JSON in the body of a `PUT` request.
+// /// **Note**: Browser support for `PUT` requests without JS/WASM may be poor.
+// /// Consider using a `POST` request if functionality without JS/WASM is required.
+// pub type PutJson = Put<JsonEncoding>;

@@ -63,6 +63,7 @@ serde_json = { workspace = true }
 
 serde_qs = { workspace = true, default-features = true }
 multer = { optional = true, workspace = true, default-features = true }
+rkyv = { optional = true,  default-features = true, version = "0.8" }
 
 # reqwest client
 reqwest = { default-features = false, optional = true, features = [
@@ -74,7 +75,8 @@ futures = { workspace = true, default-features = true }
 
 pin-project = { version = "1.1.10", optional = true }
 thiserror = { workspace = true }
-bytes = "1.10.1"
+bytes = {version = "1.10.1", features = ["serde"]}
+# bytes = {version = "1.10.1", features = ["serde"]}
 tower = { workspace = true, features = ["util"], optional = true }
 tower-layer = { version = "0.3.3", optional = true }
 parking_lot = { workspace = true, features = ["send_guard"], optional = true }
@@ -150,6 +152,7 @@ server-core = [
     "dioxus-interpreter-js",
 ]
 aws-lc-rs = ["dep:aws-lc-rs"]
+rkyv = ["dep:rkyv"]
 
 # document = ["dioxus-web?/document"]
 # devtools = ["dioxus-web?/devtools", "dep:dioxus-devtools"]

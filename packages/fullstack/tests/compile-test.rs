@@ -1,27 +1,19 @@
 use anyhow::Result;
-use std::{
-    any::TypeId,
-    marker::PhantomData,
-    prelude::rust_2024::{Future, IntoFuture},
-    process::Output,
-};
-
-use axum::{
-    extract::State,
-    response::{Html, IntoResponse},
-    routing::MethodRouter,
-    Json,
-};
+use axum::extract::FromRequest;
+use axum::response::IntoResponse;
+use axum::{extract::State, response::Html, Json};
 use bytes::Bytes;
 use dioxus::prelude::*;
 use dioxus_fullstack::{
     fetch::{FileUpload, WebSocket},
-    route, serverfn_sugar, DioxusServerState, ServerFunction,
+    DioxusServerState, ServerFnRejection, ServerFnSugar, ServerFunction,
 };
-use http::{Method, StatusCode};
-use reqwest::RequestBuilder;
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use url::Url;
+use futures::StreamExt;
+use http::HeaderMap;
+use http::StatusCode;
+use http_body_util::BodyExt;
+use serde::{Deserialize, Serialize};
+use std::prelude::rust_2024::Future;
 
 #[tokio::main]
 async fn main() {}
@@ -145,4 +137,122 @@ mod custom_types {
     async fn ws_endpoint() -> Result<WebSocket<String, String>> {
         todo!()
     }
+
+    struct MyCustomPayload {}
+    impl IntoResponse for MyCustomPayload {
+        fn into_response(self) -> axum::response::Response {
+            todo!()
+        }
+    }
+    impl<T> FromRequest<T> for MyCustomPayload {
+        type Rejection = ServerFnRejection;
+        #[allow(clippy::manual_async_fn)]
+        fn from_request(
+            _req: axum::extract::Request,
+            _state: &T,
+        ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send {
+            async move { Ok(MyCustomPayload {}) }
+        }
+    }
+
+    #[get("/myendpoint")]
+    async fn my_custom_handler1(payload: MyCustomPayload) -> Result<MyCustomPayload> {
+        Ok(payload)
+    }
+
+    #[get("/myendpoint2")]
+    async fn my_custom_handler2(payload: MyCustomPayload) -> Result<MyCustomPayload, StatusCode> {
+        Ok(payload)
+    }
+}
+
+mod overlap {
+    use super::*;
+
+    #[derive(Serialize, Deserialize)]
+    struct MyCustomPayload {}
+    impl IntoResponse for MyCustomPayload {
+        fn into_response(self) -> axum::response::Response {
+            todo!()
+        }
+    }
+    impl<T> FromRequest<T> for MyCustomPayload {
+        type Rejection = ServerFnRejection;
+        #[allow(clippy::manual_async_fn)]
+        fn from_request(
+            _req: axum::extract::Request,
+            _state: &T,
+        ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send {
+            async move { Ok(MyCustomPayload {}) }
+        }
+    }
+
+    /// When we have overlapping serialize + IntoResponse impls, the autoref logic will only pick Serialize
+    /// if IntoResponse is not available. Otherwise, IntoResponse is preferred.
+    #[get("/myendpoint")]
+    async fn my_custom_handler3(payload: MyCustomPayload) -> Result<MyCustomPayload, StatusCode> {
+        Ok(payload)
+    }
+
+    /// Same, but with the anyhow::Error path
+    #[get("/myendpoint")]
+    async fn my_custom_handler4(payload: MyCustomPayload) -> Result<MyCustomPayload> {
+        Ok(payload)
+    }
+}
+
+mod http_ext {
+    use super::*;
+
+    /// Extract regular axum endpoints
+    #[get("/myendpoint")]
+    async fn my_custom_handler1(request: axum::extract::Request) {
+        let mut data = request.into_data_stream();
+        while let Some(chunk) = data.next().await {
+            let _ = chunk.unwrap();
+        }
+    }
+
+    #[get("/myendpoint")]
+    async fn my_custom_handler2(_state: State<DioxusServerState>, request: axum::extract::Request) {
+        let mut data = request.into_data_stream();
+        while let Some(chunk) = data.next().await {
+            let _ = chunk.unwrap();
+        }
+    }
+}
+
+mod input_types {
+
+    use super::*;
+
+    #[derive(Serialize, Deserialize)]
+    struct CustomPayload {
+        name: String,
+        age: u32,
+    }
+
+    /// We can take `()` as input
+    #[post("/")]
+    async fn zero(a: (), b: (), c: ()) {}
+
+    /// We can take `()` as input
+    #[post("/")]
+    async fn zero_1(a: Json<CustomPayload>) {}
+
+    /// We can take regular axum extractors as input
+    #[post("/")]
+    async fn one(data: Json<CustomPayload>) {}
+
+    /// We can take Deserialize types as input, and they will be deserialized from JSON
+    #[post("/")]
+    async fn two(name: String, age: u32) {}
+
+    /// We can take Deserialize types as input, with custom server extensions
+    #[post("/", headers: HeaderMap)]
+    async fn three(name: String, age: u32) {}
+
+    /// We can take a regular axum-like mix with extractors and Deserialize types
+    #[post("/")]
+    async fn four(headers: HeaderMap, data: Json<CustomPayload>) {}
 }

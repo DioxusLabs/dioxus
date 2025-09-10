@@ -24,9 +24,35 @@ pub fn route_impl(
     with_aide: bool,
     method_from_macro: Option<Method>,
 ) -> syn::Result<TokenStream2> {
-    // Parse the route and function
     let route = syn::parse::<Route>(attr)?;
+    route_impl_with_route(route, item, with_aide, method_from_macro)
+}
+
+pub fn route_impl_with_route(
+    route: Route,
+    item: TokenStream,
+    with_aide: bool,
+    method_from_macro: Option<Method>,
+) -> syn::Result<TokenStream2> {
+    // Parse the route and function
     let function = syn::parse::<ItemFn>(item)?;
+
+    let server_args = &route.server_args;
+    let server_arg_tokens = quote! { #server_args  };
+
+    let mut function_on_server = function.clone();
+    function_on_server.sig.inputs.extend(server_args.clone());
+    let server_idents = server_args
+        .iter()
+        .cloned()
+        .filter_map(|arg| match arg {
+            FnArg::Receiver(_) => None,
+            FnArg::Typed(pat_type) => match &*pat_type.pat {
+                Pat::Ident(pat_ident) => Some(pat_ident.ident.clone()),
+                _ => None,
+            },
+        })
+        .collect::<Vec<_>>();
 
     // Now we can compile the route
     let original_inputs = &function.sig.inputs;
@@ -39,9 +65,10 @@ pub fn route_impl(
     let method_ident = &route.method;
     let http_method = route.method.to_axum_method_name();
     let remaining_numbered_pats = route.remaining_pattypes_numbered(&function.sig.inputs);
-    let extracted_idents = route.extracted_idents();
+    let mut extracted_idents = route.extracted_idents();
     let remaining_numbered_idents = remaining_numbered_pats.iter().map(|pat_type| &pat_type.pat);
     let route_docs = route.to_doc_comments();
+    extracted_idents.extend(server_idents);
 
     // Get the variables we need for code generation
     let fn_name = &function.sig.ident;
@@ -141,14 +168,17 @@ pub fn route_impl(
                     #path_extractor
                     #query_extractor
                     #remaining_numbered_pats
+                    #server_arg_tokens
                 ) -> axum::response::Response #where_clause {
                 // ) #fn_output #where_clause {
-                    #function
+                    #function_on_server
+
 
                     // let __res = #fn_name #ty_generics(#(#extracted_idents,)* #(#remaining_numbered_idents,)* ).await;
-                    serverfn_sugar(
-                        #fn_name #ty_generics(#(#extracted_idents,)* #(#remaining_numbered_idents,)* ).await
-                    )
+                    // serverfn_sugar()
+
+                    // desugar_into_response will autoref into using the Serialize impl
+                    #fn_name #ty_generics(#(#extracted_idents,)* #(#remaining_numbered_idents,)* ).await.desugar_into_response()
                 }
 
                 inventory::submit! {
@@ -978,6 +1008,7 @@ pub struct Route {
     pub state: Option<Type>,
     pub route_lit: LitStr,
     pub oapi_options: Option<OapiOptions>,
+    pub server_args: Punctuated<FnArg, Comma>,
 }
 
 impl Parse for Route {
@@ -990,10 +1021,11 @@ impl Parse for Route {
 
         let route_lit = input.parse::<LitStr>()?;
         let route_parser = RouteParser::new(route_lit.clone())?;
-        let state = match input.parse::<kw::with>() {
-            Ok(_) => Some(input.parse::<Type>()?),
-            Err(_) => None,
-        };
+        // let state = match input.parse::<kw::with>() {
+        //     Ok(_) => Some(input.parse::<Type>()?),
+        //     Err(_) => None,
+        // };
+        let state = None;
         let oapi_options = input
             .peek(Brace)
             .then(|| {
@@ -1003,6 +1035,13 @@ impl Parse for Route {
             })
             .transpose()?;
 
+        let server_args = if input.peek(Comma) {
+            let _ = input.parse::<Comma>()?;
+            input.parse_terminated(FnArg::parse, Comma)?
+        } else {
+            Punctuated::new()
+        };
+
         Ok(Route {
             method,
             path_params: route_parser.path_params,
@@ -1010,10 +1049,12 @@ impl Parse for Route {
             state,
             route_lit,
             oapi_options,
+            server_args,
         })
     }
 }
 
+#[derive(Clone)]
 pub enum Method {
     Get(Ident),
     Post(Ident),

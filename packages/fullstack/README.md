@@ -163,3 +163,14 @@ This project is licensed under the [MIT license].
 Unless you explicitly state otherwise, any contribution intentionally submitted
 for inclusion in Dioxus by you shall be licensed as MIT without any additional
 terms or conditions.
+
+
+## REWRITE TODO
+
+- rest of the arguments need to end up as body struct
+  - somehow disambiguate this from the FromRequest stuff? or just expect all FromRequest to be hoisted?
+- get the server route hashing working again
+- we need to adjust how requests are made based on the return type. IE stream/websocket
+- get the client builder working
+- get the callable type thing working to prevent from being called on client if the fn is a pure axum fn
+- distributed middleware. maybe explicit? automatic registration somehow?

@@ -7,6 +7,7 @@ use axum::{
 use bytes::Bytes;
 use futures::Stream;
 use http::{request::Parts, Method};
+use http_body_util::BodyExt;
 use reqwest::RequestBuilder;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{future::Future, str::FromStr, sync::LazyLock};
@@ -75,7 +76,9 @@ impl<T: DeserializeOwned> SharedClientType for Json<T> {
 }
 
 pub struct FileUpload {
-    outgoing_stream: Option<Box<dyn Stream<Item = Result<Bytes, Bytes>> + Send + Unpin>>,
+    outgoing_stream:
+        Option<http_body_util::BodyDataStream<axum::extract::Request<axum::body::Body>>>,
+    // outgoing_stream: Option<Box<dyn Stream<Item = Result<Bytes, Bytes>> + Send + Unpin>>,
 }
 
 impl FileUpload {
@@ -96,23 +99,19 @@ impl IntoResponse for ServerFnRejection {
 
 impl<S> FromRequest<S> for FileUpload {
     type Rejection = ServerFnRejection;
+
     fn from_request(
         req: axum::extract::Request,
         state: &S,
     ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send {
-        async move { todo!() }
+        async move {
+            let stream = req.into_data_stream();
+            Ok(FileUpload {
+                outgoing_stream: Some(stream),
+            })
+        }
     }
 }
-// impl<S> FromRequestParts<S> for FileUpload {
-//     type Rejection = ServerFnError;
-
-//     fn from_request_parts(
-//         parts: &mut Parts,
-//         state: &S,
-//     ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send {
-//         todo!()
-//     }
-// }
 
 pub struct FileDownload {}
 
@@ -122,6 +121,15 @@ pub struct WebSocket<In, Out> {
     _out: std::marker::PhantomData<Out>,
 }
 impl<In: Serialize, Out: DeserializeOwned> WebSocket<In, Out> {
+    pub fn new<F: Future<Output = ()>>(
+        f: impl FnOnce(
+            tokio::sync::mpsc::UnboundedSender<In>,
+            tokio::sync::mpsc::UnboundedReceiver<Out>,
+        ) -> F,
+    ) -> Self {
+        todo!()
+    }
+
     pub async fn send(&self, msg: In) -> Result<(), ServerFnError> {
         todo!()
     }
@@ -139,7 +147,7 @@ impl<In, Out> IntoResponse for WebSocket<In, Out> {
 }
 
 pub trait ServerFnSugar<M> {
-    fn to_response(self) -> axum::response::Response;
+    fn desugar_into_response(self) -> axum::response::Response;
     fn from_reqwest(res: reqwest::Response) -> Self
     where
         Self: Sized,
@@ -149,48 +157,70 @@ pub trait ServerFnSugar<M> {
 }
 
 /// We allow certain error types to be used across both the client and server side
-pub trait ErrorSugar {}
-impl ErrorSugar for anyhow::Error {}
-impl ErrorSugar for ServerFnError {}
-impl ErrorSugar for http::Error {}
+/// These need to be able to serialize through the network and end up as a response.
+/// Note that the types need to line up, not necessarily be equal.
+pub trait ErrorSugar {
+    fn to_encode_response(&self) -> axum::response::Response;
+}
 
-impl<T> ServerFnSugar<()> for T
-where
-    T: IntoResponse,
-{
-    fn to_response(self) -> axum::response::Response {
+impl ErrorSugar for ServerFnError {
+    fn to_encode_response(&self) -> axum::response::Response {
+        todo!()
+    }
+}
+impl ErrorSugar for anyhow::Error {
+    fn to_encode_response(&self) -> axum::response::Response {
+        todo!()
+    }
+}
+impl ErrorSugar for http::Error {
+    fn to_encode_response(&self) -> axum::response::Response {
+        todo!()
+    }
+}
+impl ErrorSugar for dioxus_core::CapturedError {
+    fn to_encode_response(&self) -> axum::response::Response {
         todo!()
     }
 }
 
-// pub struct DefaultSugarMarkerNoError;
-// impl<T: Serialize> ServerFnSugar<DefaultSugarMarker> for T {
-//     fn to_response(self) -> axum::response::Response {
-//         todo!()
-//     }
-// }
-
-pub struct DefaultSugarMarker;
-impl<T: Serialize, E: IntoResponse> ServerFnSugar<DefaultSugarMarker> for Result<T, E> {
-    fn to_response(self) -> axum::response::Response {
-        todo!()
-    }
-}
-
-pub struct SerializeSugarWithErrorMarker;
-impl<T: Serialize, E: ErrorSugar> ServerFnSugar<SerializeSugarWithErrorMarker> for Result<T, E> {
-    fn to_response(self) -> axum::response::Response {
-        todo!()
+/// The default conversion of T into a response is to use axum's IntoResponse trait
+/// Note that Result<T: IntoResponse, E: IntoResponse> works as a blanket impl.
+pub struct NoSugarMarker;
+impl<T: IntoResponse> ServerFnSugar<NoSugarMarker> for T {
+    fn desugar_into_response(self) -> axum::response::Response {
+        self.into_response()
     }
 }
 
 pub struct SerializeSugarMarker;
 impl<T: IntoResponse, E: ErrorSugar> ServerFnSugar<SerializeSugarMarker> for Result<T, E> {
-    fn to_response(self) -> axum::response::Response {
+    fn desugar_into_response(self) -> axum::response::Response {
         todo!()
     }
 }
 
-pub fn serverfn_sugar<M>(t: impl ServerFnSugar<M>) -> axum::response::Response {
-    t.to_response()
+/// This covers the simple case of returning a body from an endpoint where the body is serializable.
+/// By default, we use the JSON encoding, but you can use one of the other newtypes to change the encoding.
+pub struct DefaultJsonEncodingMarker;
+impl<T: Serialize, E: IntoResponse> ServerFnSugar<DefaultJsonEncodingMarker> for &Result<T, E> {
+    fn desugar_into_response(self) -> axum::response::Response {
+        todo!()
+    }
+}
+
+pub struct SerializeSugarWithErrorMarker;
+impl<T: Serialize, E: ErrorSugar> ServerFnSugar<SerializeSugarWithErrorMarker> for &Result<T, E> {
+    fn desugar_into_response(self) -> axum::response::Response {
+        todo!()
+    }
+}
+
+/// A newtype wrapper that indicates that the inner type should be converted to a response using its
+/// IntoResponse impl and not its Serialize impl.
+pub struct ViaResponse<T>(pub T);
+impl<T: IntoResponse> IntoResponse for ViaResponse<T> {
+    fn into_response(self) -> axum::response::Response {
+        self.0.into_response()
+    }
 }

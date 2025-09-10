@@ -1,7 +1,6 @@
 use dioxus::prelude::*;
-use dioxus_fullstack::{
-    codec::Json, make_server_fn, middleware::Service, ServerFunction, WebSocket,
-};
+use dioxus_fullstack::{make_server_fn, ServerFnSugar, ServerFunction, WebSocket};
+use http::Method;
 use serde::Serialize;
 use std::future::Future;
 
@@ -17,8 +16,7 @@ async fn main() {
 async fn do_thing(a: i32, b: String) -> dioxus::Result<()> {
     // If no server feature, we always make a request to the server
     if cfg!(not(feature = "server")) {
-        return Ok(dioxus_fullstack::fetch::fetch("/thing")
-            .method("POST")
+        return Ok(dioxus_fullstack::fetch::fetch(Method::POST, "/thing")
             .json(&serde_json::json!({ "a": a, "b": b }))
             .send()
             .await?
@@ -40,11 +38,9 @@ async fn do_thing(a: i32, b: String) -> dioxus::Result<()> {
             ServerFunction::new(
                 http::Method::GET,
                 "/thing",
-                |req| {
-
+                || {
                     todo!()
                 },
-                None
             )
         }
 
@@ -57,13 +53,23 @@ async fn do_thing(a: i32, b: String) -> dioxus::Result<()> {
     }
 }
 
-async fn make_websocket() -> dioxus::Result<WebSocket> {
-    // use axum::extract::z;
-    // let r = axum::routing::get(|| async { "Hello, World!" });
+#[post("/thing", ws: axum::extract::WebSocketUpgrade)]
+async fn make_websocket() -> dioxus::Result<WebSocket<String, String>> {
+    use axum::extract::ws::WebSocket;
 
-    Ok(WebSocket::new(|tx, rx| async move {
-        //
-    }))
+    ws.on_upgrade(|mut socket| async move {
+        while let Some(msg) = socket.recv().await {
+            socket
+                .send(axum::extract::ws::Message::Text("pong".into()))
+                .await
+                .unwrap();
+        }
+    });
+
+    // Ok(WebSocket::new(|tx, rx| async move {
+    //     //
+    // }))
+    todo!()
 }
 
 /*
@@ -81,18 +87,6 @@ if there's a single trailing item, it's used as the body?
 or, an entirely custom system, maybe based on names?
 or, hoist up FromRequest objects into the signature?
 */
-
-make_server_fn!(
-    #[get("/thing/{a}/{b}?amount&offset")]
-    pub async fn do_thing2(
-        a: i32,
-        b: String,
-        amount: Option<u32>,
-        offset: Option<u32>,
-    ) -> dioxus::Result<()> {
-        Ok(())
-    }
-);
 
 #[get("/thing/{a}/{b}?amount&offset")]
 pub async fn do_thing23(

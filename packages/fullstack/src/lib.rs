@@ -5,9 +5,6 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![forbid(unexpected_cfgs)]
 
-pub mod http_fn;
-pub mod ws_fn;
-
 pub use fetch::*;
 pub mod fetch;
 pub mod protocols;
@@ -18,9 +15,6 @@ pub use websocket::*;
 
 mod old;
 pub mod state;
-
-#[cfg(test)]
-mod tests;
 
 mod serverfn;
 pub use serverfn::*;
@@ -53,8 +47,6 @@ pub use inventory;
 /// Error types and utilities.
 pub mod error;
 
-/// Types to add server middleware to a server function.
-pub mod middleware;
 /// Utilities to allow client-side redirects.
 pub mod redirect;
 /// Types and traits for  for HTTP requests.

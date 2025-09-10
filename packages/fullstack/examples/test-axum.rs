@@ -16,7 +16,7 @@ use bytes::Bytes;
 use dioxus::prelude::*;
 use dioxus_fullstack::{
     fetch::{FileUpload, WebSocket},
-    route, serverfn_sugar, DioxusServerState, ServerFunction,
+    route, DioxusServerState, ServerFnSugar, ServerFunction,
 };
 use http::Method;
 use reqwest::RequestBuilder;

@@ -19,8 +19,8 @@
 // #[cfg(feature = "cbor")]
 // pub use cbor::*;
 
-mod json;
-pub use json::*;
+// mod json;
+// pub use json::*;
 
 // #[cfg(feature = "serde-lite")]
 // mod serde_lite;

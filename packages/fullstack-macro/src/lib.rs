@@ -210,8 +210,26 @@ use crate::typed_parser::Method;
 /// }
 /// ```
 #[proc_macro_attribute]
-pub fn server(args: proc_macro::TokenStream, body: TokenStream) -> TokenStream {
-    route_impl(args, body, None)
+pub fn server(attr: proc_macro::TokenStream, mut item: TokenStream) -> TokenStream {
+    let method = Method::Post(Ident::new("POST", proc_macro2::Span::call_site()));
+    let route: typed_parser::Route = typed_parser::Route {
+        method: None,
+        path_params: vec![],
+        query_params: vec![],
+        state: None,
+        route_lit: LitStr::new("/api/some-cool-fn", proc_macro2::Span::call_site()),
+        oapi_options: None,
+        server_args: Default::default(),
+    };
+
+    match typed_parser::route_impl_with_route(route, item.clone(), false, Some(method)) {
+        Ok(tokens) => tokens.into(),
+        Err(err) => {
+            let err: TokenStream = err.to_compile_error().into();
+            item.extend(err);
+            item
+        }
+    }
 }
 
 #[proc_macro_attribute]
