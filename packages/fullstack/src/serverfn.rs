@@ -44,7 +44,7 @@ use std::{
 type Req = HybridRequest;
 type Res = HybridResponse;
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct DioxusServerState {}
 
 /// A function endpoint that can be called from the client.
@@ -261,13 +261,12 @@ impl inventory::Collect for ServerFunction {
     }
 }
 
-pub struct HybridRequest {
-    pub(crate) req: http::Request<axum::body::Body>,
-}
+pub type HybridRequest = http::Request<axum::body::Body>;
 
 pub struct HybridResponse {
     pub(crate) res: http::Response<axum::body::Body>,
 }
+
 pub struct HybridStreamError {}
 pub type HybridError = ServerFnError;
 

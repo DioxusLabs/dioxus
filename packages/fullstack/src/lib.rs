@@ -8,6 +8,7 @@
 pub mod http_fn;
 pub mod ws_fn;
 
+pub use fetch::*;
 pub mod fetch;
 pub mod protocols;
 pub use protocols::*;
@@ -58,6 +59,7 @@ pub mod middleware;
 pub mod redirect;
 /// Types and traits for  for HTTP requests.
 pub mod request;
+pub use request::ServerFnRequestExt;
 
 /// Types and traits for HTTP responses.
 pub mod response;

@@ -1,4 +1,5 @@
 use crate::{HybridError, HybridRequest, HybridResponse};
+use axum::extract::Request;
 // use crate::{response::ClientRes, HybridError, HybridRequest, HybridResponse};
 use bytes::Bytes;
 use futures::{Sink, Stream};
@@ -18,10 +19,21 @@ pub fn get_server_url() -> &'static str {
     ROOT_URL.get().copied().unwrap_or("")
 }
 
+// pub struct RequestBuilder {}
+// impl RequestBuilder {}
+
 pub mod current {
     use futures::FutureExt;
 
     use super::*;
+
+    // pub fn builder() -> reqwest::RequestBuilder {
+    //     todo!()
+    // }
+
+    // fn build_a_url() {
+    //     builder().
+    // }
 
     /// Sends the request and receives a response.
     pub async fn send(req: HybridRequest) -> Result<HybridResponse, HybridError> {

@@ -2,7 +2,7 @@ use super::Encoding;
 use crate::{
     codec::{FromReq, IntoReq},
     error::{FromServerFnError, IntoAppError, ServerFnError},
-    ContentType, HybridError, HybridRequest, HybridResponse,
+    ContentType, HybridError, HybridRequest, HybridResponse, ServerFnRequestExt,
 };
 use http::Method;
 use serde::{de::DeserializeOwned, Serialize};

@@ -29,6 +29,7 @@ pub fn route_impl(
     let function = syn::parse::<ItemFn>(item)?;
 
     // Now we can compile the route
+    let original_inputs = &function.sig.inputs;
     let route = CompiledRoute::from_route(route, &function, with_aide, method_from_macro)?;
     let path_extractor = route.path_extractor();
     let query_extractor = route.query_extractor();
@@ -107,40 +108,63 @@ pub fn route_impl(
         )
     };
 
-    // Generate the code
+    let shadow_bind = original_inputs.iter().map(|arg| match arg {
+        FnArg::Receiver(receiver) => todo!(),
+        FnArg::Typed(pat_type) => {
+            let pat = &pat_type.pat;
+            quote! {
+                let _ = #pat;
+            }
+        }
+    });
+
+    // #vis fn #fn_name #impl_generics() ->  #method_router_ty<#state_type> #where_clause {
+
     Ok(quote! {
         #(#fn_docs)*
         #route_docs
-        #vis fn #fn_name #impl_generics() -> (&'static str, #method_router_ty<#state_type>) #where_clause {
-
+        #vis async fn #fn_name #impl_generics(
+            #original_inputs
+        ) #fn_output #where_clause {
             #query_params_struct
 
-            #aide_ident_docs
-            #[axum::debug_handler]
-            #asyncness fn __inner__function__ #impl_generics(
-                #path_extractor
-                #query_extractor
-                #remaining_numbered_pats
-            ) #fn_output #where_clause {
-                #function
-
-                #fn_name #ty_generics(#(#extracted_idents,)* #(#remaining_numbered_idents,)* ).await
+            // On the client, we make the request to the server
+            if cfg!(not(feature = "server")) {
+                todo!();
             }
 
-
+            // On the server, we expand the tokens and submit the function to inventory
             #[cfg(feature = "server")] {
-                {
-                    inventory::submit! {
-                        ServerFunction::new(http::Method::#method_ident, #axum_path, || axum::routing::#http_method(#inner_fn_call))
-                    }
+                #aide_ident_docs
+                #[axum::debug_handler]
+                #asyncness fn __inner__function__ #impl_generics(
+                    #path_extractor
+                    #query_extractor
+                    #remaining_numbered_pats
+                ) -> axum::response::Response #where_clause {
+                // ) #fn_output #where_clause {
+                    #function
+
+                    // let __res = #fn_name #ty_generics(#(#extracted_idents,)* #(#remaining_numbered_idents,)* ).await;
+                    serverfn_sugar(
+                        #fn_name #ty_generics(#(#extracted_idents,)* #(#remaining_numbered_idents,)* ).await
+                    )
                 }
 
-                (#axum_path, #inner_fn_call)
+                inventory::submit! {
+                    ServerFunction::new(http::Method::#method_ident, #axum_path, || axum::routing::#http_method(#inner_fn_call))
+                }
+
+                {
+                    #(#shadow_bind)*
+                }
+
+                todo!("Calling server_fn on server is not yet supported. todo.");
             }
 
-
-            #[cfg(not(feature = "server"))] {
-                todo!()
+            #[allow(unreachable_code)]
+            {
+                unreachable!()
             }
         }
     })
@@ -331,8 +355,10 @@ impl CompiledRoute {
                 let idents = self.query_params.iter().map(|item| &item.0);
                 let types = self.query_params.iter().map(|item| &item.1);
                 let derive = match with_aide {
-                    true => quote! { #[derive(::serde::Deserialize, ::schemars::JsonSchema)] },
-                    false => quote! { #[derive(::serde::Deserialize)] },
+                    true => {
+                        quote! { #[derive(::serde::Deserialize, ::serde::Serialize, ::schemars::JsonSchema)] }
+                    }
+                    false => quote! { #[derive(::serde::Deserialize, ::serde::Serialize)] },
                 };
                 Some(quote! {
                     #derive

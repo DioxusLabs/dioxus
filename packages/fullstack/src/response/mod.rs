@@ -13,6 +13,7 @@ pub mod http;
 #[cfg(feature = "reqwest")]
 pub mod reqwest;
 
+use axum::Json;
 use bytes::Bytes;
 use futures::{FutureExt, Stream};
 use std::future::Future;
@@ -57,6 +58,59 @@ impl HybridResponse {
         todo!()
     }
 }
+
+pub trait IntoServerFnResponse<Marker> {}
+
+pub struct AxumMarker;
+impl<T> IntoServerFnResponse<AxumMarker> for T where T: axum::response::IntoResponse {}
+
+pub struct MyWebSocket {}
+pub struct MyWebSocketMarker;
+impl IntoServerFnResponse<MyWebSocketMarker> for MyWebSocket {}
+
+// pub struct DefaultEncodingResultMarker;
+// impl<T> IntoServerFnResponse<DefaultEncodingResultMarker> for Result<T, HybridError> where
+//     T: serde::Serialize
+// {
+// }
+
+pub struct DefaultEncodingMarker;
+impl<T: 'static> IntoServerFnResponse<DefaultEncodingMarker> for Result<T, HybridError> where
+    T: serde::Serialize
+{
+}
+
+fn it_works() {
+    // let a = verify(handler_implicit);
+    let a = verify(handler_explicit);
+    let b = verify(handler_implicit_result);
+
+    // <handler_explicit as IntoServerFnResponse<AxumMarker>>;
+}
+
+fn verify<M, F: IntoServerFnResponse<M>>(f: impl Fn() -> F) -> M {
+    todo!()
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct MyObject {
+    id: i32,
+    name: String,
+}
+
+fn handler_implicit() -> MyObject {
+    todo!()
+}
+
+fn handler_implicit_result() -> Result<MyObject, HybridError> {
+    todo!()
+}
+
+fn handler_explicit() -> Json<MyObject> {
+    todo!()
+}
+
+// pub struct DefaultJsonEncoder<T>(std::marker::PhantomData<T>);
 
 // /// Represents the response as created by the server;
 // pub trait Res {

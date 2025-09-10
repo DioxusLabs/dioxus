@@ -8,9 +8,27 @@ use std::{borrow::Cow, future::Future};
 
 use crate::{error::IntoAppError, FromServerFnError, HybridError, HybridRequest, ServerFnError};
 
-impl HybridRequest {
+impl ServerFnRequestExt for HybridRequest {
+    fn uri(&self) -> &http::Uri {
+        self.uri()
+    }
+
+    fn headers(&self) -> &http::HeaderMap {
+        self.headers()
+    }
+
+    fn into_parts(self) -> (http::request::Parts, axum::body::Body) {
+        self.into_parts()
+    }
+
+    fn into_body(self) -> axum::body::Body {
+        self.into_body()
+    }
+}
+
+pub trait ServerFnRequestExt: Sized {
     /// Attempts to construct a new request with query parameters.
-    pub fn try_new_req_query(
+    fn try_new_req_query(
         path: &str,
         content_type: &str,
         accepts: &str,
@@ -21,7 +39,7 @@ impl HybridRequest {
     }
 
     /// Attempts to construct a new request with a text body.
-    pub fn try_new_req_text(
+    fn try_new_req_text(
         path: &str,
         content_type: &str,
         accepts: &str,
@@ -32,7 +50,7 @@ impl HybridRequest {
     }
 
     /// Attempts to construct a new request with a binary body.
-    pub fn try_new_req_bytes(
+    fn try_new_req_bytes(
         path: &str,
         content_type: &str,
         accepts: &str,
@@ -43,7 +61,7 @@ impl HybridRequest {
     }
 
     /// Attempts to construct a new request with form data as the body.
-    pub fn try_new_req_form_data<FormData>(
+    fn try_new_req_form_data<FormData>(
         path: &str,
         accepts: &str,
         content_type: &str,
@@ -54,7 +72,7 @@ impl HybridRequest {
     }
 
     /// Attempts to construct a new request with a multipart body.
-    pub fn try_new_req_multipart<FormData>(
+    fn try_new_req_multipart<FormData>(
         path: &str,
         accepts: &str,
         body: FormData,
@@ -64,7 +82,7 @@ impl HybridRequest {
     }
 
     /// Attempts to construct a new request with a streaming body.
-    pub fn try_new_req_streaming(
+    fn try_new_req_streaming(
         path: &str,
         accepts: &str,
         content_type: &str,
@@ -75,7 +93,7 @@ impl HybridRequest {
     }
 
     /// Attempts to construct a new `GET` request.
-    pub fn try_new_get(
+    fn try_new_get(
         path: &str,
         content_type: &str,
         accepts: &str,
@@ -87,7 +105,7 @@ impl HybridRequest {
     /// Attempts to construct a new `DELETE` request.
     /// **Note**: Browser support for `DELETE` requests without JS/WASM may be poor.
     /// Consider using a `POST` request if functionality without JS/WASM is required.
-    pub fn try_new_delete(
+    fn try_new_delete(
         path: &str,
         content_type: &str,
         accepts: &str,
@@ -97,7 +115,7 @@ impl HybridRequest {
     }
 
     /// Attempts to construct a new `POST` request with a text body.
-    pub fn try_new_post(
+    fn try_new_post(
         path: &str,
         content_type: &str,
         accepts: &str,
@@ -109,7 +127,7 @@ impl HybridRequest {
     /// Attempts to construct a new `PATCH` request with a text body.
     /// **Note**: Browser support for `PATCH` requests without JS/WASM may be poor.
     /// Consider using a `POST` request if functionality without JS/WASM is required.
-    pub fn try_new_patch(
+    fn try_new_patch(
         path: &str,
         content_type: &str,
         accepts: &str,
@@ -121,7 +139,7 @@ impl HybridRequest {
     /// Attempts to construct a new `PUT` request with a text body.
     /// **Note**: Browser support for `PUT` requests without JS/WASM may be poor.
     /// Consider using a `POST` request if functionality without JS/WASM is required.
-    pub fn try_new_put(
+    fn try_new_put(
         path: &str,
         content_type: &str,
         accepts: &str,
@@ -131,7 +149,7 @@ impl HybridRequest {
     }
 
     /// Attempts to construct a new `POST` request with a binary body.
-    pub fn try_new_post_bytes(
+    fn try_new_post_bytes(
         path: &str,
         content_type: &str,
         accepts: &str,
@@ -143,7 +161,7 @@ impl HybridRequest {
     /// Attempts to construct a new `PATCH` request with a binary body.
     /// **Note**: Browser support for `PATCH` requests without JS/WASM may be poor.
     /// Consider using a `POST` request if functionality without JS/WASM is required.
-    pub fn try_new_patch_bytes(
+    fn try_new_patch_bytes(
         path: &str,
         content_type: &str,
         accepts: &str,
@@ -155,7 +173,7 @@ impl HybridRequest {
     /// Attempts to construct a new `PUT` request with a binary body.
     /// **Note**: Browser support for `PUT` requests without JS/WASM may be poor.
     /// Consider using a `POST` request if functionality without JS/WASM is required.
-    pub fn try_new_put_bytes(
+    fn try_new_put_bytes(
         path: &str,
         content_type: &str,
         accepts: &str,
@@ -165,7 +183,7 @@ impl HybridRequest {
     }
 
     /// Attempts to construct a new `POST` request with form data as the body.
-    pub fn try_new_post_form_data<FormData>(
+    fn try_new_post_form_data<FormData>(
         path: &str,
         accepts: &str,
         content_type: &str,
@@ -177,7 +195,7 @@ impl HybridRequest {
     /// Attempts to construct a new `PATCH` request with form data as the body.
     /// **Note**: Browser support for `PATCH` requests without JS/WASM may be poor.
     /// Consider using a `POST` request if functionality without JS/WASM is required.
-    pub fn try_new_patch_form_data<FormData>(
+    fn try_new_patch_form_data<FormData>(
         path: &str,
         accepts: &str,
         content_type: &str,
@@ -189,7 +207,7 @@ impl HybridRequest {
     /// Attempts to construct a new `PUT` request with form data as the body.
     /// **Note**: Browser support for `PUT` requests without JS/WASM may be poor.
     /// Consider using a `POST` request if functionality without JS/WASM is required.
-    pub fn try_new_put_form_data<FormData>(
+    fn try_new_put_form_data<FormData>(
         path: &str,
         accepts: &str,
         content_type: &str,
@@ -199,7 +217,7 @@ impl HybridRequest {
     }
 
     /// Attempts to construct a new `POST` request with a multipart body.
-    pub fn try_new_post_multipart<FormData>(
+    fn try_new_post_multipart<FormData>(
         path: &str,
         accepts: &str,
         body: FormData,
@@ -210,7 +228,7 @@ impl HybridRequest {
     /// Attempts to construct a new `PATCH` request with a multipart body.
     /// **Note**: Browser support for `PATCH` requests without JS/WASM may be poor.
     /// Consider using a `POST` request if functionality without JS/WASM is required.
-    pub fn try_new_patch_multipart<FormData>(
+    fn try_new_patch_multipart<FormData>(
         path: &str,
         accepts: &str,
         body: FormData,
@@ -221,7 +239,7 @@ impl HybridRequest {
     /// Attempts to construct a new `PUT` request with a multipart body.
     /// **Note**: Browser support for `PUT` requests without JS/WASM may be poor.
     /// Consider using a `POST` request if functionality without JS/WASM is required.
-    pub fn try_new_put_multipart<FormData>(
+    fn try_new_put_multipart<FormData>(
         path: &str,
         accepts: &str,
         body: FormData,
@@ -230,7 +248,7 @@ impl HybridRequest {
     }
 
     /// Attempts to construct a new `POST` request with a streaming body.
-    pub fn try_new_post_streaming(
+    fn try_new_post_streaming(
         path: &str,
         accepts: &str,
         content_type: &str,
@@ -242,7 +260,7 @@ impl HybridRequest {
     /// Attempts to construct a new `PATCH` request with a streaming body.
     /// **Note**: Browser support for `PATCH` requests without JS/WASM may be poor.
     /// Consider using a `POST` request if functionality without JS/WASM is required.
-    pub fn try_new_patch_streaming(
+    fn try_new_patch_streaming(
         path: &str,
         accepts: &str,
         content_type: &str,
@@ -254,7 +272,7 @@ impl HybridRequest {
     /// Attempts to construct a new `PUT` request with a streaming body.
     /// **Note**: Browser support for `PUT` requests without JS/WASM may be poor.
     /// Consider using a `POST` request if functionality without JS/WASM is required.
-    pub fn try_new_put_streaming(
+    fn try_new_put_streaming(
         path: &str,
         accepts: &str,
         content_type: &str,
@@ -263,46 +281,34 @@ impl HybridRequest {
         Self::try_new_req_streaming(path, accepts, content_type, body, Method::PUT)
     }
 
-    pub fn uri(&self) -> &http::Uri {
-        todo!()
-    }
+    fn uri(&self) -> &http::Uri;
+    fn headers(&self) -> &http::HeaderMap;
+    fn into_parts(self) -> (http::request::Parts, axum::body::Body);
+    fn into_body(self) -> axum::body::Body;
 
-    pub fn headers(&self) -> &http::HeaderMap {
-        todo!()
-    }
-
-    pub fn into_parts(self) -> (http::request::Parts, axum::body::Body) {
-        todo!()
-        // (todo!(), async move { todo!() }.into_stream())
-    }
-
-    pub fn into_body(self) -> axum::body::Body {
-        todo!()
-    }
-
-    pub fn as_query(&self) -> Option<&str> {
+    fn as_query(&self) -> Option<&str> {
         self.uri().query()
     }
 
-    pub fn to_content_type(&self) -> Option<Cow<'_, str>> {
+    fn to_content_type(&self) -> Option<Cow<'_, str>> {
         self.headers()
             .get(CONTENT_TYPE)
             .map(|h| String::from_utf8_lossy(h.as_bytes()))
     }
 
-    pub fn accepts(&self) -> Option<Cow<'_, str>> {
+    fn accepts(&self) -> Option<Cow<'_, str>> {
         self.headers()
             .get(ACCEPT)
             .map(|h| String::from_utf8_lossy(h.as_bytes()))
     }
 
-    pub fn referer(&self) -> Option<Cow<'_, str>> {
+    fn referer(&self) -> Option<Cow<'_, str>> {
         self.headers()
             .get(REFERER)
             .map(|h| String::from_utf8_lossy(h.as_bytes()))
     }
 
-    pub async fn try_into_bytes(self) -> Result<Bytes, ServerFnError> {
+    async fn try_into_bytes(self) -> Result<Bytes, ServerFnError> {
         use http_body_util::BodyExt;
 
         let (_parts, body) = self.into_parts();
@@ -313,14 +319,14 @@ impl HybridRequest {
             .map_err(|e| ServerFnError::Deserialization(e.to_string()).into_app_error())
     }
 
-    pub async fn try_into_string(self) -> Result<String, ServerFnError> {
+    async fn try_into_string(self) -> Result<String, ServerFnError> {
         todo!()
         // let bytes = Req::<Error>::try_into_bytes(self).await?;
         // String::from_utf8(bytes.to_vec())
         //     .map_err(|e| ServerFnError::Deserialization(e.to_string()).into_app_error())
     }
 
-    pub fn try_into_stream(
+    fn try_into_stream(
         self,
     ) -> Result<impl Stream<Item = Result<Bytes, Bytes>> + Send + 'static, ServerFnError> {
         Ok(self.into_body().into_data_stream().map(|chunk| {
@@ -330,36 +336,37 @@ impl HybridRequest {
             })
         }))
     }
+}
 
-    #[cfg(feature = "server")]
-    pub async fn try_into_websocket(
-        self,
-    ) -> Result<
-        (
-            impl Stream<Item = Result<Bytes, Bytes>> + Send + 'static,
-            impl Sink<Bytes> + Send + 'static,
-            http::Response<axum::body::Body>,
-        ),
-        ServerFnError,
-    > {
-        use axum::extract::{ws::Message, FromRequest};
-        use futures::FutureExt;
+#[cfg(feature = "server")]
+async fn try_into_websocket(
+    req: http::Request<axum::body::Body>,
+) -> Result<
+    (
+        impl Stream<Item = Result<Bytes, Bytes>> + Send + 'static,
+        impl Sink<Bytes> + Send + 'static,
+        http::Response<axum::body::Body>,
+    ),
+    ServerFnError,
+> {
+    use axum::extract::{ws::Message, FromRequest};
+    use futures::FutureExt;
 
-        type InputStreamError = HybridError;
+    type InputStreamError = HybridError;
 
-        let upgrade = axum::extract::ws::WebSocketUpgrade::from_request(self.req, &())
-            .await
-            .map_err(|err| {
-                use crate::FromServerFnError;
+    let upgrade = axum::extract::ws::WebSocketUpgrade::from_request(req, &())
+        .await
+        .map_err(|err| {
+            use crate::FromServerFnError;
 
-                ServerFnError::from_server_fn_error(ServerFnError::Request(err.to_string()))
-            })?;
+            ServerFnError::from_server_fn_error(ServerFnError::Request(err.to_string()))
+        })?;
 
-        let (mut outgoing_tx, outgoing_rx) =
-            futures::channel::mpsc::channel::<Result<Bytes, Bytes>>(2048);
-        let (incoming_tx, mut incoming_rx) = futures::channel::mpsc::channel::<Bytes>(2048);
+    let (mut outgoing_tx, outgoing_rx) =
+        futures::channel::mpsc::channel::<Result<Bytes, Bytes>>(2048);
+    let (incoming_tx, mut incoming_rx) = futures::channel::mpsc::channel::<Bytes>(2048);
 
-        let response = upgrade
+    let response = upgrade
             .on_failed_upgrade({
                 let mut outgoing_tx = outgoing_tx.clone();
                 move |err: axum::Error| {
@@ -407,8 +414,7 @@ impl HybridRequest {
                 _ = session.send(Message::Close(None)).await;
             });
 
-        Ok((outgoing_rx, incoming_tx, response))
-    }
+    Ok((outgoing_rx, incoming_tx, response))
 }
 
 // /// Request types for Axum.

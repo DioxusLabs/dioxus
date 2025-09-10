@@ -68,6 +68,7 @@ multer = { optional = true, workspace = true, default-features = true }
 reqwest = { default-features = false, optional = true, features = [
   "multipart",
   "stream",
+  "json"
 ], workspace = true }
 futures = { workspace = true, default-features = true }
 
@@ -146,7 +147,6 @@ server = [
 ]
 server-core = [
     # "dioxus-fullstack-hooks/server",
-    # "dep:dioxus-server",
     "dioxus-interpreter-js",
 ]
 aws-lc-rs = ["dep:aws-lc-rs"]

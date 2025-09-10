@@ -310,7 +310,7 @@ impl Display for AdditionalErrorContext {
 
 /// A type alias for a result that can be either a boxed error or a value
 /// This is useful to avoid having to use `Result<T, CapturedError>` everywhere
-pub type Result<T = ()> = std::result::Result<T, CapturedError>;
+pub type Result<T = (), E = CapturedError> = std::result::Result<T, E>;
 
 /// A helper function for an Ok result that can be either a boxed error or a value
 /// This is useful to avoid having to use `Ok<T, CapturedError>` everywhere
