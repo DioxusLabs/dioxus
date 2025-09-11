@@ -65,6 +65,8 @@ pub fn route_impl_with_route(
     let method_ident = &route.method;
     let http_method = route.method.to_axum_method_name();
     let remaining_numbered_pats = route.remaining_pattypes_numbered(&function.sig.inputs);
+    let body_json_args = route.remaining_pattypes_named(&function.sig.inputs);
+    let body_json_names = body_json_args.iter().map(|pat_type| &pat_type.pat);
     let mut extracted_idents = route.extracted_idents();
     let remaining_numbered_idents = remaining_numbered_pats.iter().map(|pat_type| &pat_type.pat);
     let route_docs = route.to_doc_comments();
@@ -147,6 +149,9 @@ pub fn route_impl_with_route(
 
     // #vis fn #fn_name #impl_generics() ->  #method_router_ty<#state_type> #where_clause {
 
+    // let body_json_contents = remaining_numbered_pats.iter().map(|pat_type| [quote! {}]);
+    let body_json_names2 = body_json_names.clone();
+
     Ok(quote! {
         #(#fn_docs)*
         #route_docs
@@ -154,6 +159,18 @@ pub fn route_impl_with_route(
             #original_inputs
         ) #fn_output #where_clause {
             #query_params_struct
+
+            // #[derive(::serde::Deserialize, ::serde::Serialize)]
+            // struct __BodyExtract__ {
+            //     // #remaining_numbered_pats
+            //     // $(#body;)*
+            //     #body_json_args
+            // }
+            // impl __BodyExtract__ {
+            //     fn new() -> Self {
+            //         todo!()
+            //     }
+            // }
 
             // On the client, we make the request to the server
             if cfg!(not(feature = "server")) {
@@ -167,9 +184,12 @@ pub fn route_impl_with_route(
                 #asyncness fn __inner__function__ #impl_generics(
                     #path_extractor
                     #query_extractor
+                    // body: Json<__BodyExtract__>,
                     #remaining_numbered_pats
                     #server_arg_tokens
                 ) -> axum::response::Response #where_clause {
+                    // let __BodyExtract__ { #(#body_json_names,)* } = body.0;
+
                 // ) #fn_output #where_clause {
                     #function_on_server
 
@@ -178,7 +198,13 @@ pub fn route_impl_with_route(
                     // serverfn_sugar()
 
                     // desugar_into_response will autoref into using the Serialize impl
+
+                    // #fn_name #ty_generics(#(#extracted_idents,)*  #(#body_json_names2,)* ).await.desugar_into_response()
                     #fn_name #ty_generics(#(#extracted_idents,)* #(#remaining_numbered_idents,)* ).await.desugar_into_response()
+
+
+                    // #fn_name #ty_generics(#(#extracted_idents,)* Json(__BodyExtract__::new()) ).await.desugar_into_response()
+                    // #fn_name #ty_generics(#(#extracted_idents,)* #(#remaining_numbered_idents,)* ).await.desugar_into_response()
                 }
 
                 inventory::submit! {
@@ -411,6 +437,38 @@ impl CompiledRoute {
             idents.push(ident.clone());
         }
         idents
+    }
+
+    fn remaining_pattypes_named(
+        &self,
+        args: &Punctuated<FnArg, Comma>,
+    ) -> Punctuated<PatType, Comma> {
+        args.iter()
+            .enumerate()
+            .filter_map(|(i, item)| {
+                if let FnArg::Typed(pat_type) = item {
+                    if let syn::Pat::Ident(pat_ident) = &*pat_type.pat {
+                        if self.path_params.iter().any(|(_slash, path_param)| {
+                            if let Some((path_ident, _ty)) = path_param.capture() {
+                                path_ident == &pat_ident.ident
+                            } else {
+                                false
+                            }
+                        }) || self
+                            .query_params
+                            .iter()
+                            .any(|(query_ident, _)| query_ident == &pat_ident.ident)
+                        {
+                            return None;
+                        }
+                    }
+
+                    Some(pat_type.clone())
+                } else {
+                    unimplemented!("Self type is not supported")
+                }
+            })
+            .collect()
     }
 
     /// The arguments not used in the route.

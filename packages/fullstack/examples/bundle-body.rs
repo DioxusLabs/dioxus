@@ -45,6 +45,7 @@ Ideas
 - overload fromrequest for the final item
 - temporarily only allow FromRequestParts to be in the server declaration, all others must be deserializable
 - only do the automatic deserialize thing if no FromRequestParts are present
+- use the names to help with the Body type issue
 */
 async fn extract_some_cool_body_from_request(
     state: State<DioxusServerState>,

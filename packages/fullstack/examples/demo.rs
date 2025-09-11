@@ -21,6 +21,7 @@ fn app() -> Element {
 struct User {
     id: String,
     name: String,
+    age: i32,
 }
 
 #[post("/api/user/{id}")]
@@ -28,5 +29,6 @@ async fn upload_user(id: i32) -> anyhow::Result<User> {
     Ok(User {
         id: id.to_string(),
         name: "John Doe".into(),
+        age: 123,
     })
 }

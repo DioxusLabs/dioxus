@@ -82,6 +82,12 @@ mod simple_extractors {
     async fn elevent() -> Result<Bytes, http::Error> {
         Ok(Bytes::from_static(b"Hello!"))
     }
+
+    /// We can use mutliple args that are Deserialize
+    #[get("/hello")]
+    async fn twelve(a: i32, b: i32, c: i32) -> Result<Bytes, http::Error> {
+        Ok(Bytes::from_static(b"Hello!"))
+    }
 }
 
 mod custom_serialize {
@@ -130,6 +136,17 @@ mod custom_types {
     /// We can extract the path arg and return anything thats IntoResponse
     #[get("/upload/image/")]
     async fn streaming_file(body: FileUpload) -> Result<Json<i32>> {
+        todo!()
+    }
+
+    /// We can extract the path arg and return anything thats IntoResponse
+    #[get("/upload/image/?name&size&ftype")]
+    async fn streaming_file_args(
+        name: String,
+        size: usize,
+        ftype: String,
+        body: FileUpload,
+    ) -> Result<Json<i32>> {
         todo!()
     }
 
