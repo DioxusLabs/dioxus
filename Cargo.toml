@@ -422,14 +422,14 @@ inherits = "dev"
 [package]
 name = "dioxus-examples"
 authors = ["Jonathan Kelley"]
-edition = "2021"
+edition = "2024"
 description = "Top level crate for the Dioxus repository"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com"
 documentation = "https://dioxuslabs.com"
 keywords = ["dom", "ui", "gui", "react", "wasm"]
-rust-version = "1.80.0"
+rust-version = "1.85.0"
 publish = false
 version = "0.7.0-rc.0"
 

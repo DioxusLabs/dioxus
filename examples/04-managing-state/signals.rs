@@ -68,7 +68,7 @@ fn app() -> Element {
         }
 
         // We can also use the signal value as a slice
-        if let [ref first, .., ref last] = saved_values.read().as_slice() {
+        if let [first, .., last] = saved_values.read().as_slice() {
             li { "First and last: {first}, {last}" }
         } else {
             "No saved values"

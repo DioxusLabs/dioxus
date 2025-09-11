@@ -7,7 +7,7 @@
 //! If you `go-to-definition` on the `svg` element, you'll see its custom namespace.
 
 use dioxus::prelude::*;
-use rand::{rng, Rng};
+use rand::{Rng, rng};
 
 fn main() {
     dioxus::launch(|| {
@@ -45,7 +45,7 @@ fn Dice() -> Element {
                 value.set(rng().random_range(1..=6))
             },
             rect { x: -1000, y: -1000, width: 2000, height: 2000, rx: 200, fill: "#aaa" }
-            for ((x, y), _) in DOTS.iter().zip(active_dots.read().iter()).filter(|(_, &active)| active) {
+            for ((x, y), _) in DOTS.iter().zip(active_dots.read().iter()).filter(|(_, active)| **active) {
                 circle {
                     cx: *x * 600,
                     cy: *y * 600,

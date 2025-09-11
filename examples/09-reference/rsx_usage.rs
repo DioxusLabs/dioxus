@@ -110,10 +110,7 @@ fn app() -> Element {
                 class: if formatting.contains("form") { "{asd}" } else if formatting.contains("my other form") { "{asd}" },
                 class: if formatting.contains("form") { "{asd}" } else if formatting.contains("my other form") { "{asd}" } else { "{asd}" },
                 div {
-                    class: {
-                        const WORD: &str = "expressions";
-                        format_args!("Arguments can be passed in through curly braces for complex {WORD}")
-                    }
+                    class: format_args!("Arguments can be passed in through curly braces for complex {asd}")
                 }
             }
 
