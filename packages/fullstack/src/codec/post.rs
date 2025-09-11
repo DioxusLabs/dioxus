@@ -23,8 +23,10 @@ where
     Encoding: Encodes<T>,
 {
     fn into_req(self, path: &str, accepts: &str) -> Result<Request, HybridError> {
-        let data = Encoding::encode(&self)
-            .map_err(|e| ServerFnError::Serialization(e.to_string()).into_app_error())?;
+        let data =
+            Encoding::encode(&self).map_err(
+                |e| ServerFnError::Serialization(e.to_string()), /* .into_app_error() */
+            )?;
         Request::try_new_post_bytes(path, accepts, Encoding::CONTENT_TYPE, data)
     }
 }
@@ -35,8 +37,10 @@ where
 {
     async fn from_req(req: Request) -> Result<Self, HybridError> {
         let data = req.try_into_bytes().await?;
-        let s = Encoding::decode(data)
-            .map_err(|e| ServerFnError::Deserialization(e.to_string()).into_app_error())?;
+        let s =
+            Encoding::decode(data).map_err(
+                |e| ServerFnError::Deserialization(e.to_string()), /* .into_app_error() */
+            )?;
         Ok(s)
     }
 }
@@ -47,8 +51,10 @@ where
     T: Send,
 {
     async fn into_res(self) -> Result<HybridResponse, HybridError> {
-        let data = Encoding::encode(&self)
-            .map_err(|e| ServerFnError::Serialization(e.to_string()).into_app_error())?;
+        let data =
+            Encoding::encode(&self).map_err(
+                |e| ServerFnError::Serialization(e.to_string()), /* .into_app_error() */
+            )?;
         // HybridResponse::try_from_bytes(Encoding::CONTENT_TYPE, data)
         todo!()
     }
@@ -60,8 +66,10 @@ where
 {
     async fn from_res(res: HybridResponse) -> Result<Self, HybridError> {
         let data = res.try_into_bytes().await?;
-        let s = Encoding::decode(data)
-            .map_err(|e| ServerFnError::Deserialization(e.to_string()).into_app_error())?;
+        let s =
+            Encoding::decode(data).map_err(
+                |e| ServerFnError::Deserialization(e.to_string()), /* .into_app_error() */
+            )?;
         Ok(s)
     }
 }

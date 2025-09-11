@@ -15,7 +15,7 @@ use axum::{
 use bytes::Bytes;
 use dioxus::prelude::*;
 use dioxus_fullstack::{
-    fetch::{FileUpload, WebSocket},
+    fetch::{FileUpload, Websocket},
     route, DioxusServerState, ServerFnSugar, ServerFunction,
 };
 use http::Method;

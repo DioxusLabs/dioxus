@@ -42,8 +42,10 @@ where
     // E: FromServerFnError,
 {
     fn into_req(self, path: &str, accepts: &str) -> Result<HybridRequest, HybridError> {
-        let data = serde_qs::to_string(&self)
-            .map_err(|e| ServerFnError::Serialization(e.to_string()).into_app_error())?;
+        let data =
+            serde_qs::to_string(&self).map_err(
+                |e| ServerFnError::Serialization(e.to_string()), /*.into_app_error() */
+            )?;
         HybridRequest::try_new_get(path, accepts, GetUrl::CONTENT_TYPE, &data)
     }
 }
@@ -79,8 +81,10 @@ where
 {
     fn into_req(self, path: &str, accepts: &str) -> Result<HybridRequest, ServerFnError> {
         // fn into_req(self, path: &str, accepts: &str) -> Result<Request, E> {
-        let qs = serde_qs::to_string(&self)
-            .map_err(|e| ServerFnError::Serialization(e.to_string()).into_app_error())?;
+        let qs =
+            serde_qs::to_string(&self).map_err(
+                |e| ServerFnError::Serialization(e.to_string()), /*.into_app_error() */
+            )?;
         HybridRequest::try_new_post(path, accepts, PostUrl::CONTENT_TYPE, qs)
         // Request::try_new_post(path, accepts, PostUrl::CONTENT_TYPE, qs)
     }
@@ -99,7 +103,9 @@ where
         let string_data = req.try_into_string().await?;
         let args = serde_qs::Config::new(5, false)
             .deserialize_str::<Self>(&string_data)
-            .map_err(|e| ServerFnError::Args(e.to_string()).into_app_error())?;
+            .map_err(
+                |e| ServerFnError::Args(e.to_string()), /* .into_app_error()*/
+            )?;
         Ok(args)
     }
 }

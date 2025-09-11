@@ -118,11 +118,11 @@ impl<S> FromRequest<S> for FileUpload {
 pub struct FileDownload {}
 
 /// A WebSocket connection that can send and receive messages of type `In` and `Out`.
-pub struct WebSocket<In, Out> {
+pub struct Websocket<In, Out> {
     _in: std::marker::PhantomData<In>,
     _out: std::marker::PhantomData<Out>,
 }
-impl<In: Serialize, Out: DeserializeOwned> WebSocket<In, Out> {
+impl<In: Serialize, Out: DeserializeOwned> Websocket<In, Out> {
     pub fn new<F: Future<Output = ()>>(
         f: impl FnOnce(
             tokio::sync::mpsc::UnboundedSender<In>,
@@ -142,7 +142,7 @@ impl<In: Serialize, Out: DeserializeOwned> WebSocket<In, Out> {
 }
 
 // Create a new WebSocket connection that uses the provided function to handle incoming messages
-impl<In, Out> IntoResponse for WebSocket<In, Out> {
+impl<In, Out> IntoResponse for Websocket<In, Out> {
     fn into_response(self) -> axum::response::Response {
         todo!()
     }

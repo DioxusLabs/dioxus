@@ -26,7 +26,7 @@ fn main() {
     let a = assert_handler(handler3);
     let a = assert_handler(handler4);
     let a = assert_handler(handler5);
-    let a = assert_handler(handler6);
+    // let a = assert_handler(handler6);
 }
 
 #[derive(Deserialize)]

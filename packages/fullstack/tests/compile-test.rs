@@ -4,11 +4,9 @@ use axum::response::IntoResponse;
 use axum::{extract::State, response::Html, Json};
 use bytes::Bytes;
 use dioxus::prelude::*;
-use dioxus_fullstack::req_from::{DeSer, ExtractRequest, ExtractState};
-use dioxus_fullstack::req_to::*;
 use dioxus_fullstack::{
-    fetch::{FileUpload, WebSocket},
-    DioxusServerState, ServerFnRejection, ServerFnSugar, ServerFunction,
+    fetch::{FileUpload, Websocket},
+    DioxusServerState, ServerFnRejection,
 };
 use futures::StreamExt;
 use http::HeaderMap;
@@ -153,7 +151,7 @@ mod custom_types {
     }
 
     #[get("/")]
-    async fn ws_endpoint() -> Result<WebSocket<String, String>> {
+    async fn ws_endpoint() -> Result<Websocket<String, String>> {
         todo!()
     }
 

@@ -7,11 +7,21 @@
 
 pub mod req_from;
 pub mod req_to;
+pub use req_from::*;
+pub use req_to::*;
+
+pub use axum;
+pub use http;
+#[doc(hidden)]
+pub use inventory;
 
 pub use fetch::*;
 pub mod fetch;
 pub mod protocols;
 pub use protocols::*;
+
+mod textstream;
+pub use textstream::*;
 
 pub mod websocket;
 pub use websocket::*;
@@ -42,9 +52,6 @@ pub mod server;
 
 /// Encodings for arguments and results.
 pub mod codec;
-
-#[doc(hidden)]
-pub use inventory;
 
 #[macro_use]
 /// Error types and utilities.

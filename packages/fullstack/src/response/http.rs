@@ -1,7 +1,6 @@
 // use super::{Res, TryRes};
-use crate::error::{
-    FromServerFnError, IntoAppError, ServerFnError, ServerFnErrorWrapper, SERVER_FN_ERROR_HEADER,
-};
+use crate::error::{FromServerFnError, IntoAppError, ServerFnError, SERVER_FN_ERROR_HEADER};
+// ServerFnErrorWrapper,
 use axum::body::Body;
 use bytes::Bytes;
 use futures::{Stream, TryStreamExt};

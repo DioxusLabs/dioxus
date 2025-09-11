@@ -1,5 +1,5 @@
 use dioxus::prelude::*;
-use dioxus_fullstack::{make_server_fn, ServerFnSugar, ServerFunction, WebSocket};
+use dioxus_fullstack::{make_server_fn, ServerFnSugar, ServerFunction, Websocket};
 use http::Method;
 use serde::Serialize;
 use std::future::Future;
@@ -54,7 +54,7 @@ async fn do_thing(a: i32, b: String) -> dioxus::Result<()> {
 }
 
 #[post("/thing", ws: axum::extract::WebSocketUpgrade)]
-async fn make_websocket() -> dioxus::Result<WebSocket<String, String>> {
+async fn make_websocket() -> dioxus::Result<Websocket<String, String>> {
     use axum::extract::ws::WebSocket;
 
     ws.on_upgrade(|mut socket| async move {

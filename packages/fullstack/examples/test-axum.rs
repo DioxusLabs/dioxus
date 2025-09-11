@@ -15,7 +15,7 @@ use axum::{
 use bytes::Bytes;
 use dioxus::prelude::*;
 use dioxus_fullstack::{
-    fetch::{FileUpload, WebSocket},
+    fetch::{FileUpload, Websocket},
     route, DioxusServerState, ServerFnSugar, ServerFunction,
 };
 use http::Method;
@@ -109,7 +109,7 @@ async fn streaming_file(body: FileUpload) -> Result<Json<i32>> {
 }
 
 #[get("/")]
-async fn ws_endpoint() -> Result<WebSocket<String, String>> {
+async fn ws_endpoint() -> Result<Websocket<String, String>> {
     todo!()
 }
 

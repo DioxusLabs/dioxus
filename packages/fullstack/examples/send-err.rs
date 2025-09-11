@@ -6,7 +6,7 @@ use bytes::Bytes;
 use dioxus::prelude::*;
 use dioxus_fullstack::req_from::{DeSer, ExtractRequest, ExtractState};
 use dioxus_fullstack::{
-    fetch::{FileUpload, WebSocket},
+    fetch::{FileUpload, Websocket},
     DioxusServerState, ServerFnRejection, ServerFnSugar, ServerFunction,
 };
 use futures::StreamExt;

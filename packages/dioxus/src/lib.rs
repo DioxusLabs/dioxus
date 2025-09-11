@@ -83,7 +83,7 @@ pub use dioxus_cli_config as cli_config;
 
 #[cfg(feature = "server")]
 #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
-pub use dioxus_server as server;
+pub use dioxus_fullstack as server;
 
 #[cfg(feature = "devtools")]
 #[cfg_attr(docsrs, doc(cfg(feature = "devtools")))]
@@ -207,7 +207,7 @@ pub mod prelude {
     #[cfg(feature = "server")]
     #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
     #[doc(inline)]
-    pub use dioxus_server::{
+    pub use dioxus_fullstack::{
         extract, DioxusRouterExt, DioxusRouterFnExt, FromContext, ServeConfig,
     };
 

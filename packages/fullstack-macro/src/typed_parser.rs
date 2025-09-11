@@ -138,8 +138,8 @@ pub fn route_impl_with_route(
     } else {
         (
             quote!(),
-            quote! { ::axum::routing::#http_method(__inner__function__ #ty_generics) },
-            quote! { ::axum::routing::MethodRouter },
+            quote! { __axum::routing::#http_method(__inner__function__ #ty_generics) },
+            quote! { __axum::routing::MethodRouter },
         )
     };
 
@@ -166,6 +166,8 @@ pub fn route_impl_with_route(
         #vis async fn #fn_name #impl_generics(
             #original_inputs
         ) #fn_output #where_clause {
+            use dioxus_fullstack::{DeSer, ServerFunction, ReqSer, ExtractState, ExtractRequest, EncodeState, ServerFnSugar, ServerFnRejection};
+
             #query_params_struct
 
             // #[derive(::serde::Deserialize, ::serde::Serialize)]
@@ -199,15 +201,20 @@ pub fn route_impl_with_route(
 
             // On the server, we expand the tokens and submit the function to inventory
             #[cfg(feature = "server")] {
+                use dioxus_fullstack::inventory as __inventory;
+                use dioxus_fullstack::axum as __axum;
+                use dioxus_fullstack::http as __http;
+                use __axum::response::IntoResponse;
+
                 #aide_ident_docs
-                #[axum::debug_handler]
+                // #[__axum::debug_handler]
                 #asyncness fn __inner__function__ #impl_generics(
                     #path_extractor
                     #query_extractor
                     // body: Json<__BodyExtract__>,
                     // #remaining_numbered_pats
                     #server_arg_tokens
-                ) -> axum::response::Response #where_clause {
+                ) -> __axum::response::Response #where_clause {
                     let ( #(#body_json_names,)*) = match (&&&&&&&&&&&&&&DeSer::<(#(#body_json_types,)*), _>::new()).extract(ExtractState::default()).await {
                         Ok(v) => v,
                         Err(rejection) => {
@@ -237,8 +244,8 @@ pub fn route_impl_with_route(
                     // #fn_name #ty_generics(#(#extracted_idents,)* #(#remaining_numbered_idents,)* ).await.desugar_into_response()
                 }
 
-                inventory::submit! {
-                    ServerFunction::new(http::Method::#method_ident, #axum_path, || axum::routing::#http_method(#inner_fn_call))
+                __inventory::submit! {
+                    ServerFunction::new(__http::Method::#method_ident, #axum_path, || __axum::routing::#http_method(#inner_fn_call))
                 }
 
                 {
@@ -417,7 +424,7 @@ impl CompiledRoute {
         let idents = path_iter.clone().map(|item| item.0);
         let types = path_iter.clone().map(|item| item.1);
         Some(quote! {
-            ::axum::extract::Path((#(#idents,)*)): ::axum::extract::Path<(#(#types,)*)>,
+            __axum::extract::Path((#(#idents,)*)): __axum::extract::Path<(#(#types,)*)>,
         })
     }
 
@@ -428,9 +435,9 @@ impl CompiledRoute {
 
         let idents = self.query_params.iter().map(|item| &item.0);
         Some(quote! {
-            ::axum::extract::Query(__QueryParams__ {
+            __axum::extract::Query(__QueryParams__ {
                 #(#idents,)*
-            }): ::axum::extract::Query<__QueryParams__>,
+            }): __axum::extract::Query<__QueryParams__>,
         })
     }
 
