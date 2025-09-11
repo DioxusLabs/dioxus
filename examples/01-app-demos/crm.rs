@@ -25,7 +25,7 @@ fn main() {
                     integrity: "sha384-Uu6IeWbM+gzNVXJcM9XV3SohHtmWE+3VGi496jvgX1jyvDTXfdK+rfZc8C1Aehk5",
                     crossorigin: "anonymous",
                 }
-                Stylesheet { href: asset!("/examples/_assets/crm.css") }
+                Stylesheet { href: asset!("/examples/assets/crm.css") }
                 h1 { "Dioxus CRM Example" }
                 Router::<Route> {}
             }

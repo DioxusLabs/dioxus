@@ -6,7 +6,7 @@
 
 use dioxus::prelude::*;
 
-static ASSET_PATH: Asset = asset!("/examples/_assets/logo.png");
+static ASSET_PATH: Asset = asset!("/examples/assets/logo.png");
 
 fn main() {
     dioxus::launch(app);

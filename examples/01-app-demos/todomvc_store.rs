@@ -6,7 +6,7 @@
 use dioxus::prelude::*;
 use std::{collections::HashMap, vec};
 
-const STYLE: Asset = asset!("/examples/_assets/todomvc.css");
+const STYLE: Asset = asset!("/examples/assets/todomvc.css");
 
 /// Deriving the store macro on a struct will automatically generate an extension trait
 /// for Store<TodoState> with method to zoom into the fields of the struct.

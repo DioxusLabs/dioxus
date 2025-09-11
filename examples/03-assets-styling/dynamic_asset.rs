@@ -7,7 +7,7 @@
 use dioxus::desktop::{use_asset_handler, wry::http::Response};
 use dioxus::prelude::*;
 
-const STYLE: Asset = asset!("/examples/_assets/custom_assets.css");
+const STYLE: Asset = asset!("/examples/assets/custom_assets.css");
 
 fn main() {
     dioxus::LaunchBuilder::desktop().launch(app);

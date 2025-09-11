@@ -2,7 +2,7 @@
 
 use dioxus::prelude::*;
 
-const STYLE: Asset = asset!("/examples/_assets/counter.css");
+const STYLE: Asset = asset!("/examples/assets/counter.css");
 
 fn main() {
     dioxus::launch(app);

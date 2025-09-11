@@ -9,7 +9,7 @@
 
 use dioxus::prelude::*;
 
-const STYLE: Asset = asset!("/examples/_assets/flat_router.css");
+const STYLE: Asset = asset!("/examples/assets/flat_router.css");
 
 fn main() {
     dioxus::launch(|| {

@@ -15,7 +15,7 @@ fn app() -> Element {
     let mut dimensions = use_signal(Size2D::zero);
 
     rsx!(
-        Stylesheet { href: asset!("/examples/_assets/read_size.css") }
+        Stylesheet { href: asset!("/examples/assets/read_size.css") }
         div {
             width: "50%",
             height: "50%",

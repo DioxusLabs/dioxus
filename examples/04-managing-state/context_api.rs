@@ -9,7 +9,7 @@
 
 use dioxus::prelude::*;
 
-const STYLE: Asset = asset!("/examples/_assets/context_api.css");
+const STYLE: Asset = asset!("/examples/assets/context_api.css");
 
 fn main() {
     launch(app);
