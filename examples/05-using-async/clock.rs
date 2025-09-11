@@ -33,7 +33,7 @@ fn app() -> Element {
     );
 
     rsx! {
-        document::Stylesheet { href: asset!("/examples/assets/clock.css") }
+        document::Stylesheet { href: asset!("/examples/_assets/clock.css") }
         div { id: "app",
             div { id: "title", "Carpe diem 🎉" }
             div { id: "clock-display", "{time}" }

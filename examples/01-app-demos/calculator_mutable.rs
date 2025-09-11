@@ -29,7 +29,7 @@ fn app() -> Element {
     let mut state = use_signal(Calculator::new);
 
     rsx! {
-        Stylesheet { href: asset!("/examples/assets/calculator.css") }
+        Stylesheet { href: asset!("/examples/_assets/calculator.css") }
         div { id: "wrapper",
             div { class: "app",
                 div {

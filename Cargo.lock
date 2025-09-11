@@ -8323,6 +8323,126 @@ dependencies = [
 ]
 
 [[package]]
+name = "harness-default-to-non-default"
+version = "0.0.1"
+dependencies = [
+ "dioxus",
+]
+
+[[package]]
+name = "harness-fullstack-desktop"
+version = "0.0.1"
+dependencies = [
+ "dioxus",
+]
+
+[[package]]
+name = "harness-fullstack-desktop-with-default"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "dioxus",
+]
+
+[[package]]
+name = "harness-fullstack-desktop-with-features"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "dioxus",
+]
+
+[[package]]
+name = "harness-fullstack-multi-target"
+version = "0.0.1"
+dependencies = [
+ "dioxus",
+]
+
+[[package]]
+name = "harness-fullstack-multi-target-no-default"
+version = "0.0.1"
+dependencies = [
+ "dioxus",
+]
+
+[[package]]
+name = "harness-fullstack-with-optional-tokio"
+version = "0.0.1"
+dependencies = [
+ "dioxus",
+ "serde",
+ "tokio",
+]
+
+[[package]]
+name = "harness-no-dioxus"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+]
+
+[[package]]
+name = "harness-renderer-swap"
+version = "0.0.1"
+dependencies = [
+ "dioxus",
+]
+
+[[package]]
+name = "harness-simple-dedicated-client"
+version = "0.0.1"
+dependencies = [
+ "dioxus",
+]
+
+[[package]]
+name = "harness-simple-dedicated-server"
+version = "0.0.1"
+
+[[package]]
+name = "harness-simple-desktop"
+version = "0.0.1"
+dependencies = [
+ "dioxus",
+]
+
+[[package]]
+name = "harness-simple-fullstack"
+version = "0.0.1"
+dependencies = [
+ "dioxus",
+]
+
+[[package]]
+name = "harness-simple-fullstack-native-with-default"
+version = "0.0.1"
+dependencies = [
+ "dioxus",
+]
+
+[[package]]
+name = "harness-simple-fullstack-with-default"
+version = "0.0.1"
+dependencies = [
+ "dioxus",
+]
+
+[[package]]
+name = "harness-simple-mobile"
+version = "0.0.1"
+dependencies = [
+ "dioxus",
+]
+
+[[package]]
+name = "harness-simple-web"
+version = "0.0.1"
+dependencies = [
+ "dioxus",
+]
+
+[[package]]
 name = "hash32"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8508,18 +8628,6 @@ dependencies = [
 
 [[package]]
 name = "hotdog"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "dioxus",
- "reqwest 0.12.22",
- "rusqlite",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "hotdog-simpler"
 version = "0.1.0"
 dependencies = [
  "anyhow",

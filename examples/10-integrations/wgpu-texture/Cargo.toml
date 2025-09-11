@@ -12,7 +12,7 @@ native = ["dioxus/native"]
 tracing = ["dep:tracing-subscriber", "dioxus-native/tracing"]
 
 [dependencies]
-dioxus-native = { path = "../../packages/native" }
+dioxus-native = { workspace = true }
 dioxus = { workspace = true }
 wgpu = { workspace = true }
 winit = "0.30"

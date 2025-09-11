@@ -8,7 +8,7 @@
 
 use dioxus::prelude::*;
 
-const STYLE: Asset = asset!("/examples/assets/links.css");
+const STYLE: Asset = asset!("/examples/_assets/links.css");
 
 fn main() {
     dioxus::launch(app);

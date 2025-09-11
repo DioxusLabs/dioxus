@@ -26,7 +26,7 @@ fn app() -> Element {
     });
 
     rsx! {
-        Stylesheet { href: asset!("/examples/assets/overlay.css") }
+        Stylesheet { href: asset!("/examples/_assets/overlay.css") }
         if show_overlay() {
             div {
                 width: "100%",

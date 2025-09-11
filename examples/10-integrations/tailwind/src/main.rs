@@ -8,7 +8,7 @@ fn app() -> Element {
     let grey_background = true;
 
     rsx! {
-        Stylesheet { href: asset!("/public/tailwind.css") }
+        Stylesheet { href: asset!("/assets/tailwind.css") }
         div {
             header {
                 class: "text-gray-400 body-font",

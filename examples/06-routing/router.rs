@@ -8,7 +8,7 @@
 
 use dioxus::prelude::*;
 
-const STYLE: Asset = asset!("/examples/assets/router.css");
+const STYLE: Asset = asset!("/examples/_assets/router.css");
 
 fn main() {
     dioxus::launch(|| {

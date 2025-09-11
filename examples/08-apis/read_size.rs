@@ -28,7 +28,7 @@ fn app() -> Element {
     };
 
     rsx! {
-        Stylesheet { href: asset!("/examples/assets/read_size.css") }
+        Stylesheet { href: asset!("/examples/_assets/read_size.css") }
         div {
             width: "50%",
             height: "50%",
