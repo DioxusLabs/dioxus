@@ -16,31 +16,31 @@ async fn main() {
     let state = State(DioxusServerState::default());
 
     let r = (&&&&&&&DeSer::<(HeaderMap, HeaderMap, Json<String>), _>::new())
-        .extract(Request::new(Body::empty()))
+        .extract(ExtractState::default())
         .await;
 
     let r = (&&&&&&&DeSer::<(HeaderMap, HeaderMap, String), _>::new())
-        .extract(Request::new(Body::empty()))
+        .extract(ExtractState::default())
         .await;
 
     let r = (&&&&&&&DeSer::<(HeaderMap, String, String), _>::new())
-        .extract(Request::new(Body::empty()))
+        .extract(ExtractState::default())
         .await;
 
     let r = (&&&&&&DeSer::<(String, String, String), _>::new())
-        .extract(Request::new(Body::empty()))
+        .extract(ExtractState::default())
         .await;
 
     let r = (&&&&&&DeSer::<(String, (), ()), _>::new())
-        .extract(Request::new(Body::empty()))
+        .extract(ExtractState::default())
         .await;
 
     let r = (&&&&&&DeSer::<(HeaderMap, (), Json<()>), _>::new())
-        .extract(Request::new(Body::empty()))
+        .extract(ExtractState::default())
         .await;
 }
 
-struct DeSer<T, BodyTy, Body = Json<BodyTy>> {
+struct DeSer<T, BodyTy = (), Body = Json<BodyTy>> {
     _t: std::marker::PhantomData<T>,
     _body: std::marker::PhantomData<BodyTy>,
     _encoding: std::marker::PhantomData<Body>,
@@ -56,6 +56,13 @@ impl<T, Encoding> DeSer<T, Encoding> {
     }
 }
 
+#[derive(Default)]
+struct ExtractState {
+    request: Request,
+    state: State<DioxusServerState>,
+    names: (&'static str, &'static str, &'static str),
+}
+
 use impls::*;
 #[rustfmt::skip]
 mod impls {
@@ -65,33 +72,33 @@ use super::*;
     Handle the regular axum-like handlers with tiered overloading with a single trait.
     */
     pub trait ExtractRequest {
-        async fn extract(&self, request: Request);
+        async fn extract(&self, ctx: ExtractState);
     }
-    impl ExtractRequest for &&&&&&DeSer<(), ()> {
-        async fn extract(&self, request: Request) {}
+    impl ExtractRequest for &&&&&&DeSer<()> {
+        async fn extract(&self, ctx: ExtractState) {}
     }
-    impl<A> ExtractRequest for &&&&&&DeSer<(A,), ()> where A: FromRequest<()> {
-        async fn extract(&self, request: Request) {}
-    }
-
-    impl<A> ExtractRequest for &&&&&DeSer<(A,), ()> where A: FromRequestParts<()> {
-        async fn extract(&self, request: Request) {}
+    impl<A> ExtractRequest for &&&&&&DeSer<(A,)> where A: FromRequest<()> {
+        async fn extract(&self, ctx: ExtractState) {}
     }
 
-    impl<A, B> ExtractRequest for &&&&&&DeSer<(A, B), ()> where A: FromRequestParts<()>, B: FromRequest<()> {
-        async fn extract(&self, request: Request) {}
+    impl<A> ExtractRequest for &&&&&DeSer<(A,)> where A: FromRequestParts<()> {
+        async fn extract(&self, ctx: ExtractState) {}
     }
 
-    impl<A, B> ExtractRequest for &&&&&DeSer<(A, B), ()> where A: FromRequestParts<()>, B: FromRequestParts<()> {
-        async fn extract(&self, request: Request) {}
+    impl<A, B> ExtractRequest for &&&&&&DeSer<(A, B)> where A: FromRequestParts<()>, B: FromRequest<()> {
+        async fn extract(&self, ctx: ExtractState) {}
     }
 
-    impl<A, B, C> ExtractRequest for &&&&&&DeSer<(A, B, C), ()> where A: FromRequestParts<()>, B: FromRequestParts<()>, C: FromRequest<()>, {
-        async fn extract(&self, request: Request) {}
+    impl<A, B> ExtractRequest for &&&&&DeSer<(A, B)> where A: FromRequestParts<()>, B: FromRequestParts<()> {
+        async fn extract(&self, ctx: ExtractState) {}
     }
 
-    impl<A, B, C> ExtractRequest for &&&&&DeSer<(A, B, C), ()> where A: FromRequestParts<()>, B: FromRequestParts<()>, C: FromRequestParts<()>, {
-        async fn extract(&self, request: Request) {}
+    impl<A, B, C> ExtractRequest for &&&&&&DeSer<(A, B, C)> where A: FromRequestParts<()>, B: FromRequestParts<()>, C: FromRequest<()>, {
+        async fn extract(&self, ctx: ExtractState) {}
+    }
+
+    impl<A, B, C> ExtractRequest for &&&&&DeSer<(A, B, C)> where A: FromRequestParts<()>, B: FromRequestParts<()>, C: FromRequestParts<()>, {
+        async fn extract(&self, ctx: ExtractState) {}
     }
 
     /*
@@ -99,30 +106,28 @@ use super::*;
     */
 
     // the one-arg case
-    impl<A> ExtractRequest for &&&&DeSer<(A,), ()> where A: DeserializeOwned {
-        async fn extract(&self, request: Request) {}
+    impl<A> ExtractRequest for &&&&DeSer<(A,)> where A: DeserializeOwned {
+        async fn extract(&self, ctx: ExtractState) {}
     }
 
     // the two-arg case
-    impl<A, B> ExtractRequest for &&&&DeSer<(A, B), ()> where A: FromRequestParts<()>, B: DeserializeOwned {
-        async fn extract(&self, request: Request) {}
+    impl<A, B> ExtractRequest for &&&&DeSer<(A, B)> where A: FromRequestParts<()>, B: DeserializeOwned {
+        async fn extract(&self, ctx: ExtractState) {}
     }
-    impl<A, B> ExtractRequest for &&&DeSer<(A, B), ()> where A: DeserializeOwned, B: DeserializeOwned {
-        async fn extract(&self, request: Request) {}
+    impl<A, B> ExtractRequest for &&&DeSer<(A, B)> where A: DeserializeOwned, B: DeserializeOwned {
+        async fn extract(&self, ctx: ExtractState) {}
     }
 
     // the three-arg case
-    impl<A, B, C> ExtractRequest for &&&&DeSer<(A, B, C), ()> where A: FromRequestParts<()>, B: FromRequestParts<()>, C: DeserializeOwned {
-        async fn extract(&self, request: Request) {}
+    impl<A, B, C> ExtractRequest for &&&&DeSer<(A, B, C)> where A: FromRequestParts<()>, B: FromRequestParts<()>, C: DeserializeOwned {
+        async fn extract(&self, ctx: ExtractState) {}
     }
-    impl<A, B, C> ExtractRequest for &&&DeSer<(A, B, C), ()> where A: FromRequestParts<()>, B: DeserializeOwned, C: DeserializeOwned {
-        async fn extract(&self, request: Request) {}
+    impl<A, B, C> ExtractRequest for &&&DeSer<(A, B, C)> where A: FromRequestParts<()>, B: DeserializeOwned, C: DeserializeOwned {
+        async fn extract(&self, ctx: ExtractState) {}
     }
-    impl<A, B, C> ExtractRequest for &&DeSer<(A, B, C), ()> where A: DeserializeOwned, B: DeserializeOwned, C: DeserializeOwned {
-        async fn extract(&self, request: Request) {}
+    impl<A, B, C> ExtractRequest for &&DeSer<(A, B, C)> where A: DeserializeOwned, B: DeserializeOwned, C: DeserializeOwned {
+        async fn extract(&self, ctx: ExtractState) {}
     }
-
-
 }
 
 // #[rustfmt::skip] trait ExtractP0<O> {
