@@ -1,10 +1,12 @@
+use std::prelude::rust_2024::Future;
+
 use axum::{
-    extract::{Request, State},
+    extract::{FromRequest, Request, State},
     Json,
 };
 pub use impls::*;
 
-use crate::DioxusServerState;
+use crate::{DioxusServerState, ServerFnRejection};
 
 #[derive(Default)]
 pub struct ExtractState {
@@ -33,6 +35,20 @@ impl<T, Encoding> DeSer<T, Encoding> {
 pub struct DeTys<T> {
     names: &'static [&'static str],
     _phantom: std::marker::PhantomData<T>,
+}
+
+impl<T, S> FromRequest<S> for DeTys<T> {
+    #[doc = " If the extractor fails it\'ll use this \"rejection\" type. A rejection is"]
+    #[doc = " a kind of error that can be converted into a response."]
+    type Rejection = ServerFnRejection;
+
+    #[doc = " Perform the extraction."]
+    fn from_request(
+        req: Request,
+        state: &S,
+    ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send {
+        async move { todo!() }
+    }
 }
 
 #[rustfmt::skip]
@@ -84,11 +100,11 @@ use super::*;
         async fn extract(&self, ctx: ExtractState) -> Self::Output { todo!() }
     }
     impl<A, B> ExtractRequest for   &&&&&&&&DeSer<(A, B)> where A: Prts<()>, B: DeO_____ {
-        type Output = (A, B);
+        type Output = (A, DeTys<(B,)>);
         async fn extract(&self, ctx: ExtractState) -> Self::Output { todo!() }
     }
     impl<A, B> ExtractRequest for    &&&&&&&DeSer<(A, B)> where A: DeO_____, B: DeO_____ {
-        type Output = (A, B);
+        type Output = ((), DeTys<(A, B)>);
         async fn extract(&self, ctx: ExtractState) -> Self::Output { todo!() }
     }
 
@@ -103,15 +119,15 @@ use super::*;
         async fn extract(&self, ctx: ExtractState) -> Self::Output { todo!() }
     }
     impl<A, B, C> ExtractRequest for   &&&&&&&&DeSer<(A, B, C)> where A: Prts<()>, B: Prts<()>, C: DeO_____ {
-        type Output = (A, B, C);
+        type Output = (A, B, DeTys<(C,)>);
         async fn extract(&self, ctx: ExtractState) -> Self::Output { todo!() }
     }
     impl<A, B, C> ExtractRequest for   &&&&&&&DeSer<(A, B, C)> where A: Prts<()>, B: DeO_____, C: DeO_____ {
-        type Output = (A, B, C);
+        type Output = (A, (), DeTys<(B, C)>);
         async fn extract(&self, ctx: ExtractState) -> Self::Output { todo!() }
     }
     impl<A, B, C> ExtractRequest for    &&&&&&DeSer<(A, B, C)> where A: DeO_____, B: DeO_____, C: DeO_____ {
-        type Output = (A, B, C);
+        type Output = ((), (), DeTys<(A, B, C)>);
         async fn extract(&self, ctx: ExtractState) -> Self::Output { todo!() }
     }
 
@@ -127,23 +143,21 @@ use super::*;
         async fn extract(&self, ctx: ExtractState) -> Self::Output { todo!() }
     }
     impl<A, B, C, D> ExtractRequest for   &&&&&&&&DeSer<(A, B, C, D)> where A: Prts<()>, B: Prts<()>, C: Prts<()>, D: DeO_____ {
-        type Output = (A, B, C, D);
+        type Output = (A, B, C, DeTys<(D,)>);
         async fn extract(&self, ctx: ExtractState) -> Self::Output { todo!() }
     }
     impl<A, B, C, D> ExtractRequest for    &&&&&&&DeSer<(A, B, C, D)> where A: Prts<()>, B: Prts<()>, C: DeO_____, D: DeO_____ {
-        type Output = (A, B, C, D);
+        type Output = (A, B, (), DeTys<(C, D)>);
         async fn extract(&self, ctx: ExtractState) -> Self::Output { todo!() }
     }
     impl<A, B, C, D> ExtractRequest for     &&&&&&DeSer<(A, B, C, D)> where A: Prts<()>, B: DeO_____, C: DeO_____, D: DeO_____ {
-        type Output = (A, B, C, D);
+        type Output = (A, (), (), DeTys<(B, C, D)>);
         async fn extract(&self, ctx: ExtractState) -> Self::Output { todo!() }
     }
     impl<A, B, C, D> ExtractRequest for      &&&&&DeSer<(A, B, C, D)> where A: DeO_____, B: DeO_____, C: DeO_____, D: DeO_____ {
-        type Output = (A, B, C, D);
+        type Output = ((), (), (), DeTys<(A, B, C, D)>);
         async fn extract(&self, ctx: ExtractState) -> Self::Output { todo!() }
     }
-
-
 
     // the five-arg case
     impl<A, B, C, D, E> ExtractRequest for &&&&&&&&&&DeSer<(A, B, C, D, E)> where A: Prts<()>, B: Prts<()>, C: Prts<()>, D: Prts<()>, E: Freq<()> {
@@ -155,23 +169,23 @@ use super::*;
         async fn extract(&self, ctx: ExtractState) -> Self::Output { todo!() }
     }
     impl<A, B, C, D, E> ExtractRequest for   &&&&&&&&DeSer<(A, B, C, D, E)> where A: Prts<()>, B: Prts<()>, C: Prts<()>, D: Prts<()>, E: DeO_____ {
-        type Output = (A, B, C, D, E);
+        type Output = (A, B, C, D, DeTys<(E,)>);
         async fn extract(&self, ctx: ExtractState) -> Self::Output { todo!() }
     }
     impl<A, B, C, D, E> ExtractRequest for    &&&&&&&DeSer<(A, B, C, D, E)> where A: Prts<()>, B: Prts<()>, C: Prts<()>, D: DeO_____, E: DeO_____ {
-        type Output = (A, B, C, D, E);
+        type Output = (A, B, C, (), DeTys<(D, E)>);
         async fn extract(&self, ctx: ExtractState) -> Self::Output { todo!() }
     }
     impl<A, B, C, D, E> ExtractRequest for     &&&&&&DeSer<(A, B, C, D, E)> where A: Prts<()>, B: Prts<()>, C: DeO_____, D: DeO_____, E: DeO_____ {
-        type Output = (A, B, C, D, E);
+        type Output = (A, B, (), (), DeTys<(C, D, E)>);
         async fn extract(&self, ctx: ExtractState) -> Self::Output { todo!() }
     }
     impl<A, B, C, D, E> ExtractRequest for      &&&&&DeSer<(A, B, C, D, E)> where A: Prts<()>, B: DeO_____, C: DeO_____, D: DeO_____, E: DeO_____ {
-        type Output = (A, B, C, D, E);
+        type Output = (A, (), (), (), DeTys<(B, C, D, E)>);
         async fn extract(&self, ctx: ExtractState) -> Self::Output { todo!() }
     }
     impl<A, B, C, D, E> ExtractRequest for       &&&&DeSer<(A, B, C, D, E)> where A: DeO_____, B: DeO_____, C: DeO_____, D: DeO_____, E: DeO_____ {
-        type Output = (A, B, C, D, E);
+        type Output = ((), (), (), (), DeTys<(A, B, C, D, E)>);
         async fn extract(&self, ctx: ExtractState) -> Self::Output { todo!() }
     }
 
@@ -185,27 +199,27 @@ use super::*;
         async fn extract(&self, ctx: ExtractState) -> Self::Output { todo!() }
     }
     impl<A, B, C, D, E, F> ExtractRequest for   &&&&&&&&DeSer<(A, B, C, D, E, F)> where A: Prts<()>, B: Prts<()>, C: Prts<()>, D: Prts<()>, E: Prts<()>, F: DeO_____ {
-        type Output = (A, B, C, D, E, F);
+        type Output = (A, B, C, D, E, DeTys<(F,)>);
         async fn extract(&self, ctx: ExtractState) -> Self::Output { todo!() }
     }
     impl<A, B, C, D, E, F> ExtractRequest for    &&&&&&&DeSer<(A, B, C, D, E, F)> where A: Prts<()>, B: Prts<()>, C: Prts<()>, D: Prts<()>, E: DeO_____, F: DeO_____ {
-        type Output = (A, B, C, D, E, F);
+        type Output = (A, B, C, D, (), DeTys<(E, F)>);
         async fn extract(&self, ctx: ExtractState) -> Self::Output { todo!() }
     }
     impl<A, B, C, D, E, F> ExtractRequest for     &&&&&&DeSer<(A, B, C, D, E, F)> where A: Prts<()>, B: Prts<()>, C: Prts<()>, D: DeO_____, E: DeO_____, F: DeO_____ {
-        type Output = (A, B, C, D, E, F);
+        type Output = (A, B, C, (), (), DeTys<(D, E, F)>);
         async fn extract(&self, ctx: ExtractState) -> Self::Output { todo!() }
     }
     impl<A, B, C, D, E, F> ExtractRequest for      &&&&&DeSer<(A, B, C, D, E, F)> where A: Prts<()>, B: Prts<()>, C: DeO_____, D: DeO_____, E: DeO_____, F: DeO_____ {
-        type Output = (A, B, C, D, E, F);
+        type Output = (A, B, (), (), (), DeTys<(C, D, E, F)>);
         async fn extract(&self, ctx: ExtractState) -> Self::Output { todo!() }
     }
     impl<A, B, C, D, E, F> ExtractRequest for       &&&&DeSer<(A, B, C, D, E, F)> where A: Prts<()>, B: DeO_____, C: DeO_____, D: DeO_____, E: DeO_____, F: DeO_____ {
-        type Output = (A, B, C, D, E, F);
+        type Output = (A, (), (), (), (), DeTys<(B, C, D, E, F)>);
         async fn extract(&self, ctx: ExtractState) -> Self::Output { todo!() }
     }
     impl<A, B, C, D, E, F> ExtractRequest for        &&&DeSer<(A, B, C, D, E, F)> where A: DeO_____, B: DeO_____, C: DeO_____, D: DeO_____, E: DeO_____, F: DeO_____ {
-        type Output = (A, B, C, D, E, F);
+        type Output = ((), (), (), (), (), DeTys<(A, B, C, D, E, F)>);
         async fn extract(&self, ctx: ExtractState) -> Self::Output { todo!() }
     }
 
@@ -221,35 +235,33 @@ use super::*;
         async fn extract(&self, ctx: ExtractState) -> Self::Output { todo!() }
     }
     impl<A, B, C, D, E, F, G> ExtractRequest for   &&&&&&&&DeSer<(A, B, C, D, E, F, G)> where A: Prts<()>, B: Prts<()>, C: Prts<()>, D: Prts<()>, E: Prts<()>, F: Prts<()>, G: DeO_____ {
-        type Output = (A, B, C, D, E, F, G);
+        type Output = (A, B, C, D, E, F, DeTys<(G,)>);
         async fn extract(&self, ctx: ExtractState) -> Self::Output { todo!() }
     }
     impl<A, B, C, D, E, F, G> ExtractRequest for    &&&&&&&DeSer<(A, B, C, D, E, F, G)> where A: Prts<()>, B: Prts<()>, C: Prts<()>, D: Prts<()>, E: Prts<()>, F: DeO_____, G: DeO_____ {
-        type Output = (A, B, C, D, E, F, G);
+        type Output = (A, B, C, D, E, (), DeTys<(F, G)>);
         async fn extract(&self, ctx: ExtractState) -> Self::Output { todo!() }
     }
     impl<A, B, C, D, E, F, G> ExtractRequest for     &&&&&&DeSer<(A, B, C, D, E, F, G)> where A: Prts<()>, B: Prts<()>, C: Prts<()>, D: Prts<()>, E: DeO_____, F: DeO_____, G: DeO_____ {
-        type Output = (A, B, C, D, E, F, G);
+        type Output = (A, B, C, D, (), (), DeTys<(E, F, G)>);
         async fn extract(&self, ctx: ExtractState) -> Self::Output { todo!() }
     }
     impl<A, B, C, D, E, F, G> ExtractRequest for      &&&&&DeSer<(A, B, C, D, E, F, G)> where A: Prts<()>, B: Prts<()>, C: Prts<()>, D: DeO_____, E: DeO_____, F: DeO_____, G: DeO_____ {
-        type Output = (A, B, C, D, E, F, G);
+        type Output = (A, B, C, (), (), (), DeTys<(D, E, F, G)>);
         async fn extract(&self, ctx: ExtractState) -> Self::Output { todo!() }
     }
     impl<A, B, C, D, E, F, G> ExtractRequest for       &&&&DeSer<(A, B, C, D, E, F, G)> where A: Prts<()>, B: Prts<()>, C: DeO_____, D: DeO_____, E: DeO_____, F: DeO_____, G: DeO_____ {
-        type Output = (A, B, C, D, E, F, G);
+        type Output = (A, B, (), (), (), (), DeTys<(C, D, E, F, G)>);
         async fn extract(&self, ctx: ExtractState) -> Self::Output { todo!() }
     }
     impl<A, B, C, D, E, F, G> ExtractRequest for        &&&DeSer<(A, B, C, D, E, F, G)> where A: Prts<()>, B: DeO_____, C: DeO_____, D: DeO_____, E: DeO_____, F: DeO_____, G: DeO_____ {
-        type Output = (A, B, C, D, E, F, G);
+        type Output = (A, (), (), (), (), (), DeTys<(B, C, D, E, F, G)>);
         async fn extract(&self, ctx: ExtractState) -> Self::Output { todo!() }
     }
     impl<A, B, C, D, E, F, G> ExtractRequest for         &&DeSer<(A, B, C, D, E, F, G)> where A: DeO_____, B: DeO_____, C: DeO_____, D: DeO_____, E: DeO_____, F: DeO_____, G: DeO_____ {
-        type Output = (A, B, C, D, E, F, G);
+        type Output = ((), (), (), (), (), (), DeTys<(A, B, C, D, E, F, G)>);
         async fn extract(&self, ctx: ExtractState) -> Self::Output { todo!() }
     }
-
-
 
     // the eight-arg case
     impl<A, B, C, D, E, F, G, H> ExtractRequest for &&&&&&&&&&DeSer<(A, B, C, D, E, F, G, H)> where A: Prts<()>, B: Prts<()>, C: Prts<()>, D: Prts<()>, E: Prts<()>, F: Prts<()>, G: Prts<()>, H: Freq<()> {
@@ -261,35 +273,35 @@ use super::*;
         async fn extract(&self, ctx: ExtractState) -> Self::Output { todo!() }
     }
     impl<A, B, C, D, E, F, G, H> ExtractRequest for   &&&&&&&&DeSer<(A, B, C, D, E, F, G, H)> where A: Prts<()>, B: Prts<()>, C: Prts<()>, D: Prts<()>, E: Prts<()>, F: Prts<()>, G: Prts<()>, H: DeO_____ {
-        type Output = (A, B, C, D, E, F, G, H);
+        type Output = (A, B, C, D, E, F, G, DeTys<(H,)>);
         async fn extract(&self, ctx: ExtractState) -> Self::Output { todo!() }
     }
     impl<A, B, C, D, E, F, G, H> ExtractRequest for    &&&&&&&DeSer<(A, B, C, D, E, F, G, H)> where A: Prts<()>, B: Prts<()>, C: Prts<()>, D: Prts<()>, E: Prts<()>, F: Prts<()>, G: DeO_____, H: DeO_____ {
-        type Output = (A, B, C, D, E, F, G, H);
+        type Output = (A, B, C, D, E, F, (), DeTys<(G, H)>);
         async fn extract(&self, ctx: ExtractState) -> Self::Output { todo!() }
     }
     impl<A, B, C, D, E, F, G, H> ExtractRequest for     &&&&&&DeSer<(A, B, C, D, E, F, G, H)> where A: Prts<()>, B: Prts<()>, C: Prts<()>, D: Prts<()>, E: Prts<()>, F: DeO_____, G: DeO_____, H: DeO_____ {
-        type Output = (A, B, C, D, E, F, G, H);
+        type Output = (A, B, C, D, E, (), (), DeTys<(F, G, H)>);
         async fn extract(&self, ctx: ExtractState) -> Self::Output { todo!() }
     }
     impl<A, B, C, D, E, F, G, H> ExtractRequest for      &&&&&DeSer<(A, B, C, D, E, F, G, H)> where A: Prts<()>, B: Prts<()>, C: Prts<()>, D: Prts<()>, E: DeO_____, F: DeO_____, G: DeO_____, H: DeO_____ {
-        type Output = (A, B, C, D, E, F, G, H);
+        type Output = (A, B, C, D, (), (), (), DeTys<(E, F, G, H)>);
         async fn extract(&self, ctx: ExtractState) -> Self::Output { todo!() }
     }
     impl<A, B, C, D, E, F, G, H> ExtractRequest for       &&&&DeSer<(A, B, C, D, E, F, G, H)> where A: Prts<()>, B: Prts<()>, C: Prts<()>, D: DeO_____, E: DeO_____, F: DeO_____, G: DeO_____, H: DeO_____ {
-        type Output = (A, B, C, D, E, F, G, H);
+        type Output = (A, B, C, (), (), (), (), DeTys<(D, E, F, G, H)>);
         async fn extract(&self, ctx: ExtractState) -> Self::Output { todo!() }
     }
     impl<A, B, C, D, E, F, G, H> ExtractRequest for        &&&DeSer<(A, B, C, D, E, F, G, H)> where A: Prts<()>, B: Prts<()>, C: DeO_____, D: DeO_____, E: DeO_____, F: DeO_____, G: DeO_____, H: DeO_____ {
-        type Output = (A, B, C, D, E, F, G, H);
+        type Output = (A, B, (), (), (), (), (), DeTys<(C, D, E, F, G, H)>);
         async fn extract(&self, ctx: ExtractState) -> Self::Output { todo!() }
     }
     impl<A, B, C, D, E, F, G, H> ExtractRequest for         &&DeSer<(A, B, C, D, E, F, G, H)> where A: Prts<()>, B: DeO_____, C: DeO_____, D: DeO_____, E: DeO_____, F: DeO_____, G: DeO_____, H: DeO_____ {
-        type Output = (A, B, C, D, E, F, G, H);
+        type Output = (A, (), (), (), (), (), (), DeTys<(B, C, D, E, F, G, H)>);
         async fn extract(&self, ctx: ExtractState) -> Self::Output { todo!() }
     }
     impl<A, B, C, D, E, F, G, H> ExtractRequest for          &DeSer<(A, B, C, D, E, F, G, H)> where A: DeO_____, B: DeO_____, C: DeO_____, D: DeO_____, E: DeO_____, F: DeO_____, G: DeO_____, H: DeO_____ {
-        type Output = (A, B, C, D, E, F, G, H);
+        type Output = ((), (), (), (), (), (), (), DeTys<(A, B, C, D, E, F, G, H)>);
         async fn extract(&self, ctx: ExtractState) -> Self::Output { todo!() }
     }
 }
