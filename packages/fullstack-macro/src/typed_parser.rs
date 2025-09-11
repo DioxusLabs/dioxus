@@ -71,6 +71,11 @@ pub fn route_impl_with_route(
     let mut extracted_idents = route.extracted_idents();
     let remaining_numbered_idents = remaining_numbered_pats.iter().map(|pat_type| &pat_type.pat);
     let route_docs = route.to_doc_comments();
+
+    extracted_idents.extend(body_json_names.clone().map(|pat| match pat.as_ref() {
+        Pat::Ident(pat_ident) => pat_ident.ident.clone(),
+        _ => panic!("Expected Pat::Ident"),
+    }));
     extracted_idents.extend(server_idents);
 
     // Get the variables we need for code generation
@@ -209,7 +214,7 @@ pub fn route_impl_with_route(
 
                     // desugar_into_response will autoref into using the Serialize impl
 
-                    #fn_name #ty_generics(#(#extracted_idents,)*  #(#body_json_names2,)*).await.desugar_into_response()
+                    #fn_name #ty_generics(#(#extracted_idents,)*).await.desugar_into_response()
 
 
                     // #fn_name #ty_generics(#(#extracted_idents,)* #(#remaining_numbered_idents,)* ).await.desugar_into_response()
