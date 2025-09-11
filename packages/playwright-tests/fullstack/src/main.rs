@@ -141,7 +141,8 @@ fn Errors() -> Element {
 
 #[component]
 pub fn ThrowsError() -> Element {
-    use_server_future(server_error)?.unwrap()?;
+    let t = use_server_future(server_error)?.unwrap();
+    t?;
     rsx! {
         "success"
     }

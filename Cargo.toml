@@ -475,20 +475,9 @@ mobile = ["dioxus/mobile"]
 web = ["dioxus/web"]
 gpu = ["dep:ouroboros", "dep:wgpu"]
 
-
 [[example]]
-name = "calculator_mutable"
-path = "examples/01-app-demos/calculator_mutable.rs"
-doc-scrape-examples = true
-
-[[example]]
-name = "calculator"
-path = "examples/01-app-demos/calculator.rs"
-doc-scrape-examples = true
-
-[[example]]
-name = "counters"
-path = "examples/01-app-demos/counters.rs"
+name = "weather_app"
+path = "examples/01-app-demos/weather_app.rs"
 doc-scrape-examples = true
 
 [[example]]
@@ -497,28 +486,8 @@ path = "examples/01-app-demos/crm.rs"
 doc-scrape-examples = true
 
 [[example]]
-name = "dog_app"
-path = "examples/01-app-demos/dog_app.rs"
-doc-scrape-examples = true
-
-[[example]]
-name = "hello_world"
-path = "examples/01-app-demos/hello_world.rs"
-doc-scrape-examples = true
-
-[[example]]
 name = "image_generator_openai"
 path = "examples/01-app-demos/image_generator_openai.rs"
-doc-scrape-examples = true
-
-[[example]]
-name = "repo_readme"
-path = "examples/01-app-demos/repo_readme.rs"
-doc-scrape-examples = true
-
-[[example]]
-name = "todomvc_store"
-path = "examples/01-app-demos/todomvc_store.rs"
 doc-scrape-examples = true
 
 [[example]]
@@ -527,163 +496,360 @@ path = "examples/01-app-demos/todomvc.rs"
 doc-scrape-examples = true
 
 [[example]]
-name = "weather_app"
-path = "examples/01-app-demos/weather_app.rs"
+name = "calculator_mutable"
+path = "examples/01-app-demos/calculator_mutable.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "hello_world"
+path = "examples/01-app-demos/hello_world.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "counters"
+path = "examples/01-app-demos/counters.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "todomvc_store"
+path = "examples/01-app-demos/todomvc_store.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "dog_app"
+path = "examples/01-app-demos/dog_app.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "calculator"
+path = "examples/01-app-demos/calculator.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "repo_readme"
+path = "examples/01-app-demos/repo_readme.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "nested_listeners"
+path = "examples/02-building-ui/nested_listeners.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "disabled"
+path = "examples/02-building-ui/disabled.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "svg"
+path = "examples/02-building-ui/svg.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "custom_assets"
+path = "examples/03-assets-styling/custom_assets.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "dynamic_assets"
+path = "examples/03-assets-styling/dynamic_assets.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "meta"
+path = "examples/03-assets-styling/meta.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "meta_elements"
+path = "examples/03-assets-styling/meta_elements.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "reducer"
+path = "examples/04-managing-state/reducer.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "memo_chain"
+path = "examples/04-managing-state/memo_chain.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "global"
+path = "examples/04-managing-state/global.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "context_api"
+path = "examples/04-managing-state/context_api.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "signals"
+path = "examples/04-managing-state/signals.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "backgrounded_futures"
+path = "examples/05-using-async/backgrounded_futures.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "clock"
+path = "examples/05-using-async/clock.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "streams"
+path = "examples/05-using-async/streams.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "suspense"
+path = "examples/05-using-async/suspense.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "future"
+path = "examples/05-using-async/future.rs"
 doc-scrape-examples = true
 
 
-# [[example]]
-# name = "login_form"
-# required-features = ["http"]
-# doc-scrape-examples = true
+[[example]]
+name = "simple_router"
+path = "examples/06-routing/simple_router.rs"
+doc-scrape-examples = true
 
-# [[example]]
-# name = "dog_app"
-# required-features = ["http"]
-# doc-scrape-examples = true
+[[example]]
+name = "router_restore_scroll"
+path = "examples/06-routing/router_restore_scroll.rs"
+doc-scrape-examples = true
 
-# [[example]]
-# name = "video_stream"
-# required-features = ["http", "desktop"]
-# doc-scrape-examples = true
+[[example]]
+name = "string_router"
+path = "examples/06-routing/string_router.rs"
+doc-scrape-examples = true
 
-# [[example]]
-# name = "suspense"
-# required-features = ["http", "desktop"]
-# doc-scrape-examples = true
+[[example]]
+name = "link"
+path = "examples/06-routing/link.rs"
+doc-scrape-examples = true
 
-# [[example]]
-# name = "weather_app"
-# required-features = ["http"]
-# doc-scrape-examples = true
+[[example]]
+name = "hash_fragment_state"
+required-features = ["ciborium", "base64"]
+path = "examples/06-routing/hash_fragment_state.rs"
+doc-scrape-examples = true
 
-# [[example]]
-# name = "image_generator_openai"
-# required-features = ["http"]
-# doc-scrape-examples = true
+[[example]]
+name = "router"
+path = "examples/06-routing/router.rs"
+doc-scrape-examples = true
 
-# [[example]]
-# name = "hash_fragment_state"
-# required-features = ["ciborium", "base64"]
-# doc-scrape-examples = true
+[[example]]
+name = "router_resource"
+path = "examples/06-routing/router_resource.rs"
+doc-scrape-examples = true
 
-# [[example]]
-# name = "backgrounded_futures"
-# required-features = ["desktop"]
-# doc-scrape-examples = true
+[[example]]
+name = "query_segment_search"
+path = "examples/06-routing/query_segment_search.rs"
+doc-scrape-examples = true
 
-# [[example]]
-# name = "calculator_mutable"
-# required-features = ["desktop"]
-# doc-scrape-examples = true
+[[example]]
+name = "flat_router"
+path = "examples/06-routing/flat_router.rs"
+doc-scrape-examples = true
 
-# [[example]]
-# name = "calculator"
-# required-features = ["desktop"]
-# doc-scrape-examples = true
+[[example]]
+name = "hydration"
+path = "examples/07-fullstack/hydration.rs"
+doc-scrape-examples = true
 
-# [[example]]
-# name = "clock"
-# doc-scrape-examples = true
+[[example]]
+name = "login_form"
+path = "examples/07-fullstack/login_form.rs"
+doc-scrape-examples = true
 
-# [[example]]
-# name = "crm"
-# required-features = ["desktop"]
-# doc-scrape-examples = true
+[[example]]
+name = "control_focus"
+path = "examples/08-apis/control_focus.rs"
+doc-scrape-examples = true
 
-# [[example]]
-# name = "custom_html"
-# required-features = ["desktop"]
-# doc-scrape-examples = true
+[[example]]
+name = "window_popup"
+required-features = ["desktop"]
+path = "examples/08-apis/window_popup.rs"
+doc-scrape-examples = true
 
-# [[example]]
-# name = "custom_menu"
-# required-features = ["desktop"]
-# doc-scrape-examples = true
+[[example]]
+name = "custom_html"
+required-features = ["desktop"]
+path = "examples/08-apis/custom_html.rs"
+doc-scrape-examples = true
 
-# [[example]]
-# name = "dynamic_asset"
-# required-features = ["desktop"]
-# doc-scrape-examples = true
+[[example]]
+name = "multiwindow_with_tray_icon"
+required-features = ["desktop"]
+path = "examples/08-apis/multiwindow_with_tray_icon.rs"
+doc-scrape-examples = true
 
-# [[example]]
-# name = "errors"
-# required-features = ["desktop"]
-# doc-scrape-examples = true
+[[example]]
+name = "window_event"
+required-features = ["desktop"]
+path = "examples/08-apis/window_event.rs"
+doc-scrape-examples = true
 
-# [[example]]
-# name = "future"
-# doc-scrape-examples = true
+[[example]]
+name = "read_size"
+path = "examples/08-apis/read_size.rs"
+doc-scrape-examples = true
 
-# [[example]]
-# name = "hydration"
-# required-features = ["desktop"]
-# doc-scrape-examples = true
+[[example]]
+name = "logging"
+path = "examples/08-apis/logging.rs"
+doc-scrape-examples = true
 
-# [[example]]
-# name = "multiwindow"
-# required-features = ["desktop"]
-# doc-scrape-examples = true
+[[example]]
+name = "overlay"
+required-features = ["desktop"]
+path = "examples/08-apis/overlay.rs"
+doc-scrape-examples = true
 
-# [[example]]
-# name = "overlay"
-# required-features = ["desktop"]
-# doc-scrape-examples = true
+[[example]]
+name = "ssr"
+path = "examples/08-apis/ssr.rs"
+doc-scrape-examples = true
 
-# [[example]]
-# name = "popup"
-# required-features = ["desktop"]
-# doc-scrape-examples = true
+[[example]]
+name = "video_stream"
+required-features = ["desktop"]
+path = "examples/08-apis/video_stream.rs"
+doc-scrape-examples = true
 
-# [[example]]
-# name = "read_size"
-# required-features = ["desktop"]
-# doc-scrape-examples = true
+[[example]]
+name = "title"
+path = "examples/08-apis/title.rs"
+doc-scrape-examples = true
 
-# [[example]]
-# name = "shortcut"
-# required-features = ["desktop"]
-# doc-scrape-examples = true
+[[example]]
+name = "file_upload"
+path = "examples/08-apis/file_upload.rs"
+doc-scrape-examples = true
 
-# [[example]]
-# name = "streams"
-# doc-scrape-examples = true
+[[example]]
+name = "window_focus"
+required-features = ["desktop"]
+path = "examples/08-apis/window_focus.rs"
+doc-scrape-examples = true
 
-# [[example]]
-# name = "visible"
-# doc-scrape-examples = true
+[[example]]
+name = "eval"
+path = "examples/08-apis/eval.rs"
+doc-scrape-examples = true
 
-# [[example]]
-# name = "window_event"
-# required-features = ["desktop"]
-# doc-scrape-examples = true
+[[example]]
+name = "errors"
+path = "examples/08-apis/errors.rs"
+doc-scrape-examples = true
 
-# [[example]]
-# name = "window_focus"
-# required-features = ["desktop"]
-# doc-scrape-examples = true
+[[example]]
+name = "shortcut"
+required-features = ["desktop"]
+path = "examples/08-apis/shortcut.rs"
+doc-scrape-examples = true
 
-# [[example]]
-# name = "window_zoom"
-# required-features = ["desktop"]
-# doc-scrape-examples = true
+[[example]]
+name = "scroll_to_offset"
+path = "examples/08-apis/scroll_to_offset.rs"
+doc-scrape-examples = true
 
-# [[example]]
-# name = "wgpu_child_window"
-# required-features = ["desktop", "gpu"]
+[[example]]
+name = "scroll_to_top"
+path = "examples/08-apis/scroll_to_top.rs"
+doc-scrape-examples = true
 
-# [[example]]
-# name = "control_focus"
-# doc-scrape-examples = true
+[[example]]
+name = "wgpu_child_window"
+path = "examples/08-apis/wgpu_child_window.rs"
+required-features = ["gpu", "desktop"]
+doc-scrape-examples = true
 
-# [[example]]
-# name = "eval"
-# doc-scrape-examples = true
+[[example]]
+name = "multiwindow"
+required-features = ["desktop"]
+path = "examples/08-apis/multiwindow.rs"
+doc-scrape-examples = true
 
-# [[example]]
-# name = "logging"
-# doc-scrape-examples = true
+[[example]]
+name = "window_zoom"
+required-features = ["desktop"]
+path = "examples/08-apis/window_zoom.rs"
+doc-scrape-examples = true
 
-# [[example]]
-# name = "string_router"
-# doc-scrape-examples = true
+[[example]]
+name = "custom_menu"
+required-features = ["desktop"]
+path = "examples/08-apis/custom_menu.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "on_resize"
+path = "examples/08-apis/on_resize.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "form"
+path = "examples/08-apis/form.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "on_visible"
+path = "examples/08-apis/on_visible.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "all_events"
+path = "examples/09-reference/all_events.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "xss_safety"
+path = "examples/09-reference/xss_safety.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "web_component"
+path = "examples/09-reference/web_component.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "generic_component"
+path = "examples/09-reference/generic_component.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "shorthand"
+path = "examples/09-reference/shorthand.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "simple_list"
+path = "examples/09-reference/simple_list.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "optional_props"
+path = "examples/09-reference/optional_props.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "rsx_usage"
+path = "examples/09-reference/rsx_usage.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "spread"
+path = "examples/09-reference/spread.rs"
+doc-scrape-examples = true

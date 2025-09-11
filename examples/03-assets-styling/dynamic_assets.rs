@@ -20,7 +20,7 @@ fn app() -> Element {
             return;
         }
 
-        response.respond(Response::new(include_bytes!("./assets/logo.png").to_vec()));
+        response.respond(Response::new(include_bytes!("../assets/logo.png").to_vec()));
     });
 
     rsx! {

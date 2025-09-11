@@ -1,6 +1,6 @@
 fn main() {
-    let res = (&&&Targ::default()).do_thing(());
-    let res = (&&&Targ::default()).do_thing(123);
+    // let res = (&&&Targ::default()).do_thing(());
+    // let res = (&&&Targ::default()).do_thing(123);
 }
 
 struct Targ<T> {
