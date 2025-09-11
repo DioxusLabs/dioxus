@@ -853,3 +853,7 @@ doc-scrape-examples = true
 name = "spread"
 path = "examples/09-reference/spread.rs"
 doc-scrape-examples = true
+
+[[example]]
+name = "__scrape_example_list"
+path = "examples/scripts/scrape_examples.rs"
