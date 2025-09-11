@@ -29,6 +29,12 @@ impl<T, Encoding> DeSer<T, Encoding> {
     }
 }
 
+/// An on-the-fly struct for deserializing a variable number of types as a map
+pub struct DeTys<T> {
+    names: &'static [&'static str],
+    _phantom: std::marker::PhantomData<T>,
+}
+
 #[rustfmt::skip]
 mod impls {
 use super::*;
@@ -51,19 +57,22 @@ use super::*;
         async fn extract(&self, ctx: ExtractState) -> Self::Output {}
     }
 
+
     // One-arg case
     impl<A> ExtractRequest for &&&&&&&&&&DeSer<(A,)> where A: Freq<()> {
         type Output = (A,);
         async fn extract(&self, ctx: ExtractState)-> Self::Output { todo!() }
     }
-    impl<A> ExtractRequest for &&&&&&&&&DeSer<(A,)> where A: Prts<()> {
+    impl<A> ExtractRequest for  &&&&&&&&&DeSer<(A,)> where A: Prts<()> {
         type Output = (A,);
         async fn extract(&self, ctx: ExtractState) -> Self::Output { todo!() }
     }
-    impl<A> ExtractRequest for  &&&&&&&&DeSer<(A,)> where A: DeO_____ {
+    impl<A> ExtractRequest for   &&&&&&&&DeSer<(A,)> where A: DeO_____ {
         type Output = (A,);
         async fn extract(&self, ctx: ExtractState) -> Self::Output { todo!() }
     }
+
+
 
     // Two-arg case
     impl<A, B> ExtractRequest for &&&&&&&&&&DeSer<(A, B)> where A: Prts<()>, B: Freq<()> {
@@ -106,6 +115,8 @@ use super::*;
         async fn extract(&self, ctx: ExtractState) -> Self::Output { todo!() }
     }
 
+
+
     // the four-arg case
     impl<A, B, C, D> ExtractRequest for &&&&&&&&&&DeSer<(A, B, C, D)> where A: Prts<()>, B: Prts<()>, C: Prts<()>, D: Freq<()> {
         type Output = (A, B, C, D);
@@ -131,6 +142,8 @@ use super::*;
         type Output = (A, B, C, D);
         async fn extract(&self, ctx: ExtractState) -> Self::Output { todo!() }
     }
+
+
 
     // the five-arg case
     impl<A, B, C, D, E> ExtractRequest for &&&&&&&&&&DeSer<(A, B, C, D, E)> where A: Prts<()>, B: Prts<()>, C: Prts<()>, D: Prts<()>, E: Freq<()> {
@@ -196,6 +209,8 @@ use super::*;
         async fn extract(&self, ctx: ExtractState) -> Self::Output { todo!() }
     }
 
+
+
     // the seven-arg case
     impl<A, B, C, D, E, F, G> ExtractRequest for &&&&&&&&&&DeSer<(A, B, C, D, E, F, G)> where A: Prts<()>, B: Prts<()>, C: Prts<()>, D: Prts<()>, E: Prts<()>, F: Prts<()>, G: Freq<()> {
         type Output = (A, B, C, D, E, F, G);
@@ -233,6 +248,8 @@ use super::*;
         type Output = (A, B, C, D, E, F, G);
         async fn extract(&self, ctx: ExtractState) -> Self::Output { todo!() }
     }
+
+
 
     // the eight-arg case
     impl<A, B, C, D, E, F, G, H> ExtractRequest for &&&&&&&&&&DeSer<(A, B, C, D, E, F, G, H)> where A: Prts<()>, B: Prts<()>, C: Prts<()>, D: Prts<()>, E: Prts<()>, F: Prts<()>, G: Prts<()>, H: Freq<()> {
