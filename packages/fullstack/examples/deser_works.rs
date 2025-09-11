@@ -6,7 +6,7 @@ use axum::{
     Json, RequestExt,
 };
 use dioxus_fullstack::{
-    fromreq::{DeSer, DeTys, ExtractRequest, ExtractState},
+    req_from::{DeSer, DeTys, ExtractRequest, ExtractState},
     DioxusServerContext,
 };
 use dioxus_fullstack::{DioxusServerState, ServerFnRejection};

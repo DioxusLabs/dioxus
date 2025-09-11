@@ -5,7 +5,8 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![forbid(unexpected_cfgs)]
 
-pub mod fromreq;
+pub mod req_from;
+pub mod req_to;
 
 pub use fetch::*;
 pub mod fetch;

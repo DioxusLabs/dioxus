@@ -156,7 +156,9 @@ pub fn route_impl_with_route(
     // #vis fn #fn_name #impl_generics() ->  #method_router_ty<#state_type> #where_clause {
 
     // let body_json_contents = remaining_numbered_pats.iter().map(|pat_type| [quote! {}]);
+    let body_json_types2 = body_json_types.clone();
     let body_json_names2 = body_json_names.clone();
+    let body_json_names3 = body_json_names.clone();
 
     Ok(quote! {
         #(#fn_docs)*
@@ -177,6 +179,17 @@ pub fn route_impl_with_route(
             //         todo!()
             //     }
             // }
+
+            async fn ___make__request(#original_inputs) #fn_output #where_clause {
+                (&&&&&&&&&&&&&&ReqSer::<(#(#body_json_types2,)* )>::new())
+                        .encode(EncodeState::default(), (#(#body_json_names3,)*))
+                        .await
+                        .unwrap()
+                // let res = (&&&&&&&&&&&&&&ReqSer::<(i32, i32, Bytes)>::new())
+                //         .encode::<String>(EncodeState::default(), (1, 2, Bytes::from("hello")))
+                //         .await
+                //         .unwrap();
+            }
 
             // On the client, we make the request to the server
             if cfg!(not(feature = "server")) {
