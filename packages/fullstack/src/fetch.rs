@@ -76,8 +76,8 @@ impl<T: DeserializeOwned> SharedClientType for Json<T> {
 }
 
 pub struct FileUpload {
-    // outgoing_stream:
-    //     Option<http_body_util::BodyDataStream<axum::extract::Request<axum::body::Body>>>,
+    outgoing_stream:
+        Option<http_body_util::BodyDataStream<axum::extract::Request<axum::body::Body>>>,
     // outgoing_stream: Option<Box<dyn Stream<Item = Result<Bytes, Bytes>> + Send + Unpin>>,
 }
 
@@ -107,11 +107,10 @@ impl<S> FromRequest<S> for FileUpload {
         state: &S,
     ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send {
         async move {
-            todo!()
-            // let stream = req.into_data_stream();
-            // Ok(FileUpload {
-            //     outgoing_stream: Some(stream),
-            // })
+            let stream = req.into_data_stream();
+            Ok(FileUpload {
+                outgoing_stream: Some(stream),
+            })
         }
     }
 }

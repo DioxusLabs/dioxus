@@ -255,9 +255,9 @@ mod input_types {
     #[post("/")]
     async fn zero(a: (), b: (), c: ()) {}
 
-    /// We can take `()` as input
+    /// We can take `()` as input in serde types
     #[post("/")]
-    async fn zero_1(a: Json<CustomPayload>) {}
+    async fn zero_1(a: Json<()>) {}
 
     /// We can take regular axum extractors as input
     #[post("/")]
@@ -274,4 +274,8 @@ mod input_types {
     /// We can take a regular axum-like mix with extractors and Deserialize types
     #[post("/")]
     async fn four(headers: HeaderMap, data: Json<CustomPayload>) {}
+
+    /// We can even accept string in the final position.
+    #[post("/")]
+    async fn five(age: u32, name: String) {}
 }
