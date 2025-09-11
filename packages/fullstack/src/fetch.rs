@@ -90,6 +90,8 @@ impl FileUpload {
         todo!()
     }
 }
+
+#[derive(Debug)]
 pub struct ServerFnRejection {}
 impl IntoResponse for ServerFnRejection {
     fn into_response(self) -> axum::response::Response {

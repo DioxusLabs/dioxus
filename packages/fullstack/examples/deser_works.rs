@@ -5,51 +5,42 @@ use axum::{
     handler::Handler,
     Json, RequestExt,
 };
-use dioxus_fullstack::DioxusServerState;
 use dioxus_fullstack::{
     fromreq::{DeSer, DeTys, ExtractRequest, ExtractState},
     DioxusServerContext,
 };
+use dioxus_fullstack::{DioxusServerState, ServerFnRejection};
 use http::HeaderMap;
 use serde::de::DeserializeOwned;
 
-#[allow(clippy::needless_borrow)]
 #[tokio::main]
 async fn main() {
+    main2().await.unwrap();
+}
+
+#[allow(clippy::needless_borrow)]
+async fn main2() -> Result<(), ServerFnRejection> {
     let (a,) = (&&&&&&&&&&&&&&DeSer::<(HeaderMap,), _>::new())
         .extract(ExtractState::default())
-        .await;
+        .await?;
 
     let (a, b) = (&&&&&&&&&&&&&&DeSer::<(HeaderMap, i32), _>::new())
         .extract(ExtractState::default())
-        .await;
+        .await?;
 
     let req = (&&&&&&&&&&&&&&DeSer::<(HeaderMap, Json<String>), _>::new())
         .extract(ExtractState::default())
-        .await;
+        .await?;
 
     let req = (&&&&&&&&&&&&&&DeSer::<(HeaderMap, Request), _>::new())
         .extract(ExtractState::default())
-        .await;
+        .await?;
 
     let (a, b, c) = (&&&&&&&&&&&&&&DeSer::<(HeaderMap, i32, i32), _>::new())
         .extract(ExtractState::default())
-        .await;
+        .await?;
 
-    let handler: fn(_, _, _) -> _ = |a, b, c| async move { todo!() };
-    let p = || handler(a, b, c);
-
-    axum::Router::<DioxusServerState>::new().route("/", axum::routing::get(handler));
-
-    // axum::routing::get(|a: HeaderMap, b: (), c: DeTys<(String,)>| async move { "hello" }),
-
-    // impl<S> FromRequest<S> for ServerFnBody {
-    //     type Rejection = ();
-
-    //     async fn from_request(req: Request, _state: &S) -> Result<Self, Self::Rejection> {
-    //         Ok(ServerFnBody)
-    //     }
-    // }
+    Ok(())
 }
 
 fn return_handler() {}
@@ -100,13 +91,13 @@ fn hmm() {
         async fn handler(a: Self::First, b: Self::Second, c: Self::Third) {}
     }
 
-    async fn make_thing() -> impl Indexed {
-        Wrapped(
-            (&&&&&&&&&&&&&&DeSer::<(HeaderMap, HeaderMap, Request), _>::new())
-                .extract(ExtractState::default())
-                .await,
-        )
-    }
+    // async fn make_thing() -> impl Indexed {
+    //     Wrapped(
+    //         (&&&&&&&&&&&&&&DeSer::<(HeaderMap, HeaderMap, Request), _>::new())
+    //             .extract(ExtractState::default())
+    //             .await,
+    //     )
+    // }
 
     fn type_of<T>(_: T) -> T {
         todo!()

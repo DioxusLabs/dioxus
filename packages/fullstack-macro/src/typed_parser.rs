@@ -67,6 +67,7 @@ pub fn route_impl_with_route(
     let remaining_numbered_pats = route.remaining_pattypes_numbered(&function.sig.inputs);
     let body_json_args = route.remaining_pattypes_named(&function.sig.inputs);
     let body_json_names = body_json_args.iter().map(|pat_type| &pat_type.pat);
+    let body_json_types = body_json_args.iter().map(|pat_type| &pat_type.ty);
     let mut extracted_idents = route.extracted_idents();
     let remaining_numbered_idents = remaining_numbered_pats.iter().map(|pat_type| &pat_type.pat);
     let route_docs = route.to_doc_comments();
@@ -185,9 +186,18 @@ pub fn route_impl_with_route(
                     #path_extractor
                     #query_extractor
                     // body: Json<__BodyExtract__>,
-                    #remaining_numbered_pats
+                    // #remaining_numbered_pats
                     #server_arg_tokens
                 ) -> axum::response::Response #where_clause {
+                    let ( #(#body_json_names,)*) = match (&&&&&&&&&&&&&&DeSer::<(#(#body_json_types,)*), _>::new()).extract(ExtractState::default()).await {
+                        Ok(v) => v,
+                        Err(rejection) => {
+                            return rejection.into_response();
+                        }
+                    };
+
+
+
                     // let __BodyExtract__ { #(#body_json_names,)* } = body.0;
 
                 // ) #fn_output #where_clause {
@@ -199,10 +209,11 @@ pub fn route_impl_with_route(
 
                     // desugar_into_response will autoref into using the Serialize impl
 
+                    #fn_name #ty_generics(#(#extracted_idents,)*  #(#body_json_names2,)*).await.desugar_into_response()
+
+
+                    // #fn_name #ty_generics(#(#extracted_idents,)* #(#remaining_numbered_idents,)* ).await.desugar_into_response()
                     // #fn_name #ty_generics(#(#extracted_idents,)*  #(#body_json_names2,)* ).await.desugar_into_response()
-                    #fn_name #ty_generics(#(#extracted_idents,)* #(#remaining_numbered_idents,)* ).await.desugar_into_response()
-
-
                     // #fn_name #ty_generics(#(#extracted_idents,)* Json(__BodyExtract__::new()) ).await.desugar_into_response()
                     // #fn_name #ty_generics(#(#extracted_idents,)* #(#remaining_numbered_idents,)* ).await.desugar_into_response()
                 }
