@@ -103,8 +103,13 @@ where
 ///
 ///     // Since our resource may not be ready yet, the value is an Option. Our request may also fail, so the get function returns a Result
 ///     // The complete type we need to match is `Option<Result<String, reqwest::Error>>`
-///     // We can use `read_unchecked` to keep our matching code in one statement while avoiding a temporary variable error (this is still completely safe because dioxus checks the borrows at runtime)
-///     match &*resource.read_unchecked() {
+///     //
+///     // We can use `.read().as_ref()` to read the inner value without taking ownership of it.
+///     //
+///     // On previous versions of Rust (edition <2024), we would need to use  `read_unchecked` to keep
+///     // our matching code in one statement while avoiding a temporary variable error
+///     // (this is still completely safe because dioxus checks the borrows at runtime)
+///     match resource.read().as_ref() {
 ///         Some(Ok(value)) => rsx! { "{value:?}" },
 ///         Some(Err(err)) => rsx! { "Error: {err}" },
 ///         None => rsx! { "Loading..." },
@@ -399,10 +404,12 @@ impl<T> Resource<T> {
     ///     // We can get a signal with the value of the resource with the `value` method
     ///     let value = resource.value();
     ///
-    ///     // Since our resource may not be ready yet, the value is an Option. Our request may also fail, so the get function returns a Result
-    ///     // The complete type we need to match is `Option<Result<String, reqwest::Error>>`
-    ///     // We can use `read_unchecked` to keep our matching code in one statement while avoiding a temporary variable error (this is still completely safe because dioxus checks the borrows at runtime)
-    ///     match &*value.read_unchecked() {
+    ///     // We can use `.read().as_ref()` to read the inner value without taking ownership of it.
+    ///     //
+    ///     // On previous versions of Rust (edition <2024), we would need to use  `read_unchecked` to keep
+    ///     // our matching code in one statement while avoiding a temporary variable error
+    ///     // (this is still completely safe because dioxus checks the borrows at runtime)
+    ///     match value.read().as_ref() {
     ///         Some(Ok(value)) => rsx! { "{value:?}" },
     ///         Some(Err(err)) => rsx! { "Error: {err}" },
     ///         None => rsx! { "Loading..." },

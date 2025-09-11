@@ -41,9 +41,7 @@ fn app() -> Element {
             h3 { "Illustrious Dog Photo" }
             SuspenseBoundary {
                 fallback: move |suspense: SuspenseContext| suspense.suspense_placeholder().unwrap_or_else(|| rsx! {
-                    div {
-                        "Loading..."
-                    }
+                    div { "Loading..." }
                 }),
                 Doggo {}
             }
@@ -72,13 +70,11 @@ fn Doggo() -> Element {
     // You can suspend the future and only continue rendering when it's ready
     let value = resource.suspend().with_loading_placeholder(|| {
         rsx! {
-            div {
-                "Loading doggos..."
-            }
+            div { "Loading doggos..." }
         }
     })?;
 
-    match value.read_unchecked().as_ref() {
+    match value.read().as_ref() {
         Ok(resp) => rsx! {
             button { onclick: move |_| resource.restart(), "Click to fetch another doggo" }
             div { img { max_width: "500px", max_height: "500px", src: "{resp.message}" } }
