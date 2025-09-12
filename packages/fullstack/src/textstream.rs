@@ -1,4 +1,4 @@
-use std::pin::Pin;
+use std::{fmt::Display, pin::Pin};
 
 use axum::response::IntoResponse;
 use futures::{Stream, StreamExt};
@@ -17,39 +17,55 @@ use crate::ServerFnError;
 /// end before the output will begin.
 ///
 /// Streaming requests are only allowed over HTTP2 or HTTP3.
-pub struct TextStream<E = ServerFnError>(Pin<Box<dyn Stream<Item = Result<String, E>> + Send>>);
+pub struct Streaming<T = String, E = ServerFnError>(
+    Pin<Box<dyn Stream<Item = Result<T, E>> + Send>>,
+);
 
-impl<E> std::fmt::Debug for TextStream<E> {
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq, Hash)]
+pub enum StreamingError {
+    #[error("The streaming request was interrupted")]
+    Interrupted,
+    #[error("The streaming request failed")]
+    Failed,
+}
+
+impl<T, E> std::fmt::Debug for Streaming<T, E> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_tuple("TextStream").finish()
+        f.debug_tuple("Streaming").finish()
     }
 }
 
-impl<E> TextStream<E> {
-    /// Creates a new `TextStream` from the given stream.
-    pub fn new(value: impl Stream<Item = Result<String, E>> + Send + 'static) -> Self {
-        Self(Box::pin(value.map(|value| value)))
+impl<T, E> Streaming<T, E> {
+    /// Creates a new stream from the given stream.
+    pub fn new(value: impl Stream<Item = Result<T, E>> + Send + 'static) -> Self {
+        // Box and pin the incoming stream and store as a trait object
+        Self(Box::pin(value) as Pin<Box<dyn Stream<Item = Result<T, E>> + Send>>)
+    }
+
+    pub async fn next(&mut self) -> Option<Result<T, StreamingError>> {
+        todo!()
     }
 }
 
-impl<E> TextStream<E> {
-    /// Consumes the wrapper, returning a stream of text.
-    pub fn into_inner(self) -> impl Stream<Item = Result<String, E>> + Send {
+impl<T, E> Streaming<T, E> {
+    /// Consumes the wrapper, returning the inner stream.
+    pub fn into_inner(self) -> impl Stream<Item = Result<T, E>> + Send {
         self.0
     }
 }
 
-impl<E, S, T> From<S> for TextStream<E>
+impl<T, E, S, U> From<S> for Streaming<T, E>
 where
-    S: Stream<Item = T> + Send + 'static,
-    T: Into<String>,
+    S: Stream<Item = U> + Send + 'static,
+    U: Into<T>,
 {
     fn from(value: S) -> Self {
-        Self(Box::pin(value.map(|data| Ok(data.into()))))
+        Self(Box::pin(value.map(|data| Ok(data.into())))
+            as Pin<Box<dyn Stream<Item = Result<T, E>> + Send>>)
     }
 }
 
-impl<E> IntoResponse for TextStream<E> {
+impl<T, E> IntoResponse for Streaming<T, E> {
     fn into_response(self) -> axum::response::Response {
         todo!()
     }

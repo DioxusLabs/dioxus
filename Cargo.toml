@@ -663,11 +663,6 @@ path = "examples/06-routing/flat_router.rs"
 doc-scrape-examples = true
 
 [[example]]
-name = "hydration"
-path = "examples/07-fullstack/hydration.rs"
-doc-scrape-examples = true
-
-[[example]]
 name = "login_form"
 path = "examples/07-fullstack/login_form.rs"
 doc-scrape-examples = true

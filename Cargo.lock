@@ -1082,6 +1082,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-tungstenite"
+version = "0.31.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ee88b4c88ac8c9ea446ad43498955750a4bbe64c4392f21ccfe5d952865e318f"
+dependencies = [
+ "atomic-waker",
+ "futures-core",
+ "futures-io",
+ "futures-task",
+ "futures-util",
+ "log",
+ "pin-project-lite",
+ "tungstenite 0.27.0",
+]
+
+[[package]]
 name = "atk"
 version = "0.18.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5569,6 +5585,7 @@ dependencies = [
  "parking_lot",
  "pin-project",
  "reqwest 0.12.22",
+ "reqwest-websocket",
  "rkyv 0.8.11",
  "rustls 0.23.29",
  "rustversion",
@@ -13674,6 +13691,26 @@ dependencies = [
  "wasm-streams",
  "web-sys",
  "webpki-roots 1.0.1",
+]
+
+[[package]]
+name = "reqwest-websocket"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cd5f79b25f7f17a62cc9337108974431a66ae5a723ac0d9fe78ac1cce2027720"
+dependencies = [
+ "async-tungstenite",
+ "bytes",
+ "futures-util",
+ "reqwest 0.12.22",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.12",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "tungstenite 0.27.0",
+ "web-sys",
 ]
 
 [[package]]

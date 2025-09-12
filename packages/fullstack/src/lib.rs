@@ -5,6 +5,15 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![forbid(unexpected_cfgs)]
 
+pub mod hooks;
+pub use hooks::*;
+
+pub mod sse;
+pub use sse::*;
+
+pub mod form;
+pub use form::*;
+
 pub mod req_from;
 pub mod req_to;
 pub use req_from::*;
@@ -14,6 +23,9 @@ pub use axum;
 pub use http;
 #[doc(hidden)]
 pub use inventory;
+
+pub mod pending;
+pub use pending::*;
 
 pub use fetch::*;
 pub mod fetch;
@@ -119,16 +131,10 @@ pub mod prelude {
     use dioxus_signals::{Loader, Signal};
     use std::{marker::PhantomData, prelude::rust_2024::Future};
 
+    pub use crate::hooks::*;
     pub use crate::layer;
     pub use crate::middleware;
     pub use http::Request;
-
-    pub fn use_loader<F: Future<Output = anyhow::Result<T>>, T: 'static>(
-        // pub fn use_loader<F: Future<Output = Result<T, E>>, T: 'static, E: Into<anyhow::Error>>(
-        f: impl FnMut() -> F,
-    ) -> Result<Loader<T>, RenderError> {
-        todo!()
-    }
 
     pub struct ServerState<T> {
         _t: PhantomData<*const T>,

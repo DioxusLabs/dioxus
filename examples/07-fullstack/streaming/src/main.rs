@@ -1,4 +1,4 @@
-use dioxus::fullstack::TextStream;
+use dioxus::fullstack::Streaming;
 use dioxus::prelude::*;
 use futures::StreamExt;
 
@@ -24,7 +24,7 @@ fn app() -> Element {
 }
 
 #[server(output = StreamingText)]
-pub async fn test_stream() -> ServerFnResult<TextStream<ServerFnError>> {
+pub async fn test_stream() -> ServerFnResult<Streaming<ServerFnError>> {
     let (tx, rx) = futures::channel::mpsc::unbounded();
     tokio::spawn(async move {
         loop {
@@ -37,7 +37,7 @@ pub async fn test_stream() -> ServerFnResult<TextStream<ServerFnError>> {
         }
     });
 
-    Ok(TextStream::new(rx))
+    Ok(Streaming::new(rx))
 }
 
 fn main() {

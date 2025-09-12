@@ -117,16 +117,27 @@ impl<S> FromRequest<S> for FileUpload {
 
 pub struct FileDownload {}
 
-/// A WebSocket connection that can send and receive messages of type `In` and `Out`.
-pub struct Websocket<In, Out> {
+pub struct TypedWebsocket<In, Out> {
     _in: std::marker::PhantomData<In>,
     _out: std::marker::PhantomData<Out>,
 }
+
+/// A WebSocket connection that can send and receive messages of type `In` and `Out`.
+pub struct Websocket<In = String, Out = String> {
+    _in: std::marker::PhantomData<In>,
+    _out: std::marker::PhantomData<Out>,
+}
+
+use tokio_tungstenite::tungstenite::Error as WsError;
+
 impl<In: Serialize, Out: DeserializeOwned> Websocket<In, Out> {
-    pub fn new<F: Future<Output = ()>>(
+    pub fn raw<O, F: Future<Output = O>>(
         f: impl FnOnce(
-            tokio::sync::mpsc::UnboundedSender<In>,
-            tokio::sync::mpsc::UnboundedReceiver<Out>,
+            axum::extract::ws::WebSocket, // tokio_tungstenite::tungstenite::protocol::WebSocket<tokio::net::TcpStream>,
+                                          // tokio_tungstenite::tungstenite::stream::Stream<
+                                          //         tokio::net::TcpStream,
+                                          //         tokio_native_tls::TlsStream<tokio::net::TcpStream>,
+                                          //     >,
         ) -> F,
     ) -> Self {
         todo!()

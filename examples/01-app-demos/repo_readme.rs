@@ -8,6 +8,8 @@
 use dioxus::prelude::*;
 
 fn main() {
+    use dioxus::Result;
+
     dioxus::launch(app);
 }
 

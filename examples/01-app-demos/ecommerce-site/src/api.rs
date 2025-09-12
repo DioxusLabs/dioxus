@@ -150,7 +150,7 @@ pub(crate) struct ProductInCart {
 }
 
 impl ProductInCart {
-    pub async fn fetch_product(&self) -> Result<Product, dioxus::CapturedError> {
+    pub async fn fetch_product(&self) -> dioxus::Result<Product> {
         fetch_product(self.product_id).await
     }
 }

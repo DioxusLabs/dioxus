@@ -105,6 +105,7 @@ xxhash-rust = { features = [
   "const_xxh64",
 ], workspace = true, default-features = true }
 http-body-util = "0.1.3"
+reqwest-websocket = { version = "0.5.1", features = ["json"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 tokio = { workspace = true, features = ["rt", "sync", "macros"], optional = true }
