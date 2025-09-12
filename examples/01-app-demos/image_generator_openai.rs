@@ -68,7 +68,7 @@ fn app() -> Element {
             }
             button {
                 class: "button is-primary",
-                class: if image.is_loading() { "is-loading" },
+                class: if image.is_pending() { "is-loading" },
                 onclick: move |_| async move {
                     image.dispatch(()).await;
                 },

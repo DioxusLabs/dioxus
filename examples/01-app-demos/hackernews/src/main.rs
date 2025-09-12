@@ -15,26 +15,23 @@ fn main() {
         .with_cfg(server_only! {
             dioxus::server::ServeConfig::builder().enable_out_of_order_streaming()
         })
-        .launch(|| rsx! { Router::<Route> {} });
+        .launch(|| {
+            rsx! {
+                Stylesheet { href: asset!("/assets/hackernews.css") }
+                Router::<Route> {}
+            }
+        });
 }
 
 #[derive(Clone, Routable)]
 enum Route {
-    #[redirect("/", || Route::Homepage { story: PreviewState { active_story: None } })]
-    #[route("/:story")]
-    Homepage { story: PreviewState },
-}
-
-pub fn App() -> Element {
-    rsx! {
-        Router::<Route> {}
-    }
+    #[route("/story&:story")]
+    StoryPreview { story: Option<i64> },
 }
 
 #[component]
-fn Homepage(story: ReadSignal<PreviewState>) -> Element {
+fn StoryPreview(story: ReadSignal<Option<i64>>) -> Element {
     rsx! {
-        Stylesheet { href: asset!("/assets/hackernews.css") }
         div { display: "flex", flex_direction: "row", width: "100%",
             div { width: "50%",
                 SuspenseBoundary { fallback: |context| rsx! { "Loading..." },
@@ -43,7 +40,11 @@ fn Homepage(story: ReadSignal<PreviewState>) -> Element {
             }
             div { width: "50%",
                 SuspenseBoundary { fallback: |context| rsx! { "Loading preview..." },
-                    Preview { story }
+                    if let Some(story) = story() {
+                        Preview { story_id: story }
+                    } else {
+                        div { padding: "0.5rem", "Select a story to preview" }
+                    }
                 }
             }
         }
@@ -77,7 +78,6 @@ fn Stories() -> Element {
 #[component]
 fn StoryListing(story: ReadSignal<i64>) -> Element {
     let story = use_loader(move || get_story(story()))?;
-
     let StoryItem {
         title,
         url,
@@ -112,7 +112,7 @@ fn StoryListing(story: ReadSignal<i64>) -> Element {
             position: "relative",
             div { font_size: "1.5rem",
                 Link {
-                    to: Route::Homepage { story: PreviewState { active_story: Some(id) } },
+                    to: Route::StoryPreview { story: Some(id) },
                     "{title}"
                 }
                 a {
@@ -132,42 +132,9 @@ fn StoryListing(story: ReadSignal<i64>) -> Element {
     }
 }
 
-#[derive(Clone, Debug, Default)]
-struct PreviewState {
-    active_story: Option<i64>,
-}
-
-impl FromStr for PreviewState {
-    type Err = ParseIntError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let state = i64::from_str(s)?;
-        Ok(PreviewState {
-            active_story: Some(state),
-        })
-    }
-}
-
-impl Display for PreviewState {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        if let Some(id) = &self.active_story {
-            write!(f, "{id}")?;
-        }
-        Ok(())
-    }
-}
-
 #[component]
-fn Preview(story: ReadSignal<PreviewState>) -> Element {
-    let PreviewState {
-        active_story: Some(id),
-    } = story()
-    else {
-        return rsx! {"Click on a story to preview it here"};
-    };
-
-    let story = use_loader(use_reactive!(|id| get_story(id)))?.cloned();
-
+fn Preview(story_id: ReadSignal<i64>) -> Element {
+    let story = use_loader(|| get_story(story_id()))?.cloned();
     rsx! {
         div { padding: "0.5rem",
             div { font_size: "1.5rem", a { href: story.item.url, "{story.item.title}" } }
@@ -183,12 +150,14 @@ fn Preview(story: ReadSignal<PreviewState>) -> Element {
 }
 
 #[component]
-fn Comment(comment: i64) -> Element {
-    let comment = use_loader(use_reactive!(|comment| async move {
-        let url = format!("{}{}{}.json", BASE_API_URL, ITEM_API, comment);
-        let mut comment = reqwest::get(&url).await?.json::<CommentData>().await?;
+fn Comment(comment: ReadSignal<i64>) -> Element {
+    let comment = use_loader(|| async move {
+        let mut comment = reqwest::get(&format!("{}{}{}.json", BASE_API_URL, ITEM_API, comment))
+            .await?
+            .json::<CommentData>()
+            .await?;
         dioxus::Ok(comment)
-    }))?;
+    })?;
 
     let CommentData {
         by,
@@ -261,24 +230,20 @@ pub struct StoryItem {
 }
 
 pub async fn get_story(id: i64) -> dioxus::Result<StoryPageData> {
-    let url = format!("{}{}{}.json", BASE_API_URL, ITEM_API, id);
-    Ok(reqwest::get(&url).await?.json::<StoryPageData>().await?)
+    Ok(
+        reqwest::get(&format!("{}{}{}.json", BASE_API_URL, ITEM_API, id))
+            .await?
+            .json::<StoryPageData>()
+            .await?,
+    )
 }
 
 #[component]
 fn ChildrenOrLoading(children: Element) -> Element {
     rsx! {
         SuspenseBoundary {
-            fallback: |context: SuspenseContext| rsx! { LoadingIndicator {} },
+            fallback: |_| rsx! { div { class: "spinner", } },
             children
-        }
-    }
-}
-
-fn LoadingIndicator() -> Element {
-    rsx! {
-        div {
-            class: "spinner",
         }
     }
 }

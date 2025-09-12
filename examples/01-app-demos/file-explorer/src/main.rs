@@ -8,13 +8,10 @@
 use std::env::current_dir;
 use std::path::PathBuf;
 
-use dioxus::desktop::{Config, WindowBuilder};
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus::LaunchBuilder::desktop()
-        .with_cfg(Config::new().with_window(WindowBuilder::new().with_resizable(true)))
-        .launch(app)
+    dioxus::launch(app);
 }
 
 fn app() -> Element {
@@ -22,8 +19,8 @@ fn app() -> Element {
 
     rsx! {
         Stylesheet { href: asset!("/assets/fileexplorer.css") }
+        Stylesheet { href: "https://fonts.googleapis.com/icon?family=Material+Icons" }
         div {
-            Stylesheet { href: "https://fonts.googleapis.com/icon?family=Material+Icons" }
             header {
                 i { class: "material-icons icon-menu", "menu" }
                 h1 { "Files: " {files.read().current()} }
