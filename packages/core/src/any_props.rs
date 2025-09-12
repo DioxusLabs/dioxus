@@ -85,8 +85,7 @@ impl<F: ComponentFunction<P, M> + Clone, P: Clone + 'static, M: 'static> AnyProp
                     {
                         tracing::error!("Panic while rendering component `{_name}`: {err:?}");
                     }
-                    todo!()
-                    // Element::Err(CapturedPanic { error: err }.into())
+                    Element::Err(CapturedPanic(err).into())
                 }
             }
         }

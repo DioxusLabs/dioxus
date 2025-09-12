@@ -12,20 +12,6 @@ pub enum RenderError {
     Suspended(SuspendedFuture),
 }
 
-impl RenderError {
-    /// A backwards-compatibility shim for crafting RenderError from CapturedError
-    pub fn Aborted(e: CapturedError) -> Self {
-        Self::Error(e)
-    }
-}
-
-pub trait RenderResultExt: Sized {
-    fn is_ready(&self) -> bool;
-    fn is_loading(&self) -> bool;
-    fn is_error(&self) -> bool;
-    fn err(self) -> Option<RenderError>;
-}
-
 impl Clone for RenderError {
     fn clone(&self) -> Self {
         todo!()
@@ -71,15 +57,3 @@ impl<E: Into<CapturedError>> From<E> for RenderError {
         // Self::Aborted(CapturedError::from(e))
     }
 }
-
-// impl From<CapturedError> for RenderError {
-//     fn from(value: RenderError) -> Self {
-//         todo!()
-//     }
-// }
-
-// impl From<CapturedError> for RenderError {
-//     fn from(e: CapturedError) -> Self {
-//         RenderError::Aborted(e)
-//     }
-// }
