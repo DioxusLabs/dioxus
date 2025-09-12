@@ -363,7 +363,7 @@ impl AppBundle {
                 // Only run wasm-opt if the feature is enabled
                 // Wasm-opt has an expensive build script that makes it annoying to keep enabled for iterative dev
                 // We put it behind the "wasm-opt" feature flag so that it can be disabled when iterating on the cli
-                self.run_wasm_opt(&self.build.exe_dir())
+                self.run_wasm_opt(&self.build.wasm_bindgen_out_dir())
                     .context("run wasm-opt")?;
 
                 // Write the index.html file with the pre-configured contents we got from pre-rendering
