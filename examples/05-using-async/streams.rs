@@ -2,7 +2,7 @@
 
 use async_std::task::sleep;
 use dioxus::prelude::*;
-use futures_util::{future, stream, Stream, StreamExt};
+use futures_util::{Stream, StreamExt, future, stream};
 
 fn main() {
     dioxus::launch(app);

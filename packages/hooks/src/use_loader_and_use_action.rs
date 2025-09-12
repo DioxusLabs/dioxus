@@ -82,7 +82,7 @@ impl<I, T> Action<I, T> {
         todo!()
     }
 
-    pub fn value(&self) -> Option<Signal<T>> {
+    pub fn ok(&self) -> Option<Signal<T>> {
         todo!()
     }
 

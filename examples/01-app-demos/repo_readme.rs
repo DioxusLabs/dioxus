@@ -5,6 +5,8 @@
 //! helper methods like AddAssign, SubAssign, toggle, etc, to make it easy to update the value without running
 //! into lock issues.
 
+use std::ops::Deref;
+
 use dioxus::prelude::*;
 
 fn main() {

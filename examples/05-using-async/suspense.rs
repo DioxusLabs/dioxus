@@ -2,19 +2,10 @@
 //!
 //! Suspense allows components to bubble up loading states to parent components, simplifying data fetching.
 
-use dioxus::desktop::{Config, LogicalSize, WindowBuilder};
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus::LaunchBuilder::new()
-        .with_cfg(desktop! {
-            Config::new().with_window(
-                WindowBuilder::new()
-                    .with_title("Doggo Fetcher")
-                    .with_inner_size(LogicalSize::new(600.0, 800.0)),
-            )
-        })
-        .launch(app)
+    dioxus::launch(app)
 }
 
 fn app() -> Element {
@@ -40,7 +31,7 @@ fn app() -> Element {
 
 #[component]
 fn Doggo() -> Element {
-    // `use_loader` returns a Result<Loader<T>, LoaderError>. LoaderError can either be "Pending" or "Failed".
+    // `use_loader` returns a Result<Loader<T>, Loading>. Loading can either be "Pending" or "Failed".
     // When we use the `?` operator, the pending/error state will be thrown to the nearest Suspense or Error boundary.
     let mut dog = use_loader(move || async move {
         #[derive(serde::Deserialize, PartialEq)]

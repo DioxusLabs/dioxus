@@ -74,8 +74,7 @@ fn app() -> Element {
                 },
                 "Generate image"
             }
-            br {}
-            if let Some(image) = image.value() {
+            if let Some(image) = image.ok() {
                 for image in image.read().data.as_slice() {
                     section { class: "is-flex",
                         div { class: "container is-fluid",

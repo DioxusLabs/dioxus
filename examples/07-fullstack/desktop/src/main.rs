@@ -2,7 +2,8 @@
 use dioxus::prelude::*;
 
 fn main() {
-    #[cfg(not(feature = "server"))] // Set the url of the server where server functions are hosted.
+    // Make sure to set the url of the server where server functions are hosted - they aren't always at localhost
+    #[cfg(not(feature = "server"))]
     dioxus::fullstack::set_server_url("http://127.0.0.1:8080");
 
     dioxus::launch(app);

@@ -5,7 +5,7 @@ async fn main() {
     // We can add a new axum router that gets merged with the Dioxus one.
     // Because this is in a closure, you get hot-patching.
     #[cfg(feature = "server")]
-    dioxus_fullstack::with_axum_router(|| async move {
+    dioxus_fullstack::with_router(|| async move {
         use axum::routing::{get, post};
 
         let router = axum::Router::new()

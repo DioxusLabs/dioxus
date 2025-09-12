@@ -30,7 +30,7 @@ impl WebsocketHandle {
     }
 }
 
-pub fn with_axum_router<E, F: Future<Output = Result<axum::routing::Router<()>, E>>>(
+pub fn with_router<E, F: Future<Output = Result<axum::routing::Router<()>, E>>>(
     f: impl FnMut() -> F,
 ) {
 }

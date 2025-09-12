@@ -591,6 +591,11 @@ path = "examples/04-managing-state/signals.rs"
 doc-scrape-examples = true
 
 [[example]]
+name = "errors"
+path = "examples/04-apis/error_handling.rs"
+doc-scrape-examples = true
+
+[[example]]
 name = "backgrounded_futures"
 path = "examples/05-using-async/backgrounded_futures.rs"
 doc-scrape-examples = true
@@ -742,11 +747,6 @@ doc-scrape-examples = true
 [[example]]
 name = "eval"
 path = "examples/08-apis/eval.rs"
-doc-scrape-examples = true
-
-[[example]]
-name = "errors"
-path = "examples/08-apis/errors.rs"
 doc-scrape-examples = true
 
 [[example]]

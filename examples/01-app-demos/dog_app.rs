@@ -1,13 +1,8 @@
 //! This example demonstrates a simple app that fetches a list of dog breeds and displays a random dog.
 //!
-//! The app uses the `use_signal` and `use_loader` hooks to manage state and fetch data from the Dog API.
-//! `use_loader` is basically an async version of use_memo - it will track dependencies between .await points
-//! and then restart the future if any of the dependencies change. `use_loader` is special because it
-//! automatically integrates with Suspense, so you can show loading indicators while the data is being fetched.
-//! It also integrates with Error Boundaries and throws errors to the nearest error boundary if the future fails.
-//!
-//! You should generally throttle requests to an API - either client side or server side. This example doesn't do that
-//! since it's unlikely the user will rapidly cause new fetches, but it's something to keep in mind.
+//! This app combines `use_loader` and `use_action` to fetch data from the Dog API.
+//! - `use_loader` automatically fetches the list of dog breeds when the component mounts.
+//! - `use_action` fetches a random dog image whenever the `.dispatch` method is called.
 
 use dioxus::prelude::*;
 use std::collections::HashMap;
@@ -17,12 +12,7 @@ fn main() {
 }
 
 fn app() -> Element {
-    // Breed is a signal that will be updated when the user clicks a breed in the list
-    // `shiba` is just a default that we know will exist. We could also use a `None` instead
-    let mut breed = use_signal(|| "shiba".to_string());
-
-    // Fetch the list of breeds from the Dog API
-    // Since there are no dependencies, this will never restart
+    // Fetch the list of breeds from the Dog API, using the `?` syntax to suspend or throw errors
     let breed_list = use_loader(move || async move {
         #[derive(Debug, Clone, PartialEq, serde::Deserialize)]
         struct ListBreeds {
@@ -30,29 +20,13 @@ fn app() -> Element {
         }
 
         reqwest::get("https://dog.ceo/api/breeds/list/all")
-            .await
-            .unwrap()
+            .await?
             .json::<ListBreeds>()
             .await
     })?;
 
-    rsx! {
-        h1 { "Select a dog breed: {breed}" }
-        BreedPic { breed }
-        div { width: "400px",
-            for cur_breed in breed_list.read().message.keys().take(20).cloned() {
-                button { onclick: move |_| breed.set(cur_breed.clone()),
-                    "{cur_breed}"
-                }
-            }
-        }
-    }
-}
-
-#[component]
-fn BreedPic(breed: WriteSignal<String>) -> Element {
-    // This resource will restart whenever the breed changes
-    let mut resp = use_loader(move || async move {
+    // Whenever this action is called, it will re-run the future and return the result.
+    let mut breed = use_action(move |breed| async move {
         #[derive(serde::Deserialize, Debug, PartialEq)]
         struct DogApi {
             message: String,
@@ -63,22 +37,29 @@ fn BreedPic(breed: WriteSignal<String>) -> Element {
             .unwrap()
             .json::<DogApi>()
             .await
-    })?;
+    });
 
     rsx! {
+        h1 { "Doggo selector" }
         div {
-            button {
-                onclick: move |_| resp.restart(),
-                padding: "5px",
-                background_color: "gray",
-                color: "white",
-                border_radius: "5px",
-                "Click to fetch another doggo"
+            match breed.result() {
+                None => rsx! { div { "Click the button to fetch a dog!" } },
+                Some(Err(_e)) => rsx! { div { "Failed to fetch a dog, please try again." } },
+                Some(Ok(resp)) => rsx! {
+                    img {
+                        max_width: "500px",
+                        max_height: "500px",
+                        src: "{resp.read().message}"
+                    }
+                },
             }
-            img {
-                max_width: "500px",
-                max_height: "500px",
-                src: "{resp.read().message}"
+        }
+        div { width: "400px",
+            for cur_breed in breed_list.read().message.keys().take(20).cloned() {
+                button {
+                    onclick: move |_| breed.dispatch(cur_breed.clone()),
+                    "{cur_breed}"
+                }
             }
         }
     }
