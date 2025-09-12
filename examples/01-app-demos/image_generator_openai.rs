@@ -1,38 +1,43 @@
 use dioxus::prelude::*;
-use serde::{Deserialize, Serialize};
-use serde_json::{json, Error};
 
 fn main() {
     dioxus::launch(app)
 }
 
 fn app() -> Element {
-    let mut loading = use_signal(|| "".to_string());
-    let mut api = use_signal(|| "".to_string());
+    let mut api_key = use_signal(|| "".to_string());
     let mut prompt = use_signal(|| "".to_string());
-    let mut n_image = use_signal(|| 1.to_string());
-    let mut image = use_signal(|| ImageResponse {
-        created: 0,
-        data: Vec::new(),
-    });
-
-    let mut generate_images = use_resource(move || async move {
-        let api_key = api.peek().clone();
-        let prompt = prompt.peek().clone();
-        let number_of_images = n_image.peek().clone();
-
-        if api_key.is_empty() || prompt.is_empty() || number_of_images.is_empty() {
-            return;
+    let mut num_images = use_signal(|| 1.to_string());
+    let mut image = use_action(move |()| async move {
+        #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Props, Clone, Default)]
+        struct ImageResponse {
+            created: i32,
+            data: Vec<UrlImage>,
         }
 
-        loading.set("is-loading".to_string());
-
-        match request(api_key, prompt, number_of_images).await {
-            Ok(imgz) => image.set(imgz),
-            Err(e) => println!("Error: {:?}", e),
+        #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Props, Clone)]
+        struct UrlImage {
+            url: String,
         }
 
-        loading.set("".to_string());
+        if api_key.peek().is_empty() || prompt.peek().is_empty() || num_images.peek().is_empty() {
+            return dioxus::Ok(ImageResponse::default());
+        }
+
+        let res = reqwest::Client::new()
+            .post("https://api.openai.com/v1/images/generations")
+            .json(&serde_json::json!({
+                "prompt":  prompt.cloned(),
+                "n": num_images.cloned().parse::<i32>().unwrap_or(1),
+                "size":"1024x1024",
+            }))
+            .bearer_auth(api_key)
+            .send()
+            .await?
+            .json::<ImageResponse>()
+            .await?;
+
+        Ok(res)
     });
 
     rsx! {
@@ -41,10 +46,10 @@ fn app() -> Element {
             div { class: "columns",
                 div { class: "column",
                     input { class: "input is-primary mt-4",
-                        value: "{api}",
+                        value: "{api_key}",
                         r#type: "text",
-                        placeholder: "API",
-                        oninput: move |evt| api.set(evt.value()),
+                        placeholder: "Your OpenAI API Key",
+                        oninput: move |evt| api_key.set(evt.value()),
                     }
                     input { class: "input is-primary mt-4",
                         placeholder: "MAX 1000 Dgts",
@@ -56,24 +61,30 @@ fn app() -> Element {
                         r#type: "number",
                         min:"1",
                         max:"10",
-                        value:"{n_image}",
-                        oninput: move |evt| n_image.set(evt.value()),
+                        value:"{num_images}",
+                        oninput: move |evt| num_images.set(evt.value()),
                     }
                 }
             }
-            button { class: "button is-primary {loading}",
-                onclick: move |_| generate_images.restart(),
+            button {
+                class: "button is-primary",
+                class: if image.is_loading() { "is-loading" },
+                onclick: move |_| async move {
+                    image.dispatch(()).await;
+                },
                 "Generate image"
             }
             br {}
-            for image in image.read().data.as_slice() {
-                section { class: "is-flex",
-                    div { class: "container is-fluid",
-                        div { class: "container has-text-centered",
-                            div { class: "is-justify-content-center",
-                                div { class: "level",
-                                    div { class: "level-item",
-                                        figure { class: "image", img { alt: "", src: "{image.url}", } }
+            if let Some(image) = image.value() {
+                for image in image.read().data.as_slice() {
+                    section { class: "is-flex",
+                        div { class: "container is-fluid",
+                            div { class: "container has-text-centered",
+                                div { class: "is-justify-content-center",
+                                    div { class: "level",
+                                        div { class: "level-item",
+                                            figure { class: "image", img { alt: "", src: "{image.url}", } }
+                                        }
                                     }
                                 }
                             }
@@ -83,41 +94,4 @@ fn app() -> Element {
             }
         }
     }
-}
-async fn request(api: String, prompt: String, n_image: String) -> Result<ImageResponse, Error> {
-    let client = reqwest::Client::new();
-    let body = json!({
-        "prompt":  prompt,
-        "n":n_image.parse::<i32>().unwrap_or(1),
-        "size":"1024x1024",
-    });
-
-    let mut authorization = "Bearer ".to_string();
-    authorization.push_str(&api);
-
-    let res = client
-        .post("https://api.openai.com/v1/images/generations")
-        .body(body.to_string())
-        .header("Content-Type", "application/json")
-        .header("Authorization", authorization)
-        .send()
-        .await
-        .unwrap()
-        .text()
-        .await
-        .unwrap();
-
-    let deserialized: ImageResponse = serde_json::from_str(&res)?;
-    Ok(deserialized)
-}
-
-#[derive(Serialize, Deserialize, Debug, PartialEq, Props, Clone)]
-struct UrlImage {
-    url: String,
-}
-
-#[derive(Serialize, Deserialize, Debug, PartialEq, Props, Clone)]
-struct ImageResponse {
-    created: i32,
-    data: Vec<UrlImage>,
 }

@@ -104,7 +104,7 @@ impl AsRef<VNode> for Element {
     fn as_ref(&self) -> &VNode {
         match self {
             Element::Ok(node) => node,
-            Element::Err(RenderError::Aborted(err)) => todo!(),
+            Element::Err(RenderError::Error(err)) => todo!(),
             // Element::Err(RenderError::Aborted(err)) => &err.render,
             Element::Err(RenderError::Suspended(fut)) => &fut.placeholder,
         }
@@ -121,7 +121,7 @@ impl From<Element> for VNode {
     fn from(val: Element) -> Self {
         match val {
             Element::Ok(node) => node,
-            Element::Err(RenderError::Aborted(err)) => todo!(),
+            Element::Err(RenderError::Error(err)) => todo!(),
             // Element::Err(RenderError::Aborted(err)) => err.render,
             Element::Err(RenderError::Suspended(fut)) => fut.placeholder,
         }
@@ -145,7 +145,7 @@ impl AsVNode for Element {
     fn deep_clone(&self) -> Self {
         match self {
             Ok(node) => Ok(node.deep_clone()),
-            Err(RenderError::Aborted(err)) => todo!(),
+            Err(RenderError::Error(err)) => todo!(),
             // Err(RenderError::Aborted(err)) => Err(RenderError::Aborted(err.deep_clone())),
             Err(RenderError::Suspended(fut)) => Err(RenderError::Suspended(fut.deep_clone())),
         }

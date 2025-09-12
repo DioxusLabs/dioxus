@@ -90,11 +90,11 @@ pub use crate::innerlude::{
     ComponentFunction, DynamicNode, Element, ElementId, ErrorBoundary, ErrorContext, Event,
     EventHandler, Fragment, HasAttributes, IntoAttributeValue, IntoDynNode, LaunchConfig,
     ListenerCallback, MarkerWrapper, Mutation, Mutations, NoOpMutations, Ok,
-    OptionStringFromMarker, Properties, ReactiveContext, RenderError, Result, RsxContext, Runtime,
-    RuntimeGuard, ScopeId, ScopeState, SpawnIfAsync, SubscriberList, Subscribers, SuperFrom,
-    SuperInto, SuspendedFuture, SuspenseBoundary, SuspenseBoundaryProps, SuspenseContext,
-    SuspenseExtension, Task, Template, TemplateAttribute, TemplateNode, VComponent, VNode,
-    VNodeInner, VPlaceholder, VText, VirtualDom, WriteMutations,
+    OptionStringFromMarker, Properties, ReactiveContext, RenderError, RenderResultExt, Result,
+    RsxContext, Runtime, RuntimeGuard, ScopeId, ScopeState, SpawnIfAsync, SubscriberList,
+    Subscribers, SuperFrom, SuperInto, SuspendedFuture, SuspenseBoundary, SuspenseBoundaryProps,
+    SuspenseContext, SuspenseExtension, Task, Template, TemplateAttribute, TemplateNode,
+    VComponent, VNode, VNodeInner, VPlaceholder, VText, VirtualDom, WriteMutations,
 };
 
 pub use const_format;

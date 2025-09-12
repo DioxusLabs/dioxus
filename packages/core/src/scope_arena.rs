@@ -103,7 +103,7 @@ impl VirtualDom {
     /// Insert any errors, or suspended tasks from an element return into the runtime
     fn handle_element_return(&self, node: &mut Element, scope_id: ScopeId, scope_state: &Scope) {
         match node {
-            Err(RenderError::Aborted(e)) => {
+            Err(RenderError::Error(e)) => {
                 tracing::error!(
                     "Error while rendering component `{}`:\n{e}",
                     scope_state.name

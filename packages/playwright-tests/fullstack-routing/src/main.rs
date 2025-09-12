@@ -48,7 +48,7 @@ fn Blog(id: i32) -> Element {
 
 #[component]
 fn ThrowsError() -> Element {
-    return Err(RenderError::Aborted(dioxus::core::anyhow!(
+    return Err(RenderError::Error(dioxus::core::anyhow!(
         "This route tests uncaught errors in the server",
     )));
 }

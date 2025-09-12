@@ -16,7 +16,7 @@ fn app() -> Element {
         id: 2950159,
     });
 
-    let current_weather = use_resource(move || async move { get_weather(&country()).await });
+    let current_weather = use_loader(move || get_weather(country()));
 
     rsx! {
         Stylesheet { href: "https://unpkg.com/tailwindcss@^2.0/dist/tailwind.min.css" }
@@ -27,14 +27,20 @@ fn app() -> Element {
                     div { class: "flex flex-wrap w-full px-2",
                         div { class: "bg-gray-900 text-white relative min-w-0 break-words rounded-lg overflow-hidden shadow-sm mb-4 w-full dark:bg-gray-600",
                             div { class: "px-6 py-6 relative",
-                                if let Some(Ok(weather)) = current_weather.read().as_ref() {
-                                    CountryData {
-                                        country: country.read().clone(),
-                                        weather: weather.clone(),
+                                match current_weather {
+                                    Ok(weather) => rsx! {
+                                        CountryData {
+                                            country: country.read().clone(),
+                                            weather: weather.cloned(),
+                                        }
+                                        Forecast { weather: weather.cloned() }
+                                    },
+                                    Err(Loading::Pending(_)) => rsx! {
+                                        div { "Loading weather data..." }
+                                    },
+                                    Err(Loading::Failed(_)) => rsx! {
+                                        div { "Failed to load weather data." }
                                     }
-                                    Forecast { weather: weather.clone() }
-                                } else {
-                                    p { "Loading.." }
                                 }
                             }
                         }
@@ -226,13 +232,9 @@ struct DailyWeather {
     temperature_2m_max: Vec<f32>,
 }
 
-async fn get_weather(location: &WeatherLocation) -> reqwest::Result<WeatherResponse> {
-    let res = reqwest::get(&format!("https://api.open-meteo.com/v1/forecast?latitude={}&longitude={}&hourly=temperature_2m&daily=temperature_2m_max,temperature_2m_min,apparent_temperature_max,apparent_temperature_min&timezone=GMT", location.latitude, location.longitude))
-        .await
-        ?
+async fn get_weather(location: WeatherLocation) -> reqwest::Result<WeatherResponse> {
+    reqwest::get(&format!("https://api.open-meteo.com/v1/forecast?latitude={}&longitude={}&hourly=temperature_2m&daily=temperature_2m_max,temperature_2m_min,apparent_temperature_max,apparent_temperature_min&timezone=GMT", location.latitude, location.longitude))
+        .await?
         .json::<WeatherResponse>()
         .await
-        ?;
-
-    Ok(res)
 }

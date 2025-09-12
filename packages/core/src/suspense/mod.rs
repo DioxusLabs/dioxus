@@ -176,15 +176,15 @@ impl SuspenseContext {
         })
     }
 
-    /// Get the first suspended task with a loading placeholder
-    pub fn suspense_placeholder(&self) -> Option<Element> {
-        self.inner
-            .suspended_tasks
-            .borrow()
-            .iter()
-            .find_map(|task| task.suspense_placeholder())
-            .map(std::result::Result::Ok)
-    }
+    // /// Get the first suspended task with a loading placeholder
+    // pub fn suspense_placeholder(&self) -> Option<Element> {
+    //     self.inner
+    //         .suspended_tasks
+    //         .borrow()
+    //         .iter()
+    //         .find_map(|task| task.suspense_placeholder())
+    //         .map(std::result::Result::Ok)
+    // }
 
     /// Run a closure after suspense is resolved
     pub fn after_suspense_resolved(&self, callback: impl FnOnce() + 'static) {

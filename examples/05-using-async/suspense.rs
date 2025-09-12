@@ -1,15 +1,6 @@
 //! Suspense in Dioxus
 //!
-//! Currently, `rsx!` does not accept futures as values. To achieve the functionality
-//! of suspense, we need to make a new component that performs its own suspense
-//! handling.
-//!
-//! In this example, we render the `Doggo` component which starts a future that
-//! will cause it to fetch a random dog image from the Dog API. Since the data
-//! is not ready immediately, we render some loading text.
-//!
-//! We can achieve the majority of suspense functionality by composing "suspenseful"
-//! primitives in our own custom components.
+//! Suspense allows components to bubble up loading states to parent components, simplifying data fetching.
 
 use dioxus::desktop::{Config, LogicalSize, WindowBuilder};
 use dioxus::prelude::*;
@@ -37,25 +28,22 @@ fn app() -> Element {
                 "dog's nearest living relative.[8] The dog was the first species to be domesticated,[9][8]"
                 "by hunter–gatherers over 15,000 years ago,[7] before the development of agriculture.[1]"
             }
-
             h3 { "Illustrious Dog Photo" }
-            SuspenseBoundary {
-                fallback: move |suspense: SuspenseContext| suspense.suspense_placeholder().unwrap_or_else(|| rsx! {
-                    div { "Loading..." }
-                }),
-                Doggo {}
+            ErrorBoundary { handle_error: |_| rsx! { p { "Error loading doggos" } },
+                SuspenseBoundary { fallback: move |_| rsx! { "Loading doggos..." },
+                    Doggo {}
+                }
             }
         }
     }
 }
 
-/// This component will re-render when the future has finished
-/// Suspense is achieved my moving the future into only the component that
-/// actually renders the data.
 #[component]
 fn Doggo() -> Element {
-    let mut resource = use_resource(move || async move {
-        #[derive(serde::Deserialize)]
+    // `use_loader` returns a Result<Loader<T>, LoaderError>. LoaderError can either be "Pending" or "Failed".
+    // When we use the `?` operator, the pending/error state will be thrown to the nearest Suspense or Error boundary.
+    let mut dog = use_loader(move || async move {
+        #[derive(serde::Deserialize, PartialEq)]
         struct DogApi {
             message: String,
         }
@@ -65,26 +53,16 @@ fn Doggo() -> Element {
             .unwrap()
             .json::<DogApi>()
             .await
-    });
-
-    // You can suspend the future and only continue rendering when it's ready
-    let value = resource.suspend().with_loading_placeholder(|| {
-        rsx! {
-            div { "Loading doggos..." }
-        }
     })?;
 
-    match value.read().as_ref() {
-        Ok(resp) => rsx! {
-            button { onclick: move |_| resource.restart(), "Click to fetch another doggo" }
-            div { img { max_width: "500px", max_height: "500px", src: "{resp.message}" } }
-        },
-        Err(_) => rsx! {
-            div { "loading dogs failed" }
-            button {
-                onclick: move |_| resource.restart(),
-                "retry"
+    rsx! {
+        button { onclick: move |_| dog.restart(), "Click to fetch another doggo" }
+        div {
+            img {
+                max_width: "500px",
+                max_height: "500px",
+                src: "{dog.read().message}"
             }
-        },
+        }
     }
 }

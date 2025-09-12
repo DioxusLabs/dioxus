@@ -26,6 +26,7 @@ impl ServerFnRequestExt for HybridRequest {
     }
 }
 
+#[allow(unused_variables)]
 pub trait ServerFnRequestExt: Sized {
     /// Attempts to construct a new request with query parameters.
     fn try_new_req_query(
@@ -308,22 +309,29 @@ pub trait ServerFnRequestExt: Sized {
             .map(|h| String::from_utf8_lossy(h.as_bytes()))
     }
 
-    async fn try_into_bytes(self) -> Result<Bytes, ServerFnError> {
-        use http_body_util::BodyExt;
-
+    fn try_into_bytes(
+        self,
+    ) -> impl std::future::Future<Output = Result<Bytes, ServerFnError>> + Send {
         let (_parts, body) = self.into_parts();
 
-        body.collect()
-            .await
-            .map(|c| c.to_bytes())
-            .map_err(|e| ServerFnError::Deserialization(e.to_string()).into_app_error())
+        async {
+            use http_body_util::BodyExt;
+            body.collect()
+                .await
+                .map(|c| c.to_bytes())
+                .map_err(|e| ServerFnError::Deserialization(e.to_string()).into_app_error())
+        }
     }
 
-    async fn try_into_string(self) -> Result<String, ServerFnError> {
-        todo!()
-        // let bytes = Req::<Error>::try_into_bytes(self).await?;
-        // String::from_utf8(bytes.to_vec())
-        //     .map_err(|e| ServerFnError::Deserialization(e.to_string()).into_app_error())
+    fn try_into_string(
+        self,
+    ) -> impl std::future::Future<Output = Result<String, ServerFnError>> + Send {
+        async {
+            todo!()
+            // let bytes = Req::<Error>::try_into_bytes(self).await?;
+            // String::from_utf8(bytes.to_vec())
+            //     .map_err(|e| ServerFnError::Deserialization(e.to_string()).into_app_error())
+        }
     }
 
     fn try_into_stream(

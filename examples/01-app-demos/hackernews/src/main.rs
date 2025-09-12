@@ -37,14 +37,12 @@ fn Homepage(story: ReadSignal<PreviewState>) -> Element {
         Stylesheet { href: asset!("/assets/hackernews.css") }
         div { display: "flex", flex_direction: "row", width: "100%",
             div { width: "50%",
-                SuspenseBoundary {
-                    fallback: |context: SuspenseContext| rsx! { "Loading..." },
+                SuspenseBoundary { fallback: |context| rsx! { "Loading..." },
                     Stories {}
                 }
             }
             div { width: "50%",
-                SuspenseBoundary {
-                    fallback: |context: SuspenseContext| rsx! { "Loading preview..." },
+                SuspenseBoundary { fallback: |context| rsx! { "Loading preview..." },
                     Preview { story }
                 }
             }
@@ -55,17 +53,20 @@ fn Homepage(story: ReadSignal<PreviewState>) -> Element {
 #[component]
 fn Stories() -> Element {
     let stories = use_loader(move || async move {
-        let url = format!("{}topstories.json", BASE_API_URL);
-        let mut stories_ids = reqwest::get(&url).await?.json::<Vec<i64>>().await?;
-        stories_ids.truncate(30);
+        let stories_ids = reqwest::get(&format!("{}topstories.json", BASE_API_URL))
+            .await?
+            .json::<Vec<i64>>()
+            .await?
+            .into_iter()
+            .take(30)
+            .collect::<Vec<i64>>();
         dioxus::Ok(stories_ids)
     })?;
 
     rsx! {
         div {
             for story in stories() {
-                ChildrenOrLoading {
-                    key: "{story}",
+                ChildrenOrLoading { key: "{story}",
                     StoryListing { story }
                 }
             }
@@ -268,15 +269,7 @@ pub async fn get_story(id: i64) -> dioxus::Result<StoryPageData> {
 fn ChildrenOrLoading(children: Element) -> Element {
     rsx! {
         SuspenseBoundary {
-            fallback: |context: SuspenseContext| {
-                rsx! {
-                    if let Some(placeholder) = context.suspense_placeholder() {
-                        {placeholder}
-                    } else {
-                        LoadingIndicator {}
-                    }
-                }
-            },
+            fallback: |context: SuspenseContext| rsx! { LoadingIndicator {} },
             children
         }
     }

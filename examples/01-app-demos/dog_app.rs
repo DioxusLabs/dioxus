@@ -1,8 +1,10 @@
 //! This example demonstrates a simple app that fetches a list of dog breeds and displays a random dog.
 //!
-//! The app uses the `use_signal` and `use_resource` hooks to manage state and fetch data from the Dog API.
-//! `use_resource` is basically an async version of use_memo - it will track dependencies between .await points
-//! and then restart the future if any of the dependencies change.
+//! The app uses the `use_signal` and `use_loader` hooks to manage state and fetch data from the Dog API.
+//! `use_loader` is basically an async version of use_memo - it will track dependencies between .await points
+//! and then restart the future if any of the dependencies change. `use_loader` is special because it
+//! automatically integrates with Suspense, so you can show loading indicators while the data is being fetched.
+//! It also integrates with Error Boundaries and throws errors to the nearest error boundary if the future fails.
 //!
 //! You should generally throttle requests to an API - either client side or server side. This example doesn't do that
 //! since it's unlikely the user will rapidly cause new fetches, but it's something to keep in mind.

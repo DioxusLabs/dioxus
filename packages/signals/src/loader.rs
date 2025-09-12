@@ -14,17 +14,14 @@ use dioxus_core::{
 use futures_util::StreamExt;
 use generational_box::{AnyStorage, BorrowResult, UnsyncStorage};
 
-struct UpdateInformation<T> {
-    dirty: Arc<AtomicBool>,
-    callback: RefCell<Box<dyn FnMut() -> T>>,
-}
-
-#[doc(alias = "Selector")]
-#[doc(alias = "UseMemo")]
-#[doc(alias = "Memorize")]
 pub struct Loader<T> {
     inner: Signal<T>,
     update: CopyValue<UpdateInformation<T>>,
+}
+
+struct UpdateInformation<T> {
+    dirty: Arc<AtomicBool>,
+    callback: RefCell<Box<dyn FnMut() -> T>>,
 }
 
 impl<T> Loader<T> {
@@ -161,8 +158,8 @@ impl<T> Loader<T> {
 }
 
 impl<T> Readable for Loader<T>
-where
-    T: PartialEq,
+// where
+//     T: PartialEq,
 {
     type Target = T;
     type Storage = UnsyncStorage;
@@ -185,7 +182,8 @@ where
         let result = if needs_update {
             drop(read);
             // We shouldn't be subscribed to the value here so we don't trigger the scope we are currently in to rerun even though that scope got the latest value because we synchronously update the value: https://github.com/DioxusLabs/dioxus/issues/2416
-            self.recompute();
+            // self.recompute();
+            todo!();
             self.inner.inner.try_read_unchecked()
         } else {
             Ok(read)

@@ -5,11 +5,25 @@ use crate::innerlude::*;
 /// An error that can occur while rendering a component
 #[derive(Debug)]
 pub enum RenderError {
-    /// The render function returned early
-    Aborted(CapturedError),
+    /// The render function returned early due to an error
+    Error(CapturedError),
 
     /// The component was suspended
     Suspended(SuspendedFuture),
+}
+
+impl RenderError {
+    /// A backwards-compatibility shim for crafting RenderError from CapturedError
+    pub fn Aborted(e: CapturedError) -> Self {
+        Self::Error(e)
+    }
+}
+
+pub trait RenderResultExt: Sized {
+    fn is_ready(&self) -> bool;
+    fn is_loading(&self) -> bool;
+    fn is_error(&self) -> bool;
+    fn err(self) -> Option<RenderError>;
 }
 
 impl Clone for RenderError {
@@ -38,14 +52,14 @@ impl Default for RenderError {
             }
         }
         impl std::error::Error for RenderAbortedEarly {}
-        Self::Aborted(RenderAbortedEarly.into())
+        Self::Error(RenderAbortedEarly.into())
     }
 }
 
 impl Display for RenderError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Aborted(e) => write!(f, "Render aborted: {e}"),
+            Self::Error(e) => write!(f, "Render aborted: {e}"),
             Self::Suspended(e) => write!(f, "Component suspended: {e:?}"),
         }
     }
