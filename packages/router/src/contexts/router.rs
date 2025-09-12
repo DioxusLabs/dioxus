@@ -201,7 +201,7 @@ impl RouterContext {
 
     pub(crate) fn push_any(&self, target: NavigationTarget) -> Option<ExternalNavigationFailure> {
         {
-            let mut write = self.inner.write_unchecked();
+            let mut write = self.inner.write_extended();
             match target {
                 NavigationTarget::Internal(p) => history().push(p),
                 NavigationTarget::External(e) => return write.external(e),
@@ -217,7 +217,7 @@ impl RouterContext {
     pub fn push(&self, target: impl Into<NavigationTarget>) -> Option<ExternalNavigationFailure> {
         let target = target.into();
         {
-            let mut write = self.inner.write_unchecked();
+            let mut write = self.inner.write_extended();
             match target {
                 NavigationTarget::Internal(p) => {
                     let history = history();
@@ -239,7 +239,7 @@ impl RouterContext {
     ) -> Option<ExternalNavigationFailure> {
         let target = target.into();
         {
-            let mut state = self.inner.write_unchecked();
+            let mut state = self.inner.write_extended();
             match target {
                 NavigationTarget::Internal(p) => {
                     let history = history();
@@ -291,7 +291,7 @@ impl RouterContext {
 
     /// Clear any unresolved errors
     pub fn clear_error(&self) {
-        let mut write_inner = self.inner.write_unchecked();
+        let mut write_inner = self.inner.write_extended();
         write_inner.unresolved_error = None;
 
         write_inner.update_subscribers();
@@ -303,7 +303,7 @@ impl RouterContext {
     }
 
     pub(crate) fn render_error(&self) -> Option<Element> {
-        let inner_write = self.inner.write_unchecked();
+        let inner_write = self.inner.write_extended();
         inner_write.subscribe_to_current_context();
         inner_write
             .unresolved_error
@@ -318,7 +318,7 @@ impl RouterContext {
             let callback = callback.clone();
             drop(self_read);
             if let Some(new) = callback(myself) {
-                let mut self_write = self.inner.write_unchecked();
+                let mut self_write = self.inner.write_extended();
                 match new {
                     NavigationTarget::Internal(p) => {
                         let history = history();
