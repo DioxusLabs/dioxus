@@ -19,6 +19,7 @@ futures-channel = { workspace = true }
 serde = { workspace = true }
 dioxus-history.workspace = true
 dioxus-document.workspace = true
+futures-util.workspace = true
 
 [dev-dependencies]
 dioxus-fullstack = { workspace = true }

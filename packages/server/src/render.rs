@@ -6,8 +6,7 @@ use crate::{
 };
 use dioxus_cli_config::base_path;
 use dioxus_core::{
-    has_context, provide_error_boundary, DynamicNode, ErrorContext, ScopeId, SuspenseContext,
-    VNode, VirtualDom,
+    has_context, DynamicNode, ErrorContext, ScopeId, SuspenseContext, VNode, VirtualDom,
 };
 use dioxus_fullstack_hooks::history::provide_fullstack_history_context;
 use dioxus_fullstack_hooks::{StreamingContext, StreamingStatus};
@@ -207,8 +206,14 @@ impl SsrRendererPool {
             virtual_dom.provide_root_context(document.clone() as Rc<dyn dioxus_document::Document>);
             virtual_dom.provide_root_context(streaming_context);
 
-            // Wrap the memory history in a fullstack history provider to provide the initial route for hydration
-            in_root_scope(&virtual_dom, || provide_fullstack_history_context(history));
+            in_root_scope(&virtual_dom, || {
+                // Wrap the memory history in a fullstack history provider to provide the initial route for hydration
+                provide_fullstack_history_context(history);
+                // Provide a hydration compatible error boundary that serializes errors for the client
+                dioxus_core::provide_create_error_boundary(
+                    dioxus_fullstack_hooks::errors::init_error_boundary,
+                );
+            });
 
             // rebuild the virtual dom
             virtual_dom.rebuild_in_place();
@@ -482,8 +487,9 @@ fn streaming_render_component_callback(
 /// Start capturing errors at a suspense boundary. If the parent suspense boundary is frozen, we need to capture the errors in the suspense boundary
 /// and send them to the client to continue bubbling up
 fn start_capturing_errors(suspense_scope: ScopeId) {
-    // Add an error boundary to the scope
-    suspense_scope.in_runtime(provide_error_boundary);
+    // Add an error boundary to the scope. We serialize the suspense error boundary separately so we can use
+    // the normal in memory ErrorContext here
+    suspense_scope.in_runtime(|| dioxus_core::provide_context(ErrorContext::new(Vec::new())));
 }
 
 fn serialize_server_data(virtual_dom: &VirtualDom, scope: ScopeId) -> SerializedHydrationData {
