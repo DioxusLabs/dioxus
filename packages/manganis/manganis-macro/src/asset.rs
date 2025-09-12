@@ -45,7 +45,7 @@ impl Parse for AssetParser {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         // And then parse the options
         let (MacroString(src), path_expr) = input.call(crate::parse_with_tokens)?;
-        let asset = resolve_path(&src);
+        let asset = resolve_path(&src, path_expr.span());
         let _comma = input.parse::<Token![,]>();
         let options = input.parse()?;
 
