@@ -11,7 +11,7 @@ use winit::window::WindowAttributes;
 mod demo_renderer;
 
 // CSS Styles
-static STYLES: Asset = asset!("./src/styles.css");
+static STYLES: Asset = asset!("/src/styles.css");
 
 // WGPU settings required by this example
 const FEATURES: Features = Features::PUSH_CONSTANTS;
