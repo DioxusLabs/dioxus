@@ -819,10 +819,14 @@ impl VNode {
                 }
             };
 
+            // Write the value for each attribute in the group
             for attr in &**attribute {
                 self.write_attribute(attribute_path, attr, id, mount, dom, to);
-                dom.set_mounted_dyn_attr(mount, attribute_idx, id);
             }
+            // Set the mounted dynamic attribute once. This must be set even if no actual
+            // attributes are present so it is present for renderers like fullstack to look
+            // up the position where attributes may be inserted in the future
+            dom.set_mounted_dyn_attr(mount, attribute_idx, id);
         }
     }
 
