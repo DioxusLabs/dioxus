@@ -3,7 +3,7 @@ use dioxus::prelude::*;
 use crate::api::Product;
 
 #[component]
-pub(crate) fn product_item(product: Product) -> Element {
+pub(crate) fn ProductItem(product: Product) -> Element {
     let Product {
         id,
         title,

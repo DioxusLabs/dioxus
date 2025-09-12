@@ -22,7 +22,7 @@ fn app() -> Element {
             chat_response.write().push_str(&chunk);
         }
 
-        anyhow::Ok(())
+        dioxus::Ok(())
     });
 
     rsx! {

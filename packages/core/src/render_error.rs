@@ -3,13 +3,25 @@ use std::fmt::{Debug, Display};
 use crate::innerlude::*;
 
 /// An error that can occur while rendering a component
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Debug)]
 pub enum RenderError {
     /// The render function returned early
     Aborted(CapturedError),
 
     /// The component was suspended
     Suspended(SuspendedFuture),
+}
+
+impl Clone for RenderError {
+    fn clone(&self) -> Self {
+        todo!()
+    }
+}
+
+impl PartialEq for RenderError {
+    fn eq(&self, other: &Self) -> bool {
+        todo!()
+    }
 }
 
 impl Default for RenderError {
@@ -39,15 +51,21 @@ impl Display for RenderError {
     }
 }
 
-impl<E: std::error::Error + 'static> From<E> for RenderError {
+impl<E: Into<CapturedError>> From<E> for RenderError {
     fn from(e: E) -> Self {
         todo!()
         // Self::Aborted(CapturedError::from(e))
     }
 }
 
-impl From<CapturedError> for RenderError {
-    fn from(e: CapturedError) -> Self {
-        RenderError::Aborted(e)
-    }
-}
+// impl From<CapturedError> for RenderError {
+//     fn from(value: RenderError) -> Self {
+//         todo!()
+//     }
+// }
+
+// impl From<CapturedError> for RenderError {
+//     fn from(e: CapturedError) -> Self {
+//         RenderError::Aborted(e)
+//     }
+// }

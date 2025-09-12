@@ -1,5 +1,5 @@
 use crate::{
-    innerlude::{throw_into, CapturedError, SchedulerMsg, SuspenseContext},
+    innerlude::{SchedulerMsg, SuspenseContext},
     runtime::RuntimeError,
     Runtime, ScopeId, Task,
 };
@@ -650,8 +650,9 @@ impl ScopeId {
     ///     unimplemented!()
     /// }
     /// ```
-    pub fn throw_error(self, error: impl Into<CapturedError> + 'static) {
-        throw_into(error, self)
+    pub fn throw_error(self, error: impl Into<anyhow::Error> + 'static) {
+        todo!()
+        // throw_into(error, self)
     }
 
     /// Get the suspense context the current scope is in

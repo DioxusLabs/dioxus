@@ -3,44 +3,11 @@ use std::{fmt::Display, str::FromStr};
 use crate::api::{fetch_product, Product};
 use dioxus::prelude::*;
 
-#[derive(Default)]
-enum Size {
-    Small,
-    #[default]
-    Medium,
-    Large,
-}
-
-impl Display for Size {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Size::Small => "small".fmt(f),
-            Size::Medium => "medium".fmt(f),
-            Size::Large => "large".fmt(f),
-        }
-    }
-}
-
-impl FromStr for Size {
-    type Err = ();
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        use Size::*;
-        match s.to_lowercase().as_str() {
-            "small" => Ok(Small),
-            "medium" => Ok(Medium),
-            "large" => Ok(Large),
-            _ => Err(()),
-        }
-    }
-}
-
 #[component]
-pub fn product_page(product_id: ReadSignal<usize>) -> Element {
+pub fn ProductPage(product_id: ReadSignal<usize>) -> Element {
     let mut quantity = use_signal(|| 1);
     let mut size = use_signal(Size::default);
-
-    let product = use_server_future(move || fetch_product(product_id()))?;
+    let product = use_loader(move || fetch_product(product_id()))?;
 
     let Product {
         title,
@@ -50,7 +17,7 @@ pub fn product_page(product_id: ReadSignal<usize>) -> Element {
         image,
         rating,
         ..
-    } = product().unwrap()?;
+    } = product();
 
     rsx! {
         section { class: "py-20",
@@ -212,6 +179,38 @@ pub fn product_page(product_id: ReadSignal<usize>) -> Element {
                     }
                 }
             }
+        }
+    }
+}
+
+#[derive(Default)]
+enum Size {
+    Small,
+    #[default]
+    Medium,
+    Large,
+}
+
+impl Display for Size {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Size::Small => "small".fmt(f),
+            Size::Medium => "medium".fmt(f),
+            Size::Large => "large".fmt(f),
+        }
+    }
+}
+
+impl FromStr for Size {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        use Size::*;
+        match s.to_lowercase().as_str() {
+            "small" => Ok(Small),
+            "medium" => Ok(Medium),
+            "large" => Ok(Large),
+            _ => Err(()),
         }
     }
 }

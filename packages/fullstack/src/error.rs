@@ -82,11 +82,11 @@ impl From<ServerFnError> for CapturedError {
     }
 }
 
-impl From<ServerFnError> for RenderError {
-    fn from(value: ServerFnError) -> Self {
-        todo!()
-    }
-}
+// impl From<ServerFnError> for RenderError {
+//     fn from(value: ServerFnError) -> Self {
+//         todo!()
+//     }
+// }
 
 impl std::fmt::Display for ServerFnError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

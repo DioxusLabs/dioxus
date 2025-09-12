@@ -20,6 +20,7 @@ fn app() -> Element {
                 ("username", evt.values()["username"].as_value()),
                 ("password", evt.values()["password"].as_value()),
             ])
+            .bearer_auth("some_token")
             .send()
             .await;
 

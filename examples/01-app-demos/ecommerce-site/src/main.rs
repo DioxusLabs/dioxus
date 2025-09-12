@@ -44,7 +44,7 @@ fn Details(product_id: usize) -> Element {
     rsx! {
         div {
             components::nav::nav {}
-            components::product_page::product_page {
+            components::product_page::ProductPage {
                 product_id
             }
         }

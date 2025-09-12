@@ -21,49 +21,37 @@ fn app() -> Element {
 
     // Fetch the list of breeds from the Dog API
     // Since there are no dependencies, this will never restart
-    let breed_list = use_resource(move || async move {
+    let breed_list = use_loader(move || async move {
         #[derive(Debug, Clone, PartialEq, serde::Deserialize)]
         struct ListBreeds {
             message: HashMap<String, Vec<String>>,
         }
 
-        let list = reqwest::get("https://dog.ceo/api/breeds/list/all")
+        reqwest::get("https://dog.ceo/api/breeds/list/all")
             .await
             .unwrap()
             .json::<ListBreeds>()
-            .await;
+            .await
+    })?;
 
-        let Ok(breeds) = list else {
-            return rsx! { "error fetching breeds" };
-        };
-
-        rsx! {
-            for cur_breed in breeds.message.keys().take(20).cloned() {
+    rsx! {
+        h1 { "Select a dog breed: {breed}" }
+        BreedPic { breed }
+        div { width: "400px",
+            for cur_breed in breed_list.read().message.keys().take(20).cloned() {
                 button { onclick: move |_| breed.set(cur_breed.clone()),
                     "{cur_breed}"
                 }
             }
         }
-    });
-
-    // We can use early returns in dioxus!
-    // Traditional signal-based libraries can't do this since the scope is by default non-reactive
-    let Some(breed_list) = breed_list() else {
-        return rsx! { "loading breeds..." };
-    };
-
-    rsx! {
-        h1 { "Select a dog breed: {breed}" }
-        BreedPic { breed }
-        div { width: "400px", {breed_list} }
     }
 }
 
 #[component]
 fn BreedPic(breed: WriteSignal<String>) -> Element {
     // This resource will restart whenever the breed changes
-    let mut fut = use_resource(move || async move {
-        #[derive(serde::Deserialize, Debug)]
+    let mut resp = use_loader(move || async move {
+        #[derive(serde::Deserialize, Debug, PartialEq)]
         struct DogApi {
             message: String,
         }
@@ -73,16 +61,23 @@ fn BreedPic(breed: WriteSignal<String>) -> Element {
             .unwrap()
             .json::<DogApi>()
             .await
-    });
+    })?;
 
-    match fut.read().as_ref() {
-        Some(Ok(resp)) => rsx! {
-            div {
-                button { onclick: move |_| fut.restart(), padding: "5px", background_color: "gray", color: "white", border_radius: "5px", "Click to fetch another doggo" }
-                img { max_width: "500px", max_height: "500px", src: "{resp.message}" }
+    rsx! {
+        div {
+            button {
+                onclick: move |_| resp.restart(),
+                padding: "5px",
+                background_color: "gray",
+                color: "white",
+                border_radius: "5px",
+                "Click to fetch another doggo"
             }
-        },
-        Some(Err(_)) => rsx! { "loading image failed" },
-        None => rsx! { "loading image..." },
+            img {
+                max_width: "500px",
+                max_height: "500px",
+                src: "{resp.read().message}"
+            }
+        }
     }
 }

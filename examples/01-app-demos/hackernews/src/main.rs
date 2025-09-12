@@ -36,23 +36,16 @@ fn Homepage(story: ReadSignal<PreviewState>) -> Element {
     rsx! {
         Stylesheet { href: asset!("/assets/hackernews.css") }
         div { display: "flex", flex_direction: "row", width: "100%",
-            div {
-                width: "50%",
+            div { width: "50%",
                 SuspenseBoundary {
-                    fallback: |context: SuspenseContext| rsx! {
-                        "Loading..."
-                    },
+                    fallback: |context: SuspenseContext| rsx! { "Loading..." },
                     Stories {}
                 }
             }
             div { width: "50%",
                 SuspenseBoundary {
-                    fallback: |context: SuspenseContext| rsx! {
-                        "Loading preview..."
-                    },
-                    Preview {
-                        story
-                    }
+                    fallback: |context: SuspenseContext| rsx! { "Loading preview..." },
+                    Preview { story }
                 }
             }
         }
@@ -61,31 +54,28 @@ fn Homepage(story: ReadSignal<PreviewState>) -> Element {
 
 #[component]
 fn Stories() -> Element {
-    let stories: Resource<dioxus::Result<Vec<i64>>> = use_server_future(move || async move {
+    let stories = use_loader(move || async move {
         let url = format!("{}topstories.json", BASE_API_URL);
         let mut stories_ids = reqwest::get(&url).await?.json::<Vec<i64>>().await?;
         stories_ids.truncate(30);
-        Ok(stories_ids)
+        dioxus::Ok(stories_ids)
     })?;
 
-    match stories().unwrap() {
-        Ok(list) => rsx! {
-            div {
-                for story in list {
-                    ChildrenOrLoading {
-                        key: "{story}",
-                        StoryListing { story }
-                    }
+    rsx! {
+        div {
+            for story in stories() {
+                ChildrenOrLoading {
+                    key: "{story}",
+                    StoryListing { story }
                 }
             }
-        },
-        Err(err) => rsx! {"An error occurred while fetching stories {err}"},
+        }
     }
 }
 
 #[component]
 fn StoryListing(story: ReadSignal<i64>) -> Element {
-    let story = use_server_future(move || get_story(story()))?;
+    let story = use_loader(move || get_story(story()))?;
 
     let StoryItem {
         title,
@@ -96,7 +86,7 @@ fn StoryListing(story: ReadSignal<i64>) -> Element {
         kids,
         id,
         ..
-    } = story().unwrap()?.item;
+    } = story().item;
 
     let url = url.as_deref().unwrap_or_default();
     let hostname = url
@@ -175,9 +165,7 @@ fn Preview(story: ReadSignal<PreviewState>) -> Element {
         return rsx! {"Click on a story to preview it here"};
     };
 
-    let story = use_server_future(use_reactive!(|id| get_story(id)))?;
-
-    let story = story().unwrap()?;
+    let story = use_loader(use_reactive!(|id| get_story(id)))?.cloned();
 
     rsx! {
         div { padding: "0.5rem",
@@ -195,12 +183,11 @@ fn Preview(story: ReadSignal<PreviewState>) -> Element {
 
 #[component]
 fn Comment(comment: i64) -> Element {
-    let comment: Resource<dioxus::Result<CommentData>> =
-        use_server_future(use_reactive!(|comment| async move {
-            let url = format!("{}{}{}.json", BASE_API_URL, ITEM_API, comment);
-            let mut comment = reqwest::get(&url).await?.json::<CommentData>().await?;
-            Ok(comment)
-        }))?;
+    let comment = use_loader(use_reactive!(|comment| async move {
+        let url = format!("{}{}{}.json", BASE_API_URL, ITEM_API, comment);
+        let mut comment = reqwest::get(&url).await?.json::<CommentData>().await?;
+        dioxus::Ok(comment)
+    }))?;
 
     let CommentData {
         by,
@@ -209,7 +196,7 @@ fn Comment(comment: i64) -> Element {
         id,
         kids,
         ..
-    } = comment().unwrap()?;
+    } = comment();
 
     rsx! {
         div { padding: "0.5rem",

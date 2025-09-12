@@ -191,11 +191,12 @@ impl ErrorSugar for http::Error {
         todo!()
     }
 }
-impl ErrorSugar for dioxus_core::CapturedError {
-    fn to_encode_response(&self) -> axum::response::Response {
-        todo!()
-    }
-}
+
+// impl ErrorSugar for dioxus_core::CapturedError {
+//     fn to_encode_response(&self) -> axum::response::Response {
+//         todo!()
+//     }
+// }
 
 /// The default conversion of T into a response is to use axum's IntoResponse trait
 /// Note that Result<T: IntoResponse, E: IntoResponse> works as a blanket impl.

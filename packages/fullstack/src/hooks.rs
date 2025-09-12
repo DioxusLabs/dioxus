@@ -7,7 +7,11 @@ use tokio_tungstenite::tungstenite::Error as WsError;
 
 use crate::Websocket;
 
-pub fn use_loader<F: Future<Output = anyhow::Result<T>>, T: 'static>(
+pub fn use_loader<
+    F: Future<Output = anyhow::Result<T, E>>,
+    T: 'static + PartialEq,
+    E: Into<anyhow::Error>,
+>(
     // pub fn use_loader<F: Future<Output = Result<T, E>>, T: 'static, E: Into<anyhow::Error>>(
     f: impl FnMut() -> F,
 ) -> Result<Loader<T>, RenderError> {

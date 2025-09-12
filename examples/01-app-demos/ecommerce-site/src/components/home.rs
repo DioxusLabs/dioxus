@@ -3,20 +3,19 @@
 use crate::{
     api::{fetch_products, Sort},
     components::nav,
-    components::product_item::product_item,
+    components::product_item::ProductItem,
 };
 use dioxus::prelude::*;
 
 pub(crate) fn Home() -> Element {
-    let products = use_server_future(|| fetch_products(10, Sort::Ascending))?;
-    let products = products().unwrap()?;
+    let products = use_loader(|| fetch_products(10, Sort::Ascending))?;
 
     rsx! {
         nav::nav {}
         section { class: "p-10",
-            for product in products {
-                product_item {
-                    product
+            for product in products.iter() {
+                ProductItem {
+                    product: product.clone()
                 }
             }
         }

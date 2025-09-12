@@ -182,6 +182,10 @@ pub fn route_impl_with_route(
             //     }
             // }
 
+            {
+                #(#shadow_bind)*
+            }
+
             async fn ___make__request(#original_inputs) #fn_output #where_clause {
                 todo!()
                 // (&&&&&&&&&&&&&&ReqSer::<(#(#body_json_types2,)* )>::new())
@@ -246,10 +250,6 @@ pub fn route_impl_with_route(
 
                 __inventory::submit! {
                     ServerFunction::new(__http::Method::#method_ident, #axum_path, || __axum::routing::#http_method(#inner_fn_call))
-                }
-
-                {
-                    #(#shadow_bind)*
                 }
 
                 todo!("Calling server_fn on server is not yet supported. todo.");

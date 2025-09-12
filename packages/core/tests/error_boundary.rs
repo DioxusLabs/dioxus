@@ -46,7 +46,10 @@ fn clear_error_boundary() {
     pub fn ThrowsError() -> Element {
         if THREW_ERROR.load(std::sync::atomic::Ordering::SeqCst) {
             THREW_ERROR.store(true, std::sync::atomic::Ordering::SeqCst);
-            Err(CapturedError::from_display("This is an error").into())
+            Err(anyhow::anyhow!("This is an error"))?;
+            todo!()
+            // Err(CapturedError::from_display("This is an error").into())
+            // Err(CapturedError::from_display("This is an error").into())
         } else {
             rsx! {
                 "We should see this"

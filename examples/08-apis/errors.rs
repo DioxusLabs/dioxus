@@ -55,14 +55,14 @@ fn Show() -> Element {
                 handle_error: |errors: ErrorContext| {
                     rsx! {
                         for error in errors.errors() {
-                            if let Some(error) = error.show() {
-                                {error}
-                            } else {
-                                pre {
-                                    color: "red",
-                                    "{error}"
-                                }
-                            }
+                            // if let Some(error) = error.show() {
+                            //     {error}
+                            // } else {
+                            //     pre {
+                            //         color: "red",
+                            //         "{error}"
+                            //     }
+                            // }
                         }
                     }
                 },

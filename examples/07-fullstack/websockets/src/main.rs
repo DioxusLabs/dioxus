@@ -1,5 +1,5 @@
 #![allow(non_snake_case)]
-use dioxus::fullstack::{codec::JsonEncoding, BoxedStream, Websocket};
+// use dioxus::fullstack::{codec::JsonEncoding, BoxedStream, Websocket};
 use dioxus::prelude::*;
 use futures::{channel::mpsc, SinkExt, StreamExt};
 
