@@ -9,6 +9,7 @@ use std::{
 
 use css_module::CssModuleParser;
 use proc_macro::TokenStream;
+use proc_macro2::Span;
 use quote::{quote, ToTokens};
 use syn::{
     parse::{Parse, ParseStream},
@@ -169,7 +170,7 @@ pub fn css_module(input: TokenStream) -> TokenStream {
     quote! { #style }.into_token_stream().into()
 }
 
-fn resolve_path(raw: &str) -> Result<PathBuf, AssetParseError> {
+fn resolve_path(raw: &str, span: Span) -> Result<PathBuf, AssetParseError> {
     // Get the location of the root of the crate which is where all assets are relative to
     //
     // IE
@@ -186,8 +187,18 @@ fn resolve_path(raw: &str) -> Result<PathBuf, AssetParseError> {
     // 1. the input file should be a pathbuf
     let input = PathBuf::from(raw);
 
+    let path = if raw.starts_with('.') {
+        if let Some(local_folder) = span.local_file().as_ref().and_then(|f| f.parent()) {
+            local_folder.join(raw)
+        } else {
+            return Err(AssetParseError::RelativeAssetPath);
+        }
+    } else {
+        manifest_dir.join(raw.trim_start_matches('/'))
+    };
+
     // 2. absolute path to the asset
-    let Ok(path) = std::path::absolute(manifest_dir.join(raw.trim_start_matches('/'))) else {
+    let Ok(path) = std::path::absolute(path) else {
         return Err(AssetParseError::InvalidPath {
             path: input.clone(),
         });
@@ -200,12 +211,13 @@ fn resolve_path(raw: &str) -> Result<PathBuf, AssetParseError> {
         });
     };
 
-    // 4. Ensure the path doesn't escape the crate dir
+    // 4. Ensure the path doesn't escape the crate dir if this is a library
     //
     // - Note: since we called canonicalize on both paths, we can safely compare the parent dirs.
     //   On windows, we can only compare the prefix if both paths are canonicalized (not just absolute)
     //   https://github.com/rust-lang/rust/issues/42869
-    if path == manifest_dir || !path.starts_with(manifest_dir) {
+    let in_binary_crate = std::env::var("CARGO_BIN_NAME").is_ok();
+    if !in_binary_crate && (path == manifest_dir || !path.starts_with(manifest_dir)) {
         return Err(AssetParseError::InvalidPath { path });
     }
 
@@ -275,6 +287,7 @@ enum AssetParseError {
     IoError { err: std::io::Error, path: PathBuf },
     InvalidPath { path: PathBuf },
     FailedToReadAsset(std::io::Error),
+    RelativeAssetPath,
 }
 
 impl std::fmt::Display for AssetParseError {
@@ -294,6 +307,7 @@ impl std::fmt::Display for AssetParseError {
                 )
             }
             AssetParseError::FailedToReadAsset(err) => write!(f, "Failed to read asset: {}", err),
+            AssetParseError::RelativeAssetPath => write!(f, "Failed to resolve relative asset path. Relative assets are only supported in rust 1.88+."),
         }
     }
 }
