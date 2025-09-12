@@ -225,6 +225,7 @@ cargo_metadata = "0.18.1"
 parking_lot = "0.12.1"
 tracing-wasm = "0.2.1"
 console_error_panic_hook = "0.1.7"
+fs-err = "3.1.1"
 
 # desktop
 wry = { version = "0.45.0", default-features = false }

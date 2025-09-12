@@ -2,6 +2,7 @@ use dioxus_cli_config::format_base_path_meta_element;
 use manganis::AssetOptions;
 
 use crate::error::Result;
+use fs_err as fs;
 use std::fmt::Write;
 use std::path::{Path, PathBuf};
 
@@ -15,7 +16,7 @@ impl AppBundle {
         let mut html = {
             let crate_root: &Path = &self.build.krate.crate_dir();
             let custom_html_file = crate_root.join("index.html");
-            std::fs::read_to_string(custom_html_file).unwrap_or_else(|_| String::from(DEFAULT_HTML))
+            fs::read_to_string(custom_html_file).unwrap_or_else(|_| String::from(DEFAULT_HTML))
         };
 
         // Inject any resources from the config into the html

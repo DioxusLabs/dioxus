@@ -11,6 +11,7 @@ use std::{
     process::Stdio,
     time::Instant,
 };
+use fs_err as fs;
 use tokio::{io::AsyncBufReadExt, process::Command};
 
 #[derive(Clone, Debug)]
@@ -591,16 +592,15 @@ impl BuildRequest {
     /// It's not guaranteed that they're different from any other folder
     fn prepare_build_dir(&self) -> Result<()> {
         use once_cell::sync::OnceCell;
-        use std::fs::{create_dir_all, remove_dir_all};
 
         static INITIALIZED: OnceCell<Result<()>> = OnceCell::new();
 
         let success = INITIALIZED.get_or_init(|| {
-            _ = remove_dir_all(self.exe_dir());
+            _ = fs::remove_dir_all(self.exe_dir());
 
-            create_dir_all(self.root_dir())?;
-            create_dir_all(self.exe_dir())?;
-            create_dir_all(self.asset_dir())?;
+            fs::create_dir_all(self.root_dir())?;
+            fs::create_dir_all(self.exe_dir())?;
+            fs::create_dir_all(self.asset_dir())?;
 
             tracing::debug!("Initialized Root dir: {:?}", self.root_dir());
             tracing::debug!("Initialized Exe dir: {:?}", self.exe_dir());
@@ -762,12 +762,11 @@ impl BuildRequest {
     }
 
     fn build_android_app_dir(&self) -> Result<()> {
-        use std::fs::{create_dir_all, write};
         let root = self.root_dir();
 
         // gradle
         let wrapper = root.join("gradle").join("wrapper");
-        create_dir_all(&wrapper)?;
+        fs::create_dir_all(&wrapper)?;
         tracing::debug!("Initialized Gradle wrapper: {:?}", wrapper);
 
         // app
@@ -777,12 +776,12 @@ impl BuildRequest {
         let app_jnilibs = app_main.join("jniLibs");
         let app_assets = app_main.join("assets");
         let app_kotlin_out = self.wry_android_kotlin_files_out_dir();
-        create_dir_all(&app)?;
-        create_dir_all(&app_main)?;
-        create_dir_all(&app_kotlin)?;
-        create_dir_all(&app_jnilibs)?;
-        create_dir_all(&app_assets)?;
-        create_dir_all(&app_kotlin_out)?;
+        fs::create_dir_all(&app)?;
+        fs::create_dir_all(&app_main)?;
+        fs::create_dir_all(&app_kotlin)?;
+        fs::create_dir_all(&app_jnilibs)?;
+        fs::create_dir_all(&app_assets)?;
+        fs::create_dir_all(&app_kotlin_out)?;
         tracing::debug!("Initialized app: {:?}", app);
         tracing::debug!("Initialized app/src: {:?}", app_main);
         tracing::debug!("Initialized app/src/kotlin: {:?}", app_kotlin);
@@ -803,50 +802,50 @@ impl BuildRequest {
         };
 
         // Top-level gradle config
-        write(
+        fs::write(
             root.join("build.gradle.kts"),
             include_bytes!("../../assets/android/gen/build.gradle.kts"),
         )?;
-        write(
+        fs::write(
             root.join("gradle.properties"),
             include_bytes!("../../assets/android/gen/gradle.properties"),
         )?;
-        write(
+        fs::write(
             root.join("gradlew"),
             include_bytes!("../../assets/android/gen/gradlew"),
         )?;
-        write(
+        fs::write(
             root.join("gradlew.bat"),
             include_bytes!("../../assets/android/gen/gradlew.bat"),
         )?;
-        write(
+        fs::write(
             root.join("settings.gradle"),
             include_bytes!("../../assets/android/gen/settings.gradle"),
         )?;
 
         // Then the wrapper and its properties
-        write(
+        fs::write(
             wrapper.join("gradle-wrapper.properties"),
             include_bytes!("../../assets/android/gen/gradle/wrapper/gradle-wrapper.properties"),
         )?;
-        write(
+        fs::write(
             wrapper.join("gradle-wrapper.jar"),
             include_bytes!("../../assets/android/gen/gradle/wrapper/gradle-wrapper.jar"),
         )?;
 
         // Now the app directory
-        write(
+        fs::write(
             app.join("build.gradle.kts"),
             hbs.render_template(
                 include_str!("../../assets/android/gen/app/build.gradle.kts.hbs"),
                 &hbs_data,
             )?,
         )?;
-        write(
+        fs::write(
             app.join("proguard-rules.pro"),
             include_bytes!("../../assets/android/gen/app/proguard-rules.pro"),
         )?;
-        write(
+        fs::write(
             app.join("src").join("main").join("AndroidManifest.xml"),
             hbs.render_template(
                 include_str!("../../assets/android/gen/app/src/main/AndroidManifest.xml.hbs"),
@@ -855,7 +854,7 @@ impl BuildRequest {
         )?;
 
         // Write the main activity manually since tao dropped support for it
-        write(
+        fs::write(
             self.wry_android_kotlin_files_out_dir()
                 .join("MainActivity.kt"),
             hbs.render_template(
@@ -866,75 +865,75 @@ impl BuildRequest {
 
         // Write the res folder
         let res = app_main.join("res");
-        create_dir_all(&res)?;
-        create_dir_all(res.join("values"))?;
-        write(
+        fs::create_dir_all(&res)?;
+        fs::create_dir_all(res.join("values"))?;
+        fs::write(
             res.join("values").join("strings.xml"),
             hbs.render_template(
                 include_str!("../../assets/android/gen/app/src/main/res/values/strings.xml.hbs"),
                 &hbs_data,
             )?,
         )?;
-        write(
+        fs::write(
             res.join("values").join("colors.xml"),
             include_bytes!("../../assets/android/gen/app/src/main/res/values/colors.xml"),
         )?;
-        write(
+        fs::write(
             res.join("values").join("styles.xml"),
             include_bytes!("../../assets/android/gen/app/src/main/res/values/styles.xml"),
         )?;
 
-        create_dir_all(res.join("drawable"))?;
-        write(
+        fs::create_dir_all(res.join("drawable"))?;
+        fs::write(
             res.join("drawable").join("ic_launcher_background.xml"),
             include_bytes!(
                 "../../assets/android/gen/app/src/main/res/drawable/ic_launcher_background.xml"
             ),
         )?;
-        create_dir_all(res.join("drawable-v24"))?;
-        write(
+        fs::create_dir_all(res.join("drawable-v24"))?;
+        fs::write(
             res.join("drawable-v24").join("ic_launcher_foreground.xml"),
             include_bytes!(
                 "../../assets/android/gen/app/src/main/res/drawable-v24/ic_launcher_foreground.xml"
             ),
         )?;
-        create_dir_all(res.join("mipmap-anydpi-v26"))?;
-        write(
+        fs::create_dir_all(res.join("mipmap-anydpi-v26"))?;
+        fs::write(
             res.join("mipmap-anydpi-v26").join("ic_launcher.xml"),
             include_bytes!(
                 "../../assets/android/gen/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml"
             ),
         )?;
-        create_dir_all(res.join("mipmap-hdpi"))?;
-        write(
+        fs::create_dir_all(res.join("mipmap-hdpi"))?;
+        fs::write(
             res.join("mipmap-hdpi").join("ic_launcher.webp"),
             include_bytes!(
                 "../../assets/android/gen/app/src/main/res/mipmap-hdpi/ic_launcher.webp"
             ),
         )?;
-        create_dir_all(res.join("mipmap-mdpi"))?;
-        write(
+        fs::create_dir_all(res.join("mipmap-mdpi"))?;
+        fs::write(
             res.join("mipmap-mdpi").join("ic_launcher.webp"),
             include_bytes!(
                 "../../assets/android/gen/app/src/main/res/mipmap-mdpi/ic_launcher.webp"
             ),
         )?;
-        create_dir_all(res.join("mipmap-xhdpi"))?;
-        write(
+        fs::create_dir_all(res.join("mipmap-xhdpi"))?;
+        fs::write(
             res.join("mipmap-xhdpi").join("ic_launcher.webp"),
             include_bytes!(
                 "../../assets/android/gen/app/src/main/res/mipmap-xhdpi/ic_launcher.webp"
             ),
         )?;
-        create_dir_all(res.join("mipmap-xxhdpi"))?;
-        write(
+        fs::create_dir_all(res.join("mipmap-xxhdpi"))?;
+        fs::write(
             res.join("mipmap-xxhdpi").join("ic_launcher.webp"),
             include_bytes!(
                 "../../assets/android/gen/app/src/main/res/mipmap-xxhdpi/ic_launcher.webp"
             ),
         )?;
-        create_dir_all(res.join("mipmap-xxxhdpi"))?;
-        write(
+        fs::create_dir_all(res.join("mipmap-xxxhdpi"))?;
+        fs::write(
             res.join("mipmap-xxxhdpi").join("ic_launcher.webp"),
             include_bytes!(
                 "../../assets/android/gen/app/src/main/res/mipmap-xxxhdpi/ic_launcher.webp"

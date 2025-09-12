@@ -92,6 +92,7 @@ brotli = "6.0.0"
 ignore = "0.4.22"
 env_logger = { workspace = true }
 const-serialize = { workspace = true, features = ["serde"] }
+fs-err = "2.11.0"
 
 tracing-subscriber = { version = "0.3.18", features = ["std", "env-filter", "json", "registry", "fmt"] }
 console-subscriber = { version = "0.3.0", optional = true }

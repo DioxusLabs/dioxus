@@ -5,10 +5,10 @@ use crate::{BuildRequest, Platform};
 use crate::{Result, TraceSrc};
 use anyhow::Context;
 use dioxus_cli_opt::{process_file_to, AssetManifest};
+use fs_err as fs;
 use manganis::{AssetOptions, JsAssetOptions};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use std::collections::HashSet;
-use std::fs::File;
 use std::future::Future;
 use std::io::{BufReader, BufWriter};
 use std::path::{Path, PathBuf};
@@ -357,17 +357,19 @@ impl AppBundle {
                 // Run wasm-bindgen and drop its output into the assets folder under "dioxus"
                 self.build.status_wasm_bindgen_start();
                 self.run_wasm_bindgen(&self.app.exe.with_extension("wasm"))
-                    .await?;
+                    .await
+                    .context("run wasmbindgen")?;
 
                 // Only run wasm-opt if the feature is enabled
                 // Wasm-opt has an expensive build script that makes it annoying to keep enabled for iterative dev
                 // We put it behind the "wasm-opt" feature flag so that it can be disabled when iterating on the cli
-                self.run_wasm_opt(&self.build.exe_dir())?;
+                self.run_wasm_opt(&self.build.exe_dir())
+                    .context("run wasm-opt")?;
 
                 // Write the index.html file with the pre-configured contents we got from pre-rendering
-                std::fs::write(
+                fs::write(
                     self.build.root_dir().join("index.html"),
-                    self.prepare_html()?,
+                    self.prepare_html().context("prepare html")?,
                 )?;
             }
 
@@ -390,7 +392,7 @@ impl AppBundle {
             | Platform::Ios
             | Platform::Liveview
             | Platform::Server => {
-                std::fs::copy(&self.app.exe, self.main_exe())?;
+                fs::copy(&self.app.exe, self.main_exe())?;
             }
         }
 
@@ -422,7 +424,7 @@ impl AppBundle {
         // the asset was processed. If that version doesn't match the CLI version, we need to re-optimize
         // all assets.
         let version_file = self.build.asset_optimizer_version_file();
-        let clear_cache = std::fs::read_to_string(&version_file)
+        let clear_cache = fs::read_to_string(&version_file)
             .ok()
             .filter(|s| s == crate::VERSION.as_str())
             .is_none();
@@ -443,7 +445,7 @@ impl AppBundle {
                 }
                 // Otherwise, if it is a directory, we need to walk it and remove child files
                 if path.is_dir() {
-                    for entry in std::fs::read_dir(path)?.flatten() {
+                    for entry in fs::read_dir(path)?.flatten() {
                         let path = entry.path();
                         remove_old_assets(&path, keep_bundled_output_paths).await?;
                     }
@@ -472,7 +474,7 @@ impl AppBundle {
 
             // Force recopy WASM files when debug symbols are enabled
             if self.build.build.debug_symbols && to.extension().map_or(false, |ext| ext == "wasm") {
-                let _ = std::fs::remove_file(&to); // Remove existing file to force recopy
+                let _ = fs::remove_file(&to); // Remove existing file to force recopy
             }
             tracing::debug!("Copying asset {from:?} to {to:?}");
             assets_to_transfer.push((from, to, *bundled.options()));
@@ -520,10 +522,10 @@ impl AppBundle {
         .map_err(|e| anyhow::anyhow!("A task failed while trying to copy assets: {e}"))??;
 
         // Remove the wasm bindgen output directory if it exists
-        _ = std::fs::remove_dir_all(self.build.wasm_bindgen_out_dir());
+        _ = fs::remove_dir_all(self.build.wasm_bindgen_out_dir());
 
         // Write the version file so we know what version of the optimizer we used
-        std::fs::write(
+        fs::write(
             self.build.asset_optimizer_version_file(),
             crate::VERSION.as_str(),
         )?;
@@ -546,14 +548,14 @@ impl AppBundle {
                 .server_exe()
                 .expect("server should be set if we're building a server");
 
-            std::fs::create_dir_all(self.server_exe().unwrap().parent().unwrap())?;
+            fs::create_dir_all(self.server_exe().unwrap().parent().unwrap())?;
 
             tracing::debug!("Copying server executable to: {to:?} {server:#?}");
 
             // Remove the old server executable if it exists, since copying might corrupt it :(
             // todo(jon): do this in more places, I think
-            _ = std::fs::remove_file(&to);
-            std::fs::copy(&server.exe, to)?;
+            _ = fs::remove_file(&to);
+            fs::copy(&server.exe, to)?;
         }
 
         Ok(())
@@ -566,13 +568,13 @@ impl AppBundle {
             Platform::MacOS => {
                 let dest = self.build.root_dir().join("Contents").join("Info.plist");
                 let plist = self.macos_plist_contents()?;
-                std::fs::write(dest, plist)?;
+                fs::write(dest, plist)?;
             }
 
             Platform::Ios => {
                 let dest = self.build.root_dir().join("Info.plist");
                 let plist = self.ios_plist_contents()?;
-                std::fs::write(dest, plist)?;
+                fs::write(dest, plist)?;
             }
 
             // AndroidManifest.xml
@@ -652,7 +654,7 @@ impl AppBundle {
         let input_path = input_path.to_path_buf();
         // Make sure the bindgen output directory exists
         let bindgen_outdir = self.build.wasm_bindgen_out_dir();
-        std::fs::create_dir_all(&bindgen_outdir)?;
+        fs::create_dir_all(&bindgen_outdir)?;
 
         let name = self.build.krate.executable_name().to_string();
         let keep_debug =
@@ -718,6 +720,11 @@ impl AppBundle {
         };
         self.build.status_optimizing_wasm();
 
+        #[cfg(not(feature = "optimizations"))]
+        {
+            tracing::info!(dx_src = ?TraceSrc::Build, "Skipping optimization with wasm-opt...");
+        }
+
         #[cfg(feature = "optimizations")]
         {
             use crate::config::WasmOptLevel;
@@ -742,7 +749,10 @@ impl AppBundle {
             };
             let wasm_file =
                 bindgen_outdir.join(format!("{}_bg.wasm", self.build.krate.executable_name()));
-            let old_size = wasm_file.metadata()?.len();
+            let old_size = wasm_file
+                .metadata()
+                .with_context(|| format!("Failed to get metadata for {}", wasm_file.display()))?
+                .len();
 
             // Use a temporary output file to avoid in-place modification issues
             let temp_wasm_file = wasm_file.with_extension("wasm.tmp");
@@ -768,7 +778,7 @@ impl AppBundle {
             result.map_err(|err| crate::Error::Other(anyhow::anyhow!(err)))?;
 
             // Move the temporary file back to the original location
-            std::fs::rename(&temp_wasm_file, &wasm_file)?;
+            fs::rename(&temp_wasm_file, &wasm_file)?;
 
             let new_size = wasm_file.metadata()?.len();
             tracing::debug!(
@@ -879,7 +889,7 @@ impl AppBundle {
             self.build.build.target_args.arch()
         ));
 
-        std::fs::rename(from, &to).context("Failed to rename aab")?;
+        fs::rename(from, &to).context("Failed to rename .aab")?;
 
         Ok(to)
     }
@@ -889,7 +899,7 @@ impl AppBundle {
         #[cfg(unix)]
         {
             use std::os::unix::prelude::PermissionsExt;
-            std::fs::set_permissions(
+            fs::set_permissions(
                 self.build.root_dir().join("gradlew"),
                 std::fs::Permissions::from_mode(0o755),
             )?;
@@ -921,7 +931,7 @@ impl AppBundle {
         //
         // https://github.com/rust-mobile/xbuild/blob/master/xbuild/template/lib.rs
         // https://github.com/rust-mobile/xbuild/blob/master/apk/src/lib.rs#L19
-        std::fs::copy(source, destination)?;
+        fs::copy(source, destination)?;
         Ok(())
     }
 
@@ -936,7 +946,7 @@ impl AppBundle {
             wasm_path.display()
         );
 
-        let mut module = Module::decode_from(BufReader::new(File::open(wasm_path)?))
+        let mut module = Module::decode_from(BufReader::new(fs::File::open(wasm_path)?))
             .map_err(|e| anyhow::anyhow!("Failed to decode WASM module: {}", e))?;
 
         // Try to see if we already have a build ID. If not, create one.
@@ -962,7 +972,7 @@ impl AppBundle {
         let debug_file = wasm_path.with_extension("debug.wasm");
         // Write the complete module (including debug info) to the debug file
         module
-            .encode_into(BufWriter::new(File::create(&debug_file)?))
+            .encode_into(BufWriter::new(fs::File::create(&debug_file)?))
             .map_err(|e| anyhow::anyhow!("Failed to encode debug WASM file: {}", e))?;
         tracing::debug!("Created debug companion file: {}", debug_file.display());
 
@@ -980,7 +990,7 @@ impl AppBundle {
 
         // Write the main module
         module
-            .encode_into(BufWriter::new(File::create(wasm_path)?))
+            .encode_into(BufWriter::new(fs::File::create(wasm_path)?))
             .map_err(|e| anyhow::anyhow!("Failed to encode main WASM file: {}", e))?;
 
         tracing::debug!(
