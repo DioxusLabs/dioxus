@@ -1,6 +1,6 @@
 #![allow(non_snake_case)]
 
-use dioxus::{prelude::*, CapturedError};
+use dioxus::{prelude::*, Error};
 
 #[test]
 fn catches_panic() {

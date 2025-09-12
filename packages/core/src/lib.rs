@@ -67,13 +67,16 @@ pub(crate) mod innerlude {
     pub use crate::tasks::*;
     pub use crate::virtual_dom::*;
 
+    pub use anyhow::anyhow;
+    pub use anyhow::Context as AnyhowContext;
+    pub use anyhow::Error;
+    pub use anyhow::Ok;
+    pub use anyhow::Result;
+
     /// An [`Element`] is a possibly-none [`VNode`] created by calling `render` on [`ScopeId`] or [`ScopeState`].
     ///
     /// An Errored [`Element`] will propagate the error to the nearest error boundary.
     pub type Element = std::result::Result<VNode, RenderError>;
-
-    pub use anyhow::anyhow;
-    pub use anyhow::Context as AnyhowContext;
 
     /// A [`Component`] is a function that takes [`Properties`] and returns an [`Element`].
     pub type Component<P = ()> = fn(P) -> Element;
@@ -86,15 +89,14 @@ pub use crate::innerlude::{
     remove_future, schedule_update, schedule_update_any, spawn, spawn_forever, spawn_isomorphic,
     suspend, suspense_context, throw_error, try_consume_context, use_after_render,
     use_before_render, use_drop, use_hook, use_hook_with_cleanup, vdom_is_rendering, with_owner,
-    AnyValue, AnyhowContext, Attribute, AttributeValue, Callback, CapturedError, Component,
-    ComponentFunction, DynamicNode, Element, ElementId, ErrorBoundary, ErrorContext, Event,
-    EventHandler, Fragment, HasAttributes, IntoAttributeValue, IntoDynNode, LaunchConfig,
-    ListenerCallback, MarkerWrapper, Mutation, Mutations, NoOpMutations, Ok,
-    OptionStringFromMarker, Properties, ReactiveContext, RenderError, Result, Runtime,
-    RuntimeGuard, ScopeId, ScopeState, SpawnIfAsync, SubscriberList, Subscribers, SuperFrom,
-    SuperInto, SuspendedFuture, SuspenseBoundary, SuspenseBoundaryProps, SuspenseContext,
-    SuspenseExtension, Task, Template, TemplateAttribute, TemplateNode, VComponent, VNode,
-    VNodeInner, VPlaceholder, VText, VirtualDom, WriteMutations,
+    AnyValue, AnyhowContext, Attribute, AttributeValue, Callback, Component, ComponentFunction,
+    DynamicNode, Element, ElementId, Error, ErrorBoundary, ErrorContext, Event, EventHandler,
+    Fragment, HasAttributes, IntoAttributeValue, IntoDynNode, LaunchConfig, ListenerCallback,
+    MarkerWrapper, Mutation, Mutations, NoOpMutations, Ok, OptionStringFromMarker, Properties,
+    ReactiveContext, RenderError, Result, Runtime, RuntimeGuard, ScopeId, ScopeState, SpawnIfAsync,
+    SubscriberList, Subscribers, SuperFrom, SuperInto, SuspendedFuture, SuspenseBoundary,
+    SuspenseBoundaryProps, SuspenseContext, SuspenseExtension, Task, Template, TemplateAttribute,
+    TemplateNode, VComponent, VNode, VNodeInner, VPlaceholder, VText, VirtualDom, WriteMutations,
 };
 
 pub use const_format;

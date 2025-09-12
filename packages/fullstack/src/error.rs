@@ -3,7 +3,7 @@
 use crate::{ContentType, Decodes, Encodes, Format, FormatType};
 use base64::{engine::general_purpose::URL_SAFE, Engine as _};
 use bytes::Bytes;
-use dioxus_core::{CapturedError, RenderError};
+use dioxus_core::{Error, RenderError};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{
     fmt::{self, Display, Write},
@@ -76,7 +76,7 @@ impl ServerFnError {
     }
 }
 
-impl From<ServerFnError> for CapturedError {
+impl From<ServerFnError> for Error {
     fn from(error: ServerFnError) -> Self {
         todo!()
     }

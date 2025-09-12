@@ -12,7 +12,7 @@ pub fn use_loader<
     F: Future<Output = Result<T, E>>,
     T: 'static,
     // T: 'static + PartialEq,
-    E: Into<dioxus_core::CapturedError>,
+    E: Into<dioxus_core::Error>,
 >(
     // pub fn use_loader<F: Future<Output = Result<T, E>>, T: 'static, E: Into<anyhow::Error>>(
     f: impl FnMut() -> F,

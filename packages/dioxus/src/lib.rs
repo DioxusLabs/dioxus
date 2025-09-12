@@ -27,7 +27,7 @@
 
 pub use dioxus_core;
 #[doc(inline)]
-pub use dioxus_core::{CapturedError, Ok, Result};
+pub use dioxus_core::{Error, Ok, Result};
 
 #[cfg(feature = "launch")]
 #[cfg_attr(docsrs, doc(cfg(feature = "launch")))]
@@ -236,7 +236,7 @@ pub mod prelude {
     pub use dioxus_core::{
         consume_context, provide_context, spawn, suspend, try_consume_context, use_hook,
         AnyhowContext, Attribute, Callback, Component, Element, ErrorBoundary, ErrorContext, Event,
-        EventHandler, Fragment, HasAttributes, IntoDynNode, RenderError, RsxContext, ScopeId,
-        SuspenseBoundary, SuspenseContext, SuspenseExtension, VNode, VirtualDom,
+        EventHandler, Fragment, HasAttributes, IntoDynNode, RenderError, ScopeId, SuspenseBoundary,
+        SuspenseContext, SuspenseExtension, VNode, VirtualDom,
     };
 }

@@ -145,7 +145,7 @@ pub trait Transportable<M> {}
 impl<T> Transportable<()> for T where T: Serialize + DeserializeOwned + 'static {}
 
 pub struct SerializeMarker;
-impl<T> Transportable<SerializeMarker> for Result<T, dioxus_core::CapturedError> where
+impl<T> Transportable<SerializeMarker> for Result<T, dioxus_core::Error> where
     T: Serialize + DeserializeOwned + 'static
 {
 }

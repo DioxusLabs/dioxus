@@ -5,7 +5,7 @@
 // - 500 Routes
 
 #![allow(non_snake_case)]
-use dioxus::{prelude::*, CapturedError};
+use dioxus::{prelude::*, Error};
 
 fn main() {
     dioxus::LaunchBuilder::new()
@@ -48,9 +48,10 @@ fn Blog(id: i32) -> Element {
 
 #[component]
 fn ThrowsError() -> Element {
-    return Err(RenderError::Error(dioxus::core::anyhow!(
-        "This route tests uncaught errors in the server",
-    )));
+    todo!("Implement error throwing")
+    // return Err(RenderError::Error(dioxus::core::anyhow!(
+    //     "This route tests uncaught errors in the server",
+    // )));
 }
 
 #[component]

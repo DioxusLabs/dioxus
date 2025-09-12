@@ -1,7 +1,7 @@
 use crate::{
     innerlude::{SchedulerMsg, SuspenseContext},
     runtime::RuntimeError,
-    Runtime, ScopeId, Task,
+    Error, Runtime, ScopeId, Task,
 };
 use generational_box::{AnyStorage, Owner};
 use rustc_hash::FxHashSet;
@@ -650,9 +650,20 @@ impl ScopeId {
     ///     unimplemented!()
     /// }
     /// ```
-    pub fn throw_error(self, error: impl Into<anyhow::Error> + 'static) {
-        todo!()
-        // throw_into(error, self)
+    pub fn throw_error(self, error: impl Into<Error> + 'static) {
+        pub(crate) fn throw_into(error: impl Into<Error>, scope: ScopeId) {
+            let error = error.into();
+            if let Some(cx) = scope.consume_context::<crate::ErrorContext>() {
+                cx.insert_error(error)
+            } else {
+                tracing::error!(
+                    "Tried to throw an error into an error boundary, but failed to locate a boundary: {:?}",
+                    error
+                )
+            }
+        }
+
+        throw_into(error, self)
     }
 
     /// Get the suspense context the current scope is in

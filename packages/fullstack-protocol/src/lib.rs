@@ -2,7 +2,7 @@
 #![doc = include_str!("../README.md")]
 
 use base64::Engine;
-use dioxus_core::CapturedError;
+use dioxus_core::Error;
 use serde::Serialize;
 use std::{cell::RefCell, io::Cursor, rc::Rc};
 
@@ -56,7 +56,7 @@ impl HydrationContext {
     }
 
     /// Get the entry for the error in the suspense boundary
-    pub fn error_entry(&self) -> SerializeContextEntry<Option<CapturedError>> {
+    pub fn error_entry(&self) -> SerializeContextEntry<Option<Error>> {
         // The first entry is reserved for the error
         let entry_index = self.data.borrow_mut().create_entry_with_id(0);
 

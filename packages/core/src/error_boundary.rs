@@ -1,11 +1,10 @@
 use crate::{
-    global_context::current_scope_id, innerlude::provide_context, use_hook, Element, IntoDynNode,
-    Properties, ScopeId, Template, TemplateAttribute, TemplateNode, VNode,
+    global_context::current_scope_id, innerlude::provide_context, use_hook, Element, Error,
+    IntoDynNode, Properties, ScopeId, Template, TemplateAttribute, TemplateNode, VNode,
 };
 use std::{
     any::Any,
     cell::{Ref, RefCell},
-    error::Error,
     fmt::{Debug, Display},
     rc::Rc,
 };
@@ -19,7 +18,7 @@ use std::{
 /// </div>
 pub(crate) struct CapturedPanic(pub(crate) Box<dyn Any + Send + 'static>);
 unsafe impl Sync for CapturedPanic {}
-impl Error for CapturedPanic {}
+impl std::error::Error for CapturedPanic {}
 impl Debug for CapturedPanic {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("CapturedPanic").finish()
@@ -40,14 +39,10 @@ pub fn provide_error_boundary() -> ErrorContext {
     ))
 }
 
-pub type CapturedError = anyhow::Error;
-
-pub use anyhow::Ok;
-
 /// A context with information about suspended components
 #[derive(Debug, Clone)]
 pub struct ErrorContext {
-    errors: Rc<RefCell<Vec<CapturedError>>>,
+    errors: Rc<RefCell<Vec<Error>>>,
     id: ScopeId,
 }
 
@@ -59,7 +54,7 @@ impl PartialEq for ErrorContext {
 
 impl ErrorContext {
     /// Create a new suspense boundary in a specific scope
-    pub(crate) fn new(errors: Vec<CapturedError>, id: ScopeId) -> Self {
+    pub(crate) fn new(errors: Vec<Error>, id: ScopeId) -> Self {
         Self {
             errors: Rc::new(RefCell::new(errors)),
             id,
@@ -67,7 +62,7 @@ impl ErrorContext {
     }
 
     /// Get all errors thrown from child components
-    pub fn errors(&self) -> Ref<'_, [CapturedError]> {
+    pub fn errors(&self) -> Ref<'_, [Error]> {
         Ref::map(self.errors.borrow(), |errors| errors.as_slice())
     }
 
@@ -78,7 +73,7 @@ impl ErrorContext {
     }
 
     /// Push an error into this Error Boundary
-    pub fn insert_error(&self, error: CapturedError) {
+    pub fn insert_error(&self, error: Error) {
         self.errors.borrow_mut().push(error);
         self.id.needs_update();
     }
@@ -89,221 +84,6 @@ impl ErrorContext {
         self.id.needs_update();
     }
 }
-
-// /// A type alias for a result that can be either a boxed error or a value
-// /// This is useful to avoid having to use `Result<T, CapturedError>` everywhere
-// pub type Result<T = (), E = CapturedError> = std::result::Result<T, E>;
-pub type Result<T, E = anyhow::Error> = anyhow::Result<T, E>;
-
-// /// A helper function for an Ok result that can be either a boxed error or a value
-// /// This is useful to avoid having to use `Ok<T, CapturedError>` everywhere
-// #[allow(non_snake_case)]
-// pub fn Ok<T>(value: T) -> Result<T> {
-//     Result::Ok(value)
-// }
-
-// #[derive(Clone)]
-// /// An instance of an error captured by a descendant component.
-// pub struct CapturedError {
-//     /// The error captured by the error boundary
-//     error: Rc<anyhow::Error>,
-//     // error: Rc<dyn AnyError + 'static>,
-//     /// The backtrace of the error
-//     // backtrace: Rc<Backtrace>,
-
-//     /// The scope that threw the error
-//     scope: ScopeId,
-
-//     /// An error message that can be displayed to the user
-//     pub(crate) render: VNode,
-
-//     /// Additional context that was added to the error
-//     context: Vec<Rc<AdditionalErrorContext>>,
-// }
-
-// impl FromStr for CapturedError {
-//     type Err = std::convert::Infallible;
-
-//     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
-//         std::result::Result::Ok(Self::from_display(s.to_string()))
-//     }
-// }
-
-// #[cfg(feature = "serialize")]
-// #[derive(serde::Serialize, serde::Deserialize)]
-// struct SerializedCapturedError {
-//     error: String,
-//     context: Vec<String>,
-// }
-
-// #[cfg(feature = "serialize")]
-// impl serde::Serialize for CapturedError {
-//     fn serialize<S: serde::Serializer>(
-//         &self,
-//         serializer: S,
-//     ) -> std::result::Result<S::Ok, S::Error> {
-//         let serialized = SerializedCapturedError {
-//             error: self.error.to_string(),
-//             // error: self.error.as_error().to_string(),
-//             context: self
-//                 .context
-//                 .iter()
-//                 .map(|context| context.to_string())
-//                 .collect(),
-//         };
-//         serialized.serialize(serializer)
-//     }
-// }
-
-// #[cfg(feature = "serialize")]
-// impl<'de> serde::Deserialize<'de> for CapturedError {
-//     fn deserialize<D: serde::Deserializer<'de>>(
-//         deserializer: D,
-//     ) -> std::result::Result<Self, D::Error> {
-//         let serialized = SerializedCapturedError::deserialize(deserializer)?;
-
-//         let error = DisplayError::from(serialized.error);
-//         let context = serialized
-//             .context
-//             .into_iter()
-//             .map(|context| {
-//                 Rc::new(AdditionalErrorContext {
-//                     scope: None,
-//                     backtrace: Backtrace::disabled(),
-//                     context: Box::new(context),
-//                 })
-//             })
-//             .collect();
-
-//         std::result::Result::Ok(Self {
-//             error: Rc::new(todo!()),
-//             // error: Rc::new(error),
-//             context,
-//             // backtrace: Rc::new(Backtrace::disabled()),
-//             scope: ScopeId::ROOT,
-//             render: VNode::placeholder(),
-//         })
-//     }
-// }
-
-// impl Debug for CapturedError {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         f.debug_struct("CapturedError")
-//             .field("error", &self.error)
-//             // .field("error", &self.error.as_error())
-//             // .field("backtrace", &self.backtrace)
-//             .field("scope", &self.scope)
-//             .finish()
-//     }
-// }
-
-// impl<E: Into<anyhow::Error>> From<E> for CapturedError {
-//     // impl<E: AnyError + 'static> From<E> for CapturedError {
-//     fn from(error: E) -> Self {
-//         Self {
-//             error: Rc::new(todo!()),
-//             // error: Rc::new(error),
-//             // backtrace: Rc::new(Backtrace::capture()),
-//             scope: current_scope_id()
-//                 .expect("Cannot create an error boundary outside of a component's scope."),
-//             render: Default::default(),
-//             context: Default::default(),
-//         }
-//     }
-// }
-
-// impl CapturedError {
-//     /// Create a new captured error
-//     pub fn new(error: anyhow::Error) -> Self {
-//         // pub fn new(error: impl AnyError + 'static) -> Self {
-//         Self {
-//             error: Rc::new(error),
-//             // backtrace: Rc::new(Backtrace::capture()),
-//             scope: current_scope_id().unwrap_or(ScopeId::ROOT),
-//             render: Default::default(),
-//             context: Default::default(),
-//         }
-//     }
-
-//     /// Create a new error from a type that only implements [`Display`]. If your type implements [`Error`], you can use [`CapturedError::from`] instead.
-//     pub fn from_display(error: impl Display + 'static) -> Self {
-//         Self {
-//             error: Rc::new(todo!()),
-//             // error: Rc::new(DisplayError::from(error)),
-//             // backtrace: Rc::new(Backtrace::capture()),
-//             scope: current_scope_id().unwrap_or(ScopeId::ROOT),
-//             render: Default::default(),
-//             context: Default::default(),
-//         }
-//     }
-
-//     /// Mark the error as being thrown from a specific scope
-//     pub fn with_origin(mut self, scope: ScopeId) -> Self {
-//         self.scope = scope;
-//         self
-//     }
-
-//     /// Get a VNode representation of the error if the error provides one
-//     pub fn show(&self) -> Option<Element> {
-//         if self.render == VNode::placeholder() {
-//             None
-//         } else {
-//             Some(std::result::Result::Ok(self.render.clone()))
-//         }
-//     }
-
-//     /// Create a deep clone of this error
-//     pub(crate) fn deep_clone(&self) -> Self {
-//         Self {
-//             render: self.render.deep_clone(),
-//             ..self.clone()
-//         }
-//     }
-// }
-
-// impl PartialEq for CapturedError {
-//     fn eq(&self, other: &Self) -> bool {
-//         format!("{:?}", self) == format!("{:?}", other)
-//     }
-// }
-
-// impl Display for CapturedError {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         f.write_fmt(format_args!(
-//             "Encountered error: {:?}\nIn scope: {:?}\nContext: ",
-//             // "Encountered error: {:?}\nIn scope: {:?}\nBacktrace: {}\nContext: ",
-//             self.error.to_string(),
-//             // self.error.as_error(),
-//             self.scope,
-//             // self.backtrace
-//         ))?;
-//         for context in &*self.context {
-//             f.write_fmt(format_args!("{}\n", context))?;
-//         }
-//         std::result::Result::Ok(())
-//     }
-// }
-
-// impl CapturedError {
-//     /// Downcast the error type into a concrete error type
-//     pub fn downcast<T: 'static + Display + Debug + Send + Sync>(&self) -> Option<&T> {
-//         self.error.downcast_ref()
-//         // self.error.as_any().downcast_ref::<T>()
-//         // self.error.as_any().downcast_ref::<T>()
-//     }
-// }
-
-// pub(crate) fn throw_into(error: impl Into<CapturedError>, scope: ScopeId) {
-//     let error = error.into();
-//     if let Some(cx) = scope.consume_context::<ErrorContext>() {
-//         cx.insert_error(error)
-//     } else {
-//         tracing::error!(
-//             "Tried to throw an error into an error boundary, but failed to locate a boundary: {:?}",
-//             error
-//         )
-//     }
-// }
 
 #[allow(clippy::type_complexity)]
 #[derive(Clone)]

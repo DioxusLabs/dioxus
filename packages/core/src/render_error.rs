@@ -1,4 +1,7 @@
-use std::fmt::{Debug, Display};
+use std::{
+    fmt::{Debug, Display},
+    sync::Arc,
+};
 
 use crate::innerlude::*;
 
@@ -6,7 +9,7 @@ use crate::innerlude::*;
 #[derive(Debug)]
 pub enum RenderError {
     /// The render function returned early due to an error
-    Error(CapturedError),
+    Error(Arc<Error>),
 
     /// The component was suspended
     Suspended(SuspendedFuture),
@@ -38,7 +41,7 @@ impl Default for RenderError {
             }
         }
         impl std::error::Error for RenderAbortedEarly {}
-        Self::Error(RenderAbortedEarly.into())
+        Self::Error(Arc::new(RenderAbortedEarly.into()))
     }
 }
 
@@ -51,7 +54,7 @@ impl Display for RenderError {
     }
 }
 
-impl<E: Into<CapturedError>> From<E> for RenderError {
+impl<E: Into<Error>> From<E> for RenderError {
     fn from(e: E) -> Self {
         todo!()
         // Self::Aborted(CapturedError::from(e))
