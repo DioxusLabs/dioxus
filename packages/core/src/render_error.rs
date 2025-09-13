@@ -51,6 +51,7 @@ impl<E: Into<Error>> From<E> for RenderError {
     }
 }
 
+/// An `anyhow::Error` wrapped in an `Arc` so it can be cheaply cloned and passed around.
 #[derive(Debug, Clone)]
 pub struct CapturedError(Arc<Error>);
 impl std::ops::Deref for CapturedError {

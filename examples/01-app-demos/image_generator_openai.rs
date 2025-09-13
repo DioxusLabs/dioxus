@@ -8,6 +8,7 @@ fn app() -> Element {
     let mut api_key = use_signal(|| "".to_string());
     let mut prompt = use_signal(|| "".to_string());
     let mut num_images = use_signal(|| 1.to_string());
+
     let mut image = use_action(move |()| async move {
         #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Props, Clone, Default)]
         struct ImageResponse {

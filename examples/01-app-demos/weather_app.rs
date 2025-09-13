@@ -1,5 +1,7 @@
 #![allow(non_snake_case)]
 
+use std::fmt::Display;
+
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -116,8 +118,7 @@ fn Forecast(weather: WeatherResponse) -> Element {
 #[component]
 fn SearchBox(mut country: WriteSignal<WeatherLocation>) -> Element {
     let mut input = use_signal(|| "".to_string());
-
-    let locations = use_resource(move || async move { get_locations(&input()).await });
+    let locations = use_resource(move || get_locations(input()));
 
     rsx! {
         div {
@@ -203,7 +204,7 @@ struct SearchResponse {
     results: WeatherLocations,
 }
 
-async fn get_locations(input: &str) -> reqwest::Result<WeatherLocations> {
+async fn get_locations(input: impl Display) -> reqwest::Result<WeatherLocations> {
     let res = reqwest::get(&format!(
         "https://geocoding-api.open-meteo.com/v1/search?name={input}"
     ))

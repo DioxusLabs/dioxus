@@ -1,6 +1,6 @@
-use dioxus_core::{RenderError, Result};
+use dioxus_core::{CapturedError, RenderError, Result};
 // use cr::Resource;
-use dioxus_signals::{Loader, Signal};
+use dioxus_signals::{Loader, ReadSignal, Signal};
 use std::{marker::PhantomData, prelude::rust_2024::Future};
 
 /// A hook to create a resource that loads data asynchronously.
@@ -82,11 +82,11 @@ impl<I, T> Action<I, T> {
         todo!()
     }
 
-    pub fn ok(&self) -> Option<Signal<T>> {
+    pub fn ok(&self) -> Option<ReadSignal<T>> {
         todo!()
     }
 
-    pub fn result(&self) -> Option<Result<Signal<T>>> {
+    pub fn result(&self) -> Option<Result<ReadSignal<T>, CapturedError>> {
         todo!()
     }
 

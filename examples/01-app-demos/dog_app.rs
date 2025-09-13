@@ -14,7 +14,7 @@ fn main() {
 fn app() -> Element {
     // Fetch the list of breeds from the Dog API, using the `?` syntax to suspend or throw errors
     let breed_list = use_loader(move || async move {
-        #[derive(Debug, Clone, PartialEq, serde::Deserialize)]
+        #[derive(serde::Deserialize, Debug, PartialEq, Clone)]
         struct ListBreeds {
             message: HashMap<String, Vec<String>>,
         }
@@ -45,11 +45,11 @@ fn app() -> Element {
             match breed.result() {
                 None => rsx! { div { "Click the button to fetch a dog!" } },
                 Some(Err(_e)) => rsx! { div { "Failed to fetch a dog, please try again." } },
-                Some(Ok(resp)) => rsx! {
+                Some(Ok(res)) => rsx! {
                     img {
                         max_width: "500px",
                         max_height: "500px",
-                        src: "{resp.read().message}"
+                        src: "{res.read().message}"
                     }
                 },
             }
