@@ -1,6 +1,7 @@
 use dioxus_core::{RenderError, Result};
+use dioxus_hooks::Loader;
 use dioxus_hooks::Resource;
-use dioxus_signals::{Loader, Signal};
+use dioxus_signals::Signal;
 use serde::Serialize;
 use std::{marker::PhantomData, prelude::rust_2024::Future};
 use tokio_tungstenite::tungstenite::Error as WsError;

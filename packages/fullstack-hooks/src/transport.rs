@@ -261,7 +261,6 @@ impl HTMLData {
         location: &'static std::panic::Location<'static>,
     ) {
         let serialized = value.transport_to_bytes();
-
         self.data[id] = Some(serialized);
         #[cfg(debug_assertions)]
         {
@@ -419,7 +418,9 @@ pub fn head_element_hydration_entry() -> SerializeContextEntry<bool> {
     serialize_context().create_entry()
 }
 
-/// A `Transportable` type can be safely transported between the server and the client.
+/// A `Transportable` type can be safely transported from the server to the client, and be used for
+/// hydration. Not all types can sensibly be transported, but many can. This trait makes it possible
+/// to customize how types are transported which helps for non-serializable types like `dioxus_core::Error`.
 ///
 /// By default, all types that implement `Serialize` and `DeserializeOwned` are transportable.
 ///

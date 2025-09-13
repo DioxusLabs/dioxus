@@ -127,8 +127,9 @@ pub use serde;
 
 pub mod prelude {
     use dioxus_core::RenderError;
+    use dioxus_hooks::Loader;
     use dioxus_hooks::Resource;
-    use dioxus_signals::{Loader, Signal};
+    use dioxus_signals::Signal;
     use std::{marker::PhantomData, prelude::rust_2024::Future};
 
     pub use crate::hooks::*;

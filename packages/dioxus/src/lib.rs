@@ -220,7 +220,7 @@ pub mod prelude {
     #[doc(inline)]
     pub use dioxus_router::{
         hooks::*, navigator, use_navigator, GoBackButton, GoForwardButton, Link, NavigationTarget,
-        Outlet, Routable, Route, Router,
+        Outlet, Routable, Router,
     };
 
     #[cfg(feature = "asset")]
