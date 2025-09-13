@@ -75,20 +75,11 @@ pub struct ScopeState {
     pub(crate) reactive_context: ReactiveContext,
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum LastRenderedNode {
     Real(VNode),
     Placeholder(VNode, RenderError),
 }
-
-// impl From<Element> for LastRenderedNode {
-//     fn from(node: Element) -> Self {
-//         match node {
-//             Ok(vnode) => LastRenderedNode::Real(vnode),
-//             Err(err) => LastRenderedNode::Placeholder(VNode::placeholder(), err),
-//         }
-//     }
-// }
 
 impl std::ops::Deref for LastRenderedNode {
     type Target = VNode;
@@ -113,36 +104,6 @@ impl LastRenderedNode {
         match self {
             LastRenderedNode::Real(vnode) => vnode,
             LastRenderedNode::Placeholder(vnode, _err) => vnode,
-        }
-    }
-
-    // pub fn take(&mut self) -> Option<Element> {
-    //     match std::mem::replace(self, LastRenderedNode::None) {
-    //         LastRenderedNode::None => None,
-    //         LastRenderedNode::Real(vnode) => Some(Ok(vnode)),
-    //         LastRenderedNode::Placeholder(_vnode, err) => Some(Err(err)),
-    //     }
-    // }
-
-    // pub fn try_to_node(self) -> Option<VNode> {
-    //     match self {
-    //         LastRenderedNode::None => None,
-    //         LastRenderedNode::Real(vnode) => Some(vnode),
-    //         LastRenderedNode::Placeholder(vnode, _err) => Some(vnode),
-    //     }
-    // }
-
-    // pub fn take_node(&mut self) -> Option<VNode> {
-    //     match std::mem::replace(self, LastRenderedNode::None) {
-    //         LastRenderedNode::Real(vnode) => Some(vnode),
-    //         LastRenderedNode::Placeholder(vnode, _err) => Some(vnode),
-    //     }
-    // }
-
-    pub fn to_element(self) -> Element {
-        match self {
-            LastRenderedNode::Real(vnode) => Ok(vnode),
-            LastRenderedNode::Placeholder(_vnode, err) => Err(err),
         }
     }
 }

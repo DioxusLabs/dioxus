@@ -588,7 +588,7 @@ impl VirtualDom {
         self.scopes[ScopeId::ROOT.0].last_rendered_node = Some(new_nodes.clone());
 
         // Rebuilding implies we append the created elements to the root
-        let m = self.create_scope(Some(to), ScopeId::ROOT, new_nodes.to_element(), None);
+        let m = self.create_scope(Some(to), ScopeId::ROOT, new_nodes, None);
 
         to.append_children(ElementId(0), m);
     }

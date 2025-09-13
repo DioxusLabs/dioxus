@@ -232,13 +232,7 @@ impl ::core::cmp::PartialEq for SuspenseBoundaryProps {
 /// fn App() -> Element {
 ///     rsx! {
 ///         SuspenseBoundary {
-///             fallback: |context: SuspenseContext| rsx! {
-///                 if let Some(placeholder) = context.suspense_placeholder() {
-///                     {placeholder}
-///                 } else {
-///                     "Loading..."
-///                 }
-///             },
+///             fallback: |_| rsx! { "Loading..." },
 ///             Article {}
 ///         }
 ///     }
@@ -439,7 +433,7 @@ impl SuspenseBoundaryProps {
             let scope_state = &mut dom.scopes[scope_id.0];
             let props = Self::downcast_from_props(&mut *scope_state.props).unwrap();
             props.children.clone_from(&children);
-            scope_state.last_rendered_node = children.into();
+            scope_state.last_rendered_node = Some(children);
 
             // Run any closures that were waiting for the suspense to resolve
             suspense_context.run_resolved_closures(&dom.runtime);
@@ -537,7 +531,7 @@ impl SuspenseBoundaryProps {
                     });
 
                     // Set the last rendered node to the new suspense placeholder
-                    dom.scopes[scope_id.0].last_rendered_node = new_placeholder.into();
+                    dom.scopes[scope_id.0].last_rendered_node = Some(new_placeholder);
 
                     let suspense_context = SuspenseContext::downcast_suspense_boundary_from_scope(
                         &dom.runtime,
@@ -553,7 +547,7 @@ impl SuspenseBoundaryProps {
                     // Take the suspended nodes out of the suspense boundary so the children know that the boundary is not suspended while diffing
                     let old_suspended_nodes = suspense_context.take_suspended_nodes().unwrap();
                     let old_placeholder = last_rendered_node;
-                    let new_children = children.as_vnode().clone();
+                    let new_children = children;
 
                     // First diff the two children nodes in the background
                     suspense_context.under_suspense_boundary(&dom.runtime(), || {
@@ -571,8 +565,7 @@ impl SuspenseBoundaryProps {
                     });
 
                     // Set the last rendered node to the new children
-                    dom.scopes[scope_id.0].last_rendered_node =
-                        Some(LastRenderedNode::new(Result::Ok(new_children)));
+                    dom.scopes[scope_id.0].last_rendered_node = Some(new_children);
 
                     mark_suspense_resolved(&suspense_context, dom, scope_id);
                 }

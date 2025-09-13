@@ -69,7 +69,7 @@ impl VirtualDom {
         &mut self,
         to: Option<&mut M>,
         scope: ScopeId,
-        new_nodes: Element,
+        new_nodes: LastRenderedNode,
         parent: Option<ElementRef>,
     ) -> usize {
         self.runtime.clone().with_scope_on_stack(scope, || {
@@ -79,14 +79,10 @@ impl VirtualDom {
             let mut render_to = to.filter(|_| self.runtime.scope_should_render(scope));
 
             // Create the node
-            let nodes = match new_nodes.clone() {
-                Ok(vnode) => vnode,
-                Err(_) => VNode::placeholder(),
-            }
-            .create(self, parent, render_to.as_deref_mut());
+            let nodes = new_nodes.create(self, parent, render_to.as_deref_mut());
 
             // Then set the new node as the last rendered node
-            self.scopes[scope.0].last_rendered_node = Some(LastRenderedNode::new(new_nodes));
+            self.scopes[scope.0].last_rendered_node = Some(new_nodes);
 
             if render_to.is_some() {
                 self.runtime.get_state(scope).unwrap().mount(&self.runtime);
@@ -215,8 +211,7 @@ impl VNode {
         let new_node = dom.scopes[scope.0]
             .last_rendered_node
             .clone()
-            .expect("Component to be mounted")
-            .to_element();
+            .expect("Component to be mounted");
 
         dom.create_scope(to, scope, new_node, parent)
     }
