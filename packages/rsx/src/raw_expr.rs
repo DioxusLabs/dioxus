@@ -87,7 +87,6 @@ impl PartialExpr {
             expr: expr.to_token_stream(),
         }
     }
-
     pub fn span(&self) -> proc_macro2::Span {
         if let Some(brace) = &self.brace {
             brace.span.span()
