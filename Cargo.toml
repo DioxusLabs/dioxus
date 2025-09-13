@@ -590,7 +590,7 @@ doc-scrape-examples = true
 
 [[example]]
 name = "errors"
-path = "examples/04-apis/error_handling.rs"
+path = "examples/04-managing-state/error_handling.rs"
 doc-scrape-examples = true
 
 [[example]]
@@ -627,11 +627,6 @@ doc-scrape-examples = true
 [[example]]
 name = "router_restore_scroll"
 path = "examples/06-routing/router_restore_scroll.rs"
-doc-scrape-examples = true
-
-[[example]]
-name = "string_router"
-path = "examples/06-routing/string_router.rs"
 doc-scrape-examples = true
 
 [[example]]

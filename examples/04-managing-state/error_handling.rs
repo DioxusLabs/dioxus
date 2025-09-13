@@ -55,14 +55,25 @@ fn Show() -> Element {
                 handle_error: |errors: ErrorContext| {
                     rsx! {
                         for error in errors.errors() {
-                            // if let Some(error) = error.show() {
-                            //     {error}
-                            // } else {
-                            //     pre {
-                            //         color: "red",
-                            //         "{error}"
-                            //     }
-                            // }
+                            // You can downcast the error to see if it's a specific type and render something specific for it
+                            if let Some(_error) = error.downcast_ref::<std::num::ParseIntError>() {
+                                div {
+                                    background_color: "red",
+                                    border: "black",
+                                    border_width: "2px",
+                                    border_radius: "5px",
+                                    p { "Failed to parse data" }
+                                    Link {
+                                        to: Route::Home {},
+                                        "Go back to the homepage"
+                                    }
+                                }
+                            } else {
+                                pre {
+                                    color: "red",
+                                    "{error}"
+                                }
+                            }
                         }
                     }
                 },
@@ -79,24 +90,8 @@ fn ParseNumberWithShow() -> Element {
         button {
             onclick: move |_| {
                 let request_data = "0.5";
-                let data: i32 = request_data.parse()
-                    // You can attach rsx to results that can be displayed in the Error Boundary
-                    .show(|_| rsx! {
-                        div {
-                            background_color: "red",
-                            border: "black",
-                            border_width: "2px",
-                            border_radius: "5px",
-                            p { "Failed to parse data" }
-                            Link {
-                                to: Route::Home {},
-                                "Go back to the homepage"
-                            }
-                        }
-                    })?;
-
+                let data: i32 = request_data.parse()?;
                 println!("parsed {data}");
-
                 Ok(())
             },
             "Click to throw an error"
