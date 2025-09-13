@@ -1,6 +1,6 @@
 use crate::{
-    any_props::BoxedAnyProps, nodes::AsVNode, reactive_context::ReactiveContext,
-    scope_context::Scope, Element, Runtime, VNode,
+    any_props::BoxedAnyProps, reactive_context::ReactiveContext, scope_context::Scope, Element,
+    RenderError, Runtime, VNode,
 };
 use std::{cell::Ref, rc::Rc};
 
@@ -70,9 +70,81 @@ pub struct ScopeState {
     pub(crate) context_id: ScopeId,
     /// The last node that has been rendered for this component. This node may not ben mounted
     /// During suspense, this component can be rendered in the background multiple times
-    pub(crate) last_rendered_node: Option<Element>,
+    pub(crate) last_rendered_node: Option<LastRenderedNode>,
     pub(crate) props: BoxedAnyProps,
     pub(crate) reactive_context: ReactiveContext,
+}
+
+#[derive(Clone, PartialEq)]
+pub enum LastRenderedNode {
+    Real(VNode),
+    Placeholder(VNode, RenderError),
+}
+
+// impl From<Element> for LastRenderedNode {
+//     fn from(node: Element) -> Self {
+//         match node {
+//             Ok(vnode) => LastRenderedNode::Real(vnode),
+//             Err(err) => LastRenderedNode::Placeholder(VNode::placeholder(), err),
+//         }
+//     }
+// }
+
+impl std::ops::Deref for LastRenderedNode {
+    type Target = VNode;
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            LastRenderedNode::Real(vnode) => vnode,
+            LastRenderedNode::Placeholder(vnode, _err) => vnode,
+        }
+    }
+}
+
+impl LastRenderedNode {
+    pub fn new(node: Element) -> Self {
+        match node {
+            Ok(vnode) => LastRenderedNode::Real(vnode),
+            Err(err) => LastRenderedNode::Placeholder(VNode::placeholder(), err),
+        }
+    }
+
+    pub fn as_vnode(&self) -> &VNode {
+        match self {
+            LastRenderedNode::Real(vnode) => vnode,
+            LastRenderedNode::Placeholder(vnode, _err) => vnode,
+        }
+    }
+
+    // pub fn take(&mut self) -> Option<Element> {
+    //     match std::mem::replace(self, LastRenderedNode::None) {
+    //         LastRenderedNode::None => None,
+    //         LastRenderedNode::Real(vnode) => Some(Ok(vnode)),
+    //         LastRenderedNode::Placeholder(_vnode, err) => Some(Err(err)),
+    //     }
+    // }
+
+    // pub fn try_to_node(self) -> Option<VNode> {
+    //     match self {
+    //         LastRenderedNode::None => None,
+    //         LastRenderedNode::Real(vnode) => Some(vnode),
+    //         LastRenderedNode::Placeholder(vnode, _err) => Some(vnode),
+    //     }
+    // }
+
+    // pub fn take_node(&mut self) -> Option<VNode> {
+    //     match std::mem::replace(self, LastRenderedNode::None) {
+    //         LastRenderedNode::Real(vnode) => Some(vnode),
+    //         LastRenderedNode::Placeholder(vnode, _err) => Some(vnode),
+    //     }
+    // }
+
+    pub fn to_element(self) -> Element {
+        match self {
+            LastRenderedNode::Real(vnode) => Ok(vnode),
+            LastRenderedNode::Placeholder(_vnode, err) => Err(err),
+        }
+    }
 }
 
 impl Drop for ScopeState {
@@ -98,7 +170,11 @@ impl ScopeState {
     ///
     /// Returns [`None`] if the tree has not been built yet.
     pub fn try_root_node(&self) -> Option<&VNode> {
-        self.last_rendered_node.as_ref().map(AsVNode::as_vnode)
+        match &self.last_rendered_node {
+            Some(LastRenderedNode::Real(vnode)) => Some(vnode),
+            Some(LastRenderedNode::Placeholder(vnode, _)) => Some(vnode),
+            None => None,
+        }
     }
 
     /// Returns the scope id of this [`ScopeState`].

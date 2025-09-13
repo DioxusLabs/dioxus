@@ -4,7 +4,7 @@ use crate::{
     events::ListenerCallback,
     innerlude::{ElementRef, MountId, ScopeState, VProps},
     properties::ComponentFunction,
-    Element, Event, Properties, RenderError, ScopeId, VirtualDom,
+    Element, Event, Properties, ScopeId, VirtualDom,
 };
 use dioxus_core_types::DioxusFormattable;
 use std::ops::Deref;
@@ -98,58 +98,6 @@ pub struct VNode {
 
     /// The mount information for this template
     pub(crate) mount: Cell<MountId>,
-}
-
-impl AsRef<VNode> for Element {
-    fn as_ref(&self) -> &VNode {
-        match self {
-            Element::Ok(node) => node,
-            Element::Err(RenderError::Error(err)) => todo!(),
-            // Element::Err(RenderError::Aborted(err)) => &err.render,
-            Element::Err(RenderError::Suspended(fut)) => &fut.placeholder,
-        }
-    }
-}
-
-impl From<&Element> for VNode {
-    fn from(val: &Element) -> Self {
-        AsRef::as_ref(val).clone()
-    }
-}
-
-impl From<Element> for VNode {
-    fn from(val: Element) -> Self {
-        match val {
-            Element::Ok(node) => node,
-            Element::Err(RenderError::Error(err)) => todo!(),
-            // Element::Err(RenderError::Aborted(err)) => err.render,
-            Element::Err(RenderError::Suspended(fut)) => fut.placeholder,
-        }
-    }
-}
-
-/// A tiny helper trait to get the vnode for a Element
-pub(crate) trait AsVNode {
-    /// Get the vnode for this element
-    fn as_vnode(&self) -> &VNode;
-
-    /// Create a deep clone of this VNode
-    fn deep_clone(&self) -> Self;
-}
-
-impl AsVNode for Element {
-    fn as_vnode(&self) -> &VNode {
-        AsRef::as_ref(self)
-    }
-
-    fn deep_clone(&self) -> Self {
-        match self {
-            Ok(node) => Ok(node.deep_clone()),
-            Err(RenderError::Error(err)) => todo!(),
-            // Err(RenderError::Aborted(err)) => Err(RenderError::Aborted(err.deep_clone())),
-            Err(RenderError::Suspended(fut)) => Err(RenderError::Suspended(fut.deep_clone())),
-        }
-    }
 }
 
 impl Default for VNode {

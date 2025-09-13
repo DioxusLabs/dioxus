@@ -1,6 +1,8 @@
 use crate::{
-    global_context::current_scope_id, innerlude::provide_context, use_hook, Element, Error,
-    IntoDynNode, Properties, ScopeId, Template, TemplateAttribute, TemplateNode, VNode,
+    global_context::current_scope_id,
+    innerlude::{provide_context, CapturedError},
+    use_hook, Element, IntoDynNode, Properties, ScopeId, Template, TemplateAttribute, TemplateNode,
+    VNode,
 };
 use std::{
     any::Any,
@@ -42,7 +44,7 @@ pub fn provide_error_boundary() -> ErrorContext {
 /// A context with information about suspended components
 #[derive(Debug, Clone)]
 pub struct ErrorContext {
-    errors: Rc<RefCell<Vec<Error>>>,
+    errors: Rc<RefCell<Vec<CapturedError>>>,
     id: ScopeId,
 }
 
@@ -54,7 +56,7 @@ impl PartialEq for ErrorContext {
 
 impl ErrorContext {
     /// Create a new suspense boundary in a specific scope
-    pub(crate) fn new(errors: Vec<Error>, id: ScopeId) -> Self {
+    pub(crate) fn new(errors: Vec<CapturedError>, id: ScopeId) -> Self {
         Self {
             errors: Rc::new(RefCell::new(errors)),
             id,
@@ -62,18 +64,12 @@ impl ErrorContext {
     }
 
     /// Get all errors thrown from child components
-    pub fn errors(&self) -> Ref<'_, [Error]> {
+    pub fn errors(&self) -> Ref<'_, [CapturedError]> {
         Ref::map(self.errors.borrow(), |errors| errors.as_slice())
     }
 
-    /// Get the Element from the first error that can be shown
-    pub fn show(&self) -> Option<Element> {
-        todo!()
-        // self.errors.borrow().iter().find_map(|task| task.show())
-    }
-
     /// Push an error into this Error Boundary
-    pub fn insert_error(&self, error: Error) {
+    pub fn insert_error(&self, error: CapturedError) {
         self.errors.borrow_mut().push(error);
         self.id.needs_update();
     }

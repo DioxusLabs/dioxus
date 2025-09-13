@@ -1,6 +1,6 @@
-use crate::runtime::RuntimeError;
+use crate::{innerlude::CapturedError, runtime::RuntimeError};
 use crate::{
-    innerlude::SuspendedFuture, runtime::Runtime, Element, Error, ScopeId, SuspenseContext, Task,
+    innerlude::SuspendedFuture, runtime::Runtime, Element, ScopeId, SuspenseContext, Task,
 };
 use std::future::Future;
 use std::rc::Rc;
@@ -37,7 +37,7 @@ pub fn vdom_is_rendering() -> bool {
 ///     unimplemented!()
 /// }
 /// ```
-pub fn throw_error(error: impl Into<Error> + 'static) {
+pub fn throw_error(error: impl Into<CapturedError> + 'static) {
     current_scope_id()
         .unwrap_or_else(|e| panic!("{}", e))
         .throw_error(error)

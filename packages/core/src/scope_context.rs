@@ -1,7 +1,7 @@
 use crate::{
-    innerlude::{SchedulerMsg, SuspenseContext},
+    innerlude::{CapturedError, SchedulerMsg, SuspenseContext},
     runtime::RuntimeError,
-    Error, Runtime, ScopeId, Task,
+    Runtime, ScopeId, Task,
 };
 use generational_box::{AnyStorage, Owner};
 use rustc_hash::FxHashSet;
@@ -650,8 +650,8 @@ impl ScopeId {
     ///     unimplemented!()
     /// }
     /// ```
-    pub fn throw_error(self, error: impl Into<Error> + 'static) {
-        pub(crate) fn throw_into(error: impl Into<Error>, scope: ScopeId) {
+    pub fn throw_error(self, error: impl Into<CapturedError> + 'static) {
+        pub(crate) fn throw_into(error: impl Into<CapturedError>, scope: ScopeId) {
             let error = error.into();
             if let Some(cx) = scope.consume_context::<crate::ErrorContext>() {
                 cx.insert_error(error)
