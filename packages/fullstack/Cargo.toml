@@ -32,7 +32,6 @@ dioxus-signals = { workspace = true }
 dioxus-hooks = { workspace = true }
 dioxus-router = { workspace = true, features = ["streaming"], optional = true }
 dioxus-fullstack-hooks = { workspace = true }
-dioxus-fullstack-protocol = { workspace = true }
 dashmap = "6.1.0"
 inventory = { workspace = true , optional = true }
 dioxus-ssr = { workspace = true }

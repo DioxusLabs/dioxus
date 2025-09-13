@@ -37,7 +37,6 @@ members = [
     "packages/fullstack",
     "packages/fullstack-macro",
     "packages/fullstack-hooks",
-    "packages/fullstack-protocol",
     "packages/generational-box",
     "packages/history",
     "packages/hooks",
@@ -176,7 +175,6 @@ dioxus-devtools-types = { path = "packages/devtools-types", version = "0.7.0-rc.
 dioxus-fullstack = { path = "packages/fullstack", version = "0.7.0-rc.0", default-features = false}
 dioxus-fullstack-macro = { path = "packages/fullstack-macro", version = "0.7.0-rc.0", default-features = false }
 dioxus-fullstack-hooks = { path = "packages/fullstack-hooks", version = "0.7.0-rc.0" }
-dioxus-fullstack-protocol = { path = "packages/fullstack-protocol", version = "0.7.0-rc.0" }
 dioxus-dx-wire-format = { path = "packages/dx-wire-format", version = "0.7.0-rc.0" }
 dioxus-logger = { path = "packages/logger", version = "0.7.0-rc.0" }
 dioxus-native = { path = "packages/native", version = "0.7.0-rc.0" }

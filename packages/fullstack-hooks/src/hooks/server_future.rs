@@ -1,7 +1,7 @@
+use crate::Transportable;
 use dioxus_core::{suspend, use_hook, RenderError};
 use dioxus_hooks::*;
 use dioxus_signals::ReadableExt;
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::future::Future;
 
 /// Runs a future with a manual list of dependencies and returns a resource with the result if the future is finished or a suspended error if it is still running.
@@ -63,14 +63,15 @@ pub fn use_server_future<T, F, M>(
     mut future: impl FnMut() -> F + 'static,
 ) -> Result<Resource<T>, RenderError>
 where
-    T: Transportable<M>,
     F: Future<Output = T> + 'static,
+    T: Transportable<M>,
+    M: 'static,
 {
-    let serialize_context = use_hook(dioxus_fullstack_protocol::serialize_context);
+    let serialize_context = use_hook(crate::transport::serialize_context);
 
     // We always create a storage entry, even if the data isn't ready yet to make it possible to deserialize pending server futures on the client
     #[allow(unused)]
-    let storage_entry: dioxus_fullstack_protocol::SerializeContextEntry<Transported<T>> =
+    let storage_entry: crate::transport::SerializeContextEntry<T> =
         use_hook(|| serialize_context.create_entry());
 
     #[cfg(feature = "server")]
@@ -96,10 +97,10 @@ where
             #[cfg(feature = "web")]
             match initial_web_result.take() {
                 // The data was deserialized successfully from the server
-                Some(Ok(o)) => return o.inner,
+                Some(Ok(o)) => return o,
 
                 // The data is still pending from the server. Don't try to resolve it on the client
-                Some(Err(dioxus_fullstack_protocol::TakeDataError::DataPending)) => {
+                Some(Err(crate::transport::TakeDataError::DataPending)) => {
                     std::future::pending::<()>().await
                 }
 
@@ -113,14 +114,11 @@ where
             // Otherwise just run the future itself
             let out = user_fut.await;
 
-            // Wrap in a safe-transport type, handling dioxus::Error properly.
-            let transported = Transported { inner: out };
-
             // If this is the first run and we are on the server, cache the data in the slot we reserved for it
             #[cfg(feature = "server")]
-            storage_entry.insert(&transported, caller);
+            storage_entry.insert(&out, caller);
 
-            transported.inner
+            out
         }
     });
 
@@ -138,36 +136,4 @@ where
     }
 
     Ok(resource)
-}
-
-pub trait Transportable<M> {}
-
-impl<T> Transportable<()> for T where T: Serialize + DeserializeOwned + 'static {}
-
-pub struct SerializeMarker;
-impl<T> Transportable<SerializeMarker> for Result<T, dioxus_core::Error> where
-    T: Serialize + DeserializeOwned + 'static
-{
-}
-
-struct Transported<T> {
-    inner: T,
-}
-
-impl<T> Serialize for Transported<T> {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        todo!()
-    }
-}
-
-impl<'de, T> Deserialize<'de> for Transported<T> {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        todo!()
-    }
 }

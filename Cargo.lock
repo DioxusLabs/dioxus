@@ -5561,7 +5561,6 @@ dependencies = [
  "dioxus-document",
  "dioxus-fullstack-hooks",
  "dioxus-fullstack-macro",
- "dioxus-fullstack-protocol",
  "dioxus-history",
  "dioxus-hooks",
  "dioxus-html",
@@ -5613,16 +5612,19 @@ dependencies = [
 name = "dioxus-fullstack-hooks"
 version = "0.7.0-rc.0"
 dependencies = [
+ "base64 0.22.1",
+ "ciborium",
  "dioxus",
  "dioxus-core",
  "dioxus-document",
  "dioxus-fullstack",
- "dioxus-fullstack-protocol",
  "dioxus-history",
  "dioxus-hooks",
  "dioxus-signals",
  "futures-channel",
  "serde",
+ "thiserror 2.0.12",
+ "tracing",
 ]
 
 [[package]]
@@ -5639,17 +5641,6 @@ dependencies = [
  "syn 2.0.104",
  "tower-http",
  "xxhash-rust",
-]
-
-[[package]]
-name = "dioxus-fullstack-protocol"
-version = "0.7.0-rc.0"
-dependencies = [
- "base64 0.22.1",
- "ciborium",
- "dioxus-core",
- "serde",
- "tracing",
 ]
 
 [[package]]
@@ -6070,7 +6061,6 @@ dependencies = [
  "dioxus-devtools",
  "dioxus-document",
  "dioxus-fullstack-hooks",
- "dioxus-fullstack-protocol",
  "dioxus-history",
  "dioxus-html",
  "dioxus-interpreter-js",

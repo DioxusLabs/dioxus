@@ -10,8 +10,8 @@ use dioxus_core::{
     VNode, VirtualDom,
 };
 use dioxus_fullstack_hooks::history::provide_fullstack_history_context;
+use dioxus_fullstack_hooks::{HydrationContext, SerializedHydrationData};
 use dioxus_fullstack_hooks::{StreamingContext, StreamingStatus};
-use dioxus_fullstack_protocol::{HydrationContext, SerializedHydrationData};
 use dioxus_isrg::{CachedRender, IncrementalRendererError, RenderFreshness};
 use dioxus_router::ParseRouteError;
 use dioxus_ssr::Renderer;

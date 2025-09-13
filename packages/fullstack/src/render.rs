@@ -10,8 +10,8 @@ use dioxus_core::{
     VNode, VirtualDom,
 };
 use dioxus_fullstack_hooks::history::provide_fullstack_history_context;
+use dioxus_fullstack_hooks::{HydrationContext, SerializedHydrationData};
 use dioxus_fullstack_hooks::{StreamingContext, StreamingStatus};
-use dioxus_fullstack_protocol::{HydrationContext, SerializedHydrationData};
 use dioxus_isrg::{
     CachedRender, IncrementalRenderer, IncrementalRendererConfig, IncrementalRendererError,
     RenderFreshness,
@@ -488,17 +488,16 @@ impl SsrRendererPool {
 
     /// Get the errors from the suspense boundary
     fn serialize_errors(context: &HydrationContext, vdom: &VirtualDom, scope: ScopeId) {
-        // // If there is an error boundary on the suspense boundary, grab the error from the context API
-        // // and throw it on the client so that it bubbles up to the nearest error boundary
-        // let error = vdom.in_runtime(|| {
-        //     scope
-        //         .consume_context::<ErrorContext>()
-        //         .and_then(|error_context| error_context.errors().first().cloned())
-        // });
-        // context
-        //     .error_entry()
-        //     .insert(&error, std::panic::Location::caller());
-        todo!()
+        // If there is an error boundary on the suspense boundary, grab the error from the context API
+        // and throw it on the client so that it bubbles up to the nearest error boundary
+        let error = vdom.in_runtime(|| {
+            scope
+                .consume_context::<ErrorContext>()
+                .and_then(|error_context| error_context.errors().first().cloned())
+        });
+        context
+            .error_entry()
+            .insert(&error, std::panic::Location::caller());
     }
 
     fn take_from_scope(context: &HydrationContext, vdom: &VirtualDom, scope: ScopeId) {
