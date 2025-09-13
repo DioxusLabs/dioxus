@@ -1,4 +1,4 @@
-use std::{fmt::Display, pin::Pin};
+use std::pin::Pin;
 
 use axum::response::IntoResponse;
 use futures::{Stream, StreamExt};

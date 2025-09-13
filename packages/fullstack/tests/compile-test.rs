@@ -86,7 +86,7 @@ mod simple_extractors {
     /// We can use mutliple args that are Deserialize
     #[get("/hello")]
     async fn twelve(a: i32, b: i32, c: i32) -> Result<Bytes, http::Error> {
-        Ok(Bytes::from_static(b"Hello!"))
+        Ok(format!("Hello! {} {} {}", a, b, c).into())
     }
 }
 

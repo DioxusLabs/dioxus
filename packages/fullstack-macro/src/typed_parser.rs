@@ -152,6 +152,7 @@ pub fn route_impl_with_route(
             }
         }
     });
+    let shadow_bind2 = shadow_bind.clone();
 
     // #vis fn #fn_name #impl_generics() ->  #method_router_ty<#state_type> #where_clause {
 
@@ -187,6 +188,9 @@ pub fn route_impl_with_route(
             }
 
             async fn ___make__request(#original_inputs) #fn_output #where_clause {
+                {
+                    #(#shadow_bind2)*
+                }
                 todo!()
                 // (&&&&&&&&&&&&&&ReqSer::<(#(#body_json_types2,)* )>::new())
                 //         .encode(EncodeState::default(), (#(#body_json_names3,)*))

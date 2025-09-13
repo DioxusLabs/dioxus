@@ -57,18 +57,10 @@ fn App() -> Element {
     }
 }
 
-   #[get("/item/:id?amount&offset", codec = (Json, Json))]
-   async fn handler(id: u32, amount: Option<u32>, offset: Option<u32>, body: u32) -> u32 {
-// async fn handler(id: u32, amount: Option<u32>, offset: Option<u32>, body: Json<u32>) -> Json<u32> {
-    todo!()
-}
-
-
 #[server]
 async fn get_meaning(of: String) -> ServerFnResult<Option<u32>> {
     Ok(of.contains("life").then(|| 42))
 }
-
 ```
 
 ## Axum Integration
@@ -163,14 +155,3 @@ This project is licensed under the [MIT license].
 Unless you explicitly state otherwise, any contribution intentionally submitted
 for inclusion in Dioxus by you shall be licensed as MIT without any additional
 terms or conditions.
-
-
-## REWRITE TODO
-
-- rest of the arguments need to end up as body struct
-  - somehow disambiguate this from the FromRequest stuff? or just expect all FromRequest to be hoisted?
-- get the server route hashing working again
-- we need to adjust how requests are made based on the return type. IE stream/websocket
-- get the client builder working
-- get the callable type thing working to prevent from being called on client if the fn is a pure axum fn
-- distributed middleware. maybe explicit? automatic registration somehow?

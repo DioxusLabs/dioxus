@@ -46,8 +46,8 @@ static STYLE: Asset = asset!("/assets/highlight/styles/atom-one-dark.css");
 
 fn App() -> Element {
     rsx! {
-        Stylesheet { href: STYLE }
-        Script {
+        document::Link { rel: "stylesheet", href: STYLE }
+        document::Script {
             type: "module",
             r#"import hljs from "{HIGHLIGHT}";
             import rust from "{RUST}";

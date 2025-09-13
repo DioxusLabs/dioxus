@@ -41,6 +41,14 @@ pub mod internal {
         TemplateGlobalKey,
     };
 
+    #[allow(non_snake_case)]
+    #[doc(hidden)]
+    pub fn Err<T, E>(e: E) -> Result<T, E> {
+        std::result::Result::Err(e)
+    }
+
+    pub use anyhow::__anyhow;
+
     #[doc(hidden)]
     pub use generational_box;
 }

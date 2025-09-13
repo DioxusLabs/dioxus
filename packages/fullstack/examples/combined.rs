@@ -1,5 +1,4 @@
 use dioxus::prelude::*;
-use dioxus_fullstack::{ServerFnSugar, ServerFunction};
 
 fn main() {
     dioxus::launch(app);
@@ -7,7 +6,7 @@ fn main() {
 
 fn app() -> Element {
     let fetch_data = move |_| async move {
-        let res = get_user(123).await?;
+        get_user(123).await?;
         Ok(())
     };
 

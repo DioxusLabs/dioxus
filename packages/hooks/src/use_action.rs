@@ -24,6 +24,10 @@ impl<I, T> Action<I, T> {
         todo!()
     }
 
+    pub fn value(&self) -> Option<ReadSignal<T>> {
+        todo!()
+    }
+
     pub fn result(&self) -> Option<Result<ReadSignal<T>, CapturedError>> {
         todo!()
     }
