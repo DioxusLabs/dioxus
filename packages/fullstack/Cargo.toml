@@ -12,30 +12,36 @@ resolver = "2"
 
 [dependencies]
 # server functions
-server_fn = { workspace = true, default-features = false }
-dioxus_server_macro = { workspace = true }
+dioxus-fullstack-macro = { workspace = true }
+anyhow = { workspace = true }
 
 # axum
 axum = { workspace = true, optional = true }
 tower-http = { workspace = true, optional = true, features = ["fs"] }
 
 dioxus-core = { workspace = true }
+dioxus-core-macro = { workspace = true }
 dioxus-document = { workspace = true }
+dioxus-html = { workspace = true }
 generational-box = { workspace = true }
 
 # Dioxus + SSR
-dioxus-server = { workspace = true, optional = true}
+# dioxus-server = { workspace = true, optional = true }
 dioxus-isrg = { workspace = true, optional = true }
+dioxus-signals = { workspace = true }
+dioxus-hooks = { workspace = true }
 dioxus-router = { workspace = true, features = ["streaming"], optional = true }
 dioxus-fullstack-hooks = { workspace = true }
-dioxus-fullstack-protocol = { workspace = true }
+dashmap = "6.1.0"
+inventory = { workspace = true , optional = true }
+dioxus-ssr = { workspace = true }
+
+hyper-util = { workspace = true, features = ["full"], optional = true }
+hyper = { workspace = true, optional = true }
 
 # Web Integration
-dioxus-web = { workspace = true, features = ["hydrate"], default-features = false, optional = true }
+# dioxus-web = { workspace = true, features = ["hydrate"], default-features = false, optional = true }
 dioxus-interpreter-js = { workspace = true, optional = true }
-
-# Desktop Integration
-dioxus-desktop = { workspace = true, optional = true }
 
 tracing = { workspace = true }
 tracing-futures = { workspace = true, optional = true }
@@ -51,9 +57,25 @@ base64 = { workspace = true }
 rustls = { workspace = true, optional = true }
 hyper-rustls = { workspace = true, optional = true }
 
+url = { workspace = true, default-features = true }
+serde_json = { workspace = true }
+
+serde_qs = { workspace = true, default-features = true }
+multer = { optional = true, workspace = true, default-features = true }
+rkyv = { optional = true,  default-features = true, version = "0.8" }
+
+# reqwest client
+reqwest = { default-features = false, optional = true, features = [
+  "multipart",
+  "stream",
+  "json"
+], workspace = true }
+futures = { workspace = true, default-features = true }
+
 pin-project = { version = "1.1.10", optional = true }
-thiserror = { workspace = true, optional = true }
-bytes = "1.10.1"
+thiserror = { workspace = true }
+bytes = {version = "1.10.1", features = ["serde"]}
+# bytes = {version = "1.10.1", features = ["serde"]}
 tower = { workspace = true, features = ["util"], optional = true }
 tower-layer = { version = "0.3.3", optional = true }
 parking_lot = { workspace = true, features = ["send_guard"], optional = true }
@@ -66,44 +88,75 @@ web-sys = { version = "0.3.77", optional = true, features = [
   "console",
 ] }
 
+subsecond = { workspace =  true }
 dioxus-cli-config = { workspace = true, optional = true }
-
-dioxus-devtools = { workspace = true, optional = true }
+tokio-tungstenite = { workspace = true }
+dioxus-devtools = { workspace = true, features = ["serve"] }
 aws-lc-rs = { version = "1.13.1", optional = true }
 dioxus-history = { workspace = true }
 http.workspace = true
+enumset = "1.1.6"
+throw_error = "0.3.0"
+const_format = { workspace = true, default-features = true }
+const-str = { workspace = true, default-features = true }
+rustversion = { workspace = true, default-features = true }
+xxhash-rust = { features = [
+  "const_xxh64",
+], workspace = true, default-features = true }
+http-body-util = "0.1.3"
+reqwest-websocket = { version = "0.5.1", features = ["json"] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+tokio = { workspace = true, features = ["rt", "sync", "macros"], optional = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tokio = { workspace = true, features = ["rt", "sync", "rt-multi-thread", "macros", "net"], optional = true }
+
 
 [dev-dependencies]
 dioxus = { workspace = true, features = ["fullstack"] }
 tokio = { workspace = true, features = ["full"] }
 
 [features]
-default = ["devtools", "document", "file_engine", "mounted"]
-devtools = ["dioxus-web?/devtools", "dep:dioxus-devtools"]
-mounted = ["dioxus-web?/mounted"]
-file_engine = ["dioxus-web?/file_engine"]
-document = ["dioxus-web?/document"]
-web = ["dep:dioxus-web", "dep:web-sys", "dioxus-fullstack-hooks/web", "server_fn/browser", "dioxus_server_macro/browser"]
-desktop = ["server_fn/reqwest", "dioxus_server_macro/reqwest"]
-mobile = ["server_fn/reqwest", "dioxus_server_macro/reqwest"]
-default-tls = ["server_fn/default-tls"]
-rustls = ["server_fn/rustls", "dep:rustls", "dep:hyper-rustls"]
+default = ["router", "document", "client", "server"]
+document = []
+web = ["dep:web-sys", "dioxus-fullstack-hooks/web"]
+router = ["dep:dioxus-router"]
+default-tls = []
+rustls = ["dep:rustls", "dep:hyper-rustls"]
+client = ["reqwest"]
+reqwest = ["dep:reqwest"]
+axum = ["server", "dep:axum", "axum/default", "axum/ws", "axum/macros"]
+axum-no-default = ["server"]
 server = [
     "server-core" ,
     "default-tls",
-    "server_fn/axum",
+    "dep:axum",
+    "dep:inventory",
+    "dep:dioxus-isrg",
+    "dep:tokio",
+    "dep:hyper-util",
+    "dep:hyper",
+    "dep:tower",
+    "dep:tower-layer",
+    "dep:tokio-util",
+    "dep:dioxus-cli-config",
+    "dep:tower-http",
+    "dep:parking_lot",
+    "dep:async-trait",
+    "dep:pin-project",
+    "axum"
 ]
 server-core = [
-    "server_fn/axum-no-default",
-    "dioxus_server_macro/axum",
-    "server_fn/reqwest",
-    "server_fn/ssr",
-    "dioxus_server_macro/reqwest",
-    "dioxus-fullstack-hooks/server",
-    "dep:dioxus-server",
+    # "dioxus-fullstack-hooks/server",
     "dioxus-interpreter-js",
 ]
 aws-lc-rs = ["dep:aws-lc-rs"]
+rkyv = ["dep:rkyv"]
+
+# document = ["dioxus-web?/document"]
+# devtools = ["dioxus-web?/devtools", "dep:dioxus-devtools"]
+# web = ["dep:dioxus-web", "dep:web-sys", "dioxus-fullstack-hooks/web"]
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]

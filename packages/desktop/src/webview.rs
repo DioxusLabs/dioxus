@@ -561,12 +561,12 @@ impl SynchronousEventResponse {
 pub(crate) struct PendingWebview {
     dom: VirtualDom,
     cfg: Config,
-    sender: tokio::sync::oneshot::Sender<DesktopContext>,
+    sender: futures_channel::oneshot::Sender<DesktopContext>,
 }
 
 impl PendingWebview {
     pub(crate) fn new(dom: VirtualDom, cfg: Config) -> (Self, PendingDesktopContext) {
-        let (sender, receiver) = tokio::sync::oneshot::channel();
+        let (sender, receiver) = futures_channel::oneshot::channel();
         let webview = Self { dom, cfg, sender };
         let pending = PendingDesktopContext { receiver };
         (webview, pending)

@@ -1,0 +1,19 @@
+use dioxus::prelude::*;
+
+#[component]
+pub(crate) fn ChildrenOrLoading(children: Element) -> Element {
+    rsx! {
+        Stylesheet { href: asset!("/public/loading.css") }
+        SuspenseBoundary {
+            fallback: |_| rsx! { LoadingIndicator {} },
+            {children}
+        }
+    }
+}
+
+#[component]
+fn LoadingIndicator() -> Element {
+    rsx! {
+        div { class: "spinner", }
+    }
+}

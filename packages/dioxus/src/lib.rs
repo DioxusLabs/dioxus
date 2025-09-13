@@ -27,7 +27,7 @@
 
 pub use dioxus_core;
 #[doc(inline)]
-pub use dioxus_core::{CapturedError, Ok, Result};
+pub use dioxus_core::{Error, Ok, Result};
 
 #[cfg(feature = "launch")]
 #[cfg_attr(docsrs, doc(cfg(feature = "launch")))]
@@ -83,7 +83,7 @@ pub use dioxus_cli_config as cli_config;
 
 #[cfg(feature = "server")]
 #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
-pub use dioxus_server as server;
+pub use dioxus_fullstack as server;
 
 #[cfg(feature = "devtools")]
 #[cfg_attr(docsrs, doc(cfg(feature = "devtools")))]
@@ -200,13 +200,14 @@ pub mod prelude {
     #[cfg_attr(docsrs, doc(cfg(feature = "fullstack")))]
     #[doc(inline)]
     pub use dioxus_fullstack::{
-        server, server_fn, use_server_cached, use_server_future, ServerFnError, ServerFnResult,
+        self, delete, get, patch, post, prelude::*, put, server, use_server_cached,
+        use_server_future, ServerFnError, ServerFnResult,
     };
 
     #[cfg(feature = "server")]
     #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
     #[doc(inline)]
-    pub use dioxus_server::{
+    pub use dioxus_fullstack::{
         extract, DioxusRouterExt, DioxusRouterFnExt, FromContext, ServeConfig,
     };
 
@@ -233,9 +234,9 @@ pub mod prelude {
 
     #[doc(inline)]
     pub use dioxus_core::{
-        consume_context, provide_context, spawn, suspend, try_consume_context, use_hook, Attribute,
-        Callback, Component, Context, Element, ErrorBoundary, ErrorContext, Event, EventHandler,
-        Fragment, HasAttributes, IntoDynNode, RenderError, ScopeId, SuspenseBoundary,
-        SuspenseContext, SuspenseExtension, VNode, VirtualDom,
+        consume_context, provide_context, spawn, suspend, try_consume_context, use_hook,
+        AnyhowContext, Attribute, Callback, Component, Element, ErrorBoundary, ErrorContext, Event,
+        EventHandler, Fragment, HasAttributes, IntoDynNode, RenderError, ScopeId, SuspenseBoundary,
+        SuspenseContext, VNode, VirtualDom,
     };
 }

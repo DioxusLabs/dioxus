@@ -22,7 +22,6 @@ dioxus-interpreter-js = { workspace = true, features = [
     "minimal_bindings",
     "webonly",
 ] }
-dioxus-fullstack-protocol = { workspace = true, features = ["web"], optional = true }
 dioxus-fullstack-hooks = { workspace = true, features = ["web"], optional = true }
 generational-box = { workspace = true }
 
@@ -87,7 +86,7 @@ lazy-js-bundle = { workspace = true }
 
 [features]
 default = ["mounted", "file_engine", "devtools", "document"]
-hydrate = ["web-sys/Comment", "dep:serde", "dep:dioxus-fullstack-protocol", "dep:dioxus-fullstack-hooks"]
+hydrate = ["web-sys/Comment", "dep:serde", "dep:dioxus-fullstack-hooks"]
 mounted = [
     "web-sys/Element",
     "dioxus-html/mounted",

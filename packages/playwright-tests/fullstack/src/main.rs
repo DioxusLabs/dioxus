@@ -5,7 +5,8 @@
 // - Hydration
 
 #![allow(non_snake_case)]
-use dioxus::fullstack::{codec::JsonEncoding, commit_initial_chunk, BoxedStream, Websocket};
+// use dioxus::fullstack::{codec::JsonEncoding, commit_initial_chunk, BoxedStream, Websocket};
+use dioxus::fullstack::commit_initial_chunk;
 use dioxus::prelude::*;
 use futures::{channel::mpsc, SinkExt, StreamExt};
 
@@ -180,41 +181,42 @@ fn Assets() -> Element {
     }
 }
 
-#[server(protocol = Websocket<JsonEncoding, JsonEncoding>)]
-async fn echo_ws(
-    input: BoxedStream<String, ServerFnError>,
-) -> ServerFnResult<BoxedStream<String, ServerFnError>> {
-    let mut input = input;
+// #[server(protocol = Websocket<JsonEncoding, JsonEncoding>)]
+// async fn echo_ws(
+//     input: BoxedStream<String, ServerFnError>,
+// ) -> ServerFnResult<BoxedStream<String, ServerFnError>> {
+//     let mut input = input;
 
-    let (mut tx, rx) = mpsc::channel(1);
+//     let (mut tx, rx) = mpsc::channel(1);
 
-    tokio::spawn(async move {
-        while let Some(msg) = input.next().await {
-            let _ = tx.send(msg.map(|msg| msg.to_ascii_uppercase())).await;
-        }
-    });
+//     tokio::spawn(async move {
+//         while let Some(msg) = input.next().await {
+//             let _ = tx.send(msg.map(|msg| msg.to_ascii_uppercase())).await;
+//         }
+//     });
 
-    Ok(rx.into())
-}
+//     Ok(rx.into())
+// }
 
 /// This component tests websocket server functions
 #[component]
 fn WebSockets() -> Element {
-    let mut received = use_signal(String::new);
-    use_future(move || async move {
-        let (mut tx, rx) = mpsc::channel(1);
-        let mut receiver = echo_ws(rx.into()).await.unwrap();
-        tx.send(Ok("hello world".to_string())).await.unwrap();
-        while let Some(Ok(msg)) = receiver.next().await {
-            println!("Received: {}", msg);
-            received.set(msg);
-        }
-    });
+    todo!()
+    // let mut received = use_signal(String::new);
+    // use_future(move || async move {
+    //     let (mut tx, rx) = mpsc::channel(1);
+    //     // let mut receiver = echo_ws(rx.into()).await.unwrap();
+    //     tx.send(Ok("hello world".to_string())).await.unwrap();
+    //     while let Some(Ok(msg)) = receiver.next().await {
+    //         println!("Received: {}", msg);
+    //         received.set(msg);
+    //     }
+    // });
 
-    rsx! {
-        div {
-            id: "websocket-div",
-            "Received: {received}"
-        }
-    }
+    // rsx! {
+    //     div {
+    //         id: "websocket-div",
+    //         "Received: {received}"
+    //     }
+    // }
 }

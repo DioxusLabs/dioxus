@@ -47,15 +47,15 @@ cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
 # Most of the examples live in the workspace. We include some here so that docs.rs can scrape our examples for better inline docs
 [[example]]
 name = "hash_fragment_state"
-path = "../../examples/hash_fragment_state.rs"
+path = "../../examples/06-routing/hash_fragment_state.rs"
 doc-scrape-examples = true
 
 [[example]]
 name = "query_segment_search"
-path = "../../examples/query_segment_search.rs"
+path = "../../examples/06-routing/query_segment_search.rs"
 doc-scrape-examples = true
 
 [[example]]
 name = "simple_router"
-path = "../../examples/simple_router.rs"
+path = "../../examples/06-routing/simple_router.rs"
 doc-scrape-examples = true

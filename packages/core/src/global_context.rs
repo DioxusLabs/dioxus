@@ -1,7 +1,6 @@
-use crate::runtime::RuntimeError;
+use crate::{innerlude::CapturedError, runtime::RuntimeError};
 use crate::{
-    innerlude::SuspendedFuture, runtime::Runtime, CapturedError, Element, ScopeId, SuspenseContext,
-    Task,
+    innerlude::SuspendedFuture, runtime::Runtime, Element, ScopeId, SuspenseContext, Task,
 };
 use std::future::Future;
 use std::rc::Rc;

@@ -354,7 +354,7 @@ fn is_main_thread() -> bool {
 /// # }
 /// ```
 pub struct PendingDesktopContext {
-    pub(crate) receiver: tokio::sync::oneshot::Receiver<DesktopContext>,
+    pub(crate) receiver: futures_channel::oneshot::Receiver<DesktopContext>,
 }
 
 impl PendingDesktopContext {
@@ -366,9 +366,7 @@ impl PendingDesktopContext {
     }
 
     /// Try to resolve the pending context into a [`DesktopContext`].
-    pub async fn try_resolve(
-        self,
-    ) -> Result<DesktopContext, tokio::sync::oneshot::error::RecvError> {
+    pub async fn try_resolve(self) -> Result<DesktopContext, futures_channel::oneshot::Canceled> {
         self.receiver.await
     }
 }

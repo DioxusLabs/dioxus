@@ -1,5 +1,5 @@
 use crate::{
-    innerlude::{throw_into, CapturedError, SchedulerMsg, SuspenseContext},
+    innerlude::{CapturedError, SchedulerMsg, SuspenseContext},
     runtime::RuntimeError,
     Runtime, ScopeId, Task,
 };
@@ -651,6 +651,18 @@ impl ScopeId {
     /// }
     /// ```
     pub fn throw_error(self, error: impl Into<CapturedError> + 'static) {
+        pub(crate) fn throw_into(error: impl Into<CapturedError>, scope: ScopeId) {
+            let error = error.into();
+            if let Some(cx) = scope.consume_context::<crate::ErrorContext>() {
+                cx.insert_error(error)
+            } else {
+                tracing::error!(
+                    "Tried to throw an error into an error boundary, but failed to locate a boundary: {:?}",
+                    error
+                )
+            }
+        }
+
         throw_into(error, self)
     }
 
