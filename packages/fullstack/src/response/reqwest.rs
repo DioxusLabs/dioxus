@@ -1,4 +1,4 @@
-use crate::error::{FromServerFnError, IntoAppError, ServerFnError};
+use crate::error::{FromServerFnError, ServerFnError};
 // use crate::response::ClientRes;
 use bytes::Bytes;
 use futures::{Stream, TryStreamExt};

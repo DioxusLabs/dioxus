@@ -24,7 +24,7 @@ fn app() -> Element {
 }
 
 #[get("/api/uppercase_ws?name&age")]
-async fn uppercase_ws(name: String, age: i32) -> anyhow::Result<Websocket> {
+async fn uppercase_ws(name: String, age: i32) -> Result<Websocket> {
     use axum::extract::ws::Message;
 
     Ok(Websocket::raw(|mut socket| async move {

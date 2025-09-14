@@ -5,41 +5,74 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![forbid(unexpected_cfgs)]
 
+// re-exported to make it possible to implement a custom Client without adding a separate
+// dependency on `bytes`
+pub use bytes::Bytes;
+pub use client::{get_server_url, set_server_url};
+pub use error::{FromServerFnError, ServerFnError, ServerFnResult};
+
+pub use crate::config::{ServeConfig, ServeConfigBuilder};
+pub use crate::context::Axum;
+pub use crate::server::*;
+pub(crate) use config::*;
+pub use config::*;
+pub use context::{
+    extract, server_context, with_server_context, DioxusServerContext, FromContext,
+    FromServerContext, ProvideServerContext,
+};
+pub use dioxus_isrg::{IncrementalRenderer, IncrementalRendererConfig};
+pub use document::ServerDocument;
+
+pub use error::ToServerFnErrExt;
+
+#[cfg(not(target_arch = "wasm32"))]
+mod launch;
+
+#[cfg(not(target_arch = "wasm32"))]
+pub use launch::{launch, launch_cfg};
+
+pub use axum;
+#[doc(hidden)]
+pub use const_format;
+#[doc(hidden)]
+pub use const_str;
+pub use http;
+#[doc(hidden)]
+pub use inventory;
+#[doc(hidden)]
+pub use xxhash_rust;
+
 pub mod hooks;
 pub use hooks::*;
-
-pub mod sse;
-pub use sse::*;
-
-pub mod form;
-pub use form::*;
 
 pub mod req_from;
 pub mod req_to;
 pub use req_from::*;
 pub use req_to::*;
 
-pub use axum;
-pub use http;
-#[doc(hidden)]
-pub use inventory;
-
-pub mod pending;
-pub use pending::*;
-
 pub use fetch::*;
 pub mod fetch;
-pub mod protocols;
-pub use protocols::*;
 
-mod textstream;
-pub use textstream::*;
+mod helpers {
+    pub mod sse;
+    pub use sse::*;
 
-pub mod websocket;
-pub use websocket::*;
+    pub(crate) mod streaming;
 
-mod old;
-pub mod state;
+    mod textstream;
+    pub use textstream::*;
+
+    pub mod websocket;
+    pub use websocket::*;
+
+    pub mod form;
+    pub use form::*;
+
+    pub mod state;
+    pub use state::*;
+}
+
+pub use helpers::*;
 
 mod serverfn;
 pub use serverfn::*;
@@ -54,7 +87,6 @@ pub use dioxus_fullstack_hooks::*;
 
 #[doc(inline)]
 pub use dioxus_fullstack_macro::*;
-// pub use ServerFn as _;
 
 /// Implementations of the client side of the server function call.
 pub mod client;
@@ -78,18 +110,12 @@ pub use request::ServerFnRequestExt;
 /// Types and traits for HTTP responses.
 pub mod response;
 
-// re-exported to make it possible to implement a custom Client without adding a separate
-// dependency on `bytes`
-pub use bytes::Bytes;
-pub use client::{get_server_url, set_server_url};
-pub use error::{FromServerFnError, ServerFnError, ServerFnResult};
-#[doc(hidden)]
-pub use xxhash_rust;
+pub mod config;
+pub mod context;
 
-#[doc(hidden)]
-pub use const_format;
-#[doc(hidden)]
-pub use const_str;
+pub(crate) mod document;
+pub(crate) mod render;
+
 // #![deny(missing)]
 
 // #[doc(hidden)]
@@ -105,9 +131,6 @@ pub use const_str;
 //     // };
 //     pub use serde;
 // }
-
-// pub(crate) use crate::client::Client;
-// pub(crate) use crate::server::Server;
 
 #[cfg(feature = "axum-no-default")]
 #[doc(hidden)]
@@ -137,112 +160,5 @@ pub mod prelude {
     pub use crate::middleware;
     pub use http::Request;
 
-    pub struct ServerState<T> {
-        _t: PhantomData<*const T>,
-    }
-
-    impl<T> ServerState<T> {
-        fn get(&self) -> &T {
-            todo!()
-        }
-
-        pub const fn new(f: fn() -> T) -> Self {
-            Self { _t: PhantomData }
-        }
-    }
-
-    impl<T> std::ops::Deref for ServerState<T> {
-        type Target = T;
-
-        fn deref(&self) -> &Self::Target {
-            todo!()
-        }
-    }
-    impl<T> std::ops::DerefMut for ServerState<T> {
-        fn deref_mut(&mut self) -> &mut Self::Target {
-            todo!()
-        }
-    }
-
-    unsafe impl<T> Send for ServerState<T> {}
-    unsafe impl<T> Sync for ServerState<T> {}
-}
-
-pub mod config;
-pub mod context;
-
-pub(crate) mod document;
-pub(crate) mod render;
-pub(crate) mod streaming;
-
-pub(crate) use config::*;
-
-pub use crate::config::{ServeConfig, ServeConfigBuilder};
-pub use crate::context::Axum;
-pub use crate::server::*;
-pub use config::*;
-pub use context::{
-    extract, server_context, with_server_context, DioxusServerContext, FromContext,
-    FromServerContext, ProvideServerContext,
-};
-pub use dioxus_isrg::{IncrementalRenderer, IncrementalRendererConfig};
-pub use document::ServerDocument;
-
-#[cfg(not(target_arch = "wasm32"))]
-mod launch;
-
-#[cfg(not(target_arch = "wasm32"))]
-pub use launch::{launch, launch_cfg};
-
-#[macro_export]
-macro_rules! make_server_fn {
-    (
-        #[$method:ident($path:literal)]
-        pub async fn $name:ident ( $( $arg_name:ident : $arg_ty:ty ),* $(,)? ) -> $ret:ty $body:block
-    ) => {
-        pub async fn $name( $( $arg_name : $arg_ty ),* ) -> $ret {
-            // If no server feature, we always make a request to the server
-            if cfg!(not(feature = "server")) {
-                return Ok(dioxus_fullstack::fetch::fetch("/thing")
-                    .method("POST")
-                    // .json(&serde_json::json!({ "a": a, "b": b }))
-                    .send()
-                    .await?
-                    .json::<()>()
-                    .await?);
-            }
-
-            // if we do have the server feature, we can run the code directly
-            #[cfg(feature = "server")]
-            {
-                async fn run_user_code(
-                    $( $arg_name : $arg_ty ),*
-                ) -> $ret {
-                    $body
-                }
-
-                inventory::submit! {
-                    ServerFunction::new(
-                        http::Method::GET,
-                        "/thing",
-                        |req| {
-                            Box::pin(async move {
-                                todo!()
-                            })
-                        },
-                        None
-                    )
-                }
-
-                return run_user_code(
-                    $( $arg_name ),*
-                ).await;
-            }
-
-            #[allow(unreachable_code)]
-            {
-                unreachable!()
-            }
-        }
-    };
+    // pub use crate::state::ServerState;
 }

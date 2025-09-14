@@ -2,7 +2,7 @@ use super::Encoding;
 // use super::{Encoding, FromReq, FromRes, IntoReq, IntoRes};
 use crate::{
     error::{FromServerFnError, IntoAppError, ServerFnError},
-    ContentType, Decodes, Encodes, HybridError, HybridResponse,
+    ContentType, Decodes, Encodes, HybridResponse,
 };
 use std::marker::PhantomData;
 

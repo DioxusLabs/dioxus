@@ -6,7 +6,7 @@ use axum::{
 };
 use bytes::Bytes;
 use futures::Stream;
-use http::{request::Parts, Method};
+use http::{request::Parts, Error, Method};
 use http_body_util::BodyExt;
 use reqwest::RequestBuilder;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -176,27 +176,31 @@ pub trait ErrorSugar {
     fn to_encode_response(&self) -> axum::response::Response;
 }
 
-impl ErrorSugar for ServerFnError {
-    fn to_encode_response(&self) -> axum::response::Response {
-        todo!()
-    }
-}
-impl ErrorSugar for anyhow::Error {
-    fn to_encode_response(&self) -> axum::response::Response {
-        todo!()
-    }
-}
+// impl ErrorSugar for ServerFnError {
+//     // impl<E: Serialize + Into<anyhow::Error> + std::fmt::Debug> ErrorSugar for ServerFnError<E> {
+//     fn to_encode_response(&self) -> axum::response::Response {
+//         todo!()
+//     }
+// }
+// impl ErrorSugar for dioxus_core::Error {
+//     fn to_encode_response(&self) -> axum::response::Response {
+//         todo!()
+//     }
+// }
 impl ErrorSugar for http::Error {
     fn to_encode_response(&self) -> axum::response::Response {
         todo!()
     }
 }
 
-// impl ErrorSugar for dioxus_core::CapturedError {
-//     fn to_encode_response(&self) -> axum::response::Response {
-//         todo!()
-//     }
-// }
+impl<T> ErrorSugar for T
+where
+    T: From<ServerFnError>,
+{
+    fn to_encode_response(&self) -> axum::response::Response {
+        todo!()
+    }
+}
 
 /// The default conversion of T into a response is to use axum's IntoResponse trait
 /// Note that Result<T: IntoResponse, E: IntoResponse> works as a blanket impl.

@@ -49,13 +49,13 @@ impl<T> std::future::Future for Dispatching<T> {
     }
 }
 
-impl<I, T> std::ops::Deref for Action<I, T> {
-    type Target = fn(I);
+// impl<I, T> std::ops::Deref for Action<I, T> {
+//     type Target = fn(I);
 
-    fn deref(&self) -> &Self::Target {
-        todo!()
-    }
-}
+//     fn deref(&self) -> &Self::Target {
+//         todo!()
+//     }
+// }
 
 impl<I, T> Clone for Action<I, T> {
     fn clone(&self) -> Self {

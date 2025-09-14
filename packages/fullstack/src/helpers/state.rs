@@ -17,7 +17,44 @@ use dioxus_router::ParseRouteError;
 use dioxus_ssr::Renderer;
 use futures_channel::mpsc::Sender;
 use futures_util::{Stream, StreamExt};
-use std::{collections::HashMap, fmt::Write, future::Future, rc::Rc, sync::Arc, sync::RwLock};
+use std::{
+    collections::HashMap,
+    fmt::Write,
+    future::Future,
+    marker::PhantomData,
+    rc::Rc,
+    sync::{Arc, RwLock},
+};
 use tokio::task::JoinHandle;
 
 use crate::StreamingMode;
+
+pub struct ServerState<T> {
+    _t: PhantomData<*const T>,
+}
+
+impl<T> ServerState<T> {
+    fn get(&self) -> &T {
+        todo!()
+    }
+
+    pub const fn new(f: fn() -> T) -> Self {
+        Self { _t: PhantomData }
+    }
+}
+
+impl<T> std::ops::Deref for ServerState<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        todo!()
+    }
+}
+impl<T> std::ops::DerefMut for ServerState<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        todo!()
+    }
+}
+
+unsafe impl<T> Send for ServerState<T> {}
+unsafe impl<T> Sync for ServerState<T> {}

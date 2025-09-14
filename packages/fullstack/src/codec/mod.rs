@@ -58,7 +58,7 @@ mod put;
 pub use put::*;
 
 // mod stream;
-use crate::{ContentType, HybridError, HybridRequest, HybridResponse};
+use crate::{ContentType, ServerFnError, HybridRequest, HybridResponse};
 use futures::Future;
 use http::Method;
 // pub use stream::*;
@@ -100,7 +100,7 @@ pub trait Encoding: ContentType {
 ///     }
 /// }
 /// ```
-pub trait IntoReq<Encoding, Request = HybridRequest, E = HybridError> {
+pub trait IntoReq<Encoding, Request = HybridRequest, E = ServerFnError> {
     /// Attempts to serialize the arguments into an HTTP request.
     fn into_req(self, path: &str, accepts: &str) -> Result<Request, E>;
 }
@@ -135,7 +135,7 @@ pub trait IntoReq<Encoding, Request = HybridRequest, E = HybridError> {
 ///     }
 /// }
 /// ```
-pub trait FromReq<Encoding, Request = HybridRequest, E = HybridError>
+pub trait FromReq<Encoding, Request = HybridRequest, E = ServerFnError>
 where
     Self: Sized,
 {
@@ -169,7 +169,7 @@ where
 ///     }
 /// }
 /// ```
-pub trait IntoRes<Encoding, Response = HybridResponse, E = HybridError> {
+pub trait IntoRes<Encoding, Response = HybridResponse, E = ServerFnError> {
     /// Attempts to serialize the output into an HTTP response.
     fn into_res(self) -> impl Future<Output = Result<Response, E>> + Send;
 }
@@ -203,7 +203,7 @@ pub trait IntoRes<Encoding, Response = HybridResponse, E = HybridError> {
 ///     }
 /// }
 /// ```
-pub trait FromRes<Encoding, Response = HybridResponse, E = HybridError>
+pub trait FromRes<Encoding, Response = HybridResponse, E = ServerFnError>
 where
     Self: Sized,
 {

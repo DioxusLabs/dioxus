@@ -23,10 +23,6 @@ use tower::util::MapResponse;
 use tower::ServiceExt;
 use tower_http::services::{fs::ServeFileSystemResponseBody, ServeDir};
 
-pub mod register;
-pub mod renderer;
-pub mod router;
-
 /// A extension trait with utilities for integrating Dioxus with your Axum router.
 pub trait DioxusRouterExt<S>: DioxusRouterFnExt<S> {
     /// Serves the static WASM for your Dioxus application (except the generated index.html).
@@ -188,7 +184,7 @@ impl<S: Send + Sync + Clone + 'static> DioxusRouterFnExt<S> for Router<S> {
         mut self,
         context_providers: ContextProviders,
     ) -> Self {
-        for f in ServerFunction::collect_static() {
+        for f in ServerFunction::collect() {
             self = f.register_server_fn_on_router(self, context_providers.clone());
         }
         self

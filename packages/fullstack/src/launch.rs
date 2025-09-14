@@ -40,9 +40,7 @@ pub fn launch_cfg(root: BaseComp, contexts: ContextList, platform_config: Vec<Bo
     #[cfg(not(target_arch = "wasm32"))]
     tokio::runtime::Runtime::new()
         .unwrap()
-        .block_on(async move {
-            serve_server(root, contexts, platform_config).await;
-        });
+        .block_on(async move { serve_server(root, contexts, platform_config).await });
 
     unreachable!("Launching a fullstack app should never return")
 }
@@ -151,7 +149,7 @@ async fn serve_server(
                                 let mut new_router = axum::Router::new().serve_static_assets();
                                 let new_cfg = ServeConfig::new().unwrap();
 
-                                let server_fn_iter = ServerFunction::collect_static();
+                                let server_fn_iter = ServerFunction::collect();
 
                                 // de-duplicate iteratively by preferring the most recent (first, since it's linked)
                                 let mut server_fn_map: HashMap<_, _> = HashMap::new();

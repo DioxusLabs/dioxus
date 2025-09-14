@@ -2,7 +2,7 @@ use super::Encoding;
 use crate::{
     codec::{FromReq, IntoReq},
     error::{FromServerFnError, IntoAppError, ServerFnError},
-    ContentType, HybridError, HybridRequest, HybridResponse, ServerFnRequestExt,
+    ContentType, HybridRequest, HybridResponse, ServerFnRequestExt,
 };
 use http::Method;
 use serde::{de::DeserializeOwned, Serialize};
@@ -41,7 +41,7 @@ where
     T: Serialize + Send,
     // E: FromServerFnError,
 {
-    fn into_req(self, path: &str, accepts: &str) -> Result<HybridRequest, HybridError> {
+    fn into_req(self, path: &str, accepts: &str) -> Result<HybridRequest, ServerFnError> {
         let data =
             serde_qs::to_string(&self).map_err(
                 |e| ServerFnError::Serialization(e.to_string()), /*.into_app_error() */

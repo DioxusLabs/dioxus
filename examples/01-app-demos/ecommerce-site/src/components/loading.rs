@@ -5,15 +5,8 @@ pub(crate) fn ChildrenOrLoading(children: Element) -> Element {
     rsx! {
         Stylesheet { href: asset!("/public/loading.css") }
         SuspenseBoundary {
-            fallback: |_| rsx! { LoadingIndicator {} },
+            fallback: |_| rsx! { div { class: "spinner", } },
             {children}
         }
-    }
-}
-
-#[component]
-fn LoadingIndicator() -> Element {
-    rsx! {
-        div { class: "spinner", }
     }
 }

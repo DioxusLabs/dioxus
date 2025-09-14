@@ -3,10 +3,10 @@
 use crate::{ContentType, Decodes, Encodes, Format, FormatType};
 use base64::{engine::general_purpose::URL_SAFE, Engine as _};
 use bytes::Bytes;
-use dioxus_core::{Error, RenderError};
+use dioxus_core::CapturedError;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{
-    fmt::{self, Display, Write},
+    fmt::{self, Debug, Display, Write},
     str::FromStr,
 };
 use url::Url;
@@ -32,65 +32,56 @@ pub type ServerFnResult<T = ()> = std::result::Result<T, ServerFnError>;
 /// Unlike [`ServerFnError`], this does not implement [`Error`](trait@std::error::Error).
 /// This means that other error types can easily be converted into it using the
 /// `?` operator.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(
     feature = "rkyv",
     derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
 )]
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ServerFnError {
-    /// Error while trying to register the server function (only occurs in case of poisoned RwLock).
-    // #[error("error while trying to register the server function: {0}")]
-    Registration(String),
-    /// Occurs on the client if trying to use an unsupported `HTTP` method when building a request.
-    // #[error("error trying to build `HTTP` method request: {0}")]
-    UnsupportedRequestMethod(String),
-    /// Occurs on the client if there is a network error while trying to run function on server.
-    // #[error("error reaching server to call server function: {0}")]
-    Request(String),
     /// Occurs when there is an error while actually running the function on the server.
-    // #[error("error running server function: {0}")]
+    #[error("error running server function: {0}")]
     ServerError(String),
+
+    /// Error while trying to register the server function (only occurs in case of poisoned RwLock).
+    #[error("error while trying to register the server function: {0}")]
+    Registration(String),
+
+    /// Occurs on the client if trying to use an unsupported `HTTP` method when building a request.
+    #[error("error trying to build `HTTP` method request: {0}")]
+    UnsupportedRequestMethod(String),
+
+    /// Occurs on the client if there is a network error while trying to run function on server.
+    #[error("error reaching server to call server function: {0}")]
+    Request(String),
+
     /// Occurs when there is an error while actually running the middleware on the server.
-    // #[error("error running middleware: {0}")]
+    #[error("error running middleware: {0}")]
     MiddlewareError(String),
+
     /// Occurs on the client if there is an error deserializing the server's response.
-    // #[error("error deserializing server function results: {0}")]
+    #[error("error deserializing server function results: {0}")]
     Deserialization(String),
+
     /// Occurs on the client if there is an error serializing the server function arguments.
-    // #[error("error serializing server function arguments: {0}")]
+    #[error("error serializing server function arguments: {0}")]
     Serialization(String),
+
     /// Occurs on the server if there is an error deserializing one of the arguments that's been sent.
-    // #[error("error deserializing server function arguments: {0}")]
+    #[error("error deserializing server function arguments: {0}")]
     Args(String),
+
     /// Occurs on the server if there's a missing argument.
-    // #[error("missing argument {0}")]
+    #[error("missing argument {0}")]
     MissingArg(String),
+
     /// Occurs on the server if there is an error creating an HTTP response.
-    // #[error("error creating response {0}")]
+    #[error("error creating response {0}")]
     Response(String),
 }
 
-impl ServerFnError {
-    pub fn new(msg: impl Into<String>) -> Self {
-        Self::ServerError(msg.into())
-    }
-}
-
-impl From<ServerFnError> for Error {
-    fn from(error: ServerFnError) -> Self {
-        todo!()
-    }
-}
-
-// impl From<ServerFnError> for RenderError {
-//     fn from(value: ServerFnError) -> Self {
-//         todo!()
-//     }
-// }
-
-impl std::fmt::Display for ServerFnError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        todo!()
+impl From<anyhow::Error> for ServerFnError {
+    fn from(value: anyhow::Error) -> Self {
+        ServerFnError::ServerError(value.to_string())
     }
 }
 
@@ -192,105 +183,8 @@ impl FromServerFnError for ServerFnError {
     }
 }
 
-impl<E> From<E> for ServerFnError
-where
-    E: std::error::Error,
-{
-    fn from(error: E) -> Self {
-        ServerFnError::ServerError(error.to_string())
-    }
-}
-
-/// Associates a particular server function error with the server function
-/// found at a particular path.
-///
-/// This can be used to pass an error from the server back to the client
-/// without JavaScript/WASM supported, by encoding it in the URL as a query string.
-/// This is useful for progressive enhancement.
-#[derive(Debug)]
-pub struct ServerFnUrlError<E> {
-    path: String,
-    error: E,
-}
-
-impl<E: FromServerFnError> ServerFnUrlError<E> {
-    /// Creates a new structure associating the server function at some path
-    /// with a particular error.
-    pub fn new(path: impl Display, error: E) -> Self {
-        Self {
-            path: path.to_string(),
-            error,
-        }
-    }
-
-    /// The error itself.
-    pub fn error(&self) -> &E {
-        &self.error
-    }
-
-    /// The path of the server function that generated this error.
-    pub fn path(&self) -> &str {
-        &self.path
-    }
-
-    /// Adds an encoded form of this server function error to the given base URL.
-    pub fn to_url(&self, base: &str) -> Result<Url, url::ParseError> {
-        let mut url = Url::parse(base)?;
-        url.query_pairs_mut()
-            .append_pair("__path", &self.path)
-            .append_pair("__err", &URL_SAFE.encode(self.error.ser()));
-        Ok(url)
-    }
-
-    /// Replaces any ServerFnUrlError info from the URL in the given string
-    /// with the serialized success value given.
-    pub fn strip_error_info(path: &mut String) {
-        if let Ok(mut url) = Url::parse(&*path) {
-            // NOTE: This is gross, but the Serializer you get from
-            // .query_pairs_mut() isn't an Iterator so you can't just .retain().
-            let pairs_previously = url
-                .query_pairs()
-                .map(|(k, v)| (k.to_string(), v.to_string()))
-                .collect::<Vec<_>>();
-            let mut pairs = url.query_pairs_mut();
-            pairs.clear();
-            for (key, value) in pairs_previously
-                .into_iter()
-                .filter(|(key, _)| key != "__path" && key != "__err")
-            {
-                pairs.append_pair(&key, &value);
-            }
-            drop(pairs);
-            *path = url.to_string();
-        }
-    }
-
-    /// Decodes an error from a URL.
-    pub fn decode_err(err: &str) -> E {
-        let decoded = match URL_SAFE.decode(err) {
-            Ok(decoded) => decoded,
-            Err(err) => {
-                return ServerFnError::Deserialization(err.to_string()).into_app_error();
-            }
-        };
-        E::de(decoded.into())
-    }
-}
-
-// impl<E> From<ServerFnUrlError<E>> for ServerFnError {
-//     fn from(error: ServerFnUrlError<E>) -> Self {
-//         error.error.into()
-//     }
-// }
-
-// impl From<ServerFnUrlError<ServerFnError>> for ServerFnError {
-//     fn from(error: ServerFnUrlError<ServerFnError>) -> Self {
-//         error.error
-//     }
-// }
-
 /// A trait for types that can be returned from a server function.
-pub trait FromServerFnError: std::fmt::Debug + Sized + 'static {
+pub trait FromServerFnError: Debug + Sized + 'static {
     /// The encoding strategy used to serialize and deserialize this error type. Must implement the [`Encodes`](server_fn::Encodes) trait for references to the error type.
     type Encoder: Encodes<Self> + Decodes<Self>;
 
@@ -362,4 +256,20 @@ fn assert_from_server_fn_error_impl() {
     fn assert_impl<T: FromServerFnError>() {}
 
     assert_impl::<ServerFnError>();
+}
+
+/// A helper trait to make it easier to return sensible types from server functions.
+pub trait ToServerFnErrExt: Sized {
+    fn or_not_found(self) -> Result<Self, ServerFnError>;
+    fn or_internal_server_err(self) -> Result<Self, ServerFnError>;
+}
+
+impl<T> ToServerFnErrExt for Option<T> {
+    fn or_not_found(self) -> Result<Self, ServerFnError> {
+        todo!()
+    }
+
+    fn or_internal_server_err(self) -> Result<Self, ServerFnError> {
+        todo!()
+    }
 }

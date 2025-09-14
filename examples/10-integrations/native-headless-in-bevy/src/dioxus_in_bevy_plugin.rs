@@ -166,7 +166,7 @@ impl render_graph::Node for TextureGetterNodeDriver {
         _graph: &mut RenderGraphContext,
         _render_context: &mut RenderContext,
         _world: &World,
-    ) -> Result<(), NodeRunError> {
+    ) -> bevy::prelude::Result<(), NodeRunError> {
         Ok(())
     }
 }

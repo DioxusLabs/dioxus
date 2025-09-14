@@ -1,6 +1,7 @@
 use dioxus::prelude::*;
 
-pub fn nav() -> Element {
+#[component]
+pub fn Nav() -> Element {
     rsx! {
         section { class: "relative",
             nav { class: "flex justify-between border-b",

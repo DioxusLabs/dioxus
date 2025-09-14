@@ -6,7 +6,33 @@ use http::{
 };
 use std::{borrow::Cow, future::Future};
 
-use crate::{error::IntoAppError, FromServerFnError, HybridError, HybridRequest, ServerFnError};
+// /// Request types for Axum.
+// // #[cfg(feature = "axum-no-default")]
+// // #[cfg(feature = "axum-no-default")]
+// #[cfg(feature = "server")]
+// pub mod axum_impl;
+
+// /// Request types for the browser.
+// #[cfg(feature = "browser")]
+// pub mod browser;
+// #[cfg(feature = "generic")]
+// pub mod generic;
+
+// /// Request types for [`reqwest`].
+// #[cfg(feature = "reqwest")]
+// pub mod reqwest;
+
+// Represents the request as received by the server.
+// pub trait Req<Error, InputStreamError = Error, OutputStreamError = Error>
+// where
+//     Self: Sized,
+// /// The response type for websockets.
+// type WebsocketResponse: Send;
+
+// The type used for URL-encoded form data in this client.
+// type FormData;
+
+use crate::{error::IntoAppError, FromServerFnError, HybridRequest, ServerFnError};
 
 impl ServerFnRequestExt for HybridRequest {
     fn uri(&self) -> &http::Uri {
@@ -360,7 +386,7 @@ async fn try_into_websocket(
     use axum::extract::{ws::Message, FromRequest};
     use futures::FutureExt;
 
-    type InputStreamError = HybridError;
+    type InputStreamError = ServerFnError;
 
     let upgrade = axum::extract::ws::WebSocketUpgrade::from_request(req, &())
         .await
@@ -424,29 +450,3 @@ async fn try_into_websocket(
 
     Ok((outgoing_rx, incoming_tx, response))
 }
-
-// /// Request types for Axum.
-// // #[cfg(feature = "axum-no-default")]
-// // #[cfg(feature = "axum-no-default")]
-// #[cfg(feature = "server")]
-// pub mod axum_impl;
-
-// /// Request types for the browser.
-// #[cfg(feature = "browser")]
-// pub mod browser;
-// #[cfg(feature = "generic")]
-// pub mod generic;
-
-// /// Request types for [`reqwest`].
-// #[cfg(feature = "reqwest")]
-// pub mod reqwest;
-
-// Represents the request as received by the server.
-// pub trait Req<Error, InputStreamError = Error, OutputStreamError = Error>
-// where
-//     Self: Sized,
-// /// The response type for websockets.
-// type WebsocketResponse: Send;
-
-// The type used for URL-encoded form data in this client.
-// type FormData;

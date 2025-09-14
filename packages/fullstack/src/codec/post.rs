@@ -1,7 +1,7 @@
 use super::{Encoding, FromReq, FromRes, IntoReq, IntoRes};
 use crate::{
     error::{FromServerFnError, IntoAppError, ServerFnError},
-    ContentType, Decodes, Encodes, HybridError, HybridResponse, ServerFnRequestExt,
+    ContentType, Decodes, Encodes, HybridResponse, ServerFnRequestExt,
 };
 use std::marker::PhantomData;
 
@@ -22,7 +22,7 @@ impl<T, Encoding> IntoReq<Post<Encoding>> for T
 where
     Encoding: Encodes<T>,
 {
-    fn into_req(self, path: &str, accepts: &str) -> Result<Request, HybridError> {
+    fn into_req(self, path: &str, accepts: &str) -> Result<Request, ServerFnError> {
         let data =
             Encoding::encode(&self).map_err(
                 |e| ServerFnError::Serialization(e.to_string()), /* .into_app_error() */
@@ -35,7 +35,7 @@ impl<T, Encoding> FromReq<Post<Encoding>> for T
 where
     Encoding: Decodes<T>,
 {
-    async fn from_req(req: Request) -> Result<Self, HybridError> {
+    async fn from_req(req: Request) -> Result<Self, ServerFnError> {
         let data = req.try_into_bytes().await?;
         let s =
             Encoding::decode(data).map_err(
@@ -50,7 +50,7 @@ where
     Encoding: Encodes<T>,
     T: Send,
 {
-    async fn into_res(self) -> Result<HybridResponse, HybridError> {
+    async fn into_res(self) -> Result<HybridResponse, ServerFnError> {
         let data =
             Encoding::encode(&self).map_err(
                 |e| ServerFnError::Serialization(e.to_string()), /* .into_app_error() */
@@ -64,12 +64,13 @@ impl<Encoding, T> FromRes<Post<Encoding>> for T
 where
     Encoding: Decodes<T>,
 {
-    async fn from_res(res: HybridResponse) -> Result<Self, HybridError> {
-        let data = res.try_into_bytes().await?;
-        let s =
-            Encoding::decode(data).map_err(
-                |e| ServerFnError::Deserialization(e.to_string()), /* .into_app_error() */
-            )?;
-        Ok(s)
+    async fn from_res(res: HybridResponse) -> Result<Self, ServerFnError> {
+        todo!()
+        // let data = res.try_into_bytes().await?;
+        // let s =
+        //     Encoding::decode(data).map_err(
+        //         |e| ServerFnError::Deserialization(e.to_string()), /* .into_app_error() */
+        //     )?;
+        // Ok(s)
     }
 }

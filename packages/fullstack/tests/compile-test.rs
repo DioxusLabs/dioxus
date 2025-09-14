@@ -1,3 +1,5 @@
+#![allow(unused_variables)]
+
 use anyhow::Result;
 use axum::extract::FromRequest;
 use axum::response::IntoResponse;

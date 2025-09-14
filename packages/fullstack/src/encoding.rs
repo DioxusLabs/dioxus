@@ -1,6 +1,6 @@
 use base64::{engine::general_purpose::STANDARD_NO_PAD, DecodeError, Engine};
 
-use crate::{FromServerFnError, ServerFnError};
+use crate::{error::FromServerFnError, ServerFnError};
 
 // use super::client::Client;
 // use super::codec::{Encoding, FromReq, FromRes, IntoReq, IntoRes};

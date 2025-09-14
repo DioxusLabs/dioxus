@@ -229,7 +229,7 @@ pub struct StoryItem {
     pub r#type: String,
 }
 
-pub async fn get_story(id: i64) -> dioxus::Result<StoryPageData> {
+pub async fn get_story(id: i64) -> Result<StoryPageData> {
     Ok(
         reqwest::get(&format!("{}{}{}.json", BASE_API_URL, ITEM_API, id))
             .await?

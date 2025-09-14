@@ -429,7 +429,7 @@ pub fn head_element_hydration_entry() -> SerializeContextEntry<bool> {
 ///
 /// Note that transporting a `Result<T, dioxus_core::Error>` will lose various aspects of the original
 /// `dioxus_core::Error` such as backtraces and source errors, but will preserve the error message.
-pub trait Transportable<M>: 'static {
+pub trait Transportable<M = ()>: 'static {
     fn transport_to_bytes(&self) -> Vec<u8>;
     fn transport_from_bytes(bytes: &[u8]) -> Result<Self, ciborium::de::Error<std::io::Error>>
     where

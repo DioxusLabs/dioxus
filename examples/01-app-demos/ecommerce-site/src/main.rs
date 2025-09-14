@@ -43,7 +43,7 @@ enum Route {
 fn Details(product_id: usize) -> Element {
     rsx! {
         div {
-            components::nav::nav {}
+            components::nav::Nav {}
             components::product_page::ProductPage {
                 product_id
             }

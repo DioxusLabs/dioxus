@@ -1,9 +1,27 @@
-#![allow(unused)]
-
+use chrono::{DateTime, Utc};
+use dioxus::prelude::Result;
+use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 
-use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
+// Cache up to 100 requests, invalidating them after 60 seconds
+pub(crate) async fn fetch_product(product_id: usize) -> Result<Product> {
+    Ok(
+        reqwest::get(format!("https://fakestoreapi.com/products/{product_id}"))
+            .await?
+            .json()
+            .await?,
+    )
+}
+
+// Cache up to 100 requests, invalidating them after 60 seconds
+pub(crate) async fn fetch_products(count: usize, sort: Sort) -> Result<Vec<Product>> {
+    Ok(reqwest::get(format!(
+        "https://fakestoreapi.com/products/?sort={sort}&limit={count}"
+    ))
+    .await?
+    .json()
+    .await?)
+}
 
 #[derive(Serialize, Deserialize, PartialEq, Clone, Debug, Default)]
 pub(crate) struct Product {
@@ -54,62 +72,14 @@ impl Display for Sort {
     }
 }
 
-// Cache up to 100 requests, invalidating them after 60 seconds
-pub(crate) async fn fetch_user_carts(user_id: usize) -> Result<Vec<Cart>, reqwest::Error> {
-    reqwest::get(format!(
-        "https://fakestoreapi.com/carts/user/{user_id}?startdate=2019-12-10&enddate=2023-01-01"
-    ))
-    .await?
-    .json()
-    .await
-}
-
-// Cache up to 100 requests, invalidating them after 60 seconds
-pub(crate) async fn fetch_user(user_id: usize) -> dioxus::Result<Product> {
-    Ok(
-        reqwest::get(format!("https://fakestoreapi.com/users/{user_id}"))
-            .await?
-            .json()
-            .await?,
-    )
-}
-
-// Cache up to 100 requests, invalidating them after 60 seconds
-pub(crate) async fn fetch_product(product_id: usize) -> dioxus::Result<Product> {
-    Ok(
-        reqwest::get(format!("https://fakestoreapi.com/products/{product_id}"))
-            .await?
-            .json()
-            .await?,
-    )
-}
-
-// Cache up to 100 requests, invalidating them after 60 seconds
-pub(crate) async fn fetch_products(count: usize, sort: Sort) -> dioxus::Result<Vec<Product>> {
-    Ok(reqwest::get(format!(
-        "https://fakestoreapi.com/products/?sort={sort}&limit={count}"
-    ))
-    .await?
-    .json()
-    .await?)
-}
-
 #[derive(Serialize, Deserialize)]
-pub(crate) struct User {
+struct User {
     id: usize,
     email: String,
     username: String,
     password: String,
     name: FullName,
     phone: String,
-}
-
-impl User {
-    async fn fetch_most_recent_cart(&self) -> Result<Option<Cart>, reqwest::Error> {
-        let all_carts = fetch_user_carts(self.id).await?;
-
-        Ok(all_carts.into_iter().max_by_key(|cart| cart.date))
-    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -119,7 +89,7 @@ struct FullName {
 }
 
 #[derive(Serialize, Deserialize, Clone)]
-pub(crate) struct Cart {
+struct Cart {
     id: usize,
     #[serde(rename = "userId")]
     user_id: usize,
@@ -128,29 +98,9 @@ pub(crate) struct Cart {
     date: DateTime<Utc>,
 }
 
-impl Cart {
-    async fn update_database(&mut self) -> Result<(), reqwest::Error> {
-        let id = self.id;
-        let client = reqwest::Client::new();
-        *self = client
-            .put(format!("https://fakestoreapi.com/carts/{id}"))
-            .send()
-            .await?
-            .json()
-            .await?;
-        Ok(())
-    }
-}
-
 #[derive(Serialize, Deserialize, Clone)]
-pub(crate) struct ProductInCart {
+struct ProductInCart {
     #[serde(rename = "productId")]
     product_id: usize,
     quantity: usize,
-}
-
-impl ProductInCart {
-    pub async fn fetch_product(&self) -> dioxus::Result<Product> {
-        fetch_product(self.product_id).await
-    }
 }

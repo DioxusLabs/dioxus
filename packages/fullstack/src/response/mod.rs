@@ -18,46 +18,46 @@ use bytes::Bytes;
 use futures::{FutureExt, Stream};
 use std::future::Future;
 
-use crate::{HybridError, HybridResponse};
+use crate::{HybridResponse, ServerFnError};
 
-impl HybridResponse {
-    /// Attempts to extract a UTF-8 string from an HTTP response.
-    pub async fn try_into_string(self) -> Result<String, HybridError> {
-        todo!()
-    }
+// impl HybridResponse {
+// /// Attempts to extract a UTF-8 string from an HTTP response.
+// pub async fn try_into_string(self) -> Result<String, ServerFnError> {
+//     todo!()
+// }
 
-    /// Attempts to extract a binary blob from an HTTP response.
-    pub async fn try_into_bytes(self) -> Result<Bytes, HybridError> {
-        todo!()
-    }
+// /// Attempts to extract a binary blob from an HTTP response.
+// pub async fn try_into_bytes(self) -> Result<Bytes, ServerFnError> {
+//     todo!()
+// }
 
-    /// Attempts to extract a binary stream from an HTTP response.
-    pub fn try_into_stream(
-        self,
-    ) -> Result<impl Stream<Item = Result<Bytes, Bytes>> + Send + Sync + 'static, HybridError> {
-        Ok(async { todo!() }.into_stream())
-    }
+// /// Attempts to extract a binary stream from an HTTP response.
+// pub fn try_into_stream(
+//     self,
+// ) -> Result<impl Stream<Item = Result<Bytes, Bytes>> + Send + Sync + 'static, ServerFnError> {
+//     Ok(async { todo!() }.into_stream())
+// }
 
-    /// HTTP status code of the response.
-    pub fn status(&self) -> u16 {
-        todo!()
-    }
+// /// HTTP status code of the response.
+// pub fn status(&self) -> u16 {
+//     todo!()
+// }
 
-    /// Status text for the status code.
-    pub fn status_text(&self) -> String {
-        todo!()
-    }
+// /// Status text for the status code.
+// pub fn status_text(&self) -> String {
+//     todo!()
+// }
 
-    /// The `Location` header or (if none is set), the URL of the response.
-    pub fn location(&self) -> String {
-        todo!()
-    }
+// /// The `Location` header or (if none is set), the URL of the response.
+// pub fn location(&self) -> String {
+//     todo!()
+// }
 
-    /// Whether the response has the [`REDIRECT_HEADER`](crate::redirect::REDIRECT_HEADER) set.
-    pub fn has_redirect(&self) -> bool {
-        todo!()
-    }
-}
+// /// Whether the response has the [`REDIRECT_HEADER`](crate::redirect::REDIRECT_HEADER) set.
+// pub fn has_redirect(&self) -> bool {
+//     todo!()
+// }
+// }
 
 pub trait IntoServerFnResponse<Marker> {}
 
@@ -75,7 +75,7 @@ impl IntoServerFnResponse<MyWebSocketMarker> for MyWebSocket {}
 // }
 
 pub struct DefaultEncodingMarker;
-impl<T: 'static> IntoServerFnResponse<DefaultEncodingMarker> for Result<T, HybridError> where
+impl<T: 'static> IntoServerFnResponse<DefaultEncodingMarker> for Result<T, ServerFnError> where
     T: serde::Serialize
 {
 }
@@ -102,7 +102,7 @@ fn handler_implicit() -> MyObject {
     todo!()
 }
 
-fn handler_implicit_result() -> Result<MyObject, HybridError> {
+fn handler_implicit_result() -> Result<MyObject, ServerFnError> {
     todo!()
 }
 

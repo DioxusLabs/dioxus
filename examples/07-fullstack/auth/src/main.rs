@@ -2,7 +2,6 @@
 mod auth;
 
 use dioxus::prelude::*;
-use dioxus::Result;
 
 fn main() {
     #[cfg(feature = "server")]

@@ -2,7 +2,7 @@
 
 use crate::{
     api::{fetch_products, Sort},
-    components::nav,
+    components::nav::Nav,
     components::product_item::ProductItem,
 };
 use dioxus::prelude::*;
@@ -11,7 +11,7 @@ pub(crate) fn Home() -> Element {
     let products = use_loader(|| fetch_products(10, Sort::Ascending))?;
 
     rsx! {
-        nav::nav {}
+        Nav {}
         section { class: "p-10",
             for product in products.iter() {
                 ProductItem {

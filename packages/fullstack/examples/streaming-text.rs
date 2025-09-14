@@ -1,5 +1,5 @@
 #![allow(non_snake_case)]
-use anyhow::{Context, Result};
+
 use dioxus::prelude::*;
 use dioxus_fullstack::Streaming;
 
@@ -10,7 +10,7 @@ fn main() {
 fn app() -> Element {
     let mut chat_response = use_signal(String::default);
 
-    let send_request = use_action(move |e: FormEvent| async move {
+    let mut send_request = use_action(move |e: FormEvent| async move {
         let value = e.values()["message-input"]
             .first()
             .cloned()
@@ -27,7 +27,7 @@ fn app() -> Element {
 
     rsx! {
         form {
-            onsubmit: *send_request,
+            onsubmit: move |e| send_request.dispatch(e),
             input { name: "message-input", placeholder: "Talk to your AI" }
             button { "Send" }
         }
@@ -35,6 +35,6 @@ fn app() -> Element {
 }
 
 #[post("/api/chat")]
-async fn get_chat_response(message: String) -> Result<Streaming<String>> {
+async fn get_chat_response(user_message: String) -> Result<Streaming<String>> {
     todo!()
 }

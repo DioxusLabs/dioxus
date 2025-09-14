@@ -14,14 +14,11 @@ use crate::{
     ServerFnError,
     // FromServerFnError, Protocol, ProvideServerContext, ServerFnError,
 };
-
 // use super::client::Client;
 use super::codec::Encoding;
 // use super::codec::{Encoding, FromReq, FromRes, IntoReq, IntoRes};
-
 // #[cfg(feature = "form-redirects")]
 // use super::error::ServerFnUrlError;
-
 // use super::middleware::{BoxedService, Layer, Service};
 use super::redirect::call_redirect_hook;
 // use super::response::{Res, TryRes};
@@ -30,7 +27,6 @@ use bytes::{BufMut, Bytes, BytesMut};
 use dashmap::DashMap;
 use futures::{pin_mut, SinkExt, Stream, StreamExt};
 use http::{method, Method};
-
 // use super::server::Server;
 use std::{
     fmt::{Debug, Display},
@@ -40,9 +36,6 @@ use std::{
     pin::Pin,
     sync::{Arc, LazyLock},
 };
-
-type Req = HybridRequest;
-type Res = HybridResponse;
 
 #[derive(Clone, Default)]
 pub struct DioxusServerState {}
@@ -73,7 +66,7 @@ impl ServerFunction {
             path,
             method,
             handler,
-            serde_err: |e| HybridError::from_server_fn_error(e).ser(),
+            serde_err: |e| ServerFnError::from_server_fn_error(e).ser(),
             // middleware: match middlewares {
             //     Some(m) => m,
             //     None => default_middlewares,
@@ -91,34 +84,15 @@ impl ServerFunction {
         self.method.clone()
     }
 
-    // /// The handler for this server function.
-    // pub fn handler(&self, req: Req) -> impl Future<Output = Res> + Send {
-    //     (self.handler)()(req)
-    // }
+    /// The handler for this server function.
+    pub fn handler(&self) -> fn() -> MethodRouter<DioxusServerState> {
+        self.handler
+    }
 
     // /// The set of middleware that should be applied to this function.
     // pub fn middleware(&self) -> MiddlewareSet<Req, Res> {
     //     (self.middleware)()
     // }
-
-    pub async fn serve(dioxus_app: fn() -> Element) {
-        // let port = std::env::var("PORT")
-        //     .ok()
-        //     .and_then(|p| p.parse().ok())
-        //     .unwrap_or(3000);
-
-        // let ip = std::env::var("IP").unwrap_or_else(|_| "0.0.0.0".into());
-        let port = 3000;
-        let ip = "127.0.0.1".to_string();
-
-        let listener = tokio::net::TcpListener::bind((ip.as_str(), port))
-            .await
-            .expect("Failed to bind to address");
-
-        let app = Self::into_router(dioxus_app);
-        println!("Listening on http://{}:{}", ip, port);
-        axum::serve(listener, app).await.unwrap();
-    }
 
     /// Create a router with all registered server functions and the render handler at `/` (basepath).
     ///
@@ -190,8 +164,6 @@ impl ServerFunction {
         };
         use http::header::*;
 
-        todo!()
-
         // let (parts, body) = req.into_parts();
         // let req = Request::from_parts(parts.clone(), body);
 
@@ -246,10 +218,8 @@ impl ServerFunction {
         // server_context.send_response(&mut res);
 
         // res
-    }
 
-    pub(crate) fn collect_static() -> Vec<&'static ServerFunction> {
-        inventory::iter::<ServerFunction>().collect()
+        todo!()
     }
 }
 
@@ -262,29 +232,9 @@ impl inventory::Collect for ServerFunction {
 }
 
 pub type HybridRequest = http::Request<axum::body::Body>;
-
-pub struct HybridResponse {
-    pub(crate) res: http::Response<axum::body::Body>,
-}
-
-pub struct HybridStreamError {}
-pub type HybridError = ServerFnError;
+pub type HybridResponse = http::Response<axum::body::Body>;
 
 type LazyServerFnMap = LazyLock<DashMap<(String, Method), ServerFunction>>;
-
-/// Explicitly register a server function. This is only necessary if you are
-// /// running the server in a WASM environment (or a rare environment that the
-// /// `inventory` crate won't work in.).
-// pub fn register_explicit<T>()
-// where
-//     T: ServerFn + 'static,
-// {
-//     REGISTERED_SERVER_FUNCTIONS.insert(
-//         (T::PATH.into(), T::METHOD),
-//         ServerFnTraitObj::new(T::METHOD, T::PATH, |req| Box::pin(T::run_on_server(req))),
-//         // ServerFnTraitObj::new::<T>(|req| Box::pin(T::run_on_server(req))),
-//     );
-// }
 
 /// The set of all registered server function paths.
 pub fn server_fn_paths() -> impl Iterator<Item = (&'static str, Method)> {
@@ -292,6 +242,13 @@ pub fn server_fn_paths() -> impl Iterator<Item = (&'static str, Method)> {
         .iter()
         .map(|item| (item.path(), item.method()))
 }
+
+static REGISTERED_SERVER_FUNCTIONS: LazyServerFnMap = std::sync::LazyLock::new(|| {
+    crate::inventory::iter::<ServerFunction>
+        .into_iter()
+        .map(|obj| ((obj.path().to_string(), obj.method()), obj.clone()))
+        .collect()
+});
 
 // /// An Axum handler that responds to a server function request.
 // pub async fn handle_server_fn(req: HybridRequest) -> HybridResponse {
@@ -334,9 +291,16 @@ pub fn server_fn_paths() -> impl Iterator<Item = (&'static str, Method)> {
 //     })
 // }
 
-static REGISTERED_SERVER_FUNCTIONS: LazyServerFnMap = std::sync::LazyLock::new(|| {
-    crate::inventory::iter::<ServerFunction>
-        .into_iter()
-        .map(|obj| ((obj.path().to_string(), obj.method()), obj.clone()))
-        .collect()
-});
+// /// Explicitly register a server function. This is only necessary if you are
+// /// running the server in a WASM environment (or a rare environment that the
+// /// `inventory` crate won't work in.).
+// pub fn register_explicit<T>()
+// where
+//     T: ServerFn + 'static,
+// {
+//     REGISTERED_SERVER_FUNCTIONS.insert(
+//         (T::PATH.into(), T::METHOD),
+//         ServerFnTraitObj::new(T::METHOD, T::PATH, |req| Box::pin(T::run_on_server(req))),
+//         // ServerFnTraitObj::new::<T>(|req| Box::pin(T::run_on_server(req))),
+//     );
+// }
