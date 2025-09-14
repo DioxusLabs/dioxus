@@ -45,7 +45,7 @@ async fn through_serverfn_err(user_message: String) -> Result<i32, ServerFnError
 }
 
 #[derive(thiserror::Error, Debug)]
-enum MyError {
+enum CustomIntoResponseError {
     #[error("I/O error: {0}")]
     Eat(#[from] std::io::Error),
 
@@ -56,19 +56,19 @@ enum MyError {
     Code(String),
 }
 
-impl IntoResponse for MyError {
+impl IntoResponse for CustomIntoResponseError {
     fn into_response(self) -> axum::response::Response {
         todo!()
     }
 }
 
 #[post("/api/chat")]
-async fn custom_errors(user_message: String) -> Result<i32, MyError> {
+async fn custom_errors(user_message: String) -> Result<i32, CustomIntoResponseError> {
     todo!()
 }
 
 #[derive(thiserror::Error, Serialize, Deserialize, Debug)]
-pub enum MyError2 {
+pub enum CustomFromServerfnError {
     #[error("I/O error: {0}")]
     FailedToEat(String),
 
@@ -83,11 +83,15 @@ pub enum MyError2 {
 }
 
 #[post("/api/chat")]
-async fn through_serverfn_result(user_message: String) -> Result<i32, MyError2> {
-    let abc = std::fs::read_to_string("does_not_exist.txt")
-        .or_else(|e| Err(MyError2::FailedToEat(format!("Failed to read file: {}", e))))?;
+async fn through_serverfn_result(user_message: String) -> Result<i32, CustomFromServerfnError> {
+    let abc = std::fs::read_to_string("does_not_exist.txt").or_else(|e| {
+        Err(CustomFromServerfnError::FailedToEat(format!(
+            "Failed to read file: {}",
+            e
+        )))
+    })?;
 
-    let t = Some("yay").ok_or_else(|| MyError2::FailedToCode("no yay".into()))?;
+    let t = Some("yay").ok_or_else(|| CustomFromServerfnError::FailedToCode("no yay".into()))?;
 
     todo!()
 }

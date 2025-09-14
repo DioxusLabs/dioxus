@@ -9,27 +9,19 @@
 // dependency on `bytes`
 pub use bytes::Bytes;
 pub use client::{get_server_url, set_server_url};
-pub use error::{FromServerFnError, ServerFnError, ServerFnResult};
+pub use error::{ServerFnError, ServerFnResult};
 
-pub use crate::config::{ServeConfig, ServeConfigBuilder};
-pub use crate::context::Axum;
-pub use crate::server::*;
 pub(crate) use config::*;
 pub use config::*;
+pub use config::{ServeConfig, ServeConfigBuilder};
+pub use context::Axum;
 pub use context::{
     extract, server_context, with_server_context, DioxusServerContext, FromContext,
     FromServerContext, ProvideServerContext,
 };
 pub use dioxus_isrg::{IncrementalRenderer, IncrementalRendererConfig};
 pub use document::ServerDocument;
-
-pub use error::ToServerFnErrExt;
-
-#[cfg(not(target_arch = "wasm32"))]
-mod launch;
-
-#[cfg(not(target_arch = "wasm32"))]
-pub use launch::{launch, launch_cfg};
+pub use server::*;
 
 pub use axum;
 #[doc(hidden)]
@@ -40,18 +32,91 @@ pub use http;
 #[doc(hidden)]
 pub use inventory;
 #[doc(hidden)]
+pub use serde;
+#[doc(hidden)]
 pub use xxhash_rust;
 
-pub mod hooks;
-pub use hooks::*;
+// #![deny(missing)]
+
+// #[doc(hidden)]
+// #[cfg(feature = "serde-lite")]
+// pub use serde_lite;
+
+#[cfg(feature = "axum-no-default")]
+#[doc(hidden)]
+pub use ::axum as axum_export;
+
+// #[cfg(feature = "generic")]
+// #[doc(hidden)]
+// pub use ::bytes as bytes_export;
+// #[cfg(feature = "generic")]
+// #[doc(hidden)]
+// pub use ::http as http_export;
+// #[cfg(feature = "rkyv")]
+// pub use rkyv;
+
+// pub mod server_fn {
+//     // pub use crate::{
+//     //     client,
+//     //     client::{get_server_url, set_server_url},
+//     //     codec, server, BoxedStream, ContentType, Decodes, Encodes, Format, FormatType, ServerFn,
+//     //     Websocket,
+//     // };
+//     pub use serde;
+// }
+
+#[cfg(not(target_arch = "wasm32"))]
+mod launch;
+
+#[cfg(not(target_arch = "wasm32"))]
+pub use launch::{launch, launch_cfg};
 
 pub mod req_from;
 pub mod req_to;
 pub use req_from::*;
 pub use req_to::*;
 
-pub use fetch::*;
-pub mod fetch;
+mod serverfn;
+pub use serverfn::*;
+
+// mod encoding;
+// pub use encoding::*;
+
+pub use dioxus_fullstack_hooks::history::provide_fullstack_history_context;
+
+#[doc(inline)]
+pub use dioxus_fullstack_hooks::*;
+
+#[doc(inline)]
+pub use dioxus_fullstack_macro::*;
+
+/// Implementations of the client side of the server function call.
+pub mod client;
+pub use client::*;
+
+/// Implementations of the server side of the server function call.
+pub mod server;
+
+/// Encodings for arguments and results.
+pub mod codec;
+
+#[macro_use]
+/// Error types and utilities.
+pub mod error;
+pub use error::*;
+
+/// Utilities to allow client-side redirects.
+pub mod redirect;
+
+/// Types and traits for HTTP responses.
+// pub mod response;
+pub mod config;
+pub mod context;
+
+pub(crate) mod document;
+pub(crate) mod ssr;
+
+pub mod prelude {}
 
 mod helpers {
     pub mod sse;
@@ -70,95 +135,9 @@ mod helpers {
 
     pub mod state;
     pub use state::*;
+
+    pub mod upload;
+    pub use upload::*;
 }
 
 pub use helpers::*;
-
-mod serverfn;
-pub use serverfn::*;
-
-mod encoding;
-pub use encoding::*;
-
-pub use dioxus_fullstack_hooks::history::provide_fullstack_history_context;
-
-#[doc(inline)]
-pub use dioxus_fullstack_hooks::*;
-
-#[doc(inline)]
-pub use dioxus_fullstack_macro::*;
-
-/// Implementations of the client side of the server function call.
-pub mod client;
-
-/// Implementations of the server side of the server function call.
-pub mod server;
-
-/// Encodings for arguments and results.
-pub mod codec;
-
-#[macro_use]
-/// Error types and utilities.
-pub mod error;
-
-/// Utilities to allow client-side redirects.
-pub mod redirect;
-/// Types and traits for  for HTTP requests.
-pub mod request;
-pub use request::ServerFnRequestExt;
-
-/// Types and traits for HTTP responses.
-pub mod response;
-
-pub mod config;
-pub mod context;
-
-pub(crate) mod document;
-pub(crate) mod render;
-
-// #![deny(missing)]
-
-// #[doc(hidden)]
-// #[cfg(feature = "serde-lite")]
-// pub use serde_lite;
-
-// pub mod server_fn {
-//     // pub use crate::{
-//     //     client,
-//     //     client::{get_server_url, set_server_url},
-//     //     codec, server, BoxedStream, ContentType, Decodes, Encodes, Format, FormatType, ServerFn,
-//     //     Websocket,
-//     // };
-//     pub use serde;
-// }
-
-#[cfg(feature = "axum-no-default")]
-#[doc(hidden)]
-pub use ::axum as axum_export;
-
-// #[cfg(feature = "generic")]
-// #[doc(hidden)]
-// pub use ::bytes as bytes_export;
-// #[cfg(feature = "generic")]
-// #[doc(hidden)]
-// pub use ::http as http_export;
-// #[cfg(feature = "rkyv")]
-// pub use rkyv;
-
-#[doc(hidden)]
-pub use serde;
-
-pub mod prelude {
-    use dioxus_core::RenderError;
-    use dioxus_hooks::Loader;
-    use dioxus_hooks::Resource;
-    use dioxus_signals::Signal;
-    use std::{marker::PhantomData, prelude::rust_2024::Future};
-
-    pub use crate::hooks::*;
-    pub use crate::layer;
-    pub use crate::middleware;
-    pub use http::Request;
-
-    // pub use crate::state::ServerState;
-}

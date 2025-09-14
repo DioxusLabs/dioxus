@@ -1,8 +1,20 @@
 use dioxus_core::{CapturedError, RenderError, Result};
 // use cr::Resource;
+use std::{
+    cell::RefCell,
+    ops::Deref,
+    sync::{atomic::AtomicBool, Arc},
+};
+
+use dioxus_core::{
+    current_scope_id, spawn_isomorphic, IntoAttributeValue, IntoDynNode, ReactiveContext, ScopeId,
+    Subscribers,
+};
 use dioxus_signals::{
     read_impls, CopyValue, ReadSignal, Readable, ReadableExt, ReadableRef, Signal, WritableExt,
 };
+use futures_util::StreamExt;
+use generational_box::{AnyStorage, BorrowResult, UnsyncStorage};
 use std::{marker::PhantomData, prelude::rust_2024::Future};
 
 /// A hook to create a resource that loads data asynchronously.
@@ -68,19 +80,6 @@ impl<T> Clone for LoaderHandle<T> {
     }
 }
 impl<T> Copy for LoaderHandle<T> {}
-
-use std::{
-    cell::RefCell,
-    ops::Deref,
-    sync::{atomic::AtomicBool, Arc},
-};
-
-use dioxus_core::{
-    current_scope_id, spawn_isomorphic, IntoAttributeValue, IntoDynNode, ReactiveContext, ScopeId,
-    Subscribers,
-};
-use futures_util::StreamExt;
-use generational_box::{AnyStorage, BorrowResult, UnsyncStorage};
 
 pub struct Loader<T> {
     inner: Signal<T>,

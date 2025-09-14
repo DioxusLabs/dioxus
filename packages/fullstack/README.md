@@ -29,36 +29,24 @@ Fullstack utilities for the [`Dioxus`](https://dioxuslabs.com) framework.
 - Passing root props from the server to the client.
 
 # Example
-
-Full stack Dioxus in under 30 lines of code
+Quickly build fullstack Rust apps with axum and dioxus.
 
 ```rust, no_run
-#![allow(non_snake_case)]
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus::launch(App);
-}
+    dioxus::launch(|| {
+        let mut meaning = use_action(|| get_meaning("life the universe and everything".into()));
 
-#[component]
-fn App() -> Element {
-    let mut meaning = use_signal(|| None);
-
-    rsx! {
-        h1 { "Meaning of life: {meaning:?}" }
-        button {
-            onclick: move |_| async move {
-                if let Ok(data) = get_meaning("life the universe and everything".into()).await {
-                    meaning.set(data);
-                }
-            },
-            "Run a server function"
+        rsx! {
+            h1 { "Meaning of life: {meaning:?}" }
+            button { onclick: move |_| meaning.call(()), "Run a server function" }
         }
-    }
+    });
 }
 
-#[server]
-async fn get_meaning(of: String) -> ServerFnResult<Option<u32>> {
+#[get("/meaning/?of")]
+async fn get_meaning(of: String) -> Result<Option<u32>> {
     Ok(of.contains("life").then(|| 42))
 }
 ```

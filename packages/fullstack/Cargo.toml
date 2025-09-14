@@ -16,7 +16,7 @@ dioxus-fullstack-macro = { workspace = true }
 anyhow = { workspace = true }
 
 # axum
-axum = { workspace = true, optional = true }
+axum = { workspace = true, optional = true, features = ["multipart", "ws"]}
 tower-http = { workspace = true, optional = true, features = ["fs"] }
 
 dioxus-core = { workspace = true }

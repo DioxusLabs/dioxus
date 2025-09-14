@@ -1,21 +1,18 @@
 use crate::{
-    render::{SSRError, SsrRendererPool},
-    with_server_context, DioxusServerContext, ServeConfig,
+    ssr::{SSRError, SsrRendererPool},
+    ContextProviders, DioxusServerContext, ServeConfig, ServerFunction,
 };
-use crate::{ContextProviders, ProvideServerContext};
-use axum::body;
-use axum::extract::State;
-use axum::routing::*;
 use axum::{
+    body,
     body::Body,
+    extract::State,
     http::{Request, Response, StatusCode},
     response::IntoResponse,
+    routing::*,
 };
+use dioxus_core::{Element, VirtualDom};
 use dioxus_isrg::RenderFreshness;
 use futures::Stream;
-
-use crate::ServerFunction;
-use dioxus_core::{Element, VirtualDom};
 use http::header::*;
 use std::path::Path;
 use std::sync::Arc;

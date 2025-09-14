@@ -3,31 +3,26 @@ use base64::{engine::general_purpose::STANDARD_NO_PAD, DecodeError, Engine};
 use dioxus_core::{Element, VirtualDom};
 
 use crate::{
-    ContentType,
     ContextProviders,
-    Decodes,
     DioxusServerContext,
-    Encodes,
-    FormatType,
-    FromServerFnError,
     ProvideServerContext,
     ServerFnError,
     // FromServerFnError, Protocol, ProvideServerContext, ServerFnError,
 };
 // use super::client::Client;
-use super::codec::Encoding;
+// use super::codec::Encoding;
 // use super::codec::{Encoding, FromReq, FromRes, IntoReq, IntoRes};
 // #[cfg(feature = "form-redirects")]
 // use super::error::ServerFnUrlError;
 // use super::middleware::{BoxedService, Layer, Service};
-use super::redirect::call_redirect_hook;
 // use super::response::{Res, TryRes};
 // use super::response::{ClientRes, Res, TryRes};
+// use super::server::Server;
+use super::redirect::call_redirect_hook;
 use bytes::{BufMut, Bytes, BytesMut};
 use dashmap::DashMap;
 use futures::{pin_mut, SinkExt, Stream, StreamExt};
 use http::{method, Method};
-// use super::server::Server;
 use std::{
     fmt::{Debug, Display},
     future::Future,
@@ -46,7 +41,7 @@ pub struct ServerFunction {
     path: &'static str,
     method: Method,
     handler: fn() -> MethodRouter<DioxusServerState>,
-    serde_err: fn(ServerFnError) -> Bytes,
+    // serde_err: fn(ServerFnError) -> Bytes,
     // pub(crate) middleware: fn() -> MiddlewareSet<Req, Res>,
 }
 
@@ -66,7 +61,8 @@ impl ServerFunction {
             path,
             method,
             handler,
-            serde_err: |e| ServerFnError::from_server_fn_error(e).ser(),
+            // serde_err: |e| todo!(),
+            // serde_err: |e| ServerFnError::from_server_fn_error(e).ser(),
             // middleware: match middlewares {
             //     Some(m) => m,
             //     None => default_middlewares,
@@ -90,7 +86,7 @@ impl ServerFunction {
     }
 
     // /// The set of middleware that should be applied to this function.
-    // pub fn middleware(&self) -> MiddlewareSet<Req, Res> {
+    // pub fn middleware(&self) -> Vec {
     //     (self.middleware)()
     // }
 
@@ -164,37 +160,35 @@ impl ServerFunction {
         };
         use http::header::*;
 
-        // let (parts, body) = req.into_parts();
-        // let req = Request::from_parts(parts.clone(), body);
+        let (parts, body) = req.into_parts();
+        let req = Request::from_parts(parts.clone(), body);
 
-        // // Create the server context with info from the request
-        // let server_context = DioxusServerContext::new(parts);
+        // Create the server context with info from the request
+        let server_context = DioxusServerContext::new(parts);
 
-        // // Provide additional context from the render state
-        // server_context.add_server_context(&additional_context);
+        // Provide additional context from the render state
+        server_context.add_server_context(&additional_context);
 
-        // // store Accepts and Referrer in case we need them for redirect (below)
-        // let referrer = req.headers().get(REFERER).cloned();
-        // let accepts_html = req
-        //     .headers()
-        //     .get(ACCEPT)
-        //     .and_then(|v| v.to_str().ok())
-        //     .map(|v| v.contains("text/html"))
-        //     .unwrap_or(false);
+        // store Accepts and Referrer in case we need them for redirect (below)
+        let referrer = req.headers().get(REFERER).cloned();
+        let accepts_html = req
+            .headers()
+            .get(ACCEPT)
+            .and_then(|v| v.to_str().ok())
+            .map(|v| v.contains("text/html"))
+            .unwrap_or(false);
 
-        // // // this is taken from server_fn source...
-        // // //
-        // // // [`server_fn::axum::get_server_fn_service`]
-        // // let mut service = {
-        // //     let middleware = self.middleware();
-        // //     let mut service = self.clone().boxed();
-        // //     for middleware in middleware {
-        // //         service = middleware.layer(service);
-        // //     }
-        // //     service
-        // // };
-
-        // let req = crate::HybridRequest { req };
+        // // this is taken from server_fn source...
+        // //
+        // // [`server_fn::axum::get_server_fn_service`]
+        // let mut service = {
+        //     let middleware = self.middleware();
+        //     let mut service = self.clone().boxed();
+        //     for middleware in middleware {
+        //         service = middleware.layer(service);
+        //     }
+        //     service
+        // };
 
         // // actually run the server fn (which may use the server context)
         // let fut = crate::with_server_context(server_context.clone(), || service.run(req));
@@ -231,10 +225,8 @@ impl inventory::Collect for ServerFunction {
     }
 }
 
-pub type HybridRequest = http::Request<axum::body::Body>;
-pub type HybridResponse = http::Response<axum::body::Body>;
-
-type LazyServerFnMap = LazyLock<DashMap<(String, Method), ServerFunction>>;
+pub type AxumRequest = http::Request<axum::body::Body>;
+pub type AxumResponse = http::Response<axum::body::Body>;
 
 /// The set of all registered server function paths.
 pub fn server_fn_paths() -> impl Iterator<Item = (&'static str, Method)> {
@@ -243,6 +235,7 @@ pub fn server_fn_paths() -> impl Iterator<Item = (&'static str, Method)> {
         .map(|item| (item.path(), item.method()))
 }
 
+type LazyServerFnMap = LazyLock<DashMap<(String, Method), ServerFunction>>;
 static REGISTERED_SERVER_FUNCTIONS: LazyServerFnMap = std::sync::LazyLock::new(|| {
     crate::inventory::iter::<ServerFunction>
         .into_iter()

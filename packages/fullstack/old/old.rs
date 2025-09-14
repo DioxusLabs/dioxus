@@ -1553,3 +1553,374 @@ impl<E: FromServerFnError> ServerFnUrlError<E> {
         E::de(decoded.into())
     }
 }
+
+
+// impl HybridResponse {
+// /// Attempts to extract a UTF-8 string from an HTTP response.
+// pub async fn try_into_string(self) -> Result<String, ServerFnError> {
+//     todo!()
+// }
+
+// /// Attempts to extract a binary blob from an HTTP response.
+// pub async fn try_into_bytes(self) -> Result<Bytes, ServerFnError> {
+//     todo!()
+// }
+
+// /// Attempts to extract a binary stream from an HTTP response.
+// pub fn try_into_stream(
+//     self,
+// ) -> Result<impl Stream<Item = Result<Bytes, Bytes>> + Send + Sync + 'static, ServerFnError> {
+//     Ok(async { todo!() }.into_stream())
+// }
+
+// /// HTTP status code of the response.
+// pub fn status(&self) -> u16 {
+//     todo!()
+// }
+
+// /// Status text for the status code.
+// pub fn status_text(&self) -> String {
+//     todo!()
+// }
+
+// /// The `Location` header or (if none is set), the URL of the response.
+// pub fn location(&self) -> String {
+//     todo!()
+// }
+
+// /// Whether the response has the [`REDIRECT_HEADER`](crate::redirect::REDIRECT_HEADER) set.
+// pub fn has_redirect(&self) -> bool {
+//     todo!()
+// }
+// }
+
+
+
+fn it_works() {
+    // let a = verify(handler_implicit);
+    let a = verify(handler_explicit);
+    let b = verify(handler_implicit_result);
+
+    // <handler_explicit as IntoServerFnResponse<AxumMarker>>;
+}
+
+fn verify<M, F: IntoServerFnResponse<M>>(f: impl Fn() -> F) -> M {
+    todo!()
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct MyObject {
+    id: i32,
+    name: String,
+}
+
+fn handler_implicit() -> MyObject {
+    todo!()
+}
+
+fn handler_implicit_result() -> Result<MyObject, ServerFnError> {
+    todo!()
+}
+
+fn handler_explicit() -> Json<MyObject> {
+    todo!()
+}
+
+// pub struct DefaultJsonEncoder<T>(std::marker::PhantomData<T>);
+
+// /// Represents the response as created by the server;
+// pub trait Res {
+//     /// Converts an error into a response, with a `500` status code and the error text as its body.
+//     fn error_response(path: &str, err: Bytes) -> Self;
+
+//     /// Redirect the response by setting a 302 code and Location header.
+//     fn redirect(&mut self, path: &str);
+// }
+
+// /// Represents the response as received by the client.
+// pub trait ClientRes<E> {
+//     /// Attempts to extract a UTF-8 string from an HTTP response.
+//     fn try_into_string(self) -> impl Future<Output = Result<String, E>> + Send;
+
+//     /// Attempts to extract a binary blob from an HTTP response.
+//     fn try_into_bytes(self) -> impl Future<Output = Result<Bytes, E>> + Send;
+
+//     /// Attempts to extract a binary stream from an HTTP response.
+//     fn try_into_stream(
+//         self,
+//     ) -> Result<impl Stream<Item = Result<Bytes, Bytes>> + Send + Sync + 'static, E>;
+
+//     /// HTTP status code of the response.
+//     fn status(&self) -> u16;
+
+//     /// Status text for the status code.
+//     fn status_text(&self) -> String;
+
+//     /// The `Location` header or (if none is set), the URL of the response.
+//     fn location(&self) -> String;
+
+//     /// Whether the response has the [`REDIRECT_HEADER`](crate::redirect::REDIRECT_HEADER) set.
+//     fn has_redirect(&self) -> bool;
+// }
+
+// /// A mocked response type that can be used in place of the actual server response,
+// /// when compiling for the browser.
+// ///
+// /// ## Panics
+// /// This always panics if its methods are called. It is used solely to stub out the
+// /// server response type when compiling for the client.
+// pub struct BrowserMockRes;
+
+// impl<E> TryRes<E> for BrowserMockRes {
+//     fn try_from_string(_content_type: &str, _data: String) -> Result<Self, E> {
+//         unreachable!()
+//     }
+
+//     fn try_from_bytes(_content_type: &str, _data: Bytes) -> Result<Self, E> {
+//         unreachable!()
+//     }
+
+//     fn try_from_stream(
+//         _content_type: &str,
+//         _data: impl Stream<Item = Result<Bytes, Bytes>>,
+//     ) -> Result<Self, E> {
+//         unreachable!()
+//     }
+// }
+
+// impl Res for BrowserMockRes {
+//     fn error_response(_path: &str, _err: Bytes) -> Self {
+//         unreachable!()
+//     }
+
+//     fn redirect(&mut self, _path: &str) {
+//         unreachable!()
+//     }
+// }
+
+// /// Represents the response as created by the server;
+// pub trait TryRes<E>
+// where
+//     Self: Sized,
+// {
+//     /// Attempts to convert a UTF-8 string into an HTTP response.
+//     fn try_from_string(content_type: &str, data: String) -> Result<Self, E>;
+
+//     /// Attempts to convert a binary blob represented as bytes into an HTTP response.
+//     fn try_from_bytes(content_type: &str, data: Bytes) -> Result<Self, E>;
+
+//     /// Attempts to convert a stream of bytes into an HTTP response.
+//     fn try_from_stream(
+//         content_type: &str,
+//         data: impl Stream<Item = Result<Bytes, Bytes>> + Send + 'static,
+//     ) -> Result<Self, E>;
+// }
+
+
+use crate::ServerFnError;
+
+pub trait IntoServerFnResponse<Marker> {}
+
+pub struct AxumMarker;
+impl<T> IntoServerFnResponse<AxumMarker> for T where T: axum::response::IntoResponse {}
+
+pub struct MyWebSocket {}
+pub struct MyWebSocketMarker;
+impl IntoServerFnResponse<MyWebSocketMarker> for MyWebSocket {}
+
+pub struct DefaultEncodingMarker;
+impl<T: 'static> IntoServerFnResponse<DefaultEncodingMarker> for Result<T, ServerFnError> where
+    T: serde::Serialize
+{
+}
+
+
+#[doc(hidden)]
+#[rustversion::attr(
+    since(1.78),
+    diagnostic::on_unimplemented(
+        message = "{Self} is not a `Result` or aliased `Result`. Server \
+                   functions must return a `Result` or aliased `Result`.",
+        label = "Must return a `Result` or aliased `Result`.",
+        note = "If you are trying to return an alias of `Result`, you must \
+                also implement `FromServerFnError` for the error type."
+    )
+)]
+/// A trait for extracting the error and ok types from a [`Result`]. This is used to allow alias types to be returned from server functions.
+pub trait ServerFnMustReturnResult {
+    /// The error type of the [`Result`].
+    type Err;
+    /// The ok type of the [`Result`].
+    type Ok;
+}
+
+#[doc(hidden)]
+impl<T, E> ServerFnMustReturnResult for Result<T, E> {
+    type Err = E;
+    type Ok = T;
+}
+
+
+// use super::{Res, TryRes};
+use crate::error::{FromServerFnError, IntoAppError, ServerFnError, SERVER_FN_ERROR_HEADER};
+// ServerFnErrorWrapper,
+use axum::body::Body;
+use bytes::Bytes;
+use futures::{Stream, TryStreamExt};
+use http::{header, HeaderValue, Response, StatusCode};
+
+// impl<E> TryRes<E> for Response<Body>
+// where
+//     E: Send + Sync + FromServerFnError,
+// {
+//     fn try_from_string(content_type: &str, data: String) -> Result<Self, E> {
+//         let builder = http::Response::builder();
+//         builder
+//             .status(200)
+//             .header(http::header::CONTENT_TYPE, content_type)
+//             .body(Body::from(data))
+//             .map_err(|e| ServerFnError::Response(e.to_string()).into_app_error())
+//     }
+
+//     fn try_from_bytes(content_type: &str, data: Bytes) -> Result<Self, E> {
+//         let builder = http::Response::builder();
+//         builder
+//             .status(200)
+//             .header(http::header::CONTENT_TYPE, content_type)
+//             .body(Body::from(data))
+//             .map_err(|e| ServerFnError::Response(e.to_string()).into_app_error())
+//     }
+
+//     fn try_from_stream(
+//         content_type: &str,
+//         data: impl Stream<Item = Result<Bytes, Bytes>> + Send + 'static,
+//     ) -> Result<Self, E> {
+//         let body = Body::from_stream(data.map_err(|e| ServerFnErrorWrapper(E::de(e))));
+//         let builder = http::Response::builder();
+//         builder
+//             .status(200)
+//             .header(http::header::CONTENT_TYPE, content_type)
+//             .body(body)
+//             .map_err(|e| ServerFnError::Response(e.to_string()).into_app_error())
+//     }
+// }
+
+// impl Res for Response<Body> {
+//     fn error_response(path: &str, err: Bytes) -> Self {
+//         Response::builder()
+//             .status(http::StatusCode::INTERNAL_SERVER_ERROR)
+//             .header(SERVER_FN_ERROR_HEADER, path)
+//             .body(err.into())
+//             .unwrap()
+//     }
+
+//     fn redirect(&mut self, path: &str) {
+//         if let Ok(path) = HeaderValue::from_str(path) {
+//             self.headers_mut().insert(header::LOCATION, path);
+//             *self.status_mut() = StatusCode::FOUND;
+//         }
+//     }
+// }
+
+
+use super::ClientRes;
+use crate::{
+    error::{FromServerFnError, IntoAppError, ServerFnError},
+    redirect::REDIRECT_HEADER,
+};
+use bytes::Bytes;
+use futures::{Stream, StreamExt};
+pub use gloo_net::http::Response;
+use http::{HeaderMap, HeaderName, HeaderValue};
+use js_sys::Uint8Array;
+use send_wrapper::SendWrapper;
+use std::{future::Future, str::FromStr};
+use wasm_bindgen::JsCast;
+use wasm_streams::ReadableStream;
+
+/// The response to a `fetch` request made in the browser.
+pub struct BrowserResponse(pub(crate) SendWrapper<Response>);
+
+impl BrowserResponse {
+    /// Generate the headers from the internal [`Response`] object.
+    /// This is a workaround for the fact that the `Response` object does not
+    /// have a [`HeaderMap`] directly. This function will iterate over the
+    /// headers and convert them to a [`HeaderMap`].
+    pub fn generate_headers(&self) -> HeaderMap {
+        self.0
+            .headers()
+            .entries()
+            .filter_map(|(key, value)| {
+                let key = HeaderName::from_str(&key).ok()?;
+                let value = HeaderValue::from_str(&value).ok()?;
+                Some((key, value))
+            })
+            .collect()
+    }
+}
+
+impl<E: FromServerFnError> ClientRes<E> for BrowserResponse {
+    fn try_into_string(self) -> impl Future<Output = Result<String, E>> + Send {
+        // the browser won't send this async work between threads (because it's single-threaded)
+        // so we can safely wrap this
+        SendWrapper::new(async move {
+            self.0
+                .text()
+                .await
+                .map_err(|e| ServerFnError::Deserialization(e.to_string()).into_app_error())
+        })
+    }
+
+    fn try_into_bytes(self) -> impl Future<Output = Result<Bytes, E>> + Send {
+        // the browser won't send this async work between threads (because it's single-threaded)
+        // so we can safely wrap this
+        SendWrapper::new(async move {
+            self.0
+                .binary()
+                .await
+                .map(Bytes::from)
+                .map_err(|e| ServerFnError::Deserialization(e.to_string()).into_app_error())
+        })
+    }
+
+    fn try_into_stream(
+        self,
+    ) -> Result<impl Stream<Item = Result<Bytes, Bytes>> + Send + 'static, E> {
+        let stream = ReadableStream::from_raw(self.0.body().unwrap())
+            .into_stream()
+            .map(|data| match data {
+                Err(e) => {
+                    web_sys::console::error_1(&e);
+                    Err(E::from_server_fn_error(ServerFnError::Request(format!("{e:?}"))).ser())
+                }
+                Ok(data) => {
+                    let data = data.unchecked_into::<Uint8Array>();
+                    let mut buf = Vec::new();
+                    let length = data.length();
+                    buf.resize(length as usize, 0);
+                    data.copy_to(&mut buf);
+                    Ok(Bytes::from(buf))
+                }
+            });
+        Ok(SendWrapper::new(stream))
+    }
+
+    fn status(&self) -> u16 {
+        self.0.status()
+    }
+
+    fn status_text(&self) -> String {
+        self.0.status_text()
+    }
+
+    fn location(&self) -> String {
+        self.0
+            .headers()
+            .get("Location")
+            .unwrap_or_else(|| self.0.url())
+    }
+
+    fn has_redirect(&self) -> bool {
+        self.0.headers().get(REDIRECT_HEADER).is_some()
+    }
+}

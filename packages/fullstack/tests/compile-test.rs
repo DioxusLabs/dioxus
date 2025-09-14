@@ -6,10 +6,7 @@ use axum::response::IntoResponse;
 use axum::{extract::State, response::Html, Json};
 use bytes::Bytes;
 use dioxus::prelude::*;
-use dioxus_fullstack::{
-    fetch::{FileUpload, Websocket},
-    DioxusServerState, ServerFnRejection,
-};
+use dioxus_fullstack::{DioxusServerState, FileUpload, ServerFnRejection, Websocket};
 use futures::StreamExt;
 use http::HeaderMap;
 use http::StatusCode;

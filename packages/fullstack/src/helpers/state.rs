@@ -1,5 +1,5 @@
 //! A shared pool of renderers for efficient server side rendering.
-use crate::{document::ServerDocument, render::SsrRendererPool, ProvideServerContext, ServeConfig};
+use crate::{document::ServerDocument, ssr::SsrRendererPool, ProvideServerContext, ServeConfig};
 use crate::{
     streaming::{Mount, StreamingRenderer},
     DioxusServerContext,

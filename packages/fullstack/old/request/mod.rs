@@ -32,25 +32,7 @@ use std::{borrow::Cow, future::Future};
 // The type used for URL-encoded form data in this client.
 // type FormData;
 
-use crate::{error::IntoAppError, FromServerFnError, HybridRequest, ServerFnError};
-
-impl ServerFnRequestExt for HybridRequest {
-    fn uri(&self) -> &http::Uri {
-        self.uri()
-    }
-
-    fn headers(&self) -> &http::HeaderMap {
-        self.headers()
-    }
-
-    fn into_parts(self) -> (http::request::Parts, axum::body::Body) {
-        self.into_parts()
-    }
-
-    fn into_body(self) -> axum::body::Body {
-        self.into_body()
-    }
-}
+use crate::{error::IntoAppError, FromServerFnError, ServerFnError};
 
 #[allow(unused_variables)]
 pub trait ServerFnRequestExt: Sized {
