@@ -1,5 +1,5 @@
 use crate::{error::ServerFnSugar, FileUpload, ServerFnError};
-use axum::extract::Request;
+use axum::{extract::Request, response::Response};
 use axum::{
     extract::{FromRequest, FromRequestParts},
     response::IntoResponse,
@@ -86,17 +86,17 @@ impl<T: DeserializeOwned> SharedClientType for Json<T> {
 /// These need to be able to serialize through the network and end up as a response.
 /// Note that the types need to line up, not necessarily be equal.
 pub trait ErrorSugar {
-    fn to_encode_response(&self) -> axum::response::Response;
+    fn to_encode_response(&self) -> Response;
 }
 
 impl ErrorSugar for http::Error {
-    fn to_encode_response(&self) -> axum::response::Response {
+    fn to_encode_response(&self) -> Response {
         todo!()
     }
 }
 
 impl<T: From<ServerFnError>> ErrorSugar for T {
-    fn to_encode_response(&self) -> axum::response::Response {
+    fn to_encode_response(&self) -> Response {
         todo!()
     }
 }
@@ -105,14 +105,14 @@ impl<T: From<ServerFnError>> ErrorSugar for T {
 /// Note that Result<T: IntoResponse, E: IntoResponse> works as a blanket impl.
 pub struct NoSugarMarker;
 impl<T: IntoResponse> ServerFnSugar<NoSugarMarker> for T {
-    fn desugar_into_response(self) -> axum::response::Response {
+    fn desugar_into_response(self) -> Response {
         self.into_response()
     }
 }
 
 pub struct SerializeSugarMarker;
 impl<T: IntoResponse, E: ErrorSugar> ServerFnSugar<SerializeSugarMarker> for Result<T, E> {
-    fn desugar_into_response(self) -> axum::response::Response {
+    fn desugar_into_response(self) -> Response {
         todo!()
     }
 }
@@ -121,14 +121,14 @@ impl<T: IntoResponse, E: ErrorSugar> ServerFnSugar<SerializeSugarMarker> for Res
 /// By default, we use the JSON encoding, but you can use one of the other newtypes to change the encoding.
 pub struct DefaultJsonEncodingMarker;
 impl<T: Serialize, E: IntoResponse> ServerFnSugar<DefaultJsonEncodingMarker> for &Result<T, E> {
-    fn desugar_into_response(self) -> axum::response::Response {
+    fn desugar_into_response(self) -> Response {
         todo!()
     }
 }
 
 pub struct SerializeSugarWithErrorMarker;
 impl<T: Serialize, E: ErrorSugar> ServerFnSugar<SerializeSugarWithErrorMarker> for &Result<T, E> {
-    fn desugar_into_response(self) -> axum::response::Response {
+    fn desugar_into_response(self) -> Response {
         todo!()
     }
 }
@@ -137,7 +137,7 @@ impl<T: Serialize, E: ErrorSugar> ServerFnSugar<SerializeSugarWithErrorMarker> f
 /// IntoResponse impl and not its Serialize impl.
 pub struct ViaResponse<T>(pub T);
 impl<T: IntoResponse> IntoResponse for ViaResponse<T> {
-    fn into_response(self) -> axum::response::Response {
+    fn into_response(self) -> Response {
         self.0.into_response()
     }
 }

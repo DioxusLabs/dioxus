@@ -1,5 +1,7 @@
 use axum::response::IntoResponse;
 
+use crate::FromResponse;
+
 pub struct ServerSentEvents<T> {
     _t: std::marker::PhantomData<*const T>,
 }
@@ -22,5 +24,15 @@ impl<T> ServerSentEvents<T> {
 impl IntoResponse for ServerSentEvents<String> {
     fn into_response(self) -> axum::response::Response {
         todo!()
+    }
+}
+
+impl<T> FromResponse<()> for ServerSentEvents<T> {
+    type Output = ServerSentEvents<T>;
+
+    fn from_response(
+        res: reqwest::Response,
+    ) -> impl std::future::Future<Output = Result<Self::Output, crate::ServerFnError>> + Send {
+        async move { Ok(ServerSentEvents::new()) }
     }
 }

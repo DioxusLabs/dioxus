@@ -1,3 +1,77 @@
+//! server-fn codec just use the axum extractors
+//! ie Json<T>, Form<T>, etc
+//!
+//! Axum gives us:
+//! - Json<T>
+//! - Form<T>
+//! - Multipart<T>
+//!
+//! We need to build/copy:
+//! - Cbor<T>
+//! - MsgPack<T>
+//! - Postcard<T>
+//! - Rkyv<T>
+//!
+//! Others??
+//! - url-encoded GET params?
+//! - stream?
+
+use std::prelude::rust_2024::Future;
+
+use axum::extract::Form; // both req/res
+use axum::extract::Json; // both req/res
+use axum::extract::Multipart; // req only
+
+pub mod cbor;
+pub mod form;
+pub mod json;
+pub mod msgpack;
+pub mod multipart;
+pub mod postcard;
+pub mod rkyv;
+
+pub mod redirect;
+
+pub mod sse;
+pub use sse::*;
+
+pub mod textstream;
+pub use textstream::*;
+
+pub mod websocket;
+pub use websocket::*;
+
+pub mod upload;
+pub use upload::*;
+
+pub mod req_from;
+pub use req_from::*;
+
+pub mod req_to;
+pub use req_to::*;
+
+#[macro_use]
+/// Error types and utilities.
+pub mod error;
+pub use error::*;
+
+/// Implementations of the client side of the server function call.
+pub mod client;
+pub use client::*;
+
+pub trait FromResponse<M> {
+    type Output;
+    fn from_response(
+        res: reqwest::Response,
+    ) -> impl Future<Output = Result<Self::Output, ServerFnError>> + Send;
+}
+
+pub trait IntoRequest<M> {
+    type Input;
+    type Output;
+    fn into_request(input: Self::Input) -> Result<Self::Output, ServerFnError>;
+}
+
 use axum::{extract::State, routing::MethodRouter, Router};
 use base64::{engine::general_purpose::STANDARD_NO_PAD, DecodeError, Engine};
 use dioxus_core::{Element, VirtualDom};
@@ -25,12 +99,14 @@ use futures::{pin_mut, SinkExt, Stream, StreamExt};
 use http::{method, Method};
 use std::{
     fmt::{Debug, Display},
-    future::Future,
     marker::PhantomData,
     ops::{Deref, DerefMut},
     pin::Pin,
     sync::{Arc, LazyLock},
 };
+
+pub type AxumRequest = http::Request<axum::body::Body>;
+pub type AxumResponse = http::Response<axum::body::Body>;
 
 #[derive(Clone, Default)]
 pub struct DioxusServerState {}
@@ -224,9 +300,6 @@ impl inventory::Collect for ServerFunction {
         &REGISTRY
     }
 }
-
-pub type AxumRequest = http::Request<axum::body::Body>;
-pub type AxumResponse = http::Response<axum::body::Body>;
 
 /// The set of all registered server function paths.
 pub fn server_fn_paths() -> impl Iterator<Item = (&'static str, Method)> {

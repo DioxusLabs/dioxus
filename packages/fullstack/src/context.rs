@@ -8,40 +8,6 @@ use std::sync::Arc;
 
 use crate::ContextProviders;
 
-type SendSyncAnyMap = std::collections::HashMap<std::any::TypeId, ContextType>;
-
-#[derive(EnumSetType)]
-enum ResponsePartsModified {
-    Version,
-    Headers,
-    Status,
-    Extensions,
-    Body,
-}
-
-struct AtomicResponsePartsModified {
-    modified: AtomicU32,
-}
-
-impl AtomicResponsePartsModified {
-    fn new() -> Self {
-        Self {
-            modified: AtomicU32::new(EnumSet::<ResponsePartsModified>::empty().as_u32()),
-        }
-    }
-
-    fn set(&self, part: ResponsePartsModified) {
-        let modified =
-            EnumSet::from_u32(self.modified.load(std::sync::atomic::Ordering::Relaxed)) | part;
-        self.modified
-            .store(modified.as_u32(), std::sync::atomic::Ordering::Relaxed);
-    }
-
-    fn is_modified(&self, part: ResponsePartsModified) -> bool {
-        self.modified.load(std::sync::atomic::Ordering::Relaxed) & (1 << part as usize) != 0
-    }
-}
-
 /// A shared context for server functions that contains information about the request and middleware state.
 ///
 /// You should not construct this directly inside components or server functions. Instead use [`server_context()`] to get the server context from the current request.
@@ -66,35 +32,6 @@ pub struct DioxusServerContext {
     response_parts: Arc<RwLock<http::response::Parts>>,
     pub(crate) parts: Arc<RwLock<http::request::Parts>>,
     response_sent: Arc<std::sync::atomic::AtomicBool>,
-}
-
-enum ContextType {
-    Factory(Box<dyn Fn() -> Box<dyn Any> + Send + Sync>),
-    Value(Box<dyn Any + Send + Sync>),
-}
-
-impl ContextType {
-    fn downcast<T: Clone + 'static>(&self) -> Option<T> {
-        match self {
-            ContextType::Value(value) => value.downcast_ref::<T>().cloned(),
-            ContextType::Factory(factory) => factory().downcast::<T>().ok().map(|v| *v),
-        }
-    }
-}
-
-#[allow(clippy::derivable_impls)]
-impl Default for DioxusServerContext {
-    fn default() -> Self {
-        Self {
-            shared_context: Arc::new(RwLock::new(HashMap::new())),
-            response_parts_modified: Arc::new(AtomicResponsePartsModified::new()),
-            response_parts: Arc::new(RwLock::new(
-                http::response::Response::new(()).into_parts().0,
-            )),
-            parts: Arc::new(RwLock::new(http::request::Request::new(()).into_parts().0)),
-            response_sent: Arc::new(std::sync::atomic::AtomicBool::new(false)),
-        }
-    }
 }
 
 impl DioxusServerContext {
@@ -161,10 +98,13 @@ impl DioxusServerContext {
     /// }
     /// ```
     pub fn get<T: Any + Send + Sync + Clone + 'static>(&self) -> Option<T> {
-        self.shared_context
-            .read()
-            .get(&TypeId::of::<T>())
-            .map(|v| v.downcast::<T>().unwrap())
+        self.shared_context.read().get(&TypeId::of::<T>()).map(|v| {
+            match v {
+                ContextType::Value(value) => value.downcast_ref::<T>().cloned(),
+                ContextType::Factory(factory) => factory().downcast::<T>().ok().map(|v| *v),
+            }
+            .unwrap()
+        })
     }
 
     /// Insert a value into the shared server context
@@ -205,7 +145,7 @@ impl DioxusServerContext {
     /// # Example
     ///
     /// ```rust, no_run
-    /// # use dioxus::prelude::*;a
+    /// # use dioxus::prelude::*;
     /// use dioxus_server::server_context;
     /// #[server]
     /// async fn set_headers() -> ServerFnResult {
@@ -431,6 +371,26 @@ impl DioxusServerContext {
     }
 }
 
+#[allow(clippy::derivable_impls)]
+impl Default for DioxusServerContext {
+    fn default() -> Self {
+        Self {
+            shared_context: Arc::new(RwLock::new(HashMap::new())),
+            response_parts_modified: Arc::new(AtomicResponsePartsModified::new()),
+            response_parts: Arc::new(RwLock::new(
+                http::response::Response::new(()).into_parts().0,
+            )),
+            parts: Arc::new(RwLock::new(http::request::Request::new(()).into_parts().0)),
+            response_sent: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        }
+    }
+}
+
+enum ContextType {
+    Factory(Box<dyn Fn() -> Box<dyn Any> + Send + Sync>),
+    Value(Box<dyn Any + Send + Sync>),
+}
+
 #[test]
 fn server_context_as_any_map() {
     let parts = http::Request::new(()).into_parts().0;
@@ -579,5 +539,39 @@ impl<I: axum::extract::FromRequestParts<()>> FromServerContext<Axum> for I {
     async fn from_request(req: &DioxusServerContext) -> Result<Self, Self::Rejection> {
         let mut lock = req.request_parts_mut();
         I::from_request_parts(&mut lock, &()).await
+    }
+}
+
+type SendSyncAnyMap = std::collections::HashMap<std::any::TypeId, ContextType>;
+
+#[derive(EnumSetType)]
+enum ResponsePartsModified {
+    Version,
+    Headers,
+    Status,
+    Extensions,
+    Body,
+}
+
+struct AtomicResponsePartsModified {
+    modified: AtomicU32,
+}
+
+impl AtomicResponsePartsModified {
+    fn new() -> Self {
+        Self {
+            modified: AtomicU32::new(EnumSet::<ResponsePartsModified>::empty().as_u32()),
+        }
+    }
+
+    fn set(&self, part: ResponsePartsModified) {
+        let modified =
+            EnumSet::from_u32(self.modified.load(std::sync::atomic::Ordering::Relaxed)) | part;
+        self.modified
+            .store(modified.as_u32(), std::sync::atomic::Ordering::Relaxed);
+    }
+
+    fn is_modified(&self, part: ResponsePartsModified) -> bool {
+        self.modified.load(std::sync::atomic::Ordering::Relaxed) & (1 << part as usize) != 0
     }
 }

@@ -105,6 +105,10 @@ xxhash-rust = { features = [
 ], workspace = true, default-features = true }
 http-body-util = "0.1.3"
 reqwest-websocket = { version = "0.5.1", features = ["json"] }
+derive_more = { version = "2.0.1", features = ["deref", "deref_mut", "display", "from"] }
+
+rmp-serde = { version = "1.3", default-features = true }
+# rmp-serde = { workspace = true, default-features = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 tokio = { workspace = true, features = ["rt", "sync", "macros"], optional = true }
