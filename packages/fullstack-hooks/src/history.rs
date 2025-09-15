@@ -2,8 +2,8 @@
 
 use std::{cell::RefCell, rc::Rc};
 
+use crate::transport::{is_hydrating, SerializeContextEntry};
 use dioxus_core::{provide_context, queue_effect, schedule_update, try_consume_context};
-use dioxus_fullstack_protocol::{is_hydrating, SerializeContextEntry};
 use dioxus_history::{history, provide_history_context, History};
 
 // If we are currently in a scope and this is the first run then queue a rerender
@@ -57,7 +57,7 @@ pub(crate) fn finalize_route() {
 /// Provide the fullstack history context. This interacts with the hydration context so it must
 /// be called in the same order on the client and server after the hydration context is created
 pub fn provide_fullstack_history_context<H: History + 'static>(history: H) {
-    let entry = dioxus_fullstack_protocol::serialize_context().create_entry();
+    let entry = crate::transport::serialize_context().create_entry();
     provide_context(RouteEntry {
         entry: Rc::new(RefCell::new(Some(entry.clone()))),
     });

@@ -38,7 +38,6 @@ use std::{
 pub struct SuspendedFuture {
     origin: ScopeId,
     task: Task,
-    pub(crate) placeholder: VNode,
 }
 
 impl SuspendedFuture {
@@ -47,23 +46,7 @@ impl SuspendedFuture {
         Self {
             task,
             origin: current_scope_id().unwrap_or_else(|e| panic!("{}", e)),
-            placeholder: VNode::placeholder(),
         }
-    }
-
-    /// Get a placeholder to display while the future is suspended
-    pub fn suspense_placeholder(&self) -> Option<VNode> {
-        if self.placeholder == VNode::placeholder() {
-            None
-        } else {
-            Some(self.placeholder.clone())
-        }
-    }
-
-    /// Set a new placeholder the SuspenseBoundary may use to display while the future is suspended
-    pub fn with_placeholder(mut self, placeholder: VNode) -> Self {
-        self.placeholder = placeholder;
-        self
     }
 
     /// Get the task that was suspended
@@ -75,7 +58,6 @@ impl SuspendedFuture {
     pub(crate) fn deep_clone(&self) -> Self {
         Self {
             task: self.task,
-            placeholder: self.placeholder.deep_clone(),
             origin: self.origin,
         }
     }
@@ -176,16 +158,6 @@ impl SuspenseContext {
         })
     }
 
-    /// Get the first suspended task with a loading placeholder
-    pub fn suspense_placeholder(&self) -> Option<Element> {
-        self.inner
-            .suspended_tasks
-            .borrow()
-            .iter()
-            .find_map(|task| task.suspense_placeholder())
-            .map(std::result::Result::Ok)
-    }
-
     /// Run a closure after suspense is resolved
     pub fn after_suspense_resolved(&self, callback: impl FnOnce() + 'static) {
         let mut closures = self.inner.after_suspense_resolved.borrow_mut();
@@ -225,38 +197,4 @@ impl Debug for SuspenseBoundaryInner {
             .field("frozen", &self.frozen)
             .finish()
     }
-}
-
-/// Provides context methods to [`Result<T, RenderError>`] to show loading indicators for suspended results
-///
-/// This trait is sealed and cannot be implemented outside of dioxus-core
-pub trait SuspenseExtension<T>: private::Sealed {
-    /// Add a loading indicator if the result is suspended
-    fn with_loading_placeholder(
-        self,
-        display_placeholder: impl FnOnce() -> Element,
-    ) -> std::result::Result<T, RenderError>;
-}
-
-impl<T> SuspenseExtension<T> for std::result::Result<T, RenderError> {
-    fn with_loading_placeholder(
-        self,
-        display_placeholder: impl FnOnce() -> Element,
-    ) -> std::result::Result<T, RenderError> {
-        if let Err(RenderError::Suspended(suspense)) = self {
-            Err(RenderError::Suspended(suspense.with_placeholder(
-                display_placeholder().unwrap_or_default(),
-            )))
-        } else {
-            self
-        }
-    }
-}
-
-pub(crate) mod private {
-    use super::*;
-
-    pub trait Sealed {}
-
-    impl<T> Sealed for std::result::Result<T, RenderError> {}
 }

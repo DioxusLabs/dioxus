@@ -95,7 +95,7 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
 
         #[cfg(feature = "hydrate")]
         {
-            use dioxus_fullstack_protocol::HydrationContext;
+            use dioxus_fullstack_hooks::HydrationContext;
 
             websys_dom.skip_mutations = true;
             // Get the initial hydration data from the client

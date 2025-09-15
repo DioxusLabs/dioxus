@@ -3,7 +3,7 @@
 use dioxus_document::*;
 
 fn head_element_written_on_server() -> bool {
-    dioxus_fullstack_protocol::head_element_hydration_entry()
+    crate::transport::head_element_hydration_entry()
         .get()
         .ok()
         .unwrap_or_default()

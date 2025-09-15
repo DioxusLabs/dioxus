@@ -1,7 +1,7 @@
+use crate::Transportable;
 use dioxus_core::{suspend, use_hook, RenderError};
 use dioxus_hooks::*;
 use dioxus_signals::ReadableExt;
-use serde::{de::DeserializeOwned, Serialize};
 use std::future::Future;
 
 /// Runs a future with a manual list of dependencies and returns a resource with the result if the future is finished or a suspended error if it is still running.
@@ -59,18 +59,19 @@ use std::future::Future;
 /// ```
 #[must_use = "Consider using `cx.spawn` to run a future without reading its value"]
 #[track_caller]
-pub fn use_server_future<T, F>(
+pub fn use_server_future<T, F, M>(
     mut future: impl FnMut() -> F + 'static,
 ) -> Result<Resource<T>, RenderError>
 where
-    T: Serialize + DeserializeOwned + 'static,
     F: Future<Output = T> + 'static,
+    T: Transportable<M>,
+    M: 'static,
 {
-    let serialize_context = use_hook(dioxus_fullstack_protocol::serialize_context);
+    let serialize_context = use_hook(crate::transport::serialize_context);
 
     // We always create a storage entry, even if the data isn't ready yet to make it possible to deserialize pending server futures on the client
     #[allow(unused)]
-    let storage_entry: dioxus_fullstack_protocol::SerializeContextEntry<T> =
+    let storage_entry: crate::transport::SerializeContextEntry<T> =
         use_hook(|| serialize_context.create_entry());
 
     #[cfg(feature = "server")]
@@ -99,7 +100,7 @@ where
                 Some(Ok(o)) => return o,
 
                 // The data is still pending from the server. Don't try to resolve it on the client
-                Some(Err(dioxus_fullstack_protocol::TakeDataError::DataPending)) => {
+                Some(Err(crate::transport::TakeDataError::DataPending)) => {
                     std::future::pending::<()>().await
                 }
 
