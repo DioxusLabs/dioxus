@@ -17,6 +17,7 @@ pub(crate) mod target;
 pub(crate) mod translate;
 pub(crate) mod update;
 pub(crate) mod verbosity;
+pub(crate) mod component;
 
 pub(crate) use build::*;
 pub(crate) use serve::*;
@@ -114,6 +115,11 @@ pub(crate) enum Commands {
     #[clap(name = "tools")]
     #[clap(subcommand)]
     Tools(BuildTools),
+
+    /// Run a dioxus build tool. IE `build-assets`, `hotpatch`, etc
+    #[clap(name = "component")]
+    #[clap(subcommand)]
+    Component(component::Component),
 }
 
 #[allow(clippy::large_enum_variant)]
