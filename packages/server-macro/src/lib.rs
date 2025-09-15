@@ -6,8 +6,9 @@
 //! See the [server_fn_macro] crate for more information.
 
 use proc_macro::TokenStream;
+use quote::ToTokens;
 use server_fn_macro::ServerFnCall;
-use syn::{__private::ToTokens, parse_quote};
+use syn::parse_quote;
 
 /// Declares that a function is a [server function](https://docs.rs/server_fn/).
 /// This means that its body will only run on the server, i.e., when the `ssr`
