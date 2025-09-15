@@ -12,7 +12,7 @@ mod bevy_scene_plugin;
 mod demo_renderer;
 
 // CSS Styles
-static STYLES: Asset = asset!("./src/styles.css");
+static STYLES: Asset = asset!("/src/styles.css");
 
 type Color = OpaqueColor<Srgb>;
 

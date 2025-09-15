@@ -4,6 +4,7 @@ use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote, ToTokens, TokenStreamExt};
 use syn::{
     parse::{Parse, ParseStream},
+    spanned::Spanned,
     token::Comma,
     Ident, Token, Visibility,
 };
@@ -27,7 +28,7 @@ impl Parse for CssModuleParser {
 
         // Asset path "/path.css"
         let (MacroString(src), path_expr) = input.call(crate::parse_with_tokens)?;
-        let asset = resolve_path(&src);
+        let asset = resolve_path(&src, path_expr.span());
 
         let _comma = input.parse::<Comma>();
 
