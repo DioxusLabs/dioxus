@@ -84,7 +84,18 @@ launch = ["dep:dioxus-config-macro"]
 router = ["dep:dioxus-router"]
 
 # Platforms
-fullstack = ["dep:dioxus-fullstack", "dioxus-config-macro/fullstack", "dep:serde"]
+fullstack = [
+  "dep:dioxus-fullstack",
+  "dioxus-config-macro/fullstack",
+  "dep:serde",
+  "dioxus-web?/document",
+  "dioxus-web?/hydrate",
+  "dioxus-server?/document",
+  "dioxus-web?/devtools",
+  "dioxus-web?/mounted",
+  "dioxus-web?/file_engine",
+  "dioxus-web?/document"
+]
 desktop = ["dep:dioxus-desktop", "dioxus-config-macro/desktop"]
 mobile = ["dep:dioxus-desktop", "dioxus-config-macro/mobile"]
 web = [
@@ -104,9 +115,6 @@ server = [
   "dep:dioxus-fullstack-macro",
   "ssr",
   "dioxus-liveview?/axum",
-  # "dioxus_server_macro",
-  # "dioxus_server_macro",
-  # "dioxus-fullstack?/server",
 ]
 
 # This feature just disables the no-renderer-enabled warning

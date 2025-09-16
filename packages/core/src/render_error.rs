@@ -53,7 +53,13 @@ impl<E: Into<Error>> From<E> for RenderError {
 
 /// An `anyhow::Error` wrapped in an `Arc` so it can be cheaply cloned and passed around.
 #[derive(Debug, Clone)]
-pub struct CapturedError(Arc<Error>);
+pub struct CapturedError(pub Arc<Error>);
+impl CapturedError {
+    /// Create a `CapturedError` from anything that implements `Display`.
+    pub fn from_display(t: impl Display) -> Self {
+        Self(Arc::new(anyhow::anyhow!(t.to_string())))
+    }
+}
 impl std::ops::Deref for CapturedError {
     type Target = Error;
 

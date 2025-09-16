@@ -37,7 +37,6 @@ fn main() {
 #[post("/api/data")]
 async fn post_server_data(data: String) -> Result<()> {
     println!("Server received: {}", data);
-
     Ok(())
 }
 

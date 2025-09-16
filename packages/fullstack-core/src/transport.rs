@@ -4,7 +4,7 @@
 use base64::Engine;
 use dioxus_core::{CapturedError, Error};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use std::{cell::RefCell, io::Cursor, rc::Rc};
+use std::{cell::RefCell, io::Cursor, rc::Rc, sync::Arc};
 
 #[cfg(feature = "web")]
 thread_local! {
@@ -468,7 +468,6 @@ where
     where
         Self: Sized,
     {
-        // dioxus_core::Error::new()
         todo!()
     }
 }
@@ -476,21 +475,30 @@ where
 pub struct TransportCapturedError;
 impl Transportable<TransportCapturedError> for Option<CapturedError> {
     fn transport_to_bytes(&self) -> Vec<u8> {
-        match self {
-            Self::Some(s) => {
-                let error_message = s.to_string();
-                let mut serialized = Vec::new();
-                ciborium::into_writer(&error_message, &mut serialized).unwrap();
-                serialized
-            }
-            Self::None => vec![],
-        }
+        let err = TransportMaybeError {
+            error: self.as_ref().map(|e| e.to_string()),
+        };
+
+        let mut serialized = Vec::new();
+        ciborium::into_writer(&err, &mut serialized).unwrap();
+        serialized
     }
 
     fn transport_from_bytes(bytes: &[u8]) -> Result<Self, ciborium::de::Error<std::io::Error>>
     where
         Self: Sized,
     {
-        todo!()
+        let err: TransportMaybeError = ciborium::from_reader(Cursor::new(bytes))?;
+        match err.error {
+            Some(err) => Ok(Some(CapturedError(Arc::new(dioxus_core::Error::msg::<
+                String,
+            >(err))))),
+            None => Ok(None),
+        }
     }
+}
+
+#[derive(Serialize, Deserialize)]
+struct TransportMaybeError {
+    error: Option<String>,
 }
