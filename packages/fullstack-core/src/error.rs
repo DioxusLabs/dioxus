@@ -88,24 +88,6 @@ pub trait ServerFnSugar<M> {
     fn desugar_into_response(self) -> axum_core::response::Response;
 }
 
-/// We allow certain error types to be used across both the client and server side
-/// These need to be able to serialize through the network and end up as a response.
-/// Note that the types need to line up, not necessarily be equal.
-pub trait ErrorSugar {
-    fn to_encode_response(&self) -> Response;
-}
-
-impl ErrorSugar for http::Error {
-    fn to_encode_response(&self) -> Response {
-        todo!()
-    }
-}
-impl<T: From<ServerFnError>> ErrorSugar for T {
-    fn to_encode_response(&self) -> Response {
-        todo!()
-    }
-}
-
 /// The default conversion of T into a response is to use axum's IntoResponse trait
 /// Note that Result<T: IntoResponse, E: IntoResponse> works as a blanket impl.
 pub struct NoSugarMarker;
@@ -144,5 +126,23 @@ pub struct ViaResponse<T>(pub T);
 impl<T: IntoResponse> IntoResponse for ViaResponse<T> {
     fn into_response(self) -> Response {
         self.0.into_response()
+    }
+}
+
+/// We allow certain error types to be used across both the client and server side
+/// These need to be able to serialize through the network and end up as a response.
+/// Note that the types need to line up, not necessarily be equal.
+pub trait ErrorSugar {
+    fn to_encode_response(&self) -> Response;
+}
+
+impl ErrorSugar for http::Error {
+    fn to_encode_response(&self) -> Response {
+        todo!()
+    }
+}
+impl<T: From<ServerFnError>> ErrorSugar for T {
+    fn to_encode_response(&self) -> Response {
+        todo!()
     }
 }

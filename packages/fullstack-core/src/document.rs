@@ -2,7 +2,7 @@
 
 use dioxus_document::*;
 
-pub fn head_element_written_on_server() -> bool {
+fn head_element_written_on_server() -> bool {
     crate::transport::head_element_hydration_entry()
         .get()
         .ok()
