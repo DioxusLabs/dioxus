@@ -1,4 +1,4 @@
-use axum::response::IntoResponse;
+use axum_core::response::IntoResponse;
 
 use crate::FromResponse;
 
@@ -22,7 +22,7 @@ impl<T> ServerSentEvents<T> {
 }
 
 impl IntoResponse for ServerSentEvents<String> {
-    fn into_response(self) -> axum::response::Response {
+    fn into_response(self) -> axum_core::response::Response {
         todo!()
     }
 }

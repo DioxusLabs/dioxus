@@ -1,6 +1,6 @@
 use std::pin::Pin;
 
-use axum::response::IntoResponse;
+use axum_core::response::IntoResponse;
 use futures::{Stream, StreamExt};
 
 use crate::ServerFnError;
@@ -67,7 +67,7 @@ where
 }
 
 impl<T, E> IntoResponse for Streaming<T, E> {
-    fn into_response(self) -> axum::response::Response {
+    fn into_response(self) -> axum_core::response::Response {
         todo!()
     }
 }

@@ -113,8 +113,8 @@ pub mod req_from {
             fn extract(&self, _ctx: ExtractState) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static;
         }
 
-        use axum::extract::FromRequest as Freq;
-        use axum::extract::FromRequestParts as Prts;
+        use axum_core::extract::FromRequest as Freq;
+        use axum_core::extract::FromRequestParts as Prts;
         use dioxus_fullstack_core::DioxusServerState;
         use serde::de::DeserializeOwned as DeO_____;
         use DioxusServerState as Ds;
@@ -450,8 +450,8 @@ pub mod req_to {
             fn fetch(&self, ctx: EncodeState, data: Self::Input) -> impl Future<Output = Self::Output> + Send + 'static;
         }
 
-        use axum::extract::FromRequest as Freq;
-        use axum::extract::FromRequestParts as Prts;
+        use axum_core::extract::FromRequest as Freq;
+        use axum_core::extract::FromRequestParts as Prts;
         use serde::ser::Serialize as DeO_____;
 
 

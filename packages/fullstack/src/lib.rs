@@ -9,8 +9,6 @@
 //     }
 // }
 
-use std::prelude::rust_2024::Future;
-
 pub use dioxus_fullstack_core::client::{get_server_url, set_server_url};
 pub use dioxus_fullstack_core::*;
 
@@ -20,6 +18,8 @@ pub use dioxus_fullstack_core::{use_server_cached, use_server_future};
 pub use dioxus_fullstack_macro::*;
 
 pub use axum;
+pub use axum_core;
+// pub use axum;
 // #[doc(hidden)]
 // pub use const_format;
 // #[doc(hidden)]

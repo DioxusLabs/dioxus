@@ -1,6 +1,9 @@
 use std::prelude::rust_2024::Future;
 
-use axum::extract::FromRequest;
+use axum_core::{
+    body::Body,
+    extract::{FromRequest, Request},
+};
 use bytes::Bytes;
 use futures::Stream;
 use http_body_util::BodyExt;
@@ -8,8 +11,7 @@ use http_body_util::BodyExt;
 use crate::ServerFnRejection;
 
 pub struct FileUpload {
-    outgoing_stream:
-        Option<http_body_util::BodyDataStream<axum::extract::Request<axum::body::Body>>>,
+    outgoing_stream: Option<http_body_util::BodyDataStream<Request<Body>>>,
 }
 
 impl FileUpload {
@@ -26,7 +28,7 @@ impl<S> FromRequest<S> for FileUpload {
     type Rejection = ServerFnRejection;
 
     fn from_request(
-        req: axum::extract::Request,
+        req: Request,
         state: &S,
     ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send {
         async move {

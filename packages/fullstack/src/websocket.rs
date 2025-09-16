@@ -1,4 +1,4 @@
-use axum::response::IntoResponse;
+use axum_core::response::{IntoResponse, Response};
 use bytes::Bytes;
 
 use crate::ServerFnError;
@@ -58,7 +58,7 @@ impl<In: Serialize, Out: DeserializeOwned> Websocket<In, Out> {
 
 // Create a new WebSocket connection that uses the provided function to handle incoming messages
 impl<In, Out> IntoResponse for Websocket<In, Out> {
-    fn into_response(self) -> axum::response::Response {
+    fn into_response(self) -> Response {
         todo!()
     }
 }
