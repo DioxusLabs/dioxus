@@ -66,6 +66,7 @@ async fn main() {
             Commands::Tools(BuildTools::HotpatchTip(opts)) => opts.run().await,
             Commands::Doctor(opts) => opts.doctor().await,
             Commands::Print(opts) => opts.print().await,
+            Commands::Component(opts) => opts.run().await,
         }
     });
 

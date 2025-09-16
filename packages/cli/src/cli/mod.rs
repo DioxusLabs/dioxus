@@ -3,6 +3,7 @@ pub(crate) mod build;
 pub(crate) mod build_assets;
 pub(crate) mod bundle;
 pub(crate) mod check;
+pub(crate) mod component;
 pub(crate) mod config;
 pub(crate) mod create;
 pub(crate) mod doctor;
@@ -17,7 +18,6 @@ pub(crate) mod target;
 pub(crate) mod translate;
 pub(crate) mod update;
 pub(crate) mod verbosity;
-pub(crate) mod component;
 
 pub(crate) use build::*;
 pub(crate) use serve::*;
@@ -119,7 +119,7 @@ pub(crate) enum Commands {
     /// Run a dioxus build tool. IE `build-assets`, `hotpatch`, etc
     #[clap(name = "component")]
     #[clap(subcommand)]
-    Component(component::Component),
+    Component(component::ComponentCommand),
 }
 
 #[allow(clippy::large_enum_variant)]

@@ -902,6 +902,7 @@ impl TraceController {
                 Print::ClientArgs(_args) => ("print client-args".to_string(), json!({})),
                 Print::ServerArgs(_args) => ("print server-args".to_string(), json!({})),
             },
+            Commands::Component(cmd) => ("component".to_string(), json!({})),
         }
     }
 
