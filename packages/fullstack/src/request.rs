@@ -1,4 +1,7 @@
-use std::prelude::rust_2024::Future;
+use std::{
+    any::{type_name, TypeId},
+    prelude::rust_2024::Future,
+};
 
 use dioxus_fullstack_core::ServerFnError;
 use serde::de::DeserializeOwned;
@@ -18,7 +21,18 @@ where
         res: reqwest::Response,
     ) -> impl Future<Output = Result<Self, ServerFnError>> + Send {
         send_wrapper::SendWrapper::new(async move {
-            let res = res.json::<T>().await;
+            let bytes = res.bytes().await.unwrap();
+            let as_str = String::from_utf8_lossy(&bytes);
+            tracing::info!(
+                "Response bytes: {:?} for type {:?} ({})",
+                as_str,
+                TypeId::of::<T>(),
+                type_name::<T>()
+            );
+
+            // let resas_astr = Ok(as_str);
+            let res = serde_json::from_slice::<T>(&bytes);
+            // let res = res.json::<T>().await;
             match res {
                 Err(err) => Err(ServerFnError::Deserialization(err.to_string())),
                 Ok(res) => Ok(res),
@@ -143,7 +157,7 @@ pub mod req_to {
             type Output = Result<O, E>;
             fn fetch(&self, ctx: EncodeState, data: Self::Input) -> impl Future<Output = Self::Output> + Send + 'static {
                 send_wrapper::SendWrapper::new(async move {
-                    let res = ctx.client.send().await;
+                    let res = ctx.client.body(String::new()).send().await;
                     match res {
                         Ok(res) => O::from_response(res).await.map_err(|e| e.into()),
                         Err(err) => Err(ServerFnError::Request { message: err.to_string(), code: err.status().map(|s| s.as_u16()) }.into())

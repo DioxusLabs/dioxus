@@ -9,7 +9,8 @@ publish = false
 [dependencies]
 dioxus = { workspace = true, features = ["fullstack"]}
 serde = { workspace = true }
-reqwest = { workspace = true }
+reqwest = { workspace = true, features = ["json"] }
+serde_json = { workspace = true }
 
 [features]
 default = []

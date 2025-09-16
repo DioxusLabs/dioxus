@@ -235,9 +235,14 @@ pub fn route_impl_with_route(
                     #(#query_param_names,)*
                 };
 
+                let url = format!("http://127.0.0.1:8080{}", #request_url);
+
+                tracing::info!("Client sending request to {}", url);
+
                 let client = __reqwest::Client::new()
-                    .post(format!("{}{}", get_server_url(), #request_url))
-                    .query(&__params);
+                    .#http_method(url);
+                    // .#http_method(format!("{}{}", get_server_url(), #request_url));
+                    // .query(&__params);
 
                 let encode_state = EncodeState {
                     client

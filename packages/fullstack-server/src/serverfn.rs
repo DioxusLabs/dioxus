@@ -172,6 +172,11 @@ impl ServerFunction {
     where
         S: Send + Sync + Clone + 'static,
     {
+        tracing::info!(
+            "Registering server function: {} {}",
+            self.method(),
+            self.path()
+        );
         use http::method::Method;
         let path = self.path();
         let method = self.method();
@@ -258,6 +263,12 @@ impl ServerFunction {
 
         // // apply the response parts from the server context to the response
         // server_context.send_response(&mut res);
+
+        tracing::info!(
+            "Handling server function: {} {}",
+            self.method(),
+            self.path()
+        );
 
         let mthd: MethodRouter<DioxusServerState> =
             (self.handler)().with_state(DioxusServerState {});

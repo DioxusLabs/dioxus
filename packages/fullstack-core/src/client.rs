@@ -11,5 +11,5 @@ pub fn set_server_url(url: &'static str) {
 
 /// Returns the root server URL for all server functions.
 pub fn get_server_url() -> &'static str {
-    ROOT_URL.get().copied().unwrap_or("")
+    ROOT_URL.get().copied().unwrap_or("127.0.0.1:8080")
 }

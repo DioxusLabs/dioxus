@@ -100,7 +100,10 @@ impl<T: IntoResponse> ServerFnSugar<NoSugarMarker> for T {
 pub struct SerializeSugarMarker;
 impl<T: IntoResponse, E: ErrorSugar> ServerFnSugar<SerializeSugarMarker> for Result<T, E> {
     fn desugar_into_response(self) -> Response {
-        todo!()
+        match self {
+            Self::Ok(e) => e.into_response(),
+            Self::Err(e) => e.to_encode_response(),
+        }
     }
 }
 
@@ -109,14 +112,26 @@ impl<T: IntoResponse, E: ErrorSugar> ServerFnSugar<SerializeSugarMarker> for Res
 pub struct DefaultJsonEncodingMarker;
 impl<T: Serialize, E: IntoResponse> ServerFnSugar<DefaultJsonEncodingMarker> for &Result<T, E> {
     fn desugar_into_response(self) -> Response {
-        todo!()
+        match self.as_ref() {
+            Ok(e) => {
+                let body = serde_json::to_vec(e).unwrap();
+                (http::StatusCode::OK, body).into_response()
+            }
+            Err(e) => todo!(),
+        }
     }
 }
 
 pub struct SerializeSugarWithErrorMarker;
 impl<T: Serialize, E: ErrorSugar> ServerFnSugar<SerializeSugarWithErrorMarker> for &Result<T, E> {
     fn desugar_into_response(self) -> Response {
-        todo!()
+        match self.as_ref() {
+            Ok(e) => {
+                let body = serde_json::to_vec(e).unwrap();
+                (http::StatusCode::OK, body).into_response()
+            }
+            Err(e) => e.to_encode_response(),
+        }
     }
 }
 

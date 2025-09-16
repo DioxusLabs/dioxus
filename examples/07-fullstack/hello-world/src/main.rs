@@ -5,6 +5,7 @@
 //! ```
 
 #![allow(non_snake_case, unused)]
+use dioxus::logger::tracing;
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -23,8 +24,8 @@ fn main() {
                 onclick: move |_| async move {
                     let data = get_server_data().await?;
                     println!("Client received: {}", data);
-                    text.set(data.clone());
-                    post_server_data(data).await?;
+                    text.set(data.clone().to_string());
+                    // post_server_data(data).await?;
                     Ok(())
                 },
                 "Run a server function!"
@@ -41,6 +42,6 @@ async fn post_server_data(data: String) -> Result<()> {
 }
 
 #[get("/api/data")]
-async fn get_server_data() -> Result<String> {
-    Ok(reqwest::get("https://httpbin.org/ip").await?.text().await?)
+async fn get_server_data() -> Result<serde_json::Value> {
+    Ok(reqwest::get("https://httpbin.org/ip").await?.json().await?)
 }
