@@ -1,28 +1,25 @@
 use std::prelude::rust_2024::Future;
 
-use axum::{
-    extract::{FromRequest, Request, State},
-    Json,
-};
+use axum::extract::{FromRequest, Request, State};
 use http::HeaderMap;
 pub use impls::*;
 
-use crate::{DioxusServerState, ServerFnRejection};
+use crate::ServerFnRejection;
 
 #[derive(Default)]
 pub struct ExtractState {
     request: Request,
-    state: State<DioxusServerState>,
+    state: State<()>,
     names: (&'static str, &'static str, &'static str),
 }
 
 unsafe impl Send for ExtractState {}
 unsafe impl Sync for ExtractState {}
 
-pub struct DeSer<T, BodyTy = (), Body = Json<BodyTy>> {
+pub struct DeSer<T, BodyTy = (), B = ()> {
     _t: std::marker::PhantomData<T>,
     _body: std::marker::PhantomData<BodyTy>,
-    _encoding: std::marker::PhantomData<Body>,
+    _encoding: std::marker::PhantomData<B>,
 }
 
 unsafe impl<A, B, C> Send for DeSer<A, B, C> {}
@@ -79,8 +76,9 @@ use super::*;
 
     use axum::extract::FromRequest as Freq;
     use axum::extract::FromRequestParts as Prts;
+    use dioxus_fullstack_core::DioxusServerState;
     use serde::de::DeserializeOwned as DeO_____;
-    use super::DioxusServerState as Ds;
+    use DioxusServerState as Ds;
 
     // Zero-arg case
     impl ExtractRequest for &&&&&&&&&&DeSer<()> {

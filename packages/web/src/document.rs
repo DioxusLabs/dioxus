@@ -100,7 +100,7 @@ pub fn init_document() {
 
 #[cfg(feature = "hydrate")]
 pub fn init_fullstack_document() {
-    use dioxus_fullstack_hooks::{
+    use dioxus_fullstack_core::{
         document::FullstackWebDocument, history::provide_fullstack_history_context,
     };
 

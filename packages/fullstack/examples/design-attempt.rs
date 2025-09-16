@@ -43,6 +43,7 @@ mod real_impl {
     use std::prelude::rust_2024::Future;
 
     use anyhow::Result;
+    use dioxus::prelude::dioxus_server;
     use dioxus_fullstack::{post, ServerFnError};
 
     #[derive(serde::Serialize, serde::Deserialize)]
@@ -374,11 +375,14 @@ mod approach_with_static {
                     path: "/some/path",
                     method: Method::POST,
                     on_server: |state, req| {
-                        state.spawn(async move {
+                        // state.spawn(async move {
+                        tokio::spawn(async move {
+
                             let (parts, body) = req.into_parts();
 
                             todo!()
                         })
+                        // })
                     },
                 }
             };

@@ -10,7 +10,6 @@ use crate::ServerFnRejection;
 pub struct FileUpload {
     outgoing_stream:
         Option<http_body_util::BodyDataStream<axum::extract::Request<axum::body::Body>>>,
-    // outgoing_stream: Option<Box<dyn Stream<Item = Result<Bytes, Bytes>> + Send + Unpin>>,
 }
 
 impl FileUpload {

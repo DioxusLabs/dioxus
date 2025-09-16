@@ -7,6 +7,7 @@ pub enum StreamingStatus {
     /// The initial chunk is still being rendered. The http response parts can still be modified with
     /// [DioxusServerContext::response_parts_mut](https://docs.rs/dioxus-fullstack/0.6.3/dioxus_fullstack/prelude/struct.DioxusServerContext.html#method.response_parts_mut).
     RenderingInitialChunk,
+
     /// The initial chunk has been committed and the response is now streaming. The http response parts
     /// have already been sent to the client and can no longer be modified.
     InitialChunkCommitted,
@@ -59,7 +60,7 @@ impl StreamingContext {
 /// # Example
 /// ```rust, no_run
 /// # use dioxus::prelude::*;
-/// # use dioxus_fullstack_hooks::*;
+/// # use dioxus_fullstack::*;
 /// # fn Children() -> Element { unimplemented!() }
 /// fn App() -> Element {
 ///     // This will start streaming immediately after the current render is complete.
@@ -83,7 +84,7 @@ pub fn commit_initial_chunk() {
 /// # Example
 /// ```rust, no_run
 /// # use dioxus::prelude::*;
-/// # use dioxus_fullstack_hooks::*;
+/// # use dioxus_fullstack::*;
 /// #[component]
 /// fn MetaTitle(title: String) -> Element {
 ///     // If streaming has already started, warn the user that the meta tag will not show

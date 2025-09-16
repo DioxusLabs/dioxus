@@ -13,7 +13,7 @@ use futures::{channel::mpsc, SinkExt, StreamExt};
 fn main() {
     dioxus::LaunchBuilder::new()
         .with_cfg(server_only! {
-            dioxus::fullstack::ServeConfig::builder().enable_out_of_order_streaming()
+            dioxus::server::ServeConfig::builder().enable_out_of_order_streaming()
         })
         .with_context(1234u32)
         .launch(app);

@@ -35,8 +35,9 @@ members = [
     "packages/document",
     "packages/extension",
     "packages/fullstack",
+    "packages/fullstack-core",
     "packages/fullstack-macro",
-    "packages/fullstack-hooks",
+    "packages/fullstack-server",
     "packages/generational-box",
     "packages/history",
     "packages/hooks",
@@ -173,8 +174,9 @@ dioxus-stores-macro = { path = "packages/stores-macro", version = "0.7.0-rc.0" }
 dioxus-devtools = { path = "packages/devtools", version = "0.7.0-rc.0" }
 dioxus-devtools-types = { path = "packages/devtools-types", version = "0.7.0-rc.0" }
 dioxus-fullstack = { path = "packages/fullstack", version = "0.7.0-rc.0", default-features = false}
+dioxus-fullstack-core = { path = "packages/fullstack-core", version = "0.7.0-rc.0", default-features = false}
 dioxus-fullstack-macro = { path = "packages/fullstack-macro", version = "0.7.0-rc.0", default-features = false }
-dioxus-fullstack-hooks = { path = "packages/fullstack-hooks", version = "0.7.0-rc.0" }
+dioxus-server = { path = "packages/fullstack-server", version = "0.7.0-rc.0" }
 dioxus-dx-wire-format = { path = "packages/dx-wire-format", version = "0.7.0-rc.0" }
 dioxus-logger = { path = "packages/logger", version = "0.7.0-rc.0" }
 dioxus-native = { path = "packages/native", version = "0.7.0-rc.0" }
@@ -276,6 +278,7 @@ serde = "1.0.219"
 syn = "2.0"
 quote = "1.0"
 proc-macro2 = "1.0"
+axum-core = "0.5"
 axum_session = "0.16.0"
 axum_session_auth = "0.16.0"
 axum_session_sqlx = "0.5.0"

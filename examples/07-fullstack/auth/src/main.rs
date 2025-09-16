@@ -5,7 +5,7 @@ use dioxus::prelude::*;
 
 fn main() {
     #[cfg(feature = "server")]
-    dioxus::fullstack::with_router(|| async {
+    dioxus::server::with_router(|| async {
         use crate::auth::*;
         use axum::routing::*;
         use axum_session::{SessionConfig, SessionLayer, SessionStore};

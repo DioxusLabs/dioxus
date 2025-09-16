@@ -1,4 +1,4 @@
-use axum::response::IntoResponse;
+use axum_core::response::{IntoResponse, Response};
 use base64::{engine::general_purpose::URL_SAFE, Engine as _};
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
@@ -70,15 +70,6 @@ pub enum ServerFnError {
     Response(String),
 }
 
-impl From<reqwest::Error> for ServerFnError {
-    fn from(value: reqwest::Error) -> Self {
-        ServerFnError::Request {
-            message: value.to_string(),
-            code: value.status().map(|s| s.as_u16()),
-        }
-    }
-}
-
 impl From<anyhow::Error> for ServerFnError {
     fn from(value: anyhow::Error) -> Self {
         ServerFnError::ServerError(value.to_string())
@@ -88,37 +79,70 @@ impl From<anyhow::Error> for ServerFnError {
 #[derive(Debug)]
 pub struct ServerFnRejection {}
 impl IntoResponse for ServerFnRejection {
-    fn into_response(self) -> axum::response::Response {
+    fn into_response(self) -> axum_core::response::Response {
         todo!()
     }
 }
 
 pub trait ServerFnSugar<M> {
-    fn desugar_into_response(self) -> axum::response::Response;
-    fn from_reqwest(res: reqwest::Response) -> Self
-    where
-        Self: Sized,
-    {
+    fn desugar_into_response(self) -> axum_core::response::Response;
+}
+
+/// We allow certain error types to be used across both the client and server side
+/// These need to be able to serialize through the network and end up as a response.
+/// Note that the types need to line up, not necessarily be equal.
+pub trait ErrorSugar {
+    fn to_encode_response(&self) -> Response;
+}
+
+impl ErrorSugar for http::Error {
+    fn to_encode_response(&self) -> Response {
+        todo!()
+    }
+}
+impl<T: From<ServerFnError>> ErrorSugar for T {
+    fn to_encode_response(&self) -> Response {
         todo!()
     }
 }
 
-// pub trait IntoClientErr<M> {
-//     fn try_into_client_err(self) -> Option<ServerFnError>;
-// }
+/// The default conversion of T into a response is to use axum's IntoResponse trait
+/// Note that Result<T: IntoResponse, E: IntoResponse> works as a blanket impl.
+pub struct NoSugarMarker;
+impl<T: IntoResponse> ServerFnSugar<NoSugarMarker> for T {
+    fn desugar_into_response(self) -> Response {
+        self.into_response()
+    }
+}
 
-// impl<T, E> IntoClientErr<()> for Result<T, E>
-// where
-//     Self: Into<ServerFnError>,
-// {
-//     fn try_into_client_err(self) -> Option<ServerFnError> {
-//         Some(self.into())
-//     }
-// }
+pub struct SerializeSugarMarker;
+impl<T: IntoResponse, E: ErrorSugar> ServerFnSugar<SerializeSugarMarker> for Result<T, E> {
+    fn desugar_into_response(self) -> Response {
+        todo!()
+    }
+}
 
-// pub struct CantGoMarker;
-// impl<T> IntoClientErr<CantGoMarker> for &T {
-//     fn try_into_client_err(self) -> Option<ServerFnError> {
-//         None
-//     }
-// }
+/// This covers the simple case of returning a body from an endpoint where the body is serializable.
+/// By default, we use the JSON encoding, but you can use one of the other newtypes to change the encoding.
+pub struct DefaultJsonEncodingMarker;
+impl<T: Serialize, E: IntoResponse> ServerFnSugar<DefaultJsonEncodingMarker> for &Result<T, E> {
+    fn desugar_into_response(self) -> Response {
+        todo!()
+    }
+}
+
+pub struct SerializeSugarWithErrorMarker;
+impl<T: Serialize, E: ErrorSugar> ServerFnSugar<SerializeSugarWithErrorMarker> for &Result<T, E> {
+    fn desugar_into_response(self) -> Response {
+        todo!()
+    }
+}
+
+/// A newtype wrapper that indicates that the inner type should be converted to a response using its
+/// IntoResponse impl and not its Serialize impl.
+pub struct ViaResponse<T>(pub T);
+impl<T: IntoResponse> IntoResponse for ViaResponse<T> {
+    fn into_response(self) -> Response {
+        self.0.into_response()
+    }
+}

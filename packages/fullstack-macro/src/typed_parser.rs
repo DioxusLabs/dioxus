@@ -211,11 +211,14 @@ pub fn route_impl_with_route(
         #vis async fn #fn_name #impl_generics(
             #original_inputs
         ) #fn_output #where_clause {
+            use dioxus_fullstack::reqwest as __reqwest;
+            use dioxus_fullstack::serde as serde;
             use dioxus_fullstack::{
-                DeSer, ServerFunction, ClientRequest, ExtractState, ExtractRequest, EncodeState,
+                DeSer,  ClientRequest, ExtractState, ExtractRequest, EncodeState,
                 ServerFnSugar, ServerFnRejection, EncodeRequest, get_server_url, EncodedBody,
                 ServerFnError,
             };
+
 
             #query_params_struct
 
@@ -225,7 +228,7 @@ pub fn route_impl_with_route(
                     #(#query_param_names,)*
                 };
 
-                let client = reqwest::Client::new()
+                let client = __reqwest::Client::new()
                     .post(format!("{}{}", get_server_url(), #request_url))
                     .query(&__params);
 
@@ -244,6 +247,7 @@ pub fn route_impl_with_route(
                 use dioxus_fullstack::axum as __axum;
                 use dioxus_fullstack::http as __http;
                 use __axum::response::IntoResponse;
+                use dioxus_server::ServerFunction;
 
                 #aide_ident_docs
                 #asyncness fn __inner__function__ #impl_generics(
@@ -475,9 +479,9 @@ impl CompiledRoute {
         let types = self.query_params.iter().map(|item| &item.1);
         let derive = match with_aide {
             true => {
-                quote! { #[derive(::serde::Deserialize, ::serde::Serialize, ::schemars::JsonSchema)] }
+                quote! { #[derive(serde::Deserialize, serde::Serialize, ::schemars::JsonSchema)] }
             }
-            false => quote! { #[derive(::serde::Deserialize, ::serde::Serialize)] },
+            false => quote! { #[derive(serde::Deserialize, serde::Serialize)] },
         };
         Some(quote! {
             #derive

@@ -75,7 +75,7 @@ impl ServerDocument {
         // We only serialize the head elements if the web document feature is enabled
         #[cfg(feature = "document")]
         {
-            dioxus_fullstack_hooks::head_element_hydration_entry()
+            dioxus_fullstack_core::head_element_hydration_entry()
                 .insert(&!self.0.borrow().streaming, std::panic::Location::caller());
         }
     }

@@ -93,13 +93,13 @@ mod impls {
 
     // fallback case for *all invalid*
     // todo...
-    // impl<In, Out> EncodeRequest for ClientRequest<In, Out> {
-    //     type Input = In;
-    //     type Output = Out;
-    //     fn fetch(&self, _ctx: EncodeState, _data: Self::Input) -> impl Future<Output = Out> + Send + 'static {
-    //         async move { panic!("Could not encode request") }
-    //     }
-    // }
+    impl<In, Out> EncodeRequest for ClientRequest<In, Out> {
+        type Input = In;
+        type Output = Out;
+        fn fetch(&self, _ctx: EncodeState, _data: Self::Input) -> impl Future<Output = Out> + Send + 'static {
+            async move { panic!("Could not encode request") }
+        }
+    }
 
     // Zero-arg case
     impl<O: FromResponse<M>, E, M> EncodeRequest for &&&&&&&&&&ClientRequest<(), Result<O, E>, M> where E: From<ServerFnError> {
@@ -110,7 +110,7 @@ mod impls {
                 let res = ctx.client.send().await;
                 match res {
                     Ok(res) => O::from_response(res).await.map_err(|e| e.into()),
-                    Err(err) => Err(ServerFnError::from(err).into())
+                    Err(err) => Err(ServerFnError::Request { message: err.to_string(), code: err.status().map(|s| s.as_u16()) }.into())
                 }
             }
         }

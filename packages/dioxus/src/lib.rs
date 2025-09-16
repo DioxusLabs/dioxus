@@ -83,7 +83,7 @@ pub use dioxus_cli_config as cli_config;
 
 #[cfg(feature = "server")]
 #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
-pub use dioxus_fullstack as server;
+pub use dioxus_server as server;
 
 #[cfg(feature = "devtools")]
 #[cfg_attr(docsrs, doc(cfg(feature = "devtools")))]
@@ -200,15 +200,24 @@ pub mod prelude {
     #[cfg_attr(docsrs, doc(cfg(feature = "fullstack")))]
     #[doc(inline)]
     pub use dioxus_fullstack::{
-        self, delete, get, patch, post, prelude::*, put, server, use_server_cached,
+        self as dioxus_fullstack, delete, get, patch, post, put, server, use_server_cached,
         use_server_future, ServerFnError, ServerFnResult,
     };
+
+    // DioxusRouterExt,
+    // DioxusRouterFnExt,
+    // FromContext,
+    // ServeConfig,
+    // ServerFnError,
+    // ServerFnResult,
+    // self, delete, extract, get, patch, post, prelude::*, put, server, use_server_cached,
+    // use_server_future, DioxusRouterExt, DioxusRouterFnExt, FromContext, ServeConfig,
 
     #[cfg(feature = "server")]
     #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
     #[doc(inline)]
-    pub use dioxus_fullstack::{
-        extract, DioxusRouterExt, DioxusRouterFnExt, FromContext, ServeConfig,
+    pub use dioxus_server::{
+        self, extract, DioxusRouterExt, DioxusRouterFnExt, FromContext, ServeConfig, ServerFunction,
     };
 
     #[cfg(feature = "router")]

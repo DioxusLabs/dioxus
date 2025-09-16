@@ -25,6 +25,7 @@ use axum::{extract::Multipart, handler::Handler}; // both req/res // both req/re
 use axum::{extract::State, routing::MethodRouter};
 use base64::{engine::general_purpose::STANDARD_NO_PAD, DecodeError, Engine};
 use dioxus_core::{Element, VirtualDom};
+use dioxus_fullstack_core::DioxusServerState;
 use serde::de::DeserializeOwned;
 
 use crate::{
@@ -56,91 +57,13 @@ use std::{
     sync::{Arc, LazyLock},
 };
 
-pub mod cbor;
-pub mod form;
-pub mod json;
-pub mod msgpack;
-pub mod multipart;
-pub mod postcard;
-pub mod rkyv;
-
-pub mod redirect;
-
-pub mod sse;
-pub use sse::*;
-
-pub mod textstream;
-pub use textstream::*;
-
-pub mod websocket;
-pub use websocket::*;
-
-pub mod upload;
-pub use upload::*;
-
-pub mod req_from;
-pub use req_from::*;
-
-pub mod req_to;
-pub use req_to::*;
-
-#[macro_use]
-/// Error types and utilities.
-pub mod error;
-pub use error::*;
-
-/// Implementations of the client side of the server function call.
-pub mod client;
-pub use client::*;
-
 // pub fn get_client() -> &'static reqwest::Client {
 //     static CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| reqwest::Client::new());
 //     &CLIENT
 // }
 
-pub trait FromResponse<M>: Sized {
-    fn from_response(
-        res: reqwest::Response,
-    ) -> impl Future<Output = Result<Self, ServerFnError>> + Send;
-}
-
-pub struct DefaultEncoding;
-impl<T> FromResponse<DefaultEncoding> for T
-where
-    T: DeserializeOwned + 'static,
-{
-    fn from_response(
-        res: reqwest::Response,
-    ) -> impl Future<Output = Result<Self, ServerFnError>> + Send {
-        async move {
-            let res = res
-                .json::<T>()
-                .await
-                .map_err(|e| ServerFnError::Deserialization(e.to_string()))?;
-            Ok(res)
-        }
-    }
-}
-
-pub trait IntoRequest<M> {
-    type Input;
-    type Output;
-    fn into_request(input: Self::Input) -> Result<Self::Output, ServerFnError>;
-}
-
 pub type AxumRequest = http::Request<Body>;
 pub type AxumResponse = http::Response<Body>;
-
-#[derive(Clone, Default)]
-pub struct DioxusServerState {}
-impl DioxusServerState {
-    pub fn spawn(
-        &self,
-        fut: impl Future<Output = axum::response::Response> + Send + 'static,
-    ) -> tokio::task::JoinHandle<axum::response::Response> {
-        tokio::spawn(fut)
-    }
-}
 
 /// A function endpoint that can be called from the client.
 #[derive(Clone)]
@@ -371,3 +294,42 @@ pub struct EncodedServerFnRequest {
     pub path: String,
     pub method: Method,
 }
+
+// pub struct ServerFunction<Caller = ()> {
+//     pub path: &'static str,
+//     pub method: http::Method,
+//     _p: std::marker::PhantomData<Caller>,
+// }
+
+// impl<T> Clone for ServerFunction<T> {
+//     fn clone(&self) -> Self {
+//         Self {
+//             path: self.path,
+//             method: self.method.clone(),
+//             _p: std::marker::PhantomData,
+//         }
+//     }
+// }
+
+// impl ServerFunction {
+//     pub const fn new<P>(method: http::Method, path: &'static str, handler: fn() -> P) -> Self {
+//         Self {
+//             path,
+//             method,
+//             _p: std::marker::PhantomData,
+//         }
+//     }
+
+//     /// Get the full URL for this server function.
+//     pub fn url(&self) -> String {
+//         format!("{}{}", get_server_url(), self.path)
+//     }
+// }
+
+// impl inventory::Collect for ServerFunction {
+//     #[inline]
+//     fn registry() -> &'static inventory::Registry {
+//         static REGISTRY: inventory::Registry = inventory::Registry::new();
+//         &REGISTRY
+//     }
+// }

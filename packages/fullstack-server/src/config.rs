@@ -310,7 +310,7 @@ impl ServeConfigBuilder {
     /// # fn app() -> Element { todo!() }
     /// dioxus::LaunchBuilder::new()
     ///     .with_context(server_only! {
-    ///         dioxus::fullstack::ServeConfig::builder().streaming_mode(dioxus::fullstack::StreamingMode::OutOfOrder)
+    ///         dioxus::server::ServeConfig::builder().streaming_mode(dioxus::server::StreamingMode::OutOfOrder)
     ///     })
     ///     .launch(app);
     /// ```
@@ -328,7 +328,7 @@ impl ServeConfigBuilder {
     /// # fn app() -> Element { todo!() }
     /// dioxus::LaunchBuilder::new()
     ///     .with_context(server_only! {
-    ///         dioxus::fullstack::ServeConfig::builder().enable_out_of_order_streaming()
+    ///         dioxus::server::ServeConfig::builder().enable_out_of_order_streaming()
     ///     })
     ///     .launch(app);
     /// ```

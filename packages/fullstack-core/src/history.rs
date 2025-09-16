@@ -32,18 +32,18 @@ pub(crate) fn finalize_route() {
     let Some(entry) = try_consume_context::<RouteEntry>() else {
         return;
     };
+
     let entry = entry
         .entry
         .borrow_mut()
         .take()
         .expect("Failed to get initial route from hydration context");
+
     if cfg!(feature = "server") {
         let history = history();
-        let initial_route = history.current_route();
-        entry.insert(&initial_route, std::panic::Location::caller());
-        provide_context(ResolvedRouteContext {
-            route: initial_route,
-        });
+        let route = history.current_route();
+        entry.insert(&route, std::panic::Location::caller());
+        provide_context(ResolvedRouteContext { route });
     } else if cfg!(feature = "web") {
         let initial_route = entry
             .get()

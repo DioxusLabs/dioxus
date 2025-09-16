@@ -1,4 +1,4 @@
-use dioxus::fullstack::Streaming;
+// use dioxus::fullstack::Streaming;
 use dioxus::prelude::*;
 use futures::StreamExt;
 
@@ -9,12 +9,12 @@ fn app() -> Element {
         button {
             onclick: move |_| async move {
                 response.write().clear();
-                let stream = test_stream().await?;
-                response.write().push_str("Stream started\n");
-                let mut stream = stream.into_inner();
-                while let Some(Ok(text)) = stream.next().await {
-                    response.write().push_str(&text);
-                }
+                // let stream = test_stream().await?;
+                // response.write().push_str("Stream started\n");
+                // let mut stream = stream.into_inner();
+                // while let Some(Ok(text)) = stream.next().await {
+                //     response.write().push_str(&text);
+                // }
                 Ok(())
             },
             "Start stream"
@@ -23,22 +23,22 @@ fn app() -> Element {
     }
 }
 
-#[server(output = StreamingText)]
-pub async fn test_stream() -> ServerFnResult<Streaming<String, ServerFnError>> {
-    let (tx, rx) = futures::channel::mpsc::unbounded();
-    tokio::spawn(async move {
-        loop {
-            tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-            dioxus::logger::tracing::info!("Sending new chunk!");
-            if tx.unbounded_send(Ok("Hello, world!".to_string())).is_err() {
-                // If the channel is closed, stop sending chunks
-                break;
-            }
-        }
-    });
+// #[server(output = StreamingText)]
+// pub async fn test_stream() -> ServerFnResult<Streaming<String, ServerFnError>> {
+//     let (tx, rx) = futures::channel::mpsc::unbounded();
+//     tokio::spawn(async move {
+//         loop {
+//             tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+//             dioxus::logger::tracing::info!("Sending new chunk!");
+//             if tx.unbounded_send(Ok("Hello, world!".to_string())).is_err() {
+//                 // If the channel is closed, stop sending chunks
+//                 break;
+//             }
+//         }
+//     });
 
-    Ok(Streaming::new(rx))
-}
+//     Ok(Streaming::new(rx))
+// }
 
 fn main() {
     dioxus::launch(app)

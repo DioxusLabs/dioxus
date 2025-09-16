@@ -26,7 +26,7 @@
 //! </script>
 //! ```
 
-use dioxus_fullstack_hooks::SerializedHydrationData;
+use dioxus_fullstack_core::SerializedHydrationData;
 use futures_channel::mpsc::Sender;
 
 use std::{

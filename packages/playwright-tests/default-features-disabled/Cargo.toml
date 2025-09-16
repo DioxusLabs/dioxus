@@ -8,6 +8,7 @@ publish = false
 
 [dependencies]
 dioxus = { workspace = true, features = ["fullstack"] }
+serde = { workspace =  true, features = ["derive"] }
 
 [features]
 # Web is a default feature, but it shouldn't actually be enabled in server builds

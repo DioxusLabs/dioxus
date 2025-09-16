@@ -9,9 +9,9 @@ use dioxus_core::{
     has_context, provide_error_boundary, DynamicNode, ErrorContext, ScopeId, SuspenseContext,
     VNode, VirtualDom,
 };
-use dioxus_fullstack_hooks::history::provide_fullstack_history_context;
-use dioxus_fullstack_hooks::{HydrationContext, SerializedHydrationData};
-use dioxus_fullstack_hooks::{StreamingContext, StreamingStatus};
+use dioxus_fullstack_core::history::provide_fullstack_history_context;
+use dioxus_fullstack_core::{HydrationContext, SerializedHydrationData};
+use dioxus_fullstack_core::{StreamingContext, StreamingStatus};
 use dioxus_isrg::{
     CachedRender, IncrementalRenderer, IncrementalRendererConfig, IncrementalRendererError,
     RenderFreshness,
