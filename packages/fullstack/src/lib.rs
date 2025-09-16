@@ -1,4 +1,4 @@
-#![warn(missing_docs)]
+// #![warn(missing_docs)]
 
 // impl From<reqwest::Error> for ServerFnError {
 //     fn from(value: reqwest::Error) -> Self {
@@ -53,9 +53,3 @@ pub use upload::*;
 
 pub mod request;
 pub use request::*;
-
-pub mod req_from;
-pub use req_from::*;
-
-pub mod req_to;
-pub use req_to::*;

@@ -11,6 +11,7 @@ keywords = ["web", "gui", "server"]
 resolver = "2"
 
 [dependencies]
+# shared for both server + client
 futures-channel = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 ciborium = { workspace = true }
@@ -18,24 +19,30 @@ base64 = { workspace = true }
 tracing = { workspace = true }
 thiserror = { workspace = true }
 dioxus-fullstack-core = { workspace = true }
-reqwest = { workspace = true, features = ["json", "rustls-tls"] }
-axum = { workspace = true, features = ["multipart", "ws", "json", "form", "query"]}
-http.workspace = true
-bytes = {version = "1.10.1", features = ["serde"]}
-dioxus-fullstack-macro = { workspace = true }
-inventory = { workspace = true }
+http = { workspace = true }
+anyhow = { workspace = true }
 dioxus-core = { workspace = true }
 dioxus-signals = { workspace = true }
 dioxus-hooks = { workspace = true }
+futures = { workspace = true, default-features = true }
+bytes = { workspace = true, features = ["serde"] }
+dioxus-fullstack-macro = { workspace = true }
+http-body-util = "0.1.3"
+futures-util = { workspace = true }
+axum-core = { workspace = true }
+
+# server deps
+axum = { workspace = true, features = ["multipart", "ws", "json", "form", "query"]}
+inventory = { workspace = true }
 tokio-tungstenite = { workspace = true }
 tokio-stream = { workspace = true, features = ["sync"] }
-futures-util = { workspace = true }
-http-body-util = "0.1.3"
-futures = { workspace = true, default-features = true }
-anyhow = { workspace = true }
-tower-http = { workspace = true, features = ["fs"] }
 tower = { workspace = true, features = ["util"] }
+tower-http = { workspace = true, features = ["fs"] }
 tower-layer = { version = "0.3.3" }
+
+# optional
+reqwest = { workspace = true, features = ["json", "rustls-tls"] }
+
 
 [dev-dependencies]
 dioxus-fullstack = { workspace = true }

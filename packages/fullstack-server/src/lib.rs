@@ -101,3 +101,11 @@ pub use state::*;
 
 pub mod streaming;
 pub use streaming::*;
+
+pub fn with_router<
+    E,
+    F: std::prelude::rust_2024::Future<Output = Result<axum::routing::Router<()>, E>>,
+>(
+    f: impl FnMut() -> F,
+) {
+}

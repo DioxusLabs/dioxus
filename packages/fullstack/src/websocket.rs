@@ -34,11 +34,6 @@ impl WebsocketHandle {
     }
 }
 
-pub fn with_router<E, F: Future<Output = Result<axum::routing::Router<()>, E>>>(
-    f: impl FnMut() -> F,
-) {
-}
-
 impl<In: Serialize, Out: DeserializeOwned> Websocket<In, Out> {
     pub fn raw<O, F: Future<Output = O>>(
         f: impl FnOnce(
