@@ -1,23 +1,66 @@
-use dioxus_core::{CapturedError, RenderError, Result};
-// use cr::Resource;
+use crate::{use_callback, use_signal};
+use dioxus_core::{Callback, CapturedError, RenderError, Result, Task};
 use dioxus_signals::{
     read_impls, CopyValue, ReadSignal, Readable, ReadableExt, ReadableRef, Signal, WritableExt,
 };
 use std::{marker::PhantomData, prelude::rust_2024::Future};
 
-pub fn use_action<F: Future<Output = Result<O, E>>, E, I, O>(
-    f: impl FnOnce(I) -> F,
-) -> Action<I, O> {
-    todo!()
+pub fn use_action<F, E, I, O>(mut user_fn: impl FnMut(I) -> F + 'static) -> Action<I, O>
+where
+    F: Future<Output = Result<O, E>> + 'static,
+    O: 'static,
+    E: Into<CapturedError> + 'static,
+    I: 'static,
+{
+    let mut value = use_signal(|| None as Option<O>);
+    let mut error = use_signal(|| None as Option<CapturedError>);
+    let mut task = use_signal(|| None as Option<Task>);
+    let callback = use_callback(move |input: I| {
+        // Cancel any existing task
+        if let Some(task) = task.take() {
+            task.cancel();
+        }
+
+        // Spawn a new task, and *then* fire off the async
+        let result = user_fn(input);
+        let new_task = dioxus_core::spawn(async move {
+            // Create a new task
+            let result = result.await;
+            match result {
+                Ok(res) => {
+                    error.set(None);
+                    value.set(Some(res));
+                }
+                Err(err) => {
+                    error.set(Some(err.into()));
+                    value.set(None);
+                }
+            }
+        });
+
+        task.set(Some(new_task));
+    });
+
+    Action {
+        value,
+        error,
+        task,
+        callback,
+        _phantom: PhantomData,
+    }
 }
 
 pub struct Action<I, T> {
-    _t: PhantomData<*const T>,
-    _i: PhantomData<*const I>,
+    error: Signal<Option<CapturedError>>,
+    value: Signal<Option<T>>,
+    task: Signal<Option<Task>>,
+    callback: Callback<I, ()>,
+    _phantom: PhantomData<*const I>,
 }
-impl<I, T> Action<I, T> {
+impl<I: 'static, T> Action<I, T> {
     pub fn dispatch(&mut self, input: I) -> Dispatching<()> {
-        todo!()
+        (self.callback)(input);
+        Dispatching(PhantomData)
     }
 
     pub fn ok(&self) -> Option<ReadSignal<T>> {
@@ -49,17 +92,9 @@ impl<T> std::future::Future for Dispatching<T> {
     }
 }
 
-// impl<I, T> std::ops::Deref for Action<I, T> {
-//     type Target = fn(I);
-
-//     fn deref(&self) -> &Self::Target {
-//         todo!()
-//     }
-// }
-
+impl<I, T> Copy for Action<I, T> {}
 impl<I, T> Clone for Action<I, T> {
     fn clone(&self) -> Self {
-        todo!()
+        *self
     }
 }
-impl<I, T> Copy for Action<I, T> {}

@@ -1,21 +1,17 @@
-use dioxus_core::{CapturedError, RenderError, Result};
-// use cr::Resource;
-use std::{
-    cell::RefCell,
-    ops::Deref,
-    sync::{atomic::AtomicBool, Arc},
-};
-
+use crate::{use_callback, use_signal};
 use dioxus_core::{
-    current_scope_id, spawn_isomorphic, IntoAttributeValue, IntoDynNode, ReactiveContext, ScopeId,
-    Subscribers,
+    spawn, use_hook, Callback, IntoAttributeValue, IntoDynNode, ReactiveContext, Subscribers, Task,
 };
-use dioxus_signals::{
-    read_impls, CopyValue, ReadSignal, Readable, ReadableExt, ReadableRef, Signal, WritableExt,
+use dioxus_core::{CapturedError, RenderError, Result, SuspendedFuture};
+use dioxus_signals::{read_impls, Readable, ReadableExt, ReadableRef, Signal, WritableExt};
+use futures_util::{future, pin_mut, FutureExt, StreamExt};
+use generational_box::{BorrowResult, UnsyncStorage};
+use std::prelude::rust_2024::Future;
+use std::{
+    cell::{Cell, Ref},
+    ops::Deref,
+    rc::Rc,
 };
-use futures_util::StreamExt;
-use generational_box::{AnyStorage, BorrowResult, UnsyncStorage};
-use std::{marker::PhantomData, prelude::rust_2024::Future};
 
 /// A hook to create a resource that loads data asynchronously.
 ///
@@ -23,22 +19,112 @@ use std::{marker::PhantomData, prelude::rust_2024::Future};
 ///
 /// To inspect the state of the resource, you can use the RenderError enum along with the RenderResultExt trait.
 pub fn use_loader<
-    F: Future<Output = Result<T, E>>,
-    T: 'static,
-    // T: 'static + PartialEq,
-    E: Into<dioxus_core::Error>,
+    F: Future<Output = Result<T, E>> + 'static,
+    T: 'static + std::cmp::PartialEq,
+    E: Into<dioxus_core::Error> + 'static,
 >(
-    // pub fn use_loader<F: Future<Output = Result<T, E>>, T: 'static, E: Into<anyhow::Error>>(
-    f: impl FnMut() -> F,
+    mut future: impl FnMut() -> F + 'static,
 ) -> Result<Loader<T>, Loading> {
-    todo!()
+    let location = std::panic::Location::caller();
+
+    let mut err = use_signal(|| None as Option<CapturedError>);
+    let mut value = use_signal(|| None as Option<T>);
+    let mut state = use_signal(|| LoaderState::Pending);
+    let (rc, changed) = use_hook(|| {
+        let (rc, changed) = ReactiveContext::new_with_origin(location);
+        (rc, Rc::new(Cell::new(Some(changed))))
+    });
+
+    let callback = use_callback(move |_| {
+        // Set the state to Pending when the task is restarted
+        state.set(LoaderState::Pending);
+
+        // Create the user's task
+        let fut = rc.reset_and_run_in(&mut future);
+
+        // Spawn a wrapper task that polls the inner future and watches its dependencies
+        spawn(async move {
+            // Move the future here and pin it so we can poll it
+            let fut = fut;
+            pin_mut!(fut);
+
+            // Run each poll in the context of the reactive scope
+            // This ensures the scope is properly subscribed to the future's dependencies
+            let res = future::poll_fn(|cx| {
+                rc.run_in(|| {
+                    tracing::trace_span!("polling resource", location = %location)
+                        .in_scope(|| fut.poll_unpin(cx))
+                })
+            })
+            .await;
+
+            // Map the error to the captured error type so it's cheap to clone and pass out
+            let res: Result<T, CapturedError> = res.map_err(|e| {
+                let res: dioxus_core::Error = e.into();
+                res.into()
+            });
+
+            // Set the value and state
+            state.set(LoaderState::Ready);
+
+            match res {
+                Ok(v) => {
+                    err.set(None);
+                    value.set(Some(v));
+                }
+                Err(e) => {
+                    err.set(Some(e));
+                    state.set(LoaderState::Failed);
+                }
+            }
+        })
+    });
+
+    let mut task = use_hook(|| Signal::new(callback(())));
+
+    use_hook(|| {
+        let mut changed = changed.take().unwrap();
+        spawn(async move {
+            loop {
+                // Wait for the dependencies to change
+                let _ = changed.next().await;
+
+                // Stop the old task
+                task.write().cancel();
+
+                // Start a new task
+                task.set(callback(()));
+            }
+        })
+    });
+
+    match &*state.read_unchecked() {
+        LoaderState::Pending => Err(Loading::Pending(LoaderHandle {
+            task,
+            err,
+            callback,
+        })),
+
+        LoaderState::Failed => Err(Loading::Failed(LoaderHandle {
+            task,
+            err,
+            callback,
+        })),
+
+        LoaderState::Ready => Ok(Loader {
+            inner: value,
+            error: err,
+            state,
+            task,
+        }),
+    }
 }
 
 #[derive(PartialEq)]
 pub enum Loading {
-    Pending(LoaderHandle<()>),
+    Pending(LoaderHandle),
 
-    Failed(LoaderHandle<RenderError>),
+    Failed(LoaderHandle),
 }
 
 impl std::fmt::Debug for Loading {
@@ -59,175 +145,55 @@ impl std::fmt::Display for Loading {
     }
 }
 
+/// Convert a Loading into a RenderError for use with the `?` operator in components
 impl From<Loading> for RenderError {
     fn from(val: Loading) -> Self {
-        todo!()
+        match val {
+            Loading::Pending(t) => RenderError::Suspended(SuspendedFuture::new(t.task.cloned())),
+            Loading::Failed(err) => RenderError::Error(err.err.cloned().unwrap()),
+        }
     }
 }
 
 #[derive(PartialEq)]
-pub struct LoaderHandle<T> {
-    _t: PhantomData<*const T>,
+pub struct LoaderHandle {
+    callback: Callback<(), Task>,
+    task: Signal<Task>,
+    err: Signal<Option<CapturedError>>,
 }
-impl<T> LoaderHandle<T> {
-    pub fn restart(&self) {
-        todo!()
+impl LoaderHandle {
+    pub fn restart(&mut self) {
+        self.task.write().cancel();
+        let new_task = self.callback.call(());
+        self.task.set(new_task);
     }
 }
-impl<T> Clone for LoaderHandle<T> {
+impl Clone for LoaderHandle {
     fn clone(&self) -> Self {
-        todo!()
+        *self
     }
 }
-impl<T> Copy for LoaderHandle<T> {}
+
+impl Copy for LoaderHandle {}
+
+#[derive(Clone, Copy, PartialEq, Hash, Eq, Debug)]
+enum LoaderState {
+    /// The loader's future is still running
+    Pending,
+    /// The loader's future has completed successfully
+    Ready,
+    /// The loader's future has failed
+    Failed,
+}
 
 pub struct Loader<T> {
-    inner: Signal<T>,
-    update: CopyValue<UpdateInformation<T>>,
+    inner: Signal<Option<T>>,
+    error: Signal<Option<CapturedError>>,
+    state: Signal<LoaderState>,
+    task: Signal<Task>,
 }
 
-struct UpdateInformation<T> {
-    dirty: Arc<AtomicBool>,
-    callback: RefCell<Box<dyn FnMut() -> T>>,
-}
-
-impl<T> Loader<T> {
-    /// Create a new memo
-    #[track_caller]
-    pub fn new(f: impl FnMut() -> T + 'static) -> Self
-    where
-        T: PartialEq + 'static,
-    {
-        Self::new_with_location(f, std::panic::Location::caller())
-    }
-
-    /// Create a new memo with an explicit location
-    pub fn new_with_location(
-        mut f: impl FnMut() -> T + 'static,
-        location: &'static std::panic::Location<'static>,
-    ) -> Self
-    where
-        T: PartialEq + 'static,
-    {
-        let dirty = Arc::new(AtomicBool::new(false));
-        let (tx, mut rx) = futures_channel::mpsc::unbounded();
-
-        let callback = {
-            let dirty = dirty.clone();
-            move || {
-                dirty.store(true, std::sync::atomic::Ordering::Relaxed);
-                let _ = tx.unbounded_send(());
-            }
-        };
-        let rc =
-            ReactiveContext::new_with_callback(callback, current_scope_id().unwrap(), location);
-
-        // Create a new signal in that context, wiring up its dependencies and subscribers
-        let mut recompute = move || rc.reset_and_run_in(&mut f);
-        let value = recompute();
-        let recompute = RefCell::new(Box::new(recompute) as Box<dyn FnMut() -> T>);
-        let update = CopyValue::new(UpdateInformation {
-            dirty,
-            callback: recompute,
-        });
-        let state: Signal<T> = Signal::new_with_caller(value, location);
-
-        let memo = Loader {
-            inner: state,
-            update,
-        };
-
-        spawn_isomorphic(async move {
-            while rx.next().await.is_some() {
-                // Remove any pending updates
-                while rx.try_next().is_ok() {}
-                memo.recompute();
-            }
-        });
-
-        memo
-    }
-
-    // /// Creates a new [`GlobalMemo`] that can be used anywhere inside your dioxus app. This memo will automatically be created once per app the first time you use it.
-    // ///
-    // /// # Example
-    // /// ```rust, no_run
-    // /// # use dioxus::prelude::*;
-    // /// static SIGNAL: GlobalSignal<i32> = Signal::global(|| 0);
-    // /// // Create a new global memo that can be used anywhere in your app
-    // /// static DOUBLED: GlobalMemo<i32> = Memo::global(|| SIGNAL() * 2);
-    // ///
-    // /// fn App() -> Element {
-    // ///     rsx! {
-    // ///         button {
-    // ///             // When SIGNAL changes, the memo will update because the SIGNAL is read inside DOUBLED
-    // ///             onclick: move |_| *SIGNAL.write() += 1,
-    // ///             "{DOUBLED}"
-    // ///         }
-    // ///     }
-    // /// }
-    // /// ```
-    // ///
-    // /// <div class="warning">
-    // ///
-    // /// Global memos are generally not recommended for use in libraries because it makes it more difficult to allow multiple instances of components you define in your library.
-    // ///
-    // /// </div>
-    // #[track_caller]
-    // pub const fn global(constructor: fn() -> T) -> GlobalLoader<T>
-    // where
-    //     T: PartialEq + 'static,
-    // {
-    //     GlobalMemo::new(constructor)
-    // }
-
-    /// Restart the loader
-    pub fn restart(&mut self) {
-        todo!()
-    }
-
-    /// Rerun the computation and update the value of the memo if the result has changed.
-    #[tracing::instrument(skip(self))]
-    fn recompute(&self)
-    where
-        T: PartialEq + 'static,
-    {
-        let mut update_copy = self.update;
-        let update_write = update_copy.write();
-        let peak = self.inner.peek();
-        let new_value = (update_write.callback.borrow_mut())();
-        if new_value != *peak {
-            drop(peak);
-            let mut copy = self.inner;
-            copy.set(new_value);
-        }
-        // Always mark the memo as no longer dirty even if the value didn't change
-        update_write
-            .dirty
-            .store(false, std::sync::atomic::Ordering::Relaxed);
-    }
-
-    /// Get the scope that the signal was created in.
-    pub fn origin_scope(&self) -> ScopeId
-    where
-        T: 'static,
-    {
-        self.inner.origin_scope()
-    }
-
-    /// Get the id of the signal.
-    pub fn id(&self) -> generational_box::GenerationalBoxId
-    where
-        T: 'static,
-    {
-        self.inner.id()
-    }
-}
-
-impl<T> Readable for Loader<T>
-// where
-//     T: PartialEq,
-{
+impl<T> Readable for Loader<T> {
     type Target = T;
     type Storage = UnsyncStorage;
 
@@ -238,34 +204,10 @@ impl<T> Readable for Loader<T>
     where
         T: 'static,
     {
-        todo!()
-        // // Read the inner generational box instead of the signal so we have more fine grained control over exactly when the subscription happens
-        // let read = self.inner.try_read_unchecked()?;
-
-        // let needs_update = self
-        //     .update
-        //     .read()
-        //     .dirty
-        //     .swap(false, std::sync::atomic::Ordering::Relaxed);
-        // let result = if needs_update {
-        //     drop(read);
-        //     // We shouldn't be subscribed to the value here so we don't trigger the scope we are currently in to rerun even though that scope got the latest value because we synchronously update the value: https://github.com/DioxusLabs/dioxus/issues/2416
-        //     // self.recompute();
-        //     todo!();
-        //     self.inner.try_read_unchecked()
-        // } else {
-        //     Ok(read)
-        // };
-
-        // // Subscribe to the current scope before returning the value
-        // if let Ok(read) = &result {
-        //     if let Some(reactive_context) = ReactiveContext::current() {
-        //         tracing::trace!("Subscribing to the reactive context {}", reactive_context);
-        //         reactive_context.subscribe(read.subscribers.clone());
-        //     }
-        // }
-
-        // result.map(|read| <UnsyncStorage as AnyStorage>::map(read, |v| &v.value))
+        Ok(self
+            .inner
+            .read_unchecked()
+            .map(|r| Ref::map(r, |s| s.as_ref().unwrap())))
     }
 
     /// Get the current value of the signal. **Unlike read, this will not subscribe the current scope to the signal which can cause parts of your UI to not update.**
@@ -276,7 +218,10 @@ impl<T> Readable for Loader<T>
     where
         T: 'static,
     {
-        self.inner.try_peek_unchecked()
+        Ok(self
+            .inner
+            .peek_unchecked()
+            .map(|r| Ref::map(r, |s| s.as_ref().unwrap())))
     }
 
     fn subscribers(&self) -> Subscribers

@@ -48,8 +48,6 @@ impl Task {
     }
 
     /// Drop the task immediately.
-    ///
-    /// This does not abort the task, so you'll want to wrap it in an abort handle if that's important to you
     pub fn cancel(self) {
         remove_future(self);
     }
