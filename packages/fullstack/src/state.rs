@@ -4,7 +4,7 @@ use crate::{
     streaming::{Mount, StreamingRenderer},
     DioxusServerContext,
 };
-use dioxus_cli_config::base_path;
+// use dioxus_cli_config::base_path;
 use dioxus_core::{
     has_context, provide_error_boundary, DynamicNode, ErrorContext, ScopeId, SuspenseContext,
     VNode, VirtualDom,
@@ -12,7 +12,7 @@ use dioxus_core::{
 use dioxus_fullstack_hooks::history::provide_fullstack_history_context;
 use dioxus_fullstack_hooks::{HydrationContext, SerializedHydrationData};
 use dioxus_fullstack_hooks::{StreamingContext, StreamingStatus};
-use dioxus_isrg::{CachedRender, IncrementalRendererError, RenderFreshness};
+// use dioxus_isrg::{CachedRender, IncrementalRendererError, RenderFreshness};
 use dioxus_router::ParseRouteError;
 use dioxus_ssr::Renderer;
 use futures_channel::mpsc::Sender;
@@ -25,7 +25,6 @@ use std::{
     rc::Rc,
     sync::{Arc, RwLock},
 };
-use tokio::task::JoinHandle;
 
 use crate::StreamingMode;
 

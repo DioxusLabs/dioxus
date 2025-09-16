@@ -28,11 +28,9 @@ impl IntoResponse for ServerSentEvents<String> {
 }
 
 impl<T> FromResponse<()> for ServerSentEvents<T> {
-    type Output = ServerSentEvents<T>;
-
     fn from_response(
         res: reqwest::Response,
-    ) -> impl std::future::Future<Output = Result<Self::Output, crate::ServerFnError>> + Send {
+    ) -> impl std::future::Future<Output = Result<Self, crate::ServerFnError>> + Send {
         async move { Ok(ServerSentEvents::new()) }
     }
 }

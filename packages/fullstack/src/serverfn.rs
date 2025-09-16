@@ -18,9 +18,43 @@
 
 use std::prelude::rust_2024::Future;
 
-use axum::extract::Form; // both req/res
-use axum::extract::Json; // both req/res
-use axum::extract::Multipart; // req only
+use axum::{body::Body, extract::Form};
+use axum::{extract::Json, Router};
+use axum::{extract::Multipart, handler::Handler}; // both req/res // both req/res // req only
+
+use axum::{extract::State, routing::MethodRouter};
+use base64::{engine::general_purpose::STANDARD_NO_PAD, DecodeError, Engine};
+use dioxus_core::{Element, VirtualDom};
+use serde::de::DeserializeOwned;
+
+use crate::{
+    ContextProviders,
+    DioxusServerContext,
+    ProvideServerContext,
+    ServerFnError,
+    // FromServerFnError, Protocol, ProvideServerContext, ServerFnError,
+};
+// use super::client::Client;
+// use super::codec::Encoding;
+// use super::codec::{Encoding, FromReq, FromRes, IntoReq, IntoRes};
+// #[cfg(feature = "form-redirects")]
+// use super::error::ServerFnUrlError;
+// use super::middleware::{BoxedService, Layer, Service};
+// use super::response::{Res, TryRes};
+// use super::response::{ClientRes, Res, TryRes};
+// use super::server::Server;
+use super::redirect::call_redirect_hook;
+use bytes::{BufMut, Bytes, BytesMut};
+use dashmap::DashMap;
+use futures::{pin_mut, SinkExt, Stream, StreamExt};
+use http::{method, Method};
+use std::{
+    fmt::{Debug, Display},
+    marker::PhantomData,
+    ops::{Deref, DerefMut},
+    pin::Pin,
+    sync::{Arc, LazyLock},
+};
 
 pub mod cbor;
 pub mod form;
@@ -59,11 +93,33 @@ pub use error::*;
 pub mod client;
 pub use client::*;
 
-pub trait FromResponse<M> {
-    type Output;
+// pub fn get_client() -> &'static reqwest::Client {
+//     static CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| reqwest::Client::new());
+//     &CLIENT
+// }
+
+pub trait FromResponse<M>: Sized {
     fn from_response(
         res: reqwest::Response,
-    ) -> impl Future<Output = Result<Self::Output, ServerFnError>> + Send;
+    ) -> impl Future<Output = Result<Self, ServerFnError>> + Send;
+}
+
+pub struct DefaultEncoding;
+impl<T> FromResponse<DefaultEncoding> for T
+where
+    T: DeserializeOwned + 'static,
+{
+    fn from_response(
+        res: reqwest::Response,
+    ) -> impl Future<Output = Result<Self, ServerFnError>> + Send {
+        async move {
+            let res = res
+                .json::<T>()
+                .await
+                .map_err(|e| ServerFnError::Deserialization(e.to_string()))?;
+            Ok(res)
+        }
+    }
 }
 
 pub trait IntoRequest<M> {
@@ -72,53 +128,41 @@ pub trait IntoRequest<M> {
     fn into_request(input: Self::Input) -> Result<Self::Output, ServerFnError>;
 }
 
-use axum::{extract::State, routing::MethodRouter, Router};
-use base64::{engine::general_purpose::STANDARD_NO_PAD, DecodeError, Engine};
-use dioxus_core::{Element, VirtualDom};
-
-use crate::{
-    ContextProviders,
-    DioxusServerContext,
-    ProvideServerContext,
-    ServerFnError,
-    // FromServerFnError, Protocol, ProvideServerContext, ServerFnError,
-};
-// use super::client::Client;
-// use super::codec::Encoding;
-// use super::codec::{Encoding, FromReq, FromRes, IntoReq, IntoRes};
-// #[cfg(feature = "form-redirects")]
-// use super::error::ServerFnUrlError;
-// use super::middleware::{BoxedService, Layer, Service};
-// use super::response::{Res, TryRes};
-// use super::response::{ClientRes, Res, TryRes};
-// use super::server::Server;
-use super::redirect::call_redirect_hook;
-use bytes::{BufMut, Bytes, BytesMut};
-use dashmap::DashMap;
-use futures::{pin_mut, SinkExt, Stream, StreamExt};
-use http::{method, Method};
-use std::{
-    fmt::{Debug, Display},
-    marker::PhantomData,
-    ops::{Deref, DerefMut},
-    pin::Pin,
-    sync::{Arc, LazyLock},
-};
-
-pub type AxumRequest = http::Request<axum::body::Body>;
-pub type AxumResponse = http::Response<axum::body::Body>;
+pub type AxumRequest = http::Request<Body>;
+pub type AxumResponse = http::Response<Body>;
 
 #[derive(Clone, Default)]
 pub struct DioxusServerState {}
+impl DioxusServerState {
+    pub fn spawn(
+        &self,
+        fut: impl Future<Output = axum::response::Response> + Send + 'static,
+    ) -> tokio::task::JoinHandle<axum::response::Response> {
+        tokio::spawn(fut)
+    }
+}
 
 /// A function endpoint that can be called from the client.
 #[derive(Clone)]
-pub struct ServerFunction {
+pub struct ServerFunction<Caller = ()> {
     path: &'static str,
     method: Method,
     handler: fn() -> MethodRouter<DioxusServerState>,
+    _phantom: PhantomData<Caller>,
     // serde_err: fn(ServerFnError) -> Bytes,
     // pub(crate) middleware: fn() -> MiddlewareSet<Req, Res>,
+}
+
+impl<In1, In2, Out> std::ops::Deref for ServerFunction<((In1, In2), Out)> {
+    type Target = fn(In1, In2) -> MakeRequest<Out>;
+
+    fn deref(&self) -> &Self::Target {
+        todo!()
+    }
+}
+
+pub struct MakeRequest<T> {
+    _phantom: PhantomData<T>,
 }
 
 impl ServerFunction {
@@ -127,6 +171,8 @@ impl ServerFunction {
         method: Method,
         path: &'static str,
         handler: fn() -> MethodRouter<DioxusServerState>,
+        // middlewares: Option<fn() -> Vec<>>,
+        // handler: fn(axum::extract::Request) -> axum::response::Response,
         // middlewares: Option<fn() -> MiddlewareSet<Req, Res>>,
     ) -> Self {
         // fn default_middlewares<Req, Res>() -> MiddlewareSet<Req, Res> {
@@ -137,12 +183,7 @@ impl ServerFunction {
             path,
             method,
             handler,
-            // serde_err: |e| todo!(),
-            // serde_err: |e| ServerFnError::from_server_fn_error(e).ser(),
-            // middleware: match middlewares {
-            //     Some(m) => m,
-            //     None => default_middlewares,
-            // },
+            _phantom: PhantomData,
         }
     }
 
@@ -156,46 +197,45 @@ impl ServerFunction {
         self.method.clone()
     }
 
-    /// The handler for this server function.
-    pub fn handler(&self) -> fn() -> MethodRouter<DioxusServerState> {
-        self.handler
-    }
+    // /// The handler for this server function.
+    // pub fn handler(&self) -> fn(axum::extract::Request) -> axum::response::Response {
+    //     self.handler
+    // }
 
     // /// The set of middleware that should be applied to this function.
     // pub fn middleware(&self) -> Vec {
     //     (self.middleware)()
     // }
 
-    /// Create a router with all registered server functions and the render handler at `/` (basepath).
-    ///
-    ///
-    pub fn into_router(dioxus_app: fn() -> Element) -> Router {
-        let router = Router::new();
+    // /// Create a router with all registered server functions and the render handler at `/` (basepath).
+    // ///
+    // ///
+    // pub fn into_router(dioxus_app: fn() -> Element) -> Router {
+    //     let router = Router::new();
 
-        // add middleware if any exist
+    //     // add middleware if any exist
+    //     let mut router = Self::with_router(router);
 
-        let mut router = Self::with_router(router);
+    //     // Now serve the app at `/`
+    //     router = router.fallback(axum::routing::get(
+    //         move |state: State<DioxusServerState>| async move {
+    //             let mut vdom = VirtualDom::new(dioxus_app);
+    //             vdom.rebuild_in_place();
+    //             axum::response::Html(dioxus_ssr::render(&vdom))
+    //         },
+    //     ));
 
-        // Now serve the app at `/`
-        router = router.fallback(axum::routing::get(
-            move |state: State<DioxusServerState>| async move {
-                let mut vdom = VirtualDom::new(dioxus_app);
-                vdom.rebuild_in_place();
-                axum::response::Html(dioxus_ssr::render(&vdom))
-            },
-        ));
+    //     router.with_state(DioxusServerState {})
+    // }
 
-        router.with_state(DioxusServerState {})
-    }
+    // pub fn with_router(mut router: Router<DioxusServerState>) -> Router<DioxusServerState> {
+    //     for server_fn in crate::inventory::iter::<ServerFunction>() {
+    //         let method_router = (server_fn.handler)();
+    //         router = router.route(server_fn.path(), method_router);
+    //     }
 
-    pub fn with_router(mut router: Router<DioxusServerState>) -> Router<DioxusServerState> {
-        for server_fn in crate::inventory::iter::<ServerFunction>() {
-            let method_router = (server_fn.handler)();
-            router = router.route(server_fn.path(), method_router);
-        }
-
-        router
-    }
+    //     router
+    // }
 
     pub fn collect() -> Vec<&'static ServerFunction> {
         inventory::iter::<ServerFunction>().collect()
@@ -203,9 +243,9 @@ impl ServerFunction {
 
     pub fn register_server_fn_on_router<S>(
         &'static self,
-        router: axum::Router<S>,
+        router: Router<S>,
         context_providers: ContextProviders,
-    ) -> axum::Router<S>
+    ) -> Router<S>
     where
         S: Send + Sync + Clone + 'static,
     {
@@ -217,6 +257,12 @@ impl ServerFunction {
             Method::GET => router.route(path, axum::routing::get(handler)),
             Method::POST => router.route(path, axum::routing::post(handler)),
             Method::PUT => router.route(path, axum::routing::put(handler)),
+            Method::DELETE => router.route(path, axum::routing::delete(handler)),
+            Method::PATCH => router.route(path, axum::routing::patch(handler)),
+            Method::HEAD => router.route(path, axum::routing::head(handler)),
+            Method::OPTIONS => router.route(path, axum::routing::options(handler)),
+            Method::CONNECT => router.route(path, axum::routing::connect(handler)),
+            Method::TRACE => router.route(path, axum::routing::trace(handler)),
             _ => unimplemented!("Unsupported server function method: {}", method),
         }
     }
@@ -224,8 +270,8 @@ impl ServerFunction {
     pub async fn handle_server_fns_inner(
         &self,
         additional_context: ContextProviders,
-        req: http::Request<axum::body::Body>,
-    ) -> http::Response<axum::body::Body> {
+        req: http::Request<Body>,
+    ) -> http::Response<Body> {
         use axum::body;
         use axum::extract::State;
         use axum::routing::*;
@@ -236,23 +282,25 @@ impl ServerFunction {
         };
         use http::header::*;
 
-        let (parts, body) = req.into_parts();
-        let req = Request::from_parts(parts.clone(), body);
+        // let (parts, body) = req.into_parts();
+        // let req = Request::from_parts(parts.clone(), body);
 
-        // Create the server context with info from the request
-        let server_context = DioxusServerContext::new(parts);
+        // // Create the server context with info from the request
+        // let server_context = DioxusServerContext::new(parts);
 
-        // Provide additional context from the render state
-        server_context.add_server_context(&additional_context);
+        // // Provide additional context from the render state
+        // server_context.add_server_context(&additional_context);
 
-        // store Accepts and Referrer in case we need them for redirect (below)
-        let referrer = req.headers().get(REFERER).cloned();
-        let accepts_html = req
-            .headers()
-            .get(ACCEPT)
-            .and_then(|v| v.to_str().ok())
-            .map(|v| v.contains("text/html"))
-            .unwrap_or(false);
+        // // store Accepts and Referrer in case we need them for redirect (below)
+        // let referrer = req.headers().get(REFERER).cloned();
+        // let accepts_html = req
+        //     .headers()
+        //     .get(ACCEPT)
+        //     .and_then(|v| v.to_str().ok())
+        //     .map(|v| v.contains("text/html"))
+        //     .unwrap_or(false);
+
+        // let mthd: MethodRouter<()> = axum::routing::get(self.handler);
 
         // // this is taken from server_fn source...
         // //
@@ -266,7 +314,8 @@ impl ServerFunction {
         //     service
         // };
 
-        // // actually run the server fn (which may use the server context)
+        // actually run the server fn (which may use the server context)
+        // let fut = crate::with_server_context(server_context.clone(), || service.run(req));
         // let fut = crate::with_server_context(server_context.clone(), || service.run(req));
 
         // let res = ProvideServerContext::new(fut, server_context.clone()).await;
@@ -287,9 +336,11 @@ impl ServerFunction {
         // // apply the response parts from the server context to the response
         // server_context.send_response(&mut res);
 
-        // res
+        let mthd: MethodRouter<DioxusServerState> =
+            (self.handler)().with_state(DioxusServerState {});
+        let res = mthd.call(req, DioxusServerState {}).await;
 
-        todo!()
+        res
     }
 }
 
@@ -316,57 +367,7 @@ static REGISTERED_SERVER_FUNCTIONS: LazyServerFnMap = std::sync::LazyLock::new(|
         .collect()
 });
 
-// /// An Axum handler that responds to a server function request.
-// pub async fn handle_server_fn(req: HybridRequest) -> HybridResponse {
-//     let path = req.uri().path();
-
-//     if let Some(mut service) = get_server_fn_service(path, req.req.method().clone()) {
-//         service.run(req).await
-//     } else {
-//         let res = Response::builder()
-//             .status(StatusCode::BAD_REQUEST)
-//             .body(Body::from(format!(
-//                 "Could not find a server function at the route {path}. \
-//                      \n\nIt's likely that either\n 1. The API prefix you \
-//                      specify in the `#[server]` macro doesn't match the \
-//                      prefix at which your server function handler is mounted, \
-//                      or \n2. You are on a platform that doesn't support \
-//                      automatic server function registration and you need to \
-//                      call ServerFn::register_explicit() on the server \
-//                      function type, somewhere in your `main` function.",
-//             )))
-//             .unwrap();
-
-//         HybridResponse { res }
-//     }
-// }
-
-// /// Returns the server function at the given path as a service that can be modified.
-// fn get_server_fn_service(
-//     path: &str,
-//     method: Method,
-// ) -> Option<BoxedService<HybridRequest, HybridResponse>> {
-//     let key = (path.into(), method);
-//     REGISTERED_SERVER_FUNCTIONS.get(&key).map(|server_fn| {
-//         let middleware = (server_fn.middleware)();
-//         let mut service = server_fn.clone().boxed();
-//         for middleware in middleware {
-//             service = middleware.layer(service);
-//         }
-//         service
-//     })
-// }
-
-// /// Explicitly register a server function. This is only necessary if you are
-// /// running the server in a WASM environment (or a rare environment that the
-// /// `inventory` crate won't work in.).
-// pub fn register_explicit<T>()
-// where
-//     T: ServerFn + 'static,
-// {
-//     REGISTERED_SERVER_FUNCTIONS.insert(
-//         (T::PATH.into(), T::METHOD),
-//         ServerFnTraitObj::new(T::METHOD, T::PATH, |req| Box::pin(T::run_on_server(req))),
-//         // ServerFnTraitObj::new::<T>(|req| Box::pin(T::run_on_server(req))),
-//     );
-// }
+pub struct EncodedServerFnRequest {
+    pub path: String,
+    pub method: Method,
+}

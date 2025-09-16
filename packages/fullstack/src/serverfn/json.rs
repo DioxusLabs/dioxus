@@ -23,15 +23,15 @@ impl<T> FromResponse<()> for Json<T>
 where
     T: DeserializeOwned + 'static,
 {
-    type Output = T;
-
     fn from_response(
         res: reqwest::Response,
-    ) -> impl Future<Output = Result<Self::Output, ServerFnError>> + Send {
+    ) -> impl Future<Output = Result<Self, ServerFnError>> + Send {
         async move {
-            res.json::<T>()
+            let res = res
+                .json::<T>()
                 .await
-                .map_err(|e| ServerFnError::Deserialization(e.to_string()))
+                .map_err(|e| ServerFnError::Deserialization(e.to_string()))?;
+            Ok(Json(res))
         }
     }
 }

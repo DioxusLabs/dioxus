@@ -30,8 +30,8 @@ unsafe impl<A, B, C> Sync for DeSer<A, B, C> {}
 
 fn assert_is_send(_: impl Send) {}
 fn check_it() {
-    // assert_is_send(DeSer::<(HeaderMap, Json<String>), Json<String>>::new());
-    // assert_is_send( &&&&&&&&DeSer<(A,)>);
+    // (&&&&&&&&&&&&&&&&&&&DeSer::<(HeaderMap, Json<String>), Json<String>>::new()
+    //     .extract_request(request));
 }
 
 impl<T, Encoding> DeSer<T, Encoding> {

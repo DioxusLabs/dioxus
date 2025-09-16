@@ -9,24 +9,23 @@ pub use impls::*;
 
 use crate::{DioxusServerState, ServerFnRejection};
 
-#[derive(Default)]
 pub struct EncodeState {
-    request: Request,
-    state: State<DioxusServerState>,
-    names: (&'static str, &'static str, &'static str),
+    pub client: reqwest::RequestBuilder,
 }
 
 unsafe impl Send for EncodeState {}
 unsafe impl Sync for EncodeState {}
 
-pub struct ReqSer<T, BodyTy = (), Body = Json<BodyTy>> {
-    _t: std::marker::PhantomData<T>,
+pub struct ClientRequest<In, Out, M = (), BodyTy = (), Body = Json<BodyTy>> {
+    _marker: std::marker::PhantomData<M>,
+    _out: std::marker::PhantomData<Out>,
+    _t: std::marker::PhantomData<In>,
     _body: std::marker::PhantomData<BodyTy>,
     _encoding: std::marker::PhantomData<Body>,
 }
 
-unsafe impl<A, B, C> Send for ReqSer<A, B, C> {}
-unsafe impl<A, B, C> Sync for ReqSer<A, B, C> {}
+unsafe impl<A, B, C> Send for ClientRequest<A, B, C> {}
+unsafe impl<A, B, C> Sync for ClientRequest<A, B, C> {}
 
 fn assert_is_send(_: impl Send) {}
 fn check_it() {
@@ -34,9 +33,11 @@ fn check_it() {
     // assert_is_send( &&&&&&&&DeSer<(A,)>);
 }
 
-impl<T, Encoding> ReqSer<T, Encoding> {
+impl<T, Out, Encoding> ClientRequest<T, Out, Encoding> {
     pub fn new() -> Self {
-        ReqSer {
+        ClientRequest {
+            _marker: std::marker::PhantomData,
+            _out: std::marker::PhantomData,
             _t: std::marker::PhantomData,
             _body: std::marker::PhantomData,
             _encoding: std::marker::PhantomData,
@@ -64,261 +65,307 @@ impl<T, S> FromRequest<S> for DeTys<T> {
     }
 }
 
+pub struct EncodedBody {
+    pub data: bytes::Bytes,
+    pub content_type: &'static str,
+}
+
 #[allow(clippy::manual_async_fn)]
 #[rustfmt::skip]
 mod impls {
-use super::*;
+    use crate::{FromResponse, ServerFnError};
+
+    use super::*;
 
     /*
     Handle the regular axum-like handlers with tiered overloading with a single trait.
     */
     pub trait EncodeRequest {
         type Input;
-        fn encode<O>(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Result<O, ServerFnRejection>> + Send + 'static;
+        type Output;
+        fn fetch(&self, ctx: EncodeState, data: Self::Input) -> impl Future<Output = Self::Output> + Send + 'static;
     }
 
-    use axum::response::IntoResponse as Freq;
-    use axum::response::IntoResponseParts as Prts;
+    use axum::extract::FromRequest as Freq;
+    use axum::extract::FromRequestParts as Prts;
     use serde::ser::Serialize as DeO_____;
-    use super::DioxusServerState as Ds;
+
+
+    // fallback case for *all invalid*
+    // todo...
+    // impl<In, Out> EncodeRequest for ClientRequest<In, Out> {
+    //     type Input = In;
+    //     type Output = Out;
+    //     fn fetch(&self, _ctx: EncodeState, _data: Self::Input) -> impl Future<Output = Out> + Send + 'static {
+    //         async move { panic!("Could not encode request") }
+    //     }
+    // }
 
     // Zero-arg case
-    impl EncodeRequest for &&&&&&&&&&ReqSer<()> {
+    impl<O: FromResponse<M>, E, M> EncodeRequest for &&&&&&&&&&ClientRequest<(), Result<O, E>, M> where E: From<ServerFnError> {
         type Input = ();
-        fn encode<O>(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Result<O, ServerFnRejection>> + Send + 'static {
-            async move { todo!() }
+        type Output = Result<O, E>;
+        fn fetch(&self, ctx: EncodeState, data: Self::Input) -> impl Future<Output = Self::Output> + Send + 'static {
+            async move {
+                let res = ctx.client.send().await;
+                match res {
+                    Ok(res) => O::from_response(res).await.map_err(|e| e.into()),
+                    Err(err) => Err(ServerFnError::from(err).into())
+                }
+            }
         }
     }
 
     // One-arg case
-    impl<A> EncodeRequest for &&&&&&&&&&ReqSer<(A,)> where A: Freq {
+    impl<A, O, E> EncodeRequest for &&&&&&&&&&ClientRequest<(A,), Result<O, E>> where A: Freq<DioxusServerState>, E: From<ServerFnError> {
         type Input = (A,);
-        fn encode<O>(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Result<O, ServerFnRejection>> + Send + 'static { async move { todo!() } }
+        type Output = Result<O, E>;
+        fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Self::Output> + Send + 'static {
+            async move { todo!() }
+        }
     }
-    impl<A> EncodeRequest for  &&&&&&&&&ReqSer<(A,)> where A: Prts {
+    impl<A, O, E> EncodeRequest for  &&&&&&&&&ClientRequest<(A,), Result<O, E>> where A: Prts<DioxusServerState>, E: From<ServerFnError> {
         type Input = (A,);
-        fn encode<O>(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Result<O, ServerFnRejection>> + Send + 'static { async move { todo!() } }
+        type Output = Result<O, E>;
+        fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Self::Output> + Send + 'static {
+            async move { todo!() }
+        }
     }
-    impl<A> EncodeRequest for   &&&&&&&&ReqSer<(A,)> where A: DeO_____ {
+    impl<A, O, E> EncodeRequest for   &&&&&&&&ClientRequest<(A,), Result<O, E>> where A: DeO_____, E: From<ServerFnError> {
         type Input = (A,);
-        fn encode<O>(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Result<O, ServerFnRejection>> + Send + 'static { async move { todo!() } }
+        type Output = Result<O, E>;
+        fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Self::Output> + Send + 'static {
+            async move { todo!() }
+        }
     }
 
 
     // Two-arg case
-    impl<A, B> EncodeRequest for &&&&&&&&&&ReqSer<(A, B)> where A: Prts, B: Freq {
+    impl<A, B, O, E> EncodeRequest for &&&&&&&&&&ClientRequest<(A, B), Result<O, E>> where A: Prts<DioxusServerState>, B: Freq<DioxusServerState>, E: From<ServerFnError> {
         type Input = (A, B);
-        fn encode<O>(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Result<O, ServerFnRejection>> + Send + 'static { async move { todo!() } }
+        type Output = Result<O, E>;
+        fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Self::Output> + Send + 'static {
+            async move { todo!() }
+        }
     }
-    impl<A, B> EncodeRequest for  &&&&&&&&&ReqSer<(A, B)> where A: Prts, B: Prts {
+    impl<A, B, O, E> EncodeRequest for  &&&&&&&&&ClientRequest<(A, B), Result<O, E>> where A: Prts<DioxusServerState>, B: Prts<DioxusServerState>, E: From<ServerFnError> {
         type Input = (A, B);
-        fn encode<O>(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Result<O, ServerFnRejection>> + Send + 'static { async move { todo!() } }
+        type Output = Result<O, E>;
+        fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Self::Output> + Send + 'static {
+            async move { todo!() }
+        }
     }
-    impl<A, B> EncodeRequest for   &&&&&&&&ReqSer<(A, B)> where A: Prts {
+    impl<A, B, O, E> EncodeRequest for   &&&&&&&&ClientRequest<(A, B), Result<O, E>> where A: Prts<DioxusServerState>, B: DeO_____, E: From<ServerFnError> {
         type Input = (A, B);
-        fn encode<O>(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Result<O, ServerFnRejection>> + Send + 'static { async move { todo!() } }
+        type Output = Result<O, E>;
+        fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Self::Output> + Send + 'static {
+            async move { todo!() }
+        }
     }
-    impl<A, B> EncodeRequest for    &&&&&&&ReqSer<(A, B)>  {
+    impl<A, B, O, E> EncodeRequest for    &&&&&&&ClientRequest<(A, B), Result<O, E>> where A: DeO_____, B: DeO_____, E: From<ServerFnError> {
         type Input = (A, B);
-        fn encode<O>(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Result<O, ServerFnRejection>> + Send + 'static { async move { todo!() } }
+        type Output = Result<O, E>;
+        fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Self::Output> + Send + 'static {
+            async move { todo!() }
+        }
     }
 
 
-    // the three-arg case
-    impl<A, B, C> EncodeRequest for &&&&&&&&&&ReqSer<(A, B, C)> where A: Prts, B: Prts, C: Freq, {
-        type Input = (A, B, C);
-        fn encode<O>(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Result<O, ServerFnRejection>> + Send + 'static { async move { todo!() } }
-    }
-    impl<A, B, C> EncodeRequest for  &&&&&&&&&ReqSer<(A, B, C)> where A: Prts, B: Prts, C: Prts {
-        type Input = (A, B, C);
-        fn encode<O>(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Result<O, ServerFnRejection>> + Send + 'static { async move { todo!() } }
-    }
-    impl<A, B, C> EncodeRequest for   &&&&&&&&ReqSer<(A, B, C)> where A: Prts, B: Prts {
-        type Input = (A, B, C);
-        fn encode<O>(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Result<O, ServerFnRejection>> + Send + 'static { async move { todo!() } }
-    }
-    impl<A, B, C> EncodeRequest for   &&&&&&&ReqSer<(A, B, C)> where A: Prts {
-        type Input = (A, B, C);
-        fn encode<O>(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Result<O, ServerFnRejection>> + Send + 'static { async move { todo!() } }
-    }
-    impl<A, B, C> EncodeRequest for    &&&&&&ReqSer<(A, B, C)>  {
-        type Input = (A, B, C);
-        fn encode<O>(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Result<O, ServerFnRejection>> + Send + 'static { async move { todo!() } }
-    }
+    // // the three-arg case
+    // impl<A, B, C> EncodeRequest for &&&&&&&&&&ClientRequest<(A, B, C)> where A: Prts, B: Prts, C: Freq, {
+    //     type Input = (A, B, C);
+    //     fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = O> + Send + 'static { async move { todo!() } }
+    // }
+    // impl<A, B, C> EncodeRequest for  &&&&&&&&&ClientRequest<(A, B, C)> where A: Prts, B: Prts, C: Prts {
+    //     type Input = (A, B, C);
+    //     fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = O> + Send + 'static { async move { todo!() } }
+    // }
+    // impl<A, B, C> EncodeRequest for   &&&&&&&&ClientRequest<(A, B, C)> where A: Prts, B: Prts {
+    //     type Input = (A, B, C);
+    //     fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = O> + Send + 'static { async move { todo!() } }
+    // }
+    // impl<A, B, C> EncodeRequest for   &&&&&&&ClientRequest<(A, B, C)> where A: Prts {
+    //     type Input = (A, B, C);
+    //     fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = O> + Send + 'static { async move { todo!() } }
+    // }
+    // impl<A, B, C> EncodeRequest for    &&&&&&ClientRequest<(A, B, C)>  {
+    //     type Input = (A, B, C);
+    //     fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = O> + Send + 'static { async move { todo!() } }
+    // }
 
 
 
-    // the four-arg case
-    impl<A, B, C, D> EncodeRequest for &&&&&&&&&&ReqSer<(A, B, C, D)> where A: Prts, B: Prts, C: Prts, D: Freq {
-        type Input = (A, B, C, D);
-        fn encode<O>(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Result<O, ServerFnRejection>> + Send + 'static { async move { todo!() } }
-    }
-    impl<A, B, C, D> EncodeRequest for  &&&&&&&&&ReqSer<(A, B, C, D)> where A: Prts, B: Prts, C: Prts, D: Prts {
-        type Input = (A, B, C, D);
-        fn encode<O>(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Result<O, ServerFnRejection>> + Send + 'static { async move { todo!() } }
-    }
-    impl<A, B, C, D> EncodeRequest for   &&&&&&&&ReqSer<(A, B, C, D)> where A: Prts, B: Prts, C: Prts, D: DeO_____ {
-        type Input = (A, B, C, D);
-        fn encode<O>(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Result<O, ServerFnRejection>> + Send + 'static { async move { todo!() } }
-    }
-    impl<A, B, C, D> EncodeRequest for    &&&&&&&ReqSer<(A, B, C, D)> where A: Prts, B: Prts, C: DeO_____, D: DeO_____ {
-        type Input = (A, B, C, D);
-        fn encode<O>(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Result<O, ServerFnRejection>> + Send + 'static { async move { todo!() } }
-    }
-    impl<A, B, C, D> EncodeRequest for     &&&&&&ReqSer<(A, B, C, D)> where A: Prts, B: DeO_____, C: DeO_____, D: DeO_____ {
-        type Input = (A, B, C, D);
-        fn encode<O>(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Result<O, ServerFnRejection>> + Send + 'static { async move { todo!() } }
-    }
-    impl<A, B, C, D> EncodeRequest for      &&&&&ReqSer<(A, B, C, D)> where A: DeO_____, B: DeO_____, C: DeO_____, D: DeO_____ {
-        type Input = (A, B, C, D);
-        fn encode<O>(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Result<O, ServerFnRejection>> + Send + 'static { async move { todo!() } }
-    }
+    // // the four-arg case
+    // impl<A, B, C, D> EncodeRequest for &&&&&&&&&&ClientRequest<(A, B, C, D)> where A: Prts, B: Prts, C: Prts, D: Freq {
+    //     type Input = (A, B, C, D);
+    //     fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = O> + Send + 'static { async move { todo!() } }
+    // }
+    // impl<A, B, C, D> EncodeRequest for  &&&&&&&&&ClientRequest<(A, B, C, D)> where A: Prts, B: Prts, C: Prts, D: Prts {
+    //     type Input = (A, B, C, D);
+    //     fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = O> + Send + 'static { async move { todo!() } }
+    // }
+    // impl<A, B, C, D> EncodeRequest for   &&&&&&&&ClientRequest<(A, B, C, D)> where A: Prts, B: Prts, C: Prts, D: DeO_____ {
+    //     type Input = (A, B, C, D);
+    //     fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = O> + Send + 'static { async move { todo!() } }
+    // }
+    // impl<A, B, C, D> EncodeRequest for    &&&&&&&ClientRequest<(A, B, C, D)> where A: Prts, B: Prts, C: DeO_____, D: DeO_____ {
+    //     type Input = (A, B, C, D);
+    //     fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = O> + Send + 'static { async move { todo!() } }
+    // }
+    // impl<A, B, C, D> EncodeRequest for     &&&&&&ClientRequest<(A, B, C, D)> where A: Prts, B: DeO_____, C: DeO_____, D: DeO_____ {
+    //     type Input = (A, B, C, D);
+    //     fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = O> + Send + 'static { async move { todo!() } }
+    // }
+    // impl<A, B, C, D> EncodeRequest for      &&&&&ClientRequest<(A, B, C, D)> where A: DeO_____, B: DeO_____, C: DeO_____, D: DeO_____ {
+    //     type Input = (A, B, C, D);
+    //     fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = O> + Send + 'static { async move { todo!() } }
+    // }
 
-    // the five-arg case
-    impl<A, B, C, D, E> EncodeRequest for &&&&&&&&&&ReqSer<(A, B, C, D, E)> where A: Prts, B: Prts, C: Prts, D: Prts, E: Freq {
-        type Input = (A, B, C, D, E);
-        fn encode<O>(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Result<O, ServerFnRejection>> + Send + 'static { async move { todo!() } }
-    }
-    impl<A, B, C, D, E> EncodeRequest for  &&&&&&&&&ReqSer<(A, B, C, D, E)> where A: Prts, B: Prts, C: Prts, D: Prts, E: Prts {
-        type Input = (A, B, C, D, E);
-        fn encode<O>(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Result<O, ServerFnRejection>> + Send + 'static { async move { todo!() } }
-    }
-    impl<A, B, C, D, E> EncodeRequest for   &&&&&&&&ReqSer<(A, B, C, D, E)> where A: Prts, B: Prts, C: Prts, D: Prts, E: DeO_____ {
-        type Input = (A, B, C, D, E);
-        fn encode<O>(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Result<O, ServerFnRejection>> + Send + 'static { async move { todo!() } }
-    }
-    impl<A, B, C, D, E> EncodeRequest for    &&&&&&&ReqSer<(A, B, C, D, E)> where A: Prts, B: Prts, C: Prts, D: DeO_____, E: DeO_____ {
-        type Input = (A, B, C, D, E);
-        fn encode<O>(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Result<O, ServerFnRejection>> + Send + 'static { async move { todo!() } }
-    }
-    impl<A, B, C, D, E> EncodeRequest for     &&&&&&ReqSer<(A, B, C, D, E)> where A: Prts, B: Prts, C: DeO_____, D: DeO_____, E: DeO_____ {
-        type Input = (A, B, C, D, E);
-        fn encode<O>(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Result<O, ServerFnRejection>> + Send + 'static { async move { todo!() } }
-    }
-    impl<A, B, C, D, E> EncodeRequest for      &&&&&ReqSer<(A, B, C, D, E)> where A: Prts, B: DeO_____, C: DeO_____, D: DeO_____, E: DeO_____ {
-        type Input = (A, B, C, D, E);
-        fn encode<O>(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Result<O, ServerFnRejection>> + Send + 'static { async move { todo!() } }
-    }
-    impl<A, B, C, D, E> EncodeRequest for       &&&&ReqSer<(A, B, C, D, E)> where A: DeO_____, B: DeO_____, C: DeO_____, D: DeO_____, E: DeO_____ {
-        type Input = (A, B, C, D, E);
-        fn encode<O>(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Result<O, ServerFnRejection>> + Send + 'static { async move { todo!() } }
-    }
+    // // the five-arg case
+    // impl<A, B, C, D, E> EncodeRequest for &&&&&&&&&&ClientRequest<(A, B, C, D, E)> where A: Prts, B: Prts, C: Prts, D: Prts, E: Freq {
+    //     type Input = (A, B, C, D, E);
+    //     fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = O> + Send + 'static { async move { todo!() } }
+    // }
+    // impl<A, B, C, D, E> EncodeRequest for  &&&&&&&&&ClientRequest<(A, B, C, D, E)> where A: Prts, B: Prts, C: Prts, D: Prts, E: Prts {
+    //     type Input = (A, B, C, D, E);
+    //     fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = O> + Send + 'static { async move { todo!() } }
+    // }
+    // impl<A, B, C, D, E> EncodeRequest for   &&&&&&&&ClientRequest<(A, B, C, D, E)> where A: Prts, B: Prts, C: Prts, D: Prts, E: DeO_____ {
+    //     type Input = (A, B, C, D, E);
+    //     fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = O> + Send + 'static { async move { todo!() } }
+    // }
+    // impl<A, B, C, D, E> EncodeRequest for    &&&&&&&ClientRequest<(A, B, C, D, E)> where A: Prts, B: Prts, C: Prts, D: DeO_____, E: DeO_____ {
+    //     type Input = (A, B, C, D, E);
+    //     fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = O> + Send + 'static { async move { todo!() } }
+    // }
+    // impl<A, B, C, D, E> EncodeRequest for     &&&&&&ClientRequest<(A, B, C, D, E)> where A: Prts, B: Prts, C: DeO_____, D: DeO_____, E: DeO_____ {
+    //     type Input = (A, B, C, D, E);
+    //     fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = O> + Send + 'static { async move { todo!() } }
+    // }
+    // impl<A, B, C, D, E> EncodeRequest for      &&&&&ClientRequest<(A, B, C, D, E)> where A: Prts, B: DeO_____, C: DeO_____, D: DeO_____, E: DeO_____ {
+    //     type Input = (A, B, C, D, E);
+    //     fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = O> + Send + 'static { async move { todo!() } }
+    // }
+    // impl<A, B, C, D, E> EncodeRequest for       &&&&ClientRequest<(A, B, C, D, E)> where A: DeO_____, B: DeO_____, C: DeO_____, D: DeO_____, E: DeO_____ {
+    //     type Input = (A, B, C, D, E);
+    //     fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = O> + Send + 'static { async move { todo!() } }
+    // }
 
-    // the six-arg case
-    impl<A, B, C, D, E, F> EncodeRequest for &&&&&&&&&&ReqSer<(A, B, C, D, E, F)> where A: Prts, B: Prts, C: Prts, D: Prts, E: Prts, F: Freq {
-        type Input = (A, B, C, D, E, F);
-        fn encode<O>(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Result<O, ServerFnRejection>> + Send + 'static { async move { todo!() } }
-    }
-    impl<A, B, C, D, E, F> EncodeRequest for  &&&&&&&&&ReqSer<(A, B, C, D, E, F)> where A: Prts, B: Prts, C: Prts, D: Prts, E: Prts, F: Prts {
-        type Input = (A, B, C, D, E, F);
-        fn encode<O>(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Result<O, ServerFnRejection>> + Send + 'static { async move { todo!() } }
-    }
-    impl<A, B, C, D, E, F> EncodeRequest for   &&&&&&&&ReqSer<(A, B, C, D, E, F)> where A: Prts, B: Prts, C: Prts, D: Prts, E: Prts, F: DeO_____ {
-        type Input = (A, B, C, D, E, F);
-        fn encode<O>(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Result<O, ServerFnRejection>> + Send + 'static { async move { todo!() } }
-    }
-    impl<A, B, C, D, E, F> EncodeRequest for    &&&&&&&ReqSer<(A, B, C, D, E, F)> where A: Prts, B: Prts, C: Prts, D: Prts, E: DeO_____, F: DeO_____ {
-        type Input = (A, B, C, D, E, F);
-        fn encode<O>(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Result<O, ServerFnRejection>> + Send + 'static { async move { todo!() } }
-    }
-    impl<A, B, C, D, E, F> EncodeRequest for     &&&&&&ReqSer<(A, B, C, D, E, F)> where A: Prts, B: Prts, C: Prts, D: DeO_____, E: DeO_____, F: DeO_____ {
-        type Input = (A, B, C, D, E, F);
-        fn encode<O>(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Result<O, ServerFnRejection>> + Send + 'static { async move { todo!() } }
-    }
-    impl<A, B, C, D, E, F> EncodeRequest for      &&&&&ReqSer<(A, B, C, D, E, F)> where A: Prts, B: Prts, C: DeO_____, D: DeO_____, E: DeO_____, F: DeO_____ {
-        type Input = (A, B, C, D, E, F);
-        fn encode<O>(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Result<O, ServerFnRejection>> + Send + 'static { async move { todo!() } }
-    }
-    impl<A, B, C, D, E, F> EncodeRequest for       &&&&ReqSer<(A, B, C, D, E, F)> where A: Prts, B: DeO_____, C: DeO_____, D: DeO_____, E: DeO_____, F: DeO_____ {
-        type Input = (A, B, C, D, E, F);
-        fn encode<O>(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Result<O, ServerFnRejection>> + Send + 'static { async move { todo!() } }
-    }
-    impl<A, B, C, D, E, F> EncodeRequest for        &&&ReqSer<(A, B, C, D, E, F)> where A: DeO_____, B: DeO_____, C: DeO_____, D: DeO_____, E: DeO_____, F: DeO_____ {
-        type Input = (A, B, C, D, E, F);
-        fn encode<O>(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Result<O, ServerFnRejection>> + Send + 'static { async move { todo!() } }
-    }
-
-
-
-    // the seven-arg case
-    impl<A, B, C, D, E, F, G> EncodeRequest for &&&&&&&&&&ReqSer<(A, B, C, D, E, F, G)> where A: Prts, B: Prts, C: Prts, D: Prts, E: Prts, F: Prts, G: Freq {
-        type Input = (A, B, C, D, E, F, G);
-        fn encode<O>(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Result<O, ServerFnRejection>> + Send + 'static { async move { todo!() } }
-    }
-    impl<A, B, C, D, E, F, G> EncodeRequest for  &&&&&&&&&ReqSer<(A, B, C, D, E, F, G)> where A: Prts, B: Prts, C: Prts, D: Prts, E: Prts, F: Prts, G: Prts {
-        type Input = (A, B, C, D, E, F, G);
-        fn encode<O>(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Result<O, ServerFnRejection>> + Send + 'static { async move { todo!() } }
-    }
-    impl<A, B, C, D, E, F, G> EncodeRequest for   &&&&&&&&ReqSer<(A, B, C, D, E, F, G)> where A: Prts, B: Prts, C: Prts, D: Prts, E: Prts, F: Prts, G: DeO_____ {
-        type Input = (A, B, C, D, E, F, G);
-        fn encode<O>(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Result<O, ServerFnRejection>> + Send + 'static { async move { todo!() } }
-    }
-    impl<A, B, C, D, E, F, G> EncodeRequest for    &&&&&&&ReqSer<(A, B, C, D, E, F, G)> where A: Prts, B: Prts, C: Prts, D: Prts, E: Prts, F: DeO_____, G: DeO_____ {
-        type Input = (A, B, C, D, E, F, G);
-        fn encode<O>(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Result<O, ServerFnRejection>> + Send + 'static { async move { todo!() } }
-    }
-    impl<A, B, C, D, E, F, G> EncodeRequest for     &&&&&&ReqSer<(A, B, C, D, E, F, G)> where A: Prts, B: Prts, C: Prts, D: Prts, E: DeO_____, F: DeO_____, G: DeO_____ {
-        type Input = (A, B, C, D, E, F, G);
-        fn encode<O>(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Result<O, ServerFnRejection>> + Send + 'static { async move { todo!() } }
-    }
-    impl<A, B, C, D, E, F, G> EncodeRequest for      &&&&&ReqSer<(A, B, C, D, E, F, G)> where A: Prts, B: Prts, C: Prts, D: DeO_____, E: DeO_____, F: DeO_____, G: DeO_____ {
-        type Input = (A, B, C, D, E, F, G);
-        fn encode<O>(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Result<O, ServerFnRejection>> + Send + 'static { async move { todo!() } }
-    }
-    impl<A, B, C, D, E, F, G> EncodeRequest for       &&&&ReqSer<(A, B, C, D, E, F, G)> where A: Prts, B: Prts, C: DeO_____, D: DeO_____, E: DeO_____, F: DeO_____, G: DeO_____ {
-        type Input = (A, B, C, D, E, F, G);
-        fn encode<O>(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Result<O, ServerFnRejection>> + Send + 'static { async move { todo!() } }
-    }
-    impl<A, B, C, D, E, F, G> EncodeRequest for        &&&ReqSer<(A, B, C, D, E, F, G)> where A: Prts, B: DeO_____, C: DeO_____, D: DeO_____, E: DeO_____, F: DeO_____, G: DeO_____ {
-        type Input = (A, B, C, D, E, F, G);
-        fn encode<O>(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Result<O, ServerFnRejection>> + Send + 'static { async move { todo!() } }
-    }
-    impl<A, B, C, D, E, F, G> EncodeRequest for         &&ReqSer<(A, B, C, D, E, F, G)> where A: DeO_____, B: DeO_____, C: DeO_____, D: DeO_____, E: DeO_____, F: DeO_____, G: DeO_____ {
-        type Input = (A, B, C, D, E, F, G);
-        fn encode<O>(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Result<O, ServerFnRejection>> + Send + 'static { async move { todo!() } }
-    }
+    // // the six-arg case
+    // impl<A, B, C, D, E, F> EncodeRequest for &&&&&&&&&&ClientRequest<(A, B, C, D, E, F)> where A: Prts, B: Prts, C: Prts, D: Prts, E: Prts, F: Freq {
+    //     type Input = (A, B, C, D, E, F);
+    //     fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = O> + Send + 'static { async move { todo!() } }
+    // }
+    // impl<A, B, C, D, E, F> EncodeRequest for  &&&&&&&&&ClientRequest<(A, B, C, D, E, F)> where A: Prts, B: Prts, C: Prts, D: Prts, E: Prts, F: Prts {
+    //     type Input = (A, B, C, D, E, F);
+    //     fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = O> + Send + 'static { async move { todo!() } }
+    // }
+    // impl<A, B, C, D, E, F> EncodeRequest for   &&&&&&&&ClientRequest<(A, B, C, D, E, F)> where A: Prts, B: Prts, C: Prts, D: Prts, E: Prts, F: DeO_____ {
+    //     type Input = (A, B, C, D, E, F);
+    //     fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = O> + Send + 'static { async move { todo!() } }
+    // }
+    // impl<A, B, C, D, E, F> EncodeRequest for    &&&&&&&ClientRequest<(A, B, C, D, E, F)> where A: Prts, B: Prts, C: Prts, D: Prts, E: DeO_____, F: DeO_____ {
+    //     type Input = (A, B, C, D, E, F);
+    //     fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = O> + Send + 'static { async move { todo!() } }
+    // }
+    // impl<A, B, C, D, E, F> EncodeRequest for     &&&&&&ClientRequest<(A, B, C, D, E, F)> where A: Prts, B: Prts, C: Prts, D: DeO_____, E: DeO_____, F: DeO_____ {
+    //     type Input = (A, B, C, D, E, F);
+    //     fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = O> + Send + 'static { async move { todo!() } }
+    // }
+    // impl<A, B, C, D, E, F> EncodeRequest for      &&&&&ClientRequest<(A, B, C, D, E, F)> where A: Prts, B: Prts, C: DeO_____, D: DeO_____, E: DeO_____, F: DeO_____ {
+    //     type Input = (A, B, C, D, E, F);
+    //     fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = O> + Send + 'static { async move { todo!() } }
+    // }
+    // impl<A, B, C, D, E, F> EncodeRequest for       &&&&ClientRequest<(A, B, C, D, E, F)> where A: Prts, B: DeO_____, C: DeO_____, D: DeO_____, E: DeO_____, F: DeO_____ {
+    //     type Input = (A, B, C, D, E, F);
+    //     fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = O> + Send + 'static { async move { todo!() } }
+    // }
+    // impl<A, B, C, D, E, F> EncodeRequest for        &&&ClientRequest<(A, B, C, D, E, F)> where A: DeO_____, B: DeO_____, C: DeO_____, D: DeO_____, E: DeO_____, F: DeO_____ {
+    //     type Input = (A, B, C, D, E, F);
+    //     fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = O> + Send + 'static { async move { todo!() } }
+    // }
 
 
 
-    // the eight-arg case
-    impl<A, B, C, D, E, F, G, H> EncodeRequest for &&&&&&&&&&ReqSer<(A, B, C, D, E, F, G, H)> where A: Prts, B: Prts, C: Prts, D: Prts, E: Prts, F: Prts, G: Prts, H: Freq {
-        type Input = (A, B, C, D, E, F, G, H);
-        fn encode<O>(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Result<O, ServerFnRejection>> + Send + 'static { async move { todo!() } }
-    }
-    impl<A, B, C, D, E, F, G, H> EncodeRequest for  &&&&&&&&&ReqSer<(A, B, C, D, E, F, G, H)> where A: Prts, B: Prts, C: Prts, D: Prts, E: Prts, F: Prts, G: Prts, H: Prts {
-        type Input = (A, B, C, D, E, F, G, H);
-        fn encode<O>(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Result<O, ServerFnRejection>> + Send + 'static { async move { todo!() } }
-    }
-    impl<A, B, C, D, E, F, G, H> EncodeRequest for   &&&&&&&&ReqSer<(A, B, C, D, E, F, G, H)> where A: Prts, B: Prts, C: Prts, D: Prts, E: Prts, F: Prts, G: Prts, H: DeO_____ {
-        type Input = (A, B, C, D, E, F, G, H);
-        fn encode<O>(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Result<O, ServerFnRejection>> + Send + 'static { async move { todo!() } }
-    }
-    impl<A, B, C, D, E, F, G, H> EncodeRequest for    &&&&&&&ReqSer<(A, B, C, D, E, F, G, H)> where A: Prts, B: Prts, C: Prts, D: Prts, E: Prts, F: Prts, G: DeO_____, H: DeO_____ {
-        type Input = (A, B, C, D, E, F, G, H);
-        fn encode<O>(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Result<O, ServerFnRejection>> + Send + 'static { async move { todo!() } }
-    }
-    impl<A, B, C, D, E, F, G, H> EncodeRequest for     &&&&&&ReqSer<(A, B, C, D, E, F, G, H)> where A: Prts, B: Prts, C: Prts, D: Prts, E: Prts, F: DeO_____, G: DeO_____, H: DeO_____ {
-        type Input = (A, B, C, D, E, F, G, H);
-        fn encode<O>(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Result<O, ServerFnRejection>> + Send + 'static { async move { todo!() } }
-    }
-    impl<A, B, C, D, E, F, G, H> EncodeRequest for      &&&&&ReqSer<(A, B, C, D, E, F, G, H)> where A: Prts, B: Prts, C: Prts, D: Prts, E: DeO_____, F: DeO_____, G: DeO_____, H: DeO_____ {
-        type Input = (A, B, C, D, E, F, G, H);
-        fn encode<O>(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Result<O, ServerFnRejection>> + Send + 'static { async move { todo!() } }
-    }
-    impl<A, B, C, D, E, F, G, H> EncodeRequest for       &&&&ReqSer<(A, B, C, D, E, F, G, H)> where A: Prts, B: Prts, C: Prts, D: DeO_____, E: DeO_____, F: DeO_____, G: DeO_____, H: DeO_____ {
-        type Input = (A, B, C, D, E, F, G, H);
-        fn encode<O>(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Result<O, ServerFnRejection>> + Send + 'static { async move { todo!() } }
-    }
-    impl<A, B, C, D, E, F, G, H> EncodeRequest for        &&&ReqSer<(A, B, C, D, E, F, G, H)> where A: Prts, B: Prts, C: DeO_____, D: DeO_____, E: DeO_____, F: DeO_____, G: DeO_____, H: DeO_____ {
-        type Input = (A, B, C, D, E, F, G, H);
-        fn encode<O>(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Result<O, ServerFnRejection>> + Send + 'static { async move { todo!() } }
-    }
-    impl<A, B, C, D, E, F, G, H> EncodeRequest for         &&ReqSer<(A, B, C, D, E, F, G, H)> where A: Prts, B: DeO_____, C: DeO_____, D: DeO_____, E: DeO_____, F: DeO_____, G: DeO_____, H: DeO_____ {
-        type Input = (A, B, C, D, E, F, G, H);
-        fn encode<O>(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Result<O, ServerFnRejection>> + Send + 'static { async move { todo!() } }
-    }
-    impl<A, B, C, D, E, F, G, H> EncodeRequest for          &ReqSer<(A, B, C, D, E, F, G, H)> where A: DeO_____, B: DeO_____, C: DeO_____, D: DeO_____, E: DeO_____, F: DeO_____, G: DeO_____, H: DeO_____ {
-        type Input = (A, B, C, D, E, F, G, H);
-        fn encode<O>(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Result<O, ServerFnRejection>> + Send + 'static { async move { todo!() } }
-    }
+    // // the seven-arg case
+    // impl<A, B, C, D, E, F, G> EncodeRequest for &&&&&&&&&&ClientRequest<(A, B, C, D, E, F, G)> where A: Prts, B: Prts, C: Prts, D: Prts, E: Prts, F: Prts, G: Freq {
+    //     type Input = (A, B, C, D, E, F, G);
+    //     fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = O> + Send + 'static { async move { todo!() } }
+    // }
+    // impl<A, B, C, D, E, F, G> EncodeRequest for  &&&&&&&&&ClientRequest<(A, B, C, D, E, F, G)> where A: Prts, B: Prts, C: Prts, D: Prts, E: Prts, F: Prts, G: Prts {
+    //     type Input = (A, B, C, D, E, F, G);
+    //     fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = O> + Send + 'static { async move { todo!() } }
+    // }
+    // impl<A, B, C, D, E, F, G> EncodeRequest for   &&&&&&&&ClientRequest<(A, B, C, D, E, F, G)> where A: Prts, B: Prts, C: Prts, D: Prts, E: Prts, F: Prts, G: DeO_____ {
+    //     type Input = (A, B, C, D, E, F, G);
+    //     fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = O> + Send + 'static { async move { todo!() } }
+    // }
+    // impl<A, B, C, D, E, F, G> EncodeRequest for    &&&&&&&ClientRequest<(A, B, C, D, E, F, G)> where A: Prts, B: Prts, C: Prts, D: Prts, E: Prts, F: DeO_____, G: DeO_____ {
+    //     type Input = (A, B, C, D, E, F, G);
+    //     fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = O> + Send + 'static { async move { todo!() } }
+    // }
+    // impl<A, B, C, D, E, F, G> EncodeRequest for     &&&&&&ClientRequest<(A, B, C, D, E, F, G)> where A: Prts, B: Prts, C: Prts, D: Prts, E: DeO_____, F: DeO_____, G: DeO_____ {
+    //     type Input = (A, B, C, D, E, F, G);
+    //     fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = O> + Send + 'static { async move { todo!() } }
+    // }
+    // impl<A, B, C, D, E, F, G> EncodeRequest for      &&&&&ClientRequest<(A, B, C, D, E, F, G)> where A: Prts, B: Prts, C: Prts, D: DeO_____, E: DeO_____, F: DeO_____, G: DeO_____ {
+    //     type Input = (A, B, C, D, E, F, G);
+    //     fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = O> + Send + 'static { async move { todo!() } }
+    // }
+    // impl<A, B, C, D, E, F, G> EncodeRequest for       &&&&ClientRequest<(A, B, C, D, E, F, G)> where A: Prts, B: Prts, C: DeO_____, D: DeO_____, E: DeO_____, F: DeO_____, G: DeO_____ {
+    //     type Input = (A, B, C, D, E, F, G);
+    //     fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = O> + Send + 'static { async move { todo!() } }
+    // }
+    // impl<A, B, C, D, E, F, G> EncodeRequest for        &&&ClientRequest<(A, B, C, D, E, F, G)> where A: Prts, B: DeO_____, C: DeO_____, D: DeO_____, E: DeO_____, F: DeO_____, G: DeO_____ {
+    //     type Input = (A, B, C, D, E, F, G);
+    //     fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = O> + Send + 'static { async move { todo!() } }
+    // }
+    // impl<A, B, C, D, E, F, G> EncodeRequest for         &&ClientRequest<(A, B, C, D, E, F, G)> where A: DeO_____, B: DeO_____, C: DeO_____, D: DeO_____, E: DeO_____, F: DeO_____, G: DeO_____ {
+    //     type Input = (A, B, C, D, E, F, G);
+    //     fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = O> + Send + 'static { async move { todo!() } }
+    // }
+
+
+
+    // // the eight-arg case
+    // impl<A, B, C, D, E, F, G, H> EncodeRequest for &&&&&&&&&&ClientRequest<(A, B, C, D, E, F, G, H)> where A: Prts, B: Prts, C: Prts, D: Prts, E: Prts, F: Prts, G: Prts, H: Freq {
+    //     type Input = (A, B, C, D, E, F, G, H);
+    //     fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = O> + Send + 'static { async move { todo!() } }
+    // }
+    // impl<A, B, C, D, E, F, G, H> EncodeRequest for  &&&&&&&&&ClientRequest<(A, B, C, D, E, F, G, H)> where A: Prts, B: Prts, C: Prts, D: Prts, E: Prts, F: Prts, G: Prts, H: Prts {
+    //     type Input = (A, B, C, D, E, F, G, H);
+    //     fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = O> + Send + 'static { async move { todo!() } }
+    // }
+    // impl<A, B, C, D, E, F, G, H> EncodeRequest for   &&&&&&&&ClientRequest<(A, B, C, D, E, F, G, H)> where A: Prts, B: Prts, C: Prts, D: Prts, E: Prts, F: Prts, G: Prts, H: DeO_____ {
+    //     type Input = (A, B, C, D, E, F, G, H);
+    //     fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = O> + Send + 'static { async move { todo!() } }
+    // }
+    // impl<A, B, C, D, E, F, G, H> EncodeRequest for    &&&&&&&ClientRequest<(A, B, C, D, E, F, G, H)> where A: Prts, B: Prts, C: Prts, D: Prts, E: Prts, F: Prts, G: DeO_____, H: DeO_____ {
+    //     type Input = (A, B, C, D, E, F, G, H);
+    //     fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = O> + Send + 'static { async move { todo!() } }
+    // }
+    // impl<A, B, C, D, E, F, G, H> EncodeRequest for     &&&&&&ClientRequest<(A, B, C, D, E, F, G, H)> where A: Prts, B: Prts, C: Prts, D: Prts, E: Prts, F: DeO_____, G: DeO_____, H: DeO_____ {
+    //     type Input = (A, B, C, D, E, F, G, H);
+    //     fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = O> + Send + 'static { async move { todo!() } }
+    // }
+    // impl<A, B, C, D, E, F, G, H> EncodeRequest for      &&&&&ClientRequest<(A, B, C, D, E, F, G, H)> where A: Prts, B: Prts, C: Prts, D: Prts, E: DeO_____, F: DeO_____, G: DeO_____, H: DeO_____ {
+    //     type Input = (A, B, C, D, E, F, G, H);
+    //     fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = O> + Send + 'static { async move { todo!() } }
+    // }
+    // impl<A, B, C, D, E, F, G, H> EncodeRequest for       &&&&ClientRequest<(A, B, C, D, E, F, G, H)> where A: Prts, B: Prts, C: Prts, D: DeO_____, E: DeO_____, F: DeO_____, G: DeO_____, H: DeO_____ {
+    //     type Input = (A, B, C, D, E, F, G, H);
+    //     fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = O> + Send + 'static { async move { todo!() } }
+    // }
+    // impl<A, B, C, D, E, F, G, H> EncodeRequest for        &&&ClientRequest<(A, B, C, D, E, F, G, H)> where A: Prts, B: Prts, C: DeO_____, D: DeO_____, E: DeO_____, F: DeO_____, G: DeO_____, H: DeO_____ {
+    //     type Input = (A, B, C, D, E, F, G, H);
+    //     fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = O> + Send + 'static { async move { todo!() } }
+    // }
+    // impl<A, B, C, D, E, F, G, H> EncodeRequest for         &&ClientRequest<(A, B, C, D, E, F, G, H)> where A: Prts, B: DeO_____, C: DeO_____, D: DeO_____, E: DeO_____, F: DeO_____, G: DeO_____, H: DeO_____ {
+    //     type Input = (A, B, C, D, E, F, G, H);
+    //     fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = O> + Send + 'static { async move { todo!() } }
+    // }
+    // impl<A, B, C, D, E, F, G, H> EncodeRequest for          &ClientRequest<(A, B, C, D, E, F, G, H)> where A: DeO_____, B: DeO_____, C: DeO_____, D: DeO_____, E: DeO_____, F: DeO_____, G: DeO_____, H: DeO_____ {
+    //     type Input = (A, B, C, D, E, F, G, H);
+    //     fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = O> + Send + 'static { async move { todo!() } }
+    // }
 }

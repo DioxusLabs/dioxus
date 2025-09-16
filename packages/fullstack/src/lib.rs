@@ -42,9 +42,9 @@ pub use xxhash_rust;
 // #[cfg(feature = "serde-lite")]
 // pub use serde_lite;
 
-#[cfg(feature = "axum-no-default")]
-#[doc(hidden)]
-pub use ::axum as axum_export;
+// #[cfg(feature = "axum-no-default")]
+// #[doc(hidden)]
+// pub use ::axum as axum_export;
 
 // #[cfg(feature = "generic")]
 // #[doc(hidden)]

@@ -42,8 +42,8 @@ pub enum ServerFnError {
     UnsupportedRequestMethod(String),
 
     /// Occurs on the client if there is a network error while trying to run function on server.
-    #[error("error reaching server to call server function: {0}")]
-    Request(String),
+    #[error("error reaching server to call server function: {message} (code: {code:?})")]
+    Request { message: String, code: Option<u16> },
 
     /// Occurs when there is an error while actually running the middleware on the server.
     #[error("error running middleware: {0}")]
@@ -70,6 +70,15 @@ pub enum ServerFnError {
     Response(String),
 }
 
+impl From<reqwest::Error> for ServerFnError {
+    fn from(value: reqwest::Error) -> Self {
+        ServerFnError::Request {
+            message: value.to_string(),
+            code: value.status().map(|s| s.as_u16()),
+        }
+    }
+}
+
 impl From<anyhow::Error> for ServerFnError {
     fn from(value: anyhow::Error) -> Self {
         ServerFnError::ServerError(value.to_string())
@@ -93,3 +102,23 @@ pub trait ServerFnSugar<M> {
         todo!()
     }
 }
+
+// pub trait IntoClientErr<M> {
+//     fn try_into_client_err(self) -> Option<ServerFnError>;
+// }
+
+// impl<T, E> IntoClientErr<()> for Result<T, E>
+// where
+//     Self: Into<ServerFnError>,
+// {
+//     fn try_into_client_err(self) -> Option<ServerFnError> {
+//         Some(self.into())
+//     }
+// }
+
+// pub struct CantGoMarker;
+// impl<T> IntoClientErr<CantGoMarker> for &T {
+//     fn try_into_client_err(self) -> Option<ServerFnError> {
+//         None
+//     }
+// }

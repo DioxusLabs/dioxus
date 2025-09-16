@@ -129,6 +129,51 @@ async fn serve_server(
         };
 
         match res {
+            Msg::TcpStream(Ok((tcp_stream, _remote_addr))) => {
+                let this_hr_index = hr_idx;
+                let mut make_service = make_service.clone();
+                let mut shutdown_rx = shutdown_rx.clone();
+
+                task_pool.spawn_pinned(move || async move {
+                    let tcp_stream = TokioIo::new(tcp_stream);
+
+                    std::future::poll_fn(|cx| {
+                        <IntoMakeService<axum::Router> as tower::Service<Request>>::poll_ready(
+                            &mut make_service,
+                            cx,
+                        )
+                    })
+                    .await
+                    .unwrap();
+
+                    let tower_service = make_service
+                        .call(())
+                        .await
+                        .unwrap()
+                        .map_request(|req: Request<Incoming>| req.map(Body::new));
+
+                    // upgrades needed for websockets
+                    let builder = HyperBuilder::new(TokioExecutor::new());
+                    let connection = builder.serve_connection_with_upgrades(
+                        tcp_stream,
+                        TowerToHyperService::new(tower_service),
+                    );
+
+                    tokio::select! {
+                        res = connection => {
+                            if let Err(_err) = res {
+                                // This error only appears when the client doesn't send a request and
+                                // terminate the connection.
+                                //
+                                // If client sends one request then terminate connection whenever, it doesn't
+                                // appear.
+                            }
+                        }
+                        _res = shutdown_rx.wait_for(|i| *i == this_hr_index + 1) => {}
+                    }
+                });
+            }
+            Msg::TcpStream(Err(_)) => {}
             // We need to delete our old router and build a new one
             //
             // one challenge is that the server functions are sitting in the dlopened lib and no longer
@@ -205,50 +250,6 @@ async fn serve_server(
                     _ => {}
                 }
             }
-            Msg::TcpStream(Ok((tcp_stream, _remote_addr))) => {
-                let this_hr_index = hr_idx;
-                let mut make_service = make_service.clone();
-                let mut shutdown_rx = shutdown_rx.clone();
-                task_pool.spawn_pinned(move || async move {
-                    let tcp_stream = TokioIo::new(tcp_stream);
-
-                    std::future::poll_fn(|cx| {
-                        <IntoMakeService<axum::Router> as tower::Service<Request>>::poll_ready(
-                            &mut make_service,
-                            cx,
-                        )
-                    })
-                    .await
-                    .unwrap_or_else(|err| match err {});
-
-                    let tower_service = make_service
-                        .call(())
-                        .await
-                        .unwrap_or_else(|err| match err {})
-                        .map_request(|req: Request<Incoming>| req.map(Body::new));
-
-                    // upgrades needed for websockets
-                    let builder = HyperBuilder::new(TokioExecutor::new());
-                    let connection = builder.serve_connection_with_upgrades(
-                        tcp_stream,
-                        TowerToHyperService::new(tower_service),
-                    );
-
-                    tokio::select! {
-                        res = connection => {
-                            if let Err(_err) = res {
-                                // This error only appears when the client doesn't send a request and
-                                // terminate the connection.
-                                //
-                                // If client sends one request then terminate connection whenever, it doesn't
-                                // appear.
-                            }
-                        }
-                        _res = shutdown_rx.wait_for(|i| *i == this_hr_index + 1) => {}
-                    }
-                });
-            }
-            Msg::TcpStream(Err(_)) => {}
         }
     }
 }

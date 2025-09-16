@@ -122,7 +122,8 @@ dioxus = { workspace = true, features = ["fullstack"] }
 tokio = { workspace = true, features = ["full"] }
 
 [features]
-default = ["router", "document", "client", "server"]
+default = ["router", "document", "client"]
+# default = ["router", "document", "client", "server"]
 document = []
 web = ["dep:web-sys", "dioxus-fullstack-hooks/web"]
 router = ["dep:dioxus-router"]

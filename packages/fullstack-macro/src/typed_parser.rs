@@ -152,14 +152,58 @@ pub fn route_impl_with_route(
             }
         }
     });
+    let value_bind = original_inputs.iter().map(|arg| match arg {
+        FnArg::Receiver(receiver) => todo!(),
+        FnArg::Typed(pat_type) => &pat_type.pat,
+    });
     let shadow_bind2 = shadow_bind.clone();
 
     // #vis fn #fn_name #impl_generics() ->  #method_router_ty<#state_type> #where_clause {
 
     // let body_json_contents = remaining_numbered_pats.iter().map(|pat_type| [quote! {}]);
-    let body_json_types2 = body_json_types.clone();
-    let body_json_names2 = body_json_names.clone();
-    let body_json_names3 = body_json_names.clone();
+    let rest_idents = body_json_types.clone();
+    let rest_ident_names2 = body_json_names.clone();
+    let rest_ident_names3 = body_json_names.clone();
+
+    let input_types = original_inputs.iter().map(|arg| match arg {
+        FnArg::Receiver(_) => parse_quote! { () },
+        FnArg::Typed(pat_type) => (*pat_type.ty).clone(),
+    });
+
+    let output_type = match &function.sig.output {
+        syn::ReturnType::Default => parse_quote! { () },
+        syn::ReturnType::Type(_, ty) => (*ty).clone(),
+    };
+
+    let query_param_names = route.query_params.iter().map(|(ident, _)| ident);
+
+    let url_without_queries = route
+        .route_lit
+        .value()
+        .split('?')
+        .next()
+        .unwrap()
+        .to_string();
+
+    let path_param_args = route.path_params.iter().map(|(_slash, param)| match param {
+        PathParam::Capture(lit, _brace_1, ident, _ty, _brace_2) => {
+            Some(quote! { #ident = #ident, })
+        }
+        PathParam::WildCard(lit, _brace_1, _star, ident, _ty, _brace_2) => {
+            Some(quote! { #ident = #ident, })
+        }
+        PathParam::Static(lit) => None,
+    });
+
+    let query_param_names2 = query_param_names.clone();
+    let request_url = quote! {
+        format!(#url_without_queries, #( #path_param_args)*)
+    };
+
+    let out_ty = match output_type.as_ref() {
+        Type::Tuple(tuple) if tuple.elems.is_empty() => parse_quote! { () },
+        _ => output_type.clone(),
+    };
 
     Ok(quote! {
         #(#fn_docs)*
@@ -167,44 +211,31 @@ pub fn route_impl_with_route(
         #vis async fn #fn_name #impl_generics(
             #original_inputs
         ) #fn_output #where_clause {
-            use dioxus_fullstack::{DeSer, ServerFunction, ReqSer, ExtractState, ExtractRequest, EncodeState, ServerFnSugar, ServerFnRejection};
+            use dioxus_fullstack::{
+                DeSer, ServerFunction, ClientRequest, ExtractState, ExtractRequest, EncodeState,
+                ServerFnSugar, ServerFnRejection, EncodeRequest, get_server_url, EncodedBody,
+                ServerFnError,
+            };
 
             #query_params_struct
 
-            // #[derive(::serde::Deserialize, ::serde::Serialize)]
-            // struct __BodyExtract__ {
-            //     // #remaining_numbered_pats
-            //     // $(#body;)*
-            //     #body_json_args
-            // }
-            // impl __BodyExtract__ {
-            //     fn new() -> Self {
-            //         todo!()
-            //     }
-            // }
-
-            {
-                #(#shadow_bind)*
-            }
-
-            async fn ___make__request(#original_inputs) #fn_output #where_clause {
-                {
-                    #(#shadow_bind2)*
-                }
-                todo!()
-                // (&&&&&&&&&&&&&&ReqSer::<(#(#body_json_types2,)* )>::new())
-                //         .encode(EncodeState::default(), (#(#body_json_names3,)*))
-                //         .await
-                //         .unwrap()
-                // let res = (&&&&&&&&&&&&&&ReqSer::<(i32, i32, Bytes)>::new())
-                //         .encode::<String>(EncodeState::default(), (1, 2, Bytes::from("hello")))
-                //         .await
-                //         .unwrap();
-            }
-
             // On the client, we make the request to the server
             if cfg!(not(feature = "server")) {
-                todo!();
+                let __params = __QueryParams__ {
+                    #(#query_param_names,)*
+                };
+
+                let client = reqwest::Client::new()
+                    .post(format!("{}{}", get_server_url(), #request_url))
+                    .query(&__params);
+
+                let encode_state = EncodeState {
+                    client
+                };
+
+                return (&&&&&&&&&&&&&&ClientRequest::<(#(#rest_idents,)*), #out_ty, _>::new())
+                        .fetch(encode_state, (#(#rest_ident_names2,)*))
+                        .await;
             }
 
             // On the server, we expand the tokens and submit the function to inventory
@@ -215,37 +246,28 @@ pub fn route_impl_with_route(
                 use __axum::response::IntoResponse;
 
                 #aide_ident_docs
-                // #[__axum::debug_handler]
                 #asyncness fn __inner__function__ #impl_generics(
                     #path_extractor
                     #query_extractor
-                    // body: Json<__BodyExtract__>,
-                    // #remaining_numbered_pats
                     #server_arg_tokens
                 ) -> __axum::response::Response #where_clause {
                     let ( #(#body_json_names,)*) = match (&&&&&&&&&&&&&&DeSer::<(#(#body_json_types,)*), _>::new()).extract(ExtractState::default()).await {
                         Ok(v) => v,
-                        Err(rejection) => {
-                            return rejection.into_response();
-                        }
+                        Err(rejection) => return rejection.into_response()
                     };
 
-
-
-                    // let __BodyExtract__ { #(#body_json_names,)* } = body.0;
-
-                // ) #fn_output #where_clause {
                     #function_on_server
-
-
-                    // let __res = #fn_name #ty_generics(#(#extracted_idents,)* #(#remaining_numbered_idents,)* ).await;
-                    // serverfn_sugar()
-
-                    // desugar_into_response will autoref into using the Serialize impl
 
                     #fn_name #ty_generics(#(#extracted_idents,)*).await.desugar_into_response()
 
-
+                    // #[__axum::debug_handler]
+                    // body: Json<__BodyExtract__>,
+                    // #remaining_numbered_pats
+                    // let __BodyExtract__ { #(#body_json_names,)* } = body.0;
+                    // ) #fn_output #where_clause {
+                    // let __res = #fn_name #ty_generics(#(#extracted_idents,)* #(#remaining_numbered_idents,)* ).await;
+                    // serverfn_sugar()
+                    // desugar_into_response will autoref into using the Serialize impl
                     // #fn_name #ty_generics(#(#extracted_idents,)* #(#remaining_numbered_idents,)* ).await.desugar_into_response()
                     // #fn_name #ty_generics(#(#extracted_idents,)*  #(#body_json_names2,)* ).await.desugar_into_response()
                     // #fn_name #ty_generics(#(#extracted_idents,)* Json(__BodyExtract__::new()) ).await.desugar_into_response()
@@ -253,7 +275,7 @@ pub fn route_impl_with_route(
                 }
 
                 __inventory::submit! {
-                    ServerFunction::new(__http::Method::#method_ident, #axum_path, || __axum::routing::#http_method(#inner_fn_call))
+                    ServerFunction::new(__http::Method::#method_ident, #axum_path, || #inner_fn_call)
                 }
 
                 todo!("Calling server_fn on server is not yet supported. todo.");
@@ -446,25 +468,25 @@ impl CompiledRoute {
     }
 
     pub fn query_params_struct(&self, with_aide: bool) -> Option<TokenStream2> {
-        match self.query_params.is_empty() {
-            true => None,
-            false => {
-                let idents = self.query_params.iter().map(|item| &item.0);
-                let types = self.query_params.iter().map(|item| &item.1);
-                let derive = match with_aide {
-                    true => {
-                        quote! { #[derive(::serde::Deserialize, ::serde::Serialize, ::schemars::JsonSchema)] }
-                    }
-                    false => quote! { #[derive(::serde::Deserialize, ::serde::Serialize)] },
-                };
-                Some(quote! {
-                    #derive
-                    struct __QueryParams__ {
-                        #(#idents: #types,)*
-                    }
-                })
+        // match self.query_params.is_empty() {
+        //     true => None,
+        //     false => {
+        let idents = self.query_params.iter().map(|item| &item.0);
+        let types = self.query_params.iter().map(|item| &item.1);
+        let derive = match with_aide {
+            true => {
+                quote! { #[derive(::serde::Deserialize, ::serde::Serialize, ::schemars::JsonSchema)] }
             }
-        }
+            false => quote! { #[derive(::serde::Deserialize, ::serde::Serialize)] },
+        };
+        Some(quote! {
+            #derive
+            struct __QueryParams__ {
+                #(#idents: #types,)*
+            }
+        })
+        // }
+        // }
     }
 
     pub fn extracted_idents(&self) -> Vec<Ident> {

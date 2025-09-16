@@ -18,6 +18,8 @@ use std::prelude::rust_2024::Future;
 async fn main() {}
 
 mod simple_extractors {
+    use serde::de::DeserializeOwned;
+
     use super::*;
 
     /// We can extract the state and return anything thats IntoResponse
@@ -87,6 +89,21 @@ mod simple_extractors {
     async fn twelve(a: i32, b: i32, c: i32) -> Result<Bytes, http::Error> {
         Ok(format!("Hello! {} {} {}", a, b, c).into())
     }
+
+    // How should we handle generics? Doesn't make a lot of sense with distributed registration?
+    // I think we should just not support them for now. Reworking it will be a big change though.
+    //
+    // /// We can use generics
+    // #[get("/hello")]
+    // async fn thirten<S: Serialize + DeserializeOwned>(a: S) -> Result<Bytes> {
+    //     Ok(format!("Hello! {}", serde_json::to_string(&a)?).into())
+    // }
+
+    // /// We can use impl-style generics
+    // #[get("/hello")]
+    // async fn fourteen(a: impl Serialize + DeserializeOwned) -> Result<Bytes> {
+    //     Ok(format!("Hello! {}", serde_json::to_string(&a)?).into())
+    // }
 }
 
 mod custom_serialize {

@@ -135,148 +135,6 @@ fn message_pack_content_type<B>(req: &Request<B>) -> bool {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use axum::{body::Body, extract::FromRequest, http::HeaderValue, response::IntoResponse};
-    use futures_util::StreamExt;
-
-    use crate::{MsgPack, MsgPackRaw, MsgPackRejection};
-    use hyper::{header, Request};
-    use serde::{Deserialize, Serialize};
-
-    #[derive(Debug, Serialize, Deserialize, PartialEq)]
-    struct Input {
-        foo: String,
-    }
-
-    fn into_request<T: Serialize>(value: &T) -> Request<Body> {
-        let serialized =
-            rmp_serde::encode::to_vec_named(&value).expect("Failed to serialize test struct");
-
-        let body = Body::from(serialized);
-        Request::new(body)
-    }
-
-    fn into_request_raw<T: Serialize>(value: &T) -> Request<Body> {
-        let serialized =
-            rmp_serde::encode::to_vec(&value).expect("Failed to serialize test struct");
-
-        let body = Body::from(serialized);
-        Request::new(body)
-    }
-
-    #[tokio::test]
-    async fn serializes_named() {
-        let input = Input { foo: "bar".into() };
-        let serialized = rmp_serde::encode::to_vec_named(&input);
-        assert!(serialized.is_ok());
-        let serialized = serialized.unwrap();
-
-        let body = MsgPack(input).into_response().into_body();
-        let bytes = to_bytes(body).await;
-
-        assert_eq!(serialized, bytes);
-    }
-
-    #[tokio::test]
-    async fn deserializes_named() {
-        let input = Input { foo: "bar".into() };
-        let mut request = into_request(&input);
-
-        request.headers_mut().insert(
-            header::CONTENT_TYPE,
-            HeaderValue::from_static("application/msgpack"),
-        );
-
-        let outcome = <MsgPack<Input> as FromRequest<_, _>>::from_request(request, &|| {}).await;
-
-        let outcome = outcome.unwrap();
-        assert_eq!(input, outcome.0);
-    }
-
-    #[tokio::test]
-    async fn serializes_raw() {
-        let input = Input { foo: "bar".into() };
-        let serialized = rmp_serde::encode::to_vec(&input);
-        assert!(serialized.is_ok());
-        let serialized = serialized.unwrap();
-
-        let body = MsgPackRaw(input).into_response().into_body();
-        let bytes = to_bytes(body).await;
-
-        assert_eq!(serialized, bytes);
-    }
-
-    #[tokio::test]
-    async fn deserializes_raw() {
-        let input = Input { foo: "bar".into() };
-        let mut request = into_request_raw(&input);
-
-        request.headers_mut().insert(
-            header::CONTENT_TYPE,
-            HeaderValue::from_static("application/msgpack"),
-        );
-
-        let outcome = <MsgPackRaw<Input> as FromRequest<_, _>>::from_request(request, &|| {}).await;
-
-        let outcome = outcome.unwrap();
-        assert_eq!(input, outcome.0);
-    }
-
-    #[tokio::test]
-    async fn supported_content_type() {
-        let input = Input { foo: "bar".into() };
-        let mut request = into_request(&input);
-        request.headers_mut().insert(
-            header::CONTENT_TYPE,
-            HeaderValue::from_static("application/msgpack"),
-        );
-
-        let outcome = <MsgPack<Input> as FromRequest<_, _>>::from_request(request, &|| {}).await;
-        assert!(outcome.is_ok());
-
-        let mut request = into_request(&input);
-        request.headers_mut().insert(
-            header::CONTENT_TYPE,
-            HeaderValue::from_static("application/cloudevents+msgpack"),
-        );
-
-        let outcome = <MsgPack<Input> as FromRequest<_, _>>::from_request(request, &|| {}).await;
-        assert!(outcome.is_ok());
-
-        let mut request = into_request(&input);
-        request.headers_mut().insert(
-            header::CONTENT_TYPE,
-            HeaderValue::from_static("application/x-msgpack"),
-        );
-
-        let outcome = <MsgPack<Input> as FromRequest<_, _>>::from_request(request, &|| {}).await;
-        assert!(outcome.is_ok());
-
-        let request = into_request(&input);
-        let outcome = <MsgPack<Input> as FromRequest<_, _>>::from_request(request, &|| {}).await;
-
-        match outcome {
-            Err(MsgPackRejection::MissingMsgPackContentType(_)) => {}
-            other => unreachable!(
-                "Expected missing MsgPack content type rejection, got: {:?}",
-                other
-            ),
-        }
-    }
-
-    async fn to_bytes(body: Body) -> Vec<u8> {
-        let mut buffer = Vec::new();
-        let mut stream = body.into_data_stream();
-
-        while let Some(bytes) = stream.next().await {
-            buffer.extend(bytes.unwrap().into_iter());
-        }
-
-        buffer
-    }
-}
-
 #[derive(Debug)]
 #[non_exhaustive]
 pub struct InvalidMsgPackBody(BoxError);
@@ -424,5 +282,147 @@ impl std::error::Error for MsgPackRejection {
             Self::BodyAlreadyExtracted(inner) => Some(inner),
             Self::BytesRejection(inner) => Some(inner),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use axum::{body::Body, extract::FromRequest, http::HeaderValue, response::IntoResponse};
+    use futures_util::StreamExt;
+
+    use super::{MsgPack, MsgPackRaw, MsgPackRejection};
+    use hyper::{header, Request};
+    use serde::{Deserialize, Serialize};
+
+    #[derive(Debug, Serialize, Deserialize, PartialEq)]
+    struct Input {
+        foo: String,
+    }
+
+    fn into_request<T: Serialize>(value: &T) -> Request<Body> {
+        let serialized =
+            rmp_serde::encode::to_vec_named(&value).expect("Failed to serialize test struct");
+
+        let body = Body::from(serialized);
+        Request::new(body)
+    }
+
+    fn into_request_raw<T: Serialize>(value: &T) -> Request<Body> {
+        let serialized =
+            rmp_serde::encode::to_vec(&value).expect("Failed to serialize test struct");
+
+        let body = Body::from(serialized);
+        Request::new(body)
+    }
+
+    #[tokio::test]
+    async fn serializes_named() {
+        let input = Input { foo: "bar".into() };
+        let serialized = rmp_serde::encode::to_vec_named(&input);
+        assert!(serialized.is_ok());
+        let serialized = serialized.unwrap();
+
+        let body = MsgPack(input).into_response().into_body();
+        let bytes = to_bytes(body).await;
+
+        assert_eq!(serialized, bytes);
+    }
+
+    #[tokio::test]
+    async fn deserializes_named() {
+        let input = Input { foo: "bar".into() };
+        let mut request = into_request(&input);
+
+        request.headers_mut().insert(
+            header::CONTENT_TYPE,
+            HeaderValue::from_static("application/msgpack"),
+        );
+
+        let outcome = <MsgPack<Input> as FromRequest<_, _>>::from_request(request, &|| {}).await;
+
+        let outcome = outcome.unwrap();
+        assert_eq!(input, outcome.0);
+    }
+
+    #[tokio::test]
+    async fn serializes_raw() {
+        let input = Input { foo: "bar".into() };
+        let serialized = rmp_serde::encode::to_vec(&input);
+        assert!(serialized.is_ok());
+        let serialized = serialized.unwrap();
+
+        let body = MsgPackRaw(input).into_response().into_body();
+        let bytes = to_bytes(body).await;
+
+        assert_eq!(serialized, bytes);
+    }
+
+    #[tokio::test]
+    async fn deserializes_raw() {
+        let input = Input { foo: "bar".into() };
+        let mut request = into_request_raw(&input);
+
+        request.headers_mut().insert(
+            header::CONTENT_TYPE,
+            HeaderValue::from_static("application/msgpack"),
+        );
+
+        let outcome = <MsgPackRaw<Input> as FromRequest<_, _>>::from_request(request, &|| {}).await;
+
+        let outcome = outcome.unwrap();
+        assert_eq!(input, outcome.0);
+    }
+
+    #[tokio::test]
+    async fn supported_content_type() {
+        let input = Input { foo: "bar".into() };
+        let mut request = into_request(&input);
+        request.headers_mut().insert(
+            header::CONTENT_TYPE,
+            HeaderValue::from_static("application/msgpack"),
+        );
+
+        let outcome = <MsgPack<Input> as FromRequest<_, _>>::from_request(request, &|| {}).await;
+        assert!(outcome.is_ok());
+
+        let mut request = into_request(&input);
+        request.headers_mut().insert(
+            header::CONTENT_TYPE,
+            HeaderValue::from_static("application/cloudevents+msgpack"),
+        );
+
+        let outcome = <MsgPack<Input> as FromRequest<_, _>>::from_request(request, &|| {}).await;
+        assert!(outcome.is_ok());
+
+        let mut request = into_request(&input);
+        request.headers_mut().insert(
+            header::CONTENT_TYPE,
+            HeaderValue::from_static("application/x-msgpack"),
+        );
+
+        let outcome = <MsgPack<Input> as FromRequest<_, _>>::from_request(request, &|| {}).await;
+        assert!(outcome.is_ok());
+
+        let request = into_request(&input);
+        let outcome = <MsgPack<Input> as FromRequest<_, _>>::from_request(request, &|| {}).await;
+
+        match outcome {
+            Err(MsgPackRejection::MissingMsgPackContentType(_)) => {}
+            other => unreachable!(
+                "Expected missing MsgPack content type rejection, got: {:?}",
+                other
+            ),
+        }
+    }
+
+    async fn to_bytes(body: Body) -> Vec<u8> {
+        let mut buffer = Vec::new();
+        let mut stream = body.into_data_stream();
+
+        while let Some(bytes) = stream.next().await {
+            buffer.extend(bytes.unwrap().into_iter());
+        }
+
+        buffer
     }
 }
