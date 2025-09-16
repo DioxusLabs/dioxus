@@ -3,6 +3,8 @@ use std::{
     sync::Arc,
 };
 
+use serde::{Deserialize, Serialize};
+
 use crate::innerlude::*;
 
 /// An error that can occur while rendering a component
@@ -60,6 +62,24 @@ impl CapturedError {
         Self(Arc::new(anyhow::anyhow!(t.to_string())))
     }
 }
+impl Serialize for CapturedError {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.0.to_string())
+    }
+}
+impl<'de> Deserialize<'de> for CapturedError {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        Ok(Self::from_display(s))
+    }
+}
+
 impl std::ops::Deref for CapturedError {
     type Target = Error;
 

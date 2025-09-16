@@ -461,22 +461,10 @@ where
     T: Serialize + DeserializeOwned + 'static,
 {
     fn transport_to_bytes(&self) -> Vec<u8> {
-        todo!()
-    }
-
-    fn transport_from_bytes(bytes: &[u8]) -> Result<Self, ciborium::de::Error<std::io::Error>>
-    where
-        Self: Sized,
-    {
-        todo!()
-    }
-}
-
-pub struct TransportCapturedError;
-impl Transportable<TransportCapturedError> for Option<CapturedError> {
-    fn transport_to_bytes(&self) -> Vec<u8> {
-        let err = TransportMaybeError {
-            error: self.as_ref().map(|e| e.to_string()),
+        let err = TransportResultErr {
+            error: self
+                .as_ref()
+                .map_err(|e| CapturedError::from_display(e.to_string())),
         };
 
         let mut serialized = Vec::new();
@@ -488,14 +476,51 @@ impl Transportable<TransportCapturedError> for Option<CapturedError> {
     where
         Self: Sized,
     {
-        let err: TransportMaybeError = ciborium::from_reader(Cursor::new(bytes))?;
+        let err: TransportResultErr<T> = ciborium::from_reader(Cursor::new(bytes))?;
         match err.error {
-            Some(err) => Ok(Some(CapturedError(Arc::new(dioxus_core::Error::msg::<
-                String,
-            >(err))))),
-            None => Ok(None),
+            Ok(value) => Ok(Ok(value)),
+            Err(captured) => Ok(Err(dioxus_core::Error::msg(captured.to_string()))),
         }
     }
+}
+
+#[derive(Serialize, Deserialize)]
+struct TransportResultErr<T> {
+    error: Result<T, CapturedError>,
+}
+
+pub struct TransportCapturedError;
+// impl Transportable<TransportCapturedError> for Option<CapturedError> {
+impl Transportable<TransportCapturedError> for CapturedError {
+    fn transport_to_bytes(&self) -> Vec<u8> {
+        let err = TransportError {
+            error: self.to_string(),
+            // error: self.as_ref().map(|e| e.to_string()),
+        };
+
+        let mut serialized = Vec::new();
+        ciborium::into_writer(&err, &mut serialized).unwrap();
+        serialized
+    }
+
+    fn transport_from_bytes(bytes: &[u8]) -> Result<Self, ciborium::de::Error<std::io::Error>>
+    where
+        Self: Sized,
+    {
+        let err: TransportError = ciborium::from_reader(Cursor::new(bytes))?;
+        Ok(CapturedError(Arc::new(Error::msg::<String>(err.error))))
+        // match err.error {
+        //     Some(err) => Ok(Some(CapturedError(Arc::new(dioxus_core::Error::msg::<
+        //         String,
+        //     >(err))))),
+        //     None => Ok(None),
+        // }
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+struct TransportError {
+    error: String,
 }
 
 #[derive(Serialize, Deserialize)]

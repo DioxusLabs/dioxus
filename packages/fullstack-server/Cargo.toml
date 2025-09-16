@@ -30,7 +30,7 @@ dioxus-isrg = { workspace = true }
 dioxus-signals = { workspace = true }
 dioxus-hooks = { workspace = true }
 dioxus-router = { workspace = true, features = ["streaming"], optional = true }
-dioxus-fullstack-core = { workspace = true }
+dioxus-fullstack-core = { workspace = true, features = ["server"] }
 dashmap = "6.1.0"
 inventory = { workspace = true }
 dioxus-ssr = { workspace = true }
@@ -124,7 +124,7 @@ tokio = { workspace = true, features = ["full"] }
 default = ["router", "document"]
 # default = ["router", "document", "client", "server"]
 document = []
-web = ["dep:web-sys", "dioxus-fullstack-core/web"]
+# web = ["dep:web-sys", "dioxus-fullstack-core/web"]
 router = ["dep:dioxus-router"]
 default-tls = []
 rustls = ["dep:rustls", "dep:hyper-rustls"]
