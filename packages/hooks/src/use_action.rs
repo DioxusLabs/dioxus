@@ -3,7 +3,7 @@ use dioxus_core::{Callback, CapturedError, RenderError, Result, Task};
 use dioxus_signals::{
     read_impls, CopyValue, ReadSignal, Readable, ReadableExt, ReadableRef, Signal, WritableExt,
 };
-use std::{marker::PhantomData, prelude::rust_2024::Future};
+use std::{cell::Ref, marker::PhantomData, prelude::rust_2024::Future};
 
 pub fn use_action<F, E, I, O>(mut user_fn: impl FnMut(I) -> F + 'static) -> Action<I, O>
 where
@@ -57,22 +57,26 @@ pub struct Action<I, T> {
     callback: Callback<I, ()>,
     _phantom: PhantomData<*const I>,
 }
-impl<I: 'static, T> Action<I, T> {
+impl<I: 'static, T: 'static> Action<I, T> {
     pub fn dispatch(&mut self, input: I) -> Dispatching<()> {
         (self.callback)(input);
         Dispatching(PhantomData)
     }
 
-    pub fn ok(&self) -> Option<ReadSignal<T>> {
+    pub fn ok(&self) -> Option<Signal<T>> {
         todo!()
     }
 
-    pub fn value(&self) -> Option<ReadSignal<T>> {
+    pub fn value(&self) -> Option<Signal<T>> {
         todo!()
     }
 
-    pub fn result(&self) -> Option<Result<ReadSignal<T>, CapturedError>> {
-        todo!()
+    pub fn result(&self) -> Result<Signal<Option<T>>, CapturedError> {
+        if let Some(err) = self.error.cloned() {
+            return Err(err);
+        }
+
+        Ok(self.value)
     }
 
     pub fn is_pending(&self) -> bool {
@@ -81,16 +85,6 @@ impl<I: 'static, T> Action<I, T> {
 }
 
 pub struct Dispatching<I>(PhantomData<*const I>);
-impl<T> std::future::Future for Dispatching<T> {
-    type Output = ();
-
-    fn poll(
-        self: std::pin::Pin<&mut Self>,
-        _cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Self::Output> {
-        todo!()
-    }
-}
 
 impl<I, T> Copy for Action<I, T> {}
 impl<I, T> Clone for Action<I, T> {
