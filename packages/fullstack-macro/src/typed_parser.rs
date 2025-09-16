@@ -194,6 +194,11 @@ pub fn route_impl_with_route(
         }
         PathParam::Static(lit) => None,
     });
+    let path_param_values = route.path_params.iter().map(|(_slash, param)| match param {
+        PathParam::Capture(lit, _brace_1, ident, _ty, _brace_2) => Some(quote! { #ident }),
+        PathParam::WildCard(lit, _brace_1, _star, ident, _ty, _brace_2) => Some(quote! { #ident }),
+        PathParam::Static(lit) => None,
+    });
 
     let query_param_names2 = query_param_names.clone();
     let request_url = quote! {
@@ -204,6 +209,8 @@ pub fn route_impl_with_route(
         Type::Tuple(tuple) if tuple.elems.is_empty() => parse_quote! { () },
         _ => output_type.clone(),
     };
+
+    let extracted_idents2 = extracted_idents.clone();
 
     Ok(quote! {
         #(#fn_docs)*
@@ -253,36 +260,28 @@ pub fn route_impl_with_route(
                 #asyncness fn __inner__function__ #impl_generics(
                     #path_extractor
                     #query_extractor
-                    #server_arg_tokens
+                    // #server_arg_tokens
                 ) -> __axum::response::Response #where_clause {
                     let ( #(#body_json_names,)*) = match (&&&&&&&&&&&&&&DeSer::<(#(#body_json_types,)*), _>::new()).extract(ExtractState::default()).await {
                         Ok(v) => v,
                         Err(rejection) => return rejection.into_response()
                     };
 
-                    #function_on_server
-
                     #fn_name #ty_generics(#(#extracted_idents,)*).await.desugar_into_response()
-
-                    // #[__axum::debug_handler]
-                    // body: Json<__BodyExtract__>,
-                    // #remaining_numbered_pats
-                    // let __BodyExtract__ { #(#body_json_names,)* } = body.0;
-                    // ) #fn_output #where_clause {
-                    // let __res = #fn_name #ty_generics(#(#extracted_idents,)* #(#remaining_numbered_idents,)* ).await;
-                    // serverfn_sugar()
-                    // desugar_into_response will autoref into using the Serialize impl
-                    // #fn_name #ty_generics(#(#extracted_idents,)* #(#remaining_numbered_idents,)* ).await.desugar_into_response()
-                    // #fn_name #ty_generics(#(#extracted_idents,)*  #(#body_json_names2,)* ).await.desugar_into_response()
-                    // #fn_name #ty_generics(#(#extracted_idents,)* Json(__BodyExtract__::new()) ).await.desugar_into_response()
-                    // #fn_name #ty_generics(#(#extracted_idents,)* #(#remaining_numbered_idents,)* ).await.desugar_into_response()
                 }
 
+                // ServerFunction::new(__http::Method::#method_ident, #axum_path, || #inner_fn_call)
                 __inventory::submit! {
-                    ServerFunction::new(__http::Method::#method_ident, #axum_path, || #inner_fn_call)
+                    ServerFunction::new(
+                        __http::Method::#method_ident,
+                        #axum_path,
+                        || __axum::routing::#http_method(__inner__function__ #ty_generics)
+                    )
                 }
 
-                todo!("Calling server_fn on server is not yet supported. todo.");
+                #function_on_server
+
+                return #fn_name #ty_generics(#(#extracted_idents,)*).await;
             }
 
             #[allow(unreachable_code)]
@@ -443,9 +442,9 @@ impl CompiledRoute {
     }
 
     pub fn path_extractor(&self) -> Option<TokenStream2> {
-        if !self.path_params.iter().any(|(_, param)| param.captures()) {
-            return None;
-        }
+        // if !self.path_params.iter().any(|(_, param)| param.captures()) {
+        //     return None;
+        // }
 
         let path_iter = self
             .path_params
@@ -459,9 +458,9 @@ impl CompiledRoute {
     }
 
     pub fn query_extractor(&self) -> Option<TokenStream2> {
-        if self.query_params.is_empty() {
-            return None;
-        }
+        // if self.query_params.is_empty() {
+        //     return None;
+        // }
 
         let idents = self.query_params.iter().map(|item| &item.0);
         Some(quote! {

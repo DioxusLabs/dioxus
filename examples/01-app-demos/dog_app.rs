@@ -27,7 +27,7 @@ fn app() -> Element {
 
     // Whenever this action is called, it will re-run the future and return the result.
     let mut breed = use_action(move |breed| async move {
-        #[derive(serde::Deserialize, Debug, PartialEq, Clone)]
+        #[derive(serde::Deserialize, Debug, PartialEq)]
         struct DogApi {
             message: String,
         }
@@ -52,17 +52,18 @@ fn app() -> Element {
             }
         }
         div {
-            match breed.result().map(|res| res.cloned()) {
-                Err(_e) => rsx! { div { "Failed to fetch a dog, please try again." } },
-                Ok(None) => rsx! { div { "Click the button to fetch a dog!" } },
-                Ok(Some(res)) => rsx! {
+            match breed.result() {
+                None => rsx! { div { "Click the button to fetch a dog!" } },
+                Some(Err(_e)) => rsx! { div { "Failed to fetch a dog, please try again." } },
+                Some(Ok(res)) => rsx! {
                     img {
                         max_width: "500px",
                         max_height: "500px",
-                        src: "{res.message}"
+                        src: "{res.read().message}"
                     }
                 },
             }
         }
+
     }
 }

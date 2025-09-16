@@ -17,13 +17,13 @@ where
     fn from_response(
         res: reqwest::Response,
     ) -> impl Future<Output = Result<Self, ServerFnError>> + Send {
-        async move {
-            let res = res
-                .json::<T>()
-                .await
-                .map_err(|e| ServerFnError::Deserialization(e.to_string()))?;
-            Ok(res)
-        }
+        send_wrapper::SendWrapper::new(async move {
+            let res = res.json::<T>().await;
+            match res {
+                Err(err) => Err(ServerFnError::Deserialization(err.to_string())),
+                Ok(res) => Ok(res),
+            }
+        })
     }
 }
 
@@ -39,10 +39,7 @@ pub use req_to::*;
 pub mod req_to {
     use std::prelude::rust_2024::Future;
 
-    use axum::{
-        extract::{FromRequest, Request, State},
-        Json,
-    };
+    use axum_core::extract::{FromRequest, Request};
     use http::HeaderMap;
     pub use impls::*;
 
@@ -55,7 +52,7 @@ pub mod req_to {
     unsafe impl Send for EncodeState {}
     unsafe impl Sync for EncodeState {}
 
-    pub struct ClientRequest<In, Out, M = (), BodyTy = (), Body = Json<BodyTy>> {
+    pub struct ClientRequest<In, Out, M = (), BodyTy = (), Body = BodyTy> {
         _marker: std::marker::PhantomData<M>,
         _out: std::marker::PhantomData<Out>,
         _t: std::marker::PhantomData<In>,
@@ -145,13 +142,13 @@ pub mod req_to {
             type Input = ();
             type Output = Result<O, E>;
             fn fetch(&self, ctx: EncodeState, data: Self::Input) -> impl Future<Output = Self::Output> + Send + 'static {
-                async move {
+                send_wrapper::SendWrapper::new(async move {
                     let res = ctx.client.send().await;
                     match res {
                         Ok(res) => O::from_response(res).await.map_err(|e| e.into()),
                         Err(err) => Err(ServerFnError::Request { message: err.to_string(), code: err.status().map(|s| s.as_u16()) }.into())
                     }
-                }
+                })
             }
         }
 
@@ -413,7 +410,7 @@ pub mod req_to {
 pub mod req_from {
     use std::prelude::rust_2024::Future;
 
-    use axum::extract::{FromRequest, Request, State};
+    use axum_core::extract::{FromRequest, Request};
     use http::HeaderMap;
     pub use impls::*;
 
@@ -422,7 +419,6 @@ pub mod req_from {
     #[derive(Default)]
     pub struct ExtractState {
         request: Request,
-        state: State<()>,
         names: (&'static str, &'static str, &'static str),
     }
 

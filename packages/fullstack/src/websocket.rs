@@ -9,7 +9,6 @@ use dioxus_hooks::Resource;
 use dioxus_signals::Signal;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{marker::PhantomData, prelude::rust_2024::Future};
-use tokio_tungstenite::tungstenite::Error as WsError;
 
 pub fn use_websocket<E, F: Future<Output = Result<Websocket, E>>>(
     f: impl FnOnce() -> F,
@@ -29,12 +28,17 @@ impl WebsocketHandle {
         todo!()
     }
 
-    pub async fn send(&mut self, msg: impl Serialize) -> Result<(), WsError> {
+    #[cfg(feature = "server")]
+    pub async fn send(
+        &mut self,
+        msg: impl Serialize,
+    ) -> Result<(), tokio_tungstenite::tungstenite::Error> {
         todo!()
     }
 }
 
 impl<In: Serialize, Out: DeserializeOwned> Websocket<In, Out> {
+    #[cfg(feature = "server")]
     pub fn raw<O, F: Future<Output = O>>(
         f: impl FnOnce(
             axum::extract::ws::WebSocket, // tokio_tungstenite::tungstenite::protocol::WebSocket<tokio::net::TcpStream>,

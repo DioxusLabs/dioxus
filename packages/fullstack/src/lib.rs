@@ -17,7 +17,12 @@ pub use dioxus_fullstack_core::{use_server_cached, use_server_future};
 #[doc(inline)]
 pub use dioxus_fullstack_macro::*;
 
+#[cfg(feature = "server")]
 pub use axum;
+
+#[cfg(feature = "server")]
+pub use inventory;
+
 pub use axum_core;
 // pub use axum;
 // #[doc(hidden)]
@@ -25,7 +30,6 @@ pub use axum_core;
 // #[doc(hidden)]
 // pub use const_str;
 pub use http;
-pub use inventory;
 pub use reqwest;
 pub use serde;
 // #[doc(hidden)]

@@ -30,15 +30,16 @@ dioxus-fullstack-macro = { workspace = true }
 http-body-util = "0.1.3"
 futures-util = { workspace = true }
 axum-core = { workspace = true }
+send_wrapper = { features = ["futures"], workspace = true, default-features = true }
 
 # server deps
-axum = { workspace = true, features = ["multipart", "ws", "json", "form", "query"]}
-inventory = { workspace = true }
-tokio-tungstenite = { workspace = true }
-tokio-stream = { workspace = true, features = ["sync"] }
-tower = { workspace = true, features = ["util"] }
-tower-http = { workspace = true, features = ["fs"] }
-tower-layer = { version = "0.3.3" }
+axum = { workspace = true, features = ["multipart", "ws", "json", "form", "query"], optional = true }
+inventory = { workspace = true, optional = true }
+tokio-tungstenite = { workspace = true, optional = true }
+tokio-stream = { workspace = true, features = ["sync"], optional = true }
+tower = { workspace = true, features = ["util"], optional = true }
+tower-http = { workspace = true, features = ["fs"], optional = true }
+tower-layer = { version = "0.3.3", optional = true }
 
 # optional
 reqwest = { workspace = true, features = ["json", "rustls-tls"] }
@@ -52,7 +53,15 @@ tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time", "sy
 [features]
 web = []
 native = []
-server = []
+server = [
+    "dep:axum",
+    "dep:inventory",
+    "dep:tokio-tungstenite",
+    "dep:tokio-stream",
+    "dep:tower",
+    "dep:tower-http",
+    "dep:tower-layer",
+]
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]

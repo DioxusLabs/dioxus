@@ -1,16 +1,17 @@
 use crate::{use_callback, use_signal};
-use dioxus_core::{Callback, CapturedError, RenderError, Result, Task};
+use dioxus_core::{use_hook, Callback, CapturedError, RenderError, Result, Task};
 use dioxus_signals::{
-    read_impls, CopyValue, ReadSignal, Readable, ReadableExt, ReadableRef, Signal, WritableExt,
+    read_impls, CopyValue, ReadSignal, Readable, ReadableBoxExt, ReadableExt, ReadableRef, Signal,
+    WritableExt,
 };
 use std::{cell::Ref, marker::PhantomData, prelude::rust_2024::Future};
 
 pub fn use_action<F, E, I, O>(mut user_fn: impl FnMut(I) -> F + 'static) -> Action<I, O>
 where
     F: Future<Output = Result<O, E>> + 'static,
-    O: 'static,
     E: Into<CapturedError> + 'static,
     I: 'static,
+    O: 'static,
 {
     let mut value = use_signal(|| None as Option<O>);
     let mut error = use_signal(|| None as Option<CapturedError>);
@@ -41,16 +42,22 @@ where
         task.set(Some(new_task));
     });
 
+    // Create a reader that maps the Option<T> to T, unwrapping the Option
+    // This should only be handed out if we know the value is Some. We never set the value back to None, only modify the state of the action
+    let reader = use_hook(|| value.boxed().map(|v| v.as_ref().unwrap()).boxed());
+
     Action {
         value,
         error,
         task,
         callback,
+        reader,
         _phantom: PhantomData,
     }
 }
 
 pub struct Action<I, T> {
+    reader: ReadSignal<T>,
     error: Signal<Option<CapturedError>>,
     value: Signal<Option<T>>,
     task: Signal<Option<Task>>,
@@ -63,24 +70,32 @@ impl<I: 'static, T: 'static> Action<I, T> {
         Dispatching(PhantomData)
     }
 
-    pub fn ok(&self) -> Option<Signal<T>> {
-        todo!()
-    }
-
-    pub fn value(&self) -> Option<Signal<T>> {
-        todo!()
-    }
-
-    pub fn result(&self) -> Result<Signal<Option<T>>, CapturedError> {
-        if let Some(err) = self.error.cloned() {
-            return Err(err);
+    pub fn value(&self) -> Option<ReadSignal<T>> {
+        if self.value.peek().is_none() {
+            return None;
         }
 
-        Ok(self.value)
+        if self.error.peek().is_some() {
+            return None;
+        }
+
+        Some(self.reader)
+    }
+
+    pub fn result(&self) -> Option<Result<ReadSignal<T>, CapturedError>> {
+        if let Some(err) = self.error.cloned() {
+            return Some(Err(err));
+        }
+
+        if self.value.peek().is_none() {
+            return None;
+        }
+
+        Some(Ok(self.reader))
     }
 
     pub fn is_pending(&self) -> bool {
-        todo!()
+        self.value().is_none() && self.task.peek().is_some()
     }
 }
 

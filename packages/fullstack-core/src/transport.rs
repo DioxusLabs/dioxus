@@ -476,11 +476,15 @@ where
 pub struct TransportCapturedError;
 impl Transportable<TransportCapturedError> for Option<CapturedError> {
     fn transport_to_bytes(&self) -> Vec<u8> {
-        todo!()
-        // let error_message = self.to_string();
-        // let mut serialized = Vec::new();
-        // ciborium::into_writer(&error_message, &mut serialized).unwrap();
-        // serialized
+        match self {
+            Self::Some(s) => {
+                let error_message = s.to_string();
+                let mut serialized = Vec::new();
+                ciborium::into_writer(&error_message, &mut serialized).unwrap();
+                serialized
+            }
+            Self::None => vec![],
+        }
     }
 
     fn transport_from_bytes(bytes: &[u8]) -> Result<Self, ciborium::de::Error<std::io::Error>>

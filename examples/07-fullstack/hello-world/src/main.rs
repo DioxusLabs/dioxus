@@ -35,13 +35,13 @@ fn main() {
 }
 
 #[post("/api/data")]
-async fn post_server_data(data: String) -> ServerFnResult {
+async fn post_server_data(data: String) -> Result<()> {
     println!("Server received: {}", data);
 
     Ok(())
 }
 
 #[get("/api/data")]
-async fn get_server_data() -> ServerFnResult<String> {
+async fn get_server_data() -> Result<String> {
     Ok(reqwest::get("https://httpbin.org/ip").await?.text().await?)
 }
