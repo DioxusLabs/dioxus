@@ -6,8 +6,8 @@ use std::{
 use crate::{Result, StructuredOutput, Workspace};
 use anyhow::Context;
 use clap::Parser;
-use dioxus_component_manifest::Component;
-use tokio::task::JoinSet;
+use dioxus_component_manifest::{CargoDependency, Component};
+use tokio::{process::Command, task::JoinSet};
 use tracing::debug;
 
 #[derive(Clone, Debug, Parser)]
@@ -141,8 +141,32 @@ async fn remove_component(component: &str) -> Result<()> {
     Ok(())
 }
 
+async fn add_rust_dependencies(dependencies: &[CargoDependency]) -> Result<()> {
+    for dep in dependencies {
+        let status = Command::from(dep.add_command())
+            .status()
+            .await
+            .with_context(|| {
+                format!(
+                    "Failed to run command to add dependency {} to Cargo.toml",
+                    dep.name()
+                )
+            })?;
+        if !status.success() {
+            return Err(anyhow::anyhow!(
+                "Failed to add dependency {} to Cargo.toml",
+                dep.name()
+            ));
+        }
+    }
+
+    Ok(())
+}
+
 async fn add_component(components: &[ResolvedComponent], component: &str) -> Result<()> {
     let component = find_component(components, component).await?;
+
+    add_rust_dependencies(&component.cargo_dependencies).await?;
 
     // Copy the folder content to the components directory
     let components_root = components_root()?;
