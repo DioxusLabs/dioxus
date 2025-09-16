@@ -87,15 +87,24 @@ impl App {
         dioxus_html::set_event_converter(Box::new(crate::events::SerializedHtmlEventConverter));
 
         // Wire up the global hotkey handler
-        #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+        #[cfg(all(
+            any(target_os = "windows", target_os = "linux", target_os = "macos"),
+            not(target_env = "ohos")
+        ))]
         app.set_global_hotkey_handler();
 
         // Wire up the menubar receiver - this way any component can key into the menubar actions
-        #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+        #[cfg(all(
+            any(target_os = "windows", target_os = "linux", target_os = "macos"),
+            not(target_env = "ohos")
+        ))]
         app.set_menubar_receiver();
 
         // Wire up the tray icon receiver - this way any component can key into the menubar actions
-        #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+        #[cfg(all(
+            any(target_os = "windows", target_os = "linux", target_os = "macos"),
+            not(target_env = "ohos")
+        ))]
         app.set_tray_icon_receiver();
 
         // Allow hotreloading to work - but only in debug mode
@@ -103,7 +112,10 @@ impl App {
         app.connect_hotreload();
 
         #[cfg(debug_assertions)]
-        #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+        #[cfg(all(
+            any(target_os = "windows", target_os = "linux", target_os = "macos"),
+            not(target_env = "ohos")
+        ))]
         app.connect_preserve_window_state_handler();
 
         (event_loop, app)
@@ -116,12 +128,18 @@ impl App {
             .apply_event(window_event, &self.shared.target);
     }
 
-    #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+    #[cfg(all(
+        any(target_os = "windows", target_os = "linux", target_os = "macos"),
+        not(target_env = "ohos")
+    ))]
     pub fn handle_global_hotkey(&self, event: global_hotkey::GlobalHotKeyEvent) {
         self.shared.shortcut_manager.call_handlers(event);
     }
 
-    #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+    #[cfg(all(
+        any(target_os = "windows", target_os = "linux", target_os = "macos"),
+        not(target_env = "ohos")
+    ))]
     pub fn handle_menu_event(&mut self, event: muda::MenuEvent) {
         match event.id().0.as_str() {
             "dioxus-float-top" => {
@@ -147,12 +165,18 @@ impl App {
             _ => (),
         }
     }
-    #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+    #[cfg(all(
+        any(target_os = "windows", target_os = "linux", target_os = "macos"),
+        not(target_env = "ohos")
+    ))]
     pub fn handle_tray_menu_event(&mut self, event: tray_icon::menu::MenuEvent) {
         _ = event;
     }
 
-    #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+    #[cfg(all(
+        any(target_os = "windows", target_os = "linux", target_os = "macos"),
+        not(target_env = "ohos")
+    ))]
     pub fn handle_tray_icon_event(&mut self, event: tray_icon::TrayIconEvent) {
         if let tray_icon::TrayIconEvent::Click {
             id: _,
@@ -454,7 +478,10 @@ impl App {
         view.poll_vdom();
     }
 
-    #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+    #[cfg(all(
+        any(target_os = "windows", target_os = "linux", target_os = "macos"),
+        not(target_env = "ohos")
+    ))]
     fn set_global_hotkey_handler(&self) {
         let receiver = self.shared.proxy.clone();
 
@@ -468,7 +495,10 @@ impl App {
         }));
     }
 
-    #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+    #[cfg(all(
+        any(target_os = "windows", target_os = "linux", target_os = "macos"),
+        not(target_env = "ohos")
+    ))]
     fn set_menubar_receiver(&self) {
         let receiver = self.shared.proxy.clone();
 
@@ -482,7 +512,10 @@ impl App {
         }));
     }
 
-    #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+    #[cfg(all(
+        any(target_os = "windows", target_os = "linux", target_os = "macos"),
+        not(target_env = "ohos")
+    ))]
     fn set_tray_icon_receiver(&self) {
         let receiver = self.shared.proxy.clone();
 
@@ -584,7 +617,7 @@ impl App {
         explicit_window_position: Option<tao::dpi::Position>,
     ) {
         // We only want to do this on desktop
-        if cfg!(target_os = "android") || cfg!(target_os = "ios") {
+        if cfg!(target_os = "android") || cfg!(target_os = "ios") || cfg!(target_env = "ohos") {
             return;
         }
 
