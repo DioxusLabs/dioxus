@@ -20,16 +20,16 @@
 ///     type Target = T;
 ///     type Storage = S;
 ///
-///     fn try_read_unchecked(
+///     fn try_read_extended(
 ///         &self,
 ///     ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> where T: 'static {
-///         self.value.try_read_unchecked()
+///         self.value.try_read_extended()
 ///     }
 ///
-///     fn try_peek_unchecked(
+///     fn try_peek_extended(
 ///         &self,
 ///     ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> where T: 'static {
-///         self.value.try_read_unchecked()
+///         self.value.try_read_extended()
 ///     }
 ///
 ///     fn subscribers(&self) -> Subscribers where T: 'static {
@@ -87,16 +87,16 @@ macro_rules! default_impl {
 ///     type Target = T;
 ///     type Storage = S;
 ///
-///     fn try_read_unchecked(
+///     fn try_read_extended(
 ///         &self,
 ///     ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> where T: 'static {
-///         self.value.try_read_unchecked()
+///         self.value.try_read_extended()
 ///     }
 ///
-///     fn try_peek_unchecked(
+///     fn try_peek_extended(
 ///         &self,
 ///     ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> where T: 'static {
-///         self.value.try_read_unchecked()
+///         self.value.try_read_extended()
 ///     }
 ///
 ///     fn subscribers(&self) -> Subscribers where T: 'static {
@@ -165,16 +165,16 @@ macro_rules! read_impls {
 ///     type Target = T;
 ///     type Storage = S;
 ///
-///     fn try_read_unchecked(
+///     fn try_read_extended(
 ///         &self,
 ///     ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> where T: 'static {
-///         self.value.try_read_unchecked()
+///         self.value.try_read_extended()
 ///     }
 ///
-///     fn try_peek_unchecked(
+///     fn try_peek_extended(
 ///         &self,
 ///     ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> where T: 'static {
-///         self.value.try_read_unchecked()
+///         self.value.try_read_extended()
 ///     }
 ///
 ///     fn subscribers(&self) -> Subscribers where T: 'static {
@@ -246,16 +246,16 @@ macro_rules! fmt_impls {
 ///     type Target = T;
 ///     type Storage = S;
 ///
-///     fn try_read_unchecked(
+///     fn try_read_extended(
 ///         &self,
 ///     ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> where T: 'static {
-///         self.value.try_read_unchecked()
+///         self.value.try_read_extended()
 ///     }
 ///
-///     fn try_peek_unchecked(
+///     fn try_peek_extended(
 ///         &self,
 ///     ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> where T: 'static {
-///         self.value.try_read_unchecked()
+///         self.value.try_read_extended()
 ///     }
 ///
 ///     fn subscribers(&self) -> Subscribers where T: 'static {
@@ -311,22 +311,22 @@ macro_rules! eq_impls {
 ///     type Target = T;
 ///     type Storage = S;
 ///
-///     fn try_read_unchecked(
+///     fn try_read_extended(
 ///         &self,
 ///     ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> where T: 'static {
-///         self.value.try_read_unchecked()
+///         self.value.try_read_extended()
 ///     }
 ///
-///     fn peek_unchecked(&self) -> ReadableRef<'static, Self> where T: 'static {
-///         self.value.read_unchecked()
+///     fn peek_extended(&self) -> ReadableRef<'static, Self> where T: 'static {
+///         self.value.read_extended()
 ///     }
 /// }
 ///
 /// impl<T: 'static, S: Storage<T> + 'static> Writable for MyCopyValue<T, S> {
-///     fn try_write_unchecked(
+///     fn try_write_extended(
 ///         &self,
 ///     ) -> Result<WritableRef<'static, Self>, generational_box::BorrowMutError> where T: 'static {
-///         self.value.try_write_unchecked()
+///         self.value.try_write_extended()
 ///     }
 ///
 ///     //...

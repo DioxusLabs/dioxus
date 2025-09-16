@@ -75,7 +75,7 @@ fn BreedPic(breed: WriteSignal<String>) -> Element {
             .await
     });
 
-    match fut.read_unchecked().as_ref() {
+    match fut.read_extended().as_ref() {
         Some(Ok(resp)) => rsx! {
             div {
                 button { onclick: move |_| fut.restart(), padding: "5px", background_color: "gray", color: "white", border_radius: "5px", "Click to fetch another doggo" }
