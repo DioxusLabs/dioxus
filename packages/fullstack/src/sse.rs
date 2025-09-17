@@ -1,7 +1,7 @@
 use std::future::Future;
 
 use axum_core::response::IntoResponse;
-use axum_core::response::Response;
+// use axum_core::response::Response;
 
 use crate::{FromResponse, ServerFnError};
 
@@ -31,7 +31,9 @@ impl IntoResponse for ServerSentEvents<String> {
 }
 
 impl<T> FromResponse for ServerSentEvents<T> {
-    fn from_response(res: Response) -> impl Future<Output = Result<Self, ServerFnError>> + Send {
+    fn from_response(
+        res: reqwest::Response,
+    ) -> impl Future<Output = Result<Self, ServerFnError>> + Send {
         async move { Ok(ServerSentEvents::new()) }
     }
 }

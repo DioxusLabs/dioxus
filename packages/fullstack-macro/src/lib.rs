@@ -505,9 +505,9 @@ fn route_impl_with_route(
             use dioxus_fullstack::reqwest as __reqwest;
             use dioxus_fullstack::serde as serde;
             use dioxus_fullstack::{
-                DeSer,  ClientRequest, ExtractState, ExtractRequest, EncodeState,
+                AxumRequestDecoder, AxumResponseEncoder,  ClientRequest, ExtractState, ExtractRequest, EncodeState,
                 ServerFnSugar, ServerFnRejection, EncodeRequest, get_server_url, EncodedBody,
-                ServerFnError, ResDeser, FromResIt,
+                ServerFnError, FromResIt, ReqwestDecoder, ReqwestDecoderImpl
             };
 
             #query_params_struct
@@ -527,9 +527,15 @@ fn route_impl_with_route(
                     client
                 };
 
-                return (&&&&&&&&&&&&&&ClientRequest::<(#(#rest_idents,)*), #out_ty, _>::new())
+                let response = (&&&&&&&&&&&&&&ClientRequest::<(#(#rest_idents,)*), #out_ty, _>::new())
                     .fetch(encode_state, (#(#rest_ident_names2,)*))
                     .await;
+
+                let result = (&&&&&ReqwestDecoderImpl::<#out_ty>::new())
+                    .decode_response(response)
+                    .await;
+
+                return result;
             }
 
             // On the server, we expand the tokens and submit the function to inventory
@@ -548,9 +554,9 @@ fn route_impl_with_route(
                     #query_extractor
                     request: __axum::extract::Request,
                 ) -> __axum::response::Response #where_clause {
-                    match (&&&&&&&&&&&&&&DeSer::<(#(#body_json_types,)*), _>::new()).extract(ExtractState { request }).await {
+                    match (&&&&&&&&&&&&&&AxumRequestDecoder::<(#(#body_json_types,)*), _>::new()).extract(ExtractState { request }).await {
                         Ok(( #(#body_json_names,)*)) => {
-                            (&&&&&&ResDeser::<#out_ty>::new())
+                            (&&&&&&AxumResponseEncoder::<#out_ty>::new())
                                 .make_axum_response(#fn_name #ty_generics(#(#extracted_idents,)*).await)
                         },
                         Err(rejection) => rejection.into_response()

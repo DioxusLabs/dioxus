@@ -39,13 +39,15 @@ impl<T, E> std::future::Future for ServerFnRequest<Result<T, E>> {
 
 pub trait FromResponse: Sized {
     fn from_response(
-        res: axum_core::response::Response,
+        res: reqwest::Response,
+        // res: axum_core::response::Responsea
     ) -> impl Future<Output = Result<Self, ServerFnError>> + Send;
 }
 
 impl<T> FromResponse for Json<T> {
     fn from_response(
-        res: axum_core::response::Response,
+        res: reqwest::Response,
+        // res: axum_core::response::Response,
     ) -> impl Future<Output = Result<Self, ServerFnError>> + Send {
         async move { todo!() }
     }
@@ -76,7 +78,7 @@ pub mod req_to {
     unsafe impl Send for EncodeState {}
     unsafe impl Sync for EncodeState {}
 
-    pub struct ClientRequest<In, Out, M = (), BodyTy = (), Body = BodyTy> {
+    pub struct ClientRequest<In, Out = (), M = (), BodyTy = (), Body = BodyTy> {
         _marker: std::marker::PhantomData<M>,
         _out: std::marker::PhantomData<Out>,
         _t: std::marker::PhantomData<In>,
@@ -142,8 +144,7 @@ pub mod req_to {
         */
         pub trait EncodeRequest {
             type Input;
-            type Output;
-            fn fetch(&self, ctx: EncodeState, data: Self::Input) -> impl Future<Output = Self::Output> + Send + 'static;
+            fn fetch(&self, ctx: EncodeState, data: Self::Input) -> impl Future<Output = Result<reqwest::Response, reqwest::Error>> + Send + 'static;
         }
 
         use axum_core::extract::FromRequest as Freq;
@@ -154,41 +155,31 @@ pub mod req_to {
         use serde_json::json;
 
 
+        type Res = Result<reqwest::Response, reqwest::Error>;
+
         // fallback case for *all invalid*
         // todo...
-        impl<In, Out> EncodeRequest for ClientRequest<In, Out> {
+        impl<In> EncodeRequest for ClientRequest<In> {
             type Input = In;
-            type Output = Out;
-            fn fetch(&self, _ctx: EncodeState, _data: Self::Input) -> impl Future<Output = Out> + Send + 'static {
+            fn fetch(&self, _ctx: EncodeState, _data: Self::Input) -> impl Future<Output = Res> + Send + 'static {
                 async move { panic!("Could not encode request") }
             }
         }
 
         // Zero-arg case
-        impl<O, E> EncodeRequest for &&&&&&&&&&ClientRequest<(), Result<O, E>> where E: From<Sfe>, O: FromResponse {
+        impl<O, E> EncodeRequest for &&&&&&&&&&ClientRequest<(), Result<O, E>> where E: From<Sfe>, {
             type Input = ();
-            type Output = Result<O, E>;
-            fn fetch(&self, ctx: EncodeState, _: Self::Input) -> impl Future<Output = Self::Output> + Send + 'static {
+            fn fetch(&self, ctx: EncodeState, _: Self::Input) -> impl Future<Output = Res> + Send + 'static {
                 send_wrapper::SendWrapper::new(async move {
-                    let res = ctx.client.send().await;
-                    // let res = ctx.client.body(serde_json::to_string(&json!({})).unwrap()).send().await;
-                    match res {
-                        Ok(res) => {
-                            todo!()
-                            // let
-                            // O::from_response(res).await.map_err(|e| e.into())
-                        },
-                        Err(err) => Err(Sfe::Request { message: err.to_string(), code: err.status().map(|s| s.as_u16()) }.into())
-                    }
+                    ctx.client.send().await
                 })
             }
         }
 
         // One-arg case
-        impl<A, O, E> EncodeRequest for &&&&&&&&&&ClientRequest<(A,), Result<O, E>> where A: DeO_____ + Serialize + 'static, E: From<Sfe>, O: FromResponse {
+        impl<A, O, E> EncodeRequest for &&&&&&&&&&ClientRequest<(A,), Result<O, E>> where A: DeO_____ + Serialize + 'static, E: From<Sfe> {
             type Input = (A,);
-            type Output = Result<O, E>;
-            fn fetch(&self, ctx: EncodeState, data: Self::Input) -> impl Future<Output = Self::Output> + Send + 'static {
+            fn fetch(&self, ctx: EncodeState, data: Self::Input) -> impl Future<Output = Res> + Send + 'static {
                 send_wrapper::SendWrapper::new(async move {
                     let (a,) = data;
                     #[derive(Serialize)]
@@ -196,28 +187,19 @@ pub mod req_to {
                         data: A,
                     }
 
-                    let res = ctx.client.body(serde_json::to_string(&SerOne { data: a }).unwrap()).send().await;
-                    match res {
-                        Ok(res) => {
-                            todo!()
-                            // O::from_response(res).await.map_err(|e| e.into())
-                        },
-                        Err(err) => Err(Sfe::Request { message: err.to_string(), code: err.status().map(|s| s.as_u16()) }.into())
-                    }
+                    ctx.client.body(serde_json::to_string(&SerOne { data: a }).unwrap()).send().await
                 })
             }
         }
         impl<A, O, E> EncodeRequest for &&&&&&&&&ClientRequest<(A,), Result<O, E>> where A: Freq<Dsr>, E: From<Sfe> {
             type Input = (A,);
-            type Output = Result<O, E>;
-            fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Self::Output> + Send + 'static {
+            fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Res> + Send + 'static {
                 async move { todo!() }
             }
         }
         impl<A, O, E> EncodeRequest for  &&&&&&&&ClientRequest<(A,), Result<O, E>> where A: Prts<Dsr>, E: From<Sfe> {
             type Input = (A,);
-            type Output = Result<O, E>;
-            fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Self::Output> + Send + 'static {
+            fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Res> + Send + 'static {
                 async move { todo!() }
             }
         }
@@ -226,29 +208,25 @@ pub mod req_to {
         // Two-arg case
         impl<A, B, O, E> EncodeRequest for &&&&&&&&&&ClientRequest<(A, B), Result<O, E>> where A: Prts<Dsr>, B: Freq<Dsr>, E: From<Sfe> {
             type Input = (A, B);
-            type Output = Result<O, E>;
-            fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Self::Output> + Send + 'static {
+            fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Res> + Send + 'static {
                 async move { todo!() }
             }
         }
         impl<A, B, O, E> EncodeRequest for  &&&&&&&&&ClientRequest<(A, B), Result<O, E>> where A: Prts<Dsr>, B: Prts<Dsr>, E: From<Sfe> {
             type Input = (A, B);
-            type Output = Result<O, E>;
-            fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Self::Output> + Send + 'static {
+            fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Res> + Send + 'static {
                 async move { todo!() }
             }
         }
         impl<A, B, O, E> EncodeRequest for   &&&&&&&&ClientRequest<(A, B), Result<O, E>> where A: Prts<Dsr>, B: DeO_____, E: From<Sfe> {
             type Input = (A, B);
-            type Output = Result<O, E>;
-            fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Self::Output> + Send + 'static {
+            fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Res> + Send + 'static {
                 async move { todo!() }
             }
         }
         impl<A, B, O, E> EncodeRequest for    &&&&&&&ClientRequest<(A, B), Result<O, E>> where A: DeO_____, B: DeO_____, E: From<Sfe> {
             type Input = (A, B);
-            type Output = Result<O, E>;
-            fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Self::Output> + Send + 'static {
+            fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Res> + Send + 'static {
                 async move { todo!() }
             }
         }
@@ -471,14 +449,14 @@ pub mod req_from {
     unsafe impl Send for ExtractState {}
     unsafe impl Sync for ExtractState {}
 
-    pub struct DeSer<T, BodyTy = (), B = ()> {
+    pub struct AxumRequestDecoder<T, BodyTy = (), B = ()> {
         _t: std::marker::PhantomData<T>,
         _body: std::marker::PhantomData<BodyTy>,
         _encoding: std::marker::PhantomData<B>,
     }
 
-    unsafe impl<A, B, C> Send for DeSer<A, B, C> {}
-    unsafe impl<A, B, C> Sync for DeSer<A, B, C> {}
+    unsafe impl<A, B, C> Send for AxumRequestDecoder<A, B, C> {}
+    unsafe impl<A, B, C> Sync for AxumRequestDecoder<A, B, C> {}
 
     fn assert_is_send(_: impl Send) {}
     fn check_it() {
@@ -486,9 +464,9 @@ pub mod req_from {
         //     .extract_request(request));
     }
 
-    impl<T, Encoding> DeSer<T, Encoding> {
+    impl<T, Encoding> AxumRequestDecoder<T, Encoding> {
         pub fn new() -> Self {
-            DeSer {
+            AxumRequestDecoder {
                 _t: std::marker::PhantomData,
                 _body: std::marker::PhantomData,
                 _encoding: std::marker::PhantomData,
@@ -537,7 +515,7 @@ pub mod req_from {
         use DioxusServerState as Ds;
 
         // Zero-arg case
-        impl ExtractRequest for &&&&&&&&&&DeSer<()> {
+        impl ExtractRequest for &&&&&&&&&&AxumRequestDecoder<()> {
             type Output = ();
             fn extract(&self, _ctx: ExtractState) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static {
                 async move { Ok(()) }
@@ -545,7 +523,7 @@ pub mod req_from {
         }
 
         // One-arg case
-        impl<A> ExtractRequest for &&&&&&&&&&DeSer<(A,)> where A: DeO_____ {
+        impl<A> ExtractRequest for &&&&&&&&&&AxumRequestDecoder<(A,)> where A: DeO_____ {
             type Output = (A,);
             fn extract(&self, ctx: ExtractState) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static {
                 async move {
@@ -562,53 +540,53 @@ pub mod req_from {
                 }
             }
         }
-        impl<A> ExtractRequest for  &&&&&&&&&DeSer<(A,)> where A: Freq<Ds> {
+        impl<A> ExtractRequest for  &&&&&&&&&AxumRequestDecoder<(A,)> where A: Freq<Ds> {
             type Output = (A,);
             fn extract(&self, _ctx: ExtractState) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static { async move { todo!() } }
         }
-        impl<A> ExtractRequest for   &&&&&&&&DeSer<(A,)> where A: Prts<Ds> {
+        impl<A> ExtractRequest for   &&&&&&&&AxumRequestDecoder<(A,)> where A: Prts<Ds> {
             type Output = (A,);
             fn extract(&self, _ctx: ExtractState) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static { async move { todo!() } }
         }
 
 
         // Two-arg case
-        impl<A, B> ExtractRequest for &&&&&&&&&&DeSer<(A, B)> where A: Prts<Ds>, B: Freq<Ds> {
+        impl<A, B> ExtractRequest for &&&&&&&&&&AxumRequestDecoder<(A, B)> where A: Prts<Ds>, B: Freq<Ds> {
             type Output = (A, B);
             fn extract(&self, _ctx: ExtractState) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static { async move { todo!() } }
         }
-        impl<A, B> ExtractRequest for  &&&&&&&&&DeSer<(A, B)> where A: Prts<Ds>, B: Prts<Ds> {
+        impl<A, B> ExtractRequest for  &&&&&&&&&AxumRequestDecoder<(A, B)> where A: Prts<Ds>, B: Prts<Ds> {
             type Output = (A, B);
             fn extract(&self, _ctx: ExtractState) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static { async move { todo!() } }
         }
-        impl<A, B> ExtractRequest for   &&&&&&&&DeSer<(A, B)> where A: Prts<Ds>, B: DeO_____ {
+        impl<A, B> ExtractRequest for   &&&&&&&&AxumRequestDecoder<(A, B)> where A: Prts<Ds>, B: DeO_____ {
             type Output = (A, B);
             fn extract(&self, _ctx: ExtractState) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static { async move { todo!() } }
         }
-        impl<A, B> ExtractRequest for    &&&&&&&DeSer<(A, B)> where A: DeO_____, B: DeO_____ {
+        impl<A, B> ExtractRequest for    &&&&&&&AxumRequestDecoder<(A, B)> where A: DeO_____, B: DeO_____ {
             type Output = (A, B);
             fn extract(&self, _ctx: ExtractState) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static { async move { todo!() } }
         }
 
 
         // the three-arg case
-        impl<A, B, C> ExtractRequest for &&&&&&&&&&DeSer<(A, B, C)> where A: Prts<Ds>, B: Prts<Ds>, C: Freq<Ds>, {
+        impl<A, B, C> ExtractRequest for &&&&&&&&&&AxumRequestDecoder<(A, B, C)> where A: Prts<Ds>, B: Prts<Ds>, C: Freq<Ds>, {
             type Output = (A, B, C);
             fn extract(&self, _ctx: ExtractState) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static { async move { todo!() } }
         }
-        impl<A, B, C> ExtractRequest for  &&&&&&&&&DeSer<(A, B, C)> where A: Prts<Ds>, B: Prts<Ds>, C: Prts<Ds> {
+        impl<A, B, C> ExtractRequest for  &&&&&&&&&AxumRequestDecoder<(A, B, C)> where A: Prts<Ds>, B: Prts<Ds>, C: Prts<Ds> {
             type Output = (A, B, C);
             fn extract(&self, _ctx: ExtractState) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static { async move { todo!() } }
         }
-        impl<A, B, C> ExtractRequest for   &&&&&&&&DeSer<(A, B, C)> where A: Prts<Ds>, B: Prts<Ds>, C: DeO_____ {
+        impl<A, B, C> ExtractRequest for   &&&&&&&&AxumRequestDecoder<(A, B, C)> where A: Prts<Ds>, B: Prts<Ds>, C: DeO_____ {
             type Output = (A, B, C);
             fn extract(&self, _ctx: ExtractState) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static { async move { todo!() } }
         }
-        impl<A, B, C> ExtractRequest for   &&&&&&&DeSer<(A, B, C)> where A: Prts<Ds>, B: DeO_____, C: DeO_____ {
+        impl<A, B, C> ExtractRequest for   &&&&&&&AxumRequestDecoder<(A, B, C)> where A: Prts<Ds>, B: DeO_____, C: DeO_____ {
             type Output = (A, B, C);
             fn extract(&self, _ctx: ExtractState) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static { async move { todo!() } }
         }
-        impl<A, B, C> ExtractRequest for    &&&&&&DeSer<(A, B, C)> where A: DeO_____, B: DeO_____, C: DeO_____ {
+        impl<A, B, C> ExtractRequest for    &&&&&&AxumRequestDecoder<(A, B, C)> where A: DeO_____, B: DeO_____, C: DeO_____ {
             type Output = (A, B, C);
             fn extract(&self, _ctx: ExtractState) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static { async move { todo!() } }
         }
@@ -616,91 +594,91 @@ pub mod req_from {
 
 
         // the four-arg case
-        impl<A, B, C, D> ExtractRequest for &&&&&&&&&&DeSer<(A, B, C, D)> where A: Prts<Ds>, B: Prts<Ds>, C: Prts<Ds>, D: Freq<Ds> {
+        impl<A, B, C, D> ExtractRequest for &&&&&&&&&&AxumRequestDecoder<(A, B, C, D)> where A: Prts<Ds>, B: Prts<Ds>, C: Prts<Ds>, D: Freq<Ds> {
             type Output = (A, B, C, D);
             fn extract(&self, _ctx: ExtractState) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static { async move { todo!() } }
         }
-        impl<A, B, C, D> ExtractRequest for  &&&&&&&&&DeSer<(A, B, C, D)> where A: Prts<Ds>, B: Prts<Ds>, C: Prts<Ds>, D: Prts<Ds> {
+        impl<A, B, C, D> ExtractRequest for  &&&&&&&&&AxumRequestDecoder<(A, B, C, D)> where A: Prts<Ds>, B: Prts<Ds>, C: Prts<Ds>, D: Prts<Ds> {
             type Output = (A, B, C, D);
             fn extract(&self, _ctx: ExtractState) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static { async move { todo!() } }
         }
-        impl<A, B, C, D> ExtractRequest for   &&&&&&&&DeSer<(A, B, C, D)> where A: Prts<Ds>, B: Prts<Ds>, C: Prts<Ds>, D: DeO_____ {
+        impl<A, B, C, D> ExtractRequest for   &&&&&&&&AxumRequestDecoder<(A, B, C, D)> where A: Prts<Ds>, B: Prts<Ds>, C: Prts<Ds>, D: DeO_____ {
             type Output = (A, B, C, D);
             fn extract(&self, _ctx: ExtractState) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static { async move { todo!() } }
         }
-        impl<A, B, C, D> ExtractRequest for    &&&&&&&DeSer<(A, B, C, D)> where A: Prts<Ds>, B: Prts<Ds>, C: DeO_____, D: DeO_____ {
+        impl<A, B, C, D> ExtractRequest for    &&&&&&&AxumRequestDecoder<(A, B, C, D)> where A: Prts<Ds>, B: Prts<Ds>, C: DeO_____, D: DeO_____ {
             type Output = (A, B, C, D);
             fn extract(&self, _ctx: ExtractState) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static { async move { todo!() } }
         }
-        impl<A, B, C, D> ExtractRequest for     &&&&&&DeSer<(A, B, C, D)> where A: Prts<Ds>, B: DeO_____, C: DeO_____, D: DeO_____ {
+        impl<A, B, C, D> ExtractRequest for     &&&&&&AxumRequestDecoder<(A, B, C, D)> where A: Prts<Ds>, B: DeO_____, C: DeO_____, D: DeO_____ {
             type Output = (A, B, C, D);
             fn extract(&self, _ctx: ExtractState) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static { async move { todo!() } }
         }
-        impl<A, B, C, D> ExtractRequest for      &&&&&DeSer<(A, B, C, D)> where A: DeO_____, B: DeO_____, C: DeO_____, D: DeO_____ {
+        impl<A, B, C, D> ExtractRequest for      &&&&&AxumRequestDecoder<(A, B, C, D)> where A: DeO_____, B: DeO_____, C: DeO_____, D: DeO_____ {
             type Output = (A, B, C, D);
             fn extract(&self, _ctx: ExtractState) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static { async move { todo!() } }
         }
 
         // the five-arg case
-        impl<A, B, C, D, E> ExtractRequest for &&&&&&&&&&DeSer<(A, B, C, D, E)> where A: Prts<Ds>, B: Prts<Ds>, C: Prts<Ds>, D: Prts<Ds>, E: Freq<Ds> {
+        impl<A, B, C, D, E> ExtractRequest for &&&&&&&&&&AxumRequestDecoder<(A, B, C, D, E)> where A: Prts<Ds>, B: Prts<Ds>, C: Prts<Ds>, D: Prts<Ds>, E: Freq<Ds> {
             type Output = (A, B, C, D, E);
             fn extract(&self, _ctx: ExtractState) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static { async move { todo!() } }
         }
-        impl<A, B, C, D, E> ExtractRequest for  &&&&&&&&&DeSer<(A, B, C, D, E)> where A: Prts<Ds>, B: Prts<Ds>, C: Prts<Ds>, D: Prts<Ds>, E: Prts<Ds> {
+        impl<A, B, C, D, E> ExtractRequest for  &&&&&&&&&AxumRequestDecoder<(A, B, C, D, E)> where A: Prts<Ds>, B: Prts<Ds>, C: Prts<Ds>, D: Prts<Ds>, E: Prts<Ds> {
             type Output = (A, B, C, D, E);
             fn extract(&self, _ctx: ExtractState) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static { async move { todo!() } }
         }
-        impl<A, B, C, D, E> ExtractRequest for   &&&&&&&&DeSer<(A, B, C, D, E)> where A: Prts<Ds>, B: Prts<Ds>, C: Prts<Ds>, D: Prts<Ds>, E: DeO_____ {
+        impl<A, B, C, D, E> ExtractRequest for   &&&&&&&&AxumRequestDecoder<(A, B, C, D, E)> where A: Prts<Ds>, B: Prts<Ds>, C: Prts<Ds>, D: Prts<Ds>, E: DeO_____ {
             type Output = (A, B, C, D, E);
             fn extract(&self, _ctx: ExtractState) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static { async move { todo!() } }
         }
-        impl<A, B, C, D, E> ExtractRequest for    &&&&&&&DeSer<(A, B, C, D, E)> where A: Prts<Ds>, B: Prts<Ds>, C: Prts<Ds>, D: DeO_____, E: DeO_____ {
+        impl<A, B, C, D, E> ExtractRequest for    &&&&&&&AxumRequestDecoder<(A, B, C, D, E)> where A: Prts<Ds>, B: Prts<Ds>, C: Prts<Ds>, D: DeO_____, E: DeO_____ {
             type Output = (A, B, C, D, E);
             fn extract(&self, _ctx: ExtractState) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static { async move { todo!() } }
         }
-        impl<A, B, C, D, E> ExtractRequest for     &&&&&&DeSer<(A, B, C, D, E)> where A: Prts<Ds>, B: Prts<Ds>, C: DeO_____, D: DeO_____, E: DeO_____ {
+        impl<A, B, C, D, E> ExtractRequest for     &&&&&&AxumRequestDecoder<(A, B, C, D, E)> where A: Prts<Ds>, B: Prts<Ds>, C: DeO_____, D: DeO_____, E: DeO_____ {
             type Output = (A, B, C, D, E);
             fn extract(&self, _ctx: ExtractState) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static { async move { todo!() } }
         }
-        impl<A, B, C, D, E> ExtractRequest for      &&&&&DeSer<(A, B, C, D, E)> where A: Prts<Ds>, B: DeO_____, C: DeO_____, D: DeO_____, E: DeO_____ {
+        impl<A, B, C, D, E> ExtractRequest for      &&&&&AxumRequestDecoder<(A, B, C, D, E)> where A: Prts<Ds>, B: DeO_____, C: DeO_____, D: DeO_____, E: DeO_____ {
             type Output = (A, B, C, D, E);
             fn extract(&self, _ctx: ExtractState) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static { async move { todo!() } }
         }
-        impl<A, B, C, D, E> ExtractRequest for       &&&&DeSer<(A, B, C, D, E)> where A: DeO_____, B: DeO_____, C: DeO_____, D: DeO_____, E: DeO_____ {
+        impl<A, B, C, D, E> ExtractRequest for       &&&&AxumRequestDecoder<(A, B, C, D, E)> where A: DeO_____, B: DeO_____, C: DeO_____, D: DeO_____, E: DeO_____ {
             type Output = (A, B, C, D, E);
             fn extract(&self, _ctx: ExtractState) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static { async move { todo!() } }
         }
 
         // the six-arg case
-        impl<A, B, C, D, E, F> ExtractRequest for &&&&&&&&&&DeSer<(A, B, C, D, E, F)> where A: Prts<Ds>, B: Prts<Ds>, C: Prts<Ds>, D: Prts<Ds>, E: Prts<Ds>, F: Freq<Ds> {
+        impl<A, B, C, D, E, F> ExtractRequest for &&&&&&&&&&AxumRequestDecoder<(A, B, C, D, E, F)> where A: Prts<Ds>, B: Prts<Ds>, C: Prts<Ds>, D: Prts<Ds>, E: Prts<Ds>, F: Freq<Ds> {
             type Output = (A, B, C, D, E, F);
             fn extract(&self, _ctx: ExtractState) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static { async move { todo!() } }
         }
-        impl<A, B, C, D, E, F> ExtractRequest for  &&&&&&&&&DeSer<(A, B, C, D, E, F)> where A: Prts<Ds>, B: Prts<Ds>, C: Prts<Ds>, D: Prts<Ds>, E: Prts<Ds>, F: Prts<Ds> {
+        impl<A, B, C, D, E, F> ExtractRequest for  &&&&&&&&&AxumRequestDecoder<(A, B, C, D, E, F)> where A: Prts<Ds>, B: Prts<Ds>, C: Prts<Ds>, D: Prts<Ds>, E: Prts<Ds>, F: Prts<Ds> {
             type Output = (A, B, C, D, E, F);
             fn extract(&self, _ctx: ExtractState) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static { async move { todo!() } }
         }
-        impl<A, B, C, D, E, F> ExtractRequest for   &&&&&&&&DeSer<(A, B, C, D, E, F)> where A: Prts<Ds>, B: Prts<Ds>, C: Prts<Ds>, D: Prts<Ds>, E: Prts<Ds>, F: DeO_____ {
+        impl<A, B, C, D, E, F> ExtractRequest for   &&&&&&&&AxumRequestDecoder<(A, B, C, D, E, F)> where A: Prts<Ds>, B: Prts<Ds>, C: Prts<Ds>, D: Prts<Ds>, E: Prts<Ds>, F: DeO_____ {
             type Output = (A, B, C, D, E, F);
             fn extract(&self, _ctx: ExtractState) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static { async move { todo!() } }
         }
-        impl<A, B, C, D, E, F> ExtractRequest for    &&&&&&&DeSer<(A, B, C, D, E, F)> where A: Prts<Ds>, B: Prts<Ds>, C: Prts<Ds>, D: Prts<Ds>, E: DeO_____, F: DeO_____ {
+        impl<A, B, C, D, E, F> ExtractRequest for    &&&&&&&AxumRequestDecoder<(A, B, C, D, E, F)> where A: Prts<Ds>, B: Prts<Ds>, C: Prts<Ds>, D: Prts<Ds>, E: DeO_____, F: DeO_____ {
             type Output = (A, B, C, D, E, F);
             fn extract(&self, _ctx: ExtractState) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static { async move { todo!() } }
         }
-        impl<A, B, C, D, E, F> ExtractRequest for     &&&&&&DeSer<(A, B, C, D, E, F)> where A: Prts<Ds>, B: Prts<Ds>, C: Prts<Ds>, D: DeO_____, E: DeO_____, F: DeO_____ {
+        impl<A, B, C, D, E, F> ExtractRequest for     &&&&&&AxumRequestDecoder<(A, B, C, D, E, F)> where A: Prts<Ds>, B: Prts<Ds>, C: Prts<Ds>, D: DeO_____, E: DeO_____, F: DeO_____ {
             type Output = (A, B, C, D, E, F);
             fn extract(&self, _ctx: ExtractState) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static { async move { todo!() } }
         }
-        impl<A, B, C, D, E, F> ExtractRequest for      &&&&&DeSer<(A, B, C, D, E, F)> where A: Prts<Ds>, B: Prts<Ds>, C: DeO_____, D: DeO_____, E: DeO_____, F: DeO_____ {
+        impl<A, B, C, D, E, F> ExtractRequest for      &&&&&AxumRequestDecoder<(A, B, C, D, E, F)> where A: Prts<Ds>, B: Prts<Ds>, C: DeO_____, D: DeO_____, E: DeO_____, F: DeO_____ {
             type Output = (A, B, C, D, E, F);
             fn extract(&self, _ctx: ExtractState) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static { async move { todo!() } }
         }
-        impl<A, B, C, D, E, F> ExtractRequest for       &&&&DeSer<(A, B, C, D, E, F)> where A: Prts<Ds>, B: DeO_____, C: DeO_____, D: DeO_____, E: DeO_____, F: DeO_____ {
+        impl<A, B, C, D, E, F> ExtractRequest for       &&&&AxumRequestDecoder<(A, B, C, D, E, F)> where A: Prts<Ds>, B: DeO_____, C: DeO_____, D: DeO_____, E: DeO_____, F: DeO_____ {
             type Output = (A, B, C, D, E, F);
             fn extract(&self, _ctx: ExtractState) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static { async move { todo!() } }
         }
-        impl<A, B, C, D, E, F> ExtractRequest for        &&&DeSer<(A, B, C, D, E, F)> where A: DeO_____, B: DeO_____, C: DeO_____, D: DeO_____, E: DeO_____, F: DeO_____ {
+        impl<A, B, C, D, E, F> ExtractRequest for        &&&AxumRequestDecoder<(A, B, C, D, E, F)> where A: DeO_____, B: DeO_____, C: DeO_____, D: DeO_____, E: DeO_____, F: DeO_____ {
             type Output = (A, B, C, D, E, F);
             fn extract(&self, _ctx: ExtractState) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static { async move { todo!() } }
         }
@@ -708,39 +686,39 @@ pub mod req_from {
 
 
         // the seven-arg case
-        impl<A, B, C, D, E, F, G> ExtractRequest for &&&&&&&&&&DeSer<(A, B, C, D, E, F, G)> where A: Prts<Ds>, B: Prts<Ds>, C: Prts<Ds>, D: Prts<Ds>, E: Prts<Ds>, F: Prts<Ds>, G: Freq<Ds> {
+        impl<A, B, C, D, E, F, G> ExtractRequest for &&&&&&&&&&AxumRequestDecoder<(A, B, C, D, E, F, G)> where A: Prts<Ds>, B: Prts<Ds>, C: Prts<Ds>, D: Prts<Ds>, E: Prts<Ds>, F: Prts<Ds>, G: Freq<Ds> {
             type Output = (A, B, C, D, E, F, G);
             fn extract(&self, _ctx: ExtractState) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static { async move { todo!() } }
         }
-        impl<A, B, C, D, E, F, G> ExtractRequest for  &&&&&&&&&DeSer<(A, B, C, D, E, F, G)> where A: Prts<Ds>, B: Prts<Ds>, C: Prts<Ds>, D: Prts<Ds>, E: Prts<Ds>, F: Prts<Ds>, G: Prts<Ds> {
+        impl<A, B, C, D, E, F, G> ExtractRequest for  &&&&&&&&&AxumRequestDecoder<(A, B, C, D, E, F, G)> where A: Prts<Ds>, B: Prts<Ds>, C: Prts<Ds>, D: Prts<Ds>, E: Prts<Ds>, F: Prts<Ds>, G: Prts<Ds> {
             type Output = (A, B, C, D, E, F, G);
             fn extract(&self, _ctx: ExtractState) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static { async move { todo!() } }
         }
-        impl<A, B, C, D, E, F, G> ExtractRequest for   &&&&&&&&DeSer<(A, B, C, D, E, F, G)> where A: Prts<Ds>, B: Prts<Ds>, C: Prts<Ds>, D: Prts<Ds>, E: Prts<Ds>, F: Prts<Ds>, G: DeO_____ {
+        impl<A, B, C, D, E, F, G> ExtractRequest for   &&&&&&&&AxumRequestDecoder<(A, B, C, D, E, F, G)> where A: Prts<Ds>, B: Prts<Ds>, C: Prts<Ds>, D: Prts<Ds>, E: Prts<Ds>, F: Prts<Ds>, G: DeO_____ {
             type Output = (A, B, C, D, E, F, G);
             fn extract(&self, _ctx: ExtractState) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static { async move { todo!() } }
         }
-        impl<A, B, C, D, E, F, G> ExtractRequest for    &&&&&&&DeSer<(A, B, C, D, E, F, G)> where A: Prts<Ds>, B: Prts<Ds>, C: Prts<Ds>, D: Prts<Ds>, E: Prts<Ds>, F: DeO_____, G: DeO_____ {
+        impl<A, B, C, D, E, F, G> ExtractRequest for    &&&&&&&AxumRequestDecoder<(A, B, C, D, E, F, G)> where A: Prts<Ds>, B: Prts<Ds>, C: Prts<Ds>, D: Prts<Ds>, E: Prts<Ds>, F: DeO_____, G: DeO_____ {
             type Output = (A, B, C, D, E, F, G);
             fn extract(&self, _ctx: ExtractState) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static { async move { todo!() } }
         }
-        impl<A, B, C, D, E, F, G> ExtractRequest for     &&&&&&DeSer<(A, B, C, D, E, F, G)> where A: Prts<Ds>, B: Prts<Ds>, C: Prts<Ds>, D: Prts<Ds>, E: DeO_____, F: DeO_____, G: DeO_____ {
+        impl<A, B, C, D, E, F, G> ExtractRequest for     &&&&&&AxumRequestDecoder<(A, B, C, D, E, F, G)> where A: Prts<Ds>, B: Prts<Ds>, C: Prts<Ds>, D: Prts<Ds>, E: DeO_____, F: DeO_____, G: DeO_____ {
             type Output = (A, B, C, D, E, F, G);
             fn extract(&self, _ctx: ExtractState) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static { async move { todo!() } }
         }
-        impl<A, B, C, D, E, F, G> ExtractRequest for      &&&&&DeSer<(A, B, C, D, E, F, G)> where A: Prts<Ds>, B: Prts<Ds>, C: Prts<Ds>, D: DeO_____, E: DeO_____, F: DeO_____, G: DeO_____ {
+        impl<A, B, C, D, E, F, G> ExtractRequest for      &&&&&AxumRequestDecoder<(A, B, C, D, E, F, G)> where A: Prts<Ds>, B: Prts<Ds>, C: Prts<Ds>, D: DeO_____, E: DeO_____, F: DeO_____, G: DeO_____ {
             type Output = (A, B, C, D, E, F, G);
             fn extract(&self, _ctx: ExtractState) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static { async move { todo!() } }
         }
-        impl<A, B, C, D, E, F, G> ExtractRequest for       &&&&DeSer<(A, B, C, D, E, F, G)> where A: Prts<Ds>, B: Prts<Ds>, C: DeO_____, D: DeO_____, E: DeO_____, F: DeO_____, G: DeO_____ {
+        impl<A, B, C, D, E, F, G> ExtractRequest for       &&&&AxumRequestDecoder<(A, B, C, D, E, F, G)> where A: Prts<Ds>, B: Prts<Ds>, C: DeO_____, D: DeO_____, E: DeO_____, F: DeO_____, G: DeO_____ {
             type Output = (A, B, C, D, E, F, G);
             fn extract(&self, _ctx: ExtractState) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static { async move { todo!() } }
         }
-        impl<A, B, C, D, E, F, G> ExtractRequest for        &&&DeSer<(A, B, C, D, E, F, G)> where A: Prts<Ds>, B: DeO_____, C: DeO_____, D: DeO_____, E: DeO_____, F: DeO_____, G: DeO_____ {
+        impl<A, B, C, D, E, F, G> ExtractRequest for        &&&AxumRequestDecoder<(A, B, C, D, E, F, G)> where A: Prts<Ds>, B: DeO_____, C: DeO_____, D: DeO_____, E: DeO_____, F: DeO_____, G: DeO_____ {
             type Output = (A, B, C, D, E, F, G);
             fn extract(&self, _ctx: ExtractState) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static { async move { todo!() } }
         }
-        impl<A, B, C, D, E, F, G> ExtractRequest for         &&DeSer<(A, B, C, D, E, F, G)> where A: DeO_____, B: DeO_____, C: DeO_____, D: DeO_____, E: DeO_____, F: DeO_____, G: DeO_____ {
+        impl<A, B, C, D, E, F, G> ExtractRequest for         &&AxumRequestDecoder<(A, B, C, D, E, F, G)> where A: DeO_____, B: DeO_____, C: DeO_____, D: DeO_____, E: DeO_____, F: DeO_____, G: DeO_____ {
             type Output = (A, B, C, D, E, F, G);
             fn extract(&self, _ctx: ExtractState) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static { async move { todo!() } }
         }
@@ -748,43 +726,43 @@ pub mod req_from {
 
 
         // the eight-arg case
-        impl<A, B, C, D, E, F, G, H> ExtractRequest for &&&&&&&&&&DeSer<(A, B, C, D, E, F, G, H)> where A: Prts<Ds>, B: Prts<Ds>, C: Prts<Ds>, D: Prts<Ds>, E: Prts<Ds>, F: Prts<Ds>, G: Prts<Ds>, H: Freq<Ds> {
+        impl<A, B, C, D, E, F, G, H> ExtractRequest for &&&&&&&&&&AxumRequestDecoder<(A, B, C, D, E, F, G, H)> where A: Prts<Ds>, B: Prts<Ds>, C: Prts<Ds>, D: Prts<Ds>, E: Prts<Ds>, F: Prts<Ds>, G: Prts<Ds>, H: Freq<Ds> {
             type Output = (A, B, C, D, E, F, G, H);
             fn extract(&self, _ctx: ExtractState) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static { async move { todo!() } }
         }
-        impl<A, B, C, D, E, F, G, H> ExtractRequest for  &&&&&&&&&DeSer<(A, B, C, D, E, F, G, H)> where A: Prts<Ds>, B: Prts<Ds>, C: Prts<Ds>, D: Prts<Ds>, E: Prts<Ds>, F: Prts<Ds>, G: Prts<Ds>, H: Prts<Ds> {
+        impl<A, B, C, D, E, F, G, H> ExtractRequest for  &&&&&&&&&AxumRequestDecoder<(A, B, C, D, E, F, G, H)> where A: Prts<Ds>, B: Prts<Ds>, C: Prts<Ds>, D: Prts<Ds>, E: Prts<Ds>, F: Prts<Ds>, G: Prts<Ds>, H: Prts<Ds> {
             type Output = (A, B, C, D, E, F, G, H);
             fn extract(&self, _ctx: ExtractState) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static { async move { todo!() } }
         }
-        impl<A, B, C, D, E, F, G, H> ExtractRequest for   &&&&&&&&DeSer<(A, B, C, D, E, F, G, H)> where A: Prts<Ds>, B: Prts<Ds>, C: Prts<Ds>, D: Prts<Ds>, E: Prts<Ds>, F: Prts<Ds>, G: Prts<Ds>, H: DeO_____ {
+        impl<A, B, C, D, E, F, G, H> ExtractRequest for   &&&&&&&&AxumRequestDecoder<(A, B, C, D, E, F, G, H)> where A: Prts<Ds>, B: Prts<Ds>, C: Prts<Ds>, D: Prts<Ds>, E: Prts<Ds>, F: Prts<Ds>, G: Prts<Ds>, H: DeO_____ {
             type Output = (A, B, C, D, E, F, G, H);
             fn extract(&self, _ctx: ExtractState) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static { async move { todo!() } }
         }
-        impl<A, B, C, D, E, F, G, H> ExtractRequest for    &&&&&&&DeSer<(A, B, C, D, E, F, G, H)> where A: Prts<Ds>, B: Prts<Ds>, C: Prts<Ds>, D: Prts<Ds>, E: Prts<Ds>, F: Prts<Ds>, G: DeO_____, H: DeO_____ {
+        impl<A, B, C, D, E, F, G, H> ExtractRequest for    &&&&&&&AxumRequestDecoder<(A, B, C, D, E, F, G, H)> where A: Prts<Ds>, B: Prts<Ds>, C: Prts<Ds>, D: Prts<Ds>, E: Prts<Ds>, F: Prts<Ds>, G: DeO_____, H: DeO_____ {
             type Output = (A, B, C, D, E, F, G, H);
             fn extract(&self, _ctx: ExtractState) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static { async move { todo!() } }
         }
-        impl<A, B, C, D, E, F, G, H> ExtractRequest for     &&&&&&DeSer<(A, B, C, D, E, F, G, H)> where A: Prts<Ds>, B: Prts<Ds>, C: Prts<Ds>, D: Prts<Ds>, E: Prts<Ds>, F: DeO_____, G: DeO_____, H: DeO_____ {
+        impl<A, B, C, D, E, F, G, H> ExtractRequest for     &&&&&&AxumRequestDecoder<(A, B, C, D, E, F, G, H)> where A: Prts<Ds>, B: Prts<Ds>, C: Prts<Ds>, D: Prts<Ds>, E: Prts<Ds>, F: DeO_____, G: DeO_____, H: DeO_____ {
             type Output = (A, B, C, D, E, F, G, H);
             fn extract(&self, _ctx: ExtractState) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static { async move { todo!() } }
         }
-        impl<A, B, C, D, E, F, G, H> ExtractRequest for      &&&&&DeSer<(A, B, C, D, E, F, G, H)> where A: Prts<Ds>, B: Prts<Ds>, C: Prts<Ds>, D: Prts<Ds>, E: DeO_____, F: DeO_____, G: DeO_____, H: DeO_____ {
+        impl<A, B, C, D, E, F, G, H> ExtractRequest for      &&&&&AxumRequestDecoder<(A, B, C, D, E, F, G, H)> where A: Prts<Ds>, B: Prts<Ds>, C: Prts<Ds>, D: Prts<Ds>, E: DeO_____, F: DeO_____, G: DeO_____, H: DeO_____ {
             type Output = (A, B, C, D, E, F, G, H);
             fn extract(&self, _ctx: ExtractState) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static { async move { todo!() } }
         }
-        impl<A, B, C, D, E, F, G, H> ExtractRequest for       &&&&DeSer<(A, B, C, D, E, F, G, H)> where A: Prts<Ds>, B: Prts<Ds>, C: Prts<Ds>, D: DeO_____, E: DeO_____, F: DeO_____, G: DeO_____, H: DeO_____ {
+        impl<A, B, C, D, E, F, G, H> ExtractRequest for       &&&&AxumRequestDecoder<(A, B, C, D, E, F, G, H)> where A: Prts<Ds>, B: Prts<Ds>, C: Prts<Ds>, D: DeO_____, E: DeO_____, F: DeO_____, G: DeO_____, H: DeO_____ {
             type Output = (A, B, C, D, E, F, G, H);
             fn extract(&self, _ctx: ExtractState) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static { async move { todo!() } }
         }
-        impl<A, B, C, D, E, F, G, H> ExtractRequest for        &&&DeSer<(A, B, C, D, E, F, G, H)> where A: Prts<Ds>, B: Prts<Ds>, C: DeO_____, D: DeO_____, E: DeO_____, F: DeO_____, G: DeO_____, H: DeO_____ {
+        impl<A, B, C, D, E, F, G, H> ExtractRequest for        &&&AxumRequestDecoder<(A, B, C, D, E, F, G, H)> where A: Prts<Ds>, B: Prts<Ds>, C: DeO_____, D: DeO_____, E: DeO_____, F: DeO_____, G: DeO_____, H: DeO_____ {
             type Output = (A, B, C, D, E, F, G, H);
             fn extract(&self, _ctx: ExtractState) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static { async move { todo!() } }
         }
-        impl<A, B, C, D, E, F, G, H> ExtractRequest for         &&DeSer<(A, B, C, D, E, F, G, H)> where A: Prts<Ds>, B: DeO_____, C: DeO_____, D: DeO_____, E: DeO_____, F: DeO_____, G: DeO_____, H: DeO_____ {
+        impl<A, B, C, D, E, F, G, H> ExtractRequest for         &&AxumRequestDecoder<(A, B, C, D, E, F, G, H)> where A: Prts<Ds>, B: DeO_____, C: DeO_____, D: DeO_____, E: DeO_____, F: DeO_____, G: DeO_____, H: DeO_____ {
             type Output = (A, B, C, D, E, F, G, H);
             fn extract(&self, _ctx: ExtractState) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static { async move { todo!() } }
         }
-        impl<A, B, C, D, E, F, G, H> ExtractRequest for          &DeSer<(A, B, C, D, E, F, G, H)> where A: DeO_____, B: DeO_____, C: DeO_____, D: DeO_____, E: DeO_____, F: DeO_____, G: DeO_____, H: DeO_____ {
+        impl<A, B, C, D, E, F, G, H> ExtractRequest for          &AxumRequestDecoder<(A, B, C, D, E, F, G, H)> where A: DeO_____, B: DeO_____, C: DeO_____, D: DeO_____, E: DeO_____, F: DeO_____, G: DeO_____, H: DeO_____ {
             type Output = (A, B, C, D, E, F, G, H);
             fn extract(&self, _ctx: ExtractState) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static { async move { todo!() } }
         }
@@ -799,11 +777,11 @@ mod resp {
 
     use crate::FromResponse;
 
-    pub struct ResDeser<I> {
+    pub struct AxumResponseEncoder<I> {
         _p: std::marker::PhantomData<I>,
     }
 
-    impl<I> ResDeser<I> {
+    impl<I> AxumResponseEncoder<I> {
         pub fn new() -> Self {
             Self {
                 _p: std::marker::PhantomData,
@@ -820,7 +798,7 @@ mod resp {
         fn make_axum_response(self, s: Self::Input) -> Self::Output;
     }
 
-    impl<T, E> FromResIt for &&ResDeser<Result<T, E>>
+    impl<T, E> FromResIt for &&AxumResponseEncoder<Result<T, E>>
     where
         T: FromResponse,
         E: From<ServerFnError>,
@@ -832,37 +810,97 @@ mod resp {
         }
     }
 
-    impl<T, E> FromResIt for &ResDeser<Result<T, E>>
+    impl<T, E> FromResIt for &AxumResponseEncoder<Result<T, E>>
     where
         T: DeserializeOwned + Serialize,
         E: From<ServerFnError>,
     {
-        type Output = axum::response::Response;
         type Input = Result<T, E>;
+        type Output = axum::response::Response;
         fn make_axum_response(self, s: Self::Input) -> Self::Output {
-            todo!()
-            //         send_wrapper::SendWrapper::new(async move {
-            //             let bytes = res.bytes().await.unwrap();
-            //             let as_str = String::from_utf8_lossy(&bytes);
-            //             tracing::info!(
-            //                 "Response bytes: {:?} for type {:?} ({})",
-            //                 as_str,
-            //                 TypeId::of::<T>(),
-            //                 type_name::<T>()
-            //             );
+            match s {
+                Ok(v) => {
+                    let body = serde_json::to_string(&v).unwrap();
+                    (axum::http::StatusCode::OK, body).into_response()
+                }
+                Err(e) => {
+                    todo!()
+                }
+            }
+        }
+    }
+}
 
-            //             let bytes = if bytes.is_empty() {
-            //                 b"null".as_slice()
-            //             } else {
-            //                 &bytes
-            //             };
+pub use decode::*;
+mod decode {
+    use std::prelude::rust_2024::Future;
 
-            //             let res = serde_json::from_slice::<T>(&bytes);
+    use dioxus_fullstack_core::ServerFnError;
+    use serde::de::DeserializeOwned;
 
-            //             match res {
-            //                 Err(err) => Err(ServerFnError::Deserialization(err.to_string())),
-            //                 Ok(res) => Ok(res),
-            //             }
+    use crate::FromResponse;
+
+    //     Err(err) => Err(Sfe::Request { message: err.to_string(), code: err.status().map(|s| s.as_u16()) }.into())
+
+    pub trait ReqwestDecoder {
+        type Output;
+        fn decode_response(
+            &self,
+            res: Result<reqwest::Response, reqwest::Error>,
+        ) -> impl Future<Output = Self::Output> + Send;
+    }
+
+    pub struct ReqwestDecoderImpl<T> {
+        _p: std::marker::PhantomData<T>,
+    }
+
+    impl<T> ReqwestDecoderImpl<T> {
+        pub fn new() -> Self {
+            Self {
+                _p: std::marker::PhantomData,
+            }
+        }
+    }
+
+    impl<T: DeserializeOwned, E: From<ServerFnError>> ReqwestDecoder
+        for &&ReqwestDecoderImpl<Result<T, E>>
+    {
+        type Output = Result<T, E>;
+
+        fn decode_response(
+            &self,
+            res: Result<reqwest::Response, reqwest::Error>,
+        ) -> impl Future<Output = Self::Output> + Send {
+            send_wrapper::SendWrapper::new(async move {
+                match res {
+                    Ok(res) => {
+                        let bytes = res.bytes().await.unwrap();
+                        let as_bytes = if bytes.is_empty() {
+                            b"null".as_slice()
+                        } else {
+                            &bytes
+                        };
+                        let res = serde_json::from_slice::<T>(as_bytes);
+                        Ok(res.unwrap())
+                    }
+                    Err(_) => todo!(),
+                }
+            })
+        }
+    }
+
+    impl<T: FromResponse, E: From<ServerFnError>> ReqwestDecoder for &ReqwestDecoderImpl<Result<T, E>> {
+        type Output = Result<T, E>;
+        fn decode_response(
+            &self,
+            res: Result<reqwest::Response, reqwest::Error>,
+        ) -> impl Future<Output = Self::Output> + Send {
+            send_wrapper::SendWrapper::new(async move {
+                match res {
+                    Ok(res) => T::from_response(res).await.map_err(|e| e.into()),
+                    Err(_) => todo!(),
+                }
+            })
         }
     }
 }

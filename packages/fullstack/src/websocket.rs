@@ -79,7 +79,9 @@ pub struct Websocket<In = String, Out = String> {
 }
 
 impl<I, O> FromResponse for Websocket<I, O> {
-    fn from_response(res: Response) -> impl Future<Output = Result<Self, ServerFnError>> + Send {
+    fn from_response(
+        res: reqwest::Response,
+    ) -> impl Future<Output = Result<Self, ServerFnError>> + Send {
         async move { todo!() }
     }
 }

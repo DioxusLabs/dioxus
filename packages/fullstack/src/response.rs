@@ -14,7 +14,3 @@ impl ServerResponse {
         todo!()
     }
 }
-
-pub trait IntoReqest2 {}
-
-impl IntoReqest2 for Bytes {}

@@ -17,7 +17,9 @@ impl<T: Into<String>> IntoResponse for Text<T> {
 }
 
 impl<T: Into<String>> FromResponse for Text<T> {
-    fn from_response(res: Response) -> impl Future<Output = Result<Self, ServerFnError>> + Send {
+    fn from_response(
+        res: reqwest::Response,
+    ) -> impl Future<Output = Result<Self, ServerFnError>> + Send {
         SendWrapper::new(async move { todo!() })
     }
 }
