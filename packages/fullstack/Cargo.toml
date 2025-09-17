@@ -32,6 +32,7 @@ futures-util = { workspace = true }
 axum-core = { workspace = true }
 send_wrapper = { features = ["futures"], workspace = true, default-features = true }
 serde_json = { workspace = true }
+pin-project = { workspace = true }
 
 # server deps
 axum = { workspace = true, features = ["multipart", "ws", "json", "form", "query"], optional = true }

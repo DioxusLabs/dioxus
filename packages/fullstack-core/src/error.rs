@@ -80,7 +80,10 @@ impl From<anyhow::Error> for ServerFnError {
 pub struct ServerFnRejection {}
 impl IntoResponse for ServerFnRejection {
     fn into_response(self) -> axum_core::response::Response {
-        todo!()
+        axum_core::response::Response::builder()
+            .status(http::StatusCode::INTERNAL_SERVER_ERROR)
+            .body(axum_core::body::Body::from("Internal Server Error"))
+            .unwrap()
     }
 }
 

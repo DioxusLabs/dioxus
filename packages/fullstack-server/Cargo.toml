@@ -71,7 +71,7 @@ reqwest = { default-features = false, features = [
 ], workspace = true }
 futures = { workspace = true, default-features = true }
 
-pin-project = { version = "1.1.10" }
+pin-project = { workspace = true }
 thiserror = { workspace = true }
 bytes = {version = "1.10.1", features = ["serde"]}
 tower-http = { workspace = true, features = ["fs"] }

@@ -1,20 +1,26 @@
 use std::{
     any::{type_name, TypeId},
+    pin::Pin,
     prelude::rust_2024::Future,
 };
 
 use dioxus_fullstack_core::ServerFnError;
+use futures::FutureExt;
 use serde::de::DeserializeOwned;
 
+#[pin_project::pin_project]
 #[must_use = "Requests do nothing unless you `.await` them"]
 pub struct ServerFnRequest<Output> {
     _phantom: std::marker::PhantomData<Output>,
+    #[pin]
+    fut: Pin<Box<dyn Future<Output = Output> + Send>>,
 }
 
 impl<O> ServerFnRequest<O> {
-    pub fn new() -> Self {
+    pub fn new(res: impl Future<Output = O> + Send + 'static) -> Self {
         ServerFnRequest {
             _phantom: std::marker::PhantomData,
+            fut: Box::pin(res),
         }
     }
 }
@@ -26,7 +32,7 @@ impl<T, E> std::future::Future for ServerFnRequest<Result<T, E>> {
         self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Self::Output> {
-        todo!()
+        self.project().fut.poll(cx)
     }
 }
 
@@ -34,14 +40,6 @@ pub trait FromResponse<M>: Sized {
     fn from_response(
         res: reqwest::Response,
     ) -> impl Future<Output = Result<Self, ServerFnError>> + Send;
-}
-
-impl FromResponse<()> for () {
-    fn from_response(
-        _res: reqwest::Response,
-    ) -> impl Future<Output = Result<Self, ServerFnError>> + Send {
-        send_wrapper::SendWrapper::new(async move { Ok(()) })
-    }
 }
 
 pub struct DefaultEncoding;
@@ -62,9 +60,14 @@ where
                 type_name::<T>()
             );
 
-            // let resas_astr = Ok(as_str);
+            let bytes = if bytes.is_empty() {
+                b"null".as_slice()
+            } else {
+                &bytes
+            };
+
             let res = serde_json::from_slice::<T>(&bytes);
-            // let res = res.json::<T>().await;
+
             match res {
                 Err(err) => Err(ServerFnError::Deserialization(err.to_string())),
                 Ok(res) => Ok(res),
@@ -170,9 +173,10 @@ pub mod req_to {
 
         use axum_core::extract::FromRequest as Freq;
         use axum_core::extract::FromRequestParts as Prts;
-        use serde::ser::Serialize as DeO_____;
+        use serde::{ser::Serialize as DeO_____, Serialize};
         use dioxus_fullstack_core::DioxusServerState as Dsr;
         use dioxus_fullstack_core::ServerFnError as Sfe;
+        use serde_json::json;
 
 
         // fallback case for *all invalid*
@@ -186,12 +190,13 @@ pub mod req_to {
         }
 
         // Zero-arg case
-        impl<O: FromResponse<M>, E, M> EncodeRequest for &&&&&&&&&&ClientRequest<(), Result<O, E>, M> where E: From<Sfe> {
+        impl<O, E, M> EncodeRequest for &&&&&&&&&&ClientRequest<(), Result<O, E>, M> where E: From<Sfe>, O: FromResponse<M> {
             type Input = ();
             type Output = Result<O, E>;
             fn fetch(&self, ctx: EncodeState, _: Self::Input) -> impl Future<Output = Self::Output> + Send + 'static {
                 send_wrapper::SendWrapper::new(async move {
-                    let res = ctx.client.body(String::new()).send().await;
+                    let res = ctx.client.send().await;
+                    // let res = ctx.client.body(serde_json::to_string(&json!({})).unwrap()).send().await;
                     match res {
                         Ok(res) => O::from_response(res).await.map_err(|e| e.into()),
                         Err(err) => Err(Sfe::Request { message: err.to_string(), code: err.status().map(|s| s.as_u16()) }.into())
@@ -201,21 +206,33 @@ pub mod req_to {
         }
 
         // One-arg case
-        impl<A, O, E> EncodeRequest for &&&&&&&&&&ClientRequest<(A,), Result<O, E>> where A: Freq<Dsr>, E: From<Sfe> {
+        impl<A, O, E, M> EncodeRequest for &&&&&&&&&&ClientRequest<(A,), Result<O, E>, M> where A: DeO_____ + Serialize + 'static, E: From<Sfe>, O: FromResponse<M> {
+            type Input = (A,);
+            type Output = Result<O, E>;
+            fn fetch(&self, ctx: EncodeState, data: Self::Input) -> impl Future<Output = Self::Output> + Send + 'static {
+                send_wrapper::SendWrapper::new(async move {
+                    let (a,) = data;
+                    #[derive(Serialize)]
+                    struct SerOne<A> {
+                        data: A,
+                    }
+
+                    let res = ctx.client.body(serde_json::to_string(&SerOne { data: a }).unwrap()).send().await;
+                    match res {
+                        Ok(res) => O::from_response(res).await.map_err(|e| e.into()),
+                        Err(err) => Err(Sfe::Request { message: err.to_string(), code: err.status().map(|s| s.as_u16()) }.into())
+                    }
+                })
+            }
+        }
+        impl<A, O, E> EncodeRequest for &&&&&&&&&ClientRequest<(A,), Result<O, E>> where A: Freq<Dsr>, E: From<Sfe> {
             type Input = (A,);
             type Output = Result<O, E>;
             fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Self::Output> + Send + 'static {
                 async move { todo!() }
             }
         }
-        impl<A, O, E> EncodeRequest for  &&&&&&&&&ClientRequest<(A,), Result<O, E>> where A: Prts<Dsr>, E: From<Sfe> {
-            type Input = (A,);
-            type Output = Result<O, E>;
-            fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Self::Output> + Send + 'static {
-                async move { todo!() }
-            }
-        }
-        impl<A, O, E> EncodeRequest for   &&&&&&&&ClientRequest<(A,), Result<O, E>> where A: DeO_____, E: From<Sfe> {
+        impl<A, O, E> EncodeRequest for  &&&&&&&&ClientRequest<(A,), Result<O, E>> where A: Prts<Dsr>, E: From<Sfe> {
             type Input = (A,);
             type Output = Result<O, E>;
             fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Self::Output> + Send + 'static {
@@ -466,8 +483,7 @@ pub mod req_from {
 
     #[derive(Default)]
     pub struct ExtractState {
-        request: Request,
-        names: (&'static str, &'static str, &'static str),
+        pub request: Request,
     }
 
     unsafe impl Send for ExtractState {}
@@ -533,6 +549,7 @@ pub mod req_from {
 
         use axum_core::extract::FromRequest as Freq;
         use axum_core::extract::FromRequestParts as Prts;
+        use bytes::Bytes;
         use dioxus_fullstack_core::DioxusServerState;
         use serde::de::DeserializeOwned as DeO_____;
         use DioxusServerState as Ds;
@@ -546,15 +563,28 @@ pub mod req_from {
         }
 
         // One-arg case
-        impl<A> ExtractRequest for &&&&&&&&&&DeSer<(A,)> where A: Freq<Ds> {
+        impl<A> ExtractRequest for &&&&&&&&&&DeSer<(A,)> where A: DeO_____ {
+            type Output = (A,);
+            fn extract(&self, ctx: ExtractState) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static {
+                async move {
+                    #[derive(serde::Deserialize)]
+                    struct SerOne<A> {
+                        data: A,
+                    }
+
+                    let bytes = Bytes::from_request(ctx.request, &()).await.unwrap();
+                    let as_str = String::from_utf8_lossy(&bytes);
+                    tracing::info!("deserializing request body: {}", as_str);
+                    let res = serde_json::from_slice::<SerOne<A>>(&bytes).map(|s| (s.data,));
+                    res.map_err(|e| ServerFnRejection {})
+                }
+            }
+        }
+        impl<A> ExtractRequest for  &&&&&&&&&DeSer<(A,)> where A: Freq<Ds> {
             type Output = (A,);
             fn extract(&self, _ctx: ExtractState) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static { async move { todo!() } }
         }
-        impl<A> ExtractRequest for  &&&&&&&&&DeSer<(A,)> where A: Prts<Ds> {
-            type Output = (A,);
-            fn extract(&self, _ctx: ExtractState) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static { async move { todo!() } }
-        }
-        impl<A> ExtractRequest for   &&&&&&&&DeSer<(A,)> where A: DeO_____ {
+        impl<A> ExtractRequest for   &&&&&&&&DeSer<(A,)> where A: Prts<Ds> {
             type Output = (A,);
             fn extract(&self, _ctx: ExtractState) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static { async move { todo!() } }
         }

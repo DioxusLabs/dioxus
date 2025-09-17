@@ -5,7 +5,6 @@
 //! This crate contains the dioxus implementation of the #[macro@crate::server] macro without additional context from the server.
 //! See the [server_fn_macro] crate for more information.
 
-mod server_fn_macro_dioxus;
 use proc_macro::TokenStream;
 mod typed_parser;
 // use server_fn_macro_dioxus::ServerFnCall;

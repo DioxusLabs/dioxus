@@ -253,14 +253,11 @@ pub fn route_impl_with_route(
                     client
                 };
 
-                let _ = async move {
-                    let _ = (&&&&&&&&&&&&&&ClientRequest::<(#(#rest_idents,)*), #out_ty, _>::new())
-                            .fetch(encode_state, (#(#rest_ident_names2,)*))
-                            .await;
-                };
-
-
-                return dioxus_fullstack::ServerFnRequest::new();
+                return dioxus_fullstack::ServerFnRequest::new(async move {
+                    (&&&&&&&&&&&&&&ClientRequest::<(#(#rest_idents,)*), #out_ty, _>::new())
+                        .fetch(encode_state, (#(#rest_ident_names2,)*))
+                        .await
+                });
             }
 
             // On the server, we expand the tokens and submit the function to inventory
@@ -275,9 +272,10 @@ pub fn route_impl_with_route(
                 #asyncness fn __inner__function__ #impl_generics(
                     #path_extractor
                     #query_extractor
-                    #server_arg_tokens
+                    request: __axum::extract::Request,
+                    // #server_arg_tokens
                 ) -> __axum::response::Response #where_clause {
-                    let ( #(#body_json_names,)*) = match (&&&&&&&&&&&&&&DeSer::<(#(#body_json_types,)*), _>::new()).extract(ExtractState::default()).await {
+                    let ( #(#body_json_names,)*) = match (&&&&&&&&&&&&&&DeSer::<(#(#body_json_types,)*), _>::new()).extract(ExtractState { request }).await {
                         Ok(v) => v,
                         Err(rejection) => return rejection.into_response()
                     };
@@ -296,11 +294,9 @@ pub fn route_impl_with_route(
 
                 #function_on_server
 
-                let _  = async move {
-                    let _res = #fn_name #ty_generics(#(#extracted_idents,)*).await;
-                };
-
-                return dioxus_fullstack::ServerFnRequest::new();
+                return dioxus_fullstack::ServerFnRequest::new(async move {
+                    #fn_name #ty_generics(#(#extracted_idents,)*).await
+                });
             }
 
             #[allow(unreachable_code)]

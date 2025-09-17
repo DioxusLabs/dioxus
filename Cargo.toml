@@ -341,6 +341,7 @@ multer = "3.1.0"
 const-str = "0.7.0"
 bytes = "1.10"
 send_wrapper = "0.6.0"
+pin-project = { version = "1.1.10" }
 
 # desktop
 wry = { version = "0.52.1", default-features = false }
