@@ -83,3 +83,92 @@ impl<I, O> FromResponse for Websocket<I, O> {
         async move { todo!() }
     }
 }
+
+trait GoodServerFn<M> {}
+
+trait IntoRequest {}
+
+struct M1;
+impl<O, E, F> GoodServerFn<M1> for F where F: FnMut() -> Result<O, E> {}
+
+struct M2;
+impl<O, E, F, A> GoodServerFn<(M2, (O, E, A))> for F
+where
+    F: FnMut(A) -> Result<O, E>,
+    A: IntoRequest,
+{
+}
+
+struct M3;
+impl<O, E, F, A> GoodServerFn<(M3, (O, E, A))> for F
+where
+    F: FnMut(A) -> Result<O, E>,
+    A: DeserializeOwned,
+{
+}
+
+struct M4;
+impl<O, E, F, A, B> GoodServerFn<(M4, (O, E, A, B))> for F
+where
+    F: FnMut(A, B) -> Result<O, E>,
+    A: DeserializeOwned,
+    B: DeserializeOwned,
+{
+}
+
+struct M5;
+impl<O, E, F, A, B, C> GoodServerFn<(M5, (O, E, A, B, C))> for F
+where
+    F: FnMut(A, B, C) -> Result<O, E>,
+    A: DeserializeOwned,
+    B: DeserializeOwned,
+    C: DeserializeOwned,
+{
+}
+/*
+async fn do_thing(a: i32, b: String) -> O {
+}
+
+client steps:
+- ** encode arguments ( Struct { queries, url, method, body })
+- send to server, await response
+- ** decode response ( FromResponse )
+
+server steps:
+- ** decode args from request
+    - call function
+- ** encode response
+
+
+client is optional...
+
+
+
+a -> Result<T, E>
+
+on client
+-> send.await -> Result<T, E> (reqwest err -> serverfn err -> user err)
+-> .await -> Result<T, E> (reqwest ok -> user err)
+
+our "encoding" can just be us implicitly wrapping the types with Json<T> or Form<T> as needed
+*/
+
+mod new_impl {
+    use axum::{Form, Json};
+
+    macro_rules! do_it {
+        () => {};
+    }
+
+    trait RequestEncoder<O> {
+        type Output;
+    }
+
+    trait Encoding<T> {
+        const CONTENT_TYPE: &'static str;
+    }
+
+    fn fetch() {
+        //
+    }
+}

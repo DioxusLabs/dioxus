@@ -811,6 +811,9 @@ mod resp {
         }
     }
 
+    /// A trait for converting the result of the Server Function into an Axum response.
+    /// This is to work around the issue where we want to return both Deserialize types and FromResponse types.
+    /// Stuff like websockets
     pub trait FromResIt {
         type Output;
         type Input;

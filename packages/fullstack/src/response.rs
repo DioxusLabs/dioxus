@@ -1,3 +1,5 @@
+use axum::extract::FromRequest;
+use bytes::Bytes;
 use http::HeaderMap;
 
 pub struct ServerResponse {
@@ -12,3 +14,7 @@ impl ServerResponse {
         todo!()
     }
 }
+
+pub trait IntoReqest2 {}
+
+impl IntoReqest2 for Bytes {}

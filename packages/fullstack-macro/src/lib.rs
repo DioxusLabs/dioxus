@@ -499,9 +499,9 @@ fn route_impl_with_route(
     Ok(quote! {
         #(#fn_docs)*
         #route_docs
-        #vis fn #fn_name #impl_generics(
+        async fn #fn_name #impl_generics(
             #original_inputs
-        ) -> #mapped_output #where_clause {
+        ) -> #out_ty #where_clause {
             use dioxus_fullstack::reqwest as __reqwest;
             use dioxus_fullstack::serde as serde;
             use dioxus_fullstack::{
@@ -509,7 +509,6 @@ fn route_impl_with_route(
                 ServerFnSugar, ServerFnRejection, EncodeRequest, get_server_url, EncodedBody,
                 ServerFnError, ResDeser, FromResIt,
             };
-
 
             #query_params_struct
 
@@ -519,12 +518,8 @@ fn route_impl_with_route(
                     #(#query_param_names,)*
                 };
 
-                let url = format!("http://127.0.0.1:8080{}", #request_url);
-
-                tracing::info!("Client sending request to {}", url);
-
                 let client = __reqwest::Client::new()
-                    .#http_method(url);
+                    .#http_method(format!("http://127.0.0.1:8080{}", #request_url));
                     // .#http_method(format!("{}{}", get_server_url(), #request_url));
                     // .query(&__params);
 
@@ -532,11 +527,9 @@ fn route_impl_with_route(
                     client
                 };
 
-                return dioxus_fullstack::ServerFnRequest::new(async move {
-                    (&&&&&&&&&&&&&&ClientRequest::<(#(#rest_idents,)*), #out_ty, _>::new())
-                        .fetch(encode_state, (#(#rest_ident_names2,)*))
-                        .await
-                });
+                return (&&&&&&&&&&&&&&ClientRequest::<(#(#rest_idents,)*), #out_ty, _>::new())
+                    .fetch(encode_state, (#(#rest_ident_names2,)*))
+                    .await;
             }
 
             // On the server, we expand the tokens and submit the function to inventory
@@ -572,9 +565,7 @@ fn route_impl_with_route(
                     )
                 }
 
-                return dioxus_fullstack::ServerFnRequest::new(async move {
-                    #fn_name #ty_generics(#(#extracted_idents,)*).await
-                });
+                return #fn_name #ty_generics(#(#extracted_idents,)*).await;
             }
 
             #[allow(unreachable_code)]
