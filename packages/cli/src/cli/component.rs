@@ -145,7 +145,8 @@ impl ComponentCommand {
     pub async fn run(self) -> Result<StructuredOutput> {
         match self {
             Self::List { registry } => {
-                let components = registry.read_components().await?;
+                let mut components = registry.read_components().await?;
+                components.sort_by_key(|c| c.name.clone());
                 for component in components {
                     println!("- {}: {}", component.name, component.description);
                 }
