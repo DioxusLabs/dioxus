@@ -554,17 +554,14 @@ fn route_impl_with_route(
                     #path_extractor
                     #query_extractor
                     request: __axum::extract::Request,
-                    // #server_arg_tokens
                 ) -> __axum::response::Response #where_clause {
-                    let ( #(#body_json_names,)*) = match (&&&&&&&&&&&&&&DeSer::<(#(#body_json_types,)*), _>::new()).extract(ExtractState { request }).await {
-                        Ok(v) => v,
-                        Err(rejection) => return rejection.into_response()
-                    };
-
-                    let res = #fn_name #ty_generics(#(#extracted_idents,)*).await;
-
-                    (&&&&&&ResDeser::<#out_ty>::new()).make_axum_response(res)
-                    // (&&&&&&ResDeser::<#out_ty>::new()).make_axum_response(res)
+                    match (&&&&&&&&&&&&&&DeSer::<(#(#body_json_types,)*), _>::new()).extract(ExtractState { request }).await {
+                        Ok(( #(#body_json_names,)*)) => {
+                            (&&&&&&ResDeser::<#out_ty>::new())
+                                .make_axum_response(#fn_name #ty_generics(#(#extracted_idents,)*).await)
+                        },
+                        Err(rejection) => rejection.into_response()
+                    }
                 }
 
                 __inventory::submit! {

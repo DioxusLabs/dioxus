@@ -47,15 +47,10 @@ async fn get_server_data() -> Result<serde_json::Value> {
     Ok(reqwest::get("https://httpbin.org/ip").await?.json().await?)
 }
 
-// #[get("/api/ws")]
-// async fn ws_endpoint(ws: String) -> Result<Websocket<String, String>> {
-//     todo!()
-// }
-
-// #[get("/api/data")]
-// async fn get_server_data2() -> axum::extract::Json<i32> {
-//     axum::extract::Json(123)
-// }
+#[get("/api/ws")]
+async fn ws_endpoint(ws: String) -> Result<Websocket<String, String>> {
+    todo!()
+}
 
 // new rules
 //

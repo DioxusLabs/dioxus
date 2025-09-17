@@ -39,13 +39,13 @@ impl<T, E> std::future::Future for ServerFnRequest<Result<T, E>> {
 
 pub trait FromResponse: Sized {
     fn from_response(
-        res: reqwest::Response,
+        res: axum_core::response::Response,
     ) -> impl Future<Output = Result<Self, ServerFnError>> + Send;
 }
 
 impl<T> FromResponse for Json<T> {
     fn from_response(
-        res: reqwest::Response,
+        res: axum_core::response::Response,
     ) -> impl Future<Output = Result<Self, ServerFnError>> + Send {
         async move { todo!() }
     }
@@ -173,7 +173,11 @@ pub mod req_to {
                     let res = ctx.client.send().await;
                     // let res = ctx.client.body(serde_json::to_string(&json!({})).unwrap()).send().await;
                     match res {
-                        Ok(res) => O::from_response(res).await.map_err(|e| e.into()),
+                        Ok(res) => {
+                            todo!()
+                            // let
+                            // O::from_response(res).await.map_err(|e| e.into())
+                        },
                         Err(err) => Err(Sfe::Request { message: err.to_string(), code: err.status().map(|s| s.as_u16()) }.into())
                     }
                 })
@@ -194,7 +198,10 @@ pub mod req_to {
 
                     let res = ctx.client.body(serde_json::to_string(&SerOne { data: a }).unwrap()).send().await;
                     match res {
-                        Ok(res) => O::from_response(res).await.map_err(|e| e.into()),
+                        Ok(res) => {
+                            todo!()
+                            // O::from_response(res).await.map_err(|e| e.into())
+                        },
                         Err(err) => Err(Sfe::Request { message: err.to_string(), code: err.status().map(|s| s.as_u16()) }.into())
                     }
                 })
