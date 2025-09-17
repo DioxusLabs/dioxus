@@ -1,6 +1,6 @@
 use axum_core::response::{IntoResponse, Response};
 use base64::{engine::general_purpose::URL_SAFE, Engine as _};
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::fmt::Debug;
 // use crate::{ContentType, Decodes, Encodes, Format, FormatType};
 
@@ -76,6 +76,18 @@ impl From<anyhow::Error> for ServerFnError {
     }
 }
 
+impl From<ServerFnError> for http::StatusCode {
+    fn from(value: ServerFnError) -> Self {
+        todo!()
+    }
+}
+
+impl From<ServerFnError> for http::Error {
+    fn from(value: ServerFnError) -> Self {
+        todo!()
+    }
+}
+
 #[derive(Debug)]
 pub struct ServerFnRejection {}
 impl IntoResponse for ServerFnRejection {
@@ -91,49 +103,14 @@ pub trait ServerFnSugar<M> {
     fn desugar_into_response(self) -> axum_core::response::Response;
 }
 
-/// The default conversion of T into a response is to use axum's IntoResponse trait
-/// Note that Result<T: IntoResponse, E: IntoResponse> works as a blanket impl.
-pub struct NoSugarMarker;
-impl<T: IntoResponse> ServerFnSugar<NoSugarMarker> for T {
-    fn desugar_into_response(self) -> Response {
-        self.into_response()
-    }
-}
-
 pub struct SerializeSugarMarker;
-impl<T: IntoResponse, E: ErrorSugar> ServerFnSugar<SerializeSugarMarker> for Result<T, E> {
+impl<T: DeserializeOwned, E: From<ServerFnError> + IntoResponse> ServerFnSugar<SerializeSugarMarker>
+    for Result<T, E>
+{
     fn desugar_into_response(self) -> Response {
         match self {
-            Self::Ok(e) => e.into_response(),
-            Self::Err(e) => e.to_encode_response(),
-        }
-    }
-}
-
-/// This covers the simple case of returning a body from an endpoint where the body is serializable.
-/// By default, we use the JSON encoding, but you can use one of the other newtypes to change the encoding.
-pub struct DefaultJsonEncodingMarker;
-impl<T: Serialize, E: IntoResponse> ServerFnSugar<DefaultJsonEncodingMarker> for &Result<T, E> {
-    fn desugar_into_response(self) -> Response {
-        match self.as_ref() {
-            Ok(e) => {
-                let body = serde_json::to_vec(e).unwrap();
-                (http::StatusCode::OK, body).into_response()
-            }
-            Err(e) => todo!(),
-        }
-    }
-}
-
-pub struct SerializeSugarWithErrorMarker;
-impl<T: Serialize, E: ErrorSugar> ServerFnSugar<SerializeSugarWithErrorMarker> for &Result<T, E> {
-    fn desugar_into_response(self) -> Response {
-        match self.as_ref() {
-            Ok(e) => {
-                let body = serde_json::to_vec(e).unwrap();
-                (http::StatusCode::OK, body).into_response()
-            }
-            Err(e) => e.to_encode_response(),
+            Self::Ok(e) => todo!(),
+            Self::Err(e) => e.into_response(),
         }
     }
 }
@@ -144,23 +121,5 @@ pub struct ViaResponse<T>(pub T);
 impl<T: IntoResponse> IntoResponse for ViaResponse<T> {
     fn into_response(self) -> Response {
         self.0.into_response()
-    }
-}
-
-/// We allow certain error types to be used across both the client and server side
-/// These need to be able to serialize through the network and end up as a response.
-/// Note that the types need to line up, not necessarily be equal.
-pub trait ErrorSugar {
-    fn to_encode_response(&self) -> Response;
-}
-
-impl ErrorSugar for http::Error {
-    fn to_encode_response(&self) -> Response {
-        todo!()
-    }
-}
-impl<T: From<ServerFnError>> ErrorSugar for T {
-    fn to_encode_response(&self) -> Response {
-        todo!()
     }
 }

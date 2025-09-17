@@ -166,6 +166,8 @@ mod custom_serialize {
 }
 
 mod custom_types {
+    use dioxus_fullstack::FromResponse;
+
     use super::*;
 
     /// We can extract the path arg and return anything thats IntoResponse
@@ -191,6 +193,13 @@ mod custom_types {
     }
 
     struct MyCustomPayload {}
+    impl FromResponse for MyCustomPayload {
+        fn from_response(
+            res: reqwest::Response,
+        ) -> impl Future<Output = Result<Self, ServerFnError>> + Send {
+            async move { Ok(MyCustomPayload {}) }
+        }
+    }
     impl IntoResponse for MyCustomPayload {
         fn into_response(self) -> axum::response::Response {
             todo!()

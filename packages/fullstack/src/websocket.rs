@@ -1,7 +1,7 @@
 use axum_core::response::{IntoResponse, Response};
 use bytes::Bytes;
 
-use crate::ServerFnError;
+use crate::{FromResponse, ServerFnError};
 
 use dioxus_core::{RenderError, Result};
 use dioxus_hooks::Loader;
@@ -76,4 +76,12 @@ pub struct TypedWebsocket<In, Out> {
 pub struct Websocket<In = String, Out = String> {
     _in: std::marker::PhantomData<In>,
     _out: std::marker::PhantomData<Out>,
+}
+
+impl<I, O> FromResponse for Websocket<I, O> {
+    fn from_response(
+        res: reqwest::Response,
+    ) -> impl Future<Output = Result<Self, ServerFnError>> + Send {
+        async move { todo!() }
+    }
 }

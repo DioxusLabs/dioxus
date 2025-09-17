@@ -4,10 +4,10 @@
 //! dx serve --platform web
 //! ```
 
-#![allow(non_snake_case, unused)]
-use dioxus::logger::tracing;
+use anyhow::Context;
 use dioxus::prelude::*;
-use serde::{Deserialize, Serialize};
+use dioxus::{fullstack::Websocket, logger::tracing};
+use reqwest::StatusCode;
 
 fn main() {
     dioxus::launch(|| {
@@ -25,7 +25,8 @@ fn main() {
                     let data = get_server_data().await?;
                     println!("Client received: {}", data);
                     text.set(data.clone().to_string());
-                    post_server_data(data.to_string()).await?;
+                    let err = post_server_data(data.to_string()).await;
+                    // get_server_data2().await;
                     Ok(())
                 },
                 "Run a server function!"
@@ -36,7 +37,7 @@ fn main() {
 }
 
 #[post("/api/data")]
-async fn post_server_data(data: String) -> Result<()> {
+async fn post_server_data(data: String) -> Result<(), StatusCode> {
     println!("Server received: {}", data);
     Ok(())
 }
@@ -45,3 +46,21 @@ async fn post_server_data(data: String) -> Result<()> {
 async fn get_server_data() -> Result<serde_json::Value> {
     Ok(reqwest::get("https://httpbin.org/ip").await?.json().await?)
 }
+
+// #[get("/api/ws")]
+// async fn ws_endpoint(ws: String) -> Result<Websocket<String, String>> {
+//     todo!()
+// }
+
+// #[get("/api/data")]
+// async fn get_server_data2() -> axum::extract::Json<i32> {
+//     axum::extract::Json(123)
+// }
+
+// new rules
+//
+// - only Result<T, E: From<ServerFnError>> is allowed as the return type.
+// - all arguments must be (de)serializable with serde *OR* a single argument that implements IntoRequest (and thus from request)
+// - extra "fromrequestparts" things must be added in the attr args
+//
+// this forces every endpoint to be usable from the client

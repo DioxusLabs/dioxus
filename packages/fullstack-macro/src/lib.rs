@@ -507,7 +507,7 @@ fn route_impl_with_route(
             use dioxus_fullstack::{
                 DeSer,  ClientRequest, ExtractState, ExtractRequest, EncodeState,
                 ServerFnSugar, ServerFnRejection, EncodeRequest, get_server_url, EncodedBody,
-                ServerFnError,
+                ServerFnError, ResDeser, FromResIt,
             };
 
 
@@ -547,6 +547,8 @@ fn route_impl_with_route(
                 use __axum::response::IntoResponse;
                 use dioxus_server::ServerFunction;
 
+                #function_on_server
+
                 #aide_ident_docs
                 #asyncness fn __inner__function__ #impl_generics(
                     #path_extractor
@@ -559,10 +561,12 @@ fn route_impl_with_route(
                         Err(rejection) => return rejection.into_response()
                     };
 
-                    #fn_name #ty_generics(#(#extracted_idents,)*).await.desugar_into_response()
+                    let res = #fn_name #ty_generics(#(#extracted_idents,)*).await;
+
+                    (&&&&&&ResDeser::<#out_ty>::new()).make_axum_response(res)
+                    // (&&&&&&ResDeser::<#out_ty>::new()).make_axum_response(res)
                 }
 
-                // ServerFunction::new(__http::Method::#method_ident, #axum_path, || #inner_fn_call)
                 __inventory::submit! {
                     ServerFunction::new(
                         __http::Method::#method_ident,
@@ -570,8 +574,6 @@ fn route_impl_with_route(
                         || __axum::routing::#http_method(__inner__function__ #ty_generics)
                     )
                 }
-
-                #function_on_server
 
                 return dioxus_fullstack::ServerFnRequest::new(async move {
                     #fn_name #ty_generics(#(#extracted_idents,)*).await

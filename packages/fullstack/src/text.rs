@@ -13,7 +13,7 @@ impl<T: Into<String>> axum_core::response::IntoResponse for Text<T> {
     }
 }
 
-impl<T: Into<String>> FromResponse<()> for Text<T> {
+impl<T: Into<String>> FromResponse for Text<T> {
     fn from_response(
         res: reqwest::Response,
     ) -> impl std::prelude::rust_2024::Future<

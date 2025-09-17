@@ -7178,6 +7178,7 @@ dependencies = [
 name = "fullstack-hello-world-example"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "dioxus",
  "reqwest 0.12.22",
  "serde",

@@ -27,7 +27,7 @@ impl IntoResponse for ServerSentEvents<String> {
     }
 }
 
-impl<T> FromResponse<()> for ServerSentEvents<T> {
+impl<T> FromResponse for ServerSentEvents<T> {
     fn from_response(
         res: reqwest::Response,
     ) -> impl std::future::Future<Output = Result<Self, crate::ServerFnError>> + Send {

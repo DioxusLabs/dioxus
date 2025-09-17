@@ -4,6 +4,7 @@ use std::{
     prelude::rust_2024::Future,
 };
 
+use axum::Json;
 use dioxus_fullstack_core::ServerFnError;
 use futures::FutureExt;
 use serde::de::DeserializeOwned;
@@ -36,43 +37,17 @@ impl<T, E> std::future::Future for ServerFnRequest<Result<T, E>> {
     }
 }
 
-pub trait FromResponse<M>: Sized {
+pub trait FromResponse: Sized {
     fn from_response(
         res: reqwest::Response,
     ) -> impl Future<Output = Result<Self, ServerFnError>> + Send;
 }
 
-pub struct DefaultEncoding;
-impl<T> FromResponse<DefaultEncoding> for T
-where
-    T: DeserializeOwned + 'static,
-{
+impl<T> FromResponse for Json<T> {
     fn from_response(
         res: reqwest::Response,
     ) -> impl Future<Output = Result<Self, ServerFnError>> + Send {
-        send_wrapper::SendWrapper::new(async move {
-            let bytes = res.bytes().await.unwrap();
-            let as_str = String::from_utf8_lossy(&bytes);
-            tracing::info!(
-                "Response bytes: {:?} for type {:?} ({})",
-                as_str,
-                TypeId::of::<T>(),
-                type_name::<T>()
-            );
-
-            let bytes = if bytes.is_empty() {
-                b"null".as_slice()
-            } else {
-                &bytes
-            };
-
-            let res = serde_json::from_slice::<T>(&bytes);
-
-            match res {
-                Err(err) => Err(ServerFnError::Deserialization(err.to_string())),
-                Ok(res) => Ok(res),
-            }
-        })
+        async move { todo!() }
     }
 }
 
@@ -190,7 +165,7 @@ pub mod req_to {
         }
 
         // Zero-arg case
-        impl<O, E, M> EncodeRequest for &&&&&&&&&&ClientRequest<(), Result<O, E>, M> where E: From<Sfe>, O: FromResponse<M> {
+        impl<O, E> EncodeRequest for &&&&&&&&&&ClientRequest<(), Result<O, E>> where E: From<Sfe>, O: FromResponse {
             type Input = ();
             type Output = Result<O, E>;
             fn fetch(&self, ctx: EncodeState, _: Self::Input) -> impl Future<Output = Self::Output> + Send + 'static {
@@ -206,7 +181,7 @@ pub mod req_to {
         }
 
         // One-arg case
-        impl<A, O, E, M> EncodeRequest for &&&&&&&&&&ClientRequest<(A,), Result<O, E>, M> where A: DeO_____ + Serialize + 'static, E: From<Sfe>, O: FromResponse<M> {
+        impl<A, O, E> EncodeRequest for &&&&&&&&&&ClientRequest<(A,), Result<O, E>> where A: DeO_____ + Serialize + 'static, E: From<Sfe>, O: FromResponse {
             type Input = (A,);
             type Output = Result<O, E>;
             fn fetch(&self, ctx: EncodeState, data: Self::Input) -> impl Future<Output = Self::Output> + Send + 'static {
@@ -805,6 +780,79 @@ pub mod req_from {
         impl<A, B, C, D, E, F, G, H> ExtractRequest for          &DeSer<(A, B, C, D, E, F, G, H)> where A: DeO_____, B: DeO_____, C: DeO_____, D: DeO_____, E: DeO_____, F: DeO_____, G: DeO_____, H: DeO_____ {
             type Output = (A, B, C, D, E, F, G, H);
             fn extract(&self, _ctx: ExtractState) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static { async move { todo!() } }
+        }
+    }
+}
+
+pub use resp::*;
+mod resp {
+    use axum::response::IntoResponse;
+    use dioxus_fullstack_core::ServerFnError;
+    use serde::{de::DeserializeOwned, Serialize};
+
+    use crate::FromResponse;
+
+    pub struct ResDeser<I> {
+        _p: std::marker::PhantomData<I>,
+    }
+
+    impl<I> ResDeser<I> {
+        pub fn new() -> Self {
+            Self {
+                _p: std::marker::PhantomData,
+            }
+        }
+    }
+
+    pub trait FromResIt {
+        type Output;
+        type Input;
+        fn make_axum_response(self, s: Self::Input) -> Self::Output;
+    }
+
+    impl<T, E> FromResIt for &&ResDeser<Result<T, E>>
+    where
+        T: FromResponse,
+        E: From<ServerFnError>,
+    {
+        type Input = Result<T, E>;
+        type Output = axum::response::Response;
+        fn make_axum_response(self, s: Self::Input) -> Self::Output {
+            todo!()
+        }
+    }
+
+    impl<T, E> FromResIt for &ResDeser<Result<T, E>>
+    where
+        T: DeserializeOwned + Serialize,
+        E: From<ServerFnError>,
+    {
+        type Output = axum::response::Response;
+        type Input = Result<T, E>;
+        fn make_axum_response(self, s: Self::Input) -> Self::Output {
+            todo!()
+            //         send_wrapper::SendWrapper::new(async move {
+            //             let bytes = res.bytes().await.unwrap();
+            //             let as_str = String::from_utf8_lossy(&bytes);
+            //             tracing::info!(
+            //                 "Response bytes: {:?} for type {:?} ({})",
+            //                 as_str,
+            //                 TypeId::of::<T>(),
+            //                 type_name::<T>()
+            //             );
+
+            //             let bytes = if bytes.is_empty() {
+            //                 b"null".as_slice()
+            //             } else {
+            //                 &bytes
+            //             };
+
+            //             let res = serde_json::from_slice::<T>(&bytes);
+
+            //             match res {
+            //                 Err(err) => Err(ServerFnError::Deserialization(err.to_string())),
+            //                 Ok(res) => Ok(res),
+            //             }
         }
     }
 }
