@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     ops::Deref,
     path::{Path, PathBuf},
 };
@@ -8,6 +8,7 @@ use crate::{Result, StructuredOutput, Workspace};
 use anyhow::Context;
 use clap::Parser;
 use dioxus_component_manifest::{CargoDependency, Component, ComponentDependency};
+use git2::Repository;
 use tokio::{process::Command, task::JoinSet};
 use tracing::debug;
 
@@ -31,7 +32,45 @@ impl ComponentRegisteryArgs {
             return Ok(PathBuf::from(path));
         }
 
-        todo!()
+        // If a git url is provided use that (plus optional rev)
+        // Otherwise use the built-in registry
+        let (git, rev) = if let Some(git) = &self.git {
+            (git.clone(), self.rev.clone())
+        } else {
+            (
+                "https://github.com/ealmloff/components".into(),
+                Some("origin/components-cli".into()),
+            )
+        };
+
+        let repo_dir = Workspace::component_cache_path(&git, self.rev.as_deref());
+        // If the repo already exists, use it otherwise clone it
+        if !repo_dir.exists() {
+            tokio::fs::create_dir_all(&repo_dir).await?;
+            tokio::task::spawn_blocking({
+                let git = git.clone();
+                let repo_dir = repo_dir.clone();
+                move || {
+                    println!("Cloning {git}...");
+                    let repo = Repository::clone(&git, repo_dir)?;
+                    if let Some(rev) = &rev {
+                        let (object, reference) = repo.revparse_ext(rev).with_context(|| {
+                            format!("Failed to find revision '{}' in '{}'", rev, git)
+                        })?;
+                        repo.checkout_tree(&object, None)?;
+                        if let Some(gref) = reference {
+                            repo.set_head(gref.name().unwrap())?;
+                        } else {
+                            repo.set_head_detached(object.id())?;
+                        }
+                    }
+                    anyhow::Ok(())
+                }
+            })
+            .await??;
+        }
+
+        Ok(repo_dir)
     }
 
     async fn read_components(&self) -> Result<Vec<ResolvedComponent>> {
@@ -68,6 +107,7 @@ impl ResolvedComponent {
 
 #[derive(Clone, Debug, Parser)]
 pub enum ComponentCommand {
+    /// Add a component from a registry
     #[clap(name = "add")]
     Add {
         /// The component to add
@@ -79,11 +119,20 @@ pub enum ComponentCommand {
         #[clap(long)]
         force: bool,
     },
+    /// Remove a component
     #[clap(name = "remove")]
     Remove {
         /// The component to remove
         component: String,
     },
+    /// Update a component registry
+    #[clap(name = "update")]
+    Update {
+        /// The registry to use
+        #[clap(flatten)]
+        registry: ComponentRegisteryArgs,
+    },
+    /// List available components in a registry
     #[clap(name = "list")]
     List {
         /// The registry to use
@@ -154,6 +203,9 @@ impl ComponentCommand {
                 for (component, mode) in required_components {
                     add_component(&component, mode).await?;
                 }
+            }
+            Self::Update { registry } => {
+                todo!()
             }
             Self::Remove { component } => {
                 remove_component(&component).await?;

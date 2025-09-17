@@ -5122,6 +5122,7 @@ dependencies = [
  "fs2",
  "futures-channel",
  "futures-util",
+ "git2",
  "handlebars",
  "headers",
  "html_parser",
