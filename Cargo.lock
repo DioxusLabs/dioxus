@@ -5275,6 +5275,7 @@ dependencies = [
 [[package]]
 name = "dioxus-component-manifest"
 version = "0.1.0"
+source = "git+https://github.com/ealmloff/components?branch=components-cli#ba115d3fae75d17b1ea4cb3ddf133504a2430689"
 dependencies = [
  "schemars 1.0.4",
  "serde",
