@@ -35,13 +35,16 @@ pub use serde;
 // #[doc(hidden)]
 // pub use xxhash_rust;
 
-// pub mod cbor;
-// pub mod form;
-// pub mod json;
 // pub mod msgpack;
-// pub mod multipart;
-// pub mod postcard;
-// pub mod rkyv;
+
+pub mod cbor;
+pub mod form;
+pub mod json;
+pub mod multipart;
+pub mod postcard;
+pub mod rkyv;
+pub mod text;
+pub use text::*;
 
 pub mod sse;
 pub use sse::*;

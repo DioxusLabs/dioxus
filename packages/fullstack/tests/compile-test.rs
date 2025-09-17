@@ -7,7 +7,8 @@ use axum::{extract::State, response::Html, Json};
 use bytes::Bytes;
 use dioxus::prelude::*;
 use dioxus_fullstack::{
-    get, DioxusServerState, FileUpload, ServerFnError, ServerFnRejection, Websocket,
+    get, DioxusServerState, FileUpload, ServerFnError, ServerFnRejection, Text, TextStream,
+    Websocket,
 };
 use futures::StreamExt;
 use http::HeaderMap;
@@ -54,6 +55,22 @@ mod simple_extractors {
     #[get("/hello")]
     async fn six() -> Json<&'static str> {
         Json("Hello!")
+    }
+
+    /// We can return our own custom `Text<T>` type for sending plain text
+    #[get("/hello")]
+    async fn six_2() -> Text<&'static str> {
+        Text("Hello!")
+    }
+
+    /// We can return our own custom TextStream type for sending plain text streams
+    #[get("/hello")]
+    async fn six_3() -> TextStream {
+        TextStream::new(futures::stream::iter(vec![
+            Ok("Hello 1".to_string()),
+            Ok("Hello 2".to_string()),
+            Ok("Hello 3".to_string()),
+        ]))
     }
 
     /// We can return a Result with anything that implements IntoResponse
@@ -283,9 +300,9 @@ mod input_types {
     #[post("/")]
     async fn two(name: String, age: u32) {}
 
-    /// We can take Deserialize types as input, with custom server extensions
-    #[post("/", headers: HeaderMap)]
-    async fn three(name: String, age: u32) {}
+    // /// We can take Deserialize types as input, with custom server extensions
+    // #[post("/", headers: HeaderMap)]
+    // async fn three(name: String, age: u32) {}
 
     /// We can take a regular axum-like mix with extractors and Deserialize types
     #[post("/")]

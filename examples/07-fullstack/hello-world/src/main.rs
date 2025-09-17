@@ -25,7 +25,7 @@ fn main() {
                     let data = get_server_data().await?;
                     println!("Client received: {}", data);
                     text.set(data.clone().to_string());
-                    // post_server_data(data).await?;
+                    post_server_data(data.to_string()).await?;
                     Ok(())
                 },
                 "Run a server function!"

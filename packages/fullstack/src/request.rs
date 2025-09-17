@@ -6,10 +6,42 @@ use std::{
 use dioxus_fullstack_core::ServerFnError;
 use serde::de::DeserializeOwned;
 
+#[must_use = "Requests do nothing unless you `.await` them"]
+pub struct ServerFnRequest<Output> {
+    _phantom: std::marker::PhantomData<Output>,
+}
+
+impl<O> ServerFnRequest<O> {
+    pub fn new() -> Self {
+        ServerFnRequest {
+            _phantom: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<T, E> std::future::Future for ServerFnRequest<Result<T, E>> {
+    type Output = Result<T, E>;
+
+    fn poll(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Self::Output> {
+        todo!()
+    }
+}
+
 pub trait FromResponse<M>: Sized {
     fn from_response(
         res: reqwest::Response,
     ) -> impl Future<Output = Result<Self, ServerFnError>> + Send;
+}
+
+impl FromResponse<()> for () {
+    fn from_response(
+        _res: reqwest::Response,
+    ) -> impl Future<Output = Result<Self, ServerFnError>> + Send {
+        send_wrapper::SendWrapper::new(async move { Ok(()) })
+    }
 }
 
 pub struct DefaultEncoding;
@@ -139,6 +171,8 @@ pub mod req_to {
         use axum_core::extract::FromRequest as Freq;
         use axum_core::extract::FromRequestParts as Prts;
         use serde::ser::Serialize as DeO_____;
+        use dioxus_fullstack_core::DioxusServerState as Dsr;
+        use dioxus_fullstack_core::ServerFnError as Sfe;
 
 
         // fallback case for *all invalid*
@@ -152,36 +186,36 @@ pub mod req_to {
         }
 
         // Zero-arg case
-        impl<O: FromResponse<M>, E, M> EncodeRequest for &&&&&&&&&&ClientRequest<(), Result<O, E>, M> where E: From<ServerFnError> {
+        impl<O: FromResponse<M>, E, M> EncodeRequest for &&&&&&&&&&ClientRequest<(), Result<O, E>, M> where E: From<Sfe> {
             type Input = ();
             type Output = Result<O, E>;
-            fn fetch(&self, ctx: EncodeState, data: Self::Input) -> impl Future<Output = Self::Output> + Send + 'static {
+            fn fetch(&self, ctx: EncodeState, _: Self::Input) -> impl Future<Output = Self::Output> + Send + 'static {
                 send_wrapper::SendWrapper::new(async move {
                     let res = ctx.client.body(String::new()).send().await;
                     match res {
                         Ok(res) => O::from_response(res).await.map_err(|e| e.into()),
-                        Err(err) => Err(ServerFnError::Request { message: err.to_string(), code: err.status().map(|s| s.as_u16()) }.into())
+                        Err(err) => Err(Sfe::Request { message: err.to_string(), code: err.status().map(|s| s.as_u16()) }.into())
                     }
                 })
             }
         }
 
         // One-arg case
-        impl<A, O, E> EncodeRequest for &&&&&&&&&&ClientRequest<(A,), Result<O, E>> where A: Freq<DioxusServerState>, E: From<ServerFnError> {
+        impl<A, O, E> EncodeRequest for &&&&&&&&&&ClientRequest<(A,), Result<O, E>> where A: Freq<Dsr>, E: From<Sfe> {
             type Input = (A,);
             type Output = Result<O, E>;
             fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Self::Output> + Send + 'static {
                 async move { todo!() }
             }
         }
-        impl<A, O, E> EncodeRequest for  &&&&&&&&&ClientRequest<(A,), Result<O, E>> where A: Prts<DioxusServerState>, E: From<ServerFnError> {
+        impl<A, O, E> EncodeRequest for  &&&&&&&&&ClientRequest<(A,), Result<O, E>> where A: Prts<Dsr>, E: From<Sfe> {
             type Input = (A,);
             type Output = Result<O, E>;
             fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Self::Output> + Send + 'static {
                 async move { todo!() }
             }
         }
-        impl<A, O, E> EncodeRequest for   &&&&&&&&ClientRequest<(A,), Result<O, E>> where A: DeO_____, E: From<ServerFnError> {
+        impl<A, O, E> EncodeRequest for   &&&&&&&&ClientRequest<(A,), Result<O, E>> where A: DeO_____, E: From<Sfe> {
             type Input = (A,);
             type Output = Result<O, E>;
             fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Self::Output> + Send + 'static {
@@ -191,28 +225,28 @@ pub mod req_to {
 
 
         // Two-arg case
-        impl<A, B, O, E> EncodeRequest for &&&&&&&&&&ClientRequest<(A, B), Result<O, E>> where A: Prts<DioxusServerState>, B: Freq<DioxusServerState>, E: From<ServerFnError> {
+        impl<A, B, O, E> EncodeRequest for &&&&&&&&&&ClientRequest<(A, B), Result<O, E>> where A: Prts<Dsr>, B: Freq<Dsr>, E: From<Sfe> {
             type Input = (A, B);
             type Output = Result<O, E>;
             fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Self::Output> + Send + 'static {
                 async move { todo!() }
             }
         }
-        impl<A, B, O, E> EncodeRequest for  &&&&&&&&&ClientRequest<(A, B), Result<O, E>> where A: Prts<DioxusServerState>, B: Prts<DioxusServerState>, E: From<ServerFnError> {
+        impl<A, B, O, E> EncodeRequest for  &&&&&&&&&ClientRequest<(A, B), Result<O, E>> where A: Prts<Dsr>, B: Prts<Dsr>, E: From<Sfe> {
             type Input = (A, B);
             type Output = Result<O, E>;
             fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Self::Output> + Send + 'static {
                 async move { todo!() }
             }
         }
-        impl<A, B, O, E> EncodeRequest for   &&&&&&&&ClientRequest<(A, B), Result<O, E>> where A: Prts<DioxusServerState>, B: DeO_____, E: From<ServerFnError> {
+        impl<A, B, O, E> EncodeRequest for   &&&&&&&&ClientRequest<(A, B), Result<O, E>> where A: Prts<Dsr>, B: DeO_____, E: From<Sfe> {
             type Input = (A, B);
             type Output = Result<O, E>;
             fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Self::Output> + Send + 'static {
                 async move { todo!() }
             }
         }
-        impl<A, B, O, E> EncodeRequest for    &&&&&&&ClientRequest<(A, B), Result<O, E>> where A: DeO_____, B: DeO_____, E: From<ServerFnError> {
+        impl<A, B, O, E> EncodeRequest for    &&&&&&&ClientRequest<(A, B), Result<O, E>> where A: DeO_____, B: DeO_____, E: From<Sfe> {
             type Input = (A, B);
             type Output = Result<O, E>;
             fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Self::Output> + Send + 'static {

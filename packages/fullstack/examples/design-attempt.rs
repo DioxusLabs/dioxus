@@ -38,6 +38,43 @@ qs:
 
 fn main() {}
 
+mod test_real_into_future {
+    use std::prelude::rust_2024::Future;
+
+    use anyhow::Result;
+    use dioxus::prelude::dioxus_server;
+    use dioxus_fullstack::{post, ClientRequest, ServerFnError};
+
+    #[derive(serde::Serialize, serde::Deserialize)]
+    struct MyStuff {
+        alpha: String,
+        beta: String,
+    }
+
+    #[post("/my_path")]
+    async fn do_thing_simple(data: MyStuff) -> Result<String> {
+        todo!()
+    }
+
+    #[post("/my_path")]
+    async fn do_thing_not_client(data: MyStuff) -> String {
+        todo!()
+    }
+
+    async fn it_works() {
+        let res: ClientRequest<Result<String>> = do_thing_simple(MyStuff {
+            alpha: "hello".into(),
+            beta: "world".into(),
+        });
+
+        do_thing_not_client(MyStuff {
+            alpha: "hello".into(),
+            beta: "world".into(),
+        })
+        .await;
+    }
+}
+
 /// This verifies the approach of our impl system.
 mod real_impl {
     use std::prelude::rust_2024::Future;

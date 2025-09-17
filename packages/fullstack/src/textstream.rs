@@ -5,6 +5,8 @@ use futures::{Stream, StreamExt};
 
 use crate::ServerFnError;
 
+pub type TextStream = Streaming<String, ServerFnError>;
+
 /// A stream of text.
 ///
 /// A server function can return this type if its output encoding is [`StreamingText`].
@@ -17,9 +19,9 @@ use crate::ServerFnError;
 /// end before the output will begin.
 ///
 /// Streaming requests are only allowed over HTTP2 or HTTP3.
-pub struct Streaming<T = String, E = ServerFnError>(
-    Pin<Box<dyn Stream<Item = Result<T, E>> + Send>>,
-);
+pub struct Streaming<T = String, E = ServerFnError> {
+    stream: Pin<Box<dyn Stream<Item = Result<T, E>> + Send>>,
+}
 
 #[derive(thiserror::Error, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum StreamingError {
@@ -40,7 +42,9 @@ impl<T, E> Streaming<T, E> {
     /// Creates a new stream from the given stream.
     pub fn new(value: impl Stream<Item = Result<T, E>> + Send + 'static) -> Self {
         // Box and pin the incoming stream and store as a trait object
-        Self(Box::pin(value) as Pin<Box<dyn Stream<Item = Result<T, E>> + Send>>)
+        Self {
+            stream: Box::pin(value) as Pin<Box<dyn Stream<Item = Result<T, E>> + Send>>,
+        }
     }
 
     pub async fn next(&mut self) -> Option<Result<T, StreamingError>> {
@@ -51,7 +55,7 @@ impl<T, E> Streaming<T, E> {
 impl<T, E> Streaming<T, E> {
     /// Consumes the wrapper, returning the inner stream.
     pub fn into_inner(self) -> impl Stream<Item = Result<T, E>> + Send {
-        self.0
+        self.stream
     }
 }
 
@@ -61,8 +65,10 @@ where
     U: Into<T>,
 {
     fn from(value: S) -> Self {
-        Self(Box::pin(value.map(|data| Ok(data.into())))
-            as Pin<Box<dyn Stream<Item = Result<T, E>> + Send>>)
+        Self {
+            stream: Box::pin(value.map(|data| Ok(data.into())))
+                as Pin<Box<dyn Stream<Item = Result<T, E>> + Send>>,
+        }
     }
 }
 

@@ -212,12 +212,17 @@ pub fn route_impl_with_route(
 
     let extracted_idents2 = extracted_idents.clone();
 
+    let mapped_output = match fn_output {
+        syn::ReturnType::Default => quote! { dioxus_fullstack::ServerFnRequest<()> },
+        syn::ReturnType::Type(_, _) => quote! { dioxus_fullstack::ServerFnRequest<#out_ty> },
+    };
+
     Ok(quote! {
         #(#fn_docs)*
         #route_docs
-        #vis async fn #fn_name #impl_generics(
+        #vis fn #fn_name #impl_generics(
             #original_inputs
-        ) #fn_output #where_clause {
+        ) -> #mapped_output #where_clause {
             use dioxus_fullstack::reqwest as __reqwest;
             use dioxus_fullstack::serde as serde;
             use dioxus_fullstack::{
@@ -248,9 +253,14 @@ pub fn route_impl_with_route(
                     client
                 };
 
-                return (&&&&&&&&&&&&&&ClientRequest::<(#(#rest_idents,)*), #out_ty, _>::new())
-                        .fetch(encode_state, (#(#rest_ident_names2,)*))
-                        .await;
+                let _ = async move {
+                    let _ = (&&&&&&&&&&&&&&ClientRequest::<(#(#rest_idents,)*), #out_ty, _>::new())
+                            .fetch(encode_state, (#(#rest_ident_names2,)*))
+                            .await;
+                };
+
+
+                return dioxus_fullstack::ServerFnRequest::new();
             }
 
             // On the server, we expand the tokens and submit the function to inventory
@@ -265,7 +275,7 @@ pub fn route_impl_with_route(
                 #asyncness fn __inner__function__ #impl_generics(
                     #path_extractor
                     #query_extractor
-                    // #server_arg_tokens
+                    #server_arg_tokens
                 ) -> __axum::response::Response #where_clause {
                     let ( #(#body_json_names,)*) = match (&&&&&&&&&&&&&&DeSer::<(#(#body_json_types,)*), _>::new()).extract(ExtractState::default()).await {
                         Ok(v) => v,
@@ -286,7 +296,11 @@ pub fn route_impl_with_route(
 
                 #function_on_server
 
-                return #fn_name #ty_generics(#(#extracted_idents,)*).await;
+                let _  = async move {
+                    let _res = #fn_name #ty_generics(#(#extracted_idents,)*).await;
+                };
+
+                return dioxus_fullstack::ServerFnRequest::new();
             }
 
             #[allow(unreachable_code)]
