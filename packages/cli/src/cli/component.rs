@@ -1,4 +1,5 @@
 use std::{
+    collections::{HashMap, HashSet},
     ops::Deref,
     path::{Path, PathBuf},
 };
@@ -6,17 +7,20 @@ use std::{
 use crate::{Result, StructuredOutput, Workspace};
 use anyhow::Context;
 use clap::Parser;
-use dioxus_component_manifest::{CargoDependency, Component};
+use dioxus_component_manifest::{CargoDependency, Component, ComponentDependency};
 use tokio::{process::Command, task::JoinSet};
 use tracing::debug;
 
-#[derive(Clone, Debug, Parser)]
+#[derive(Clone, Debug, Parser, Default)]
 pub struct ComponentRegisteryArgs {
     /// The url of the the component registry
     #[arg(long, conflicts_with = "path")]
     git: Option<String>,
+    /// The revision of the the component registry
+    #[arg(long, conflicts_with = "path")]
+    rev: Option<String>,
     /// The path to the components directory
-    #[arg(long, conflicts_with = "git")]
+    #[arg(long, conflicts_with = "git", conflicts_with = "rev")]
     path: Option<String>,
 }
 
@@ -38,6 +42,7 @@ impl ComponentRegisteryArgs {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 struct ResolvedComponent {
     path: PathBuf,
     component: Component,
@@ -70,6 +75,9 @@ pub enum ComponentCommand {
         /// The registry to use
         #[clap(flatten)]
         registry: ComponentRegisteryArgs,
+        /// Overwrite the component if it already exists
+        #[clap(long)]
+        force: bool,
     },
     #[clap(name = "remove")]
     Remove {
@@ -96,9 +104,56 @@ impl ComponentCommand {
             Self::Add {
                 component,
                 registry,
+                force,
             } => {
                 let components = registry.read_components().await?;
-                add_component(&components, &component).await?;
+                let mode = if force {
+                    ComponentExistsBehavior::Overwrite
+                } else {
+                    ComponentExistsBehavior::Error
+                };
+                let component = find_component(components, &component).await?;
+
+                // Recursively add dependencies
+                // A map of the components that have been added or are queued to be added
+                let mut required_components = HashMap::new();
+                required_components.insert(component.clone(), mode);
+                // A stack of components to process
+                let mut queued_components = vec![component];
+                while let Some(queued_component) = queued_components.pop() {
+                    for dependency in &queued_component.component_dependencies {
+                        let (registry, name) = match dependency {
+                            ComponentDependency::Builtin(name) => {
+                                (ComponentRegisteryArgs::default(), name)
+                            }
+                            ComponentDependency::ThirdParty { name, git, rev } => (
+                                ComponentRegisteryArgs {
+                                    git: Some(git.clone()),
+                                    rev: rev.clone(),
+                                    path: None,
+                                },
+                                name,
+                            ),
+                        };
+                        let registry_components = registry.read_components().await?;
+                        let dependency_component =
+                            find_component(registry_components, name).await?;
+                        if !required_components
+                            .insert(
+                                dependency_component.clone(),
+                                ComponentExistsBehavior::Return,
+                            )
+                            .is_some()
+                        {
+                            queued_components.push(dependency_component);
+                        }
+                    }
+                }
+
+                // Once we have all required components, add them
+                for (component, mode) in required_components {
+                    add_component(&component, mode).await?;
+                }
             }
             Self::Remove { component } => {
                 remove_component(&component).await?;
@@ -109,12 +164,12 @@ impl ComponentCommand {
     }
 }
 
-async fn find_component<'a>(
-    components: &'a [ResolvedComponent],
+async fn find_component(
+    components: Vec<ResolvedComponent>,
     component: &str,
-) -> Result<&'a ResolvedComponent> {
+) -> Result<ResolvedComponent> {
     components
-        .iter()
+        .into_iter()
         .find(|c| c.name == component)
         .ok_or_else(|| anyhow::anyhow!("Component '{}' not found in registry", component))
 }
@@ -163,21 +218,40 @@ async fn add_rust_dependencies(dependencies: &[CargoDependency]) -> Result<()> {
     Ok(())
 }
 
-async fn add_component(components: &[ResolvedComponent], component: &str) -> Result<()> {
-    let component = find_component(components, component).await?;
+#[derive(Clone, Copy, Debug)]
+enum ComponentExistsBehavior {
+    /// Return an error (default)
+    Error,
+    /// Return early for component dependencies
+    Return,
+    /// Overwrite the existing component
+    Overwrite,
+}
 
+async fn add_component(
+    component: &ResolvedComponent,
+    behavior: ComponentExistsBehavior,
+) -> Result<()> {
     add_rust_dependencies(&component.cargo_dependencies).await?;
 
     // Copy the folder content to the components directory
     let components_root = components_root()?;
     ensure_components_module_exists(&components_root).await?;
 
-    copy_component_files(
+    let copied = copy_component_files(
         &component.path,
         &components_root.join(&component.name),
         &component.exclude,
+        behavior,
     )
     .await?;
+    if !copied {
+        debug!(
+            "Component '{}' already exists, skipping copy",
+            component.name
+        );
+        return Ok(());
+    }
 
     // Add the module to the components mod.rs
     let mod_rs_path = components_root.join("mod.rs");
@@ -194,7 +268,13 @@ async fn add_component(components: &[ResolvedComponent], component: &str) -> Res
     Ok(())
 }
 
-async fn copy_component_files(src: &Path, dest: &Path, exclude: &[String]) -> Result<()> {
+/// Copy the component files. Returns true if the component was copied, false if it was skipped.
+async fn copy_component_files(
+    src: &Path,
+    dest: &Path,
+    exclude: &[String],
+    behavior: ComponentExistsBehavior,
+) -> Result<bool> {
     async fn read_dir_paths(src: &Path) -> Result<Vec<PathBuf>> {
         let mut entries = tokio::fs::read_dir(src).await?;
         let mut paths = vec![];
@@ -205,10 +285,28 @@ async fn copy_component_files(src: &Path, dest: &Path, exclude: &[String]) -> Re
     }
 
     if dest.exists() {
-        return Err(anyhow::anyhow!(
-            "Destination directory '{}' already exists",
-            dest.display()
-        ));
+        match behavior {
+            ComponentExistsBehavior::Error => {
+                return Err(anyhow::anyhow!(
+                    "Destination directory '{}' already exists",
+                    dest.display()
+                ));
+            }
+            ComponentExistsBehavior::Return => {
+                debug!(
+                    "Destination directory '{}' already exists, returning early",
+                    dest.display()
+                );
+                return Ok(false);
+            }
+            ComponentExistsBehavior::Overwrite => {
+                debug!(
+                    "Destination directory '{}' already exists, overwriting",
+                    dest.display()
+                );
+                tokio::fs::remove_dir_all(dest).await?;
+            }
+        }
     }
     tokio::fs::create_dir_all(dest).await?;
 
@@ -260,7 +358,7 @@ async fn copy_component_files(src: &Path, dest: &Path, exclude: &[String]) -> Re
         res??;
     }
 
-    Ok(())
+    Ok(true)
 }
 
 async fn ensure_components_module_exists(components_dir: &Path) -> Result<()> {
