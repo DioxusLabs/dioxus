@@ -60,7 +60,7 @@ impl StreamingContext {
 /// # Example
 /// ```rust, no_run
 /// # use dioxus::prelude::*;
-/// # use dioxus_fullstack::*;
+/// # use dioxus_fullstack_core::*;
 /// # fn Children() -> Element { unimplemented!() }
 /// fn App() -> Element {
 ///     // This will start streaming immediately after the current render is complete.
@@ -84,7 +84,7 @@ pub fn commit_initial_chunk() {
 /// # Example
 /// ```rust, no_run
 /// # use dioxus::prelude::*;
-/// # use dioxus_fullstack::*;
+/// # use dioxus_fullstack_core::*;
 /// #[component]
 /// fn MetaTitle(title: String) -> Element {
 ///     // If streaming has already started, warn the user that the meta tag will not show

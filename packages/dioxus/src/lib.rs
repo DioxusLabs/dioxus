@@ -204,15 +204,6 @@ pub mod prelude {
         use_server_future, ServerFnError, ServerFnResult,
     };
 
-    // DioxusRouterExt,
-    // DioxusRouterFnExt,
-    // FromContext,
-    // ServeConfig,
-    // ServerFnError,
-    // ServerFnResult,
-    // self, delete, extract, get, patch, post, prelude::*, put, server, use_server_cached,
-    // use_server_future, DioxusRouterExt, DioxusRouterFnExt, FromContext, ServeConfig,
-
     #[cfg(feature = "server")]
     #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
     #[doc(inline)]

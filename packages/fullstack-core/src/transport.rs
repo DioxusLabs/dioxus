@@ -430,7 +430,10 @@ pub fn head_element_hydration_entry() -> SerializeContextEntry<bool> {
 /// Note that transporting a `Result<T, dioxus_core::Error>` will lose various aspects of the original
 /// `dioxus_core::Error` such as backtraces and source errors, but will preserve the error message.
 pub trait Transportable<M = ()>: 'static {
+    /// Serialize the type to a byte vector for transport
     fn transport_to_bytes(&self) -> Vec<u8>;
+
+    /// Deserialize the type from a byte slice
     fn transport_from_bytes(bytes: &[u8]) -> Result<Self, ciborium::de::Error<std::io::Error>>
     where
         Self: Sized;
@@ -456,6 +459,10 @@ where
 
 #[doc(hidden)]
 pub struct TransportViaErrMarker;
+#[derive(Serialize, Deserialize)]
+struct TransportResultErr<T> {
+    error: Result<T, CapturedError>,
+}
 impl<T> Transportable<TransportViaErrMarker> for Result<T, dioxus_core::Error>
 where
     T: Serialize + DeserializeOwned + 'static,
@@ -484,18 +491,16 @@ where
     }
 }
 
-#[derive(Serialize, Deserialize)]
-struct TransportResultErr<T> {
-    error: Result<T, CapturedError>,
-}
-
+#[doc(hidden)]
 pub struct TransportCapturedError;
-// impl Transportable<TransportCapturedError> for Option<CapturedError> {
+#[derive(Serialize, Deserialize)]
+struct TransportError {
+    error: String,
+}
 impl Transportable<TransportCapturedError> for CapturedError {
     fn transport_to_bytes(&self) -> Vec<u8> {
         let err = TransportError {
             error: self.to_string(),
-            // error: self.as_ref().map(|e| e.to_string()),
         };
 
         let mut serialized = Vec::new();
@@ -509,21 +514,5 @@ impl Transportable<TransportCapturedError> for CapturedError {
     {
         let err: TransportError = ciborium::from_reader(Cursor::new(bytes))?;
         Ok(CapturedError(Arc::new(Error::msg::<String>(err.error))))
-        // match err.error {
-        //     Some(err) => Ok(Some(CapturedError(Arc::new(dioxus_core::Error::msg::<
-        //         String,
-        //     >(err))))),
-        //     None => Ok(None),
-        // }
     }
-}
-
-#[derive(Serialize, Deserialize)]
-struct TransportError {
-    error: String,
-}
-
-#[derive(Serialize, Deserialize)]
-struct TransportMaybeError {
-    error: Option<String>,
 }
