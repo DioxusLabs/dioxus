@@ -509,6 +509,32 @@ fn route_impl_with_route(
     //     quote! {}
     // };
 
+    let body_struct_impl = {
+        let tys = body_json_types
+            .clone()
+            .into_iter()
+            .enumerate()
+            .map(|(idx, _)| format_ident!("__Ty{}", idx));
+
+        let names = body_json_names
+            .clone()
+            .into_iter()
+            .enumerate()
+            .map(|(idx, name)| {
+                let ty_name = format_ident!("__Ty{}", idx);
+                quote! {
+                    #name: #ty_name
+                }
+            });
+
+        quote! {
+            #[derive(serde::Serialize, serde::Deserialize)]
+            struct ___Body_Serialize___<#(#tys,)*> {
+                #(#names,)*
+            }
+        }
+    };
+
     Ok(quote! {
         #(#fn_docs)*
         #route_docs
@@ -526,6 +552,8 @@ fn route_impl_with_route(
             // #warn_if_invalid_body
 
             #query_params_struct
+
+            #body_struct_impl
 
             // On the client, we make the request to the server
             // We want to support extremely flexible error types and return types, making this more complex than it should
