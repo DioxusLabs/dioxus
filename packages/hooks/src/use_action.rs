@@ -117,6 +117,9 @@ impl<I: 'static, T: 'static> Action<I, T> {
     /// Clear the current value and error, setting the state to Reset
     pub fn reset(&mut self) {
         self.state.set(ActionState::Reset);
+        if let Some(t) = self.task.take() {
+            t.cancel()
+        }
     }
 }
 

@@ -48,7 +48,6 @@ async fn it_works() {
             &self,
             request: axum_core::extract::Request,
             body: Self::Input,
-            first: fn(Self::Input) -> Self::Output,
         ) -> Self::Output;
     }
 
@@ -74,9 +73,8 @@ async fn it_works() {
             &self,
             request: axum_core::extract::Request,
             body: Self::Input,
-            first: fn(Self::Input) -> O,
         ) -> Self::Output {
-            first(body)
+            todo!()
         }
     }
 
@@ -88,9 +86,8 @@ async fn it_works() {
             &self,
             request: axum_core::extract::Request,
             body: Self::Input,
-            first: fn(Self::Input) -> Self::Output,
         ) -> Self::Output {
-            first(body)
+            todo!()
         }
     }
 
@@ -106,7 +103,6 @@ async fn it_works() {
                 age: 30,
                 extra: None::<String>,
             },
-            |x| (x.name, x.age, x.extra),
         )
         .await;
 
@@ -123,7 +119,6 @@ async fn it_works() {
             SingleRequest {
                 request: Request::default(),
             },
-            |x| (x.request,),
         )
         .await;
 }
