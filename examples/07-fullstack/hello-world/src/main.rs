@@ -12,26 +12,37 @@ use reqwest::StatusCode;
 fn main() {
     dioxus::launch(|| {
         let mut count = use_signal(|| 0);
-        let mut text = use_signal(|| "...".to_string());
-        let server_future = use_server_future(get_server_data)?;
+        let mut dog_data = use_action(move |()| get_dog_data());
+        let mut ip_data = use_action(move |()| get_ip_data());
 
         rsx! {
-            document::Link { href: asset!("/assets/hello.css"), rel: "stylesheet" }
+            Stylesheet { href: asset!("/assets/hello.css")  }
             h1 { "High-Five counter: {count}" }
             button { onclick: move |_| count += 1, "Up high!" }
             button { onclick: move |_| count -= 1, "Down low!" }
+            button { onclick: move |_| { dog_data.dispatch(()); }, "Fetch dog data" }
+            button { onclick: move |_| { ip_data.dispatch(()); }, "Fetch IP data" }
             button {
-                onclick: move |_| async move {
-                    let data = get_server_data().await?;
-                    println!("Client received: {}", data);
-                    text.set(data.clone().to_string());
-                    let err = post_server_data(data.to_string()).await;
-                    // get_server_data2().await;
-                    Ok(())
+                onclick: move |_| {
+                    ip_data.reset();
+                    dog_data.reset();
                 },
-                "Run a server function!"
+                "Clear data"
             }
-            "Server said: {text}"
+            div {
+                pre {
+                    "Dog data: "
+                    if dog_data.is_pending() { "(loading...) " }
+                    "{dog_data.value():#?}"
+                }
+            }
+            div {
+                pre {
+                    "IP data: "
+                    if ip_data.is_pending() { "(loading...) " }
+                    "{ip_data.value():#?}"
+                }
+            }
         }
     });
 }
@@ -43,19 +54,19 @@ async fn post_server_data(data: String) -> Result<(), StatusCode> {
 }
 
 #[get("/api/data")]
-async fn get_server_data() -> Result<serde_json::Value> {
+async fn get_ip_data() -> Result<serde_json::Value> {
     Ok(reqwest::get("https://httpbin.org/ip").await?.json().await?)
+}
+
+#[get("/api/dog-data")]
+async fn get_dog_data() -> Result<serde_json::Value> {
+    Ok(reqwest::get("https://dog.ceo/api/breeds/image/random")
+        .await?
+        .json()
+        .await?)
 }
 
 #[get("/api/ws")]
 async fn ws_endpoint(ws: String) -> Result<Websocket<String, String>> {
     todo!()
 }
-
-// new rules
-//
-// - only Result<T, E: From<ServerFnError>> is allowed as the return type.
-// - all arguments must be (de)serializable with serde *OR* a single argument that implements IntoRequest (and thus from request)
-// - extra "fromrequestparts" things must be added in the attr args
-//
-// this forces every endpoint to be usable from the client

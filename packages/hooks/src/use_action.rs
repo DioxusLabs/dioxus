@@ -16,6 +16,7 @@ where
     let mut value = use_signal(|| None as Option<O>);
     let mut error = use_signal(|| None as Option<CapturedError>);
     let mut task = use_signal(|| None as Option<Task>);
+    let mut state = use_signal(|| ActionState::Unset);
     let callback = use_callback(move |input: I| {
         // Cancel any existing task
         if let Some(task) = task.take() {
@@ -25,16 +26,21 @@ where
         // Spawn a new task, and *then* fire off the async
         let result = user_fn(input);
         let new_task = dioxus_core::spawn(async move {
+            // Set the state to pending
+            state.set(ActionState::Pending);
+
             // Create a new task
             let result = result.await;
             match result {
                 Ok(res) => {
                     error.set(None);
                     value.set(Some(res));
+                    state.set(ActionState::Ready);
                 }
                 Err(err) => {
                     error.set(Some(err.into()));
                     value.set(None);
+                    state.set(ActionState::Errored);
                 }
             }
         });
@@ -53,6 +59,7 @@ where
         callback,
         reader,
         _phantom: PhantomData,
+        state,
     }
 }
 
@@ -62,6 +69,7 @@ pub struct Action<I, T> {
     value: Signal<Option<T>>,
     task: Signal<Option<Task>>,
     callback: Callback<I, ()>,
+    state: Signal<ActionState>,
     _phantom: PhantomData<*const I>,
 }
 impl<I: 'static, T: 'static> Action<I, T> {
@@ -71,11 +79,15 @@ impl<I: 'static, T: 'static> Action<I, T> {
     }
 
     pub fn value(&self) -> Option<ReadSignal<T>> {
-        if self.value.peek().is_none() {
+        if *self.state.read() != ActionState::Ready {
             return None;
         }
 
-        if self.error.peek().is_some() {
+        if self.value.read().is_none() {
+            return None;
+        }
+
+        if self.error.read().is_some() {
             return None;
         }
 
@@ -83,11 +95,15 @@ impl<I: 'static, T: 'static> Action<I, T> {
     }
 
     pub fn result(&self) -> Option<Result<ReadSignal<T>, CapturedError>> {
+        if *self.state.read() != ActionState::Ready {
+            return None;
+        }
+
         if let Some(err) = self.error.cloned() {
             return Some(Err(err));
         }
 
-        if self.value.peek().is_none() {
+        if self.value.read().is_none() {
             return None;
         }
 
@@ -95,7 +111,12 @@ impl<I: 'static, T: 'static> Action<I, T> {
     }
 
     pub fn is_pending(&self) -> bool {
-        self.value().is_none() && self.task.peek().is_some()
+        *self.state.read() == ActionState::Pending
+    }
+
+    /// Clear the current value and error, setting the state to Reset
+    pub fn reset(&mut self) {
+        self.state.set(ActionState::Reset);
     }
 }
 
@@ -106,4 +127,16 @@ impl<I, T> Clone for Action<I, T> {
     fn clone(&self) -> Self {
         *self
     }
+}
+
+/// The state of an action
+///
+/// We can never reset the state to Unset, only to Reset, otherwise the value reader would panic.
+#[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
+enum ActionState {
+    Unset,
+    Pending,
+    Ready,
+    Errored,
+    Reset,
 }

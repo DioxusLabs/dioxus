@@ -37,6 +37,9 @@ pub use serde;
 
 // pub mod msgpack;
 
+pub mod error;
+pub use error::*;
+
 pub mod cbor;
 pub mod form;
 pub mod json;

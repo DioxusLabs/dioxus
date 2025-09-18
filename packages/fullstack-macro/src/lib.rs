@@ -505,34 +505,31 @@ fn route_impl_with_route(
             use dioxus_fullstack::reqwest as __reqwest;
             use dioxus_fullstack::serde as serde;
             use dioxus_fullstack::{
-                AxumRequestDecoder, AxumResponseEncoder,  ClientRequest, ExtractState, ExtractRequest, EncodeState,
+                AxumRequestDecoder, AxumResponseEncoder,  ReqwestEncoder, ExtractState, ExtractRequest, EncodeState,
                 ServerFnSugar, ServerFnRejection, EncodeRequest, get_server_url, EncodedBody,
-                ServerFnError, FromResIt, ReqwestDecoder, ReqwestDecoderImpl
+                ServerFnError, FromResIt, ReqwestDecoder, ReqwestDecodeResult, ReqwestDecodeErr
             };
 
             #query_params_struct
 
             // On the client, we make the request to the server
+            // We want to support extremely flexible error types and return types, making this more complex than it should
             if cfg!(not(feature = "server")) {
-                let __params = __QueryParams__ {
-                    #(#query_param_names,)*
-                };
+                let __params = __QueryParams__ { #(#query_param_names,)* };
 
                 let client = __reqwest::Client::new()
-                    .#http_method(format!("http://127.0.0.1:8080{}", #request_url));
-                    // .#http_method(format!("{}{}", get_server_url(), #request_url));
-                    // .query(&__params);
+                    .#http_method(format!("http://127.0.0.1:8080{}", #request_url)); // .#http_method(format!("{}{}", get_server_url(), #request_url)); // .query(&__params);
 
-                let encode_state = EncodeState {
-                    client
-                };
-
-                let response = (&&&&&&&&&&&&&&ClientRequest::<(#(#rest_idents,)*), #out_ty, _>::new())
-                    .fetch(encode_state, (#(#rest_ident_names2,)*))
+                let response = (&&&&&&&&&&&&&&ReqwestEncoder::<(#(#rest_idents,)*)>::new())
+                    .fetch(EncodeState { client }, (#(#rest_ident_names2,)*))
                     .await;
 
-                let result = (&&&&&ReqwestDecoderImpl::<#out_ty>::new())
+                let decoded_result = (&&&&&ReqwestDecoder::<#out_ty>::new())
                     .decode_response(response)
+                    .await;
+
+                let result = (&&&&&ReqwestDecoder::<#out_ty>::new())
+                    .decode_err(decoded_result)
                     .await;
 
                 return result;
@@ -554,13 +551,20 @@ fn route_impl_with_route(
                     #query_extractor
                     request: __axum::extract::Request,
                 ) -> __axum::response::Response #where_clause {
-                    match (&&&&&&&&&&&&&&AxumRequestDecoder::<(#(#body_json_types,)*), _>::new()).extract(ExtractState { request }).await {
-                        Ok(( #(#body_json_names,)*)) => {
-                            (&&&&&&AxumResponseEncoder::<#out_ty>::new())
-                                .make_axum_response(#fn_name #ty_generics(#(#extracted_idents,)*).await)
-                        },
-                        Err(rejection) => rejection.into_response()
-                    }
+                    let extracted = (&&&&&&&&&&&&&&AxumRequestDecoder::<(#(#body_json_types,)*), _>::new())
+                        .extract(ExtractState { request }).await;
+
+                    let ( #(#body_json_names,)*) = match extracted {
+                        Ok(res) => res,
+                        Err(rejection) => return rejection.into_response(),
+                    };
+
+                    let __users_result = #fn_name #ty_generics(#(#extracted_idents,)*).await;
+
+                    let response = (&&&&&&AxumResponseEncoder::<#out_ty>::new())
+                        .make_axum_response(__users_result);
+
+                    return response;
                 }
 
                 __inventory::submit! {

@@ -43,7 +43,7 @@ mod test_real_into_future {
 
     use anyhow::Result;
     use dioxus::prelude::dioxus_server;
-    use dioxus_fullstack::{post, ClientRequest, ServerFnError};
+    use dioxus_fullstack::{post, ReqwestEncoder, ServerFnError};
 
     #[derive(serde::Serialize, serde::Deserialize)]
     struct MyStuff {
@@ -62,7 +62,7 @@ mod test_real_into_future {
     }
 
     async fn it_works() {
-        let res: ClientRequest<Result<String>> = do_thing_simple(MyStuff {
+        let res: ReqwestEncoder<Result<String>> = do_thing_simple(MyStuff {
             alpha: "hello".into(),
             beta: "world".into(),
         });
@@ -363,7 +363,7 @@ mod approach_with_static {
         response::Response,
         Router,
     };
-    use dioxus_fullstack::{ClientRequest, DioxusServerState, EncodeRequest, EncodeState};
+    use dioxus_fullstack::{DioxusServerState, EncodeRequest, EncodeState, ReqwestEncoder};
     use http::Method;
     use serde::de::DeserializeOwned;
     use tokio::task::JoinHandle;
