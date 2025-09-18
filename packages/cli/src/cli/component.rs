@@ -11,12 +11,13 @@ use dioxus_component_manifest::{
     component_manifest_schema, CargoDependency, Component, ComponentDependency,
 };
 use git2::Repository;
+use serde::Serialize;
 use tokio::{process::Command, task::JoinSet};
 use tracing::debug;
 
 /// Arguments for the default or custom remote registry
 /// If both values are None, the default registry will be used
-#[derive(Clone, Debug, Parser, Default)]
+#[derive(Clone, Debug, Parser, Default, Serialize)]
 pub struct RemoteComponentRegisteryArgs {
     /// The url of the the component registry
     #[arg(long)]
@@ -122,7 +123,7 @@ fn checkout_rev(repo: &Repository, git: &str, rev: &str) -> Result<()> {
 
 /// Arguments for a component registry
 /// Either a path to a local directory or a remote git repo (with optional rev)
-#[derive(Clone, Debug, Parser, Default)]
+#[derive(Clone, Debug, Parser, Default, Serialize)]
 pub struct ComponentRegisteryArgs {
     /// The remote repo args
     #[clap(flatten)]
@@ -181,7 +182,7 @@ impl ResolvedComponent {
 }
 
 /// Arguments for a component and component module location
-#[derive(Clone, Debug, Parser)]
+#[derive(Clone, Debug, Parser, Serialize)]
 pub struct ComponentArgs {
     /// The component to add
     component: String,
@@ -288,12 +289,12 @@ impl ComponentCommand {
                         let registry_components = registry.read_components().await?;
                         let dependency_component =
                             find_component(registry_components, name).await?;
-                        if !required_components
+                        if required_components
                             .insert(
                                 dependency_component.clone(),
                                 ComponentExistsBehavior::Return,
                             )
-                            .is_some()
+                            .is_none()
                         {
                             queued_components.push(dependency_component);
                         }
@@ -458,7 +459,7 @@ async fn add_component(
     }
 
     let assets_root = global_assets_root(assets_path)?;
-    copy_global_assets(&assets_root, &component).await?;
+    copy_global_assets(&assets_root, component).await?;
 
     // Add the module to the components mod.rs
     let mod_rs_path = components_root.join("mod.rs");
@@ -601,7 +602,7 @@ async fn ensure_components_module_exists(components_dir: &Path) -> Result<bool> 
 }
 
 /// Read a component from the given path
-async fn read_component(path: &PathBuf) -> Result<ResolvedComponent> {
+async fn read_component(path: &Path) -> Result<ResolvedComponent> {
     let json_path = path.join("component.json");
     let bytes = tokio::fs::read(&json_path).await.with_context(|| {
         format!(
@@ -611,7 +612,7 @@ async fn read_component(path: &PathBuf) -> Result<ResolvedComponent> {
     })?;
     let component = serde_json::from_slice(&bytes)?;
     Ok(ResolvedComponent {
-        path: path.clone(),
+        path: path.to_path_buf(),
         component,
     })
 }
@@ -646,7 +647,7 @@ async fn copy_global_assets(assets_root: &Path, component: &ResolvedComponent) -
     let cache_dir = Workspace::component_cache_dir();
 
     for path in &component.global_assets {
-        let src = component.path.join(&path);
+        let src = component.path.join(path);
         let absolute_source = dunce::canonicalize(&src).with_context(|| {
             format!(
                 "Failed to find global asset '{}' for component '{}'",
@@ -663,9 +664,9 @@ async fn copy_global_assets(assets_root: &Path, component: &ResolvedComponent) -
         }
         let file = absolute_source
             .components()
-            .last()
+            .next_back()
             .context("Global assets must have at least one file component")?;
-        let dest = assets_root.join(&file);
+        let dest = assets_root.join(file);
         if let Some(parent) = dest.parent() {
             if !parent.exists() {
                 tokio::fs::create_dir_all(parent).await?;

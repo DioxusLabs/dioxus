@@ -29,6 +29,7 @@
 //! - set `dx config set disable-telemetry true`
 //!
 
+use crate::component::ComponentCommand;
 use crate::{dx_build_info::GIT_COMMIT_HASH_SHORT, serve::ServeUpdate, Cli, Commands, Verbosity};
 use crate::{BundleFormat, CliSettings, Workspace};
 use anyhow::{bail, Context, Error, Result};
@@ -906,7 +907,40 @@ impl TraceController {
                 Print::ClientArgs(_args) => ("print client-args".to_string(), json!({})),
                 Print::ServerArgs(_args) => ("print server-args".to_string(), json!({})),
             },
-            Commands::Component(cmd) => ("component".to_string(), json!({})),
+            Commands::Component(cmd) => match cmd {
+                ComponentCommand::Add {
+                    component,
+                    registry,
+                    force,
+                } => (
+                    "component add".to_string(),
+                    json!({
+                        "component": component,
+                        "registry": registry,
+                        "force": force,
+                    }),
+                ),
+                ComponentCommand::Remove { component } => (
+                    "component remove".to_string(),
+                    json!({
+                        "component": component,
+                    }),
+                ),
+                ComponentCommand::Update { registry } => (
+                    "component update".to_string(),
+                    json!({
+                        "registry": registry,
+                    }),
+                ),
+                ComponentCommand::List { registry } => (
+                    "component list".to_string(),
+                    json!({
+                        "registry": registry,
+                    }),
+                ),
+                ComponentCommand::Clean => ("component clean".to_string(), json!({})),
+                ComponentCommand::Schema => ("component schema".to_string(), json!({})),
+            },
         }
     }
 
