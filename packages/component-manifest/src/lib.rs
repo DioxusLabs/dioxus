@@ -19,6 +19,8 @@ pub struct Component {
     pub members: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub exclude: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub global_assets: Vec<String>,
 }
 
 #[derive(Deserialize, Serialize, JsonSchema, Clone, Debug, PartialEq, Eq, Hash)]

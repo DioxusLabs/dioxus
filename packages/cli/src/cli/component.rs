@@ -150,6 +150,10 @@ impl ComponentRegisteryArgs {
         let root = read_component(&path).await?;
         discover_components(root).await
     }
+
+    fn is_default(&self) -> bool {
+        self.path.is_none() && self.remote.git.is_none() && self.remote.rev.is_none()
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -184,6 +188,9 @@ pub struct ComponentArgs {
     /// The location of the component module in your project (default: src/components)
     #[clap(long)]
     module_path: Option<PathBuf>,
+    /// The location of the global assets in your project (default: assets)
+    #[clap(long)]
+    assets_path: Option<PathBuf>,
 }
 
 #[derive(Clone, Debug, Parser)]
@@ -251,6 +258,10 @@ impl ComponentCommand {
                 };
                 let component = find_component(components, &component_args.component).await?;
 
+                let components_root = components_root(component_args.module_path.as_deref())?;
+                let new_components_module =
+                    ensure_components_module_exists(&components_root).await?;
+
                 // Recursively add dependencies
                 // A map of the components that have been added or are queued to be added
                 let mut required_components = HashMap::new();
@@ -291,7 +302,25 @@ impl ComponentCommand {
 
                 // Once we have all required components, add them
                 for (component, mode) in required_components {
-                    add_component(component_args.module_path.as_deref(), &component, mode).await?;
+                    add_component(
+                        component_args.assets_path.as_deref(),
+                        component_args.module_path.as_deref(),
+                        &component,
+                        mode,
+                    )
+                    .await?;
+                }
+
+                if new_components_module {
+                    println!(
+                        "Created new components module at {}.",
+                        components_root.display()
+                    );
+                    println!("To finish setting up components, you will need to:");
+                    println!("- manually reference the module by adding `mod component;` to your `main.rs` file");
+                    if registry.is_default() {
+                        println!("- add a reference to `asset!(\"/assets/dx-components-theme.css\")` as a stylesheet in your app");
+                    }
                 }
             }
             Self::Update { registry } => {
@@ -337,6 +366,16 @@ fn components_root(module_path: Option<&Path>) -> Result<PathBuf> {
     let root = Workspace::crate_root_from_path()?;
 
     Ok(root.join("src").join("components"))
+}
+
+fn global_assets_root(assets_path: Option<&Path>) -> Result<PathBuf> {
+    if let Some(assets_path) = assets_path {
+        return Ok(PathBuf::from(assets_path));
+    }
+
+    let root = Workspace::crate_root_from_path()?;
+
+    Ok(root.join("assets"))
 }
 
 /// Remove a component from the managed component module
@@ -393,6 +432,7 @@ enum ComponentExistsBehavior {
 }
 
 async fn add_component(
+    assets_path: Option<&Path>,
     component_path: Option<&Path>,
     component: &ResolvedComponent,
     behavior: ComponentExistsBehavior,
@@ -401,7 +441,6 @@ async fn add_component(
 
     // Copy the folder content to the components directory
     let components_root = components_root(component_path)?;
-    ensure_components_module_exists(&components_root).await?;
 
     let copied = copy_component_files(
         &component.path,
@@ -417,6 +456,9 @@ async fn add_component(
         );
         return Ok(());
     }
+
+    let assets_root = global_assets_root(assets_path)?;
+    copy_global_assets(&assets_root, &component).await?;
 
     // Add the module to the components mod.rs
     let mod_rs_path = components_root.join("mod.rs");
@@ -543,18 +585,19 @@ async fn copy_component_files(
     Ok(true)
 }
 
-/// Make sure the components directory and a mod.rs file exists
-async fn ensure_components_module_exists(components_dir: &Path) -> Result<()> {
-    if !components_dir.exists() {
-        tokio::fs::create_dir_all(&components_dir).await?;
+/// Make sure the components directory and a mod.rs file exists. Returns true if the directory was created, false if it already existed.
+async fn ensure_components_module_exists(components_dir: &Path) -> Result<bool> {
+    if components_dir.exists() {
+        return Ok(false);
     }
-
+    tokio::fs::create_dir_all(&components_dir).await?;
     let mod_rs_path = components_dir.join("mod.rs");
-    if !mod_rs_path.exists() {
-        tokio::fs::write(&mod_rs_path, "// AUTOGENERTED Components module\n").await?;
+    if mod_rs_path.exists() {
+        return Ok(false);
     }
+    tokio::fs::write(&mod_rs_path, "// AUTOGENERTED Components module\n").await?;
 
-    Ok(())
+    Ok(true)
 }
 
 /// Read a component from the given path
@@ -596,4 +639,46 @@ async fn discover_components(root: ResolvedComponent) -> Result<Vec<ResolvedComp
         components.push(component);
     }
     Ok(components)
+}
+
+/// Copy any global assets for the component
+async fn copy_global_assets(assets_root: &Path, component: &ResolvedComponent) -> Result<()> {
+    let cache_dir = Workspace::component_cache_dir();
+
+    for path in &component.global_assets {
+        let src = component.path.join(&path);
+        let absolute_source = dunce::canonicalize(&src).with_context(|| {
+            format!(
+                "Failed to find global asset '{}' for component '{}'",
+                src.display(),
+                component.name
+            )
+        })?;
+        if !absolute_source.starts_with(&cache_dir) {
+            return Err(anyhow::anyhow!(
+                "Cannot copy global asset '{}' for component '{}' because it is outside of the component registry",
+                src.display(),
+                component.name
+            ));
+        }
+        let file = absolute_source
+            .components()
+            .last()
+            .context("Global assets must have at least one file component")?;
+        let dest = assets_root.join(&file);
+        if let Some(parent) = dest.parent() {
+            if !parent.exists() {
+                tokio::fs::create_dir_all(parent).await?;
+            }
+        }
+        tokio::fs::copy(&src, &dest).await.with_context(|| {
+            format!(
+                "Failed to copy global asset from {} to {}",
+                src.display(),
+                dest.display()
+            )
+        })?;
+    }
+
+    Ok(())
 }
