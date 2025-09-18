@@ -520,7 +520,7 @@ fn route_impl_with_route(
             use dioxus_fullstack::{
                 AxumRequestDecoder, AxumResponseEncoder,  ReqwestEncoder, ExtractState, ExtractRequest, EncodeState,
                 ServerFnSugar, ServerFnRejection, EncodeRequest, get_server_url, EncodedBody,
-                ServerFnError, FromResIt, ReqwestDecoder, ReqwestDecodeResult, ReqwestDecodeErr
+                ServerFnError, FromResIt, ReqwestDecoder, ReqwestDecodeResult, ReqwestDecodeErr, DioxusServerState
             };
 
             #warn_if_invalid_body
@@ -562,6 +562,7 @@ fn route_impl_with_route(
 
                 #aide_ident_docs
                 #asyncness fn __inner__function__ #impl_generics(
+                    ___state: __axum::extract::State<DioxusServerState>,
                     #path_extractor
                     #query_extractor
                     request: __axum::extract::Request,
@@ -569,7 +570,7 @@ fn route_impl_with_route(
                     info!("Handling request for server function: {}", stringify!(#fn_name));
 
                     let extracted = (&&&&&&&&&&&&&&AxumRequestDecoder::<(#(#body_json_types,)*), _>::new())
-                        .extract(ExtractState { request }).await;
+                        .extract(ExtractState { request, state: ___state.0 }).await;
 
                     let ( #(#body_json_names,)*) = match extracted {
                         Ok(res) => res,

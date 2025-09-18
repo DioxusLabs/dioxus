@@ -448,6 +448,7 @@ pub mod req_from {
     use std::prelude::rust_2024::Future;
 
     use axum_core::extract::{FromRequest, Request};
+    use dioxus_fullstack_core::DioxusServerState;
     use http::HeaderMap;
     pub use impls::*;
 
@@ -455,6 +456,7 @@ pub mod req_from {
 
     #[derive(Default)]
     pub struct ExtractState {
+        pub state: DioxusServerState,
         pub request: Request,
     }
 
@@ -554,12 +556,20 @@ pub mod req_from {
         }
         impl<A> ExtractRequest for  &&&&&&&&&AxumRequestDecoder<(A,)> where A: Freq<Ds> {
             type Output = (A,);
-            fn extract(&self, _ctx: ExtractState) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static { async move { todo!() } }
+            fn extract(&self, _ctx: ExtractState) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static {
+                send_wrapper::SendWrapper::new(async move {
+                    let res: Result<A, A::Rejection> = A::from_request(_ctx.request, &_ctx.state)
+                        .await;
+
+                    res.map(|a| (a,)).map_err(|_e| ServerFnRejection {})
+                })
+            }
         }
-        impl<A> ExtractRequest for   &&&&&&&&AxumRequestDecoder<(A,)> where A: Prts<Ds> {
-            type Output = (A,);
-            fn extract(&self, _ctx: ExtractState) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static { async move { todo!() } }
-        }
+
+        // impl<A> ExtractRequest for   &&&&&&&&AxumRequestDecoder<(A,)> where A: Prts<Ds> {
+        //     type Output = (A,);
+        //     fn extract(&self, _ctx: ExtractState) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static { async move { todo!() } }
+        // }
 
 
         // Two-arg case
