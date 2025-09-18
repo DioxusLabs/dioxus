@@ -27,7 +27,7 @@ wasm-split-cli = { workspace = true }
 depinfo = { workspace = true }
 subsecond-types = { workspace = true }
 dioxus-cli-telemetry = { workspace =  true }
-dioxus-component-manifest = { git = "https://github.com/ealmloff/components", branch = "components-cli" }
+dioxus-component-manifest = { workspace = true }
 
 clap = { workspace = true, features = ["derive", "cargo"] }
 convert_case = { workspace = true }

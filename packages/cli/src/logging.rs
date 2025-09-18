@@ -68,6 +68,10 @@ const DX_SRC_FLAG: &str = "dx_src";
 
 pub static VERBOSITY: OnceLock<Verbosity> = OnceLock::new();
 
+pub fn verbosity_or_default() -> Verbosity {
+    crate::VERBOSITY.get().cloned().unwrap_or_default()
+}
+
 fn reset_cursor() {
     use std::io::IsTerminal;
 
