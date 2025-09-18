@@ -41,85 +41,77 @@ use std::{
     prelude::rust_2024::Future,
 };
 
+use crate::FromResponse;
+use crate::{IntoRequest, ServerFnError};
+use axum::response::IntoResponse;
 use axum::Json;
-use dioxus_fullstack_core::ServerFnError;
+use axum_core::extract::FromRequest as Freq;
+use axum_core::extract::FromRequestParts as Prts;
+use dioxus_fullstack_core::DioxusServerState as Dsr;
 use futures::FutureExt;
-use serde::{de::DeserializeOwned, Serialize};
+use serde::ser::Serialize as DeserializeOwned;
+use serde::Serialize;
+
+use axum_core::extract::{FromRequest, Request};
+use http::HeaderMap;
+
+use crate::{DioxusServerState, ServerFnRejection};
+
+type Res = Result<reqwest::Response, reqwest::Error>;
+
+pub struct ServerFnEncoder<In, Out> {
+    _t: std::marker::PhantomData<fn() -> In>,
+    _o: std::marker::PhantomData<fn() -> Out>,
+}
+
+impl<In, Out> ServerFnEncoder<In, Out> {
+    pub fn new() -> Self {
+        ServerFnEncoder {
+            _t: std::marker::PhantomData,
+            _o: std::marker::PhantomData,
+        }
+    }
+}
 
 pub use req_to::*;
 pub mod req_to {
-    use crate::{FromResponse, IntoRequest, ServerFnError};
-    use axum_core::extract::FromRequest as Freq;
-    use axum_core::extract::FromRequestParts as Prts;
-    use dioxus_fullstack_core::DioxusServerState as Dsr;
-    use serde::{ser::Serialize as DeO_____, Serialize};
-    use std::prelude::rust_2024::Future;
-
-    use axum_core::extract::{FromRequest, Request};
-    use http::HeaderMap;
-
-    use crate::{DioxusServerState, ServerFnRejection};
-
-    pub struct EncodeState {
-        pub client: reqwest::RequestBuilder,
-    }
-
-    unsafe impl Send for EncodeState {}
-    unsafe impl Sync for EncodeState {}
-
-    pub struct ReqwestEncoder<In, Out> {
-        _t: std::marker::PhantomData<fn() -> In>,
-        _o: std::marker::PhantomData<fn() -> Out>,
-    }
-
-    impl<In, Out> ReqwestEncoder<In, Out> {
-        pub fn new() -> Self {
-            ReqwestEncoder {
-                _t: std::marker::PhantomData,
-                _o: std::marker::PhantomData,
-            }
-        }
-    }
-
-    pub struct EncodedBody {
-        pub data: bytes::Bytes,
-        pub content_type: &'static str,
-    }
-
     use super::*;
 
-    type Res = Result<reqwest::Response, reqwest::Error>;
+    pub struct FetchRequest {
+        pub client: reqwest::RequestBuilder,
+    }
+    impl FetchRequest {
+        pub fn new(method: http::Method, url: String) -> Self {
+            let client = reqwest::Client::new();
+            let client = client.request(method, url);
+            Self { client }
+        }
+    }
+    unsafe impl Send for FetchRequest {}
+    unsafe impl Sync for FetchRequest {}
 
-    /*
-    Handle the regular axum-like handlers with tiered overloading with a single trait.
-    */
-    pub trait EncodeRequest {
-        type Input;
-        type Unpack;
-        fn fetch(
+    pub trait EncodeRequest<In, Out> {
+        fn fetch_client(
             &self,
-            ctx: EncodeState,
-            data: Self::Input,
-            map: fn(Self::Input) -> Self::Unpack,
+            ctx: FetchRequest,
+            data: In,
+            map: fn(In) -> Out,
         ) -> impl Future<Output = Res> + Send + 'static;
     }
 
     // One-arg case
-    impl<T, O> EncodeRequest for &&&&&&&&&&ReqwestEncoder<T, O>
+    impl<T, O> EncodeRequest<T, O> for &&&&&&&&&&ServerFnEncoder<T, O>
     where
-        T: DeO_____ + Serialize + 'static,
+        T: DeserializeOwned + Serialize + 'static,
     {
-        type Input = T;
-        type Unpack = O;
-        fn fetch(
+        fn fetch_client(
             &self,
-            ctx: EncodeState,
-            data: Self::Input,
-            _map: fn(Self::Input) -> Self::Unpack,
+            ctx: FetchRequest,
+            data: T,
+            _map: fn(T) -> O,
         ) -> impl Future<Output = Res> + Send + 'static {
             send_wrapper::SendWrapper::new(async move {
                 let data = serde_json::to_string(&data).unwrap();
-                tracing::info!("serializing request body: {}", data);
 
                 if data.is_empty() || data == "{}" {
                     return Ok(ctx.client.send().await.unwrap());
@@ -130,187 +122,18 @@ pub mod req_to {
         }
     }
 
-    impl<T: 'static, O> EncodeRequest for &&&&&&&&&ReqwestEncoder<T, O>
+    impl<T, O> EncodeRequest<T, O> for &&&&&&&&&ServerFnEncoder<T, O>
     where
-        O: Freq<Dsr> + IntoRequest,
+        T: 'static,
+        O: FromRequest<DioxusServerState> + IntoRequest,
     {
-        type Input = T;
-        type Unpack = O;
-        fn fetch(
+        fn fetch_client(
             &self,
-            ctx: EncodeState,
-            data: Self::Input,
-            map: fn(Self::Input) -> Self::Unpack,
+            ctx: FetchRequest,
+            data: T,
+            map: fn(T) -> O,
         ) -> impl Future<Output = Res> + Send + 'static {
             O::into_request(map(data), ctx.client)
-        }
-    }
-}
-
-pub use req_from::*;
-pub mod req_from {
-    use std::prelude::rust_2024::Future;
-
-    use axum_core::extract::{FromRequest, Request};
-    use dioxus_fullstack_core::DioxusServerState;
-    use http::HeaderMap;
-    pub use impls::*;
-
-    use crate::ServerFnRejection;
-
-    #[derive(Default)]
-    pub struct ExtractState {
-        pub state: DioxusServerState,
-        pub request: Request,
-    }
-
-    unsafe impl Send for ExtractState {}
-    unsafe impl Sync for ExtractState {}
-
-    pub struct AxumRequestDecoder<In, Out> {
-        _t: std::marker::PhantomData<fn() -> In>,
-        _o: std::marker::PhantomData<fn() -> Out>,
-    }
-
-    impl<In, Out> AxumRequestDecoder<In, Out> {
-        pub fn new() -> Self {
-            AxumRequestDecoder {
-                _t: std::marker::PhantomData,
-                _o: std::marker::PhantomData,
-            }
-        }
-    }
-
-    #[allow(clippy::manual_async_fn)]
-    #[rustfmt::skip]
-    mod impls {
-    use super::*;
-
-        /*
-        Handle the regular axum-like handlers with tiered overloading with a single trait.
-        */
-        pub trait ExtractRequest<S = DioxusServerState> {
-            type Input;
-            type Output;
-            fn extract(&self, _ctx: ExtractState, map: fn(Self::Input) -> Self::Output) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static;
-        }
-
-        use axum_core::extract::FromRequest as Freq;
-        use bytes::Bytes;
-        use dioxus_fullstack_core::DioxusServerState;
-        use serde::de::DeserializeOwned as DeO_____;
-        use DioxusServerState as Ds;
-
-        // One-arg case
-        impl<In, Out: 'static> ExtractRequest for &&&&&&&&&&AxumRequestDecoder<In, Out> where In: DeO_____ + 'static {
-            type Input = In;
-            type Output = Out;
-            fn extract(&self, ctx: ExtractState, map: fn(Self::Input) -> Self::Output) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static {
-                send_wrapper::SendWrapper::new(async move {
-                    let bytes = Bytes::from_request(ctx.request, &()).await.unwrap();
-                    let as_str = String::from_utf8_lossy(&bytes);
-                    tracing::info!("deserializing request body: {}", as_str);
-                    let bytes = if as_str.is_empty() {
-                        "{}".as_bytes()
-                    } else {
-                        &bytes
-                    };
-
-                    let res = serde_json::from_slice::<In>(&bytes).map(|a| map(a));
-                    res.map_err(|e| ServerFnRejection {})
-                })
-            }
-        }
-
-        /// We skip the BodySerialize wrapper and just go for the output type directly.
-        impl<In, Out> ExtractRequest for &&&&&&&&&AxumRequestDecoder<In, Out> where Out: Freq<Ds> {
-            type Input = In;
-            type Output = Out;
-            fn extract(&self, ctx: ExtractState, _map: fn(Self::Input) -> Self::Output) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static {
-                send_wrapper::SendWrapper::new(async move {
-                    Out::from_request(ctx.request, &ctx.state)
-                        .await
-                        .map_err(|e| ServerFnRejection { })
-                })
-            }
-        }
-
-    }
-}
-
-pub use resp::*;
-mod resp {
-    use axum::response::IntoResponse;
-    use dioxus_fullstack_core::ServerFnError;
-    use serde::{de::DeserializeOwned, Serialize};
-
-    use crate::FromResponse;
-
-    pub struct AxumResponseEncoder<I> {
-        _p: std::marker::PhantomData<I>,
-    }
-
-    impl<I> AxumResponseEncoder<I> {
-        pub fn new() -> Self {
-            Self {
-                _p: std::marker::PhantomData,
-            }
-        }
-    }
-
-    /// A trait for converting the result of the Server Function into an Axum response.
-    ///
-    /// This is to work around the issue where we want to return both Deserialize types and FromResponse types.
-    /// Stuff like websockets
-    ///
-    /// We currently have an `Input` type even though it's not useful since we might want to support regular axum endpoints later.
-    /// For now, it's just Result<T, E> where T is either DeserializeOwned or FromResponse
-    pub trait FromResIt {
-        type Input;
-        fn make_axum_response(self, s: Self::Input) -> axum::response::Response;
-    }
-
-    // Higher priority impl for special types like websocket/file responses that generate their own responses
-    // The FromResponse impl helps narrow types to those usable on the client
-    impl<T, E> FromResIt for &&&AxumResponseEncoder<Result<T, E>>
-    where
-        T: FromResponse + IntoResponse,
-        E: From<ServerFnError>,
-    {
-        type Input = Result<T, E>;
-        fn make_axum_response(self, s: Self::Input) -> axum::response::Response {
-            match s {
-                Ok(res) => res.into_response(),
-                Err(err) => todo!(),
-            }
-        }
-    }
-
-    // Lower priority impl for regular serializable types
-    // We try to match the encoding from the incoming request, otherwise default to JSON
-    impl<T, E> FromResIt for &&AxumResponseEncoder<Result<T, E>>
-    where
-        T: DeserializeOwned + Serialize,
-        E: From<ServerFnError>,
-    {
-        type Input = Result<T, E>;
-        fn make_axum_response(self, s: Self::Input) -> axum::response::Response {
-            match s.map(|v| serde_json::to_string(&v)) {
-                Ok(Ok(v)) => {
-                    let mut res = (axum::http::StatusCode::OK, v).into_response();
-                    res.headers_mut().insert(
-                        axum::http::header::CONTENT_TYPE,
-                        axum::http::HeaderValue::from_static("application/json"),
-                    );
-                    res
-                }
-                Ok(Err(e)) => {
-                    todo!()
-                }
-                Err(e) => {
-                    todo!()
-                }
-            }
         }
     }
 }
@@ -503,6 +326,179 @@ mod decode_ok {
                     Err(_) => todo!(),
                 }
             })
+        }
+    }
+}
+
+pub use req_from::*;
+pub mod req_from {
+    use axum_core::extract::FromRequest as Freq;
+    use axum_core::extract::{FromRequest, Request};
+    use bytes::Bytes;
+    use dioxus_fullstack_core::DioxusServerState;
+    use http::HeaderMap;
+    use serde::de::DeserializeOwned;
+    use std::prelude::rust_2024::Future;
+    use DioxusServerState as Ds;
+
+    use crate::ServerFnRejection;
+
+    #[derive(Default)]
+    pub struct ExtractState {
+        pub state: DioxusServerState,
+        pub request: Request,
+    }
+
+    unsafe impl Send for ExtractState {}
+    unsafe impl Sync for ExtractState {}
+
+    pub struct AxumRequestDecoder<In, Out> {
+        _t: std::marker::PhantomData<fn() -> In>,
+        _o: std::marker::PhantomData<fn() -> Out>,
+    }
+
+    impl<In, Out> AxumRequestDecoder<In, Out> {
+        pub fn new() -> Self {
+            AxumRequestDecoder {
+                _t: std::marker::PhantomData,
+                _o: std::marker::PhantomData,
+            }
+        }
+    }
+
+    /*
+    Handle the regular axum-like handlers with tiered overloading with a single trait.
+    */
+    pub trait ExtractRequest<S = DioxusServerState> {
+        type Input;
+        type Output;
+        fn extract_axum(
+            &self,
+            _ctx: ExtractState,
+            map: fn(Self::Input) -> Self::Output,
+        ) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static;
+    }
+
+    // One-arg case
+    impl<In, Out: 'static> ExtractRequest for &&&&&&&&&&AxumRequestDecoder<In, Out>
+    where
+        In: DeserializeOwned + 'static,
+    {
+        type Input = In;
+        type Output = Out;
+        fn extract_axum(
+            &self,
+            ctx: ExtractState,
+            map: fn(Self::Input) -> Self::Output,
+        ) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static
+        {
+            send_wrapper::SendWrapper::new(async move {
+                let bytes = Bytes::from_request(ctx.request, &()).await.unwrap();
+                let as_str = String::from_utf8_lossy(&bytes);
+                tracing::info!("deserializing request body: {}", as_str);
+                let bytes = if as_str.is_empty() {
+                    "{}".as_bytes()
+                } else {
+                    &bytes
+                };
+
+                let res = serde_json::from_slice::<In>(&bytes).map(|a| map(a));
+                res.map_err(|e| ServerFnRejection {})
+            })
+        }
+    }
+
+    /// We skip the BodySerialize wrapper and just go for the output type directly.
+    impl<In, Out> ExtractRequest for &&&&&&&&&AxumRequestDecoder<In, Out>
+    where
+        Out: Freq<Ds>,
+    {
+        type Input = In;
+        type Output = Out;
+        fn extract_axum(
+            &self,
+            ctx: ExtractState,
+            _map: fn(Self::Input) -> Self::Output,
+        ) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static
+        {
+            send_wrapper::SendWrapper::new(async move {
+                Out::from_request(ctx.request, &ctx.state)
+                    .await
+                    .map_err(|e| ServerFnRejection {})
+            })
+        }
+    }
+}
+
+pub use resp::*;
+mod resp {
+    use super::*;
+
+    pub struct AxumResponseEncoder<I> {
+        _p: std::marker::PhantomData<I>,
+    }
+
+    impl<I> AxumResponseEncoder<I> {
+        pub fn new() -> Self {
+            Self {
+                _p: std::marker::PhantomData,
+            }
+        }
+    }
+
+    /// A trait for converting the result of the Server Function into an Axum response.
+    ///
+    /// This is to work around the issue where we want to return both Deserialize types and FromResponse types.
+    /// Stuff like websockets
+    ///
+    /// We currently have an `Input` type even though it's not useful since we might want to support regular axum endpoints later.
+    /// For now, it's just Result<T, E> where T is either DeserializeOwned or FromResponse
+    pub trait FromResIt {
+        type Input;
+        fn make_axum_response(self, s: Self::Input) -> axum::response::Response;
+    }
+
+    // Higher priority impl for special types like websocket/file responses that generate their own responses
+    // The FromResponse impl helps narrow types to those usable on the client
+    impl<T, E> FromResIt for &&&AxumResponseEncoder<Result<T, E>>
+    where
+        T: FromResponse + IntoResponse,
+        E: From<ServerFnError>,
+    {
+        type Input = Result<T, E>;
+        fn make_axum_response(self, s: Self::Input) -> axum::response::Response {
+            match s {
+                Ok(res) => res.into_response(),
+                Err(err) => todo!(),
+            }
+        }
+    }
+
+    // Lower priority impl for regular serializable types
+    // We try to match the encoding from the incoming request, otherwise default to JSON
+    impl<T, E> FromResIt for &&AxumResponseEncoder<Result<T, E>>
+    where
+        T: DeserializeOwned + Serialize,
+        E: From<ServerFnError>,
+    {
+        type Input = Result<T, E>;
+        fn make_axum_response(self, s: Self::Input) -> axum::response::Response {
+            match s.map(|v| serde_json::to_string(&v)) {
+                Ok(Ok(v)) => {
+                    let mut res = (axum::http::StatusCode::OK, v).into_response();
+                    res.headers_mut().insert(
+                        axum::http::header::CONTENT_TYPE,
+                        axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    res
+                }
+                Ok(Err(e)) => {
+                    todo!()
+                }
+                Err(e) => {
+                    todo!()
+                }
+            }
         }
     }
 }
