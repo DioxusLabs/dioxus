@@ -1,4 +1,4 @@
-//! ServerFn request decoders and encoders.
+//! ServerFn request magical 🧙 decoders and encoders.
 //!
 //! The Dioxus Server Function implementation brings a lot of *magic* to the types of endpoints we can handle.
 //! Our ultimate goal is to handle *all* endpoints, even axum endpoints, with the macro.
@@ -6,7 +6,7 @@
 //! Unfortunately, some axum traits like `FromRequest` overlap with some of the default magic we want
 //! to provide, like allowing DeserializedOwned groups.
 //!
-//! Our ultimate goal - to accept all axum handlers - is feasible but not implemented.
+//! Our ultimate goal - to accept all axum handlers - is feasible but not fully implemented.
 //!
 //! Broadly, we support the following categories of handlers arguments:
 //! - Handlers with a single argument that implements `FromRequest` + `IntoRequest`
@@ -81,7 +81,6 @@ pub trait FromResponse: Sized {
 }
 
 pub trait IntoRequest: Sized {
-    type Output;
     fn into_request(
         input: Self,
         request_builder: reqwest::RequestBuilder,
@@ -125,8 +124,6 @@ pub mod req_to {
     }
 
     impl<T, S> FromRequest<S> for DeTys<T> {
-        #[doc = " If the extractor fails it\'ll use this \"rejection\" type. A rejection is"]
-        #[doc = " a kind of error that can be converted into a response."]
         type Rejection = ServerFnRejection;
 
         #[doc = " Perform the extraction."]

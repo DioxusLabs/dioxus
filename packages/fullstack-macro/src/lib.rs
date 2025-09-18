@@ -496,18 +496,18 @@ fn route_impl_with_route(
         syn::ReturnType::Type(_, _) => quote! { dioxus_fullstack::ServerFnRequest<#out_ty> },
     };
 
-    let warn_if_invalid_body = if !body_json_args.is_empty() {
-        match &route.method {
-            Method::Get(_) | Method::Delete(_) | Method::Options(_) | Method::Head(_) => {
-                quote! {
-                    compile_error!("GET, DELETE, OPTIONS, and HEAD requests should not have a body. Consider using query parameters or changing the HTTP method.");
-                }
-            }
-            _ => quote! {},
-        }
-    } else {
-        quote! {}
-    };
+    // let warn_if_invalid_body = if !body_json_args.is_empty() {
+    //     match &route.method {
+    //         Method::Get(_) | Method::Delete(_) | Method::Options(_) | Method::Head(_) => {
+    //             quote! {
+    //                 compile_error!("GET, DELETE, OPTIONS, and HEAD requests should not have a body. Consider using query parameters or changing the HTTP method.");
+    //             }
+    //         }
+    //         _ => quote! {},
+    //     }
+    // } else {
+    //     quote! {}
+    // };
 
     Ok(quote! {
         #(#fn_docs)*
@@ -523,7 +523,7 @@ fn route_impl_with_route(
                 ServerFnError, FromResIt, ReqwestDecoder, ReqwestDecodeResult, ReqwestDecodeErr, DioxusServerState
             };
 
-            #warn_if_invalid_body
+            // #warn_if_invalid_body
 
             #query_params_struct
 
@@ -570,6 +570,7 @@ fn route_impl_with_route(
                     info!("Handling request for server function: {}", stringify!(#fn_name));
 
                     let extracted = (&&&&&&&&&&&&&&AxumRequestDecoder::<(#(#body_json_types,)*), _>::new())
+
                         .extract(ExtractState { request, state: ___state.0 }).await;
 
                     let ( #(#body_json_names,)*) = match extracted {

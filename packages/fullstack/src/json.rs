@@ -11,8 +11,6 @@ impl<T> IntoRequest for Json<T>
 where
     T: Serialize + 'static,
 {
-    type Output = Json<T>;
-
     fn into_request(
         input: Self,
         request_builder: reqwest::RequestBuilder,

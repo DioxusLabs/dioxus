@@ -27,14 +27,14 @@ mod simple_extractors {
 
     /// We can extract the state and return anything thats IntoResponse
     #[get("/home")]
-    async fn one(state: State<DioxusServerState>) -> String {
-        "hello home".to_string()
+    async fn one() -> Result<String> {
+        Ok("hello home".to_string())
     }
 
-    /// We can extract the path arg and return anything thats IntoResponse
+    /// We can extract the path arg
     #[get("/home/{id}")]
-    async fn two(id: String) -> String {
-        format!("hello home {}", id)
+    async fn two(id: String) -> Result<String> {
+        Ok(format!("hello home {}", id))
     }
 
     /// We can do basically nothing
@@ -252,13 +252,13 @@ mod overlap {
 
     /// When we have overlapping serialize + IntoResponse impls, the autoref logic will only pick Serialize
     /// if IntoResponse is not available. Otherwise, IntoResponse is preferred.
-    #[get("/myendpoint")]
+    #[post("/myendpoint")]
     async fn my_custom_handler3(payload: MyCustomPayload) -> Result<MyCustomPayload, StatusCode> {
         Ok(payload)
     }
 
     /// Same, but with the anyhow::Error path
-    #[get("/myendpoint")]
+    #[post("/myendpoint")]
     async fn my_custom_handler4(payload: MyCustomPayload) -> Result<MyCustomPayload> {
         Ok(payload)
     }
@@ -268,20 +268,14 @@ mod http_ext {
     use super::*;
 
     /// Extract regular axum endpoints
-    #[get("/myendpoint")]
-    async fn my_custom_handler1(request: axum::extract::Request) {
+    #[post("/myendpoint")]
+    async fn my_custom_handler1(request: axum::extract::Request) -> Result<()> {
         let mut data = request.into_data_stream();
         while let Some(chunk) = data.next().await {
             let _ = chunk.unwrap();
         }
-    }
 
-    #[get("/myendpoint")]
-    async fn my_custom_handler2(_state: State<DioxusServerState>, request: axum::extract::Request) {
-        let mut data = request.into_data_stream();
-        while let Some(chunk) = data.next().await {
-            let _ = chunk.unwrap();
-        }
+        Ok(())
     }
 }
 

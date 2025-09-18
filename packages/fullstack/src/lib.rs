@@ -37,6 +37,9 @@ pub use serde;
 
 // pub mod msgpack;
 
+pub mod magic;
+pub use magic::*;
+
 pub mod error;
 pub use error::*;
 
@@ -63,9 +66,6 @@ pub use websocket::*;
 
 pub mod upload;
 pub use upload::*;
-
-pub mod request;
-pub use request::*;
 
 pub mod response;
 pub use response::*;
