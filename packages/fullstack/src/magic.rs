@@ -46,68 +46,17 @@ use dioxus_fullstack_core::ServerFnError;
 use futures::FutureExt;
 use serde::{de::DeserializeOwned, Serialize};
 
-#[pin_project::pin_project]
-#[must_use = "Requests do nothing unless you `.await` them"]
-pub struct ServerFnRequest<Output> {
-    _phantom: std::marker::PhantomData<Output>,
-    #[pin]
-    fut: Pin<Box<dyn Future<Output = Output> + Send>>,
-}
-
-impl<O> ServerFnRequest<O> {
-    pub fn new(res: impl Future<Output = O> + Send + 'static) -> Self {
-        ServerFnRequest {
-            _phantom: std::marker::PhantomData,
-            fut: Box::pin(res),
-        }
-    }
-}
-
-impl<T, E> std::future::Future for ServerFnRequest<Result<T, E>> {
-    type Output = Result<T, E>;
-
-    fn poll(
-        self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Self::Output> {
-        self.project().fut.poll(cx)
-    }
-}
-
-pub trait FromResponse: Sized {
-    fn from_response(
-        res: reqwest::Response,
-    ) -> impl Future<Output = Result<Self, ServerFnError>> + Send;
-}
-
-pub trait IntoRequest: Sized {
-    fn into_request(
-        input: Self,
-        request_builder: reqwest::RequestBuilder,
-    ) -> impl Future<Output = Result<reqwest::Response, reqwest::Error>> + Send + 'static;
-}
-
-impl<A> IntoRequest for (A,)
-where
-    A: IntoRequest + 'static,
-{
-    fn into_request(
-        input: Self,
-        request_builder: reqwest::RequestBuilder,
-    ) -> impl Future<Output = Result<reqwest::Response, reqwest::Error>> + Send + 'static {
-        send_wrapper::SendWrapper::new(
-            async move { A::into_request(input.0, request_builder).await },
-        )
-    }
-}
-
 pub use req_to::*;
 pub mod req_to {
+    use crate::{FromResponse, IntoRequest, ServerFnError};
+    use axum_core::extract::FromRequest as Freq;
+    use axum_core::extract::FromRequestParts as Prts;
+    use dioxus_fullstack_core::DioxusServerState as Dsr;
+    use serde::{ser::Serialize as DeO_____, Serialize};
     use std::prelude::rust_2024::Future;
 
     use axum_core::extract::{FromRequest, Request};
     use http::HeaderMap;
-    pub use impls::*;
 
     use crate::{DioxusServerState, ServerFnRejection};
 
@@ -137,52 +86,63 @@ pub mod req_to {
         pub content_type: &'static str,
     }
 
-    #[allow(clippy::manual_async_fn)]
-    #[rustfmt::skip]
-    mod impls {
-        use axum_core::extract::FromRequest as Freq;
-        use axum_core::extract::FromRequestParts as Prts;
-        use serde::{ser::Serialize as DeO_____, Serialize};
-        use dioxus_fullstack_core::DioxusServerState as Dsr;
-        use crate::{FromResponse, IntoRequest, ServerFnError};
+    use super::*;
 
-        use super::*;
+    type Res = Result<reqwest::Response, reqwest::Error>;
 
-        type Res = Result<reqwest::Response, reqwest::Error>;
+    /*
+    Handle the regular axum-like handlers with tiered overloading with a single trait.
+    */
+    pub trait EncodeRequest {
+        type Input;
+        type Unpack;
+        fn fetch(
+            &self,
+            ctx: EncodeState,
+            data: Self::Input,
+            map: fn(Self::Input) -> Self::Unpack,
+        ) -> impl Future<Output = Res> + Send + 'static;
+    }
 
-        /*
-        Handle the regular axum-like handlers with tiered overloading with a single trait.
-        */
-        pub trait EncodeRequest {
-            type Input;
-            type Unpack;
-            fn fetch(&self, ctx: EncodeState, data: Self::Input, map: fn(Self::Input) -> Self::Unpack) -> impl Future<Output = Res> + Send + 'static;
+    // One-arg case
+    impl<T, O> EncodeRequest for &&&&&&&&&&ReqwestEncoder<T, O>
+    where
+        T: DeO_____ + Serialize + 'static,
+    {
+        type Input = T;
+        type Unpack = O;
+        fn fetch(
+            &self,
+            ctx: EncodeState,
+            data: Self::Input,
+            _map: fn(Self::Input) -> Self::Unpack,
+        ) -> impl Future<Output = Res> + Send + 'static {
+            send_wrapper::SendWrapper::new(async move {
+                let data = serde_json::to_string(&data).unwrap();
+                tracing::info!("serializing request body: {}", data);
+
+                if data.is_empty() || data == "{}" {
+                    return Ok(ctx.client.send().await.unwrap());
+                }
+
+                Ok(ctx.client.body(data).send().await.unwrap())
+            })
         }
+    }
 
-        // One-arg case
-        impl<T, O> EncodeRequest for &&&&&&&&&&ReqwestEncoder<T, O> where T: DeO_____ + Serialize + 'static {
-            type Input = T;
-            type Unpack = O;
-            fn fetch(&self, ctx: EncodeState, data: Self::Input, _map: fn(Self::Input) -> Self::Unpack) -> impl Future<Output = Res> + Send + 'static {
-                send_wrapper::SendWrapper::new(async move {
-                    let data = serde_json::to_string(&data).unwrap();
-                    tracing::info!("serializing request body: {}", data);
-
-                    if data.is_empty() || data == "{}"{
-                        return Ok(ctx.client.send().await.unwrap());
-                    }
-
-                    Ok(ctx.client.body(data).send().await.unwrap())
-                })
-            }
-        }
-
-        impl<T: 'static, O> EncodeRequest for &&&&&&&&&ReqwestEncoder<T, O> where O: Freq<Dsr> + IntoRequest {
-            type Input = T;
-            type Unpack = O;
-            fn fetch(&self, ctx: EncodeState, data: Self::Input, map: fn(Self::Input) -> Self::Unpack) -> impl Future<Output = Res> + Send + 'static {
-                O::into_request(map(data), ctx.client)
-            }
+    impl<T: 'static, O> EncodeRequest for &&&&&&&&&ReqwestEncoder<T, O>
+    where
+        O: Freq<Dsr> + IntoRequest,
+    {
+        type Input = T;
+        type Unpack = O;
+        fn fetch(
+            &self,
+            ctx: EncodeState,
+            data: Self::Input,
+            map: fn(Self::Input) -> Self::Unpack,
+        ) -> impl Future<Output = Res> + Send + 'static {
+            O::into_request(map(data), ctx.client)
         }
     }
 }
