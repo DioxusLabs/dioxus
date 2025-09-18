@@ -369,29 +369,24 @@ pub mod req_from {
     /*
     Handle the regular axum-like handlers with tiered overloading with a single trait.
     */
-    pub trait ExtractRequest<S = DioxusServerState> {
-        type Input;
-        type Output;
+    pub trait ExtractRequest<In, Out, S = DioxusServerState> {
         fn extract_axum(
             &self,
             _ctx: ExtractState,
-            map: fn(Self::Input) -> Self::Output,
-        ) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static;
+            map: fn(In) -> Out,
+        ) -> impl Future<Output = Result<Out, ServerFnRejection>> + Send + 'static;
     }
 
     // One-arg case
-    impl<In, Out: 'static> ExtractRequest for &&&&&&&&&&AxumRequestDecoder<In, Out>
+    impl<In, Out: 'static> ExtractRequest<In, Out> for &&&&&&&&&&AxumRequestDecoder<In, Out>
     where
         In: DeserializeOwned + 'static,
     {
-        type Input = In;
-        type Output = Out;
         fn extract_axum(
             &self,
             ctx: ExtractState,
-            map: fn(Self::Input) -> Self::Output,
-        ) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static
-        {
+            map: fn(In) -> Out,
+        ) -> impl Future<Output = Result<Out, ServerFnRejection>> + Send + 'static {
             send_wrapper::SendWrapper::new(async move {
                 let bytes = Bytes::from_request(ctx.request, &()).await.unwrap();
                 let as_str = String::from_utf8_lossy(&bytes);
@@ -409,18 +404,15 @@ pub mod req_from {
     }
 
     /// We skip the BodySerialize wrapper and just go for the output type directly.
-    impl<In, Out> ExtractRequest for &&&&&&&&&AxumRequestDecoder<In, Out>
+    impl<In, Out> ExtractRequest<In, Out> for &&&&&&&&&AxumRequestDecoder<In, Out>
     where
         Out: Freq<Ds>,
     {
-        type Input = In;
-        type Output = Out;
         fn extract_axum(
             &self,
             ctx: ExtractState,
-            _map: fn(Self::Input) -> Self::Output,
-        ) -> impl Future<Output = Result<Self::Output, ServerFnRejection>> + Send + 'static
-        {
+            _map: fn(In) -> Out,
+        ) -> impl Future<Output = Result<Out, ServerFnRejection>> + Send + 'static {
             send_wrapper::SendWrapper::new(async move {
                 Out::from_request(ctx.request, &ctx.state)
                     .await
