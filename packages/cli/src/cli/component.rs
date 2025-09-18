@@ -317,7 +317,7 @@ impl ComponentCommand {
                         components_root.display()
                     );
                     println!("To finish setting up components, you will need to:");
-                    println!("- manually reference the module by adding `mod component;` to your `main.rs` file");
+                    println!("- manually reference the module by adding `mod components;` to your `main.rs` file");
                     if registry.is_default() {
                         println!("- add a reference to `asset!(\"/assets/dx-components-theme.css\")` as a stylesheet in your app");
                     }
