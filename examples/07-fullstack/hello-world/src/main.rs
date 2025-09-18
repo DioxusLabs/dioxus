@@ -5,11 +5,8 @@
 //! ```
 
 use anyhow::Context;
+use dioxus::fullstack::{Json, Websocket};
 use dioxus::prelude::*;
-use dioxus::{
-    fullstack::{Json, Websocket},
-    logger::tracing,
-};
 use reqwest::StatusCode;
 
 fn main() {
@@ -17,7 +14,15 @@ fn main() {
         let mut count = use_signal(|| 0);
         let mut dog_data = use_action(move |()| get_dog_data());
         let mut ip_data = use_action(move |()| get_ip_data());
-        let mut custom_data = use_action(move |()| get_custom_encoding());
+        let mut custom_data = use_action(move |()| async move {
+            info!("Fetching custom encoded data");
+            get_custom_encoding(Json(serde_json::json!({
+                "example": "data",
+                "number": 123,
+                "array": [1, 2, 3],
+            })))
+            .await
+        });
 
         rsx! {
             Stylesheet { href: asset!("/assets/hello.css")  }
@@ -79,15 +84,16 @@ async fn get_dog_data() -> Result<serde_json::Value> {
         .await?)
 }
 
-#[get("/api/custom-encoding")]
-async fn get_custom_encoding() -> Result<Json<serde_json::Value>> {
-    Ok(Json(serde_json::json!({
+#[post("/api/custom-encoding")]
+async fn get_custom_encoding(takes: Json<serde_json::Value>) -> Result<serde_json::Value> {
+    Ok(serde_json::json!({
         "message": "This response was encoded with a custom encoder!",
         "success": true,
-    })))
+        "you sent": takes.0,
+    }))
 }
 
-#[get("/api/ws")]
+#[post("/api/ws")]
 async fn ws_endpoint(a: i32) -> Result<Websocket<String, String>> {
     todo!()
 }

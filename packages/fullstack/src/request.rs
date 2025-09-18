@@ -80,24 +80,12 @@ pub trait FromResponse: Sized {
     ) -> impl Future<Output = Result<Self, ServerFnError>> + Send;
 }
 
-impl<T: DeserializeOwned> FromResponse for Json<T> {
-    fn from_response(
-        res: reqwest::Response,
-    ) -> impl Future<Output = Result<Self, ServerFnError>> + Send {
-        send_wrapper::SendWrapper::new(async move {
-            let data = res
-                .json::<T>()
-                .await
-                .map_err(|e| ServerFnError::Deserialization(e.to_string()))?;
-            Ok(Json(data))
-        })
-    }
-}
-
-pub trait IntoRequest {
-    type Input;
+pub trait IntoRequest: Sized {
     type Output;
-    fn into_request(input: Self::Input) -> Result<Self::Output, ServerFnError>;
+    fn into_request(
+        input: Self,
+        request_builder: reqwest::RequestBuilder,
+    ) -> impl Future<Output = Result<reqwest::Response, reqwest::Error>> + Send + 'static;
 }
 
 pub use req_to::*;
@@ -176,14 +164,14 @@ pub mod req_to {
             fn fetch(&self, ctx: EncodeState, data: Self::Input) -> impl Future<Output = Res> + Send + 'static;
         }
 
-        // fallback case for *all invalid*
-        // todo...
-        impl<In> EncodeRequest for ReqwestEncoder<In> {
-            type Input = In;
-            fn fetch(&self, _ctx: EncodeState, _data: Self::Input) -> impl Future<Output = Res> + Send + 'static {
-                async move { panic!("Could not encode request") }
-            }
-        }
+        // // fallback case for *all invalid*
+        // // todo...
+        // impl<In> EncodeRequest for ReqwestEncoder<In> {
+        //     type Input = In;
+        //     fn fetch(&self, _ctx: EncodeState, _data: Self::Input) -> impl Future<Output = Res> + Send + 'static {
+        //         async move { panic!("Could not encode request") }
+        //     }
+        // }
 
         // Zero-arg case
         impl EncodeRequest for &&&&&&&&&&ReqwestEncoder<()> {
@@ -211,10 +199,10 @@ pub mod req_to {
             }
         }
 
-        impl<A> EncodeRequest for &&&&&&&&&ReqwestEncoder<(A,)> where A: Freq<Dsr> + IntoRequest {
+        impl<A: 'static> EncodeRequest for &&&&&&&&&ReqwestEncoder<(A,)> where A: Freq<Dsr> + IntoRequest {
             type Input = (A,);
-            fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Res> + Send + 'static {
-                async move { todo!() }
+            fn fetch(&self, ctx: EncodeState, data: Self::Input) -> impl Future<Output = Res> + Send + 'static {
+                A::into_request(data.0, ctx.client)
             }
         }
 

@@ -7,31 +7,36 @@ use crate::{FromResponse, ServerFnError};
 
 use super::IntoRequest;
 
-// impl<T> IntoRequest<()> for Json<T>
-// where
-//     T: Serialize,
-// {
-//     type Input = T;
-//     type Output = Json<T>;
+impl<T> IntoRequest for Json<T>
+where
+    T: Serialize + 'static,
+{
+    type Output = Json<T>;
 
-//     fn into_request(input: Self::Input) -> Result<axum_core::Json<T>, ServerFnError> {
-//         Ok(Json(input))
-//     }
-// }
+    fn into_request(
+        input: Self,
+        request_builder: reqwest::RequestBuilder,
+    ) -> impl Future<Output = Result<reqwest::Response, reqwest::Error>> + Send + 'static {
+        send_wrapper::SendWrapper::new(async move {
+            request_builder
+                .header("Content-Type", "application/json")
+                .json(&input.0)
+                .send()
+                .await
+        })
+    }
+}
 
-// impl<T> FromResponse<()> for Json<T>
-// where
-//     T: DeserializeOwned + 'static,
-// {
-//     fn from_response(
-//         res: reqwest::Response,
-//     ) -> impl Future<Output = Result<Self, ServerFnError>> + Send {
-//         async move {
-//             let res = res
-//                 .json::<T>()
-//                 .await
-//                 .map_err(|e| ServerFnError::Deserialization(e.to_string()))?;
-//             Ok(Json(res))
-//         }
-//     }
-// }
+impl<T: DeserializeOwned> FromResponse for Json<T> {
+    fn from_response(
+        res: reqwest::Response,
+    ) -> impl Future<Output = Result<Self, ServerFnError>> + Send {
+        send_wrapper::SendWrapper::new(async move {
+            let data = res
+                .json::<T>()
+                .await
+                .map_err(|e| ServerFnError::Deserialization(e.to_string()))?;
+            Ok(Json(data))
+        })
+    }
+}

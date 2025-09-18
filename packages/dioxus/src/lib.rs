@@ -239,4 +239,7 @@ pub mod prelude {
         EventHandler, Fragment, HasAttributes, IntoDynNode, RenderError, Result, ScopeId,
         SuspenseBoundary, SuspenseContext, VNode, VirtualDom,
     };
+
+    #[cfg(feature = "logger")]
+    pub use dioxus_logger::tracing::{debug, error, info, trace, warn};
 }

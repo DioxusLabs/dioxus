@@ -496,6 +496,19 @@ fn route_impl_with_route(
         syn::ReturnType::Type(_, _) => quote! { dioxus_fullstack::ServerFnRequest<#out_ty> },
     };
 
+    let warn_if_invalid_body = if !body_json_args.is_empty() {
+        match &route.method {
+            Method::Get(_) | Method::Delete(_) | Method::Options(_) | Method::Head(_) => {
+                quote! {
+                    compile_error!("GET, DELETE, OPTIONS, and HEAD requests should not have a body. Consider using query parameters or changing the HTTP method.");
+                }
+            }
+            _ => quote! {},
+        }
+    } else {
+        quote! {}
+    };
+
     Ok(quote! {
         #(#fn_docs)*
         #route_docs
@@ -509,6 +522,8 @@ fn route_impl_with_route(
                 ServerFnSugar, ServerFnRejection, EncodeRequest, get_server_url, EncodedBody,
                 ServerFnError, FromResIt, ReqwestDecoder, ReqwestDecodeResult, ReqwestDecodeErr
             };
+
+            #warn_if_invalid_body
 
             #query_params_struct
 
@@ -551,6 +566,8 @@ fn route_impl_with_route(
                     #query_extractor
                     request: __axum::extract::Request,
                 ) -> __axum::response::Response #where_clause {
+                    info!("Handling request for server function: {}", stringify!(#fn_name));
+
                     let extracted = (&&&&&&&&&&&&&&AxumRequestDecoder::<(#(#body_json_types,)*), _>::new())
                         .extract(ExtractState { request }).await;
 
