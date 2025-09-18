@@ -40,9 +40,12 @@ pub use serde;
 pub mod error;
 pub use error::*;
 
+pub mod json;
+pub use json::*;
+
 pub mod cbor;
 pub mod form;
-pub mod json;
+
 pub mod multipart;
 pub mod postcard;
 pub mod rkyv;

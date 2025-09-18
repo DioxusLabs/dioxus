@@ -1,6 +1,6 @@
 use std::prelude::rust_2024::Future;
 
-// pub use axum::extract::Json;
+pub use axum::extract::Json;
 use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{FromResponse, ServerFnError};

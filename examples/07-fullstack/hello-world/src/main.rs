@@ -6,7 +6,10 @@
 
 use anyhow::Context;
 use dioxus::prelude::*;
-use dioxus::{fullstack::Websocket, logger::tracing};
+use dioxus::{
+    fullstack::{Json, Websocket},
+    logger::tracing,
+};
 use reqwest::StatusCode;
 
 fn main() {
@@ -14,6 +17,7 @@ fn main() {
         let mut count = use_signal(|| 0);
         let mut dog_data = use_action(move |()| get_dog_data());
         let mut ip_data = use_action(move |()| get_ip_data());
+        let mut custom_data = use_action(move |()| get_custom_encoding());
 
         rsx! {
             Stylesheet { href: asset!("/assets/hello.css")  }
@@ -22,10 +26,12 @@ fn main() {
             button { onclick: move |_| count -= 1, "Down low!" }
             button { onclick: move |_| { dog_data.dispatch(()); }, "Fetch dog data" }
             button { onclick: move |_| { ip_data.dispatch(()); }, "Fetch IP data" }
+            button { onclick: move |_| { custom_data.dispatch(()); }, "Fetch custom encoded data" }
             button {
                 onclick: move |_| {
                     ip_data.reset();
                     dog_data.reset();
+                    custom_data.reset();
                 },
                 "Clear data"
             }
@@ -41,6 +47,13 @@ fn main() {
                     "IP data: "
                     if ip_data.is_pending() { "(loading...) " }
                     "{ip_data.value():#?}"
+                }
+            }
+            div {
+                pre {
+                    "Custom encoded data: "
+                    if custom_data.is_pending() { "(loading...) " }
+                    "{custom_data.value():#?}"
                 }
             }
         }
@@ -66,7 +79,15 @@ async fn get_dog_data() -> Result<serde_json::Value> {
         .await?)
 }
 
+#[get("/api/custom-encoding")]
+async fn get_custom_encoding() -> Result<Json<serde_json::Value>> {
+    Ok(Json(serde_json::json!({
+        "message": "This response was encoded with a custom encoder!",
+        "success": true,
+    })))
+}
+
 #[get("/api/ws")]
-async fn ws_endpoint(ws: String) -> Result<Websocket<String, String>> {
+async fn ws_endpoint(a: i32) -> Result<Websocket<String, String>> {
     todo!()
 }

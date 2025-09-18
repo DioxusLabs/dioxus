@@ -80,16 +80,21 @@ pub trait FromResponse: Sized {
     ) -> impl Future<Output = Result<Self, ServerFnError>> + Send;
 }
 
-impl<T> FromResponse for Json<T> {
+impl<T: DeserializeOwned> FromResponse for Json<T> {
     fn from_response(
         res: reqwest::Response,
-        // res: axum_core::response::Response,
     ) -> impl Future<Output = Result<Self, ServerFnError>> + Send {
-        async move { todo!() }
+        send_wrapper::SendWrapper::new(async move {
+            let data = res
+                .json::<T>()
+                .await
+                .map_err(|e| ServerFnError::Deserialization(e.to_string()))?;
+            Ok(Json(data))
+        })
     }
 }
 
-pub trait IntoRequest<M> {
+pub trait IntoRequest {
     type Input;
     type Output;
     fn into_request(input: Self::Input) -> Result<Self::Output, ServerFnError>;
@@ -157,7 +162,7 @@ pub mod req_to {
         use axum_core::extract::FromRequestParts as Prts;
         use serde::{ser::Serialize as DeO_____, Serialize};
         use dioxus_fullstack_core::DioxusServerState as Dsr;
-        use crate::{FromResponse, ServerFnError};
+        use crate::{FromResponse, IntoRequest, ServerFnError};
 
         use super::*;
 
@@ -206,40 +211,42 @@ pub mod req_to {
             }
         }
 
-        impl<A> EncodeRequest for &&&&&&&&&ReqwestEncoder<(A,)> where A: Freq<Dsr> {
+        impl<A> EncodeRequest for &&&&&&&&&ReqwestEncoder<(A,)> where A: Freq<Dsr> + IntoRequest {
             type Input = (A,);
             fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Res> + Send + 'static {
                 async move { todo!() }
             }
         }
 
-        impl<A> EncodeRequest for  &&&&&&&&ReqwestEncoder<(A,)> where A: Prts<Dsr> {
-            type Input = (A,);
-            fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Res> + Send + 'static {
-                async move { todo!() }
-            }
-        }
+        // impl<A> EncodeRequest for  &&&&&&&&ReqwestEncoder<(A,)> where A: Prts<Dsr> {
+        //     type Input = (A,);
+        //     fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Res> + Send + 'static {
+        //         async move { todo!() }
+        //     }
+        // }
 
 
         // Two-arg case
-        impl<A, B> EncodeRequest for &&&&&&&&&&ReqwestEncoder<(A, B)> where A: Prts<Dsr>, B: Freq<Dsr> {
-            type Input = (A, B);
-            fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Res> + Send + 'static {
-                async move { todo!() }
-            }
-        }
-        impl<A, B> EncodeRequest for  &&&&&&&&&ReqwestEncoder<(A, B)> where A: Prts<Dsr>, B: Prts<Dsr> {
-            type Input = (A, B);
-            fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Res> + Send + 'static {
-                async move { todo!() }
-            }
-        }
-        impl<A, B> EncodeRequest for   &&&&&&&&ReqwestEncoder<(A, B)> where A: Prts<Dsr>, B: DeO_____ {
-            type Input = (A, B);
-            fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Res> + Send + 'static {
-                async move { todo!() }
-            }
-        }
+        // impl<A, B> EncodeRequest for &&&&&&&&&&ReqwestEncoder<(A, B)> where A: Prts<Dsr>, B: Freq<Dsr> {
+        //     type Input = (A, B);
+        //     fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Res> + Send + 'static {
+        //         async move { todo!() }
+        //     }
+        // }
+        // impl<A, B> EncodeRequest for  &&&&&&&&&ReqwestEncoder<(A, B)> where A: Prts<Dsr>, B: Prts<Dsr> {
+        //     type Input = (A, B);
+        //     fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Res> + Send + 'static {
+        //         async move { todo!() }
+        //     }
+        // }
+
+        // impl<A, B> EncodeRequest for   &&&&&&&&ReqwestEncoder<(A, B)> where A: Prts<Dsr>, B: DeO_____ {
+        //     type Input = (A, B);
+        //     fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Res> + Send + 'static {
+        //         async move { todo!() }
+        //     }
+        // }
+
         impl<A, B> EncodeRequest for    &&&&&&&ReqwestEncoder<(A, B)> where A: DeO_____, B: DeO_____ {
             type Input = (A, B);
             fn fetch(&self, _ctx: EncodeState, data: Self::Input) -> impl Future<Output = Res> + Send + 'static {
@@ -796,12 +803,14 @@ mod resp {
 
     pub struct AxumResponseEncoder<I> {
         _p: std::marker::PhantomData<I>,
+        prefers_content_type: Option<String>,
     }
 
     impl<I> AxumResponseEncoder<I> {
         pub fn new() -> Self {
             Self {
                 _p: std::marker::PhantomData,
+                prefers_content_type: None,
             }
         }
     }
@@ -815,8 +824,7 @@ mod resp {
     /// For now, it's just Result<T, E> where T is either DeserializeOwned or FromResponse
     pub trait FromResIt {
         type Input;
-        type Output;
-        fn make_axum_response(self, s: Self::Input) -> Self::Output;
+        fn make_axum_response(self, s: Self::Input) -> axum::response::Response;
     }
 
     // Higher priority impl for special types like websocket/file responses that generate their own responses
@@ -827,21 +835,23 @@ mod resp {
         E: From<ServerFnError>,
     {
         type Input = Result<T, E>;
-        type Output = axum::response::Response;
-        fn make_axum_response(self, s: Self::Input) -> Self::Output {
-            todo!()
+        fn make_axum_response(self, s: Self::Input) -> axum::response::Response {
+            match s {
+                Ok(res) => res.into_response(),
+                Err(err) => todo!(),
+            }
         }
     }
 
     // Lower priority impl for regular serializable types
-    impl<T, E> FromResIt for &AxumResponseEncoder<Result<T, E>>
+    // We try to match the encoding from the incoming request, otherwise default to JSON
+    impl<T, E> FromResIt for &&AxumResponseEncoder<Result<T, E>>
     where
         T: DeserializeOwned + Serialize,
         E: From<ServerFnError>,
     {
         type Input = Result<T, E>;
-        type Output = axum::response::Response;
-        fn make_axum_response(self, s: Self::Input) -> Self::Output {
+        fn make_axum_response(self, s: Self::Input) -> axum::response::Response {
             match s.map(|v| serde_json::to_string(&v)) {
                 Ok(Ok(v)) => {
                     let mut res = (axum::http::StatusCode::OK, v).into_response();
