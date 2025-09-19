@@ -68,7 +68,7 @@ impl EnumLayout {
         let padding = (max_align - (variants_offset_raw % max_align)) % max_align;
         let variants_offset = variants_offset_raw + padding;
 
-        assert!(variants_offset.is_multiple_of(max_align));
+        assert!(variants_offset % max_align == 0);
 
         Self {
             size,
