@@ -14,6 +14,7 @@ fn main() {
     dioxus::launch(|| {
         let mut count = use_signal(|| 0);
         let mut dog_data = use_action(move |()| get_dog_data());
+        let mut dog_data_err = use_action(move |()| get_dog_data_err());
         let mut ip_data = use_action(move |()| get_ip_data());
         let mut custom_data = use_action(move |()| async move {
             info!("Fetching custom encoded data");
@@ -30,6 +31,7 @@ fn main() {
             info!("Fetching typed error data: {result:#?}");
             result
         });
+        let mut throws_ok_data = use_action(move |()| get_throws_ok());
 
         rsx! {
             Stylesheet { href: asset!("/assets/hello.css")  }
@@ -41,6 +43,8 @@ fn main() {
             button { onclick: move |_| { custom_data.dispatch(()); }, "Fetch custom encoded data" }
             button { onclick: move |_| { error_data.dispatch(()); }, "Fetch error data" }
             button { onclick: move |_| { typed_error_data.dispatch(()); }, "Fetch typed error data" }
+            button { onclick: move |_| { dog_data_err.dispatch(()); }, "Fetch dog error data" }
+            button { onclick: move |_| { throws_ok_data.dispatch(()); }, "Fetch throws ok data" }
             button {
                 onclick: move |_| {
                     ip_data.reset();
@@ -84,6 +88,20 @@ fn main() {
                     "{typed_error_data.result():#?}"
                 }
             }
+            div {
+                pre {
+                    "Dog error data: "
+                    if dog_data_err.is_pending() { "(loading...) " }
+                    "{dog_data_err.result():#?}"
+                }
+            }
+            div {
+                pre {
+                    "Throws ok data: "
+                    if throws_ok_data.is_pending() { "(loading...) " }
+                    "{throws_ok_data.result():#?}"
+                }
+            }
         }
     });
 }
@@ -107,6 +125,16 @@ async fn get_dog_data() -> Result<serde_json::Value> {
         .await?)
 }
 
+#[get("/api/dog-data-err")]
+async fn get_dog_data_err() -> Result<serde_json::Value> {
+    Ok(
+        reqwest::get("https://dog.ceo/api/breed/NOT_A_REAL_DOG/images")
+            .await?
+            .json()
+            .await?,
+    )
+}
+
 #[post("/api/custom-encoding")]
 async fn get_custom_encoding(takes: Json<serde_json::Value>) -> Result<serde_json::Value> {
     Ok(serde_json::json!({
@@ -118,20 +146,25 @@ async fn get_custom_encoding(takes: Json<serde_json::Value>) -> Result<serde_jso
 
 #[get("/api/untyped-error")]
 async fn get_throws_error() -> Result<()> {
-    Err(anyhow::anyhow!("This is an example error").context("Additional context"))
+    Err(anyhow::anyhow!("This is an example error"))
+}
+
+#[get("/api/throws-ok")]
+async fn get_throws_ok() -> Result<()> {
+    Ok(())
 }
 
 #[get("/api/typed-error")]
 async fn get_throws_typed_error() -> Result<(), MyCustomError> {
     Err(MyCustomError::BadRequest {
-        details: "Invalid input".into(),
+        custom_name: "Invalid input".into(),
     })
 }
 
 #[derive(thiserror::Error, Debug, Serialize, Deserialize)]
 enum MyCustomError {
     #[error("bad request")]
-    BadRequest { details: String },
+    BadRequest { custom_name: String },
     #[error("not found")]
     NotFound,
     #[error("internal server error: {0}")]

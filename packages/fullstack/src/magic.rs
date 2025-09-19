@@ -39,23 +39,15 @@ use crate::FromResponse;
 use crate::ServerFnRejection;
 use crate::{IntoRequest, ServerFnError};
 use axum::response::IntoResponse;
-use axum::Json;
 use axum_core::extract::{FromRequest, Request};
 use bytes::Bytes;
 use dioxus_fullstack_core::DioxusServerState;
-use futures::FutureExt;
-use http::HeaderMap;
+use http::StatusCode;
 use send_wrapper::SendWrapper;
 use serde::Serialize;
 use serde::{de::DeserializeOwned, Deserialize};
-use std::{
-    any::{type_name, TypeId},
-    marker::PhantomData,
-    pin::Pin,
-    prelude::rust_2024::Future,
-};
-
-type Res = Result<reqwest::Response, reqwest::Error>;
+use std::fmt::Display;
+use std::{marker::PhantomData, prelude::rust_2024::Future};
 
 #[doc(hidden)]
 pub struct ServerFnEncoder<In, Out>(PhantomData<fn() -> (In, Out)>);
@@ -75,19 +67,33 @@ impl<Out> ServerFnDecoder<Out> {
     }
 }
 
-/// The actual body of the request, that gets sent over the wire.
-/// We flatten the data here to avoid double-wrapping in JSON.
+/// A response structure for a regular REST API, with a success and error case where the status is
+/// encoded in the body and all fields are serializable. This lets you call fetch().await.json()
+/// and get a strongly typed result.
+///
+/// Eventually we want to support JsonRPC which requires a different format.
+///
+/// We use the `___status` field to avoid conflicts with user-defined fields. Hopefully no one uses this field name!
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-#[serde(tag = "__status")]
-pub enum HttpResult<T, E> {
+#[serde(untagged)]
+pub enum RestEndpointPayload<T, E> {
+    #[serde(rename = "success")]
     Success(T),
 
-    Error {
-        __message: String,
+    #[serde(rename = "error")]
+    Error(ErrorPayload<E>),
+}
 
-        #[serde(flatten)]
-        data: E,
-    },
+/// The error payload structure for REST API errors.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct ErrorPayload<E> {
+    message: String,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    code: Option<u16>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    data: Option<E>,
 }
 
 pub use req_to::*;
@@ -111,7 +117,7 @@ pub mod req_to {
             ctx: FetchRequest,
             data: In,
             map: fn(In) -> Out,
-        ) -> impl Future<Output = Res> + Send + 'static;
+        ) -> impl Future<Output = Result<reqwest::Response, reqwest::Error>> + Send + 'static;
     }
 
     // One-arg case
@@ -124,7 +130,8 @@ pub mod req_to {
             ctx: FetchRequest,
             data: T,
             _map: fn(T) -> O,
-        ) -> impl Future<Output = Res> + Send + 'static {
+        ) -> impl Future<Output = Result<reqwest::Response, reqwest::Error>> + Send + 'static
+        {
             send_wrapper::SendWrapper::new(async move {
                 let data = serde_json::to_string(&data).unwrap();
 
@@ -147,7 +154,8 @@ pub mod req_to {
             ctx: FetchRequest,
             data: T,
             map: fn(T) -> O,
-        ) -> impl Future<Output = Res> + Send + 'static {
+        ) -> impl Future<Output = Result<reqwest::Response, reqwest::Error>> + Send + 'static
+        {
             O::into_request(map(data), ctx.client)
         }
     }
@@ -156,7 +164,6 @@ pub mod req_to {
 pub use decode_ok::*;
 mod decode_ok {
     use super::*;
-    use http::StatusCode;
 
     /// Conver the reqwest response into the desired type, in place.
     /// The point here is to prefer FromResponse types *first* and then DeserializeOwned types second.
@@ -193,6 +200,8 @@ mod decode_ok {
                 match res {
                     Err(err) => Err(err),
                     Ok(res) => {
+                        let status = res.status();
+
                         let bytes = res.bytes().await.unwrap();
                         let as_bytes = if bytes.is_empty() {
                             b"null".as_slice()
@@ -200,15 +209,20 @@ mod decode_ok {
                             &bytes
                         };
 
-                        let res =
-                            serde_json::from_slice::<HttpResult<T, serde_json::Value>>(as_bytes);
+                        let res = if status.is_success() {
+                            serde_json::from_slice::<T>(as_bytes).map(RestEndpointPayload::Success)
+                        } else {
+                            serde_json::from_slice::<ErrorPayload<serde_json::Value>>(as_bytes)
+                                .map(RestEndpointPayload::Error)
+                        };
 
                         match res {
-                            Ok(HttpResult::Success(t)) => Ok(Ok(t)),
-                            Ok(HttpResult::Error { __message, data }) => {
+                            Ok(RestEndpointPayload::Success(t)) => Ok(Ok(t)),
+                            Ok(RestEndpointPayload::Error(err)) => {
                                 Ok(Err(ServerFnError::ServerError {
-                                    message: __message,
-                                    details: Some(data),
+                                    message: err.message,
+                                    details: err.data,
+                                    code: err.code,
                                 }))
                             }
                             Err(e) => Ok(Err(ServerFnError::Deserialization(e.to_string()))),
@@ -238,15 +252,25 @@ mod decode_ok {
                 match res {
                     Ok(Ok(res)) => Ok(res),
                     Ok(Err(e)) => match e {
-                        ServerFnError::ServerError { details, .. } => {
-                            let res = serde_json::from_value::<E>(
-                                details.unwrap_or(serde_json::Value::Null),
-                            );
-                            match res {
-                                Ok(res) => Err(res),
-                                Err(err) => {
-                                    Err(E::from(ServerFnError::Deserialization(err.to_string())))
-                                }
+                        ServerFnError::ServerError {
+                            details,
+                            message,
+                            code,
+                        } => {
+                            // If there are "details", then we try to deserialize them into the error type.
+                            // If there aren't, we just create a generic ServerFnError::ServerError with the message.
+                            match details {
+                                Some(details) => match serde_json::from_value::<E>(details) {
+                                    Ok(res) => Err(res),
+                                    Err(err) => Err(E::from(ServerFnError::Deserialization(
+                                        err.to_string(),
+                                    ))),
+                                },
+                                None => Err(E::from(ServerFnError::ServerError {
+                                    message,
+                                    details: None,
+                                    code,
+                                })),
                             }
                         }
                         err => Err(err.into()),
@@ -298,13 +322,19 @@ mod decode_ok {
                         //
                         match e {
                             // todo: we've caught the reqwest error here, so we should give it back in the form of a proper status code.
-                            ServerFnError::Request { message, code } => {
-                                Err(StatusCode::INTERNAL_SERVER_ERROR)
-                            }
+                            ServerFnError::Request {
+                                message: _message,
+                                code,
+                            } => Err(StatusCode::from_u16(code.unwrap_or(500))
+                                .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR)),
 
-                            ServerFnError::ServerError { message, details } => {
-                                Err(StatusCode::INTERNAL_SERVER_ERROR)
-                            }
+                            ServerFnError::ServerError {
+                                message: _message,
+                                details: _details,
+                                code,
+                            } => Err(StatusCode::from_u16(code.unwrap_or(500))
+                                .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR)),
+
                             ServerFnError::Registration(_) => {
                                 Err(StatusCode::INTERNAL_SERVER_ERROR)
                             }
@@ -326,27 +356,14 @@ mod decode_ok {
                             ServerFnError::Response(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
                         }
                     }
-                    Err(_) => todo!(),
-                }
-            })
-        }
-    }
 
-    /// This tries to catch http::Error and its subtypes, but will not catch everything that is normally "IntoResponse"
-    impl<T, E> ReqwestDecodeErr<T, E> for ServerFnDecoder<Result<T, E>>
-    where
-        E: Into<http::Error>,
-        E: From<http::Error>,
-    {
-        fn decode_client_err(
-            &self,
-            res: Result<Result<T, ServerFnError>, reqwest::Error>,
-        ) -> impl Future<Output = Result<T, E>> + Send {
-            SendWrapper::new(async move {
-                match res {
-                    Ok(Ok(res)) => Ok(res),
-                    Ok(Err(e)) => todo!(),
-                    Err(_) => todo!(),
+                    // The reqwest error case, we try to convert the reqwest error into a status code.
+                    Err(reqwest_err) => {
+                        let code = reqwest_err
+                            .status()
+                            .unwrap_or(StatusCode::SERVICE_UNAVAILABLE);
+                        Err(code)
+                    }
                 }
             })
         }
@@ -418,12 +435,8 @@ pub mod req_from {
 
 pub use resp::*;
 mod resp {
-    use std::fmt::Display;
-
-    use axum::response::Response;
-    use http::StatusCode;
-
     use super::*;
+    use axum::response::Response;
 
     /// A trait for converting the result of the Server Function into an Axum response.
     ///
@@ -456,7 +469,8 @@ mod resp {
         fn make_axum_response(self, result: Result<T, E>) -> Result<Response, E> {
             match result {
                 Ok(res) => {
-                    let res: HttpResult<T, serde_json::Value> = HttpResult::Success(res);
+                    let res: RestEndpointPayload<T, serde_json::Value> =
+                        RestEndpointPayload::Success(res);
                     let body = serde_json::to_string(&res).unwrap();
                     let mut resp = Response::new(body.into());
                     resp.headers_mut().insert(
@@ -471,6 +485,7 @@ mod resp {
         }
     }
 
+    #[allow(clippy::result_large_err)]
     pub trait MakeAxumError<E> {
         fn make_axum_error(self, result: Result<Response, E>) -> Result<Response, Response>;
     }
@@ -483,9 +498,10 @@ mod resp {
             match result {
                 Ok(res) => Ok(res),
                 Err(err) => {
-                    let err: HttpResult<(), E> = HttpResult::Error {
-                        __message: err.to_string(),
-                        data: err,
+                    let err = ErrorPayload {
+                        code: None,
+                        message: err.to_string(),
+                        data: Some(err),
                     };
                     let body = serde_json::to_string(&err).unwrap();
                     let mut resp = Response::new(body.into());
@@ -508,9 +524,10 @@ mod resp {
             match result {
                 Ok(res) => Ok(res),
                 Err(err) => {
-                    let err: HttpResult<(), serde_json::Value> = HttpResult::Error {
-                        __message: err.to_string(),
-                        data: serde_json::Value::Null,
+                    let err = ErrorPayload::<()> {
+                        code: None,
+                        message: err.to_string(),
+                        data: None,
                     };
                     let body = serde_json::to_string(&err).unwrap();
                     let mut resp = Response::new(body.into());
@@ -530,7 +547,24 @@ mod resp {
             self,
             result: Result<Response, StatusCode>,
         ) -> Result<Response, Response> {
-            todo!()
+            match result {
+                Ok(resp) => Ok(resp),
+                Err(status) => {
+                    let body = serde_json::to_string(&ErrorPayload::<()> {
+                        code: Some(status.as_u16()),
+                        message: status.to_string(),
+                        data: None,
+                    })
+                    .unwrap();
+                    let mut resp = Response::new(body.into());
+                    resp.headers_mut().insert(
+                        http::header::CONTENT_TYPE,
+                        "application/json".parse().unwrap(),
+                    );
+                    *resp.status_mut() = status;
+                    Err(resp)
+                }
+            }
         }
     }
 }

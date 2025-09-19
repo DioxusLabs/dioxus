@@ -30,11 +30,25 @@ pub type ServerFnResult<T = ()> = std::result::Result<T, ServerFnError>;
 #[derive(thiserror::Error, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ServerFnError {
     /// Occurs when there is an error while actually running the function on the server.
+    ///
+    /// The `details` field can optionally contain additional structured information about the error.
+    /// When passing typed errors from the server to the client, the `details` field contains the serialized
+    /// representation of the error.
     #[error("error running server function: {message} (details: {details:#?})")]
     ServerError {
         message: String,
+
+        /// Optional HTTP status code associated with the error.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        code: Option<u16>,
+
+        #[serde(skip_serializing_if = "Option::is_none")]
         details: Option<serde_json::Value>,
     },
+
+    /// Occurs on the client if there is a network error while trying to run function on server.
+    #[error("error reaching server to call server function: {message} (code: {code:?})")]
+    Request { message: String, code: Option<u16> },
 
     /// Error while trying to register the server function (only occurs in case of poisoned RwLock).
     #[error("error while trying to register the server function: {0}")]
@@ -43,10 +57,6 @@ pub enum ServerFnError {
     /// Occurs on the client if trying to use an unsupported `HTTP` method when building a request.
     #[error("error trying to build `HTTP` method request: {0}")]
     UnsupportedRequestMethod(String),
-
-    /// Occurs on the client if there is a network error while trying to run function on server.
-    #[error("error reaching server to call server function: {message} (code: {code:?})")]
-    Request { message: String, code: Option<u16> },
 
     /// Occurs when there is an error while actually running the middleware on the server.
     #[error("error running middleware: {0}")]
@@ -78,6 +88,7 @@ impl From<anyhow::Error> for ServerFnError {
         ServerFnError::ServerError {
             message: value.to_string(),
             details: None,
+            code: None,
         }
     }
 }
