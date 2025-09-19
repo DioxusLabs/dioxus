@@ -18,7 +18,7 @@ use tracing::debug;
 /// Arguments for the default or custom remote registry
 /// If both values are None, the default registry will be used
 #[derive(Clone, Debug, Parser, Default, Serialize)]
-pub struct RemoteComponentRegisteryArgs {
+pub struct RemoteComponentRegistryArgs {
     /// The url of the the component registry
     #[arg(long)]
     git: Option<String>,
@@ -27,7 +27,7 @@ pub struct RemoteComponentRegisteryArgs {
     rev: Option<String>,
 }
 
-impl RemoteComponentRegisteryArgs {
+impl RemoteComponentRegistryArgs {
     /// If a git url is provided use that (plus optional rev)
     /// Otherwise use the built-in registry
     fn resolve_or_default(&self) -> (String, Option<String>) {
@@ -123,16 +123,16 @@ fn checkout_rev(repo: &Repository, git: &str, rev: &str) -> Result<()> {
 /// Arguments for a component registry
 /// Either a path to a local directory or a remote git repo (with optional rev)
 #[derive(Clone, Debug, Parser, Default, Serialize)]
-pub struct ComponentRegisteryArgs {
+pub struct ComponentRegistryArgs {
     /// The remote repo args
     #[clap(flatten)]
-    remote: RemoteComponentRegisteryArgs,
+    remote: RemoteComponentRegistryArgs,
     /// The path to the components directory
     #[arg(long)]
     path: Option<String>,
 }
 
-impl ComponentRegisteryArgs {
+impl ComponentRegistryArgs {
     /// Resolve the path to the component registry, downloading the remote registry if needed
     async fn resolve(&self) -> Result<PathBuf> {
         // If a path is provided, use that
@@ -206,7 +206,7 @@ pub enum ComponentCommand {
         component: ComponentArgs,
         /// The registry to use
         #[clap(flatten)]
-        registry: ComponentRegisteryArgs,
+        registry: ComponentRegistryArgs,
         /// Overwrite the component if it already exists
         #[clap(long)]
         force: bool,
@@ -222,14 +222,14 @@ pub enum ComponentCommand {
     Update {
         /// The registry to update
         #[clap(flatten)]
-        registry: RemoteComponentRegisteryArgs,
+        registry: RemoteComponentRegistryArgs,
     },
     /// List available components in a registry
     #[clap(name = "list")]
     List {
         /// The registry to list components in
         #[clap(flatten)]
-        registry: ComponentRegisteryArgs,
+        registry: ComponentRegistryArgs,
     },
     /// Clear the component registry cache
     #[clap(name = "clean")]
@@ -282,11 +282,11 @@ impl ComponentCommand {
                     for dependency in &queued_component.component_dependencies {
                         let (registry, name) = match dependency {
                             ComponentDependency::Builtin(name) => {
-                                (ComponentRegisteryArgs::default(), name)
+                                (ComponentRegistryArgs::default(), name)
                             }
                             ComponentDependency::ThirdParty { name, git, rev } => (
-                                ComponentRegisteryArgs {
-                                    remote: RemoteComponentRegisteryArgs {
+                                ComponentRegistryArgs {
+                                    remote: RemoteComponentRegistryArgs {
                                         git: Some(git.clone()),
                                         rev: rev.clone(),
                                     },
