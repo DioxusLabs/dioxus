@@ -113,7 +113,9 @@ fn checkout_rev(repo: &Repository, git: &str, rev: &str) -> Result<()> {
         .with_context(|| format!("Failed to find revision '{}' in '{}'", rev, git))?;
     repo.checkout_tree(&object, None)?;
     if let Some(gref) = reference {
-        repo.set_head(gref.name().unwrap())?;
+        if let Some(name) = gref.name() {
+            repo.set_head(name)?;
+        }
     } else {
         repo.set_head_detached(object.id())?;
     }
@@ -578,7 +580,9 @@ async fn copy_component_files(
             }
 
             // Find the path in the destination directory
-            let path_relative_to_src = path.strip_prefix(&src).unwrap();
+            let Ok(path_relative_to_src) = path.strip_prefix(&src) else {
+                continue;
+            };
             let dest = dest.join(path_relative_to_src);
 
             // If it's a directory, read it, otherwise copy the file
