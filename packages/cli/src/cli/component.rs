@@ -34,13 +34,11 @@ impl RemoteComponentRegisteryArgs {
         if let Some(git) = &self.git {
             (git.clone(), self.rev.clone())
         } else {
-            (
-                "https://github.com/ealmloff/components".into(),
-                Some("origin/components-cli".into()),
-            )
+            ("https://github.com/dioxuslabs/components".into(), None)
         }
     }
 
+    /// Resolve the path to the component registry, downloading the remote registry if needed
     async fn resolve(&self) -> Result<PathBuf> {
         // If a git url is provided use that (plus optional rev)
         // Otherwise use the built-in registry
@@ -80,6 +78,7 @@ impl RemoteComponentRegisteryArgs {
         Ok(repo_dir)
     }
 
+    /// Update the component registry by fetching the latest changes from the remote
     async fn update(&self) -> Result<()> {
         let (git, rev) = self.resolve_or_default();
 
@@ -145,6 +144,7 @@ impl ComponentRegisteryArgs {
         self.remote.resolve().await
     }
 
+    /// Read all components that are part of this registry
     async fn read_components(&self) -> Result<Vec<ResolvedComponent>> {
         let path = self.resolve().await?;
 
@@ -152,11 +152,13 @@ impl ComponentRegisteryArgs {
         discover_components(root).await
     }
 
+    /// Check if this is the default registry
     fn is_default(&self) -> bool {
         self.path.is_none() && self.remote.git.is_none() && self.remote.rev.is_none()
     }
 }
 
+/// A component that has been downloaded and resolved at a specific path
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 struct ResolvedComponent {
     path: PathBuf,
@@ -172,6 +174,7 @@ impl Deref for ResolvedComponent {
 }
 
 impl ResolvedComponent {
+    /// Get the absolute paths to members of this component
     fn member_paths(&self) -> Vec<PathBuf> {
         self.component
             .members
@@ -237,8 +240,10 @@ pub enum ComponentCommand {
 }
 
 impl ComponentCommand {
+    /// Run the component command
     pub async fn run(self) -> Result<StructuredOutput> {
         match self {
+            // List all components in the registry
             Self::List { registry } => {
                 let mut components = registry.read_components().await?;
                 components.sort_by_key(|c| c.name.clone());
@@ -246,19 +251,23 @@ impl ComponentCommand {
                     println!("- {}: {}", component.name, component.description);
                 }
             }
+            // Add a component to the managed component module
             Self::Add {
                 component: component_args,
                 registry,
                 force,
             } => {
+                // Read all components from the registry
                 let components = registry.read_components().await?;
                 let mode = if force {
                     ComponentExistsBehavior::Overwrite
                 } else {
                     ComponentExistsBehavior::Error
                 };
+                // Find the requested component
                 let component = find_component(components, &component_args.component).await?;
 
+                // Find and initialize the components module if it doesn't exist
                 let components_root = components_root(component_args.module_path.as_deref())?;
                 let new_components_module =
                     ensure_components_module_exists(&components_root).await?;
@@ -312,6 +321,7 @@ impl ComponentCommand {
                     .await?;
                 }
 
+                // If we created a new components module, print instructions about the final setup steps required
                 if new_components_module {
                     println!(
                         "Created new components module at {}.",
@@ -324,18 +334,22 @@ impl ComponentCommand {
                     }
                 }
             }
+            // Update the remote component registry
             Self::Update { registry } => {
                 registry.update().await?;
             }
+            // Remove a component from the managed component module
             Self::Remove { component } => {
                 remove_component(&component).await?;
             }
+            // Clear the component registry cache
             Self::Clean => {
                 let cache_dir = Workspace::component_cache_dir();
                 if cache_dir.exists() {
                     tokio::fs::remove_dir_all(&cache_dir).await?;
                 }
             }
+            // Print the schema for component manifests
             Self::Schema => {
                 let schema = component_manifest_schema();
                 println!(
@@ -349,6 +363,7 @@ impl ComponentCommand {
     }
 }
 
+// Find a component by name in a list of components
 async fn find_component(
     components: Vec<ResolvedComponent>,
     component: &str,
@@ -359,6 +374,7 @@ async fn find_component(
         .ok_or_else(|| anyhow::anyhow!("Component '{}' not found in registry", component))
 }
 
+/// Get the path to the components module, defaulting to src/components
 fn components_root(module_path: Option<&Path>) -> Result<PathBuf> {
     if let Some(module_path) = module_path {
         return Ok(PathBuf::from(module_path));
@@ -369,6 +385,7 @@ fn components_root(module_path: Option<&Path>) -> Result<PathBuf> {
     Ok(root.join("src").join("components"))
 }
 
+/// Get the path to the global assets directory, defaulting to assets
 fn global_assets_root(assets_path: Option<&Path>) -> Result<PathBuf> {
     if let Some(assets_path) = assets_path {
         return Ok(PathBuf::from(assets_path));
@@ -422,6 +439,7 @@ async fn add_rust_dependencies(dependencies: &[CargoDependency]) -> Result<()> {
     Ok(())
 }
 
+/// How should we handle the component if it already exists
 #[derive(Clone, Copy, Debug)]
 enum ComponentExistsBehavior {
     /// Return an error (default)
@@ -432,6 +450,7 @@ enum ComponentExistsBehavior {
     Overwrite,
 }
 
+/// Add a component to the managed component module
 async fn add_component(
     assets_path: Option<&Path>,
     component_path: Option<&Path>,
@@ -442,7 +461,6 @@ async fn add_component(
 
     // Copy the folder content to the components directory
     let components_root = components_root(component_path)?;
-
     let copied = copy_component_files(
         &component.path,
         &components_root.join(&component.name),
@@ -458,6 +476,7 @@ async fn add_component(
         return Ok(());
     }
 
+    // Copy any global assets
     let assets_root = global_assets_root(assets_path)?;
     copy_global_assets(&assets_root, component).await?;
 
@@ -655,6 +674,7 @@ async fn copy_global_assets(assets_root: &Path, component: &ResolvedComponent) -
                 component.name
             )
         })?;
+        // Make sure the source is inside the component registry somewhere
         if !absolute_source.starts_with(&cache_dir) {
             return Err(anyhow::anyhow!(
                 "Cannot copy global asset '{}' for component '{}' because it is outside of the component registry",
@@ -662,11 +682,14 @@ async fn copy_global_assets(assets_root: &Path, component: &ResolvedComponent) -
                 component.name
             ));
         }
+
+        // Copy the file into the assets directory, preserving the file name and extension
         let file = absolute_source
             .components()
             .next_back()
             .context("Global assets must have at least one file component")?;
         let dest = assets_root.join(file);
+        // Make sure the asset dir exists
         if let Some(parent) = dest.parent() {
             if !parent.exists() {
                 tokio::fs::create_dir_all(parent).await?;

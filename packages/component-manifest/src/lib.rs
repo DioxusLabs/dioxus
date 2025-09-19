@@ -3,6 +3,8 @@ use std::process::Command;
 use schemars::{schema_for, JsonSchema, Schema};
 use serde::{Deserialize, Serialize};
 
+/// A component compatable with the dioxus components system.
+/// This may be a "virtual" component which is empty except for a list of members.
 #[derive(Deserialize, Serialize, JsonSchema, Clone, Debug, PartialEq, Eq, Hash)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Component {
@@ -23,6 +25,7 @@ pub struct Component {
     pub global_assets: Vec<String>,
 }
 
+/// A dependency on another component, either built-in or third-party.
 #[derive(Deserialize, Serialize, JsonSchema, Clone, Debug, PartialEq, Eq, Hash)]
 #[serde(untagged)]
 pub enum ComponentDependency {
@@ -35,6 +38,7 @@ pub enum ComponentDependency {
     },
 }
 
+/// A dependency on a cargo crate required for a component.
 #[derive(Deserialize, Serialize, JsonSchema, Clone, Debug, PartialEq, Eq, Hash)]
 #[serde(untagged)]
 pub enum CargoDependency {
@@ -55,6 +59,7 @@ pub enum CargoDependency {
 }
 
 impl CargoDependency {
+    /// Get the `cargo add` command for this dependency.
     pub fn add_command(&self) -> Command {
         let mut cmd = Command::new("cargo");
         cmd.arg("add");
@@ -94,6 +99,7 @@ impl CargoDependency {
         cmd
     }
 
+    /// Get the name of the dependency.
     pub fn name(&self) -> &str {
         match self {
             CargoDependency::Simple(name) => name,
@@ -102,6 +108,7 @@ impl CargoDependency {
     }
 }
 
+/// Get the JSON schema for the `Component` struct.
 pub fn component_manifest_schema() -> Schema {
     schema_for!(Component)
 }
