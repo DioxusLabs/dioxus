@@ -71,6 +71,7 @@ members = [
     "packages/asset-resolver",
     "packages/depinfo",
     "packages/server",
+    "packages/component-manifest",
 
     # Playwright tests
     "packages/playwright-tests/liveview",
@@ -180,6 +181,7 @@ dioxus-native = { path = "packages/native", version = "0.7.0-rc.0" }
 dioxus-native-dom = { path = "packages/native-dom", version = "0.7.0-rc.0" }
 dioxus-asset-resolver = { path = "packages/asset-resolver", version = "0.7.0-rc.0" }
 dioxus-config-macros = { path = "packages/config-macros", version = "0.7.0-rc.0" }
+dioxus-component-manifest = { path = "packages/component-manifest", version = "0.7.0-rc.0" }
 
 generational-box = { path = "packages/generational-box", version = "0.7.0-rc.0" }
 lazy-js-bundle = { path = "packages/lazy-js-bundle", version = "0.7.0-rc.0" }
