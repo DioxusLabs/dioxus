@@ -565,9 +565,9 @@ fn route_impl_with_route(
             use dioxus_fullstack::reqwest as __reqwest;
             use dioxus_fullstack::serde as serde;
             use dioxus_fullstack::{
-                AxumRequestDecoder, AxumResponseEncoder,  ServerFnEncoder, ExtractState, ExtractRequest, FetchRequest,
+                ServerFnEncoder, ExtractRequest, FetchRequest,
                 ServerFnSugar, ServerFnRejection, EncodeRequest, get_server_url,
-                ServerFnError, FromResIt, ReqwestDecoder, ReqwestDecodeResult, ReqwestDecodeErr, DioxusServerState
+                ServerFnError, FromResIt, ServerFnDecoder, ReqwestDecodeResult, ReqwestDecodeErr, DioxusServerState
             };
 
             #query_params_struct
@@ -589,12 +589,12 @@ fn route_impl_with_route(
                     .fetch_client(client, ___Body_Serialize___ { #(#rest_ident_names2,)* }, #unpack)
                     .await;
 
-                let decoded_result = (&&&&&ReqwestDecoder::<#out_ty>::new())
-                    .decode_response(response)
+                let decoded = (&&&&&ServerFnDecoder::<#out_ty>::new())
+                    .decode_client_response(response)
                     .await;
 
-                let result = (&&&&&ReqwestDecoder::<#out_ty>::new())
-                    .decode_err(decoded_result)
+                let result = (&&&&&ServerFnDecoder::<#out_ty>::new())
+                    .decode_client_err(decoded)
                     .await;
 
                 return result;
@@ -619,8 +619,8 @@ fn route_impl_with_route(
                 ) -> __axum::response::Response #where_clause {
                     info!("Handling request for server function: {}", stringify!(#fn_name));
 
-                    let extracted = (&&&&&&&&&&&&&&AxumRequestDecoder::<___Body_Serialize___<#(#body_json_types,)*>, (#(#body_json_types3,)*)>::new())
-                        .extract_axum(ExtractState { request, state: ___state.0 }, #unpack2).await;
+                    let extracted = (&&&&&&&&&&&&&&ServerFnEncoder::<___Body_Serialize___<#(#body_json_types,)*>, (#(#body_json_types3,)*)>::new())
+                        .extract_axum(___state.0, request, #unpack2).await;
 
                     let ( #(#body_json_names,)*)  = match extracted {
                         Ok(res) => res,
@@ -629,7 +629,7 @@ fn route_impl_with_route(
 
                     let __users_result = #fn_name #ty_generics(#(#extracted_idents,)*).await;
 
-                    let response = (&&&&&&AxumResponseEncoder::<#out_ty>::new())
+                    let response = (&&&&&&ServerFnDecoder::<#out_ty>::new())
                         .make_axum_response(__users_result);
 
                     return response;

@@ -35,41 +35,43 @@
 //! This module is broken up into several parts, attempting to match how the server macro generates code:
 //! - ReqwestEncoder: encodes a set of arguments into a reqwest request
 
+use crate::FromResponse;
+use crate::ServerFnRejection;
+use crate::{IntoRequest, ServerFnError};
+use axum::response::IntoResponse;
+use axum::Json;
+use axum_core::extract::{FromRequest, Request};
+use bytes::Bytes;
+use dioxus_fullstack_core::DioxusServerState;
+use futures::FutureExt;
+use http::HeaderMap;
+use send_wrapper::SendWrapper;
+use serde::de::DeserializeOwned;
+use serde::Serialize;
 use std::{
     any::{type_name, TypeId},
+    marker::PhantomData,
     pin::Pin,
     prelude::rust_2024::Future,
 };
 
-use crate::FromResponse;
-use crate::{IntoRequest, ServerFnError};
-use axum::response::IntoResponse;
-use axum::Json;
-use axum_core::extract::FromRequest as Freq;
-use axum_core::extract::FromRequestParts as Prts;
-use dioxus_fullstack_core::DioxusServerState as Dsr;
-use futures::FutureExt;
-use serde::ser::Serialize as DeserializeOwned;
-use serde::Serialize;
-
-use axum_core::extract::{FromRequest, Request};
-use http::HeaderMap;
-
-use crate::{DioxusServerState, ServerFnRejection};
-
 type Res = Result<reqwest::Response, reqwest::Error>;
 
-pub struct ServerFnEncoder<In, Out> {
-    _t: std::marker::PhantomData<fn() -> In>,
-    _o: std::marker::PhantomData<fn() -> Out>,
+#[doc(hidden)]
+pub struct ServerFnEncoder<In, Out>(PhantomData<fn() -> (In, Out)>);
+impl<In, Out> ServerFnEncoder<In, Out> {
+    #[doc(hidden)]
+    pub fn new() -> Self {
+        ServerFnEncoder(PhantomData)
+    }
 }
 
-impl<In, Out> ServerFnEncoder<In, Out> {
+#[doc(hidden)]
+pub struct ServerFnDecoder<Out>(PhantomData<fn() -> Out>);
+impl<Out> ServerFnDecoder<Out> {
+    #[doc(hidden)]
     pub fn new() -> Self {
-        ServerFnEncoder {
-            _t: std::marker::PhantomData,
-            _o: std::marker::PhantomData,
-        }
+        ServerFnDecoder(PhantomData)
     }
 }
 
@@ -87,8 +89,6 @@ pub mod req_to {
             Self { client }
         }
     }
-    unsafe impl Send for FetchRequest {}
-    unsafe impl Sync for FetchRequest {}
 
     pub trait EncodeRequest<In, Out> {
         fn fetch_client(
@@ -140,25 +140,8 @@ pub mod req_to {
 
 pub use decode_ok::*;
 mod decode_ok {
-    use std::prelude::rust_2024::Future;
-
-    use dioxus_fullstack_core::ServerFnError;
+    use super::*;
     use http::StatusCode;
-    use serde::{de::DeserializeOwned, Serialize};
-
-    use crate::FromResponse;
-
-    pub struct ReqwestDecoder<T> {
-        _p: std::marker::PhantomData<T>,
-    }
-
-    impl<T> ReqwestDecoder<T> {
-        pub fn new() -> Self {
-            Self {
-                _p: std::marker::PhantomData,
-            }
-        }
-    }
 
     /// Conver the reqwest response into the desired type, in place.
     /// The point here is to prefer FromResponse types *first* and then DeserializeOwned types second.
@@ -166,18 +149,18 @@ mod decode_ok {
     /// This is because FromResponse types are more specialized and can handle things like websockets and files.
     /// DeserializeOwned types are more general and can handle things like JSON responses.
     pub trait ReqwestDecodeResult<T> {
-        fn decode_response(
+        fn decode_client_response(
             &self,
             res: Result<reqwest::Response, reqwest::Error>,
         ) -> impl Future<Output = Result<Result<T, ServerFnError>, reqwest::Error>> + Send;
     }
 
-    impl<T: FromResponse, E> ReqwestDecodeResult<T> for &&&ReqwestDecoder<Result<T, E>> {
-        fn decode_response(
+    impl<T: FromResponse, E> ReqwestDecodeResult<T> for &&&ServerFnDecoder<Result<T, E>> {
+        fn decode_client_response(
             &self,
             res: Result<reqwest::Response, reqwest::Error>,
         ) -> impl Future<Output = Result<Result<T, ServerFnError>, reqwest::Error>> + Send {
-            send_wrapper::SendWrapper::new(async move {
+            SendWrapper::new(async move {
                 match res {
                     Err(err) => Err(err),
                     Ok(res) => Ok(T::from_response(res).await),
@@ -186,12 +169,12 @@ mod decode_ok {
         }
     }
 
-    impl<T: DeserializeOwned, E> ReqwestDecodeResult<T> for &&ReqwestDecoder<Result<T, E>> {
-        fn decode_response(
+    impl<T: DeserializeOwned, E> ReqwestDecodeResult<T> for &&ServerFnDecoder<Result<T, E>> {
+        fn decode_client_response(
             &self,
             res: Result<reqwest::Response, reqwest::Error>,
         ) -> impl Future<Output = Result<Result<T, ServerFnError>, reqwest::Error>> + Send {
-            send_wrapper::SendWrapper::new(async move {
+            SendWrapper::new(async move {
                 match res {
                     Err(err) => Err(err),
                     Ok(res) => {
@@ -213,20 +196,21 @@ mod decode_ok {
     }
 
     pub trait ReqwestDecodeErr<T, E> {
-        fn decode_err(
+        fn decode_client_err(
             &self,
             res: Result<Result<T, ServerFnError>, reqwest::Error>,
         ) -> impl Future<Output = Result<T, E>> + Send;
     }
 
-    impl<T, E: From<ServerFnError> + DeserializeOwned + Serialize> ReqwestDecodeErr<T, E>
-        for &&&ReqwestDecoder<Result<T, E>>
+    impl<T, E> ReqwestDecodeErr<T, E> for &&&ServerFnDecoder<Result<T, E>>
+    where
+        E: From<ServerFnError> + DeserializeOwned + Serialize,
     {
-        fn decode_err(
+        fn decode_client_err(
             &self,
             res: Result<Result<T, ServerFnError>, reqwest::Error>,
         ) -> impl Future<Output = Result<T, E>> + Send {
-            send_wrapper::SendWrapper::new(async move {
+            SendWrapper::new(async move {
                 match res {
                     Ok(Ok(res)) => Ok(res),
                     Ok(Err(e)) => Err(e.into()),
@@ -246,12 +230,12 @@ mod decode_ok {
     /// from the ServerFnError if they want to.
     ///
     /// This loses any actual type information, but is the most flexible for users.
-    impl<T> ReqwestDecodeErr<T, anyhow::Error> for &&ReqwestDecoder<Result<T, anyhow::Error>> {
-        fn decode_err(
+    impl<T> ReqwestDecodeErr<T, anyhow::Error> for &&ServerFnDecoder<Result<T, anyhow::Error>> {
+        fn decode_client_err(
             &self,
             res: Result<Result<T, ServerFnError>, reqwest::Error>,
         ) -> impl Future<Output = Result<T, anyhow::Error>> + Send {
-            send_wrapper::SendWrapper::new(async move {
+            SendWrapper::new(async move {
                 match res {
                     Ok(Ok(res)) => Ok(res),
                     Ok(Err(e)) => Err(anyhow::Error::from(e)),
@@ -265,12 +249,12 @@ mod decode_ok {
     }
 
     /// This converts to statuscode, which can be useful but loses a lot of information.
-    impl<T> ReqwestDecodeErr<T, StatusCode> for &ReqwestDecoder<Result<T, StatusCode>> {
-        fn decode_err(
+    impl<T> ReqwestDecodeErr<T, StatusCode> for &ServerFnDecoder<Result<T, StatusCode>> {
+        fn decode_client_err(
             &self,
             res: Result<Result<T, ServerFnError>, reqwest::Error>,
         ) -> impl Future<Output = Result<T, StatusCode>> + Send {
-            send_wrapper::SendWrapper::new(async move {
+            SendWrapper::new(async move {
                 match res {
                     Ok(Ok(res)) => Ok(res),
                     Ok(Err(e)) => {
@@ -310,16 +294,16 @@ mod decode_ok {
     }
 
     /// This tries to catch http::Error and its subtypes, but will not catch everything that is normally "IntoResponse"
-    impl<T, E> ReqwestDecodeErr<T, E> for ReqwestDecoder<Result<T, E>>
+    impl<T, E> ReqwestDecodeErr<T, E> for ServerFnDecoder<Result<T, E>>
     where
         E: Into<http::Error>,
         E: From<http::Error>,
     {
-        fn decode_err(
+        fn decode_client_err(
             &self,
             res: Result<Result<T, ServerFnError>, reqwest::Error>,
         ) -> impl Future<Output = Result<T, E>> + Send {
-            send_wrapper::SendWrapper::new(async move {
+            SendWrapper::new(async move {
                 match res {
                     Ok(Ok(res)) => Ok(res),
                     Ok(Err(e)) => todo!(),
@@ -332,63 +316,31 @@ mod decode_ok {
 
 pub use req_from::*;
 pub mod req_from {
-    use axum_core::extract::FromRequest as Freq;
-    use axum_core::extract::{FromRequest, Request};
-    use bytes::Bytes;
-    use dioxus_fullstack_core::DioxusServerState;
-    use http::HeaderMap;
-    use serde::de::DeserializeOwned;
-    use std::prelude::rust_2024::Future;
-    use DioxusServerState as Ds;
+    use super::*;
 
-    use crate::ServerFnRejection;
-
-    #[derive(Default)]
-    pub struct ExtractState {
-        pub state: DioxusServerState,
-        pub request: Request,
-    }
-
-    unsafe impl Send for ExtractState {}
-    unsafe impl Sync for ExtractState {}
-
-    pub struct AxumRequestDecoder<In, Out> {
-        _t: std::marker::PhantomData<fn() -> In>,
-        _o: std::marker::PhantomData<fn() -> Out>,
-    }
-
-    impl<In, Out> AxumRequestDecoder<In, Out> {
-        pub fn new() -> Self {
-            AxumRequestDecoder {
-                _t: std::marker::PhantomData,
-                _o: std::marker::PhantomData,
-            }
-        }
-    }
-
-    /*
-    Handle the regular axum-like handlers with tiered overloading with a single trait.
-    */
-    pub trait ExtractRequest<In, Out, S = DioxusServerState> {
+    pub trait ExtractRequest<In, Out> {
         fn extract_axum(
             &self,
-            _ctx: ExtractState,
+            state: DioxusServerState,
+            request: Request,
             map: fn(In) -> Out,
         ) -> impl Future<Output = Result<Out, ServerFnRejection>> + Send + 'static;
     }
 
     // One-arg case
-    impl<In, Out: 'static> ExtractRequest<In, Out> for &&&&&&&&&&AxumRequestDecoder<In, Out>
+    impl<In, Out> ExtractRequest<In, Out> for &&&&&&&&&&ServerFnEncoder<In, Out>
     where
         In: DeserializeOwned + 'static,
+        Out: 'static,
     {
         fn extract_axum(
             &self,
-            ctx: ExtractState,
+            _state: DioxusServerState,
+            request: Request,
             map: fn(In) -> Out,
         ) -> impl Future<Output = Result<Out, ServerFnRejection>> + Send + 'static {
             send_wrapper::SendWrapper::new(async move {
-                let bytes = Bytes::from_request(ctx.request, &()).await.unwrap();
+                let bytes = Bytes::from_request(request, &()).await.unwrap();
                 let as_str = String::from_utf8_lossy(&bytes);
                 tracing::info!("deserializing request body: {}", as_str);
                 let bytes = if as_str.is_empty() {
@@ -397,24 +349,26 @@ pub mod req_from {
                     &bytes
                 };
 
-                let res = serde_json::from_slice::<In>(&bytes).map(|a| map(a));
-                res.map_err(|e| ServerFnRejection {})
+                serde_json::from_slice::<In>(bytes)
+                    .map(map)
+                    .map_err(|e| ServerFnRejection {})
             })
         }
     }
 
     /// We skip the BodySerialize wrapper and just go for the output type directly.
-    impl<In, Out> ExtractRequest<In, Out> for &&&&&&&&&AxumRequestDecoder<In, Out>
+    impl<In, Out> ExtractRequest<In, Out> for &&&&&&&&&ServerFnEncoder<In, Out>
     where
-        Out: Freq<Ds>,
+        Out: FromRequest<DioxusServerState> + 'static,
     {
         fn extract_axum(
             &self,
-            ctx: ExtractState,
+            state: DioxusServerState,
+            request: Request,
             _map: fn(In) -> Out,
         ) -> impl Future<Output = Result<Out, ServerFnRejection>> + Send + 'static {
             send_wrapper::SendWrapper::new(async move {
-                Out::from_request(ctx.request, &ctx.state)
+                Out::from_request(request, &state)
                     .await
                     .map_err(|e| ServerFnRejection {})
             })
@@ -426,18 +380,6 @@ pub use resp::*;
 mod resp {
     use super::*;
 
-    pub struct AxumResponseEncoder<I> {
-        _p: std::marker::PhantomData<I>,
-    }
-
-    impl<I> AxumResponseEncoder<I> {
-        pub fn new() -> Self {
-            Self {
-                _p: std::marker::PhantomData,
-            }
-        }
-    }
-
     /// A trait for converting the result of the Server Function into an Axum response.
     ///
     /// This is to work around the issue where we want to return both Deserialize types and FromResponse types.
@@ -445,21 +387,19 @@ mod resp {
     ///
     /// We currently have an `Input` type even though it's not useful since we might want to support regular axum endpoints later.
     /// For now, it's just Result<T, E> where T is either DeserializeOwned or FromResponse
-    pub trait FromResIt {
-        type Input;
-        fn make_axum_response(self, s: Self::Input) -> axum::response::Response;
+    pub trait FromResIt<T> {
+        fn make_axum_response(self, result: T) -> axum::response::Response;
     }
 
     // Higher priority impl for special types like websocket/file responses that generate their own responses
     // The FromResponse impl helps narrow types to those usable on the client
-    impl<T, E> FromResIt for &&&AxumResponseEncoder<Result<T, E>>
+    impl<T, E> FromResIt<Result<T, E>> for &&&ServerFnDecoder<Result<T, E>>
     where
         T: FromResponse + IntoResponse,
         E: From<ServerFnError>,
     {
-        type Input = Result<T, E>;
-        fn make_axum_response(self, s: Self::Input) -> axum::response::Response {
-            match s {
+        fn make_axum_response(self, result: Result<T, E>) -> axum::response::Response {
+            match result {
                 Ok(res) => res.into_response(),
                 Err(err) => todo!(),
             }
@@ -468,14 +408,13 @@ mod resp {
 
     // Lower priority impl for regular serializable types
     // We try to match the encoding from the incoming request, otherwise default to JSON
-    impl<T, E> FromResIt for &&AxumResponseEncoder<Result<T, E>>
+    impl<T, E> FromResIt<Result<T, E>> for &&ServerFnDecoder<Result<T, E>>
     where
         T: DeserializeOwned + Serialize,
         E: From<ServerFnError>,
     {
-        type Input = Result<T, E>;
-        fn make_axum_response(self, s: Self::Input) -> axum::response::Response {
-            match s.map(|v| serde_json::to_string(&v)) {
+        fn make_axum_response(self, result: Result<T, E>) -> axum::response::Response {
+            match result.map(|v| serde_json::to_string(&v)) {
                 Ok(Ok(v)) => {
                     let mut res = (axum::http::StatusCode::OK, v).into_response();
                     res.headers_mut().insert(

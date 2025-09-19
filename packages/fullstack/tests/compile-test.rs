@@ -286,7 +286,6 @@ mod http_ext {
 }
 
 mod input_types {
-
     use super::*;
 
     #[derive(Serialize, Deserialize)]
@@ -323,8 +322,8 @@ mod input_types {
     #[post("/")]
     async fn five(age: u32, name: String) {}
 
-    type r1<T> = Result<T, dioxus_core::Error>;
-    type r2<T> = Result<T, ServerFnError>;
-    type r3<T> = Result<T, StatusCode>;
-    type r4<T> = Result<T, http::Error>;
+    // type r1<T> = Result<T, dioxus_core::Error>;
+    // type r2<T> = Result<T, ServerFnError>;
+    // type r3<T> = Result<T, StatusCode>;
+    // type r4<T> = Result<T, http::Error>;
 }

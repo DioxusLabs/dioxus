@@ -10,7 +10,7 @@ pub trait FromResponse: Sized {
 pub trait IntoRequest: Sized {
     fn into_request(
         input: Self,
-        request_builder: reqwest::RequestBuilder,
+        builder: reqwest::RequestBuilder,
     ) -> impl Future<Output = Result<reqwest::Response, reqwest::Error>> + Send + 'static;
 }
 
@@ -20,11 +20,9 @@ where
 {
     fn into_request(
         input: Self,
-        request_builder: reqwest::RequestBuilder,
+        builder: reqwest::RequestBuilder,
     ) -> impl Future<Output = Result<reqwest::Response, reqwest::Error>> + Send + 'static {
-        send_wrapper::SendWrapper::new(
-            async move { A::into_request(input.0, request_builder).await },
-        )
+        send_wrapper::SendWrapper::new(async move { A::into_request(input.0, builder).await })
     }
 }
 
