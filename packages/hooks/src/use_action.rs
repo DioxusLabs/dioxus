@@ -96,7 +96,7 @@ impl<I: 'static, T: 'static> Action<I, T> {
 
     pub fn result(&self) -> Option<Result<ReadSignal<T>, CapturedError>> {
         if *self.state.read() != ActionState::Ready {
-            return None;
+            //
         }
 
         if let Some(err) = self.error.cloned() {

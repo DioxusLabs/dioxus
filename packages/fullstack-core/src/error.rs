@@ -30,8 +30,11 @@ pub type ServerFnResult<T = ()> = std::result::Result<T, ServerFnError>;
 #[derive(thiserror::Error, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ServerFnError {
     /// Occurs when there is an error while actually running the function on the server.
-    #[error("error running server function: {0}")]
-    ServerError(String),
+    #[error("error running server function: {message} (details: {details:#?})")]
+    ServerError {
+        message: String,
+        details: Option<serde_json::Value>,
+    },
 
     /// Error while trying to register the server function (only occurs in case of poisoned RwLock).
     #[error("error while trying to register the server function: {0}")]
@@ -72,7 +75,10 @@ pub enum ServerFnError {
 
 impl From<anyhow::Error> for ServerFnError {
     fn from(value: anyhow::Error) -> Self {
-        ServerFnError::ServerError(value.to_string())
+        ServerFnError::ServerError {
+            message: value.to_string(),
+            details: None,
+        }
     }
 }
 

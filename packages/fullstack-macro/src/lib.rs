@@ -567,7 +567,8 @@ fn route_impl_with_route(
             use dioxus_fullstack::{
                 ServerFnEncoder, ExtractRequest, FetchRequest,
                 ServerFnSugar, ServerFnRejection, EncodeRequest, get_server_url,
-                ServerFnError, FromResIt, ServerFnDecoder, ReqwestDecodeResult, ReqwestDecodeErr, DioxusServerState
+                ServerFnError, MakeAxumResponse, ServerFnDecoder, ReqwestDecodeResult, ReqwestDecodeErr, DioxusServerState,
+                MakeAxumError
             };
 
             #query_params_struct
@@ -616,21 +617,19 @@ fn route_impl_with_route(
                     #path_extractor
                     #query_extractor
                     request: __axum::extract::Request,
-                ) -> __axum::response::Response #where_clause {
+                ) -> Result<__axum::response::Response, __axum::response::Response> #where_clause {
                     info!("Handling request for server function: {}", stringify!(#fn_name));
 
-                    let extracted = (&&&&&&&&&&&&&&ServerFnEncoder::<___Body_Serialize___<#(#body_json_types,)*>, (#(#body_json_types3,)*)>::new())
-                        .extract_axum(___state.0, request, #unpack2).await;
+                    let ( #(#body_json_names,)*) = (&&&&&&&&&&&&&&ServerFnEncoder::<___Body_Serialize___<#(#body_json_types,)*>, (#(#body_json_types3,)*)>::new())
+                        .extract_axum(___state.0, request, #unpack2).await?;
 
-                    let ( #(#body_json_names,)*)  = match extracted {
-                        Ok(res) => res,
-                        Err(rejection) => return rejection.into_response(),
-                    };
+                    let encoded = (&&&&&&ServerFnDecoder::<#out_ty>::new())
+                        .make_axum_response(
+                            #fn_name #ty_generics(#(#extracted_idents,)*).await
+                        );
 
-                    let __users_result = #fn_name #ty_generics(#(#extracted_idents,)*).await;
-
-                    let response = (&&&&&&ServerFnDecoder::<#out_ty>::new())
-                        .make_axum_response(__users_result);
+                    let response = (&&&&&ServerFnDecoder::<#out_ty>::new())
+                        .make_axum_error(encoded);
 
                     return response;
                 }

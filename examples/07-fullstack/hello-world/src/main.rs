@@ -8,6 +8,7 @@ use anyhow::Context;
 use dioxus::fullstack::{Json, Websocket};
 use dioxus::prelude::*;
 use reqwest::StatusCode;
+use serde::{Deserialize, Serialize};
 
 fn main() {
     dioxus::launch(|| {
@@ -23,6 +24,12 @@ fn main() {
             })))
             .await
         });
+        let mut error_data = use_action(move |()| get_throws_error());
+        let mut typed_error_data = use_action(move |()| async move {
+            let result = get_throws_typed_error().await;
+            info!("Fetching typed error data: {result:#?}");
+            result
+        });
 
         rsx! {
             Stylesheet { href: asset!("/assets/hello.css")  }
@@ -32,6 +39,8 @@ fn main() {
             button { onclick: move |_| { dog_data.dispatch(()); }, "Fetch dog data" }
             button { onclick: move |_| { ip_data.dispatch(()); }, "Fetch IP data" }
             button { onclick: move |_| { custom_data.dispatch(()); }, "Fetch custom encoded data" }
+            button { onclick: move |_| { error_data.dispatch(()); }, "Fetch error data" }
+            button { onclick: move |_| { typed_error_data.dispatch(()); }, "Fetch typed error data" }
             button {
                 onclick: move |_| {
                     ip_data.reset();
@@ -59,6 +68,20 @@ fn main() {
                     "Custom encoded data: "
                     if custom_data.is_pending() { "(loading...) " }
                     "{custom_data.value():#?}"
+                }
+            }
+            div {
+                pre {
+                    "Error data: "
+                    if error_data.is_pending() { "(loading...) " }
+                    "{error_data.result():#?}"
+                }
+            }
+            div {
+                pre {
+                    "Typed error data: "
+                    if typed_error_data.is_pending() { "(loading...) " }
+                    "{typed_error_data.result():#?}"
                 }
             }
         }
@@ -91,6 +114,28 @@ async fn get_custom_encoding(takes: Json<serde_json::Value>) -> Result<serde_jso
         "success": true,
         "you sent": takes.0,
     }))
+}
+
+#[get("/api/untyped-error")]
+async fn get_throws_error() -> Result<()> {
+    Err(anyhow::anyhow!("This is an example error").context("Additional context"))
+}
+
+#[get("/api/typed-error")]
+async fn get_throws_typed_error() -> Result<(), MyCustomError> {
+    Err(MyCustomError::BadRequest {
+        details: "Invalid input".into(),
+    })
+}
+
+#[derive(thiserror::Error, Debug, Serialize, Deserialize)]
+enum MyCustomError {
+    #[error("bad request")]
+    BadRequest { details: String },
+    #[error("not found")]
+    NotFound,
+    #[error("internal server error: {0}")]
+    ServerFnError(#[from] ServerFnError),
 }
 
 #[post("/api/ws")]

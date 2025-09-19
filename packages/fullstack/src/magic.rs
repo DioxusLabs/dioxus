@@ -46,8 +46,8 @@ use dioxus_fullstack_core::DioxusServerState;
 use futures::FutureExt;
 use http::HeaderMap;
 use send_wrapper::SendWrapper;
-use serde::de::DeserializeOwned;
 use serde::Serialize;
+use serde::{de::DeserializeOwned, Deserialize};
 use std::{
     any::{type_name, TypeId},
     marker::PhantomData,
@@ -73,6 +73,21 @@ impl<Out> ServerFnDecoder<Out> {
     pub fn new() -> Self {
         ServerFnDecoder(PhantomData)
     }
+}
+
+/// The actual body of the request, that gets sent over the wire.
+/// We flatten the data here to avoid double-wrapping in JSON.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[serde(tag = "__status")]
+pub enum HttpResult<T, E> {
+    Success(T),
+
+    Error {
+        __message: String,
+
+        #[serde(flatten)]
+        data: E,
+    },
 }
 
 pub use req_to::*;
@@ -184,9 +199,18 @@ mod decode_ok {
                         } else {
                             &bytes
                         };
-                        let res = serde_json::from_slice::<T>(as_bytes);
+
+                        let res =
+                            serde_json::from_slice::<HttpResult<T, serde_json::Value>>(as_bytes);
+
                         match res {
-                            Ok(t) => Ok(Ok(t)),
+                            Ok(HttpResult::Success(t)) => Ok(Ok(t)),
+                            Ok(HttpResult::Error { __message, data }) => {
+                                Ok(Err(ServerFnError::ServerError {
+                                    message: __message,
+                                    details: Some(data),
+                                }))
+                            }
                             Err(e) => Ok(Err(ServerFnError::Deserialization(e.to_string()))),
                         }
                     }
@@ -213,7 +237,20 @@ mod decode_ok {
             SendWrapper::new(async move {
                 match res {
                     Ok(Ok(res)) => Ok(res),
-                    Ok(Err(e)) => Err(e.into()),
+                    Ok(Err(e)) => match e {
+                        ServerFnError::ServerError { details, .. } => {
+                            let res = serde_json::from_value::<E>(
+                                details.unwrap_or(serde_json::Value::Null),
+                            );
+                            match res {
+                                Ok(res) => Err(res),
+                                Err(err) => {
+                                    Err(E::from(ServerFnError::Deserialization(err.to_string())))
+                                }
+                            }
+                        }
+                        err => Err(err.into()),
+                    },
                     // todo: implement proper through-error conversion, instead of just ServerFnError::Request
                     // we should expand these cases.
                     Err(err) => Err(ServerFnError::Request {
@@ -265,7 +302,9 @@ mod decode_ok {
                                 Err(StatusCode::INTERNAL_SERVER_ERROR)
                             }
 
-                            ServerFnError::ServerError(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
+                            ServerFnError::ServerError { message, details } => {
+                                Err(StatusCode::INTERNAL_SERVER_ERROR)
+                            }
                             ServerFnError::Registration(_) => {
                                 Err(StatusCode::INTERNAL_SERVER_ERROR)
                             }
@@ -317,6 +356,7 @@ mod decode_ok {
 pub use req_from::*;
 pub mod req_from {
     use super::*;
+    use axum::response::Response;
 
     pub trait ExtractRequest<In, Out> {
         fn extract_axum(
@@ -324,7 +364,7 @@ pub mod req_from {
             state: DioxusServerState,
             request: Request,
             map: fn(In) -> Out,
-        ) -> impl Future<Output = Result<Out, ServerFnRejection>> + Send + 'static;
+        ) -> impl Future<Output = Result<Out, Response>> + Send + 'static;
     }
 
     // One-arg case
@@ -338,7 +378,7 @@ pub mod req_from {
             _state: DioxusServerState,
             request: Request,
             map: fn(In) -> Out,
-        ) -> impl Future<Output = Result<Out, ServerFnRejection>> + Send + 'static {
+        ) -> impl Future<Output = Result<Out, Response>> + Send + 'static {
             send_wrapper::SendWrapper::new(async move {
                 let bytes = Bytes::from_request(request, &()).await.unwrap();
                 let as_str = String::from_utf8_lossy(&bytes);
@@ -351,7 +391,7 @@ pub mod req_from {
 
                 serde_json::from_slice::<In>(bytes)
                     .map(map)
-                    .map_err(|e| ServerFnRejection {})
+                    .map_err(|e| ServerFnRejection {}.into_response())
             })
         }
     }
@@ -366,11 +406,11 @@ pub mod req_from {
             state: DioxusServerState,
             request: Request,
             _map: fn(In) -> Out,
-        ) -> impl Future<Output = Result<Out, ServerFnRejection>> + Send + 'static {
+        ) -> impl Future<Output = Result<Out, Response>> + Send + 'static {
             send_wrapper::SendWrapper::new(async move {
                 Out::from_request(request, &state)
                     .await
-                    .map_err(|e| ServerFnRejection {})
+                    .map_err(|e| ServerFnRejection {}.into_response())
             })
         }
     }
@@ -378,6 +418,11 @@ pub mod req_from {
 
 pub use resp::*;
 mod resp {
+    use std::fmt::Display;
+
+    use axum::response::Response;
+    use http::StatusCode;
+
     use super::*;
 
     /// A trait for converting the result of the Server Function into an Axum response.
@@ -387,49 +432,105 @@ mod resp {
     ///
     /// We currently have an `Input` type even though it's not useful since we might want to support regular axum endpoints later.
     /// For now, it's just Result<T, E> where T is either DeserializeOwned or FromResponse
-    pub trait FromResIt<T> {
-        fn make_axum_response(self, result: T) -> axum::response::Response;
+    pub trait MakeAxumResponse<T, E> {
+        fn make_axum_response(self, result: Result<T, E>) -> Result<Response, E>;
     }
 
     // Higher priority impl for special types like websocket/file responses that generate their own responses
     // The FromResponse impl helps narrow types to those usable on the client
-    impl<T, E> FromResIt<Result<T, E>> for &&&ServerFnDecoder<Result<T, E>>
+    impl<T, E> MakeAxumResponse<T, E> for &&&ServerFnDecoder<Result<T, E>>
     where
         T: FromResponse + IntoResponse,
-        E: From<ServerFnError>,
     {
-        fn make_axum_response(self, result: Result<T, E>) -> axum::response::Response {
-            match result {
-                Ok(res) => res.into_response(),
-                Err(err) => todo!(),
-            }
+        fn make_axum_response(self, result: Result<T, E>) -> Result<Response, E> {
+            result.map(|v| v.into_response())
         }
     }
 
     // Lower priority impl for regular serializable types
     // We try to match the encoding from the incoming request, otherwise default to JSON
-    impl<T, E> FromResIt<Result<T, E>> for &&ServerFnDecoder<Result<T, E>>
+    impl<T, E> MakeAxumResponse<T, E> for &&ServerFnDecoder<Result<T, E>>
     where
         T: DeserializeOwned + Serialize,
-        E: From<ServerFnError>,
     {
-        fn make_axum_response(self, result: Result<T, E>) -> axum::response::Response {
-            match result.map(|v| serde_json::to_string(&v)) {
-                Ok(Ok(v)) => {
-                    let mut res = (axum::http::StatusCode::OK, v).into_response();
-                    res.headers_mut().insert(
-                        axum::http::header::CONTENT_TYPE,
-                        axum::http::HeaderValue::from_static("application/json"),
+        fn make_axum_response(self, result: Result<T, E>) -> Result<Response, E> {
+            match result {
+                Ok(res) => {
+                    let res: HttpResult<T, serde_json::Value> = HttpResult::Success(res);
+                    let body = serde_json::to_string(&res).unwrap();
+                    let mut resp = Response::new(body.into());
+                    resp.headers_mut().insert(
+                        http::header::CONTENT_TYPE,
+                        "application/json".parse().unwrap(),
                     );
-                    res
+                    *resp.status_mut() = StatusCode::OK;
+                    Ok(resp)
                 }
-                Ok(Err(e)) => {
-                    todo!()
-                }
-                Err(e) => {
-                    todo!()
+                Err(err) => Err(err),
+            }
+        }
+    }
+
+    pub trait MakeAxumError<E> {
+        fn make_axum_error(self, result: Result<Response, E>) -> Result<Response, Response>;
+    }
+
+    impl<T, E> MakeAxumError<E> for &&&ServerFnDecoder<Result<T, E>>
+    where
+        E: From<ServerFnError> + Serialize + DeserializeOwned + Display,
+    {
+        fn make_axum_error(self, result: Result<Response, E>) -> Result<Response, Response> {
+            match result {
+                Ok(res) => Ok(res),
+                Err(err) => {
+                    let err: HttpResult<(), E> = HttpResult::Error {
+                        __message: err.to_string(),
+                        data: err,
+                    };
+                    let body = serde_json::to_string(&err).unwrap();
+                    let mut resp = Response::new(body.into());
+                    resp.headers_mut().insert(
+                        http::header::CONTENT_TYPE,
+                        "application/json".parse().unwrap(),
+                    );
+                    *resp.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
+                    Err(resp)
                 }
             }
+        }
+    }
+
+    impl<T> MakeAxumError<anyhow::Error> for &&ServerFnDecoder<Result<T, anyhow::Error>> {
+        fn make_axum_error(
+            self,
+            result: Result<Response, anyhow::Error>,
+        ) -> Result<Response, Response> {
+            match result {
+                Ok(res) => Ok(res),
+                Err(err) => {
+                    let err: HttpResult<(), serde_json::Value> = HttpResult::Error {
+                        __message: err.to_string(),
+                        data: serde_json::Value::Null,
+                    };
+                    let body = serde_json::to_string(&err).unwrap();
+                    let mut resp = Response::new(body.into());
+                    resp.headers_mut().insert(
+                        http::header::CONTENT_TYPE,
+                        "application/json".parse().unwrap(),
+                    );
+                    *resp.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
+                    Err(resp)
+                }
+            }
+        }
+    }
+
+    impl<T> MakeAxumError<StatusCode> for &&ServerFnDecoder<Result<T, StatusCode>> {
+        fn make_axum_error(
+            self,
+            result: Result<Response, StatusCode>,
+        ) -> Result<Response, Response> {
+            todo!()
         }
     }
 }
