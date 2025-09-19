@@ -212,6 +212,11 @@ pub fn Link(props: LinkProps) -> Element {
             return;
         }
 
+        // If we need to open in a new tab, let the browser handle it
+        if new_tab {
+            return;
+        }
+
         // todo(jon): this is extra hacky for no reason - we should fix prevent default on Links
         if do_default && is_external {
             return;
