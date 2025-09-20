@@ -85,15 +85,15 @@ fn app() -> Element {
 }
 
 #[post("/api/user/logout", auth: auth::Session)]
-pub async fn logout() -> Result<String> {
+pub async fn logout() -> Result<()> {
     auth.logout_user();
-    Ok("Logged out".into())
+    Ok(())
 }
 
 #[post("/api/user/login", auth: auth::Session)]
-pub async fn login() -> Result<String> {
+pub async fn login() -> Result<()> {
     auth.login_user(2);
-    Ok("Logged in".into())
+    Ok(())
 }
 
 #[get("/api/user/name", auth: auth::Session)]
