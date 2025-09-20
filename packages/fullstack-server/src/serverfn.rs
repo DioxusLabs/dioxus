@@ -72,8 +72,6 @@ pub struct ServerFunction<Caller = ()> {
     method: Method,
     handler: fn() -> MethodRouter<DioxusServerState>,
     _phantom: PhantomData<Caller>,
-    // serde_err: fn(ServerFnError) -> Bytes,
-    // pub(crate) middleware: fn() -> MiddlewareSet<Req, Res>,
 }
 
 impl<In1, In2, Out> std::ops::Deref for ServerFunction<((In1, In2), Out)> {
@@ -94,14 +92,7 @@ impl ServerFunction {
         method: Method,
         path: &'static str,
         handler: fn() -> MethodRouter<DioxusServerState>,
-        // middlewares: Option<fn() -> Vec<>>,
-        // handler: fn(axum::extract::Request) -> axum::response::Response,
-        // middlewares: Option<fn() -> MiddlewareSet<Req, Res>>,
     ) -> Self {
-        // fn default_middlewares<Req, Res>() -> MiddlewareSet<Req, Res> {
-        //     Vec::new()
-        // }
-
         Self {
             path,
             method,
@@ -119,46 +110,6 @@ impl ServerFunction {
     pub fn method(&self) -> Method {
         self.method.clone()
     }
-
-    // /// The handler for this server function.
-    // pub fn handler(&self) -> fn(axum::extract::Request) -> axum::response::Response {
-    //     self.handler
-    // }
-
-    // /// The set of middleware that should be applied to this function.
-    // pub fn middleware(&self) -> Vec {
-    //     (self.middleware)()
-    // }
-
-    // /// Create a router with all registered server functions and the render handler at `/` (basepath).
-    // ///
-    // ///
-    // pub fn into_router(dioxus_app: fn() -> Element) -> Router {
-    //     let router = Router::new();
-
-    //     // add middleware if any exist
-    //     let mut router = Self::with_router(router);
-
-    //     // Now serve the app at `/`
-    //     router = router.fallback(axum::routing::get(
-    //         move |state: State<DioxusServerState>| async move {
-    //             let mut vdom = VirtualDom::new(dioxus_app);
-    //             vdom.rebuild_in_place();
-    //             axum::response::Html(dioxus_ssr::render(&vdom))
-    //         },
-    //     ));
-
-    //     router.with_state(DioxusServerState {})
-    // }
-
-    // pub fn with_router(mut router: Router<DioxusServerState>) -> Router<DioxusServerState> {
-    //     for server_fn in crate::inventory::iter::<ServerFunction>() {
-    //         let method_router = (server_fn.handler)();
-    //         router = router.route(server_fn.path(), method_router);
-    //     }
-
-    //     router
-    // }
 
     pub fn collect() -> Vec<&'static ServerFunction> {
         inventory::iter::<ServerFunction>().collect()
@@ -265,9 +216,10 @@ impl ServerFunction {
         // server_context.send_response(&mut res);
 
         tracing::info!(
-            "Handling server function: {} {}",
+            "Handling server function: {} {} with {} extensions",
             self.method(),
-            self.path()
+            self.path(),
+            req.extensions().len()
         );
 
         let mthd: MethodRouter<DioxusServerState> =

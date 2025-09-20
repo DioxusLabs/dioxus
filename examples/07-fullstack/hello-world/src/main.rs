@@ -116,7 +116,7 @@ async fn post_server_data(data: String) -> Result<(), StatusCode> {
     Ok(())
 }
 
-#[get("/api/data")]
+#[get("/api/ip-data")]
 async fn get_ip_data() -> Result<serde_json::Value> {
     Ok(reqwest::get("https://httpbin.org/ip").await?.json().await?)
 }
@@ -187,7 +187,7 @@ async fn streaming_file(body: FileUpload) -> Result<Json<i32>> {
 }
 
 /// We can extract the path arg and return anything thats IntoResponse
-#[get("/upload/image/?name&size&ftype")]
+#[get("/upload/image-args/?name&size&ftype")]
 async fn streaming_file_args(
     name: String,
     size: usize,

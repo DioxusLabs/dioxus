@@ -44,7 +44,7 @@ tower-http = { workspace = true, features = ["fs"], optional = true }
 tower-layer = { version = "0.3.3", optional = true }
 
 # optional
-reqwest = { workspace = true, features = ["json", "rustls-tls"] }
+reqwest = { workspace = true, features = ["json", "rustls-tls", "cookies"] }
 
 
 [dev-dependencies]

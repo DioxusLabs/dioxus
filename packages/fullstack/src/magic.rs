@@ -97,6 +97,8 @@ pub struct ErrorPayload<E> {
 
 pub use req_to::*;
 pub mod req_to {
+    use std::sync::{Arc, LazyLock};
+
     use crate::{CantEncode, EncodeIsVerified};
 
     use super::*;
@@ -104,10 +106,19 @@ pub mod req_to {
     pub struct FetchRequest {
         pub client: reqwest::RequestBuilder,
     }
+
     impl FetchRequest {
         pub fn new(method: http::Method, url: String) -> Self {
-            let client = reqwest::Client::new();
-            let client = client.request(method, url);
+            // static COOKIES: LazyLock<Arc<reqwest::cookie::Jar>> =
+            //     LazyLock::new(|| Arc::new(reqwest::cookie::Jar::default()));
+
+            let client = reqwest::Client::builder()
+                // .cookie_store(true)
+                // .cookie_provider(COOKIES.clone())
+                .build()
+                .unwrap()
+                .request(method, url);
+
             Self { client }
         }
     }
@@ -245,10 +256,30 @@ mod decode_ok {
                         };
 
                         let res = if status.is_success() {
-                            serde_json::from_slice::<T>(as_bytes).map(RestEndpointPayload::Success)
+                            serde_json::from_slice::<T>(as_bytes)
+                                .map(RestEndpointPayload::Success)
+                                .map_err(|e| ServerFnError::Deserialization(e.to_string()))
                         } else {
-                            serde_json::from_slice::<ErrorPayload<serde_json::Value>>(as_bytes)
-                                .map(RestEndpointPayload::Error)
+                            match serde_json::from_slice::<ErrorPayload<serde_json::Value>>(
+                                as_bytes,
+                            ) {
+                                Ok(res) => Ok(RestEndpointPayload::Error(ErrorPayload {
+                                    message: res.message,
+                                    code: res.code,
+                                    data: res.data,
+                                })),
+                                Err(err) => {
+                                    if let Ok(text) = String::from_utf8(as_bytes.to_vec()) {
+                                        Ok(RestEndpointPayload::Error(ErrorPayload {
+                                            message: format!("HTTP {}: {}", status.as_u16(), text),
+                                            code: Some(status.as_u16()),
+                                            data: None,
+                                        }))
+                                    } else {
+                                        Err(ServerFnError::Deserialization(err.to_string()))
+                                    }
+                                }
+                            }
                         };
 
                         match res {
@@ -260,7 +291,7 @@ mod decode_ok {
                                     code: err.code,
                                 }))
                             }
-                            Err(e) => Ok(Err(ServerFnError::Deserialization(e.to_string()))),
+                            Err(e) => Ok(Err(e)),
                         }
                     }
                 }
@@ -463,6 +494,8 @@ pub mod req_from {
 
 pub use resp::*;
 mod resp {
+    use crate::HttpError;
+
     use super::*;
     use axum::response::Response;
     use http::HeaderValue;
@@ -568,10 +601,19 @@ mod resp {
                             code: None,
                             data: None,
                         },
-                        Err(err) => ErrorPayload {
-                            code: None,
-                            message: err.to_string(),
-                            data: None,
+                        Err(err) => match err.downcast::<HttpError>() {
+                            Ok(http_err) => ErrorPayload {
+                                message: http_err
+                                    .message
+                                    .unwrap_or_else(|| http_err.status.to_string()),
+                                code: Some(http_err.status.as_u16()),
+                                data: None,
+                            },
+                            Err(err) => ErrorPayload {
+                                code: None,
+                                message: err.to_string(),
+                                data: None,
+                            },
                         },
                     };
 

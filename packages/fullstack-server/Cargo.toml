@@ -15,7 +15,7 @@ resolver = "2"
 anyhow = { workspace = true }
 
 # axum
-axum = { workspace = true, features = ["multipart", "ws", "json", "form"]}
+axum = { workspace = true, features = ["multipart", "ws", "json", "form", "tokio", "http1", "http2", "macros"]}
 
 
 dioxus-core = { workspace = true }
@@ -29,6 +29,7 @@ generational-box = { workspace = true }
 dioxus-isrg = { workspace = true }
 dioxus-signals = { workspace = true }
 dioxus-hooks = { workspace = true }
+dioxus-logger = { workspace = true }
 dioxus-router = { workspace = true, features = ["streaming"], optional = true }
 dioxus-fullstack-core = { workspace = true, features = ["server"] }
 dashmap = "6.1.0"

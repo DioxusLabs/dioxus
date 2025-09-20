@@ -150,7 +150,7 @@ impl<T> std::future::Future for Dispatching<T> {
         self: std::pin::Pin<&mut Self>,
         _cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Self::Output> {
-        todo!()
+        std::task::Poll::Ready(())
     }
 }
 
