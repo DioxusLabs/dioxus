@@ -2,13 +2,12 @@ use async_trait::async_trait;
 use axum_session_auth::*;
 use axum_session_sqlx::SessionSqlitePool;
 use serde::{Deserialize, Serialize};
-use sqlx::{sqlite::SqlitePool, Executor};
+use sqlx::sqlite::SqlitePool;
 use std::collections::HashSet;
 
-pub(crate) type Session =
-    axum_session_auth::AuthSession<User, i64, SessionSqlitePool, sqlx::SqlitePool>;
+pub(crate) type Session = axum_session_auth::AuthSession<User, i64, SessionSqlitePool, SqlitePool>;
 pub(crate) type AuthLayer =
-    axum_session_auth::AuthSessionLayer<User, i64, SessionSqlitePool, sqlx::SqlitePool>;
+    axum_session_auth::AuthSessionLayer<User, i64, SessionSqlitePool, SqlitePool>;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct User {
@@ -26,7 +25,7 @@ pub(crate) struct SqlPermissionTokens {
 #[async_trait]
 impl Authentication<User, i64, SqlitePool> for User {
     async fn load_user(userid: i64, pool: Option<&SqlitePool>) -> Result<User, anyhow::Error> {
-        let pool = pool.unwrap();
+        let db = pool.unwrap();
 
         #[derive(sqlx::FromRow, Clone)]
         struct SqlUser {
@@ -37,7 +36,7 @@ impl Authentication<User, i64, SqlitePool> for User {
 
         let sqluser = sqlx::query_as::<_, SqlUser>("SELECT * FROM users WHERE id = $1")
             .bind(userid)
-            .fetch_one(pool)
+            .fetch_one(db)
             .await?;
 
         //lets just get all the tokens the user can use, we will only use the full permissions if modifying them.
@@ -45,7 +44,7 @@ impl Authentication<User, i64, SqlitePool> for User {
             "SELECT token FROM user_permissions WHERE user_id = $1;",
         )
         .bind(userid)
-        .fetch_all(pool)
+        .fetch_all(db)
         .await?;
 
         Ok(User {

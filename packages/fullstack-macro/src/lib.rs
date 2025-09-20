@@ -352,10 +352,11 @@ fn route_impl_with_route(
     let remaining_numbered_idents = remaining_numbered_pats.iter().map(|pat_type| &pat_type.pat);
     let route_docs = route.to_doc_comments();
 
-    extracted_idents.extend(body_json_names.clone().map(|pat| match pat.as_ref() {
+    let body_idents = body_json_names.clone().map(|pat| match pat.as_ref() {
         Pat::Ident(pat_ident) => pat_ident.ident.clone(),
         _ => panic!("Expected Pat::Ident"),
-    }));
+    });
+    let body_idents2 = body_idents.clone();
 
     // Get the variables we need for code generation
     let fn_name = &function.sig.ident;
@@ -724,7 +725,7 @@ fn route_impl_with_route(
 
                     let encoded = (&&&&&&ServerFnDecoder::<#out_ty>::new())
                         .make_axum_response(
-                            #fn_name #ty_generics(#(#server_names2,)* #(#extracted_idents,)*).await
+                            #fn_name #ty_generics(#(#extracted_idents,)* #(#server_names2,)* #(#body_idents,)*).await
                         );
 
                     let response = (&&&&&ServerFnDecoder::<#out_ty>::new())
@@ -744,8 +745,9 @@ fn route_impl_with_route(
                 #(#server_defaults)*
 
                 return #fn_name #ty_generics(
-                    #(#server_names3,)*
                     #(#extracted_idents,)*
+                    #(#server_names3,)*
+                    #(#body_idents2,)*
                 ).await;
             }
 

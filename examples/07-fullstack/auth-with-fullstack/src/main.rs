@@ -1,9 +1,4 @@
-use axum::extract::{FromRequest, FromRequestParts};
-use dioxus::{
-    fullstack::{DioxusServerState, FromResponse, HttpError, ServerFnEncoder},
-    prelude::*,
-};
-use http::HeaderMap;
+use dioxus::prelude::*;
 
 #[cfg(feature = "server")]
 mod auth;
@@ -21,9 +16,9 @@ fn main() {
         use crate::auth::*;
         use axum::routing::*;
         use axum_session::{SessionConfig, SessionLayer, SessionStore};
-        use axum_session_auth::{AuthConfig, AuthSessionLayer};
+        use axum_session_auth::AuthConfig;
         use axum_session_sqlx::SessionSqlitePool;
-        use sqlx::{sqlite::SqlitePoolOptions, Executor, SqlitePool};
+        use sqlx::{sqlite::SqlitePoolOptions, Executor};
 
         // Create an in-memory SQLite database and setup our tables
         let db = SqlitePoolOptions::new()
@@ -43,8 +38,7 @@ fn main() {
         db.execute(r#"INSERT INTO user_permissions (user_id, token) SELECT 2, 'Category::View'"#)
             .await?;
 
-        // This Defaults as normal Cookies.
-        // build our application with some routes
+        // Create an axum router that dioxus will attach the app to
         Ok(Router::new()
             .layer(
                 AuthLayer::new(Some(db.clone()))
@@ -61,9 +55,9 @@ fn main() {
 }
 
 fn app() -> Element {
+    let mut login = use_action(|_| login(2));
     let mut user_name = use_action(|_| get_user_name());
     let mut permissions = use_action(|_| get_permissions());
-    let mut login = use_action(|_| login());
 
     rsx! {
         button { onclick: move |_| login.dispatch(()), "Login Test User" }
@@ -74,51 +68,39 @@ fn app() -> Element {
     }
 }
 
-async fn get_user_name() -> Result<()> {
-    todo!()
-}
-async fn get_permissions() -> Result<()> {
-    todo!()
-}
-async fn login() -> Result<()> {
-    todo!()
+#[post("/api/user/login?user", auth: auth::Session)]
+pub async fn login(user: i64) -> Result<()> {
+    auth.login_user(user);
+    Ok(())
 }
 
-// #[get("/api/user/name", auth: auth::Session)]
-// pub async fn get_user_name() -> Result<String> {
-//     Ok(auth.current_user.or_unauthorized("")?.username)
-// }
-
-// #[post("/api/user/login", auth: auth::Session)]
-// pub async fn login() -> Result<()> {
-//     auth.login_user(2);
-//     Ok(())
-// }
-
-// #[get("/api/user/permissions", auth: auth::Session)]
-// pub async fn get_permissions() -> Result<String> {
-//     use crate::auth::User;
-//     use axum_session_auth::{Auth, Rights};
-
-//     let user = auth.current_user.or_unauthorized("No current user")?;
-
-//     // lets check permissions only and not worry about if they are anon or not
-//     Auth::<User, i64, sqlx::SqlitePool>::build([axum::http::Method::POST], false)
-//         .requires(Rights::any([
-//             Rights::permission("Category::View"),
-//             Rights::permission("Admin::View"),
-//         ]))
-//         .validate(&user, &axum::http::Method::GET, None)
-//         .await
-//         .or_unauthorized("You do not have permissions to view this page")?;
-
-//     Ok(format!(
-//         "User has Permissions needed. {:?}",
-//         user.permissions
-//     ))
-// }
+#[get("/api/user/name", auth: auth::Session)]
+pub async fn get_user_name() -> Result<String> {
+    Ok(auth
+        .current_user
+        .or_internal_server_error("You must log in first!")?
+        .username)
+}
 
 #[get("/api/user/permissions", auth: auth::Session)]
-pub async fn do_thing() -> Result<()> {
-    todo!()
+pub async fn get_permissions() -> Result<String> {
+    use crate::auth::User;
+    use axum_session_auth::{Auth, Rights};
+
+    let user = auth.current_user.or_unauthorized("No current user")?;
+
+    // lets check permissions only and not worry about if they are anon or not
+    Auth::<User, i64, sqlx::SqlitePool>::build([axum::http::Method::POST], false)
+        .requires(Rights::any([
+            Rights::permission("Category::View"),
+            Rights::permission("Admin::View"),
+        ]))
+        .validate(&user, &axum::http::Method::GET, None)
+        .await
+        .or_unauthorized("You do not have permissions to view this page")?;
+
+    Ok(format!(
+        "User has Permissions needed. {:?}",
+        user.permissions
+    ))
 }
