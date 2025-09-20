@@ -6,6 +6,9 @@
 //!
 //! The `.serve_dioxus_application` method is used to mount our Dioxus app as a fallback service to
 //! handle HTML rendering and static assets.
+//!
+//! We easily share the "permissions" between the server and client by using a `HashSet<String>`
+//! which is serialized to/from JSON automatically by the server function system.
 
 use std::collections::HashSet;
 
@@ -20,8 +23,11 @@ fn main() {
     dioxus::launch(app);
 
     // On the server, we can use `dioxus::serve` to create a server that serves our app.
-    // The `serve` function takes a `Result<T>` where `T` is a tower service (and thus an axum router).
-    // The `app` parameter is mounted as a fallback service to handle HTML rendering and static assets.
+    //
+    // The `serve` function takes a closure that returns a `Future` which resolves to an `axum::Router`.
+    //
+    // We return a `Router` such that dioxus sets up logging, hot-reloading, devtools, and wires up the
+    // IP and PORT environment variables to our server.
     #[cfg(feature = "server")]
     dioxus::serve(|| async {
         use crate::auth::*;
@@ -109,24 +115,24 @@ fn app() -> Element {
 /// We use the `auth::Session` extractor to get access to the current user session.
 /// This lets us modify the user session, log in/out, and access the current user.
 #[post("/api/user/login", auth: auth::Session)]
-pub async fn login() -> Result<()> {
+pub async fn login() -> Result<String> {
     use axum_session_auth::Authentication;
 
     // Already logged in
     if auth.current_user.as_ref().unwrap().is_authenticated() {
-        return Ok(());
+        return Ok("Already logged in".into());
     }
 
     auth.login_user(2);
-    Ok(())
+    Ok("Logged in".into())
 }
 
 /// Just like `login`, but this time we log out the user.
 #[post("/api/user/logout", auth: auth::Session)]
-pub async fn logout() -> Result<()> {
+pub async fn logout() -> Result<String> {
     auth.logout_user();
     auth.cache_clear_user(2);
-    Ok(())
+    Ok("Logged out".into())
 }
 
 /// We can access the current user via `auth.current_user`.
@@ -141,20 +147,22 @@ pub async fn get_user_name() -> Result<String> {
 /// Get the current user's permissions, guarding the endpoint with the `Auth` validator.
 /// If this returns false, we use the `or_unauthorized` extension to return a 401 error.
 #[get("/api/user/permissions", auth: auth::Session)]
-pub async fn get_permissions() -> Result<HashSet<String>> {
+pub async fn get_permissions() -> Result<String> {
     use crate::auth::User;
     use axum_session_auth::{Auth, Rights};
 
     let user = auth.current_user.unwrap();
 
-    Auth::<User, i64, sqlx::SqlitePool>::build([axum::http::Method::GET], false)
+    if !Auth::<User, i64, sqlx::SqlitePool>::build([axum::http::Method::GET], false)
         .requires(Rights::any([
             Rights::permission("Category::View"),
             Rights::permission("Admin::View"),
         ]))
         .validate(&user, &axum::http::Method::GET, None)
         .await
-        .or_unauthorized("User does not have permission to view categories.")?;
+    {
+        return Ok("no permissions".into());
+    }
 
-    Ok(user.permissions)
+    Ok(format!("{:?}", user.permissions))
 }
