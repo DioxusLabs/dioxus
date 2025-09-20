@@ -317,6 +317,7 @@ fn route_impl_with_route(
     let function = syn::parse::<ItemFn>(item)?;
 
     let server_args = &route.server_args;
+    let server_args2 = server_args.clone();
 
     let mut function_on_server = function.clone();
     function_on_server.sig.inputs.extend(server_args.clone());
@@ -351,7 +352,6 @@ fn route_impl_with_route(
     let remaining_numbered_idents = remaining_numbered_pats.iter().map(|pat_type| &pat_type.pat);
     let route_docs = route.to_doc_comments();
 
-    extracted_idents.extend(server_idents);
     extracted_idents.extend(body_json_names.clone().map(|pat| match pat.as_ref() {
         Pat::Ident(pat_ident) => pat_ident.ident.clone(),
         _ => panic!("Expected Pat::Ident"),
@@ -513,7 +513,50 @@ fn route_impl_with_route(
     //     quote! {}
     // };
 
+    let server_tys = server_args2.iter().map(|pat_type| match pat_type {
+        FnArg::Receiver(_) => quote! { () },
+        FnArg::Typed(pat_type) => {
+            let ty = (*pat_type.ty).clone();
+            quote! {
+                #ty
+            }
+        }
+    });
+    let server_tys2 = server_tys.clone();
+    let server_names = server_args2.iter().map(|pat_type| match pat_type {
+        FnArg::Receiver(_) => quote! { () },
+        FnArg::Typed(pat_type) => match pat_type.pat.as_ref() {
+            Pat::Ident(pat_ident) => {
+                let name = &pat_ident.ident;
+                quote! { #name }
+            }
+            _ => panic!("Expected Pat::Ident"),
+        },
+    });
+    let server_names2 = server_names.clone();
+    let server_names3 = server_names.clone();
+
     let body_struct_impl = {
+        let server_tys = server_args2.iter().enumerate().map(|(idx, _)| {
+            let ty_name = format_ident!("__ServerTy{}", idx);
+            quote! {
+                #[cfg(feature = "server")] #ty_name
+            }
+        });
+
+        let server_names = server_args2.iter().enumerate().map(|(idx, arg)| {
+            let name = match arg {
+                FnArg::Receiver(_) => panic!("Server args cannot be receiver"),
+                FnArg::Typed(pat_type) => &pat_type.pat,
+            };
+
+            let ty_name = format_ident!("__ServerTy{}", idx);
+            quote! {
+                #[cfg(feature = "server")]
+                #name: #ty_name
+            }
+        });
+
         let tys = body_json_types
             .clone()
             .into_iter()
@@ -526,23 +569,39 @@ fn route_impl_with_route(
             .enumerate()
             .map(|(idx, name)| {
                 let ty_name = format_ident!("__Ty{}", idx);
-                quote! {
-                    #name: #ty_name
-                }
+                quote! { #name: #ty_name }
             });
-
-        // let server_tys = server_args
 
         quote! {
             #[derive(serde::Serialize, serde::Deserialize)]
-            struct ___Body_Serialize___<#(#tys,)*> {
+            struct ___Body_Serialize___< #(#server_tys,)* #(#tys,)* > {
+                #(#server_names,)*
                 #(#names,)*
             }
         }
     };
 
+    let server_inputs = server_args2.iter().map(|arg| {
+        let mut arg = arg.clone();
+        quote! {
+            #[cfg(feature = "server")]
+            #arg
+        }
+    });
+
     // This unpacks the body struct into the individual variables that get scoped
     let unpack = {
+        let unpack_server_args = server_args2.iter().enumerate().map(|(idx, arg)| {
+            let name = match arg {
+                FnArg::Receiver(_) => panic!("Server args cannot be receiver"),
+                FnArg::Typed(pat_type) => match pat_type.pat.as_ref() {
+                    Pat::Ident(pat_ident) => &pat_ident.ident,
+                    _ => panic!("Expected Pat::Ident"),
+                },
+            };
+            quote! { #[cfg(feature = "server")] data.#name }
+        });
+
         let unpack_args = body_json_names
             .clone()
             .into_iter()
@@ -553,12 +612,40 @@ fn route_impl_with_route(
 
         quote! {
             |data| {
-                (#(#unpack_args,)*)
+                (
+                    #(#unpack_server_args,)*
+                    #(#unpack_args,)*
+                )
             }
         }
     };
 
     let unpack2 = unpack.clone();
+
+    // there's no active request on the server, so we just create a dummy one
+    let server_defaults = server_args2.iter().map(|arg| {
+        let name = match arg {
+            FnArg::Receiver(_) => panic!("Server args cannot be receiver"),
+            FnArg::Typed(pat_type) => match pat_type.pat.as_ref() {
+                Pat::Ident(pat_ident) => &pat_ident.ident,
+                _ => panic!("Expected Pat::Ident"),
+            },
+        };
+
+        let ty = match arg {
+            FnArg::Receiver(_) => panic!("Server args cannot be receiver"),
+            FnArg::Typed(pat_type) => (*pat_type.ty).clone(),
+        };
+
+        quote! {
+            let #name = {
+                use __axum::extract::FromRequestParts;
+                let __request = __axum::extract::Request::new(());
+                let mut __parts = __request.into_parts().0;
+                #ty::from_request_parts(&mut __parts, &()).await.unwrap()
+            };
+        }
+    });
 
     Ok(quote! {
         #(#fn_docs)*
@@ -584,7 +671,8 @@ fn route_impl_with_route(
             // On the client, we make the request to the server
             // We want to support extremely flexible error types and return types, making this more complex than it should
             #[allow(clippy::unused_unit)]
-            if cfg!(not(feature = "server")) {
+            #[cfg(not(feature = "server"))]
+            {
                 let __params = __QueryParams__ { #(#query_param_names,)* };
 
                 let client = FetchRequest::new(
@@ -631,12 +719,12 @@ fn route_impl_with_route(
                     #query_extractor
                     request: __axum::extract::Request,
                 ) -> Result<__axum::response::Response, __axum::response::Response> #where_clause {
-                    let ( #(#body_json_names,)*) = (&&&&&&&&&&&&&&ServerFnEncoder::<___Body_Serialize___<#(#body_json_types,)*>, (#(#body_json_types3,)*)>::new())
+                    let ( #(#server_names,)*  #(#body_json_names,)*) = (&&&&&&&&&&&&&&ServerFnEncoder::<___Body_Serialize___<#(#server_tys,)* #(#body_json_types,)*>, (#(#server_tys2,)* #(#body_json_types3,)*)>::new())
                         .extract_axum(___state.0, request, #unpack2).await?;
 
                     let encoded = (&&&&&&ServerFnDecoder::<#out_ty>::new())
                         .make_axum_response(
-                            #fn_name #ty_generics(#(#extracted_idents,)*).await
+                            #fn_name #ty_generics(#(#server_names2,)* #(#extracted_idents,)*).await
                         );
 
                     let response = (&&&&&ServerFnDecoder::<#out_ty>::new())
@@ -653,7 +741,12 @@ fn route_impl_with_route(
                     )
                 }
 
-                return #fn_name #ty_generics(#(#extracted_idents,)*).await;
+                #(#server_defaults)*
+
+                return #fn_name #ty_generics(
+                    #(#server_names3,)*
+                    #(#extracted_idents,)*
+                ).await;
             }
 
             #[allow(unreachable_code)]

@@ -7,6 +7,8 @@ use std::collections::HashSet;
 
 pub(crate) type Session =
     axum_session_auth::AuthSession<User, i64, SessionSqlitePool, sqlx::SqlitePool>;
+pub(crate) type AuthLayer =
+    axum_session_auth::AuthSessionLayer<User, i64, SessionSqlitePool, sqlx::SqlitePool>;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct User {

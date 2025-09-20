@@ -47,7 +47,7 @@ fn main() {
         // build our application with some routes
         Ok(Router::new()
             .layer(
-                AuthSessionLayer::<User, i64, SessionSqlitePool, SqlitePool>::new(Some(db.clone()))
+                AuthLayer::new(Some(db.clone()))
                     .with_config(AuthConfig::<i64>::default().with_anonymous_user_id(Some(1))),
             )
             .layer(SessionLayer::new(
@@ -118,22 +118,7 @@ async fn login() -> Result<()> {
 //     ))
 // }
 
-// #[get("/api/user/permissions")]
-pub async fn do_thing(auth: auth::Session) -> Result<()> {
-    struct ___Body_Serialize___<#[cfg(feature = "server")] A> {
-        #[cfg(feature = "server")]
-        auth: A,
-    }
-    use dioxus::fullstack::ExtractRequest;
-    let __state = DioxusServerState::default();
-
-    let request = axum::extract::Request::default();
-
-    let (auth,) =
-        (&&&&&&&&&ServerFnEncoder::<___Body_Serialize___<auth::Session>, (auth::Session,)>::new())
-            .extract_axum(__state, request, |data| (data.auth,))
-            .await
-            .unwrap();
-
+#[get("/api/user/permissions", auth: auth::Session)]
+pub async fn do_thing() -> Result<()> {
     todo!()
 }
