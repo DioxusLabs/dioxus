@@ -35,13 +35,19 @@ fn main() {
         use axum_session::{SessionConfig, SessionLayer, SessionStore};
         use axum_session_auth::AuthConfig;
         use axum_session_sqlx::SessionSqlitePool;
+        use dioxus::server::RenderHandleState;
         use sqlx::{sqlite::SqlitePoolOptions, Executor};
 
         // Create an in-memory SQLite database and set up our tables
         let db = SqlitePoolOptions::new()
-            .max_connections(5)
+            .max_connections(20)
             .connect_with("sqlite::memory:".parse()?)
             .await?;
+
+        // Drop existing tables if they exist
+        db.execute("DROP TABLE IF EXISTS users").await?;
+        db.execute("DROP TABLE IF EXISTS user_permissions").await?;
+        db.execute("DROP TABLE IF EXISTS test_table").await?;
 
         // Create the tables (sessions, users)
         db.execute(r#"CREATE TABLE IF NOT EXISTS users ( "id" INTEGER PRIMARY KEY, "anonymous" BOOLEAN NOT NULL, "username" VARCHAR(256) NOT NULL )"#,)
@@ -61,7 +67,12 @@ fn main() {
 
         // Create an axum router that dioxus will attach the app to
         Ok(Router::new()
-            .serve_dioxus_application(ServeConfig::new().unwrap(), app)
+            .register_server_functions()
+            .serve_static_assets()
+            .fallback(
+                get(RenderHandleState::render_handler)
+                    .with_state(RenderHandleState::new(ServeConfig::new().unwrap(), app)),
+            )
             .layer(
                 AuthLayer::new(Some(db.clone()))
                     .with_config(AuthConfig::<i64>::default().with_anonymous_user_id(Some(1))),
@@ -118,13 +129,6 @@ fn app() -> Element {
 /// This lets us modify the user session, log in/out, and access the current user.
 #[post("/api/user/login", auth: auth::Session)]
 pub async fn login() -> Result<()> {
-    use axum_session_auth::Authentication;
-
-    // Already logged in
-    if auth.current_user.as_ref().unwrap().is_authenticated() {
-        return Ok(());
-    }
-
     auth.login_user(2);
     Ok(())
 }
@@ -133,7 +137,6 @@ pub async fn login() -> Result<()> {
 #[post("/api/user/logout", auth: auth::Session)]
 pub async fn logout() -> Result<()> {
     auth.logout_user();
-    auth.cache_clear_user(2);
     Ok(())
 }
 
@@ -141,7 +144,7 @@ pub async fn logout() -> Result<()> {
 /// We can have both anonymous user (id 1) and a logged in user (id 2).
 ///
 /// Logged-in users will have more permissions which we can modify.
-#[get("/api/user/name", auth: auth::Session)]
+#[post("/api/user/name", auth: auth::Session)]
 pub async fn get_user_name() -> Result<String> {
     Ok(auth.current_user.unwrap().username)
 }

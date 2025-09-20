@@ -37,7 +37,8 @@ impl Authentication<User, i64, SqlitePool> for User {
         let sqluser = sqlx::query_as::<_, SqlUser>("SELECT * FROM users WHERE id = $1")
             .bind(userid)
             .fetch_one(db)
-            .await?;
+            .await
+            .unwrap();
 
         //lets just get all the tokens the user can use, we will only use the full permissions if modifying them.
         let sql_user_perms = sqlx::query_as::<_, SqlPermissionTokens>(
@@ -45,7 +46,8 @@ impl Authentication<User, i64, SqlitePool> for User {
         )
         .bind(userid)
         .fetch_all(db)
-        .await?;
+        .await
+        .unwrap();
 
         Ok(User {
             id: sqluser.id,

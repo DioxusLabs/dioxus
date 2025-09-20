@@ -44,7 +44,7 @@ features = ["sqlite"]
 optional = true
 
 [features]
-default = []
+default = ["web", "server"]
 server = [
     "dioxus/server",
     "dep:axum",

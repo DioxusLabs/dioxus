@@ -679,6 +679,7 @@ fn route_impl_with_route(
                 let client = FetchRequest::new(
                     dioxus_fullstack::http::Method::#method_ident,
                     format!("http://127.0.0.1:8080{}", #request_url)
+                    // format!("http://127.0.0.1:8080{}", #request_url)
                     // .#http_method(format!("{}{}", get_server_url(), #request_url)); // .query(&__params);
                 );
 
