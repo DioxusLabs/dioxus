@@ -84,55 +84,57 @@ fn app() -> Element {
     let mut logout = use_action(|_| logout());
 
     let fetch_new = move |_| async move {
-        user_name.call(());
-        permissions.call(());
+        user_name.call(()).await;
+        permissions.call(()).await;
     };
 
     rsx! {
-        button {
-            onclick: move |_| async move {
-                login.call(());
-            },
-            "Login Test User"
-        }
-        button {
-            onclick: move |_| async move {
-                logout.call(());
-            },
-            "Logout"
-        }
-        button {
-            onclick: fetch_new,
-            "Fetch User Info"
-        }
+        div {
+            button {
+                onclick: move |_| async move {
+                    login.call(()).await;
+                },
+                "Login Test User"
+            }
+            button {
+                onclick: move |_| async move {
+                    logout.call(()).await;
+                },
+                "Logout"
+            }
+            button {
+                onclick: fetch_new,
+                "Fetch User Info"
+            }
 
-        pre { "Logged in: {login.result():?}" }
-        pre { "User name: {user_name.result():?}" }
-        pre { "Permissions: {permissions.result():?}" }
+            pre { "Logged in: {login.result():?}" }
+            pre { "User name: {user_name.result():?}" }
+            pre { "Permissions: {permissions.result():?}" }
+        }
     }
 }
 
 /// We use the `auth::Session` extractor to get access to the current user session.
 /// This lets us modify the user session, log in/out, and access the current user.
 #[post("/api/user/login", auth: auth::Session)]
-pub async fn login() -> Result<String> {
+pub async fn login() -> Result<()> {
     use axum_session_auth::Authentication;
 
     // Already logged in
     if auth.current_user.as_ref().unwrap().is_authenticated() {
-        return Ok("Already logged in".into());
+        return Ok(());
     }
 
     auth.login_user(2);
-    Ok("Logged in".into())
+    Ok(())
 }
 
 /// Just like `login`, but this time we log out the user.
 #[post("/api/user/logout", auth: auth::Session)]
-pub async fn logout() -> Result<String> {
+pub async fn logout() -> Result<()> {
     auth.logout_user();
     auth.cache_clear_user(2);
-    Ok("Logged out".into())
+    Ok(())
 }
 
 /// We can access the current user via `auth.current_user`.
@@ -147,7 +149,7 @@ pub async fn get_user_name() -> Result<String> {
 /// Get the current user's permissions, guarding the endpoint with the `Auth` validator.
 /// If this returns false, we use the `or_unauthorized` extension to return a 401 error.
 #[get("/api/user/permissions", auth: auth::Session)]
-pub async fn get_permissions() -> Result<String> {
+pub async fn get_permissions() -> Result<HashSet<String>> {
     use crate::auth::User;
     use axum_session_auth::{Auth, Rights};
 
@@ -161,8 +163,8 @@ pub async fn get_permissions() -> Result<String> {
         .validate(&user, &axum::http::Method::GET, None)
         .await
     {
-        return Ok("no permissions".into());
+        return Ok(HashSet::new());
     }
 
-    Ok(format!("{:?}", user.permissions))
+    Ok(user.permissions.clone())
 }

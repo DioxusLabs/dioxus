@@ -145,16 +145,16 @@ where
     }
 }
 pub struct Dispatching<I>(PhantomData<*const I>);
-// impl<T> std::future::Future for Dispatching<T> {
-//     type Output = ();
+impl<T> std::future::Future for Dispatching<T> {
+    type Output = ();
 
-//     fn poll(
-//         self: std::pin::Pin<&mut Self>,
-//         _cx: &mut std::task::Context<'_>,
-//     ) -> std::task::Poll<Self::Output> {
-//         future::futu
-//     }
-// }
+    fn poll(
+        self: std::pin::Pin<&mut Self>,
+        _cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Self::Output> {
+        std::task::Poll::Ready(())
+    }
+}
 
 impl<I, T> Copy for Action<I, T> {}
 impl<I, T> Clone for Action<I, T> {
