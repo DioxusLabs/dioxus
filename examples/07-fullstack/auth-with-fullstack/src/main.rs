@@ -44,7 +44,7 @@ fn main() {
             .connect_with("sqlite::memory:".parse()?)
             .await?;
 
-        // Drop existing tables if they exist
+        // Drop existing tables if they exist. Otherwise, the sqlite instance might persist
         db.execute("DROP TABLE IF EXISTS users").await?;
         db.execute("DROP TABLE IF EXISTS user_permissions").await?;
         db.execute("DROP TABLE IF EXISTS test_table").await?;
