@@ -19,7 +19,7 @@ use hyper_util::{
     rt::{TokioExecutor, TokioIo},
     service::TowerToHyperService,
 };
-use std::{any::Any, collections::HashMap, net::SocketAddr};
+use std::{any::Any, collections::HashMap, net::SocketAddr, prelude::rust_2024::Future};
 use tokio::net::TcpStream;
 use tokio_util::task::LocalPoolHandle;
 use tower::Service;
@@ -283,4 +283,11 @@ fn apply_base_path(
     }
 
     router
+}
+
+pub fn serve<F>(root: BaseComp, f: impl FnMut() -> F) -> !
+where
+    F: Future<Output = Result<axum::Router, anyhow::Error>>,
+{
+    todo!()
 }

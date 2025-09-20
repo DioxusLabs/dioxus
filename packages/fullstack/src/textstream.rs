@@ -1,9 +1,9 @@
-use std::pin::Pin;
+use std::{pin::Pin, prelude::rust_2024::Future};
 
 use axum_core::response::IntoResponse;
 use futures::{Stream, StreamExt};
 
-use crate::ServerFnError;
+use crate::{FromResponse, ServerFnError};
 
 pub type TextStream = Streaming<String, ServerFnError>;
 
@@ -14,7 +14,8 @@ pub type TextStream = Streaming<String, ServerFnError>;
 /// ## Browser Support for Streaming Input
 ///
 /// Browser fetch requests do not currently support full request duplexing, which
-/// means that that they do begin handling responses until the full request has been sent.
+/// means that that they do not begin handling responses until the full request has been sent.
+///
 /// This means that if you use a streaming input encoding, the input stream needs to
 /// end before the output will begin.
 ///
@@ -75,5 +76,13 @@ where
 impl<T, E> IntoResponse for Streaming<T, E> {
     fn into_response(self) -> axum_core::response::Response {
         todo!()
+    }
+}
+
+impl<T, E> FromResponse for Streaming<T, E> {
+    fn from_response(
+        res: reqwest::Response,
+    ) -> impl Future<Output = Result<Self, ServerFnError>> + Send {
+        async move { todo!() }
     }
 }

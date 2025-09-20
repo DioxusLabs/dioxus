@@ -112,6 +112,7 @@ members = [
     "examples/07-fullstack/streaming",
     "examples/07-fullstack/desktop",
     "examples/07-fullstack/auth",
+    "examples/07-fullstack/auth-with-fullstack",
     "examples/07-fullstack/websockets",
 
     # Integrations
@@ -136,7 +137,7 @@ members = [
     "packages/playwright-tests/cli-optimization",
     "packages/playwright-tests/wasm-split-harness",
     "packages/playwright-tests/default-features-disabled"
-]
+, "packages/storage"]
 
 [workspace.package]
 version = "0.7.0-rc.0"

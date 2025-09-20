@@ -37,7 +37,11 @@ impl<T> ServerState<T> {
         todo!()
     }
 
-    pub const fn new(f: fn() -> T) -> Self {
+    pub const fn lazy() -> Self {
+        Self { _t: PhantomData }
+    }
+
+    pub const fn new<F: Future<Output = T>>(f: fn() -> F) -> Self {
         Self { _t: PhantomData }
     }
 }

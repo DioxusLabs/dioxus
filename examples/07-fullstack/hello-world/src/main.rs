@@ -5,7 +5,7 @@
 //! ```
 
 use anyhow::Context;
-use dioxus::fullstack::{Json, Websocket};
+use dioxus::fullstack::{FileUpload, Json, Websocket};
 use dioxus::prelude::*;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
@@ -50,6 +50,10 @@ fn main() {
                     ip_data.reset();
                     dog_data.reset();
                     custom_data.reset();
+                    error_data.reset();
+                    typed_error_data.reset();
+                    dog_data_err.reset();
+                    throws_ok_data.reset();
                 },
                 "Clear data"
             }
@@ -173,5 +177,22 @@ enum MyCustomError {
 
 #[post("/api/ws")]
 async fn ws_endpoint(a: i32) -> Result<Websocket<String, String>> {
+    todo!()
+}
+
+/// We can extract the path arg and return anything thats IntoResponse
+#[get("/upload/image/")]
+async fn streaming_file(body: FileUpload) -> Result<Json<i32>> {
+    todo!()
+}
+
+/// We can extract the path arg and return anything thats IntoResponse
+#[get("/upload/image/?name&size&ftype")]
+async fn streaming_file_args(
+    name: String,
+    size: usize,
+    ftype: String,
+    body: FileUpload,
+) -> Result<Json<i32>> {
     todo!()
 }

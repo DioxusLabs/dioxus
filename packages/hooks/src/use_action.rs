@@ -95,8 +95,11 @@ impl<I: 'static, T: 'static> Action<I, T> {
     }
 
     pub fn result(&self) -> Option<Result<ReadSignal<T>, CapturedError>> {
-        if *self.state.read() != ActionState::Ready {
-            //
+        if !matches!(
+            *self.state.read(),
+            ActionState::Ready | ActionState::Errored
+        ) {
+            return None;
         }
 
         if let Some(err) = self.error.cloned() {
@@ -123,7 +126,33 @@ impl<I: 'static, T: 'static> Action<I, T> {
     }
 }
 
+impl<I, T> std::fmt::Debug for Action<I, T>
+where
+    T: std::fmt::Debug + 'static,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if f.alternate() {
+            f.debug_struct("Action")
+                .field("state", &self.state.read())
+                .field("value", &self.value.read())
+                .field("error", &self.error.read())
+                .finish()
+        } else {
+            std::fmt::Debug::fmt(&self.value.read().as_ref(), f)
+        }
+    }
+}
 pub struct Dispatching<I>(PhantomData<*const I>);
+impl<T> std::future::Future for Dispatching<T> {
+    type Output = ();
+
+    fn poll(
+        self: std::pin::Pin<&mut Self>,
+        _cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Self::Output> {
+        todo!()
+    }
+}
 
 impl<I, T> Copy for Action<I, T> {}
 impl<I, T> Clone for Action<I, T> {

@@ -1323,6 +1323,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "021e862c184ae977658b36c4500f7feac3221ca5da43e3f25bd04ab6c79a29b5"
 dependencies = [
  "axum-core 0.5.2",
+ "axum-macros",
  "base64 0.22.1",
  "bytes",
  "form_urlencoded",
@@ -1415,6 +1416,17 @@ dependencies = [
  "tower 0.5.2",
  "tower-layer",
  "tower-service",
+]
+
+[[package]]
+name = "axum-macros"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "604fde5e028fea851ce1d8570bbdc034bec850d157f7569d10f347d06808c05c"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.104",
 ]
 
 [[package]]
@@ -5540,6 +5552,7 @@ dependencies = [
  "base64 0.22.1",
  "bytes",
  "ciborium",
+ "dashmap 6.1.0",
  "dioxus",
  "dioxus-core",
  "dioxus-fullstack",
@@ -5553,6 +5566,7 @@ dependencies = [
  "http 1.3.1",
  "http-body-util",
  "inventory",
+ "once_cell",
  "pin-project",
  "reqwest 0.12.22",
  "send_wrapper",
@@ -6052,6 +6066,15 @@ dependencies = [
  "dioxus-core",
  "dioxus-core-types",
  "rustc-hash 2.1.1",
+]
+
+[[package]]
+name = "dioxus-storage"
+version = "0.7.0-rc.0"
+dependencies = [
+ "js-sys",
+ "wasm-bindgen",
+ "web-sys",
 ]
 
 [[package]]
@@ -7137,6 +7160,27 @@ dependencies = [
 
 [[package]]
 name = "fullstack-auth-example"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "axum 0.8.4",
+ "axum_session",
+ "axum_session_auth",
+ "axum_session_sqlx",
+ "dioxus",
+ "dioxus-web",
+ "execute",
+ "http 1.3.1",
+ "serde",
+ "sqlx",
+ "tokio",
+ "tower 0.5.2",
+ "tower-http",
+]
+
+[[package]]
+name = "fullstack-auth-example-with-fullstack"
 version = "0.1.0"
 dependencies = [
  "anyhow",

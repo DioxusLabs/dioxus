@@ -317,7 +317,6 @@ fn route_impl_with_route(
     let function = syn::parse::<ItemFn>(item)?;
 
     let server_args = &route.server_args;
-    let server_arg_tokens = quote! { #server_args  };
 
     let mut function_on_server = function.clone();
     function_on_server.sig.inputs.extend(server_args.clone());
@@ -347,15 +346,16 @@ fn route_impl_with_route(
     let body_json_args = route.remaining_pattypes_named(&function.sig.inputs);
     let body_json_names = body_json_args.iter().map(|pat_type| &pat_type.pat);
     let body_json_types = body_json_args.iter().map(|pat_type| &pat_type.ty);
+
     let mut extracted_idents = route.extracted_idents();
     let remaining_numbered_idents = remaining_numbered_pats.iter().map(|pat_type| &pat_type.pat);
     let route_docs = route.to_doc_comments();
 
+    extracted_idents.extend(server_idents);
     extracted_idents.extend(body_json_names.clone().map(|pat| match pat.as_ref() {
         Pat::Ident(pat_ident) => pat_ident.ident.clone(),
         _ => panic!("Expected Pat::Ident"),
     }));
-    extracted_idents.extend(server_idents);
 
     // Get the variables we need for code generation
     let fn_name = &function.sig.ident;
@@ -442,7 +442,9 @@ fn route_impl_with_route(
     // let body_json_contents = remaining_numbered_pats.iter().map(|pat_type| [quote! {}]);
     let body_json_types2 = body_json_types.clone();
     let body_json_types3 = body_json_types.clone();
+    let body_json_types4 = body_json_types.clone();
     let rest_idents = body_json_types.clone();
+    let rest_idents2 = body_json_types.clone();
     let rest_ident_names2 = body_json_names.clone();
     let rest_ident_names3 = body_json_names.clone();
 
@@ -491,7 +493,7 @@ fn route_impl_with_route(
         _ => output_type.clone(),
     };
 
-    let extracted_idents2 = extracted_idents.clone();
+    // let extracted_idents2 = extracted_idents.clone();
 
     let mapped_output = match fn_output {
         syn::ReturnType::Default => quote! { dioxus_fullstack::ServerFnRequest<()> },
@@ -528,6 +530,8 @@ fn route_impl_with_route(
                     #name: #ty_name
                 }
             });
+
+        // let server_tys = server_args
 
         quote! {
             #[derive(serde::Serialize, serde::Deserialize)]
@@ -568,8 +572,10 @@ fn route_impl_with_route(
                 ServerFnEncoder, ExtractRequest, FetchRequest,
                 ServerFnSugar, ServerFnRejection, EncodeRequest, get_server_url,
                 ServerFnError, MakeAxumResponse, ServerFnDecoder, ReqwestDecodeResult, ReqwestDecodeErr, DioxusServerState,
-                MakeAxumError
+                MakeAxumError, assert_is_result
             };
+
+            _ = assert_is_result::<#out_ty>();
 
             #query_params_struct
 
@@ -577,6 +583,7 @@ fn route_impl_with_route(
 
             // On the client, we make the request to the server
             // We want to support extremely flexible error types and return types, making this more complex than it should
+            #[allow(clippy::unused_unit)]
             if cfg!(not(feature = "server")) {
                 let __params = __QueryParams__ { #(#query_param_names,)* };
 
@@ -585,6 +592,11 @@ fn route_impl_with_route(
                     format!("http://127.0.0.1:8080{}", #request_url)
                     // .#http_method(format!("{}{}", get_server_url(), #request_url)); // .query(&__params);
                 );
+
+                let verify_token = (&&&&&&&&&&&&&&ServerFnEncoder::<___Body_Serialize___<#(#rest_idents2,)*>, (#(#body_json_types4,)*)>::new())
+                    .verify_can_serialize();
+
+                dioxus_fullstack::assert_can_encode(verify_token);
 
                 let response = (&&&&&&&&&&&&&&ServerFnEncoder::<___Body_Serialize___<#(#rest_idents,)*>, (#(#body_json_types2,)*)>::new())
                     .fetch_client(client, ___Body_Serialize___ { #(#rest_ident_names2,)* }, #unpack)
@@ -611,6 +623,7 @@ fn route_impl_with_route(
 
                 #function_on_server
 
+                #[allow(clippy::unused_unit)]
                 #aide_ident_docs
                 #asyncness fn __inner__function__ #impl_generics(
                     ___state: __axum::extract::State<DioxusServerState>,
@@ -618,8 +631,6 @@ fn route_impl_with_route(
                     #query_extractor
                     request: __axum::extract::Request,
                 ) -> Result<__axum::response::Response, __axum::response::Response> #where_clause {
-                    info!("Handling request for server function: {}", stringify!(#fn_name));
-
                     let ( #(#body_json_names,)*) = (&&&&&&&&&&&&&&ServerFnEncoder::<___Body_Serialize___<#(#body_json_types,)*>, (#(#body_json_types3,)*)>::new())
                         .extract_axum(___state.0, request, #unpack2).await?;
 

@@ -1,4 +1,6 @@
-use dioxus_fullstack_core::ServerFnError;
+use axum::extract::FromRequest;
+use dioxus_fullstack_core::{DioxusServerState, ServerFnError};
+use serde::de::DeserializeOwned;
 use std::{pin::Pin, prelude::rust_2024::Future};
 
 pub trait FromResponse: Sized {
@@ -56,3 +58,27 @@ impl<T, E> std::future::Future for ServerFnRequest<Result<T, E>> {
         self.project().fut.poll(cx)
     }
 }
+
+#[doc(hidden)]
+#[diagnostic::on_unimplemented(
+    message = "The return type of a server function must be `Result<T, E>`",
+    note = "`T` is either `impl IntoResponse` *or* `impl Serialize`",
+    note = "`E` is either `From<ServerFnError> + Serialize`, `dioxus::Error` or `StatusCode`."
+)]
+pub trait AssertIsResult {}
+impl<T, E> AssertIsResult for Result<T, E> {}
+
+#[doc(hidden)]
+pub fn assert_is_result<T: AssertIsResult>() {}
+
+#[diagnostic::on_unimplemented(
+    message = "The arguments to the server function must either be a single `impl FromRequest + IntoRequest` argument, or multiple `DeserializeOwned` arguments."
+)]
+pub trait AssertCanEncode {}
+
+pub struct CantEncode;
+
+pub struct EncodeIsVerified;
+impl AssertCanEncode for EncodeIsVerified {}
+
+pub fn assert_can_encode(_t: impl AssertCanEncode) {}

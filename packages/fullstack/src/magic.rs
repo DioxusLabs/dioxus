@@ -75,7 +75,6 @@ impl<Out> ServerFnDecoder<Out> {
 ///
 /// We use the `___status` field to avoid conflicts with user-defined fields. Hopefully no one uses this field name!
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-#[serde(untagged)]
 pub enum RestEndpointPayload<T, E> {
     #[serde(rename = "success")]
     Success(T),
@@ -98,6 +97,8 @@ pub struct ErrorPayload<E> {
 
 pub use req_to::*;
 pub mod req_to {
+    use crate::{CantEncode, EncodeIsVerified};
+
     use super::*;
 
     pub struct FetchRequest {
@@ -112,12 +113,15 @@ pub mod req_to {
     }
 
     pub trait EncodeRequest<In, Out> {
+        type VerifyEncode;
         fn fetch_client(
             &self,
             ctx: FetchRequest,
             data: In,
             map: fn(In) -> Out,
         ) -> impl Future<Output = Result<reqwest::Response, reqwest::Error>> + Send + 'static;
+
+        fn verify_can_serialize(&self) -> Self::VerifyEncode;
     }
 
     // One-arg case
@@ -125,6 +129,7 @@ pub mod req_to {
     where
         T: DeserializeOwned + Serialize + 'static,
     {
+        type VerifyEncode = EncodeIsVerified;
         fn fetch_client(
             &self,
             ctx: FetchRequest,
@@ -142,6 +147,10 @@ pub mod req_to {
                 Ok(ctx.client.body(data).send().await.unwrap())
             })
         }
+
+        fn verify_can_serialize(&self) -> Self::VerifyEncode {
+            EncodeIsVerified
+        }
     }
 
     impl<T, O> EncodeRequest<T, O> for &&&&&&&&&ServerFnEncoder<T, O>
@@ -149,6 +158,7 @@ pub mod req_to {
         T: 'static,
         O: FromRequest<DioxusServerState> + IntoRequest,
     {
+        type VerifyEncode = EncodeIsVerified;
         fn fetch_client(
             &self,
             ctx: FetchRequest,
@@ -157,6 +167,31 @@ pub mod req_to {
         ) -> impl Future<Output = Result<reqwest::Response, reqwest::Error>> + Send + 'static
         {
             O::into_request(map(data), ctx.client)
+        }
+
+        fn verify_can_serialize(&self) -> Self::VerifyEncode {
+            EncodeIsVerified
+        }
+    }
+
+    /// The fall-through case that emits a `CantEncode` type which fails to compile when checked by the macro
+    impl<T, O> EncodeRequest<T, O> for &ServerFnEncoder<T, O>
+    where
+        T: 'static,
+    {
+        type VerifyEncode = CantEncode;
+        #[allow(clippy::manual_async_fn)]
+        fn fetch_client(
+            &self,
+            _ctx: FetchRequest,
+            _data: T,
+            _map: fn(T) -> O,
+        ) -> impl Future<Output = Result<reqwest::Response, reqwest::Error>> + Send + 'static
+        {
+            async move { unimplemented!() }
+        }
+        fn verify_can_serialize(&self) -> Self::VerifyEncode {
+            CantEncode
         }
     }
 }
@@ -318,44 +353,37 @@ mod decode_ok {
             SendWrapper::new(async move {
                 match res {
                     Ok(Ok(res)) => Ok(res),
-                    Ok(Err(e)) => {
-                        //
-                        match e {
-                            // todo: we've caught the reqwest error here, so we should give it back in the form of a proper status code.
-                            ServerFnError::Request {
-                                message: _message,
-                                code,
-                            } => Err(StatusCode::from_u16(code.unwrap_or(500))
-                                .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR)),
 
-                            ServerFnError::ServerError {
-                                message: _message,
-                                details: _details,
-                                code,
-                            } => Err(StatusCode::from_u16(code.unwrap_or(500))
-                                .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR)),
+                    // We do a best-effort conversion from ServerFnError to StatusCode.
+                    Ok(Err(e)) => match e {
+                        ServerFnError::Request {
+                            message: _message,
+                            code,
+                        } => Err(StatusCode::from_u16(code.unwrap_or(500))
+                            .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR)),
 
-                            ServerFnError::Registration(_) => {
-                                Err(StatusCode::INTERNAL_SERVER_ERROR)
-                            }
-                            ServerFnError::UnsupportedRequestMethod(_) => {
-                                Err(StatusCode::INTERNAL_SERVER_ERROR)
-                            }
+                        ServerFnError::ServerError {
+                            message: _message,
+                            details: _details,
+                            code,
+                        } => Err(StatusCode::from_u16(code.unwrap_or(500))
+                            .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR)),
 
-                            ServerFnError::MiddlewareError(_) => {
-                                Err(StatusCode::INTERNAL_SERVER_ERROR)
-                            }
-                            ServerFnError::Deserialization(_) => {
-                                Err(StatusCode::INTERNAL_SERVER_ERROR)
-                            }
-                            ServerFnError::Serialization(_) => {
-                                Err(StatusCode::INTERNAL_SERVER_ERROR)
-                            }
-                            ServerFnError::Args(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
-                            ServerFnError::MissingArg(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
-                            ServerFnError::Response(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
+                        ServerFnError::Registration(_) | ServerFnError::MiddlewareError(_) => {
+                            Err(StatusCode::INTERNAL_SERVER_ERROR)
                         }
-                    }
+
+                        ServerFnError::Deserialization(_)
+                        | ServerFnError::Serialization(_)
+                        | ServerFnError::Args(_)
+                        | ServerFnError::MissingArg(_) => Err(StatusCode::UNPROCESSABLE_ENTITY),
+
+                        ServerFnError::UnsupportedRequestMethod(_) => {
+                            Err(StatusCode::METHOD_NOT_ALLOWED)
+                        }
+
+                        ServerFnError::Response(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
+                    },
 
                     // The reqwest error case, we try to convert the reqwest error into a status code.
                     Err(reqwest_err) => {
@@ -373,9 +401,9 @@ mod decode_ok {
 pub use req_from::*;
 pub mod req_from {
     use super::*;
-    use axum::response::Response;
+    use axum::{extract::FromRequestParts, response::Response};
 
-    pub trait ExtractRequest<In, Out> {
+    pub trait ExtractRequest<In, Out, M = ()> {
         fn extract_axum(
             &self,
             state: DioxusServerState,
@@ -399,7 +427,7 @@ pub mod req_from {
             send_wrapper::SendWrapper::new(async move {
                 let bytes = Bytes::from_request(request, &()).await.unwrap();
                 let as_str = String::from_utf8_lossy(&bytes);
-                tracing::info!("deserializing request body: {}", as_str);
+
                 let bytes = if as_str.is_empty() {
                     "{}".as_bytes()
                 } else {
@@ -414,9 +442,9 @@ pub mod req_from {
     }
 
     /// We skip the BodySerialize wrapper and just go for the output type directly.
-    impl<In, Out> ExtractRequest<In, Out> for &&&&&&&&&ServerFnEncoder<In, Out>
+    impl<In, Out, M> ExtractRequest<In, Out, M> for &&&&&&&&&ServerFnEncoder<In, Out>
     where
-        Out: FromRequest<DioxusServerState> + 'static,
+        Out: FromRequest<DioxusServerState, M> + 'static,
     {
         fn extract_axum(
             &self,
@@ -437,6 +465,7 @@ pub use resp::*;
 mod resp {
     use super::*;
     use axum::response::Response;
+    use http::HeaderValue;
 
     /// A trait for converting the result of the Server Function into an Axum response.
     ///
@@ -469,13 +498,11 @@ mod resp {
         fn make_axum_response(self, result: Result<T, E>) -> Result<Response, E> {
             match result {
                 Ok(res) => {
-                    let res: RestEndpointPayload<T, serde_json::Value> =
-                        RestEndpointPayload::Success(res);
                     let body = serde_json::to_string(&res).unwrap();
                     let mut resp = Response::new(body.into());
                     resp.headers_mut().insert(
                         http::header::CONTENT_TYPE,
-                        "application/json".parse().unwrap(),
+                        HeaderValue::from_static("application/json"),
                     );
                     *resp.status_mut() = StatusCode::OK;
                     Ok(resp)
@@ -507,7 +534,7 @@ mod resp {
                     let mut resp = Response::new(body.into());
                     resp.headers_mut().insert(
                         http::header::CONTENT_TYPE,
-                        "application/json".parse().unwrap(),
+                        HeaderValue::from_static("application/json"),
                     );
                     *resp.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
                     Err(resp)
@@ -523,17 +550,36 @@ mod resp {
         ) -> Result<Response, Response> {
             match result {
                 Ok(res) => Ok(res),
-                Err(err) => {
-                    let err = ErrorPayload::<()> {
-                        code: None,
-                        message: err.to_string(),
-                        data: None,
+                Err(errr) => {
+                    // The `WithHttpError` trait emits ServerFnErrors so we can downcast them here
+                    // to create richer responses.
+                    let payload = match errr.downcast::<ServerFnError>() {
+                        Ok(ServerFnError::ServerError {
+                            message,
+                            code,
+                            details,
+                        }) => ErrorPayload {
+                            message,
+                            code,
+                            data: details,
+                        },
+                        Ok(other) => ErrorPayload {
+                            message: other.to_string(),
+                            code: None,
+                            data: None,
+                        },
+                        Err(err) => ErrorPayload {
+                            code: None,
+                            message: err.to_string(),
+                            data: None,
+                        },
                     };
-                    let body = serde_json::to_string(&err).unwrap();
+
+                    let body = serde_json::to_string(&payload).unwrap();
                     let mut resp = Response::new(body.into());
                     resp.headers_mut().insert(
                         http::header::CONTENT_TYPE,
-                        "application/json".parse().unwrap(),
+                        HeaderValue::from_static("application/json"),
                     );
                     *resp.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
                     Err(resp)
@@ -559,7 +605,7 @@ mod resp {
                     let mut resp = Response::new(body.into());
                     resp.headers_mut().insert(
                         http::header::CONTENT_TYPE,
-                        "application/json".parse().unwrap(),
+                        HeaderValue::from_static("application/json"),
                     );
                     *resp.status_mut() = status;
                     Err(resp)

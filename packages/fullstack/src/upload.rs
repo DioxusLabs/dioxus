@@ -1,14 +1,16 @@
 use std::prelude::rust_2024::Future;
 
+use axum::response::IntoResponse;
 use axum_core::{
     body::Body,
     extract::{FromRequest, Request},
 };
 use bytes::Bytes;
+use dioxus_fullstack_core::ServerFnError;
 use futures::Stream;
 use http_body_util::BodyExt;
 
-use crate::ServerFnRejection;
+use crate::{FromResponse, IntoRequest, ServerFnRejection};
 
 pub struct FileUpload {
     outgoing_stream: Option<http_body_util::BodyDataStream<Request<Body>>>,
@@ -21,6 +23,27 @@ impl FileUpload {
         data: impl Stream<Item = Result<Bytes, Bytes>> + Send + 'static,
     ) -> Self {
         todo!()
+    }
+}
+
+impl IntoRequest for FileUpload {
+    fn into_request(
+        mut input: Self,
+        builder: reqwest::RequestBuilder,
+    ) -> impl Future<Output = Result<reqwest::Response, reqwest::Error>> + Send + 'static {
+        async move {
+            todo!()
+            // let stream = input
+            //     .outgoing_stream
+            //     .take()
+            //     .expect("FileUpload can only be used once");
+            // let req = builder
+            //     .body(reqwest::Body::wrap_stream(stream))
+            //     .build()
+            //     .expect("Failed to build request");
+            // let client = reqwest::Client::new();
+            // client.execute(req).await
+        }
     }
 }
 
@@ -37,5 +60,13 @@ impl<S> FromRequest<S> for FileUpload {
                 outgoing_stream: Some(stream),
             })
         }
+    }
+}
+
+impl FromResponse for FileUpload {
+    fn from_response(
+        res: reqwest::Response,
+    ) -> impl Future<Output = Result<Self, ServerFnError>> + Send {
+        async move { todo!() }
     }
 }

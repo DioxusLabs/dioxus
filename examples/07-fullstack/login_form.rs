@@ -48,3 +48,38 @@ fn app() -> Element {
         }
     }
 }
+
+#[component]
+fn LoggedIn() -> Element {
+    // let data = use_loader!(|| DB.query("SELECT (name, email) FROM users limit 30"));
+
+    // rsx! {
+    //     div {
+    //         for user in data.value().iter() {
+    //             div { "{user.name} - {user.email}" }
+    //         }
+    //         Link { to: "/next-page", "Next Page" }
+    //     }
+    // }
+    todo!()
+}
+
+struct Something {}
+
+fn hmmm() {
+    impl Something {
+        /// Mock database query function
+        pub fn query(&self, query: &str) -> Vec<UsersNameAndEmail> {
+            vec![]
+        }
+    }
+    struct UsersNameAndEmail {
+        name: String,
+        email: String,
+    }
+    todo!()
+}
+
+fn oh_cool() {
+    Something {}.query("SELECT (name, email) FROM users limit 30");
+}

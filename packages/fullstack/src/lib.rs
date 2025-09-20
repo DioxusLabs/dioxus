@@ -1,14 +1,5 @@
 // #![warn(missing_docs)]
 
-// impl From<reqwest::Error> for ServerFnError {
-//     fn from(value: reqwest::Error) -> Self {
-//         ServerFnError::Request {
-//             message: value.to_string(),
-//             code: value.status().map(|s| s.as_u16()),
-//         }
-//     }
-// }
-
 pub use dioxus_fullstack_core::client::{get_server_url, set_server_url};
 pub use dioxus_fullstack_core::*;
 
@@ -37,11 +28,11 @@ pub use serde;
 
 // pub mod msgpack;
 
+pub mod jwt;
+pub use jwt::*;
+
 pub mod magic;
 pub use magic::*;
-
-pub mod error;
-pub use error::*;
 
 pub mod json;
 pub use json::*;
@@ -72,3 +63,9 @@ pub use response::*;
 
 pub mod request;
 pub use request::*;
+
+pub mod html;
+pub use html::*;
+
+pub mod error;
+pub use error::*;

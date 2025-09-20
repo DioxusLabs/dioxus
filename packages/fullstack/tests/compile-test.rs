@@ -27,56 +27,60 @@ mod simple_extractors {
 
     /// We can extract the state and return anything thats IntoResponse
     #[get("/home")]
-    async fn one(state: State<DioxusServerState>) -> String {
-        "hello home".to_string()
+    async fn one() -> Result<String> {
+        Ok("hello home".to_string())
     }
 
     /// We can extract the path arg and return anything thats IntoResponse
     #[get("/home/{id}")]
-    async fn two(id: String) -> String {
-        format!("hello home {}", id)
+    async fn two(id: String) -> Result<String> {
+        Ok(format!("hello home {}", id))
     }
 
     /// We can do basically nothing
     #[get("/")]
-    async fn three() {}
+    async fn three() -> Result<()> {
+        Ok(())
+    }
 
     /// We can do basically nothing, with args
     #[get("/{one}/{two}?a&b&c")]
-    async fn four(one: String, two: String, a: String, b: String, c: String) {}
-
-    /// We can return anything that implements IntoResponse
-    #[get("/hello")]
-    async fn five() -> Html<&'static str> {
-        Html("<h1>Hello!</h1>")
+    async fn four(one: String, two: String, a: String, b: String, c: String) -> Result<()> {
+        Ok(())
     }
 
     /// We can return anything that implements IntoResponse
     #[get("/hello")]
-    async fn six() -> Json<&'static str> {
-        Json("Hello!")
+    async fn five() -> Result<Html<String>> {
+        Ok(Html("<h1>Hello!</h1>".to_string()))
+    }
+
+    /// We can return anything that implements IntoResponse
+    #[get("/hello")]
+    async fn six() -> Result<Json<String>> {
+        Ok(Json("Hello!".to_string()))
     }
 
     /// We can return our own custom `Text<T>` type for sending plain text
     #[get("/hello")]
-    async fn six_2() -> Text<&'static str> {
-        Text("Hello!")
+    async fn six_2() -> Result<Text<&'static str>> {
+        Ok(Text("Hello!"))
     }
 
     /// We can return our own custom TextStream type for sending plain text streams
     #[get("/hello")]
-    async fn six_3() -> TextStream {
-        TextStream::new(futures::stream::iter(vec![
+    async fn six_3() -> Result<TextStream> {
+        Ok(TextStream::new(futures::stream::iter(vec![
             Ok("Hello 1".to_string()),
             Ok("Hello 2".to_string()),
             Ok("Hello 3".to_string()),
-        ]))
+        ])))
     }
 
     /// We can return a Result with anything that implements IntoResponse
     #[get("/hello")]
-    async fn seven() -> Bytes {
-        Bytes::from_static(b"Hello!")
+    async fn seven() -> Result<Bytes> {
+        Ok(Bytes::from_static(b"Hello!"))
     }
 
     /// We can return a Result with anything that implements IntoResponse
@@ -99,13 +103,13 @@ mod simple_extractors {
 
     /// We can use the ServerFnError error type
     #[get("/hello")]
-    async fn elevent() -> Result<Bytes, http::Error> {
+    async fn elevent() -> Result<Bytes> {
         Ok(Bytes::from_static(b"Hello!"))
     }
 
     /// We can use mutliple args that are Deserialize
     #[get("/hello")]
-    async fn twelve(a: i32, b: i32, c: i32) -> Result<Bytes, http::Error> {
+    async fn twelve(a: i32, b: i32, c: i32) -> Result<Bytes> {
         Ok(format!("Hello! {} {} {}", a, b, c).into())
     }
 
@@ -137,8 +141,12 @@ mod custom_serialize {
 
     /// Directly return the object, and it will be serialized to JSON
     #[get("/item/{id}?amount&offset")]
-    async fn get_item1(id: i32, amount: Option<i32>, offset: Option<i32>) -> Json<YourObject> {
-        Json(YourObject { id, amount, offset })
+    async fn get_item1(
+        id: i32,
+        amount: Option<i32>,
+        offset: Option<i32>,
+    ) -> Result<Json<YourObject>> {
+        Ok(Json(YourObject { id, amount, offset }))
     }
 
     #[get("/item/{id}?amount&offset")]
@@ -168,7 +176,7 @@ mod custom_serialize {
 mod custom_types {
     use axum::response::Response;
     // use axum_core::response::Response;
-    use dioxus_fullstack::FromResponse;
+    use dioxus_fullstack::{FromResponse, IntoRequest};
 
     use super::*;
 
@@ -215,6 +223,15 @@ mod custom_types {
             _state: &T,
         ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send {
             async move { Ok(MyCustomPayload {}) }
+        }
+    }
+    impl IntoRequest for MyCustomPayload {
+        fn into_request(
+            input: Self,
+            request_builder: reqwest::RequestBuilder,
+        ) -> impl Future<Output = Result<reqwest::Response, reqwest::Error>> + Send + 'static
+        {
+            async move { todo!() }
         }
     }
 
@@ -265,23 +282,18 @@ mod overlap {
 }
 
 mod http_ext {
+    use dioxus::Result;
+
     use super::*;
 
-    /// Extract regular axum endpoints
+    /// Extract requests directly for full control
     #[get("/myendpoint")]
-    async fn my_custom_handler1(request: axum::extract::Request) {
+    async fn my_custom_handler1(request: axum::extract::Request) -> Result<()> {
         let mut data = request.into_data_stream();
         while let Some(chunk) = data.next().await {
             let _ = chunk.unwrap();
         }
-    }
-
-    #[get("/myendpoint")]
-    async fn my_custom_handler2(_state: State<DioxusServerState>, request: axum::extract::Request) {
-        let mut data = request.into_data_stream();
-        while let Some(chunk) = data.next().await {
-            let _ = chunk.unwrap();
-        }
+        Ok(())
     }
 }
 
@@ -296,34 +308,41 @@ mod input_types {
 
     /// We can take `()` as input
     #[post("/")]
-    async fn zero(a: (), b: (), c: ()) {}
+    async fn zero(a: (), b: (), c: ()) -> Result<()> {
+        Ok(())
+    }
 
     /// We can take `()` as input in serde types
     #[post("/")]
-    async fn zero_1(a: Json<()>) {}
+    async fn zero_1(a: Json<()>) -> Result<()> {
+        Ok(())
+    }
 
     /// We can take regular axum extractors as input
     #[post("/")]
-    async fn one(data: Json<CustomPayload>) {}
+    async fn one(data: Json<CustomPayload>) -> Result<()> {
+        Ok(())
+    }
 
     /// We can take Deserialize types as input, and they will be deserialized from JSON
     #[post("/")]
-    async fn two(name: String, age: u32) {}
+    async fn two(name: String, age: u32) -> Result<()> {
+        Ok(())
+    }
 
     // /// We can take Deserialize types as input, with custom server extensions
     // #[post("/", headers: HeaderMap)]
     // async fn three(name: String, age: u32) {}
 
-    /// We can take a regular axum-like mix with extractors and Deserialize types
-    #[post("/")]
-    async fn four(headers: HeaderMap, data: Json<CustomPayload>) {}
+    // /// We can take a regular axum-like mix with extractors and Deserialize types
+    // #[post("/")]
+    // async fn four(headers: HeaderMap, data: Json<CustomPayload>) -> Result<()> {
+    //     Ok(())
+    // }
 
     /// We can even accept string in the final position.
     #[post("/")]
-    async fn five(age: u32, name: String) {}
-
-    // type r1<T> = Result<T, dioxus_core::Error>;
-    // type r2<T> = Result<T, ServerFnError>;
-    // type r3<T> = Result<T, StatusCode>;
-    // type r4<T> = Result<T, http::Error>;
+    async fn five(age: u32, name: String) -> Result<()> {
+        Ok(())
+    }
 }

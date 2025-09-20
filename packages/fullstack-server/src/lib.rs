@@ -83,6 +83,8 @@ pub use launch::{launch, launch_cfg};
 /// Implementations of the server side of the server function call.
 pub mod server;
 
+pub use launch::serve;
+
 /// Types and traits for HTTP responses.
 // pub mod response;
 pub mod config;

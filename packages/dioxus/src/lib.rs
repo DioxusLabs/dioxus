@@ -85,6 +85,9 @@ pub use dioxus_cli_config as cli_config;
 #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
 pub use dioxus_server as server;
 
+#[cfg(feature = "server")]
+pub use dioxus_server::serve;
+
 #[cfg(feature = "devtools")]
 #[cfg_attr(docsrs, doc(cfg(feature = "devtools")))]
 pub use dioxus_devtools as devtools;
@@ -201,14 +204,15 @@ pub mod prelude {
     #[doc(inline)]
     pub use dioxus_fullstack::{
         self as dioxus_fullstack, delete, get, patch, post, put, server, use_server_cached,
-        use_server_future, ServerFnError, ServerFnResult,
+        use_server_future, OrHttpError, ServerFnError, ServerFnResult,
     };
 
     #[cfg(feature = "server")]
     #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
     #[doc(inline)]
     pub use dioxus_server::{
-        self, extract, DioxusRouterExt, DioxusRouterFnExt, FromContext, ServeConfig, ServerFunction,
+        self, extract, serve, DioxusRouterExt, DioxusRouterFnExt, FromContext, ServeConfig,
+        ServerFunction,
     };
 
     #[cfg(feature = "router")]
