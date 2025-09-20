@@ -45,7 +45,7 @@ fn app() -> Element {
                         class: "inline-block w-full md:w-auto px-6 py-3 font-medium text-white bg-indigo-500 hover:bg-indigo-600 rounded transition duration-200",
                         disabled: scan.is_pending(),
                         onclick: move |_| {
-                            scan.dispatch(());
+                            scan.call(());
                         },
                         if scan.is_pending() { "Scanning" } else { "Scan" }
                     }

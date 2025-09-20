@@ -14,10 +14,10 @@ fn app() -> Element {
     });
 
     rsx! {
-        button { onclick: move |_| user_from_server_fn.dispatch(123), "Fetch Data" }
+        button { onclick: move |_| user_from_server_fn.call(123), "Fetch Data" }
         div { "User from server: {user_from_server_fn.value():?}", }
 
-        button { onclick: move |_| user_from_reqwest.dispatch(456), "Fetch From Endpoint" }
+        button { onclick: move |_| user_from_reqwest.call(456), "Fetch From Endpoint" }
         div { "User from server: {user_from_reqwest.value():?}", }
     }
 }

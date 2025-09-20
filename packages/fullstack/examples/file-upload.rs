@@ -22,7 +22,7 @@ fn app() -> Element {
 
     rsx! {
         div { "File upload example" }
-        button { onclick: move |_| file_id.dispatch(()), "Upload file" }
+        button { onclick: move |_| file_id.call(()), "Upload file" }
     }
 }
 

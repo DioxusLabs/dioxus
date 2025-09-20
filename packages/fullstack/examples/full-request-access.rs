@@ -11,7 +11,7 @@ fn app() -> Element {
 
     rsx! {
         div { "Access to full axum request" }
-        button { onclick: move |_| file_id.dispatch(()), "Upload file" }
+        button { onclick: move |_| file_id.call(()), "Upload file" }
     }
 }
 

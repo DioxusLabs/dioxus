@@ -28,7 +28,7 @@ fn app() -> Element {
     rsx! {
         form {
             onsubmit: move |e| {
-                send_request.dispatch(e);
+                send_request.call(e);
             },
             input { name: "message-input", placeholder: "Talk to your AI" }
             button { "Send" }

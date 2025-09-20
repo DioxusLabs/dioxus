@@ -4,6 +4,7 @@ use dioxus_signals::{
     read_impls, CopyValue, ReadSignal, Readable, ReadableBoxExt, ReadableExt, ReadableRef, Signal,
     WritableExt,
 };
+use futures_util::future;
 use std::{cell::Ref, marker::PhantomData, prelude::rust_2024::Future};
 
 pub fn use_action<F, E, I, O>(mut user_fn: impl FnMut(I) -> F + 'static) -> Action<I, O>
@@ -73,7 +74,8 @@ pub struct Action<I, T> {
     _phantom: PhantomData<*const I>,
 }
 impl<I: 'static, T: 'static> Action<I, T> {
-    pub fn dispatch(&mut self, input: I) -> Dispatching<()> {
+    /// Call this action with the given input, returning a Dispatching future that resolves when the action is complete.
+    pub fn call(&mut self, input: I) -> Dispatching<()> {
         (self.callback)(input);
         Dispatching(PhantomData)
     }
@@ -143,16 +145,16 @@ where
     }
 }
 pub struct Dispatching<I>(PhantomData<*const I>);
-impl<T> std::future::Future for Dispatching<T> {
-    type Output = ();
+// impl<T> std::future::Future for Dispatching<T> {
+//     type Output = ();
 
-    fn poll(
-        self: std::pin::Pin<&mut Self>,
-        _cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Self::Output> {
-        std::task::Poll::Ready(())
-    }
-}
+//     fn poll(
+//         self: std::pin::Pin<&mut Self>,
+//         _cx: &mut std::task::Context<'_>,
+//     ) -> std::task::Poll<Self::Output> {
+//         future::futu
+//     }
+// }
 
 impl<I, T> Copy for Action<I, T> {}
 impl<I, T> Clone for Action<I, T> {

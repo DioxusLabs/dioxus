@@ -1,3 +1,14 @@
+//! This example showcases how to use the `axum-session-auth` crate with Dioxus fullstack.
+//! We add the `auth::Session` extractor to our server functions to get access to the current user session.
+//!
+//! To initialize the axum router, we use `dioxus::serve` to spawn a custom axum server that creates
+//! our database, session store, and authentication layer.
+//!
+//! The `.serve_dioxus_application` method is used to mount our Dioxus app as a fallback service to
+//! handle HTML rendering and static assets.
+
+use std::collections::HashSet;
+
 use dioxus::prelude::*;
 
 #[cfg(feature = "server")]
@@ -59,71 +70,91 @@ fn main() {
     });
 }
 
+/// The UI for our app - is just a few buttons to call our server functions and display the results.
 fn app() -> Element {
     let mut login = use_action(|_| login());
     let mut user_name = use_action(|_| get_user_name());
     let mut permissions = use_action(|_| get_permissions());
     let mut logout = use_action(|_| logout());
 
+    let fetch_new = move |_| async move {
+        user_name.call(());
+        permissions.call(());
+    };
+
     rsx! {
-        button { onclick: move |_| login.dispatch(()), "Login Test User" }
-        button { onclick: move |_| user_name.dispatch(()), "Get User Name" }
-        button { onclick: move |_| permissions.dispatch(()), "Get Permissions" }
         button {
             onclick: move |_| async move {
-                logout.dispatch(()).await;
-                login.reset();
-                user_name.reset();
-                permissions.reset();
+                login.call(());
             },
-            "Reset"
+            "Login Test User"
         }
+        button {
+            onclick: move |_| async move {
+                logout.call(());
+            },
+            "Logout"
+        }
+        button {
+            onclick: fetch_new,
+            "Fetch User Info"
+        }
+
         pre { "Logged in: {login.result():?}" }
         pre { "User name: {user_name.result():?}" }
         pre { "Permissions: {permissions.result():?}" }
     }
 }
 
-#[post("/api/user/logout", auth: auth::Session)]
-pub async fn logout() -> Result<()> {
-    auth.logout_user();
-    Ok(())
-}
-
+/// We use the `auth::Session` extractor to get access to the current user session.
+/// This lets us modify the user session, log in/out, and access the current user.
 #[post("/api/user/login", auth: auth::Session)]
 pub async fn login() -> Result<()> {
+    use axum_session_auth::Authentication;
+
+    // Already logged in
+    if auth.current_user.as_ref().unwrap().is_authenticated() {
+        return Ok(());
+    }
+
     auth.login_user(2);
     Ok(())
 }
 
+/// Just like `login`, but this time we log out the user.
+#[post("/api/user/logout", auth: auth::Session)]
+pub async fn logout() -> Result<()> {
+    auth.logout_user();
+    auth.cache_clear_user(2);
+    Ok(())
+}
+
+/// We can access the current user via `auth.current_user`.
+/// We can have both anonymous user (id 1) and a logged in user (id 2).
+///
+/// Logged-in users will have more permissions which we can modify.
 #[get("/api/user/name", auth: auth::Session)]
 pub async fn get_user_name() -> Result<String> {
     Ok(auth.current_user.unwrap().username)
 }
 
+/// Get the current user's permissions, guarding the endpoint with the `Auth` validator.
+/// If this returns false, we use the `or_unauthorized` extension to return a 401 error.
 #[get("/api/user/permissions", auth: auth::Session)]
-pub async fn get_permissions() -> Result<String> {
+pub async fn get_permissions() -> Result<HashSet<String>> {
     use crate::auth::User;
     use axum_session_auth::{Auth, Rights};
+
     let user = auth.current_user.unwrap();
 
-    // lets check permissions only and not worry about if they are anon or not
-    if !Auth::<User, i64, sqlx::SqlitePool>::build([axum::http::Method::GET], false)
+    Auth::<User, i64, sqlx::SqlitePool>::build([axum::http::Method::GET], false)
         .requires(Rights::any([
             Rights::permission("Category::View"),
             Rights::permission("Admin::View"),
         ]))
         .validate(&user, &axum::http::Method::GET, None)
         .await
-    {
-        return Ok(format!(
-            "User does not have Permissions needed. - {:?} ",
-            user.permissions
-        ));
-    }
+        .or_unauthorized("User does not have permission to view categories.")?;
 
-    Ok(format!(
-        "User has Permissions needed. {:?}",
-        user.permissions
-    ))
+    Ok(user.permissions)
 }

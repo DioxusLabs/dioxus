@@ -71,7 +71,7 @@ fn app() -> Element {
                 class: "button is-primary",
                 class: if image.is_pending() { "is-loading" },
                 onclick: move |_| {
-                    image.dispatch(());
+                    image.call(());
                 },
                 "Generate image"
             }

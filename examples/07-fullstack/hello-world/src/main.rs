@@ -38,13 +38,13 @@ fn main() {
             h1 { "High-Five counter: {count}" }
             button { onclick: move |_| count += 1, "Up high!" }
             button { onclick: move |_| count -= 1, "Down low!" }
-            button { onclick: move |_| { dog_data.dispatch(()); }, "Fetch dog data" }
-            button { onclick: move |_| { ip_data.dispatch(()); }, "Fetch IP data" }
-            button { onclick: move |_| { custom_data.dispatch(()); }, "Fetch custom encoded data" }
-            button { onclick: move |_| { error_data.dispatch(()); }, "Fetch error data" }
-            button { onclick: move |_| { typed_error_data.dispatch(()); }, "Fetch typed error data" }
-            button { onclick: move |_| { dog_data_err.dispatch(()); }, "Fetch dog error data" }
-            button { onclick: move |_| { throws_ok_data.dispatch(()); }, "Fetch throws ok data" }
+            button { onclick: move |_| { dog_data.call(()); }, "Fetch dog data" }
+            button { onclick: move |_| { ip_data.call(()); }, "Fetch IP data" }
+            button { onclick: move |_| { custom_data.call(()); }, "Fetch custom encoded data" }
+            button { onclick: move |_| { error_data.call(()); }, "Fetch error data" }
+            button { onclick: move |_| { typed_error_data.call(()); }, "Fetch typed error data" }
+            button { onclick: move |_| { dog_data_err.call(()); }, "Fetch dog error data" }
+            button { onclick: move |_| { throws_ok_data.call(()); }, "Fetch throws ok data" }
             button {
                 onclick: move |_| {
                     ip_data.reset();

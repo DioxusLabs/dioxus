@@ -59,7 +59,7 @@ fn app() -> Element {
         div {
             button {
                 onclick: move |_|  {
-                    login.dispatch(());
+                    login.call(());
                 },
                 "Login Test User"
             }
@@ -67,7 +67,7 @@ fn app() -> Element {
         div {
             button {
                 onclick: move |_| {
-                    user_name.dispatch(());
+                    user_name.call(());
                 },
                 "Get User Name"
             }
@@ -76,7 +76,7 @@ fn app() -> Element {
         div {
             button {
                 onclick: move |_| {
-                    permissions.dispatch(());
+                    permissions.call(());
                 },
                 "Get Permissions"
             }

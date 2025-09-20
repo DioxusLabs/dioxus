@@ -45,7 +45,7 @@ fn app() -> Element {
     });
 
     rsx! {
-        button { onclick: move |_| send_request.dispatch("yay".to_string()), "Send" }
+        button { onclick: move |_| send_request.call("yay".to_string()), "Send" }
     }
 }
 

@@ -45,7 +45,7 @@ fn app() -> Element {
             for cur_breed in breed_list.read().message.keys().take(20).cloned() {
                 button {
                     onclick: move |_| {
-                        breed.dispatch(cur_breed.clone());
+                        breed.call(cur_breed.clone());
                     },
                     "{cur_breed}"
                 }
