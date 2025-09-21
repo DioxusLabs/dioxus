@@ -679,6 +679,11 @@ path = "examples/07-fullstack/handling_errors.rs"
 doc-scrape-examples = true
 
 [[example]]
+name = "dog_app_self_hosted"
+path = "examples/07-fullstack/dog_app_self_hosted.rs"
+doc-scrape-examples = true
+
+[[example]]
 name = "control_focus"
 path = "examples/08-apis/control_focus.rs"
 doc-scrape-examples = true
