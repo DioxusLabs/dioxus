@@ -37,10 +37,7 @@ fn app() -> Element {
             // We can handle the action result and display loading state
             div { style: "margin: 1rem 0;",
                 h2 { "Server Greeting" }
-                button {
-                    onclick: move |_| message.call(("World".to_string(), 30)),
-                    "Get Server Greeting"
-                }
+                button { onclick: move |_| message.call(("World".to_string(), 30)), "Get Server Greeting" }
                 if message.is_pending() {
                     p { "Loading..." }
                 }

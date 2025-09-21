@@ -69,3 +69,5 @@ pub use html::*;
 
 pub mod error;
 pub use error::*;
+
+pub use http::StatusCode;

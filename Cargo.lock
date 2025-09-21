@@ -5527,6 +5527,7 @@ dependencies = [
 name = "dioxus-examples"
 version = "0.7.0-rc.0"
 dependencies = [
+ "anyhow",
  "async-std",
  "base64 0.22.1",
  "ciborium",
@@ -5543,6 +5544,7 @@ dependencies = [
  "separator",
  "serde",
  "serde_json",
+ "thiserror 2.0.12",
  "tokio",
  "wasm-splitter",
  "web-time",

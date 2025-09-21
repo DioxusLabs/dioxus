@@ -448,7 +448,7 @@ ouroboros = { version = "*", optional = true }
 wasm-splitter = { workspace = true, package = "wasm-split" }
 
 [dev-dependencies]
-dioxus = { workspace = true, features = ["router"] }
+dioxus = { workspace = true, features = ["router", "fullstack"] }
 dioxus-stores = { workspace = true }
 dioxus-ssr = { workspace = true }
 futures-util = { workspace = true }
@@ -459,6 +459,8 @@ rand = { workspace = true, features = ["small_rng"] }
 form_urlencoded = "1.2.1"
 async-std = "1.13.1"
 web-time = "1.1.0"
+anyhow = { workspace = true }
+thiserror = { workspace = true }
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 getrandom = { workspace = true, features = ["wasm_js"] }
@@ -474,7 +476,6 @@ default = ["desktop"]
 desktop = ["dioxus/desktop"]
 native = ["dioxus/native"]
 liveview = ["dioxus/liveview"]
-fullstack = ["dioxus/fullstack"]
 server = ["dioxus/server"]
 mobile = ["dioxus/mobile"]
 web = ["dioxus/web"]
