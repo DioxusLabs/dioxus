@@ -96,6 +96,7 @@ impl<I, O> FromResponse for Websocket<I, O> {
 
 pub struct WebSocketOptions {
     _private: (),
+    #[cfg(feature = "server")]
     upgrade: Option<axum::extract::ws::WebSocketUpgrade>,
 }
 
@@ -103,6 +104,8 @@ impl WebSocketOptions {
     pub fn new() -> Self {
         Self {
             _private: (),
+
+            #[cfg(feature = "server")]
             upgrade: None,
         }
     }
@@ -135,6 +138,7 @@ impl IntoRequest for WebSocketOptions {
     }
 }
 
+#[cfg(feature = "server")]
 impl<S: Send> FromRequest<S> for WebSocketOptions {
     #[doc = " If the extractor fails it\'ll use this \"rejection\" type. A rejection is"]
     #[doc = " a kind of error that can be converted into a response."]

@@ -867,6 +867,14 @@ impl BuildRequest {
             ]);
         }
 
+        // automatically set the getrandom backend for web builds if the user requested it
+        if matches!(bundle, BundleFormat::Web) && args.wasm_js_cfg {
+            rustflags.flags.extend(
+                cargo_config2::Flags::from_space_separated(r#"--cfg getrandom_backend="wasm_js""#)
+                    .flags,
+            );
+        }
+
         // Make sure to take into account the RUSTFLAGS env var and the CARGO_TARGET_<triple>_RUSTFLAGS
         for env in [
             "RUSTFLAGS".to_string(),

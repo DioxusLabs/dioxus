@@ -92,10 +92,6 @@ impl ServeArgs {
     ///
     /// We also set up proper panic handling since the TUI has a tendency to corrupt the terminal.
     pub(crate) async fn serve(self, tracer: &TraceController) -> Result<StructuredOutput> {
-        if std::env::var("RUST_BACKTRACE").is_err() {
-            std::env::set_var("RUST_BACKTRACE", "1");
-        }
-
         // Redirect all logging the cli logger - if there's any pending after a panic, we flush it
         let is_interactive_tty = self.is_interactive_tty();
         if is_interactive_tty {

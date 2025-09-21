@@ -149,6 +149,10 @@ pub(crate) struct TargetArgs {
     /// when merging `@client and @server` targets together.
     #[clap(long, help_heading = HELP_HEADING)]
     pub(crate) client_target: Option<String>,
+
+    /// Automatically pass `--features=js_cfg` when building for wasm targets. This is enabled by default.
+    #[clap(long, default_value_t = true, help_heading = HELP_HEADING, num_args = 0..=1)]
+    pub(crate) wasm_js_cfg: bool,
 }
 
 impl Anonymized for TargetArgs {
