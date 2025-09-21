@@ -43,7 +43,7 @@ pub fn Router<R: Routable + Clone>(props: RouterProps<R>) -> Element {
 
     #[cfg(feature = "streaming")]
     dioxus_hooks::use_after_suspense_resolved(|| {
-        dioxus_fullstack::commit_initial_chunk();
+        dioxus_fullstack_core::commit_initial_chunk();
     });
 
     use_hook(|| {

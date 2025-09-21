@@ -5826,7 +5826,6 @@ name = "dioxus-playwright-default-features-disabled-test"
 version = "0.1.0"
 dependencies = [
  "dioxus",
- "serde",
 ]
 
 [[package]]
@@ -5912,7 +5911,7 @@ dependencies = [
  "dioxus-cli-config",
  "dioxus-core",
  "dioxus-core-macro",
- "dioxus-fullstack",
+ "dioxus-fullstack-core",
  "dioxus-history",
  "dioxus-hooks",
  "dioxus-html",
