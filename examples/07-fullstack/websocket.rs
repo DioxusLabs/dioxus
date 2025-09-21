@@ -1,5 +1,5 @@
 use dioxus::prelude::*;
-use dioxus_fullstack::{use_websocket, WebSocketOptions, Websocket};
+use dioxus_fullstack::{WebSocketOptions, Websocket, use_websocket};
 
 fn main() {
     dioxus::launch(app);

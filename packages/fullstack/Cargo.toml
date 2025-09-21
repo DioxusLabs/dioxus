@@ -47,13 +47,6 @@ tower-layer = { version = "0.3.3", optional = true }
 # optional
 reqwest = { workspace = true, features = ["json", "rustls-tls", "cookies"] }
 
-
-[dev-dependencies]
-dioxus-fullstack = { workspace = true }
-dioxus = { workspace = true, features = ["fullstack", "server"] }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time", "sync"] }
-dashmap = "6.1"
-once_cell = "1.21"
 [features]
 web = []
 native = []
@@ -65,7 +58,7 @@ server = [
     "dep:tower-http",
     "dep:tower-layer",
     "axum/ws",
-    "axum/tokio"
+    "axum/tokio",
 ]
 
 [package.metadata.docs.rs]

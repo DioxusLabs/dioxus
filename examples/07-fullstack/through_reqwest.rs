@@ -1,3 +1,6 @@
+//! We can call server functions directly from reqwest as well as through Dioxus's built-in
+//! server function support. This example shows both methods of calling the same server function.
+//!
 use dioxus::prelude::*;
 
 fn main() {
@@ -6,6 +9,7 @@ fn main() {
 
 fn app() -> Element {
     let mut user_from_server_fn = use_action(get_user);
+
     let mut user_from_reqwest = use_action(move |id: i32| async move {
         reqwest::get(&format!("http://localhost:8000/api/user/{}", id))
             .await?

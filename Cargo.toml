@@ -461,6 +461,8 @@ async-std = "1.13.1"
 web-time = "1.1.0"
 anyhow = { workspace = true }
 thiserror = { workspace = true }
+bytes = { workspace = true }
+futures = { workspace = true }
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 getrandom = { workspace = true, features = ["wasm_js"] }
@@ -681,6 +683,56 @@ doc-scrape-examples = true
 [[example]]
 name = "dog_app_self_hosted"
 path = "examples/07-fullstack/dog_app_self_hosted.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "through_reqwest"
+path = "examples/07-fullstack/through_reqwest.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "file_upload_fullstack"
+path = "examples/07-fullstack/file_upload.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "full_request_access"
+path = "examples/07-fullstack/full_request_access.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "hello_world_test"
+path = "examples/07-fullstack/hello_world_test.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "server_side_events"
+path = "examples/07-fullstack/server_side_events.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "server_state"
+path = "examples/07-fullstack/server_state.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "server_errors"
+path = "examples/07-fullstack/server_errors.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "streaming_text"
+path = "examples/07-fullstack/streaming_text.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "custom_axum_serve"
+path = "examples/07-fullstack/custom_axum_serve.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "websocket"
+path = "examples/07-fullstack/websocket.rs"
 doc-scrape-examples = true
 
 [[example]]

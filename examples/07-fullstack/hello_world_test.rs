@@ -23,5 +23,6 @@ async fn parse_number(number: String) -> Result<String, ServerFnError> {
     let parsed_number: f32 = number
         .parse()
         .map_err(|e: ParseFloatError| ServerFnError::Args(e.to_string()))?;
+
     Ok(format!("Parsed number: {}", parsed_number))
 }
