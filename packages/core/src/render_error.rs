@@ -3,8 +3,6 @@ use std::{
     sync::Arc,
 };
 
-use serde::{Deserialize, Serialize};
-
 use crate::innerlude::*;
 
 /// An error that can occur while rendering a component
@@ -81,7 +79,7 @@ impl CapturedError {
 }
 
 #[cfg(feature = "serialize")]
-impl Serialize for CapturedError {
+impl serde::Serialize for CapturedError {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
@@ -91,7 +89,7 @@ impl Serialize for CapturedError {
 }
 
 #[cfg(feature = "serialize")]
-impl<'de> Deserialize<'de> for CapturedError {
+impl<'de> serde::Deserialize<'de> for CapturedError {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,

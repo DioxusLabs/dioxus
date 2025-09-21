@@ -5,7 +5,15 @@ use std::prelude::rust_2024::Future;
 
 use crate::FromResponse;
 
+/// A simple text response type.
 pub struct Text<T>(pub T);
+
+impl<T: Into<String>> Text<T> {
+    /// Create a new text response.
+    pub fn new(text: T) -> Self {
+        Self(text)
+    }
+}
 
 impl<T: Into<String>> IntoResponse for Text<T> {
     fn into_response(self) -> Response {
