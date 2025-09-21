@@ -575,6 +575,7 @@ fn route_impl_with_route(
 
         quote! {
             #[derive(serde::Serialize, serde::Deserialize)]
+            #[serde(crate = "serde")]
             struct ___Body_Serialize___< #(#server_tys,)* #(#tys,)* > {
                 #(#server_names,)*
                 #(#names,)*
@@ -905,55 +906,44 @@ impl CompiledRoute {
         })
     }
 
-    pub fn path_extractor(&self) -> Option<TokenStream2> {
-        // if !self.path_params.iter().any(|(_, param)| param.captures()) {
-        //     return None;
-        // }
-
+    pub fn path_extractor(&self) -> TokenStream2 {
         let path_iter = self
             .path_params
             .iter()
             .filter_map(|(_slash, path_param)| path_param.capture());
         let idents = path_iter.clone().map(|item| item.0);
         let types = path_iter.clone().map(|item| item.1);
-        Some(quote! {
+        quote! {
             __axum::extract::Path((#(#idents,)*)): __axum::extract::Path<(#(#types,)*)>,
-        })
+        }
     }
 
-    pub fn query_extractor(&self) -> Option<TokenStream2> {
-        // if self.query_params.is_empty() {
-        //     return None;
-        // }
-
+    pub fn query_extractor(&self) -> TokenStream2 {
         let idents = self.query_params.iter().map(|item| &item.0);
-        Some(quote! {
-            __axum::extract::Query(__QueryParams__ {
-                #(#idents,)*
-            }): __axum::extract::Query<__QueryParams__>,
-        })
+        quote! {
+            __axum::extract::Query(__QueryParams__ { #(#idents,)* }): __axum::extract::Query<__QueryParams__>,
+        }
     }
 
-    pub fn query_params_struct(&self, with_aide: bool) -> Option<TokenStream2> {
-        // match self.query_params.is_empty() {
-        //     true => None,
-        //     false => {
+    pub fn query_params_struct(&self, with_aide: bool) -> TokenStream2 {
         let idents = self.query_params.iter().map(|item| &item.0);
         let types = self.query_params.iter().map(|item| &item.1);
         let derive = match with_aide {
-            true => {
-                quote! { #[derive(serde::Deserialize, serde::Serialize, ::schemars::JsonSchema)] }
-            }
-            false => quote! { #[derive(serde::Deserialize, serde::Serialize)] },
+            true => quote! {
+                #[derive(serde::Deserialize, serde::Serialize, ::schemars::JsonSchema)]
+                #[serde(crate = "serde")]
+            },
+            false => quote! {
+                #[derive(serde::Deserialize, serde::Serialize)]
+                #[serde(crate = "serde")]
+            },
         };
-        Some(quote! {
+        quote! {
             #derive
             struct __QueryParams__ {
                 #(#idents: #types,)*
             }
-        })
-        // }
-        // }
+        }
     }
 
     pub fn extracted_idents(&self) -> Vec<Ident> {

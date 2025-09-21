@@ -17,8 +17,7 @@ use http_body_util::BodyExt;
 use serde::{Deserialize, Serialize};
 use std::prelude::rust_2024::Future;
 
-#[tokio::main]
-async fn main() {}
+fn main() {}
 
 mod simple_extractors {
     use serde::de::DeserializeOwned;

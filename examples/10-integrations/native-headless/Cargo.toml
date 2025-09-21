@@ -9,7 +9,7 @@ publish = false
 tracing = ["dep:tracing-subscriber", "dioxus-native-dom/tracing"]
 
 [dependencies]
-dioxus = { workspace = true, default-features = false, features = ["html", "hooks", "signals"] }
+dioxus = { workspace = true, features = ["html", "hooks", "signals"] }
 dioxus-native-dom = { workspace = true }
 anyrender_vello = { workspace = true }
 vello = "0.5"

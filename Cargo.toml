@@ -284,7 +284,7 @@ axum_session = "0.16.0"
 axum_session_auth = "0.16.0"
 axum_session_sqlx = "0.5.0"
 axum-extra = "0.10.1"
-reqwest = "0.12.22"
+reqwest = { version = "0.12.22", default-features = false }
 owo-colors = "4.2.2"
 ciborium = "0.2.2"
 base64 = "0.22.1"
@@ -445,7 +445,7 @@ base64 = { workspace = true, optional = true }
 http-range = { version = "0.1.5" }
 wgpu = { workspace = true, optional = true }
 ouroboros = { version = "*", optional = true }
-wasm-splitter = { workspace = true, package = "wasm-split" }
+wasm-splitter = { workspace = true }
 
 [dev-dependencies]
 dioxus = { workspace = true, features = ["router", "fullstack"] }
@@ -673,7 +673,7 @@ doc-scrape-examples = true
 [[example]]
 name = "login_form"
 path = "examples/07-fullstack/login_form.rs"
-doc-scrapea-examples = true
+doc-scrape-examples = true
 
 [[example]]
 name = "handling_errors"

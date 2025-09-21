@@ -5,7 +5,6 @@ we support anyhow::Error on the bounds, but you just get the error message, not 
 
 */
 
-use axum::response::IntoResponse;
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 

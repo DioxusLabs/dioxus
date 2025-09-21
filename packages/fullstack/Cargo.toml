@@ -47,6 +47,9 @@ tower-layer = { version = "0.3.3", optional = true }
 # optional
 reqwest = { workspace = true, features = ["json", "rustls-tls", "cookies"] }
 
+[dev-dependencies]
+dioxus = { workspace = true, features = ["fullstack", "router"] }
+dioxus-server = { workspace = true }
 [features]
 web = []
 native = []

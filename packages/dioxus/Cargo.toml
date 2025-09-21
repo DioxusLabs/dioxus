@@ -34,7 +34,7 @@ dioxus-asset-resolver = { workspace = true, optional = true }
 manganis = { workspace = true, features = ["dioxus"], optional = true }
 dioxus-logger = { workspace = true, optional = true }
 warnings = { workspace = true, optional = true }
-wasm-splitter = { workspace = true, package = "wasm-split", optional = true }
+wasm-splitter = { workspace = true, optional = true }
 subsecond = { workspace = true }
 
 serde = { workspace = true, optional = true }

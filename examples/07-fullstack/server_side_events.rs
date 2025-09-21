@@ -1,7 +1,6 @@
 #![allow(non_snake_case)]
 
 use anyhow::{Context, Result};
-use axum::response::sse::{Event, KeepAlive, Sse};
 use dioxus::prelude::*;
 use dioxus_fullstack::{ServerSentEvents, Streaming};
 
@@ -34,5 +33,7 @@ fn app() -> Element {
 
 #[get("/api/sse")]
 async fn listen_for_changes() -> Result<ServerSentEvents<String>> {
+    use axum::response::sse::{Event, KeepAlive, Sse};
+
     todo!()
 }
