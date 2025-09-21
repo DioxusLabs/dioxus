@@ -127,6 +127,9 @@ pub enum Loading {
     Failed(LoaderHandle),
 }
 
+// unsafe impl Send for Loading {}
+// unsafe impl Sync for Loading {}
+
 impl std::fmt::Debug for Loading {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -276,3 +279,12 @@ impl<T> Clone for Loader<T> {
 }
 
 impl<T> Copy for Loader<T> {}
+
+impl<T> Loader<T> {
+    pub fn restart(&mut self) {
+        todo!()
+        // self.task.write().cancel();
+        // let new_task = self.callback.call(());
+        // self.task.set(new_task);
+    }
+}

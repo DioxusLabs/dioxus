@@ -1,4 +1,5 @@
 use std::{
+    any::Any,
     fmt::{Debug, Display},
     sync::Arc,
 };
@@ -47,15 +48,32 @@ impl Display for RenderError {
     }
 }
 
+impl From<CapturedError> for RenderError {
+    fn from(e: CapturedError) -> Self {
+        Self::Error(e)
+    }
+}
+
 impl<E: Into<Error>> From<E> for RenderError {
     fn from(e: E) -> Self {
-        Self::Error(CapturedError(Arc::new(e.into())))
+        let anyhow_err = e.into();
+
+        if let Some(suspended) = anyhow_err.downcast_ref::<SuspendedFuture>() {
+            return Self::Suspended(suspended.clone());
+        }
+
+        if let Some(render_error) = anyhow_err.downcast_ref::<RenderError>() {
+            return render_error.clone();
+        }
+
+        Self::Error(CapturedError(Arc::new(anyhow_err)))
     }
 }
 
 /// An `anyhow::Error` wrapped in an `Arc` so it can be cheaply cloned and passed around.
 #[derive(Debug, Clone)]
 pub struct CapturedError(pub Arc<Error>);
+
 impl CapturedError {
     /// Create a `CapturedError` from anything that implements `Display`.
     pub fn from_display(t: impl Display) -> Self {
@@ -104,4 +122,12 @@ impl PartialEq for CapturedError {
     fn eq(&self, other: &Self) -> bool {
         Arc::ptr_eq(&self.0, &other.0)
     }
+}
+
+#[test]
+fn assert_errs_can_downcast() {
+    fn assert_is_stderr_like<T: Send + Sync + Display + Debug>() {}
+
+    assert_is_stderr_like::<RenderError>();
+    assert_is_stderr_like::<CapturedError>();
 }

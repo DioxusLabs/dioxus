@@ -90,26 +90,3 @@ async fn through_serverfn_result(user_message: String) -> Result<i32, CustomFrom
 
     Ok(123)
 }
-
-#[derive(thiserror::Error, Debug)]
-enum CustomIntoResponseError {
-    #[error("I/O error: {0}")]
-    Eat(#[from] std::io::Error),
-
-    #[error("Sleep error: {0}")]
-    Sleep(i32),
-
-    #[error("Coding error: {0}")]
-    Code(String),
-}
-
-impl IntoResponse for CustomIntoResponseError {
-    fn into_response(self) -> axum::response::Response {
-        todo!()
-    }
-}
-
-#[post("/api/chat")]
-async fn custom_errors(user_message: String) -> Result<i32, CustomIntoResponseError> {
-    todo!()
-}

@@ -37,21 +37,21 @@ use std::{
 #[derive(Clone, PartialEq, Debug)]
 pub struct SuspendedFuture {
     origin: ScopeId,
-    task: Task,
+    task: TaskId,
 }
 
 impl SuspendedFuture {
     /// Create a new suspended future
     pub fn new(task: Task) -> Self {
         Self {
-            task,
+            task: task.id,
             origin: current_scope_id().unwrap_or_else(|e| panic!("{}", e)),
         }
     }
 
     /// Get the task that was suspended
     pub fn task(&self) -> Task {
-        self.task
+        Task::from_id(self.task)
     }
 
     /// Create a deep clone of this suspended future
@@ -60,6 +60,12 @@ impl SuspendedFuture {
             task: self.task,
             origin: self.origin,
         }
+    }
+}
+
+impl std::fmt::Display for SuspendedFuture {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "SuspendedFuture {{ task: {:?} }}", self.task)
     }
 }
 
@@ -147,7 +153,7 @@ impl SuspenseContext {
         self.inner
             .suspended_tasks
             .borrow_mut()
-            .retain(|t| t.task != task);
+            .retain(|t| t.task != task.id);
         self.inner.id.get().needs_update();
     }
 

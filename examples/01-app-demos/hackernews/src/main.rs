@@ -134,7 +134,7 @@ fn StoryListing(story: ReadSignal<i64>) -> Element {
 
 #[component]
 fn Preview(story_id: ReadSignal<i64>) -> Element {
-    let story = use_loader(|| get_story(story_id()))?.cloned();
+    let story = use_loader(move || get_story(story_id()))?.cloned();
     rsx! {
         div { padding: "0.5rem",
             div { font_size: "1.5rem", a { href: story.item.url, "{story.item.title}" } }
@@ -151,7 +151,7 @@ fn Preview(story_id: ReadSignal<i64>) -> Element {
 
 #[component]
 fn Comment(comment: ReadSignal<i64>) -> Element {
-    let comment = use_loader(|| async move {
+    let comment = use_loader(move || async move {
         let mut comment = reqwest::get(&format!("{}{}{}.json", BASE_API_URL, ITEM_API, comment))
             .await?
             .json::<CommentData>()

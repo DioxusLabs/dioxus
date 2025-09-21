@@ -1,7 +1,8 @@
+use axum::extract::{FromRequest, Request};
 use axum_core::response::{IntoResponse, Response};
 use bytes::Bytes;
 
-use crate::{FromResponse, ServerFnError};
+use crate::{FromResponse, IntoRequest, ServerFnError};
 
 use dioxus_core::{RenderError, Result};
 use dioxus_hooks::Loader;
@@ -76,6 +77,13 @@ pub struct TypedWebsocket<In, Out> {
 pub struct Websocket<In = String, Out = String> {
     _in: std::marker::PhantomData<In>,
     _out: std::marker::PhantomData<Out>,
+    response: Option<axum::response::Response>,
+}
+
+impl<I, O> PartialEq for Websocket<I, O> {
+    fn eq(&self, other: &Self) -> bool {
+        todo!()
+    }
 }
 
 impl<I, O> FromResponse for Websocket<I, O> {
@@ -83,5 +91,70 @@ impl<I, O> FromResponse for Websocket<I, O> {
         res: reqwest::Response,
     ) -> impl Future<Output = Result<Self, ServerFnError>> + Send {
         async move { todo!() }
+    }
+}
+
+pub struct WebSocketOptions {
+    _private: (),
+    upgrade: Option<axum::extract::ws::WebSocketUpgrade>,
+}
+
+impl WebSocketOptions {
+    pub fn new() -> Self {
+        Self {
+            _private: (),
+            upgrade: None,
+        }
+    }
+
+    #[cfg(feature = "server")]
+    pub fn on_upgrade<F, Fut>(self, f: F) -> Websocket
+    where
+        F: FnOnce(axum::extract::ws::WebSocket) -> Fut + 'static,
+        Fut: Future<Output = ()> + 'static,
+    {
+        let response = self.upgrade.unwrap().on_upgrade(|socket| async move {
+            //
+        });
+
+        Websocket {
+            response: Some(response),
+            _in: PhantomData,
+            _out: PhantomData,
+        }
+    }
+}
+
+impl IntoRequest for WebSocketOptions {
+    fn into_request(
+        input: Self,
+        builder: reqwest::RequestBuilder,
+    ) -> impl Future<Output = std::result::Result<reqwest::Response, reqwest::Error>> + Send + 'static
+    {
+        async move { todo!() }
+    }
+}
+
+impl<S: Send> FromRequest<S> for WebSocketOptions {
+    #[doc = " If the extractor fails it\'ll use this \"rejection\" type. A rejection is"]
+    #[doc = " a kind of error that can be converted into a response."]
+    type Rejection = axum::http::StatusCode;
+
+    #[doc = " Perform the extraction."]
+    fn from_request(
+        req: Request,
+        state: &S,
+    ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send {
+        async move {
+            let ws = match axum::extract::ws::WebSocketUpgrade::from_request(req, &()).await {
+                Ok(ws) => ws,
+                Err(rejection) => todo!(),
+            };
+
+            Ok(WebSocketOptions {
+                _private: (),
+                upgrade: Some(ws),
+            })
+        }
     }
 }

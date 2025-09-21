@@ -20,10 +20,12 @@ use std::{pin::Pin, task::Poll};
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Task {
-    pub(crate) id: slotmap::DefaultKey,
+    pub(crate) id: TaskId,
     // We add a raw pointer to make this !Send + !Sync
     unsend: PhantomData<*const ()>,
 }
+
+pub(crate) type TaskId = slotmap::DefaultKey;
 
 impl Task {
     /// Create a task from a raw id

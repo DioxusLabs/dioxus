@@ -25,27 +25,27 @@ fn app() -> Element {
     }
 }
 
-struct MyInputStream {}
-impl<S> FromRequest<S> for MyInputStream {
-    #[doc = " If the extractor fails it\'ll use this \"rejection\" type. A rejection is"]
-    #[doc = " a kind of error that can be converted into a response."]
-    type Rejection = ();
+// struct MyInputStream {}
+// impl<S> FromRequest<S> for MyInputStream {
+//     #[doc = " If the extractor fails it\'ll use this \"rejection\" type. A rejection is"]
+//     #[doc = " a kind of error that can be converted into a response."]
+//     type Rejection = ();
 
-    #[doc = " Perform the extraction."]
-    fn from_request(
-        req: dioxus_server::axum::extract::Request,
-        state: &S,
-    ) -> impl std::prelude::rust_2024::Future<Output = Result<Self, Self::Rejection>> + Send {
-        async move { todo!() }
-    }
-}
+//     #[doc = " Perform the extraction."]
+//     fn from_request(
+//         req: dioxus_server::axum::extract::Request,
+//         state: &S,
+//     ) -> impl std::prelude::rust_2024::Future<Output = Result<Self, Self::Rejection>> + Send {
+//         async move { todo!() }
+//     }
+// }
 
-impl dioxus_fullstack::IntoRequest for MyInputStream {
-    type Input = ();
+// impl dioxus_fullstack::IntoRequest for MyInputStream {
+//     type Input = ();
 
-    type Output = ();
+//     type Output = ();
 
-    fn into_request(input: Self::Input) -> std::result::Result<Self::Output, ServerFnError> {
-        todo!()
-    }
-}
+//     fn into_request(input: Self::Input) -> std::result::Result<Self::Output, ServerFnError> {
+//         todo!()
+//     }
+// }

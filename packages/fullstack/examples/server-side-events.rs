@@ -13,9 +13,7 @@ fn app() -> Element {
     let mut events = use_signal(Vec::new);
 
     use_future(move || async move {
-        let mut stream = listen_for_changes()
-            .await
-            .context("failed to listen for changes")?;
+        let mut stream = listen_for_changes().await?;
 
         while let Some(Ok(event)) = stream.next().await {
             events.write().push(event);

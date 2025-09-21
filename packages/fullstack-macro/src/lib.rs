@@ -640,10 +640,9 @@ fn route_impl_with_route(
 
         quote! {
             let #name = {
-                use __axum::extract::FromRequestParts;
-                let __request = __axum::extract::Request::new(());
-                let mut __parts = __request.into_parts().0;
-                #ty::from_request_parts(&mut __parts, &()).await.unwrap()
+                use __axum::extract::FromRequest;
+                let __request = __axum::extract::Request::new(__axum::body::Body::empty());
+                #ty::from_request(__request, &()).await.unwrap()
             };
         }
     });
