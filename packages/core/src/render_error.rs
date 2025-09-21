@@ -79,6 +79,8 @@ impl CapturedError {
         Self(Arc::new(anyhow::anyhow!(t.to_string())))
     }
 }
+
+#[cfg(feature = "serialize")]
 impl Serialize for CapturedError {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -87,6 +89,8 @@ impl Serialize for CapturedError {
         serializer.serialize_str(&self.0.to_string())
     }
 }
+
+#[cfg(feature = "serialize")]
 impl<'de> Deserialize<'de> for CapturedError {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where

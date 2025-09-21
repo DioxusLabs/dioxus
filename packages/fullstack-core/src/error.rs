@@ -1,8 +1,6 @@
 use axum_core::response::{IntoResponse, Response};
-use base64::{engine::general_purpose::URL_SAFE, Engine as _};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::fmt::Debug;
-// use crate::{ContentType, Decodes, Encodes, Format, FormatType};
 
 /// A default result type for server functions, which can either be successful or contain an error. The [`ServerFnResult`] type
 /// is a convenient alias for a `Result` type that uses [`ServerFnError`] as the error type.
