@@ -1,3 +1,6 @@
+//! The code here is pulled from the `axum-session-auth` crate examples, requiring little to no
+//! modification to work with dioxus fullstack.
+
 use async_trait::async_trait;
 use axum_session_auth::*;
 use axum_session_sqlx::SessionSqlitePool;

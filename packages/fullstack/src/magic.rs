@@ -99,6 +99,8 @@ pub use req_to::*;
 pub mod req_to {
     use std::sync::{Arc, LazyLock};
 
+    use dioxus_fullstack_core::client::get_server_url;
+
     use crate::{CantEncode, EncodeIsVerified};
 
     use super::*;
@@ -108,18 +110,55 @@ pub mod req_to {
     }
 
     impl FetchRequest {
-        pub fn new(method: http::Method, url: String) -> Self {
-            // static COOKIES: LazyLock<Arc<reqwest::cookie::Jar>> =
-            //     LazyLock::new(|| Arc::new(reqwest::cookie::Jar::default()));
+        pub fn new(method: http::Method, url: String, params: &impl Serialize) -> Self {
+            // Shrink monomorphization bloat by moving this to its own function
+            fn fetch_inner(method: http::Method, url: String, query: String) -> FetchRequest {
+                #[cfg(not(target_arch = "wasm32"))]
+                let (ip, port) = {
+                    static IP: LazyLock<String> = LazyLock::new(|| {
+                        std::env::var("IP").unwrap_or_else(|_| "127.0.0.1".into())
+                    });
+                    static PORT: LazyLock<String> =
+                        LazyLock::new(|| std::env::var("PORT").unwrap_or_else(|_| "8080".into()));
 
-            let client = reqwest::Client::builder()
-                // .cookie_store(true)
-                // .cookie_provider(COOKIES.clone())
-                .build()
-                .unwrap()
-                .request(method, url);
+                    (IP.clone(), PORT.clone())
+                };
 
-            Self { client }
+                #[cfg(target_arch = "wasm32")]
+                let (ip, port) = ("127.0.0.1", "8080".to_string());
+
+                let url = format!(
+                    "http://{ip}:{port}{url}{params}",
+                    params = if query.is_empty() {
+                        "".to_string()
+                    } else {
+                        format!("?{}", query)
+                    }
+                );
+
+                // let host = if cfg!(target_os = "wasm32") {
+                //     "".to_string()
+                // } else {
+                //     get_server_url()
+                // };
+
+                // http://127.0.0.1:8080
+                // // format!("http://127.0.0.1:8080{}", #request_url)
+                // // .#http_method(format!("{}{}", get_server_url(), #request_url)); // .query(&__params);
+
+                // static COOKIES: LazyLock<Arc<reqwest::cookie::Jar>> =
+                //     LazyLock::new(|| Arc::new(reqwest::cookie::Jar::default()));
+
+                let client = reqwest::Client::builder()
+                    // .cookie_store(true)
+                    // .cookie_provider(COOKIES.clone())
+                    .build()
+                    .unwrap()
+                    .request(method, url);
+                FetchRequest { client }
+            }
+
+            fetch_inner(method, url, serde_qs::to_string(params).unwrap())
         }
     }
 

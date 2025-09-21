@@ -44,11 +44,6 @@ fn main() {
             .connect_with("sqlite::memory:".parse()?)
             .await?;
 
-        // Drop existing tables if they exist. Otherwise, the sqlite instance might persist
-        db.execute("DROP TABLE IF EXISTS users").await?;
-        db.execute("DROP TABLE IF EXISTS user_permissions").await?;
-        db.execute("DROP TABLE IF EXISTS test_table").await?;
-
         // Create the tables (sessions, users)
         db.execute(r#"CREATE TABLE IF NOT EXISTS users ( "id" INTEGER PRIMARY KEY, "anonymous" BOOLEAN NOT NULL, "username" VARCHAR(256) NOT NULL )"#,)
             .await?;
@@ -158,16 +153,14 @@ pub async fn get_permissions() -> Result<HashSet<String>> {
 
     let user = auth.current_user.unwrap();
 
-    if !Auth::<User, i64, sqlx::SqlitePool>::build([axum::http::Method::GET], false)
+    Auth::<User, i64, sqlx::SqlitePool>::build([axum::http::Method::GET], false)
         .requires(Rights::any([
             Rights::permission("Category::View"),
             Rights::permission("Admin::View"),
         ]))
         .validate(&user, &axum::http::Method::GET, None)
         .await
-    {
-        return Ok(HashSet::new());
-    }
+        .or_unauthorized("You do not have permission to view categories")?;
 
-    Ok(user.permissions.clone())
+    Ok(user.permissions)
 }

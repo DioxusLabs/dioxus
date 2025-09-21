@@ -5590,6 +5590,7 @@ dependencies = [
  "send_wrapper",
  "serde",
  "serde_json",
+ "serde_qs",
  "thiserror 2.0.12",
  "tokio",
  "tokio-stream",

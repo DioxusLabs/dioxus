@@ -670,6 +670,11 @@ doc-scrape-examples = true
 [[example]]
 name = "login_form"
 path = "examples/07-fullstack/login_form.rs"
+doc-scrapea-examples = true
+
+[[example]]
+name = "handling_errors"
+path = "examples/07-fullstack/handling_errors.rs"
 doc-scrape-examples = true
 
 [[example]]
