@@ -360,12 +360,14 @@ impl VirtualDom {
     ///
     /// This is useful for what is essentially dependency injection when building the app
     pub fn with_root_context<T: Clone + 'static>(self, context: T) -> Self {
+        let _runtime = RuntimeGuard::new(self.runtime.clone());
         self.base_scope().state().provide_context(context);
         self
     }
 
     /// Provide a context to the root scope
     pub fn provide_root_context<T: Clone + 'static>(&self, context: T) {
+        let _runtime = RuntimeGuard::new(self.runtime.clone());
         self.base_scope().state().provide_context(context);
     }
 
@@ -373,6 +375,7 @@ impl VirtualDom {
     ///
     /// This method is useful for when you want to provide a context in your app without knowing its type
     pub fn insert_any_root_context(&mut self, context: Box<dyn Any>) {
+        let _runtime = RuntimeGuard::new(self.runtime.clone());
         self.base_scope().state().provide_any_context(context);
     }
 

@@ -37,7 +37,6 @@ impl VirtualDom {
         });
 
         self.runtime.create_scope(scope_runtime);
-        tracing::trace!("created scope {id:?} with parent {parent_id:?}");
 
         scope
     }

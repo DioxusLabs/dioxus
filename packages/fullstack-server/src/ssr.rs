@@ -58,7 +58,7 @@ impl SsrRendererPool {
     fn check_cached_route(
         &self,
         route: &str,
-        render_into: &mut Sender<Result<String, dioxus_isrg::IncrementalRendererError>>,
+        render_into: &mut Sender<Result<String, IncrementalRendererError>>,
     ) -> Option<RenderFreshness> {
         if let Some(incremental) = &self.incremental_cache {
             if let Ok(mut incremental) = incremental.write() {
@@ -69,9 +69,10 @@ impl SsrRendererPool {
                             response,
                             ..
                         } = cached_render;
-                        _ = render_into.start_send(String::from_utf8(response.to_vec()).map_err(
-                            |err| dioxus_isrg::IncrementalRendererError::Other(Box::new(err)),
-                        ));
+                        _ = render_into.start_send(
+                            String::from_utf8(response.to_vec())
+                                .map_err(|err| IncrementalRendererError::Other(Box::new(err))),
+                        );
                         return Some(freshness);
                     }
                     Err(e) => {
@@ -97,19 +98,17 @@ impl SsrRendererPool {
     ) -> Result<
         (
             RenderFreshness,
-            impl Stream<Item = Result<String, dioxus_isrg::IncrementalRendererError>>,
+            impl Stream<Item = Result<String, IncrementalRendererError>>,
         ),
         SSRError,
     > {
         struct ReceiverWithDrop {
-            receiver: futures_channel::mpsc::Receiver<
-                Result<String, dioxus_isrg::IncrementalRendererError>,
-            >,
+            receiver: futures_channel::mpsc::Receiver<Result<String, IncrementalRendererError>>,
             cancel_task: Option<tokio::task::JoinHandle<()>>,
         }
 
         impl Stream for ReceiverWithDrop {
-            type Item = Result<String, dioxus_isrg::IncrementalRendererError>;
+            type Item = Result<String, IncrementalRendererError>;
 
             fn poll_next(
                 mut self: std::pin::Pin<&mut Self>,
@@ -128,9 +127,8 @@ impl SsrRendererPool {
             }
         }
 
-        let (mut into, rx) = futures_channel::mpsc::channel::<
-            Result<String, dioxus_isrg::IncrementalRendererError>,
-        >(1000);
+        let (mut into, rx) =
+            futures_channel::mpsc::channel::<Result<String, IncrementalRendererError>>(1000);
 
         let (initial_result_tx, initial_result_rx) = futures_channel::oneshot::channel();
 
@@ -161,6 +159,7 @@ impl SsrRendererPool {
             let mut virtual_dom = virtual_dom_factory();
             let document = Rc::new(ServerDocument::default());
             virtual_dom.provide_root_context(document.clone());
+
             // If there is a base path, trim the base path from the route and add the base path formatting to the
             // history provider
             let history = if let Some(base_path) = base_path() {
@@ -172,6 +171,7 @@ impl SsrRendererPool {
                 dioxus_history::MemoryHistory::with_initial_path(&route)
             };
 
+            // Provide the document and streaming context to the root of the app
             let streaming_context = virtual_dom.in_scope(ScopeId::ROOT, StreamingContext::new);
             virtual_dom.provide_root_context(document.clone() as Rc<dyn dioxus_document::Document>);
             virtual_dom.provide_root_context(streaming_context);
@@ -186,9 +186,8 @@ impl SsrRendererPool {
             // before rendering anything
             if streaming_mode == StreamingMode::Disabled {
                 virtual_dom.wait_for_suspense().await;
-            }
-            // Otherwise, just wait for the streaming context to signal the initial chunk is ready
-            else {
+            } else {
+                // Otherwise, just wait for the streaming context to signal the initial chunk is ready
                 loop {
                     // Check if the router has finished and set the streaming context to finished
                     let streaming_context_finished = virtual_dom
@@ -210,21 +209,20 @@ impl SsrRendererPool {
 
             // check if there are any errors
             let errors = virtual_dom.in_runtime(|| {
-                let error_context: ErrorContext = ScopeId::APP
-                    .consume_context()
-                    .expect("The root should be under an error boundary");
-                let errors = error_context.errors();
-                errors.to_vec()
+                ScopeId::APP
+                    .consume_context::<ErrorContext>()
+                    .expect("The root should be under an error boundary")
+                    .errors()
+                    .to_vec()
             });
+
             if errors.is_empty() {
                 // If routing was successful, we can return a 200 status and render into the stream
                 _ = initial_result_tx.send(Ok(()));
             } else {
                 // If there was an error while routing, return the error with a 400 status
                 // Return a routing error if any of the errors were a routing error
-
                 let routing_error = errors.iter().find_map(|err| err.downcast_ref().cloned());
-
                 if let Some(routing_error) = routing_error {
                     _ = initial_result_tx.send(Err(SSRError::Routing(routing_error)));
                     return;
@@ -547,7 +545,7 @@ impl SsrRendererPool {
         cfg: &ServeConfig,
         to: &mut R,
         virtual_dom: &VirtualDom,
-    ) -> Result<(), dioxus_isrg::IncrementalRendererError> {
+    ) -> Result<(), IncrementalRendererError> {
         let ServeConfig { index, .. } = cfg;
 
         let title = {
@@ -584,7 +582,7 @@ impl SsrRendererPool {
     fn render_before_body<R: std::fmt::Write>(
         cfg: &ServeConfig,
         to: &mut R,
-    ) -> Result<(), dioxus_isrg::IncrementalRendererError> {
+    ) -> Result<(), IncrementalRendererError> {
         let ServeConfig { index, .. } = cfg;
 
         to.write_str(&index.close_head)?;
@@ -603,7 +601,7 @@ impl SsrRendererPool {
         cfg: &ServeConfig,
         to: &mut R,
         virtual_dom: &VirtualDom,
-    ) -> Result<(), dioxus_isrg::IncrementalRendererError> {
+    ) -> Result<(), IncrementalRendererError> {
         let ServeConfig { index, .. } = cfg;
 
         // Collect the initial server data from the root node. For most apps, no use_server_futures will be resolved initially, so this will be full on `None`s.
@@ -639,7 +637,7 @@ impl SsrRendererPool {
     pub fn render_after_body<R: std::fmt::Write>(
         cfg: &ServeConfig,
         to: &mut R,
-    ) -> Result<(), dioxus_isrg::IncrementalRendererError> {
+    ) -> Result<(), IncrementalRendererError> {
         let ServeConfig { index, .. } = cfg;
 
         to.write_str(&index.after_closing_body_tag)?;

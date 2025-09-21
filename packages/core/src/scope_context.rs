@@ -545,9 +545,7 @@ impl ScopeId {
 
     /// Consume context from the current scope
     pub fn consume_context<T: 'static + Clone>(self) -> Option<T> {
-        Runtime::with_scope(self, |cx| cx.consume_context::<T>())
-            .ok()
-            .flatten()
+        Runtime::with_scope(self, |cx| cx.consume_context::<T>()).expect("Runtime to exist")
     }
 
     /// Consume context from the current scope

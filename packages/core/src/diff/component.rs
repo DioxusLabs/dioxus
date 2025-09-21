@@ -43,7 +43,6 @@ impl VirtualDom {
                 return;
             };
             let scope_state = &mut self.scopes[scope.0];
-
             // Load the old and new rendered nodes
             let old = scope_state.last_rendered_node.take().unwrap();
 

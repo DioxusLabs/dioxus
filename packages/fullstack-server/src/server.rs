@@ -11,7 +11,7 @@ use axum::{
     routing::*,
 };
 use dioxus_core::{Element, VirtualDom};
-use dioxus_isrg::RenderFreshness;
+use dioxus_isrg::{IncrementalRendererError, RenderFreshness};
 use futures::Stream;
 use http::header::*;
 use std::path::Path;
@@ -292,8 +292,10 @@ impl RenderHandleState {
             .to_string();
         let parts: Arc<parking_lot::RwLock<http::request::Parts>> =
             Arc::new(parking_lot::RwLock::new(parts));
+
         // Create the server context with info from the request
         let server_context = DioxusServerContext::from_shared_parts(parts.clone());
+
         // Provide additional context from the render state
         server_context.add_server_context(&state.config.context_providers);
 
@@ -339,7 +341,7 @@ impl RenderHandleState {
     ) -> Result<
         (
             RenderFreshness,
-            impl Stream<Item = Result<String, dioxus_isrg::IncrementalRendererError>>,
+            impl Stream<Item = Result<String, IncrementalRendererError>>,
         ),
         SSRError,
     > {

@@ -650,7 +650,7 @@ fn route_impl_with_route(
     Ok(quote! {
         #(#fn_docs)*
         #route_docs
-        async fn #fn_name #impl_generics(
+        #vis async fn #fn_name #impl_generics(
             #original_inputs
         ) -> #out_ty #where_clause {
             use dioxus_fullstack::reqwest as __reqwest;
