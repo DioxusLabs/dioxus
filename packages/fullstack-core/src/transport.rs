@@ -457,12 +457,14 @@ where
     }
 }
 
-#[doc(hidden)]
-pub struct TransportViaErrMarker;
 #[derive(Serialize, Deserialize)]
 struct TransportResultErr<T> {
     error: Result<T, CapturedError>,
 }
+
+#[doc(hidden)]
+pub struct TransportViaErrMarker;
+
 impl<T> Transportable<TransportViaErrMarker> for Result<T, dioxus_core::Error>
 where
     T: Serialize + DeserializeOwned + 'static,

@@ -19,12 +19,6 @@ pub type ServerFnResult<T = ()> = std::result::Result<T, ServerFnError>;
 
 /// The error type for the server function system. This enum encompasses all possible errors that can occur
 /// during the registration, invocation, and processing of server functions.
-///
-///
-#[cfg_attr(
-    feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
-)]
 #[derive(thiserror::Error, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ServerFnError {
     /// Occurs when there is an error while actually running the function on the server.

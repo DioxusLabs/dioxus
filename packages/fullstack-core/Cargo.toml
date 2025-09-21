@@ -11,7 +11,7 @@ keywords = ["web", "gui", "server"]
 resolver = "2"
 
 [dependencies]
-dioxus-core = { workspace = true }
+dioxus-core = { workspace = true, features = ["serialize"]}
 dioxus-signals = { workspace = true }
 dioxus-hooks = { workspace = true }
 futures-channel = { workspace = true }
