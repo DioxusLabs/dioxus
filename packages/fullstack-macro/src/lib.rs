@@ -8,11 +8,9 @@
 use core::panic;
 use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as TokenStream2};
+use quote::ToTokens;
 use quote::{format_ident, quote};
 use std::collections::HashMap;
-use syn::{
-    __private::ToTokens, parse::Parse, parse_macro_input, parse_quote, Ident, ItemFn, LitStr,
-};
 use syn::{
     braced, bracketed,
     parse::ParseStream,
@@ -20,6 +18,7 @@ use syn::{
     token::{Comma, Slash},
     FnArg, GenericArgument, Meta, PathArguments, Signature, Token, Type,
 };
+use syn::{parse::Parse, parse_quote, Ident, ItemFn, LitStr};
 use syn::{spanned::Spanned, LitBool, LitInt, Pat, PatType};
 use syn::{
     token::{Brace, Star},
@@ -315,23 +314,9 @@ fn route_impl_with_route(
 ) -> syn::Result<TokenStream2> {
     // Parse the route and function
     let function = syn::parse::<ItemFn>(item)?;
-
-    let server_args = &route.server_args;
-    let server_args2 = server_args.clone();
-
+    let server_args = route.server_args.clone();
     let mut function_on_server = function.clone();
     function_on_server.sig.inputs.extend(server_args.clone());
-    let server_idents = server_args
-        .iter()
-        .cloned()
-        .filter_map(|arg| match arg {
-            FnArg::Receiver(_) => None,
-            FnArg::Typed(pat_type) => match &*pat_type.pat {
-                Pat::Ident(pat_ident) => Some(pat_ident.ident.clone()),
-                _ => None,
-            },
-        })
-        .collect::<Vec<_>>();
 
     // Now we can compile the route
     let original_inputs = &function.sig.inputs;
@@ -339,28 +324,33 @@ fn route_impl_with_route(
     let path_extractor = route.path_extractor();
     let query_extractor = route.query_extractor();
     let query_params_struct = route.query_params_struct(with_aide);
-    let state_type = &route.state;
+    let _state_type = &route.state;
     let axum_path = route.to_axum_path_string();
     let method_ident = &route.method;
     let http_method = route.method.to_axum_method_name();
     let remaining_numbered_pats = route.remaining_pattypes_numbered(&function.sig.inputs);
     let body_json_args = route.remaining_pattypes_named(&function.sig.inputs);
-    let body_json_names = body_json_args.iter().map(|pat_type| &pat_type.pat);
-    let body_json_types = body_json_args.iter().map(|pat_type| &pat_type.ty);
-
-    let mut extracted_idents = route.extracted_idents();
-    let remaining_numbered_idents = remaining_numbered_pats.iter().map(|pat_type| &pat_type.pat);
+    let body_json_names = body_json_args
+        .iter()
+        .map(|pat_type| &pat_type.pat)
+        .collect::<Vec<_>>();
+    let body_json_types = body_json_args
+        .iter()
+        .map(|pat_type| &pat_type.ty)
+        .collect::<Vec<_>>();
+    let extracted_idents = route.extracted_idents();
     let route_docs = route.to_doc_comments();
 
-    let body_idents = body_json_names.clone().map(|pat| match pat.as_ref() {
-        Pat::Ident(pat_ident) => pat_ident.ident.clone(),
-        _ => panic!("Expected Pat::Ident"),
-    });
-    let body_idents2 = body_idents.clone();
+    let body_idents = body_json_names
+        .iter()
+        .map(|pat| match pat.as_ref() {
+            Pat::Ident(pat_ident) => pat_ident.ident.clone(),
+            _ => panic!("Expected Pat::Ident"),
+        })
+        .collect::<Vec<_>>();
 
     // Get the variables we need for code generation
     let fn_name = &function.sig.ident;
-    let fn_output = &function.sig.output;
     let vis = &function.vis;
     let asyncness = &function.sig.asyncness;
     let (impl_generics, ty_generics, where_clause) = &function.sig.generics.split_for_impl();
@@ -423,37 +413,6 @@ fn route_impl_with_route(
         )
     };
 
-    let shadow_bind = original_inputs.iter().map(|arg| match arg {
-        FnArg::Receiver(receiver) => todo!(),
-        FnArg::Typed(pat_type) => {
-            let pat = &pat_type.pat;
-            quote! {
-                let _ = #pat;
-            }
-        }
-    });
-    let value_bind = original_inputs.iter().map(|arg| match arg {
-        FnArg::Receiver(receiver) => todo!(),
-        FnArg::Typed(pat_type) => &pat_type.pat,
-    });
-    let shadow_bind2 = shadow_bind.clone();
-
-    // #vis fn #fn_name #impl_generics() ->  #method_router_ty<#state_type> #where_clause {
-
-    // let body_json_contents = remaining_numbered_pats.iter().map(|pat_type| [quote! {}]);
-    let body_json_types2 = body_json_types.clone();
-    let body_json_types3 = body_json_types.clone();
-    let body_json_types4 = body_json_types.clone();
-    let rest_idents = body_json_types.clone();
-    let rest_idents2 = body_json_types.clone();
-    let rest_ident_names2 = body_json_names.clone();
-    let rest_ident_names3 = body_json_names.clone();
-
-    let input_types = original_inputs.iter().map(|arg| match arg {
-        FnArg::Receiver(_) => parse_quote! { () },
-        FnArg::Typed(pat_type) => (*pat_type.ty).clone(),
-    });
-
     let output_type = match &function.sig.output {
         syn::ReturnType::Default => parse_quote! { () },
         syn::ReturnType::Type(_, ty) => (*ty).clone(),
@@ -470,82 +429,54 @@ fn route_impl_with_route(
         .to_string();
 
     let path_param_args = route.path_params.iter().map(|(_slash, param)| match param {
-        PathParam::Capture(lit, _brace_1, ident, _ty, _brace_2) => {
+        PathParam::Capture(_lit, _brace_1, ident, _ty, _brace_2) => {
             Some(quote! { #ident = #ident, })
         }
-        PathParam::WildCard(lit, _brace_1, _star, ident, _ty, _brace_2) => {
+        PathParam::WildCard(_lit, _brace_1, _star, ident, _ty, _brace_2) => {
             Some(quote! { #ident = #ident, })
         }
-        PathParam::Static(lit) => None,
+        PathParam::Static(_lit) => None,
     });
-    let path_param_values = route.path_params.iter().map(|(_slash, param)| match param {
-        PathParam::Capture(lit, _brace_1, ident, _ty, _brace_2) => Some(quote! { #ident }),
-        PathParam::WildCard(lit, _brace_1, _star, ident, _ty, _brace_2) => Some(quote! { #ident }),
-        PathParam::Static(lit) => None,
-    });
-
-    let query_param_names2 = query_param_names.clone();
-    let request_url = quote! {
-        format!(#url_without_queries, #( #path_param_args)*)
-    };
 
     let out_ty = match output_type.as_ref() {
         Type::Tuple(tuple) if tuple.elems.is_empty() => parse_quote! { () },
         _ => output_type.clone(),
     };
 
-    // let extracted_idents2 = extracted_idents.clone();
-
-    let mapped_output = match fn_output {
-        syn::ReturnType::Default => quote! { dioxus_fullstack::ServerFnRequest<()> },
-        syn::ReturnType::Type(_, _) => quote! { dioxus_fullstack::ServerFnRequest<#out_ty> },
-    };
-
-    // let warn_if_invalid_body = if !body_json_args.is_empty() {
-    //     match &route.method {
-    //         Method::Get(_) | Method::Delete(_) | Method::Options(_) | Method::Head(_) => {
-    //             quote! {
-    //                 compile_error!("GET, DELETE, OPTIONS, and HEAD requests should not have a body. Consider using query parameters or changing the HTTP method.");
-    //             }
-    //         }
-    //         _ => quote! {},
-    //     }
-    // } else {
-    //     quote! {}
-    // };
-
-    let server_tys = server_args2.iter().map(|pat_type| match pat_type {
-        FnArg::Receiver(_) => quote! { () },
-        FnArg::Typed(pat_type) => {
-            let ty = (*pat_type.ty).clone();
-            quote! {
-                #ty
+    let server_tys = server_args
+        .iter()
+        .map(|pat_type| match pat_type {
+            FnArg::Receiver(_) => quote! { () },
+            FnArg::Typed(pat_type) => {
+                let ty = &pat_type.ty;
+                quote! { #ty }
             }
-        }
-    });
-    let server_tys2 = server_tys.clone();
-    let server_names = server_args2.iter().map(|pat_type| match pat_type {
-        FnArg::Receiver(_) => quote! { () },
-        FnArg::Typed(pat_type) => match pat_type.pat.as_ref() {
-            Pat::Ident(pat_ident) => {
-                let name = &pat_ident.ident;
-                quote! { #name }
-            }
-            _ => panic!("Expected Pat::Ident"),
-        },
-    });
-    let server_names2 = server_names.clone();
-    let server_names3 = server_names.clone();
+        })
+        .collect::<Vec<_>>();
+
+    let server_names = server_args
+        .iter()
+        .map(|pat_type| match pat_type {
+            FnArg::Receiver(_) => quote! { () },
+            FnArg::Typed(pat_type) => match pat_type.pat.as_ref() {
+                Pat::Ident(pat_ident) => {
+                    let name = &pat_ident.ident;
+                    quote! { #name }
+                }
+                _ => panic!("Expected Pat::Ident"),
+            },
+        })
+        .collect::<Vec<_>>();
 
     let body_struct_impl = {
-        let server_tys = server_args2.iter().enumerate().map(|(idx, _)| {
+        let server_tys = server_args.iter().enumerate().map(|(idx, _)| {
             let ty_name = format_ident!("__ServerTy{}", idx);
             quote! {
                 #[cfg(feature = "server")] #ty_name
             }
         });
 
-        let server_names = server_args2.iter().enumerate().map(|(idx, arg)| {
+        let server_names = server_args.iter().enumerate().map(|(idx, arg)| {
             let name = match arg {
                 FnArg::Receiver(_) => panic!("Server args cannot be receiver"),
                 FnArg::Typed(pat_type) => &pat_type.pat,
@@ -559,19 +490,14 @@ fn route_impl_with_route(
         });
 
         let tys = body_json_types
-            .clone()
-            .into_iter()
+            .iter()
             .enumerate()
             .map(|(idx, _)| format_ident!("__Ty{}", idx));
 
-        let names = body_json_names
-            .clone()
-            .into_iter()
-            .enumerate()
-            .map(|(idx, name)| {
-                let ty_name = format_ident!("__Ty{}", idx);
-                quote! { #name: #ty_name }
-            });
+        let names = body_json_names.iter().enumerate().map(|(idx, name)| {
+            let ty_name = format_ident!("__Ty{}", idx);
+            quote! { #name: #ty_name }
+        });
 
         quote! {
             #[derive(serde::Serialize, serde::Deserialize)]
@@ -583,17 +509,9 @@ fn route_impl_with_route(
         }
     };
 
-    let server_inputs = server_args2.iter().map(|arg| {
-        let mut arg = arg.clone();
-        quote! {
-            #[cfg(feature = "server")]
-            #arg
-        }
-    });
-
     // This unpacks the body struct into the individual variables that get scoped
     let unpack = {
-        let unpack_server_args = server_args2.iter().enumerate().map(|(idx, arg)| {
+        let unpack_server_args = server_args.iter().map(|arg| {
             let name = match arg {
                 FnArg::Receiver(_) => panic!("Server args cannot be receiver"),
                 FnArg::Typed(pat_type) => match pat_type.pat.as_ref() {
@@ -604,13 +522,7 @@ fn route_impl_with_route(
             quote! { #[cfg(feature = "server")] data.#name }
         });
 
-        let unpack_args = body_json_names
-            .clone()
-            .into_iter()
-            .enumerate()
-            .map(|(idx, name)| {
-                quote! { data.#name }
-            });
+        let unpack_args = body_json_names.iter().map(|name| quote! { data.#name });
 
         quote! {
             |data| {
@@ -622,10 +534,8 @@ fn route_impl_with_route(
         }
     };
 
-    let unpack2 = unpack.clone();
-
     // there's no active request on the server, so we just create a dummy one
-    let server_defaults = server_args2.iter().map(|arg| {
+    let server_defaults = server_args.iter().map(|arg| {
         let name = match arg {
             FnArg::Receiver(_) => panic!("Server args cannot be receiver"),
             FnArg::Typed(pat_type) => match pat_type.pat.as_ref() {
@@ -676,17 +586,17 @@ fn route_impl_with_route(
             {
                 let client = FetchRequest::new(
                     dioxus_fullstack::http::Method::#method_ident,
-                    #request_url,
+                    format!(#url_without_queries, #( #path_param_args)*),
                     &__QueryParams__ { #(#query_param_names,)* },
                 );
 
-                let verify_token = (&&&&&&&&&&&&&&ServerFnEncoder::<___Body_Serialize___<#(#rest_idents2,)*>, (#(#body_json_types4,)*)>::new())
+                let verify_token = (&&&&&&&&&&&&&&ServerFnEncoder::<___Body_Serialize___<#(#body_json_types,)*>, (#(#body_json_types,)*)>::new())
                     .verify_can_serialize();
 
                 dioxus_fullstack::assert_can_encode(verify_token);
 
-                let response = (&&&&&&&&&&&&&&ServerFnEncoder::<___Body_Serialize___<#(#rest_idents,)*>, (#(#body_json_types2,)*)>::new())
-                    .fetch_client(client, ___Body_Serialize___ { #(#rest_ident_names2,)* }, #unpack)
+                let response = (&&&&&&&&&&&&&&ServerFnEncoder::<___Body_Serialize___<#(#body_json_types,)*>, (#(#body_json_types,)*)>::new())
+                    .fetch_client(client, ___Body_Serialize___ { #(#body_json_names,)* }, #unpack)
                     .await;
 
                 let decoded = (&&&&&ServerFnDecoder::<#out_ty>::new())
@@ -718,12 +628,12 @@ fn route_impl_with_route(
                     #query_extractor
                     request: __axum::extract::Request,
                 ) -> Result<__axum::response::Response, __axum::response::Response> #where_clause {
-                    let ( #(#server_names,)*  #(#body_json_names,)*) = (&&&&&&&&&&&&&&ServerFnEncoder::<___Body_Serialize___<#(#server_tys,)* #(#body_json_types,)*>, (#(#server_tys2,)* #(#body_json_types3,)*)>::new())
-                        .extract_axum(___state.0, request, #unpack2).await?;
+                    let ( #(#server_names,)*  #(#body_json_names,)*) = (&&&&&&&&&&&&&&ServerFnEncoder::<___Body_Serialize___<#(#server_tys,)* #(#body_json_types,)*>, (#(#server_tys,)* #(#body_json_types,)*)>::new())
+                        .extract_axum(___state.0, request, #unpack).await?;
 
                     let encoded = (&&&&&&ServerFnDecoder::<#out_ty>::new())
                         .make_axum_response(
-                            #fn_name #ty_generics(#(#extracted_idents,)* #(#server_names2,)* #(#body_idents,)*).await
+                            #fn_name #ty_generics(#(#extracted_idents,)* #(#server_names,)* #(#body_idents,)*).await
                         );
 
                     let response = (&&&&&ServerFnDecoder::<#out_ty>::new())
@@ -744,8 +654,8 @@ fn route_impl_with_route(
 
                 return #fn_name #ty_generics(
                     #(#extracted_idents,)*
-                    #(#server_names3,)*
-                    #(#body_idents2,)*
+                    #(#server_names,)*
+                    #(#body_idents,)*
                 ).await;
             }
 
@@ -964,8 +874,7 @@ impl CompiledRoute {
         args: &Punctuated<FnArg, Comma>,
     ) -> Punctuated<PatType, Comma> {
         args.iter()
-            .enumerate()
-            .filter_map(|(i, item)| {
+            .filter_map(|item| {
                 if let FnArg::Typed(pat_type) = item {
                     if let syn::Pat::Ident(pat_ident) = &*pat_type.pat {
                         if self.path_params.iter().any(|(_slash, path_param)| {
@@ -1412,20 +1321,16 @@ impl Parse for Security {
     }
 }
 
-impl ToString for Security {
-    fn to_string(&self) -> String {
-        let mut s = String::new();
-        s.push('{');
+impl std::fmt::Display for Security {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{{")?;
         for (i, (scheme, scopes)) in self.0.iter().enumerate() {
             if i > 0 {
-                s.push_str(", ");
+                write!(f, ", ")?;
             }
-            s.push_str(&scheme.value());
-            s.push_str(": ");
-            s.push_str(&scopes.to_string());
+            write!(f, "{}: {}", scheme.value(), scopes)?;
         }
-        s.push('}');
-        s
+        write!(f, "}}")
     }
 }
 
@@ -1448,20 +1353,16 @@ impl Parse for Responses {
     }
 }
 
-impl ToString for Responses {
-    fn to_string(&self) -> String {
-        let mut s = String::new();
-        s.push('{');
+impl std::fmt::Display for Responses {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{{")?;
         for (i, (status, ty)) in self.0.iter().enumerate() {
             if i > 0 {
-                s.push_str(", ");
+                write!(f, ", ")?;
             }
-            s.push_str(&status.to_string());
-            s.push_str(": ");
-            s.push_str(&ty.to_token_stream().to_string());
+            write!(f, "{}: {}", status, ty.to_token_stream())?;
         }
-        s.push('}');
-        s
+        write!(f, "}}")
     }
 }
 
@@ -1480,20 +1381,16 @@ impl Parse for StrArray {
     }
 }
 
-impl ToString for StrArray {
-    fn to_string(&self) -> String {
-        let mut s = String::new();
-        s.push('[');
+impl std::fmt::Display for StrArray {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[")?;
         for (i, lit) in self.0.iter().enumerate() {
             if i > 0 {
-                s.push_str(", ");
+                write!(f, ", ")?;
             }
-            s.push('"');
-            s.push_str(&lit.value());
-            s.push('"');
+            write!(f, "\"{}\"", lit.value())?;
         }
-        s.push(']');
-        s
+        write!(f, "]")
     }
 }
 
