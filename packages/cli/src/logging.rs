@@ -920,10 +920,14 @@ impl TraceController {
                         "force": force,
                     }),
                 ),
-                ComponentCommand::Remove { component } => (
+                ComponentCommand::Remove {
+                    component,
+                    registry,
+                } => (
                     "component remove".to_string(),
                     json!({
                         "component": component,
+                        "registry": registry,
                     }),
                 ),
                 ComponentCommand::Update { registry } => (

@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     ops::Deref,
     path::{Path, PathBuf},
 };
@@ -189,14 +189,18 @@ impl ResolvedComponent {
 /// Arguments for a component and component module location
 #[derive(Clone, Debug, Parser, Serialize)]
 pub struct ComponentArgs {
-    /// The component to add
-    component: String,
+    /// The components to add or remove
+    #[clap(required_unless_present = "all", value_delimiter = ',')]
+    components: Vec<String>,
     /// The location of the component module in your project (default: src/components)
     #[clap(long)]
     module_path: Option<PathBuf>,
     /// The location of the global assets in your project (default: assets)
     #[clap(long)]
     assets_path: Option<PathBuf>,
+    /// Include all components in the registry
+    #[clap(long)]
+    all: bool,
 }
 
 #[derive(Clone, Debug, Parser)]
@@ -218,6 +222,9 @@ pub enum ComponentCommand {
     Remove {
         #[clap(flatten)]
         component: ComponentArgs,
+        /// The registry to use
+        #[clap(flatten)]
+        registry: ComponentRegistryArgs,
     },
     /// Update a component registry
     #[clap(name = "update")]
@@ -266,8 +273,16 @@ impl ComponentCommand {
                 } else {
                     ComponentExistsBehavior::Error
                 };
-                // Find the requested component
-                let component = find_component(components, &component_args.component).await?;
+                // Find the requested components
+                let components = if component_args.all {
+                    components
+                } else {
+                    component_args
+                        .components
+                        .iter()
+                        .map(|component| find_component(&components, &component))
+                        .collect::<Result<Vec<_>>>()?
+                };
 
                 // Find and initialize the components module if it doesn't exist
                 let components_root = components_root(component_args.module_path.as_deref())?;
@@ -277,9 +292,9 @@ impl ComponentCommand {
                 // Recursively add dependencies
                 // A map of the components that have been added or are queued to be added
                 let mut required_components = HashMap::new();
-                required_components.insert(component.clone(), mode);
+                required_components.extend(components.iter().cloned().map(|c| (c, mode)));
                 // A stack of components to process
-                let mut queued_components = vec![component];
+                let mut queued_components = components;
                 while let Some(queued_component) = queued_components.pop() {
                     for dependency in &queued_component.component_dependencies {
                         let (registry, name) = match dependency {
@@ -298,8 +313,7 @@ impl ComponentCommand {
                             ),
                         };
                         let registry_components = registry.read_components().await?;
-                        let dependency_component =
-                            find_component(registry_components, name).await?;
+                        let dependency_component = find_component(&registry_components, name)?;
                         if required_components
                             .insert(
                                 dependency_component.clone(),
@@ -311,6 +325,14 @@ impl ComponentCommand {
                         }
                     }
                 }
+
+                // Then collect all required rust dependencies
+                let mut rust_dependencies = HashSet::new();
+                for component in required_components.keys() {
+                    rust_dependencies.extend(component.cargo_dependencies.iter().cloned());
+                }
+                // And add them to Cargo.toml
+                add_rust_dependencies(&rust_dependencies).await?;
 
                 // Once we have all required components, add them
                 for (component, mode) in required_components {
@@ -341,8 +363,11 @@ impl ComponentCommand {
                 registry.update().await?;
             }
             // Remove a component from the managed component module
-            Self::Remove { component } => {
-                remove_component(&component).await?;
+            Self::Remove {
+                component,
+                registry,
+            } => {
+                remove_component(&component, registry).await?;
             }
             // Clear the component registry cache
             Self::Clean => {
@@ -366,13 +391,11 @@ impl ComponentCommand {
 }
 
 // Find a component by name in a list of components
-async fn find_component(
-    components: Vec<ResolvedComponent>,
-    component: &str,
-) -> Result<ResolvedComponent> {
+fn find_component(components: &[ResolvedComponent], component: &str) -> Result<ResolvedComponent> {
     components
-        .into_iter()
+        .iter()
         .find(|c| c.name == component)
+        .cloned()
         .ok_or_else(|| anyhow::anyhow!("Component '{}' not found in registry", component))
 }
 
@@ -399,27 +422,46 @@ fn global_assets_root(assets_path: Option<&Path>) -> Result<PathBuf> {
 }
 
 /// Remove a component from the managed component module
-async fn remove_component(component: &ComponentArgs) -> Result<()> {
-    let components_root = components_root(component.module_path.as_deref())?;
+async fn remove_component(
+    component_args: &ComponentArgs,
+    registry: ComponentRegistryArgs,
+) -> Result<()> {
+    let components_root = components_root(component_args.module_path.as_deref())?;
 
-    // Remove the component module
-    tokio::fs::remove_dir_all(&components_root.join(&component.component)).await?;
+    // Find the requested components
+    let components = if component_args.all {
+        registry
+            .read_components()
+            .await?
+            .into_iter()
+            .map(|c| c.component.name)
+            .collect()
+    } else {
+        component_args.components.clone()
+    };
 
-    // Remove the module from the components mod.rs
-    let mod_rs_path = components_root.join("mod.rs");
-    let mod_rs_content = tokio::fs::read_to_string(&mod_rs_path)
-        .await
-        .with_context(|| format!("Failed to read {}", mod_rs_path.display()))?;
-    let mod_line = format!("pub mod {};\n", component.component);
-    let new_mod_rs_content = mod_rs_content.replace(&mod_line, "");
-    tokio::fs::write(&mod_rs_path, new_mod_rs_content)
-        .await
-        .with_context(|| format!("Failed to write to {}", mod_rs_path.display()))?;
+    for component_name in components {
+        // Remove the component module
+        _ = tokio::fs::remove_dir_all(&components_root.join(&component_name)).await;
+
+        // Remove the module from the components mod.rs
+        let mod_rs_path = components_root.join("mod.rs");
+        let mod_rs_content = tokio::fs::read_to_string(&mod_rs_path)
+            .await
+            .with_context(|| format!("Failed to read {}", mod_rs_path.display()))?;
+        let mod_line = format!("pub mod {};\n", component_name);
+        let new_mod_rs_content = mod_rs_content.replace(&mod_line, "");
+        tokio::fs::write(&mod_rs_path, new_mod_rs_content)
+            .await
+            .with_context(|| format!("Failed to write to {}", mod_rs_path.display()))?;
+    }
     Ok(())
 }
 
 /// Add any rust dependencies required for a component
-async fn add_rust_dependencies(dependencies: &[CargoDependency]) -> Result<()> {
+async fn add_rust_dependencies(
+    dependencies: impl IntoIterator<Item = &CargoDependency>,
+) -> Result<()> {
     for dep in dependencies {
         let status = Command::from(dep.add_command())
             .status()
@@ -459,8 +501,6 @@ async fn add_component(
     component: &ResolvedComponent,
     behavior: ComponentExistsBehavior,
 ) -> Result<()> {
-    add_rust_dependencies(&component.cargo_dependencies).await?;
-
     // Copy the folder content to the components directory
     let components_root = components_root(component_path)?;
     let copied = copy_component_files(
