@@ -297,7 +297,7 @@ impl ComponentCommand {
                     component_args
                         .components
                         .iter()
-                        .map(|component| find_component(&components, &component))
+                        .map(|component| find_component(&components, component))
                         .collect::<Result<Vec<_>>>()?
                 };
 
@@ -488,7 +488,7 @@ async fn remove_component(
     registry: ComponentRegistry,
     config: &DioxusConfig,
 ) -> Result<()> {
-    let components_root = components_root(component_args.module_path.as_deref(), &config)?;
+    let components_root = components_root(component_args.module_path.as_deref(), config)?;
 
     // Find the requested components
     let components = if component_args.all {
@@ -565,7 +565,7 @@ async fn add_component(
     config: &DioxusConfig,
 ) -> Result<()> {
     // Copy the folder content to the components directory
-    let components_root = components_root(component_path, &config)?;
+    let components_root = components_root(component_path, config)?;
     let copied = copy_component_files(
         &component.path,
         &components_root.join(&component.name),
