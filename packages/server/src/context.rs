@@ -402,7 +402,7 @@ mod server_fn_impl {
             {
                 let mut_headers = response.headers_mut();
                 for (key, value) in parts.headers.iter() {
-                    mut_headers.insert(key, value.clone());
+                    mut_headers.append(key, value.clone());
                 }
             }
             if self
