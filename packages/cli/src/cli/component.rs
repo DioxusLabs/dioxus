@@ -435,11 +435,11 @@ fn components_root(module_path: Option<&Path>, config: &DioxusConfig) -> Result<
         return Ok(PathBuf::from(module_path));
     }
 
-    if let Some(component_path) = &config.component.component_dir {
-        return Ok(component_path.clone());
-    }
-
     let root = Workspace::crate_root_from_path()?;
+
+    if let Some(component_path) = &config.component.component_dir {
+        return Ok(root.join(component_path));
+    }
 
     Ok(root.join("src").join("components"))
 }
