@@ -65,7 +65,7 @@ impl<T> FromResponse for ServerEvents<T> {
         // use tokio::io::AsyncBufReadExt;
         // use tokio_util::io::StreamReader;
 
-        async move {
+        send_wrapper::SendWrapper::new(async move {
             let status = res.status();
             if status != StatusCode::OK {
                 todo!()
@@ -136,7 +136,7 @@ impl<T> FromResponse for ServerEvents<T> {
                 #[cfg(feature = "server")]
                 sse: None,
             })
-        }
+        })
     }
 }
 
@@ -155,9 +155,7 @@ mod server_impl {
     impl<T: Serialize> SseTx<T> {
         pub async fn send(&mut self, event: T) -> anyhow::Result<()> {
             let event = axum::response::sse::Event::default().json_data(event)?;
-
             self.sender.unbounded_send(event)?;
-
             Ok(())
         }
     }
