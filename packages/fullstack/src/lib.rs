@@ -1,4 +1,5 @@
 // #![warn(missing_docs)]
+#![allow(clippy::manual_async_fn)]
 
 pub use dioxus_fullstack_core::client::{get_server_url, set_server_url};
 pub use dioxus_fullstack_core::*;
@@ -26,37 +27,8 @@ pub use serde;
 // #[doc(hidden)]
 // pub use xxhash_rust;
 
-// pub mod msgpack;
-
-pub mod jwt;
-pub use jwt::*;
-
 pub mod magic;
 pub use magic::*;
-
-pub mod json;
-pub use json::*;
-
-pub mod cbor;
-pub mod form;
-
-pub mod multipart;
-pub mod postcard;
-pub mod rkyv;
-pub mod text;
-pub use text::*;
-
-pub mod sse;
-pub use sse::*;
-
-pub mod textstream;
-pub use textstream::*;
-
-pub mod websocket;
-pub use websocket::*;
-
-pub mod upload;
-pub use upload::*;
 
 pub mod response;
 pub use response::*;
@@ -64,16 +36,53 @@ pub use response::*;
 pub mod request;
 pub use request::*;
 
-pub mod html;
-pub use html::*;
-
 pub mod error;
 pub use error::*;
 
 pub use http::StatusCode;
 
-pub mod serde_lite;
-pub use serde_lite::*;
-
 pub mod url;
 pub use url::*;
+
+pub use payloads::*;
+pub mod payloads {
+    pub mod jwt;
+    pub use jwt::*;
+    pub mod json;
+    pub use json::*;
+
+    pub mod cbor;
+    pub mod form;
+
+    pub mod multipart;
+    pub mod rkyv;
+
+    #[cfg(feature = "postcard")]
+    pub mod postcard;
+    #[cfg(feature = "postcard")]
+    pub use postcard::*;
+
+    // pub mod msgpack;
+    // pub use msgpack::*;
+
+    pub mod text;
+    pub use text::*;
+
+    pub mod html;
+    pub use html::*;
+
+    pub mod serde_lite;
+    pub use serde_lite::*;
+
+    pub mod sse;
+    pub use sse::*;
+
+    pub mod textstream;
+    pub use textstream::*;
+
+    pub mod websocket;
+    pub use websocket::*;
+
+    pub mod upload;
+    pub use upload::*;
+}

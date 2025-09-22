@@ -2,7 +2,7 @@ use http::StatusCode;
 use std::fmt;
 
 /// An error type that wraps an HTTP status code and optional message.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct HttpError {
     pub status: StatusCode,
     pub message: Option<String>,
