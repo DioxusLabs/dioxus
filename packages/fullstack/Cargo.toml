@@ -48,7 +48,7 @@ tower-http = { workspace = true, features = ["fs"], optional = true }
 tower-layer = { version = "0.3.3", optional = true }
 
 # optional
-reqwest = { workspace = true, features = ["json", "rustls-tls", "cookies"] }
+reqwest = { workspace = true, features = ["json", "rustls-tls", "cookies", "stream"] }
 
 # payloads
 postcard = { features = ["alloc"], optional = true, workspace = true, default-features = true }

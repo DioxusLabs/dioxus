@@ -9,8 +9,8 @@ use axum::{
 };
 
 use axum_core::response::IntoResponse;
-use futures::StreamExt;
 use futures::{Stream, TryStream};
+use futures::{StreamExt, TryStreamExt};
 use http::{header::CONTENT_TYPE, StatusCode};
 use reqwest::header::HeaderValue;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -61,8 +61,9 @@ impl<T> FromResponse for ServerEvents<T> {
     fn from_response(
         res: reqwest::Response,
     ) -> impl Future<Output = Result<Self, ServerFnError>> + Send {
-        use tokio::io::AsyncBufReadExt;
-        use tokio_util::io::StreamReader;
+        use futures::io::{AsyncBufReadExt, Cursor};
+        // use tokio::io::AsyncBufReadExt;
+        // use tokio_util::io::StreamReader;
 
         async move {
             let status = res.status();
@@ -76,10 +77,10 @@ impl<T> FromResponse for ServerEvents<T> {
                 // return Err(EventSourceError::BadContentType(content_type.cloned()));
             }
 
-            let mut stream = StreamReader::new(
-                res.bytes_stream()
-                    .map(|result| result.map_err(std::io::Error::other)),
-            );
+            let mut stream = res
+                .bytes_stream()
+                .map(|result| result.map_err(std::io::Error::other))
+                .into_async_read();
 
             let mut line_buffer = String::new();
             let mut event_buffer = EventBuffer::new();
@@ -131,6 +132,8 @@ impl<T> FromResponse for ServerEvents<T> {
             Ok(Self {
                 _marker: std::marker::PhantomData,
                 client: Some(stream),
+
+                #[cfg(feature = "server")]
                 sse: None,
             })
         }
