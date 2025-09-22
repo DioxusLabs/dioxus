@@ -5588,6 +5588,7 @@ version = "0.7.0-rc.0"
 dependencies = [
  "anyhow",
  "async-stream",
+ "async-tungstenite",
  "axum 0.8.4",
  "axum-core 0.5.2",
  "base64 0.22.1",
@@ -5623,6 +5624,8 @@ dependencies = [
  "tower-http",
  "tower-layer",
  "tracing",
+ "tungstenite 0.27.0",
+ "web-sys",
 ]
 
 [[package]]
