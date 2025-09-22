@@ -435,7 +435,7 @@ fn components_root(module_path: Option<&Path>, config: &DioxusConfig) -> Result<
         return Ok(PathBuf::from(module_path));
     }
 
-    if let Some(component_path) = &config.component.component_path {
+    if let Some(component_path) = &config.component.component_dir {
         return Ok(component_path.clone());
     }
 
