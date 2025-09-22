@@ -4,21 +4,21 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::{verbosity_or_default, Result, StructuredOutput, Workspace};
+use crate::{verbosity_or_default, DioxusConfig, Result, StructuredOutput, Workspace};
 use anyhow::Context;
 use clap::Parser;
 use dioxus_component_manifest::{
     component_manifest_schema, CargoDependency, Component, ComponentDependency,
 };
 use git2::Repository;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tokio::{process::Command, task::JoinSet};
 use tracing::debug;
 
 /// Arguments for the default or custom remote registry
 /// If both values are None, the default registry will be used
-#[derive(Clone, Debug, Parser, Default, Serialize)]
-pub struct RemoteComponentRegistryArgs {
+#[derive(Clone, Debug, Parser, Default, Serialize, Deserialize)]
+pub struct RemoteComponentRegistry {
     /// The url of the the component registry
     #[arg(long)]
     git: Option<String>,
@@ -27,7 +27,7 @@ pub struct RemoteComponentRegistryArgs {
     rev: Option<String>,
 }
 
-impl RemoteComponentRegistryArgs {
+impl RemoteComponentRegistry {
     /// If a git url is provided use that (plus optional rev)
     /// Otherwise use the built-in registry
     fn resolve_or_default(&self) -> (String, Option<String>) {
@@ -124,17 +124,18 @@ fn checkout_rev(repo: &Repository, git: &str, rev: &str) -> Result<()> {
 
 /// Arguments for a component registry
 /// Either a path to a local directory or a remote git repo (with optional rev)
-#[derive(Clone, Debug, Parser, Default, Serialize)]
-pub struct ComponentRegistryArgs {
+#[derive(Clone, Debug, Parser, Default, Serialize, Deserialize)]
+pub struct ComponentRegistry {
     /// The remote repo args
     #[clap(flatten)]
-    remote: RemoteComponentRegistryArgs,
+    #[serde(flatten)]
+    remote: RemoteComponentRegistry,
     /// The path to the components directory
     #[arg(long)]
     path: Option<String>,
 }
 
-impl ComponentRegistryArgs {
+impl ComponentRegistry {
     /// Resolve the path to the component registry, downloading the remote registry if needed
     async fn resolve(&self) -> Result<PathBuf> {
         // If a path is provided, use that
@@ -151,7 +152,12 @@ impl ComponentRegistryArgs {
         let path = self.resolve().await?;
 
         let root = read_component(&path).await?;
-        discover_components(root).await
+        let mut components = discover_components(root).await?;
+
+        // Filter out any virtual components with members
+        components.retain(|c| c.members.is_empty());
+
+        Ok(components)
     }
 
     /// Check if this is the default registry
@@ -197,7 +203,7 @@ pub struct ComponentArgs {
     module_path: Option<PathBuf>,
     /// The location of the global assets in your project (default: assets)
     #[clap(long)]
-    assets_path: Option<PathBuf>,
+    global_assets_path: Option<PathBuf>,
     /// Include all components in the registry
     #[clap(long)]
     all: bool,
@@ -212,7 +218,8 @@ pub enum ComponentCommand {
         component: ComponentArgs,
         /// The registry to use
         #[clap(flatten)]
-        registry: ComponentRegistryArgs,
+        registry: Option<ComponentRegistry>,
+
         /// Overwrite the component if it already exists
         #[clap(long)]
         force: bool,
@@ -224,21 +231,21 @@ pub enum ComponentCommand {
         component: ComponentArgs,
         /// The registry to use
         #[clap(flatten)]
-        registry: ComponentRegistryArgs,
+        registry: Option<ComponentRegistry>,
     },
     /// Update a component registry
     #[clap(name = "update")]
     Update {
         /// The registry to update
         #[clap(flatten)]
-        registry: RemoteComponentRegistryArgs,
+        registry: Option<RemoteComponentRegistry>,
     },
     /// List available components in a registry
     #[clap(name = "list")]
     List {
         /// The registry to list components in
         #[clap(flatten)]
-        registry: ComponentRegistryArgs,
+        registry: Option<ComponentRegistry>,
     },
     /// Clear the component registry cache
     #[clap(name = "clean")]
@@ -254,6 +261,11 @@ impl ComponentCommand {
         match self {
             // List all components in the registry
             Self::List { registry } => {
+                // Resolve the config
+                let config = config().await?;
+                // Resolve the registry
+                let registry = resolve_registry(registry, &config)?;
+
                 let mut components = registry.read_components().await?;
                 components.sort_by_key(|c| c.name.clone());
                 for component in components {
@@ -266,6 +278,11 @@ impl ComponentCommand {
                 registry,
                 force,
             } => {
+                // Resolve the config
+                let config = config().await?;
+                // Resolve the registry
+                let registry = resolve_registry(registry, &config)?;
+
                 // Read all components from the registry
                 let components = registry.read_components().await?;
                 let mode = if force {
@@ -285,7 +302,8 @@ impl ComponentCommand {
                 };
 
                 // Find and initialize the components module if it doesn't exist
-                let components_root = components_root(component_args.module_path.as_deref())?;
+                let components_root =
+                    components_root(component_args.module_path.as_deref(), &config)?;
                 let new_components_module =
                     ensure_components_module_exists(&components_root).await?;
 
@@ -299,11 +317,11 @@ impl ComponentCommand {
                     for dependency in &queued_component.component_dependencies {
                         let (registry, name) = match dependency {
                             ComponentDependency::Builtin(name) => {
-                                (ComponentRegistryArgs::default(), name)
+                                (ComponentRegistry::default(), name)
                             }
                             ComponentDependency::ThirdParty { name, git, rev } => (
-                                ComponentRegistryArgs {
-                                    remote: RemoteComponentRegistryArgs {
+                                ComponentRegistry {
+                                    remote: RemoteComponentRegistry {
                                         git: Some(git.clone()),
                                         rev: rev.clone(),
                                     },
@@ -337,10 +355,11 @@ impl ComponentCommand {
                 // Once we have all required components, add them
                 for (component, mode) in required_components {
                     add_component(
-                        component_args.assets_path.as_deref(),
+                        component_args.global_assets_path.as_deref(),
                         component_args.module_path.as_deref(),
                         &component,
                         mode,
+                        &config,
                     )
                     .await?;
                 }
@@ -360,6 +379,12 @@ impl ComponentCommand {
             }
             // Update the remote component registry
             Self::Update { registry } => {
+                // Resolve the config and registry
+                let config = config().await?;
+                let registry = match registry {
+                    Some(registry) => registry,
+                    None => config.component.registry.remote,
+                };
                 registry.update().await?;
             }
             // Remove a component from the managed component module
@@ -367,7 +392,12 @@ impl ComponentCommand {
                 component,
                 registry,
             } => {
-                remove_component(&component, registry).await?;
+                // Resolve the config
+                let config = config().await?;
+                // Resolve the registry
+                let registry = resolve_registry(registry, &config)?;
+
+                remove_component(&component, registry, &config).await?;
             }
             // Clear the component registry cache
             Self::Clean => {
@@ -400,9 +430,13 @@ fn find_component(components: &[ResolvedComponent], component: &str) -> Result<R
 }
 
 /// Get the path to the components module, defaulting to src/components
-fn components_root(module_path: Option<&Path>) -> Result<PathBuf> {
+fn components_root(module_path: Option<&Path>, config: &DioxusConfig) -> Result<PathBuf> {
     if let Some(module_path) = module_path {
         return Ok(PathBuf::from(module_path));
+    }
+
+    if let Some(component_path) = &config.component.component_path {
+        return Ok(component_path.clone());
     }
 
     let root = Workspace::crate_root_from_path()?;
@@ -410,10 +444,37 @@ fn components_root(module_path: Option<&Path>) -> Result<PathBuf> {
     Ok(root.join("src").join("components"))
 }
 
+/// Load the config
+async fn config() -> Result<DioxusConfig> {
+    let workspace = Workspace::current().await?;
+
+    let crate_package = workspace.find_main_package(None)?;
+
+    Ok(workspace
+        .load_dioxus_config(crate_package)?
+        .unwrap_or_default())
+}
+
+/// Resolve a registry from the config if none is provided
+fn resolve_registry(
+    registry: Option<ComponentRegistry>,
+    config: &DioxusConfig,
+) -> Result<ComponentRegistry> {
+    if let Some(registry) = registry {
+        return Ok(registry);
+    }
+
+    Ok(config.component.registry.clone())
+}
+
 /// Get the path to the global assets directory, defaulting to assets
-fn global_assets_root(assets_path: Option<&Path>) -> Result<PathBuf> {
+async fn global_assets_root(assets_path: Option<&Path>, config: &DioxusConfig) -> Result<PathBuf> {
     if let Some(assets_path) = assets_path {
         return Ok(PathBuf::from(assets_path));
+    }
+
+    if let Some(asset_dir) = &config.application.asset_dir {
+        return Ok(asset_dir.clone());
     }
 
     let root = Workspace::crate_root_from_path()?;
@@ -424,9 +485,10 @@ fn global_assets_root(assets_path: Option<&Path>) -> Result<PathBuf> {
 /// Remove a component from the managed component module
 async fn remove_component(
     component_args: &ComponentArgs,
-    registry: ComponentRegistryArgs,
+    registry: ComponentRegistry,
+    config: &DioxusConfig,
 ) -> Result<()> {
-    let components_root = components_root(component_args.module_path.as_deref())?;
+    let components_root = components_root(component_args.module_path.as_deref(), &config)?;
 
     // Find the requested components
     let components = if component_args.all {
@@ -500,9 +562,10 @@ async fn add_component(
     component_path: Option<&Path>,
     component: &ResolvedComponent,
     behavior: ComponentExistsBehavior,
+    config: &DioxusConfig,
 ) -> Result<()> {
     // Copy the folder content to the components directory
-    let components_root = components_root(component_path)?;
+    let components_root = components_root(component_path, &config)?;
     let copied = copy_component_files(
         &component.path,
         &components_root.join(&component.name),
@@ -519,7 +582,7 @@ async fn add_component(
     }
 
     // Copy any global assets
-    let assets_root = global_assets_root(assets_path)?;
+    let assets_root = global_assets_root(assets_path, config).await?;
     copy_global_assets(&assets_root, component).await?;
 
     // Add the module to the components mod.rs
