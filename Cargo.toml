@@ -70,6 +70,7 @@ members = [
     "packages/native-dom",
     "packages/asset-resolver",
     "packages/depinfo",
+    "packages/sdk",
 
     # CLI harnesses, all included
     "packages/cli-harnesses/*",
@@ -137,7 +138,7 @@ members = [
     "packages/playwright-tests/cli-optimization",
     "packages/playwright-tests/wasm-split-harness",
     "packages/playwright-tests/default-features-disabled"
-, "packages/storage"]
+]
 
 [workspace.package]
 version = "0.7.0-rc.0"

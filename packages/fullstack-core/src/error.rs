@@ -42,6 +42,10 @@ pub enum ServerFnError {
     #[error("error reaching server to call server function: {message} (code: {code:?})")]
     Request { message: String, code: Option<u16> },
 
+    /// Occurs on the client if there is an error while trying to read the response body as a stream.
+    #[error("error reading response body stream: {0}")]
+    StreamError(String),
+
     /// Error while trying to register the server function (only occurs in case of poisoned RwLock).
     #[error("error while trying to register the server function: {0}")]
     Registration(String),

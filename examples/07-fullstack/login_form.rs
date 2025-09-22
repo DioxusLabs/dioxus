@@ -1,10 +1,4 @@
 //! Implementing a login form
-//!
-//! This example demonstrates how to implement a login form using Dioxus desktop. Since forms typically navigate the
-//! page on submit, we need to intercept the onsubmit event and send a request to a server. On the web, we could
-//! just leave the `submit action` as is, but on desktop, we need to handle the form submission ourselves.
-//!
-//! Todo: actually spin up a server and run the login flow. Login is way more complex than a form override :)
 
 use dioxus::prelude::*;
 
@@ -14,15 +8,10 @@ fn main() {
 
 fn app() -> Element {
     let onsubmit = move |evt: FormEvent| async move {
-        let resp = reqwest::Client::new()
-            .post("http://localhost:8080/login")
-            .form(&[
-                ("username", evt.values()["username"].as_value()),
-                ("password", evt.values()["password"].as_value()),
-            ])
-            .bearer_auth("some_token")
-            .send()
-            .await;
+        // Intercept the form submission
+        let res = evt.prevent_default();
+
+        login(evt.data()).await;
 
         match resp {
             // Parse data from here, such as storing a response token
@@ -49,37 +38,12 @@ fn app() -> Element {
     }
 }
 
-#[component]
-fn LoggedIn() -> Element {
-    // let data = use_loader!(|| DB.query("SELECT (name, email) FROM users limit 30"));
+use dioxus::fullstack::Form;
 
-    // rsx! {
-    //     div {
-    //         for user in data.value().iter() {
-    //             div { "{user.name} - {user.email}" }
-    //         }
-    //         Link { to: "/next-page", "Next Page" }
-    //     }
-    // }
+#[derive(serde::Deserialize)]
+pub struct LoginForm {}
+
+#[post("/api/login")]
+async fn login(form: Form<LoginForm>) -> Result<()> {
     todo!()
-}
-
-struct Something {}
-
-fn hmmm() {
-    impl Something {
-        /// Mock database query function
-        pub fn query(&self, query: &str) -> Vec<UsersNameAndEmail> {
-            vec![]
-        }
-    }
-    struct UsersNameAndEmail {
-        name: String,
-        email: String,
-    }
-    todo!()
-}
-
-fn oh_cool() {
-    Something {}.query("SELECT (name, email) FROM users limit 30");
 }

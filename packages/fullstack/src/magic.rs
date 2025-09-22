@@ -446,7 +446,8 @@ mod decode_ok {
                         ServerFnError::Deserialization(_)
                         | ServerFnError::Serialization(_)
                         | ServerFnError::Args(_)
-                        | ServerFnError::MissingArg(_) => Err(StatusCode::UNPROCESSABLE_ENTITY),
+                        | ServerFnError::MissingArg(_)
+                        | ServerFnError::StreamError(_) => Err(StatusCode::UNPROCESSABLE_ENTITY),
 
                         ServerFnError::UnsupportedRequestMethod(_) => {
                             Err(StatusCode::METHOD_NOT_ALLOWED)

@@ -1,0 +1,6 @@
+[package]
+name = "sdk-mini"
+edition = "2024"
+version.workspace = true
+
+[dependencies]

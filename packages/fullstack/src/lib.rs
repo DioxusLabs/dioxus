@@ -48,11 +48,15 @@ pub use payloads::*;
 pub mod payloads {
     pub mod jwt;
     pub use jwt::*;
+
     pub mod json;
     pub use json::*;
 
     pub mod cbor;
+    pub use cbor::*;
+
     pub mod form;
+    pub use form::*;
 
     pub mod multipart;
     pub mod rkyv;
@@ -85,4 +89,7 @@ pub mod payloads {
 
     pub mod upload;
     pub use upload::*;
+
+    pub mod redirect;
+    pub use redirect::*;
 }

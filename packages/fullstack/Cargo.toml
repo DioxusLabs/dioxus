@@ -39,7 +39,9 @@ mime = "0.3.17"
 # server deps
 axum = { workspace = true, default-features = false, features = ["json", "form", "query", "multipart", "query"] }
 inventory = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true }
 tokio-tungstenite = { workspace = true, optional = true }
+tokio-util = { workspace = true, features = ["codec"], optional = true }
 tokio-stream = { workspace = true, features = ["sync"], optional = true }
 tower = { workspace = true, features = ["util"], optional = true }
 tower-http = { workspace = true, features = ["fs"], optional = true }
@@ -50,6 +52,7 @@ reqwest = { workspace = true, features = ["json", "rustls-tls", "cookies"] }
 
 # payloads
 postcard = { features = ["alloc"], optional = true, workspace = true, default-features = true }
+async-stream = "0.3.6"
 
 [dev-dependencies]
 dioxus = { workspace = true, features = ["fullstack", "router"] }
@@ -59,11 +62,13 @@ web = []
 native = []
 server = [
     "dep:inventory",
+    "dep:tokio",
     "dep:tokio-tungstenite",
     "dep:tokio-stream",
     "dep:tower",
     "dep:tower-http",
     "dep:tower-layer",
+    "dep:tokio-util",
     "axum/ws",
     "axum/tokio",
 ]

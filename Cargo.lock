@@ -5587,6 +5587,7 @@ name = "dioxus-fullstack"
 version = "0.7.0-rc.0"
 dependencies = [
  "anyhow",
+ "async-stream",
  "axum 0.8.4",
  "axum-core 0.5.2",
  "base64 0.22.1",
@@ -5614,8 +5615,10 @@ dependencies = [
  "serde_json",
  "serde_qs",
  "thiserror 2.0.12",
+ "tokio",
  "tokio-stream",
  "tokio-tungstenite 0.27.0",
+ "tokio-util",
  "tower 0.5.2",
  "tower-http",
  "tower-layer",
@@ -6104,15 +6107,6 @@ dependencies = [
  "dioxus-core",
  "dioxus-core-types",
  "rustc-hash 2.1.1",
-]
-
-[[package]]
-name = "dioxus-storage"
-version = "0.7.0-rc.0"
-dependencies = [
- "js-sys",
- "wasm-bindgen",
- "web-sys",
 ]
 
 [[package]]
@@ -14563,6 +14557,10 @@ dependencies = [
  "smithay-client-toolkit",
  "tiny-skia",
 ]
+
+[[package]]
+name = "sdk-mini"
+version = "0.7.0-rc.0"
 
 [[package]]
 name = "seahash"
