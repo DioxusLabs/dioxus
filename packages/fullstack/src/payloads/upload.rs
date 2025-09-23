@@ -10,7 +10,7 @@ use dioxus_fullstack_core::ServerFnError;
 use futures::Stream;
 use http_body_util::BodyExt;
 
-use crate::{FromResponse, IntoRequest, ResponseWithState, ServerFnRejection};
+use crate::{FromResponse, IntoRequest, ServerFnRejection};
 
 pub struct FileUpload {
     outgoing_stream: Option<http_body_util::BodyDataStream<Request<Body>>>,

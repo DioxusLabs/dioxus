@@ -9,8 +9,7 @@ use send_wrapper::SendWrapper;
 
 use crate::{
     websocket::{protocol::CloseCode, wasm::WebSysWebSocketStream},
-    CborEncoding, Encoding, FromResponse, IntoRequest, JsonEncoding, ResponseWithState,
-    ServerFnError,
+    CborEncoding, Encoding, FromResponse, IntoRequest, JsonEncoding, ServerFnError,
 };
 use dioxus_core::{use_hook, CapturedError, RenderError, Result};
 use dioxus_hooks::{use_loader, use_memo, use_signal, use_waker, Loader};
@@ -109,10 +108,7 @@ impl<In, Out, E> UseWebsocket<In, Out, E> {
     }
 
     pub async fn recv_raw(&mut self) -> Result<protocol::Message, WebsocketError> {
-        // Wait for the connection to be established
-        while !self.connection.finished() {
-            _ = self.waker.wait().await;
-        }
+        self.wait_for_connection().await;
 
         let conn = self.connection.value();
         let con_ref = conn.as_ref();
@@ -164,6 +160,15 @@ impl<In, Out, E> UseWebsocket<In, Out, E> {
             }
         }
     }
+
+    /// Wait for the connection to be established. This guarantees that subsequent calls to methods like
+    /// `.try_recv()` will not fail due to the connection not being ready.
+    pub async fn wait_for_connection(&mut self) {
+        // Wait for the connection to be established
+        while !self.connection.finished() {
+            _ = self.waker.wait().await;
+        }
+    }
 }
 
 impl<In: Serialize, Out, E: Encoding> UseWebsocket<In, Out, E> {
@@ -173,11 +178,7 @@ impl<In: Serialize, Out, E: Encoding> UseWebsocket<In, Out, E> {
             _ = self.waker.wait().await;
         }
 
-        let as_str = serde_json::to_string(&msg);
-
-        // let bytes = E::to_bytes(&msg).ok_or_else(|| {
-        //     WebsocketError::Serialization(anyhow::anyhow!("Failed to serialize message").into())
-        // });
+        let bytes = E::to_bytes(&msg);
 
         let conn = self.connection.value();
         let con_ref = conn.as_ref();
@@ -190,8 +191,7 @@ impl<In: Serialize, Out, E: Encoding> UseWebsocket<In, Out, E> {
             .as_ref();
 
         let r = connection.unwrap().inner_web.as_ref().unwrap();
-        r.inner.send_with_str(&as_str.unwrap()).unwrap();
-        // r.inner.send_with_u8_array(&bytes.unwrap()).unwrap();
+        r.inner.send_with_u8_array(&bytes.unwrap()).unwrap();
 
         Ok(())
     }
@@ -202,13 +202,15 @@ impl<In, Out: DeserializeOwned, E: Encoding> UseWebsocket<In, Out, E> {
     ///
     /// If the connection is still opening, this will wait until the connection is established.
     /// If the connection fails to open or is killed while waiting, an error will be returned.
+    ///
+    /// This method returns an error if the connection is closed since we assume closed connections
+    /// are a "failure".
     pub async fn recv(&mut self) -> Result<Out, WebsocketError> {
         let msg = self.recv_raw().await?;
-        tracing::info!("Received raw websocket message: {:?}", msg);
 
         match msg {
             protocol::Message::Text(text) => {
-                let res: Out = E::from_bytes(text.as_bytes()).ok_or_else(|| {
+                let res: Out = E::from_bytes(text.into()).ok_or_else(|| {
                     WebsocketError::Deserialization(
                         anyhow::anyhow!("Failed to deserialize text message").into(),
                     )
@@ -216,7 +218,7 @@ impl<In, Out: DeserializeOwned, E: Encoding> UseWebsocket<In, Out, E> {
                 Ok(res)
             }
             protocol::Message::Binary(bytes) => {
-                let res: Out = E::from_bytes(&bytes).ok_or_else(|| {
+                let res: Out = E::from_bytes(bytes.into()).ok_or_else(|| {
                     WebsocketError::Deserialization(
                         anyhow::anyhow!("Failed to deserialize binary message").into(),
                     )
@@ -445,7 +447,7 @@ impl<In: DeserializeOwned, Out: Serialize, E: Encoding> TypedWebsocket<In, Out, 
         let res = self.inner.next().await?;
         match res {
             Ok(res) => {
-                let e: In = E::from_bytes(&res.into_data()).unwrap();
+                let e: In = E::from_bytes(res.into_data()).unwrap();
                 return Some(Ok(e));
             }
             Err(res) => return todo!(),

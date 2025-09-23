@@ -16,7 +16,7 @@ use reqwest::header::HeaderValue;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::fmt::Display;
 
-use crate::{FromResponse, ResponseWithState, ServerFnError};
+use crate::{FromResponse, ServerFnError};
 
 pub struct ServerEvents<T> {
     _marker: std::marker::PhantomData<fn() -> T>,
@@ -31,7 +31,7 @@ pub struct ServerEvents<T> {
 
 // Client Impl
 impl<T: DeserializeOwned> ServerEvents<T> {
-    pub async fn next(&mut self) -> Option<Result<T, ServerFnError>> {
+    pub async fn recv(&mut self) -> Option<Result<T, ServerFnError>> {
         let event = self.next_event().await?;
         match event {
             Ok(event) => {
@@ -61,9 +61,7 @@ impl<T> FromResponse for ServerEvents<T> {
     fn from_response(
         res: reqwest::Response,
     ) -> impl Future<Output = Result<Self, ServerFnError>> + Send {
-        use futures::io::{AsyncBufReadExt, Cursor};
-        // use tokio::io::AsyncBufReadExt;
-        // use tokio_util::io::StreamReader;
+        use futures::io::AsyncBufReadExt;
 
         let res = res;
         send_wrapper::SendWrapper::new(async move {
@@ -73,7 +71,7 @@ impl<T> FromResponse for ServerEvents<T> {
                 // return Err(EventSourceError::BadStatus(status));
             }
             let content_type = res.headers().get(CONTENT_TYPE);
-            if content_type != Some(&MIME_EVENT_STREAM) {
+            if content_type != Some(&HeaderValue::from_static(mime::TEXT_EVENT_STREAM.as_ref())) {
                 todo!()
                 // return Err(EventSourceError::BadContentType(content_type.cloned()));
             }
@@ -263,9 +261,6 @@ pub struct ServerSentEvent {
     /// Reconnection time.
     pub retry: Option<Duration>,
 }
-
-/// `text/event-stream` MIME type as [`HeaderValue`].
-pub static MIME_EVENT_STREAM: HeaderValue = HeaderValue::from_static("text/event-stream");
 
 #[derive(Debug)]
 pub enum EventError {

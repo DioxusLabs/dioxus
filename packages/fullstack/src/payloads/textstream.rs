@@ -3,7 +3,7 @@ use std::{pin::Pin, prelude::rust_2024::Future};
 use axum_core::response::IntoResponse;
 use futures::{Stream, StreamExt};
 
-use crate::{FromResponse, ResponseWithState, ServerFnError};
+use crate::{FromResponse, ServerFnError};
 
 pub type TextStream = Streaming<String, ServerFnError>;
 

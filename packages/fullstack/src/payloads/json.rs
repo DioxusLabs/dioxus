@@ -1,4 +1,4 @@
-use crate::{FromResponse, IntoRequest, ResponseWithState, ServerFnError};
+use crate::{FromResponse, IntoRequest, ServerFnError};
 pub use axum::extract::Json;
 use reqwest::RequestBuilder;
 use serde::{de::DeserializeOwned, Serialize};

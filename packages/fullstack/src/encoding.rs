@@ -1,31 +1,35 @@
+use bytes::Bytes;
 use serde::{de::DeserializeOwned, Serialize};
 
+/// A trait for encoding and decoding data.
+///
+/// This takes an owned self to make it easier for zero-copy encodings.
 pub trait Encoding {
-    fn to_bytes(data: &impl Serialize) -> Option<Vec<u8>>;
-    fn from_bytes<O: DeserializeOwned>(bytes: &[u8]) -> Option<O>;
+    fn to_bytes(data: impl Serialize) -> Option<Bytes>;
+    fn from_bytes<O: DeserializeOwned>(bytes: Bytes) -> Option<O>;
 }
 
 pub struct JsonEncoding;
 impl Encoding for JsonEncoding {
-    fn to_bytes(data: &impl Serialize) -> Option<Vec<u8>> {
-        serde_json::to_vec(data).ok()
+    fn to_bytes(data: impl Serialize) -> Option<Bytes> {
+        serde_json::to_vec(&data).ok().map(Into::into)
     }
 
-    fn from_bytes<O: DeserializeOwned>(bytes: &[u8]) -> Option<O> {
-        serde_json::from_slice(bytes).ok()
+    fn from_bytes<O: DeserializeOwned>(bytes: Bytes) -> Option<O> {
+        serde_json::from_slice(&bytes).ok()
     }
 }
 
 pub struct CborEncoding;
 impl Encoding for CborEncoding {
-    fn to_bytes(data: &impl Serialize) -> Option<Vec<u8>> {
+    fn to_bytes(data: impl Serialize) -> Option<Bytes> {
         let mut buf = Vec::new();
-        ciborium::into_writer(data, &mut buf).ok()?;
-        Some(buf)
+        ciborium::into_writer(&data, &mut buf).ok()?;
+        Some(buf.into())
     }
 
-    fn from_bytes<O: DeserializeOwned>(bytes: &[u8]) -> Option<O> {
-        ciborium::de::from_reader(bytes).ok()
+    fn from_bytes<O: DeserializeOwned>(bytes: Bytes) -> Option<O> {
+        ciborium::de::from_reader(bytes.as_ref()).ok()
     }
 }
 
@@ -33,12 +37,12 @@ impl Encoding for CborEncoding {
 pub struct PostcardEncoding;
 #[cfg(feature = "postcard")]
 impl Encoding for PostcardEncoding {
-    fn to_bytes(data: &impl Serialize) -> Option<Vec<u8>> {
-        postcard::to_allocvec(data).ok()
+    fn to_bytes(data: impl Serialize) -> Option<Bytes> {
+        postcard::to_allocvec(&data).ok().map(Into::into)
     }
 
-    fn from_bytes<O: DeserializeOwned>(bytes: &[u8]) -> Option<O> {
-        postcard::from_bytes(bytes).ok()
+    fn from_bytes<O: DeserializeOwned>(bytes: Bytes) -> Option<O> {
+        postcard::from_bytes(bytes.as_ref()).ok()
     }
 }
 
@@ -46,11 +50,11 @@ impl Encoding for PostcardEncoding {
 pub struct MsgPackEncoding;
 #[cfg(feature = "msgpack")]
 impl Encoding for MsgPackEncoding {
-    fn to_bytes(data: &impl Serialize) -> Option<Vec<u8>> {
-        rmp_serde::to_vec(data).ok()
+    fn to_bytes(data: impl Serialize) -> Option<Bytes> {
+        rmp_serde::to_vec(&data).ok().map(Into::into)
     }
 
-    fn from_bytes<O: DeserializeOwned>(bytes: &[u8]) -> Option<O> {
-        rmp_serde::from_slice(bytes).ok()
+    fn from_bytes<O: DeserializeOwned>(bytes: Bytes) -> Option<O> {
+        rmp_serde::from_slice(&bytes).ok()
     }
 }

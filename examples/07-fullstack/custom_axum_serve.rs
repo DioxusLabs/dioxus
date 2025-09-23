@@ -1,3 +1,20 @@
+//! This example demonstrates how to use `dioxus::serve` with a custom Axum router.
+//!
+//! By default, `dioxus::launch` takes over the main thread and runs the Dioxus application.
+//! However, if you want to integrate Dioxus into an existing web server or use a custom router,
+//! you can use `dioxus::serve` to create a server that serves your Dioxus application alongside
+//! other routes.
+//!
+//! `dioxus::serve` sets up an async runtime, logging, hot-reloading, crash handling, and more.
+//! You can then use the `.serve_dioxus_application` method on your router to serve the Dioxus app.
+//!
+//! `dioxus::serve` is most useful for customizing the server setup, such as adding middleware,
+//! custom routes, or integrating with existing axum backend code.
+//!
+//! On other platforms (like desktop or mobile), you'll want to use `dioxus::launch` instead and then
+//! handle async loading of data through hooks like `use_future` or `use_resource` and give the user
+//! a loading state while data is being fetched.
+
 use dioxus::prelude::*;
 
 fn main() {
@@ -8,20 +25,14 @@ fn main() {
     // On the server, we can use `dioxus::serve` and `.serve_dioxus_application` to serve our app with routing.
     // Using `dioxus::serve` sets up an async runtime, logging, hot-reloading, and more.
     #[cfg(feature = "server")]
-    dioxus_server::serve(|| async move {
-        use dioxus_server::axum::{
-            self,
-            routing::{get, post},
-        };
+    dioxus::serve(|| async move {
+        use dioxus::server::axum::routing::{Router, get, post};
 
-        let router = axum::Router::new()
-            .serve_dioxus_application(ServeConfig::new().unwrap(), app)
-            .route("/", get(|| async { "Hello, world!" }))
+        Ok(Router::new()
             .route("/submit", post(|| async { "Form submitted!" }))
             .route("/about", get(|| async { "About us" }))
-            .route("/contact", get(|| async { "Contact us" }));
-
-        anyhow::Ok(router)
+            .route("/contact", get(|| async { "Contact us" }))
+            .serve_dioxus_application(ServeConfig::new().unwrap(), app))
     });
 }
 

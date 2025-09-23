@@ -3,7 +3,7 @@ use dioxus_fullstack_core::ServerFnError;
 use send_wrapper::SendWrapper;
 use std::prelude::rust_2024::Future;
 
-use crate::{FromResponse, ResponseWithState};
+use crate::FromResponse;
 
 /// A simple text response type.
 pub struct Text<T>(pub T);

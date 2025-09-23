@@ -3,8 +3,6 @@ use dioxus_fullstack_core::{DioxusServerState, ServerFnError};
 use serde::de::DeserializeOwned;
 use std::{pin::Pin, prelude::rust_2024::Future};
 
-use crate::ResponseWithState;
-
 pub trait FromResponse<R = reqwest::Response>: Sized {
     fn from_response(res: R) -> impl Future<Output = Result<Self, ServerFnError>> + Send;
 }

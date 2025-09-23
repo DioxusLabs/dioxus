@@ -4,7 +4,7 @@
 
 use dioxus::desktop::wry::http;
 use dioxus::desktop::wry::http::Response;
-use dioxus::desktop::{use_asset_handler, AssetRequest};
+use dioxus::desktop::{AssetRequest, use_asset_handler};
 use dioxus::prelude::*;
 use http::{header::*, response::Builder as ResponseBuilder, status::StatusCode};
 use std::{io::SeekFrom, path::PathBuf};
@@ -16,7 +16,7 @@ fn main() {
     // For the sake of this example, we will download the video file if it doesn't exist
     ensure_video_is_loaded();
 
-    dioxus::LaunchBuilder::desktop().launch(app);
+    dioxus::launch(app);
 }
 
 fn app() -> Element {
