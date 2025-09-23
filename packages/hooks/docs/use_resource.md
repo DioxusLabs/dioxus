@@ -25,7 +25,7 @@ fn app() -> Element {
         // conditionally render elements based off if it's future
         // finished (Some(Ok(_)), errored Some(Err(_)),
         // or is still running (None)
-        match &*current_weather.read_unchecked() {
+        match &*current_weather.read_extended() {
             Some(Ok(weather)) => rsx! { WeatherElement { weather } },
             Some(Err(e)) => rsx! { p { "Loading weather failed, {e}" } },
             None =>  rsx! { p { "Loading..." } }

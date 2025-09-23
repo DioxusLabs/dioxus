@@ -168,17 +168,17 @@ impl Readable for UseFuture {
     type Storage = UnsyncStorage;
 
     #[track_caller]
-    fn try_read_unchecked(
+    fn try_read_extended(
         &self,
     ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> {
-        self.state.try_read_unchecked()
+        self.state.try_read_extended()
     }
 
     #[track_caller]
-    fn try_peek_unchecked(
+    fn try_peek_extended(
         &self,
     ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> {
-        self.state.try_peek_unchecked()
+        self.state.try_peek_extended()
     }
 
     fn subscribers(&self) -> Subscribers {
