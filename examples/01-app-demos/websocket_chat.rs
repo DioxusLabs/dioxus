@@ -11,6 +11,10 @@ use dioxus::prelude::*;
 use dioxus_fullstack::{WebSocketOptions, Websocket, use_websocket};
 use serde::{Deserialize, Serialize};
 use std::sync::LazyLock;
+use tokio::sync::{
+    Mutex,
+    broadcast::{self, Sender},
+};
 use uuid::Uuid;
 
 fn main() {
@@ -76,11 +80,13 @@ fn app() -> Element {
     }
 }
 
+/// The events that the client can send to the server
 #[derive(Serialize, Deserialize, Debug)]
 enum ClientEvent {
     SendMessage(String),
 }
 
+/// The events that the server can send to the client
 #[derive(Serialize, Deserialize, Debug)]
 enum ServerEvent {
     Connected { messages: Vec<ChatMessage> },
@@ -94,19 +100,10 @@ struct ChatMessage {
     message: String,
 }
 
-// our "room" is just a tokio broadcast channel.
-static MESSAGES: LazyLock<ChatRoom> = LazyLock::new(|| {
-    let (sender, _receiver) = tokio::sync::broadcast::channel(100);
-    ChatRoom {
-        message_list: tokio::sync::Mutex::new(Vec::new()),
-        sender,
-    }
-});
-
-struct ChatRoom {
-    message_list: tokio::sync::Mutex<Vec<ChatMessage>>,
-    sender: tokio::sync::broadcast::Sender<ChatMessage>,
-}
+// Every chat app needs a chat room! For this demo, we just use a tokio broadcast channel and a mutex-protected
+// list of messages to store chat history.
+static MESSAGES: LazyLock<Mutex<Vec<ChatMessage>>> = LazyLock::new(|| Mutex::new(Vec::new()));
+static BROADCAST: LazyLock<Sender<ChatMessage>> = LazyLock::new(|| broadcast::channel(100).0);
 
 #[get("/api/chat?name&user_id")]
 async fn uppercase_ws(
@@ -116,11 +113,11 @@ async fn uppercase_ws(
 ) -> Result<Websocket<ClientEvent, ServerEvent>> {
     Ok(options.on_upgrade(move |mut socket| async move {
         // Send back all the messages from the room to the new client
-        let messages = MESSAGES.message_list.lock().await.clone();
+        let messages = MESSAGES.lock().await.clone();
         _ = socket.send(ServerEvent::Connected { messages }).await;
 
         // Subscriber to the broadcast channel
-        let sender = MESSAGES.sender.clone();
+        let sender = BROADCAST.clone();
         let mut broadcast = sender.subscribe();
 
         // Announce that we've joined
@@ -130,6 +127,9 @@ async fn uppercase_ws(
             name: "[CONSOLE]".to_string(),
         });
 
+        // Loop poll the broadcast receiver and the websocket for new messages
+        // If we receive a message from the broadcast channel, send it to the client
+        // If we receive a message from the client, broadcast it to all other clients and save it to the message list
         loop {
             tokio::select! {
                 Ok(msg) = broadcast.recv() => {
@@ -142,7 +142,7 @@ async fn uppercase_ws(
                         message,
                     };
                     let _ = sender.send(chat_message.clone());
-                    MESSAGES.message_list.lock().await.push(chat_message.clone());
+                    MESSAGES.lock().await.push(chat_message.clone());
                 },
                 else => break,
             }
