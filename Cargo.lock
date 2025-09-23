@@ -5547,6 +5547,7 @@ version = "0.7.0-rc.0"
 dependencies = [
  "anyhow",
  "async-std",
+ "axum-core 0.5.2",
  "base64 0.22.1",
  "bytes",
  "ciborium",

@@ -2,7 +2,6 @@
 //! self-hosted instead of using the Dog API.
 
 use dioxus::{fullstack::HttpError, prelude::*};
-use std::collections::HashMap;
 
 fn main() {
     dioxus::launch(app);

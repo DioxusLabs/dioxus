@@ -1,5 +1,5 @@
 use std::pin::Pin;
-use std::{any, future::Future, time::Duration};
+use std::{future::Future, time::Duration};
 
 use async_stream::try_stream;
 #[cfg(feature = "server")]
@@ -29,7 +29,6 @@ pub struct ServerEvents<T> {
     sse: Option<axum::response::Sse<Pin<Box<dyn Stream<Item = Result<Event, BoxError>> + Send>>>>,
 }
 
-// Client Impl
 impl<T: DeserializeOwned> ServerEvents<T> {
     pub async fn recv(&mut self) -> Option<Result<T, ServerFnError>> {
         let event = self.next_event().await?;
@@ -109,15 +108,9 @@ impl<T> FromResponse for ServerEvents<T> {
                         let (field, value) = parse_line(line);
 
                         match field {
-                            "event" => {
-                                event_buffer.set_event_type(value);
-                            }
-                            "data" => {
-                                event_buffer.push_data(value);
-                            }
-                            "id" => {
-                                event_buffer.set_id(value);
-                            }
+                            "event" => event_buffer.set_event_type(value),
+                            "data" => event_buffer.push_data(value),
+                            "id" => event_buffer.set_id(value),
                             "retry" => {
                                 if let Ok(millis) = value.parse() {
                                     event_buffer.set_retry(Duration::from_millis(millis));
@@ -137,6 +130,19 @@ impl<T> FromResponse for ServerEvents<T> {
             })
         })
     }
+}
+
+/// Server-Sent Event representation.
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct ServerSentEvent {
+    /// A string identifying the type of event described.
+    pub event_type: String,
+    /// The data field for the message.
+    pub data: String,
+    /// Last event ID value.
+    pub last_event_id: Option<String>,
+    /// Reconnection time.
+    pub retry: Option<Duration>,
 }
 
 #[cfg(feature = "server")]
@@ -245,34 +251,6 @@ mod server_impl {
     impl<T> IntoResponse for ServerEvents<T> {
         fn into_response(self) -> axum_core::response::Response {
             self.sse.unwrap().into_response()
-        }
-    }
-}
-
-/// Server-Sent Event representation.
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct ServerSentEvent {
-    /// A string identifying the type of event described.
-    pub event_type: String,
-    /// The data field for the message.
-    pub data: String,
-    /// Last event ID value.
-    pub last_event_id: Option<String>,
-    /// Reconnection time.
-    pub retry: Option<Duration>,
-}
-
-#[derive(Debug)]
-pub enum EventError {
-    IoError(std::io::Error),
-}
-
-impl Display for EventError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            EventError::IoError(error) => {
-                write!(f, "failed to process event due to I/O error: {error}")
-            }
         }
     }
 }

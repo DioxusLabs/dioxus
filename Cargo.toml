@@ -465,6 +465,7 @@ anyhow = { workspace = true }
 thiserror = { workspace = true }
 bytes = { workspace = true }
 futures = { workspace = true }
+axum-core = { workspace = true }
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 getrandom = { workspace = true, features = ["wasm_js"] }
@@ -703,8 +704,8 @@ path = "examples/07-fullstack/full_request_access.rs"
 doc-scrape-examples = true
 
 [[example]]
-name = "hello_world_test"
-path = "examples/07-fullstack/hello_world_test.rs"
+name = "fullstack_hello_world"
+path = "examples/07-fullstack/fullstack_hello_world.rs"
 doc-scrape-examples = true
 
 [[example]]
@@ -715,11 +716,6 @@ doc-scrape-examples = true
 [[example]]
 name = "server_state"
 path = "examples/07-fullstack/server_state.rs"
-doc-scrape-examples = true
-
-[[example]]
-name = "server_errors"
-path = "examples/07-fullstack/server_errors.rs"
 doc-scrape-examples = true
 
 [[example]]

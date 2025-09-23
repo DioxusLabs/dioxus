@@ -1,27 +1,51 @@
-#![cfg(feature = "ws")]
+//! This module implements WebSocket support for Dioxus Fullstack applications.
+//!
+//! WebSockets provide a full-duplex communication channel over a single, long-lived connection.
+//!
+//! This makes them ideal for real-time applications where the server and the client need to communicate
+//! frequently and with low latency. Unlike Server-Sent Events (SSE), WebSockets allow the direct
+//! transport of binary data, enabling things like video and audio streaming as well as more efficient
+//! zero-copy serialization formats.
+//!
+//! This module implements a variety of types:
+//! - `Websocket<In, Out, E>`: Represents a WebSocket connection that can send messages of type `In` and receive messages of type `Out`, using the encoding `E`.
+//! - `UseWebsocket<In, Out, E>`: A hook that provides a reactive interface to a WebSocket connection.
+//! - `WebSocketOptions`: Configuration options for establishing a WebSocket connection.
+//! - `TypedWebsocket<In, Out, E>`: A typed wrapper around an Axum WebSocket connection for server-side use.
+//! - `WebsocketState`: An enum representing the state of the WebSocket connection.
+//! - plus a variety of error types and traits for encoding/decoding messages.
+//!
+//! Dioxus Fullstack websockets are typed in both directions, letting the happy path (`.send()` and `.recv()`)
+//! automatically serialize and deserialize messages for you.
 
+use crate::{CborEncoding, Encoding, FromResponse, IntoRequest, JsonEncoding, ServerFnError};
 use axum::extract::{FromRequest, Request};
 use axum_core::response::{IntoResponse, Response};
 use bytes::Bytes;
-use futures::StreamExt;
-use http::HeaderValue;
-use send_wrapper::SendWrapper;
-
-use crate::{
-    websocket::{protocol::CloseCode, wasm::WebSysWebSocketStream},
-    CborEncoding, Encoding, FromResponse, IntoRequest, JsonEncoding, ServerFnError,
-};
 use dioxus_core::{use_hook, CapturedError, RenderError, Result};
 use dioxus_hooks::{use_loader, use_memo, use_signal, use_waker, Loader};
 use dioxus_hooks::{use_resource, Resource};
 use dioxus_signals::{CopyValue, ReadSignal, ReadableOptionExt, Signal, WritableExt};
+use futures::StreamExt;
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::TryFutureExt;
+use http::HeaderValue;
+use protocol::CloseCode;
+use send_wrapper::SendWrapper;
 use serde::{de::DeserializeOwned, Serialize};
-use std::sync::Mutex;
 use std::{marker::PhantomData, prelude::rust_2024::Future, sync::Arc};
 
 /// A hook that provides a reactive interface to a WebSocket connection.
+///
+/// WebSockets provide a full-duplex communication channel over a single, long-lived connection.
+///
+/// This makes them ideal for real-time applications where the server and the client need to communicate
+/// frequently and with low latency. Unlike Server-Sent Events (SSE), WebSockets allow the direct
+/// transport of binary data, enabling things like video and audio streaming as well as more efficient
+/// zero-copy serialization formats.
+///
+/// This hook takes a function that returns a future which resolves to a `Websocket<In, Out, E>` -
+/// usually a server function.
 pub fn use_websocket<
     In: 'static,
     Out: 'static,
@@ -31,10 +55,9 @@ pub fn use_websocket<
 >(
     mut connect_to_websocket: impl FnMut() -> F + 'static,
 ) -> UseWebsocket<In, Out, Enc> {
+    let mut waker = use_waker();
     let mut status = use_signal(|| WebsocketState::Connecting);
     let status_read = use_hook(|| ReadSignal::new(status));
-
-    let mut waker = use_waker::<()>();
 
     let connection = use_resource(move || {
         let fut = connect_to_websocket().map_err(|e| CapturedError::from(e.into()));
@@ -52,7 +75,7 @@ pub fn use_websocket<
                 }
             }
 
-            // Wake up the receivers
+            // Wake up the `.recv()` calls waiting for the connection to be established
             waker.wake(());
 
             res
@@ -61,8 +84,6 @@ pub fn use_websocket<
 
     UseWebsocket {
         _in: PhantomData,
-        _out: PhantomData,
-        _enc: PhantomData,
         connection,
         waker,
         status,
@@ -70,24 +91,31 @@ pub fn use_websocket<
     }
 }
 
-pub struct UseWebsocket<In: 'static, Out: 'static, Enc: 'static = JsonEncoding> {
-    _in: std::marker::PhantomData<fn() -> In>,
-    _out: std::marker::PhantomData<fn() -> Out>,
-    _enc: std::marker::PhantomData<fn() -> Enc>,
+/// The return type of the `use_websocket` hook.
+///
+/// See the `use_websocket` documentation for more details.
+///
+/// This handle provides methods to send and receive messages, check the connection status,
+/// and wait for the connection to be established.
+pub struct UseWebsocket<In, Out, Enc = JsonEncoding>
+where
+    In: 'static,
+    Out: 'static,
+    Enc: 'static,
+{
+    _in: std::marker::PhantomData<fn() -> (In, Out, Enc)>,
     connection: Resource<Result<Websocket<In, Out, Enc>, CapturedError>>,
     waker: dioxus_hooks::UseWaker<()>,
     status: Signal<WebsocketState>,
     status_read: ReadSignal<WebsocketState>,
 }
 
-impl<In, Out, E> UseWebsocket<In, Out, E> {}
-
+impl<In, Out, E> Copy for UseWebsocket<In, Out, E> {}
 impl<In, Out, E> Clone for UseWebsocket<In, Out, E> {
     fn clone(&self) -> Self {
-        todo!()
+        *self
     }
 }
-impl<In, Out, E> Copy for UseWebsocket<In, Out, E> {}
 
 impl<In, Out, E> UseWebsocket<In, Out, E> {
     /// Explicitly wait for the WebSocket connection to be established.
@@ -300,23 +328,6 @@ pub enum WebsocketState {
     FailedToConnect,
 }
 
-impl<In: Serialize, Out: DeserializeOwned> Websocket<In, Out> {
-    pub async fn send(&self, msg: In) -> Result<(), ServerFnError> {
-        todo!()
-    }
-
-    pub async fn recv(&mut self) -> Result<Out, ServerFnError> {
-        todo!()
-    }
-}
-
-// Create a new WebSocket connection that uses the provided function to handle incoming messages
-impl<In, Out, E> IntoResponse for Websocket<In, Out, E> {
-    fn into_response(self) -> Response {
-        self.response.unwrap().into_response()
-    }
-}
-
 /// A WebSocket connection that can send and receive messages of type `In` and `Out`.
 pub struct Websocket<In = String, Out = String, E = JsonEncoding> {
     _in: std::marker::PhantomData<fn() -> In>,
@@ -335,6 +346,13 @@ pub struct Websocket<In = String, Out = String, E = JsonEncoding> {
 impl<I, O, E> PartialEq for Websocket<I, O, E> {
     fn eq(&self, other: &Self) -> bool {
         todo!()
+    }
+}
+
+// Create a new WebSocket connection that uses the provided function to handle incoming messages
+impl<In, Out, E> IntoResponse for Websocket<In, Out, E> {
+    fn into_response(self) -> Response {
+        self.response.unwrap().into_response()
     }
 }
 
@@ -382,8 +400,8 @@ impl<I, O, E> FromResponse<ActiveWebSocketConnection> for Websocket<I, O, E> {
 }
 
 pub struct WebSocketOptions {
-    _private: (),
     protocols: Vec<String>,
+    automatic_reconnect: bool,
     #[cfg(feature = "server")]
     upgrade: Option<axum::extract::ws::WebSocketUpgrade>,
 }
@@ -391,12 +409,17 @@ pub struct WebSocketOptions {
 impl WebSocketOptions {
     pub fn new() -> Self {
         Self {
-            _private: (),
             protocols: Vec::new(),
-
+            automatic_reconnect: false,
             #[cfg(feature = "server")]
             upgrade: None,
         }
+    }
+
+    /// Automatically reconnect if the connection is lost. This uses an exponential backoff strategy.
+    pub fn with_automatic_reconnect(mut self) -> Self {
+        self.automatic_reconnect = true;
+        self
     }
 
     #[cfg(feature = "server")]
@@ -426,6 +449,12 @@ impl WebSocketOptions {
             _enc: PhantomData,
             inner_web: None,
         }
+    }
+}
+
+impl Default for WebSocketOptions {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -501,6 +530,7 @@ impl<In: DeserializeOwned, Out: Serialize, E: Encoding> TypedWebsocket<In, Out, 
 pub struct ActiveWebSocketConnection {
     inner: wasm::WebSysWebSocketStream,
 }
+
 unsafe impl Send for ActiveWebSocketConnection {}
 unsafe impl Sync for ActiveWebSocketConnection {}
 
@@ -539,8 +569,8 @@ impl<S: Send> FromRequest<S> for WebSocketOptions {
             };
 
             Ok(WebSocketOptions {
-                _private: (),
                 protocols: vec![],
+                automatic_reconnect: false,
                 upgrade: Some(ws),
             })
         }
@@ -594,13 +624,13 @@ mod wasm {
         }
     }
 
+    type WebsocketRcvTy = Option<Result<Message, WebSysError>>;
+
     #[derive(Debug)]
     pub struct WebSysWebSocketStream {
         pub(crate) inner: web_sys::WebSocket,
 
-        pub(crate) rx: futures_util::lock::Mutex<
-            mpsc::UnboundedReceiver<Option<Result<Message, WebSysError>>>,
-        >,
+        pub(crate) rx: futures_util::lock::Mutex<mpsc::UnboundedReceiver<WebsocketRcvTy>>,
 
         #[allow(dead_code)]
         on_message_callback: Closure<dyn FnMut(MessageEvent)>,
