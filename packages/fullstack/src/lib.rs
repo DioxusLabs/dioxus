@@ -100,4 +100,7 @@ pub mod payloads {
 
     pub mod redirect;
     pub use redirect::*;
+
+    pub mod ranged;
+    pub use ranged::*;
 }

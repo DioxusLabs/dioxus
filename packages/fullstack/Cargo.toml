@@ -42,6 +42,7 @@ reqwest = { workspace = true, features = ["json", "rustls-tls", "cookies", "stre
 
 # server deps
 axum = { workspace = true, default-features = false, features = ["json", "form", "query", "multipart", "query"] }
+axum-extra = { workspace =  true, optional = true, features = ["typed-header"] }
 inventory = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true }
 tokio-tungstenite = { workspace = true, optional = true }
@@ -49,6 +50,7 @@ tokio-stream = { workspace = true, features = ["sync"], optional = true }
 tower = { workspace = true, features = ["util"], optional = true }
 tower-http = { workspace = true, features = ["fs"], optional = true }
 tower-layer = { version = "0.3.3", optional = true }
+http-body = { workspace = true }
 
 # payloads
 postcard = { features = ["alloc"], optional = true, workspace = true, default-features = true }
@@ -85,6 +87,7 @@ server = [
     "dep:tower",
     "dep:tower-http",
     "dep:tower-layer",
+    "dep:axum-extra",
     "axum/ws",
     "axum/tokio",
 ]
