@@ -4,6 +4,7 @@ use axum::extract::{FromRequest, Request};
 use axum_core::response::{IntoResponse, Response};
 use bytes::Bytes;
 use futures::StreamExt;
+use http::HeaderValue;
 use send_wrapper::SendWrapper;
 
 use crate::{
@@ -26,10 +27,11 @@ pub fn use_websocket<
     In: 'static,
     Out: 'static,
     E: Into<dioxus_core::Error> + 'static,
-    F: Future<Output = Result<Websocket<In, Out>, E>> + 'static,
+    F: Future<Output = Result<Websocket<In, Out, Enc>, E>> + 'static,
+    Enc: Encoding,
 >(
     mut connect_to_websocket: impl FnMut() -> F + 'static,
-) -> UseWebsocket<In, Out> {
+) -> UseWebsocket<In, Out, Enc> {
     let mut status = use_signal(|| WebsocketState::Connecting);
     let status_read = use_hook(|| ReadSignal::new(status));
 
@@ -69,11 +71,11 @@ pub fn use_websocket<
     }
 }
 
-pub struct UseWebsocket<In: 'static, Out: 'static, Enc = JsonEncoding> {
+pub struct UseWebsocket<In: 'static, Out: 'static, Enc: 'static = JsonEncoding> {
     _in: std::marker::PhantomData<fn() -> In>,
     _out: std::marker::PhantomData<fn() -> Out>,
     _enc: std::marker::PhantomData<fn() -> Enc>,
-    connection: Resource<Result<Websocket<In, Out>, CapturedError>>,
+    connection: Resource<Result<Websocket<In, Out, Enc>, CapturedError>>,
     waker: dioxus_hooks::UseWaker<()>,
     status: Signal<WebsocketState>,
     status_read: ReadSignal<WebsocketState>,
@@ -114,7 +116,7 @@ impl<In, Out, E> UseWebsocket<In, Out, E> {
 
         let conn = self.connection.value();
         let con_ref = conn.as_ref();
-        let connection: Result<&Websocket<In, Out>, &CapturedError> = con_ref
+        let connection: Result<&Websocket<In, Out, E>, &CapturedError> = con_ref
             .as_deref()
             .ok_or_else(|| WebsocketError::ConnectionClosed {
                 description: "Connection closed".into(),
@@ -165,7 +167,7 @@ impl<In, Out, E> UseWebsocket<In, Out, E> {
 }
 
 impl<In: Serialize, Out, E: Encoding> UseWebsocket<In, Out, E> {
-    pub async fn send(&self, msg: impl Serialize) -> Result<(), WebsocketError> {
+    pub async fn send(&self, msg: In) -> Result<(), WebsocketError> {
         // Wait for the connection to be established
         while !self.connection.finished() {
             _ = self.waker.wait().await;
@@ -179,7 +181,7 @@ impl<In: Serialize, Out, E: Encoding> UseWebsocket<In, Out, E> {
 
         let conn = self.connection.value();
         let con_ref = conn.as_ref();
-        let connection: Result<&Websocket<In, Out>, &CapturedError> = con_ref
+        let connection: Result<&Websocket<In, Out, E>, &CapturedError> = con_ref
             .as_deref()
             .ok_or_else(|| WebsocketError::ConnectionClosed {
                 description: "Connection closed".into(),
@@ -314,7 +316,7 @@ impl<In, Out, E> IntoResponse for Websocket<In, Out, E> {
 }
 
 /// A WebSocket connection that can send and receive messages of type `In` and `Out`.
-pub struct Websocket<In = String, Out = String, E = CborEncoding> {
+pub struct Websocket<In = String, Out = String, E = JsonEncoding> {
     _in: std::marker::PhantomData<fn() -> In>,
     _out: std::marker::PhantomData<fn() -> Out>,
     _enc: std::marker::PhantomData<fn() -> E>,
@@ -396,13 +398,20 @@ impl WebSocketOptions {
     }
 
     #[cfg(feature = "server")]
-    pub fn on_upgrade<F, Fut>(self, callback: F) -> Websocket
+    pub fn on_upgrade<F, Fut, In, Out, Enc>(self, callback: F) -> Websocket<In, Out, Enc>
     where
-        F: FnOnce(axum::extract::ws::WebSocket) -> Fut + Send + 'static,
+        F: FnOnce(TypedWebsocket<In, Out, Enc>) -> Fut + Send + 'static,
         Fut: Future<Output = ()> + 'static,
     {
         let response = self.upgrade.unwrap().on_upgrade(|socket| {
-            let res = crate::spawn_platform(move || callback(socket));
+            let res = crate::spawn_platform(move || {
+                callback(TypedWebsocket {
+                    _in: PhantomData,
+                    _out: PhantomData,
+                    _enc: PhantomData,
+                    inner: socket,
+                })
+            });
             async move {
                 let _ = res.await;
             }
@@ -415,6 +424,75 @@ impl WebSocketOptions {
             _enc: PhantomData,
             inner_web: None,
         }
+    }
+}
+
+#[cfg(feature = "server")]
+pub struct TypedWebsocket<In, Out, E = JsonEncoding> {
+    _in: std::marker::PhantomData<fn() -> In>,
+    _out: std::marker::PhantomData<fn() -> Out>,
+    _enc: std::marker::PhantomData<fn() -> E>,
+
+    inner: axum::extract::ws::WebSocket,
+}
+
+#[cfg(feature = "server")]
+impl<In: DeserializeOwned, Out: Serialize, E: Encoding> TypedWebsocket<In, Out, E> {
+    /// Receive another message.
+    ///
+    /// Returns `None` if the stream has closed.
+    pub async fn recv(&mut self) -> Option<Result<In, WebsocketError>> {
+        let res = self.inner.next().await?;
+        match res {
+            Ok(res) => {
+                let e: In = E::from_bytes(&res.into_data()).unwrap();
+                return Some(Ok(e));
+            }
+            Err(res) => return todo!(),
+        }
+    }
+
+    /// Send a message.
+    pub async fn send(&mut self, msg: Out) -> Result<(), WebsocketError> {
+        use axum::extract::ws::Message;
+
+        let to_bytes = E::to_bytes(&msg).ok_or_else(|| {
+            WebsocketError::Serialization(anyhow::anyhow!("Failed to serialize message").into())
+        })?;
+
+        let res = self
+            .inner
+            .send(Message::Binary(to_bytes.into()))
+            .await
+            .unwrap();
+
+        Ok(())
+    }
+
+    /// Receive another message.
+    ///
+    /// Returns `None` if the stream has closed.
+    pub async fn recv_raw(&mut self) -> Option<Result<Out, WebsocketError>> {
+        // let res = self.inner.next().await;
+        todo!()
+    }
+
+    /// Send a message.
+    pub async fn send_raw(
+        &mut self,
+        msg: axum::extract::ws::Message,
+    ) -> Result<(), WebsocketError> {
+        todo!()
+        // self.inner
+        //     .send(msg.into_tungstenite())
+        //     .await
+        //     .map_err(Error::new)
+    }
+
+    /// Return the selected WebSocket subprotocol, if one has been chosen.
+    pub fn protocol(&self) -> Option<&HeaderValue> {
+        // self.protocol.as_ref()
+        todo!()
     }
 }
 

@@ -26,44 +26,45 @@ fn app() -> Element {
         p { "Connection status: {socket.status():?}" }
         input {
             placeholder: "Type a message",
-            oninput: move |e| async move { socket.send(e.value()).await; },
+            oninput: move |e| async move { socket.send(ClientEvent::TextInput(e.value())).await; },
         }
-        for message in messages.iter() {
-            pre { "{message}" }
+        button {
+            onclick: move |_| messages.clear(),
+            "Clear messages"
+        }
+        for message in messages.read().iter().rev() {
+            pre { "{message:?}" }
         }
     }
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+enum ClientEvent {
+    TextInput(String),
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+enum ServerEvent {
+    Uppercase(String),
+}
+
 #[get("/api/uppercase_ws?name&age")]
-async fn uppercase_ws(name: String, age: i32, options: WebSocketOptions) -> Result<Websocket> {
+async fn uppercase_ws(
+    name: String,
+    age: i32,
+    options: WebSocketOptions,
+) -> Result<Websocket<ClientEvent, ServerEvent>> {
     use axum::extract::ws::Message;
     use dioxus::fullstack::axum;
 
     Ok(options.on_upgrade(move |mut socket| async move {
         loop {
-            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-            let json_message = serde_json::to_string("Hello from server").unwrap();
-            if socket
-                .send(Message::Text(json_message.into()))
-                .await
-                .is_err()
-            {
-                return;
+            let msg = socket.recv().await.unwrap().unwrap();
+            match msg {
+                ClientEvent::TextInput(next) => {
+                    socket.send(ServerEvent::Uppercase(next)).await;
+                }
             }
         }
-
-        // let greeting = format!("Hello, {}! You are {} years old.", name, age);
-        // if socket.send(Message::Text(greeting.into())).await.is_err() {
-        //     return;
-        // }
-
-        // while let Some(Ok(msg)) = socket.recv().await {
-        //     if let Message::Text(text) = msg {
-        //         let uppercased = text.to_uppercase();
-        //         if socket.send(Message::Text(uppercased.into())).await.is_err() {
-        //             return;
-        //         }
-        //     }
-        // }
     }))
 }
