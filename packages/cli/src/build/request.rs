@@ -3875,15 +3875,15 @@ impl BuildRequest {
         writeln!(
             buf_writer,
             r#"
-window.__wasm_split_main_initSync = initSync;
+globalThis.__wasm_split_main_initSync = initSync;
 
 // Actually perform the load
 __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
     // assign this module to be accessible globally
-    window.__dx_mainWasm = wasm;
-    window.__dx_mainInit = __wbg_init;
-    window.__dx_mainInitSync = initSync;
-    window.__dx___wbg_get_imports = __wbg_get_imports;
+    globalThis.__dx_mainWasm = wasm;
+    globalThis.__dx_mainInit = __wbg_init;
+    globalThis.__dx_mainInitSync = initSync;
+    globalThis.__dx___wbg_get_imports = __wbg_get_imports;
 
     if (wasm.__wbindgen_start == undefined) {{
         wasm.main();
