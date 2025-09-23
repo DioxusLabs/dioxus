@@ -45,9 +45,6 @@ async fn listen_for_changes() -> Result<ServerEvents<MyServerEvent>> {
         let mut count = 1;
 
         loop {
-            // Poll some data source here, subscribe to changes, maybe call an LLM?
-            tokio::time::sleep(Duration::from_secs(1)).await;
-
             // Create our serializable message
             let msg = if count % 5 == 0 {
                 MyServerEvent::Nay {
@@ -66,6 +63,9 @@ async fn listen_for_changes() -> Result<ServerEvents<MyServerEvent>> {
             }
 
             count += 1;
+
+            // Poll some data source here, subscribe to changes, maybe call an LLM?
+            tokio::time::sleep(Duration::from_secs(1)).await;
         }
     }))
 }
