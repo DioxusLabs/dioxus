@@ -3,7 +3,7 @@ use std::{pin::Pin, prelude::rust_2024::Future};
 use axum_core::response::IntoResponse;
 use futures::{Stream, StreamExt};
 
-use crate::{FromResponse, ServerFnError};
+use crate::{FromResponse, ResponseWithState, ServerFnError};
 
 pub type TextStream = Streaming<String, ServerFnError>;
 
@@ -81,7 +81,7 @@ impl<T, E> IntoResponse for Streaming<T, E> {
 
 impl<T, E> FromResponse for Streaming<T, E> {
     fn from_response(
-        res: reqwest::Response,
+        res: ResponseWithState,
     ) -> impl Future<Output = Result<Self, ServerFnError>> + Send {
         async move { todo!() }
     }

@@ -4,7 +4,7 @@ use crate::innerlude::{remove_future, spawn, Runtime};
 use crate::scope_context::ScopeStatus;
 use crate::scope_context::SuspenseLocation;
 use crate::ScopeId;
-use futures_util::task::ArcWake;
+use futures_util::{future::Shared, task::ArcWake};
 use slotmap::DefaultKey;
 use std::marker::PhantomData;
 use std::panic;

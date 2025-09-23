@@ -104,3 +104,6 @@ pub use use_loader::*;
 
 mod use_action;
 pub use use_action::*;
+
+mod use_waker;
+pub use use_waker::*;

@@ -3,7 +3,7 @@ use dioxus_fullstack_core::ServerFnError;
 use send_wrapper::SendWrapper;
 use std::prelude::rust_2024::Future;
 
-use crate::FromResponse;
+use crate::{FromResponse, ResponseWithState};
 
 /// A simple text response type.
 pub struct Text<T>(pub T);
@@ -26,7 +26,7 @@ impl<T: Into<String>> IntoResponse for Text<T> {
 
 impl<T: Into<String>> FromResponse for Text<T> {
     fn from_response(
-        res: reqwest::Response,
+        res: ResponseWithState,
     ) -> impl Future<Output = Result<Self, ServerFnError>> + Send {
         SendWrapper::new(async move { todo!() })
     }

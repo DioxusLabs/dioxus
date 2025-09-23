@@ -5611,6 +5611,7 @@ dependencies = [
  "pin-project",
  "postcard",
  "reqwest 0.12.22",
+ "rmp-serde",
  "send_wrapper",
  "serde",
  "serde_json",

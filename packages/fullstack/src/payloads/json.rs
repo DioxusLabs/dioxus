@@ -1,4 +1,4 @@
-use crate::{FromResponse, IntoRequest, ServerFnError};
+use crate::{FromResponse, IntoRequest, ResponseWithState, ServerFnError};
 pub use axum::extract::Json;
 use serde::{de::DeserializeOwned, Serialize};
 use std::prelude::rust_2024::Future;
@@ -8,13 +8,13 @@ where
     T: Serialize + 'static,
 {
     fn into_request(
-        input: Self,
+        self,
         request_builder: reqwest::RequestBuilder,
     ) -> impl Future<Output = Result<reqwest::Response, reqwest::Error>> + Send + 'static {
         send_wrapper::SendWrapper::new(async move {
             request_builder
                 .header("Content-Type", "application/json")
-                .json(&input.0)
+                .json(&self.0)
                 .send()
                 .await
         })
@@ -23,10 +23,11 @@ where
 
 impl<T: DeserializeOwned> FromResponse for Json<T> {
     fn from_response(
-        res: reqwest::Response,
+        res: ResponseWithState,
     ) -> impl Future<Output = Result<Self, ServerFnError>> + Send {
         send_wrapper::SendWrapper::new(async move {
             let data = res
+                .response
                 .json::<T>()
                 .await
                 .map_err(|e| ServerFnError::Deserialization(e.to_string()))?;

@@ -3,15 +3,17 @@ use dioxus_fullstack_core::{DioxusServerState, ServerFnError};
 use serde::de::DeserializeOwned;
 use std::{pin::Pin, prelude::rust_2024::Future};
 
+use crate::ResponseWithState;
+
 pub trait FromResponse: Sized {
     fn from_response(
-        res: reqwest::Response,
+        res: ResponseWithState,
     ) -> impl Future<Output = Result<Self, ServerFnError>> + Send;
 }
 
 pub trait IntoRequest: Sized {
     fn into_request(
-        input: Self,
+        self,
         builder: reqwest::RequestBuilder,
     ) -> impl Future<Output = Result<reqwest::Response, reqwest::Error>> + Send + 'static;
 }
@@ -21,10 +23,10 @@ where
     A: IntoRequest + 'static,
 {
     fn into_request(
-        input: Self,
+        self,
         builder: reqwest::RequestBuilder,
     ) -> impl Future<Output = Result<reqwest::Response, reqwest::Error>> + Send + 'static {
-        send_wrapper::SendWrapper::new(async move { A::into_request(input.0, builder).await })
+        send_wrapper::SendWrapper::new(async move { A::into_request(self.0, builder).await })
     }
 }
 

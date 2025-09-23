@@ -6,7 +6,7 @@ use crate::IntoRequest;
 
 impl<T> IntoRequest for Form<T> {
     fn into_request(
-        input: Self,
+        self,
         builder: reqwest::RequestBuilder,
     ) -> impl Future<Output = Result<reqwest::Response, reqwest::Error>> + Send + 'static {
         async move { todo!() }

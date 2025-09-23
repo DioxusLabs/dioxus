@@ -37,30 +37,39 @@ serde_qs = { workspace = true, default-features = true}
 mime = "0.3.17"
 reqwest = { workspace = true, features = ["json", "rustls-tls", "cookies", "stream"] }
 
+
+
+
 # server deps
 axum = { workspace = true, default-features = false, features = ["json", "form", "query", "multipart", "query"] }
 inventory = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true }
 tokio-tungstenite = { workspace = true, optional = true }
-tokio-util = { workspace = true, features = ["codec", "compat"], optional = true }
 tokio-stream = { workspace = true, features = ["sync"], optional = true }
 tower = { workspace = true, features = ["util"], optional = true }
 tower-http = { workspace = true, features = ["fs"], optional = true }
 tower-layer = { version = "0.3.3", optional = true }
-async-tungstenite = { version = "0.31.0", default-features = false, features = ["futures-03-sink"], optional = true }
-tungstenite = { version = "0.27", default-features = false, features = ["handshake"], optional = true }
 
 # payloads
 postcard = { features = ["alloc"], optional = true, workspace = true, default-features = true }
+rmp-serde = { version = "1.3", optional = true }
 async-stream = "0.3.6"
 
 # websocket stuff
 web-sys = { version = "0.3", features = ["WebSocket", "CloseEvent", "ErrorEvent", "Event", "MessageEvent", "BinaryType"], optional = true }
 
+# native websocket deps
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+async-tungstenite = { version = "0.31.0", default-features = false, features = ["futures-03-sink"], optional = true }
+tungstenite = { version = "0.27", default-features = false, features = ["handshake"], optional = true }
+tokio-util = { workspace = true, features = ["codec", "compat"] }
+
 [dev-dependencies]
 dioxus = { workspace = true, features = ["fullstack", "router"] }
 dioxus-server = { workspace = true }
+
 [features]
+default = ["ws", "web"]
 web = [
     "dep:web-sys"
 ]
@@ -75,11 +84,12 @@ server = [
     "dep:tower",
     "dep:tower-http",
     "dep:tower-layer",
-    "dep:tokio-util",
     "axum/ws",
     "axum/tokio",
 ]
 postcard = ["dep:postcard"]
+msgpack = ["dep:rmp-serde"]
+ws = ["dep:async-tungstenite", "dep:tungstenite"]
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]

@@ -175,7 +175,7 @@ mod custom_serialize {
 mod custom_types {
     use axum::response::Response;
     // use axum_core::response::Response;
-    use dioxus_fullstack::{FromResponse, IntoRequest};
+    use dioxus_fullstack::{FromResponse, IntoRequest, ResponseWithState};
 
     use super::*;
 
@@ -204,7 +204,7 @@ mod custom_types {
     struct MyCustomPayload {}
     impl FromResponse for MyCustomPayload {
         fn from_response(
-            res: reqwest::Response,
+            res: ResponseWithState,
         ) -> impl Future<Output = Result<Self, ServerFnError>> + Send {
             async move { Ok(MyCustomPayload {}) }
         }
@@ -226,7 +226,7 @@ mod custom_types {
     }
     impl IntoRequest for MyCustomPayload {
         fn into_request(
-            input: Self,
+            self,
             request_builder: reqwest::RequestBuilder,
         ) -> impl Future<Output = Result<reqwest::Response, reqwest::Error>> + Send + 'static
         {

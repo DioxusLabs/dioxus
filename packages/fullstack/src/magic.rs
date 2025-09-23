@@ -270,7 +270,11 @@ mod decode_ok {
             SendWrapper::new(async move {
                 match res {
                     Err(err) => Err(err),
-                    Ok(res) => Ok(T::from_response(res).await),
+                    Ok(res) => Ok(T::from_response(crate::ResponseWithState {
+                        response: res,
+                        state: None,
+                    })
+                    .await),
                 }
             })
         }

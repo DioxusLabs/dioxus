@@ -44,6 +44,9 @@ pub use http::StatusCode;
 pub mod url;
 pub use url::*;
 
+pub mod encoding;
+pub use encoding::*;
+
 pub use payloads::*;
 pub mod payloads {
     pub mod jwt;
@@ -84,7 +87,9 @@ pub mod payloads {
     pub mod textstream;
     pub use textstream::*;
 
+    #[cfg(feature = "ws")]
     pub mod websocket;
+    #[cfg(feature = "ws")]
     pub use websocket::*;
 
     pub mod upload;

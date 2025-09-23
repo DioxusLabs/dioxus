@@ -1,4 +1,4 @@
-use std::prelude::rust_2024::Future;
+use std::{any::Any, prelude::rust_2024::Future};
 
 use axum::extract::FromRequest;
 use bytes::Bytes;
@@ -12,8 +12,7 @@ use serde::{
 use crate::IntoRequest;
 
 pub struct ServerResponse {
-    headers: HeaderMap,
-    status: http::StatusCode,
+    inner: Box<dyn PlatformResponse>,
 }
 
 impl ServerResponse {
@@ -26,9 +25,20 @@ impl ServerResponse {
 
 impl IntoRequest for axum::extract::Request {
     fn into_request(
-        input: Self,
+        self,
         request_builder: reqwest::RequestBuilder,
     ) -> impl Future<Output = Result<reqwest::Response, reqwest::Error>> + Send + 'static {
         async move { todo!() }
     }
 }
+
+/// A response that wraps a `reqwest::Response` and optionally holds some state that can be used
+/// across sending and receiving the response.
+///
+/// Useful for things like websockets that need to hold onto the upgrade state across the request/response boundary.
+pub struct ResponseWithState {
+    pub response: reqwest::Response,
+    pub state: Option<Box<dyn Any>>,
+}
+
+pub trait PlatformResponse {}
