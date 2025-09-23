@@ -8,7 +8,8 @@ use send_wrapper::SendWrapper;
 
 use crate::{
     websocket::{protocol::CloseCode, wasm::WebSysWebSocketStream},
-    CborEncoding, Encoding, FromResponse, IntoRequest, ResponseWithState, ServerFnError,
+    CborEncoding, Encoding, FromResponse, IntoRequest, JsonEncoding, ResponseWithState,
+    ServerFnError,
 };
 use dioxus_core::{use_hook, CapturedError, RenderError, Result};
 use dioxus_hooks::{use_loader, use_memo, use_signal, use_waker, Loader};
@@ -57,37 +58,22 @@ pub fn use_websocket<
         }
     });
 
-    let (inner_tx, inner_rx) = use_hook(|| {
-        let (tx, rx) = futures_channel::mpsc::unbounded::<InnerWebsocketMessage>();
-        (
-            CopyValue::new(tx),
-            CopyValue::new(Arc::new(futures::lock::Mutex::new(rx))),
-        )
-    });
-
     UseWebsocket {
         _in: PhantomData,
         _out: PhantomData,
         _enc: PhantomData,
         connection,
-        inner_tx,
-        inner_rx,
         waker,
         status,
         status_read,
     }
 }
 
-/// We wire up all the listeners on the websocket and then push them through this channel
-enum InnerWebsocketMessage {}
-
-pub struct UseWebsocket<In: 'static, Out: 'static, Enc = CborEncoding> {
+pub struct UseWebsocket<In: 'static, Out: 'static, Enc = JsonEncoding> {
     _in: std::marker::PhantomData<fn() -> In>,
     _out: std::marker::PhantomData<fn() -> Out>,
     _enc: std::marker::PhantomData<fn() -> Enc>,
     connection: Resource<Result<Websocket<In, Out>, CapturedError>>,
-    inner_tx: CopyValue<UnboundedSender<InnerWebsocketMessage>>,
-    inner_rx: CopyValue<Arc<futures::lock::Mutex<UnboundedReceiver<InnerWebsocketMessage>>>>,
     waker: dioxus_hooks::UseWaker<()>,
     status: Signal<WebsocketState>,
     status_read: ReadSignal<WebsocketState>,
@@ -138,9 +124,11 @@ impl<In, Out, E> UseWebsocket<In, Out, E> {
 
         loop {
             let conn = connection.unwrap();
-            let mut socket = conn.inner_web.lock().await;
+            let msg = {
+                let mut socket = conn.inner_web.as_ref().unwrap().rx.lock().await;
+                socket.next().await
+            };
 
-            let msg = socket.rx.next().await;
             let msg = match msg {
                 Some(Some(Ok(msg))) => msg,
                 Some(Some(Err(e))) => {
@@ -176,9 +164,34 @@ impl<In, Out, E> UseWebsocket<In, Out, E> {
     }
 }
 
-impl<In: Serialize, Out> UseWebsocket<In, Out> {
-    pub fn send(&self, msg: impl Serialize) -> impl Future<Output = Result<(), WebsocketError>> {
-        async move { todo!() }
+impl<In: Serialize, Out, E: Encoding> UseWebsocket<In, Out, E> {
+    pub async fn send(&self, msg: impl Serialize) -> Result<(), WebsocketError> {
+        // Wait for the connection to be established
+        while !self.connection.finished() {
+            _ = self.waker.wait().await;
+        }
+
+        let as_str = serde_json::to_string(&msg);
+
+        // let bytes = E::to_bytes(&msg).ok_or_else(|| {
+        //     WebsocketError::Serialization(anyhow::anyhow!("Failed to serialize message").into())
+        // });
+
+        let conn = self.connection.value();
+        let con_ref = conn.as_ref();
+        let connection: Result<&Websocket<In, Out>, &CapturedError> = con_ref
+            .as_deref()
+            .ok_or_else(|| WebsocketError::ConnectionClosed {
+                description: "Connection closed".into(),
+                reason: CloseCode::Away,
+            })?
+            .as_ref();
+
+        let r = connection.unwrap().inner_web.as_ref().unwrap();
+        r.inner.send_with_str(&as_str.unwrap()).unwrap();
+        // r.inner.send_with_u8_array(&bytes.unwrap()).unwrap();
+
+        Ok(())
     }
 }
 
@@ -189,6 +202,8 @@ impl<In, Out: DeserializeOwned, E: Encoding> UseWebsocket<In, Out, E> {
     /// If the connection fails to open or is killed while waiting, an error will be returned.
     pub async fn recv(&mut self) -> Result<Out, WebsocketError> {
         let msg = self.recv_raw().await?;
+        tracing::info!("Received raw websocket message: {:?}", msg);
+
         match msg {
             protocol::Message::Text(text) => {
                 let res: Out = E::from_bytes(text.as_bytes()).ok_or_else(|| {
@@ -282,19 +297,6 @@ pub enum WebsocketState {
 }
 
 impl<In: Serialize, Out: DeserializeOwned> Websocket<In, Out> {
-    #[cfg(feature = "server")]
-    pub fn raw<O, F: Future<Output = O>>(
-        f: impl FnOnce(
-            axum::extract::ws::WebSocket, // tokio_tungstenite::tungstenite::protocol::WebSocket<tokio::net::TcpStream>,
-                                          // tokio_tungstenite::tungstenite::stream::Stream<
-                                          //         tokio::net::TcpStream,
-                                          //         tokio_native_tls::TlsStream<tokio::net::TcpStream>,
-                                          //     >,
-        ) -> F,
-    ) -> Self {
-        todo!()
-    }
-
     pub async fn send(&self, msg: In) -> Result<(), ServerFnError> {
         todo!()
     }
@@ -307,7 +309,7 @@ impl<In: Serialize, Out: DeserializeOwned> Websocket<In, Out> {
 // Create a new WebSocket connection that uses the provided function to handle incoming messages
 impl<In, Out, E> IntoResponse for Websocket<In, Out, E> {
     fn into_response(self) -> Response {
-        todo!()
+        self.response.unwrap().into_response()
     }
 }
 
@@ -321,7 +323,7 @@ pub struct Websocket<In = String, Out = String, E = CborEncoding> {
     // inner_native: native::WebSocketStream,
 
     // #[cfg(target_arch = "wasm32")]
-    inner_web: futures_util::lock::Mutex<wasm::WebSysWebSocketStream>,
+    inner_web: Option<wasm::WebSysWebSocketStream>,
 
     response: Option<axum::response::Response>,
 }
@@ -365,7 +367,7 @@ impl<I, O, E> FromResponse<ActiveWebSocketConnection> for Websocket<I, O, E> {
             // };
 
             Ok(Websocket {
-                inner_web: futures_util::lock::Mutex::new(inner_web),
+                inner_web: Some(inner_web),
                 response: None,
                 _in: PhantomData,
                 _out: PhantomData,
@@ -394,21 +396,24 @@ impl WebSocketOptions {
     }
 
     #[cfg(feature = "server")]
-    pub fn on_upgrade<F, Fut>(self, f: F) -> Websocket
+    pub fn on_upgrade<F, Fut>(self, callback: F) -> Websocket
     where
-        F: FnOnce(axum::extract::ws::WebSocket) -> Fut + 'static,
+        F: FnOnce(axum::extract::ws::WebSocket) -> Fut + Send + 'static,
         Fut: Future<Output = ()> + 'static,
     {
-        let response = self.upgrade.unwrap().on_upgrade(|socket| async move {
-            //
+        let response = self.upgrade.unwrap().on_upgrade(|socket| {
+            let res = crate::spawn_platform(move || callback(socket));
+            async move {
+                let _ = res.await;
+            }
         });
 
         Websocket {
             response: Some(response),
             _in: PhantomData,
             _out: PhantomData,
-            inner_web: todo!(),
             _enc: PhantomData,
+            inner_web: None,
         }
     }
 }
@@ -511,9 +516,11 @@ mod wasm {
 
     #[derive(Debug)]
     pub struct WebSysWebSocketStream {
-        inner: web_sys::WebSocket,
+        pub(crate) inner: web_sys::WebSocket,
 
-        pub(crate) rx: mpsc::UnboundedReceiver<Option<Result<Message, WebSysError>>>,
+        pub(crate) rx: futures_util::lock::Mutex<
+            mpsc::UnboundedReceiver<Option<Result<Message, WebSysError>>>,
+        >,
 
         #[allow(dead_code)]
         on_message_callback: Closure<dyn FnMut(MessageEvent)>,
@@ -589,7 +596,10 @@ mod wasm {
                 Closure::<dyn FnMut(Event)>::new(move |event: Event| {
                     let error = match event.dyn_into::<ErrorEvent>() {
                         Ok(error) => WebSysError::from(error),
-                        Err(_event) => WebSysError::Unknown,
+                        Err(_event) => {
+                            tracing::debug!(event = ?_event, "received unknown error event");
+                            WebSysError::Unknown
+                        }
                     };
                     tracing::debug!("received error event: {error}");
 
@@ -650,6 +660,8 @@ mod wasm {
             // remove open handler
             inner.set_onopen(None);
 
+            let rx = futures_util::lock::Mutex::new(rx);
+
             Ok(Self {
                 inner,
                 on_message_callback,
@@ -684,6 +696,7 @@ mod wasm {
 
         fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
             self.rx
+                .get_mut()
                 .poll_next_unpin(cx)
                 .map(|ready_value| ready_value.flatten())
         }

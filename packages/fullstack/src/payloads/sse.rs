@@ -146,6 +146,8 @@ pub use server_impl::*;
 
 #[cfg(feature = "server")]
 mod server_impl {
+    use crate::spawn_platform;
+
     use super::*;
 
     pub struct SseTx<T> {
@@ -245,37 +247,6 @@ mod server_impl {
     impl<T> IntoResponse for ServerEvents<T> {
         fn into_response(self) -> axum_core::response::Response {
             self.sse.unwrap().into_response()
-        }
-    }
-
-    /// Spawn a task in the background. If wasm is enabled, this will use the single threaded tokio runtime
-    #[cfg(feature = "server")]
-    fn spawn_platform<Fut>(
-        f: impl FnOnce() -> Fut + Send + 'static,
-    ) -> tokio::task::JoinHandle<Fut::Output>
-    where
-        Fut: Future + 'static,
-        Fut::Output: Send + 'static,
-    {
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            use tokio_util::task::LocalPoolHandle;
-            static TASK_POOL: std::sync::OnceLock<LocalPoolHandle> = std::sync::OnceLock::new();
-
-            let pool = TASK_POOL.get_or_init(|| {
-                LocalPoolHandle::new(
-                    std::thread::available_parallelism()
-                        .map(usize::from)
-                        .unwrap_or(1),
-                )
-            });
-
-            pool.spawn_pinned(f)
-        }
-
-        #[cfg(target_arch = "wasm32")]
-        {
-            tokio::task::spawn_local(f())
         }
     }
 }

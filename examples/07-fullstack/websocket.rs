@@ -40,18 +40,30 @@ async fn uppercase_ws(name: String, age: i32, options: WebSocketOptions) -> Resu
     use dioxus::fullstack::axum;
 
     Ok(options.on_upgrade(move |mut socket| async move {
-        let greeting = format!("Hello, {}! You are {} years old.", name, age);
-        if socket.send(Message::Text(greeting.into())).await.is_err() {
-            return;
-        }
-
-        while let Some(Ok(msg)) = socket.recv().await {
-            if let Message::Text(text) = msg {
-                let uppercased = text.to_uppercase();
-                if socket.send(Message::Text(uppercased.into())).await.is_err() {
-                    return;
-                }
+        loop {
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+            let json_message = serde_json::to_string("Hello from server").unwrap();
+            if socket
+                .send(Message::Text(json_message.into()))
+                .await
+                .is_err()
+            {
+                return;
             }
         }
+
+        // let greeting = format!("Hello, {}! You are {} years old.", name, age);
+        // if socket.send(Message::Text(greeting.into())).await.is_err() {
+        //     return;
+        // }
+
+        // while let Some(Ok(msg)) = socket.recv().await {
+        //     if let Message::Text(text) = msg {
+        //         let uppercased = text.to_uppercase();
+        //         if socket.send(Message::Text(uppercased.into())).await.is_err() {
+        //             return;
+        //         }
+        //     }
+        // }
     }))
 }

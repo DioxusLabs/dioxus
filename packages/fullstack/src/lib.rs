@@ -27,6 +27,9 @@ pub use serde;
 // #[doc(hidden)]
 // pub use xxhash_rust;
 
+pub mod spawn;
+pub use spawn::*;
+
 pub mod magic;
 pub use magic::*;
 
