@@ -5,17 +5,15 @@ use std::{pin::Pin, prelude::rust_2024::Future};
 
 use crate::ResponseWithState;
 
-pub trait FromResponse: Sized {
-    fn from_response(
-        res: ResponseWithState,
-    ) -> impl Future<Output = Result<Self, ServerFnError>> + Send;
+pub trait FromResponse<R = reqwest::Response>: Sized {
+    fn from_response(res: R) -> impl Future<Output = Result<Self, ServerFnError>> + Send;
 }
 
-pub trait IntoRequest: Sized {
+pub trait IntoRequest<R = reqwest::Response>: Sized {
     fn into_request(
         self,
         builder: reqwest::RequestBuilder,
-    ) -> impl Future<Output = Result<reqwest::Response, reqwest::Error>> + Send + 'static;
+    ) -> impl Future<Output = Result<R, reqwest::Error>> + Send + 'static;
 }
 
 impl<A> IntoRequest for (A,)

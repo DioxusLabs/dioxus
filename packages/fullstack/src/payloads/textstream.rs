@@ -81,7 +81,7 @@ impl<T, E> IntoResponse for Streaming<T, E> {
 
 impl<T, E> FromResponse for Streaming<T, E> {
     fn from_response(
-        res: ResponseWithState,
+        res: reqwest::Response,
     ) -> impl Future<Output = Result<Self, ServerFnError>> + Send {
         async move { todo!() }
     }

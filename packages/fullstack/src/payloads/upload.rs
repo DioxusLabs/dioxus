@@ -65,7 +65,7 @@ impl<S> FromRequest<S> for FileUpload {
 
 impl FromResponse for FileUpload {
     fn from_response(
-        res: ResponseWithState,
+        res: reqwest::Response,
     ) -> impl Future<Output = Result<Self, ServerFnError>> + Send {
         async move { todo!() }
     }

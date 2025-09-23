@@ -59,13 +59,13 @@ impl<T> ServerEvents<T> {
 
 impl<T> FromResponse for ServerEvents<T> {
     fn from_response(
-        res: ResponseWithState,
+        res: reqwest::Response,
     ) -> impl Future<Output = Result<Self, ServerFnError>> + Send {
         use futures::io::{AsyncBufReadExt, Cursor};
         // use tokio::io::AsyncBufReadExt;
         // use tokio_util::io::StreamReader;
 
-        let res = res.response;
+        let res = res;
         send_wrapper::SendWrapper::new(async move {
             let status = res.status();
             if status != StatusCode::OK {

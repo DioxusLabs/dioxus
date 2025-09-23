@@ -174,7 +174,7 @@ pub mod req_to {
         fn verify_can_serialize(&self) -> Self::VerifyEncode;
     }
 
-    // One-arg case
+    /// Using the deserialize path
     impl<T, O> EncodeRequest<T, O> for &&&&&&&&&&ServerFnEncoder<T, O>
     where
         T: DeserializeOwned + Serialize + 'static,
@@ -203,6 +203,7 @@ pub mod req_to {
         }
     }
 
+    /// When we use the FromRequest path, we don't need to deserialize the input type on the client,
     impl<T, O> EncodeRequest<T, O> for &&&&&&&&&ServerFnEncoder<T, O>
     where
         T: 'static,
@@ -255,32 +256,30 @@ mod decode_ok {
     ///
     /// This is because FromResponse types are more specialized and can handle things like websockets and files.
     /// DeserializeOwned types are more general and can handle things like JSON responses.
-    pub trait ReqwestDecodeResult<T> {
+    pub trait ReqwestDecodeResult<T, R> {
         fn decode_client_response(
             &self,
-            res: Result<reqwest::Response, reqwest::Error>,
+            res: Result<R, reqwest::Error>,
         ) -> impl Future<Output = Result<Result<T, ServerFnError>, reqwest::Error>> + Send;
     }
 
-    impl<T: FromResponse, E> ReqwestDecodeResult<T> for &&&ServerFnDecoder<Result<T, E>> {
+    impl<T: FromResponse<R>, E, R> ReqwestDecodeResult<T, R> for &&&ServerFnDecoder<Result<T, E>> {
         fn decode_client_response(
             &self,
-            res: Result<reqwest::Response, reqwest::Error>,
+            res: Result<R, reqwest::Error>,
         ) -> impl Future<Output = Result<Result<T, ServerFnError>, reqwest::Error>> + Send {
             SendWrapper::new(async move {
                 match res {
                     Err(err) => Err(err),
-                    Ok(res) => Ok(T::from_response(crate::ResponseWithState {
-                        response: res,
-                        state: None,
-                    })
-                    .await),
+                    Ok(res) => Ok(T::from_response(res).await),
                 }
             })
         }
     }
 
-    impl<T: DeserializeOwned, E> ReqwestDecodeResult<T> for &&ServerFnDecoder<Result<T, E>> {
+    impl<T: DeserializeOwned, E> ReqwestDecodeResult<T, reqwest::Response>
+        for &&ServerFnDecoder<Result<T, E>>
+    {
         fn decode_client_response(
             &self,
             res: Result<reqwest::Response, reqwest::Error>,
@@ -551,15 +550,15 @@ mod resp {
     ///
     /// We currently have an `Input` type even though it's not useful since we might want to support regular axum endpoints later.
     /// For now, it's just Result<T, E> where T is either DeserializeOwned or FromResponse
-    pub trait MakeAxumResponse<T, E> {
+    pub trait MakeAxumResponse<T, E, R = reqwest::Response> {
         fn make_axum_response(self, result: Result<T, E>) -> Result<Response, E>;
     }
 
     // Higher priority impl for special types like websocket/file responses that generate their own responses
     // The FromResponse impl helps narrow types to those usable on the client
-    impl<T, E> MakeAxumResponse<T, E> for &&&ServerFnDecoder<Result<T, E>>
+    impl<T, E, R> MakeAxumResponse<T, E, R> for &&&ServerFnDecoder<Result<T, E>>
     where
-        T: FromResponse + IntoResponse,
+        T: FromResponse<R> + IntoResponse,
     {
         fn make_axum_response(self, result: Result<T, E>) -> Result<Response, E> {
             result.map(|v| v.into_response())
@@ -568,7 +567,7 @@ mod resp {
 
     // Lower priority impl for regular serializable types
     // We try to match the encoding from the incoming request, otherwise default to JSON
-    impl<T, E> MakeAxumResponse<T, E> for &&ServerFnDecoder<Result<T, E>>
+    impl<T, E> MakeAxumResponse<T, E, reqwest::Response> for &&ServerFnDecoder<Result<T, E>>
     where
         T: DeserializeOwned + Serialize,
     {

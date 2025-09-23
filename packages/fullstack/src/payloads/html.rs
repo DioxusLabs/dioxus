@@ -7,7 +7,7 @@ use crate::{FromResponse, ResponseWithState};
 
 impl<T: DeserializeOwned> FromResponse for Html<T> {
     fn from_response(
-        res: ResponseWithState,
+        res: reqwest::Response,
     ) -> impl Future<Output = Result<Self, dioxus_fullstack_core::ServerFnError>> + Send {
         async move { todo!() }
     }

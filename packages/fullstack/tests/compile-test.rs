@@ -175,7 +175,7 @@ mod custom_serialize {
 mod custom_types {
     use axum::response::Response;
     // use axum_core::response::Response;
-    use dioxus_fullstack::{FromResponse, IntoRequest, ResponseWithState};
+    use dioxus_fullstack::{FromResponse, IntoRequest, ResponseWithState, WebSocketOptions};
 
     use super::*;
 
@@ -197,14 +197,14 @@ mod custom_types {
     }
 
     #[get("/")]
-    async fn ws_endpoint() -> Result<Websocket<String, String>> {
+    async fn ws_endpoint(options: WebSocketOptions) -> Result<Websocket<String, String>> {
         todo!()
     }
 
     struct MyCustomPayload {}
     impl FromResponse for MyCustomPayload {
         fn from_response(
-            res: ResponseWithState,
+            res: reqwest::Response,
         ) -> impl Future<Output = Result<Self, ServerFnError>> + Send {
             async move { Ok(MyCustomPayload {}) }
         }

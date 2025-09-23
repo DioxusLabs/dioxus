@@ -332,21 +332,24 @@ impl<I, O, E> PartialEq for Websocket<I, O, E> {
     }
 }
 
-impl<I, O, E> FromResponse for Websocket<I, O, E> {
+pub struct WebsocketStatefulRequest {}
+
+impl<I, O, E> FromResponse<WebsocketStatefulRequest> for Websocket<I, O, E> {
     fn from_response(
-        mut res: ResponseWithState,
+        res: WebsocketStatefulRequest,
     ) -> impl Future<Output = Result<Self, ServerFnError>> + Send {
         SendWrapper::new(async move {
             // #[cfg(feature = "web")]
             let inner_web = {
-                let state = res
-                    .state
-                    .take()
-                    .unwrap()
-                    .downcast::<ActiveWebSocketConnection>()
-                    .unwrap();
+                todo!()
+                // let state = res
+                //     .state
+                //     .take()
+                //     .unwrap()
+                //     .downcast::<ActiveWebSocketConnection>()
+                //     .unwrap();
 
-                state.inner.unwrap()
+                // state.inner.unwrap()
             };
 
             // #[cfg(not(target_arch = "wasm32"))]
@@ -417,12 +420,13 @@ struct ActiveWebSocketConnection {
 unsafe impl Send for ActiveWebSocketConnection {}
 unsafe impl Sync for ActiveWebSocketConnection {}
 
-impl IntoRequest for WebSocketOptions {
+impl IntoRequest<ActiveWebSocketConnection> for WebSocketOptions {
     fn into_request(
         self,
         builder: reqwest::RequestBuilder,
-    ) -> impl Future<Output = std::result::Result<reqwest::Response, reqwest::Error>> + Send + 'static
-    {
+    ) -> impl Future<Output = std::result::Result<ActiveWebSocketConnection, reqwest::Error>>
+           + Send
+           + 'static {
         send_wrapper::SendWrapper::new(async move {
             let inner = wasm::WebSysWebSocketStream::new(builder.build()?, &self.protocols)
                 .await
