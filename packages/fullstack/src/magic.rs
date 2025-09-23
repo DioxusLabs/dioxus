@@ -162,14 +162,14 @@ pub mod req_to {
         }
     }
 
-    pub trait EncodeRequest<In, Out> {
+    pub trait EncodeRequest<In, Out, R = reqwest::Response> {
         type VerifyEncode;
         fn fetch_client(
             &self,
             ctx: FetchRequest,
             data: In,
             map: fn(In) -> Out,
-        ) -> impl Future<Output = Result<reqwest::Response, reqwest::Error>> + Send + 'static;
+        ) -> impl Future<Output = Result<R, reqwest::Error>> + Send + 'static;
 
         fn verify_can_serialize(&self) -> Self::VerifyEncode;
     }
@@ -204,10 +204,10 @@ pub mod req_to {
     }
 
     /// When we use the FromRequest path, we don't need to deserialize the input type on the client,
-    impl<T, O> EncodeRequest<T, O> for &&&&&&&&&ServerFnEncoder<T, O>
+    impl<T, O, R> EncodeRequest<T, O, R> for &&&&&&&&&ServerFnEncoder<T, O>
     where
         T: 'static,
-        O: FromRequest<DioxusServerState> + IntoRequest,
+        O: FromRequest<DioxusServerState> + IntoRequest<R>,
     {
         type VerifyEncode = EncodeIsVerified;
         fn fetch_client(
@@ -215,8 +215,7 @@ pub mod req_to {
             ctx: FetchRequest,
             data: T,
             map: fn(T) -> O,
-        ) -> impl Future<Output = Result<reqwest::Response, reqwest::Error>> + Send + 'static
-        {
+        ) -> impl Future<Output = Result<R, reqwest::Error>> + Send + 'static {
             O::into_request(map(data), ctx.client)
         }
 

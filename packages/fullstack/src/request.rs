@@ -16,14 +16,14 @@ pub trait IntoRequest<R = reqwest::Response>: Sized {
     ) -> impl Future<Output = Result<R, reqwest::Error>> + Send + 'static;
 }
 
-impl<A> IntoRequest for (A,)
+impl<A, R> IntoRequest<R> for (A,)
 where
-    A: IntoRequest + 'static,
+    A: IntoRequest<R> + 'static,
 {
     fn into_request(
         self,
         builder: reqwest::RequestBuilder,
-    ) -> impl Future<Output = Result<reqwest::Response, reqwest::Error>> + Send + 'static {
+    ) -> impl Future<Output = Result<R, reqwest::Error>> + Send + 'static {
         send_wrapper::SendWrapper::new(async move { A::into_request(self.0, builder).await })
     }
 }

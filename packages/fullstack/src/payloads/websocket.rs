@@ -332,16 +332,15 @@ impl<I, O, E> PartialEq for Websocket<I, O, E> {
     }
 }
 
-pub struct WebsocketStatefulRequest {}
-
-impl<I, O, E> FromResponse<WebsocketStatefulRequest> for Websocket<I, O, E> {
+impl<I, O, E> FromResponse<ActiveWebSocketConnection> for Websocket<I, O, E> {
     fn from_response(
-        res: WebsocketStatefulRequest,
+        res: ActiveWebSocketConnection,
     ) -> impl Future<Output = Result<Self, ServerFnError>> + Send {
         SendWrapper::new(async move {
             // #[cfg(feature = "web")]
             let inner_web = {
-                todo!()
+                res.inner
+                // todo!()
                 // let state = res
                 //     .state
                 //     .take()
@@ -414,8 +413,8 @@ impl WebSocketOptions {
     }
 }
 
-struct ActiveWebSocketConnection {
-    inner: Option<wasm::WebSysWebSocketStream>,
+pub struct ActiveWebSocketConnection {
+    inner: wasm::WebSysWebSocketStream,
 }
 unsafe impl Send for ActiveWebSocketConnection {}
 unsafe impl Sync for ActiveWebSocketConnection {}
@@ -432,26 +431,7 @@ impl IntoRequest<ActiveWebSocketConnection> for WebSocketOptions {
                 .await
                 .unwrap();
 
-            // // Construct a fake response and then convert it to the reqwest Response
-            // let mut reqwest_res = reqwest::Response::from(
-            //     http::response::Response::builder()
-            //         .status(http::StatusCode::SWITCHING_PROTOCOLS)
-            //         .header(http::header::UPGRADE, "websocket")
-            //         .header(http::header::CONNECTION, "upgrade")
-            //         .body(reqwest::Body::from(vec![]))
-            //         // .body(reqwest::Body::wrap("".to_string()))
-            //         .unwrap(),
-            // );
-
-            // // Now attach the websocket stream as an extension so we can retrieve it later once the response is being processed
-            // reqwest_res
-            //     .extensions_mut()
-            //     .insert(ActiveWebSocketConnection {
-            //         inner: Arc::new(Mutex::new(Some(inner))),
-            //     });
-
-            // Ok(reqwest_res)
-            todo!()
+            Ok(ActiveWebSocketConnection { inner })
         })
     }
 }
