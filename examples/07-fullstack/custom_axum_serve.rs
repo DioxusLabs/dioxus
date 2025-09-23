@@ -11,6 +11,10 @@
 //! `dioxus::serve` is most useful for customizing the server setup, such as adding middleware,
 //! custom routes, or integrating with existing axum backend code.
 //!
+//! Note that `dioxus::serve` is accepts a Router from `axum`. Dioxus will use the IP and PORT
+//! environment variables to determine where to bind the server. To customize the port, use environment
+//! variables or a `.env` file.
+//!
 //! On other platforms (like desktop or mobile), you'll want to use `dioxus::launch` instead and then
 //! handle async loading of data through hooks like `use_future` or `use_resource` and give the user
 //! a loading state while data is being fetched.
