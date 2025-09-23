@@ -5567,6 +5567,7 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.12",
  "tokio",
+ "uuid",
  "wasm-splitter",
  "web-time",
  "wgpu",

@@ -466,10 +466,12 @@ thiserror = { workspace = true }
 bytes = { workspace = true }
 futures = { workspace = true }
 axum-core = { workspace = true }
+uuid = { workspace = true, features = ["v4", "serde"] }
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 getrandom = { workspace = true, features = ["wasm_js"] }
 tokio = { version = "1.46", default-features = false, features = ["sync", "macros", "io-util", "rt", "time"] }
+uuid = { workspace = true, features = ["v4", "serde", "js"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 tokio = { version = "1.46", features = ["full"] }
@@ -485,6 +487,11 @@ server = ["dioxus/server"]
 mobile = ["dioxus/mobile"]
 web = ["dioxus/web"]
 gpu = ["dep:ouroboros", "dep:wgpu"]
+
+[[example]]
+name = "websocket_chat"
+path = "examples/01-app-demos/websocket_chat.rs"
+doc-scrape-examples = true
 
 [[example]]
 name = "weather_app"

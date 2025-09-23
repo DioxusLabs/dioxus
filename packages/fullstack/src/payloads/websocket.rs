@@ -25,7 +25,7 @@ use bytes::Bytes;
 use dioxus_core::{use_hook, CapturedError, RenderError, Result};
 use dioxus_hooks::{use_loader, use_memo, use_signal, use_waker, Loader};
 use dioxus_hooks::{use_resource, Resource};
-use dioxus_signals::{CopyValue, ReadSignal, ReadableOptionExt, Signal, WritableExt};
+use dioxus_signals::{CopyValue, ReadSignal, ReadableExt, ReadableOptionExt, Signal, WritableExt};
 use futures::StreamExt;
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::TryFutureExt;
@@ -117,7 +117,7 @@ impl<In, Out, E> UseWebsocket<In, Out, E> {
     }
 
     pub fn connecting(&self) -> bool {
-        todo!()
+        matches!(self.status.cloned(), WebsocketState::Connecting)
     }
 
     pub async fn send_raw(&mut self, msg: Bytes) -> Result<(), WebsocketError> {
@@ -250,7 +250,7 @@ impl<In, Out, E> Clone for UseWebsocket<In, Out, E> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum WebsocketState {
     /// The WebSocket is connecting.
     Connecting,
@@ -464,8 +464,8 @@ impl IntoRequest<UpgradingWebsocket> for WebSocketOptions {
     ) -> impl Future<Output = std::result::Result<UpgradingWebsocket, reqwest::Error>> + Send + 'static
     {
         send_wrapper::SendWrapper::new(async move {
-            #[cfg(feature = "web")]
-            if cfg!(target_arch = "wasm32") {
+            #[cfg(all(feature = "web", target_arch = "wasm32"))]
+            {
                 let inner_web = Some(
                     wasm::WebSysWebSocketStream::new(builder.build()?, &self.protocols)
                         .await
@@ -473,6 +473,7 @@ impl IntoRequest<UpgradingWebsocket> for WebSocketOptions {
                 );
                 return Ok(UpgradingWebsocket {
                     inner_web,
+                    #[cfg(not(target_arch = "wasm32"))]
                     inner_native: None,
                 });
             }
@@ -551,10 +552,19 @@ impl<In: DeserializeOwned, Out: Serialize, E: Encoding> TypedWebsocket<In, Out, 
     pub async fn recv(&mut self) -> Option<Result<In, WebsocketError>> {
         let res = self.inner.next().await?;
         match res {
-            Ok(res) => {
-                let e: In = E::from_bytes(res.into_data()).unwrap();
-                return Some(Ok(e));
-            }
+            Ok(res) => match res {
+                axum::extract::ws::Message::Text(utf8_bytes) => {
+                    let e: In = E::from_bytes(utf8_bytes.into()).unwrap();
+                    return Some(Ok(e));
+                }
+                axum::extract::ws::Message::Binary(bytes) => {
+                    let e: In = E::from_bytes(bytes.into()).unwrap();
+                    return Some(Ok(e));
+                }
+                axum::extract::ws::Message::Ping(bytes) => todo!(),
+                axum::extract::ws::Message::Pong(bytes) => todo!(),
+                axum::extract::ws::Message::Close(close_frame) => return None,
+            },
             Err(res) => return todo!(),
         }
     }
@@ -758,8 +768,6 @@ mod wasm {
             let on_message_callback = {
                 let tx = tx.clone();
                 Closure::<dyn FnMut(MessageEvent)>::new(move |event: MessageEvent| {
-                    tracing::debug!(event = ?event.data(), "message event");
-
                     if let Ok(abuf) = event.data().dyn_into::<ArrayBuffer>() {
                         let array = Uint8Array::new(&abuf);
                         let data = array.to_vec();

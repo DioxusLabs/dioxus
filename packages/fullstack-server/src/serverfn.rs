@@ -215,7 +215,7 @@ impl ServerFunction {
         // // apply the response parts from the server context to the response
         // server_context.send_response(&mut res);
 
-        tracing::info!(
+        tracing::debug!(
             "Handling server function: {} {} with {} extensions",
             self.method(),
             self.path(),

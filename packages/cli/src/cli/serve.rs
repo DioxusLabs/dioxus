@@ -61,7 +61,7 @@ pub(crate) struct ServeArgs {
     pub(crate) hot_patch: bool,
 
     /// Watch the filesystem for changes and trigger a rebuild [default: true]
-    #[clap(long, default_missing_value = "true")]
+    #[clap(long, default_missing_value = "true", num_args=0..=1)]
     pub(crate) watch: Option<bool>,
 
     /// Exit the CLI after running into an error. This is mainly used to test hot patching internally
