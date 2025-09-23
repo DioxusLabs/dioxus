@@ -1,5 +1,6 @@
 //! Implementing a login form
 
+use dioxus::fullstack::Form;
 use dioxus::prelude::*;
 
 fn main() {
@@ -7,26 +8,20 @@ fn main() {
 }
 
 fn app() -> Element {
-    let onsubmit = move |evt: FormEvent| async move {
-        // Intercept the form submission
-        let res = evt.prevent_default();
-    };
-
     rsx! {
         h1 { "Login" }
-        form { onsubmit,
+        form {
+            onsubmit: move |evt: FormEvent| async move {
+                let res = evt.prevent_default();
+            },
             input { r#type: "text", id: "username", name: "username" }
             label { "Username" }
-            br {}
             input { r#type: "password", id: "password", name: "password" }
             label { "Password" }
-            br {}
             button { "Login" }
         }
     }
 }
-
-use dioxus::fullstack::Form;
 
 #[derive(serde::Deserialize)]
 pub struct LoginForm {}

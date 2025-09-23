@@ -110,13 +110,6 @@ where
     status_read: ReadSignal<WebsocketState>,
 }
 
-impl<In, Out, E> Copy for UseWebsocket<In, Out, E> {}
-impl<In, Out, E> Clone for UseWebsocket<In, Out, E> {
-    fn clone(&self) -> Self {
-        *self
-    }
-}
-
 impl<In, Out, E> UseWebsocket<In, Out, E> {
     /// Explicitly wait for the WebSocket connection to be established.
     pub fn connect(&mut self) -> impl Future<Output = Result<(), WebsocketError>> {
@@ -150,23 +143,19 @@ impl<In, Out, E> UseWebsocket<In, Out, E> {
 
         loop {
             let conn = connection.unwrap();
-            let msg = {
-                let mut socket = conn.inner_web.as_ref().unwrap().rx.lock().await;
-                socket.next().await
-            };
+            let msg = conn.recv_msg().await;
 
             let msg = match msg {
-                Some(Some(Ok(msg))) => msg,
-                Some(Some(Err(e))) => {
+                Some(Ok(msg)) => msg,
+                Some(Err(e)) => {
                     todo!()
                 }
-                Some(None) => {
+                None => {
                     return Err(WebsocketError::ConnectionClosed {
                         description: "Connection closed".into(),
                         reason: CloseCode::Away,
                     })
                 }
-                None => todo!(),
             };
 
             match msg {
@@ -206,20 +195,14 @@ impl<In: Serialize, Out, E: Encoding> UseWebsocket<In, Out, E> {
             _ = self.waker.wait().await;
         }
 
-        let bytes = E::to_bytes(&msg);
-
         let conn = self.connection.value();
-        let con_ref = conn.as_ref();
-        let connection: Result<&Websocket<In, Out, E>, &CapturedError> = con_ref
-            .as_deref()
-            .ok_or_else(|| WebsocketError::ConnectionClosed {
-                description: "Connection closed".into(),
-                reason: CloseCode::Away,
-            })?
-            .as_ref();
-
-        let r = connection.unwrap().inner_web.as_ref().unwrap();
-        r.inner.send_with_u8_array(&bytes.unwrap()).unwrap();
+        if let Some(Ok(con)) = conn.as_ref().as_deref() {
+            let bytes = E::to_bytes(&msg).ok_or_else(|| {
+                WebsocketError::Serialization(anyhow::anyhow!("Failed to serialize message").into())
+            })?;
+            con.send_msg(protocol::Message::Binary(bytes.into()))
+                .await?;
+        }
 
         Ok(())
     }
@@ -260,54 +243,11 @@ impl<In, Out: DeserializeOwned, E: Encoding> UseWebsocket<In, Out, E> {
     }
 }
 
-#[derive(thiserror::Error, Debug)]
-pub enum WebsocketError {
-    #[error("Connection closed")]
-    ConnectionClosed {
-        reason: CloseCode,
-        description: String,
-    },
-
-    #[error("WebSocket already closed")]
-    AlreadyClosed,
-
-    #[error("WebSocket capacity reached")]
-    Capacity,
-
-    #[cfg(not(target_arch = "wasm32"))]
-    #[cfg_attr(docsrs, doc(cfg(not(target_arch = "wasm32"))))]
-    #[error("websocket upgrade failed")]
-    Handshake(#[from] native::HandshakeError),
-
-    #[error("reqwest error")]
-    Reqwest(#[from] reqwest::Error),
-
-    #[cfg(not(target_arch = "wasm32"))]
-    #[cfg_attr(docsrs, doc(cfg(not(target_arch = "wasm32"))))]
-    #[error("tungstenite error")]
-    Tungstenite(#[from] tungstenite::Error),
-
-    #[cfg(target_arch = "wasm32")]
-    #[cfg_attr(docsrs, doc(cfg(target_arch = "wasm32")))]
-    #[error("web_sys error")]
-    WebSys(#[from] wasm::WebSysError),
-
-    /// Error during serialization/deserialization.
-    #[error("error during serialization/deserialization")]
-    Deserialization(Box<dyn std::error::Error + Send + Sync>),
-
-    /// Error during serialization/deserialization.
-    #[error("error during serialization/deserialization")]
-    Serialization(Box<dyn std::error::Error + Send + Sync>),
-
-    /// Error during serialization/deserialization.
-    #[error("serde_json error")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "json")))]
-    Json(#[from] serde_json::Error),
-
-    /// Error during serialization/deserialization.
-    #[error("ciborium error")]
-    Cbor(#[from] ciborium::de::Error<std::io::Error>),
+impl<In, Out, E> Copy for UseWebsocket<In, Out, E> {}
+impl<In, Out, E> Clone for UseWebsocket<In, Out, E> {
+    fn clone(&self) -> Self {
+        *self
+    }
 }
 
 #[derive(Debug)]
@@ -330,17 +270,93 @@ pub enum WebsocketState {
 
 /// A WebSocket connection that can send and receive messages of type `In` and `Out`.
 pub struct Websocket<In = String, Out = String, E = JsonEncoding> {
-    _in: std::marker::PhantomData<fn() -> In>,
-    _out: std::marker::PhantomData<fn() -> Out>,
-    _enc: std::marker::PhantomData<fn() -> E>,
+    _in: std::marker::PhantomData<fn() -> (In, Out, E)>,
 
-    // #[cfg(not(target_arch = "wasm32"))]
-    // inner_native: native::WebSocketStream,
+    #[cfg(not(target_arch = "wasm32"))]
+    inner_native: Option<native::SplitSocket>,
 
-    // #[cfg(target_arch = "wasm32")]
+    #[cfg(feature = "web")]
     inner_web: Option<wasm::WebSysWebSocketStream>,
 
     response: Option<axum::response::Response>,
+}
+
+impl<I, O, E> Websocket<I, O, E> {
+    pub async fn send_msg(&self, message: protocol::Message) -> Result<(), WebsocketError> {
+        #[cfg(feature = "web")]
+        if cfg!(target_arch = "wasm32") {
+            match message {
+                protocol::Message::Text(s) => {
+                    let r = self.inner_web.as_ref().unwrap();
+                    r.inner.send_with_str(&s).unwrap();
+                }
+                protocol::Message::Binary(bytes) => {
+                    let r = self.inner_web.as_ref().unwrap();
+                    r.inner.send_with_u8_array(&bytes).unwrap();
+                }
+                protocol::Message::Ping(bytes) => todo!(),
+                protocol::Message::Pong(bytes) => todo!(),
+                protocol::Message::Close { code, reason } => todo!(),
+            }
+            return Ok(());
+        }
+
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let conn = self.inner_native.as_ref().unwrap();
+            let mut conn = conn.sender.lock().await;
+            let as_tungestine = message.into();
+            conn.send(as_tungestine)
+                .await
+                .map_err(WebsocketError::from)?;
+        }
+
+        Ok(())
+    }
+    pub async fn recv_msg(&self) -> Option<Result<protocol::Message, WebsocketError>> {
+        #[cfg(feature = "web")]
+        if cfg!(target_arch = "wasm32") {
+            let mut socket = self.inner_web.as_ref().unwrap().rx.lock().await;
+            let res = socket.next().await;
+            return match res {
+                Some(Ok(res)) => Some(Ok(res)),
+                Some(Err(e)) => Some(Err(WebsocketError::from(e))),
+                None => None,
+            };
+        }
+
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let conn = self.inner_native.as_ref().unwrap();
+            let mut conn = conn.receiver.lock().await;
+            let res = conn.next().await;
+            return match res {
+                Some(Ok(res)) => Some(match res {
+                    // todo: this is inefficient, we should just go into String
+                    tungstenite::Message::Text(utf8_bytes) => {
+                        Ok(protocol::Message::Text(utf8_bytes.to_string()))
+                    }
+                    tungstenite::Message::Binary(bytes) => {
+                        Ok(protocol::Message::Binary(bytes.into()))
+                    }
+                    tungstenite::Message::Close(close_frame) => {
+                        let (code, reason) = match close_frame {
+                            Some(cf) => (cf.code.into(), cf.reason.to_string()),
+                            None => (protocol::CloseCode::Away, "".into()),
+                        };
+                        Ok(protocol::Message::Close { code, reason })
+                    }
+                    tungstenite::Message::Ping(bytes) => todo!(),
+                    tungstenite::Message::Pong(bytes) => todo!(),
+                    tungstenite::Message::Frame(frame) => unreachable!(),
+                }),
+                Some(Err(e)) => Some(Err(WebsocketError::from(e))),
+                None => None,
+            };
+        }
+
+        unreachable!()
+    }
 }
 
 impl<I, O, E> PartialEq for Websocket<I, O, E> {
@@ -356,44 +372,24 @@ impl<In, Out, E> IntoResponse for Websocket<In, Out, E> {
     }
 }
 
-impl<I, O, E> FromResponse<ActiveWebSocketConnection> for Websocket<I, O, E> {
+impl<I, O, E> FromResponse<UpgradingWebsocket> for Websocket<I, O, E> {
     fn from_response(
-        res: ActiveWebSocketConnection,
+        res: UpgradingWebsocket,
     ) -> impl Future<Output = Result<Self, ServerFnError>> + Send {
         SendWrapper::new(async move {
-            // #[cfg(feature = "web")]
-            let inner_web = {
-                res.inner
-                // todo!()
-                // let state = res
-                //     .state
-                //     .take()
-                //     .unwrap()
-                //     .downcast::<ActiveWebSocketConnection>()
-                //     .unwrap();
+            #[cfg(not(target_arch = "wasm32"))]
+            let inner_native = res.inner_native;
 
-                // state.inner.unwrap()
-            };
-
-            // #[cfg(not(target_arch = "wasm32"))]
-            // let (inner, protocol) = res
-            //     .inner
-            //     .into_stream_and_protocol(res.protocols, res.web_socket_config)
-            //     .await?;
-
-            // WebSysWebSocketStream::new(, protocols)
-            // // #[cfg(target_arch = "wasm32")]
-            // let (inner, protocol) = {
-            //     let protocol = res.inner.protocol();
-            //     (res.inner, Some(protocol))
-            // };
+            #[cfg(feature = "web")]
+            let inner_web = res.inner_web;
 
             Ok(Websocket {
-                inner_web: Some(inner_web),
+                #[cfg(not(target_arch = "wasm32"))]
+                inner_native,
+                #[cfg(feature = "web")]
+                inner_web,
                 response: None,
                 _in: PhantomData,
-                _out: PhantomData,
-                _enc: PhantomData,
             })
         })
     }
@@ -445,8 +441,11 @@ impl WebSocketOptions {
         Websocket {
             response: Some(response),
             _in: PhantomData,
-            _out: PhantomData,
-            _enc: PhantomData,
+
+            #[cfg(not(target_arch = "wasm32"))]
+            inner_native: None,
+
+            #[cfg(feature = "web")]
             inner_web: None,
         }
     }
@@ -457,6 +456,83 @@ impl Default for WebSocketOptions {
         Self::new()
     }
 }
+
+impl IntoRequest<UpgradingWebsocket> for WebSocketOptions {
+    fn into_request(
+        self,
+        builder: reqwest::RequestBuilder,
+    ) -> impl Future<Output = std::result::Result<UpgradingWebsocket, reqwest::Error>> + Send + 'static
+    {
+        send_wrapper::SendWrapper::new(async move {
+            #[cfg(feature = "web")]
+            if cfg!(target_arch = "wasm32") {
+                let inner_web = Some(
+                    wasm::WebSysWebSocketStream::new(builder.build()?, &self.protocols)
+                        .await
+                        .unwrap(),
+                );
+                return Ok(UpgradingWebsocket {
+                    inner_web,
+                    inner_native: None,
+                });
+            }
+
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                let response = native::send_request(builder, &self.protocols)
+                    .await
+                    .unwrap();
+                let (inner, protocol) = response
+                    .into_stream_and_protocol(self.protocols, None)
+                    .await
+                    .unwrap();
+                return Ok(UpgradingWebsocket {
+                    #[cfg(feature = "web")]
+                    inner_web: None,
+                    inner_native: Some(inner),
+                });
+            }
+        })
+    }
+}
+
+impl<S: Send> FromRequest<S> for WebSocketOptions {
+    type Rejection = axum::http::StatusCode;
+
+    fn from_request(
+        req: Request,
+        state: &S,
+    ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send {
+        #[cfg(not(feature = "server"))]
+        return async move { Err(axum::http::StatusCode::NOT_IMPLEMENTED) };
+
+        #[cfg(feature = "server")]
+        async move {
+            let ws = match axum::extract::ws::WebSocketUpgrade::from_request(req, &()).await {
+                Ok(ws) => ws,
+                Err(rejection) => todo!(),
+            };
+
+            Ok(WebSocketOptions {
+                protocols: vec![],
+                automatic_reconnect: false,
+                upgrade: Some(ws),
+            })
+        }
+    }
+}
+
+#[doc(hidden)]
+pub struct UpgradingWebsocket {
+    #[cfg(feature = "web")]
+    inner_web: Option<wasm::WebSysWebSocketStream>,
+
+    #[cfg(not(target_arch = "wasm32"))]
+    inner_native: Option<native::SplitSocket>,
+}
+
+unsafe impl Send for UpgradingWebsocket {}
+unsafe impl Sync for UpgradingWebsocket {}
 
 #[cfg(feature = "server")]
 pub struct TypedWebsocket<In, Out, E = JsonEncoding> {
@@ -527,57 +603,57 @@ impl<In: DeserializeOwned, Out: Serialize, E: Encoding> TypedWebsocket<In, Out, 
     }
 }
 
-pub struct ActiveWebSocketConnection {
-    inner: wasm::WebSysWebSocketStream,
+#[derive(thiserror::Error, Debug)]
+pub enum WebsocketError {
+    #[error("Connection closed")]
+    ConnectionClosed {
+        reason: CloseCode,
+        description: String,
+    },
+
+    #[error("WebSocket already closed")]
+    AlreadyClosed,
+
+    #[error("WebSocket capacity reached")]
+    Capacity,
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg_attr(docsrs, doc(cfg(not(target_arch = "wasm32"))))]
+    #[error("websocket upgrade failed")]
+    Handshake(#[from] native::HandshakeError),
+
+    #[error("reqwest error")]
+    Reqwest(#[from] reqwest::Error),
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg_attr(docsrs, doc(cfg(not(target_arch = "wasm32"))))]
+    #[error("tungstenite error")]
+    Tungstenite(#[from] tungstenite::Error),
+
+    // #[cfg(target_arch = "wasm32")]
+    // #[cfg_attr(docsrs, doc(cfg(target_arch = "wasm32")))]
+    #[cfg(feature = "web")]
+    #[error("web_sys error")]
+    WebSys(#[from] wasm::WebSysError),
+
+    /// Error during serialization/deserialization.
+    #[error("error during serialization/deserialization")]
+    Deserialization(Box<dyn std::error::Error + Send + Sync>),
+
+    /// Error during serialization/deserialization.
+    #[error("error during serialization/deserialization")]
+    Serialization(Box<dyn std::error::Error + Send + Sync>),
+
+    /// Error during serialization/deserialization.
+    #[error("serde_json error")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "json")))]
+    Json(#[from] serde_json::Error),
+
+    /// Error during serialization/deserialization.
+    #[error("ciborium error")]
+    Cbor(#[from] ciborium::de::Error<std::io::Error>),
 }
 
-unsafe impl Send for ActiveWebSocketConnection {}
-unsafe impl Sync for ActiveWebSocketConnection {}
-
-impl IntoRequest<ActiveWebSocketConnection> for WebSocketOptions {
-    fn into_request(
-        self,
-        builder: reqwest::RequestBuilder,
-    ) -> impl Future<Output = std::result::Result<ActiveWebSocketConnection, reqwest::Error>>
-           + Send
-           + 'static {
-        send_wrapper::SendWrapper::new(async move {
-            let inner = wasm::WebSysWebSocketStream::new(builder.build()?, &self.protocols)
-                .await
-                .unwrap();
-
-            Ok(ActiveWebSocketConnection { inner })
-        })
-    }
-}
-
-impl<S: Send> FromRequest<S> for WebSocketOptions {
-    type Rejection = axum::http::StatusCode;
-
-    fn from_request(
-        req: Request,
-        state: &S,
-    ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send {
-        #[cfg(not(feature = "server"))]
-        return async move { Err(axum::http::StatusCode::NOT_IMPLEMENTED) };
-
-        #[cfg(feature = "server")]
-        async move {
-            let ws = match axum::extract::ws::WebSocketUpgrade::from_request(req, &()).await {
-                Ok(ws) => ws,
-                Err(rejection) => todo!(),
-            };
-
-            Ok(WebSocketOptions {
-                protocols: vec![],
-                automatic_reconnect: false,
-                upgrade: Some(ws),
-            })
-        }
-    }
-}
-
-// #[cfg(target_arch = "wasm32")]
 #[cfg(feature = "web")]
 mod wasm {
     use std::{
@@ -624,7 +700,7 @@ mod wasm {
         }
     }
 
-    type WebsocketRcvTy = Option<Result<Message, WebSysError>>;
+    type WebsocketRcvTy = Result<Message, WebSysError>;
 
     #[derive(Debug)]
     pub struct WebSysWebSocketStream {
@@ -659,11 +735,11 @@ mod wasm {
             let (tx, rx) = mpsc::unbounded();
 
             // channel to signal when the websocket has been opened
-            let (open_success_tx, mut open_success_rx) = oneshot::channel();
+            let (open_success_tx, open_success_rx) = oneshot::channel();
             let mut open_success_tx = Some(open_success_tx);
 
             // channel to signal an error while opening the channel
-            let (open_error_tx, mut open_error_rx) = oneshot::channel();
+            let (open_error_tx, open_error_rx) = oneshot::channel();
             let mut open_error_tx = Some(open_error_tx);
 
             // create websocket
@@ -687,9 +763,9 @@ mod wasm {
                     if let Ok(abuf) = event.data().dyn_into::<ArrayBuffer>() {
                         let array = Uint8Array::new(&abuf);
                         let data = array.to_vec();
-                        let _ = tx.unbounded_send(Some(Ok(Message::Binary(data.into()))));
+                        let _ = tx.unbounded_send(Ok(Message::Binary(data.into())));
                     } else if let Ok(text) = event.data().dyn_into::<JsString>() {
-                        let _ = tx.unbounded_send(Some(Ok(Message::Text(text.into()))));
+                        let _ = tx.unbounded_send(Ok(Message::Text(text.into())));
                     } else {
                         tracing::debug!(event = ?event.data(), "received unknown message event");
                     }
@@ -706,12 +782,8 @@ mod wasm {
                 Closure::<dyn FnMut(Event)>::new(move |event: Event| {
                     let error = match event.dyn_into::<ErrorEvent>() {
                         Ok(error) => WebSysError::from(error),
-                        Err(_event) => {
-                            tracing::debug!(event = ?_event, "received unknown error event");
-                            WebSysError::Unknown
-                        }
+                        Err(_event) => WebSysError::Unknown,
                     };
-                    tracing::debug!("received error event: {error}");
 
                     let error = if let Some(open_error_tx) = open_error_tx.take() {
                         match open_error_tx.send(error) {
@@ -722,7 +794,7 @@ mod wasm {
                         error
                     };
 
-                    let _ = tx.unbounded_send(Some(Err(error)));
+                    let _ = tx.unbounded_send(Err(error));
                 })
             };
             inner.set_onerror(Some(on_error_callback.as_ref().unchecked_ref()));
@@ -731,25 +803,24 @@ mod wasm {
             let on_close_callback = {
                 let tx = tx.clone();
                 Closure::<dyn FnMut(CloseEvent)>::new(move |event: CloseEvent| {
-                    tracing::debug!("received close event");
-
-                    let _ = tx.unbounded_send(Some(Ok(Message::Close {
+                    let _ = tx.unbounded_send(Ok(Message::Close {
                         code: event.code().into(),
                         reason: event.reason(),
-                    })));
-                    let _ = tx.unbounded_send(None);
+                    }));
                 })
             };
             inner.set_onclose(Some(on_close_callback.as_ref().unchecked_ref()));
 
             // register open handler
-            let on_open_callback = Closure::<dyn FnMut(Event)>::new(move |_event: Event| {
-                tracing::debug!("received open event");
-                if let Some(tx) = open_success_tx.take() {
-                    let _ = tx.send(());
-                }
-            });
-            inner.set_onopen(Some(on_open_callback.as_ref().unchecked_ref()));
+            inner.set_onopen(Some(
+                Closure::<dyn FnMut(Event)>::new(move |_event: Event| {
+                    if let Some(tx) = open_success_tx.take() {
+                        let _ = tx.send(());
+                    }
+                })
+                .as_ref()
+                .unchecked_ref(),
+            ));
 
             // wait for either the open event or an error
             futures::select! {
@@ -793,7 +864,6 @@ mod wasm {
 
     impl Drop for WebSysWebSocketStream {
         fn drop(&mut self) {
-            tracing::debug!("websocket stream dropped");
             let _result = self.inner.close();
             self.inner.set_onmessage(None);
             self.inner.set_onclose(None);
@@ -808,7 +878,7 @@ mod wasm {
             self.rx
                 .get_mut()
                 .poll_next_unpin(cx)
-                .map(|ready_value| ready_value.flatten())
+                .map(|ready_value| ready_value)
         }
     }
 
@@ -849,6 +919,342 @@ mod wasm {
             _cx: &mut Context<'_>,
         ) -> Poll<Result<(), Self::Error>> {
             Poll::Ready(self.inner.close().map_err(Into::into))
+        }
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+mod native {
+    use std::borrow::Cow;
+
+    use super::{
+        protocol::{CloseCode, Message},
+        WebsocketError,
+    };
+    use reqwest::{
+        header::{HeaderName, HeaderValue},
+        RequestBuilder, Response, StatusCode, Version,
+    };
+    use tungstenite::protocol::WebSocketConfig;
+
+    pub(crate) struct SplitSocket {
+        pub sender: futures_util::lock::Mutex<
+            async_tungstenite::WebSocketSender<tokio_util::compat::Compat<reqwest::Upgraded>>,
+        >,
+
+        pub receiver: futures_util::lock::Mutex<
+            async_tungstenite::WebSocketReceiver<tokio_util::compat::Compat<reqwest::Upgraded>>,
+        >,
+    }
+
+    pub async fn send_request(
+        request_builder: RequestBuilder,
+        protocols: &[String],
+    ) -> Result<WebSocketResponse, WebsocketError> {
+        let (client, request_result) = request_builder.build_split();
+        let mut request = request_result?;
+
+        // change the scheme from wss? to https?
+        let url = request.url_mut();
+        match url.scheme() {
+            "ws" => {
+                url.set_scheme("http")
+                    .expect("url should accept http scheme");
+            }
+            "wss" => {
+                url.set_scheme("https")
+                    .expect("url should accept https scheme");
+            }
+            _ => {}
+        }
+
+        // prepare request
+        let version = request.version();
+        let nonce = match version {
+            Version::HTTP_10 | Version::HTTP_11 => {
+                // HTTP 1 requires us to set some headers.
+                let nonce_value = tungstenite::handshake::client::generate_key();
+                let headers = request.headers_mut();
+                headers.insert(
+                    reqwest::header::CONNECTION,
+                    HeaderValue::from_static("upgrade"),
+                );
+                headers.insert(
+                    reqwest::header::UPGRADE,
+                    HeaderValue::from_static("websocket"),
+                );
+                headers.insert(
+                    reqwest::header::SEC_WEBSOCKET_KEY,
+                    HeaderValue::from_str(&nonce_value).expect("nonce is a invalid header value"),
+                );
+                headers.insert(
+                    reqwest::header::SEC_WEBSOCKET_VERSION,
+                    HeaderValue::from_static("13"),
+                );
+                if !protocols.is_empty() {
+                    headers.insert(
+                        reqwest::header::SEC_WEBSOCKET_PROTOCOL,
+                        HeaderValue::from_str(&protocols.join(", "))
+                            .expect("protocols is an invalid header value"),
+                    );
+                }
+
+                Some(nonce_value)
+            }
+            Version::HTTP_2 => {
+                // TODO: Implement websocket upgrade for HTTP 2.
+                return Err(HandshakeError::UnsupportedHttpVersion(version).into());
+            }
+            _ => {
+                return Err(HandshakeError::UnsupportedHttpVersion(version).into());
+            }
+        };
+
+        // execute request
+        let response = client.execute(request).await?;
+
+        Ok(WebSocketResponse {
+            response,
+            version,
+            nonce,
+        })
+    }
+
+    pub type WebSocketStream =
+        async_tungstenite::WebSocketStream<tokio_util::compat::Compat<reqwest::Upgraded>>;
+
+    /// Error during `Websocket` handshake.
+    #[derive(Debug, thiserror::Error, Clone)]
+    pub enum HandshakeError {
+        #[error("unsupported http version: {0:?}")]
+        UnsupportedHttpVersion(Version),
+
+        #[error("the server responded with a different http version. this could be the case because reqwest silently upgraded the connection to http2. see: https://github.com/jgraef/reqwest-websocket/issues/2")]
+        ServerRespondedWithDifferentVersion,
+
+        #[error("missing header {header}")]
+        MissingHeader { header: HeaderName },
+
+        #[error("unexpected value for header {header}: expected {expected}, but got {got:?}.")]
+        UnexpectedHeaderValue {
+            header: HeaderName,
+            got: HeaderValue,
+            expected: Cow<'static, str>,
+        },
+
+        #[error("expected the server to select a protocol.")]
+        ExpectedAProtocol,
+
+        #[error("unexpected protocol: {got}")]
+        UnexpectedProtocol { got: String },
+
+        #[error("unexpected status code: {0}")]
+        UnexpectedStatusCode(StatusCode),
+    }
+
+    pub struct WebSocketResponse {
+        pub response: Response,
+        pub version: Version,
+        pub nonce: Option<String>,
+    }
+
+    impl WebSocketResponse {
+        pub async fn into_stream_and_protocol(
+            self,
+            protocols: Vec<String>,
+            web_socket_config: Option<WebSocketConfig>,
+        ) -> Result<(SplitSocket, Option<String>), WebsocketError> {
+            let headers = self.response.headers();
+
+            if self.response.version() != self.version {
+                return Err(HandshakeError::ServerRespondedWithDifferentVersion.into());
+            }
+
+            if self.response.status() != reqwest::StatusCode::SWITCHING_PROTOCOLS {
+                tracing::debug!(status_code = %self.response.status(), "server responded with unexpected status code");
+                return Err(HandshakeError::UnexpectedStatusCode(self.response.status()).into());
+            }
+
+            if let Some(header) = headers.get(reqwest::header::CONNECTION) {
+                if !header
+                    .to_str()
+                    .is_ok_and(|s| s.eq_ignore_ascii_case("upgrade"))
+                {
+                    tracing::debug!("server responded with invalid Connection header: {header:?}");
+                    return Err(HandshakeError::UnexpectedHeaderValue {
+                        header: reqwest::header::CONNECTION,
+                        got: header.clone(),
+                        expected: "upgrade".into(),
+                    }
+                    .into());
+                }
+            } else {
+                tracing::debug!("missing Connection header");
+                return Err(HandshakeError::MissingHeader {
+                    header: reqwest::header::CONNECTION,
+                }
+                .into());
+            }
+
+            if let Some(header) = headers.get(reqwest::header::UPGRADE) {
+                if !header
+                    .to_str()
+                    .is_ok_and(|s| s.eq_ignore_ascii_case("websocket"))
+                {
+                    tracing::debug!("server responded with invalid Upgrade header: {header:?}");
+                    return Err(HandshakeError::UnexpectedHeaderValue {
+                        header: reqwest::header::UPGRADE,
+                        got: header.clone(),
+                        expected: "websocket".into(),
+                    }
+                    .into());
+                }
+            } else {
+                tracing::debug!("missing Upgrade header");
+                return Err(HandshakeError::MissingHeader {
+                    header: reqwest::header::UPGRADE,
+                }
+                .into());
+            }
+
+            if let Some(nonce) = &self.nonce {
+                let expected_nonce = tungstenite::handshake::derive_accept_key(nonce.as_bytes());
+
+                if let Some(header) = headers.get(reqwest::header::SEC_WEBSOCKET_ACCEPT) {
+                    if !header.to_str().is_ok_and(|s| s == expected_nonce) {
+                        tracing::debug!(
+                            "server responded with invalid Sec-Websocket-Accept header: {header:?}"
+                        );
+                        return Err(HandshakeError::UnexpectedHeaderValue {
+                            header: reqwest::header::SEC_WEBSOCKET_ACCEPT,
+                            got: header.clone(),
+                            expected: expected_nonce.into(),
+                        }
+                        .into());
+                    }
+                } else {
+                    tracing::debug!("missing Sec-Websocket-Accept header");
+                    return Err(HandshakeError::MissingHeader {
+                        header: reqwest::header::SEC_WEBSOCKET_ACCEPT,
+                    }
+                    .into());
+                }
+            }
+
+            let protocol = headers
+                .get(reqwest::header::SEC_WEBSOCKET_PROTOCOL)
+                .and_then(|v| v.to_str().ok())
+                .map(ToOwned::to_owned);
+
+            match (protocols.is_empty(), &protocol) {
+                (true, None) => {
+                    // we didn't request any protocols, so we don't expect one
+                    // in return
+                }
+                (false, None) => {
+                    // server didn't reply with a protocol
+                    return Err(HandshakeError::ExpectedAProtocol.into());
+                }
+                (false, Some(protocol)) => {
+                    if !protocols.contains(protocol) {
+                        // the responded protocol is none which we requested
+                        return Err(HandshakeError::UnexpectedProtocol {
+                            got: protocol.clone(),
+                        }
+                        .into());
+                    }
+                }
+                (true, Some(protocol)) => {
+                    // we didn't request any protocols but got one anyway
+                    return Err(HandshakeError::UnexpectedProtocol {
+                        got: protocol.clone(),
+                    }
+                    .into());
+                }
+            }
+
+            use tokio_util::compat::TokioAsyncReadCompatExt;
+
+            let inner = WebSocketStream::from_raw_socket(
+                self.response.upgrade().await?.compat(),
+                tungstenite::protocol::Role::Client,
+                web_socket_config,
+            )
+            .await;
+
+            let split: (
+                async_tungstenite::WebSocketSender<tokio_util::compat::Compat<reqwest::Upgraded>>,
+                async_tungstenite::WebSocketReceiver<tokio_util::compat::Compat<reqwest::Upgraded>>,
+            ) = inner.split();
+
+            let split_socket = SplitSocket {
+                sender: futures_util::lock::Mutex::new(split.0),
+                receiver: futures_util::lock::Mutex::new(split.1),
+            };
+
+            Ok((split_socket, protocol))
+        }
+    }
+
+    #[derive(Debug, thiserror::Error)]
+    #[error("could not convert message")]
+    pub struct FromTungsteniteMessageError {
+        pub original: tungstenite::Message,
+    }
+
+    impl TryFrom<tungstenite::Message> for Message {
+        type Error = FromTungsteniteMessageError;
+
+        fn try_from(value: tungstenite::Message) -> Result<Self, Self::Error> {
+            match value {
+                tungstenite::Message::Text(text) => Ok(Self::Text(text.as_str().to_owned())),
+                tungstenite::Message::Binary(data) => Ok(Self::Binary(data)),
+                tungstenite::Message::Ping(data) => Ok(Self::Ping(data)),
+                tungstenite::Message::Pong(data) => Ok(Self::Pong(data)),
+                tungstenite::Message::Close(Some(tungstenite::protocol::CloseFrame {
+                    code,
+                    reason,
+                })) => Ok(Self::Close {
+                    code: code.into(),
+                    reason: reason.as_str().to_owned(),
+                }),
+                tungstenite::Message::Close(None) => Ok(Self::Close {
+                    code: CloseCode::default(),
+                    reason: "".to_owned(),
+                }),
+                tungstenite::Message::Frame(_) => {
+                    Err(FromTungsteniteMessageError { original: value })
+                }
+            }
+        }
+    }
+
+    impl From<Message> for tungstenite::Message {
+        fn from(value: Message) -> Self {
+            match value {
+                Message::Text(text) => Self::Text(tungstenite::Utf8Bytes::from(text)),
+                Message::Binary(data) => Self::Binary(data),
+                Message::Ping(data) => Self::Ping(data),
+                Message::Pong(data) => Self::Pong(data),
+                Message::Close { code, reason } => {
+                    Self::Close(Some(tungstenite::protocol::CloseFrame {
+                        code: code.into(),
+                        reason: reason.into(),
+                    }))
+                }
+            }
+        }
+    }
+
+    impl From<tungstenite::protocol::frame::coding::CloseCode> for CloseCode {
+        fn from(value: tungstenite::protocol::frame::coding::CloseCode) -> Self {
+            u16::from(value).into()
+        }
+    }
+
+    impl From<CloseCode> for tungstenite::protocol::frame::coding::CloseCode {
+        fn from(value: CloseCode) -> Self {
+            u16::from(value).into()
         }
     }
 }
@@ -1169,322 +1575,6 @@ mod protocol {
                     Err(serde_json::Error::custom("neither text nor binary").into())
                 }
             }
-        }
-    }
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-mod native {
-    use std::borrow::Cow;
-
-    use super::{
-        protocol::{CloseCode, Message},
-        WebsocketError,
-    };
-    use reqwest::{
-        header::{HeaderName, HeaderValue},
-        RequestBuilder, Response, StatusCode, Version,
-    };
-    use tungstenite::protocol::WebSocketConfig;
-
-    pub async fn send_request(
-        request_builder: RequestBuilder,
-        protocols: &[String],
-    ) -> Result<WebSocketResponse, WebsocketError> {
-        let (client, request_result) = request_builder.build_split();
-        let mut request = request_result?;
-
-        // change the scheme from wss? to https?
-        let url = request.url_mut();
-        match url.scheme() {
-            "ws" => {
-                url.set_scheme("http")
-                    .expect("url should accept http scheme");
-            }
-            "wss" => {
-                url.set_scheme("https")
-                    .expect("url should accept https scheme");
-            }
-            _ => {}
-        }
-
-        // prepare request
-        let version = request.version();
-        let nonce = match version {
-            Version::HTTP_10 | Version::HTTP_11 => {
-                // HTTP 1 requires us to set some headers.
-                let nonce_value = tungstenite::handshake::client::generate_key();
-                let headers = request.headers_mut();
-                headers.insert(
-                    reqwest::header::CONNECTION,
-                    HeaderValue::from_static("upgrade"),
-                );
-                headers.insert(
-                    reqwest::header::UPGRADE,
-                    HeaderValue::from_static("websocket"),
-                );
-                headers.insert(
-                    reqwest::header::SEC_WEBSOCKET_KEY,
-                    HeaderValue::from_str(&nonce_value).expect("nonce is a invalid header value"),
-                );
-                headers.insert(
-                    reqwest::header::SEC_WEBSOCKET_VERSION,
-                    HeaderValue::from_static("13"),
-                );
-                if !protocols.is_empty() {
-                    headers.insert(
-                        reqwest::header::SEC_WEBSOCKET_PROTOCOL,
-                        HeaderValue::from_str(&protocols.join(", "))
-                            .expect("protocols is an invalid header value"),
-                    );
-                }
-
-                Some(nonce_value)
-            }
-            Version::HTTP_2 => {
-                // TODO: Implement websocket upgrade for HTTP 2.
-                return Err(HandshakeError::UnsupportedHttpVersion(version).into());
-            }
-            _ => {
-                return Err(HandshakeError::UnsupportedHttpVersion(version).into());
-            }
-        };
-
-        // execute request
-        let response = client.execute(request).await?;
-
-        Ok(WebSocketResponse {
-            response,
-            version,
-            nonce,
-        })
-    }
-
-    pub type WebSocketStream =
-        async_tungstenite::WebSocketStream<tokio_util::compat::Compat<reqwest::Upgraded>>;
-
-    /// Error during `Websocket` handshake.
-    #[derive(Debug, thiserror::Error, Clone)]
-    pub enum HandshakeError {
-        #[error("unsupported http version: {0:?}")]
-        UnsupportedHttpVersion(Version),
-
-        #[error("the server responded with a different http version. this could be the case because reqwest silently upgraded the connection to http2. see: https://github.com/jgraef/reqwest-websocket/issues/2")]
-        ServerRespondedWithDifferentVersion,
-
-        #[error("missing header {header}")]
-        MissingHeader { header: HeaderName },
-
-        #[error("unexpected value for header {header}: expected {expected}, but got {got:?}.")]
-        UnexpectedHeaderValue {
-            header: HeaderName,
-            got: HeaderValue,
-            expected: Cow<'static, str>,
-        },
-
-        #[error("expected the server to select a protocol.")]
-        ExpectedAProtocol,
-
-        #[error("unexpected protocol: {got}")]
-        UnexpectedProtocol { got: String },
-
-        #[error("unexpected status code: {0}")]
-        UnexpectedStatusCode(StatusCode),
-    }
-
-    pub struct WebSocketResponse {
-        pub response: Response,
-        pub version: Version,
-        pub nonce: Option<String>,
-    }
-
-    impl WebSocketResponse {
-        pub async fn into_stream_and_protocol(
-            self,
-            protocols: Vec<String>,
-            web_socket_config: Option<WebSocketConfig>,
-        ) -> Result<(WebSocketStream, Option<String>), WebsocketError> {
-            let headers = self.response.headers();
-
-            if self.response.version() != self.version {
-                return Err(HandshakeError::ServerRespondedWithDifferentVersion.into());
-            }
-
-            if self.response.status() != reqwest::StatusCode::SWITCHING_PROTOCOLS {
-                tracing::debug!(status_code = %self.response.status(), "server responded with unexpected status code");
-                return Err(HandshakeError::UnexpectedStatusCode(self.response.status()).into());
-            }
-
-            if let Some(header) = headers.get(reqwest::header::CONNECTION) {
-                if !header
-                    .to_str()
-                    .is_ok_and(|s| s.eq_ignore_ascii_case("upgrade"))
-                {
-                    tracing::debug!("server responded with invalid Connection header: {header:?}");
-                    return Err(HandshakeError::UnexpectedHeaderValue {
-                        header: reqwest::header::CONNECTION,
-                        got: header.clone(),
-                        expected: "upgrade".into(),
-                    }
-                    .into());
-                }
-            } else {
-                tracing::debug!("missing Connection header");
-                return Err(HandshakeError::MissingHeader {
-                    header: reqwest::header::CONNECTION,
-                }
-                .into());
-            }
-
-            if let Some(header) = headers.get(reqwest::header::UPGRADE) {
-                if !header
-                    .to_str()
-                    .is_ok_and(|s| s.eq_ignore_ascii_case("websocket"))
-                {
-                    tracing::debug!("server responded with invalid Upgrade header: {header:?}");
-                    return Err(HandshakeError::UnexpectedHeaderValue {
-                        header: reqwest::header::UPGRADE,
-                        got: header.clone(),
-                        expected: "websocket".into(),
-                    }
-                    .into());
-                }
-            } else {
-                tracing::debug!("missing Upgrade header");
-                return Err(HandshakeError::MissingHeader {
-                    header: reqwest::header::UPGRADE,
-                }
-                .into());
-            }
-
-            if let Some(nonce) = &self.nonce {
-                let expected_nonce = tungstenite::handshake::derive_accept_key(nonce.as_bytes());
-
-                if let Some(header) = headers.get(reqwest::header::SEC_WEBSOCKET_ACCEPT) {
-                    if !header.to_str().is_ok_and(|s| s == expected_nonce) {
-                        tracing::debug!(
-                            "server responded with invalid Sec-Websocket-Accept header: {header:?}"
-                        );
-                        return Err(HandshakeError::UnexpectedHeaderValue {
-                            header: reqwest::header::SEC_WEBSOCKET_ACCEPT,
-                            got: header.clone(),
-                            expected: expected_nonce.into(),
-                        }
-                        .into());
-                    }
-                } else {
-                    tracing::debug!("missing Sec-Websocket-Accept header");
-                    return Err(HandshakeError::MissingHeader {
-                        header: reqwest::header::SEC_WEBSOCKET_ACCEPT,
-                    }
-                    .into());
-                }
-            }
-
-            let protocol = headers
-                .get(reqwest::header::SEC_WEBSOCKET_PROTOCOL)
-                .and_then(|v| v.to_str().ok())
-                .map(ToOwned::to_owned);
-
-            match (protocols.is_empty(), &protocol) {
-                (true, None) => {
-                    // we didn't request any protocols, so we don't expect one
-                    // in return
-                }
-                (false, None) => {
-                    // server didn't reply with a protocol
-                    return Err(HandshakeError::ExpectedAProtocol.into());
-                }
-                (false, Some(protocol)) => {
-                    if !protocols.contains(protocol) {
-                        // the responded protocol is none which we requested
-                        return Err(HandshakeError::UnexpectedProtocol {
-                            got: protocol.clone(),
-                        }
-                        .into());
-                    }
-                }
-                (true, Some(protocol)) => {
-                    // we didn't request any protocols but got one anyway
-                    return Err(HandshakeError::UnexpectedProtocol {
-                        got: protocol.clone(),
-                    }
-                    .into());
-                }
-            }
-
-            use tokio_util::compat::TokioAsyncReadCompatExt;
-
-            let inner = WebSocketStream::from_raw_socket(
-                self.response.upgrade().await?.compat(),
-                tungstenite::protocol::Role::Client,
-                web_socket_config,
-            )
-            .await;
-
-            Ok((inner, protocol))
-        }
-    }
-
-    #[derive(Debug, thiserror::Error)]
-    #[error("could not convert message")]
-    pub struct FromTungsteniteMessageError {
-        pub original: tungstenite::Message,
-    }
-
-    impl TryFrom<tungstenite::Message> for Message {
-        type Error = FromTungsteniteMessageError;
-
-        fn try_from(value: tungstenite::Message) -> Result<Self, Self::Error> {
-            match value {
-                tungstenite::Message::Text(text) => Ok(Self::Text(text.as_str().to_owned())),
-                tungstenite::Message::Binary(data) => Ok(Self::Binary(data)),
-                tungstenite::Message::Ping(data) => Ok(Self::Ping(data)),
-                tungstenite::Message::Pong(data) => Ok(Self::Pong(data)),
-                tungstenite::Message::Close(Some(tungstenite::protocol::CloseFrame {
-                    code,
-                    reason,
-                })) => Ok(Self::Close {
-                    code: code.into(),
-                    reason: reason.as_str().to_owned(),
-                }),
-                tungstenite::Message::Close(None) => Ok(Self::Close {
-                    code: CloseCode::default(),
-                    reason: "".to_owned(),
-                }),
-                tungstenite::Message::Frame(_) => {
-                    Err(FromTungsteniteMessageError { original: value })
-                }
-            }
-        }
-    }
-
-    impl From<Message> for tungstenite::Message {
-        fn from(value: Message) -> Self {
-            match value {
-                Message::Text(text) => Self::Text(tungstenite::Utf8Bytes::from(text)),
-                Message::Binary(data) => Self::Binary(data),
-                Message::Ping(data) => Self::Ping(data),
-                Message::Pong(data) => Self::Pong(data),
-                Message::Close { code, reason } => {
-                    Self::Close(Some(tungstenite::protocol::CloseFrame {
-                        code: code.into(),
-                        reason: reason.into(),
-                    }))
-                }
-            }
-        }
-    }
-
-    impl From<tungstenite::protocol::frame::coding::CloseCode> for CloseCode {
-        fn from(value: tungstenite::protocol::frame::coding::CloseCode) -> Self {
-            u16::from(value).into()
-        }
-    }
-
-    impl From<CloseCode> for tungstenite::protocol::frame::coding::CloseCode {
-        fn from(value: CloseCode) -> Self {
-            u16::from(value).into()
         }
     }
 }

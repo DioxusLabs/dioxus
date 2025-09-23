@@ -56,7 +56,8 @@ rmp-serde = { version = "1.3", optional = true }
 async-stream = "0.3.6"
 
 # websocket stuff
-web-sys = { version = "0.3", features = ["WebSocket", "CloseEvent", "ErrorEvent", "Event", "MessageEvent", "BinaryType"], optional = true }
+# [target.'cfg(target_arch = "wasm32")'.dependencies]
+web-sys = { version = "0.3", features = ["WebSocket", "CloseEvent", "ErrorEvent", "Event", "MessageEvent", "BinaryType"], optional = true}
 
 # native websocket deps
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
@@ -69,7 +70,7 @@ dioxus = { workspace = true, features = ["fullstack", "router"] }
 dioxus-server = { workspace = true }
 
 [features]
-default = ["ws", "web"]
+default = ["ws"]
 web = [
     "dep:web-sys"
 ]
