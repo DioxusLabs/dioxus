@@ -21,7 +21,7 @@ fn main() {
 
 fn app() -> Element {
     let mut count = use_signal(|| 0);
-    let mut message = use_action(move |(name, age): (String, i32)| get_greeting(name, age));
+    let mut message = use_action(get_greeting);
 
     rsx! {
         div { style: "padding: 2rem; font-family: Arial, sans-serif;",
@@ -37,7 +37,7 @@ fn app() -> Element {
             // We can handle the action result and display loading state
             div { style: "margin: 1rem 0;",
                 h2 { "Server Greeting" }
-                button { onclick: move |_| message.call(("World".to_string(), 30)), "Get Server Greeting" }
+                button { onclick: move |_| message.call("World".to_string(), 30), "Get Server Greeting" }
                 if message.is_pending() {
                     p { "Loading..." }
                 }

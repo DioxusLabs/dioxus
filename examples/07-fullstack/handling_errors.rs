@@ -29,32 +29,32 @@ use serde::{Deserialize, Serialize};
 
 fn main() {
     dioxus::launch(|| {
-        let mut dog_data = use_action(move |()| get_dog_data());
-        let mut dog_data_err = use_action(move |()| get_dog_data_err());
-        let mut ip_data = use_action(move |()| get_ip_data());
-        let mut custom_data = use_action(move |()| {
+        let mut dog_data = use_action(get_dog_data);
+        let mut dog_data_err = use_action(get_dog_data_err);
+        let mut ip_data = use_action(get_ip_data);
+        let mut custom_data = use_action(move || {
             get_custom_encoding(Json(serde_json::json!({
                 "example": "data",
                 "number": 123,
                 "array": [1, 2, 3],
             })))
         });
-        let mut error_data = use_action(move |()| get_throws_error());
-        let mut typed_error_data = use_action(move |()| get_throws_typed_error());
-        let mut throws_ok_data = use_action(move |()| get_throws_ok());
-        let mut http_error_data = use_action(move |()| throws_http_error());
-        let mut http_error_context_data = use_action(move |()| throws_http_error_context());
+        let mut error_data = use_action(get_throws_error);
+        let mut typed_error_data = use_action(get_throws_typed_error);
+        let mut throws_ok_data = use_action(get_throws_ok);
+        let mut http_error_data = use_action(throws_http_error);
+        let mut http_error_context_data = use_action(throws_http_error_context);
 
         rsx! {
-            button { onclick: move |_| { dog_data.call(()); }, "Fetch dog data" }
-            button { onclick: move |_| { ip_data.call(()); }, "Fetch IP data" }
-            button { onclick: move |_| { custom_data.call(()); }, "Fetch custom encoded data" }
-            button { onclick: move |_| { error_data.call(()); }, "Fetch error data" }
-            button { onclick: move |_| { typed_error_data.call(()); }, "Fetch typed error data" }
-            button { onclick: move |_| { dog_data_err.call(()); }, "Fetch dog error data" }
-            button { onclick: move |_| { throws_ok_data.call(()); }, "Fetch throws ok data" }
-            button { onclick: move |_| { http_error_data.call(()); }, "Fetch HTTP 400" }
-            button { onclick: move |_| { http_error_context_data.call(()); }, "Fetch HTTP 400 (context)" }
+            button { onclick: move |_| { dog_data.call(); }, "Fetch dog data" }
+            button { onclick: move |_| { ip_data.call(); }, "Fetch IP data" }
+            button { onclick: move |_| { custom_data.call(); }, "Fetch custom encoded data" }
+            button { onclick: move |_| { error_data.call(); }, "Fetch error data" }
+            button { onclick: move |_| { typed_error_data.call(); }, "Fetch typed error data" }
+            button { onclick: move |_| { dog_data_err.call(); }, "Fetch dog error data" }
+            button { onclick: move |_| { throws_ok_data.call(); }, "Fetch throws ok data" }
+            button { onclick: move |_| { http_error_data.call(); }, "Fetch HTTP 400" }
+            button { onclick: move |_| { http_error_context_data.call(); }, "Fetch HTTP 400 (context)" }
             button {
                 onclick: move |_| {
                     ip_data.reset();

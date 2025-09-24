@@ -51,15 +51,15 @@ fn main() {
 }
 
 fn app() -> Element {
-    let mut user_name = use_action(|()| get_user_name());
-    let mut permissions = use_action(|()| get_permissions());
-    let mut login = use_action(|()| login());
+    let mut user_name = use_action(get_user_name);
+    let mut permissions = use_action(get_permissions);
+    let mut login = use_action(login);
 
     rsx! {
         div {
             button {
                 onclick: move |_|  {
-                    login.call(());
+                    login.call();
                 },
                 "Login Test User"
             }
@@ -67,7 +67,7 @@ fn app() -> Element {
         div {
             button {
                 onclick: move |_| {
-                    user_name.call(());
+                    user_name.call();
                 },
                 "Get User Name"
             }
@@ -76,7 +76,7 @@ fn app() -> Element {
         div {
             button {
                 onclick: move |_| {
-                    permissions.call(());
+                    permissions.call();
                 },
                 "Get Permissions"
             }

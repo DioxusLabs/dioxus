@@ -7,7 +7,7 @@ fn main() {
 }
 
 fn app() -> Element {
-    let mut file_id = use_action(move |()| async move {
+    let mut file_id = use_action(move || async move {
         let file = FileUpload::from_stream(
             "myfile.png".to_string(),
             "image/png".to_string(),
@@ -22,7 +22,7 @@ fn app() -> Element {
 
     rsx! {
         div { "File upload example" }
-        button { onclick: move |_| file_id.call(()), "Upload file" }
+        button { onclick: move |_| file_id.call(), "Upload file" }
     }
 }
 

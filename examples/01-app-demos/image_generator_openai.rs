@@ -9,7 +9,7 @@ fn app() -> Element {
     let mut prompt = use_signal(|| "".to_string());
     let mut num_images = use_signal(|| 1.to_string());
 
-    let mut image = use_action(move |()| async move {
+    let mut image = use_action(move || async move {
         #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Props, Clone, Default)]
         struct ImageResponse {
             created: i32,
@@ -71,7 +71,7 @@ fn app() -> Element {
                 class: "button is-primary",
                 class: if image.is_pending() { "is-loading" },
                 onclick: move |_| {
-                    image.call(());
+                    image.call();
                 },
                 "Generate image"
             }

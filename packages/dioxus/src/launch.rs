@@ -40,9 +40,12 @@ use crate::prelude::*;
 ///
 /// # Example
 /// ```rust, no_run
-/// # use dioxus::prelude::*;
+/// use dioxus::prelude::*;
 ///
-/// dioxus::launch(app);
+/// fn main() {
+///     dioxus::launch(app);
+/// }
+///
 /// fn app() -> Element {
 ///     rsx! {
 ///         div { "Hello, world!" }

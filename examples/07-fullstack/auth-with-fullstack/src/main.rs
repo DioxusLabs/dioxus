@@ -29,13 +29,11 @@ fn main() {
     // We return a `Router` such that dioxus sets up logging, hot-reloading, devtools, and wires up the
     // IP and PORT environment variables to our server.
     #[cfg(feature = "server")]
-    dioxus::serve(|| async {
+    dioxus::serve(app, |router| async {
         use crate::auth::*;
-        use axum::routing::*;
         use axum_session::{SessionConfig, SessionLayer, SessionStore};
         use axum_session_auth::AuthConfig;
         use axum_session_sqlx::SessionSqlitePool;
-        use dioxus::server::RenderHandleState;
         use sqlx::{sqlite::SqlitePoolOptions, Executor};
 
         // Create an in-memory SQLite database and set up our tables
@@ -61,13 +59,7 @@ fn main() {
             .await?;
 
         // Create an axum router that dioxus will attach the app to
-        Ok(Router::new()
-            .register_server_functions()
-            .serve_static_assets()
-            .fallback(
-                get(RenderHandleState::render_handler)
-                    .with_state(RenderHandleState::new(ServeConfig::new().unwrap(), app)),
-            )
+        Ok(router
             .layer(
                 AuthLayer::new(Some(db.clone()))
                     .with_config(AuthConfig::<i64>::default().with_anonymous_user_id(Some(1))),

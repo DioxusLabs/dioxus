@@ -450,6 +450,16 @@ wgpu = { workspace = true, optional = true }
 ouroboros = { version = "*", optional = true }
 wasm-splitter = { workspace = true }
 
+sqlx = { version = "0.8.6", features = [
+    "macros",
+    "migrate",
+    "postgres",
+    "sqlite",
+    "_unstable-all-types",
+    "tls-native-tls",
+    "runtime-tokio",
+], optional = true }
+
 [dev-dependencies]
 dioxus = { workspace = true, features = ["router", "fullstack"] }
 dioxus-stores = { workspace = true }
@@ -730,6 +740,7 @@ doc-scrape-examples = true
 name = "server_state"
 path = "examples/07-fullstack/server_state.rs"
 doc-scrape-examples = true
+required-features = ["sqlx"]
 
 [[example]]
 name = "streaming_text"

@@ -10,12 +10,12 @@ use dioxus::prelude::*;
 
 fn main() {
     dioxus::launch(|| {
-        let mut message = use_action(|(name, age)| get_message(name, age));
+        let mut message = use_action(get_message);
 
         rsx! {
             h1 { "Server says: "}
             pre { "{message:?}"}
-            button { onclick: move |_| message.call(("world".into(), 30)), "Click me!" }
+            button { onclick: move |_| message.call("world".into(), 30), "Click me!" }
         }
     });
 }

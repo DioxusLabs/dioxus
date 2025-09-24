@@ -5565,6 +5565,7 @@ dependencies = [
  "separator",
  "serde",
  "serde_json",
+ "sqlx",
  "thiserror 2.0.12",
  "tokio",
  "uuid",

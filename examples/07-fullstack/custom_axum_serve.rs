@@ -28,15 +28,17 @@ fn main() {
 
     // On the server, we can use `dioxus::serve` and `.serve_dioxus_application` to serve our app with routing.
     // Using `dioxus::serve` sets up an async runtime, logging, hot-reloading, and more.
+    //
+    // The Router passed to `dioxus::serve` already has the Dioxus routes configured on it, though we
+    // could return our own custom Router if we wanted to.
     #[cfg(feature = "server")]
-    dioxus::serve(|| async move {
-        use dioxus::server::axum::routing::{Router, get, post};
+    dioxus::serve(app, |router| async move {
+        use dioxus::server::axum::routing::{get, post};
 
-        Ok(Router::new()
+        Ok(router
             .route("/submit", post(|| async { "Form submitted!" }))
             .route("/about", get(|| async { "About us" }))
-            .route("/contact", get(|| async { "Contact us" }))
-            .serve_dioxus_application(ServeConfig::new().unwrap(), app))
+            .route("/contact", get(|| async { "Contact us" })))
     });
 }
 

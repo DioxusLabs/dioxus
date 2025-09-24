@@ -285,8 +285,9 @@ fn apply_base_path(
     router
 }
 
-pub fn serve<F>(mut serve_it: impl FnMut() -> F)
+pub fn serve<F>(app: fn() -> Element, mut serve_it: impl FnMut(axum::Router) -> F)
 where
+    // F: Future<Output = axum::Router>,
     F: Future<Output = Result<axum::Router, anyhow::Error>>,
 {
     dioxus_logger::initialize_default();
@@ -296,12 +297,6 @@ where
         .block_on(async move {
             tracing::info!("Starting fullstack server");
 
-            // let router =
-            //     axum::Router::new().serve_dioxus_application(ServeConfig::new().unwrap(), root);
-
-            tracing::info!("Serving additional router from serve_it");
-
-            let router = serve_it().await.unwrap();
             // let router = new_router.merge(router);
 
             // let cfg = ServeConfig::new().unwrap();
@@ -311,6 +306,13 @@ where
             //     cfg.clone(),
             //     base_path().map(|s| s.to_string()),
             // );
+
+            let router =
+                axum::Router::new().serve_dioxus_application(ServeConfig::new().unwrap(), app);
+
+            tracing::info!("Serving additional router from serve_it");
+
+            let router = serve_it(router).await.unwrap();
 
             let address = dioxus_cli_config::fullstack_address_or_localhost();
             let listener = tokio::net::TcpListener::bind(address).await.unwrap();
