@@ -1,5 +1,9 @@
-//! We can call server functions directly from reqwest as well as through Dioxus's built-in
-//! server function support. This example shows both methods of calling the same server function.
+//! This example demonstrates that dioxus server functions can be be called directly as a Rust
+//! function or via an HTTP request using reqwest.
+//!
+//! Dioxus server functions generated a REST endpoint that can be called using any HTTP client.
+//! By default, they also support different serialization formats like JSON and CBOR. Try changing
+//! your `accept` header to see the different formats.
 
 use dioxus::prelude::*;
 
