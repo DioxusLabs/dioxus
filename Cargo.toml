@@ -138,7 +138,7 @@ members = [
     "packages/playwright-tests/cli-optimization",
     "packages/playwright-tests/wasm-split-harness",
     "packages/playwright-tests/default-features-disabled"
-]
+, "examples/07-fullstack/ssr-only"]
 
 [workspace.package]
 version = "0.7.0-rc.0"

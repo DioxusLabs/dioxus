@@ -248,6 +248,8 @@ pub mod req_to {
 
 pub use decode_ok::*;
 mod decode_ok {
+    use dioxus_fullstack_core::HttpError;
+
     use super::*;
 
     /// Conver the reqwest response into the desired type, in place.
@@ -465,6 +467,36 @@ mod decode_ok {
                             .unwrap_or(StatusCode::SERVICE_UNAVAILABLE);
                         Err(code)
                     }
+                }
+            })
+        }
+    }
+
+    impl<T> ReqwestDecodeErr<T, HttpError> for &ServerFnDecoder<Result<T, HttpError>> {
+        fn decode_client_err(
+            &self,
+            res: Result<Result<T, ServerFnError>, reqwest::Error>,
+        ) -> impl Future<Output = Result<T, HttpError>> + Send {
+            SendWrapper::new(async move {
+                match res {
+                    Ok(Ok(res)) => Ok(res),
+                    Ok(Err(res)) => match res {
+                        ServerFnError::ServerError { message, code, .. } => Err(HttpError {
+                            status: StatusCode::from_u16(code.unwrap_or(500))
+                                .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
+                            message: Some(message),
+                        }),
+                        ServerFnError::Request { message, code } => Err(HttpError {
+                            status: StatusCode::from_u16(code.unwrap_or(400))
+                                .unwrap_or(StatusCode::BAD_REQUEST),
+                            message: Some(message),
+                        }),
+                        _ => HttpError::internal_server_error("Internal Server Error"),
+                    },
+                    Err(err) => Err(HttpError::new(
+                        err.status().unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
+                        err.to_string(),
+                    )),
                 }
             })
         }
@@ -692,6 +724,34 @@ mod resp {
                         HeaderValue::from_static("application/json"),
                     );
                     *resp.status_mut() = status;
+                    Err(resp)
+                }
+            }
+        }
+    }
+
+    impl<T> MakeAxumError<HttpError> for &ServerFnDecoder<Result<T, HttpError>> {
+        fn make_axum_error(
+            self,
+            result: Result<Response, HttpError>,
+        ) -> Result<Response, Response> {
+            match result {
+                Ok(resp) => Ok(resp),
+                Err(http_err) => {
+                    let body = serde_json::to_string(&ErrorPayload::<()> {
+                        code: Some(http_err.status.as_u16()),
+                        message: http_err
+                            .message
+                            .unwrap_or_else(|| http_err.status.to_string()),
+                        data: None,
+                    })
+                    .unwrap();
+                    let mut resp = Response::new(body.into());
+                    resp.headers_mut().insert(
+                        http::header::CONTENT_TYPE,
+                        HeaderValue::from_static("application/json"),
+                    );
+                    *resp.status_mut() = http_err.status;
                     Err(resp)
                 }
             }

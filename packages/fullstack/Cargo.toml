@@ -37,9 +37,6 @@ serde_qs = { workspace = true, default-features = true}
 mime = "0.3.17"
 reqwest = { workspace = true, features = ["json", "rustls-tls", "cookies", "stream"] }
 
-
-
-
 # server deps
 axum = { workspace = true, default-features = false, features = ["json", "form", "query", "multipart", "query"] }
 axum-extra = { workspace =  true, optional = true, features = ["typed-header"] }

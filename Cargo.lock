@@ -15616,6 +15616,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "ssr-only"
+version = "0.7.0-rc.0"
+dependencies = [
+ "dioxus",
+]
+
+[[package]]
 name = "stable_deref_trait"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
