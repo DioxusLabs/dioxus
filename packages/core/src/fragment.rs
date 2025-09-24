@@ -28,8 +28,8 @@ use crate::innerlude::*;
 ///
 /// You want to use this free-function when your fragment needs a key and simply returning multiple nodes from rsx! won't cut it.
 #[allow(non_upper_case_globals, non_snake_case)]
-pub fn Fragment(cx: FragmentProps) -> Element {
-    cx.0
+pub fn Fragment(props: FragmentProps) -> Element {
+    props.0
 }
 
 #[derive(Clone, PartialEq)]

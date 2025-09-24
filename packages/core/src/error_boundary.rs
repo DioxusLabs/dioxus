@@ -103,10 +103,8 @@ impl Display for CapturedPanic {
 
 /// Provide an error boundary to catch errors from child components
 pub fn provide_error_boundary() -> ErrorContext {
-    provide_context(ErrorContext::new(
-        Vec::new(),
-        current_scope_id().unwrap_or_else(|e| panic!("{}", e)),
-    ))
+    let ctx = ErrorContext::new(current_scope_id().unwrap_or_else(|e| panic!("{}", e)));
+    provide_context(ctx)
 }
 
 /// A context with information about suspended components
@@ -124,9 +122,9 @@ impl PartialEq for ErrorContext {
 
 impl ErrorContext {
     /// Create a new suspense boundary in a specific scope
-    pub(crate) fn new(errors: Vec<CapturedError>, id: ScopeId) -> Self {
+    pub(crate) fn new(id: ScopeId) -> Self {
         Self {
-            errors: Rc::new(RefCell::new(errors)),
+            errors: Rc::new(RefCell::new(vec![])),
             id,
         }
     }

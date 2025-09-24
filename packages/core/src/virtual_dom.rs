@@ -2,16 +2,16 @@
 //!
 //! This module provides the primary mechanics to create a hook-based, concurrent VDOM for Rust.
 
-use crate::properties::RootProps;
-use crate::root_wrapper::RootScopeWrapper;
+use crate::scopes::LastRenderedNode;
 use crate::{
     arena::ElementId,
     innerlude::{NoOpMutations, SchedulerMsg, ScopeOrder, ScopeState, VProps, WriteMutations},
     runtime::{Runtime, RuntimeGuard},
     scopes::ScopeId,
-    ComponentFunction, Element, Mutations,
+    ComponentFunction, Element, Mutations, SuspenseContext,
 };
-use crate::{innerlude::Work, scopes::LastRenderedNode};
+use crate::{diff::Fiber, innerlude::Work};
+use crate::{properties::RootProps, ErrorBoundary, ErrorContext};
 use crate::{Task, VComponent};
 use futures_util::StreamExt;
 use slab::Slab;
@@ -33,9 +33,9 @@ use tracing::instrument;
 ///     title: String
 /// }
 ///
-/// fn app(cx: AppProps) -> Element {
+/// fn app(props: AppProps) -> Element {
 ///     rsx!(
-///         div {"hello, {cx.title}"}
+///         div {"hello, {props.title}"}
 ///     )
 /// }
 /// ```
@@ -54,10 +54,10 @@ use tracing::instrument;
 /// static ROUTES: &str = "";
 ///
 /// #[component]
-/// fn app(cx: AppProps) -> Element {
+/// fn app(props: AppProps) -> Element {
 ///     rsx!(
 ///         NavBar { routes: ROUTES }
-///         Title { "{cx.title}" }
+///         Title { "{props.title}" }
 ///         Footer {}
 ///     )
 /// }
@@ -261,8 +261,8 @@ impl VirtualDom {
     ///     name: &'static str
     /// }
     ///
-    /// fn Example(cx: SomeProps) -> Element  {
-    ///     rsx! { div { "hello {cx.name}" } }
+    /// fn Example(props: SomeProps) -> Element  {
+    ///     rsx! { div { "hello {props.name}" } }
     /// }
     ///
     /// let dom = VirtualDom::new_with_props(Example, SomeProps { name: "world" });
@@ -277,8 +277,8 @@ impl VirtualDom {
     /// # struct SomeProps {
     /// #     name: &'static str
     /// # }
-    /// # fn Example(cx: SomeProps) -> Element  {
-    /// #     rsx! { div { "hello {cx.name}" } }
+    /// # fn Example(props: SomeProps) -> Element  {
+    /// #     rsx! { div { "hello {props.name}" } }
     /// # }
     /// let mut dom = VirtualDom::new_with_props(Example, SomeProps { name: "jane" });
     /// dom.rebuild_in_place();
@@ -287,12 +287,10 @@ impl VirtualDom {
         root: impl ComponentFunction<P, M>,
         root_props: P,
     ) -> Self {
-        let render_fn = root.fn_ptr();
-        let props = VProps::new(root, |_, _| true, root_props, "Root");
         Self::new_with_component(VComponent {
             name: "root",
-            render_fn,
-            props: Box::new(props),
+            render_fn: root.fn_ptr(),
+            props: Box::new(VProps::new(root, |_, _| true, root_props, "Root")),
         })
     }
 
@@ -316,13 +314,13 @@ impl VirtualDom {
             resolved_scopes: Default::default(),
         };
 
-        let root = VProps::new(
-            RootScopeWrapper,
-            |_, _| true,
-            RootProps(root),
-            "RootWrapper",
-        );
-        dom.new_scope(Box::new(root), "app");
+        let root = dom.new_scope(root.props, "app");
+
+        // Capture errors
+        root.state().provide_context(ErrorContext::new(root.id()));
+
+        // Capture suspense
+        root.state().provide_context(SuspenseContext::new());
 
         #[cfg(debug_assertions)]
         dom.register_subsecond_handler();
@@ -588,7 +586,11 @@ impl VirtualDom {
         self.scopes[ScopeId::ROOT.0].last_rendered_node = Some(new_nodes.clone());
 
         // Rebuilding implies we append the created elements to the root
-        let m = self.create_scope(Some(to), ScopeId::ROOT, new_nodes, None);
+        let m = Fiber::new(&self.runtime.clone(), self, to, true).create_scope(
+            ScopeId::ROOT,
+            new_nodes,
+            None,
+        );
 
         to.append_children(ElementId(0), m);
     }
@@ -615,7 +617,8 @@ impl VirtualDom {
                 Work::RerunScope(scope) => {
                     // If the scope is dirty, run the scope and get the mutations
                     self.runtime.clone().while_rendering(|| {
-                        self.run_and_diff_scope(Some(to), scope.id);
+                        Fiber::new(&self.runtime.clone(), self, to, true)
+                            .run_and_diff_scope(scope.id);
                     });
                 }
             }
@@ -671,6 +674,7 @@ impl VirtualDom {
             {
                 // Make sure we set the runtime since we're running user code
                 let _runtime = RuntimeGuard::new(self.runtime.clone());
+
                 // Next, run any queued tasks
                 // We choose not to poll the deadline since we complete pretty quickly anyways
                 let mut tasks_polled = 0;
@@ -684,6 +688,7 @@ impl VirtualDom {
                         }
                     }
                     tasks_polled += 1;
+
                     // Once we have polled a few tasks, we manually yield to the scheduler to give it a chance to run other pending work
                     if tasks_polled > 32 {
                         yield_now().await;
@@ -721,10 +726,12 @@ impl VirtualDom {
                         .get_state(scope.id)
                         .filter(|scope| scope.should_run_during_suspense())
                         .is_some();
+
                     if run_scope {
                         // If the scope is dirty, run the scope and get the mutations
                         self.runtime.clone().while_rendering(|| {
-                            self.run_and_diff_scope(None::<&mut NoOpMutations>, scope_id);
+                            Fiber::new(&self.runtime.clone(), self, &mut NoOpMutations, false)
+                                .run_and_diff_scope(scope_id);
                         });
 
                         tracing::trace!("Ran scope {:?} during suspense", scope_id);

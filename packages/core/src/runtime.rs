@@ -216,14 +216,14 @@ impl Runtime {
 
     /// Push a scope onto the stack
     fn push_scope(&self, scope: ScopeId) {
-        let suspense_location = self
-            .scope_states
-            .borrow()
-            .get(scope.0)
-            .and_then(|s| s.as_ref())
-            .map(|s| s.suspense_location())
-            .unwrap_or_default();
-        self.suspense_stack.borrow_mut().push(suspense_location);
+        // let suspense_location = self
+        //     .scope_states
+        //     .borrow()
+        //     .get(scope.0)
+        //     .and_then(|s| s.as_ref())
+        //     .map(|s| s.suspense_location())
+        //     .unwrap_or_default();
+        // self.suspense_stack.borrow_mut().push(suspense_location);
         self.scope_stack.borrow_mut().push(scope);
     }
 
@@ -296,10 +296,12 @@ impl Runtime {
         if self.suspended_tasks.get() == 0 {
             return true;
         }
+
         // If this is not a suspended scope, and we are under a frozen context, then we should
         let scopes = self.scope_states.borrow();
         let scope = &scopes[scope_id.0].as_ref().unwrap();
-        !matches!(scope.suspense_location(), SuspenseLocation::UnderSuspense(suspense) if suspense.is_suspended())
+        // !matches!(scope.suspense_location(), SuspenseLocation::UnderSuspense(suspense) if suspense.is_suspended())
+        todo!()
     }
 
     /// Call a listener inside the VirtualDom with data from outside the VirtualDom. **The ElementId passed in must be the id of an element with a listener, not a static node or a text node.**
@@ -469,9 +471,9 @@ impl Runtime {
 ///     }
 /// }
 ///
-/// fn Component(cx: ComponentProps) -> Element {
+/// fn Component(props: ComponentProps) -> Element {
 ///     use_hook(|| {
-///         let _guard = RuntimeGuard::new(cx.runtime.clone());
+///         let _guard = RuntimeGuard::new(props.runtime.clone());
 ///     });
 ///
 ///     rsx! { div {} }

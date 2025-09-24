@@ -25,7 +25,8 @@ impl VirtualDom {
         let entry = self.scopes.vacant_entry();
         let id = ScopeId(entry.key());
 
-        let scope_runtime = Scope::new(name, id, parent_id, height, suspense_boundary);
+        let scope_runtime = Scope::new(name, id, parent_id, height);
+        // let scope_runtime = Scope::new(name, id, parent_id, height, suspense_boundary);
         let reactive_context = ReactiveContext::new_for_scope(&scope_runtime, &self.runtime);
 
         let scope = entry.insert(ScopeState {
@@ -115,30 +116,31 @@ impl VirtualDom {
                 throw_error(e.clone());
             }
             Err(RenderError::Suspended(e)) => {
-                let task = e.task();
-                // Insert the task into the nearest suspense boundary if it exists
-                let boundary = self
-                    .runtime
-                    .get_state(scope_id)
-                    .unwrap()
-                    .suspense_location();
-                let already_suspended = self
-                    .runtime
-                    .tasks
-                    .borrow()
-                    .get(task.id)
-                    .expect("Suspended on a task that no longer exists")
-                    .suspend(boundary.clone());
-                if !already_suspended {
-                    tracing::trace!("Suspending {:?} on {:?}", scope_id, task);
-                    // Add this task to the suspended tasks list of the boundary
-                    if let SuspenseLocation::UnderSuspense(boundary) = &boundary {
-                        boundary.add_suspended_task(e.clone());
-                    }
-                    self.runtime
-                        .suspended_tasks
-                        .set(self.runtime.suspended_tasks.get() + 1);
-                }
+                todo!()
+                // let task = e.task();
+                // // Insert the task into the nearest suspense boundary if it exists
+                // let boundary = self
+                //     .runtime
+                //     .get_state(scope_id)
+                //     .unwrap()
+                //     .suspense_location();
+                // let already_suspended = self
+                //     .runtime
+                //     .tasks
+                //     .borrow()
+                //     .get(task.id)
+                //     .expect("Suspended on a task that no longer exists")
+                //     .suspend(boundary.clone());
+                // if !already_suspended {
+                //     tracing::trace!("Suspending {:?} on {:?}", scope_id, task);
+                //     // Add this task to the suspended tasks list of the boundary
+                //     if let SuspenseLocation::UnderSuspense(boundary) = &boundary {
+                //         boundary.add_suspended_task(e.clone());
+                //     }
+                //     self.runtime
+                //         .suspended_tasks
+                //         .set(self.runtime.suspended_tasks.get() + 1);
+                // }
             }
             Ok(_) => {
                 // If the render was successful, we can move the render generation forward by one

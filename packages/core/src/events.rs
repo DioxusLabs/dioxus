@@ -221,10 +221,10 @@ impl<T: std::fmt::Debug> std::fmt::Debug for Event<T> {
 ///     onclick: EventHandler<MouseEvent>,
 /// }
 ///
-/// fn MyComponent(cx: MyProps) -> Element {
+/// fn MyComponent(props: MyProps) -> Element {
 ///     rsx! {
 ///         button {
-///             onclick: move |evt| cx.onclick.call(evt),
+///             onclick: move |evt| props.onclick.call(evt),
 ///         }
 ///     }
 /// }
@@ -251,10 +251,10 @@ pub type EventHandler<T = ()> = Callback<T>;
 ///     onclick: Callback<MouseEvent, i32>,
 /// }
 ///
-/// fn MyComponent(cx: MyProps) -> Element {
+/// fn MyComponent(props: MyProps) -> Element {
 ///     rsx! {
 ///         button {
-///             onclick: move |evt| println!("number: {}", cx.onclick.call(evt)),
+///             onclick: move |evt| println!("number: {}", props.onclick.call(evt)),
 ///         }
 ///     }
 /// }

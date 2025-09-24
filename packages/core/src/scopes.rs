@@ -33,23 +33,6 @@ impl std::fmt::Debug for ScopeId {
 }
 
 impl ScopeId {
-    /// The ScopeId of the main scope passed into [`crate::VirtualDom::new`].
-    ///
-    /// This scope will last for the entire duration of your app, making it convenient for long-lived state
-    /// that is created dynamically somewhere down the component tree.
-    ///
-    /// # Example
-    ///
-    /// ```rust, no_run
-    /// use dioxus::prelude::*;
-    /// let my_persistent_state = Signal::new_in_scope(String::new(), ScopeId::APP);
-    /// ```
-    // ScopeId(0) is the root scope wrapper
-    // ScopeId(1) is the default error boundary
-    // ScopeId(2) is the default suspense boundary
-    // ScopeId(3) is the users root scope
-    pub const APP: ScopeId = ScopeId(3);
-
     /// The ScopeId of the topmost scope in the tree.
     /// This will be higher up in the tree than [`ScopeId::APP`] because dioxus inserts a default [`crate::SuspenseBoundary`] and [`crate::ErrorBoundary`] at the root of the tree.
     // ScopeId(0) is the root scope wrapper

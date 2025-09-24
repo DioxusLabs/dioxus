@@ -58,9 +58,8 @@ pub(crate) struct Scope {
     pub(crate) before_render: RefCell<Vec<Box<dyn FnMut()>>>,
     pub(crate) after_render: RefCell<Vec<Box<dyn FnMut()>>>,
 
-    /// The suspense boundary that this scope is currently in (if any)
-    suspense_boundary: SuspenseLocation,
-
+    // /// The suspense boundary that this scope is currently in (if any)
+    // suspense_boundary: SuspenseLocation,
     pub(crate) status: RefCell<ScopeStatus>,
 }
 
@@ -70,7 +69,7 @@ impl Scope {
         id: ScopeId,
         parent_id: Option<ScopeId>,
         height: u32,
-        suspense_boundary: SuspenseLocation,
+        // suspense_boundary: SuspenseLocation,
     ) -> Self {
         Self {
             name,
@@ -87,7 +86,7 @@ impl Scope {
             status: RefCell::new(ScopeStatus::Unmounted {
                 effects_queued: Vec::new(),
             }),
-            suspense_boundary,
+            // suspense_boundary,
         }
     }
 
@@ -110,26 +109,32 @@ impl Scope {
         }
     }
 
-    /// Get the suspense location of this scope
-    pub(crate) fn suspense_location(&self) -> SuspenseLocation {
-        self.suspense_boundary.clone()
-    }
+    // /// Get the suspense location of this scope
+    // pub(crate) fn suspense_location(&self) -> SuspenseLocation {
+    //     self.suspense_boundary.clone()
+    // }
 
     /// If this scope is a suspense boundary, return the suspense context
     pub(crate) fn suspense_boundary(&self) -> Option<SuspenseContext> {
-        match self.suspense_location() {
-            SuspenseLocation::SuspenseBoundary(context) => Some(context),
-            _ => None,
-        }
+        todo!()
+        // match self.suspense_location() {
+        //     SuspenseLocation::SuspenseBoundary(context) => Some(context),
+        //     _ => None,
+        // }
     }
 
     /// Check if a node should run during suspense
     pub(crate) fn should_run_during_suspense(&self) -> bool {
-        let Some(context) = self.suspense_boundary.suspense_context() else {
-            return false;
-        };
+        if let Some(context) = self.consume_context::<SuspenseContext>() {
+            return !context.frozen();
+        }
 
-        !context.frozen()
+        todo!();
+        // let Some(context) = self.suspense_boundary.suspense_context() else {
+        //     return false;
+        // };
+
+        // !context.frozen()
     }
 
     /// Mark this scope as dirty, and schedule a render for it.
@@ -662,6 +667,7 @@ impl ScopeId {
 
     /// Get the suspense context the current scope is in
     pub fn suspense_context(&self) -> Option<SuspenseContext> {
-        Runtime::with_scope(*self, |cx| cx.suspense_boundary.suspense_context().cloned()).unwrap()
+        todo!()
+        // Runtime::with_scope(*self, |cx| cx.suspense_boundary.suspense_context().cloned()).unwrap()
     }
 }
