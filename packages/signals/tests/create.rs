@@ -1,6 +1,5 @@
 #![allow(unused, non_upper_case_globals, non_snake_case)]
 
-use std::sync::mpsc::{sync_channel, SyncSender};
 use dioxus::prelude::*;
 use dioxus_core::{generation, ElementId, NoOpMutations};
 use dioxus_signals::*;
@@ -32,41 +31,28 @@ fn create_signals_global() {
 
 #[test]
 fn deref_signal() {
-    #[derive(Clone, Props)]
-    struct ChildProps {
-        tx: SyncSender<bool>,
-    }
+    use std::sync::atomic::{AtomicBool, Ordering};
+    static STRINGS_MATCH: AtomicBool = AtomicBool::new(false);
 
-    impl PartialEq for ChildProps {
-        fn eq(&self, _: &Self) -> bool {
-            false
-        }
+    let mut dom = VirtualDom::new(|| {
+        rsx! { Child {} }
+    });
 
-        fn ne(&self, _: &Self) -> bool {
-            true
-        }
-    }
-
-    fn Child(props: ChildProps) -> Element {
+    fn Child() -> Element {
         let signal = Signal::new("hello world".to_string());
 
         // You can call signals like functions to get a Ref of their value.
         let result = &*signal();
-        let _ = props.tx.send(result.eq("hello world"));
+        STRINGS_MATCH.store(result.eq("hello world"), Ordering::Relaxed);
 
         rsx! {
             "arbitrary text"
         }
     }
 
-    let (tx, rx) = sync_channel::<bool>(1);
-    let props = ChildProps { tx };
-    let mut dom = VirtualDom::new_with_props(Child, props);
-
     dom.rebuild_in_place();
 
-    let result = rx.recv();
-    assert!(matches!(result, Ok(true)));
+    assert!(STRINGS_MATCH.load(Ordering::Relaxed));
 }
 
 #[test]
