@@ -1016,8 +1016,8 @@ impl<'a, 'b, M: WriteMutations> Fiber<'a, 'b, M> {
                     } else {
                         self.to.remove_node(id);
                     }
-                    self.reclaim(id)
                 }
+                self.reclaim(id)
             }
             Fragment(nodes) => {
                 for node in &nodes[..nodes.len() - 1] {
@@ -1434,38 +1434,31 @@ impl<'a, 'b, M: WriteMutations> Fiber<'a, 'b, M> {
     }
 
     fn get_mounted_parent(&self, mount: MountId) -> Option<ElementRef> {
-        let mounts = self.runtime.mounts.borrow();
-        mounts[mount.0].parent
+        self.runtime.mounts.borrow()[mount.0].parent
     }
 
     fn get_mounted_dyn_node(&self, mount: MountId, dyn_node_idx: usize) -> usize {
-        let mounts = self.runtime.mounts.borrow();
-        mounts[mount.0].mounted_dynamic_nodes[dyn_node_idx]
+        self.runtime.mounts.borrow()[mount.0].mounted_dynamic_nodes[dyn_node_idx]
     }
 
     fn set_mounted_dyn_node(&self, mount: MountId, dyn_node_idx: usize, value: usize) {
-        let mut mounts = self.runtime.mounts.borrow_mut();
-        mounts[mount.0].mounted_dynamic_nodes[dyn_node_idx] = value;
+        self.runtime.mounts.borrow_mut()[mount.0].mounted_dynamic_nodes[dyn_node_idx] = value;
     }
 
     fn get_mounted_dyn_attr(&self, mount: MountId, dyn_attr_idx: usize) -> ElementId {
-        let mounts = self.runtime.mounts.borrow();
-        mounts[mount.0].mounted_attributes[dyn_attr_idx]
+        self.runtime.mounts.borrow()[mount.0].mounted_attributes[dyn_attr_idx]
     }
 
     fn set_mounted_dyn_attr(&self, mount: MountId, dyn_attr_idx: usize, value: ElementId) {
-        let mut mounts = self.runtime.mounts.borrow_mut();
-        mounts[mount.0].mounted_attributes[dyn_attr_idx] = value;
+        self.runtime.mounts.borrow_mut()[mount.0].mounted_attributes[dyn_attr_idx] = value;
     }
 
     fn get_mounted_root_node(&self, mount: MountId, root_idx: usize) -> ElementId {
-        let mounts = self.runtime.mounts.borrow();
-        mounts[mount.0].root_ids[root_idx]
+        self.runtime.mounts.borrow()[mount.0].root_ids[root_idx]
     }
 
     fn set_mounted_root_node(&self, mount: MountId, root_idx: usize, value: ElementId) {
-        let mut mounts = self.runtime.mounts.borrow_mut();
-        mounts[mount.0].root_ids[root_idx] = value;
+        self.runtime.mounts.borrow_mut()[mount.0].root_ids[root_idx] = value;
     }
 
     fn load_template_root(&mut self, node: &VNode, mount: MountId, root_idx: usize) -> ElementId {
