@@ -202,7 +202,7 @@ use tracing::{instrument, trace_span};
 ///     let mut dom = VirtualDom::new(app);
 ///
 ///     dom.rebuild_in_place();
-///     dom.wait_for_suspense().await;
+///     dom.wait_for_suspense(&mut NoOpMutations).await;
 /// });
 ///
 /// // Render the virtual dom

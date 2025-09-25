@@ -32,22 +32,14 @@ use std::{
 /// Suspended nodes are flushed to the DOM just like regular nodes, but they are unmounted and thus
 /// not interactive. Only once the suspense tree is fully resolved are the nodes mounted and made interactive.
 pub(crate) struct Fiber<'a, 'b, M: WriteMutations> {
-    runtime: Rc<Runtime>,
     dom: &'a mut VirtualDom,
     to: &'b mut M,
-    // write: bool,
-    suspended_scopes: Vec<ScopeId>,
 }
 
 impl<'a, 'b, M: WriteMutations> Fiber<'a, 'b, M> {
     /// When we create a new fiber, we keep track of the current suspense context
     pub(crate) fn new(dom: &'a mut VirtualDom, to: &'b mut M) -> Self {
-        Self {
-            runtime: dom.runtime.clone(),
-            dom,
-            to,
-            suspended_scopes: Vec::new(),
-        }
+        Self { dom, to }
     }
 
     /// Swaps in the real tree for a suspense boundary that has resolved
@@ -73,53 +65,12 @@ impl<'a, 'b, M: WriteMutations> Fiber<'a, 'b, M> {
     pub(crate) fn run_and_diff_scope(&mut self, scope_id: ScopeId) {
         let new_nodes = self.dom.run_scope(scope_id);
         self.diff_scope(scope_id, new_nodes);
-        // todo!()
-        // let scope = &mut self.dom.scopes[scope_id.0];
-        // if SuspenseBoundaryProps::downcast_from_props(&mut *scope.props).is_some() {
-        //     self.diff_suspense(scope_id)
-        // } else {
-        //     let new_nodes = self.dom.run_scope(scope_id);
-        //     self.diff_scope(scope_id, new_nodes);
-        // }
     }
 
     fn diff_scope(&mut self, scope: ScopeId, new_nodes: LastRenderedNode) {
-        self.runtime.clone().with_scope_on_stack(scope, || {
-            // If the node was previously suspended and now it's not, we need to load its placeholder
-            // and start writing mutations again.
-            //
-            // This will happen by default by processing its placeholder node as normal, but we also
-            // need to register the suspense as resolved with its suspense boundary.
-            // match new_nodes.as_element_ref() {
-            //     Ok(_) => todo!(),
-            //     Err(RenderError::Suspended(node)) => todo!(),
-            //     Err(RenderError::Suspended(node)) => todo!(),
-            // }
-            // // We don't diff the nodes if the scope is suspended or has an error
-            // let Ok(new_real_nodes) = &new_nodes.as_element_ref() else {
-            //     return;
-            // };
-
+        self.dom.runtime.clone().with_scope_on_stack(scope, || {
             // Load the old and new rendered nodes
             let old = self.dom.scopes[scope.0].last_rendered_node.take().unwrap();
-
-            // We need to emit some internal work based on the state change
-            // This would be to go wake up the suspense and error boundaries that are affected
-            use LastRenderedNode::{Placeholder as Pl, Real as Rl};
-            use RenderError::{Error as Er, Suspended as Su};
-            match (&old, &new_nodes) {
-                // In these cases, nothing needs to be done since the work is already queued.
-                (Rl(_), Rl(_)) => { /* nothing, fine transition */ }
-                (Rl(_), Pl(_, Er(_))) => { /* nothing, error already thrown, update is queued */ }
-                (Rl(_), Pl(_, Su(_))) => { /* nothing, suspense already thrown, update  queued */ }
-                (Pl(_, Er(_)), Rl(_)) => { /* nothing, error must be cleared by now */ }
-                (Pl(_, Su(_)), Pl(_, Su(_))) => { /* nothing, still suspended */ }
-                (Pl(_, Er(_)), Pl(_, Er(_))) => { /* nothing, still errored */ }
-                (Pl(_, Er(_)), Pl(_, Su(_))) => { /* suspense already pinged */ }
-
-                (Pl(_, Su(_)), Rl(_)) => { /* go wake up suspense boundary */ }
-                (Pl(_, Su(_)), Pl(_, Er(_))) => { /* go wake up suspense boundary */ }
-            }
 
             // We load up the new node as its placeholder or real node
             let new_real_nodes = new_nodes.as_vnode();
@@ -130,8 +81,8 @@ impl<'a, 'b, M: WriteMutations> Fiber<'a, 'b, M> {
             self.diff_node(old.as_vnode(), new_real_nodes);
             self.dom.scopes[scope.0].last_rendered_node = Some(new_nodes);
 
-            if self.runtime.should_run_mount_tasks(scope) {
-                self.runtime.get_scope(scope).mount(&self.runtime);
+            if self.dom.runtime.should_run_mount_tasks(scope) {
+                self.dom.runtime.get_scope(scope).mount(&self.dom.runtime);
             }
         })
     }
@@ -150,7 +101,7 @@ impl<'a, 'b, M: WriteMutations> Fiber<'a, 'b, M> {
         //
         // Note: It is important that we still diff the scope even if it is suspended, because the
         // scope may render other child components which may change between renders
-        self.runtime.clone().with_scope_on_stack(scope, || {
+        self.dom.runtime.clone().with_scope_on_stack(scope, || {
             // Create the node. This will run the fiber until we hit a suspense scope which returns a placeholder
             let num_nodes = self.create(new_nodes.as_vnode(), parent);
 
@@ -158,8 +109,8 @@ impl<'a, 'b, M: WriteMutations> Fiber<'a, 'b, M> {
             self.dom.scopes[scope.0].last_rendered_node = Some(new_nodes);
 
             // Run mount tasks
-            if self.runtime.should_run_mount_tasks(scope) {
-                self.dom.runtime.get_scope(scope).mount(&self.runtime);
+            if self.dom.runtime.should_run_mount_tasks(scope) {
+                self.dom.runtime.get_scope(scope).mount(&self.dom.runtime);
             }
 
             // Check if this scope is a suspense boundary. If it is, and its suspended after we run it,
@@ -671,7 +622,7 @@ impl<'a, 'b, M: WriteMutations> Fiber<'a, 'b, M> {
         // Now diff the scope
         self.run_and_diff_scope(scope_id);
 
-        let height = self.runtime.get_scope(scope_id).height;
+        let height = self.dom.runtime.get_scope(scope_id).height;
         self.dom
             .dirty_scopes
             .remove(&ScopeOrder::new(height, scope_id));
@@ -713,7 +664,7 @@ impl<'a, 'b, M: WriteMutations> Fiber<'a, 'b, M> {
 
         // If the scopeid is a placeholder, we need to load up a new scope for this vcomponent. If it's already mounted, then we can just use that
         if scope_id.is_placeholder() {
-            let parent_id = self.runtime.current_scope_id();
+            let parent_id = self.dom.runtime.current_scope_id();
 
             scope_id = self
                 .dom
@@ -791,7 +742,7 @@ impl<'a, 'b, M: WriteMutations> Fiber<'a, 'b, M> {
         new.mount.set(mount_id);
 
         if mount_id.mounted() {
-            let mut mounts = self.runtime.mounts.borrow_mut();
+            let mut mounts = self.dom.runtime.mounts.borrow_mut();
             let mount = &mut mounts[mount_id.0];
 
             // Update the reference to the node for bubbling events
@@ -996,7 +947,7 @@ impl<'a, 'b, M: WriteMutations> Fiber<'a, 'b, M> {
         if destroy_component_state {
             let mount = node.mount.take();
             // Remove the mount information
-            self.runtime.mounts.borrow_mut().remove(mount.0);
+            self.dom.runtime.mounts.borrow_mut().remove(mount.0);
         }
     }
 
@@ -1213,7 +1164,7 @@ impl<'a, 'b, M: WriteMutations> Fiber<'a, 'b, M> {
                     path: ElementPath { path },
                     mount,
                 };
-                let mut elements = self.runtime.elements.borrow_mut();
+                let mut elements = self.dom.runtime.elements.borrow_mut();
                 elements[id.0] = Some(element_ref);
                 self.to.create_event_listener(&attribute.name[2..], id);
             }
@@ -1231,7 +1182,7 @@ impl<'a, 'b, M: WriteMutations> Fiber<'a, 'b, M> {
 
         // Initialize the mount information for this vnode if it isn't already mounted
         if !node.mount.get().mounted() {
-            let mut mounts = self.runtime.mounts.borrow_mut();
+            let mut mounts = self.dom.runtime.mounts.borrow_mut();
             let entry = mounts.vacant_entry();
             let mount = MountId(entry.key());
             node.mount.set(mount);
@@ -1254,7 +1205,7 @@ impl<'a, 'b, M: WriteMutations> Fiber<'a, 'b, M> {
         // Get the mounted id of this block
         // At this point, we should have already mounted the block
         debug_assert!(
-            self.runtime.mounts.borrow().contains(
+            self.dom.runtime.mounts.borrow().contains(
                 node.mount
                     .get()
                     .as_usize()
@@ -1485,31 +1436,31 @@ impl<'a, 'b, M: WriteMutations> Fiber<'a, 'b, M> {
     }
 
     fn get_mounted_parent(&self, mount: MountId) -> Option<ElementRef> {
-        self.runtime.mounts.borrow()[mount.0].parent
+        self.dom.runtime.mounts.borrow()[mount.0].parent
     }
 
     fn get_mounted_dyn_node(&self, mount: MountId, dyn_node_idx: usize) -> usize {
-        self.runtime.mounts.borrow()[mount.0].mounted_dynamic_nodes[dyn_node_idx]
+        self.dom.runtime.mounts.borrow()[mount.0].mounted_dynamic_nodes[dyn_node_idx]
     }
 
     fn set_mounted_dyn_node(&self, mount: MountId, dyn_node_idx: usize, value: usize) {
-        self.runtime.mounts.borrow_mut()[mount.0].mounted_dynamic_nodes[dyn_node_idx] = value;
+        self.dom.runtime.mounts.borrow_mut()[mount.0].mounted_dynamic_nodes[dyn_node_idx] = value;
     }
 
     fn get_mounted_dyn_attr(&self, mount: MountId, dyn_attr_idx: usize) -> ElementId {
-        self.runtime.mounts.borrow()[mount.0].mounted_attributes[dyn_attr_idx]
+        self.dom.runtime.mounts.borrow()[mount.0].mounted_attributes[dyn_attr_idx]
     }
 
     fn set_mounted_dyn_attr(&self, mount: MountId, dyn_attr_idx: usize, value: ElementId) {
-        self.runtime.mounts.borrow_mut()[mount.0].mounted_attributes[dyn_attr_idx] = value;
+        self.dom.runtime.mounts.borrow_mut()[mount.0].mounted_attributes[dyn_attr_idx] = value;
     }
 
     fn get_mounted_root_node(&self, mount: MountId, root_idx: usize) -> ElementId {
-        self.runtime.mounts.borrow()[mount.0].root_ids[root_idx]
+        self.dom.runtime.mounts.borrow()[mount.0].root_ids[root_idx]
     }
 
     fn set_mounted_root_node(&self, mount: MountId, root_idx: usize, value: ElementId) {
-        self.runtime.mounts.borrow_mut()[mount.0].root_ids[root_idx] = value;
+        self.dom.runtime.mounts.borrow_mut()[mount.0].root_ids[root_idx] = value;
     }
 
     fn load_template_root(&mut self, node: &VNode, mount: MountId, root_idx: usize) -> ElementId {
@@ -1605,7 +1556,7 @@ impl<'a, 'b, M: WriteMutations> Fiber<'a, 'b, M> {
         // todo!()
         // todo!()
         // let Some(scope) =
-        //     SuspenseContext::downcast_suspense_boundary_from_scope(self.runtime, scope_id)
+        //     SuspenseContext::downcast_suspense_boundary_from_scope(self.dom.runtime, scope_id)
         // else {
         //     return;
         // };
@@ -1625,7 +1576,7 @@ impl<'a, 'b, M: WriteMutations> Fiber<'a, 'b, M> {
     }
 
     fn next_element(&mut self) -> ElementId {
-        let mut elements = self.runtime.elements.borrow_mut();
+        let mut elements = self.dom.runtime.elements.borrow_mut();
         ElementId(elements.insert(None))
     }
 
@@ -1641,7 +1592,7 @@ impl<'a, 'b, M: WriteMutations> Fiber<'a, 'b, M> {
             return true;
         }
 
-        let mut elements = self.runtime.elements.borrow_mut();
+        let mut elements = self.dom.runtime.elements.borrow_mut();
         elements.try_remove(el.0).is_some()
     }
 

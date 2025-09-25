@@ -2,7 +2,9 @@
 
 use anyhow::bail;
 use dioxus::prelude::*;
-use dioxus_core::{generation, AttributeValue, ElementId, Mutation, Mutations};
+use dioxus_core::{
+    generation, AttributeValue, ElementId, Mutation, Mutations, SuspenseBoundaryProps,
+};
 use pretty_assertions::assert_eq;
 use std::future::poll_fn;
 use std::task::Poll;
@@ -123,13 +125,86 @@ async fn suspense_with_levels() {
     println!("{}", dioxus_ssr::render(&dom));
 }
 
-// #[tokio::test]
+#[tokio::test]
+async fn multiple_boundaries() {
+    init_logger();
+
+    fn app() -> Element {
+        rsx! {
+            h1 { "parent!" }
+            SuspenseBoundary {
+                fallback: |_| rsx! { "loading 1..." },
+                DelayChild { delay_ms: 2 }
+            }
+            SuspenseBoundary {
+                fallback: |_| rsx! { "loading 2..." },
+                DelayChild { delay_ms: 5 }
+            }
+            SuspenseBoundary {
+                fallback: |_| rsx! { "loading 3..." },
+                DelayChild { delay_ms: 10 }
+            }
+            h3 { "after suspense" }
+        }
+    }
+
+    #[component]
+    fn DelayChild(delay_ms: u64) -> Element {
+        use_short_delay(delay_ms)?;
+        rsx! {
+            div { "Child {delay_ms} is ready!" }
+        }
+    }
+
+    let mut dom = VirtualDom::new(app);
+    let mutations = dom.rebuild_to_vec();
+    #[rustfmt::skip] {
+        assert_eq!(
+            mutations.edits,
+            vec![
+                // Load the h1 parent element
+                Mutation::LoadTemplate { index: 0, id: ElementId(1) },
+
+                // Create a placeholder for the first suspense boundary
+                Mutation::CreatePlaceholder { id: ElementId(2) },
+                // Save this placeholder
+                Mutation::SaveNodes { n: 1 },
+                // Create loading UI for the first suspense boundary
+                Mutation::LoadTemplate { index: 0, id: ElementId(3) },
+
+                // Create a placeholder for the second suspense boundary
+                Mutation::CreatePlaceholder { id: ElementId(4) },
+                // Save this placeholder
+                Mutation::SaveNodes { n: 1 },
+                // Create loading UI for the second suspense boundary
+                Mutation::LoadTemplate { index: 0, id: ElementId(5) },
+
+                // Create a placeholder for the third suspense boundary
+                Mutation::CreatePlaceholder { id: ElementId(6) },
+                // Save this placeholder
+                Mutation::SaveNodes { n: 1 },
+                // Create loading UI for the third suspense boundary
+                Mutation::LoadTemplate { index: 0, id: ElementId(7) },
+
+                // Create the h3 after suspense element
+                Mutation::LoadTemplate { index: 4, id: ElementId(8) },
+
+                // Append the nodes on the stack
+                Mutation::AppendChildren { id: ElementId(0), m: 5 },
+            ]
+        )
+    };
+}
+
+/// Test that a suspense boundary can go from resolved to suspended again if its internal state changes
+#[tokio::test]
+async fn suspense_moves_from_okay_to_suspended() {}
 
 fn init_logger() {
-    tracing_subscriber::fmt()
+    _ = tracing_subscriber::fmt()
         .with_env_filter("debug,dioxus_core=trace,dioxus=trace")
         .without_time()
-        .init();
+        .try_init();
 }
 
 /// runs a short delay inside a suspense boundary, returning the suspense error if it is still pending
