@@ -230,11 +230,7 @@ impl ::core::cmp::PartialEq for SuspenseBoundaryProps {
 ///     rsx! {
 ///         SuspenseBoundary {
 ///             fallback: |context: SuspenseContext| rsx! {
-///                 if let Some(placeholder) = context.suspense_placeholder() {
-///                     {placeholder}
-///                 } else {
-///                     "Loading..."
-///                 }
+///                 "Loading..."
 ///             },
 ///             Article {}
 ///         }

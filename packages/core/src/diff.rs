@@ -1558,15 +1558,17 @@ impl<'a, 'b, M: WriteMutations> Fiber<'a, 'b, M> {
     }
 
     fn remove_suspended_nodes(&mut self, scope_id: ScopeId, destroy_component_state: bool) {
-        todo!()
+        // todo!()
         // let Some(scope) =
         //     SuspenseContext::downcast_suspense_boundary_from_scope(self.runtime, scope_id)
         // else {
         //     return;
         // };
 
+        // let Some(ctxx)
+
         // // Remove the suspended nodes
-        // if let Some(node) = scope.take_suspended_nodes() {
+        // if let Some(node) = self.take_suspended_nodes() {
         //     self.remove_node_inner(&node, destroy_component_state, None)
         // }
     }

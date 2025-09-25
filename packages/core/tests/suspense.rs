@@ -20,21 +20,17 @@ async fn poll_three_times() {
     .await;
 }
 
-#[test]
-fn suspense_resolves_ssr() {
+#[tokio::test]
+async fn suspense_resolves_ssr() {
     // wait just a moment, not enough time for the boundary to resolve
-    tokio::runtime::Builder::new_current_thread()
-        .build()
-        .unwrap()
-        .block_on(async {
-            let mut dom = VirtualDom::new(app);
-            dom.rebuild_in_place();
-            dom.wait_for_suspense().await;
-            dom.render_immediate(&mut dioxus_core::NoOpMutations);
-            let out = dioxus_ssr::render(&dom);
 
-            assert_eq!(out, "<div>Waiting for... child</div>");
-        });
+    let mut dom = VirtualDom::new(app);
+    dom.rebuild_in_place();
+    dom.wait_for_suspense().await;
+    dom.render_immediate(&mut dioxus_core::NoOpMutations);
+    let out = dioxus_ssr::render(&dom);
+
+    assert_eq!(out, "<div>Waiting for... child</div>");
 }
 
 fn app() -> Element {
@@ -74,26 +70,20 @@ fn suspended_child() -> Element {
 }
 
 /// When switching from a suspense fallback to the real child, the state of that component must be kept
-#[test]
-fn suspense_keeps_state() {
-    tokio::runtime::Builder::new_current_thread()
-        .enable_time()
-        .build()
-        .unwrap()
-        .block_on(async {
-            let mut dom = VirtualDom::new(app);
-            dom.rebuild(&mut dioxus_core::NoOpMutations);
-            dom.render_suspense_immediate().await;
+#[tokio::test]
+async fn suspense_keeps_state() {
+    let mut dom = VirtualDom::new(app);
+    dom.rebuild(&mut dioxus_core::NoOpMutations);
+    dom.render_suspense_immediate().await;
 
-            let out = dioxus_ssr::render(&dom);
+    let out = dioxus_ssr::render(&dom);
 
-            assert_eq!(out, "fallback");
+    assert_eq!(out, "fallback");
 
-            dom.wait_for_suspense().await;
-            let out = dioxus_ssr::render(&dom);
+    dom.wait_for_suspense().await;
+    let out = dioxus_ssr::render(&dom);
 
-            assert_eq!(out, "<div>child with future resolved</div>");
-        });
+    assert_eq!(out, "<div>child with future resolved</div>");
 
     fn app() -> Element {
         rsx! {
@@ -133,21 +123,15 @@ fn suspense_keeps_state() {
 }
 
 /// spawn doesn't run in suspense
-#[test]
-fn suspense_does_not_poll_spawn() {
-    tokio::runtime::Builder::new_current_thread()
-        .enable_time()
-        .build()
-        .unwrap()
-        .block_on(async {
-            let mut dom = VirtualDom::new(app);
-            dom.rebuild(&mut dioxus_core::NoOpMutations);
+#[tokio::test]
+async fn suspense_does_not_poll_spawn() {
+    let mut dom = VirtualDom::new(app);
+    dom.rebuild(&mut dioxus_core::NoOpMutations);
 
-            dom.wait_for_suspense().await;
-            let out = dioxus_ssr::render(&dom);
+    dom.wait_for_suspense().await;
+    let out = dioxus_ssr::render(&dom);
 
-            assert_eq!(out, "<div>child with future resolved</div>");
-        });
+    assert_eq!(out, "<div>child with future resolved</div>");
 
     fn app() -> Element {
         rsx! {
@@ -186,27 +170,21 @@ fn suspense_does_not_poll_spawn() {
 }
 
 /// suspended nodes are not mounted, so they should not run effects
-#[test]
-fn suspended_nodes_dont_trigger_effects() {
-    tokio::runtime::Builder::new_current_thread()
-        .enable_time()
-        .build()
-        .unwrap()
-        .block_on(async {
-            let mut dom = VirtualDom::new(app);
-            dom.rebuild(&mut dioxus_core::NoOpMutations);
+#[tokio::test]
+async fn suspended_nodes_dont_trigger_effects() {
+    let mut dom = VirtualDom::new(app);
+    dom.rebuild(&mut dioxus_core::NoOpMutations);
 
-            let work = async move {
-                loop {
-                    dom.wait_for_work().await;
-                    dom.render_immediate(&mut dioxus_core::NoOpMutations);
-                }
-            };
-            tokio::select! {
-                _ = work => {},
-                _ = tokio::time::sleep(std::time::Duration::from_millis(100)) => {}
-            }
-        });
+    let work = async move {
+        loop {
+            dom.wait_for_work().await;
+            dom.render_immediate(&mut dioxus_core::NoOpMutations);
+        }
+    };
+    tokio::select! {
+        _ = work => {},
+        _ = tokio::time::sleep(std::time::Duration::from_millis(100)) => {}
+    }
 
     fn app() -> Element {
         rsx! {
@@ -256,34 +234,28 @@ fn suspended_nodes_dont_trigger_effects() {
 }
 
 /// Make sure we keep any state of components when we switch from a resolved future to a suspended future
-#[test]
-fn resolved_to_suspended() {
+#[tokio::test]
+async fn resolved_to_suspended() {
     static SUSPENDED: GlobalSignal<bool> = Signal::global(|| false);
 
-    tokio::runtime::Builder::new_current_thread()
-        .enable_time()
-        .build()
-        .unwrap()
-        .block_on(async {
-            let mut dom = VirtualDom::new(app);
-            dom.rebuild(&mut dioxus_core::NoOpMutations);
+    let mut dom = VirtualDom::new(app);
+    dom.rebuild(&mut dioxus_core::NoOpMutations);
 
-            let out = dioxus_ssr::render(&dom);
+    let out = dioxus_ssr::render(&dom);
 
-            assert_eq!(out, "rendered 1 times");
+    assert_eq!(out, "rendered 1 times");
 
-            dom.in_scope(ScopeId::ROOT, || *SUSPENDED.write() = true);
+    dom.in_scope(ScopeId::ROOT, || *SUSPENDED.write() = true);
 
-            dom.render_suspense_immediate().await;
-            let out = dioxus_ssr::render(&dom);
+    dom.render_suspense_immediate().await;
+    let out = dioxus_ssr::render(&dom);
 
-            assert_eq!(out, "fallback");
+    assert_eq!(out, "fallback");
 
-            dom.wait_for_suspense().await;
-            let out = dioxus_ssr::render(&dom);
+    dom.wait_for_suspense().await;
+    let out = dioxus_ssr::render(&dom);
 
-            assert_eq!(out, "rendered 3 times");
-        });
+    assert_eq!(out, "rendered 3 times");
 
     fn app() -> Element {
         rsx! {
@@ -321,23 +293,19 @@ fn resolved_to_suspended() {
 }
 
 /// Make sure suspense tells the renderer that a suspense boundary was resolved
-#[test]
-fn suspense_tracks_resolved() {
-    tokio::runtime::Builder::new_current_thread()
-        .enable_time()
-        .build()
-        .unwrap()
-        .block_on(async {
-            let mut dom = VirtualDom::new(app);
-            dom.rebuild(&mut dioxus_core::NoOpMutations);
+#[tokio::test]
+async fn suspense_tracks_resolved() {
+    todo!();
 
-            dom.render_suspense_immediate().await;
-            dom.wait_for_suspense_work().await;
-            assert_eq!(
-                dom.render_suspense_immediate().await,
-                vec![ScopeId(ScopeId::ROOT.0 + 1)]
-            );
-        });
+    let mut dom = VirtualDom::new(app);
+    dom.rebuild(&mut dioxus_core::NoOpMutations);
+
+    dom.render_suspense_immediate().await;
+    dom.wait_for_suspense_work().await;
+    assert_eq!(
+        dom.render_suspense_immediate().await,
+        vec![ScopeId(ScopeId::ROOT.0 + 1)]
+    );
 
     fn app() -> Element {
         rsx! {
@@ -373,8 +341,8 @@ fn suspense_tracks_resolved() {
 }
 
 // Regression test for https://github.com/DioxusLabs/dioxus/issues/2783
-#[test]
-fn toggle_suspense() {
+#[tokio::test]
+async fn toggle_suspense() {
     use dioxus::prelude::*;
 
     fn app() -> Element {
@@ -409,69 +377,63 @@ fn toggle_suspense() {
         }
     }
 
-    tokio::runtime::Builder::new_current_thread()
-        .enable_time()
-        .build()
-        .unwrap()
-        .block_on(async {
-            let mut dom = VirtualDom::new(app);
-            let mutations = dom.rebuild_to_vec();
+    let mut dom = VirtualDom::new(app);
+    let mutations = dom.rebuild_to_vec();
 
-            // First create goodbye world
-            println!("{:#?}", mutations);
-            assert_eq!(
-                mutations.edits,
-                [
-                    Mutation::LoadTemplate { index: 0, id: ElementId(1) },
-                    Mutation::AppendChildren { id: ElementId(0), m: 1 }
-                ]
-            );
+    // First create goodbye world
+    println!("{:#?}", mutations);
+    assert_eq!(
+        mutations.edits,
+        [
+            Mutation::LoadTemplate { index: 0, id: ElementId(1) },
+            Mutation::AppendChildren { id: ElementId(0), m: 1 }
+        ]
+    );
 
-            dom.mark_dirty(ScopeId::ROOT);
-            let mutations = dom.render_immediate_to_vec();
+    dom.mark_dirty(ScopeId::ROOT);
+    let mutations = dom.render_immediate_to_vec();
 
-            // Then replace that with nothing
-            println!("{:#?}", mutations);
-            assert_eq!(
-                mutations.edits,
-                [
-                    Mutation::CreatePlaceholder { id: ElementId(2) },
-                    Mutation::ReplaceWith { id: ElementId(1), m: 1 },
-                ]
-            );
+    // Then replace that with nothing
+    println!("{:#?}", mutations);
+    assert_eq!(
+        mutations.edits,
+        [
+            Mutation::CreatePlaceholder { id: ElementId(2) },
+            Mutation::ReplaceWith { id: ElementId(1), m: 1 },
+        ]
+    );
 
-            dom.wait_for_work().await;
-            let mutations = dom.render_immediate_to_vec();
+    dom.wait_for_work().await;
+    let mutations = dom.render_immediate_to_vec();
 
-            // Then replace it with a placeholder
-            println!("{:#?}", mutations);
-            assert_eq!(
-                mutations.edits,
-                [
-                    Mutation::LoadTemplate { index: 0, id: ElementId(1) },
-                    Mutation::ReplaceWith { id: ElementId(2), m: 1 },
-                ]
-            );
+    // Then replace it with a placeholder
+    println!("{:#?}", mutations);
+    assert_eq!(
+        mutations.edits,
+        [
+            Mutation::LoadTemplate { index: 0, id: ElementId(1) },
+            Mutation::ReplaceWith { id: ElementId(2), m: 1 },
+        ]
+    );
 
-            dom.wait_for_work().await;
-            let mutations = dom.render_immediate_to_vec();
+    dom.wait_for_work().await;
+    let mutations = dom.render_immediate_to_vec();
 
-            // Then replace it with the resolved node
-            println!("{:#?}", mutations);
-            assert_eq!(
-                mutations.edits,
-                [
-                    Mutation::CreatePlaceholder { id: ElementId(2,) },
-                    Mutation::ReplaceWith { id: ElementId(1,), m: 1 },
-                    Mutation::LoadTemplate { index: 0, id: ElementId(1) },
-                    Mutation::ReplaceWith { id: ElementId(2), m: 1 },
-                ]
-            );
-        });
+    // Then replace it with the resolved node
+    println!("{:#?}", mutations);
+    assert_eq!(
+        mutations.edits,
+        [
+            Mutation::CreatePlaceholder { id: ElementId(2,) },
+            Mutation::ReplaceWith { id: ElementId(1,), m: 1 },
+            Mutation::LoadTemplate { index: 0, id: ElementId(1) },
+            Mutation::ReplaceWith { id: ElementId(2), m: 1 },
+        ]
+    );
 }
 
-#[test]
-fn nested_suspense_resolves_client() {
+#[tokio::test]
+async fn nested_suspense_resolves_client() {
     use Mutation::*;
 
     async fn poll_three_times() {

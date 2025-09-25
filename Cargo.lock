@@ -5397,6 +5397,7 @@ dependencies = [
  "slotmap",
  "subsecond",
  "sysinfo 0.35.2",
+ "thiserror 2.0.12",
  "tokio",
  "tracing",
  "tracing-fluent-assertions",

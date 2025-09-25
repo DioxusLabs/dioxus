@@ -5,6 +5,8 @@ use crate::Runtime;
 /// A guard for a new runtime. This must be used to override the current runtime when importing components from a dynamic library that has it's own runtime.
 ///
 /// ```rust
+/// #![allow(non_snake_case)]
+///
 /// use dioxus::prelude::*;
 /// use dioxus_core::{Runtime, RuntimeGuard};
 ///
@@ -13,7 +15,7 @@ use crate::Runtime;
 /// }
 ///
 /// fn app() -> Element {
-///     rsx! { Component { runtime: Runtime::current().unwrap() } }
+///     rsx! { Component { runtime: Runtime::current() } }
 /// }
 ///
 /// // In a dynamic library

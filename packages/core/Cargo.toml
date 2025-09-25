@@ -38,6 +38,7 @@ tracing-subscriber = { workspace = true, default-features = true }
 tracing-fluent-assertions = "0.3.0"
 pretty_assertions = { workspace = true }
 sysinfo = "0.35.2"
+thiserror = { workspace = true }
 
 [dev-dependencies.web-sys]
 version = "0.3.77"

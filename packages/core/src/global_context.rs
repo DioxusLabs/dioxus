@@ -32,7 +32,7 @@ pub fn vdom_is_rendering() -> bool {
 ///         match reqwest::get("https://api.example.com").await {
 ///             Ok(_) => unimplemented!(),
 ///             // You can explicitly throw an error into a scope with throw_error
-///             Err(err) => ScopeId::ROOT.throw_error(err)
+///             Err(err) => dioxus_core::throw_error(err)
 ///         }
 ///     });
 ///
