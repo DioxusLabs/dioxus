@@ -1,70 +1,75 @@
-// use anyhow::bail;
-// use dioxus::prelude::*;
-// use dioxus_core::{generation, AttributeValue, ElementId, Mutation};
-// use pretty_assertions::assert_eq;
-// use std::future::poll_fn;
-// use std::task::Poll;
+use anyhow::bail;
+use dioxus::prelude::*;
+use dioxus_core::{generation, AttributeValue, ElementId, Mutation};
+use pretty_assertions::assert_eq;
+use std::future::poll_fn;
+use std::task::Poll;
 
-// #[tokio::test]
-// async fn suspense_holds_dom() {
-//     tracing_subscriber::fmt()
-//         .with_env_filter("info,dioxus_core=trace,dioxus=trace")
-//         .without_time()
-//         .init();
+#[tokio::test]
+async fn suspense_holds_dom() {
+    tracing_subscriber::fmt()
+        .with_env_filter("debug,dioxus_core=trace,dioxus=trace")
+        .without_time()
+        .init();
 
-//     let mut dom = VirtualDom::new(app);
-//     dom.rebuild_in_place();
+    let mut dom = VirtualDom::new(app);
+    dom.rebuild_in_place();
 
-//     // make sure the suspense is registered - the dom is suspended
-//     assert!(dom.suspended_tasks_remaining());
+    // make sure the suspense is registered - the dom is suspended
+    assert!(dom.suspended_tasks_remaining());
 
-//     // Wait for the first tier of suspense to resolve
-//     dom.wait_for_suspense().await;
+    // Wait for the first tier of suspense to resolve
+    dom.wait_for_suspense(&mut dioxus_core::NoOpMutations).await;
 
-//     // Assert no more suspense - not always the case but true for this test
-//     assert!(!dom.suspended_tasks_remaining());
+    // Assert no more suspense - not always the case but true for this test
+    assert!(!dom.suspended_tasks_remaining());
 
-//     // Render out the DOM now that it's no longer stuck and then print it
-//     dom.render_immediate(&mut dioxus_core::NoOpMutations);
+    // Render out the DOM now that it's no longer stuck and then print it
+    dom.render_immediate(&mut dioxus_core::NoOpMutations);
 
-//     println!("{}", dioxus_ssr::render(&dom));
-// }
+    println!("{}", dioxus_ssr::render(&dom));
+}
 
-// fn app() -> Element {
-//     let mut ready = use_signal(|| false);
+fn app() -> Element {
+    info!("Rendering app!!");
 
-//     let suspense_err = use_hook(|| {
-//         suspend(spawn(async move {
-//             tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-//             ready.set(true);
-//             println!("ready!");
-//         }))
-//     });
+    let mut ready = use_signal(|| false);
 
-//     debug!("suspense: {:?}", suspense_err);
-//     debug!("ready: {}", ready());
+    let suspense_err = use_hook(|| {
+        let task = spawn(async move {
+            info!("Starting future...");
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            ready.set(true);
+            info!("Future is finished~!")
+        });
+        suspend(task)
+    });
 
-//     if !ready() {
-//         return suspense_err;
-//     }
+    info!("suspense: {:?}", suspense_err);
+    info!("ready: {}", ready());
 
-//     rsx! {
-//         div { "Hello!" }
-//     }
-// }
+    if !ready() {
+        debug!("Suspending because of suspense.");
+        return suspense_err;
+    }
 
-// #[tokio::test]
-// async fn error_while_suspense() {}
+    rsx! {
+        div { "Hello!" }
+    }
+}
 
-// fn app2() -> Element {
-//     let mut ready = use_signal(|| false);
+#[tokio::test]
+async fn error_while_suspense() {}
 
-//     use_hook(|| {
-//         suspend(spawn(async move {
-//             tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-//             ready.set(true);
-//         }))
-//     })?;
+fn app2() -> Element {
+    let mut ready = use_signal(|| false);
 
-//     Err(anyhow::anyhow!("oh no").into())
-// }
+    use_hook(|| {
+        suspend(spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            ready.set(true);
+        }))
+    })?;
+
+    Err(anyhow::anyhow!("oh no").into())
+}

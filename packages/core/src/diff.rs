@@ -15,8 +15,8 @@ use crate::{
     },
     nodes::{VNode, VNodeMount},
     scopes::{LastRenderedNode, ScopeId},
-    Attribute, AttributeValue, DynamicNode, Element, ElementId, Runtime, SuspenseContext,
-    TemplateNode, VComponent, VText, VirtualDom, WriteMutations,
+    Attribute, AttributeValue, DynamicNode, Element, ElementId, RenderError, Runtime,
+    SuspenseContext, TemplateNode, VComponent, VText, VirtualDom, WriteMutations,
 };
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::{
@@ -41,12 +41,7 @@ pub(crate) struct Fiber<'a, 'b, M: WriteMutations> {
 
 impl<'a, 'b, M: WriteMutations> Fiber<'a, 'b, M> {
     /// When we create a new fiber, we keep track of the current suspense context
-    pub(crate) fn new(
-        runtime: &'a Rc<Runtime>,
-        dom: &'a mut VirtualDom,
-        to: &'b mut M,
-        write: bool,
-    ) -> Self {
+    pub(crate) fn new(runtime: &'a Rc<Runtime>, dom: &'a mut VirtualDom, to: &'b mut M) -> Self {
         Self {
             runtime,
             dom,
@@ -72,15 +67,44 @@ impl<'a, 'b, M: WriteMutations> Fiber<'a, 'b, M> {
 
     fn diff_scope(&mut self, scope: ScopeId, new_nodes: LastRenderedNode) {
         self.runtime.clone().with_scope_on_stack(scope, || {
-            // We don't diff the nodes if the scope is suspended or has an error
-            let Ok(new_real_nodes) = &new_nodes.as_element_ref() else {
-                return;
-            };
-
-            let scope_state = &mut self.dom.scopes[scope.0];
+            // If the node was previously suspended and now it's not, we need to load its placeholder
+            // and start writing mutations again.
+            //
+            // This will happen by default by processing its placeholder node as normal, but we also
+            // need to register the suspense as resolved with its suspense boundary.
+            // match new_nodes.as_element_ref() {
+            //     Ok(_) => todo!(),
+            //     Err(RenderError::Suspended(node)) => todo!(),
+            //     Err(RenderError::Suspended(node)) => todo!(),
+            // }
+            // // We don't diff the nodes if the scope is suspended or has an error
+            // let Ok(new_real_nodes) = &new_nodes.as_element_ref() else {
+            //     return;
+            // };
 
             // Load the old and new rendered nodes
-            let old = scope_state.last_rendered_node.take().unwrap();
+            let old = self.dom.scopes[scope.0].last_rendered_node.take().unwrap();
+
+            // We need to emit some internal work based on the state change
+            // This would be to go wake up the suspense and error boundaries that are affected
+            use LastRenderedNode::{Placeholder as Pl, Real as Rl};
+            use RenderError::{Error as Er, Suspended as Su};
+            match (&old, &new_nodes) {
+                // In these cases, nothing needs to be done since the work is already queued.
+                (Rl(_), Rl(_)) => { /* nothing, fine transition */ }
+                (Rl(_), Pl(_, Er(_))) => { /* nothing, error already thrown, update is queued */ }
+                (Rl(_), Pl(_, Su(_))) => { /* nothing, suspense already thrown, update  queued */ }
+                (Pl(_, Er(_)), Rl(_)) => { /* nothing, error must be cleared by now */ }
+                (Pl(_, Su(_)), Pl(_, Su(_))) => { /* nothing, still suspended */ }
+                (Pl(_, Er(_)), Pl(_, Er(_))) => { /* nothing, still errored */ }
+                (Pl(_, Er(_)), Pl(_, Su(_))) => { /* suspense already pinged */ }
+
+                (Pl(_, Su(_)), Rl(_)) => { /* go wake up suspense boundary */ }
+                (Pl(_, Su(_)), Pl(_, Er(_))) => { /* go wake up suspense boundary */ }
+            }
+
+            // We load up the new node as its placeholder or real node
+            let new_real_nodes = new_nodes.as_vnode();
 
             // If there are suspended scopes, we need to check if the scope is suspended before we diff it
             // If it is suspended, we need to diff it but write the mutations nothing
@@ -88,12 +112,9 @@ impl<'a, 'b, M: WriteMutations> Fiber<'a, 'b, M> {
             self.diff_node(old.as_vnode(), new_real_nodes);
             self.dom.scopes[scope.0].last_rendered_node = Some(new_nodes);
 
-            if self.runtime.scope_should_mount(scope) {
+            if self.runtime.should_run_mount_tasks(scope) {
                 self.runtime.get_scope(scope).mount(self.runtime);
             }
-            // if self.write && self.runtime.scope_should_mount(scope) {
-            //     self.runtime.get_scope(scope).mount(self.runtime);
-            // }
         })
     }
 
@@ -119,7 +140,7 @@ impl<'a, 'b, M: WriteMutations> Fiber<'a, 'b, M> {
             self.dom.scopes[scope.0].last_rendered_node = Some(new_nodes);
 
             // if self.write && self.runtime.scope_should_mount(scope) {
-            if self.runtime.scope_should_mount(scope) {
+            if self.runtime.should_run_mount_tasks(scope) {
                 self.dom.runtime.get_scope(scope).mount(self.runtime);
             }
 

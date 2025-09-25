@@ -6,8 +6,8 @@ use crate::{
 };
 use dioxus_cli_config::base_path;
 use dioxus_core::{
-    has_context, provide_error_boundary, DynamicNode, ErrorContext, Runtime, ScopeId,
-    SuspenseContext, VNode, VirtualDom,
+    has_context, provide_error_boundary, DynamicNode, ErrorContext, NoOpMutations, Runtime,
+    ScopeId, SuspenseContext, VNode, VirtualDom,
 };
 use dioxus_fullstack_core::history::provide_fullstack_history_context;
 use dioxus_fullstack_core::{HydrationContext, SerializedHydrationData};
@@ -185,7 +185,7 @@ impl SsrRendererPool {
             // If streaming is disabled, wait for the virtual dom to finish all suspense work
             // before rendering anything
             if streaming_mode == StreamingMode::Disabled {
-                virtual_dom.wait_for_suspense().await;
+                virtual_dom.wait_for_suspense(&mut NoOpMutations).await;
             } else {
                 // Otherwise, just wait for the streaming context to signal the initial chunk is ready
                 loop {
@@ -203,7 +203,9 @@ impl SsrRendererPool {
                     virtual_dom.wait_for_suspense_work().await;
 
                     // Do that async work
-                    virtual_dom.render_suspense_immediate().await;
+                    virtual_dom
+                        .render_suspense_immediate(&mut NoOpMutations)
+                        .await;
                 }
             }
 
@@ -279,7 +281,9 @@ impl SsrRendererPool {
             // After the initial render, we need to resolve suspense
             while virtual_dom.suspended_tasks_remaining() {
                 virtual_dom.wait_for_suspense_work().await;
-                let resolved_suspense_nodes = virtual_dom.render_suspense_immediate().await;
+                let resolved_suspense_nodes = virtual_dom
+                    .render_suspense_immediate(&mut NoOpMutations)
+                    .await;
 
                 // Just rerender the resolved nodes
                 for scope in resolved_suspense_nodes {

@@ -1,3 +1,4 @@
+use crate::ErrorContext;
 use crate::{arena::ElementRef, CapturedError};
 use crate::{guard::RuntimeError, nodes::VNodeMount};
 use crate::{
@@ -11,7 +12,7 @@ use crate::{
     Task,
 };
 use crate::{scheduler::ScopeOrder, RuntimeGuard};
-use crate::{scope_context::SuspenseLocation, ErrorContext};
+// use crate::{scope_context::SuspenseLocation, ErrorContext};
 use crate::{AttributeValue, ElementId, Event};
 use generational_box::{AnyStorage, Owner};
 use slab::Slab;
@@ -38,7 +39,7 @@ pub struct Runtime {
 
     // We use this to track the current suspense location. Generally this lines up with the scope stack, but it may be different for children of a suspense boundary
     // This stack should only be modified through [`Runtime::with_suspense_location`] to ensure that the stack is correctly restored
-    suspense_stack: RefCell<Vec<SuspenseLocation>>,
+    // suspense_stack: RefCell<Vec<SuspenseLocation>>,
 
     // We use this to track the current task
     pub(crate) current_task: Cell<Option<Task>>,
@@ -80,7 +81,7 @@ impl Runtime {
             rendering: Cell::new(false),
             scope_states: Default::default(),
             scope_stack: Default::default(),
-            suspense_stack: Default::default(),
+            // suspense_stack: Default::default(),
             current_task: Default::default(),
             tasks: Default::default(),
             suspended_tasks: Default::default(),
@@ -202,22 +203,22 @@ impl Runtime {
         o
     }
 
-    /// Get the current suspense location
-    pub(crate) fn current_suspense_location(&self) -> Option<SuspenseLocation> {
-        self.suspense_stack.borrow().last().cloned()
-    }
+    // /// Get the current suspense location
+    // pub(crate) fn current_suspense_location(&self) -> Option<SuspenseLocation> {
+    //     self.suspense_stack.borrow().last().cloned()
+    // }
 
-    /// Run a callback a [`SuspenseLocation`] at the top of the stack
-    pub(crate) fn with_suspense_location<O>(
-        &self,
-        suspense_location: SuspenseLocation,
-        f: impl FnOnce() -> O,
-    ) -> O {
-        self.suspense_stack.borrow_mut().push(suspense_location);
-        let o = f();
-        self.suspense_stack.borrow_mut().pop();
-        o
-    }
+    // /// Run a callback a [`SuspenseLocation`] at the top of the stack
+    // pub(crate) fn with_suspense_location<O>(
+    //     &self,
+    //     suspense_location: SuspenseLocation,
+    //     f: impl FnOnce() -> O,
+    // ) -> O {
+    //     self.suspense_stack.borrow_mut().push(suspense_location);
+    //     let o = f();
+    //     self.suspense_stack.borrow_mut().pop();
+    //     o
+    // }
 
     /// Run a callback with the current scope at the top of the stack
     pub(crate) fn with_scope_on_stack<O>(&self, scope: ScopeId, f: impl FnOnce() -> O) -> O {
@@ -243,7 +244,7 @@ impl Runtime {
     /// Pop a scope off the stack
     fn pop_scope(&self) {
         self.scope_stack.borrow_mut().pop();
-        self.suspense_stack.borrow_mut().pop();
+        // self.suspense_stack.borrow_mut().pop();
     }
 
     /// Get the state for any scope given its ID
@@ -305,17 +306,21 @@ impl Runtime {
     }
 
     /// Check if we should render a scope
-    pub(crate) fn scope_should_mount(&self, scope_id: ScopeId) -> bool {
+    pub(crate) fn should_run_mount_tasks(&self, scope_id: ScopeId) -> bool {
         // If there are no suspended futures, we know the scope is not and we can skip context checks
         if self.suspended_tasks.get() == 0 {
             return true;
         }
 
-        // If this is not a suspended scope, and we are under a frozen context, then we should
+        // If this is not a suspended scope, and we are under a frozen context, then we should ... what, what should we doooo
         let scopes = self.scope_states.borrow();
         let scope = &scopes[scope_id.0].as_ref().unwrap();
+        let ctx = scope.consume_context::<SuspenseContext>().unwrap();
+        !ctx.has_suspended_tasks()
+        // !ctx.is_suspended()
+
         // !matches!(scope.suspense_location(), SuspenseLocation::UnderSuspense(suspense) if suspense.is_suspended())
-        todo!()
+        // todo!()
     }
 
     /// Call a listener inside the VirtualDom with data from outside the VirtualDom. **The ElementId passed in must be the id of an element with a listener, not a static node or a text node.**
@@ -515,6 +520,11 @@ impl Runtime {
     /// Mark the current scope as dirty, causing it to re-render
     pub fn needs_update(&self, scope: ScopeId) {
         self.get_scope(scope).needs_update();
+    }
+
+    /// Notify the runtime that a suspense boundary and its descendents have changed state
+    pub(crate) fn suspense_event(&self, scope: ScopeId) {
+        self.sender.unbounded_send(SchedulerMsg::Suspense(scope));
     }
 
     /// Create a subscription that schedules a future render for the reference component. Unlike [`Self::needs_update`], this function will work outside of the dioxus runtime.

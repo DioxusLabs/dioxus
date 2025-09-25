@@ -1,4 +1,4 @@
-use crate::{innerlude::*, scope_context::SuspenseLocation};
+use crate::innerlude::*;
 
 /// Properties for the [`SuspenseBoundary()`] component.
 #[allow(non_camel_case_types)]
@@ -265,23 +265,23 @@ pub use SuspenseBoundary_completions::Component::SuspenseBoundary;
 // }
 
 impl SuspenseContext {
-    /// Run a closure under a suspense boundary
-    pub(crate) fn under_suspense_boundary<O>(&self, runtime: &Runtime, f: impl FnOnce() -> O) -> O {
-        runtime.with_suspense_location(SuspenseLocation::UnderSuspense(self.clone()), f)
-    }
+    // /// Run a closure under a suspense boundary
+    // pub(crate) fn under_suspense_boundary<O>(&self, runtime: &Runtime, f: impl FnOnce() -> O) -> O {
+    //     runtime.with_suspense_location(SuspenseLocation::UnderSuspense(self.clone()), f)
+    // }
 
-    /// Run a closure under a suspense placeholder
-    pub(crate) fn in_suspense_placeholder<O>(&self, runtime: &Runtime, f: impl FnOnce() -> O) -> O {
-        runtime.with_suspense_location(SuspenseLocation::InSuspensePlaceholder(self.clone()), f)
-    }
+    // /// Run a closure under a suspense placeholder
+    // pub(crate) fn in_suspense_placeholder<O>(&self, runtime: &Runtime, f: impl FnOnce() -> O) -> O {
+    //     runtime.with_suspense_location(SuspenseLocation::InSuspensePlaceholder(self.clone()), f)
+    // }
 
-    /// Try to get a suspense boundary from a scope id
-    pub fn downcast_suspense_boundary_from_scope(
-        runtime: &Runtime,
-        scope_id: ScopeId,
-    ) -> Option<Self> {
-        runtime
-            .try_get_scope(scope_id)
-            .and_then(|scope| scope.suspense_boundary())
-    }
+    // /// Try to get a suspense boundary from a scope id
+    // pub fn downcast_suspense_boundary_from_scope(
+    //     runtime: &Runtime,
+    //     scope_id: ScopeId,
+    // ) -> Option<Self> {
+    //     runtime
+    //         .try_get_scope(scope_id)
+    //         .and_then(|scope| scope.suspense_boundary())
+    // }
 }

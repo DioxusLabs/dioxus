@@ -1,8 +1,8 @@
-use crate::innerlude::Effect;
 use crate::innerlude::ScopeOrder;
 use crate::innerlude::{remove_future, spawn, Runtime};
 use crate::scope_context::ScopeStatus;
-use crate::scope_context::SuspenseLocation;
+use crate::{innerlude::Effect, SuspenseContext};
+// use crate::scope_context::SuspenseLocation;
 use crate::ScopeId;
 use futures_util::task::ArcWake;
 use slotmap::DefaultKey;
@@ -307,13 +307,14 @@ impl Runtime {
 
         if let Some(task) = &task {
             // Remove the task from suspense
-            if let TaskType::Suspended { boundary } = &*task.ty.borrow() {
+            if let TaskType::Suspended { boundary, .. } = &*task.ty.borrow() {
                 self.suspended_tasks.set(self.suspended_tasks.get() - 1);
-                if let SuspenseLocation::UnderSuspense(boundary) = boundary {
-                    boundary.remove_suspended_task(id);
-                    // self.inner.id.get().needs_update();
-                    todo!()
-                }
+                todo!("Remove task from suspense boundary");
+                // if let SuspenseLocation::UnderSuspense(boundary) = boundary {
+                //     boundary.remove_suspended_task(id);
+                //     // self.inner.id.get().needs_update();
+                //     todo!()
+                // }
             }
 
             // Remove the task from pending work. We could reuse the slot before the task is polled and discarded so we need to remove it from pending work instead of filtering out dead tasks when we try to poll them
@@ -332,7 +333,22 @@ impl Runtime {
     pub(crate) fn task_runs_during_suspense(&self, task: Task) -> bool {
         let borrow = self.tasks.borrow();
         let task: Option<&LocalTask> = borrow.get(task.id).map(|t| &**t);
-        matches!(task, Some(LocalTask { ty, .. }) if ty.borrow().runs_during_suspense())
+        matches!(task, Some(LocalTask { ty, .. }) if matches!(*ty.borrow(), TaskType::Isomorphic | TaskType::Suspended { .. }) )
+    }
+
+    /// Mark this task as a suspense task that will run during suspense
+    pub(crate) fn mark_as_suspense_task(
+        &self,
+        task: Task,
+        scope: ScopeId,
+        boundary: SuspenseContext,
+    ) -> bool {
+        let task = self.tasks.borrow().get(task.id).cloned().unwrap();
+        let old_ty = task.ty.replace(TaskType::Suspended {
+            boundary,
+            in_component: scope,
+        });
+        matches!(old_ty, TaskType::Suspended { .. })
     }
 }
 
@@ -346,26 +362,15 @@ pub(crate) struct LocalTask {
     active: Cell<bool>,
 }
 
-impl LocalTask {
-    /// Suspend the task, returns true if the task was already suspended
-    pub(crate) fn suspend(&self, boundary: SuspenseLocation) -> bool {
-        // Make this a suspended task so it runs during suspense
-        let old_type = self.ty.replace(TaskType::Suspended { boundary });
-        matches!(old_type, TaskType::Suspended { .. })
-    }
-}
-
 #[derive(Clone)]
 enum TaskType {
     ClientOnly,
-    Suspended { boundary: SuspenseLocation },
+    Suspended {
+        boundary: SuspenseContext,
+        in_component: ScopeId,
+    },
+    // Suspended { boundary: SuspenseLocation },
     Isomorphic,
-}
-
-impl TaskType {
-    fn runs_during_suspense(&self) -> bool {
-        matches!(self, TaskType::Isomorphic | TaskType::Suspended { .. })
-    }
 }
 
 /// The type of message that can be sent to the scheduler.
@@ -378,6 +383,10 @@ pub(crate) enum SchedulerMsg {
 
     /// Immediate updates from Components that mark them as dirty
     Immediate(ScopeId),
+
+    /// A suspended component has either resolved or created new suspended children.
+    /// Re-run that suspense context's update logic and re-render if needed.
+    Suspense(ScopeId),
 
     /// A task has woken and needs to be progressed
     TaskNotified(slotmap::DefaultKey),

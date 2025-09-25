@@ -111,10 +111,10 @@ impl SuspenseContext {
         !self.inner.suspended_tasks.borrow().is_empty()
     }
 
-    /// Check if the suspense boundary is currently rendered as suspended
-    pub fn is_suspended(&self) -> bool {
-        self.inner.suspended_nodes.borrow().is_some()
-    }
+    // /// Check if the suspense boundary is currently rendered as suspended
+    // pub fn is_suspended(&self) -> bool {
+    //     self.inner.suspended_nodes.borrow().is_some()
+    // }
 
     /// Add a suspended task, returning true if it was added and false if it was already present
     pub(crate) fn add_suspended_task(&self, task: SuspendedFuture) -> bool {
@@ -181,22 +181,39 @@ impl Debug for SuspenseBoundaryInner {
 
 /// A task spawned with `spawn` that has suspended its tree.
 #[derive(Clone, PartialEq, Debug, Hash, Eq)]
-pub struct SuspendedFuture(TaskId);
+pub struct SuspendedFuture {
+    task: TaskId,
+    // scope: ScopeId,
+}
 
 impl SuspendedFuture {
     /// Create a new suspended future
     pub fn new(task: Task) -> Self {
-        Self(task.id)
+        // pub fn new(task: Task, scope: ScopeId) -> Self {
+        Self {
+            task: task.id,
+            // scope,
+        }
     }
 
     /// Get the task that was suspended
     pub fn task(&self) -> Task {
-        Task::from_id(self.0)
+        Task::from_id(self.task)
     }
+
+    // pub fn scope(&self) -> ScopeId {
+    //     self.scope
+    // }
 }
 
 impl std::fmt::Display for SuspendedFuture {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "SuspendedFuture {{ task: {:?} }}", self.task())
+        write!(
+            f,
+            "SuspendedFuture {{ task: {:?} }}",
+            // "SuspendedFuture {{ task: {:?}, scope: {:?} }}",
+            self.task(),
+            // self.scope()
+        )
     }
 }

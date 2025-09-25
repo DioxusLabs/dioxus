@@ -20,25 +20,25 @@ pub(crate) enum ScopeStatus {
     },
 }
 
-#[derive(Debug, Clone, Default)]
-pub(crate) enum SuspenseLocation {
-    #[default]
-    NotSuspended,
-    SuspenseBoundary(SuspenseContext),
-    UnderSuspense(SuspenseContext),
-    InSuspensePlaceholder(SuspenseContext),
-}
+// #[derive(Debug, Clone, Default)]
+// pub(crate) enum SuspenseLocation {
+//     #[default]
+//     NotSuspended,
+//     SuspenseBoundary(SuspenseContext),
+//     UnderSuspense(SuspenseContext),
+//     InSuspensePlaceholder(SuspenseContext),
+// }
 
-impl SuspenseLocation {
-    pub(crate) fn suspense_context(&self) -> Option<&SuspenseContext> {
-        match self {
-            SuspenseLocation::InSuspensePlaceholder(context) => Some(context),
-            SuspenseLocation::UnderSuspense(context) => Some(context),
-            SuspenseLocation::SuspenseBoundary(context) => Some(context),
-            _ => None,
-        }
-    }
-}
+// impl SuspenseLocation {
+//     pub(crate) fn suspense_context(&self) -> Option<&SuspenseContext> {
+//         match self {
+//             SuspenseLocation::InSuspensePlaceholder(context) => Some(context),
+//             SuspenseLocation::UnderSuspense(context) => Some(context),
+//             SuspenseLocation::SuspenseBoundary(context) => Some(context),
+//             _ => None,
+//         }
+//     }
+// }
 
 /// A component's state separate from its props.
 ///
@@ -113,12 +113,12 @@ impl Scope {
         self.render_count.set(count.wrapping_add(1));
     }
 
-    /// Get the suspense location of this scope
-    pub(crate) fn suspense_location(&self) -> SuspenseLocation {
-        todo!()
-        // consume_context::<>()
-        // self.suspense_boundary.clone()
-    }
+    // /// Get the suspense location of this scope
+    // pub(crate) fn suspense_location(&self) -> SuspenseLocation {
+    //     todo!()
+    //     // consume_context::<>()
+    //     // self.suspense_boundary.clone()
+    // }
 
     /// If this scope is a suspense boundary, return the suspense context
     pub(crate) fn suspense_boundary(&self) -> Option<SuspenseContext> {
@@ -131,11 +131,11 @@ impl Scope {
 
     /// Check if a node should run during suspense
     pub(crate) fn should_run_during_suspense(&self) -> bool {
-        if let Some(context) = self.consume_context::<SuspenseContext>() {
-            return !context.frozen();
-        }
+        !self.consume_context::<SuspenseContext>().unwrap().frozen()
 
-        todo!();
+        // if let Some(context) =  {
+        //     return !context.frozen();
+        // }
         // let Some(context) = self.suspense_boundary.suspense_context() else {
         //     return false;
         // };

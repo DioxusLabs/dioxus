@@ -1,4 +1,4 @@
-use crate::innerlude::{CapturedError, RuntimeError};
+use crate::innerlude::{CapturedError, RenderError, RuntimeError};
 use crate::{
     innerlude::SuspendedFuture, runtime::Runtime, Element, ScopeId, SuspenseContext, Task,
 };
@@ -81,9 +81,9 @@ pub fn provide_root_context<T: 'static + Clone>(value: T) -> T {
 
 /// Suspended the current component on a specific task and then return None
 pub fn suspend(task: Task) -> Element {
-    Err(crate::innerlude::RenderError::Suspended(
-        SuspendedFuture::new(task),
-    ))
+    let scope = current_scope_id();
+    Err(RenderError::Suspended(SuspendedFuture::new(task)))
+    // Err(RenderError::Suspended(SuspendedFuture::new(task, scope)))
 }
 
 /// Start a new future on the same thread as the rest of the VirtualDom.
