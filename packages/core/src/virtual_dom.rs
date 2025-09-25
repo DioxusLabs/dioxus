@@ -615,6 +615,7 @@ impl VirtualDom {
             match work {
                 Work::PollTask(task) => {
                     _ = self.runtime.handle_task_wakeup(task);
+
                     // Make sure we process any new events
                     self.queue_events();
                 }
@@ -628,7 +629,14 @@ impl VirtualDom {
             }
         }
 
-        self.runtime.finish_render();
+        // If there are new effects we can run, send a message to the scheduler to run them
+        // (after the renderer has applied the mutations)
+        if !self.runtime.pending_effects.borrow().is_empty() {
+            self.runtime
+                .sender
+                .unbounded_send(SchedulerMsg::EffectQueued)
+                .expect("Scheduler should exist");
+        }
     }
 
     /// [`Self::render_immediate`] to a vector of mutations for testing purposes

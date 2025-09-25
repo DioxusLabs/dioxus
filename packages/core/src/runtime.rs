@@ -304,16 +304,6 @@ impl Runtime {
         self.get_scope(scope).owner()
     }
 
-    /// Finish a render. This will mark all effects as ready to run and send the render signal.
-    pub(crate) fn finish_render(&self) {
-        // If there are new effects we can run, send a message to the scheduler to run them (after the renderer has applied the mutations)
-        if !self.pending_effects.borrow().is_empty() {
-            self.sender
-                .unbounded_send(SchedulerMsg::EffectQueued)
-                .expect("Scheduler should exist");
-        }
-    }
-
     /// Check if we should render a scope
     pub(crate) fn scope_should_mount(&self, scope_id: ScopeId) -> bool {
         // If there are no suspended futures, we know the scope is not and we can skip context checks
