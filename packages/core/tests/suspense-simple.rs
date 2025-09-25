@@ -14,11 +14,20 @@ async fn suspense_holds_dom() {
 
     let mut dom = VirtualDom::new(app);
     dom.rebuild_in_place();
+
+    // make sure the suspense is registered - the dom is suspended
+    assert!(dom.suspended_tasks_remaining());
+
+    // Wait for the first tier of suspense to resolve
     dom.wait_for_suspense().await;
+
+    // Assert no more suspense - not always the case but true for this test
+    assert!(!dom.suspended_tasks_remaining());
+
+    // Render out the DOM now that it's no longer stuck and then print it
     dom.render_immediate(&mut dioxus_core::NoOpMutations);
 
-    let out = dioxus_ssr::render(&dom);
-    println!("{}", out);
+    println!("{}", dioxus_ssr::render(&dom));
 }
 
 fn app() -> Element {

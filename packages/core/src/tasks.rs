@@ -73,7 +73,6 @@ impl Task {
                 false
             }
         })
-        .unwrap_or_default()
     }
 
     /// Wake the task.
@@ -84,13 +83,12 @@ impl Task {
                 .sender
                 .unbounded_send(SchedulerMsg::TaskNotified(self.id))
         })
-        .unwrap_or_else(|e| panic!("{}", e))
     }
 
     /// Poll the task immediately.
     #[track_caller]
     pub fn poll_now(&self) -> Poll<()> {
-        Runtime::with(|rt| rt.handle_task_wakeup(*self)).unwrap_or_else(|e| panic!("{}", e))
+        Runtime::with(|rt| rt.handle_task_wakeup(*self))
     }
 
     /// Set the task as active or paused.
@@ -106,7 +104,6 @@ impl Task {
                 }
             }
         })
-        .unwrap_or_else(|e| panic!("{}", e))
     }
 }
 

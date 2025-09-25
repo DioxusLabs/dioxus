@@ -73,31 +73,6 @@ impl Properties for () {
     }
 }
 
-/// Root properties never need to be memoized, so we can use a dummy implementation.
-pub(crate) struct RootProps<P>(pub P);
-
-impl<P> Clone for RootProps<P>
-where
-    P: Clone,
-{
-    fn clone(&self) -> Self {
-        Self(self.0.clone())
-    }
-}
-
-impl<P> Properties for RootProps<P>
-where
-    P: Clone + 'static,
-{
-    type Builder = P;
-    fn builder() -> Self::Builder {
-        unreachable!("Root props technically are never built")
-    }
-    fn memoize(&mut self, _other: &Self) -> bool {
-        true
-    }
-}
-
 // We allow components to use the () generic parameter if they have no props. This impl enables the "build" method
 // that the macros use to anonymously complete prop construction.
 pub struct EmptyBuilder;

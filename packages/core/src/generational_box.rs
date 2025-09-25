@@ -85,7 +85,7 @@ pub fn current_owner<S: AnyStorage>() -> Owner<S> {
     }
 
     // Otherwise get the owner from the current scope
-    current_scope_id().expect("in a virtual dom").owner()
+    current_scope_id().owner()
 }
 
 impl ScopeId {

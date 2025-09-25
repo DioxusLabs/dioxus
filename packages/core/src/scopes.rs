@@ -13,6 +13,17 @@ use std::{cell::Ref, rc::Rc};
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct ScopeId(pub usize);
 
+impl ScopeId {
+    /// The ScopeId of the topmost scope in the tree which contains an ErrorContext and a SuspenseContext.
+    pub const ROOT: ScopeId = ScopeId(0);
+
+    pub(crate) const PLACEHOLDER: ScopeId = ScopeId(usize::MAX);
+
+    pub(crate) fn is_placeholder(&self) -> bool {
+        *self == Self::PLACEHOLDER
+    }
+}
+
 impl std::fmt::Debug for ScopeId {
     #[allow(unused_mut)]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -32,19 +43,6 @@ impl std::fmt::Debug for ScopeId {
     }
 }
 
-impl ScopeId {
-    /// The ScopeId of the topmost scope in the tree.
-    /// This will be higher up in the tree than [`ScopeId::APP`] because dioxus inserts a default [`crate::SuspenseBoundary`] and [`crate::ErrorBoundary`] at the root of the tree.
-    // ScopeId(0) is the root scope wrapper
-    pub const ROOT: ScopeId = ScopeId(0);
-
-    pub(crate) const PLACEHOLDER: ScopeId = ScopeId(usize::MAX);
-
-    pub(crate) fn is_placeholder(&self) -> bool {
-        *self == Self::PLACEHOLDER
-    }
-}
-
 /// A component's rendered state.
 ///
 /// This state erases the type of the component's props. It is used to store the state of a component in the runtime.
@@ -56,45 +54,6 @@ pub struct ScopeState {
     pub(crate) last_rendered_node: Option<LastRenderedNode>,
     pub(crate) props: BoxedAnyProps,
     pub(crate) reactive_context: ReactiveContext,
-}
-
-#[derive(Clone, PartialEq, Debug)]
-pub enum LastRenderedNode {
-    Real(VNode),
-    Placeholder(VNode, RenderError),
-}
-
-impl std::ops::Deref for LastRenderedNode {
-    type Target = VNode;
-
-    fn deref(&self) -> &Self::Target {
-        match self {
-            LastRenderedNode::Real(vnode) => vnode,
-            LastRenderedNode::Placeholder(vnode, _err) => vnode,
-        }
-    }
-}
-
-impl LastRenderedNode {
-    pub fn new(node: Element) -> Self {
-        match node {
-            Ok(vnode) => LastRenderedNode::Real(vnode),
-            Err(err) => LastRenderedNode::Placeholder(VNode::placeholder(), err),
-        }
-    }
-
-    pub fn as_vnode(&self) -> &VNode {
-        match self {
-            LastRenderedNode::Real(vnode) => vnode,
-            LastRenderedNode::Placeholder(vnode, _err) => vnode,
-        }
-    }
-}
-
-impl Drop for ScopeState {
-    fn drop(&mut self) {
-        self.runtime.remove_scope(self.context_id);
-    }
 }
 
 impl ScopeState {
@@ -128,5 +87,44 @@ impl ScopeState {
 
     pub(crate) fn state(&self) -> Ref<'_, Scope> {
         self.runtime.get_state(self.context_id).unwrap()
+    }
+}
+
+impl Drop for ScopeState {
+    fn drop(&mut self) {
+        self.runtime.remove_scope(self.context_id);
+    }
+}
+
+#[derive(Clone, PartialEq, Debug)]
+pub enum LastRenderedNode {
+    Real(VNode),
+    Placeholder(VNode, RenderError),
+}
+
+impl LastRenderedNode {
+    pub fn new(node: Element) -> Self {
+        match node {
+            Ok(vnode) => LastRenderedNode::Real(vnode),
+            Err(err) => LastRenderedNode::Placeholder(VNode::placeholder(), err),
+        }
+    }
+
+    pub fn as_vnode(&self) -> &VNode {
+        match self {
+            LastRenderedNode::Real(vnode) => vnode,
+            LastRenderedNode::Placeholder(vnode, _err) => vnode,
+        }
+    }
+}
+
+impl std::ops::Deref for LastRenderedNode {
+    type Target = VNode;
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            LastRenderedNode::Real(vnode) => vnode,
+            LastRenderedNode::Placeholder(vnode, _err) => vnode,
+        }
     }
 }

@@ -33,52 +33,26 @@ use std::{
     rc::Rc,
 };
 
-/// A task that has been suspended which may have an optional loading placeholder
-#[derive(Clone, PartialEq, Debug)]
-pub struct SuspendedFuture {
-    origin: ScopeId,
-    task: TaskId,
-}
-
-impl SuspendedFuture {
-    /// Create a new suspended future
-    pub fn new(task: Task) -> Self {
-        Self {
-            task: task.id,
-            origin: current_scope_id().unwrap_or_else(|e| panic!("{}", e)),
-        }
-    }
-
-    /// Get the task that was suspended
-    pub fn task(&self) -> Task {
-        Task::from_id(self.task)
-    }
-
-    /// Create a deep clone of this suspended future
-    pub(crate) fn deep_clone(&self) -> Self {
-        Self {
-            task: self.task,
-            origin: self.origin,
-        }
-    }
-}
-
-impl std::fmt::Display for SuspendedFuture {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "SuspendedFuture {{ task: {:?} }}", self.task)
-    }
-}
-
 /// A context with information about suspended components
 #[derive(Debug, Clone)]
 pub struct SuspenseContext {
     inner: Rc<SuspenseBoundaryInner>,
 }
 
-impl PartialEq for SuspenseContext {
-    fn eq(&self, other: &Self) -> bool {
-        Rc::ptr_eq(&self.inner, &other.inner)
-    }
+/// A boundary that will capture any errors from child components
+struct SuspenseBoundaryInner {
+    suspended_tasks: RefCell<Vec<SuspendedFuture>>,
+
+    id: Cell<ScopeId>,
+
+    /// The nodes that are suspended under this boundary
+    suspended_nodes: RefCell<Option<VNode>>,
+
+    /// On the server, you can only resolve a suspense boundary once. This is used to track if the suspense boundary has been resolved and if it should be frozen
+    frozen: Cell<bool>,
+
+    /// Closures queued to run after the suspense boundary is resolved
+    after_suspense_resolved: RefCell<Vec<Box<dyn FnOnce()>>>,
 }
 
 impl SuspenseContext {
@@ -142,10 +116,19 @@ impl SuspenseContext {
         self.inner.suspended_nodes.borrow().is_some()
     }
 
-    /// Add a suspended task
-    pub(crate) fn add_suspended_task(&self, task: SuspendedFuture) {
-        self.inner.suspended_tasks.borrow_mut().push(task);
+    /// Add a suspended task, returning true if it was added and false if it was already present
+    pub(crate) fn add_suspended_task(&self, task: SuspendedFuture) -> bool {
+        let mut tasks = self.inner.suspended_tasks.borrow_mut();
+
+        if tasks.iter().any(|t| t == &task) {
+            return false;
+        }
+
+        tasks.push(task);
+
         self.inner.id.get().needs_update();
+
+        true
     }
 
     /// Remove a suspended task
@@ -153,7 +136,7 @@ impl SuspenseContext {
         self.inner
             .suspended_tasks
             .borrow_mut()
-            .retain(|t| t.task != task.id);
+            .retain(|t| t.task() != task);
         self.inner.id.get().needs_update();
     }
 
@@ -182,16 +165,10 @@ impl SuspenseContext {
     }
 }
 
-/// A boundary that will capture any errors from child components
-pub struct SuspenseBoundaryInner {
-    suspended_tasks: RefCell<Vec<SuspendedFuture>>,
-    id: Cell<ScopeId>,
-    /// The nodes that are suspended under this boundary
-    suspended_nodes: RefCell<Option<VNode>>,
-    /// On the server, you can only resolve a suspense boundary once. This is used to track if the suspense boundary has been resolved and if it should be frozen
-    frozen: Cell<bool>,
-    /// Closures queued to run after the suspense boundary is resolved
-    after_suspense_resolved: RefCell<Vec<Box<dyn FnOnce()>>>,
+impl PartialEq for SuspenseContext {
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.inner, &other.inner)
+    }
 }
 
 impl Debug for SuspenseBoundaryInner {
@@ -202,5 +179,27 @@ impl Debug for SuspenseBoundaryInner {
             .field("suspended_nodes", &self.suspended_nodes)
             .field("frozen", &self.frozen)
             .finish()
+    }
+}
+
+/// A task spawned with `spawn` that has suspended its tree.
+#[derive(Clone, PartialEq, Debug, Hash, Eq)]
+pub struct SuspendedFuture(TaskId);
+
+impl SuspendedFuture {
+    /// Create a new suspended future
+    pub fn new(task: Task) -> Self {
+        Self(task.id)
+    }
+
+    /// Get the task that was suspended
+    pub fn task(&self) -> Task {
+        Task::from_id(self.0)
+    }
+}
+
+impl std::fmt::Display for SuspendedFuture {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "SuspendedFuture {{ task: {:?} }}", self.task())
     }
 }

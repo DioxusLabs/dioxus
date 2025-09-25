@@ -95,11 +95,18 @@ impl Runtime {
             .ok_or(RuntimeError::new())
     }
 
+    /// Get the current runtime
+    pub fn try_current() -> Result<Rc<Self>, RuntimeError> {
+        RUNTIMES
+            .with(|stack| stack.borrow().last().cloned())
+            .ok_or(RuntimeError::new())
+    }
+
     /// Wrap a closure so that it always runs in the runtime that is currently active
     pub fn wrap_closure<'a, I, O>(f: impl Fn(I) -> O + 'a) -> impl Fn(I) -> O + 'a {
         let current_runtime = Self::current().unwrap();
-        let current_scope = current_runtime.current_scope_id().ok();
-        move |input| match current_scope {
+
+        move |input| match current_runtime.try_current_scope_id().ok() {
             Some(scope) => current_runtime.on_scope(scope, || f(input)),
             None => {
                 let _runtime_guard = RuntimeGuard::new(current_runtime.clone());
@@ -126,6 +133,8 @@ impl Runtime {
     }
 
     /// Create a scope context. This slab is synchronized with the scope slab.
+    ///
+    /// todo: this is inefficient, we should be `push` and then take advantage of geometric growth
     pub(crate) fn create_scope(&self, context: Scope) {
         let id = context.id;
         let mut scopes = self.scope_states.borrow_mut();
@@ -166,7 +175,11 @@ impl Runtime {
     }
 
     /// Get the current scope id
-    pub(crate) fn current_scope_id(&self) -> Result<ScopeId, RuntimeError> {
+    pub(crate) fn current_scope_id(&self) -> ScopeId {
+        *self.scope_stack.borrow().last().unwrap()
+    }
+
+    pub(crate) fn try_current_scope_id(&self) -> Result<ScopeId, RuntimeError> {
         self.scope_stack
             .borrow()
             .last()
@@ -254,20 +267,32 @@ impl Runtime {
     }
 
     /// Runs a function with the current runtime
-    pub(crate) fn with<R>(f: impl FnOnce(&Runtime) -> R) -> Result<R, RuntimeError> {
+    pub(crate) fn with<R>(f: impl FnOnce(&Runtime) -> R) -> R {
+        let rt = Self::current().expect("Runtime should exist");
+        f(&*rt)
+    }
+
+    /// Runs a function with the current runtime
+    pub(crate) fn try_with<R>(f: impl FnOnce(&Runtime) -> R) -> Result<R, RuntimeError> {
         Self::current().map(|r| f(&r))
     }
 
     /// Runs a function with the current scope
-    pub(crate) fn with_current_scope<R>(f: impl FnOnce(&Scope) -> R) -> Result<R, RuntimeError> {
+    pub(crate) fn with_current_scope<R>(f: impl FnOnce(&Scope) -> R) -> R {
         Self::with(|rt| {
-            rt.current_scope_id()
-                .ok()
-                .and_then(|scope| rt.get_state(scope).map(|sc| f(&sc)))
+            let scope = rt.current_scope_id();
+            rt.get_state(scope).map(|sc| f(&sc)).unwrap()
         })
-        .ok()
-        .flatten()
-        .ok_or(RuntimeError::new())
+    }
+
+    pub(crate) fn try_with_current_scope<R>(
+        f: impl FnOnce(&Scope) -> R,
+    ) -> Result<R, RuntimeError> {
+        todo!()
+        // Self::with(|rt| {
+        //     let scope = rt.current_scope_id();
+        //     rt.get_state(scope).map(|sc| f(&sc))
+        // })
     }
 
     /// Runs a function with the current scope
@@ -276,7 +301,6 @@ impl Runtime {
         callback: impl FnOnce(&Scope) -> R,
     ) -> Result<R, RuntimeError> {
         Self::with(|rt| rt.get_state(scope).map(|scopestate| callback(&scopestate)))
-            .expect("Runtime should exist")
             .ok_or(RuntimeError::new())
     }
 

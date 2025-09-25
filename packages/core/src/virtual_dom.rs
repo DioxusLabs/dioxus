@@ -2,7 +2,11 @@
 //!
 //! This module provides the primary mechanics to create a hook-based, concurrent VDOM for Rust.
 
-use crate::scopes::LastRenderedNode;
+use crate::ErrorContext;
+use crate::{
+    any_props::BoxedAnyProps, scope_context::Scope, scopes::LastRenderedNode, ReactiveContext,
+    RenderError,
+};
 use crate::{
     arena::ElementId,
     innerlude::{NoOpMutations, SchedulerMsg, ScopeOrder, ScopeState, VProps, WriteMutations},
@@ -11,13 +15,12 @@ use crate::{
     ComponentFunction, Element, Mutations, SuspenseContext,
 };
 use crate::{diff::Fiber, innerlude::Work};
-use crate::{properties::RootProps, ErrorBoundary, ErrorContext};
 use crate::{Task, VComponent};
 use futures_util::StreamExt;
 use slab::Slab;
 use std::collections::BTreeSet;
 use std::{any::Any, rc::Rc};
-use tracing::instrument;
+use tracing::{instrument, trace_span};
 
 /// A virtual node system that progresses user events and diffs UI trees.
 ///
@@ -314,7 +317,7 @@ impl VirtualDom {
             resolved_scopes: Default::default(),
         };
 
-        let root = dom.new_scope(root.props, "app");
+        let root = dom.new_scope(root.props, "app", None);
 
         // Capture errors
         root.state().provide_context(ErrorContext::new(root.id()));
@@ -343,10 +346,10 @@ impl VirtualDom {
     }
 
     /// Run a closure inside the dioxus runtime
-    #[instrument(skip(self, f), level = "trace", name = "VirtualDom::in_runtime")]
-    pub fn in_runtime<O>(&self, f: impl FnOnce() -> O) -> O {
+    #[instrument(skip(self, callback), level = "trace", name = "VirtualDom::in_runtime")]
+    pub fn in_runtime<O>(&self, callback: impl FnOnce() -> O) -> O {
         let _runtime = RuntimeGuard::new(self.runtime.clone());
-        f()
+        callback()
     }
 
     /// Run a closure inside a specific scope
@@ -776,6 +779,109 @@ impl VirtualDom {
         subsecond::register_handler(std::sync::Arc::new(move || {
             _ = sender.unbounded_send(SchedulerMsg::AllDirty);
         }));
+    }
+
+    /// Allocate a new scope in the virtualdom. This does not run the scope, it just allocates it,
+    /// and thus takes care of all the bookkeeping.
+    pub(crate) fn new_scope(
+        &mut self,
+        props: BoxedAnyProps,
+        name: &'static str,
+        parent: Option<ScopeId>,
+    ) -> &mut ScopeState {
+        let height = match parent.and_then(|id| self.runtime.get_state(id)) {
+            Some(parent) => parent.height() + 1,
+            None => 0,
+        };
+
+        let entry = self.scopes.vacant_entry();
+        let id = ScopeId(entry.key());
+
+        let scope_runtime = Scope::new(name, id, parent, height);
+        let reactive_context = ReactiveContext::new_for_scope(&scope_runtime, &self.runtime);
+        self.runtime.create_scope(scope_runtime);
+
+        entry.insert(ScopeState {
+            runtime: self.runtime.clone(),
+            context_id: id,
+            props,
+            last_rendered_node: Default::default(),
+            reactive_context,
+        })
+    }
+
+    /// Run a scope and return the rendered nodes. This will not modify the DOM or update the last rendered node of the scope.
+    #[tracing::instrument(skip(self), level = "trace", name = "VirtualDom::run_scope")]
+    #[track_caller]
+    pub(crate) fn run_scope(&mut self, scope_id: ScopeId) -> Element {
+        self.runtime.clone().with_scope_on_stack(scope_id, || {
+            let scope = &self.scopes[scope_id.0];
+
+            scope.state().hook_index.set(0);
+
+            // Run all pre-render hooks
+            for pre_run in scope.state().before_render.borrow_mut().iter_mut() {
+                pre_run();
+            }
+
+            // Actually run the user's component function
+            let element = trace_span!("render", scope = %scope.state().name).in_scope(|| {
+                scope.reactive_context.reset_and_run_in(|| {
+                    // After the component is run, we need to do a deep clone of the VNode. This
+                    // breaks any references to mounted parts of the VNode from the component.
+                    // Without this, the component could store a mounted version of the VNode
+                    // which causes a lot of issues for diffing because we expect only the old
+                    // or new node to be mounted.
+                    //
+                    // For example, the dog app example returns rsx from a resource. Every time
+                    // the component runs, it returns a clone of the last rsx that was returned from
+                    // that resource. If we don't deep clone the VNode and the resource changes, then
+                    // we could end up diffing two different versions of the same mounted node
+                    let render_return = scope.props.render().map(|node| node.deep_clone());
+
+                    // now actually handle the return value
+                    match render_return.as_ref() {
+                        // If the render was successful, we can move the render generation forward by one
+                        Ok(_) => scope.state().forward_render_count(),
+
+                        // If there was an error, we throw it up the nearest error boundary
+                        Err(RenderError::Error(e)) => scope_id.throw_error(e.clone()),
+
+                        // If the task suspended, we need to add it to the nearest suspense boundary
+                        Err(RenderError::Suspended(e)) => {
+                            // Get the nearest suspense boundary
+                            let boundary = self
+                                .runtime
+                                .get_state(scope_id)
+                                .unwrap()
+                                .consume_context::<SuspenseContext>()
+                                .unwrap();
+
+                            // Add the suspended task to the boundary, and then increment the global suspended task count
+                            // if it was actually added (it might have already been added before...)
+                            if boundary.add_suspended_task(e.clone()) {
+                                self.runtime
+                                    .suspended_tasks
+                                    .set(self.runtime.suspended_tasks.get() + 1);
+                            }
+                        }
+                    };
+
+                    render_return
+                })
+            });
+
+            // Run all post-render hooks
+            for post_run in scope.state().after_render.borrow_mut().iter_mut() {
+                post_run();
+            }
+
+            // remove this scope from dirty scopes
+            self.dirty_scopes
+                .remove(&ScopeOrder::new(scope.state().height, scope_id));
+
+            element
+        })
     }
 }
 

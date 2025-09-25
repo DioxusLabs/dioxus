@@ -1,4 +1,5 @@
 use crate::{
+    consume_context,
     innerlude::{CapturedError, SchedulerMsg, SuspenseContext},
     runtime::RuntimeError,
     Runtime, ScopeId, Task,
@@ -10,6 +11,7 @@ use std::{
     cell::{Cell, RefCell},
     future::Future,
     sync::Arc,
+    thread::current,
 };
 
 pub(crate) enum ScopeStatus {
@@ -95,7 +97,7 @@ impl Scope {
     }
 
     fn sender(&self) -> futures_channel::mpsc::UnboundedSender<SchedulerMsg> {
-        Runtime::with(|rt| rt.sender.clone()).unwrap_or_else(|e| panic!("{}", e))
+        Runtime::with(|rt| rt.sender.clone())
     }
 
     /// Mount the scope and queue any pending effects if it is not already mounted
@@ -109,10 +111,18 @@ impl Scope {
         }
     }
 
-    // /// Get the suspense location of this scope
-    // pub(crate) fn suspense_location(&self) -> SuspenseLocation {
-    //     self.suspense_boundary.clone()
-    // }
+    /// Push forward the render count
+    pub(crate) fn forward_render_count(&self) {
+        let count = self.render_count.get();
+        self.render_count.set(count.wrapping_add(1));
+    }
+
+    /// Get the suspense location of this scope
+    pub(crate) fn suspense_location(&self) -> SuspenseLocation {
+        todo!()
+        // consume_context::<>()
+        // self.suspense_boundary.clone()
+    }
 
     /// If this scope is a suspense boundary, return the suspense context
     pub(crate) fn suspense_boundary(&self) -> Option<SuspenseContext> {
@@ -211,7 +221,7 @@ impl Scope {
         }
 
         let mut search_parent = self.parent_id;
-        let cur_runtime = Runtime::with(|runtime| {
+        let ctx = Runtime::with(|runtime| {
             while let Some(parent_id) = search_parent {
                 let Some(parent) = runtime.get_state(parent_id) else {
                     tracing::error!("Parent scope {:?} not found", parent_id);
@@ -231,17 +241,15 @@ impl Scope {
             None
         });
 
-        match cur_runtime.ok().flatten() {
-            Some(ctx) => Some(ctx),
-            None => {
-                tracing::trace!(
-                    "context {} ({:?}) not found",
-                    std::any::type_name::<T>(),
-                    std::any::TypeId::of::<T>()
-                );
-                None
-            }
+        if ctx.is_none() {
+            tracing::trace!(
+                "context {} ({:?}) not found",
+                std::any::type_name::<T>(),
+                std::any::TypeId::of::<T>()
+            );
         }
+
+        ctx
     }
 
     /// Inject a `Box<dyn Any>` into the context of this scope
@@ -324,7 +332,6 @@ impl Scope {
                 .unwrap()
                 .provide_context(context)
         })
-        .expect("Runtime to exist")
     }
 
     /// Start a new future on the same thread as the rest of the VirtualDom.
@@ -354,21 +361,21 @@ impl Scope {
     /// });
     /// ```
     pub fn spawn_isomorphic(&self, fut: impl Future<Output = ()> + 'static) -> Task {
-        let id = Runtime::with(|rt| rt.spawn_isomorphic(self.id, fut)).expect("Runtime to exist");
+        let id = Runtime::with(|rt| rt.spawn_isomorphic(self.id, fut));
         self.spawned_tasks.borrow_mut().insert(id);
         id
     }
 
     /// Spawns the future and returns the [`Task`]
     pub fn spawn(&self, fut: impl Future<Output = ()> + 'static) -> Task {
-        let id = Runtime::with(|rt| rt.spawn(self.id, fut)).expect("Runtime to exist");
+        let id = Runtime::with(|rt| rt.spawn(self.id, fut));
         self.spawned_tasks.borrow_mut().insert(id);
         id
     }
 
     /// Queue an effect to run after the next render
     pub fn queue_effect(&self, f: impl FnOnce() + 'static) {
-        Runtime::with(|rt| rt.queue_effect(self.id, f)).expect("Runtime to exist");
+        Runtime::with(|rt| rt.queue_effect(self.id, f));
     }
 
     /// Store a value between renders. The foundational hook for all other hooks.
@@ -540,13 +547,14 @@ impl Scope {
 }
 
 impl ScopeId {
-    /// Get the current scope id
-    pub fn current_scope_id(self) -> Result<ScopeId, RuntimeError> {
-        Runtime::with(|rt| rt.current_scope_id().ok())
-            .ok()
-            .flatten()
-            .ok_or(RuntimeError::new())
-    }
+    // /// Get the current scope id
+    // pub fn current_scope_id(self) -> Result<ScopeId, RuntimeError> {
+    //     todo!()
+    //     // Runtime::with(|rt| rt.current_scope_id().ok())
+    //     //     .ok()
+    //     //     .flatten()
+    //     //     .ok_or(RuntimeError::new())
+    // }
 
     /// Consume context from the current scope
     pub fn consume_context<T: 'static + Clone>(self) -> Option<T> {
@@ -559,8 +567,6 @@ impl ScopeId {
             rt.get_state(scope_id)
                 .and_then(|cx| cx.consume_context::<T>())
         })
-        .ok()
-        .flatten()
     }
 
     /// Check if the current scope has a context
@@ -659,9 +665,9 @@ impl ScopeId {
             cx.insert_error(error)
         } else {
             tracing::error!(
-                    "Tried to throw an error into an error boundary, but failed to locate a boundary: {:?}",
-                    error
-                )
+                "Tried to throw an error into an error boundary, but failed to locate a boundary: {:?}",
+                error
+            )
         }
     }
 

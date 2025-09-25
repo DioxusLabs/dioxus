@@ -653,9 +653,11 @@ impl<'a, 'b, M: WriteMutations> Fiber<'a, 'b, M> {
 
         // If the scopeid is a placeholder, we need to load up a new scope for this vcomponent. If it's already mounted, then we can just use that
         if scope_id.is_placeholder() {
+            let parent_id = self.runtime.current_scope_id();
+
             scope_id = self
                 .dom
-                .new_scope(component.props.duplicate(), component.name)
+                .new_scope(component.props.duplicate(), component.name, Some(parent_id))
                 .state()
                 .id;
 

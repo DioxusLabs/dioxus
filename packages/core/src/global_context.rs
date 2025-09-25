@@ -7,17 +7,19 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 /// Get the current scope id
-pub fn current_scope_id() -> Result<ScopeId, RuntimeError> {
-    Runtime::with(|rt| rt.current_scope_id().ok())
-        .ok()
-        .flatten()
-        .ok_or(RuntimeError::new())
+pub fn current_scope_id() -> ScopeId {
+    todo!()
+    // Runtime::with(|rt| rt.current_scope_id()).ok_or(RuntimeError::new())
+}
+pub fn try_current_scope_id() -> Result<ScopeId, RuntimeError> {
+    todo!()
+    // Runtime::with(|rt| rt.current_scope_id()).ok_or(RuntimeError::new())
 }
 
 #[doc(hidden)]
 /// Check if the virtual dom is currently inside of the body of a component
 pub fn vdom_is_rendering() -> bool {
-    Runtime::with(|rt| rt.rendering.get()).unwrap_or_default()
+    Runtime::with(|rt| rt.rendering.get())
 }
 
 /// Throw a [`CapturedError`] into the current scope. The error will bubble up to the nearest [`crate::ErrorBoundary()`] or the root of the app.
@@ -38,30 +40,22 @@ pub fn vdom_is_rendering() -> bool {
 /// }
 /// ```
 pub fn throw_error(error: impl Into<CapturedError> + 'static) {
-    current_scope_id()
-        .unwrap_or_else(|e| panic!("{}", e))
-        .throw_error(error)
+    current_scope_id().throw_error(error)
 }
 
 /// Get the suspense context the current scope is in
 pub fn suspense_context() -> Option<SuspenseContext> {
-    current_scope_id()
-        .unwrap_or_else(|e| panic!("{}", e))
-        .suspense_context()
+    current_scope_id().suspense_context()
 }
 
 /// Consume context from the current scope
 pub fn try_consume_context<T: 'static + Clone>() -> Option<T> {
     Runtime::with_current_scope(|cx| cx.consume_context::<T>())
-        .ok()
-        .flatten()
 }
 
 /// Consume context from the current scope
 pub fn consume_context<T: 'static + Clone>() -> T {
     Runtime::with_current_scope(|cx| cx.consume_context::<T>())
-        .ok()
-        .flatten()
         .unwrap_or_else(|| panic!("Could not find context {}", std::any::type_name::<T>()))
 }
 
@@ -71,25 +65,21 @@ pub fn consume_context_from_scope<T: 'static + Clone>(scope_id: ScopeId) -> Opti
         rt.get_state(scope_id)
             .and_then(|cx| cx.consume_context::<T>())
     })
-    .ok()
-    .flatten()
 }
 
 /// Check if the current scope has a context
 pub fn has_context<T: 'static + Clone>() -> Option<T> {
     Runtime::with_current_scope(|cx| cx.has_context::<T>())
-        .ok()
-        .flatten()
 }
 
 /// Provide context to the current scope
 pub fn provide_context<T: 'static + Clone>(value: T) -> T {
-    Runtime::with_current_scope(|cx| cx.provide_context(value)).unwrap()
+    Runtime::with_current_scope(|cx| cx.provide_context(value))
 }
 
 /// Provide a context to the root scope
 pub fn provide_root_context<T: 'static + Clone>(value: T) -> T {
-    Runtime::with_current_scope(|cx| cx.provide_root_context(value)).unwrap()
+    Runtime::with_current_scope(|cx| cx.provide_root_context(value))
 }
 
 /// Suspended the current component on a specific task and then return None
@@ -128,7 +118,7 @@ pub fn suspend(task: Task) -> Element {
 ///
 #[doc = include_str!("../docs/common_spawn_errors.md")]
 pub fn spawn_isomorphic(fut: impl Future<Output = ()> + 'static) -> Task {
-    Runtime::with_current_scope(|cx| cx.spawn_isomorphic(fut)).unwrap()
+    Runtime::with_current_scope(|cx| cx.spawn_isomorphic(fut))
 }
 
 /// Spawns the future and returns the [`Task`]. This task will automatically be canceled when the component is dropped.
@@ -154,12 +144,12 @@ pub fn spawn_isomorphic(fut: impl Future<Output = ()> + 'static) -> Task {
 ///
 #[doc = include_str!("../docs/common_spawn_errors.md")]
 pub fn spawn(fut: impl Future<Output = ()> + 'static) -> Task {
-    Runtime::with_current_scope(|cx| cx.spawn(fut)).unwrap()
+    Runtime::with_current_scope(|cx| cx.spawn(fut))
 }
 
 /// Queue an effect to run after the next render. You generally shouldn't need to interact with this function directly. [use_effect](https://docs.rs/dioxus-hooks/latest/dioxus_hooks/fn.use_effect.html) will call this function for you.
 pub fn queue_effect(f: impl FnOnce() + 'static) {
-    Runtime::with_current_scope(|cx| cx.queue_effect(f)).unwrap()
+    Runtime::with_current_scope(|cx| cx.queue_effect(f))
 }
 
 /// Spawn a future that Dioxus won't clean up when this component is unmounted
@@ -311,21 +301,19 @@ pub fn remove_future(id: Task) {
 /// ```
 #[track_caller]
 pub fn use_hook<State: Clone + 'static>(initializer: impl FnOnce() -> State) -> State {
-    Runtime::with_current_scope(|cx| cx.use_hook(initializer)).unwrap()
+    Runtime::with_current_scope(|cx| cx.use_hook(initializer))
 }
 
 /// Get the current render since the inception of this component.
 ///
 /// This can be used as a helpful diagnostic when debugging hooks/renders, etc.
 pub fn generation() -> usize {
-    Runtime::with_current_scope(|cx| cx.generation()).unwrap()
+    Runtime::with_current_scope(|cx| cx.generation())
 }
 
 /// Get the parent of the current scope if it exists.
 pub fn parent_scope() -> Option<ScopeId> {
     Runtime::with_current_scope(|cx| cx.parent_id())
-        .ok()
-        .flatten()
 }
 
 /// Mark the current scope as dirty, causing it to re-render.
@@ -349,7 +337,7 @@ pub fn needs_update_any(id: ScopeId) {
 /// You should prefer [`schedule_update_any`] if you need to update multiple components.
 #[track_caller]
 pub fn schedule_update() -> Arc<dyn Fn() + Send + Sync> {
-    Runtime::with_current_scope(|cx| cx.schedule_update()).unwrap_or_else(|e| panic!("{}", e))
+    Runtime::with_current_scope(|cx| cx.schedule_update())
 }
 
 /// Schedule an update for any component given its [`ScopeId`].
@@ -362,7 +350,7 @@ pub fn schedule_update() -> Arc<dyn Fn() + Send + Sync> {
 /// If the desired behavior is to schedule invalidation of the current rendering of a component, use [`ReactiveContext`](crate::reactive_context::ReactiveContext) instead.
 #[track_caller]
 pub fn schedule_update_any() -> Arc<dyn Fn(ScopeId) + Send + Sync> {
-    Runtime::with_current_scope(|cx| cx.schedule_update_any()).unwrap_or_else(|e| panic!("{}", e))
+    Runtime::with_current_scope(|cx| cx.schedule_update_any())
 }
 
 /// Creates a callback that will be run before the component is removed.
@@ -499,5 +487,4 @@ pub fn force_all_dirty() {
             }
         });
     })
-    .expect("Runtime to exist");
 }

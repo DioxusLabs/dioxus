@@ -103,8 +103,7 @@ impl Display for CapturedPanic {
 
 /// Provide an error boundary to catch errors from child components
 pub fn provide_error_boundary() -> ErrorContext {
-    let ctx = ErrorContext::new(current_scope_id().unwrap_or_else(|e| panic!("{}", e)));
-    provide_context(ctx)
+    provide_context(ErrorContext::new(current_scope_id()))
 }
 
 /// A context with information about suspended components

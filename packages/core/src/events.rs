@@ -475,9 +475,7 @@ impl<Args: 'static, Ret: 'static> Callback<Args, Ret> {
         mut f: impl FnMut(Args) -> MaybeAsync + 'static,
     ) -> Self {
         let runtime = Runtime::current().unwrap_or_else(|e| panic!("{}", e));
-        let origin = runtime
-            .current_scope_id()
-            .unwrap_or_else(|e| panic!("{}", e));
+        let origin = runtime.current_scope_id();
         let owner = crate::innerlude::current_owner::<generational_box::UnsyncStorage>();
         let callback = owner.insert_rc(Some(ExternalListenerCallback {
             callback: Box::new(move |event: Args| f(event).spawn()),
@@ -490,9 +488,7 @@ impl<Args: 'static, Ret: 'static> Callback<Args, Ret> {
     #[track_caller]
     pub fn leak(mut f: impl FnMut(Args) -> Ret + 'static) -> Self {
         let runtime = Runtime::current().unwrap_or_else(|e| panic!("{}", e));
-        let origin = runtime
-            .current_scope_id()
-            .unwrap_or_else(|e| panic!("{}", e));
+        let origin = runtime.current_scope_id();
         let callback = GenerationalBox::leak_rc(
             Some(ExternalListenerCallback {
                 callback: Box::new(move |event: Args| f(event).spawn()),
@@ -634,7 +630,7 @@ impl<T> ListenerCallback<T> {
         MaybeAsync: SpawnIfAsync<Marker>,
     {
         Self {
-            origin: current_scope_id().expect("ListenerCallback must be created within a scope"),
+            origin: current_scope_id(),
             callback: Rc::new(RefCell::new(move |event: Event<dyn Any>| {
                 let data = event.data.downcast::<T>().unwrap();
                 f(Event {
