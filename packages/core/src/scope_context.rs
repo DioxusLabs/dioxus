@@ -1,7 +1,6 @@
 use crate::{
     consume_context,
-    innerlude::{CapturedError, SchedulerMsg, SuspenseContext},
-    runtime::RuntimeError,
+    innerlude::{CapturedError, RuntimeError, SchedulerMsg, SuspenseContext},
     Runtime, ScopeId, Task,
 };
 use generational_box::{AnyStorage, Owner};
@@ -89,7 +88,7 @@ impl Scope {
         }
     }
 
-    pub fn parent_id(&self) -> Option<ScopeId> {
+    pub(crate) fn parent_id(&self) -> Option<ScopeId> {
         self.parent_id
     }
 
@@ -145,12 +144,12 @@ impl Scope {
     }
 
     /// Mark this scope as dirty, and schedule a render for it.
-    pub fn needs_update(&self) {
+    pub(crate) fn needs_update(&self) {
         self.needs_update_any(self.id)
     }
 
     /// Mark this scope as dirty, and schedule a render for it.
-    pub fn needs_update_any(&self, id: ScopeId) {
+    pub(crate) fn needs_update_any(&self, id: ScopeId) {
         self.sender()
             .unbounded_send(SchedulerMsg::Immediate(id))
             .expect("Scheduler to exist if scope exists");
@@ -163,7 +162,7 @@ impl Scope {
     /// Note: The function returned by this method will schedule an update for the current component even if it has already updated between when `schedule_update` was called and when the returned function is called.
     /// If the desired behavior is to invalidate the current rendering of the current component (and no-op if already invalidated)
     /// [`subscribe`](crate::reactive_context::ReactiveContext::subscribe) to the [`current`](crate::reactive_context::ReactiveContext::current) [`ReactiveContext`](crate::reactive_context::ReactiveContext) instead.
-    pub fn schedule_update(&self) -> Arc<dyn Fn() + Send + Sync + 'static> {
+    pub(crate) fn schedule_update(&self) -> Arc<dyn Fn() + Send + Sync + 'static> {
         let (chan, id) = (self.sender(), self.id);
         Arc::new(move || drop(chan.unbounded_send(SchedulerMsg::Immediate(id))))
     }
@@ -176,7 +175,7 @@ impl Scope {
     ///
     /// Note: It does not matter when `schedule_update_any` is called: the returned function will invalidate what ever generation of the specified component is current when returned function is called.
     /// If the desired behavior is to schedule invalidation of the current rendering of a component, use [`ReactiveContext`](crate::reactive_context::ReactiveContext) instead.
-    pub fn schedule_update_any(&self) -> Arc<dyn Fn(ScopeId) + Send + Sync> {
+    pub(crate) fn schedule_update_any(&self) -> Arc<dyn Fn(ScopeId) + Send + Sync> {
         let chan = self.sender();
         Arc::new(move |id| {
             chan.unbounded_send(SchedulerMsg::Immediate(id)).unwrap();
@@ -184,7 +183,7 @@ impl Scope {
     }
 
     /// Get the owner for the current scope.
-    pub fn owner<S: AnyStorage>(&self) -> Owner<S> {
+    pub(crate) fn owner<S: AnyStorage>(&self) -> Owner<S> {
         match self.has_context() {
             Some(rt) => rt,
             None => {
@@ -195,7 +194,7 @@ impl Scope {
     }
 
     /// Return any context of type T if it exists on this scope
-    pub fn has_context<T: 'static + Clone>(&self) -> Option<T> {
+    pub(crate) fn has_context<T: 'static + Clone>(&self) -> Option<T> {
         self.shared_contexts
             .borrow()
             .iter()
@@ -206,7 +205,7 @@ impl Scope {
     /// Try to retrieve a shared state with type `T` from any parent scope.
     ///
     /// Clones the state if it exists.
-    pub fn consume_context<T: 'static + Clone>(&self) -> Option<T> {
+    pub(crate) fn consume_context<T: 'static + Clone>(&self) -> Option<T> {
         tracing::trace!(
             "looking for context {} ({:?}) in {:?}",
             std::any::type_name::<T>(),
@@ -291,7 +290,7 @@ impl Scope {
     ///     rsx!(div { "hello {state.0}" })
     /// }
     /// ```
-    pub fn provide_context<T: 'static + Clone>(&self, value: T) -> T {
+    pub(crate) fn provide_context<T: 'static + Clone>(&self, value: T) -> T {
         tracing::trace!(
             "providing context {} ({:?}) in {:?}",
             std::any::type_name::<T>(),
@@ -322,7 +321,7 @@ impl Scope {
     ///
     /// Note that you should be checking if the context existed before trying to provide a new one. Providing a context
     /// when a context already exists will swap the context out for the new one, which may not be what you want.
-    pub fn provide_root_context<T: 'static + Clone>(&self, context: T) -> T {
+    pub(crate) fn provide_root_context<T: 'static + Clone>(&self, context: T) -> T {
         Runtime::with(|runtime| {
             runtime
                 .get_scope(ScopeId::ROOT)
@@ -357,21 +356,21 @@ impl Scope {
     ///     }
     /// });
     /// ```
-    pub fn spawn_isomorphic(&self, fut: impl Future<Output = ()> + 'static) -> Task {
+    pub(crate) fn spawn_isomorphic(&self, fut: impl Future<Output = ()> + 'static) -> Task {
         let id = Runtime::with(|rt| rt.spawn_isomorphic(self.id, fut));
         self.spawned_tasks.borrow_mut().insert(id);
         id
     }
 
     /// Spawns the future and returns the [`Task`]
-    pub fn spawn(&self, fut: impl Future<Output = ()> + 'static) -> Task {
+    pub(crate) fn spawn(&self, fut: impl Future<Output = ()> + 'static) -> Task {
         let id = Runtime::with(|rt| rt.spawn(self.id, fut));
         self.spawned_tasks.borrow_mut().insert(id);
         id
     }
 
     /// Queue an effect to run after the next render
-    pub fn queue_effect(&self, f: impl FnOnce() + 'static) {
+    pub(crate) fn queue_effect(&self, f: impl FnOnce() + 'static) {
         Runtime::with(|rt| rt.queue_effect(self.id, f));
     }
 
@@ -393,7 +392,7 @@ impl Scope {
     /// use std::rc::Rc;
     /// use std::cell::RefCell;
     ///
-    /// pub fn Comp() -> Element {
+    /// pub(crate) fn Comp() -> Element {
     ///     let count = use_hook(|| Rc::new(RefCell::new(0)));
     ///
     ///     rsx! {
@@ -409,7 +408,7 @@ impl Scope {
     /// ```rust
     /// use dioxus::prelude::*;
     ///
-    /// pub fn Comp() -> Element {
+    /// pub(crate) fn Comp() -> Element {
     ///     let mut count = use_signal(|| 0);
     ///
     ///     rsx! {
@@ -429,7 +428,7 @@ impl Scope {
     /// use dioxus::prelude::*;
     ///
     /// // prints a greeting on the initial render
-    /// pub fn use_hello_world() {
+    /// pub(crate) fn use_hello_world() {
     ///     use_hook(|| println!("Hello, world!"));
     /// }
     /// ```
@@ -452,13 +451,16 @@ impl Scope {
     ///     inner: Signal<InnerCustomState>
     /// }
     ///
-    /// pub fn use_custom_state() -> CustomState {
+    /// pub(crate) fn use_custom_state() -> CustomState {
     ///     use_hook(|| CustomState {
     ///         inner: Signal::new(InnerCustomState(0))
     ///     })
     /// }
     /// ```
-    pub fn use_hook<State: Clone + 'static>(&self, initializer: impl FnOnce() -> State) -> State {
+    pub(crate) fn use_hook<State: Clone + 'static>(
+        &self,
+        initializer: impl FnOnce() -> State,
+    ) -> State {
         let cur_hook = self.hook_index.get();
 
         // The hook list works by keeping track of the current hook index and pushing the index forward
@@ -522,23 +524,23 @@ impl Scope {
         );
     }
 
-    pub fn push_before_render(&self, f: impl FnMut() + 'static) {
+    pub(crate) fn push_before_render(&self, f: impl FnMut() + 'static) {
         self.before_render.borrow_mut().push(Box::new(f));
     }
 
-    pub fn push_after_render(&self, f: impl FnMut() + 'static) {
+    pub(crate) fn push_after_render(&self, f: impl FnMut() + 'static) {
         self.after_render.borrow_mut().push(Box::new(f));
     }
 
     /// Get the current render since the inception of this component
     ///
     /// This can be used as a helpful diagnostic when debugging hooks/renders, etc
-    pub fn generation(&self) -> usize {
+    pub(crate) fn generation(&self) -> usize {
         self.render_count.get()
     }
 
     /// Get the height of this scope
-    pub fn height(&self) -> u32 {
+    pub(crate) fn height(&self) -> u32 {
         self.height
     }
 

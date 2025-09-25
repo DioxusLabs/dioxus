@@ -1,7 +1,6 @@
-use crate::nodes::VNodeMount;
-use crate::scheduler::ScopeOrder;
 use crate::scope_context::SuspenseLocation;
 use crate::{arena::ElementRef, CapturedError};
+use crate::{guard::RuntimeError, nodes::VNodeMount};
 use crate::{
     innerlude::{DirtyTasks, Effect},
     SuspenseContext,
@@ -12,10 +11,11 @@ use crate::{
     scopes::ScopeId,
     Task,
 };
+use crate::{scheduler::ScopeOrder, RuntimeGuard};
 use crate::{AttributeValue, ElementId, Event};
+use generational_box::{AnyStorage, Owner};
 use slab::Slab;
 use slotmap::DefaultKey;
-use std::fmt;
 use std::{any::Any, future::Future};
 use std::{
     cell::{Cell, Ref, RefCell},
@@ -184,7 +184,7 @@ impl Runtime {
             .borrow()
             .last()
             .copied()
-            .ok_or(RuntimeError { _priv: () })
+            .ok_or(RuntimeError::new())
     }
 
     /// Call this function with the current scope set to the given scope
@@ -302,6 +302,11 @@ impl Runtime {
     ) -> Result<R, RuntimeError> {
         Self::with(|rt| rt.get_scope(scope).map(|scopestate| callback(&scopestate)))
             .ok_or(RuntimeError::new())
+    }
+
+    /// Get the reactive context's owner for a given scope
+    pub fn owner_of<S: AnyStorage>(&self, scope: ScopeId) -> Owner<S> {
+        self.get_scope(scope).unwrap().owner()
     }
 
     /// Finish a render. This will mark all effects as ready to run and send the render signal.
@@ -469,7 +474,12 @@ impl Runtime {
     }
 
     /// Consume context from the current scope
-    pub fn consume_context<T: 'static + Clone>(&self, id: ScopeId) -> Option<T> {
+    pub fn consume_context<T: 'static + Clone>(&self, id: ScopeId) -> T {
+        self.get_scope(id).unwrap().consume_context::<T>().unwrap()
+    }
+
+    /// Consume context from the current scope
+    pub fn try_consume_context<T: 'static + Clone>(&self, id: ScopeId) -> Option<T> {
         self.get_scope(id).unwrap().consume_context::<T>()
     }
 
@@ -534,12 +544,6 @@ impl Runtime {
         self.get_scope(scope).unwrap().height()
     }
 
-    /// Run a closure inside of scope's runtime
-    #[track_caller]
-    pub fn in_runtime<T>(&self, scope: ScopeId, f: impl FnOnce() -> T) -> T {
-        self.with_scope_on_stack(scope, f)
-    }
-
     /// Throw a [`CapturedError`] into a scope. The error will bubble up to the nearest [`ErrorBoundary`](crate::ErrorBoundary) or the root of the app.
     ///
     /// # Examples
@@ -559,7 +563,7 @@ impl Runtime {
     /// ```
     pub fn throw_error(&self, scope: ScopeId, error: impl Into<CapturedError> + 'static) {
         let error = error.into();
-        if let Some(cx) = self.consume_context::<crate::ErrorContext>(scope) {
+        if let Some(cx) = self.try_consume_context::<crate::ErrorContext>(scope) {
             cx.insert_error(error)
         } else {
             tracing::error!(
@@ -574,112 +578,10 @@ impl Runtime {
         todo!()
         // Runtime::with_scope(*self, |cx| cx.suspense_boundary.suspense_context().cloned()).unwrap()
     }
-}
 
-/// A guard for a new runtime. This must be used to override the current runtime when importing components from a dynamic library that has it's own runtime.
-///
-/// ```rust
-/// use dioxus::prelude::*;
-/// use dioxus_core::{Runtime, RuntimeGuard};
-///
-/// fn main() {
-///     let virtual_dom = VirtualDom::new(app);
-/// }
-///
-/// fn app() -> Element {
-///     rsx! { Component { runtime: Runtime::current().unwrap() } }
-/// }
-///
-/// // In a dynamic library
-/// #[derive(Props, Clone)]
-/// struct ComponentProps {
-///    runtime: std::rc::Rc<Runtime>,
-/// }
-///
-/// impl PartialEq for ComponentProps {
-///     fn eq(&self, _other: &Self) -> bool {
-///         true
-///     }
-/// }
-///
-/// fn Component(props: ComponentProps) -> Element {
-///     use_hook(|| {
-///         let _guard = RuntimeGuard::new(props.runtime.clone());
-///     });
-///
-///     rsx! { div {} }
-/// }
-/// ```
-pub struct RuntimeGuard(());
-
-impl RuntimeGuard {
-    /// Create a new runtime guard that sets the current Dioxus runtime. The runtime will be reset when the guard is dropped
-    pub fn new(runtime: Rc<Runtime>) -> Self {
-        Runtime::push(runtime);
-        Self(())
+    /// Run a closure inside of scope's runtime
+    #[track_caller]
+    pub(crate) fn in_scope<T>(&self, scope: ScopeId, f: impl FnOnce() -> T) -> T {
+        self.with_scope_on_stack(scope, f)
     }
 }
-
-impl Drop for RuntimeGuard {
-    fn drop(&mut self) {
-        Runtime::pop();
-    }
-}
-
-/// Missing Dioxus runtime error.
-pub struct RuntimeError {
-    _priv: (),
-}
-
-impl RuntimeError {
-    #[inline(always)]
-    pub(crate) fn new() -> Self {
-        Self { _priv: () }
-    }
-}
-
-impl fmt::Debug for RuntimeError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("RuntimeError").finish()
-    }
-}
-
-impl fmt::Display for RuntimeError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "Must be called from inside a Dioxus runtime.
-
-Help: Some APIs in dioxus require a global runtime to be present.
-If you are calling one of these APIs from outside of a dioxus runtime
-(typically in a web-sys closure or dynamic library), you will need to
-grab the runtime from a scope that has it and then move it into your
-new scope with a runtime guard.
-
-For example, if you are trying to use dioxus apis from a web-sys
-closure, you can grab the runtime from the scope it is created in:
-
-```rust
-use dioxus::prelude::*;
-static COUNT: GlobalSignal<i32> = Signal::global(|| 0);
-
-#[component]
-fn MyComponent() -> Element {{
-    use_effect(|| {{
-        // Grab the runtime from the MyComponent scope
-        let runtime = Runtime::current().expect(\"Components run in the Dioxus runtime\");
-        // Move the runtime into the web-sys closure scope
-        let web_sys_closure = Closure::new(|| {{
-            // Then create a guard to provide the runtime to the closure
-            let _guard = RuntimeGuard::new(runtime);
-            // and run whatever code needs the runtime
-            tracing::info!(\"The count is: {{COUNT}}\");
-        }});
-    }})
-}}
-```"
-        )
-    }
-}
-
-impl std::error::Error for RuntimeError {}

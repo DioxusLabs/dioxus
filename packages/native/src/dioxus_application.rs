@@ -119,20 +119,20 @@ impl ApplicationHandler<BlitzShellEvent> for DioxusNativeApplication {
             let window_id = window.window_id();
             let doc = window.downcast_doc_mut::<DioxusDocument>();
 
-            doc.vdom.in_runtime(|| {
+            doc.vdom.in_runtime(|rt| {
                 let shared: Rc<dyn dioxus_document::Document> =
                     Rc::new(DioxusNativeDocument::new(self.proxy.clone(), window_id));
-                ScopeId::ROOT.provide_context(shared);
+                rt.provide_context(ScopeId::ROOT, shared);
             });
 
             // Add history
             let history_provider: Rc<dyn History> = Rc::new(MemoryHistory::default());
             doc.vdom
-                .in_runtime(move || ScopeId::ROOT.provide_context(history_provider));
+                .runtime()
+                .provide_context(ScopeId::ROOT, history_provider);
 
             // Add renderer
-            doc.vdom
-                .in_runtime(move || ScopeId::ROOT.provide_context(renderer));
+            doc.vdom.runtime().provide_context(ScopeId::ROOT, renderer);
 
             // Queue rebuild
             doc.initial_build();

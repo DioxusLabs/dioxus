@@ -116,8 +116,7 @@ impl<T, S: Storage<T>> CopyValue<T, S> {
         scope: ScopeId,
         caller: &'static std::panic::Location<'static>,
     ) -> Self {
-        let owner = scope.owner();
-
+        let owner = dioxus_core::Runtime::current().owner_of(scope);
         Self {
             value: owner.insert_rc_with_caller(value, caller),
             origin_scope: scope,

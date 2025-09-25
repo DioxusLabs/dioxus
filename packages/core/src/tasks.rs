@@ -7,7 +7,6 @@ use crate::ScopeId;
 use futures_util::task::ArcWake;
 use slotmap::DefaultKey;
 use std::marker::PhantomData;
-use std::panic;
 use std::sync::Arc;
 use std::task::Waker;
 use std::{cell::Cell, future::Future};

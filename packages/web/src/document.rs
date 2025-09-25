@@ -1,6 +1,6 @@
-use dioxus_core::provide_context;
 use dioxus_core::queue_effect;
 use dioxus_core::ScopeId;
+use dioxus_core::{provide_context, Runtime};
 use dioxus_document::{
     Document, Eval, EvalError, Evaluator, LinkProps, MetaProps, ScriptProps, StyleProps,
 };
@@ -70,14 +70,14 @@ extern "C" {
 fn init_document_with(document: impl FnOnce(), history: impl FnOnce()) {
     use dioxus_core::has_context;
 
-    ScopeId::ROOT.in_runtime(|| {
+    Runtime::current().on_scope(ScopeId::ROOT, || {
         if has_context::<Rc<dyn Document>>().is_none() {
             document();
         }
         if has_context::<Rc<dyn History>>().is_none() {
             history();
         }
-    })
+    });
 }
 
 /// Provides the Document through [`ScopeId::provide_context`].

@@ -1,5 +1,5 @@
-use dioxus_core::queue_effect;
 use dioxus_core::ScopeId;
+use dioxus_core::{queue_effect, Runtime};
 use dioxus_document::{
     create_element_in_head, Document, Eval, EvalError, Evaluator, LinkProps, MetaProps,
     ScriptProps, StyleProps,
@@ -66,16 +66,19 @@ impl Evaluator for LiveviewEvaluator {
 
 /// Provides the LiveviewDocument through [`ScopeId::provide_context`].
 pub fn init_document() {
-    let query = ScopeId::ROOT.consume_context::<QueryEngine>().unwrap();
+    let rt = Runtime::current();
+
+    let query = rt.consume_context::<QueryEngine>(ScopeId::ROOT);
     let provider: Rc<dyn Document> = Rc::new(LiveviewDocument {
         query: query.clone(),
     });
-    ScopeId::ROOT.provide_context(provider);
+    rt.provide_context(ScopeId::ROOT, provider);
+
     let history = LiveviewHistory::new(Rc::new(move |script: &str| {
         Eval::new(LiveviewEvaluator::create(query.clone(), script.to_string()))
     }));
     let history: Rc<dyn History> = Rc::new(history);
-    ScopeId::ROOT.provide_context(history);
+    rt.provide_context(ScopeId::ROOT, history);
 }
 
 /// Reprints the liveview-target's provider of evaluators.

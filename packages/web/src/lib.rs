@@ -8,6 +8,7 @@ use std::time::Duration;
 
 pub use crate::cfg::Config;
 use crate::hydration::SuspenseMessage;
+use dioxus_core::ScopeId;
 use dioxus_core::VirtualDom;
 use dom::WebsysDom;
 use futures_util::{pin_mut, select, FutureExt, StreamExt};
@@ -56,11 +57,15 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
 
     #[cfg(feature = "document")]
     if let Some(history) = web_config.history.clone() {
-        virtual_dom.in_runtime(|| dioxus_core::ScopeId::ROOT.provide_context(history));
+        use dioxus_core::ScopeId;
+
+        virtual_dom
+            .runtime()
+            .provide_context(ScopeId::ROOT, history);
     }
 
     #[cfg(feature = "document")]
-    virtual_dom.in_runtime(document::init_document);
+    virtual_dom.in_runtime(|_| document::init_document());
 
     let runtime = virtual_dom.runtime();
 
@@ -132,11 +137,11 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
                 HydrationContext::from_serialized(&hydration_data, debug_types, debug_locations);
             // If the server serialized an error into the root suspense boundary, throw it into the root scope
             if let Some(error) = server_data.error_entry().get().ok().flatten() {
-                virtual_dom.in_runtime(|| dioxus_core::ScopeId::APP.throw_error(error));
+                virtual_dom.runtime().throw_error(ScopeId::ROOT, error);
             }
             server_data.in_context(|| {
                 #[cfg(feature = "document")]
-                virtual_dom.in_runtime(|| {
+                virtual_dom.in_runtime(|_| {
                     document::init_fullstack_document();
                 });
                 virtual_dom.rebuild(&mut websys_dom);

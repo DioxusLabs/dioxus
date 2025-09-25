@@ -5,7 +5,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use dioxus_core::{provide_context, Element, ReactiveContext, ScopeId};
+use dioxus_core::{provide_context, Element, ReactiveContext, Runtime, ScopeId};
 use dioxus_history::history;
 use dioxus_signals::{CopyValue, ReadableExt, Signal, WritableExt};
 
@@ -35,20 +35,24 @@ struct RootRouterContext(Signal<Option<RouterContext>>);
 ///
 /// This will return `None` if there is no router present or the router has not been created yet.
 pub fn root_router() -> Option<RouterContext> {
-    if let Some(ctx) = ScopeId::ROOT.consume_context::<RootRouterContext>() {
+    let rt = Runtime::current();
+    if let Some(ctx) = rt.try_consume_context::<RootRouterContext>(ScopeId::ROOT) {
         ctx.0.cloned()
     } else {
-        ScopeId::ROOT.provide_context(RootRouterContext(Signal::new_in_scope(None, ScopeId::ROOT)));
+        rt.provide_context(
+            ScopeId::ROOT,
+            RootRouterContext(Signal::new_in_scope(None, ScopeId::ROOT)),
+        );
         None
     }
 }
 
 pub(crate) fn provide_router_context(ctx: RouterContext) {
     if root_router().is_none() {
-        ScopeId::ROOT.provide_context(RootRouterContext(Signal::new_in_scope(
-            Some(ctx),
+        Runtime::current().provide_context(
             ScopeId::ROOT,
-        )));
+            RootRouterContext(Signal::new_in_scope(Some(ctx), ScopeId::ROOT)),
+        );
     }
     provide_context(ctx);
 }

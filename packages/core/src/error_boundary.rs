@@ -148,6 +148,15 @@ impl ErrorContext {
     }
 }
 
+impl std::fmt::Debug for ErrorContext {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ErrorContext")
+            .field("errors", &self.errors.borrow())
+            .field("id", &self.id)
+            .finish()
+    }
+}
+
 #[allow(clippy::type_complexity)]
 #[derive(Clone)]
 pub struct ErrorHandler(Rc<dyn Fn(ErrorContext) -> Element>);

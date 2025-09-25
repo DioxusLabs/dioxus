@@ -1,4 +1,4 @@
-use crate::{innerlude::CapturedError, runtime::RuntimeError};
+use crate::innerlude::{CapturedError, RuntimeError};
 use crate::{
     innerlude::SuspendedFuture, runtime::Runtime, Element, ScopeId, SuspenseContext, Task,
 };

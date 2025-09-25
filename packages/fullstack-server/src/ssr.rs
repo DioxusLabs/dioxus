@@ -6,8 +6,8 @@ use crate::{
 };
 use dioxus_cli_config::base_path;
 use dioxus_core::{
-    has_context, provide_error_boundary, DynamicNode, ErrorContext, ScopeId, SuspenseContext,
-    VNode, VirtualDom,
+    has_context, provide_error_boundary, DynamicNode, ErrorContext, Runtime, ScopeId,
+    SuspenseContext, VNode, VirtualDom,
 };
 use dioxus_fullstack_core::history::provide_fullstack_history_context;
 use dioxus_fullstack_core::{HydrationContext, SerializedHydrationData};
@@ -208,13 +208,11 @@ impl SsrRendererPool {
             }
 
             // check if there are any errors
-            let errors = virtual_dom.in_runtime(|| {
-                ScopeId(3)
-                    .consume_context::<ErrorContext>()
-                    .expect("The root should be under an error boundary")
-                    .errors()
-                    .to_vec()
-            });
+            let errors = virtual_dom
+                .runtime()
+                .consume_context::<ErrorContext>(ScopeId::ROOT)
+                .errors()
+                .to_vec();
 
             if errors.is_empty() {
                 // If routing was successful, we can return a 200 status and render into the stream
@@ -318,7 +316,7 @@ impl SsrRendererPool {
                             suspense.freeze();
                             // Go to every child suspense boundary and add an error boundary. Since we cannot rerun any nodes above the child suspense boundary,
                             // we need to capture the errors and send them to the client as it resolves
-                            virtual_dom.in_runtime(|| {
+                            virtual_dom.in_runtime(|_| {
                                 for &suspense_scope in pending_suspense_boundary.children.iter() {
                                     Self::start_capturing_errors(suspense_scope);
                                 }
@@ -442,7 +440,7 @@ impl SsrRendererPool {
                 }
                 // Otherwise this is a root suspense boundary, so we need to start capturing errors immediately
                 else {
-                    vdom.in_runtime(|| {
+                    vdom.in_runtime(|_| {
                         Self::start_capturing_errors(scope);
                     });
                 }
@@ -457,7 +455,7 @@ impl SsrRendererPool {
     /// and send them to the client to continue bubbling up
     fn start_capturing_errors(suspense_scope: ScopeId) {
         // Add an error boundary to the scope
-        suspense_scope.in_runtime(provide_error_boundary);
+        Runtime::current().on_scope(suspense_scope, provide_error_boundary);
     }
 
     fn serialize_server_data(virtual_dom: &VirtualDom, scope: ScopeId) -> SerializedHydrationData {
@@ -485,25 +483,22 @@ impl SsrRendererPool {
     fn serialize_errors(context: &HydrationContext, vdom: &VirtualDom, scope: ScopeId) {
         // If there is an error boundary on the suspense boundary, grab the error from the context API
         // and throw it on the client so that it bubbles up to the nearest error boundary
-        let error = vdom.in_runtime(|| {
-            scope
-                .consume_context::<ErrorContext>()
-                .and_then(|error_context| error_context.errors().first().cloned())
-        });
+        let error = vdom
+            .runtime()
+            .try_consume_context::<ErrorContext>(scope)
+            .and_then(|error_context| error_context.errors().first().cloned());
         context
             .error_entry()
             .insert(&error, std::panic::Location::caller());
     }
 
     fn take_from_scope(context: &HydrationContext, vdom: &VirtualDom, scope: ScopeId) {
-        vdom.in_runtime(|| {
-            scope.in_runtime(|| {
-                // Grab any serializable server context from this scope
-                let other: Option<HydrationContext> = has_context();
-                if let Some(other) = other {
-                    context.extend(&other);
-                }
-            });
+        vdom.in_scope(scope, || {
+            // Grab any serializable server context from this scope
+            let other: Option<HydrationContext> = has_context();
+            if let Some(other) = other {
+                context.extend(&other);
+            }
         });
 
         // then continue to any children
@@ -550,7 +545,7 @@ impl SsrRendererPool {
 
         let title = {
             let document: Option<Rc<ServerDocument>> =
-                virtual_dom.in_runtime(|| ScopeId::ROOT.consume_context());
+                virtual_dom.runtime().try_consume_context(ScopeId::ROOT);
             // Collect any head content from the document provider and inject that into the head
             document.and_then(|document| document.title())
         };
@@ -564,7 +559,7 @@ impl SsrRendererPool {
         to.write_str(&index.head_after_title)?;
 
         let document: Option<Rc<ServerDocument>> =
-            virtual_dom.in_runtime(|| ScopeId::ROOT.consume_context());
+            virtual_dom.runtime().try_consume_context(ScopeId::ROOT);
         if let Some(document) = document {
             // Collect any head content from the document provider and inject that into the head
             document.render(to)?;

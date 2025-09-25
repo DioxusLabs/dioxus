@@ -16,6 +16,7 @@ pub struct ScopeId(pub usize);
 impl ScopeId {
     /// The ScopeId of the topmost scope in the tree which contains an ErrorContext and a SuspenseContext.
     pub const ROOT: ScopeId = ScopeId(0);
+    pub const APP: ScopeId = ScopeId(0);
 
     pub(crate) const PLACEHOLDER: ScopeId = ScopeId(usize::MAX);
 

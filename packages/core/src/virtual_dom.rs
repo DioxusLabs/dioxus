@@ -9,8 +9,10 @@ use crate::{
 };
 use crate::{
     arena::ElementId,
-    innerlude::{NoOpMutations, SchedulerMsg, ScopeOrder, ScopeState, VProps, WriteMutations},
-    runtime::{Runtime, RuntimeGuard},
+    innerlude::{
+        NoOpMutations, RuntimeGuard, SchedulerMsg, ScopeOrder, ScopeState, VProps, WriteMutations,
+    },
+    runtime::Runtime,
     scopes::ScopeId,
     ComponentFunction, Element, Mutations, SuspenseContext,
 };
@@ -357,7 +359,7 @@ impl VirtualDom {
 
     /// Run a closure inside a specific scope
     pub fn in_scope<T>(&self, scope: ScopeId, f: impl FnOnce() -> T) -> T {
-        self.in_runtime(|rt| rt.in_runtime(scope, f))
+        self.in_runtime(|rt| rt.in_scope(scope, f))
     }
 
     /// Build the virtualdom with a global context inserted into the base scope

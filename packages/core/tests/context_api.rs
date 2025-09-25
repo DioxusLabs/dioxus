@@ -30,14 +30,14 @@ fn state_shares() {
 
     dom.mark_dirty(ScopeId::ROOT);
     _ = dom.render_immediate_to_vec();
-    dom.in_runtime(|| {
-        assert_eq!(ScopeId::ROOT.consume_context::<i32>().unwrap(), 1);
+    dom.in_runtime(|_| {
+        assert_eq!(dom.runtime().consume_context::<i32>(ScopeId::ROOT), 1);
     });
 
     dom.mark_dirty(ScopeId::ROOT);
     _ = dom.render_immediate_to_vec();
-    dom.in_runtime(|| {
-        assert_eq!(ScopeId::ROOT.consume_context::<i32>().unwrap(), 2);
+    dom.in_runtime(|_| {
+        assert_eq!(dom.runtime().consume_context::<i32>(ScopeId::ROOT), 2);
     });
 
     dom.mark_dirty(ScopeId(ScopeId::ROOT.0 + 2));

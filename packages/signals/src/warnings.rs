@@ -1,5 +1,6 @@
 //! Warnings that can be triggered by suspicious usage of signals
 
+use dioxus_core::Runtime;
 use warnings::warning;
 
 /// A warning that is triggered when a copy value is used in a higher scope that it is owned by
@@ -10,10 +11,13 @@ pub fn copy_value_hoisted<T: 'static, S: generational_box::Storage<T> + 'static>
 ) {
     let origin_scope = value.origin_scope;
     if let Ok(current_scope) = dioxus_core::try_current_scope_id() {
+        let is_descendent_of = Runtime::current().is_descendant_of(current_scope, origin_scope);
+
         // If the current scope is a descendant of the origin scope or is the same scope, we don't need to warn
-        if origin_scope == current_scope || current_scope.is_descendant_of(origin_scope) {
+        if origin_scope == current_scope || is_descendent_of {
             return;
         }
+
         let create_location = value.value.created_at().unwrap();
         let broken_example = include_str!("../docs/hoist/error.rs");
         let fixed_example = include_str!("../docs/hoist/fixed_list.rs");

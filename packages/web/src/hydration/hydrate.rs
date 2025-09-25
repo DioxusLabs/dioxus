@@ -149,21 +149,22 @@ impl WebsysDom {
         let server_data = HydrationContext::from_serialized(&data, debug_types, debug_locations);
         // If the server serialized an error into the suspense boundary, throw it on the client so that it bubbles up to the nearest error boundary
         if let Some(error) = server_data.error_entry().get().ok().flatten() {
-            dom.in_runtime(|| id.throw_error(error));
+            dom.runtime().throw_error(id, error);
         }
         server_data.in_context(|| {
-            // rerun the scope with the new data
-            SuspenseBoundaryProps::resolve_suspense(
-                id,
-                dom,
-                self,
-                |to| {
-                    // Switch to only writing templates
-                    to.skip_mutations = true;
-                },
-                children.len(),
-            );
-            self.skip_mutations = false;
+            // // rerun the scope with the new data
+            // SuspenseBoundaryProps::resolve_suspense(
+            //     id,
+            //     dom,
+            //     self,
+            //     |to| {
+            //         // Switch to only writing templates
+            //         to.skip_mutations = true;
+            //     },
+            //     children.len(),
+            // );
+            // self.skip_mutations = false;
+            todo!()
         });
 
         // Flush the mutations that will swap the placeholder nodes with the resolved nodes

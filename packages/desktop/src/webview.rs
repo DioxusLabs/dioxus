@@ -436,11 +436,10 @@ impl WebviewInstance {
         edits.set_desktop_context(Rc::downgrade(&desktop_context));
         let provider: Rc<dyn Document> = Rc::new(DesktopDocument::new(desktop_context.clone()));
         let history_provider: Rc<dyn History> = Rc::new(MemoryHistory::default());
-        dom.in_runtime(|| {
-            ScopeId::ROOT.provide_context(desktop_context.clone());
-            ScopeId::ROOT.provide_context(provider);
-            ScopeId::ROOT.provide_context(history_provider);
-        });
+        let rt = dom.runtime();
+        rt.provide_context(ScopeId::ROOT, desktop_context.clone());
+        rt.provide_context(ScopeId::ROOT, provider.clone());
+        rt.provide_context(ScopeId::ROOT, history_provider.clone());
 
         WebviewInstance {
             dom,
@@ -575,11 +574,11 @@ impl PendingWebview {
     pub(crate) fn create_window(self, shared: &Rc<SharedContext>) -> WebviewInstance {
         let window = WebviewInstance::new(self.cfg, self.dom, shared.clone());
 
-        let cx = window.dom.in_runtime(|| {
-            ScopeId::ROOT
-                .consume_context::<Rc<DesktopService>>()
-                .unwrap()
-        });
+        let cx = window
+            .dom
+            .runtime()
+            .consume_context::<DesktopContext>(ScopeId::ROOT);
+
         _ = self.sender.send(cx);
 
         window
