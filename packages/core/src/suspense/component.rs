@@ -1,5 +1,35 @@
 use crate::innerlude::*;
 
+/// Suspense Boundaries let you render a fallback UI while a child component is suspended.
+///
+/// # Example
+///
+/// ```rust
+/// # use dioxus::prelude::*;
+/// # fn Article() -> Element { rsx! { "Article" } }
+/// fn App() -> Element {
+///     rsx! {
+///         SuspenseBoundary {
+///             fallback: |ctx| rsx! { "Loading..." },
+///             Article {}
+///         }
+///     }
+/// }
+/// ```
+#[allow(non_snake_case)]
+pub fn SuspenseBoundary(mut __props: SuspenseBoundaryProps) -> Element {
+    // Register this component as a suspense boundary
+    // Whenever a child component suspends, it will register itself with this boundary
+    use_hook(|| {
+        provide_context(SuspenseContext::new(current_scope_id(), move |ctx| {
+            __props.fallback.call(ctx)
+        }))
+    });
+
+    // Just emit the children directly. Dioxus will handle fallback logic for us
+    __props.children
+}
+
 /// Properties for the [`SuspenseBoundary()`] component.
 #[allow(non_camel_case_types)]
 pub struct SuspenseBoundaryProps {
@@ -219,28 +249,6 @@ impl ::core::cmp::PartialEq for SuspenseBoundaryProps {
     }
 }
 
-/// Suspense Boundaries let you render a fallback UI while a child component is suspended.
-///
-/// # Example
-///
-/// ```rust
-/// # use dioxus::prelude::*;
-/// # fn Article() -> Element { rsx! { "Article" } }
-/// fn App() -> Element {
-///     rsx! {
-///         SuspenseBoundary {
-///             fallback: |context: SuspenseContext| rsx! {
-///                 "Loading..."
-///             },
-///             Article {}
-///         }
-///     }
-/// }
-/// ```
-#[allow(non_snake_case)]
-pub fn SuspenseBoundary(mut __props: SuspenseBoundaryProps) -> Element {
-    unreachable!("SuspenseBoundary should not be called directly")
-}
 #[allow(non_snake_case)]
 #[doc(hidden)]
 mod SuspenseBoundary_completions {

@@ -259,4 +259,11 @@ impl WriteMutations for WebsysDom {
         }
         self.interpreter.push_root(id.0 as u32)
     }
+
+    fn save_nodes(&mut self, n: usize) {
+        if self.skip_mutations() {
+            return;
+        }
+        self.interpreter.pop_nodes(n as u16);
+    }
 }

@@ -129,20 +129,6 @@ impl Scope {
         // }
     }
 
-    /// Check if a node should run during suspense
-    pub(crate) fn should_run_during_suspense(&self) -> bool {
-        !self.consume_context::<SuspenseContext>().unwrap().frozen()
-
-        // if let Some(context) =  {
-        //     return !context.frozen();
-        // }
-        // let Some(context) = self.suspense_boundary.suspense_context() else {
-        //     return false;
-        // };
-
-        // !context.frozen()
-    }
-
     /// Mark this scope as dirty, and schedule a render for it.
     pub(crate) fn needs_update(&self) {
         self.needs_update_any(self.id)

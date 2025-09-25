@@ -53,18 +53,31 @@ pub(crate) struct SuspenseBoundaryInner {
 
     /// Closures queued to run after the suspense boundary is resolved
     pub(crate) after_suspense_resolved: RefCell<Vec<Box<dyn FnOnce()>>>,
+
+    /// The last rendered fallback UI. We keep it around here so we can remove it when the suspense resolves
+    pub(crate) rendered_fallback_ui: RefCell<Option<VNode>>,
+
+    pub(crate) fallback: Box<dyn Fn(SuspenseContext) -> Element>,
+
+    pub(crate) suspended: Cell<bool>,
 }
 
 impl SuspenseContext {
     /// Create a new suspense boundary in a specific scope
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new(
+        id: ScopeId,
+        fallback: impl Fn(SuspenseContext) -> Element + 'static,
+    ) -> Self {
         Self {
             inner: Rc::new(SuspenseBoundaryInner {
                 suspended_tasks: RefCell::new(vec![]),
-                id: Cell::new(ScopeId::ROOT),
+                id: Cell::new(id),
                 suspended_nodes: Default::default(),
                 frozen: Default::default(),
                 after_suspense_resolved: Default::default(),
+                fallback: Box::new(fallback),
+                rendered_fallback_ui: Default::default(),
+                suspended: Cell::new(false),
             }),
         }
     }
@@ -125,6 +138,9 @@ impl SuspenseContext {
         }
 
         tasks.push(task);
+
+        // always set this to true if we add a task
+        self.inner.suspended.set(true);
 
         true
     }

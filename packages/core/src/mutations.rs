@@ -115,6 +115,11 @@ pub trait WriteMutations {
     ///
     /// Id: The ID of the root node to push.
     fn push_root(&mut self, id: ElementId);
+
+    /// Save `n` nodes off the stack into a fragment node.
+    ///
+    /// These will be pulled out of the fragment later when they are appended to another node.
+    fn save_nodes(&mut self, n: usize);
 }
 
 /// A `Mutation` represents a single instruction for the renderer to use to modify the UI tree to match the state
@@ -279,6 +284,12 @@ pub enum Mutation {
         /// The ID of the root node to push.
         id: ElementId,
     },
+
+    /// Save `n` nodes off the stack into a fragment node.
+    SaveNodes {
+        /// The number of nodes to pop off the stack
+        n: usize,
+    },
 }
 
 /// A static list of mutations that can be applied to the DOM. Note: this list does not contain any `Any` attribute values
@@ -378,6 +389,10 @@ impl WriteMutations for Mutations {
     fn push_root(&mut self, id: ElementId) {
         self.edits.push(Mutation::PushRoot { id })
     }
+
+    fn save_nodes(&mut self, n: usize) {
+        self.edits.push(Mutation::SaveNodes { n })
+    }
 }
 
 /// A struct that ignores all mutations
@@ -420,4 +435,6 @@ impl WriteMutations for NoOpMutations {
     fn remove_node(&mut self, _: ElementId) {}
 
     fn push_root(&mut self, _: ElementId) {}
+
+    fn save_nodes(&mut self, _: usize) {}
 }

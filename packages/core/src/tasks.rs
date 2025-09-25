@@ -307,9 +307,23 @@ impl Runtime {
 
         if let Some(task) = &task {
             // Remove the task from suspense
-            if let TaskType::Suspended { boundary, .. } = &*task.ty.borrow() {
+            if let TaskType::Suspended {
+                boundary,
+                in_component,
+            } = &*task.ty.borrow()
+            {
                 self.suspended_tasks.set(self.suspended_tasks.get() - 1);
-                todo!("Remove task from suspense boundary");
+
+                // Remove this task from the suspense boundary
+                boundary.remove_suspended_task(id);
+
+                // And then go re-run the target component to progress the fiber
+                self.needs_update(*in_component);
+
+                // And then go run the component that created the task to progress the fiber
+                // self.suspense_event(scope);
+
+                // todo!("Remove task from suspense boundary");
                 // if let SuspenseLocation::UnderSuspense(boundary) = boundary {
                 //     boundary.remove_suspended_task(id);
                 //     // self.inner.id.get().needs_update();
@@ -386,7 +400,10 @@ pub(crate) enum SchedulerMsg {
 
     /// A suspended component has either resolved or created new suspended children.
     /// Re-run that suspense context's update logic and re-render if needed.
-    Suspense(ScopeId),
+    Suspense {
+        boundary: ScopeId,
+        component: ScopeId,
+    },
 
     /// A task has woken and needs to be progressed
     TaskNotified(slotmap::DefaultKey),

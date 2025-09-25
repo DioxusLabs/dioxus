@@ -32,7 +32,7 @@ use std::{
 /// Suspended nodes are flushed to the DOM just like regular nodes, but they are unmounted and thus
 /// not interactive. Only once the suspense tree is fully resolved are the nodes mounted and made interactive.
 pub(crate) struct Fiber<'a, 'b, M: WriteMutations> {
-    runtime: &'a Rc<Runtime>,
+    runtime: Rc<Runtime>,
     dom: &'a mut VirtualDom,
     to: &'b mut M,
     // write: bool,
@@ -41,14 +41,32 @@ pub(crate) struct Fiber<'a, 'b, M: WriteMutations> {
 
 impl<'a, 'b, M: WriteMutations> Fiber<'a, 'b, M> {
     /// When we create a new fiber, we keep track of the current suspense context
-    pub(crate) fn new(runtime: &'a Rc<Runtime>, dom: &'a mut VirtualDom, to: &'b mut M) -> Self {
+    pub(crate) fn new(dom: &'a mut VirtualDom, to: &'b mut M) -> Self {
         Self {
-            runtime,
+            runtime: dom.runtime.clone(),
             dom,
             to,
-            // write,
             suspended_scopes: Vec::new(),
         }
+    }
+
+    /// Swaps in the real tree for a suspense boundary that has resolved
+    pub(crate) fn swap_suspense_tree(&mut self, ctx: &SuspenseContext) {
+        let placeholder_ui = ctx
+            .inner
+            .rendered_fallback_ui
+            .borrow_mut()
+            .take()
+            .expect("suspense boundary to have a rendered fallback UI");
+
+        let last_rendered = self.dom.scopes[ctx.inner.id.get().0]
+            .last_rendered_node
+            .as_ref()
+            .unwrap()
+            .clone();
+
+        let num_old_nodes = self.push_all_root_nodes(last_rendered.as_vnode());
+        self.remove_node_inner(&placeholder_ui, false, Some(num_old_nodes), true);
     }
 
     /// Run and diff a scope, creating the scope if it doesn't already exist
@@ -113,7 +131,7 @@ impl<'a, 'b, M: WriteMutations> Fiber<'a, 'b, M> {
             self.dom.scopes[scope.0].last_rendered_node = Some(new_nodes);
 
             if self.runtime.should_run_mount_tasks(scope) {
-                self.runtime.get_scope(scope).mount(self.runtime);
+                self.runtime.get_scope(scope).mount(&self.runtime);
             }
         })
     }
@@ -133,18 +151,39 @@ impl<'a, 'b, M: WriteMutations> Fiber<'a, 'b, M> {
         // Note: It is important that we still diff the scope even if it is suspended, because the
         // scope may render other child components which may change between renders
         self.runtime.clone().with_scope_on_stack(scope, || {
-            // Create the node
-            let nodes = self.create(new_nodes.as_vnode(), parent);
+            // Create the node. This will run the fiber until we hit a suspense scope which returns a placeholder
+            let num_nodes = self.create(new_nodes.as_vnode(), parent);
 
             // Then set the new node as the last rendered node
             self.dom.scopes[scope.0].last_rendered_node = Some(new_nodes);
 
-            // if self.write && self.runtime.scope_should_mount(scope) {
+            // Run mount tasks
             if self.runtime.should_run_mount_tasks(scope) {
-                self.dom.runtime.get_scope(scope).mount(self.runtime);
+                self.dom.runtime.get_scope(scope).mount(&self.runtime);
             }
 
-            nodes
+            // Check if this scope is a suspense boundary. If it is, and its suspended after we run it,
+            // then we need to swap it with its fallback UI.
+            if let Some(ctx) = self.dom.runtime.has_context::<SuspenseContext>(scope) {
+                if ctx.has_suspended_tasks() {
+                    // Pop the nodes we just created, saving them into a fragment so we can retrieve them once they're ready
+                    self.to.save_nodes(num_nodes);
+
+                    let fallback_ui = (ctx.inner.fallback.as_ref())(ctx.clone())
+                        .expect("Fallback UI cannot return suspense or errors!");
+
+                    // Create the placeholder in place, returning that instead
+                    let num_created = self.create(&fallback_ui, parent);
+
+                    // Attach the fallback UI to the suspense context so we can remove it later
+                    *ctx.inner.rendered_fallback_ui.borrow_mut() = Some(fallback_ui);
+
+                    return num_created;
+                }
+            }
+
+            // Otherwise, just return the number of nodes we created
+            num_nodes
         })
     }
 

@@ -191,4 +191,8 @@ impl WriteMutations for MutationState {
     fn push_root(&mut self, id: dioxus_core::ElementId) {
         self.channel.push_root(id.0 as _);
     }
+
+    fn save_nodes(&mut self, n: usize) {
+        self.channel.pop_nodes(n as _);
+    }
 }

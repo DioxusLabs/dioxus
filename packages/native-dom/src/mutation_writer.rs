@@ -263,6 +263,12 @@ impl WriteMutations for MutationWriter<'_> {
             self.state.event_handler_counts[idx] -= 1;
         }
     }
+
+    fn save_nodes(&mut self, n: usize) {
+        for _ in 0..n {
+            self.state.stack.pop();
+        }
+    }
 }
 
 fn create_template_node(docm: &mut DocumentMutator<'_>, node: &TemplateNode) -> NodeId {

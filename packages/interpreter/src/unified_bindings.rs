@@ -47,6 +47,9 @@ mod js {
     fn push_root(root: u32) {
         "{this.pushRoot(this.nodes[$root$]);}"
     }
+    fn pop_nodes(n: u16) {
+        "{this.stack.splice(this.stack.length-$n$);}"
+    }
     fn append_children(id: u32, many: u16) {
         "{this.appendChildren($id$, $many$);}"
     }

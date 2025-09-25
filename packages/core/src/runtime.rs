@@ -523,8 +523,12 @@ impl Runtime {
     }
 
     /// Notify the runtime that a suspense boundary and its descendents have changed state
-    pub(crate) fn suspense_event(&self, scope: ScopeId) {
-        self.sender.unbounded_send(SchedulerMsg::Suspense(scope));
+    pub(crate) fn suspense_event(&self, boundary: ScopeId, component: ScopeId) {
+        self.sender.unbounded_send(SchedulerMsg::Suspense {
+            boundary,
+            component,
+        });
+        // todo!()
     }
 
     /// Create a subscription that schedules a future render for the reference component. Unlike [`Self::needs_update`], this function will work outside of the dioxus runtime.

@@ -178,6 +178,7 @@ impl VirtualDom {
     /// Take any work from the highest scope. This may include rerunning the scope and/or running tasks
     pub(crate) fn pop_work(&mut self) -> Option<Work> {
         let dirty_scope = self.dirty_scopes.first();
+
         // Make sure the top dirty scope is valid
         #[cfg(debug_assertions)]
         if let Some(scope) = dirty_scope {
@@ -188,6 +189,7 @@ impl VirtualDom {
         let dirty_task = {
             let mut dirty_tasks = self.runtime.dirty_tasks.borrow_mut();
             let mut dirty_task = dirty_tasks.first();
+
             // Pop any invalid tasks off of each dirty scope;
             while let Some(task) = dirty_task {
                 if task.tasks_queued.borrow().is_empty() {
@@ -197,6 +199,7 @@ impl VirtualDom {
                     break;
                 }
             }
+
             dirty_task.map(|task| task.order)
         };
 

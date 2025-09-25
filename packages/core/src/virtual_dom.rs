@@ -2,7 +2,6 @@
 //!
 //! This module provides the primary mechanics to create a hook-based, concurrent VDOM for Rust.
 
-use crate::ErrorContext;
 use crate::{
     any_props::BoxedAnyProps, scope_context::Scope, scopes::LastRenderedNode, ReactiveContext,
     RenderError,
@@ -17,6 +16,7 @@ use crate::{
     ComponentFunction, Element, Mutations, SuspenseContext,
 };
 use crate::{diff::Fiber, innerlude::Work};
+use crate::{ErrorContext, VNode};
 use crate::{Task, VComponent};
 use futures_util::StreamExt;
 use slab::Slab;
@@ -328,7 +328,10 @@ impl VirtualDom {
             .provide_context(ErrorContext::new(runtime, root.id()));
 
         // Capture suspense
-        root.state().provide_context(SuspenseContext::new());
+        root.state()
+            .provide_context(SuspenseContext::new(ScopeId::ROOT, |_ctx| {
+                Ok(VNode::placeholder())
+            }));
 
         #[cfg(debug_assertions)]
         dom.register_subsecond_handler();
@@ -479,8 +482,11 @@ impl VirtualDom {
             }
             SchedulerMsg::EffectQueued => {}
             SchedulerMsg::AllDirty => self.mark_all_dirty(),
-            SchedulerMsg::Suspense(scope_id) => {
-                self.mark_dirty(scope_id);
+            SchedulerMsg::Suspense {
+                boundary,
+                component,
+            } => {
+                self.mark_dirty(boundary);
             }
         };
     }
@@ -494,11 +500,19 @@ impl VirtualDom {
                 SchedulerMsg::TaskNotified(task) => self.mark_task_dirty(Task::from_id(task)),
                 SchedulerMsg::EffectQueued => {}
                 SchedulerMsg::AllDirty => self.mark_all_dirty(),
-                SchedulerMsg::Suspense(scope_id) => {
-                    self.mark_dirty(scope_id);
+                // _ => todo!(),
+                SchedulerMsg::Suspense {
+                    boundary,
+                    component,
+                } => {
+                    self.mark_dirty(boundary);
                 }
             }
         }
+    }
+
+    fn process_suspense_event(&mut self, boundary: ScopeId, target: ScopeId) {
+        todo!()
     }
 
     /// Process all events in the queue until there are no more left
@@ -599,11 +613,7 @@ impl VirtualDom {
         //
         // If the element generated an error or suspense, we still write its placeholder and then
         // queue work to go update the content after the build-out is done.
-        let m = Fiber::new(&self.runtime.clone(), self, to).create_scope(
-            ScopeId::ROOT,
-            new_nodes,
-            None,
-        );
+        let m = Fiber::new(self, to).create_scope(ScopeId::ROOT, new_nodes, None);
 
         to.append_children(ElementId(0), m);
     }
@@ -631,7 +641,7 @@ impl VirtualDom {
                 Work::RerunScope(scope) => {
                     // If the scope is dirty, run the scope and get the mutations
                     self.runtime.clone().while_rendering(|| {
-                        Fiber::new(&self.runtime.clone(), self, to).run_and_diff_scope(scope.id);
+                        Fiber::new(self, to).run_and_diff_scope(scope.id);
                     });
                 }
             }
@@ -742,22 +752,40 @@ impl VirtualDom {
                         let _ = self.runtime.handle_task_wakeup(task);
                     }
                 }
+
+                // We run the scope and if running it resolves its suspense boundary, we swap in the real content
                 Work::RerunScope(scope) => {
                     let scope_id: ScopeId = scope.id;
+
+                    let suspense_ctx = self
+                        .runtime
+                        .get_scope(scope_id)
+                        .consume_context::<SuspenseContext>()
+                        .expect("All suspense boundaries should have a suspense context");
+
                     let run_scope = self
                         .runtime
-                        .try_get_scope(scope.id)
-                        .filter(|scope| scope.should_run_during_suspense())
+                        .try_get_scope(scope_id)
+                        .filter(|_| !suspense_ctx.frozen())
                         .is_some();
 
                     if run_scope {
-                        // If the scope is dirty, run the scope and get the mutations
-                        self.runtime.clone().while_rendering(|| {
-                            Fiber::new(&self.runtime.clone(), self, to)
-                                .run_and_diff_scope(scope_id);
-                        });
+                        let rt = self.runtime.clone();
 
-                        tracing::trace!("Ran scope {:?} during suspense", scope_id);
+                        let mut fiber = Fiber::new(self, to);
+
+                        // If the scope is dirty, run the scope and get the mutations
+                        rt.clone()
+                            .while_rendering(|| fiber.run_and_diff_scope(scope_id));
+
+                        let num_suspended = suspense_ctx.inner.suspended_tasks.borrow().len();
+                        if num_suspended == 0 && suspense_ctx.inner.suspended.get() {
+                            // the suspense boundary has resolved. Let's swap it back in with the real content
+                            fiber.swap_suspense_tree(&suspense_ctx);
+
+                            // And then mark the boundary as no longer suspended
+                            suspense_ctx.inner.suspended.set(false);
+                        }
                     } else {
                         tracing::warn!(
                             "Scope {:?} was marked as dirty, but will not rerun during suspense. Only nodes that are under a suspense boundary rerun during suspense",
@@ -889,7 +917,8 @@ impl VirtualDom {
                             // Add the suspended task to the boundary, and then increment the global suspended task count
                             // if it was actually added (it might have already been added before...)
                             if boundary.add_suspended_task(e.clone()) {
-                                self.runtime.suspense_event(boundary.inner.id.get());
+                                self.runtime
+                                    .suspense_event(boundary.inner.id.get(), scope_id);
                                 self.runtime
                                     .suspended_tasks
                                     .set(self.runtime.suspended_tasks.get() + 1);
