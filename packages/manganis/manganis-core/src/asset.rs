@@ -9,6 +9,7 @@ use std::{fmt::Debug, hash::Hash, path::PathBuf};
 /// to use.
 #[derive(Debug, Eq, Clone, Copy, SerializeConst, serde::Serialize, serde::Deserialize)]
 pub struct BundledAsset {
+    relative_source_path: ConstStr,
     /// The absolute path of the asset
     absolute_source_path: ConstStr,
     /// The bundled path of the asset
@@ -55,11 +56,13 @@ impl BundledAsset {
     /// This should only be called from the macro
     /// Create a new asset
     pub const fn new(
+        relative_source_path: &str,
         absolute_source_path: &str,
         bundled_path: &str,
         options: AssetOptions,
     ) -> Self {
         Self {
+            relative_source_path: ConstStr::new(relative_source_path),
             absolute_source_path: ConstStr::new(absolute_source_path),
             bundled_path: ConstStr::new(bundled_path),
             options,
@@ -79,6 +82,10 @@ impl BundledAsset {
     /// Get the options for the asset
     pub const fn options(&self) -> &AssetOptions {
         &self.options
+    }
+
+    pub fn relative_source_path(&self) -> &str {
+        self.relative_source_path.as_str()
     }
 }
 

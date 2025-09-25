@@ -39,6 +39,7 @@ impl Parse for CssModuleParser {
         }
 
         let asset_parser = AssetParser {
+            src,
             path_expr,
             asset,
             options,
