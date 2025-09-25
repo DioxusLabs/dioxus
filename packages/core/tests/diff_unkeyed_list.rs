@@ -31,7 +31,7 @@ fn list_creates_one_by_one() {
     );
 
     // Rendering the first item should replace the placeholder with an element
-    dom.mark_dirty(ScopeId::APP);
+    dom.mark_dirty(ScopeId::ROOT);
     assert_eq!(
         dom.render_immediate_to_vec().edits,
         [
@@ -43,7 +43,7 @@ fn list_creates_one_by_one() {
     );
 
     // Rendering the next item should insert after the previous
-    dom.mark_dirty(ScopeId::APP);
+    dom.mark_dirty(ScopeId::ROOT);
     assert_eq!(
         dom.render_immediate_to_vec().edits,
         [
@@ -55,7 +55,7 @@ fn list_creates_one_by_one() {
     );
 
     // ... and again!
-    dom.mark_dirty(ScopeId::APP);
+    dom.mark_dirty(ScopeId::ROOT);
     assert_eq!(
         dom.render_immediate_to_vec().edits,
         [
@@ -67,7 +67,7 @@ fn list_creates_one_by_one() {
     );
 
     // once more
-    dom.mark_dirty(ScopeId::APP);
+    dom.mark_dirty(ScopeId::ROOT);
     assert_eq!(
         dom.render_immediate_to_vec().edits,
         [
@@ -118,14 +118,14 @@ fn removes_one_by_one() {
 
     // Remove div(3)
     // Rendering the first item should replace the placeholder with an element
-    dom.mark_dirty(ScopeId::APP);
+    dom.mark_dirty(ScopeId::ROOT);
     assert_eq!(
         dom.render_immediate_to_vec().edits,
         [Remove { id: ElementId(6) }]
     );
 
     // Remove div(2)
-    dom.mark_dirty(ScopeId::APP);
+    dom.mark_dirty(ScopeId::ROOT);
     assert_eq!(
         dom.render_immediate_to_vec().edits,
         [Remove { id: ElementId(4) }]
@@ -133,7 +133,7 @@ fn removes_one_by_one() {
 
     // Remove div(1) and replace with a placeholder
     // todo: this should just be a remove with no placeholder
-    dom.mark_dirty(ScopeId::APP);
+    dom.mark_dirty(ScopeId::ROOT);
     assert_eq!(
         dom.render_immediate_to_vec().edits,
         [
@@ -144,7 +144,7 @@ fn removes_one_by_one() {
 
     // load the 3 and replace the placeholder
     // todo: this should actually be append to, but replace placeholder is fine for now
-    dom.mark_dirty(ScopeId::APP);
+    dom.mark_dirty(ScopeId::ROOT);
     assert_eq!(
         dom.render_immediate_to_vec().edits,
         [
@@ -185,7 +185,7 @@ fn list_shrink_multiroot() {
         ]
     );
 
-    dom.mark_dirty(ScopeId::APP);
+    dom.mark_dirty(ScopeId::ROOT);
     assert_eq!(
         dom.render_immediate_to_vec().edits,
         [
@@ -199,7 +199,7 @@ fn list_shrink_multiroot() {
         ]
     );
 
-    dom.mark_dirty(ScopeId::APP);
+    dom.mark_dirty(ScopeId::ROOT);
     assert_eq!(
         dom.render_immediate_to_vec().edits,
         [
@@ -213,7 +213,7 @@ fn list_shrink_multiroot() {
         ]
     );
 
-    dom.mark_dirty(ScopeId::APP);
+    dom.mark_dirty(ScopeId::ROOT);
     assert_eq!(
         dom.render_immediate_to_vec().edits,
         [
@@ -272,19 +272,19 @@ fn removes_one_by_one_multiroot() {
         ]
     );
 
-    dom.mark_dirty(ScopeId::APP);
+    dom.mark_dirty(ScopeId::ROOT);
     assert_eq!(
         dom.render_immediate_to_vec().edits,
         [Remove { id: ElementId(10) }, Remove { id: ElementId(12) }]
     );
 
-    dom.mark_dirty(ScopeId::APP);
+    dom.mark_dirty(ScopeId::ROOT);
     assert_eq!(
         dom.render_immediate_to_vec().edits,
         [Remove { id: ElementId(6) }, Remove { id: ElementId(8) }]
     );
 
-    dom.mark_dirty(ScopeId::APP);
+    dom.mark_dirty(ScopeId::ROOT);
     assert_eq!(
         dom.render_immediate_to_vec().edits,
         [
@@ -354,7 +354,7 @@ fn remove_many() {
 
     // len = 1
     {
-        dom.mark_dirty(ScopeId::APP);
+        dom.mark_dirty(ScopeId::ROOT);
         let edits = dom.render_immediate_to_vec();
         assert_eq!(
             edits.edits,
@@ -369,7 +369,7 @@ fn remove_many() {
 
     // len = 5
     {
-        dom.mark_dirty(ScopeId::APP);
+        dom.mark_dirty(ScopeId::ROOT);
         let edits = dom.render_immediate_to_vec();
         assert_eq!(
             edits.edits,
@@ -393,7 +393,7 @@ fn remove_many() {
 
     // len = 0
     {
-        dom.mark_dirty(ScopeId::APP);
+        dom.mark_dirty(ScopeId::ROOT);
         let edits = dom.render_immediate_to_vec();
         assert_eq!(edits.edits[0], CreatePlaceholder { id: ElementId(11,) });
         let removed = edits.edits[1..5]
@@ -414,7 +414,7 @@ fn remove_many() {
 
     // len = 1
     {
-        dom.mark_dirty(ScopeId::APP);
+        dom.mark_dirty(ScopeId::ROOT);
         let edits = dom.render_immediate_to_vec();
         assert_eq!(
             edits.edits,
@@ -466,7 +466,7 @@ fn replace_and_add_items() {
 
     // Rerendering adds an a static template
     {
-        dom.mark_dirty(ScopeId::APP);
+        dom.mark_dirty(ScopeId::ROOT);
         let edits = dom.render_immediate_to_vec();
         assert_eq!(
             edits.edits,
@@ -479,7 +479,7 @@ fn replace_and_add_items() {
 
     // Rerendering replaces the old node with a placeholder and adds a new placeholder
     {
-        dom.mark_dirty(ScopeId::APP);
+        dom.mark_dirty(ScopeId::ROOT);
         let edits = dom.render_immediate_to_vec();
         assert_eq!(
             edits.edits,
@@ -494,7 +494,7 @@ fn replace_and_add_items() {
 
     // Rerendering replaces both placeholders with the static nodes and add a new static node
     {
-        dom.mark_dirty(ScopeId::APP);
+        dom.mark_dirty(ScopeId::ROOT);
         let edits = dom.render_immediate_to_vec();
         assert_eq!(
             edits.edits,

@@ -8,12 +8,12 @@ use std::sync::Arc;
 
 /// Get the current scope id
 pub fn current_scope_id() -> ScopeId {
-    todo!()
-    // Runtime::with(|rt| rt.current_scope_id()).ok_or(RuntimeError::new())
+    Runtime::with(|rt| rt.current_scope_id())
 }
+
+/// Try to get the current scope id
 pub fn try_current_scope_id() -> Result<ScopeId, RuntimeError> {
-    todo!()
-    // Runtime::with(|rt| rt.current_scope_id()).ok_or(RuntimeError::new())
+    Runtime::try_with(|rt| rt.current_scope_id())
 }
 
 #[doc(hidden)]
@@ -32,7 +32,7 @@ pub fn vdom_is_rendering() -> bool {
 ///         match reqwest::get("https://api.example.com").await {
 ///             Ok(_) => unimplemented!(),
 ///             // You can explicitly throw an error into a scope with throw_error
-///             Err(err) => ScopeId::APP.throw_error(err)
+///             Err(err) => ScopeId::ROOT.throw_error(err)
 ///         }
 ///     });
 ///
@@ -318,12 +318,12 @@ pub fn parent_scope() -> Option<ScopeId> {
 
 /// Mark the current scope as dirty, causing it to re-render.
 pub fn needs_update() {
-    let _ = Runtime::with_current_scope(|cx| cx.needs_update());
+    Runtime::with_current_scope(|cx| cx.needs_update());
 }
 
 /// Mark the current scope as dirty, causing it to re-render.
 pub fn needs_update_any(id: ScopeId) {
-    let _ = Runtime::with_current_scope(|cx| cx.needs_update_any(id));
+    Runtime::with_current_scope(|cx| cx.needs_update_any(id));
 }
 
 /// Schedule an update for the current component.
@@ -456,12 +456,12 @@ pub fn use_after_render(f: impl FnMut() + 'static) {
 /// This is a hook and will always run, so you can't unschedule it
 /// Will run for every progression of suspense, though this might change in the future
 pub fn before_render(f: impl FnMut() + 'static) {
-    let _ = Runtime::with_current_scope(|cx| cx.push_before_render(f));
+    Runtime::with_current_scope(|cx| cx.push_before_render(f));
 }
 
 /// Push a function to be run after the render is complete, even if it didn't complete successfully
 pub fn after_render(f: impl FnMut() + 'static) {
-    let _ = Runtime::with_current_scope(|cx| cx.push_after_render(f));
+    Runtime::with_current_scope(|cx| cx.push_after_render(f));
 }
 
 /// Use a hook with a cleanup function

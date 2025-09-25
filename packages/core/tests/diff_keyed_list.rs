@@ -40,7 +40,7 @@ fn keyed_diffing_out_of_order() {
         );
     }
 
-    dom.mark_dirty(ScopeId::APP);
+    dom.mark_dirty(ScopeId::ROOT);
     assert_eq!(
         dom.render_immediate_to_vec().edits,
         [
@@ -65,7 +65,7 @@ fn keyed_diffing_out_of_order_adds() {
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
 
-    dom.mark_dirty(ScopeId::APP);
+    dom.mark_dirty(ScopeId::ROOT);
     assert_eq!(
         dom.render_immediate_to_vec().edits,
         [
@@ -91,7 +91,7 @@ fn keyed_diffing_out_of_order_adds_3() {
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
 
-    dom.mark_dirty(ScopeId::APP);
+    dom.mark_dirty(ScopeId::ROOT);
     assert_eq!(
         dom.render_immediate_to_vec().edits,
         [
@@ -117,7 +117,7 @@ fn keyed_diffing_out_of_order_adds_4() {
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
 
-    dom.mark_dirty(ScopeId::APP);
+    dom.mark_dirty(ScopeId::ROOT);
     assert_eq!(
         dom.render_immediate_to_vec().edits,
         [
@@ -143,7 +143,7 @@ fn keyed_diffing_out_of_order_adds_5() {
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
 
-    dom.mark_dirty(ScopeId::APP);
+    dom.mark_dirty(ScopeId::ROOT);
     assert_eq!(
         dom.render_immediate_to_vec().edits,
         [
@@ -168,7 +168,7 @@ fn keyed_diffing_additions() {
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
 
-    dom.mark_dirty(ScopeId::APP);
+    dom.mark_dirty(ScopeId::ROOT);
     assert_eq!(
         dom.render_immediate_to_vec().edits,
         [
@@ -193,7 +193,7 @@ fn keyed_diffing_additions_and_moves_on_ends() {
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
 
-    dom.mark_dirty(ScopeId::APP);
+    dom.mark_dirty(ScopeId::ROOT);
     assert_eq!(
         dom.render_immediate_to_vec().edits,
         [
@@ -223,7 +223,7 @@ fn keyed_diffing_additions_and_moves_in_middle() {
     dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     // LIS: 4, 5, 6
-    dom.mark_dirty(ScopeId::APP);
+    dom.mark_dirty(ScopeId::ROOT);
     assert_eq!(
         dom.render_immediate_to_vec().edits,
         [
@@ -257,7 +257,7 @@ fn controlled_keyed_diffing_out_of_order() {
     dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     // LIS: 5, 6
-    dom.mark_dirty(ScopeId::APP);
+    dom.mark_dirty(ScopeId::ROOT);
     assert_eq!(
         dom.render_immediate_to_vec().edits,
         [
@@ -290,7 +290,7 @@ fn controlled_keyed_diffing_out_of_order_max_test() {
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
 
-    dom.mark_dirty(ScopeId::APP);
+    dom.mark_dirty(ScopeId::ROOT);
     assert_eq!(
         dom.render_immediate_to_vec().edits,
         [
@@ -319,7 +319,7 @@ fn remove_list() {
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
 
-    dom.mark_dirty(ScopeId::APP);
+    dom.mark_dirty(ScopeId::ROOT);
     assert_eq!(
         dom.render_immediate_to_vec().edits,
         [
@@ -344,7 +344,7 @@ fn no_common_keys() {
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
 
-    dom.mark_dirty(ScopeId::APP);
+    dom.mark_dirty(ScopeId::ROOT);
     assert_eq!(
         dom.render_immediate_to_vec().edits,
         [
@@ -372,7 +372,7 @@ fn perfect_reverse() {
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
 
-    dom.mark_dirty(ScopeId::APP);
+    dom.mark_dirty(ScopeId::ROOT);
     let edits = dom.render_immediate_to_vec().edits;
     assert_eq!(
         edits,
@@ -406,7 +406,7 @@ fn old_middle_empty_left_pivot() {
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
 
-    dom.mark_dirty(ScopeId::APP);
+    dom.mark_dirty(ScopeId::ROOT);
     let edits = dom.render_immediate_to_vec().edits;
     assert_eq!(
         edits,
@@ -435,7 +435,7 @@ fn old_middle_empty_right_pivot() {
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
 
-    dom.mark_dirty(ScopeId::APP);
+    dom.mark_dirty(ScopeId::ROOT);
     let edits = dom.render_immediate_to_vec().edits;
     assert_eq!(
         edits,

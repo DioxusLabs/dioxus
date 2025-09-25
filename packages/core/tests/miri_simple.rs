@@ -10,7 +10,7 @@ fn app_drops() {
     let mut dom = VirtualDom::new(app);
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
-    dom.mark_dirty(ScopeId::APP);
+    dom.mark_dirty(ScopeId::ROOT);
     _ = dom.render_immediate_to_vec();
 }
 
@@ -28,7 +28,7 @@ fn hooks_drop() {
     let mut dom = VirtualDom::new(app);
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
-    dom.mark_dirty(ScopeId::APP);
+    dom.mark_dirty(ScopeId::ROOT);
     _ = dom.render_immediate_to_vec();
 }
 
@@ -52,7 +52,7 @@ fn contexts_drop() {
     let mut dom = VirtualDom::new(app);
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
-    dom.mark_dirty(ScopeId::APP);
+    dom.mark_dirty(ScopeId::ROOT);
     _ = dom.render_immediate_to_vec();
 }
 
@@ -69,7 +69,7 @@ fn tasks_drop() {
     let mut dom = VirtualDom::new(app);
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
-    dom.mark_dirty(ScopeId::APP);
+    dom.mark_dirty(ScopeId::ROOT);
     _ = dom.render_immediate_to_vec();
 }
 
@@ -84,7 +84,7 @@ fn root_props_drop() {
     );
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
-    dom.mark_dirty(ScopeId::APP);
+    dom.mark_dirty(ScopeId::ROOT);
     _ = dom.render_immediate_to_vec();
 }
 
@@ -114,7 +114,7 @@ fn diffing_drops_old() {
 
     let mut dom = VirtualDom::new(app);
     dom.rebuild(&mut dioxus_core::NoOpMutations);
-    dom.mark_dirty(ScopeId::APP);
+    dom.mark_dirty(ScopeId::ROOT);
 
     _ = dom.render_immediate_to_vec();
 }
@@ -142,6 +142,6 @@ fn hooks_drop_before_contexts() {
     let mut dom = VirtualDom::new(app);
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
-    dom.mark_dirty(ScopeId::APP);
+    dom.mark_dirty(ScopeId::ROOT);
     _ = dom.render_immediate_to_vec();
 }

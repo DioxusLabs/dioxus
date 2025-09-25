@@ -63,7 +63,7 @@ fn test_memory_leak() {
     dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     for _ in 0..5 {
-        dom.mark_dirty(ScopeId::APP);
+        dom.mark_dirty(ScopeId::ROOT);
         _ = dom.render_immediate_to_vec();
     }
 }

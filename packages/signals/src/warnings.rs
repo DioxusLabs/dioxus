@@ -9,7 +9,7 @@ pub fn copy_value_hoisted<T: 'static, S: generational_box::Storage<T> + 'static>
     caller: &'static std::panic::Location<'static>,
 ) {
     let origin_scope = value.origin_scope;
-    if let Ok(current_scope) = dioxus_core::current_scope_id() {
+    if let Ok(current_scope) = dioxus_core::try_current_scope_id() {
         // If the current scope is a descendant of the origin scope or is the same scope, we don't need to warn
         if origin_scope == current_scope || current_scope.is_descendant_of(origin_scope) {
             return;

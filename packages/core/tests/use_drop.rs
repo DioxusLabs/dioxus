@@ -59,7 +59,7 @@ fn drop_runs() {
     assert_eq!(*drop_count.lock().unwrap(), 0);
     *render_child.lock().unwrap() = false;
 
-    dom.mark_dirty(ScopeId::APP);
+    dom.mark_dirty(ScopeId::ROOT);
     dom.render_immediate(&mut dioxus_core::NoOpMutations);
 
     assert_eq!(*drop_count.lock().unwrap(), 1);

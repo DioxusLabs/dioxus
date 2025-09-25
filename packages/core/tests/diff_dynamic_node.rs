@@ -29,7 +29,7 @@ fn toggle_option_text() {
     );
 
     // Rendering again should replace the placeholder with an text node
-    dom.mark_dirty(ScopeId::APP);
+    dom.mark_dirty(ScopeId::ROOT);
     assert_eq!(
         dom.render_immediate_to_vec().edits,
         [
@@ -39,7 +39,7 @@ fn toggle_option_text() {
     );
 
     // Rendering again should replace the placeholder with an text node
-    dom.mark_dirty(ScopeId::APP);
+    dom.mark_dirty(ScopeId::ROOT);
     assert_eq!(
         dom.render_immediate_to_vec().edits,
         [
@@ -77,7 +77,7 @@ fn toggle_template() {
     dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     // Rendering again should replace the placeholder with an text node
-    dom.mark_dirty(ScopeId::APP);
+    dom.mark_dirty(ScopeId::ROOT);
     assert_eq!(
         dom.render_immediate_to_vec().edits,
         [
@@ -86,7 +86,7 @@ fn toggle_template() {
         ]
     );
 
-    dom.mark_dirty(ScopeId(ScopeId::APP.0 + 1));
+    dom.mark_dirty(ScopeId(ScopeId::ROOT.0 + 1));
     assert_eq!(
         dom.render_immediate_to_vec().edits,
         [
@@ -95,7 +95,7 @@ fn toggle_template() {
         ]
     );
 
-    dom.mark_dirty(ScopeId(ScopeId::APP.0 + 1));
+    dom.mark_dirty(ScopeId(ScopeId::ROOT.0 + 1));
     assert_eq!(
         dom.render_immediate_to_vec().edits,
         [
@@ -104,7 +104,7 @@ fn toggle_template() {
         ]
     );
 
-    dom.mark_dirty(ScopeId(ScopeId::APP.0 + 1));
+    dom.mark_dirty(ScopeId(ScopeId::ROOT.0 + 1));
     assert_eq!(
         dom.render_immediate_to_vec().edits,
         [

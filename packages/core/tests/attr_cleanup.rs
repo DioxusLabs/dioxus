@@ -28,7 +28,7 @@ fn attrs_cycle() {
         ]
     );
 
-    dom.mark_dirty(ScopeId::APP);
+    dom.mark_dirty(ScopeId::ROOT);
     assert_eq!(
         dom.render_immediate_to_vec().edits,
         [
@@ -40,7 +40,7 @@ fn attrs_cycle() {
         ]
     );
 
-    dom.mark_dirty(ScopeId::APP);
+    dom.mark_dirty(ScopeId::ROOT);
     assert_eq!(
         dom.render_immediate_to_vec().edits,
         [
@@ -49,7 +49,7 @@ fn attrs_cycle() {
         ]
     );
 
-    dom.mark_dirty(ScopeId::APP);
+    dom.mark_dirty(ScopeId::ROOT);
     assert_eq!(
         dom.render_immediate_to_vec().edits,
         [
@@ -72,7 +72,7 @@ fn attrs_cycle() {
     );
 
     // we take the node taken by attributes since we reused it
-    dom.mark_dirty(ScopeId::APP);
+    dom.mark_dirty(ScopeId::ROOT);
     assert_eq!(
         dom.render_immediate_to_vec().edits,
         [

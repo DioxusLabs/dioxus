@@ -87,7 +87,7 @@ fn component_swap() {
         );
     }
 
-    dom.mark_dirty(ScopeId::APP);
+    dom.mark_dirty(ScopeId::ROOT);
     assert_eq!(
         dom.render_immediate_to_vec().edits,
         [
@@ -96,7 +96,7 @@ fn component_swap() {
         ]
     );
 
-    dom.mark_dirty(ScopeId::APP);
+    dom.mark_dirty(ScopeId::ROOT);
     assert_eq!(
         dom.render_immediate_to_vec().edits,
         [
@@ -105,7 +105,7 @@ fn component_swap() {
         ]
     );
 
-    dom.mark_dirty(ScopeId::APP);
+    dom.mark_dirty(ScopeId::ROOT);
     assert_eq!(
         dom.render_immediate_to_vec().edits,
         [

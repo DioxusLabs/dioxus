@@ -67,7 +67,7 @@ fn events_generate() {
     );
     dom.runtime().handle_event("click", event, ElementId(1));
 
-    dom.mark_dirty(ScopeId::APP);
+    dom.mark_dirty(ScopeId::ROOT);
     let edits = dom.render_immediate_to_vec();
 
     assert_eq!(
