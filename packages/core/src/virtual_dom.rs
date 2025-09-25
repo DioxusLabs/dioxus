@@ -399,7 +399,7 @@ impl VirtualDom {
     ///
     /// Whenever the Runtime "works", it will re-render this scope
     pub fn mark_dirty(&mut self, id: ScopeId) {
-        let Some(scope) = self.runtime.get_scope(id) else {
+        let Some(scope) = self.runtime.try_get_scope(id) else {
             return;
         };
 
@@ -414,7 +414,7 @@ impl VirtualDom {
         let Some(scope) = self.runtime.task_scope(task) else {
             return;
         };
-        let Some(scope) = self.runtime.get_scope(scope) else {
+        let Some(scope) = self.runtime.try_get_scope(scope) else {
             return;
         };
 
@@ -589,10 +589,6 @@ impl VirtualDom {
             .clone()
             .while_rendering(|| self.run_scope(ScopeId::ROOT));
 
-        let new_nodes = LastRenderedNode::new(new_nodes);
-
-        self.scopes[ScopeId::ROOT.0].last_rendered_node = Some(new_nodes.clone());
-
         // Rebuilding implies we append the created elements to the root
         let m = Fiber::new(&self.runtime.clone(), self, to, true).create_scope(
             ScopeId::ROOT,
@@ -731,7 +727,7 @@ impl VirtualDom {
                     let scope_id: ScopeId = scope.id;
                     let run_scope = self
                         .runtime
-                        .get_scope(scope.id)
+                        .try_get_scope(scope.id)
                         .filter(|scope| scope.should_run_during_suspense())
                         .is_some();
 
@@ -762,7 +758,7 @@ impl VirtualDom {
         }
 
         self.resolved_scopes
-            .sort_by_key(|&id| self.runtime.get_scope(id).unwrap().height);
+            .sort_by_key(|&id| self.runtime.get_scope(id).height);
         std::mem::take(&mut self.resolved_scopes)
     }
 
@@ -794,7 +790,7 @@ impl VirtualDom {
         name: &'static str,
         parent: Option<ScopeId>,
     ) -> &mut ScopeState {
-        let height = match parent.and_then(|id| self.runtime.get_scope(id)) {
+        let height = match parent.and_then(|id| self.runtime.try_get_scope(id)) {
             Some(parent) => parent.height() + 1,
             None => 0,
         };
@@ -818,7 +814,7 @@ impl VirtualDom {
     /// Run a scope and return the rendered nodes. This will not modify the DOM or update the last rendered node of the scope.
     #[tracing::instrument(skip(self), level = "trace", name = "VirtualDom::run_scope")]
     #[track_caller]
-    pub(crate) fn run_scope(&mut self, scope_id: ScopeId) -> Element {
+    pub(crate) fn run_scope(&mut self, scope_id: ScopeId) -> LastRenderedNode {
         self.runtime.clone().with_scope_on_stack(scope_id, || {
             let scope = &self.scopes[scope_id.0];
 
@@ -844,7 +840,6 @@ impl VirtualDom {
                     // we could end up diffing two different versions of the same mounted node
                     let render_return = scope.props.render().map(|node| node.deep_clone());
 
-                    // now actually handle the return value
                     match render_return.as_ref() {
                         // If the render was successful, we can move the render generation forward by one
                         Ok(_) => scope.state().forward_render_count(),
@@ -858,15 +853,13 @@ impl VirtualDom {
                             let boundary = self
                                 .runtime
                                 .get_scope(scope_id)
-                                .unwrap()
                                 .consume_context::<SuspenseContext>()
                                 .unwrap();
 
                             // Add the suspended task to the boundary, and then increment the global suspended task count
                             // if it was actually added (it might have already been added before...)
                             if boundary.add_suspended_task(e.clone()) {
-                                todo!();
-                                // self.inner.id.get().needs_update();
+                                self.runtime.needs_update(boundary.inner.id.get());
 
                                 self.runtime
                                     .suspended_tasks
@@ -888,7 +881,7 @@ impl VirtualDom {
             self.dirty_scopes
                 .remove(&ScopeOrder::new(scope.state().height, scope_id));
 
-            element
+            LastRenderedNode::new(element)
         })
     }
 }

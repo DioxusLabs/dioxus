@@ -255,14 +255,14 @@ use generational_box::Owner;
 #[allow(unused)]
 pub use SuspenseBoundary_completions::Component::SuspenseBoundary;
 
-/// Suspense has a custom diffing algorithm that diffs the suspended nodes in the background without rendering them
-impl SuspenseBoundaryProps {
-    /// Try to downcast [`AnyProps`] to [`SuspenseBoundaryProps`]
-    pub(crate) fn downcast_from_props(props: &mut dyn AnyProps) -> Option<&mut Self> {
-        let inner: Option<&mut SuspenseBoundaryPropsWithOwner> = props.props_mut().downcast_mut();
-        inner.map(|inner| &mut inner.inner)
-    }
-}
+// /// Suspense has a custom diffing algorithm that diffs the suspended nodes in the background without rendering them
+// impl SuspenseBoundaryProps {
+//     /// Try to downcast [`AnyProps`] to [`SuspenseBoundaryProps`]
+//     pub(crate) fn downcast_from_props(props: &mut dyn AnyProps) -> Option<&mut Self> {
+//         let inner: Option<&mut SuspenseBoundaryPropsWithOwner> = props.props_mut().downcast_mut();
+//         inner.map(|inner| &mut inner.inner)
+//     }
+// }
 
 impl SuspenseContext {
     /// Run a closure under a suspense boundary
@@ -281,7 +281,7 @@ impl SuspenseContext {
         scope_id: ScopeId,
     ) -> Option<Self> {
         runtime
-            .get_scope(scope_id)
+            .try_get_scope(scope_id)
             .and_then(|scope| scope.suspense_boundary())
     }
 }

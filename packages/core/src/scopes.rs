@@ -33,7 +33,7 @@ impl std::fmt::Debug for ScopeId {
         #[cfg(debug_assertions)]
         {
             if let Ok(rt) = Runtime::try_current() {
-                if let Some(scope) = rt.get_scope(*self) {
+                if let Some(scope) = rt.try_get_scope(*self) {
                     builder = builder.field(&scope.name);
                 }
             }
@@ -85,7 +85,7 @@ impl ScopeState {
     }
 
     pub(crate) fn state(&self) -> Ref<'_, Scope> {
-        self.runtime.get_scope(self.context_id).unwrap()
+        self.runtime.get_scope(self.context_id)
     }
 }
 
@@ -106,6 +106,13 @@ impl LastRenderedNode {
         match node {
             Ok(vnode) => LastRenderedNode::Real(vnode),
             Err(err) => LastRenderedNode::Placeholder(VNode::placeholder(), err),
+        }
+    }
+
+    pub fn as_element_ref(&self) -> Result<&VNode, &RenderError> {
+        match self {
+            LastRenderedNode::Real(vnode) => Ok(vnode),
+            LastRenderedNode::Placeholder(vnode, err) => Err(err),
         }
     }
 

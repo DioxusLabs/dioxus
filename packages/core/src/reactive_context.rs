@@ -82,7 +82,7 @@ impl ReactiveContext {
             scope: None,
         };
 
-        let owner = Runtime::current().get_scope(scope).unwrap().owner();
+        let owner = Runtime::current().get_scope(scope).owner();
 
         let self_ = Self {
             scope,

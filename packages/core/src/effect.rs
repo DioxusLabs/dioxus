@@ -8,9 +8,10 @@ use std::collections::VecDeque;
 /// Effects are the lowest priority task in the scheduler.
 /// They are run after all other dirty scopes and futures have been resolved. Other dirty scopes and futures may cause the component this effect is attached to to rerun, which would update the DOM.
 pub(crate) struct Effect {
-    // The scope that the effect is attached to
+    /// The scope that the effect is attached to
     pub(crate) order: ScopeOrder,
-    // The callbacks that will be run when effects are rerun
+
+    /// The callbacks that will be run when effects are rerun
     effect: RefCell<VecDeque<Box<dyn FnOnce() + 'static>>>,
 }
 

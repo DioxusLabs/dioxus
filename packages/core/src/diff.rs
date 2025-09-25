@@ -14,19 +14,9 @@ use crate::{
         ElementRef, MountId, ScopeOrder, SuspenseBoundaryProps, SuspenseBoundaryPropsWithOwner,
     },
     nodes::{VNode, VNodeMount},
-    // prelude::{RuntimeGuard, SuspenseContext},
     scopes::{LastRenderedNode, ScopeId},
-    Attribute,
-    AttributeValue,
-    DynamicNode,
-    Element,
-    ElementId,
-    Runtime,
-    TemplateNode,
-    VComponent,
-    VText,
-    VirtualDom,
-    WriteMutations,
+    Attribute, AttributeValue, DynamicNode, Element, ElementId, Runtime, SuspenseContext,
+    TemplateNode, VComponent, VText, VirtualDom, WriteMutations,
 };
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::{
@@ -38,42 +28,61 @@ use std::{
 
 /// A fiber progresses a given work tree by running scopes and diffing nodes.
 /// It queues work internally such that suspended scopes can be paused and resumed.
+///
+/// Suspended nodes are flushed to the DOM just like regular nodes, but they are unmounted and thus
+/// not interactive. Only once the suspense tree is fully resolved are the nodes mounted and made interactive.
 pub(crate) struct Fiber<'a, 'b, M: WriteMutations> {
     runtime: &'a Rc<Runtime>,
     dom: &'a mut VirtualDom,
     to: &'b mut M,
     write: bool,
+    suspended_scopes: Vec<ScopeId>,
+    // starting: ScopeId,
+    // suspense_ctx: Vec<SuspenseContext>,
 }
 
 impl<'a, 'b, M: WriteMutations> Fiber<'a, 'b, M> {
+    /// When we create a new fiber, we keep track of the current suspense context
     pub(crate) fn new(
         runtime: &'a Rc<Runtime>,
         dom: &'a mut VirtualDom,
         to: &'b mut M,
         write: bool,
+        // at: ScopeId,
     ) -> Self {
+        // let suspense_ctx = runtime
+        //     .get_scope(at)
+        //     .consume_context::<SuspenseContext>()
+        //     .unwrap();
         Self {
             runtime,
             dom,
             to,
             write,
+            suspended_scopes: Vec::new(),
+            // starting: at,
+            // suspense_ctx,
         }
     }
 
+    /// Run and diff a scope, creating the scope if it doesn't already exist
     pub(crate) fn run_and_diff_scope(&mut self, scope_id: ScopeId) {
-        let scope = &mut self.dom.scopes[scope_id.0];
-        if SuspenseBoundaryProps::downcast_from_props(&mut *scope.props).is_some() {
-            self.diff_suspense(scope_id)
-        } else {
-            let new_nodes = self.dom.run_scope(scope_id);
-            self.diff_scope(scope_id, new_nodes);
-        }
+        let new_nodes = self.dom.run_scope(scope_id);
+        self.diff_scope(scope_id, new_nodes);
+        // todo!()
+        // let scope = &mut self.dom.scopes[scope_id.0];
+        // if SuspenseBoundaryProps::downcast_from_props(&mut *scope.props).is_some() {
+        //     self.diff_suspense(scope_id)
+        // } else {
+        //     let new_nodes = self.dom.run_scope(scope_id);
+        //     self.diff_scope(scope_id, new_nodes);
+        // }
     }
 
-    fn diff_scope(&mut self, scope: ScopeId, new_nodes: Element) {
+    fn diff_scope(&mut self, scope: ScopeId, new_nodes: LastRenderedNode) {
         self.runtime.clone().with_scope_on_stack(scope, || {
             // We don't diff the nodes if the scope is suspended or has an error
-            let Ok(new_real_nodes) = &new_nodes else {
+            let Ok(new_real_nodes) = &new_nodes.as_element_ref() else {
                 return;
             };
 
@@ -86,10 +95,10 @@ impl<'a, 'b, M: WriteMutations> Fiber<'a, 'b, M> {
             // If it is suspended, we need to diff it but write the mutations nothing
             // Note: It is important that we still diff the scope even if it is suspended, because the scope may render other child components which may change between renders
             self.diff_node(old.as_vnode(), new_real_nodes);
-            self.dom.scopes[scope.0].last_rendered_node = Some(LastRenderedNode::new(new_nodes));
+            self.dom.scopes[scope.0].last_rendered_node = Some(new_nodes);
 
-            if self.write && self.runtime.scope_should_render(scope) {
-                self.runtime.get_scope(scope).unwrap().mount(self.runtime);
+            if self.write && self.runtime.scope_should_mount(scope) {
+                self.runtime.get_scope(scope).mount(self.runtime);
             }
         })
     }
@@ -104,8 +113,10 @@ impl<'a, 'b, M: WriteMutations> Fiber<'a, 'b, M> {
         parent: Option<ElementRef>,
     ) -> usize {
         // If there are suspended scopes, we need to check if the scope is suspended before we diff it
-        // If it is suspended, we need to diff it but write the mutations nothing
-        // Note: It is important that we still diff the scope even if it is suspended, because the scope may render other child components which may change between renders
+        // If it is suspended, we need to diff it but write the mutations to nothing
+        //
+        // Note: It is important that we still diff the scope even if it is suspended, because the
+        // scope may render other child components which may change between renders
         self.runtime.clone().with_scope_on_stack(scope, || {
             // Create the node
             let nodes = self.create(new_nodes.as_vnode(), parent);
@@ -113,12 +124,8 @@ impl<'a, 'b, M: WriteMutations> Fiber<'a, 'b, M> {
             // Then set the new node as the last rendered node
             self.dom.scopes[scope.0].last_rendered_node = Some(new_nodes);
 
-            if self.write && self.runtime.scope_should_render(scope) {
-                self.dom
-                    .runtime
-                    .get_scope(scope)
-                    .unwrap()
-                    .mount(self.runtime);
+            if self.write && self.runtime.scope_should_mount(scope) {
+                self.dom.runtime.get_scope(scope).mount(self.runtime);
             }
 
             nodes
@@ -611,7 +618,7 @@ impl<'a, 'b, M: WriteMutations> Fiber<'a, 'b, M> {
         // Now diff the scope
         self.run_and_diff_scope(scope_id);
 
-        let height = self.runtime.get_scope(scope_id).unwrap().height;
+        let height = self.runtime.get_scope(scope_id).height;
         self.dom
             .dirty_scopes
             .remove(&ScopeOrder::new(height, scope_id));
@@ -668,7 +675,7 @@ impl<'a, 'b, M: WriteMutations> Fiber<'a, 'b, M> {
             let new = self.dom.run_scope(scope_id);
 
             // Then set the new node as the last rendered node
-            self.dom.scopes[scope_id.0].last_rendered_node = Some(LastRenderedNode::new(new));
+            self.dom.scopes[scope_id.0].last_rendered_node = Some(new);
         }
 
         let scope = ScopeId(self.get_mounted_dyn_node(mount, idx));
@@ -996,7 +1003,6 @@ impl<'a, 'b, M: WriteMutations> Fiber<'a, 'b, M> {
     fn remove_dynamic_node(
         &mut self,
         mount: MountId,
-
         destroy_component_state: bool,
         idx: usize,
         node: &DynamicNode,
@@ -1211,6 +1217,7 @@ impl<'a, 'b, M: WriteMutations> Fiber<'a, 'b, M> {
                     TemplateNode::Dynamic { id } => {
                         // Take a dynamic node off the depth first iterator
                         nodes.next().unwrap();
+
                         // Then mount the node
                         self.create_dynamic_node(node, &node.dynamic_nodes[*id], mount, *id)
                     }
@@ -1228,6 +1235,7 @@ impl<'a, 'b, M: WriteMutations> Fiber<'a, 'b, M> {
                             if self.write {
                                 self.write_attrs(node, mount, &mut attrs, root_idx as u8);
                             }
+
                             // This operation relies on the fact that the root node is the top node on the stack so we need to do it here
                             self.load_placeholders(node, mount, &mut nodes, root_idx as u8);
                         }
@@ -1551,6 +1559,7 @@ impl<'a, 'b, M: WriteMutations> Fiber<'a, 'b, M> {
     }
 
     fn remove_suspended_nodes(&mut self, scope_id: ScopeId, destroy_component_state: bool) {
+        // todo!()
         // todo!()
         // let Some(scope) =
         //     SuspenseContext::downcast_suspense_boundary_from_scope(self.runtime, scope_id)

@@ -1,4 +1,3 @@
-use crate::scope_context::SuspenseLocation;
 use crate::{arena::ElementRef, CapturedError};
 use crate::{guard::RuntimeError, nodes::VNodeMount};
 use crate::{
@@ -12,6 +11,7 @@ use crate::{
     Task,
 };
 use crate::{scheduler::ScopeOrder, RuntimeGuard};
+use crate::{scope_context::SuspenseLocation, ErrorContext};
 use crate::{AttributeValue, ElementId, Event};
 use generational_box::{AnyStorage, Owner};
 use slab::Slab;
@@ -249,7 +249,16 @@ impl Runtime {
     /// Get the state for any scope given its ID
     ///
     /// This is useful for inserting or removing contexts from a scope, or rendering out its root node
-    pub(crate) fn get_scope(&self, id: ScopeId) -> Option<Ref<'_, Scope>> {
+    pub(crate) fn get_scope(&self, id: ScopeId) -> Ref<'_, Scope> {
+        Ref::map(self.scope_states.borrow(), |contexts| {
+            contexts[id.0].as_ref().unwrap()
+        })
+    }
+
+    /// Get the state for any scope given its ID
+    ///
+    /// This is useful for inserting or removing contexts from a scope, or rendering out its root node
+    pub(crate) fn try_get_scope(&self, id: ScopeId) -> Option<Ref<'_, Scope>> {
         Ref::filter_map(self.scope_states.borrow(), |contexts| {
             contexts.get(id.0).and_then(|f| f.as_ref())
         })
@@ -281,32 +290,18 @@ impl Runtime {
     pub(crate) fn with_current_scope<R>(f: impl FnOnce(&Scope) -> R) -> R {
         Self::with(|rt| {
             let scope = rt.current_scope_id();
-            rt.get_scope(scope).map(|sc| f(&sc)).unwrap()
+            f(&rt.get_scope(scope))
         })
     }
 
-    pub(crate) fn try_with_current_scope<R>(
-        f: impl FnOnce(&Scope) -> R,
-    ) -> Result<R, RuntimeError> {
-        todo!()
-        // Self::with(|rt| {
-        //     let scope = rt.current_scope_id();
-        //     rt.get_state(scope).map(|sc| f(&sc))
-        // })
-    }
-
     /// Runs a function with the current scope
-    pub(crate) fn with_scope<R>(
-        scope: ScopeId,
-        callback: impl FnOnce(&Scope) -> R,
-    ) -> Result<R, RuntimeError> {
-        Self::with(|rt| rt.get_scope(scope).map(|scopestate| callback(&scopestate)))
-            .ok_or(RuntimeError::new())
+    pub(crate) fn with_scope<R>(scope: ScopeId, callback: impl FnOnce(&Scope) -> R) -> R {
+        Self::with(|rt| callback(&rt.get_scope(scope)))
     }
 
     /// Get the reactive context's owner for a given scope
     pub fn owner_of<S: AnyStorage>(&self, scope: ScopeId) -> Owner<S> {
-        self.get_scope(scope).unwrap().owner()
+        self.get_scope(scope).owner()
     }
 
     /// Finish a render. This will mark all effects as ready to run and send the render signal.
@@ -320,8 +315,8 @@ impl Runtime {
     }
 
     /// Check if we should render a scope
-    pub(crate) fn scope_should_render(&self, scope_id: ScopeId) -> bool {
-        // If there are no suspended futures, we know the scope is not  and we can skip context checks
+    pub(crate) fn scope_should_mount(&self, scope_id: ScopeId) -> bool {
+        // If there are no suspended futures, we know the scope is not and we can skip context checks
         if self.suspended_tasks.get() == 0 {
             return true;
         }
@@ -475,27 +470,27 @@ impl Runtime {
 
     /// Consume context from the current scope
     pub fn consume_context<T: 'static + Clone>(&self, id: ScopeId) -> T {
-        self.get_scope(id).unwrap().consume_context::<T>().unwrap()
+        self.get_scope(id).consume_context::<T>().unwrap()
     }
 
     /// Consume context from the current scope
     pub fn try_consume_context<T: 'static + Clone>(&self, id: ScopeId) -> Option<T> {
-        self.get_scope(id).unwrap().consume_context::<T>()
+        self.get_scope(id).consume_context::<T>()
     }
 
     /// Consume context from the current scope
     pub fn consume_context_from_scope<T: 'static + Clone>(&self, scope_id: ScopeId) -> Option<T> {
-        self.get_scope(scope_id).unwrap().consume_context::<T>()
+        self.get_scope(scope_id).consume_context::<T>()
     }
 
     /// Check if the current scope has a context
     pub fn has_context<T: 'static + Clone>(&self, scope: ScopeId) -> Option<T> {
-        self.get_scope(scope).unwrap().has_context::<T>()
+        self.get_scope(scope).has_context::<T>()
     }
 
     /// Provide context to the current scope
     pub fn provide_context<T: 'static + Clone>(&self, scope: ScopeId, value: T) -> T {
-        self.get_scope(scope).unwrap().provide_context(value)
+        self.get_scope(scope).provide_context(value)
     }
 
     /// Pushes the future onto the poll queue to be polled after the component renders.
@@ -507,12 +502,12 @@ impl Runtime {
     ///
     /// This can be used as a helpful diagnostic when debugging hooks/renders, etc
     pub fn generation(&self, scope: ScopeId) -> usize {
-        self.get_scope(scope).unwrap().generation()
+        self.get_scope(scope).generation()
     }
 
     /// Get the parent of the current scope if it exists
     pub fn parent_scope(&self, scope: ScopeId) -> Option<ScopeId> {
-        self.get_scope(scope).unwrap().parent_id()
+        self.get_scope(scope).parent_id()
     }
 
     /// Check if the current scope is a descendant of the given scope
@@ -529,19 +524,19 @@ impl Runtime {
 
     /// Mark the current scope as dirty, causing it to re-render
     pub fn needs_update(&self, scope: ScopeId) {
-        self.get_scope(scope).unwrap().needs_update();
+        self.get_scope(scope).needs_update();
     }
 
     /// Create a subscription that schedules a future render for the reference component. Unlike [`Self::needs_update`], this function will work outside of the dioxus runtime.
     ///
     /// ## Notice: you should prefer using [`crate::schedule_update_any`]
     pub fn schedule_update(&self, scope: ScopeId) -> Arc<dyn Fn() + Send + Sync + 'static> {
-        self.get_scope(scope).unwrap().schedule_update()
+        self.get_scope(scope).schedule_update()
     }
 
     /// Get the height of the current scope
     pub fn height(&self, scope: ScopeId) -> u32 {
-        self.get_scope(scope).unwrap().height()
+        self.get_scope(scope).height()
     }
 
     /// Throw a [`CapturedError`] into a scope. The error will bubble up to the nearest [`ErrorBoundary`](crate::ErrorBoundary) or the root of the app.
@@ -562,21 +557,15 @@ impl Runtime {
     /// }
     /// ```
     pub fn throw_error(&self, scope: ScopeId, error: impl Into<CapturedError> + 'static) {
-        let error = error.into();
-        if let Some(cx) = self.try_consume_context::<crate::ErrorContext>(scope) {
-            cx.insert_error(error)
-        } else {
-            tracing::error!(
-                "Tried to throw an error into an error boundary, but failed to locate a boundary: {:?}",
-                error
-            )
-        }
+        self.consume_context::<ErrorContext>(scope)
+            .insert_error(error.into());
     }
 
     /// Get the suspense context the current scope is in
-    pub fn suspense_context(&self, scope: ScopeId) -> Option<SuspenseContext> {
-        todo!()
-        // Runtime::with_scope(*self, |cx| cx.suspense_boundary.suspense_context().cloned()).unwrap()
+    pub fn suspense_context(&self, scope: ScopeId) -> SuspenseContext {
+        self.consume_context::<SuspenseContext>(scope)
+        // todo!()
+        // // Runtime::with_scope(*self, |cx| cx.suspense_boundary.suspense_context().cloned()).unwrap()
     }
 
     /// Run a closure inside of scope's runtime

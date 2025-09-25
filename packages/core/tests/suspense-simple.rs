@@ -41,8 +41,8 @@ fn app() -> Element {
         }))
     });
 
-    println!("suspense: {:?}", suspense_err);
-    println!("ready: {}", ready());
+    debug!("suspense: {:?}", suspense_err);
+    debug!("ready: {}", ready());
 
     if !ready() {
         return suspense_err;

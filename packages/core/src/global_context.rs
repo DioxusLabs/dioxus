@@ -61,10 +61,7 @@ pub fn consume_context<T: 'static + Clone>() -> T {
 
 /// Consume context from the current scope
 pub fn consume_context_from_scope<T: 'static + Clone>(scope_id: ScopeId) -> Option<T> {
-    Runtime::with(|rt| {
-        rt.get_scope(scope_id)
-            .and_then(|cx| cx.consume_context::<T>())
-    })
+    Runtime::with(|rt| rt.get_scope(scope_id).consume_context::<T>())
 }
 
 /// Check if the current scope has a context
@@ -205,8 +202,8 @@ pub fn queue_effect(f: impl FnOnce() + 'static) {
 /// ```
 ///
 #[doc = include_str!("../docs/common_spawn_errors.md")]
-pub fn spawn_forever(fut: impl Future<Output = ()> + 'static) -> Option<Task> {
-    Runtime::with_scope(ScopeId::ROOT, |cx| cx.spawn(fut)).ok()
+pub fn spawn_forever(fut: impl Future<Output = ()> + 'static) -> Task {
+    Runtime::with_scope(ScopeId::ROOT, |cx| cx.spawn(fut))
 }
 
 /// Informs the scheduler that this task is no longer needed and should be removed.

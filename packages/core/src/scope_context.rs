@@ -219,7 +219,7 @@ impl Scope {
         let mut search_parent = self.parent_id;
         let ctx = Runtime::with(|runtime| {
             while let Some(parent_id) = search_parent {
-                let Some(parent) = runtime.get_scope(parent_id) else {
+                let Some(parent) = runtime.try_get_scope(parent_id) else {
                     tracing::error!("Parent scope {:?} not found", parent_id);
                     return None;
                 };
@@ -322,12 +322,7 @@ impl Scope {
     /// Note that you should be checking if the context existed before trying to provide a new one. Providing a context
     /// when a context already exists will swap the context out for the new one, which may not be what you want.
     pub(crate) fn provide_root_context<T: 'static + Clone>(&self, context: T) -> T {
-        Runtime::with(|runtime| {
-            runtime
-                .get_scope(ScopeId::ROOT)
-                .unwrap()
-                .provide_context(context)
-        })
+        Runtime::with(|runtime| runtime.get_scope(ScopeId::ROOT).provide_context(context))
     }
 
     /// Start a new future on the same thread as the rest of the VirtualDom.
