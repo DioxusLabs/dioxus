@@ -1,8 +1,8 @@
 use crate::{
     global_context::current_scope_id,
     innerlude::{provide_context, CapturedError},
-    use_hook, Element, IntoDynNode, Properties, ScopeId, Template, TemplateAttribute, TemplateNode,
-    VNode,
+    use_hook, Element, IntoDynNode, Properties, Runtime, ScopeId, Template, TemplateAttribute,
+    TemplateNode, VNode,
 };
 use std::{
     any::Any,
@@ -103,14 +103,15 @@ impl Display for CapturedPanic {
 
 /// Provide an error boundary to catch errors from child components
 pub fn provide_error_boundary() -> ErrorContext {
-    provide_context(ErrorContext::new(current_scope_id()))
+    provide_context(ErrorContext::new(Runtime::current(), current_scope_id()))
 }
 
 /// A context with information about suspended components
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ErrorContext {
     errors: Rc<RefCell<Vec<CapturedError>>>,
     id: ScopeId,
+    rt: Rc<Runtime>,
 }
 
 impl PartialEq for ErrorContext {
@@ -121,10 +122,11 @@ impl PartialEq for ErrorContext {
 
 impl ErrorContext {
     /// Create a new suspense boundary in a specific scope
-    pub(crate) fn new(id: ScopeId) -> Self {
+    pub(crate) fn new(rt: Rc<Runtime>, id: ScopeId) -> Self {
         Self {
             errors: Rc::new(RefCell::new(vec![])),
             id,
+            rt,
         }
     }
 
@@ -136,13 +138,13 @@ impl ErrorContext {
     /// Push an error into this Error Boundary
     pub fn insert_error(&self, error: CapturedError) {
         self.errors.borrow_mut().push(error);
-        self.id.needs_update();
+        self.rt.needs_update(self.id);
     }
 
     /// Clear all errors from this Error Boundary
     pub fn clear_errors(&self) {
         self.errors.borrow_mut().clear();
-        self.id.needs_update();
+        self.rt.needs_update(self.id);
     }
 }
 

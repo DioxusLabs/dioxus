@@ -317,10 +317,13 @@ impl VirtualDom {
             resolved_scopes: Default::default(),
         };
 
+        let runtime = dom.runtime.clone();
+
         let root = dom.new_scope(root.props, "app", None);
 
         // Capture errors
-        root.state().provide_context(ErrorContext::new(root.id()));
+        root.state()
+            .provide_context(ErrorContext::new(runtime, root.id()));
 
         // Capture suspense
         root.state().provide_context(SuspenseContext::new());
@@ -347,14 +350,14 @@ impl VirtualDom {
 
     /// Run a closure inside the dioxus runtime
     #[instrument(skip(self, callback), level = "trace", name = "VirtualDom::in_runtime")]
-    pub fn in_runtime<O>(&self, callback: impl FnOnce() -> O) -> O {
+    pub fn in_runtime<O>(&self, callback: impl FnOnce(&Runtime) -> O) -> O {
         let _runtime = RuntimeGuard::new(self.runtime.clone());
-        callback()
+        callback(&self.runtime)
     }
 
     /// Run a closure inside a specific scope
     pub fn in_scope<T>(&self, scope: ScopeId, f: impl FnOnce() -> T) -> T {
-        self.in_runtime(|| scope.in_runtime(f))
+        self.in_runtime(|rt| rt.in_runtime(scope, f))
     }
 
     /// Build the virtualdom with a global context inserted into the base scope
@@ -394,7 +397,7 @@ impl VirtualDom {
     ///
     /// Whenever the Runtime "works", it will re-render this scope
     pub fn mark_dirty(&mut self, id: ScopeId) {
-        let Some(scope) = self.runtime.get_state(id) else {
+        let Some(scope) = self.runtime.get_scope(id) else {
             return;
         };
 
@@ -409,7 +412,7 @@ impl VirtualDom {
         let Some(scope) = self.runtime.task_scope(task) else {
             return;
         };
-        let Some(scope) = self.runtime.get_state(scope) else {
+        let Some(scope) = self.runtime.get_scope(scope) else {
             return;
         };
 
@@ -726,7 +729,7 @@ impl VirtualDom {
                     let scope_id: ScopeId = scope.id;
                     let run_scope = self
                         .runtime
-                        .get_state(scope.id)
+                        .get_scope(scope.id)
                         .filter(|scope| scope.should_run_during_suspense())
                         .is_some();
 
@@ -757,7 +760,7 @@ impl VirtualDom {
         }
 
         self.resolved_scopes
-            .sort_by_key(|&id| self.runtime.get_state(id).unwrap().height);
+            .sort_by_key(|&id| self.runtime.get_scope(id).unwrap().height);
         std::mem::take(&mut self.resolved_scopes)
     }
 
@@ -789,7 +792,7 @@ impl VirtualDom {
         name: &'static str,
         parent: Option<ScopeId>,
     ) -> &mut ScopeState {
-        let height = match parent.and_then(|id| self.runtime.get_state(id)) {
+        let height = match parent.and_then(|id| self.runtime.get_scope(id)) {
             Some(parent) => parent.height() + 1,
             None => 0,
         };
@@ -845,14 +848,14 @@ impl VirtualDom {
                         Ok(_) => scope.state().forward_render_count(),
 
                         // If there was an error, we throw it up the nearest error boundary
-                        Err(RenderError::Error(e)) => scope_id.throw_error(e.clone()),
+                        Err(RenderError::Error(e)) => self.runtime.throw_error(scope_id, e.clone()),
 
                         // If the task suspended, we need to add it to the nearest suspense boundary
                         Err(RenderError::Suspended(e)) => {
                             // Get the nearest suspense boundary
                             let boundary = self
                                 .runtime
-                                .get_state(scope_id)
+                                .get_scope(scope_id)
                                 .unwrap()
                                 .consume_context::<SuspenseContext>()
                                 .unwrap();
@@ -860,6 +863,9 @@ impl VirtualDom {
                             // Add the suspended task to the boundary, and then increment the global suspended task count
                             // if it was actually added (it might have already been added before...)
                             if boundary.add_suspended_task(e.clone()) {
+                                todo!();
+                                // self.inner.id.get().needs_update();
+
                                 self.runtime
                                     .suspended_tasks
                                     .set(self.runtime.suspended_tasks.get() + 1);

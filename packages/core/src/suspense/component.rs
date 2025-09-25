@@ -285,7 +285,7 @@ impl SuspenseContext {
         scope_id: ScopeId,
     ) -> Option<Self> {
         runtime
-            .get_state(scope_id)
+            .get_scope(scope_id)
             .and_then(|scope| scope.suspense_boundary())
     }
 }

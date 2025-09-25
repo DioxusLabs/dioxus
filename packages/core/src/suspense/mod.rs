@@ -126,8 +126,6 @@ impl SuspenseContext {
 
         tasks.push(task);
 
-        self.inner.id.get().needs_update();
-
         true
     }
 
@@ -137,7 +135,6 @@ impl SuspenseContext {
             .suspended_tasks
             .borrow_mut()
             .retain(|t| t.task() != task);
-        self.inner.id.get().needs_update();
     }
 
     /// Get all suspended tasks

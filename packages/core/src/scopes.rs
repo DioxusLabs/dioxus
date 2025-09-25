@@ -31,12 +31,10 @@ impl std::fmt::Debug for ScopeId {
         let mut builder = builder.field(&self.0);
         #[cfg(debug_assertions)]
         {
-            if let Some(name) = Runtime::current()
-                .ok()
-                .as_ref()
-                .and_then(|rt| rt.get_state(*self))
-            {
-                builder = builder.field(&name.name);
+            if let Ok(rt) = Runtime::try_current() {
+                if let Some(scope) = rt.get_scope(*self) {
+                    builder = builder.field(&scope.name);
+                }
             }
         }
         builder.finish()
@@ -86,7 +84,7 @@ impl ScopeState {
     }
 
     pub(crate) fn state(&self) -> Ref<'_, Scope> {
-        self.runtime.get_state(self.context_id).unwrap()
+        self.runtime.get_scope(self.context_id).unwrap()
     }
 }
 

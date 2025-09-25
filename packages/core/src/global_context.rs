@@ -40,12 +40,12 @@ pub fn vdom_is_rendering() -> bool {
 /// }
 /// ```
 pub fn throw_error(error: impl Into<CapturedError> + 'static) {
-    current_scope_id().throw_error(error)
+    Runtime::current().throw_error(current_scope_id(), error);
 }
 
 /// Get the suspense context the current scope is in
 pub fn suspense_context() -> Option<SuspenseContext> {
-    current_scope_id().suspense_context()
+    Runtime::with_current_scope(|cx| cx.suspense_context())
 }
 
 /// Consume context from the current scope
@@ -62,7 +62,7 @@ pub fn consume_context<T: 'static + Clone>() -> T {
 /// Consume context from the current scope
 pub fn consume_context_from_scope<T: 'static + Clone>(scope_id: ScopeId) -> Option<T> {
     Runtime::with(|rt| {
-        rt.get_state(scope_id)
+        rt.get_scope(scope_id)
             .and_then(|cx| cx.consume_context::<T>())
     })
 }

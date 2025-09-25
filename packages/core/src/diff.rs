@@ -89,7 +89,7 @@ impl<'a, 'b, M: WriteMutations> Fiber<'a, 'b, M> {
             self.dom.scopes[scope.0].last_rendered_node = Some(LastRenderedNode::new(new_nodes));
 
             if self.write && self.runtime.scope_should_render(scope) {
-                self.runtime.get_state(scope).unwrap().mount(self.runtime);
+                self.runtime.get_scope(scope).unwrap().mount(self.runtime);
             }
         })
     }
@@ -116,7 +116,7 @@ impl<'a, 'b, M: WriteMutations> Fiber<'a, 'b, M> {
             if self.write && self.runtime.scope_should_render(scope) {
                 self.dom
                     .runtime
-                    .get_state(scope)
+                    .get_scope(scope)
                     .unwrap()
                     .mount(self.runtime);
             }
@@ -611,7 +611,7 @@ impl<'a, 'b, M: WriteMutations> Fiber<'a, 'b, M> {
         // Now diff the scope
         self.run_and_diff_scope(scope_id);
 
-        let height = self.runtime.get_state(scope_id).unwrap().height;
+        let height = self.runtime.get_scope(scope_id).unwrap().height;
         self.dom
             .dirty_scopes
             .remove(&ScopeOrder::new(height, scope_id));

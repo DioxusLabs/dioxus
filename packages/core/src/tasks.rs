@@ -214,7 +214,7 @@ impl Runtime {
     /// Queue an effect to run after the next render
     pub(crate) fn queue_effect(&self, id: ScopeId, f: impl FnOnce() + 'static) {
         let effect = Box::new(f) as Box<dyn FnOnce() + 'static>;
-        let Some(scope) = self.get_state(id) else {
+        let Some(scope) = self.get_scope(id) else {
             return;
         };
         let mut status = scope.status.borrow_mut();
@@ -236,7 +236,8 @@ impl Runtime {
     ) {
         // Add the effect to the queue of effects to run after the next render for the given scope
         let mut effects = self.pending_effects.borrow_mut();
-        let scope_order = ScopeOrder::new(id.height(), id);
+        let height = self.get_scope(id).map(|s| s.height()).unwrap_or(0);
+        let scope_order = ScopeOrder::new(height, id);
         match effects.get(&scope_order) {
             Some(effects) => effects.push_back(f),
             None => {
@@ -261,12 +262,6 @@ impl Runtime {
 
     #[track_caller]
     pub(crate) fn handle_task_wakeup(&self, id: Task) -> Poll<()> {
-        #[cfg(debug_assertions)]
-        {
-            // Ensure we are currently inside a `Runtime`.
-            Runtime::current().unwrap_or_else(|e| panic!("{}", e));
-        }
-
         let task = self.tasks.borrow().get(id.id).cloned();
 
         // The task was removed from the scheduler, so we can just ignore it
@@ -289,7 +284,7 @@ impl Runtime {
 
             if poll_result.is_ready() {
                 // Remove it from the scope so we dont try to double drop it when the scope dropes
-                self.get_state(task.scope)
+                self.get_scope(task.scope)
                     .unwrap()
                     .spawned_tasks
                     .borrow_mut()
@@ -318,11 +313,13 @@ impl Runtime {
                 self.suspended_tasks.set(self.suspended_tasks.get() - 1);
                 if let SuspenseLocation::UnderSuspense(boundary) = boundary {
                     boundary.remove_suspended_task(id);
+                    // self.inner.id.get().needs_update();
+                    todo!()
                 }
             }
 
             // Remove the task from pending work. We could reuse the slot before the task is polled and discarded so we need to remove it from pending work instead of filtering out dead tasks when we try to poll them
-            if let Some(scope) = self.get_state(task.scope) {
+            if let Some(scope) = self.get_scope(task.scope) {
                 let order = ScopeOrder::new(scope.height(), scope.id);
                 if let Some(dirty_tasks) = self.dirty_tasks.borrow_mut().get(&order) {
                     dirty_tasks.remove(id);
