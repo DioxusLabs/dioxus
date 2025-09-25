@@ -16,6 +16,7 @@ fn app() -> Element {
 }
 
 #[test]
+#[ignore] // Test doesn't do anything.
 fn bubbles_error() {
     let mut dom = VirtualDom::new(app);
 

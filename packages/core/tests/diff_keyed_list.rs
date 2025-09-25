@@ -2,7 +2,7 @@
 //!
 //! These tests only verify that the diffing algorithm works properly for single components.
 //!
-//! It does not validated that component lifecycles work properly. This is done in another test file.
+//! It does not validate that component lifecycles work properly. This is done in another test file.
 
 use dioxus::dioxus_core::{ElementId, Mutation::*};
 use dioxus::prelude::*;
