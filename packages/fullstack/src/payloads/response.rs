@@ -1,8 +1,7 @@
-use crate::IntoRequest;
+use crate::{ClientRequest, IntoRequest};
 use crate::{ClientResponse, FromResponse};
 
 use dioxus_fullstack_core::{RequestError, ServerFnError};
-use reqwest::{RequestBuilder, Url};
 use std::prelude::rust_2024::Future;
 
 impl FromResponse for axum::response::Response {
@@ -16,7 +15,7 @@ impl FromResponse for axum::response::Response {
 impl IntoRequest for axum::extract::Request {
     fn into_request(
         self,
-        request: RequestBuilder,
+        request: ClientRequest,
     ) -> impl Future<Output = Result<ClientResponse, RequestError>> + Send + 'static {
         async move { todo!() }
     }

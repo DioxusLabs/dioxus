@@ -10,7 +10,7 @@ use dioxus_fullstack_core::{RequestError, ServerFnError};
 use futures::Stream;
 use http_body_util::BodyExt;
 
-use crate::{ClientResponse, FromResponse, IntoRequest, ServerFnRejection};
+use crate::{ClientResponse, ClientRequest, FromResponse, IntoRequest, ServerFnRejection};
 
 pub struct FileUpload {
     outgoing_stream: Option<http_body_util::BodyDataStream<Request<Body>>>,
@@ -29,7 +29,7 @@ impl FileUpload {
 impl IntoRequest for FileUpload {
     fn into_request(
         self,
-        builder: reqwest::RequestBuilder,
+        builder: ClientRequest,
     ) -> impl Future<Output = Result<ClientResponse, RequestError>> + Send + 'static {
         async move { todo!() }
     }

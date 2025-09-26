@@ -137,72 +137,15 @@ pub mod req_to {
 
     use dioxus_fullstack_core::client::get_server_url;
 
-    use crate::{CantEncode, ClientResponse, EncodeIsVerified};
+    use crate::{CantEncode, ClientRequest, ClientResponse, EncodeIsVerified};
 
     use super::*;
-
-    pub struct FetchRequest {
-        pub client: reqwest::RequestBuilder,
-    }
-
-    impl FetchRequest {
-        pub fn new(method: http::Method, url: String, params: &impl Serialize) -> Self {
-            // Shrink monomorphization bloat by moving this to its own function
-            fn fetch_inner(method: http::Method, url: String, query: String) -> FetchRequest {
-                #[cfg(not(target_arch = "wasm32"))]
-                let (ip, port) = {
-                    static IP: LazyLock<String> = LazyLock::new(|| {
-                        std::env::var("IP").unwrap_or_else(|_| "127.0.0.1".into())
-                    });
-                    static PORT: LazyLock<String> =
-                        LazyLock::new(|| std::env::var("PORT").unwrap_or_else(|_| "8080".into()));
-
-                    (IP.clone(), PORT.clone())
-                };
-
-                #[cfg(target_arch = "wasm32")]
-                let (ip, port) = ("127.0.0.1", "8080".to_string());
-
-                let url = format!(
-                    "http://{ip}:{port}{url}{params}",
-                    params = if query.is_empty() {
-                        "".to_string()
-                    } else {
-                        format!("?{}", query)
-                    }
-                );
-
-                // let host = if cfg!(target_os = "wasm32") {
-                //     "".to_string()
-                // } else {
-                //     get_server_url()
-                // };
-
-                // http://127.0.0.1:8080
-                // // format!("http://127.0.0.1:8080{}", #request_url)
-                // // .#http_method(format!("{}{}", get_server_url(), #request_url)); // .query(&__params);
-
-                // static COOKIES: LazyLock<Arc<reqwest::cookie::Jar>> =
-                //     LazyLock::new(|| Arc::new(reqwest::cookie::Jar::default()));
-
-                let client = reqwest::Client::builder()
-                    // .cookie_store(true)
-                    // .cookie_provider(COOKIES.clone())
-                    .build()
-                    .unwrap()
-                    .request(method, url);
-                FetchRequest { client }
-            }
-
-            fetch_inner(method, url, serde_qs::to_string(params).unwrap())
-        }
-    }
 
     pub trait EncodeRequest<In, Out> {
         type VerifyEncode;
         fn fetch_client(
             &self,
-            ctx: FetchRequest,
+            ctx: ClientRequest,
             data: In,
             map: fn(In) -> Out,
         ) -> impl Future<Output = Result<ClientResponse, RequestError>> + Send + 'static;
@@ -218,7 +161,7 @@ pub mod req_to {
         type VerifyEncode = EncodeIsVerified;
         fn fetch_client(
             &self,
-            ctx: FetchRequest,
+            ctx: ClientRequest,
             data: T,
             _map: fn(T) -> O,
         ) -> impl Future<Output = Result<ClientResponse, RequestError>> + Send + 'static {
@@ -231,14 +174,14 @@ pub mod req_to {
                         inner: res,
                         state: None,
                     });
+                } else {
+                    let res = ctx.client.body(data).send().await.unwrap();
+
+                    Ok(ClientResponse {
+                        inner: res,
+                        state: None,
+                    })
                 }
-
-                let res = ctx.client.body(data).send().await.unwrap();
-
-                Ok(ClientResponse {
-                    inner: res,
-                    state: None,
-                })
             })
         }
 
@@ -256,11 +199,11 @@ pub mod req_to {
         type VerifyEncode = EncodeIsVerified;
         fn fetch_client(
             &self,
-            ctx: FetchRequest,
+            ctx: ClientRequest,
             data: T,
             map: fn(T) -> O,
         ) -> impl Future<Output = Result<ClientResponse, RequestError>> + Send + 'static {
-            O::into_request(map(data), ctx.client)
+            O::into_request(map(data), ctx)
         }
 
         fn verify_can_serialize(&self) -> Self::VerifyEncode {
@@ -277,7 +220,7 @@ pub mod req_to {
         #[allow(clippy::manual_async_fn)]
         fn fetch_client(
             &self,
-            _ctx: FetchRequest,
+            _ctx: ClientRequest,
             _data: T,
             _map: fn(T) -> O,
         ) -> impl Future<Output = Result<ClientResponse, RequestError>> + Send + 'static {

@@ -19,7 +19,8 @@
 //! automatically serialize and deserialize messages for you.
 
 use crate::{
-    CborEncoding, ClientResponse, Encoding, FromResponse, IntoRequest, JsonEncoding, ServerFnError,
+    CborEncoding, ClientRequest, ClientResponse, Encoding, FromResponse, IntoRequest, JsonEncoding,
+    ServerFnError,
 };
 use axum::extract::{FromRequest, Request};
 use axum_core::response::{IntoResponse, Response};
@@ -466,7 +467,7 @@ impl IntoRequest for WebSocketOptions {
     // impl IntoRequest<UpgradingWebsocket> for WebSocketOptions {
     fn into_request(
         self,
-        builder: reqwest::RequestBuilder,
+        builder: ClientRequest,
     ) -> impl Future<Output = std::result::Result<ClientResponse, RequestError>> + Send + 'static
 // ) -> impl Future<Output = std::result::Result<UpgradingWebsocket, RequestError>> + Send + 'static
     {

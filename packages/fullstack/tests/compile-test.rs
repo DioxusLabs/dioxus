@@ -174,7 +174,7 @@ mod custom_types {
     use axum::response::Response;
     // use axum_core::response::Response;
     use dioxus_fullstack::{
-        ClientResponse, FromResponse, IntoRequest, RequestError, WebSocketOptions,
+        ClientRequest, ClientResponse, FromResponse, IntoRequest, RequestError, WebSocketOptions,
     };
 
     use super::*;
@@ -227,9 +227,8 @@ mod custom_types {
     impl IntoRequest for MyCustomPayload {
         fn into_request(
             self,
-            request_builder: reqwest::RequestBuilder,
-        ) -> impl Future<Output = Result<reqwest::Response, RequestError>> + Send + 'static
-        {
+            request_builder: ClientRequest,
+        ) -> impl Future<Output = Result<ClientResponse, RequestError>> + Send + 'static {
             async move { todo!() }
         }
     }

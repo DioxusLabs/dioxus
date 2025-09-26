@@ -1,7 +1,6 @@
-use crate::{ClientResponse, FromResponse, IntoRequest, ServerFnError};
+use crate::{ClientRequest, ClientResponse, FromResponse, IntoRequest, ServerFnError};
 pub use axum::extract::Json;
 use dioxus_fullstack_core::RequestError;
-use reqwest::RequestBuilder;
 use serde::{de::DeserializeOwned, Serialize};
 use std::prelude::rust_2024::Future;
 
@@ -11,7 +10,7 @@ where
 {
     fn into_request(
         self,
-        request_builder: RequestBuilder,
+        request_builder: ClientRequest,
     ) -> impl Future<Output = Result<ClientResponse, RequestError>> + Send + 'static {
         send_wrapper::SendWrapper::new(async move {
             todo!()

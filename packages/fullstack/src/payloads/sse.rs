@@ -11,8 +11,7 @@ use axum::{
 use axum_core::response::IntoResponse;
 use futures::{Stream, TryStream};
 use futures::{StreamExt, TryStreamExt};
-use http::{header::CONTENT_TYPE, StatusCode};
-use reqwest::header::HeaderValue;
+use http::{header::CONTENT_TYPE, HeaderValue, StatusCode};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::fmt::Display;
 
