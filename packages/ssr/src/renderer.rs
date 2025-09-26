@@ -103,8 +103,8 @@ impl Renderer {
         dom: &VirtualDom,
         scope: ScopeId,
     ) -> std::fmt::Result {
-        let node = dom.get_scope(scope).unwrap().root_node();
-        self.render_template(buf, dom, node, true)?;
+        let node = dom.get_scope(scope).unwrap().displayed_node();
+        self.render_template(buf, dom, &node, true)?;
 
         Ok(())
     }
@@ -179,8 +179,8 @@ impl Renderer {
                                 render_components(self, &mut buf, dom, scope_id)?;
                             } else {
                                 let scope = node.mounted_scope(*index, template, dom).unwrap();
-                                let node = scope.root_node();
-                                self.render_template(buf, dom, node, escaped)?
+                                let node = scope.displayed_node();
+                                self.render_template(buf, dom, &node, escaped)?
                             }
                         }
                         DynamicNode::Text(text) => {

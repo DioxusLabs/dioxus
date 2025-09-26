@@ -1,6 +1,6 @@
 use crate::{
     any_props::BoxedAnyProps, reactive_context::ReactiveContext, scope_context::Scope, Element,
-    RenderError, Runtime, VNode,
+    RenderError, Runtime, SuspenseContext, VNode,
 };
 use std::{cell::Ref, rc::Rc};
 
@@ -56,12 +56,25 @@ pub struct ScopeState {
 }
 
 impl ScopeState {
+    /// Get a handle to the currently displayed node for this Scope
+    ///
+    /// If this scope is a suspense boundary and is currently suspended, this will return a placeholder node.
+    pub fn displayed_node(&self) -> VNode {
+        if let Some(ctx) = self.runtime.has_context::<SuspenseContext>(self.context_id) {
+            if ctx.inner.suspended.get() {
+                return ctx.inner.rendered_fallback_ui.borrow().clone().unwrap();
+            }
+        }
+
+        self.root_node().clone()
+    }
+
     /// Get a handle to the currently active head node arena for this Scope
     ///
     /// This is useful for traversing the tree outside of the VirtualDom, such as in a custom renderer or in SSR.
     ///
     /// Panics if the tree has not been built yet.
-    pub fn root_node(&self) -> &VNode {
+    pub(crate) fn root_node(&self) -> &VNode {
         self.try_root_node()
             .expect("The tree has not been built yet. Make sure to call rebuild on the tree before accessing its nodes.")
     }
@@ -95,7 +108,7 @@ impl Drop for ScopeState {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(PartialEq, Debug)]
 pub enum LastRenderedNode {
     Real(VNode),
     Placeholder(VNode, RenderError),
@@ -109,16 +122,16 @@ impl LastRenderedNode {
         }
     }
 
-    pub fn as_element_ref(&self) -> Result<&VNode, &RenderError> {
-        match self {
-            LastRenderedNode::Real(vnode) => Ok(vnode),
-            LastRenderedNode::Placeholder(vnode, err) => Err(err),
-        }
-    }
+    // pub fn as_element_ref(&self) -> Result<&VNode, &RenderError> {
+    //     match self {
+    //         LastRenderedNode::Real(vnode) => Ok(vnode),
+    //         LastRenderedNode::Placeholder(vnode, err) => Err(err),
+    //     }
+    // }
 
-    pub fn is_suspended(&self) -> bool {
-        matches!(self, LastRenderedNode::Placeholder(_, err) if matches!(err, RenderError::Suspended(_)))
-    }
+    // pub fn is_suspended(&self) -> bool {
+    //     matches!(self, LastRenderedNode::Placeholder(_, err) if matches!(err, RenderError::Suspended(_)))
+    // }
 
     pub fn as_vnode(&self) -> &VNode {
         match self {

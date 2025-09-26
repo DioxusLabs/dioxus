@@ -516,6 +516,7 @@ impl SsrRendererPool {
                 }
             }
             if let Some(node) = scope.try_root_node() {
+                todo!("fix this...");
                 Self::take_from_vnode(context, vdom, node);
             }
         }
