@@ -1,19 +1,8 @@
 use crate::ServerFnError;
-use axum::{extract::Request, response::Response};
-use axum::{
-    extract::{FromRequest, FromRequestParts},
-    response::IntoResponse,
-    Json,
-};
-use bytes::Bytes;
-use dioxus_fullstack_core::ServerFnSugar;
-use futures::Stream;
-use http::{request::Parts, Error, Method};
-use http_body_util::BodyExt;
-use reqwest::RequestBuilder;
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use std::sync::OnceLock;
-use std::{future::Future, str::FromStr, sync::LazyLock};
+use axum::Json;
+use http::Method;
+use serde::{de::DeserializeOwned, Serialize};
+use std::{future::Future, sync::LazyLock};
 
 static CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| reqwest::Client::new());
 

@@ -26,6 +26,7 @@ impl IntoResponse for OpaqueResponse {
             self.inner
                 .expect("OpaqueResponse can only be converted into a response on the server")
         }
+
         #[cfg(not(feature = "server"))]
         {
             todo!()

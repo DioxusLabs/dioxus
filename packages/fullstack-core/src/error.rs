@@ -39,8 +39,11 @@ pub enum ServerFnError {
     },
 
     /// Occurs on the client if there is a network error while trying to run function on server.
-    #[error("error reaching server to call server function: {message} (code: {code:?})")]
-    Request { message: String, code: Option<u16> },
+    #[error("error reaching server to call server function: {message} ")]
+    Request {
+        error: RequestError,
+        message: String,
+    },
 
     /// Occurs on the client if there is an error while trying to read the response body as a stream.
     #[error("error reading response body stream: {0}")]
@@ -97,10 +100,10 @@ impl From<ServerFnError> for http::StatusCode {
                     .unwrap_or(http::StatusCode::INTERNAL_SERVER_ERROR),
                 None => http::StatusCode::INTERNAL_SERVER_ERROR,
             },
-            ServerFnError::Request { code, .. } => match code {
-                Some(code) => http::StatusCode::from_u16(code)
+            ServerFnError::Request { error, .. } => match error {
+                RequestError::Status(code) => http::StatusCode::from_u16(code)
                     .unwrap_or(http::StatusCode::INTERNAL_SERVER_ERROR),
-                None => http::StatusCode::INTERNAL_SERVER_ERROR,
+                _ => http::StatusCode::INTERNAL_SERVER_ERROR,
             },
             ServerFnError::StreamError(_)
             | ServerFnError::Registration(_)
@@ -123,5 +126,53 @@ impl IntoResponse for ServerFnRejection {
             .status(http::StatusCode::INTERNAL_SERVER_ERROR)
             .body(axum_core::body::Body::from("Internal Server Error"))
             .unwrap()
+    }
+}
+
+/// An error type representing issues that can occur while making requests.
+///
+/// This is made to paper over the reqwest::Error type which we don't want to export here and
+/// is limited in many ways.
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RequestError {
+    /// An error that occurs when building the request.
+    #[error("error building request")]
+    Builder,
+
+    /// An error that occurs when following a redirect.
+    #[error("error following redirect")]
+    Redirect,
+
+    /// An error that occurs when receiving a non-2xx status code.
+    #[error("error receiving status code")]
+    Status(u16),
+
+    /// An error that occurs when a request times out.
+    #[error("error timing out")]
+    Timeout,
+
+    /// An error that occurs when sending a request.
+    #[error("error sending request")]
+    Request,
+
+    /// An error that occurs when upgrading a connection.
+    #[error("error upgrading connection")]
+    Connect,
+
+    /// An error that occurs when there is a request or response body error.
+    #[error("request or response body error")]
+    Body,
+
+    /// An error that occurs when decoding the response body.
+    #[error("error decoding response body")]
+    Decode,
+}
+
+impl RequestError {
+    pub fn status(&self) -> Option<u16> {
+        match self {
+            RequestError::Status(code) => Some(*code),
+            _ => None,
+        }
     }
 }

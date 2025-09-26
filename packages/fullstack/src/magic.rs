@@ -248,7 +248,9 @@ pub mod req_to {
 
 pub use decode_ok::*;
 mod decode_ok {
-    use dioxus_fullstack_core::HttpError;
+    use dioxus_fullstack_core::{HttpError, RequestError};
+
+    use crate::reqwest_resonse_to_serverfn_err;
 
     use super::*;
 
@@ -386,11 +388,7 @@ mod decode_ok {
                     },
                     // todo: implement proper through-error conversion, instead of just ServerFnError::Request
                     // we should expand these cases.
-                    Err(err) => Err(ServerFnError::Request {
-                        message: err.to_string(),
-                        code: err.status().map(|s| s.as_u16()),
-                    }
-                    .into()),
+                    Err(err) => Err(reqwest_resonse_to_serverfn_err(err).into()),
                 }
             })
         }
@@ -409,10 +407,7 @@ mod decode_ok {
                 match res {
                     Ok(Ok(res)) => Ok(res),
                     Ok(Err(e)) => Err(anyhow::Error::from(e)),
-                    Err(err) => Err(anyhow::Error::from(ServerFnError::Request {
-                        message: err.to_string(),
-                        code: err.status().map(|s| s.as_u16()),
-                    })),
+                    Err(err) => Err(anyhow::Error::from(reqwest_resonse_to_serverfn_err(err))),
                 }
             })
         }
@@ -430,11 +425,10 @@ mod decode_ok {
 
                     // We do a best-effort conversion from ServerFnError to StatusCode.
                     Ok(Err(e)) => match e {
-                        ServerFnError::Request {
-                            message: _message,
-                            code,
-                        } => Err(StatusCode::from_u16(code.unwrap_or(500))
-                            .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR)),
+                        ServerFnError::Request { error, .. } => {
+                            Err(StatusCode::from_u16(error.status().unwrap_or(500))
+                                .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR))
+                        }
 
                         ServerFnError::ServerError {
                             message: _message,
@@ -486,11 +480,16 @@ mod decode_ok {
                                 .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
                             message: Some(message),
                         }),
-                        ServerFnError::Request { message, code } => Err(HttpError {
-                            status: StatusCode::from_u16(code.unwrap_or(400))
-                                .unwrap_or(StatusCode::BAD_REQUEST),
-                            message: Some(message),
-                        }),
+                        ServerFnError::Request { message, error } => match error {
+                            RequestError::Builder => todo!(),
+                            RequestError::Redirect => todo!(),
+                            RequestError::Status(_) => todo!(),
+                            RequestError::Timeout => todo!(),
+                            RequestError::Request => todo!(),
+                            RequestError::Connect => todo!(),
+                            RequestError::Body => todo!(),
+                            RequestError::Decode => todo!(),
+                        },
                         _ => HttpError::internal_server_error("Internal Server Error"),
                     },
                     Err(err) => Err(HttpError::new(
@@ -508,59 +507,85 @@ pub mod req_from {
     use super::*;
     use axum::{extract::FromRequestParts, response::Response};
 
-    pub trait ExtractRequest<In, Out, M = ()> {
+    pub trait ExtractRequest<In, Out, H, M = ()> {
         fn extract_axum(
             &self,
             state: DioxusServerState,
             request: Request,
             map: fn(In) -> Out,
-        ) -> impl Future<Output = Result<Out, Response>> + Send + 'static;
+        ) -> impl Future<Output = Result<(H, Out), Response>> + Send + 'static;
     }
 
     // One-arg case
-    impl<In, Out> ExtractRequest<In, Out> for &&&&&&&&&&ServerFnEncoder<In, Out>
+    impl<In, Out, H> ExtractRequest<In, Out, H> for &&&&&&&&&&ServerFnEncoder<In, Out>
     where
         In: DeserializeOwned + 'static,
         Out: 'static,
+        H: FromRequestParts<DioxusServerState>,
     {
         fn extract_axum(
             &self,
             _state: DioxusServerState,
             request: Request,
             map: fn(In) -> Out,
-        ) -> impl Future<Output = Result<Out, Response>> + Send + 'static {
+        ) -> impl Future<Output = Result<(H, Out), Response>> + Send + 'static {
             send_wrapper::SendWrapper::new(async move {
-                let bytes = Bytes::from_request(request, &()).await.unwrap();
-                let as_str = String::from_utf8_lossy(&bytes);
+                todo!()
+                // let bytes = Bytes::from_request(request, &()).await.unwrap();
+                // let as_str = String::from_utf8_lossy(&bytes);
 
-                let bytes = if as_str.is_empty() {
-                    "{}".as_bytes()
-                } else {
-                    &bytes
-                };
+                // let bytes = if as_str.is_empty() {
+                //     "{}".as_bytes()
+                // } else {
+                //     &bytes
+                // };
 
-                serde_json::from_slice::<In>(bytes)
-                    .map(map)
-                    .map_err(|e| ServerFnRejection {}.into_response())
+                // serde_json::from_slice::<In>(bytes)
+                //     .map(map)
+                //     .map_err(|e| ServerFnRejection {}.into_response())
             })
         }
     }
 
     /// We skip the BodySerialize wrapper and just go for the output type directly.
-    impl<In, Out, M> ExtractRequest<In, Out, M> for &&&&&&&&&ServerFnEncoder<In, Out>
+    impl<In, Out, M, H> ExtractRequest<In, Out, H, M> for &&&&&&&&&ServerFnEncoder<In, Out>
     where
         Out: FromRequest<DioxusServerState, M> + 'static,
+        H: FromRequestParts<DioxusServerState>,
     {
         fn extract_axum(
             &self,
             state: DioxusServerState,
             request: Request,
             _map: fn(In) -> Out,
-        ) -> impl Future<Output = Result<Out, Response>> + Send + 'static {
+        ) -> impl Future<Output = Result<(H, Out), Response>> + Send + 'static {
             send_wrapper::SendWrapper::new(async move {
-                Out::from_request(request, &state)
-                    .await
-                    .map_err(|e| ServerFnRejection {}.into_response())
+                todo!()
+
+                // Out::from_request(request, &state)
+                //     .await
+                //     .map_err(|e| ServerFnRejection {}.into_response())
+            })
+        }
+    }
+
+    /// We skip the BodySerialize wrapper and just go for the output type directly.
+    impl<In, M, H> ExtractRequest<In, (), H, M> for &&&&&&&&ServerFnEncoder<In, ()>
+    where
+        H: FromRequest<DioxusServerState>,
+    {
+        fn extract_axum(
+            &self,
+            state: DioxusServerState,
+            request: Request,
+            _map: fn(In) -> (),
+        ) -> impl Future<Output = Result<(H, ()), Response>> + Send + 'static {
+            send_wrapper::SendWrapper::new(async move {
+                todo!()
+
+                // Out::from_request(request, &state)
+                //     .await
+                //     .map_err(|e| ServerFnRejection {}.into_response())
             })
         }
     }

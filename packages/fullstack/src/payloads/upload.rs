@@ -31,19 +31,7 @@ impl IntoRequest for FileUpload {
         self,
         builder: reqwest::RequestBuilder,
     ) -> impl Future<Output = Result<reqwest::Response, reqwest::Error>> + Send + 'static {
-        async move {
-            todo!()
-            // let stream = input
-            //     .outgoing_stream
-            //     .take()
-            //     .expect("FileUpload can only be used once");
-            // let req = builder
-            //     .body(reqwest::Body::wrap_stream(stream))
-            //     .build()
-            //     .expect("Failed to build request");
-            // let client = reqwest::Client::new();
-            // client.execute(req).await
-        }
+        async move { todo!() }
     }
 }
 

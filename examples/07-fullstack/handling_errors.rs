@@ -22,8 +22,7 @@
 //!
 //! Try running requests against the endpoints directly with `curl` or `postman` to see the actual HTTP responses!
 
-use anyhow::Context;
-use dioxus::fullstack::{HttpError, Json, StatusCode};
+use dioxus::fullstack::{Json, StatusCode};
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -130,12 +129,15 @@ async fn get_custom_encoding(takes: Json<serde_json::Value>) -> Result<serde_jso
 /// Returns an untyped `anyhow` error with context (results in HTTP 500).
 #[get("/api/untyped-error")]
 async fn get_throws_error() -> Result<()> {
+    use anyhow::Context;
+
     Err(None.context("This is an example error using anyhow::Error")?)
 }
 
 /// Demonstrates returning an explicit HTTP error (400 Bad Request) using `HttpError`.
 #[get("/api/throws-http-error")]
 async fn throws_http_error() -> Result<()> {
+    use dioxus::fullstack::HttpError;
     HttpError::bad_request("Bad request example")?;
     Ok(())
 }

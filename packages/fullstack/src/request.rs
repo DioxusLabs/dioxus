@@ -1,14 +1,17 @@
-use dioxus_fullstack_core::ServerFnError;
-use std::{pin::Pin, prelude::rust_2024::Future};
+use axum::extract::FromRequest;
+use dioxus_fullstack_core::{DioxusServerState, ServerFnError};
+use http::HeaderMap;
+use reqwest::{RequestBuilder, Response};
+use std::{future::Future, pin::Pin};
 
-pub trait FromResponse<R = reqwest::Response>: Sized {
+pub trait FromResponse<R = Response>: Sized {
     fn from_response(res: R) -> impl Future<Output = Result<Self, ServerFnError>> + Send;
 }
 
-pub trait IntoRequest<R = reqwest::Response>: Sized {
+pub trait IntoRequest<R = Response>: Sized {
     fn into_request(
         self,
-        builder: reqwest::RequestBuilder,
+        builder: RequestBuilder,
     ) -> impl Future<Output = Result<R, reqwest::Error>> + Send + 'static;
 }
 
@@ -18,7 +21,7 @@ where
 {
     fn into_request(
         self,
-        builder: reqwest::RequestBuilder,
+        builder: RequestBuilder,
     ) -> impl Future<Output = Result<R, reqwest::Error>> + Send + 'static {
         send_wrapper::SendWrapper::new(async move { A::into_request(self.0, builder).await })
     }
@@ -78,3 +81,9 @@ pub struct EncodeIsVerified;
 impl AssertCanEncode for EncodeIsVerified {}
 
 pub fn assert_can_encode(_t: impl AssertCanEncode) {}
+
+fn assert_is_requst() {
+    fn assert_it<T: FromRequest<DioxusServerState>>() {}
+
+    assert_it::<(HeaderMap, (HeaderMap, axum::extract::Request))>();
+}

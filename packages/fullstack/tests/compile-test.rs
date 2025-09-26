@@ -3,12 +3,11 @@
 use anyhow::Result;
 use axum::extract::FromRequest;
 use axum::response::IntoResponse;
-use axum::{extract::State, response::Html, Json};
+use axum::{response::Html, Json};
 use bytes::Bytes;
 use dioxus::prelude::*;
 use dioxus_fullstack::{
-    get, DioxusServerState, FileUpload, ServerFnError, ServerFnRejection, Text, TextStream,
-    Websocket,
+    get, FileUpload, ServerFnError, ServerFnRejection, Text, TextStream, Websocket,
 };
 use futures::StreamExt;
 use http::HeaderMap;
@@ -20,8 +19,6 @@ use std::prelude::rust_2024::Future;
 fn main() {}
 
 mod simple_extractors {
-    use serde::de::DeserializeOwned;
-
     use super::*;
 
     /// We can extract the state and return anything thats IntoResponse
@@ -62,8 +59,8 @@ mod simple_extractors {
 
     /// We can return our own custom `Text<T>` type for sending plain text
     #[get("/hello")]
-    async fn six_2() -> Result<Text<&'static str>> {
-        Ok(Text("Hello!"))
+    async fn six_2() -> Result<Text<String>> {
+        Ok(Text("Hello!".to_string()))
     }
 
     /// We can return our own custom TextStream type for sending plain text streams
@@ -329,15 +326,17 @@ mod input_types {
         Ok(())
     }
 
-    // /// We can take Deserialize types as input, with custom server extensions
-    // #[post("/", headers: HeaderMap)]
-    // async fn three(name: String, age: u32) {}
+    /// We can take Deserialize types as input, with custom server extensions
+    #[post("/", headers: HeaderMap)]
+    async fn three(name: String) -> Result<()> {
+        Ok(())
+    }
 
-    // /// We can take a regular axum-like mix with extractors and Deserialize types
-    // #[post("/")]
-    // async fn four(headers: HeaderMap, data: Json<CustomPayload>) -> Result<()> {
-    //     Ok(())
-    // }
+    /// We can take a regular axum-like mix with extractors and Deserialize types
+    #[post("/", headers: HeaderMap)]
+    async fn four(data: Json<CustomPayload>) -> Result<()> {
+        Ok(())
+    }
 
     /// We can even accept string in the final position.
     #[post("/")]

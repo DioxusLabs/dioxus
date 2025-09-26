@@ -16,51 +16,17 @@
 //! - url-encoded GET params?
 //! - stream?
 
-use std::prelude::rust_2024::Future;
+use axum::body::Body;
+use axum::handler::Handler;
+use axum::Router; // both req/res // both req/res // req only
 
-use axum::{body::Body, extract::Form};
-use axum::{extract::Json, Router};
-use axum::{extract::Multipart, handler::Handler}; // both req/res // both req/res // req only
-
-use axum::{extract::State, routing::MethodRouter};
-use base64::{engine::general_purpose::STANDARD_NO_PAD, DecodeError, Engine};
-use dioxus_core::{Element, VirtualDom};
+use axum::routing::MethodRouter;
 use dioxus_fullstack_core::DioxusServerState;
-use serde::de::DeserializeOwned;
 
-use crate::{
-    ContextProviders,
-    DioxusServerContext,
-    ProvideServerContext,
-    ServerFnError,
-    // FromServerFnError, Protocol, ProvideServerContext, ServerFnError,
-};
-// use super::client::Client;
-// use super::codec::Encoding;
-// use super::codec::{Encoding, FromReq, FromRes, IntoReq, IntoRes};
-// #[cfg(feature = "form-redirects")]
-// use super::error::ServerFnUrlError;
-// use super::middleware::{BoxedService, Layer, Service};
-// use super::response::{Res, TryRes};
-// use super::response::{ClientRes, Res, TryRes};
-// use super::server::Server;
-use super::redirect::call_redirect_hook;
-use bytes::{BufMut, Bytes, BytesMut};
+use crate::ContextProviders; // FromServerFnError, Protocol, ProvideServerContext, ServerFnError,
 use dashmap::DashMap;
-use futures::{pin_mut, SinkExt, Stream, StreamExt};
-use http::{method, Method};
-use std::{
-    fmt::{Debug, Display},
-    marker::PhantomData,
-    ops::{Deref, DerefMut},
-    pin::Pin,
-    sync::{Arc, LazyLock},
-};
-
-// pub fn get_client() -> &'static reqwest::Client {
-//     static CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| reqwest::Client::new());
-//     &CLIENT
-// }
+use http::Method;
+use std::{marker::PhantomData, sync::LazyLock};
 
 pub type AxumRequest = http::Request<Body>;
 pub type AxumResponse = http::Response<Body>;
@@ -72,14 +38,6 @@ pub struct ServerFunction<Caller = ()> {
     method: Method,
     handler: fn() -> MethodRouter<DioxusServerState>,
     _phantom: PhantomData<Caller>,
-}
-
-impl<In1, In2, Out> std::ops::Deref for ServerFunction<((In1, In2), Out)> {
-    type Target = fn(In1, In2) -> MakeRequest<Out>;
-
-    fn deref(&self) -> &Self::Target {
-        todo!()
-    }
 }
 
 pub struct MakeRequest<T> {
@@ -151,15 +109,15 @@ impl ServerFunction {
         additional_context: ContextProviders,
         req: http::Request<Body>,
     ) -> http::Response<Body> {
-        use axum::body;
-        use axum::extract::State;
-        use axum::routing::*;
-        use axum::{
-            body::Body,
-            http::{Request, Response, StatusCode},
-            response::IntoResponse,
-        };
-        use http::header::*;
+        // use axum::body;
+        // use axum::extract::State;
+        // use axum::routing::*;
+        // use axum::{
+        //     body::Body,
+        //     http::{Request, Response, StatusCode},
+        //     response::IntoResponse,
+        // };
+        // use http::header::*;
 
         // let (parts, body) = req.into_parts();
         // let req = Request::from_parts(parts.clone(), body);
@@ -252,102 +210,3 @@ static REGISTERED_SERVER_FUNCTIONS: LazyServerFnMap = std::sync::LazyLock::new(|
         .map(|obj| ((obj.path().to_string(), obj.method()), obj.clone()))
         .collect()
 });
-
-pub struct EncodedServerFnRequest {
-    pub path: String,
-    pub method: Method,
-}
-
-// pub struct ServerFunction<Caller = ()> {
-//     pub path: &'static str,
-//     pub method: http::Method,
-//     _p: std::marker::PhantomData<Caller>,
-// }
-
-// impl<T> Clone for ServerFunction<T> {
-//     fn clone(&self) -> Self {
-//         Self {
-//             path: self.path,
-//             method: self.method.clone(),
-//             _p: std::marker::PhantomData,
-//         }
-//     }
-// }
-
-// impl ServerFunction {
-//     pub const fn new<P>(method: http::Method, path: &'static str, handler: fn() -> P) -> Self {
-//         Self {
-//             path,
-//             method,
-//             _p: std::marker::PhantomData,
-//         }
-//     }
-
-//     /// Get the full URL for this server function.
-//     pub fn url(&self) -> String {
-//         format!("{}{}", get_server_url(), self.path)
-//     }
-// }
-
-// impl inventory::Collect for ServerFunction {
-//     #[inline]
-//     fn registry() -> &'static inventory::Registry {
-//         static REGISTRY: inventory::Registry = inventory::Registry::new();
-//         &REGISTRY
-//     }
-// }
-
-// /// An Axum handler that responds to a server function request.
-// pub async fn handle_server_fn(req: HybridRequest) -> HybridResponse {
-//     let path = req.uri().path();
-
-//     if let Some(mut service) = get_server_fn_service(path, req.req.method().clone()) {
-//         service.run(req).await
-//     } else {
-//         let res = Response::builder()
-//             .status(StatusCode::BAD_REQUEST)
-//             .body(Body::from(format!(
-//                 "Could not find a server function at the route {path}. \
-//                      \n\nIt's likely that either\n 1. The API prefix you \
-//                      specify in the `#[server]` macro doesn't match the \
-//                      prefix at which your server function handler is mounted, \
-//                      or \n2. You are on a platform that doesn't support \
-//                      automatic server function registration and you need to \
-//                      call ServerFn::register_explicit() on the server \
-//                      function type, somewhere in your `main` function.",
-//             )))
-//             .unwrap();
-
-//         HybridResponse { res }
-//     }
-// }
-
-// /// Returns the server function at the given path as a service that can be modified.
-// fn get_server_fn_service(
-//     path: &str,
-//     method: Method,
-// ) -> Option<BoxedService<HybridRequest, HybridResponse>> {
-//     let key = (path.into(), method);
-//     REGISTERED_SERVER_FUNCTIONS.get(&key).map(|server_fn| {
-//         let middleware = (server_fn.middleware)();
-//         let mut service = server_fn.clone().boxed();
-//         for middleware in middleware {
-//             service = middleware.layer(service);
-//         }
-//         service
-//     })
-// }
-
-// /// Explicitly register a server function. This is only necessary if you are
-// /// running the server in a WASM environment (or a rare environment that the
-// /// `inventory` crate won't work in.).
-// pub fn register_explicit<T>()
-// where
-//     T: ServerFn + 'static,
-// {
-//     REGISTERED_SERVER_FUNCTIONS.insert(
-//         (T::PATH.into(), T::METHOD),
-//         ServerFnTraitObj::new(T::METHOD, T::PATH, |req| Box::pin(T::run_on_server(req))),
-//         // ServerFnTraitObj::new::<T>(|req| Box::pin(T::run_on_server(req))),
-//     );
-// }

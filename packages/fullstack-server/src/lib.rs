@@ -77,9 +77,6 @@ mod launch;
 #[cfg(not(target_arch = "wasm32"))]
 pub use launch::{launch, launch_cfg};
 
-// mod encoding;
-// pub use encoding::*;
-
 /// Implementations of the server side of the server function call.
 pub mod server;
 
@@ -98,16 +95,5 @@ pub use serverfn::*;
 
 pub mod prelude {}
 
-pub mod state;
-pub use state::*;
-
 pub mod streaming;
 pub use streaming::*;
-
-pub fn with_router<
-    E,
-    F: std::prelude::rust_2024::Future<Output = Result<axum::routing::Router<()>, E>>,
->(
-    f: impl FnMut() -> F,
-) {
-}
