@@ -1,3 +1,5 @@
+//! Additional utilities for `BTreeMap` stores.
+
 use std::{borrow::Borrow, collections::BTreeMap, hash::Hash, iter::FusedIterator};
 
 use crate::{store::Store, ReadStore};

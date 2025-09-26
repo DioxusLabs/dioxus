@@ -1,3 +1,5 @@
+//! Additional utilities for `HashMap` stores.
+
 use std::{
     borrow::Borrow,
     collections::HashMap,

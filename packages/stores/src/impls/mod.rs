@@ -1,7 +1,7 @@
-mod btreemap;
+pub mod btreemap;
 mod deref;
-mod hashmap;
-mod index;
+pub mod hashmap;
+pub mod index;
 mod option;
 mod result;
 mod slice;
