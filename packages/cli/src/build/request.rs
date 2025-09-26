@@ -320,9 +320,9 @@
 //! - xbuild: <https://github.com/rust-mobile/xbuild/blob/master/xbuild/src/command/build.rs>
 
 use crate::{
-    AndroidTools, BuildContext, BundleFormat, DioxusConfig, Error, LinkAction, LinkerFlavor,
-    Renderer, Result, RustcArgs, TargetAlias, TargetArgs, TraceSrc, WasmBindgen, WasmOptConfig,
-    Workspace, DX_RUSTC_WRAPPER_ENV_VAR,
+    verbosity_or_default, AndroidTools, BuildContext, BundleFormat, DioxusConfig, Error,
+    LinkAction, LinkerFlavor, Renderer, Result, RustcArgs, TargetAlias, TargetArgs, TraceSrc,
+    WasmBindgen, WasmOptConfig, Workspace, DX_RUSTC_WRAPPER_ENV_VAR,
 };
 use anyhow::{bail, Context};
 use cargo_metadata::diagnostic::Diagnostic;
@@ -2340,7 +2340,7 @@ impl BuildRequest {
         cargo_args.push(self.executable_name().to_string());
 
         // Set offline/locked/frozen
-        let lock_opts = crate::VERBOSITY.get().cloned().unwrap_or_default();
+        let lock_opts = verbosity_or_default();
         if lock_opts.frozen {
             cargo_args.push("--frozen".to_string());
         }

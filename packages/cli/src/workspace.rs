@@ -6,6 +6,7 @@ use anyhow::{bail, Context};
 use ignore::gitignore::Gitignore;
 use krates::{semver::Version, KrateDetails, LockOptions};
 use krates::{Cmd, Krates, NodeId};
+use std::hash::Hasher;
 use std::sync::Arc;
 use std::{collections::HashSet, path::Path};
 use std::{path::PathBuf, time::Duration};
@@ -531,6 +532,22 @@ impl Workspace {
 
     pub(crate) fn global_settings_file() -> PathBuf {
         Self::dioxus_data_dir().join("settings.json")
+    }
+
+    /// The path where components downloaded from git are cached
+    pub(crate) fn component_cache_dir() -> PathBuf {
+        Self::dioxus_data_dir().join("components")
+    }
+
+    /// Get the path to a specific component in the cache
+    pub(crate) fn component_cache_path(git: &str, rev: Option<&str>) -> PathBuf {
+        let mut hasher = std::hash::DefaultHasher::new();
+        std::hash::Hash::hash(git, &mut hasher);
+        if let Some(rev) = rev {
+            std::hash::Hash::hash(rev, &mut hasher);
+        }
+        let hash = hasher.finish();
+        Self::component_cache_dir().join(format!("{hash:016x}"))
     }
 }
 
