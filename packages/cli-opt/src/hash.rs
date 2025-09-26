@@ -148,7 +148,7 @@ pub fn add_hash_to_asset(asset: &mut BundledAsset) {
             let mut bundled_path = if asset.options().hash_suffix() {
                 PathBuf::from(format!("{}-dxh{hash}", file_stem.to_string_lossy()))
             } else {
-                PathBuf::from(file_stem)
+                PathBuf::from(asset.relative_source_path().trim_start_matches("/assets/")).with_extension("")
             };
 
             if let Some(ext) = ext {
@@ -160,7 +160,7 @@ pub fn add_hash_to_asset(asset: &mut BundledAsset) {
 
             let bundled_path = bundled_path.to_string_lossy().to_string();
 
-            *asset = BundledAsset::new(source, &bundled_path, options);
+            *asset = BundledAsset::new(asset.relative_source_path(), source, &bundled_path, options);
         }
         Err(err) => {
             tracing::error!("Failed to hash asset: {err}");

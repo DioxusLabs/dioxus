@@ -32,6 +32,7 @@ impl AssetManifest {
     /// Manually add an asset to the manifest
     pub fn register_asset(
         &mut self,
+        relative_source_path: &Path,
         asset_path: &Path,
         options: manganis::AssetOptions,
     ) -> anyhow::Result<BundledAsset> {
@@ -40,7 +41,7 @@ impl AssetManifest {
         ))?;
 
         let mut bundled_asset =
-            manganis::macro_helpers::create_bundled_asset(output_path_str, options);
+            manganis::macro_helpers::create_bundled_asset(relative_source_path.to_str().unwrap(), output_path_str, options);
         add_hash_to_asset(&mut bundled_asset);
 
         self.assets

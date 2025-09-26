@@ -5,8 +5,8 @@ use manganis_core::{AssetOptions, BundledAsset};
 const PLACEHOLDER_HASH: &str = "This should be replaced by dx as part of the build process. If you see this error, make sure you are using a matching version of dx and dioxus and you are not stripping symbols from your binary.";
 
 /// Create a bundled asset from the input path, the content hash, and the asset options
-pub const fn create_bundled_asset(input_path: &str, asset_config: AssetOptions) -> BundledAsset {
-    BundledAsset::new(input_path, PLACEHOLDER_HASH, asset_config)
+pub const fn create_bundled_asset(relative_source_path: &str, input_path: &str, asset_config: AssetOptions) -> BundledAsset {
+    BundledAsset::new(relative_source_path, input_path, PLACEHOLDER_HASH, asset_config)
 }
 
 /// Create a bundled asset from the input path, the content hash, and the asset options with a relative asset deprecation warning
@@ -19,7 +19,7 @@ pub const fn create_bundled_asset_relative(
     input_path: &str,
     asset_config: AssetOptions,
 ) -> BundledAsset {
-    create_bundled_asset(input_path, asset_config)
+    create_bundled_asset(input_path, input_path, asset_config)
 }
 
 /// Serialize an asset to a const buffer

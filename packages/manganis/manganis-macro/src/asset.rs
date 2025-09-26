@@ -13,6 +13,7 @@ use syn::{
 };
 
 pub struct AssetParser {
+    pub(crate) src: String,
     /// The token(s) of the source string, for error reporting
     pub(crate) path_expr: proc_macro2::TokenStream,
 
@@ -50,6 +51,7 @@ impl Parse for AssetParser {
         let options = input.parse()?;
 
         Ok(Self {
+            src,
             path_expr,
             asset,
             options,
@@ -102,8 +104,11 @@ impl ToTokens for AssetParser {
             self.options.clone()
         };
 
+        let src = &self.src;
+
         tokens.extend(quote! {
             {
+                const __ASSET_RELATIVE_SOURCE_PATH: &'static str = #src;
                 // The source is used by the CLI to copy the asset
                 const __ASSET_SOURCE_PATH: &'static str = #asset_str;
                 // The options give the CLI info about how to process the asset
@@ -114,7 +119,7 @@ impl ToTokens for AssetParser {
                 const __ASSET_HASH: &'static str = #asset_hash;
                 // Create the asset that the crate will use. This is used both in the return value and
                 // added to the linker for the bundler to copy later
-                const __ASSET: manganis::BundledAsset = manganis::macro_helpers::#constructor(__ASSET_SOURCE_PATH, __ASSET_OPTIONS);
+                const __ASSET: manganis::BundledAsset = manganis::macro_helpers::#constructor(__ASSET_RELATIVE_SOURCE_PATH, __ASSET_SOURCE_PATH, __ASSET_OPTIONS);
 
                 #link_section
 
