@@ -5,12 +5,20 @@ use serde::{de::DeserializeOwned, Serialize};
 ///
 /// This takes an owned self to make it easier for zero-copy encodings.
 pub trait Encoding {
+    fn content_type() -> &'static str;
+    fn stream_content_type() -> &'static str;
     fn to_bytes(data: impl Serialize) -> Option<Bytes>;
     fn from_bytes<O: DeserializeOwned>(bytes: Bytes) -> Option<O>;
 }
 
 pub struct JsonEncoding;
 impl Encoding for JsonEncoding {
+    fn content_type() -> &'static str {
+        "application/json"
+    }
+    fn stream_content_type() -> &'static str {
+        "application/stream+json"
+    }
     fn to_bytes(data: impl Serialize) -> Option<Bytes> {
         serde_json::to_vec(&data).ok().map(Into::into)
     }
@@ -22,6 +30,12 @@ impl Encoding for JsonEncoding {
 
 pub struct CborEncoding;
 impl Encoding for CborEncoding {
+    fn content_type() -> &'static str {
+        "application/cbor"
+    }
+    fn stream_content_type() -> &'static str {
+        "application/stream+cbor"
+    }
     fn to_bytes(data: impl Serialize) -> Option<Bytes> {
         let mut buf = Vec::new();
         ciborium::into_writer(&data, &mut buf).ok()?;
@@ -37,6 +51,12 @@ impl Encoding for CborEncoding {
 pub struct PostcardEncoding;
 #[cfg(feature = "postcard")]
 impl Encoding for PostcardEncoding {
+    fn content_type() -> &'static str {
+        "application/postcard"
+    }
+    fn stream_content_type() -> &'static str {
+        "application/stream+postcard"
+    }
     fn to_bytes(data: impl Serialize) -> Option<Bytes> {
         postcard::to_allocvec(&data).ok().map(Into::into)
     }
@@ -50,6 +70,12 @@ impl Encoding for PostcardEncoding {
 pub struct MsgPackEncoding;
 #[cfg(feature = "msgpack")]
 impl Encoding for MsgPackEncoding {
+    fn content_type() -> &'static str {
+        "application/msgpack"
+    }
+    fn stream_content_type() -> &'static str {
+        "application/stream+msgpack"
+    }
     fn to_bytes(data: impl Serialize) -> Option<Bytes> {
         rmp_serde::to_vec(&data).ok().map(Into::into)
     }

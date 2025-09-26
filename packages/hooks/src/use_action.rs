@@ -114,6 +114,13 @@ impl<I: 'static, O: 'static> Action<I, O> {
             t.cancel()
         }
     }
+
+    pub fn cancel(&mut self) {
+        if let Some(t) = self.task.take() {
+            t.cancel()
+        }
+        self.state.set(ActionState::Reset);
+    }
 }
 
 impl<I, T> std::fmt::Debug for Action<I, T>

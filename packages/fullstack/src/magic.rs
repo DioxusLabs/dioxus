@@ -530,19 +530,27 @@ pub mod req_from {
             map: fn(In) -> Out,
         ) -> impl Future<Output = Result<(H, Out), Response>> + Send + 'static {
             send_wrapper::SendWrapper::new(async move {
-                todo!()
-                // let bytes = Bytes::from_request(request, &()).await.unwrap();
-                // let as_str = String::from_utf8_lossy(&bytes);
+                let (mut parts, body) = request.into_parts();
+                let Ok(h) = H::from_request_parts(&mut parts, &_state).await else {
+                    todo!()
+                };
 
-                // let bytes = if as_str.is_empty() {
-                //     "{}".as_bytes()
-                // } else {
-                //     &bytes
-                // };
+                let request = Request::from_parts(parts, body);
+                let bytes = Bytes::from_request(request, &()).await.unwrap();
+                let as_str = String::from_utf8_lossy(&bytes);
 
-                // serde_json::from_slice::<In>(bytes)
-                //     .map(map)
-                //     .map_err(|e| ServerFnRejection {}.into_response())
+                let bytes = if as_str.is_empty() {
+                    "{}".as_bytes()
+                } else {
+                    &bytes
+                };
+
+                let out = serde_json::from_slice::<In>(bytes)
+                    .map(map)
+                    .map_err(|e| ServerFnRejection {}.into_response())
+                    .unwrap();
+
+                Ok((h, out))
             })
         }
     }

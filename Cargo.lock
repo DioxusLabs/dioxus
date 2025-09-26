@@ -7294,17 +7294,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "fullstack-streaming-example"
-version = "0.1.0"
-dependencies = [
- "dioxus",
- "futures",
- "futures-util",
- "serde",
- "tokio",
-]
-
-[[package]]
 name = "fullstack-websocket-example"
 version = "0.1.0"
 dependencies = [

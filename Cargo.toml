@@ -110,7 +110,6 @@ members = [
     # Fullstack examples
     "examples/07-fullstack/hello-world",
     "examples/07-fullstack/router",
-    "examples/07-fullstack/streaming",
     "examples/07-fullstack/desktop",
     "examples/07-fullstack/auth",
     "examples/07-fullstack/auth-with-fullstack",
@@ -743,8 +742,8 @@ doc-scrape-examples = true
 required-features = ["sqlx"]
 
 [[example]]
-name = "streaming_text"
-path = "examples/07-fullstack/streaming_text.rs"
+name = "streaming"
+path = "examples/07-fullstack/streaming.rs"
 doc-scrape-examples = true
 
 [[example]]

@@ -17,8 +17,6 @@ impl IntoRequest for axum::extract::Request {
 pub fn reqwest_resonse_to_serverfn_err(err: reqwest::Error) -> ServerFnError {
     let inner = if err.is_timeout() {
         RequestError::Timeout
-    } else if err.is_connect() {
-        RequestError::Connect
     } else if err.is_request() {
         RequestError::Request
     } else if err.is_body() {
@@ -30,6 +28,23 @@ pub fn reqwest_resonse_to_serverfn_err(err: reqwest::Error) -> ServerFnError {
     } else if let Some(status) = err.status() {
         RequestError::Status(status.as_u16())
     } else {
+        // todo: this stupid reqwest error isnt available on wasm
+        // if cfg!(not(target_arch = "wasm32")) {
+        // #[cfg(target_arch = "wasm32")]
+        // {
+        //     unreachable!()
+        // }
+        // #[cfg(not(target_arch = "wasm32"))]
+        // {
+        //     if err.is_connect() {
+        //         return ServerFnError::Network {
+        //             error: RequestError::Connect,
+        //             message: err.to_string(),
+        //         };
+        //     }
+        // }
+        // }
+
         RequestError::Request
     };
 
