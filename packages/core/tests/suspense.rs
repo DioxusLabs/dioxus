@@ -1,72 +1,74 @@
+// #![allow(non_snake_case)]
+
 // use dioxus::prelude::*;
 // use dioxus_core::{generation, AttributeValue, ElementId, Mutation};
 // use pretty_assertions::assert_eq;
 // use std::future::poll_fn;
 // use std::task::Poll;
 
-// async fn poll_three_times() {
-//     // Poll each task 3 times
-//     let mut count = 0;
-//     poll_fn(|cx| {
-//         println!("polling... {}", count);
-//         if count < 3 {
-//             count += 1;
-//             cx.waker().wake_by_ref();
-//             Poll::Pending
-//         } else {
-//             Poll::Ready(())
-//         }
-//     })
-//     .await;
-// }
-
 // #[tokio::test]
 // async fn suspense_resolves_ssr() {
 //     // wait just a moment, not enough time for the boundary to resolve
 
-//     let mut dom = VirtualDom::new(app);
+//     let mut dom = VirtualDom::new(top_level_app);
 //     dom.rebuild_in_place();
-//     dom.wait_for_suspense().await;
+//     dom.wait_for_suspense(&mut dioxus_core::NoOpMutations).await;
 //     dom.render_immediate(&mut dioxus_core::NoOpMutations);
 //     let out = dioxus_ssr::render(&dom);
 
 //     assert_eq!(out, "<div>Waiting for... child</div>");
-// }
 
-// fn app() -> Element {
-//     rsx!(
-//         div {
-//             "Waiting for... "
-//             SuspenseBoundary {
-//                 fallback: |_| rsx! { "fallback" },
-//                 suspended_child {}
+//     fn top_level_app() -> Element {
+//         rsx!(
+//             div {
+//                 "Waiting for... "
+//                 SuspenseBoundary {
+//                     fallback: |_| rsx! { "fallback" },
+//                     SuspendedChild {}
+//                 }
 //             }
-//         }
-//     )
-// }
-
-// fn suspended_child() -> Element {
-//     let mut val = use_signal(|| 0);
-
-//     // Tasks that are not suspended should never be polled
-//     spawn(async move {
-//         panic!("Non-suspended task was polled");
-//     });
-
-//     // Memos should still work like normal
-//     let memo = use_memo(move || val * 2);
-//     assert_eq!(memo, val * 2);
-
-//     if val() < 3 {
-//         let task = spawn(async move {
-//             poll_three_times().await;
-//             println!("waiting... {}", val);
-//             val += 1;
-//         });
-//         suspend(task)?;
+//         )
 //     }
 
-//     rsx!("child")
+//     fn SuspendedChild() -> Element {
+//         let mut val = use_signal(|| 0);
+
+//         // Tasks that are not suspended should never be polled
+//         spawn(async move {
+//             panic!("Non-suspended task was polled");
+//         });
+
+//         // Memos should still work like normal
+//         let memo = use_memo(move || val * 2);
+//         assert_eq!(memo, val * 2);
+
+//         if val() < 3 {
+//             let task = spawn(async move {
+//                 poll_three_times().await;
+//                 println!("waiting... {}", val);
+//                 val += 1;
+//             });
+//             suspend(task)?;
+//         }
+
+//         rsx!("child")
+//     }
+
+//     async fn poll_three_times() {
+//         // Poll each task 3 times
+//         let mut count = 0;
+//         poll_fn(|cx| {
+//             println!("polling... {}", count);
+//             if count < 3 {
+//                 count += 1;
+//                 cx.waker().wake_by_ref();
+//                 Poll::Pending
+//             } else {
+//                 Poll::Ready(())
+//             }
+//         })
+//         .await;
+//     }
 // }
 
 // /// When switching from a suspense fallback to the real child, the state of that component must be kept
@@ -74,13 +76,14 @@
 // async fn suspense_keeps_state() {
 //     let mut dom = VirtualDom::new(app);
 //     dom.rebuild(&mut dioxus_core::NoOpMutations);
-//     dom.render_suspense_immediate().await;
+//     dom.render_suspense_immediate(&mut dioxus_core::NoOpMutations)
+//         .await;
 
 //     let out = dioxus_ssr::render(&dom);
 
 //     assert_eq!(out, "fallback");
 
-//     dom.wait_for_suspense().await;
+//     dom.wait_for_suspense(&mut dioxus_core::NoOpMutations).await;
 //     let out = dioxus_ssr::render(&dom);
 
 //     assert_eq!(out, "<div>child with future resolved</div>");
@@ -128,7 +131,7 @@
 //     let mut dom = VirtualDom::new(app);
 //     dom.rebuild(&mut dioxus_core::NoOpMutations);
 
-//     dom.wait_for_suspense().await;
+//     dom.wait_for_suspense(&mut dioxus_core::NoOpMutations).await;
 //     let out = dioxus_ssr::render(&dom);
 
 //     assert_eq!(out, "<div>child with future resolved</div>");
@@ -247,12 +250,13 @@
 
 //     dom.in_scope(ScopeId::ROOT, || *SUSPENDED.write() = true);
 
-//     dom.render_suspense_immediate().await;
+//     dom.render_suspense_immediate(&mut dioxus_core::NoOpMutations)
+//         .await;
 //     let out = dioxus_ssr::render(&dom);
 
 //     assert_eq!(out, "fallback");
 
-//     dom.wait_for_suspense().await;
+//     dom.wait_for_suspense(&mut dioxus_core::NoOpMutations).await;
 //     let out = dioxus_ssr::render(&dom);
 
 //     assert_eq!(out, "rendered 3 times");
@@ -300,10 +304,12 @@
 //     let mut dom = VirtualDom::new(app);
 //     dom.rebuild(&mut dioxus_core::NoOpMutations);
 
-//     dom.render_suspense_immediate().await;
+//     dom.render_suspense_immediate(&mut dioxus_core::NoOpMutations)
+//         .await;
 //     dom.wait_for_suspense_work().await;
 //     assert_eq!(
-//         dom.render_suspense_immediate().await,
+//         dom.render_suspense_immediate(&mut dioxus_core::NoOpMutations)
+//             .await,
 //         vec![ScopeId(ScopeId::ROOT.0 + 1)]
 //     );
 

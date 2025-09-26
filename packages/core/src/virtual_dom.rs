@@ -500,7 +500,6 @@ impl VirtualDom {
                 SchedulerMsg::TaskNotified(task) => self.mark_task_dirty(Task::from_id(task)),
                 SchedulerMsg::EffectQueued => {}
                 SchedulerMsg::AllDirty => self.mark_all_dirty(),
-                // _ => todo!(),
                 SchedulerMsg::Suspense {
                     boundary,
                     component,
@@ -664,7 +663,7 @@ impl VirtualDom {
         mutations
     }
 
-    /// Render the virtual dom, waiting for all suspense to be finished
+    /// Render the virtual dom, waiting for *all* suspense to be finished
     ///
     /// The mutations for suspended components will be still written to the dom via the `to` parameter,
     /// but the won't be visible until all suspense is resolved.
@@ -681,9 +680,33 @@ impl VirtualDom {
         }
     }
 
+    /// Wait for the root suspense to resolve. This is useful for SSR and SSG where you need to wait
+    /// for the initial commit of the tree to be ready before you can show it to the user.
+    pub async fn wait_for_root_suspense(&mut self, to: &mut impl WriteMutations) {
+        loop {
+            if !self.root_is_suspended() {
+                break;
+            }
+
+            self.wait_for_suspense_work().await;
+
+            self.render_suspense_immediate(to).await;
+        }
+    }
+
     /// Check if there are any suspended tasks remaining
+    /// This does not necessarily mean you can't use the DOM yet, just that there are some suspended tasks
     pub fn suspended_tasks_remaining(&self) -> bool {
         self.runtime.suspended_tasks.get() > 0
+    }
+
+    /// Check if the root of the tree is currently suspended
+    pub fn root_is_suspended(&self) -> bool {
+        let scope = self.runtime.get_scope(ScopeId::ROOT);
+        let suspense_ctx = scope
+            .consume_context::<SuspenseContext>()
+            .expect("All suspense boundaries should have a suspense context");
+        suspense_ctx.inner.suspended.get()
     }
 
     /// Wait for the scheduler to have any work that should be run during suspense.

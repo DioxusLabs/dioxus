@@ -24,6 +24,7 @@ use std::{
     iter::Peekable,
     ops::{Deref, DerefMut},
     rc::Rc,
+    usize,
 };
 
 /// A fiber progresses a given work tree by running scopes and diffing nodes.
@@ -120,8 +121,13 @@ impl<'a, 'b, M: WriteMutations> Fiber<'a, 'b, M> {
                     // Pop the nodes we just created, saving them into a fragment so we can retrieve them once they're ready
                     self.to.save_nodes(num_nodes);
 
+                    // assert!(ctx.inner.rendered_fallback_ui.borrow().is_none());
+                    tracing::error!("Suspense boundary in scope {:#?} has suspended tasks, rendering fallback UI", scope);
+
                     let fallback_ui = (ctx.inner.fallback.as_ref())(ctx.clone())
                         .expect("Fallback UI cannot return suspense or errors!");
+
+                    tracing::debug!("fallback ui: {:#?}", fallback_ui);
 
                     // Create the placeholder in place, returning that instead
                     let num_created = self.create(&fallback_ui, parent);
@@ -1189,8 +1195,8 @@ impl<'a, 'b, M: WriteMutations> Fiber<'a, 'b, M> {
             entry.insert(VNodeMount {
                 node: node.clone(),
                 parent,
-                root_ids: vec![ElementId(0); template.roots.len()].into_boxed_slice(),
-                mounted_attributes: vec![ElementId(0); template.attr_paths.len()]
+                root_ids: vec![ElementId(usize::MAX - 1); template.roots.len()].into_boxed_slice(),
+                mounted_attributes: vec![ElementId(usize::MAX - 1); template.attr_paths.len()]
                     .into_boxed_slice(),
                 mounted_dynamic_nodes: vec![usize::MAX; template.node_paths.len()]
                     .into_boxed_slice(),
