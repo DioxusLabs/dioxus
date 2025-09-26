@@ -33,7 +33,7 @@ use std::{
 /// Suspended nodes are flushed to the DOM just like regular nodes, but they are unmounted and thus
 /// not interactive. Only once the suspense tree is fully resolved are the nodes mounted and made interactive.
 pub(crate) struct Fiber<'a, 'b, M: WriteMutations> {
-    dom: &'a mut VirtualDom,
+    pub(crate) dom: &'a mut VirtualDom,
     to: &'b mut M,
 }
 
@@ -57,6 +57,11 @@ impl<'a, 'b, M: WriteMutations> Fiber<'a, 'b, M> {
             .as_ref()
             .unwrap()
             .clone();
+
+        let mount = last_rendered.mount.get();
+
+        // Mount the last_rendered tree.
+        self.load_template_root(last_rendered.as_vnode(), mount, 0);
 
         let num_old_nodes = self.push_all_root_nodes(last_rendered.as_vnode());
         self.remove_node_inner(&placeholder_ui, false, Some(num_old_nodes), true);

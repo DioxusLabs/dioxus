@@ -18,16 +18,16 @@ use crate::innerlude::*;
 /// ```
 #[allow(non_snake_case)]
 pub fn SuspenseBoundary(mut __props: SuspenseBoundaryProps) -> Element {
-    // Register this component as a suspense boundary
-    // Whenever a child component suspends, it will register itself with this boundary
-    use_hook(|| {
-        provide_context(SuspenseContext::new(current_scope_id(), move |ctx| {
-            __props.fallback.call(ctx)
-        }))
-    });
+    // // Register this component as a suspense boundary
+    // // Whenever a child component suspends, it will register itself with this boundary
+    // use_hook(|| {
+    //     provide_context(SuspenseContext::new(current_scope_id(), move |ctx| {
+    //         __props.fallback.call(ctx)
+    //     }))
+    // });
 
     // Just emit the children directly. Dioxus will handle fallback logic for us
-    __props.children
+    __props.children.clone()
 }
 
 /// Properties for the [`SuspenseBoundary()`] component.

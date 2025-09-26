@@ -133,14 +133,14 @@ impl SuspenseContext {
     pub(crate) fn add_suspended_task(&self, task: SuspendedFuture) -> bool {
         let mut tasks = self.inner.suspended_tasks.borrow_mut();
 
+        // always set this to true if we add a task
+        self.inner.suspended.set(true);
+
         if tasks.iter().any(|t| t == &task) {
             return false;
         }
 
         tasks.push(task);
-
-        // always set this to true if we add a task
-        self.inner.suspended.set(true);
 
         true
     }

@@ -108,7 +108,7 @@ impl Drop for ScopeState {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum LastRenderedNode {
     Real(VNode),
     Placeholder(VNode, RenderError),

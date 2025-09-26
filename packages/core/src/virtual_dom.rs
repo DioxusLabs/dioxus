@@ -795,6 +795,12 @@ impl VirtualDom {
                     if run_scope {
                         let rt = self.runtime.clone();
 
+                        let is_suspense_ctx = self
+                            .runtime
+                            .has_context::<SuspenseContext>(scope.id)
+                            .is_some()
+                            && scope.id != ScopeId::ROOT;
+
                         let mut fiber = Fiber::new(self, to);
 
                         // If the scope is dirty, run the scope and get the mutations
@@ -802,12 +808,20 @@ impl VirtualDom {
                             .while_rendering(|| fiber.run_and_diff_scope(scope_id));
 
                         let num_suspended = suspense_ctx.inner.suspended_tasks.borrow().len();
-                        if num_suspended == 0 && suspense_ctx.inner.suspended.get() {
-                            // the suspense boundary has resolved. Let's swap it back in with the real content
-                            fiber.swap_suspense_tree(&suspense_ctx);
+                        if num_suspended == 0
+                            && suspense_ctx.inner.suspended.get()
+                            && !is_suspense_ctx
+                        {
+                            drop(fiber);
 
-                            // And then mark the boundary as no longer suspended
-                            suspense_ctx.inner.suspended.set(false);
+                            self.queue_events();
+
+                            self.resolved_scopes.push(scope_id);
+
+                            if self.has_dirty_scopes() {
+                                // If running the scope caused other scopes to become dirty, we need to stop here and let the outer loop handle it
+                                continue;
+                            }
                         }
                     } else {
                         tracing::warn!(
@@ -831,6 +845,24 @@ impl VirtualDom {
 
         self.resolved_scopes
             .sort_by_key(|&id| self.runtime.get_scope(id).height);
+
+        for s in self.resolved_scopes.clone() {
+            let suspense_ctx = self
+                .runtime
+                .get_scope(s)
+                .consume_context::<SuspenseContext>()
+                .expect("All suspense boundaries should have a suspense context");
+
+            let mut fiber = Fiber::new(self, to);
+
+            // tracing::info!("DIRTY SCOPES: {:?}", fiber.dom.rx.try_next());
+
+            // the suspense boundary has resolved. Let's swap it back in with the real content
+            fiber.swap_suspense_tree(&suspense_ctx);
+
+            // And then mark the boundary as no longer suspended
+            suspense_ctx.inner.suspended.set(false);
+        }
 
         std::mem::take(&mut self.resolved_scopes)
     }

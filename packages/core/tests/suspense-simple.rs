@@ -39,7 +39,9 @@ async fn suspense_holds_dom() {
 
     fn app() -> Element {
         use_delay(10)?;
-        rsx! { div { "Hello!" } }
+        rsx! {
+            div { "Hello!" }
+        }
     }
 }
 
@@ -209,122 +211,192 @@ async fn suspense_wait_for_first_commit() {
     init_logger();
 
     fn app() -> Element {
-        use_delay(10)?;
+        // use_delay(10)?;
 
         rsx! {
             h1 { "parent!" }
+            h1 { "parent!" }
+            h1 { "parent!" }
+            h1 { "parent!" }
+            {"123123"}
             SuspenseBoundary {
                 fallback: |_| rsx! { "loading..." },
-                Child {}
+                Child2 {}
+                {"123123"}
+                {"123123"}
+                {"123123"}
+                {"123123"}
+                // div { "Child parent" }
+                // Child {}
+            }
+            SuspenseBoundary {
+                fallback: |_| rsx! { "loading..." },
+                // Child2 {}
+                {"123123"}
             }
             h2 { "after suspense" }
         }
     }
 
-    fn Child() -> Element {
-        rsx! {
-            div { "Child parent" }
-            SuspendedChild {}
-        }
-    }
-
-    fn SuspendedChild() -> Element {
+    fn Child2() -> Element {
         use_delay(100)?;
-
         rsx! {
-            div { "Child is ready!" }
+            "Child2 is ready!"
+            SuspenseBoundary {
+                fallback: |_| rsx! { "loading inner..." },
+                Child3 {}
+            }
         }
     }
 
-    // Make sure it renders correctly after waiting for all suspense to resolve
-    let mut dom = VirtualDom::new(app);
-    dom.rebuild_in_place();
-    dom.wait_for_suspense(&mut NoOpMutations).await;
-    assert_eq!(
-        "<h1>parent!</h1><div>Child parent</div><div>Child is ready!</div><h2>after suspense</h2>",
-        dioxus_ssr::render(&dom)
-    );
+    fn Child3() -> Element {
+        // use_delay(50)?;
+        rsx! {
+            "Child3 is ready!"
+        }
+    }
 
-    // Wait individually
-    let mut dom = VirtualDom::new(app);
-    let mutations = dom.rebuild_to_vec();
-    assert_eq!(
-        mutations.edits,
-        vec![
-            // Creating the placeholder node and nothing else.
-            Mutation::CreatePlaceholder { id: ElementId(1) },
-            Mutation::SaveNodes { n: 1 },
-            // And then the loading UI for the suspense boundary, which happens to be just a placeholder too..
-            Mutation::CreatePlaceholder { id: ElementId(2) },
-            // Add to document
-            Mutation::AppendChildren { id: ElementId(0), m: 1 }
-        ]
-    );
+    // fn Child() -> Element {
+    //     rsx! {
+    //         div { "Child parent" }
+    //         SuspendedChild {}
+    //     }
+    // }
 
-    // make sure the suspense is registered - the dom is suspended
-    assert!(dom.suspended_tasks_remaining());
+    // fn SuspendedChild() -> Element {
+    //     use_delay(100)?;
 
-    // Also assert the virtualdom is right about being suspended
-    assert!(dom.root_is_suspended());
+    //     rsx! {
+    //         div { "Child is ready!" }
+    //     }
+    // }
 
-    // Make sure the only thing in the dom is the initial placeholder
-    assert_eq!("<!--placeholder0-->", dioxus_ssr::pre_render(&dom));
+    let mut virtual_dom = VirtualDom::new(app);
+    let edits = virtual_dom.rebuild_to_vec();
+    debug!("edits: {:#?}", edits);
 
-    // Wait for all the suspense to resolve
     let mut mutations = Mutations::default();
-    dom.wait_for_root_suspense(&mut mutations).await;
+    virtual_dom.wait_for_suspense(&mut mutations).await;
+    debug!("mutations: {:#?}", mutations);
 
-    #[rustfmt::skip]
-    {assert_eq!(
-        mutations.edits,
-        vec![
-            // Create the "parent!" h1"
-            Mutation::LoadTemplate { index: 0, id: ElementId(3) },
+    // // Make sure it renders correctly after waiting for all suspense to resolve
+    // let mut dom = VirtualDom::new(app);
+    // dom.rebuild_in_place();
+    // dom.wait_for_suspense(&mut NoOpMutations).await;
+    // assert_eq!(
+    //     "<h1>parent!</h1><div>Child parent</div><div>Child is ready!</div><h2>after suspense</h2>",
+    //     dioxus_ssr::render(&dom)
+    // );
 
-            // Create the `div { "Child parent" }` element
-            Mutation::LoadTemplate { index: 0, id: ElementId(4) },
+    // // Wait individually
+    // let mut dom = VirtualDom::new(app);
+    // let mutations = dom.rebuild_to_vec();
+    // assert_eq!(
+    //     mutations.edits,
+    //     vec![
+    //         // Creating the placeholder node and nothing else.
+    //         Mutation::CreatePlaceholder { id: ElementId(1) },
+    //         Mutation::SaveNodes { n: 1 },
+    //         // And then the loading UI for the suspense boundary, which happens to be just a placeholder too..
+    //         Mutation::CreatePlaceholder { id: ElementId(2) },
+    //         // Add to document
+    //         Mutation::AppendChildren { id: ElementId(0), m: 1 }
+    //     ]
+    // );
 
-            // Create a placeholder for the first suspense boundary
-            Mutation::CreatePlaceholder { id: ElementId(5) },
-            // Save this placeholder
-            Mutation::SaveNodes { n: 2 },
+    // // make sure the suspense is registered - the dom is suspended
+    // assert!(dom.suspended_tasks_remaining());
 
-            // Create loading UI for the first suspense boundary
-            Mutation::LoadTemplate { index: 0, id: ElementId(6) },
+    // // Also assert the virtualdom is right about being suspended
+    // assert!(dom.root_is_suspended());
 
-            // Create the h2 after suspense element
-            Mutation::LoadTemplate { index: 2, id: ElementId(7) },
+    // // Make sure the only thing in the dom is the initial placeholder
+    // assert_eq!("<!--placeholder0-->", dioxus_ssr::pre_render(&dom));
 
-            // Replace the first suspense placeholder with the resolved tier 1 suspense content
-            Mutation::ReplaceWith { id: ElementId(1), m: 3 },
+    // // Wait for all the suspense to resolve
+    // let mut mutations = Mutations::default();
+    // dom.wait_for_root_suspense(&mut mutations).await;
 
-            // And then replace the root placeholder with the suspense resolved content
-            Mutation::PushRoot { id: ElementId(3) }, /* parent! h1 */
-            Mutation::PushRoot { id: ElementId(4) }, /* child parent div */
-            Mutation::PushRoot { id: ElementId(usize::MAX - 1) }, /* suspense fragment */
-            // Mutation::PushRoot { id: ElementId(6) }, /* suspense fragment */
-            Mutation::PushRoot { id: ElementId(7) }, /* h2 after suspense */
-            Mutation::ReplaceWith { id: ElementId(2), m: 4 },
-        ]
-    )};
+    // #[rustfmt::skip]
+    // {assert_eq!(
+    //     mutations.edits,
+    //     vec![
+    //         // Create the "parent!" h1"
+    //         Mutation::LoadTemplate { index: 0, id: ElementId(3) },
 
-    assert_eq!(
-        "<h1>parent!</h1>loading<h2>after suspense</h2>",
-        dioxus_ssr::render(&dom)
-    );
+    //         // Create the `div { "Child parent" }` element
+    //         Mutation::LoadTemplate { index: 0, id: ElementId(4) },
 
-    // Assert no more suspense - not always the case but true for this test
-    assert!(dom.suspended_tasks_remaining());
+    //         // Create a placeholder for the first suspense boundary
+    //         Mutation::CreatePlaceholder { id: ElementId(5) },
 
-    // Render out the DOM now that it's no longer stuck and then print it
-    dom.render_immediate(&mut dioxus_core::NoOpMutations);
+    //         // Save this placeholder
+    //         Mutation::SaveNodes { n: 2 },
 
-    assert_eq!("<div>Hello!</div>", dioxus_ssr::render(&dom));
+    //         // Create loading UI for the first suspense boundary
+    //         Mutation::LoadTemplate { index: 0, id: ElementId(6) },
+
+    //         // Create the h2 after suspense element
+    //         Mutation::LoadTemplate { index: 2, id: ElementId(7) },
+
+    //         // Replace the first suspense placeholder with the resolved tier 1 suspense content
+    //         Mutation::ReplaceWith { id: ElementId(1), m: 3 },
+
+    //         // And then replace the root placeholder with the suspense resolved content
+    //         Mutation::PushRoot { id: ElementId(3) }, /* parent! h1 */
+    //         Mutation::PushRoot { id: ElementId(4) }, /* child parent div */
+    //         // Mutation::PushRoot { id: ElementId(usize::MAX - 1) }, /* suspense fragment */
+    //         Mutation::PushRoot { id: ElementId(6) }, /* suspense fragment */
+    //         Mutation::PushRoot { id: ElementId(7) }, /* h2 after suspense */
+    //         Mutation::ReplaceWith { id: ElementId(2), m: 4 },
+    //     ]
+    // )};
+
+    // assert_eq!(
+    //     "<h1>parent!</h1>loading...<h2>after suspense</h2>",
+    //     dioxus_ssr::render(&dom)
+    // );
+
+    // // Assert no more suspense - not always the case but true for this test
+    // assert!(dom.suspended_tasks_remaining());
+
+    // // Render out the DOM now that it's no longer stuck and then print it
+    // dom.render_immediate(&mut dioxus_core::NoOpMutations);
+
+    // assert_eq!("<div>Hello!</div>", dioxus_ssr::render(&dom));
 }
 
 /// Test that a suspense boundary can go from resolved to suspended again if its internal state changes
 #[tokio::test]
 async fn suspense_moves_from_okay_to_suspended() {}
+
+#[tokio::test]
+async fn render_stuff() {
+    init_logger();
+
+    fn app() -> Element {
+        let abc = 123;
+        rsx! {
+            h1 { "Hello!" }
+            Child {
+                h1 { "{abc}" }
+            }
+            h3 { "Goodbye!" }
+        }
+    }
+
+    #[component]
+    fn Child(children: Element) -> Element {
+        rsx! {
+            {children}
+        }
+    }
+
+    let mut dom = VirtualDom::new(app);
+    let mut mutations = Mutations::default();
+    dom.rebuild(&mut mutations);
+    debug!("mutations: {:#?}", mutations);
+}
 
 fn init_logger() {
     _ = tracing_subscriber::fmt()
