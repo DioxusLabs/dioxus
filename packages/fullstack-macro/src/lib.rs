@@ -243,7 +243,7 @@ pub fn server(attr: proc_macro::TokenStream, mut item: TokenStream) -> TokenStre
 }
 
 #[proc_macro_attribute]
-pub fn route(attr: TokenStream, mut item: TokenStream) -> TokenStream {
+pub fn route(attr: TokenStream, item: TokenStream) -> TokenStream {
     wrapped_route_impl(attr, item, None)
 }
 
@@ -328,7 +328,7 @@ fn route_impl_with_route(
     let axum_path = route.to_axum_path_string();
     let method_ident = &route.method;
     let http_method = route.method.to_axum_method_name();
-    let remaining_numbered_pats = route.remaining_pattypes_numbered(&function.sig.inputs);
+    let _remaining_numbered_pats = route.remaining_pattypes_numbered(&function.sig.inputs);
     let body_json_args = route.remaining_pattypes_named(&function.sig.inputs);
     let body_json_names = body_json_args
         .iter()
@@ -360,7 +360,7 @@ fn route_impl_with_route(
         .iter()
         .filter(|attr| attr.path().is_ident("doc"));
 
-    let (aide_ident_docs, inner_fn_call, method_router_ty) = if with_aide {
+    let (aide_ident_docs, _inner_fn_call, _method_router_ty) = if with_aide {
         let http_method = format_ident!("{}_with", http_method);
         let summary = route
             .get_oapi_summary()
@@ -1245,7 +1245,7 @@ enum PathParam {
 }
 
 impl PathParam {
-    fn captures(&self) -> bool {
+    fn _captures(&self) -> bool {
         matches!(self, Self::Capture(..) | Self::WildCard(..))
     }
 

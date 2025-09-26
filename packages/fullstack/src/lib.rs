@@ -27,8 +27,8 @@ pub use serde;
 // #[doc(hidden)]
 // pub use xxhash_rust;
 
-pub mod spawn;
-pub use spawn::*;
+pub(crate) mod spawn;
+pub(crate) use spawn::*;
 
 pub mod magic;
 pub use magic::*;
@@ -38,9 +38,6 @@ pub use response::*;
 
 pub mod request;
 pub use request::*;
-
-pub mod error;
-pub use error::*;
 
 pub use http::StatusCode;
 
@@ -55,9 +52,6 @@ pub use lazy::*;
 
 pub use payloads::*;
 pub mod payloads {
-    pub mod jwt;
-    pub use jwt::*;
-
     pub mod json;
     pub use json::*;
 

@@ -1,6 +1,4 @@
-use axum::extract::FromRequest;
-use dioxus_fullstack_core::{DioxusServerState, ServerFnError};
-use serde::de::DeserializeOwned;
+use dioxus_fullstack_core::ServerFnError;
 use std::{pin::Pin, prelude::rust_2024::Future};
 
 pub trait FromResponse<R = reqwest::Response>: Sized {

@@ -1,5 +1,5 @@
-use axum_core::response::{IntoResponse, Response};
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use axum_core::response::IntoResponse;
+use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 
 /// A default result type for server functions, which can either be successful or contain an error. The [`ServerFnResult`] type
@@ -91,13 +91,27 @@ impl From<anyhow::Error> for ServerFnError {
 
 impl From<ServerFnError> for http::StatusCode {
     fn from(value: ServerFnError) -> Self {
-        todo!()
-    }
-}
-
-impl From<ServerFnError> for http::Error {
-    fn from(value: ServerFnError) -> Self {
-        todo!()
+        match value {
+            ServerFnError::ServerError { code, .. } => match code {
+                Some(code) => http::StatusCode::from_u16(code)
+                    .unwrap_or(http::StatusCode::INTERNAL_SERVER_ERROR),
+                None => http::StatusCode::INTERNAL_SERVER_ERROR,
+            },
+            ServerFnError::Request { code, .. } => match code {
+                Some(code) => http::StatusCode::from_u16(code)
+                    .unwrap_or(http::StatusCode::INTERNAL_SERVER_ERROR),
+                None => http::StatusCode::INTERNAL_SERVER_ERROR,
+            },
+            ServerFnError::StreamError(_)
+            | ServerFnError::Registration(_)
+            | ServerFnError::UnsupportedRequestMethod(_)
+            | ServerFnError::MiddlewareError(_)
+            | ServerFnError::Deserialization(_)
+            | ServerFnError::Serialization(_)
+            | ServerFnError::Args(_)
+            | ServerFnError::MissingArg(_)
+            | ServerFnError::Response(_) => http::StatusCode::INTERNAL_SERVER_ERROR,
+        }
     }
 }
 
@@ -109,30 +123,5 @@ impl IntoResponse for ServerFnRejection {
             .status(http::StatusCode::INTERNAL_SERVER_ERROR)
             .body(axum_core::body::Body::from("Internal Server Error"))
             .unwrap()
-    }
-}
-
-pub trait ServerFnSugar<M> {
-    fn desugar_into_response(self) -> axum_core::response::Response;
-}
-
-pub struct SerializeSugarMarker;
-impl<T: DeserializeOwned, E: From<ServerFnError> + IntoResponse> ServerFnSugar<SerializeSugarMarker>
-    for Result<T, E>
-{
-    fn desugar_into_response(self) -> Response {
-        match self {
-            Self::Ok(e) => todo!(),
-            Self::Err(e) => e.into_response(),
-        }
-    }
-}
-
-/// A newtype wrapper that indicates that the inner type should be converted to a response using its
-/// IntoResponse impl and not its Serialize impl.
-pub struct ViaResponse<T>(pub T);
-impl<T: IntoResponse> IntoResponse for ViaResponse<T> {
-    fn into_response(self) -> Response {
-        self.0.into_response()
     }
 }

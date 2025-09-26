@@ -100,17 +100,19 @@ struct ChatMessage {
     message: String,
 }
 
-// Every chat app needs a chat room! For this demo, we just use a tokio broadcast channel and a mutex-protected
-// list of messages to store chat history.
-static MESSAGES: LazyLock<Mutex<Vec<ChatMessage>>> = LazyLock::new(|| Mutex::new(Vec::new()));
-static BROADCAST: LazyLock<Sender<ChatMessage>> = LazyLock::new(|| broadcast::channel(100).0);
-
 #[get("/api/chat?name&user_id")]
 async fn uppercase_ws(
     name: String,
     user_id: Uuid,
     options: WebSocketOptions,
 ) -> Result<Websocket<ClientEvent, ServerEvent>> {
+    // Every chat app needs a chat room! For this demo, we just use a tokio broadcast channel and a mutex-protected
+    // list of messages to store chat history.
+    //
+    // We place these types in the body of this serverfn since theyre not used on the client, only the server.
+    static MESSAGES: LazyLock<Mutex<Vec<ChatMessage>>> = LazyLock::new(|| Mutex::new(Vec::new()));
+    static BROADCAST: LazyLock<Sender<ChatMessage>> = LazyLock::new(|| broadcast::channel(100).0);
+
     Ok(options.on_upgrade(move |mut socket| async move {
         // Send back all the messages from the room to the new client
         let messages = MESSAGES.lock().await.clone();
