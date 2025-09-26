@@ -101,6 +101,6 @@ pub mod payloads {
     pub mod ranged;
     pub use ranged::*;
 
-    pub mod opaque;
-    pub use opaque::*;
+    pub mod response;
+    pub use response::*;
 }
