@@ -6,11 +6,11 @@ use axum_core::{
     extract::{FromRequest, Request},
 };
 use bytes::Bytes;
-use dioxus_fullstack_core::ServerFnError;
+use dioxus_fullstack_core::{RequestError, ServerFnError};
 use futures::Stream;
 use http_body_util::BodyExt;
 
-use crate::{FromResponse, IntoRequest, ServerFnRejection};
+use crate::{ClientResponse, FromResponse, IntoRequest, ServerFnRejection};
 
 pub struct FileUpload {
     outgoing_stream: Option<http_body_util::BodyDataStream<Request<Body>>>,
@@ -30,7 +30,7 @@ impl IntoRequest for FileUpload {
     fn into_request(
         self,
         builder: reqwest::RequestBuilder,
-    ) -> impl Future<Output = Result<reqwest::Response, reqwest::Error>> + Send + 'static {
+    ) -> impl Future<Output = Result<ClientResponse, RequestError>> + Send + 'static {
         async move { todo!() }
     }
 }
@@ -53,7 +53,7 @@ impl<S> FromRequest<S> for FileUpload {
 
 impl FromResponse for FileUpload {
     fn from_response(
-        res: reqwest::Response,
+        res: ClientResponse,
     ) -> impl Future<Output = Result<Self, ServerFnError>> + Send {
         async move { todo!() }
     }

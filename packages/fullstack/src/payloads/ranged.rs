@@ -1,4 +1,4 @@
-use crate::FromResponse;
+use crate::{ClientResponse, FromResponse};
 use dioxus_fullstack_core::ServerFnError;
 use std::prelude::rust_2024::Future;
 
@@ -9,7 +9,7 @@ pub struct RangedBytes {
 
 impl FromResponse for RangedBytes {
     fn from_response(
-        res: reqwest::Response,
+        res: ClientResponse,
     ) -> impl Future<Output = Result<Self, ServerFnError>> + Send {
         async move {
             Ok(Self {

@@ -16,7 +16,7 @@ use reqwest::header::HeaderValue;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::fmt::Display;
 
-use crate::{FromResponse, ServerFnError};
+use crate::{ClientResponse, FromResponse, ServerFnError};
 
 pub struct ServerEvents<T> {
     _marker: std::marker::PhantomData<fn() -> T>,
@@ -58,7 +58,7 @@ impl<T> ServerEvents<T> {
 
 impl<T> FromResponse for ServerEvents<T> {
     fn from_response(
-        res: reqwest::Response,
+        res: ClientResponse,
     ) -> impl Future<Output = Result<Self, ServerFnError>> + Send {
         use futures::io::AsyncBufReadExt;
 

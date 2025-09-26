@@ -1,4 +1,4 @@
-use crate::{reqwest_response_to_serverfn_err, FromResponse};
+use crate::{reqwest_response_to_serverfn_err, ClientResponse, FromResponse};
 use axum_core::response::{IntoResponse, Response};
 use dioxus_fullstack_core::ServerFnError;
 use send_wrapper::SendWrapper;
@@ -30,7 +30,7 @@ impl<T: Into<String>> IntoResponse for Text<T> {
 
 impl<T: From<String>> FromResponse for Text<T> {
     fn from_response(
-        res: reqwest::Response,
+        res: ClientResponse,
     ) -> impl Future<Output = Result<Self, ServerFnError>> + Send {
         SendWrapper::new(async move {
             match res.text().await {

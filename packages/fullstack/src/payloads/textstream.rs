@@ -1,4 +1,4 @@
-use crate::{Encoding, FromResponse, ServerFnError};
+use crate::{ClientResponse, Encoding, FromResponse, ServerFnError};
 use axum_core::response::IntoResponse;
 use bytes::Bytes;
 use futures::{Stream, StreamExt};
@@ -115,7 +115,7 @@ impl<T: DeserializeOwned + Serialize + 'static, E: Encoding> IntoResponse for St
 
 impl FromResponse for Streaming<String> {
     fn from_response(
-        res: reqwest::Response,
+        res: ClientResponse,
     ) -> impl Future<Output = Result<Self, ServerFnError>> + Send {
         SendWrapper::new(async move {
             let client_stream = Box::pin(res.bytes_stream().map(|byte| match byte {
@@ -138,7 +138,7 @@ impl FromResponse for Streaming<String> {
 
 impl FromResponse for Streaming<Bytes> {
     fn from_response(
-        res: reqwest::Response,
+        res: ClientResponse,
     ) -> impl Future<Output = Result<Self, ServerFnError>> + Send {
         async move { todo!() }
     }
@@ -148,7 +148,7 @@ impl<T: DeserializeOwned + Serialize + 'static + Send, E: Encoding> FromResponse
     for Streaming<T, E>
 {
     fn from_response(
-        res: reqwest::Response,
+        res: ClientResponse,
     ) -> impl Future<Output = Result<Self, ServerFnError>> + Send {
         SendWrapper::new(async move {
             let client_stream = Box::pin(res.bytes_stream().map(|byte| match byte {

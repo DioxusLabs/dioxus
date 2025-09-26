@@ -44,6 +44,9 @@ pub use encoding::*;
 pub mod lazy;
 pub use lazy::*;
 
+pub mod response;
+pub use response::*;
+
 pub use payloads::*;
 pub mod payloads {
     pub mod json;

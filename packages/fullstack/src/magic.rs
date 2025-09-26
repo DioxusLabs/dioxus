@@ -95,37 +95,40 @@ pub struct ErrorPayload<E> {
     data: Option<E>,
 }
 
-/// Convert a `reqwest::Error` into a `ServerFnError`.
+/// Convert a `RequestError` into a `ServerFnError`.
 ///
 /// This is a separate function to avoid bringing in `reqwest` into fullstack-core.
 pub fn reqwest_response_to_serverfn_err(err: reqwest::Error) -> ServerFnError {
-    let mut inner = if err.is_timeout() {
-        RequestError::Timeout
+    let message = err.to_string();
+    let inner = if err.is_timeout() {
+        RequestError::Timeout(message)
     } else if err.is_request() {
-        RequestError::Request
+        RequestError::Request(message)
     } else if err.is_body() {
-        RequestError::Body
+        RequestError::Body(message)
     } else if err.is_decode() {
-        RequestError::Decode
+        RequestError::Decode(message)
     } else if err.is_redirect() {
-        RequestError::Redirect
+        RequestError::Redirect(message)
     } else if let Some(status) = err.status() {
-        RequestError::Status(status.as_u16())
+        RequestError::Status(message, status.as_u16())
     } else {
-        RequestError::Request
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            if err.is_connect() {
+                RequestError::Connect(message)
+            } else {
+                RequestError::Request(message)
+            }
+        }
+
+        #[cfg(target_arch = "wasm32")]
+        {
+            RequestError::Request(message)
+        }
     };
 
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        if err.is_connect() {
-            inner = RequestError::Connect;
-        }
-    }
-
-    ServerFnError::Request {
-        error: inner,
-        message: err.to_string(),
-    }
+    ServerFnError::Request(inner)
 }
 
 pub use req_to::*;
@@ -134,7 +137,7 @@ pub mod req_to {
 
     use dioxus_fullstack_core::client::get_server_url;
 
-    use crate::{CantEncode, EncodeIsVerified};
+    use crate::{CantEncode, ClientResponse, EncodeIsVerified};
 
     use super::*;
 
@@ -195,14 +198,14 @@ pub mod req_to {
         }
     }
 
-    pub trait EncodeRequest<In, Out, R = reqwest::Response> {
+    pub trait EncodeRequest<In, Out> {
         type VerifyEncode;
         fn fetch_client(
             &self,
             ctx: FetchRequest,
             data: In,
             map: fn(In) -> Out,
-        ) -> impl Future<Output = Result<R, reqwest::Error>> + Send + 'static;
+        ) -> impl Future<Output = Result<ClientResponse, RequestError>> + Send + 'static;
 
         fn verify_can_serialize(&self) -> Self::VerifyEncode;
     }
@@ -218,16 +221,24 @@ pub mod req_to {
             ctx: FetchRequest,
             data: T,
             _map: fn(T) -> O,
-        ) -> impl Future<Output = Result<reqwest::Response, reqwest::Error>> + Send + 'static
-        {
+        ) -> impl Future<Output = Result<ClientResponse, RequestError>> + Send + 'static {
             send_wrapper::SendWrapper::new(async move {
                 let data = serde_json::to_string(&data).unwrap();
 
                 if data.is_empty() || data == "{}" {
-                    return Ok(ctx.client.send().await.unwrap());
+                    let res = ctx.client.send().await.unwrap();
+                    return Ok(ClientResponse {
+                        inner: res,
+                        state: None,
+                    });
                 }
 
-                Ok(ctx.client.body(data).send().await.unwrap())
+                let res = ctx.client.body(data).send().await.unwrap();
+
+                Ok(ClientResponse {
+                    inner: res,
+                    state: None,
+                })
             })
         }
 
@@ -237,10 +248,10 @@ pub mod req_to {
     }
 
     /// When we use the FromRequest path, we don't need to deserialize the input type on the client,
-    impl<T, O, R> EncodeRequest<T, O, R> for &&&&&&&&&ServerFnEncoder<T, O>
+    impl<T, O> EncodeRequest<T, O> for &&&&&&&&&ServerFnEncoder<T, O>
     where
         T: 'static,
-        O: FromRequest<DioxusServerState> + IntoRequest<R>,
+        O: FromRequest<DioxusServerState> + IntoRequest,
     {
         type VerifyEncode = EncodeIsVerified;
         fn fetch_client(
@@ -248,7 +259,7 @@ pub mod req_to {
             ctx: FetchRequest,
             data: T,
             map: fn(T) -> O,
-        ) -> impl Future<Output = Result<R, reqwest::Error>> + Send + 'static {
+        ) -> impl Future<Output = Result<ClientResponse, RequestError>> + Send + 'static {
             O::into_request(map(data), ctx.client)
         }
 
@@ -269,8 +280,7 @@ pub mod req_to {
             _ctx: FetchRequest,
             _data: T,
             _map: fn(T) -> O,
-        ) -> impl Future<Output = Result<reqwest::Response, reqwest::Error>> + Send + 'static
-        {
+        ) -> impl Future<Output = Result<ClientResponse, RequestError>> + Send + 'static {
             async move { unimplemented!() }
         }
         fn verify_can_serialize(&self) -> Self::VerifyEncode {
@@ -283,7 +293,7 @@ pub use decode_ok::*;
 mod decode_ok {
     use dioxus_fullstack_core::{HttpError, RequestError};
 
-    use crate::reqwest_response_to_serverfn_err;
+    use crate::{reqwest_response_to_serverfn_err, ClientResponse};
 
     use super::*;
 
@@ -292,18 +302,18 @@ mod decode_ok {
     ///
     /// This is because FromResponse types are more specialized and can handle things like websockets and files.
     /// DeserializeOwned types are more general and can handle things like JSON responses.
-    pub trait ReqwestDecodeResult<T, R> {
+    pub trait ReqwestDecodeResult<T> {
         fn decode_client_response(
             &self,
-            res: Result<R, reqwest::Error>,
-        ) -> impl Future<Output = Result<Result<T, ServerFnError>, reqwest::Error>> + Send;
+            res: Result<ClientResponse, RequestError>,
+        ) -> impl Future<Output = Result<Result<T, ServerFnError>, RequestError>> + Send;
     }
 
-    impl<T: FromResponse<R>, E, R> ReqwestDecodeResult<T, R> for &&&ServerFnDecoder<Result<T, E>> {
+    impl<T: FromResponse, E> ReqwestDecodeResult<T> for &&&ServerFnDecoder<Result<T, E>> {
         fn decode_client_response(
             &self,
-            res: Result<R, reqwest::Error>,
-        ) -> impl Future<Output = Result<Result<T, ServerFnError>, reqwest::Error>> + Send {
+            res: Result<ClientResponse, RequestError>,
+        ) -> impl Future<Output = Result<Result<T, ServerFnError>, RequestError>> + Send {
             SendWrapper::new(async move {
                 match res {
                     Err(err) => Err(err),
@@ -313,13 +323,11 @@ mod decode_ok {
         }
     }
 
-    impl<T: DeserializeOwned, E> ReqwestDecodeResult<T, reqwest::Response>
-        for &&ServerFnDecoder<Result<T, E>>
-    {
+    impl<T: DeserializeOwned, E> ReqwestDecodeResult<T> for &&ServerFnDecoder<Result<T, E>> {
         fn decode_client_response(
             &self,
-            res: Result<reqwest::Response, reqwest::Error>,
-        ) -> impl Future<Output = Result<Result<T, ServerFnError>, reqwest::Error>> + Send {
+            res: Result<ClientResponse, RequestError>,
+        ) -> impl Future<Output = Result<Result<T, ServerFnError>, RequestError>> + Send {
             SendWrapper::new(async move {
                 match res {
                     Err(err) => Err(err),
@@ -380,7 +388,7 @@ mod decode_ok {
     pub trait ReqwestDecodeErr<T, E> {
         fn decode_client_err(
             &self,
-            res: Result<Result<T, ServerFnError>, reqwest::Error>,
+            res: Result<Result<T, ServerFnError>, RequestError>,
         ) -> impl Future<Output = Result<T, E>> + Send;
     }
 
@@ -390,7 +398,7 @@ mod decode_ok {
     {
         fn decode_client_err(
             &self,
-            res: Result<Result<T, ServerFnError>, reqwest::Error>,
+            res: Result<Result<T, ServerFnError>, RequestError>,
         ) -> impl Future<Output = Result<T, E>> + Send {
             SendWrapper::new(async move {
                 match res {
@@ -421,7 +429,7 @@ mod decode_ok {
                     },
                     // todo: implement proper through-error conversion, instead of just ServerFnError::Request
                     // we should expand these cases.
-                    Err(err) => Err(reqwest_response_to_serverfn_err(err).into()),
+                    Err(err) => Err(ServerFnError::from(err).into()),
                 }
             })
         }
@@ -434,13 +442,13 @@ mod decode_ok {
     impl<T> ReqwestDecodeErr<T, anyhow::Error> for &&ServerFnDecoder<Result<T, anyhow::Error>> {
         fn decode_client_err(
             &self,
-            res: Result<Result<T, ServerFnError>, reqwest::Error>,
+            res: Result<Result<T, ServerFnError>, RequestError>,
         ) -> impl Future<Output = Result<T, anyhow::Error>> + Send {
             SendWrapper::new(async move {
                 match res {
                     Ok(Ok(res)) => Ok(res),
                     Ok(Err(e)) => Err(anyhow::Error::from(e)),
-                    Err(err) => Err(anyhow::Error::from(reqwest_response_to_serverfn_err(err))),
+                    Err(err) => Err(anyhow::Error::from(err)),
                 }
             })
         }
@@ -450,7 +458,7 @@ mod decode_ok {
     impl<T> ReqwestDecodeErr<T, StatusCode> for &ServerFnDecoder<Result<T, StatusCode>> {
         fn decode_client_err(
             &self,
-            res: Result<Result<T, ServerFnError>, reqwest::Error>,
+            res: Result<Result<T, ServerFnError>, RequestError>,
         ) -> impl Future<Output = Result<T, StatusCode>> + Send {
             SendWrapper::new(async move {
                 match res {
@@ -458,8 +466,8 @@ mod decode_ok {
 
                     // We do a best-effort conversion from ServerFnError to StatusCode.
                     Ok(Err(e)) => match e {
-                        ServerFnError::Request { error, .. } => {
-                            Err(StatusCode::from_u16(error.status().unwrap_or(500))
+                        ServerFnError::Request(error) => {
+                            Err(StatusCode::from_u16(error.status_code().unwrap_or(500))
                                 .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR))
                         }
 
@@ -502,7 +510,7 @@ mod decode_ok {
     impl<T> ReqwestDecodeErr<T, HttpError> for &ServerFnDecoder<Result<T, HttpError>> {
         fn decode_client_err(
             &self,
-            res: Result<Result<T, ServerFnError>, reqwest::Error>,
+            res: Result<Result<T, ServerFnError>, RequestError>,
         ) -> impl Future<Output = Result<T, HttpError>> + Send {
             SendWrapper::new(async move {
                 match res {
@@ -513,16 +521,16 @@ mod decode_ok {
                                 .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
                             message: Some(message),
                         }),
-                        ServerFnError::Request { message, error } => match error {
-                            RequestError::Builder => todo!(),
-                            RequestError::Redirect => todo!(),
-                            RequestError::Status(_) => todo!(),
-                            RequestError::Timeout => todo!(),
-                            RequestError::Request => todo!(),
-                            RequestError::Connect => todo!(),
-                            RequestError::Body => todo!(),
-                            RequestError::Decode => todo!(),
-                        },
+                        // ServerFnError::Request { message, error } => match error {
+                        //     RequestError::Builder => todo!(),
+                        //     RequestError::Redirect => todo!(),
+                        //     RequestError::Status(_) => todo!(),
+                        //     RequestError::Timeout => todo!(),
+                        //     RequestError::Request => todo!(),
+                        //     RequestError::Connect => todo!(),
+                        //     RequestError::Body => todo!(),
+                        //     RequestError::Decode => todo!(),
+                        // },
                         _ => HttpError::internal_server_error("Internal Server Error"),
                     },
                     Err(err) => Err(HttpError::new(
@@ -647,15 +655,15 @@ mod resp {
     ///
     /// We currently have an `Input` type even though it's not useful since we might want to support regular axum endpoints later.
     /// For now, it's just Result<T, E> where T is either DeserializeOwned or FromResponse
-    pub trait MakeAxumResponse<T, E, R = reqwest::Response> {
+    pub trait MakeAxumResponse<T, E> {
         fn make_axum_response(self, result: Result<T, E>) -> Result<Response, E>;
     }
 
     // Higher priority impl for special types like websocket/file responses that generate their own responses
     // The FromResponse impl helps narrow types to those usable on the client
-    impl<T, E, R> MakeAxumResponse<T, E, R> for &&&ServerFnDecoder<Result<T, E>>
+    impl<T, E> MakeAxumResponse<T, E> for &&&ServerFnDecoder<Result<T, E>>
     where
-        T: FromResponse<R> + IntoResponse,
+        T: FromResponse + IntoResponse,
     {
         fn make_axum_response(self, result: Result<T, E>) -> Result<Response, E> {
             result.map(|v| v.into_response())
@@ -664,7 +672,7 @@ mod resp {
 
     // Lower priority impl for regular serializable types
     // We try to match the encoding from the incoming request, otherwise default to JSON
-    impl<T, E> MakeAxumResponse<T, E, reqwest::Response> for &&ServerFnDecoder<Result<T, E>>
+    impl<T, E> MakeAxumResponse<T, E> for &&ServerFnDecoder<Result<T, E>>
     where
         T: DeserializeOwned + Serialize,
     {

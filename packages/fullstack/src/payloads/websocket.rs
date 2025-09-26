@@ -18,11 +18,14 @@
 //! Dioxus Fullstack websockets are typed in both directions, letting the happy path (`.send()` and `.recv()`)
 //! automatically serialize and deserialize messages for you.
 
-use crate::{CborEncoding, Encoding, FromResponse, IntoRequest, JsonEncoding, ServerFnError};
+use crate::{
+    CborEncoding, ClientResponse, Encoding, FromResponse, IntoRequest, JsonEncoding, ServerFnError,
+};
 use axum::extract::{FromRequest, Request};
 use axum_core::response::{IntoResponse, Response};
 use bytes::Bytes;
 use dioxus_core::{use_hook, CapturedError, RenderError, Result};
+use dioxus_fullstack_core::RequestError;
 use dioxus_hooks::{use_loader, use_memo, use_signal, use_waker, Loader};
 use dioxus_hooks::{use_resource, Resource};
 use dioxus_signals::{CopyValue, ReadSignal, ReadableExt, ReadableOptionExt, Signal, WritableExt};
@@ -372,26 +375,28 @@ impl<In, Out, E> IntoResponse for Websocket<In, Out, E> {
     }
 }
 
-impl<I, O, E> FromResponse<UpgradingWebsocket> for Websocket<I, O, E> {
+impl<I, O, E> FromResponse for Websocket<I, O, E> {
     fn from_response(
-        res: UpgradingWebsocket,
+        res: ClientResponse,
+        // res: UpgradingWebsocket,
     ) -> impl Future<Output = Result<Self, ServerFnError>> + Send {
-        SendWrapper::new(async move {
-            #[cfg(not(target_arch = "wasm32"))]
-            let inner_native = res.inner_native;
+        async move { todo!() }
+        // SendWrapper::new(async move {
+        //     #[cfg(not(target_arch = "wasm32"))]
+        //     let inner_native = res.inner_native;
 
-            #[cfg(feature = "web")]
-            let inner_web = res.inner_web;
+        //     #[cfg(feature = "web")]
+        //     let inner_web = res.inner_web;
 
-            Ok(Websocket {
-                #[cfg(not(target_arch = "wasm32"))]
-                inner_native,
-                #[cfg(feature = "web")]
-                inner_web,
-                response: None,
-                _in: PhantomData,
-            })
-        })
+        //     Ok(Websocket {
+        //         #[cfg(not(target_arch = "wasm32"))]
+        //         inner_native,
+        //         #[cfg(feature = "web")]
+        //         inner_web,
+        //         response: None,
+        //         _in: PhantomData,
+        //     })
+        // })
     }
 }
 
@@ -457,43 +462,47 @@ impl Default for WebSocketOptions {
     }
 }
 
-impl IntoRequest<UpgradingWebsocket> for WebSocketOptions {
+impl IntoRequest for WebSocketOptions {
+    // impl IntoRequest<UpgradingWebsocket> for WebSocketOptions {
     fn into_request(
         self,
         builder: reqwest::RequestBuilder,
-    ) -> impl Future<Output = std::result::Result<UpgradingWebsocket, reqwest::Error>> + Send + 'static
+    ) -> impl Future<Output = std::result::Result<ClientResponse, RequestError>> + Send + 'static
+// ) -> impl Future<Output = std::result::Result<UpgradingWebsocket, RequestError>> + Send + 'static
     {
-        send_wrapper::SendWrapper::new(async move {
-            #[cfg(all(feature = "web", target_arch = "wasm32"))]
-            {
-                let inner_web = Some(
-                    wasm::WebSysWebSocketStream::new(builder.build()?, &self.protocols)
-                        .await
-                        .unwrap(),
-                );
-                return Ok(UpgradingWebsocket {
-                    inner_web,
-                    #[cfg(not(target_arch = "wasm32"))]
-                    inner_native: None,
-                });
-            }
+        async move { todo!() }
+        // send_wrapper::SendWrapper::new(async move {
+        //     #[cfg(all(feature = "web", target_arch = "wasm32"))]
+        //     {
+        //         let inner_web = Some(
+        //             wasm::WebSysWebSocketStream::new(builder.build().unwrap(), &self.protocols)
+        //                 // wasm::WebSysWebSocketStream::new(builder.build()?, &self.protocols)
+        //                 .await
+        //                 .unwrap(),
+        //         );
+        //         return Ok(UpgradingWebsocket {
+        //             inner_web,
+        //             #[cfg(not(target_arch = "wasm32"))]
+        //             inner_native: None,
+        //         });
+        //     }
 
-            #[cfg(not(target_arch = "wasm32"))]
-            {
-                let response = native::send_request(builder, &self.protocols)
-                    .await
-                    .unwrap();
-                let (inner, protocol) = response
-                    .into_stream_and_protocol(self.protocols, None)
-                    .await
-                    .unwrap();
-                return Ok(UpgradingWebsocket {
-                    #[cfg(feature = "web")]
-                    inner_web: None,
-                    inner_native: Some(inner),
-                });
-            }
-        })
+        //     #[cfg(not(target_arch = "wasm32"))]
+        //     {
+        //         let response = native::send_request(builder, &self.protocols)
+        //             .await
+        //             .unwrap();
+        //         let (inner, protocol) = response
+        //             .into_stream_and_protocol(self.protocols, None)
+        //             .await
+        //             .unwrap();
+        //         return Ok(UpgradingWebsocket {
+        //             #[cfg(feature = "web")]
+        //             inner_web: None,
+        //             inner_native: Some(inner),
+        //         });
+        //     }
+        // })
     }
 }
 
