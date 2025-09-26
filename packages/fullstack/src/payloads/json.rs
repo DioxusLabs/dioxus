@@ -10,15 +10,14 @@ where
 {
     fn into_request(
         self,
-        request_builder: ClientRequest,
+        request: ClientRequest,
     ) -> impl Future<Output = Result<ClientResponse, RequestError>> + Send + 'static {
         send_wrapper::SendWrapper::new(async move {
-            todo!()
-            // request_builder
-            //     .header("Content-Type", "application/json")
-            //     .json(&self.0)
-            //     .send()
-            //     .await
+            request
+                .header("Content-Type", "application/json")
+                .json(&self.0)
+                .send()
+                .await
         })
     }
 }

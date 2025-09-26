@@ -1,7 +1,7 @@
 use bytes::Bytes;
-use dioxus_fullstack_core::ServerFnError;
+use dioxus_fullstack_core::{RequestError, ServerFnError};
 use futures::Stream;
-use http::{HeaderMap, Method, StatusCode};
+use http::{HeaderMap, HeaderName, HeaderValue, Method, StatusCode};
 use serde::{de::DeserializeOwned, Serialize};
 use std::{future::Future, pin::Pin};
 use url::Url;
@@ -14,6 +14,7 @@ pub struct ClientResponse {
     pub(crate) inner: reqwest::Response,
     pub(crate) state: Option<Box<dyn std::any::Any + Send + Sync>>,
 }
+
 impl ClientResponse {
     pub fn status(&self) -> StatusCode {
         self.inner.status()
@@ -53,57 +54,82 @@ pub struct ClientRequest {
     pub client: reqwest::RequestBuilder,
 }
 
+unsafe impl Send for ClientRequest {}
+unsafe impl Sync for ClientRequest {}
+
 impl ClientRequest {
     pub fn new(method: http::Method, url: String, params: &impl Serialize) -> Self {
-        // Shrink monomorphization bloat by moving this to its own function
-        fn fetch_inner(method: http::Method, url: String, query: String) -> ClientRequest {
-            #[cfg(not(target_arch = "wasm32"))]
-            let (ip, port) = {
-                use std::sync::LazyLock;
+        Self::fetch_inner(method, url, serde_qs::to_string(params).unwrap())
+    }
 
-                static IP: LazyLock<String> =
-                    LazyLock::new(|| std::env::var("IP").unwrap_or_else(|_| "127.0.0.1".into()));
-                static PORT: LazyLock<String> =
-                    LazyLock::new(|| std::env::var("PORT").unwrap_or_else(|_| "8080".into()));
+    // Shrink monomorphization bloat by moving this to its own function
+    fn fetch_inner(method: http::Method, url: String, query: String) -> ClientRequest {
+        #[cfg(not(target_arch = "wasm32"))]
+        let (ip, port) = {
+            use std::sync::LazyLock;
 
-                (IP.clone(), PORT.clone())
-            };
+            static IP: LazyLock<String> =
+                LazyLock::new(|| std::env::var("IP").unwrap_or_else(|_| "127.0.0.1".into()));
+            static PORT: LazyLock<String> =
+                LazyLock::new(|| std::env::var("PORT").unwrap_or_else(|_| "8080".into()));
 
-            #[cfg(target_arch = "wasm32")]
-            let (ip, port) = ("127.0.0.1", "8080".to_string());
+            (IP.clone(), PORT.clone())
+        };
 
-            let url = format!(
-                "http://{ip}:{port}{url}{params}",
-                params = if query.is_empty() {
-                    "".to_string()
-                } else {
-                    format!("?{}", query)
-                }
-            );
+        #[cfg(target_arch = "wasm32")]
+        let (ip, port) = ("127.0.0.1", "8080".to_string());
 
-            // let host = if cfg!(target_os = "wasm32") {
-            //     "".to_string()
-            // } else {
-            //     get_server_url()
-            // };
+        let url = format!(
+            "http://{ip}:{port}{url}{params}",
+            params = if query.is_empty() {
+                "".to_string()
+            } else {
+                format!("?{}", query)
+            }
+        );
 
-            // http://127.0.0.1:8080
-            // // format!("http://127.0.0.1:8080{}", #request_url)
-            // // .#http_method(format!("{}{}", get_server_url(), #request_url)); // .query(&__params);
+        // let host = if cfg!(target_os = "wasm32") {
+        //     "".to_string()
+        // } else {
+        //     get_server_url()
+        // };
 
-            // static COOKIES: LazyLock<Arc<reqwest::cookie::Jar>> =
-            //     LazyLock::new(|| Arc::new(reqwest::cookie::Jar::default()));
+        // http://127.0.0.1:8080
+        // // format!("http://127.0.0.1:8080{}", #request_url)
+        // // .#http_method(format!("{}{}", get_server_url(), #request_url)); // .query(&__params);
 
-            let client = reqwest::Client::builder()
-                // .cookie_store(true)
-                // .cookie_provider(COOKIES.clone())
-                .build()
-                .unwrap()
-                .request(method, url);
-            ClientRequest { client }
+        // static COOKIES: LazyLock<Arc<reqwest::cookie::Jar>> =
+        //     LazyLock::new(|| Arc::new(reqwest::cookie::Jar::default()));
+
+        let client = reqwest::Client::builder()
+            // .cookie_store(true)
+            // .cookie_provider(COOKIES.clone())
+            .build()
+            .unwrap()
+            .request(method, url);
+        ClientRequest { client }
+    }
+
+    pub fn json(self, json: &impl Serialize) -> Self {
+        Self {
+            client: self.client.json(json),
         }
+    }
 
-        fetch_inner(method, url, serde_qs::to_string(params).unwrap())
+    pub async fn send(self) -> Result<ClientResponse, RequestError> {
+        todo!()
+    }
+
+    /// Add a `Header` to this Request.
+    pub fn header<K, V>(mut self, key: K, value: V) -> Self
+    where
+        HeaderName: TryFrom<K>,
+        <HeaderName as TryFrom<K>>::Error: Into<http::Error>,
+        HeaderValue: TryFrom<V>,
+        <HeaderValue as TryFrom<V>>::Error: Into<http::Error>,
+    {
+        self.client = self.client.header(key, value);
+        self
     }
 }
 
