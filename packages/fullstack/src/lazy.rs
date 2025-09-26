@@ -1,3 +1,5 @@
+#![allow(clippy::needless_return)]
+
 use std::{hint::black_box, prelude::rust_2024::Future};
 
 /// `Lazy` is a thread-safe, lazily-initialized global variable.
@@ -46,7 +48,16 @@ impl<T: Send + Sync + 'static> Lazy<T> {
     ///
     /// This should only be called once during the server setup phase, typically inside `dioxus::serve`.
     /// Future calls to this method will return an error containing the provided value.
-    pub fn set(&self, pool: T) -> Result<(), T> {
+    pub fn set(&self, pool: T) -> Result<(), dioxus_core::Error> {
+        let res = self.value.set(pool);
+        if res.is_err() {
+            return Err(anyhow::anyhow!("Lazy value is already initialized."));
+        }
+
+        Ok(())
+    }
+
+    pub fn try_set(&self, pool: T) -> Result<(), T> {
         self.value.set(pool)
     }
 
@@ -98,13 +109,12 @@ where
     let fut = ptr();
 
     #[cfg(feature = "server")]
-    return std::thread::spawn(move || {
-        tokio::runtime::Handle::current()
-            .block_on(fut)
-            .map_err(|e| e.into())
-    })
-    .join()
-    .unwrap();
+    {
+        let rt = tokio::runtime::Handle::current();
+        return std::thread::spawn(move || rt.block_on(fut).map_err(|e| e.into()))
+            .join()
+            .unwrap();
+    }
 
     #[cfg(not(feature = "server"))]
     unimplemented!("Lazy initialization is only supported with tokio and threads enabled.")

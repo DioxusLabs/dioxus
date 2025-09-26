@@ -40,6 +40,8 @@ they can be used without `.await` at the callsites.
 */
 #[cfg(feature = "server")]
 static DATABASE: Lazy<sqlx::SqlitePool> = Lazy::lazy();
+static OTHER_LAZY: Lazy<String> =
+    Lazy::new(|| async move { dioxus::Ok("Hello from a lazy static!".to_string()) });
 
 #[get("/api/users")]
 async fn get_users() -> Result<Vec<String>> {
