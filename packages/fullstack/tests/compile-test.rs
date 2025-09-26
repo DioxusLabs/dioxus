@@ -1,3 +1,4 @@
+#![allow(clippy::manual_async_fn)]
 #![allow(unused_variables)]
 
 use anyhow::Result;
@@ -67,9 +68,9 @@ mod simple_extractors {
     #[get("/hello")]
     async fn six_3() -> Result<TextStream> {
         Ok(TextStream::new(futures::stream::iter(vec![
-            Ok("Hello 1".to_string()),
-            Ok("Hello 2".to_string()),
-            Ok("Hello 3".to_string()),
+            "Hello 1".to_string(),
+            "Hello 2".to_string(),
+            "Hello 3".to_string(),
         ])))
     }
 

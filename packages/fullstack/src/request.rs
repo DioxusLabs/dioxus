@@ -1,11 +1,22 @@
-use axum::extract::FromRequest;
-use dioxus_fullstack_core::{DioxusServerState, ServerFnError};
+use bytes::Bytes;
+use dioxus_fullstack_core::ServerFnError;
 use http::HeaderMap;
-use reqwest::{RequestBuilder, Response};
+use reqwest::{RequestBuilder, Response, StatusCode};
 use std::{future::Future, pin::Pin};
+use url::Url;
 
 pub trait FromResponse<R = Response>: Sized {
     fn from_response(res: R) -> impl Future<Output = Result<Self, ServerFnError>> + Send;
+}
+
+pub trait ClientResponse {
+    fn status(&self) -> StatusCode;
+    fn headers(&self) -> &HeaderMap;
+    fn url(&self) -> &Url;
+    fn content_length(&self) -> Option<u64>;
+    fn bytes(self) -> impl Future<Output = Result<Bytes, reqwest::Error>> + Send;
+    fn byte_stream(self) -> impl futures_util::Stream<Item = Result<Bytes, reqwest::Error>>;
+    fn original_request(&self);
 }
 
 pub trait IntoRequest<R = Response>: Sized {
@@ -80,10 +91,5 @@ pub struct CantEncode;
 pub struct EncodeIsVerified;
 impl AssertCanEncode for EncodeIsVerified {}
 
+#[doc(hidden)]
 pub fn assert_can_encode(_t: impl AssertCanEncode) {}
-
-fn assert_is_requst() {
-    fn assert_it<T: FromRequest<DioxusServerState>>() {}
-
-    assert_it::<(HeaderMap, (HeaderMap, axum::extract::Request))>();
-}

@@ -1,4 +1,4 @@
-use crate::FromResponse;
+use crate::{reqwest_response_to_serverfn_err, FromResponse};
 use axum_core::response::{IntoResponse, Response};
 use dioxus_fullstack_core::ServerFnError;
 use send_wrapper::SendWrapper;
@@ -35,7 +35,7 @@ impl<T: From<String>> FromResponse for Text<T> {
         SendWrapper::new(async move {
             match res.text().await {
                 Ok(text) => Ok(Text::new(text.into())),
-                Err(err) => Err(todo!("handle error: {}", err)),
+                Err(err) => Err(reqwest_response_to_serverfn_err(err)),
             }
         })
     }

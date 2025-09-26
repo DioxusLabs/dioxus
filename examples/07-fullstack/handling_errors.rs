@@ -129,8 +129,6 @@ async fn get_custom_encoding(takes: Json<serde_json::Value>) -> Result<serde_jso
 /// Returns an untyped `anyhow` error with context (results in HTTP 500).
 #[get("/api/untyped-error")]
 async fn get_throws_error() -> Result<()> {
-    use anyhow::Context;
-
     Err(None.context("This is an example error using anyhow::Error")?)
 }
 

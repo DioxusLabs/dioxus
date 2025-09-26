@@ -3,8 +3,6 @@
 //! the `get`, `post`, `put`, `delete`, etc macros are used to define server actions that can be
 //! called from the client. The action can take arguments and return a value, and the client
 //! will automatically serialize and deserialize the data.
-//!
-//!
 
 use dioxus::prelude::*;
 

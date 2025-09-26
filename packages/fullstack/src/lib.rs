@@ -33,16 +33,10 @@ pub(crate) use spawn::*;
 pub mod magic;
 pub use magic::*;
 
-pub mod response;
-pub use response::*;
-
 pub mod request;
 pub use request::*;
 
 pub use http::StatusCode;
-
-pub mod url;
-pub use url::*;
 
 pub mod encoding;
 pub use encoding::*;

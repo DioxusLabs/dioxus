@@ -41,7 +41,7 @@ use crate::{IntoRequest, ServerFnError};
 use axum::response::IntoResponse;
 use axum_core::extract::{FromRequest, Request};
 use bytes::Bytes;
-use dioxus_fullstack_core::DioxusServerState;
+use dioxus_fullstack_core::{DioxusServerState, RequestError};
 use http::StatusCode;
 use send_wrapper::SendWrapper;
 use serde::Serialize;
@@ -93,6 +93,39 @@ pub struct ErrorPayload<E> {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     data: Option<E>,
+}
+
+/// Convert a `reqwest::Error` into a `ServerFnError`.
+///
+/// This is a separate function to avoid bringing in `reqwest` into fullstack-core.
+pub fn reqwest_response_to_serverfn_err(err: reqwest::Error) -> ServerFnError {
+    let mut inner = if err.is_timeout() {
+        RequestError::Timeout
+    } else if err.is_request() {
+        RequestError::Request
+    } else if err.is_body() {
+        RequestError::Body
+    } else if err.is_decode() {
+        RequestError::Decode
+    } else if err.is_redirect() {
+        RequestError::Redirect
+    } else if let Some(status) = err.status() {
+        RequestError::Status(status.as_u16())
+    } else {
+        RequestError::Request
+    };
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        if err.is_connect() {
+            inner = RequestError::Connect;
+        }
+    }
+
+    ServerFnError::Request {
+        error: inner,
+        message: err.to_string(),
+    }
 }
 
 pub use req_to::*;
@@ -250,7 +283,7 @@ pub use decode_ok::*;
 mod decode_ok {
     use dioxus_fullstack_core::{HttpError, RequestError};
 
-    use crate::reqwest_resonse_to_serverfn_err;
+    use crate::reqwest_response_to_serverfn_err;
 
     use super::*;
 
@@ -388,7 +421,7 @@ mod decode_ok {
                     },
                     // todo: implement proper through-error conversion, instead of just ServerFnError::Request
                     // we should expand these cases.
-                    Err(err) => Err(reqwest_resonse_to_serverfn_err(err).into()),
+                    Err(err) => Err(reqwest_response_to_serverfn_err(err).into()),
                 }
             })
         }
@@ -407,7 +440,7 @@ mod decode_ok {
                 match res {
                     Ok(Ok(res)) => Ok(res),
                     Ok(Err(e)) => Err(anyhow::Error::from(e)),
-                    Err(err) => Err(anyhow::Error::from(reqwest_resonse_to_serverfn_err(err))),
+                    Err(err) => Err(anyhow::Error::from(reqwest_response_to_serverfn_err(err))),
                 }
             })
         }
