@@ -137,7 +137,6 @@ async fn get_throws_error() -> Result<()> {
 /// Demonstrates returning an explicit HTTP error (400 Bad Request) using `HttpError`.
 #[get("/api/throws-http-error")]
 async fn throws_http_error() -> Result<()> {
-    use dioxus::fullstack::HttpError;
     HttpError::bad_request("Bad request example")?;
     Ok(())
 }

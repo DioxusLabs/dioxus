@@ -6,7 +6,7 @@
 //! This is useful for static site generation, or if you want to use Dioxus Fullstack as a server-side
 //! framework without the `rsx! {}` markup.
 
-use dioxus::{fullstack::HttpError, prelude::*};
+use dioxus::prelude::*;
 
 fn main() {
     dioxus::serve(

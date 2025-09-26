@@ -204,7 +204,7 @@ pub mod prelude {
     #[doc(inline)]
     pub use dioxus_fullstack::{
         self as dioxus_fullstack, delete, get, patch, post, put, server, use_server_cached,
-        use_server_future, OrHttpError, ServerFnError, ServerFnResult,
+        use_server_future, HttpError, OrHttpError, ServerFnError, ServerFnResult,
     };
 
     #[cfg(feature = "server")]

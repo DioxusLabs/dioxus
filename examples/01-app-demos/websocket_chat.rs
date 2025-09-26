@@ -7,14 +7,9 @@
 //! In practice, you'd use a distributed messaging system (Redis PubSub / Kafka / etc) to coordinate
 //! between multiple server instances and an additional database to persist chat history.
 
+use dioxus::fullstack::{WebSocketOptions, Websocket, use_websocket};
 use dioxus::prelude::*;
-use dioxus_fullstack::{WebSocketOptions, Websocket, use_websocket};
 use serde::{Deserialize, Serialize};
-use std::sync::LazyLock;
-use tokio::sync::{
-    Mutex,
-    broadcast::{self, Sender},
-};
 use uuid::Uuid;
 
 fn main() {
@@ -106,6 +101,12 @@ async fn uppercase_ws(
     user_id: Uuid,
     options: WebSocketOptions,
 ) -> Result<Websocket<ClientEvent, ServerEvent>> {
+    use std::sync::LazyLock;
+    use tokio::sync::{
+        Mutex,
+        broadcast::{self, Sender},
+    };
+
     // Every chat app needs a chat room! For this demo, we just use a tokio broadcast channel and a mutex-protected
     // list of messages to store chat history.
     //
