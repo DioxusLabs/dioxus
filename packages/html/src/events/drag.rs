@@ -59,7 +59,7 @@ impl DragData {
 }
 
 impl crate::HasFileData for DragData {
-    fn files(&self) -> Option<std::sync::Arc<dyn crate::file_data::FileEngine>> {
+    fn files(&self) -> Vec<FileData> {
         self.inner.files()
     }
 }
@@ -111,8 +111,7 @@ impl PointerInteraction for DragData {
 pub struct SerializedDragData {
     pub mouse: crate::point_interaction::SerializedPointInteraction,
 
-    #[serde(default)]
-    files: Option<crate::file_data::SerializedFileEngine>,
+    pub files: Vec<SerializedFileData>,
 }
 
 #[cfg(feature = "serialize")]
@@ -120,7 +119,7 @@ impl SerializedDragData {
     fn new(drag: &DragData) -> Self {
         Self {
             mouse: crate::point_interaction::SerializedPointInteraction::from(drag),
-            files: None,
+            files: vec![],
         }
     }
 }
@@ -134,10 +133,8 @@ impl HasDragData for SerializedDragData {
 
 #[cfg(feature = "serialize")]
 impl crate::file_data::HasFileData for SerializedDragData {
-    fn files(&self) -> Option<std::sync::Arc<dyn crate::file_data::FileEngine>> {
-        self.files
-            .as_ref()
-            .map(|files| std::sync::Arc::new(files.clone()) as _)
+    fn files(&self) -> Vec<FileData> {
+        self.files.iter().map(|f| f.clone().into()).collect()
     }
 }
 

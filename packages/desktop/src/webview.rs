@@ -4,14 +4,9 @@ use crate::menubar::DioxusMenu;
 use crate::PendingDesktopContext;
 use crate::WindowCloseBehaviour;
 use crate::{
-    app::SharedContext,
-    assets::AssetHandlerRegistry,
-    edits::WryQueue,
-    file_upload::{NativeFileEngine, NativeFileHover},
-    ipc::UserWindowEvent,
-    protocol,
-    waker::tao_waker,
-    Config, DesktopContext, DesktopService,
+    app::SharedContext, assets::AssetHandlerRegistry, edits::WryQueue,
+    file_upload::NativeFileHover, ipc::UserWindowEvent, protocol, waker::tao_waker, Config,
+    DesktopContext, DesktopService,
 };
 use crate::{document::DesktopDocument, WeakDesktopContext};
 use base64::prelude::BASE64_STANDARD;
@@ -19,10 +14,9 @@ use dioxus_core::{Runtime, ScopeId, VirtualDom};
 use dioxus_document::Document;
 use dioxus_history::{History, MemoryHistory};
 use dioxus_hooks::to_owned;
-use dioxus_html::{HasFileData, HtmlEvent, PlatformEventData};
+use dioxus_html::{HtmlEvent, PlatformEventData};
 use futures_util::{pin_mut, FutureExt};
 use std::sync::atomic::AtomicBool;
-use std::sync::Arc;
 use std::{cell::OnceCell, time::Duration};
 use std::{rc::Rc, task::Waker};
 use wry::{DragDropEvent, RequestAsyncResponder, WebContext, WebViewBuilder, WebViewId};
@@ -131,20 +125,17 @@ impl WebviewEdits {
             }
             dioxus_html::EventData::Drag(ref drag) => {
                 // we want to override this with a native file engine, provided by the most recent drag event
-                if drag.files().is_some() {
-                    let file_event = recent_file.current().unwrap();
-                    let paths = match file_event {
-                        wry::DragDropEvent::Enter { paths, .. } => paths,
-                        wry::DragDropEvent::Drop { paths, .. } => paths,
-                        _ => vec![],
-                    };
-                    Rc::new(PlatformEventData::new(Box::new(DesktopFileDragEvent {
-                        mouse: drag.mouse.clone(),
-                        files: Arc::new(NativeFileEngine::new(paths)),
-                    })))
-                } else {
-                    data.into_any()
-                }
+                let file_event = recent_file.current().unwrap();
+                let paths = match file_event {
+                    wry::DragDropEvent::Enter { paths, .. } => paths,
+                    wry::DragDropEvent::Drop { paths, .. } => paths,
+                    _ => vec![],
+                };
+
+                Rc::new(PlatformEventData::new(Box::new(DesktopFileDragEvent {
+                    mouse: drag.mouse.clone(),
+                    files: paths,
+                })))
             }
             _ => data.into_any(),
         };

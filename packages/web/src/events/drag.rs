@@ -2,8 +2,8 @@ use super::{Synthetic, WebEventExt};
 use dioxus_html::{
     geometry::{ClientPoint, ElementPoint, PagePoint, ScreenPoint},
     input_data::{decode_mouse_button_set, MouseButton},
-    HasDragData, HasFileData, HasMouseData, InteractionElementOffset, InteractionLocation,
-    Modifiers, ModifiersInteraction, PointerInteraction,
+    FileData, HasDragData, HasFileData, HasMouseData, InteractionElementOffset,
+    InteractionLocation, Modifiers, ModifiersInteraction, PointerInteraction,
 };
 use web_sys::DragEvent;
 
@@ -71,30 +71,24 @@ impl HasDragData for Synthetic<DragEvent> {
 }
 
 impl HasFileData for Synthetic<DragEvent> {
-    fn files(&self) -> Option<std::sync::Arc<dyn dioxus_html::FileEngine>> {
+    fn files(&self) -> Vec<FileData> {
         #[cfg(feature = "file_engine")]
         {
             use wasm_bindgen::JsCast;
-            let files = self
-                .event
+
+            self.event
                 .dyn_ref::<web_sys::DragEvent>()
                 .and_then(|drag_event| {
-                    drag_event.data_transfer().and_then(|dt| {
-                        dt.files().and_then(|files| {
-                            #[allow(clippy::arc_with_non_send_sync)]
-                            crate::file_engine::WebFileEngine::new(files).map(|f| {
-                                std::sync::Arc::new(f)
-                                    as std::sync::Arc<dyn dioxus_html::FileEngine>
-                            })
-                        })
-                    })
-                });
-
-            files
+                    drag_event
+                        .data_transfer()
+                        .and_then(|dt| dt.files().and_then(crate::files::WebFileEngine::new))
+                })
+                .map(|engine| engine.to_files())
+                .unwrap_or_default()
         }
         #[cfg(not(feature = "file_engine"))]
         {
-            None
+            vec![]
         }
     }
 }

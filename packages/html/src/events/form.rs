@@ -1,5 +1,9 @@
 use crate::file_data::HasFileData;
+use crate::FileData;
 use std::{collections::HashMap, fmt::Debug, ops::Deref};
+
+#[cfg(feature = "serialize")]
+use crate::SerializedFileData;
 
 use dioxus_core::Event;
 
@@ -105,7 +109,7 @@ impl FormData {
     }
 
     /// Get the files of the form event
-    pub fn files(&self) -> Option<std::sync::Arc<dyn crate::file_data::FileEngine>> {
+    pub fn files(&self) -> Vec<FileData> {
         self.inner.files()
     }
 
@@ -181,7 +185,7 @@ pub struct SerializedFormData {
     valid: bool,
 
     #[serde(default)]
-    files: Option<crate::file_data::SerializedFileEngine>,
+    files: Vec<SerializedFileData>,
 }
 
 #[cfg(feature = "serialize")]
@@ -192,40 +196,35 @@ impl SerializedFormData {
             value,
             values,
             valid: true,
-            files: None,
+            files: vec![],
         }
     }
 
     /// Add files to the serialized form data object
-    pub fn with_files(mut self, files: crate::file_data::SerializedFileEngine) -> Self {
-        self.files = Some(files);
+    pub fn with_files(mut self, files: Vec<SerializedFileData>) -> Self {
+        self.files = files;
         self
     }
 
     /// Create a new serialized form data object from a traditional form data object
-    pub async fn async_from(data: &FormData) -> Self {
-        Self {
+    pub async fn async_from(data: &FormData) -> Result<Self, dioxus_core::Error> {
+        Ok(Self {
             value: data.value(),
             values: data.values(),
             valid: data.valid(),
             files: {
-                match data.files() {
-                    Some(files) => {
-                        let mut resolved_files = HashMap::new();
-
-                        for file in files.files() {
-                            let bytes = files.read_file(&file).await;
-                            resolved_files.insert(file, bytes.unwrap_or_default());
-                        }
-
-                        Some(crate::file_data::SerializedFileEngine {
-                            files: resolved_files,
-                        })
-                    }
-                    None => None,
+                let mut out = vec![];
+                for file in data.files() {
+                    out.push(SerializedFileData {
+                        name: file.name(),
+                        size: file.size(),
+                        last_modified: file.last_modified(),
+                        contents: file.read_bytes().await?,
+                    });
                 }
+                out
             },
-        }
+        })
     }
 
     fn from_lossy(data: &FormData) -> Self {
@@ -233,7 +232,7 @@ impl SerializedFormData {
             value: data.value(),
             values: data.values(),
             valid: data.valid(),
-            files: None,
+            files: vec![],
         }
     }
 }
@@ -259,15 +258,13 @@ impl HasFormData for SerializedFormData {
 
 #[cfg(feature = "serialize")]
 impl HasFileData for SerializedFormData {
-    fn files(&self) -> Option<std::sync::Arc<dyn crate::FileEngine>> {
-        self.files
-            .as_ref()
-            .map(|files| std::sync::Arc::new(files.clone()) as _)
+    fn files(&self) -> Vec<FileData> {
+        self.files.iter().map(|f| f.clone().into()).collect()
     }
 }
 
 impl HasFileData for FormData {
-    fn files(&self) -> Option<std::sync::Arc<dyn crate::FileEngine>> {
+    fn files(&self) -> Vec<FileData> {
         self.inner.files()
     }
 }

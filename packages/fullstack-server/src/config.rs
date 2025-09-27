@@ -43,7 +43,7 @@ impl ServeConfigBuilder {
     /// rendered html in memory and/or the file system. It can be used to improve performance of heavy routes.
     ///
     /// ```rust, no_run
-    /// # fn app() -> Element { todo!() }
+    /// # fn app() -> Element { unimplemented!() }
     /// use dioxus::prelude::*;
     ///
     /// // Finally, launch the app with the config
@@ -89,7 +89,7 @@ impl ServeConfigBuilder {
     /// You can set the root id to `"my-custom-root"` to render the app into that element:
     ///
     /// ```rust, no_run
-    /// # fn app() -> Element { todo!() }
+    /// # fn app() -> Element { unimplemented!() }
     /// use dioxus::prelude::*;
     ///
     /// // Finally, launch the app with the config
@@ -307,7 +307,7 @@ impl ServeConfigBuilder {
     ///
     /// ```rust, no_run
     /// # use dioxus::prelude::*;
-    /// # fn app() -> Element { todo!() }
+    /// # fn app() -> Element { unimplemented!() }
     /// dioxus::LaunchBuilder::new()
     ///     .with_context(server_only! {
     ///         dioxus::server::ServeConfig::builder().streaming_mode(dioxus::server::StreamingMode::OutOfOrder)
@@ -325,7 +325,7 @@ impl ServeConfigBuilder {
     ///
     /// ```rust, no_run
     /// # use dioxus::prelude::*;
-    /// # fn app() -> Element { todo!() }
+    /// # fn app() -> Element { unimplemented!() }
     /// dioxus::LaunchBuilder::new()
     ///     .with_context(server_only! {
     ///         dioxus::server::ServeConfig::builder().enable_out_of_order_streaming()

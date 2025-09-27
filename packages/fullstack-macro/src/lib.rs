@@ -94,7 +94,7 @@ use syn::{
 /// ```rust,ignore
 /// #[server(output = StreamingJson)]
 /// pub async fn json_stream_fn() -> Result<JsonStream<String>, ServerFnError> {
-///     todo!()
+///     unimplemented!()
 /// }
 /// ```
 ///
@@ -105,7 +105,7 @@ use syn::{
 /// ```rust,ignore
 /// #[server(output = StreamingText)]
 /// pub async fn text_stream_fn() -> Result<TextStream, ServerFnError> {
-///     todo!()
+///     unimplemented!()
 /// }
 /// ```
 ///
@@ -119,7 +119,7 @@ use syn::{
 /// ```rust,ignore
 /// #[server(output = PostUrl)]
 /// pub async fn form_fn() -> Result<TextStream, ServerFnError> {
-///     todo!()
+///     unimplemented!()
 /// }
 /// ```
 ///
@@ -332,7 +332,11 @@ fn route_impl_with_route(
     let body_json_args = route.remaining_pattypes_named(&function.sig.inputs);
     let body_json_names = body_json_args
         .iter()
-        .map(|pat_type| &pat_type.pat)
+        .enumerate()
+        .map(|(i, pat_type)| match &*pat_type.pat {
+            Pat::Ident(ref pat_ident) => pat_ident.ident.clone(),
+            _ => format_ident!("___arg{}", i),
+        })
         .collect::<Vec<_>>();
     let body_json_types = body_json_args
         .iter()
@@ -341,13 +345,13 @@ fn route_impl_with_route(
     let extracted_idents = route.extracted_idents();
     let route_docs = route.to_doc_comments();
 
-    let body_idents = body_json_names
-        .iter()
-        .map(|pat| match pat.as_ref() {
-            Pat::Ident(pat_ident) => pat_ident.ident.clone(),
-            _ => panic!("Expected Pat::Ident"),
-        })
-        .collect::<Vec<_>>();
+    // let body_idents = body_json_names
+    //     .iter()
+    //     .map(|pat| match pat {
+    //         Pat::Ident(pat_ident) => pat_ident.ident.clone(),
+    //         _ => panic!("Expected Pat::Ident"),
+    //     })
+    //     .collect::<Vec<_>>();
 
     // Get the variables we need for code generation
     let fn_name = &function.sig.ident;
@@ -584,7 +588,7 @@ fn route_impl_with_route(
 
                     let encoded = (&&&&&&ServerFnDecoder::<#out_ty>::new())
                         .make_axum_response(
-                            #fn_name #ty_generics(#(#extracted_idents,)*  #(#body_idents,)* #(#server_names,)*).await
+                            #fn_name #ty_generics(#(#extracted_idents,)*  #(#body_json_names,)* #(#server_names,)*).await
                         );
 
                     let response = (&&&&&ServerFnDecoder::<#out_ty>::new())
@@ -605,7 +609,7 @@ fn route_impl_with_route(
 
                 return #fn_name #ty_generics(
                     #(#extracted_idents,)*
-                    #(#body_idents,)*
+                    #(#body_json_names,)*
                     #(#server_names,)*
                 ).await;
             }

@@ -1,30 +1,24 @@
-use dioxus_html::HasFileData;
+use dioxus_html::{FileData, HasFileData};
 
 use super::Synthetic;
 
 impl HasFileData for Synthetic<web_sys::Event> {
-    fn files(&self) -> Option<std::sync::Arc<dyn dioxus_html::FileEngine>> {
+    fn files(&self) -> Vec<FileData> {
         #[cfg(feature = "file_engine")]
         {
             use wasm_bindgen::JsCast;
-
-            let files = self
-                .event
+            self.event
                 .dyn_ref()
                 .and_then(|input: &web_sys::HtmlInputElement| {
-                    input.files().and_then(|files| {
-                        #[allow(clippy::arc_with_non_send_sync)]
-                        crate::file_engine::WebFileEngine::new(files).map(|f| {
-                            std::sync::Arc::new(f) as std::sync::Arc<dyn dioxus_html::FileEngine>
-                        })
-                    })
-                });
-
-            files
+                    input.files().and_then(crate::files::WebFileEngine::new)
+                })
+                .map(|engine| engine.to_files())
+                .unwrap_or_default()
         }
+
         #[cfg(not(feature = "file_engine"))]
         {
-            None
+            vec![]
         }
     }
 }

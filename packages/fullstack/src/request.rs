@@ -46,17 +46,6 @@ where
     fn from_response_parts(parts: &mut Parts) -> Result<Self, ServerFnError>;
 }
 
-// impl<T> FromResponse for T
-// where
-//     T: FromResponseParts,
-// {
-//     fn from_response(
-//         res: ClientResponse,
-//     ) -> impl Future<Output = Result<Self, ServerFnError>>  {
-//         todo!()
-//     }
-// }
-
 #[cfg(feature = "server")]
 impl<T> FromResponseParts for axum_extra::TypedHeader<T> {
     fn from_response_parts(parts: &mut Parts) -> Result<Self, ServerFnError> {

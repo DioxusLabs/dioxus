@@ -5431,6 +5431,7 @@ version = "0.7.0-rc.0"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
+ "bytes",
  "cocoa",
  "core-foundation 0.10.1",
  "dioxus",
@@ -5710,6 +5711,7 @@ name = "dioxus-html"
 version = "0.7.0-rc.0"
 dependencies = [
  "async-trait",
+ "bytes",
  "dioxus",
  "dioxus-core",
  "dioxus-core-macro",

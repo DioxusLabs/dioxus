@@ -47,7 +47,7 @@ use serde::{de::DeserializeOwned, Serialize};
 ///
 /// async fn create_user(Postcard(payload): Postcard<CreateUser>) {
 ///     // payload is a `CreateUser`
-///     todo!()
+///     unimplemented!()
 /// }
 ///
 /// let app = Router::new().route("/users", post(create_user));
@@ -83,7 +83,7 @@ use serde::{de::DeserializeOwned, Serialize};
 /// }
 ///
 /// async fn find_user(user_id: u32) -> User {
-///     todo!()
+///     unimplemented!()
 /// }
 ///
 /// let app = Router::new().route("/users/:id", get(get_user));

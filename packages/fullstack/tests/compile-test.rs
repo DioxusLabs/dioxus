@@ -182,7 +182,7 @@ mod custom_types {
     /// We can extract the path arg and return anything thats IntoResponse
     #[get("/upload/image/")]
     async fn streaming_file(body: FileUpload) -> Result<Json<i32>> {
-        todo!()
+        unimplemented!()
     }
 
     /// We can extract the path arg and return anything thats IntoResponse
@@ -193,12 +193,12 @@ mod custom_types {
         ftype: String,
         body: FileUpload,
     ) -> Result<Json<i32>> {
-        todo!()
+        unimplemented!()
     }
 
     #[get("/")]
     async fn ws_endpoint(options: WebSocketOptions) -> Result<Websocket<String, String>> {
-        todo!()
+        unimplemented!()
     }
 
     struct MyCustomPayload {}
@@ -209,7 +209,7 @@ mod custom_types {
     }
     impl IntoResponse for MyCustomPayload {
         fn into_response(self) -> Response {
-            todo!()
+            unimplemented!()
         }
     }
     impl<T> FromRequest<T> for MyCustomPayload {
@@ -227,7 +227,7 @@ mod custom_types {
             self,
             request_builder: ClientRequest,
         ) -> impl Future<Output = Result<ClientResponse, RequestError>> + 'static {
-            async move { todo!() }
+            async move { unimplemented!() }
         }
     }
 
@@ -249,7 +249,7 @@ mod overlap {
     struct MyCustomPayload {}
     impl IntoResponse for MyCustomPayload {
         fn into_response(self) -> axum::response::Response {
-            todo!()
+            unimplemented!()
         }
     }
     impl<T> FromRequest<T> for MyCustomPayload {

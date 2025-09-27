@@ -89,7 +89,6 @@ default = ["mounted", "file_engine", "devtools", "document"]
 hydrate = ["web-sys/Comment", "dep:serde", "dep:dioxus-fullstack-core"]
 mounted = [
     "web-sys/Element",
-    "dioxus-html/mounted",
     "web-sys/Element",
     "web-sys/DomRect",
     "web-sys/ScrollIntoViewOptions",
@@ -98,7 +97,6 @@ mounted = [
     "web-sys/HtmlElement",
 ]
 file_engine = [
-    "dioxus-html/file_engine",
     "dep:async-trait",
     "web-sys/File",
     "web-sys/FileList",

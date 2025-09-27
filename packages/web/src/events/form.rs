@@ -1,6 +1,6 @@
 use std::{any::Any, collections::HashMap};
 
-use dioxus_html::{FormValue, HasFileData, HasFormData};
+use dioxus_html::{FileData, FormValue, HasFileData, HasFormData};
 use js_sys::Array;
 use wasm_bindgen::JsValue;
 use wasm_bindgen::{prelude::wasm_bindgen, JsCast};
@@ -10,7 +10,7 @@ use super::WebEventExt;
 
 pub(crate) struct WebFormData {
     element: Element,
-    raw: Event,
+    event: Event,
 }
 
 impl WebEventExt for dioxus_html::FormData {
@@ -23,8 +23,8 @@ impl WebEventExt for dioxus_html::FormData {
 }
 
 impl WebFormData {
-    pub fn new(element: Element, raw: Event) -> Self {
-        Self { element, raw }
+    pub fn new(element: Element, event: Event) -> Self {
+        Self { element, event }
     }
 }
 
@@ -101,31 +101,26 @@ impl HasFormData for WebFormData {
     }
 
     fn as_any(&self) -> &dyn Any {
-        &self.raw as &dyn Any
+        &self.event as &dyn Any
     }
 }
 
 impl HasFileData for WebFormData {
-    fn files(&self) -> Option<std::sync::Arc<dyn dioxus_html::FileEngine>> {
+    fn files(&self) -> Vec<FileData> {
         #[cfg(feature = "file_engine")]
         {
-            let files = self
-                .element
+            use wasm_bindgen::JsCast;
+            self.event
                 .dyn_ref()
                 .and_then(|input: &web_sys::HtmlInputElement| {
-                    input.files().and_then(|files| {
-                        #[allow(clippy::arc_with_non_send_sync)]
-                        crate::file_engine::WebFileEngine::new(files).map(|f| {
-                            std::sync::Arc::new(f) as std::sync::Arc<dyn dioxus_html::FileEngine>
-                        })
-                    })
-                });
-
-            files
+                    input.files().and_then(crate::files::WebFileEngine::new)
+                })
+                .map(|engine| engine.to_files())
+                .unwrap_or_default()
         }
         #[cfg(not(feature = "file_engine"))]
         {
-            None
+            vec![]
         }
     }
 }
