@@ -19,6 +19,8 @@ fn app() -> Element {
         // reqwest::multipart::Form::new()
 
         // upload_file(file).await
+
+        dioxus::Ok(todo!())
     });
 
     let onsubmit = move |evt: FormEvent| {
@@ -36,7 +38,8 @@ fn app() -> Element {
 }
 
 #[post("/api/upload_image")]
-async fn upload_file(mut upload: FileUpload) -> Result<u32> {
+async fn upload_file() -> Result<u32> {
+    // async fn upload_file(mut upload: FileUpload) -> Result<u32> {
     // async fn upload_file(mut upload: Multipart) -> Result<u32> {
     use std::env::temp_dir;
     // let uploade_dir = temp_dir().join("uploads");
@@ -45,12 +48,12 @@ async fn upload_file(mut upload: FileUpload) -> Result<u32> {
     //     // Write the chunk to the target file
     // }
 
-    while let Some(mut field) = upload.next_field().await.unwrap() {
-        let name = field.name().unwrap().to_string();
-        let data = field.bytes().await.unwrap();
+    // while let Some(mut field) = upload.next_field().await.unwrap() {
+    //     let name = field.name().unwrap().to_string();
+    //     let data = field.bytes().await.unwrap();
 
-        println!("Length of `{}` is {} bytes", name, data.len());
-    }
+    //     println!("Length of `{}` is {} bytes", name, data.len());
+    // }
 
     todo!()
 }

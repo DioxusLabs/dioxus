@@ -125,11 +125,10 @@ impl WebFileEngine {
         (0..self.len())
             .filter_map(|i| self.get(i))
             .map(|file| {
-                WebFileData {
+                FileData::new(WebFileData {
                     file,
                     reader: FileReader::new().unwrap(),
-                }
-                .into()
+                })
             })
             .collect()
     }

@@ -7,15 +7,6 @@ pub struct FileData {
     inner: std::sync::Arc<dyn NativeFileData>,
 }
 
-impl<T> From<T> for FileData
-where
-    T: NativeFileData + 'static,
-{
-    fn from(value: T) -> Self {
-        Self::new(value)
-    }
-}
-
 impl FileData {
     pub fn new(inner: impl NativeFileData + 'static) -> Self {
         Self {

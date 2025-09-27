@@ -103,8 +103,6 @@ impl FileDialogRequest {
                 dialog.pick_file().into_iter().collect()
             };
 
-            tracing::info!("Selected files: {:?}", files);
-
             files
         }
 
@@ -165,7 +163,7 @@ impl HasFileData for DesktopFileUploadForm {
         self.files
             .iter()
             .cloned()
-            .map(|f| DesktopFileData(f).into())
+            .map(|f| FileData::new(DesktopFileData(f)))
             .collect()
     }
 }
@@ -201,7 +199,7 @@ impl HasFileData for DesktopFileDragEvent {
         self.files
             .iter()
             .cloned()
-            .map(|f| DesktopFileData(f).into())
+            .map(|f| FileData::new(DesktopFileData(f)))
             .collect()
     }
 }

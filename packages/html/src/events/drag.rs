@@ -134,7 +134,10 @@ impl HasDragData for SerializedDragData {
 #[cfg(feature = "serialize")]
 impl crate::file_data::HasFileData for SerializedDragData {
     fn files(&self) -> Vec<FileData> {
-        self.files.iter().map(|f| f.clone().into()).collect()
+        self.files
+            .iter()
+            .map(|f| FileData::new(f.clone()))
+            .collect()
     }
 }
 

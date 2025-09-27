@@ -260,7 +260,10 @@ impl HasFormData for SerializedFormData {
 #[cfg(feature = "serialize")]
 impl HasFileData for SerializedFormData {
     fn files(&self) -> Vec<FileData> {
-        self.files.iter().map(|f| f.clone().into()).collect()
+        self.files
+            .iter()
+            .map(|f| FileData::new(f.clone()))
+            .collect()
     }
 }
 

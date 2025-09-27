@@ -8,7 +8,7 @@ use futures_channel::oneshot::Receiver;
 use futures_util::{future::Shared, FutureExt};
 use std::{marker::PhantomData, prelude::rust_2024::Future};
 
-pub fn use_action<C, M, E>(mut user_fn: C) -> Action<C::Input, C::Output>
+pub fn use_action<E, C, M>(mut user_fn: C) -> Action<C::Input, C::Output>
 where
     E: Into<CapturedError> + 'static,
     C: ActionCallback<M, E>,
