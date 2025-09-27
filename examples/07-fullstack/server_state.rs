@@ -1,16 +1,15 @@
 //! This example shows how to use global state to maintain state between server functions.
-//!
-//!
 
-use dioxus::{fullstack::Lazy, prelude::*, server::axum};
-use futures::lock::Mutex;
-use std::sync::{
-    LazyLock,
-    atomic::{AtomicI32, Ordering},
-};
+use dioxus::prelude::*;
 
 #[cfg(feature = "server")]
-use sqlx::{Executor, Row};
+use ::{
+    dioxus::fullstack::Lazy,
+    dioxus::fullstack::axum,
+    futures::lock::Mutex,
+    sqlx::{Executor, Row},
+    std::sync::LazyLock,
+};
 
 /*
 Option 1:
@@ -34,15 +33,25 @@ async fn read_messages() -> Result<Vec<String>> {
 /*
 Option 2:
 
-For complex async data, we can use the `Lazy` type from Dioxus Fullstack and then initialize it in
-our `dioxus::serve` body. `Lazy` types need to be initialized before they are used, but once initialized,
-they can be used without `.await` at the callsites.
+For complex async data, we can use the `Lazy` type from Dioxus Fullstack. The `Lazy` type provides
+an interface like `once_cell::Lazy` but supports async initialization. When reading the value from
+a `Lazy<T>`, the value will be initialized syncronously, blocking the current task until the value is ready.
+
+Alternatively, you can create a `Lazy<T>` with `Lazy::lazy` and then initialize it later with
+`Lazy::initialize`.
 */
 #[cfg(feature = "server")]
-static DATABASE: Lazy<sqlx::SqlitePool> = Lazy::lazy();
-static OTHER_LAZY: Lazy<String> =
-    Lazy::new(|| async move { dioxus::Ok("Hello from a lazy static!".to_string()) });
+static DATABASE: Lazy<sqlx::SqlitePool> = Lazy::new(|| async move {
+    use sqlx::sqlite::SqlitePoolOptions;
+    dioxus::Ok(
+        SqlitePoolOptions::new()
+            .max_connections(5)
+            .connect_with("sqlite::memory:".parse().unwrap())
+            .await?,
+    )
+});
 
+/// When using the `Lazy<T>` type, it implements `Deref<Target = T>`, so you can use it like a normal reference.
 #[get("/api/users")]
 async fn get_users() -> Result<Vec<String>> {
     let users = DATABASE
@@ -72,21 +81,14 @@ async fn broadcast_message() -> Result<()> {
 }
 
 fn main() {
+    #[cfg(not(feature = "server"))]
+    dioxus::launch(app);
+
     // When using `Lazy` items, or axum `Extension`s, we need to initialize them in `dioxus::serve`
     // before launching our app.
     #[cfg(feature = "server")]
     dioxus::serve(|| async move {
         use dioxus::server::axum::Extension;
-        use sqlx::sqlite::SqlitePoolOptions;
-
-        // For `Lazy` items, we can use the `set` method to initialize them.
-        // We can initialize our lazy static state here on the server before using it on our app.
-        DATABASE.set(
-            SqlitePoolOptions::new()
-                .max_connections(5)
-                .connect_with("sqlite::memory:".parse().unwrap())
-                .await?,
-        )?;
 
         // For axum `Extension`s, we can use the `layer` method to add them to our router.
         let router = dioxus::server::router(app)
@@ -94,9 +96,6 @@ fn main() {
 
         Ok(router)
     });
-
-    #[cfg(not(feature = "server"))]
-    dioxus::launch(app);
 }
 
 fn app() -> Element {

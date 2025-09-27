@@ -8,7 +8,9 @@
 //! the server. Instead, it uses a single long-lived HTTP connection to stream events from the server to the client.
 //!
 //! This means that SSE messages are stringly encoded, and thus binary data must be base64 encoded.
-//! If you need to send binary data, consider using WebSockets instead, or an alternative transport.
+//! If you need to send binary data, consider using the `Streaming<T>` type instead, which lets
+//! you send raw bytes over a streaming HTTP response with a custom encoding. You'd reach for SSE
+//! when dealing with clients that might not support custom streaming protocols.
 //!
 //! Calling an SSE endpoint is as simple as calling any other server function. The return type of an
 //! SSE endpoint is a `ServerEvents<T>` where `T` is the type of event you want to send to the client.

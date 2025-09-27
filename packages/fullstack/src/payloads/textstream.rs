@@ -1,4 +1,4 @@
-use crate::{ClientResponse, Encoding, FromResponse, ServerFnError};
+use crate::{CborEncoding, ClientResponse, Encoding, FromResponse, JsonEncoding, ServerFnError};
 use axum_core::response::IntoResponse;
 use bytes::Bytes;
 use futures::{Stream, StreamExt};
@@ -8,6 +8,8 @@ use std::{future::Future, marker::PhantomData, pin::Pin};
 
 pub type TextStream = Streaming<String>;
 pub type ByteStream = Streaming<Bytes>;
+pub type JsonStream<T> = Streaming<T, JsonEncoding>;
+pub type CborStream<T> = Streaming<T, CborEncoding>;
 
 /// A stream of text.
 ///
@@ -54,6 +56,8 @@ impl<T, E> Streaming<T, E> {
     pub async fn next(&mut self) -> Option<Result<T, StreamingError>> {
         self.client_stream.as_mut()?.next().await
     }
+
+    pub fn cancel(self) {}
 }
 
 impl<T, E> Streaming<T, E> {

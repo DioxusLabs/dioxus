@@ -694,6 +694,11 @@ path = "examples/06-routing/flat_router.rs"
 doc-scrape-examples = true
 
 [[example]]
+name = "multipart"
+path = "examples/07-fullstack/multipart.rs"
+doc-scrape-examples = true
+
+[[example]]
 name = "open_api"
 path = "examples/07-fullstack/open_api.rs"
 doc-scrape-examples = true
@@ -744,8 +749,8 @@ path = "examples/07-fullstack/fullstack_hello_world.rs"
 doc-scrape-examples = true
 
 [[example]]
-name = "server_side_events"
-path = "examples/07-fullstack/server_side_events.rs"
+name = "server_sent_events"
+path = "examples/07-fullstack/server_sent_events.rs"
 doc-scrape-examples = true
 
 [[example]]

@@ -10,10 +10,9 @@ fn app() -> Element {
     let mut file_id = use_action(move || async move {
         let file = FileUpload::from_stream(
             "myfile.png".to_string(),
-            "image/png".to_string(),
             futures::stream::iter(vec![
-                Ok(Bytes::from_static(b"hello")),
-                Ok(Bytes::from_static(b"world")),
+                Bytes::from_static(b"hello"),
+                Bytes::from_static(b"world"),
             ]),
         );
 

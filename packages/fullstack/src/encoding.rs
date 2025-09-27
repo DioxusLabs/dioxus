@@ -84,3 +84,23 @@ impl Encoding for MsgPackEncoding {
         rmp_serde::from_slice(&bytes).ok()
     }
 }
+
+// todo: ... add rkyv support
+// pub struct RkyvEncoding;
+// impl Encoding for RkyvEncoding {
+//     fn content_type() -> &'static str {
+//         "application/rkyv"
+//     }
+//     fn stream_content_type() -> &'static str {
+//         "application/stream+rkyv"
+//     }
+//     fn to_bytes(data: impl Serialize) -> Option<Bytes> {
+//         let mut buf = rkyv::ser::Serializer::new(rkyv::ser::AllocSerializer::new());
+//         rkyv::ser::Serializer::serialize(&mut buf, &data).ok()?;
+//         Some(Bytes::from(buf.into_inner()))
+//     }
+//     fn from_bytes<O: DeserializeOwned>(bytes: Bytes) -> Option<O> {
+//         let archived = unsafe { rkyv::archived_root::<O>(&bytes) };
+//         rkyv::Deserialize::deserialize(archived).ok()
+//     }
+// }
