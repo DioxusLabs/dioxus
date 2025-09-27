@@ -139,35 +139,35 @@ impl IntoResponse for ServerFnRejection {
 /// is limited in many ways.
 #[derive(thiserror::Error, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RequestError {
-    /// An error that occurs when building the request.
+    /// An error occurred when building the request.
     #[error("error building request: {0}")]
     Builder(String),
 
-    /// An error that occurs when following a redirect.
+    /// An error occurred when following a redirect.
     #[error("error following redirect: {0}")]
     Redirect(String),
 
-    /// An error that occurs when receiving a non-2xx status code.
+    /// An error occurred when receiving a non-2xx status code.
     #[error("error receiving status code: {0} ({1})")]
     Status(String, u16),
 
-    /// An error that occurs when a request times out.
+    /// An error occurred when a request times out.
     #[error("error timing out: {0}")]
     Timeout(String),
 
-    /// An error that occurs when sending a request.
+    /// An error occurred when sending a request.
     #[error("error sending request: {0}")]
     Request(String),
 
-    /// An error that occurs when upgrading a connection.
+    /// An error occurred when upgrading a connection.
     #[error("error upgrading connection: {0}")]
     Connect(String),
 
-    /// An error that occurs when there is a request or response body error.
+    /// An error occurred when there is a request or response body error.
     #[error("request or response body error: {0}")]
     Body(String),
 
-    /// An error that occurs when decoding the response body.
+    /// An error occurred when decoding the response body.
     #[error("error decoding response body: {0}")]
     Decode(String),
 }

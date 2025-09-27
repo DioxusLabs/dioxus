@@ -2,7 +2,7 @@ use crate::{ClientRequest, IntoRequest};
 use crate::{ClientResponse, FromResponse};
 
 use dioxus_fullstack_core::{RequestError, ServerFnError};
-use std::prelude::rust_2024::Future;
+use std::future::Future;
 
 impl FromResponse for axum::response::Response {
     fn from_response(

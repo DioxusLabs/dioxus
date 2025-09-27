@@ -1,6 +1,6 @@
 use crate::{ClientResponse, FromResponse};
 use dioxus_fullstack_core::ServerFnError;
-use std::prelude::rust_2024::Future;
+use std::future::Future;
 
 pub struct RangedBytes {
     #[cfg(feature = "server")]

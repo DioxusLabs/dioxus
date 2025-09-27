@@ -1,4 +1,4 @@
-use std::prelude::rust_2024::Future;
+use std::future::Future;
 
 use axum::response::IntoResponse;
 use axum_core::{
@@ -10,7 +10,7 @@ use dioxus_fullstack_core::{RequestError, ServerFnError};
 use futures::Stream;
 use http_body_util::BodyExt;
 
-use crate::{ClientResponse, ClientRequest, FromResponse, IntoRequest, ServerFnRejection};
+use crate::{ClientRequest, ClientResponse, FromResponse, IntoRequest, ServerFnRejection};
 
 pub struct FileUpload {
     outgoing_stream: Option<http_body_util::BodyDataStream<Request<Body>>>,

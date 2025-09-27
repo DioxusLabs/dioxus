@@ -2,7 +2,7 @@ use crate::{ClientRequest, ClientResponse, FromResponse, IntoRequest, ServerFnEr
 pub use axum::extract::Json;
 use dioxus_fullstack_core::RequestError;
 use serde::{de::DeserializeOwned, Serialize};
-use std::prelude::rust_2024::Future;
+use std::future::Future;
 
 impl<T> IntoRequest for Json<T>
 where
@@ -27,10 +27,7 @@ impl<T: DeserializeOwned> FromResponse for Json<T> {
         res: ClientResponse,
     ) -> impl Future<Output = Result<Self, ServerFnError>> + Send {
         send_wrapper::SendWrapper::new(async move {
-            let data = res
-                .json::<T>()
-                .await
-                .map_err(|e| ServerFnError::Deserialization(e.to_string()))?;
+            let data = res.json::<T>().await?;
             Ok(Json(data))
         })
     }

@@ -1,8 +1,8 @@
-use crate::{reqwest_response_to_serverfn_err, ClientResponse, FromResponse};
+use crate::{ClientResponse, FromResponse};
 use axum_core::response::{IntoResponse, Response};
 use dioxus_fullstack_core::ServerFnError;
 use send_wrapper::SendWrapper;
-use std::prelude::rust_2024::Future;
+use std::future::Future;
 
 /// A simple text response type.
 ///
@@ -33,10 +33,8 @@ impl<T: From<String>> FromResponse for Text<T> {
         res: ClientResponse,
     ) -> impl Future<Output = Result<Self, ServerFnError>> + Send {
         SendWrapper::new(async move {
-            match res.text().await {
-                Ok(text) => Ok(Text::new(text.into())),
-                Err(err) => Err(reqwest_response_to_serverfn_err(err)),
-            }
+            let text = res.text().await?;
+            Ok(Text::new(text.into()))
         })
     }
 }

@@ -1,4 +1,4 @@
-use std::prelude::rust_2024::Future;
+use std::future::Future;
 
 use axum::{
     body::{Body, Bytes},

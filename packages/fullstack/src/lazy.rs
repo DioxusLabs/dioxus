@@ -1,12 +1,19 @@
 #![allow(clippy::needless_return)]
 
-use std::{hint::black_box, prelude::rust_2024::Future};
+use std::{hint::black_box, prelude::rust_2024::Future, sync::atomic::AtomicBool};
 
 /// `Lazy` is a thread-safe, lazily-initialized global variable.
 ///
-/// It uses `std::sync::OnceLock`` internally to ensure that the value is only initialized once.
+/// Unlike other async once-cell implementations, accessing the value of a `Lazy` instance is synchronous
+/// and done on `deref`.
+///
+/// This is done by offloading the async initialization to a blocking thread during the first access,
+/// and then using the initialized value for all subsequent accesses.
+///
+/// It uses `std::sync::OnceLock` internally to ensure that the value is only initialized once.
 pub struct Lazy<T> {
     value: std::sync::OnceLock<T>,
+    started_initialization: AtomicBool,
     constructor: Option<fn() -> Result<T, dioxus_core::Error>>,
     _phantom: std::marker::PhantomData<T>,
 }
@@ -20,6 +27,7 @@ impl<T: Send + Sync + 'static> Lazy<T> {
         Self {
             _phantom: std::marker::PhantomData,
             constructor: None,
+            started_initialization: AtomicBool::new(false),
             value: std::sync::OnceLock::new(),
         }
     }
@@ -40,6 +48,7 @@ impl<T: Send + Sync + 'static> Lazy<T> {
         Self {
             _phantom: std::marker::PhantomData,
             value: std::sync::OnceLock::new(),
+            started_initialization: AtomicBool::new(false),
             constructor: Some(blocking_initialize::<T, F, G, E>),
         }
     }
@@ -61,10 +70,20 @@ impl<T: Send + Sync + 'static> Lazy<T> {
         self.value.set(pool)
     }
 
+    /// Initialize the value of the `Lazy` instance if it hasn't been initialized yet.
     pub fn initialize(&self) -> Result<(), dioxus_core::Error> {
         if let Some(constructor) = self.constructor {
-            let value = constructor()?;
-            _ = self.set(value);
+            // If we're already initializing this value, wait on the receiver.
+            if self
+                .started_initialization
+                .swap(true, std::sync::atomic::Ordering::SeqCst)
+            {
+                self.value.wait();
+                return Ok(());
+            }
+
+            // Otherwise, we need to initialize the value
+            self.set(constructor().unwrap())?;
         }
         Ok(())
     }
@@ -116,6 +135,8 @@ where
             .unwrap();
     }
 
+    // todo: technically we can support constructors in wasm with the same tricks inventory uses with `__wasm_call_ctors`
+    // the host would need to decide when to cal the ctors and when to block them.
     #[cfg(not(feature = "server"))]
     unimplemented!("Lazy initialization is only supported with tokio and threads enabled.")
 }

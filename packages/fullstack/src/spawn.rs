@@ -1,5 +1,5 @@
 #[cfg(feature = "server")]
-use std::prelude::rust_2024::Future;
+use std::future::Future;
 
 /// Spawn a task in the background. If wasm is enabled, this will use the single threaded tokio runtime
 #[cfg(feature = "server")]

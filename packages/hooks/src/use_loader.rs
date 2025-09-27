@@ -6,7 +6,7 @@ use dioxus_core::{CapturedError, RenderError, Result, SuspendedFuture};
 use dioxus_signals::{read_impls, Readable, ReadableExt, ReadableRef, Signal, WritableExt};
 use futures_util::{future, pin_mut, FutureExt, StreamExt};
 use generational_box::{BorrowResult, UnsyncStorage};
-use std::prelude::rust_2024::Future;
+use std::future::Future;
 use std::{
     cell::{Cell, Ref},
     ops::Deref,

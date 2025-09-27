@@ -99,8 +99,12 @@ pub struct ErrorPayload<E> {
 ///
 /// This is a separate function to avoid bringing in `reqwest` into fullstack-core.
 pub fn reqwest_response_to_serverfn_err(err: reqwest::Error) -> ServerFnError {
+    ServerFnError::Request(reqwest_error_to_request_error(err))
+}
+
+pub fn reqwest_error_to_request_error(err: reqwest::Error) -> RequestError {
     let message = err.to_string();
-    let inner = if err.is_timeout() {
+    if err.is_timeout() {
         RequestError::Timeout(message)
     } else if err.is_request() {
         RequestError::Request(message)
@@ -126,9 +130,7 @@ pub fn reqwest_response_to_serverfn_err(err: reqwest::Error) -> ServerFnError {
         {
             RequestError::Request(message)
         }
-    };
-
-    ServerFnError::Request(inner)
+    }
 }
 
 pub use req_to::*;

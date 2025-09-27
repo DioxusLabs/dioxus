@@ -15,7 +15,7 @@ use http::HeaderMap;
 use http::StatusCode;
 use http_body_util::BodyExt;
 use serde::{Deserialize, Serialize};
-use std::prelude::rust_2024::Future;
+use std::future::Future;
 
 fn main() {}
 

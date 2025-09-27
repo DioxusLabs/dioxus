@@ -1,10 +1,12 @@
 use bytes::Bytes;
 use dioxus_fullstack_core::{RequestError, ServerFnError};
-use futures::Stream;
+use futures::{Stream, TryStreamExt};
 use http::{HeaderMap, HeaderName, HeaderValue, Method, StatusCode};
 use serde::{de::DeserializeOwned, Serialize};
 use std::{future::Future, pin::Pin};
 use url::Url;
+
+use crate::{reqwest_error_to_request_error, reqwest_response_to_serverfn_err};
 
 /// A wrapper type over the platform's HTTP response type.
 ///
@@ -28,13 +30,18 @@ impl ClientResponse {
     pub fn content_length(&self) -> Option<u64> {
         self.inner.content_length()
     }
-    pub fn bytes(self) -> impl Future<Output = Result<Bytes, reqwest::Error>> {
-        self.inner.bytes()
+    pub async fn bytes(self) -> Result<Bytes, RequestError> {
+        self.inner
+            .bytes()
+            .await
+            .map_err(reqwest_error_to_request_error)
     }
     pub fn bytes_stream(
         self,
-    ) -> impl futures_util::Stream<Item = Result<Bytes, reqwest::Error>> + 'static + Unpin {
-        self.inner.bytes_stream()
+    ) -> impl futures_util::Stream<Item = Result<Bytes, RequestError>> + 'static + Unpin {
+        self.inner
+            .bytes_stream()
+            .map_err(|e| reqwest_error_to_request_error(e))
     }
     pub fn original_request(&self) {
         todo!()
@@ -42,11 +49,17 @@ impl ClientResponse {
     pub fn state<T>(&self) -> &T {
         todo!()
     }
-    pub fn json<T: DeserializeOwned>(self) -> impl Future<Output = Result<T, reqwest::Error>> {
-        self.inner.json()
+    pub async fn json<T: DeserializeOwned>(self) -> Result<T, RequestError> {
+        self.inner
+            .json()
+            .await
+            .map_err(reqwest_error_to_request_error)
     }
-    pub fn text(self) -> impl Future<Output = Result<String, reqwest::Error>> {
-        self.inner.text()
+    pub async fn text(self) -> Result<String, RequestError> {
+        self.inner
+            .text()
+            .await
+            .map_err(reqwest_error_to_request_error)
     }
 }
 
