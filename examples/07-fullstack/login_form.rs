@@ -61,6 +61,7 @@ pub struct LoginForm {
 
 /// A static session ID for demonstration purposes. This forces all previous logins to be invalidated
 /// when the server restarts.
+#[cfg(feature = "server")]
 static THIS_SESSION_ID: LazyLock<uuid::Uuid> = LazyLock::new(uuid::Uuid::new_v4);
 
 /// In our `login` form, we'll return a `SetCookie` header if the login is successful.
@@ -72,6 +73,7 @@ static THIS_SESSION_ID: LazyLock<uuid::Uuid> = LazyLock::new(uuid::Uuid::new_v4)
 /// of headers to `SetHeader::new()`.
 #[post("/api/login")]
 async fn login(form: Form<LoginForm>) -> Result<SetHeader<SetCookie>> {
+    // Verify the username and password. In a real application, you'd check these against a database.
     if form.0.username == "admin" && form.0.password == "password" {
         return Ok(SetHeader::new(format!("auth-demo={};", &*THIS_SESSION_ID))?);
     }
@@ -79,7 +81,7 @@ async fn login(form: Form<LoginForm>) -> Result<SetHeader<SetCookie>> {
     HttpError::unauthorized("Invalid username or password")?
 }
 
-/// We'll use the `TypedHeader` extractor to get the cookie from the request.
+/// We'll use the `TypedHeader` extractor on the server to get the cookie from the request.
 #[get("/api/sensitive", header: dioxus::fullstack::TypedHeader<Cookie>)]
 async fn sensitive() -> Result<String> {
     // Extract the cookie from the request headers and use `.eq` to verify its value.

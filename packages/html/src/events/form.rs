@@ -146,16 +146,6 @@ impl FormData {
     where
         T: serde::de::DeserializeOwned,
     {
-        use serde::Serialize;
-
-        // fn convert_hashmap_to_json<K, V>(hashmap: &HashMap<K, V>) -> serde_json::Result<String>
-        // where
-        //     K: Serialize + std::hash::Hash + Eq,
-        //     V: Serialize,
-        // {
-        //     serde_json::to_string(hashmap)
-        // }
-
         let values = &self.values();
 
         let mut map = serde_json::Map::new();

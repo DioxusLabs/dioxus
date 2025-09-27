@@ -6,7 +6,7 @@ use dioxus_signals::{
 };
 use futures_channel::oneshot::Receiver;
 use futures_util::{future::Shared, FutureExt};
-use std::{cell::Ref, marker::PhantomData, prelude::rust_2024::Future};
+use std::{marker::PhantomData, prelude::rust_2024::Future};
 
 pub fn use_action<C, M, E>(mut user_fn: C) -> Action<C::Input, C::Output>
 where

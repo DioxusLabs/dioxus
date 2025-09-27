@@ -105,3 +105,5 @@ pub mod payloads {
     pub mod header;
     pub use header::*;
 }
+
+pub use http::{HeaderMap, HeaderValue, Method};

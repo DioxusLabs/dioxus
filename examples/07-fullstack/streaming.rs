@@ -11,7 +11,7 @@ fn app() -> Element {
     let mut text_responses = use_signal(String::new);
     let mut json_responses = use_signal(Vec::new);
 
-    let mut cancellable_stream = use_action(|| async move {
+    let mut cancellable_stream = use_action(move || async move {
         text_responses.write().clear();
         let mut stream = text_stream(Some(100)).await?;
         while let Some(Ok(text)) = stream.next().await {

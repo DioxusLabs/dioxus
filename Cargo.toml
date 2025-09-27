@@ -113,7 +113,7 @@ members = [
     "examples/07-fullstack/desktop",
     "examples/07-fullstack/auth",
     "examples/07-fullstack/auth-with-fullstack",
-    "examples/07-fullstack/websockets",
+    "examples/07-fullstack/ssr-only",
 
     # Integrations
     "examples/10-integrations/tailwind",
@@ -137,7 +137,7 @@ members = [
     "packages/playwright-tests/cli-optimization",
     "packages/playwright-tests/wasm-split-harness",
     "packages/playwright-tests/default-features-disabled"
-, "examples/07-fullstack/ssr-only"]
+]
 
 [workspace.package]
 version = "0.7.0-rc.0"
@@ -691,6 +691,11 @@ doc-scrape-examples = true
 [[example]]
 name = "flat_router"
 path = "examples/06-routing/flat_router.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "header_map"
+path = "examples/07-fullstack/header_map.rs"
 doc-scrape-examples = true
 
 [[example]]

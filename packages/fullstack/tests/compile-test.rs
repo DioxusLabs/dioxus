@@ -203,9 +203,7 @@ mod custom_types {
 
     struct MyCustomPayload {}
     impl FromResponse for MyCustomPayload {
-        fn from_response(
-            res: ClientResponse,
-        ) -> impl Future<Output = Result<Self, ServerFnError>> + Send {
+        fn from_response(res: ClientResponse) -> impl Future<Output = Result<Self, ServerFnError>> {
             async move { Ok(MyCustomPayload {}) }
         }
     }
@@ -228,7 +226,7 @@ mod custom_types {
         fn into_request(
             self,
             request_builder: ClientRequest,
-        ) -> impl Future<Output = Result<ClientResponse, RequestError>> + Send + 'static {
+        ) -> impl Future<Output = Result<ClientResponse, RequestError>> + 'static {
             async move { todo!() }
         }
     }
