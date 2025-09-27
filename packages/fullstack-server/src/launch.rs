@@ -285,7 +285,7 @@ fn apply_base_path(
     router
 }
 
-pub fn serve<F>(app: fn() -> Element, mut serve_it: impl FnMut(axum::Router) -> F)
+pub fn serve<F>(mut serve_it: impl FnMut() -> F)
 where
     // F: Future<Output = axum::Router>,
     F: Future<Output = Result<axum::Router, anyhow::Error>>,
@@ -307,12 +307,9 @@ where
             //     base_path().map(|s| s.to_string()),
             // );
 
-            let router =
-                axum::Router::new().serve_dioxus_application(ServeConfig::new().unwrap(), app);
-
             tracing::info!("Serving additional router from serve_it");
 
-            let router = serve_it(router).await.unwrap();
+            let router = serve_it().await.unwrap();
 
             let address = dioxus_cli_config::fullstack_address_or_localhost();
             let listener = tokio::net::TcpListener::bind(address).await.unwrap();
@@ -325,4 +322,25 @@ where
         });
 
     // unreachable!("Serving a fullstack app should never return")
+}
+
+/// Create a router that serves the dioxus application at the appropriate base path.
+///
+/// This method automatically setups up:
+/// - Static asset serving
+/// - Mapping of base paths
+/// - Automatic registration of server functions
+/// - Handler to render the dioxus application
+/// - WebSocket handling for live reload and devtools
+/// - Hot-reloading
+/// - Async Runtime
+/// - Logging
+pub fn router(app: fn() -> Element) -> axum::Router {
+    let cfg = ServeConfig::new().unwrap();
+    apply_base_path(
+        axum::Router::new().serve_dioxus_application(cfg.clone(), app),
+        app,
+        cfg,
+        base_path().map(|s| s.to_string()),
+    )
 }

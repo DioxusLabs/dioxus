@@ -9,10 +9,7 @@
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus::serve(
-        || rsx! { Router::<Route> { } },
-        |router| async move { Ok(router) },
-    );
+    dioxus::launch(|| rsx! { Router::<Route> { } });
 }
 
 #[derive(Routable, Clone, Debug, PartialEq)]

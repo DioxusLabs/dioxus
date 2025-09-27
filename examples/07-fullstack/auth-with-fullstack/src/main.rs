@@ -29,7 +29,7 @@ fn main() {
     // We return a `Router` such that dioxus sets up logging, hot-reloading, devtools, and wires up the
     // IP and PORT environment variables to our server.
     #[cfg(feature = "server")]
-    dioxus::serve(app, |router| async {
+    dioxus::serve(|| async {
         use crate::auth::*;
         use axum_session::{SessionConfig, SessionLayer, SessionStore};
         use axum_session_auth::AuthConfig;
@@ -59,7 +59,7 @@ fn main() {
             .await?;
 
         // Create an axum router that dioxus will attach the app to
-        Ok(router
+        Ok(dioxus::server::router(app)
             .layer(
                 AuthLayer::new(Some(db.clone()))
                     .with_config(AuthConfig::<i64>::default().with_anonymous_user_id(Some(1))),
@@ -76,27 +76,27 @@ fn main() {
 
 /// The UI for our app - is just a few buttons to call our server functions and display the results.
 fn app() -> Element {
-    let mut login = use_action(|_| login());
-    let mut user_name = use_action(|_| get_user_name());
-    let mut permissions = use_action(|_| get_permissions());
-    let mut logout = use_action(|_| logout());
+    let mut login = use_action(login);
+    let mut user_name = use_action(get_user_name);
+    let mut permissions = use_action(get_permissions);
+    let mut logout = use_action(logout);
 
     let fetch_new = move |_| async move {
-        user_name.call(()).await;
-        permissions.call(()).await;
+        user_name.call().await;
+        permissions.call().await;
     };
 
     rsx! {
         div {
             button {
                 onclick: move |_| async move {
-                    login.call(()).await;
+                    login.call().await;
                 },
                 "Login Test User"
             }
             button {
                 onclick: move |_| async move {
-                    logout.call(()).await;
+                    logout.call().await;
                 },
                 "Logout"
             }

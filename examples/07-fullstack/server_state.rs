@@ -75,7 +75,7 @@ fn main() {
     // When using `Lazy` items, or axum `Extension`s, we need to initialize them in `dioxus::serve`
     // before launching our app.
     #[cfg(feature = "server")]
-    dioxus::serve(app, |mut router| async move {
+    dioxus::serve(|| async move {
         use dioxus::server::axum::Extension;
         use sqlx::sqlite::SqlitePoolOptions;
 
@@ -89,7 +89,8 @@ fn main() {
         )?;
 
         // For axum `Extension`s, we can use the `layer` method to add them to our router.
-        router = router.layer(Extension(tokio::sync::broadcast::channel::<String>(16).0));
+        let router = dioxus::server::router(app)
+            .layer(Extension(tokio::sync::broadcast::channel::<String>(16).0));
 
         Ok(router)
     });
