@@ -504,7 +504,7 @@ fn route_impl_with_route(
             let #name = {
                 use __axum::extract::FromRequest;
                 let __request = __axum::extract::Request::new(__axum::body::Body::empty());
-                #ty::from_request(__request, &()).await.unwrap()
+                <#ty as FromRequest<_, _>>::from_request(__request, &()).await.unwrap()
             };
         }
     });

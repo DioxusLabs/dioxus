@@ -2886,7 +2886,7 @@ checksum = "2434788de88b5b6b10a4b71b08284be3126633caa53c15063a2bf322ef6c6202"
 dependencies = [
  "blitz-traits",
  "data-url 0.3.1",
- "reqwest 0.12.22",
+ "reqwest 0.12.23",
  "tokio",
 ]
 
@@ -5241,7 +5241,7 @@ dependencies = [
  "ratatui",
  "rayon",
  "regex",
- "reqwest 0.12.22",
+ "reqwest 0.12.23",
  "rustls 0.23.29",
  "self-replace",
  "self_update",
@@ -5343,7 +5343,7 @@ version = "0.0.1"
 dependencies = [
  "dioxus",
  "flate2",
- "reqwest 0.12.22",
+ "reqwest 0.12.23",
  "serde",
  "serde_json",
  "tar",
@@ -5389,7 +5389,7 @@ dependencies = [
  "longest-increasing-subsequence",
  "pretty_assertions",
  "rand 0.9.1",
- "reqwest 0.12.22",
+ "reqwest 0.12.23",
  "rustc-hash 2.1.1",
  "rustversion",
  "serde",
@@ -5464,7 +5464,7 @@ dependencies = [
  "objc_id",
  "percent-encoding",
  "rand 0.9.1",
- "reqwest 0.12.22",
+ "reqwest 0.12.23",
  "rfd",
  "rustc-hash 2.1.1",
  "separator",
@@ -5562,7 +5562,7 @@ dependencies = [
  "http-range",
  "ouroboros",
  "rand 0.9.1",
- "reqwest 0.12.22",
+ "reqwest 0.12.23",
  "separator",
  "serde",
  "serde_json",
@@ -5618,7 +5618,7 @@ dependencies = [
  "mime",
  "pin-project",
  "postcard",
- "reqwest 0.12.22",
+ "reqwest 0.12.23",
  "rmp-serde",
  "send_wrapper",
  "serde",
@@ -5696,7 +5696,7 @@ dependencies = [
  "futures-channel",
  "futures-util",
  "generational-box",
- "reqwest 0.12.22",
+ "reqwest 0.12.23",
  "rustversion",
  "slab",
  "tokio",
@@ -6066,7 +6066,7 @@ dependencies = [
  "multer",
  "parking_lot",
  "pin-project",
- "reqwest 0.12.22",
+ "reqwest 0.12.23",
  "reqwest-websocket",
  "rkyv 0.8.11",
  "rmp-serde",
@@ -6103,7 +6103,7 @@ dependencies = [
  "generational-box",
  "parking_lot",
  "rand 0.9.1",
- "reqwest 0.12.22",
+ "reqwest 0.12.23",
  "rustc-hash 2.1.1",
  "serde",
  "tokio",
@@ -6442,7 +6442,7 @@ version = "0.1.1"
 dependencies = [
  "chrono",
  "dioxus",
- "reqwest 0.12.22",
+ "reqwest 0.12.23",
  "serde",
 ]
 
@@ -7272,7 +7272,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "dioxus",
- "reqwest 0.12.22",
+ "reqwest 0.12.23",
  "serde",
 ]
 
@@ -7282,7 +7282,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "dioxus",
- "reqwest 0.12.22",
+ "reqwest 0.12.23",
  "serde",
  "serde_json",
  "thiserror 2.0.12",
@@ -8790,7 +8790,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "dioxus",
- "reqwest 0.12.22",
+ "reqwest 0.12.23",
  "rusqlite",
  "serde",
  "serde_json",
@@ -13816,9 +13816,9 @@ dependencies = [
 
 [[package]]
 name = "reqwest"
-version = "0.12.22"
+version = "0.12.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cbc931937e6ca3a06e3b6c0aa7841849b160a90351d6ab467a8b9b9959767531"
+checksum = "d429f34c8092b2d42c7c93cec323bb4adeb7c67698f70839adec842ec10c7ceb"
 dependencies = [
  "base64 0.22.1",
  "bytes",
@@ -13874,7 +13874,7 @@ dependencies = [
  "async-tungstenite",
  "bytes",
  "futures-util",
- "reqwest 0.12.22",
+ "reqwest 0.12.23",
  "serde",
  "serde_json",
  "thiserror 2.0.12",
@@ -14690,7 +14690,7 @@ dependencies = [
  "log",
  "quick-xml 0.37.5",
  "regex",
- "reqwest 0.12.22",
+ "reqwest 0.12.23",
  "self-replace",
  "semver",
  "serde_json",
@@ -18550,7 +18550,7 @@ dependencies = [
  "futures",
  "getrandom 0.3.3",
  "js-sys",
- "reqwest 0.12.22",
+ "reqwest 0.12.23",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",

@@ -62,9 +62,18 @@ impl ClientResponse {
             .map_err(reqwest_error_to_request_error)
     }
     pub fn make_parts(&self) -> http::response::Parts {
-        let mut response = http::response::Response::builder()
-            .status(self.inner.status())
-            .version(self.inner.version());
+        let mut response = http::response::Response::builder().status(self.inner.status());
+
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            response = response.version(self.inner.version());
+        }
+
+        #[cfg(target_arch = "wasm32")]
+        {
+            // wasm32 doesn't support HTTP/2 yet, so we'll just set it to HTTP/1.1
+            response = response.version(http::Version::HTTP_2);
+        }
 
         for (key, value) in self.inner.headers().iter() {
             response = response.header(key, value);
@@ -119,6 +128,7 @@ impl ClientRequest {
         let (ip, port) = ("127.0.0.1", "8080".to_string());
 
         let url = format!(
+            // "http://localhost:{port}{url}{params}",
             "http://{ip}:{port}{url}{params}",
             params = if query.is_empty() {
                 "".to_string()

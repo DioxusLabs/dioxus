@@ -1,31 +1,12 @@
 use std::future::Future;
 
+pub use axum::extract::Form;
 use axum::extract::{FromRequest, Request};
-// pub use axum::Form;
 use dioxus_fullstack_core::RequestError;
 use http::Method;
 use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{ClientRequest, ClientResponse, IntoRequest};
-
-pub struct Form<T>(pub T);
-
-impl<T: DeserializeOwned, S: Send + Sync + 'static> FromRequest<S> for Form<T> {
-    type Rejection = ();
-
-    #[doc = " Perform the extraction."]
-    fn from_request(
-        _req: Request,
-        _state: &S,
-    ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send {
-        async move {
-            axum::extract::Form::<T>::from_request(_req, _state)
-                .await
-                .map(|form| Form(form.0))
-                .map_err(|_| ())
-        }
-    }
-}
 
 impl<T> IntoRequest for Form<T>
 where

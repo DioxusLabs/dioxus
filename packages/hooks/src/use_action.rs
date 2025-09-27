@@ -4,6 +4,8 @@ use dioxus_signals::{
     read_impls, CopyValue, ReadSignal, Readable, ReadableBoxExt, ReadableExt, ReadableRef, Signal,
     WritableExt,
 };
+use futures_channel::oneshot::Receiver;
+use futures_util::{future::Shared, FutureExt};
 use std::{cell::Ref, marker::PhantomData, prelude::rust_2024::Future};
 
 pub fn use_action<C, M, E>(mut user_fn: C) -> Action<C::Input, C::Output>
@@ -13,6 +15,7 @@ where
     M: 'static,
     C::Input: 'static,
     C::Output: 'static,
+    C: 'static,
 {
     let mut value = use_signal(|| None as Option<C::Output>);
     let mut error = use_signal(|| None as Option<CapturedError>);
@@ -24,30 +27,36 @@ where
             task.cancel();
         }
 
-        todo!()
-        // // Spawn a new task, and *then* fire off the async
-        // let result = user_fn(input);
-        // let new_task = dioxus_core::spawn(async move {
-        //     // Set the state to pending
-        //     state.set(ActionState::Pending);
+        let (tx, rx) = futures_channel::oneshot::channel();
+        let rx = rx.shared();
 
-        //     // Create a new task
-        //     let result = result.await;
-        //     match result {
-        //         Ok(res) => {
-        //             error.set(None);
-        //             value.set(Some(res));
-        //             state.set(ActionState::Ready);
-        //         }
-        //         Err(err) => {
-        //             error.set(Some(err.into()));
-        //             value.set(None);
-        //             state.set(ActionState::Errored);
-        //         }
-        //     }
-        // });
+        // Spawn a new task, and *then* fire off the async
+        let result = user_fn.call(input);
+        let new_task = dioxus_core::spawn(async move {
+            // Set the state to pending
+            state.set(ActionState::Pending);
 
-        // task.set(Some(new_task));
+            // Create a new task
+            let result = result.await;
+            match result {
+                Ok(res) => {
+                    error.set(None);
+                    value.set(Some(res));
+                    state.set(ActionState::Ready);
+                }
+                Err(err) => {
+                    error.set(Some(err.into()));
+                    value.set(None);
+                    state.set(ActionState::Errored);
+                }
+            }
+
+            tx.send(()).ok();
+        });
+
+        task.set(Some(new_task));
+
+        rx
     });
 
     // Create a reader that maps the Option<T> to T, unwrapping the Option
@@ -70,7 +79,7 @@ pub struct Action<I, T> {
     error: Signal<Option<CapturedError>>,
     value: Signal<Option<T>>,
     task: Signal<Option<Task>>,
-    callback: Callback<I, ()>,
+    callback: Callback<I, Shared<Receiver<()>>>,
     state: Signal<ActionState>,
     _phantom: PhantomData<*const I>,
 }
@@ -139,15 +148,31 @@ where
         }
     }
 }
-pub struct Dispatching<I>(PhantomData<*const I>);
+pub struct Dispatching<I> {
+    _phantom: PhantomData<*const I>,
+    receiver: Shared<Receiver<()>>,
+}
+
+impl<T> Dispatching<T> {
+    pub(crate) fn new(receiver: Shared<Receiver<()>>) -> Self {
+        Self {
+            _phantom: PhantomData,
+            receiver,
+        }
+    }
+}
+
 impl<T> std::future::Future for Dispatching<T> {
     type Output = ();
 
     fn poll(
-        self: std::pin::Pin<&mut Self>,
+        mut self: std::pin::Pin<&mut Self>,
         _cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Self::Output> {
-        std::task::Poll::Ready(())
+        match self.receiver.poll_unpin(_cx) {
+            std::task::Poll::Ready(_) => std::task::Poll::Ready(()),
+            std::task::Poll::Pending => std::task::Poll::Pending,
+        }
     }
 }
 
@@ -173,93 +198,94 @@ enum ActionState {
 pub trait ActionCallback<M, E> {
     type Input;
     type Output;
+    fn call(
+        &mut self,
+        input: Self::Input,
+    ) -> impl Future<Output = Result<Self::Output, E>> + 'static;
 }
 
 impl<F, O, G, E> ActionCallback<(O,), E> for F
 where
     F: FnMut() -> G,
-    G: Future<Output = Result<O, E>>,
+    G: Future<Output = Result<O, E>> + 'static,
 {
     type Input = ();
     type Output = O;
+    fn call(
+        &mut self,
+        _input: Self::Input,
+    ) -> impl Future<Output = Result<Self::Output, E>> + 'static {
+        (self)()
+    }
 }
 
 impl<F, O, A, G, E> ActionCallback<(A, O), E> for F
 where
     F: FnMut(A) -> G,
-    G: Future<Output = Result<O, E>>,
+    G: Future<Output = Result<O, E>> + 'static,
 {
     type Input = (A,);
     type Output = O;
+    fn call(
+        &mut self,
+        input: Self::Input,
+    ) -> impl Future<Output = Result<Self::Output, E>> + 'static {
+        let (a,) = input;
+        (self)(a)
+    }
 }
 
 impl<O, A, B, F, G, E> ActionCallback<(A, B, O), E> for F
 where
     F: FnMut(A, B) -> G,
-    G: Future<Output = Result<O, E>>,
+    G: Future<Output = Result<O, E>> + 'static,
 {
     type Input = (A, B);
     type Output = O;
+    fn call(
+        &mut self,
+        input: Self::Input,
+    ) -> impl Future<Output = Result<Self::Output, E>> + 'static {
+        let (a, b) = input;
+        (self)(a, b)
+    }
 }
 
 impl<O, A, B, C, F, G, E> ActionCallback<(A, B, C, O), E> for F
 where
     F: FnMut(A, B, C) -> G,
-    G: Future<Output = Result<O, E>>,
+    G: Future<Output = Result<O, E>> + 'static,
 {
     type Input = (A, B, C);
     type Output = O;
+    fn call(
+        &mut self,
+        input: Self::Input,
+    ) -> impl Future<Output = Result<Self::Output, E>> + 'static {
+        let (a, b, c) = input;
+        (self)(a, b, c)
+    }
 }
 
 impl<O> Action<(), O> {
     pub fn call(&mut self) -> Dispatching<()> {
-        unimplemented!()
+        Dispatching::new((self.callback).call(()))
     }
 }
 
-impl<A, O> Action<(A,), O> {
+impl<A: 'static, O> Action<(A,), O> {
     pub fn call(&mut self, _a: A) -> Dispatching<()> {
-        unimplemented!()
+        Dispatching::new((self.callback).call((_a,)))
     }
 }
 
-impl<A, B, O> Action<(A, B), O> {
+impl<A: 'static, B: 'static, O> Action<(A, B), O> {
     pub fn call(&mut self, _a: A, _b: B) -> Dispatching<()> {
-        unimplemented!()
+        Dispatching::new((self.callback).call((_a, _b)))
     }
 }
-impl<A, B, C, O> Action<(A, B, C), O> {
+impl<A: 'static, B: 'static, C: 'static, O> Action<(A, B, C), O> {
     pub fn call(&mut self, _a: A, _b: B, _c: C) -> Dispatching<()> {
-        unimplemented!()
+        Dispatching::new((self.callback).call((_a, _b, _c)))
     }
 }
-
-// impl<A, O> std::ops::Deref for Action<(A,), O> {
-//     type Target = fn(A) -> O;
-
-//     fn deref(&self) -> &Self::Target {
-//         unimplemented!()
-//     }
-// }
-
-// impl<A, B, O> std::ops::Deref for Action<(A, B), O> {
-//     type Target = fn(A, B) -> O;
-
-//     fn deref(&self) -> &Self::Target {
-//         unimplemented!()
-//     }
-// }
-
-// impl<A, B, C, O> std::ops::Deref for Action<(A, B, C), O> {
-//     type Target = fn(A, B, C) -> O;
-
-//     fn deref(&self) -> &Self::Target {
-//         unimplemented!()
-//     }
-// }
-
-// /// Call this action with the given input, returning a Dispatching future that resolves when the action is complete.
-// pub fn call(&mut self, input: I) -> Dispatching<()> {
-//     (self.callback)(input);
-//     Dispatching(PhantomData)
-// }

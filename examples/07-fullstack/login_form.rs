@@ -1,4 +1,8 @@
-//! Implementing a login form
+//! This example demonstrates how to use types like `Form`, `SetHeader`, and `TypedHeader`
+//! to create a simple login form that sets a cookie in the browser and uses it for authentication
+//! on a protected endpoint.
+
+use std::sync::LazyLock;
 
 use dioxus::fullstack::{Cookie, Form, SetCookie, SetHeader};
 use dioxus::prelude::*;
@@ -9,25 +13,34 @@ fn main() {
 }
 
 fn app() -> Element {
+    let mut fetch_login = use_action(login);
+    let mut fetch_sensitive = use_action(sensitive);
+
     rsx! {
         h1 { "Login Form Demo" }
         button {
             onclick: move |_| async move {
-                let result = sensitive().await;
-                info!("Sensitive data: {:?}", result);
+                fetch_sensitive.call();
             },
             "Get Sensitive Data",
         }
+        pre { "Response from locked API: {fetch_sensitive.result():?}"}
         form {
             onsubmit: move |evt: FormEvent| {
+                // Prevent the browser from navigating away
                 evt.prevent_default();
+
                 async move {
-                    info!("Form submitted: {:?}", evt.values());
+                    // Extract the form values into our `LoginForm` struct. The `.parsed_values` method
+                    // is provided by Dioxus and works with any form element that has `name` attributes.
                     let values: LoginForm = evt.parsed_values().unwrap();
 
-                    let result = login(Form(values)).await;
-                    info!("Login result: {:?}", result);
-                    Ok(())
+                    // Call our server function with the form values wrapped in `Form`. The `SetHeader`
+                    // response will set a cookie in the browser if the login is successful.
+                    fetch_login.call(Form(values)).await;
+
+                    // Now that we're logged in, we can call our sensitive endpoint.
+                    fetch_sensitive.call().await;
                 }
             },
             input { r#type: "text", id: "username", name: "username" }
@@ -40,14 +53,15 @@ fn app() -> Element {
     }
 }
 
-#[cfg(feature = "server")]
-type MyTypedHeader = dioxus::fullstack::TypedHeader<Cookie>;
-
 #[derive(Deserialize, Serialize)]
 pub struct LoginForm {
     username: String,
     password: String,
 }
+
+/// A static session ID for demonstration purposes. This forces all previous logins to be invalidated
+/// when the server restarts.
+static THIS_SESSION_ID: LazyLock<uuid::Uuid> = LazyLock::new(uuid::Uuid::new_v4);
 
 /// In our `login` form, we'll return a `SetCookie` header if the login is successful.
 ///
@@ -59,21 +73,21 @@ pub struct LoginForm {
 #[post("/api/login")]
 async fn login(form: Form<LoginForm>) -> Result<SetHeader<SetCookie>> {
     if form.0.username == "admin" && form.0.password == "password" {
-        return Ok(SetHeader::new("auth-demo=abcdef123456;")?);
+        return Ok(SetHeader::new(format!("auth-demo={};", &*THIS_SESSION_ID))?);
     }
 
     HttpError::unauthorized("Invalid username or password")?
 }
 
 /// We'll use the `TypedHeader` extractor to get the cookie from the request.
-#[get("/api/sensitive", header: MyTypedHeader)]
+#[get("/api/sensitive", header: dioxus::fullstack::TypedHeader<Cookie>)]
 async fn sensitive() -> Result<String> {
     // Extract the cookie from the request headers and use `.eq` to verify its value.
     // The `or_unauthorized` works on boolean values, returning a 401 if the condition is false.
     header
         .get("auth-demo")
         .or_unauthorized("Missing auth-demo cookie")?
-        .eq("abcdef123456")
+        .eq(THIS_SESSION_ID.to_string().as_str())
         .or_unauthorized("Invalid auth-demo cookie")?;
 
     Ok("Sensitive data".to_string())

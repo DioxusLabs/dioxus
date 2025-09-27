@@ -285,7 +285,7 @@ axum_session = "0.16.0"
 axum_session_auth = "0.16.0"
 axum_session_sqlx = "0.5.0"
 axum-extra = "0.10.1"
-reqwest = { version = "0.12.22", default-features = false }
+reqwest = { version = "0.12.23", default-features = false }
 owo-colors = "4.2.2"
 ciborium = "0.2.2"
 base64 = "0.22.1"

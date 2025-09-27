@@ -39,9 +39,11 @@ reqwest = { workspace = true, features = ["json", "rustls-tls", "cookies", "stre
 url = { workspace =  true }
 serde_urlencoded = { workspace = true }
 form_urlencoded = { workspace = true }
+axum = { workspace = true, default-features = false, features = ["json", "form", "query", "multipart", "query"] }
+http-body = { workspace = true }
+headers = "0.4.1"
 
 # server deps
-axum = { workspace = true, default-features = false, features = ["json", "form", "query", "multipart", "query"] }
 axum-extra = { workspace =  true, optional = true, features = ["typed-header"] }
 inventory = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true }
@@ -50,7 +52,6 @@ tokio-stream = { workspace = true, features = ["sync"], optional = true }
 tower = { workspace = true, features = ["util"], optional = true }
 tower-http = { workspace = true, features = ["fs"], optional = true }
 tower-layer = { version = "0.3.3", optional = true }
-http-body = { workspace = true }
 
 # payloads
 postcard = { features = ["alloc"], optional = true, workspace = true, default-features = true }
@@ -59,8 +60,7 @@ async-stream = "0.3.6"
 
 # websocket stuff
 # [target.'cfg(target_arch = "wasm32")'.dependencies]
-web-sys = { version = "0.3", features = ["WebSocket", "CloseEvent", "ErrorEvent", "Event", "MessageEvent", "BinaryType"], optional = true}
-headers = "0.4.1"
+web-sys = { version = "0.3", features = ["WebSocket", "CloseEvent", "ErrorEvent", "Event", "MessageEvent", "BinaryType"], optional = true }
 
 # native websocket deps
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
