@@ -380,7 +380,7 @@ impl<I, O, E> FromResponse for Websocket<I, O, E> {
     fn from_response(
         res: ClientResponse,
         // res: UpgradingWebsocket,
-    ) -> impl Future<Output = Result<Self, ServerFnError>> + Send {
+    ) -> impl Future<Output = Result<Self, ServerFnError>> {
         async move { todo!() }
         // SendWrapper::new(async move {
         //     #[cfg(not(target_arch = "wasm32"))]
@@ -468,7 +468,7 @@ impl IntoRequest for WebSocketOptions {
     fn into_request(
         self,
         builder: ClientRequest,
-    ) -> impl Future<Output = std::result::Result<ClientResponse, RequestError>> + Send + 'static
+    ) -> impl Future<Output = std::result::Result<ClientResponse, RequestError>> + 'static
 // ) -> impl Future<Output = std::result::Result<UpgradingWebsocket, RequestError>> + Send + 'static
     {
         async move { todo!() }

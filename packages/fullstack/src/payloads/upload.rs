@@ -30,7 +30,7 @@ impl IntoRequest for FileUpload {
     fn into_request(
         self,
         builder: ClientRequest,
-    ) -> impl Future<Output = Result<ClientResponse, RequestError>> + Send + 'static {
+    ) -> impl Future<Output = Result<ClientResponse, RequestError>> + 'static {
         async move { todo!() }
     }
 }
@@ -52,9 +52,7 @@ impl<S> FromRequest<S> for FileUpload {
 }
 
 impl FromResponse for FileUpload {
-    fn from_response(
-        res: ClientResponse,
-    ) -> impl Future<Output = Result<Self, ServerFnError>> + Send {
+    fn from_response(res: ClientResponse) -> impl Future<Output = Result<Self, ServerFnError>> {
         async move { todo!() }
     }
 }

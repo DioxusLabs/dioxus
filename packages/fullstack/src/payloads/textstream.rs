@@ -114,9 +114,7 @@ impl<T: DeserializeOwned + Serialize + 'static, E: Encoding> IntoResponse for St
 }
 
 impl FromResponse for Streaming<String> {
-    fn from_response(
-        res: ClientResponse,
-    ) -> impl Future<Output = Result<Self, ServerFnError>> + Send {
+    fn from_response(res: ClientResponse) -> impl Future<Output = Result<Self, ServerFnError>> {
         SendWrapper::new(async move {
             let client_stream = Box::pin(res.bytes_stream().map(|byte| match byte {
                 Ok(bytes) => match String::from_utf8(bytes.to_vec()) {
@@ -137,9 +135,7 @@ impl FromResponse for Streaming<String> {
 }
 
 impl FromResponse for Streaming<Bytes> {
-    fn from_response(
-        res: ClientResponse,
-    ) -> impl Future<Output = Result<Self, ServerFnError>> + Send {
+    fn from_response(res: ClientResponse) -> impl Future<Output = Result<Self, ServerFnError>> {
         async move { todo!() }
     }
 }
@@ -147,9 +143,7 @@ impl FromResponse for Streaming<Bytes> {
 impl<T: DeserializeOwned + Serialize + 'static + Send, E: Encoding> FromResponse
     for Streaming<T, E>
 {
-    fn from_response(
-        res: ClientResponse,
-    ) -> impl Future<Output = Result<Self, ServerFnError>> + Send {
+    fn from_response(res: ClientResponse) -> impl Future<Output = Result<Self, ServerFnError>> {
         SendWrapper::new(async move {
             let client_stream = Box::pin(res.bytes_stream().map(|byte| match byte {
                 Ok(bytes) => match E::from_bytes(bytes) {

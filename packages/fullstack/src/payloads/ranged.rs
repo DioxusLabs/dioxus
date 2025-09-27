@@ -8,9 +8,7 @@ pub struct RangedBytes {
 }
 
 impl FromResponse for RangedBytes {
-    fn from_response(
-        res: ClientResponse,
-    ) -> impl Future<Output = Result<Self, ServerFnError>> + Send {
+    fn from_response(res: ClientResponse) -> impl Future<Output = Result<Self, ServerFnError>> {
         async move {
             Ok(Self {
                 #[cfg(feature = "server")]

@@ -37,6 +37,8 @@ serde_qs = { workspace = true, default-features = true}
 mime = "0.3.17"
 reqwest = { workspace = true, features = ["json", "rustls-tls", "cookies", "stream"] }
 url = { workspace =  true }
+serde_urlencoded = { workspace = true }
+form_urlencoded = { workspace = true }
 
 # server deps
 axum = { workspace = true, default-features = false, features = ["json", "form", "query", "multipart", "query"] }
@@ -58,6 +60,7 @@ async-stream = "0.3.6"
 # websocket stuff
 # [target.'cfg(target_arch = "wasm32")'.dependencies]
 web-sys = { version = "0.3", features = ["WebSocket", "CloseEvent", "ErrorEvent", "Event", "MessageEvent", "BinaryType"], optional = true}
+headers = "0.4.1"
 
 # native websocket deps
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

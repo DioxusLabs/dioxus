@@ -11,7 +11,7 @@ where
     fn into_request(
         self,
         request: ClientRequest,
-    ) -> impl Future<Output = Result<ClientResponse, RequestError>> + Send + 'static {
+    ) -> impl Future<Output = Result<ClientResponse, RequestError>> + 'static {
         send_wrapper::SendWrapper::new(async move {
             request
                 .header("Content-Type", "application/json")
@@ -23,12 +23,10 @@ where
 }
 
 impl<T: DeserializeOwned> FromResponse for Json<T> {
-    fn from_response(
-        res: ClientResponse,
-    ) -> impl Future<Output = Result<Self, ServerFnError>> + Send {
-        send_wrapper::SendWrapper::new(async move {
+    fn from_response(res: ClientResponse) -> impl Future<Output = Result<Self, ServerFnError>> {
+        async move {
             let data = res.json::<T>().await?;
             Ok(Json(data))
-        })
+        }
     }
 }

@@ -29,9 +29,7 @@ impl<T: Into<String>> IntoResponse for Text<T> {
 }
 
 impl<T: From<String>> FromResponse for Text<T> {
-    fn from_response(
-        res: ClientResponse,
-    ) -> impl Future<Output = Result<Self, ServerFnError>> + Send {
+    fn from_response(res: ClientResponse) -> impl Future<Output = Result<Self, ServerFnError>> {
         SendWrapper::new(async move {
             let text = res.text().await?;
             Ok(Text::new(text.into()))

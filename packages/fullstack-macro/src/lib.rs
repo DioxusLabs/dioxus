@@ -443,17 +443,6 @@ fn route_impl_with_route(
         _ => output_type.clone(),
     };
 
-    let server_tys = server_args
-        .iter()
-        .map(|pat_type| match pat_type {
-            FnArg::Receiver(_) => quote! { () },
-            FnArg::Typed(pat_type) => {
-                let ty = &pat_type.ty;
-                quote! { #ty }
-            }
-        })
-        .collect::<Vec<_>>();
-
     let server_names = server_args
         .iter()
         .map(|pat_type| match pat_type {
@@ -469,26 +458,6 @@ fn route_impl_with_route(
         .collect::<Vec<_>>();
 
     let body_struct_impl = {
-        // let server_tys = server_args.iter().enumerate().map(|(idx, _)| {
-        //     let ty_name = format_ident!("__ServerTy{}", idx);
-        //     quote! {
-        //         #[cfg(feature = "server")] #ty_name
-        //     }
-        // });
-
-        // let server_names = server_args.iter().enumerate().map(|(idx, arg)| {
-        //     let name = match arg {
-        //         FnArg::Receiver(_) => panic!("Server args cannot be receiver"),
-        //         FnArg::Typed(pat_type) => &pat_type.pat,
-        //     };
-
-        //     let ty_name = format_ident!("__ServerTy{}", idx);
-        //     quote! {
-        //         #[cfg(feature = "server")]
-        //         #name: #ty_name
-        //     }
-        // });
-
         let tys = body_json_types
             .iter()
             .enumerate()
@@ -503,8 +472,6 @@ fn route_impl_with_route(
             #[derive(serde::Serialize, serde::Deserialize)]
             #[serde(crate = "serde")]
             struct ___Body_Serialize___< #(#tys,)* > {
-            // struct ___Body_Serialize___< #(#server_tys,)* #(#tys,)* > {
-                // #(#server_names,)*
                 #(#names,)*
             }
         }
@@ -512,26 +479,9 @@ fn route_impl_with_route(
 
     // This unpacks the body struct into the individual variables that get scoped
     let unpack = {
-        // let unpack_server_args = server_args.iter().map(|arg| {
-        //     let name = match arg {
-        //         FnArg::Receiver(_) => panic!("Server args cannot be receiver"),
-        //         FnArg::Typed(pat_type) => match pat_type.pat.as_ref() {
-        //             Pat::Ident(pat_ident) => &pat_ident.ident,
-        //             _ => panic!("Expected Pat::Ident"),
-        //         },
-        //     };
-        //     quote! { #[cfg(feature = "server")] data.#name }
-        // });
-
         let unpack_args = body_json_names.iter().map(|name| quote! { data.#name });
-
         quote! {
-            |data| {
-                (
-                    // #(#unpack_server_args,)*
-                    #(#unpack_args,)*
-                )
-            }
+            |data| { ( #(#unpack_args,)* ) }
         }
     };
 

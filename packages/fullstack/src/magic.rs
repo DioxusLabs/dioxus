@@ -150,7 +150,7 @@ pub mod req_to {
             ctx: ClientRequest,
             data: In,
             map: fn(In) -> Out,
-        ) -> impl Future<Output = Result<ClientResponse, RequestError>> + Send + 'static;
+        ) -> impl Future<Output = Result<ClientResponse, RequestError>> + 'static;
 
         fn verify_can_serialize(&self) -> Self::VerifyEncode;
     }
@@ -166,7 +166,7 @@ pub mod req_to {
             ctx: ClientRequest,
             data: T,
             _map: fn(T) -> O,
-        ) -> impl Future<Output = Result<ClientResponse, RequestError>> + Send + 'static {
+        ) -> impl Future<Output = Result<ClientResponse, RequestError>> + 'static {
             send_wrapper::SendWrapper::new(async move {
                 let data = serde_json::to_string(&data).unwrap();
 
@@ -204,7 +204,7 @@ pub mod req_to {
             ctx: ClientRequest,
             data: T,
             map: fn(T) -> O,
-        ) -> impl Future<Output = Result<ClientResponse, RequestError>> + Send + 'static {
+        ) -> impl Future<Output = Result<ClientResponse, RequestError>> + 'static {
             O::into_request(map(data), ctx)
         }
 
@@ -225,7 +225,7 @@ pub mod req_to {
             _ctx: ClientRequest,
             _data: T,
             _map: fn(T) -> O,
-        ) -> impl Future<Output = Result<ClientResponse, RequestError>> + Send + 'static {
+        ) -> impl Future<Output = Result<ClientResponse, RequestError>> + 'static {
             async move { unimplemented!() }
         }
         fn verify_can_serialize(&self) -> Self::VerifyEncode {
@@ -554,11 +554,17 @@ pub mod req_from {
             _map: fn(In) -> Out,
         ) -> impl Future<Output = Result<(H, Out), Response>> + Send + 'static {
             send_wrapper::SendWrapper::new(async move {
-                todo!()
+                let (mut parts, body) = request.into_parts();
+                let Ok(h) = H::from_request_parts(&mut parts, &state).await else {
+                    todo!()
+                };
+                let request = Request::from_parts(parts, body);
 
-                // Out::from_request(request, &state)
-                //     .await
-                //     .map_err(|e| ServerFnRejection {}.into_response())
+                let res = Out::from_request(request, &state)
+                    .await
+                    .map_err(|e| ServerFnRejection {}.into_response());
+
+                res.map(|out| (h, out))
             })
         }
     }
@@ -575,11 +581,10 @@ pub mod req_from {
             _map: fn(In) -> (),
         ) -> impl Future<Output = Result<(H, ()), Response>> + Send + 'static {
             send_wrapper::SendWrapper::new(async move {
-                todo!()
-
-                // Out::from_request(request, &state)
-                //     .await
-                //     .map_err(|e| ServerFnRejection {}.into_response())
+                H::from_request(request, &state)
+                    .await
+                    .map_err(|e| ServerFnRejection {}.into_response())
+                    .map(|out| (out, ()))
             })
         }
     }
@@ -606,7 +611,7 @@ mod resp {
 
     // Higher priority impl for special types like websocket/file responses that generate their own responses
     // The FromResponse impl helps narrow types to those usable on the client
-    impl<T, E> MakeAxumResponse<T, E> for &&&ServerFnDecoder<Result<T, E>>
+    impl<T, E> MakeAxumResponse<T, E> for &&&&ServerFnDecoder<Result<T, E>>
     where
         T: FromResponse + IntoResponse,
     {
@@ -617,7 +622,7 @@ mod resp {
 
     // Lower priority impl for regular serializable types
     // We try to match the encoding from the incoming request, otherwise default to JSON
-    impl<T, E> MakeAxumResponse<T, E> for &&ServerFnDecoder<Result<T, E>>
+    impl<T, E> MakeAxumResponse<T, E> for &&&ServerFnDecoder<Result<T, E>>
     where
         T: DeserializeOwned + Serialize,
     {

@@ -56,9 +56,7 @@ impl<T> ServerEvents<T> {
 }
 
 impl<T> FromResponse for ServerEvents<T> {
-    fn from_response(
-        res: ClientResponse,
-    ) -> impl Future<Output = Result<Self, ServerFnError>> + Send {
+    fn from_response(res: ClientResponse) -> impl Future<Output = Result<Self, ServerFnError>> {
         use futures::io::AsyncBufReadExt;
 
         let res = res;

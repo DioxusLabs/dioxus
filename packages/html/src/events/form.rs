@@ -148,18 +148,32 @@ impl FormData {
     {
         use serde::Serialize;
 
-        fn convert_hashmap_to_json<K, V>(hashmap: &HashMap<K, V>) -> serde_json::Result<String>
-        where
-            K: Serialize + std::hash::Hash + Eq,
-            V: Serialize,
-        {
-            serde_json::to_string(hashmap)
+        // fn convert_hashmap_to_json<K, V>(hashmap: &HashMap<K, V>) -> serde_json::Result<String>
+        // where
+        //     K: Serialize + std::hash::Hash + Eq,
+        //     V: Serialize,
+        // {
+        //     serde_json::to_string(hashmap)
+        // }
+
+        let values = &self.values();
+
+        let mut map = serde_json::Map::new();
+        for (key, value) in values {
+            if value.0.len() == 1 {
+                map.insert(key.clone(), serde_json::Value::String(value.0[0].clone()));
+            } else {
+                let arr = value
+                    .0
+                    .iter()
+                    .cloned()
+                    .map(serde_json::Value::String)
+                    .collect();
+                map.insert(key.clone(), serde_json::Value::Array(arr));
+            }
         }
 
-        let parsed_json =
-            convert_hashmap_to_json(&self.values()).expect("Failed to parse values to JSON");
-
-        serde_json::from_str(&parsed_json)
+        serde_json::from_value(serde_json::Value::Object(map))
     }
 }
 

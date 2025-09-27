@@ -345,6 +345,8 @@ bytes = "1.10"
 send_wrapper = "0.6.0"
 pin-project = { version = "1.1.10" }
 postcard = { version = "1.1.3", default-features = false }
+serde_urlencoded = "0.7"
+form_urlencoded = "1.2.1"
 
 # desktop
 wry = { version = "0.52.1", default-features = false }
@@ -461,6 +463,7 @@ sqlx = { version = "0.8.6", features = [
 
 [dev-dependencies]
 dioxus = { workspace = true, features = ["router", "fullstack"] }
+dioxus-html = { workspace = true, features = ["serialize"] }
 dioxus-stores = { workspace = true }
 dioxus-ssr = { workspace = true }
 futures-util = { workspace = true }

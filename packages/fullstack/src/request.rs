@@ -1,22 +1,74 @@
 use bytes::Bytes;
 use dioxus_fullstack_core::{RequestError, ServerFnError};
-use http::HeaderMap;
+use http::{response::Parts, HeaderMap};
+use serde::de::DeserializeOwned;
 use std::{future::Future, pin::Pin};
 use url::Url;
 
 use crate::{ClientRequest, ClientResponse};
 
 pub trait FromResponse: Sized {
-    fn from_response(
-        res: ClientResponse,
-    ) -> impl Future<Output = Result<Self, ServerFnError>> + Send;
+    fn from_response(res: ClientResponse) -> impl Future<Output = Result<Self, ServerFnError>>;
+}
+
+impl<A> FromResponse for A
+where
+    A: FromResponseParts,
+{
+    fn from_response(res: ClientResponse) -> impl Future<Output = Result<Self, ServerFnError>> {
+        async move {
+            let (parts, _body) = res.into_parts();
+            let mut parts = parts;
+            A::from_response_parts(&mut parts)
+        }
+    }
+}
+
+impl<A, B> FromResponse for (A, B)
+where
+    A: FromResponseParts,
+    B: FromResponse,
+{
+    fn from_response(res: ClientResponse) -> impl Future<Output = Result<Self, ServerFnError>> {
+        async move {
+            let mut parts = res.make_parts();
+            let a = A::from_response_parts(&mut parts)?;
+            let b = B::from_response(res).await?;
+            Ok((a, b))
+        }
+    }
+}
+
+pub trait FromResponseParts
+where
+    Self: Sized,
+{
+    fn from_response_parts(parts: &mut Parts) -> Result<Self, ServerFnError>;
+}
+
+// impl<T> FromResponse for T
+// where
+//     T: FromResponseParts,
+// {
+//     fn from_response(
+//         res: ClientResponse,
+//     ) -> impl Future<Output = Result<Self, ServerFnError>>  {
+//         todo!()
+//     }
+// }
+
+#[cfg(feature = "server")]
+impl<T> FromResponseParts for axum_extra::TypedHeader<T> {
+    fn from_response_parts(parts: &mut Parts) -> Result<Self, ServerFnError> {
+        todo!()
+    }
 }
 
 pub trait IntoRequest: Sized {
     fn into_request(
         self,
         builder: ClientRequest,
-    ) -> impl Future<Output = Result<ClientResponse, RequestError>> + Send + 'static;
+    ) -> impl Future<Output = Result<ClientResponse, RequestError>> + 'static;
 }
 
 impl<A> IntoRequest for (A,)
@@ -26,8 +78,21 @@ where
     fn into_request(
         self,
         builder: ClientRequest,
-    ) -> impl Future<Output = Result<ClientResponse, RequestError>> + Send + 'static {
+    ) -> impl Future<Output = Result<ClientResponse, RequestError>> + 'static {
         send_wrapper::SendWrapper::new(async move { A::into_request(self.0, builder).await })
+    }
+}
+
+impl<A, B> IntoRequest for (A, B)
+where
+    A: IntoRequest + 'static,
+    B: IntoRequest + 'static,
+{
+    fn into_request(
+        self,
+        builder: ClientRequest,
+    ) -> impl Future<Output = Result<ClientResponse, RequestError>> + 'static {
+        send_wrapper::SendWrapper::new(async move { todo!() })
     }
 }
 

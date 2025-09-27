@@ -61,12 +61,38 @@ impl ClientResponse {
             .await
             .map_err(reqwest_error_to_request_error)
     }
+    pub fn make_parts(&self) -> http::response::Parts {
+        let mut response = http::response::Response::builder()
+            .status(self.inner.status())
+            .version(self.inner.version());
+
+        for (key, value) in self.inner.headers().iter() {
+            response = response.header(key, value);
+        }
+
+        let (parts, _) = response.body(()).unwrap().into_parts();
+
+        parts
+    }
+
+    pub fn into_parts(
+        self,
+    ) -> (
+        http::response::Parts,
+        impl Stream<Item = Result<Bytes, RequestError>>,
+    ) {
+        let parts = self.make_parts();
+
+        (parts, self.bytes_stream())
+    }
 }
 
 pub struct ClientRequest {
     pub client: reqwest::RequestBuilder,
+    pub method: Method,
 }
 
+// On wasm reqwest not being send/sync gets annoying, but it's not relevant since wasm is single-threaded
 unsafe impl Send for ClientRequest {}
 unsafe impl Sync for ClientRequest {}
 
@@ -101,36 +127,46 @@ impl ClientRequest {
             }
         );
 
-        // let host = if cfg!(target_os = "wasm32") {
-        //     "".to_string()
-        // } else {
-        //     get_server_url()
-        // };
+        let mut client = reqwest::Client::builder();
 
-        // http://127.0.0.1:8080
-        // // format!("http://127.0.0.1:8080{}", #request_url)
-        // // .#http_method(format!("{}{}", get_server_url(), #request_url)); // .query(&__params);
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            use std::sync::Arc;
+            use std::sync::LazyLock;
 
-        // static COOKIES: LazyLock<Arc<reqwest::cookie::Jar>> =
-        //     LazyLock::new(|| Arc::new(reqwest::cookie::Jar::default()));
+            static COOKIES: LazyLock<Arc<reqwest::cookie::Jar>> =
+                LazyLock::new(|| Arc::new(reqwest::cookie::Jar::default()));
 
-        let client = reqwest::Client::builder()
-            // .cookie_store(true)
-            // .cookie_provider(COOKIES.clone())
-            .build()
-            .unwrap()
-            .request(method, url);
-        ClientRequest { client }
+            client = client.cookie_store(true).cookie_provider(COOKIES.clone());
+        }
+
+        let client = client.build().unwrap().request(method.clone(), url);
+
+        ClientRequest { client, method }
     }
 
     pub fn json(self, json: &impl Serialize) -> Self {
         Self {
             client: self.client.json(json),
+            method: self.method,
         }
     }
 
     pub async fn send(self) -> Result<ClientResponse, RequestError> {
-        todo!()
+        let res = self
+            .client
+            .send()
+            .await
+            .map_err(reqwest_error_to_request_error)?;
+
+        Ok(ClientResponse {
+            inner: res,
+            state: None,
+        })
+    }
+
+    pub fn method(&self) -> &Method {
+        &self.method
     }
 
     /// Add a `Header` to this Request.

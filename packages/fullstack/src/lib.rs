@@ -16,6 +16,7 @@ pub use axum;
 pub use inventory;
 
 pub use axum_core;
+pub use headers;
 // pub use axum;
 // #[doc(hidden)]
 // pub use const_format;
@@ -100,4 +101,7 @@ pub mod payloads {
 
     pub mod response;
     pub use response::*;
+
+    pub mod header;
+    pub use header::*;
 }
