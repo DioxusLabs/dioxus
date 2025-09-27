@@ -8,6 +8,8 @@ use url::Url;
 
 use crate::{reqwest_error_to_request_error, reqwest_response_to_serverfn_err};
 
+pub type ClientResult = Result<ClientResponse, RequestError>;
+
 /// A wrapper type over the platform's HTTP response type.
 ///
 /// This abstracts over the inner `reqwest::Response` type and provides the original request
@@ -153,6 +155,35 @@ impl ClientRequest {
         let client = client.build().unwrap().request(method.clone(), url);
 
         ClientRequest { client, method }
+    }
+
+    pub fn query(self, query: &impl Serialize) -> Self {
+        Self {
+            client: self.client.query(query),
+            method: self.method,
+        }
+    }
+
+    pub fn bytes(self, bytes: Bytes) -> Self {
+        Self {
+            client: self.client.body(bytes),
+            method: self.method,
+        }
+    }
+
+    pub fn text(self, text: impl Into<String> + Into<Bytes>) -> Self {
+        let bytes: Bytes = text.into();
+        Self {
+            client: self.client.body(bytes),
+            method: self.method,
+        }
+    }
+
+    pub fn body(self, body: impl Into<Bytes>) -> Self {
+        Self {
+            client: self.client.body(body.into()),
+            method: self.method,
+        }
     }
 
     pub fn json(self, json: &impl Serialize) -> Self {

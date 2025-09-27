@@ -361,6 +361,16 @@ impl<I, O, E> Websocket<I, O, E> {
 
         unreachable!()
     }
+
+    pub async fn recv(&self) -> Option<Result<O, WebsocketError>>
+    where
+        O: DeserializeOwned,
+        E: Encoding,
+    {
+        let msg = self.recv_msg().await?;
+
+        todo!()
+    }
 }
 
 impl<I, O, E> PartialEq for Websocket<I, O, E> {

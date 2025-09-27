@@ -1,12 +1,14 @@
+#![cfg_attr(not(feature = "server"), allow(dead_code))]
+
 //! This example demonstrates how to use types like `Form`, `SetHeader`, and `TypedHeader`
 //! to create a simple login form that sets a cookie in the browser and uses it for authentication
 //! on a protected endpoint.
 
-use std::sync::LazyLock;
-
 use dioxus::fullstack::{Cookie, Form, SetCookie, SetHeader};
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
+
+use std::sync::LazyLock;
 
 fn main() {
     dioxus::launch(app);
@@ -26,22 +28,20 @@ fn app() -> Element {
         }
         pre { "Response from locked API: {fetch_sensitive.result():?}"}
         form {
-            onsubmit: move |evt: FormEvent| {
-                // Prevent the browser from navigating away
+            onsubmit: move |evt: FormEvent| async move {
+                // Prevent the browser from navigating away.
                 evt.prevent_default();
 
-                async move {
-                    // Extract the form values into our `LoginForm` struct. The `.parsed_values` method
-                    // is provided by Dioxus and works with any form element that has `name` attributes.
-                    let values: LoginForm = evt.parsed_values().unwrap();
+                // Extract the form values into our `LoginForm` struct. The `.parsed_values` method
+                // is provided by Dioxus and works with any form element that has `name` attributes.
+                let values: LoginForm = evt.parsed_values().unwrap();
 
-                    // Call our server function with the form values wrapped in `Form`. The `SetHeader`
-                    // response will set a cookie in the browser if the login is successful.
-                    fetch_login.call(Form(values)).await;
+                // Call our server function with the form values wrapped in `Form`. The `SetHeader`
+                // response will set a cookie in the browser if the login is successful.
+                fetch_login.call(Form(values)).await;
 
-                    // Now that we're logged in, we can call our sensitive endpoint.
-                    fetch_sensitive.call().await;
-                }
+                // Now that we're logged in, we can call our sensitive endpoint.
+                fetch_sensitive.call().await;
             },
             input { r#type: "text", id: "username", name: "username" }
             label { "Username" }

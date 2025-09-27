@@ -5,10 +5,11 @@
 // - Hydration
 
 #![allow(non_snake_case)]
-// use dioxus::fullstack::{codec::JsonEncoding, commit_initial_chunk, BoxedStream, Websocket};
-use dioxus::fullstack::commit_initial_chunk;
-use dioxus::prelude::*;
-use futures::{channel::mpsc, SinkExt, StreamExt};
+use dioxus::{
+    core::anyhow,
+    fullstack::{commit_initial_chunk, Websocket},
+};
+use dioxus::{fullstack::WebSocketOptions, prelude::*};
 
 fn main() {
     dioxus::LaunchBuilder::new()
@@ -108,7 +109,7 @@ async fn get_server_data_empty_vec(empty_vec: Vec<String>) -> ServerFnResult<Vec
 async fn server_error() -> ServerFnResult<String> {
     assert_server_context_provided().await;
     tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
-    Err(ServerFnError::new("the server threw an error!"))
+    Err(anyhow!("This is a test error").into())
 }
 
 #[component]
@@ -181,42 +182,32 @@ fn Assets() -> Element {
     }
 }
 
-// #[server(protocol = Websocket<JsonEncoding, JsonEncoding>)]
-// async fn echo_ws(
-//     input: BoxedStream<String, ServerFnError>,
-// ) -> ServerFnResult<BoxedStream<String, ServerFnError>> {
-//     let mut input = input;
-
-//     let (mut tx, rx) = mpsc::channel(1);
-
-//     tokio::spawn(async move {
-//         while let Some(msg) = input.next().await {
-//             let _ = tx.send(msg.map(|msg| msg.to_ascii_uppercase())).await;
-//         }
-//     });
-
-//     Ok(rx.into())
-// }
-
 /// This component tests websocket server functions
 #[component]
 fn WebSockets() -> Element {
-    todo!()
-    // let mut received = use_signal(String::new);
-    // use_future(move || async move {
-    //     let (mut tx, rx) = mpsc::channel(1);
-    //     // let mut receiver = echo_ws(rx.into()).await.unwrap();
-    //     tx.send(Ok("hello world".to_string())).await.unwrap();
-    //     while let Some(Ok(msg)) = receiver.next().await {
-    //         println!("Received: {}", msg);
-    //         received.set(msg);
-    //     }
-    // });
+    let mut received = use_signal(String::new);
 
-    // rsx! {
-    //     div {
-    //         id: "websocket-div",
-    //         "Received: {received}"
-    //     }
-    // }
+    use_future(move || async move {
+        let socket = echo_ws(WebSocketOptions::default()).await.unwrap();
+
+        while let Some(Ok(msg)) = socket.recv().await {
+            received.write().push_str(&msg);
+        }
+    });
+
+    rsx! {
+        div {
+            id: "websocket-div",
+            "Received: {received}"
+        }
+    }
+}
+
+#[server]
+async fn echo_ws(options: WebSocketOptions) -> ServerFnResult<Websocket> {
+    Ok(options.on_upgrade(|mut tx| async move {
+        while let Some(Ok(msg)) = tx.recv().await {
+            let _ = tx.send(msg).await;
+        }
+    }))
 }

@@ -18,13 +18,12 @@ use std::{
 /// To bubble errors and pending, simply use `?` on the result of the resource read.
 ///
 /// To inspect the state of the resource, you can use the RenderError enum along with the RenderResultExt trait.
-pub fn use_loader<
+pub fn use_loader<F, T, E>(mut future: impl FnMut() -> F + 'static) -> Result<Loader<T>, Loading>
+where
     F: Future<Output = Result<T, E>> + 'static,
     T: 'static + std::cmp::PartialEq,
     E: Into<dioxus_core::Error> + 'static,
->(
-    mut future: impl FnMut() -> F + 'static,
-) -> Result<Loader<T>, Loading> {
+{
     let location = std::panic::Location::caller();
 
     let mut err = use_signal(|| None as Option<CapturedError>);
@@ -126,9 +125,6 @@ pub enum Loading {
 
     Failed(LoaderHandle),
 }
-
-// unsafe impl Send for Loading {}
-// unsafe impl Sync for Loading {}
 
 impl std::fmt::Debug for Loading {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -283,8 +279,5 @@ impl<T> Copy for Loader<T> {}
 impl<T> Loader<T> {
     pub fn restart(&mut self) {
         todo!()
-        // self.task.write().cancel();
-        // let new_task = self.callback.call(());
-        // self.task.set(new_task);
     }
 }

@@ -5,7 +5,7 @@ use serde::de::DeserializeOwned;
 use std::{future::Future, pin::Pin};
 use url::Url;
 
-use crate::{ClientRequest, ClientResponse};
+use crate::{ClientRequest, ClientResponse, ClientResult};
 
 pub trait FromResponse: Sized {
     fn from_response(res: ClientResponse) -> impl Future<Output = Result<Self, ServerFnError>>;
@@ -65,20 +65,14 @@ impl<T> FromResponseParts for axum_extra::TypedHeader<T> {
 }
 
 pub trait IntoRequest: Sized {
-    fn into_request(
-        self,
-        builder: ClientRequest,
-    ) -> impl Future<Output = Result<ClientResponse, RequestError>> + 'static;
+    fn into_request(self, builder: ClientRequest) -> impl Future<Output = ClientResult> + 'static;
 }
 
 impl<A> IntoRequest for (A,)
 where
     A: IntoRequest + 'static,
 {
-    fn into_request(
-        self,
-        builder: ClientRequest,
-    ) -> impl Future<Output = Result<ClientResponse, RequestError>> + 'static {
+    fn into_request(self, builder: ClientRequest) -> impl Future<Output = ClientResult> + 'static {
         send_wrapper::SendWrapper::new(async move { A::into_request(self.0, builder).await })
     }
 }
@@ -88,10 +82,7 @@ where
     A: IntoRequest + 'static,
     B: IntoRequest + 'static,
 {
-    fn into_request(
-        self,
-        builder: ClientRequest,
-    ) -> impl Future<Output = Result<ClientResponse, RequestError>> + 'static {
+    fn into_request(self, builder: ClientRequest) -> impl Future<Output = ClientResult> + 'static {
         send_wrapper::SendWrapper::new(async move { todo!() })
     }
 }

@@ -1,16 +1,6 @@
-use std::future::Future;
-
-use axum::response::IntoResponse;
-use axum_core::{
-    body::Body,
-    extract::{FromRequest, Request},
-};
-use bytes::Bytes;
-use dioxus_fullstack_core::{RequestError, ServerFnError};
-use futures::Stream;
+use super::*;
+use axum_core::{body::Body, extract::Request};
 use http_body_util::BodyExt;
-
-use crate::{ClientRequest, ClientResponse, FromResponse, IntoRequest, ServerFnRejection};
 
 pub struct FileUpload {
     outgoing_stream: Option<http_body_util::BodyDataStream<Request<Body>>>,
@@ -27,10 +17,7 @@ impl FileUpload {
 }
 
 impl IntoRequest for FileUpload {
-    fn into_request(
-        self,
-        builder: ClientRequest,
-    ) -> impl Future<Output = Result<ClientResponse, RequestError>> + 'static {
+    fn into_request(self, builder: ClientRequest) -> impl Future<Output = ClientResult> + 'static {
         async move { todo!() }
     }
 }

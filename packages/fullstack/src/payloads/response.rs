@@ -1,8 +1,4 @@
-use crate::{ClientRequest, IntoRequest};
-use crate::{ClientResponse, FromResponse};
-
-use dioxus_fullstack_core::{RequestError, ServerFnError};
-use std::future::Future;
+use super::*;
 
 impl FromResponse for axum::response::Response {
     fn from_response(res: ClientResponse) -> impl Future<Output = Result<Self, ServerFnError>> {
@@ -11,10 +7,7 @@ impl FromResponse for axum::response::Response {
 }
 
 impl IntoRequest for axum::extract::Request {
-    fn into_request(
-        self,
-        request: ClientRequest,
-    ) -> impl Future<Output = Result<ClientResponse, RequestError>> + 'static {
+    fn into_request(self, request: ClientRequest) -> impl Future<Output = ClientResult> + 'static {
         async move { todo!() }
     }
 }

@@ -1,11 +1,4 @@
-use std::{marker::PhantomData, prelude::rust_2024::Future};
-
-use axum::response::{IntoResponse, IntoResponseParts, ResponseParts};
-use dioxus_fullstack_core::{RequestError, ServerFnError};
-use headers::Header;
-use http::{header::InvalidHeaderValue, HeaderValue};
-
-use crate::{ClientRequest, ClientResponse, FromResponse, FromResponseParts, IntoRequest};
+use super::*;
 
 pub use headers::Cookie;
 pub use headers::SetCookie;
@@ -25,23 +18,22 @@ impl<T: Header> SetHeader<T> {
 
         Ok(Self { data: Some(res) })
     }
-
-    // pub fn new<I>(value: impl IntoIterator<Item = I>) -> Result<Self, headers::Error>
-    //     where
-    //         I: TryInto<HeaderValue, Error = InvalidHeaderValue>,
-    //     {
-    //         let values: Vec<HeaderValue> = value
-    //             .into_iter()
-    //             .map(|v| v.try_into())
-    //             .collect::<Result<Vec<_>, _>>()
-    //             .map_err(|_| headers::Error::invalid())?;
 }
 
 impl<T: Header> IntoResponseParts for SetHeader<T> {
     type Error = ();
 
     fn into_response_parts(self, res: ResponseParts) -> Result<ResponseParts, Self::Error> {
-        todo!()
+        let data = self.data.expect("SetHeader must have data to set");
+
+        let mut headers = vec![];
+        data.encode(&mut headers);
+
+        Ok(axum::response::AppendHeaders(
+            headers.into_iter().map(|value| (T::name().clone(), value)),
+        )
+        .into_response_parts(res)
+        .unwrap())
     }
 }
 
