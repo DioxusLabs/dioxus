@@ -1,5 +1,3 @@
-#![cfg_attr(not(feature = "server"), allow(dead_code))]
-
 //! This example demonstrates how to use types like `Form`, `SetHeader`, and `TypedHeader`
 //! to create a simple login form that sets a cookie in the browser and uses it for authentication
 //! on a protected endpoint.
@@ -8,7 +6,8 @@ use dioxus::fullstack::{Cookie, Form, SetCookie, SetHeader};
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use std::sync::LazyLock;
+#[cfg(feature = "server")]
+use ::{std::sync::LazyLock, uuid::Uuid};
 
 fn main() {
     dioxus::launch(app);
@@ -62,7 +61,7 @@ pub struct LoginForm {
 /// A static session ID for demonstration purposes. This forces all previous logins to be invalidated
 /// when the server restarts.
 #[cfg(feature = "server")]
-static THIS_SESSION_ID: LazyLock<uuid::Uuid> = LazyLock::new(uuid::Uuid::new_v4);
+static THIS_SESSION_ID: LazyLock<Uuid> = LazyLock::new(Uuid::new_v4);
 
 /// In our `login` form, we'll return a `SetCookie` header if the login is successful.
 ///

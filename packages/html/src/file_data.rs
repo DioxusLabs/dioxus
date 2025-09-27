@@ -1,6 +1,4 @@
-#[cfg(feature = "serialize")]
-use std::sync::Arc;
-use std::{pin::Pin, prelude::rust_2024::Future};
+use std::{path::PathBuf, pin::Pin, prelude::rust_2024::Future};
 
 use bytes::Bytes;
 
@@ -48,12 +46,17 @@ impl FileData {
     pub fn inner(&self) -> &dyn std::any::Any {
         self.inner.inner()
     }
+
+    pub fn pathbuf(&self) -> PathBuf {
+        self.inner.path()
+    }
 }
 
 pub trait NativeFileData {
     fn name(&self) -> String;
     fn size(&self) -> u64;
     fn last_modified(&self) -> u64;
+    fn path(&self) -> PathBuf;
     fn read_bytes(
         &self,
     ) -> Pin<Box<dyn Future<Output = Result<Bytes, dioxus_core::Error>> + 'static>>;
@@ -92,6 +95,7 @@ pub trait HasFileData: std::any::Any {
 #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Clone)]
 pub struct SerializedFileData {
     pub name: String,
+    pub path: PathBuf,
     pub size: u64,
     pub last_modified: u64,
     pub contents: bytes::Bytes,
@@ -122,12 +126,14 @@ impl NativeFileData for SerializedFileData {
         &self,
     ) -> Pin<Box<dyn Future<Output = Result<String, dioxus_core::Error>> + 'static>> {
         let contents = self.contents.clone();
-        Box::pin(async move {
-            String::from_utf8(contents.to_vec()).map_err(|e| dioxus_core::Error::from(e))
-        })
+        Box::pin(async move { Ok(String::from_utf8(contents.to_vec())?) })
     }
 
     fn inner(&self) -> &dyn std::any::Any {
         self
+    }
+
+    fn path(&self) -> PathBuf {
+        self.path.clone()
     }
 }

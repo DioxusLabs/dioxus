@@ -220,6 +220,7 @@ impl SerializedFormData {
                         size: file.size(),
                         last_modified: file.last_modified(),
                         contents: file.read_bytes().await?,
+                        path: file.pathbuf(),
                     });
                 }
                 out

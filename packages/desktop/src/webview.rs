@@ -84,7 +84,7 @@ impl WebviewEdits {
             }
             Err(err) => {
                 tracing::error!(
-                    "Error parsing user_event: {:?}.Contents: {:?}, raw: {:#?}",
+                    "Error parsing user_event: {:?}. \n Contents: {:?}, \nraw: {:#?}",
                     err,
                     String::from_utf8(request.body().to_vec()),
                     request

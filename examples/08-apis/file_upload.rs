@@ -3,10 +3,9 @@
 //! Dioxus intercepts these events and provides a Rusty interface to the file data. Since we want this interface to
 //! be crossplatform,
 
-use std::sync::Arc;
-
+use dioxus::html::HasFileData;
 use dioxus::prelude::*;
-use dioxus::{html::HasFileData, prelude::dioxus_elements::FileEngine};
+use dioxus_html::FileData;
 
 const STYLE: Asset = asset!("/examples/assets/file_upload.css");
 
@@ -24,21 +23,20 @@ fn app() -> Element {
     let mut files_uploaded = use_signal(|| Vec::new() as Vec<UploadedFile>);
     let mut hovered = use_signal(|| false);
 
-    let read_files = move |file_engine: Arc<dyn FileEngine>| async move {
-        let files = file_engine.files();
-        for file_name in &files {
-            if let Some(contents) = file_engine.read_file_to_string(file_name).await {
+    let upload_files = move |files: Vec<FileData>| async move {
+        for file in files {
+            let filename = file.name();
+            if let Ok(contents) = file.read_string().await {
                 files_uploaded.write().push(UploadedFile {
-                    name: file_name.clone(),
+                    name: filename,
                     contents,
                 });
+            } else {
+                files_uploaded.write().push(UploadedFile {
+                    name: filename,
+                    contents: "Failed to read file".into(),
+                });
             }
-        }
-    };
-
-    let upload_files = move |evt: FormEvent| async move {
-        if let Some(file_engine) = evt.files() {
-            read_files(file_engine).await;
         }
     };
 
@@ -67,7 +65,9 @@ fn app() -> Element {
                 multiple: true,
                 name: "textreader",
                 directory: enable_directory_upload,
-                onchange: upload_files,
+                onchange: move |evt| async move {
+                    upload_files(evt.files()).await
+                },
             }
         }
 
@@ -79,14 +79,10 @@ fn app() -> Element {
                 hovered.set(true)
             },
             ondragleave: move |_| hovered.set(false),
-            ondrop: move |evt| {
+            ondrop: move |evt| async move {
                 evt.prevent_default();
                 hovered.set(false);
-                if let Some(file_engine) = evt.files() {
-                    spawn(async move {
-                        read_files(file_engine).await;
-                    });
-                }
+                upload_files(evt.files()).await;
             },
             "Drop files here"
         }

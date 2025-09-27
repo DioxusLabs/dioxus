@@ -5,10 +5,7 @@
 // - Hydration
 
 #![allow(non_snake_case)]
-use dioxus::{
-    core::anyhow,
-    fullstack::{commit_initial_chunk, Websocket},
-};
+use dioxus::fullstack::{commit_initial_chunk, Websocket};
 use dioxus::{fullstack::WebSocketOptions, prelude::*};
 
 fn main() {
@@ -107,9 +104,10 @@ async fn get_server_data_empty_vec(empty_vec: Vec<String>) -> ServerFnResult<Vec
 
 #[server]
 async fn server_error() -> ServerFnResult<String> {
+    use dioxus_core::AnyhowContext;
     assert_server_context_provided().await;
     tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
-    Err(anyhow!("This is a test error").into())
+    Err(None.context("Server error occurred")?)
 }
 
 #[component]

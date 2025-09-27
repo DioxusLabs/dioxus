@@ -694,11 +694,6 @@ path = "examples/06-routing/flat_router.rs"
 doc-scrape-examples = true
 
 [[example]]
-name = "multipart"
-path = "examples/07-fullstack/multipart.rs"
-doc-scrape-examples = true
-
-[[example]]
 name = "open_api"
 path = "examples/07-fullstack/open_api.rs"
 doc-scrape-examples = true

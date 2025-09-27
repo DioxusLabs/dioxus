@@ -9,6 +9,8 @@ pub struct FileUpload {
 }
 
 impl FileUpload {
+    // pub fn new()
+
     pub fn from_stream(filename: String, data: impl Stream<Item = Bytes> + Send + 'static) -> Self {
         todo!()
     }

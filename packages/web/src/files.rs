@@ -95,6 +95,10 @@ impl NativeFileData for WebFileData {
     fn inner(&self) -> &dyn std::any::Any {
         &self.file
     }
+
+    fn path(&self) -> std::path::PathBuf {
+        std::path::PathBuf::from(self.file.name())
+    }
 }
 
 /// A file engine for the web platform

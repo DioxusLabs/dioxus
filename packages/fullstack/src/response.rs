@@ -221,6 +221,13 @@ impl ClientRequest {
         self.client = self.client.header(key, value);
         self
     }
+
+    // https://stackoverflow.com/questions/39280438/fetch-missing-boundary-in-multipart-form-data-post
+    #[cfg(feature = "web")]
+    pub async fn send_form(self, data: web_sys::FormData) {
+        let form = reqwest::multipart::Form::new();
+        // for entry in data.entries() {}
+    }
 }
 
 // pub use reqwest::RequestBuilder;

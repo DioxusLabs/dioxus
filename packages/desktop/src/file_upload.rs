@@ -103,6 +103,8 @@ impl FileDialogRequest {
                 dialog.pick_file().into_iter().collect()
             };
 
+            tracing::info!("Selected files: {:?}", files);
+
             files
         }
 
@@ -297,5 +299,9 @@ impl NativeFileData for DesktopFileData {
 
     fn inner(&self) -> &dyn std::any::Any {
         &self.0
+    }
+
+    fn path(&self) -> PathBuf {
+        self.0.clone()
     }
 }
