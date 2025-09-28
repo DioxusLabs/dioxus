@@ -35,9 +35,10 @@
 //! This module is broken up into several parts, attempting to match how the server macro generates code:
 //! - ReqwestEncoder: encodes a set of arguments into a reqwest request
 
-use crate::FromResponse;
-use crate::ServerFnRejection;
-use crate::{IntoRequest, ServerFnError};
+use crate::{
+    CantEncode, ClientRequest, ClientResponse, EncodeIsVerified, FromResponse, HttpError,
+    IntoRequest, ServerFnError, ServerFnRejection,
+};
 use axum::response::IntoResponse;
 use axum_core::extract::{FromRequest, Request};
 use bytes::Bytes;
@@ -135,28 +136,22 @@ pub fn reqwest_error_to_request_error(err: reqwest::Error) -> RequestError {
 
 pub use req_to::*;
 pub mod req_to {
-    use std::sync::{Arc, LazyLock};
-
-    use dioxus_fullstack_core::client::get_server_url;
-
-    use crate::{CantEncode, ClientRequest, ClientResponse, EncodeIsVerified};
-
     use super::*;
 
-    pub trait EncodeRequest<In, Out> {
+    pub trait EncodeRequest<In, Out, R> {
         type VerifyEncode;
         fn fetch_client(
             &self,
             ctx: ClientRequest,
             data: In,
             map: fn(In) -> Out,
-        ) -> impl Future<Output = Result<ClientResponse, RequestError>> + 'static;
+        ) -> impl Future<Output = Result<R, RequestError>> + 'static;
 
         fn verify_can_serialize(&self) -> Self::VerifyEncode;
     }
 
     /// Using the deserialize path
-    impl<T, O> EncodeRequest<T, O> for &&&&&&&&&&ServerFnEncoder<T, O>
+    impl<T, O> EncodeRequest<T, O, ClientResponse> for &&&&&&&&&&ServerFnEncoder<T, O>
     where
         T: DeserializeOwned + Serialize + 'static,
     {
@@ -167,24 +162,25 @@ pub mod req_to {
             data: T,
             _map: fn(T) -> O,
         ) -> impl Future<Output = Result<ClientResponse, RequestError>> + 'static {
-            send_wrapper::SendWrapper::new(async move {
-                let data = serde_json::to_string(&data).unwrap();
+            async move { todo!() }
+            // send_wrapper::SendWrapper::new(async move {
+            //     let data = serde_json::to_string(&data).unwrap();
 
-                if data.is_empty() || data == "{}" {
-                    let res = ctx.client.send().await.unwrap();
-                    return Ok(ClientResponse {
-                        inner: res,
-                        state: None,
-                    });
-                } else {
-                    let res = ctx.client.body(data).send().await.unwrap();
+            //     if data.is_empty() || data == "{}" {
+            //         let res = ctx.client.send().await.unwrap();
+            //         Ok(ClientResponse {
+            //             response: Some(res),
+            //             response: None,
+            //         })
+            //     } else {
+            //         let res = ctx.client.body(data).send().await.unwrap();
 
-                    Ok(ClientResponse {
-                        inner: res,
-                        state: None,
-                    })
-                }
-            })
+            //         Ok(ClientResponse {
+            //             response: Some(res),
+            //             response: None,
+            //         })
+            //     }
+            // })
         }
 
         fn verify_can_serialize(&self) -> Self::VerifyEncode {
@@ -193,10 +189,10 @@ pub mod req_to {
     }
 
     /// When we use the FromRequest path, we don't need to deserialize the input type on the client,
-    impl<T, O> EncodeRequest<T, O> for &&&&&&&&&ServerFnEncoder<T, O>
+    impl<T, O, R> EncodeRequest<T, O, R> for &&&&&&&&&ServerFnEncoder<T, O>
     where
         T: 'static,
-        O: FromRequest<DioxusServerState> + IntoRequest,
+        O: FromRequest<DioxusServerState> + IntoRequest<R>,
     {
         type VerifyEncode = EncodeIsVerified;
         fn fetch_client(
@@ -204,7 +200,7 @@ pub mod req_to {
             ctx: ClientRequest,
             data: T,
             map: fn(T) -> O,
-        ) -> impl Future<Output = Result<ClientResponse, RequestError>> + 'static {
+        ) -> impl Future<Output = Result<R, RequestError>> + 'static {
             O::into_request(map(data), ctx)
         }
 
@@ -214,7 +210,7 @@ pub mod req_to {
     }
 
     /// The fall-through case that emits a `CantEncode` type which fails to compile when checked by the macro
-    impl<T, O> EncodeRequest<T, O> for &ServerFnEncoder<T, O>
+    impl<T, O> EncodeRequest<T, O, ClientResponse> for &ServerFnEncoder<T, O>
     where
         T: 'static,
     {
@@ -236,9 +232,6 @@ pub mod req_to {
 
 pub use decode_ok::*;
 mod decode_ok {
-    use dioxus_fullstack_core::{HttpError, RequestError};
-
-    use crate::{reqwest_response_to_serverfn_err, ClientResponse};
 
     use super::*;
 
@@ -247,17 +240,17 @@ mod decode_ok {
     ///
     /// This is because FromResponse types are more specialized and can handle things like websockets and files.
     /// DeserializeOwned types are more general and can handle things like JSON responses.
-    pub trait ReqwestDecodeResult<T> {
+    pub trait ReqwestDecodeResult<T, R> {
         fn decode_client_response(
             &self,
-            res: Result<ClientResponse, RequestError>,
+            res: Result<R, RequestError>,
         ) -> impl Future<Output = Result<Result<T, ServerFnError>, RequestError>> + Send;
     }
 
-    impl<T: FromResponse, E> ReqwestDecodeResult<T> for &&&ServerFnDecoder<Result<T, E>> {
+    impl<T: FromResponse<R>, E, R> ReqwestDecodeResult<T, R> for &&&ServerFnDecoder<Result<T, E>> {
         fn decode_client_response(
             &self,
-            res: Result<ClientResponse, RequestError>,
+            res: Result<R, RequestError>,
         ) -> impl Future<Output = Result<Result<T, ServerFnError>, RequestError>> + Send {
             SendWrapper::new(async move {
                 match res {
@@ -268,7 +261,9 @@ mod decode_ok {
         }
     }
 
-    impl<T: DeserializeOwned, E> ReqwestDecodeResult<T> for &&ServerFnDecoder<Result<T, E>> {
+    impl<T: DeserializeOwned, E> ReqwestDecodeResult<T, ClientResponse>
+        for &&ServerFnDecoder<Result<T, E>>
+    {
         fn decode_client_response(
             &self,
             res: Result<ClientResponse, RequestError>,
@@ -499,7 +494,7 @@ pub mod req_from {
             state: DioxusServerState,
             request: Request,
             map: fn(In) -> Out,
-        ) -> impl Future<Output = Result<(H, Out), Response>> + Send + 'static;
+        ) -> impl Future<Output = Result<(H, Out), Response>> + 'static;
     }
 
     // One-arg case
@@ -514,8 +509,8 @@ pub mod req_from {
             _state: DioxusServerState,
             request: Request,
             map: fn(In) -> Out,
-        ) -> impl Future<Output = Result<(H, Out), Response>> + Send + 'static {
-            send_wrapper::SendWrapper::new(async move {
+        ) -> impl Future<Output = Result<(H, Out), Response>> + 'static {
+            async move {
                 let (mut parts, body) = request.into_parts();
                 let Ok(h) = H::from_request_parts(&mut parts, &_state).await else {
                     todo!()
@@ -537,7 +532,7 @@ pub mod req_from {
                     .unwrap();
 
                 Ok((h, out))
-            })
+            }
         }
     }
 
@@ -552,8 +547,8 @@ pub mod req_from {
             state: DioxusServerState,
             request: Request,
             _map: fn(In) -> Out,
-        ) -> impl Future<Output = Result<(H, Out), Response>> + Send + 'static {
-            send_wrapper::SendWrapper::new(async move {
+        ) -> impl Future<Output = Result<(H, Out), Response>> + 'static {
+            async move {
                 let (mut parts, body) = request.into_parts();
                 let Ok(h) = H::from_request_parts(&mut parts, &state).await else {
                     todo!()
@@ -565,7 +560,7 @@ pub mod req_from {
                     .map_err(|e| ServerFnRejection {}.into_response());
 
                 res.map(|out| (h, out))
-            })
+            }
         }
     }
 
@@ -579,13 +574,13 @@ pub mod req_from {
             state: DioxusServerState,
             request: Request,
             _map: fn(In) -> (),
-        ) -> impl Future<Output = Result<(H, ()), Response>> + Send + 'static {
-            send_wrapper::SendWrapper::new(async move {
+        ) -> impl Future<Output = Result<(H, ()), Response>> + 'static {
+            async move {
                 H::from_request(request, &state)
                     .await
                     .map_err(|e| ServerFnRejection {}.into_response())
                     .map(|out| (out, ()))
-            })
+            }
         }
     }
 }
@@ -605,15 +600,15 @@ mod resp {
     ///
     /// We currently have an `Input` type even though it's not useful since we might want to support regular axum endpoints later.
     /// For now, it's just Result<T, E> where T is either DeserializeOwned or FromResponse
-    pub trait MakeAxumResponse<T, E> {
+    pub trait MakeAxumResponse<T, E, R> {
         fn make_axum_response(self, result: Result<T, E>) -> Result<Response, E>;
     }
 
     // Higher priority impl for special types like websocket/file responses that generate their own responses
     // The FromResponse impl helps narrow types to those usable on the client
-    impl<T, E> MakeAxumResponse<T, E> for &&&&ServerFnDecoder<Result<T, E>>
+    impl<T, E, R> MakeAxumResponse<T, E, R> for &&&&ServerFnDecoder<Result<T, E>>
     where
-        T: FromResponse + IntoResponse,
+        T: FromResponse<R> + IntoResponse,
     {
         fn make_axum_response(self, result: Result<T, E>) -> Result<Response, E> {
             result.map(|v| v.into_response())
@@ -622,7 +617,7 @@ mod resp {
 
     // Lower priority impl for regular serializable types
     // We try to match the encoding from the incoming request, otherwise default to JSON
-    impl<T, E> MakeAxumResponse<T, E> for &&&ServerFnDecoder<Result<T, E>>
+    impl<T, E> MakeAxumResponse<T, E, ()> for &&&ServerFnDecoder<Result<T, E>>
     where
         T: DeserializeOwned + Serialize,
     {

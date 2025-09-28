@@ -2,12 +2,16 @@
 //! to create a simple login form that sets a cookie in the browser and uses it for authentication
 //! on a protected endpoint.
 
-use dioxus::fullstack::{Cookie, Form, SetCookie, SetHeader};
+use dioxus::fullstack::{Form, SetCookie, SetHeader};
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "server")]
-use ::{std::sync::LazyLock, uuid::Uuid};
+use ::{
+    dioxus::fullstack::{Cookie, TypedHeader},
+    std::sync::LazyLock,
+    uuid::Uuid,
+};
 
 fn main() {
     dioxus::launch(app);
@@ -81,7 +85,7 @@ async fn login(form: Form<LoginForm>) -> Result<SetHeader<SetCookie>> {
 }
 
 /// We'll use the `TypedHeader` extractor on the server to get the cookie from the request.
-#[get("/api/sensitive", header: dioxus::fullstack::TypedHeader<Cookie>)]
+#[get("/api/sensitive", header: TypedHeader<Cookie>)]
 async fn sensitive() -> Result<String> {
     // Extract the cookie from the request headers and use `.eq` to verify its value.
     // The `or_unauthorized` works on boolean values, returning a 401 if the condition is false.

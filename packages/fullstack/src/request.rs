@@ -7,8 +7,59 @@ use url::Url;
 
 use crate::{ClientRequest, ClientResponse, ClientResult};
 
-pub trait FromResponse: Sized {
-    fn from_response(res: ClientResponse) -> impl Future<Output = Result<Self, ServerFnError>>;
+/// The `IntoRequest` trait allows types to be used as the body of a request to a HTTP endpoint or server function.
+///
+/// `IntoRequest` allows for types handle the calling of `ClientRequest::send` where the result is then
+/// passed to `FromResponse` to decode the response.
+///
+/// You can think of the `IntoRequest` and `FromResponse` traits are "inverse" traits of the axum
+/// `FromRequest` and `IntoResponse` traits. Just like a type can be decoded from a request via `FromRequest`,
+/// a type can be encoded into a request via `IntoRequest`.
+///
+/// ## Generic State
+///
+/// `IntoRequest` is generic over the response type `R` which defaults to `ClientResponse`. The default
+/// `ClientResponse` is the base response type that internally wraps `reqwest::Response`.
+///
+/// However, some responses might need state from the initial request to properly decode the response.
+/// Most state can be extended via the `.extension()` method on `ClientRequest`. In some cases, like
+/// websockets, the response needs to retain an initial connection from the request. Here, you can use
+///  the `R` generic to specify a concrete response type. The resulting type that implements `FromResponse`
+/// must also be generic over the same `R` type.
+pub trait IntoRequest<R = ClientResponse>: Sized {
+    fn into_request(
+        self,
+        builder: ClientRequest,
+    ) -> impl Future<Output = Result<R, RequestError>> + 'static;
+}
+
+impl<A, R> IntoRequest<R> for (A,)
+where
+    A: IntoRequest<R> + 'static,
+{
+    fn into_request(
+        self,
+        builder: ClientRequest,
+    ) -> impl Future<Output = Result<R, RequestError>> + 'static {
+        A::into_request(self.0, builder)
+    }
+}
+
+impl<A, B, R> IntoRequest<R> for (A, B)
+where
+    A: IntoRequest<R> + 'static,
+    B: IntoRequest<R> + 'static,
+{
+    fn into_request(
+        self,
+        req: ClientRequest,
+    ) -> impl Future<Output = Result<R, RequestError>> + 'static {
+        async move { todo!() }
+    }
+}
+
+pub trait FromResponse<R = ClientResponse>: Sized {
+    fn from_response(res: R) -> impl Future<Output = Result<Self, ServerFnError>>;
 }
 
 impl<A> FromResponse for A
@@ -39,6 +90,23 @@ where
     }
 }
 
+impl<A, B, C> FromResponse for (A, B, C)
+where
+    A: FromResponseParts,
+    B: FromResponseParts,
+    C: FromResponse,
+{
+    fn from_response(res: ClientResponse) -> impl Future<Output = Result<Self, ServerFnError>> {
+        async move {
+            let mut parts = res.make_parts();
+            let a = A::from_response_parts(&mut parts)?;
+            let b = B::from_response_parts(&mut parts)?;
+            let c = C::from_response(res).await?;
+            Ok((a, b, c))
+        }
+    }
+}
+
 pub trait FromResponseParts
 where
     Self: Sized,
@@ -50,29 +118,6 @@ where
 impl<T> FromResponseParts for axum_extra::TypedHeader<T> {
     fn from_response_parts(parts: &mut Parts) -> Result<Self, ServerFnError> {
         todo!()
-    }
-}
-
-pub trait IntoRequest: Sized {
-    fn into_request(self, builder: ClientRequest) -> impl Future<Output = ClientResult> + 'static;
-}
-
-impl<A> IntoRequest for (A,)
-where
-    A: IntoRequest + 'static,
-{
-    fn into_request(self, builder: ClientRequest) -> impl Future<Output = ClientResult> + 'static {
-        send_wrapper::SendWrapper::new(async move { A::into_request(self.0, builder).await })
-    }
-}
-
-impl<A, B> IntoRequest for (A, B)
-where
-    A: IntoRequest + 'static,
-    B: IntoRequest + 'static,
-{
-    fn into_request(self, builder: ClientRequest) -> impl Future<Output = ClientResult> + 'static {
-        send_wrapper::SendWrapper::new(async move { todo!() })
     }
 }
 

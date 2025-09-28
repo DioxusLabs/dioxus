@@ -102,7 +102,9 @@ impl<T> FromResponse for ServerEvents<T> {
                             continue;
                         }
 
-                        let (field, value) = parse_line(line);
+                        /// Parse line to split field name and value, applying proper trimming.
+                        let (field, value) = line.split_once(':').unwrap_or((line, ""));
+                        let value = value.strip_prefix(' ').unwrap_or(value);
 
                         match field {
                             "event" => event_buffer.set_event_type(value),
@@ -358,11 +360,4 @@ impl EventBuffer {
     fn set_retry(&mut self, retry: Duration) {
         self.retry = Some(retry);
     }
-}
-
-/// Parse line to split field name and value, applying proper trimming.
-fn parse_line(line: &str) -> (&str, &str) {
-    let (field, value) = line.split_once(':').unwrap_or((line, ""));
-    let value = value.strip_prefix(' ').unwrap_or(value);
-    (field, value)
 }

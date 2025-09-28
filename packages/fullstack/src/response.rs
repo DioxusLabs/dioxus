@@ -1,12 +1,11 @@
 use bytes::Bytes;
-use dioxus_fullstack_core::{RequestError, ServerFnError};
+use dioxus_fullstack_core::RequestError;
 use futures::{Stream, TryStreamExt};
 use http::{HeaderMap, HeaderName, HeaderValue, Method, StatusCode};
 use serde::{de::DeserializeOwned, Serialize};
-use std::{future::Future, pin::Pin};
 use url::Url;
 
-use crate::{reqwest_error_to_request_error, reqwest_response_to_serverfn_err};
+use crate::reqwest_error_to_request_error;
 
 pub type ClientResult = Result<ClientResponse, RequestError>;
 
@@ -15,25 +14,24 @@ pub type ClientResult = Result<ClientResponse, RequestError>;
 /// This abstracts over the inner `reqwest::Response` type and provides the original request
 /// and a way to store state associated with the response.
 pub struct ClientResponse {
-    pub(crate) inner: reqwest::Response,
-    pub(crate) state: Option<Box<dyn std::any::Any + Send + Sync>>,
+    pub(crate) response: reqwest::Response,
 }
 
 impl ClientResponse {
     pub fn status(&self) -> StatusCode {
-        self.inner.status()
+        self.response.status()
     }
     pub fn headers(&self) -> &HeaderMap {
-        self.inner.headers()
+        self.response.headers()
     }
     pub fn url(&self) -> &Url {
-        self.inner.url()
+        self.response.url()
     }
     pub fn content_length(&self) -> Option<u64> {
-        self.inner.content_length()
+        self.response.content_length()
     }
     pub async fn bytes(self) -> Result<Bytes, RequestError> {
-        self.inner
+        self.response
             .bytes()
             .await
             .map_err(reqwest_error_to_request_error)
@@ -41,7 +39,7 @@ impl ClientResponse {
     pub fn bytes_stream(
         self,
     ) -> impl futures_util::Stream<Item = Result<Bytes, RequestError>> + 'static + Unpin {
-        self.inner
+        self.response
             .bytes_stream()
             .map_err(|e| reqwest_error_to_request_error(e))
     }
@@ -52,23 +50,23 @@ impl ClientResponse {
         todo!()
     }
     pub async fn json<T: DeserializeOwned>(self) -> Result<T, RequestError> {
-        self.inner
+        self.response
             .json()
             .await
             .map_err(reqwest_error_to_request_error)
     }
     pub async fn text(self) -> Result<String, RequestError> {
-        self.inner
+        self.response
             .text()
             .await
             .map_err(reqwest_error_to_request_error)
     }
     pub fn make_parts(&self) -> http::response::Parts {
-        let mut response = http::response::Response::builder().status(self.inner.status());
+        let mut response = http::response::Response::builder().status(self.response.status());
 
         #[cfg(not(target_arch = "wasm32"))]
         {
-            response = response.version(self.inner.version());
+            response = response.version(self.response.version());
         }
 
         #[cfg(target_arch = "wasm32")]
@@ -77,7 +75,7 @@ impl ClientResponse {
             response = response.version(http::Version::HTTP_2);
         }
 
-        for (key, value) in self.inner.headers().iter() {
+        for (key, value) in self.response.headers().iter() {
             response = response.header(key, value);
         }
 
@@ -200,10 +198,7 @@ impl ClientRequest {
             .await
             .map_err(reqwest_error_to_request_error)?;
 
-        Ok(ClientResponse {
-            inner: res,
-            state: None,
-        })
+        Ok(ClientResponse { response: todo!() })
     }
 
     pub fn method(&self) -> &Method {
@@ -225,7 +220,8 @@ impl ClientRequest {
     // https://stackoverflow.com/questions/39280438/fetch-missing-boundary-in-multipart-form-data-post
     #[cfg(feature = "web")]
     pub async fn send_form(self, data: web_sys::FormData) {
-        let form = reqwest::multipart::Form::new();
+        todo!()
+        // let form = reqwest::multipart::Form::new();
         // for entry in data.entries() {}
     }
 }

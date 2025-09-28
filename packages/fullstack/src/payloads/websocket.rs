@@ -386,28 +386,24 @@ impl<In, Out, E> IntoResponse for Websocket<In, Out, E> {
     }
 }
 
-impl<I, O, E> FromResponse for Websocket<I, O, E> {
-    fn from_response(
-        res: ClientResponse,
-        // res: UpgradingWebsocket,
-    ) -> impl Future<Output = Result<Self, ServerFnError>> {
-        async move { todo!() }
-        // SendWrapper::new(async move {
-        //     #[cfg(not(target_arch = "wasm32"))]
-        //     let inner_native = res.inner_native;
+impl<I, O, E> FromResponse<UpgradingWebsocket> for Websocket<I, O, E> {
+    fn from_response(res: UpgradingWebsocket) -> impl Future<Output = Result<Self, ServerFnError>> {
+        async move {
+            #[cfg(not(target_arch = "wasm32"))]
+            let inner_native = res.inner_native;
 
-        //     #[cfg(feature = "web")]
-        //     let inner_web = res.inner_web;
+            #[cfg(feature = "web")]
+            let inner_web = res.inner_web;
 
-        //     Ok(Websocket {
-        //         #[cfg(not(target_arch = "wasm32"))]
-        //         inner_native,
-        //         #[cfg(feature = "web")]
-        //         inner_web,
-        //         response: None,
-        //         _in: PhantomData,
-        //     })
-        // })
+            Ok(Websocket {
+                #[cfg(not(target_arch = "wasm32"))]
+                inner_native,
+                #[cfg(feature = "web")]
+                inner_web,
+                response: None,
+                _in: PhantomData,
+            })
+        }
     }
 }
 
@@ -473,47 +469,44 @@ impl Default for WebSocketOptions {
     }
 }
 
-impl IntoRequest for WebSocketOptions {
-    // impl IntoRequest<UpgradingWebsocket> for WebSocketOptions {
+impl IntoRequest<UpgradingWebsocket> for WebSocketOptions {
     fn into_request(
         self,
-        builder: ClientRequest,
-    ) -> impl Future<Output = std::result::Result<ClientResponse, RequestError>> + 'static
-// ) -> impl Future<Output = std::result::Result<UpgradingWebsocket, RequestError>> + Send + 'static
-    {
-        async move { todo!() }
-        // send_wrapper::SendWrapper::new(async move {
-        //     #[cfg(all(feature = "web", target_arch = "wasm32"))]
-        //     {
-        //         let inner_web = Some(
-        //             wasm::WebSysWebSocketStream::new(builder.build().unwrap(), &self.protocols)
-        //                 // wasm::WebSysWebSocketStream::new(builder.build()?, &self.protocols)
-        //                 .await
-        //                 .unwrap(),
-        //         );
-        //         return Ok(UpgradingWebsocket {
-        //             inner_web,
-        //             #[cfg(not(target_arch = "wasm32"))]
-        //             inner_native: None,
-        //         });
-        //     }
+        request: ClientRequest,
+    ) -> impl Future<Output = std::result::Result<UpgradingWebsocket, RequestError>> + 'static {
+        async move {
+            #[cfg(all(feature = "web", target_arch = "wasm32"))]
+            {
+                let inner_web = Some(
+                    wasm::WebSysWebSocketStream::new(request, &self.protocols)
+                        .await
+                        .unwrap(),
+                );
 
-        //     #[cfg(not(target_arch = "wasm32"))]
-        //     {
-        //         let response = native::send_request(builder, &self.protocols)
-        //             .await
-        //             .unwrap();
-        //         let (inner, protocol) = response
-        //             .into_stream_and_protocol(self.protocols, None)
-        //             .await
-        //             .unwrap();
-        //         return Ok(UpgradingWebsocket {
-        //             #[cfg(feature = "web")]
-        //             inner_web: None,
-        //             inner_native: Some(inner),
-        //         });
-        //     }
-        // })
+                return Ok(UpgradingWebsocket {
+                    inner_web,
+                    #[cfg(not(target_arch = "wasm32"))]
+                    inner_native: None,
+                });
+            }
+
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                let response = native::send_request(request, &self.protocols)
+                    .await
+                    .unwrap();
+                let (inner, protocol) = response
+                    .into_stream_and_protocol(self.protocols, None)
+                    .await
+                    .unwrap();
+
+                return Ok(UpgradingWebsocket {
+                    #[cfg(feature = "web")]
+                    inner_web: None,
+                    inner_native: Some(inner),
+                });
+            }
+        }
     }
 }
 
@@ -701,6 +694,8 @@ mod wasm {
         CloseEvent, ErrorEvent, Event, MessageEvent,
     };
 
+    use crate::ClientRequest;
+
     use super::protocol::{CloseCode, Message};
 
     #[derive(Debug, thiserror::Error)]
@@ -749,7 +744,12 @@ mod wasm {
     }
 
     impl WebSysWebSocketStream {
-        pub async fn new(request: Request, protocols: &[String]) -> Result<Self, WebSysError> {
+        pub async fn new(
+            request: ClientRequest,
+            protocols: &[String],
+        ) -> Result<Self, WebSysError> {
+            let request = request.client.build().unwrap();
+
             let mut url = request.url().clone();
             let scheme = match url.scheme() {
                 "http" | "ws" => "ws",
@@ -955,6 +955,8 @@ mod wasm {
 mod native {
     use std::borrow::Cow;
 
+    use crate::ClientRequest;
+
     use super::{
         protocol::{CloseCode, Message},
         WebsocketError,
@@ -976,9 +978,11 @@ mod native {
     }
 
     pub async fn send_request(
-        request_builder: RequestBuilder,
+        // request_builder: RequestBuilder,
+        request: ClientRequest,
         protocols: &[String],
     ) -> Result<WebSocketResponse, WebsocketError> {
+        let request_builder = request.client;
         let (client, request_result) = request_builder.build_split();
         let mut request = request_result?;
 

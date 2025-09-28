@@ -175,14 +175,14 @@ pub enum RequestError {
 impl RequestError {
     pub fn status(&self) -> Option<StatusCode> {
         match self {
-            RequestError::Status(message, code) => Some(StatusCode::from_u16(*code).ok()?),
+            RequestError::Status(_, code) => Some(StatusCode::from_u16(*code).ok()?),
             _ => None,
         }
     }
 
     pub fn status_code(&self) -> Option<u16> {
         match self {
-            RequestError::Status(message, code) => Some(*code),
+            RequestError::Status(_, code) => Some(*code),
             _ => None,
         }
     }

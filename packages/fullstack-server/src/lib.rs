@@ -38,10 +38,6 @@ pub use xxhash_rust;
 
 pub mod redirect;
 
-/// Implementations of the client side of the server function call.
-pub mod client;
-pub use client::*;
-
 // #![deny(missing)]
 
 // #[doc(hidden)]
