@@ -1,13 +1,12 @@
-use std::future::Future;
-
 use axum::{
-    body::{Body, Bytes},
+    body::Bytes,
     extract::{rejection::BytesRejection, FromRequest},
-    http::{header, HeaderMap, Request, StatusCode},
+    http::{header, HeaderMap, StatusCode},
     response::{IntoResponse, Response},
 };
 use postcard::{from_bytes, to_allocvec};
 use serde::{de::DeserializeOwned, Serialize};
+use std::future::Future;
 
 /// Postcard Extractor / Response.
 ///
