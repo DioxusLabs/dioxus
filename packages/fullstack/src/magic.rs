@@ -162,25 +162,16 @@ pub mod req_to {
             data: T,
             _map: fn(T) -> O,
         ) -> impl Future<Output = Result<ClientResponse, RequestError>> + 'static {
-            async move { todo!() }
-            // send_wrapper::SendWrapper::new(async move {
-            //     let data = serde_json::to_string(&data).unwrap();
-
-            //     if data.is_empty() || data == "{}" {
-            //         let res = ctx.client.send().await.unwrap();
-            //         Ok(ClientResponse {
-            //             response: Some(res),
-            //             response: None,
-            //         })
-            //     } else {
-            //         let res = ctx.client.body(data).send().await.unwrap();
-
-            //         Ok(ClientResponse {
-            //             response: Some(res),
-            //             response: None,
-            //         })
-            //     }
-            // })
+            async move {
+                let data = serde_json::to_string(&data).unwrap();
+                if data.is_empty() || data == "{}" {
+                    let response = ctx.client.send().await.unwrap();
+                    Ok(ClientResponse { response })
+                } else {
+                    let response = ctx.client.body(data).send().await.unwrap();
+                    Ok(ClientResponse { response })
+                }
+            }
         }
 
         fn verify_can_serialize(&self) -> Self::VerifyEncode {
@@ -461,16 +452,6 @@ mod decode_ok {
                                 .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
                             message: Some(message),
                         }),
-                        // ServerFnError::Request { message, error } => match error {
-                        //     RequestError::Builder => todo!(),
-                        //     RequestError::Redirect => todo!(),
-                        //     RequestError::Status(_) => todo!(),
-                        //     RequestError::Timeout => todo!(),
-                        //     RequestError::Request => todo!(),
-                        //     RequestError::Connect => todo!(),
-                        //     RequestError::Body => todo!(),
-                        //     RequestError::Decode => todo!(),
-                        // },
                         _ => HttpError::internal_server_error("Internal Server Error"),
                     },
                     Err(err) => Err(HttpError::new(
