@@ -748,7 +748,7 @@ mod wasm {
             request: ClientRequest,
             protocols: &[String],
         ) -> Result<Self, WebSysError> {
-            let request = request.client.build().unwrap();
+            let url = request.url();
 
             let mut url = request.url().clone();
             let scheme = match url.scheme() {
@@ -978,11 +978,10 @@ mod native {
     }
 
     pub async fn send_request(
-        // request_builder: RequestBuilder,
         request: ClientRequest,
         protocols: &[String],
     ) -> Result<WebSocketResponse, WebsocketError> {
-        let request_builder = request.client;
+        let request_builder = request.new_reqwest_request();
         let (client, request_result) = request_builder.build_split();
         let mut request = request_result?;
 

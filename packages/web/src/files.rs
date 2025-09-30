@@ -1,17 +1,29 @@
-use std::{pin::Pin, prelude::rust_2024::Future};
+use std::{
+    pin::Pin,
+    prelude::rust_2024::{Future, IntoFuture},
+};
 
 use dioxus_core::AnyhowContext;
 use dioxus_html::{bytes::Bytes, FileData, NativeFileData};
 use futures_channel::oneshot;
-use js_sys::Uint8Array;
+use futures_util::{FutureExt, StreamExt};
+use js_sys::{ArrayBuffer, Uint8Array};
+use send_wrapper::SendWrapper;
 use wasm_bindgen::{prelude::Closure, JsCast};
-use web_sys::{File, FileList, FileReader};
+use web_sys::{File, FileList, FileReader, ReadableStream};
 
 /// A file representation for the web platform
 #[derive(Clone)]
 pub struct WebFileData {
     file: File,
     reader: FileReader,
+}
+
+impl WebFileData {
+    /// Create a new WebFileData from a web_sys::File
+    pub fn new(file: File, reader: FileReader) -> Self {
+        Self { file, reader }
+    }
 }
 
 impl NativeFileData for WebFileData {
@@ -92,12 +104,44 @@ impl NativeFileData for WebFileData {
         })
     }
 
+    /// we'd like to use `blob` to readable stream here, but we cannot.
+    ///
+    /// We just read the entire file into memory and return it as a single chunk.
+    /// This is not super great, especially given the wasm <-> js boundary duplication cost.
+    ///
+    /// For more efficient streaming of byte data, consider using the dedicated FileStream type which
+    /// goes directly from `File` to fetch request body without going through Rust.
+    ///
+    /// We should maybe update these APIs to use our own custom `ByteBuffer` type to avoid going through `Vec<u8>`?
+    fn byte_stream(
+        &self,
+    ) -> Pin<Box<dyn futures_util::Stream<Item = Result<Bytes, dioxus_core::Error>> + 'static + Send>>
+    {
+        let file = self.file.dyn_ref::<web_sys::Blob>().unwrap().clone();
+        Box::pin(SendWrapper::new(futures_util::stream::once(async move {
+            let array_buff = wasm_bindgen_futures::JsFuture::from(file.array_buffer())
+                .await
+                .unwrap();
+            let as_uint_array = array_buff.dyn_into::<Uint8Array>().unwrap();
+            Ok(as_uint_array.to_vec().into())
+        })))
+    }
+
     fn inner(&self) -> &dyn std::any::Any {
         &self.file
     }
 
     fn path(&self) -> std::path::PathBuf {
         std::path::PathBuf::from(self.file.name())
+    }
+
+    fn content_type(&self) -> Option<String> {
+        let type_ = self.file.type_();
+        if type_.is_empty() {
+            None
+        } else {
+            Some(type_)
+        }
     }
 }
 
@@ -109,8 +153,8 @@ pub(crate) struct WebFileEngine {
 
 impl WebFileEngine {
     /// Create a new file engine from a file list
-    pub fn new(file_list: FileList) -> Option<Self> {
-        Some(Self { file_list })
+    pub fn new(file_list: FileList) -> Self {
+        Self { file_list }
     }
 
     fn len(&self) -> usize {

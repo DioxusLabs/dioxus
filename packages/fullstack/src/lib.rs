@@ -45,8 +45,8 @@ pub use encoding::*;
 pub mod lazy;
 pub use lazy::*;
 
-pub mod response;
-pub use response::*;
+// pub mod response;
+// pub use response::*;
 
 pub use payloads::*;
 pub mod payloads {
@@ -96,8 +96,8 @@ pub mod payloads {
     pub mod sse;
     pub use sse::*;
 
-    pub mod textstream;
-    pub use textstream::*;
+    pub mod stream;
+    pub use stream::*;
 
     #[cfg(feature = "ws")]
     pub mod websocket;
@@ -121,3 +121,6 @@ pub mod payloads {
 }
 
 pub use http::{HeaderMap, HeaderValue, Method};
+
+mod client;
+pub use client::*;

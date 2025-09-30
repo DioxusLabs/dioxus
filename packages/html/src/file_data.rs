@@ -1,6 +1,7 @@
 use std::{path::PathBuf, pin::Pin, prelude::rust_2024::Future};
 
 use bytes::Bytes;
+use futures_util::Stream;
 
 #[derive(Clone)]
 pub struct FileData {
@@ -12,6 +13,10 @@ impl FileData {
         Self {
             inner: std::sync::Arc::new(inner),
         }
+    }
+
+    pub fn content_type(&self) -> Option<String> {
+        self.inner.content_type()
     }
 
     pub fn name(&self) -> String {
@@ -34,6 +39,12 @@ impl FileData {
         self.inner.read_string()
     }
 
+    pub fn byte_stream(
+        &self,
+    ) -> Pin<Box<dyn Stream<Item = Result<Bytes, dioxus_core::Error>> + Send>> {
+        self.inner.byte_stream()
+    }
+
     pub fn inner(&self) -> &dyn std::any::Any {
         self.inner.inner()
     }
@@ -48,9 +59,13 @@ pub trait NativeFileData {
     fn size(&self) -> u64;
     fn last_modified(&self) -> u64;
     fn path(&self) -> PathBuf;
+    fn content_type(&self) -> Option<String>;
     fn read_bytes(
         &self,
     ) -> Pin<Box<dyn Future<Output = Result<Bytes, dioxus_core::Error>> + 'static>>;
+    fn byte_stream(
+        &self,
+    ) -> Pin<Box<dyn futures_util::Stream<Item = Result<Bytes, dioxus_core::Error>> + 'static + Send>>;
     fn read_string(
         &self,
     ) -> Pin<Box<dyn Future<Output = Result<String, dioxus_core::Error>> + 'static>>;
@@ -76,9 +91,7 @@ impl std::cmp::PartialEq for FileData {
 }
 
 pub trait HasFileData: std::any::Any {
-    fn files(&self) -> Vec<FileData> {
-        Vec::new()
-    }
+    fn files(&self) -> Vec<FileData>;
 }
 
 /// A serializable representation of file data\
@@ -89,6 +102,7 @@ pub struct SerializedFileData {
     pub path: PathBuf,
     pub size: u64,
     pub last_modified: u64,
+    pub content_type: Option<String>,
     pub contents: bytes::Bytes,
 }
 
@@ -120,11 +134,23 @@ impl NativeFileData for SerializedFileData {
         Box::pin(async move { Ok(String::from_utf8(contents.to_vec())?) })
     }
 
+    fn byte_stream(
+        &self,
+    ) -> Pin<Box<dyn futures_util::Stream<Item = Result<Bytes, dioxus_core::Error>> + 'static + Send>>
+    {
+        let contents = self.contents.clone();
+        Box::pin(futures_util::stream::once(async move { Ok(contents) }))
+    }
+
     fn inner(&self) -> &dyn std::any::Any {
         self
     }
 
     fn path(&self) -> PathBuf {
         self.path.clone()
+    }
+
+    fn content_type(&self) -> Option<String> {
+        self.content_type.clone()
     }
 }

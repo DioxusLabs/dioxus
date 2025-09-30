@@ -24,6 +24,7 @@ keyboard-types = { workspace = true, default-features = false }
 async-trait = { workspace = true }
 tokio = { workspace = true, features = ["fs", "io-util"], optional = true }
 futures-channel = { workspace = true }
+futures-util = { workspace = true }
 serde_json = { workspace = true, optional = true }
 tracing = { workspace = true }
 rustversion = { workspace = true }

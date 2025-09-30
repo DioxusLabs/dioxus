@@ -7,7 +7,7 @@ use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "server")]
-use ::{
+use {
     dioxus::fullstack::{Cookie, TypedHeader},
     std::sync::LazyLock,
     uuid::Uuid,

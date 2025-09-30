@@ -24,6 +24,7 @@ anyhow = { workspace = true }
 dioxus-core = { workspace = true }
 dioxus-signals = { workspace = true }
 dioxus-hooks = { workspace = true }
+dioxus-html = { workspace = true }
 futures = { workspace = true, default-features = true }
 bytes = { workspace = true, features = ["serde"] }
 dioxus-fullstack-macro = { workspace = true }
@@ -50,7 +51,7 @@ tokio = { workspace = true, optional = true }
 tokio-tungstenite = { workspace = true, optional = true }
 tokio-stream = { workspace = true, features = ["sync"], optional = true }
 tower = { workspace = true, features = ["util"], optional = true }
-tower-http = { workspace = true, features = ["fs"], optional = true }
+tower-http = { workspace = true, features = ["fs", "limit"], optional = true }
 tower-layer = { version = "0.3.3", optional = true }
 
 # payloads
@@ -60,7 +61,13 @@ async-stream = "0.3.6"
 
 # websocket stuff
 # [target.'cfg(target_arch = "wasm32")'.dependencies]
-web-sys = { version = "0.3", features = ["WebSocket", "CloseEvent", "ErrorEvent", "Event", "MessageEvent", "BinaryType", "FormData"], optional = true }
+web-sys = { version = "0.3", features = ["WebSocket", "CloseEvent", "ErrorEvent", "Event", "MessageEvent", "BinaryType", "FormData", "Response", "ReadableStream", "AbortController", "File", "ReadableStream"], optional = true }
+gloo-net = "0.6.0"
+js-sys = { workspace = true }
+wasm-bindgen = { workspace = true }
+wasm-bindgen-futures = { workspace = true }
+wasm-streams = "0.4.2"
+content_disposition = "0.4.0"
 
 # native websocket deps
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

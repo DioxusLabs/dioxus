@@ -22,16 +22,15 @@ pub use events::*;
 
 #[cfg(feature = "document")]
 mod document;
-#[cfg(feature = "file_engine")]
-mod files;
 #[cfg(feature = "document")]
 mod history;
 #[cfg(feature = "document")]
 pub use document::WebDocument;
-#[cfg(feature = "file_engine")]
-pub use files::*;
 #[cfg(feature = "document")]
 pub use history::{HashHistory, WebHistory};
+
+mod files;
+pub use files::*;
 
 #[cfg(all(feature = "devtools", debug_assertions))]
 mod devtools;

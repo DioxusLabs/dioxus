@@ -127,7 +127,11 @@ impl HasFormData for NativeFormData {
     }
 }
 
-impl HasFileData for NativeFormData {}
+impl HasFileData for NativeFormData {
+    fn files(&self) -> Vec<dioxus_html::FileData> {
+        vec![]
+    }
+}
 
 #[derive(Clone, Debug)]
 pub(crate) struct BlitzKeyboardData(pub(crate) BlitzKeyEvent);

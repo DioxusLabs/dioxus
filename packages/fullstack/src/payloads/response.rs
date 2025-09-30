@@ -7,12 +7,13 @@ use super::*;
 /// headers, and body are transferred from the client response to the axum response.
 impl FromResponse for axum::response::Response {
     fn from_response(res: ClientResponse) -> impl Future<Output = Result<Self, ServerFnError>> {
-        async move {
-            let parts = res.make_parts();
-            let body = axum::body::Body::from_stream(res.bytes_stream());
-            let response = axum::response::Response::from_parts(parts, body);
-            Ok(response)
-        }
+        send_wrapper::SendWrapper::new(async move {
+            todo!("send_wrappe needed for axum on web");
+            // let parts = res.make_parts();
+            // let body = axum::body::Body::from_stream(res.bytes_stream());
+            // let response = axum::response::Response::from_parts(parts, body);
+            // Ok(response)
+        })
     }
 }
 
@@ -24,20 +25,21 @@ impl FromResponse for axum::response::Response {
 impl IntoRequest for axum::extract::Request {
     fn into_request(self, request: ClientRequest) -> impl Future<Output = ClientResult> + 'static {
         async move {
-            let (parts, body) = self.into_parts();
-            let body_bytes = axum::body::to_bytes(body, usize::MAX)
-                .await
-                .map_err(|e| RequestError::Body(format!("Failed to read body: {}", e)))?;
-            let mut builder = request.client;
-            for (key, value) in &parts.headers {
-                builder = builder.header(key.clone(), value.clone());
-            }
-            let response = builder
-                .body(body_bytes)
-                .send()
-                .await
-                .map_err(crate::reqwest_error_to_request_error)?;
-            Ok(ClientResponse { response })
+            // let (parts, body) = self.into_parts();
+            // let body_bytes = axum::body::to_bytes(body, usize::MAX)
+            //     .await
+            //     .map_err(|e| RequestError::Body(format!("Failed to read body: {}", e)))?;
+            // let mut builder = request.client;
+            // for (key, value) in &parts.headers {
+            //     builder = builder.header(key.clone(), value.clone());
+            // }
+            // let response = builder
+            //     .body(body_bytes)
+            //     .send()
+            //     .await
+            //     .map_err(crate::reqwest_error_to_request_error)?;
+            todo!()
+            // Ok(ClientResponse { response })
         }
     }
 }

@@ -3,7 +3,7 @@
 use crate::{server::DioxusRouterExt, RenderHandleState, ServeConfig, ServeConfigBuilder};
 use axum::{
     body::Body,
-    extract::{Request, State},
+    extract::{DefaultBodyLimit, Request, State},
     response::IntoResponse,
     routing::IntoMakeService,
 };

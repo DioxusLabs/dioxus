@@ -218,9 +218,10 @@ impl SerializedFormData {
                     out.push(SerializedFileData {
                         name: file.name(),
                         size: file.size(),
+                        content_type: file.content_type(),
                         last_modified: file.last_modified(),
-                        contents: file.read_bytes().await?,
                         path: file.pathbuf(),
+                        contents: file.read_bytes().await?,
                     });
                 }
                 out

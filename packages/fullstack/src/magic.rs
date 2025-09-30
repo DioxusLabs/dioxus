@@ -163,14 +163,15 @@ pub mod req_to {
             _map: fn(T) -> O,
         ) -> impl Future<Output = Result<ClientResponse, RequestError>> + 'static {
             async move {
-                let data = serde_json::to_string(&data).unwrap();
-                if data.is_empty() || data == "{}" {
-                    let response = ctx.client.send().await.unwrap();
-                    Ok(ClientResponse { response })
-                } else {
-                    let response = ctx.client.body(data).send().await.unwrap();
-                    Ok(ClientResponse { response })
-                }
+                todo!()
+                // let data = serde_json::to_string(&data).unwrap();
+                // if data.is_empty() || data == "{}" {
+                //     let response = ctx.client.send().await.unwrap();
+                //     Ok(ClientResponse { response })
+                // } else {
+                //     let response = ctx.client.body(data).send().await.unwrap();
+                //     Ok(ClientResponse { response })
+                // }
             }
         }
 

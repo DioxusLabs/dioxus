@@ -6,13 +6,7 @@ where
     T: Serialize + 'static,
 {
     fn into_request(self, request: ClientRequest) -> impl Future<Output = ClientResult> + 'static {
-        async move {
-            request
-                .header("Content-Type", "application/json")
-                .json(&self.0)
-                .send()
-                .await
-        }
+        async move { request.send_json(&self.0).await }
     }
 }
 

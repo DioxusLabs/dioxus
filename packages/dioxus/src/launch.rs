@@ -302,7 +302,7 @@ impl LaunchBuilder {
         // Set any flags if we're running under fullstack
         #[cfg(feature = "fullstack")]
         {
-            use dioxus_fullstack::client::{get_server_url, set_server_url};
+            use dioxus_fullstack::{get_server_url, set_server_url};
 
             // Make sure to set the server_fn endpoint if the user specified the fullstack feature
             // We only set this on native targets
