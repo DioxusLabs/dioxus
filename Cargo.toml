@@ -679,16 +679,6 @@ path = "examples/06-routing/flat_router.rs"
 doc-scrape-examples = true
 
 [[example]]
-name = "open_api"
-path = "examples/07-fullstack/open_api.rs"
-doc-scrape-examples = true
-
-[[example]]
-name = "jwt_client_middleware"
-path = "examples/07-fullstack/jwt_client_middleware.rs"
-doc-scrape-examples = true
-
-[[example]]
 name = "header_map"
 path = "examples/07-fullstack/header_map.rs"
 doc-scrape-examples = true
@@ -721,11 +711,6 @@ doc-scrape-examples = true
 [[example]]
 name = "streaming_file_upload"
 path = "examples/07-fullstack/streaming_file_upload.rs"
-doc-scrape-examples = true
-
-[[example]]
-name = "custom_client"
-path = "examples/07-fullstack/custom_client.rs"
 doc-scrape-examples = true
 
 [[example]]

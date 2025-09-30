@@ -11,11 +11,11 @@ fn main() {
 }
 
 fn app() -> Element {
-    let mut file_id = use_action(move |()| full_request());
+    let mut file_id = use_action(full_request);
 
     rsx! {
         div { "Access to full axum request" }
-        button { onclick: move |_| file_id.call(()), "Upload file" }
+        button { onclick: move |_| file_id.call(), "Upload file" }
     }
 }
 
