@@ -1,10 +1,4 @@
-//! This example showcases how to upload files from the client to the server.
-//!
-//! We can use the `FileStream` type to handle file uploads in a streaming fashion.
-//! This allows us to handle large files without loading them entirely into memory.
-//!
-//! `FileStream` and `FileDownload` are built on multi-part form data and streams, which we
-//! also showcase here.
+//! This example showcases how to handle multipart form data uploads in Dioxus.
 
 use async_std::prelude::StreamExt;
 use bytes::Bytes;
@@ -25,12 +19,12 @@ fn app() -> Element {
     // If we have multiple files to upload, we can use multipart form data which also uses streaming
     // The `FormData` type from dioxus-html automatically implements `Into<MultipartData>` for us,
     // making it possible to use multipart form data without converting each file individually.
-    let mut upload_as_multipart = use_action(move |data: LoginFormData| async move {
+    let mut upload_as_multipart = use_action(move |data: FormEvent| async move {
         // todo!()
         // for file in files {
         //     let res = upload_file(file.into()).await;
         // }
-        Ok(())
+        dioxus::Ok(())
     });
 
     rsx! {
@@ -44,7 +38,7 @@ fn app() -> Element {
                 gap: "8px",
                 onsubmit: move |evt| async move {
                     evt.prevent_default();
-                    // upload_as_multipart.call(evt.data().into()).await;
+                    upload_as_multipart.call(evt).await;
                 },
                 input { r#type: "file", name: "headshot", multiple: true, accept: ".png,.jpg,.jpeg" }
                 label { r#for: "headshot", "Photos" }

@@ -1,6 +1,11 @@
 //! This example demonstrates how to use types like `Form`, `SetHeader`, and `TypedHeader`
 //! to create a simple login form that sets a cookie in the browser and uses it for authentication
 //! on a protected endpoint.
+//!
+//! For more information on handling forms in general, see the multipart_form example.
+//!
+//! The intent with this example is to show how to use the building blocks like `Form` and `SetHeader`
+//! to roll a simple authentication system.
 
 use dioxus::fullstack::{Form, SetCookie, SetHeader};
 use dioxus::prelude::*;

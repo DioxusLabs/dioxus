@@ -714,12 +714,17 @@ path = "examples/07-fullstack/through_reqwest.rs"
 doc-scrape-examples = true
 
 [[example]]
-name = "streaming_file_upload.rs"
+name = "streaming_file_upload"
 path = "examples/07-fullstack/streaming_file_upload.rs"
 doc-scrape-examples = true
 
 [[example]]
-name = "multipart_form.rs"
+name = "custom_client"
+path = "examples/07-fullstack/custom_client.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "multipart_form"
 path = "examples/07-fullstack/multipart_form.rs"
 doc-scrape-examples = true
 
