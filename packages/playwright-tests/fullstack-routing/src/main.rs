@@ -30,6 +30,9 @@ enum Route {
     #[route("/error")]
     ThrowsError,
 
+    #[route("/async-error")]
+    ThrowsAsyncError,
+
     #[route("/can-go-back")]
     HydrateCanGoBack,
 }
@@ -50,6 +53,20 @@ fn ThrowsError() -> Element {
     return Err(RenderError::Aborted(CapturedError::from_display(
         "This route tests uncaught errors in the server",
     )));
+}
+
+#[component]
+fn ThrowsAsyncError() -> Element {
+    #[server]
+    async fn error_after_delay() -> ServerFnResult<()> {
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        Err(ServerFnError::new("Async error from a server function"))
+    }
+
+    use_server_future(error_after_delay)?().unwrap()?;
+    rsx! {
+        "Hello, world!"
+    }
 }
 
 #[component]
