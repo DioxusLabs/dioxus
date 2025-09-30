@@ -122,7 +122,7 @@ impl IntoRequest for FileUpload {
                         ),
                     );
 
-                return builder.send_blob(as_blob.clone()).await;
+                return builder.send_js_value(as_blob.clone().into()).await;
             }
 
             todo!()

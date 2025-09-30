@@ -51,13 +51,12 @@ impl<S> IntoRequest for MultipartFormData<S> {
             #[cfg(feature = "web")]
             {
                 use wasm_bindgen::JsCast;
-
                 let data = self.client.unwrap();
                 let event: &web_sys::Event = data.downcast().unwrap();
                 let target = event.target().unwrap();
                 let form: &web_sys::HtmlFormElement = target.dyn_ref().unwrap();
                 let data = web_sys::FormData::new_with_form(form).unwrap();
-                builder.send_web_form(data).await
+                builder.send_js_value(data.into()).await
             }
 
             #[cfg(not(feature = "web"))]

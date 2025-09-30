@@ -2,9 +2,6 @@
 #![doc(html_logo_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 
-//! This crate contains the dioxus implementation of the #[macro@crate::server] macro without additional context from the server.
-//! See the [server_fn_macro] crate for more information.
-
 use core::panic;
 use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as TokenStream2};
@@ -25,16 +22,13 @@ use syn::{
     Attribute, Expr, ExprClosure, Lit,
 };
 
-/// Declares that a function is a [server function](https://docs.rs/server_fn/).
-/// This means that its body will only run on the server, i.e., when the `ssr`
-/// feature is enabled on this crate.
-///
 /// ## Usage
 /// ```rust,ignore
 /// # use dioxus::prelude::*;
 /// # #[derive(serde::Deserialize, serde::Serialize)]
 /// # struct BlogPost;
 /// # async fn load_posts(category: &str) -> ServerFnResult<Vec<BlogPost>> { unimplemented!() }
+///
 /// #[server]
 /// async fn blog_posts(
 ///     category: String,
@@ -128,7 +122,6 @@ use syn::{
 ///
 /// ```rust,ignore
 /// #[server(
-///   name = SomeStructName,
 ///   prefix = "/my_api",
 ///   endpoint = "my_fn",
 ///   input = Cbor,
@@ -232,7 +225,7 @@ pub fn server(attr: proc_macro::TokenStream, mut item: TokenStream) -> TokenStre
         server_args: Default::default(),
     };
 
-    match route_impl_with_route(route, item.clone(), false, Some(method)) {
+    match route_impl_with_route(route, item.clone(), Some(method)) {
         Ok(tokens) => tokens.into(),
         Err(err) => {
             let err: TokenStream = err.to_compile_error().into();
@@ -286,7 +279,7 @@ fn wrapped_route_impl(
     mut item: TokenStream,
     method: Option<Method>,
 ) -> TokenStream {
-    match route_impl(attr, item.clone(), false, method) {
+    match route_impl(attr, item.clone(), method) {
         Ok(tokens) => tokens.into(),
         Err(err) => {
             let err: TokenStream = err.to_compile_error().into();
@@ -299,17 +292,15 @@ fn wrapped_route_impl(
 fn route_impl(
     attr: TokenStream,
     item: TokenStream,
-    with_aide: bool,
     method_from_macro: Option<Method>,
 ) -> syn::Result<TokenStream2> {
     let route = syn::parse::<Route>(attr)?;
-    route_impl_with_route(route, item, with_aide, method_from_macro)
+    route_impl_with_route(route, item, method_from_macro)
 }
 
 fn route_impl_with_route(
     route: Route,
     item: TokenStream,
-    with_aide: bool,
     method_from_macro: Option<Method>,
 ) -> syn::Result<TokenStream2> {
     // Parse the route and function
@@ -319,11 +310,25 @@ fn route_impl_with_route(
     function_on_server.sig.inputs.extend(server_args.clone());
 
     // Now we can compile the route
-    let original_inputs = &function.sig.inputs;
-    let route = CompiledRoute::from_route(route, &function, with_aide, method_from_macro)?;
+    let original_inputs = function
+        .sig
+        .inputs
+        .iter()
+        .map(|arg| match arg {
+            FnArg::Receiver(_receiver) => panic!("Self type is not supported"),
+            FnArg::Typed(pat_type) => {
+                quote! {
+                    #[allow(unused_mut)]
+                    #pat_type
+                }
+            }
+        })
+        .collect::<Punctuated<_, Token![,]>>();
+
+    let route = CompiledRoute::from_route(route, &function, false, method_from_macro)?;
     let path_extractor = route.path_extractor();
     let query_extractor = route.query_extractor();
-    let query_params_struct = route.query_params_struct(with_aide);
+    let query_params_struct = route.query_params_struct(false);
     let _state_type = &route.state;
     let axum_path = route.to_axum_path_string();
     let method_ident = &route.method;
@@ -345,14 +350,6 @@ fn route_impl_with_route(
     let extracted_idents = route.extracted_idents();
     let route_docs = route.to_doc_comments();
 
-    // let body_idents = body_json_names
-    //     .iter()
-    //     .map(|pat| match pat {
-    //         Pat::Ident(pat_ident) => pat_ident.ident.clone(),
-    //         _ => panic!("Expected Pat::Ident"),
-    //     })
-    //     .collect::<Vec<_>>();
-
     // Get the variables we need for code generation
     let fn_name = &function.sig.ident;
     let vis = &function.vis;
@@ -364,52 +361,7 @@ fn route_impl_with_route(
         .iter()
         .filter(|attr| attr.path().is_ident("doc"));
 
-    let (aide_ident_docs, _inner_fn_call, _method_router_ty) = if with_aide {
-        let http_method = format_ident!("{}_with", http_method);
-        let summary = route
-            .get_oapi_summary()
-            .map(|summary| quote! { .summary(#summary) });
-        let description = route
-            .get_oapi_description()
-            .map(|description| quote! { .description(#description) });
-        let hidden = route
-            .get_oapi_hidden()
-            .map(|hidden| quote! { .hidden(#hidden) });
-        let tags = route.get_oapi_tags();
-        let id = route
-            .get_oapi_id(&function.sig)
-            .map(|id| quote! { .id(#id) });
-        let transform = route.get_oapi_transform()?;
-        let responses = route.get_oapi_responses();
-        let response_code = responses.iter().map(|response| &response.0);
-        let response_type = responses.iter().map(|response| &response.1);
-        let security = route.get_oapi_security();
-        let schemes = security.iter().map(|sec| &sec.0);
-        let scopes = security.iter().map(|sec| &sec.1);
-
-        (
-            route.ide_documentation_for_aide_methods(),
-            quote! {
-                ::aide::axum::routing::#http_method(
-                    __inner__function__ #ty_generics,
-                    |__op__| {
-                        let __op__ = __op__
-                            #summary
-                            #description
-                            #hidden
-                            #id
-                            #(.tag(#tags))*
-                            #(.security_requirement_scopes::<Vec<&'static str>, _>(#schemes, vec![#(#scopes),*]))*
-                            #(.response::<#response_code, #response_type>())*
-                            ;
-                        #transform
-                        __op__
-                    }
-                )
-            },
-            quote! { ::aide::axum::routing::ApiMethodRouter },
-        )
-    } else {
+    let (aide_ident_docs, _inner_fn_call, _method_router_ty) = {
         (
             quote!(),
             quote! { __axum::routing::#http_method(__inner__function__ #ty_generics) },
@@ -525,10 +477,10 @@ fn route_impl_with_route(
                 ServerFnEncoder, ExtractRequest,
                 ServerFnRejection, EncodeRequest, get_server_url,
                 ServerFnError, MakeAxumResponse, ServerFnDecoder, ReqwestDecodeResult, ReqwestDecodeErr, DioxusServerState,
-                MakeAxumError, assert_is_result, ClientRequest
+                MakeAxumError, ClientRequest
             };
 
-            _ = assert_is_result::<#out_ty>();
+            _ = dioxus_fullstack::assert_is_result::<#out_ty>();
 
             #query_params_struct
 
@@ -892,6 +844,55 @@ impl CompiledRoute {
             .collect()
     }
 
+    #[allow(dead_code)]
+    fn aide() {
+        // let http_method = format_ident!("{}_with", http_method);
+        // let summary = route
+        //     .get_oapi_summary()
+        //     .map(|summary| quote! { .summary(#summary) });
+        // let description = route
+        //     .get_oapi_description()
+        //     .map(|description| quote! { .description(#description) });
+        // let hidden = route
+        //     .get_oapi_hidden()
+        //     .map(|hidden| quote! { .hidden(#hidden) });
+        // let tags = route.get_oapi_tags();
+        // let id = route
+        //     .get_oapi_id(&function.sig)
+        //     .map(|id| quote! { .id(#id) });
+        // let transform = route.get_oapi_transform()?;
+        // let responses = route.get_oapi_responses();
+        // let response_code = responses.iter().map(|response| &response.0);
+        // let response_type = responses.iter().map(|response| &response.1);
+        // let security = route.get_oapi_security();
+        // let schemes = security.iter().map(|sec| &sec.0);
+        // let scopes = security.iter().map(|sec| &sec.1);
+
+        // (
+        //     route.ide_documentation_for_aide_methods(),
+        //     quote! {
+        //         ::aide::axum::routing::#http_method(
+        //             __inner__function__ #ty_generics,
+        //             |__op__| {
+        //                 let __op__ = __op__
+        //                     #summary
+        //                     #description
+        //                     #hidden
+        //                     #id
+        //                     #(.tag(#tags))*
+        //                     #(.security_requirement_scopes::<Vec<&'static str>, _>(#schemes, vec![#(#scopes),*]))*
+        //                     #(.response::<#response_code, #response_type>())*
+        //                     ;
+        //                 #transform
+        //                 __op__
+        //             }
+        //         )
+        //     },
+        //     quote! { ::aide::axum::routing::ApiMethodRouter },
+        // )
+    }
+
+    #[allow(dead_code)]
     pub fn ide_documentation_for_aide_methods(&self) -> TokenStream2 {
         let Some(options) = &self.oapi_options else {
             return quote! {};
@@ -945,6 +946,7 @@ impl CompiledRoute {
         }
     }
 
+    #[allow(dead_code)]
     pub fn get_oapi_summary(&self) -> Option<LitStr> {
         if let Some(oapi_options) = &self.oapi_options {
             if let Some(summary) = &oapi_options.summary {
@@ -954,6 +956,7 @@ impl CompiledRoute {
         None
     }
 
+    #[allow(dead_code)]
     pub fn get_oapi_description(&self) -> Option<LitStr> {
         if let Some(oapi_options) = &self.oapi_options {
             if let Some(description) = &oapi_options.description {
@@ -963,6 +966,7 @@ impl CompiledRoute {
         None
     }
 
+    #[allow(dead_code)]
     pub fn get_oapi_hidden(&self) -> Option<LitBool> {
         if let Some(oapi_options) = &self.oapi_options {
             if let Some(hidden) = &oapi_options.hidden {
@@ -972,6 +976,7 @@ impl CompiledRoute {
         None
     }
 
+    #[allow(dead_code)]
     pub fn get_oapi_tags(&self) -> Vec<LitStr> {
         if let Some(oapi_options) = &self.oapi_options {
             if let Some(tags) = &oapi_options.tags {
@@ -981,6 +986,7 @@ impl CompiledRoute {
         Vec::new()
     }
 
+    #[allow(dead_code)]
     pub fn get_oapi_id(&self, sig: &Signature) -> Option<LitStr> {
         if let Some(oapi_options) = &self.oapi_options {
             if let Some(id) = &oapi_options.id {
@@ -990,6 +996,7 @@ impl CompiledRoute {
         Some(LitStr::new(&sig.ident.to_string(), sig.ident.span()))
     }
 
+    #[allow(dead_code)]
     pub fn get_oapi_transform(&self) -> syn::Result<Option<TokenStream2>> {
         if let Some(oapi_options) = &self.oapi_options {
             if let Some(transform) = &oapi_options.transform {
@@ -1020,6 +1027,7 @@ impl CompiledRoute {
         Ok(None)
     }
 
+    #[allow(dead_code)]
     pub fn get_oapi_responses(&self) -> Vec<(LitInt, Type)> {
         if let Some(oapi_options) = &self.oapi_options {
             if let Some((_ident, Responses(responses))) = &oapi_options.responses {
@@ -1029,6 +1037,7 @@ impl CompiledRoute {
         Default::default()
     }
 
+    #[allow(dead_code)]
     pub fn get_oapi_security(&self) -> Vec<(LitStr, Vec<LitStr>)> {
         if let Some(oapi_options) = &self.oapi_options {
             if let Some((_ident, Security(security))) = &oapi_options.security {

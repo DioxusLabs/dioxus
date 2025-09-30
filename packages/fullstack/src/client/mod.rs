@@ -5,7 +5,6 @@ use dioxus_fullstack_core::RequestError;
 use futures::{Stream, TryStreamExt};
 use futures_util::stream::StreamExt;
 use http::{Extensions, HeaderMap, HeaderName, HeaderValue, Method, StatusCode};
-use send_wrapper::SendWrapper;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{pin::Pin, prelude::rust_2024::Future, sync::OnceLock};
 use url::Url;
@@ -183,30 +182,6 @@ impl ClientRequest {
             .await
     }
 
-    // https://stackoverflow.com/questions/39280438/fetch-missing-boundary-in-multipart-form-data-post
-    #[cfg(feature = "web")]
-    pub async fn send_web_form(
-        self,
-        data: web_sys::FormData,
-    ) -> Result<ClientResponse, RequestError> {
-        use crate::client::browser::WrappedGlooResponse;
-
-        let gloo_res = self
-            // .header("Content-Type", "multipart/form-data")
-            .new_gloo_request()
-            .body(data)
-            .unwrap()
-            .send()
-            .await
-            .unwrap();
-
-        let res = WrappedGlooResponse::new(gloo_res, None);
-
-        return Ok(ClientResponse {
-            response: Box::new(res),
-        });
-    }
-
     /// Sends the request with an empty body.
     pub async fn send_empty_body(self) -> Result<ClientResponse, RequestError> {
         todo!()
@@ -291,33 +266,49 @@ impl ClientRequest {
     }
 
     #[cfg(feature = "web")]
-    pub fn body_from_readable_stream(
+    pub async fn send_js_value(
         self,
-        stream: web_sys::ReadableStream,
+        value: wasm_bindgen::JsValue,
     ) -> Result<ClientResponse, RequestError> {
-        todo!()
-    }
+        use std::str::FromStr;
 
-    #[cfg(feature = "web")]
-    pub async fn send_blob(self, blob: web_sys::Blob) -> Result<ClientResponse, RequestError> {
-        use browser::WrappedGlooResponse;
-        use wasm_bindgen::JsValue;
-
-        tracing::info!("Sending streaming request to {}", self.url.path());
-
-        let res = self
+        let inner = self
             .new_gloo_request()
-            .body(blob)
+            .body(value)
             .unwrap()
             .send()
             .await
             .unwrap();
 
-        let res = WrappedGlooResponse::new(res, None);
+        let status = inner.status();
+        let url = inner.url().parse().unwrap();
+        let headers = {
+            let mut map = HeaderMap::new();
+            for (key, value) in inner.headers().entries() {
+                if let Ok(header_value) = http::HeaderValue::from_str(&value) {
+                    let header = HeaderName::from_str(&key).unwrap();
+                    map.append(header, header_value);
+                }
+            }
+            map
+        };
 
-        return Ok(ClientResponse {
-            response: Box::new(res),
-        });
+        let content_length = headers
+            .get(http::header::CONTENT_LENGTH)
+            .and_then(|val| val.to_str().ok())
+            .and_then(|s| s.parse::<u64>().ok());
+
+        let status = http::StatusCode::from_u16(status).unwrap_or(http::StatusCode::OK);
+
+        Ok(ClientResponse {
+            response: Box::new(browser::WrappedGlooResponse {
+                inner,
+                headers,
+                status,
+                url,
+                content_length,
+            }),
+        })
     }
 }
 
