@@ -38,17 +38,6 @@ fn app() -> Element {
         dioxus::Ok(())
     });
 
-    // If we have multiple files to upload, we can use multipart form data which also uses streaming
-    // The `FormData` type from dioxus-html automatically implements `Into<MultipartData>` for us,
-    // making it possible to use multipart form data without converting each file individually.
-    let mut upload_as_multipart = use_action(move |data: LoginFormData| async move {
-        // todo!()
-        // for file in files {
-        //     let res = upload_file(file.into()).await;
-        // }
-        dioxus::Ok(())
-    });
-
     // We can upload files by directly using the `ByteStream` type. With this approach, we need to
     // specify the file name and size as query parameters since its an opaque stream.
     //
@@ -84,30 +73,6 @@ fn app() -> Element {
                     "Drop files here"
                 }
                 pre { "{upload_as_file_upload.result():?}" }
-            }
-
-
-            div {
-                h3 { "Upload as Multipart" }
-                p { "Use the built-in multipart form handling" }
-                form {
-                    display: "flex",
-                    flex_direction: "column",
-                    gap: "8px",
-                    onsubmit: move |evt| async move {
-                        evt.prevent_default();
-                        // upload_as_multipart.call(evt.data().into()).await;
-                    },
-                    input { r#type: "file", name: "headshot", multiple: true, accept: ".png,.jpg,.jpeg" }
-                    label { r#for: "headshot", "Photos" }
-                    input { r#type: "file", name: "resume", multiple: false, accept: ".pdf" }
-                    label { r#for: "resume", "Resume" }
-                    input{ r#type: "text", name: "name", placeholder: "Name" }
-                    label { r#for: "name", "Name" }
-                    input{ r#type: "number", name: "age", placeholder: "Age" }
-                    label { r#for: "age", "Age" }
-                    input { type: "button", name: "submit", value: "Submit your resume"}
-                }
             }
 
             div {
@@ -190,47 +155,16 @@ async fn upload_file_as_filestream(mut upload: FileUpload) -> Result<u32> {
     Ok(uploaded as u32)
 }
 
-struct LoginFormData {
-    name: String,
-    age: u32,
-    resumee: FileData,
-    photos: Vec<FileData>,
-}
-
-/// Upload an entire form as multipart form data. This is useful when uploading multiple files
-/// from a form.
-///
-/// MultipartStream is typed over the form data structure, allowing us to extract
-/// both files and other form fields in a type-safe manner.
-async fn upload_as_multipart(data: MultipartStream<LoginFormData>) -> Result<u32> {
-    // use std::env::temp_dir;
-    // let uploade_dir = temp_dir().join("uploads");
-
-    // match chunk.next_chunk() {
-    //     LoginFormData::name(name) => {}
-    //     LoginFormData::age(age) => {}
-    //     LoginFormData::resumee(resumee) => {}
-    //     LoginFormData::photos(photos) => {}
-    //     _ => HttpError::bad_request("Invalid form data")?,
-    // }
-
-    // while let Some(chunk) = upload.next_chunk().await {
-    //     // Write the chunk to the target file
-    // }
-
-    // while let Some(mut field) = upload.next_field().await.unwrap() {
-    //     let name = field.name().unwrap().to_string();
-    //     let data = field.bytes().await.unwrap();
-
-    //     println!("Length of `{}` is {} bytes", name, data.len());
-    // }
-
-    todo!()
-}
-
 /// Upload a file as a raw byte stream. This requires us to specify the file name and size
 /// as query parameters since the `ByteStream` type is an opaque stream without metadata.
+///
+/// We could also use custom headers to pass metadata if we wanted to avoid query parameters.
 #[post("/api/upload_as_bytestream?name&size")]
 async fn upload_as_bytestream(name: String, size: u64, mut stream: ByteStream) -> Result<()> {
-    todo!()
+    for chunk in stream.next().await {
+        let chunk = chunk?;
+        info!("Received {} bytes for file {}", chunk.len(), name);
+    }
+
+    Ok(())
 }
