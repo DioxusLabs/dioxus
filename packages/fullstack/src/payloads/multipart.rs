@@ -1,91 +1,111 @@
-// use super::{Encoding, FromReq};
-// use crate::{
-//     error::{FromServerFnError, ServerFnErrorWrapper},
-//     request::{browser::BrowserFormData, ClientReq, Req},
-//     ContentType, IntoReq,
-// };
-// use futures::StreamExt;
-// use http::Method;
-// use multer::Multipart;
-// use web_sys::FormData;
+use std::{prelude::rust_2024::Future, rc::Rc};
 
-// /// Encodes multipart form data.
-// ///
-// /// You should primarily use this if you are trying to handle file uploads.
-// pub struct MultipartFormData;
+use crate::{ClientRequest, ClientResponse, FromResponse, IntoRequest};
+use axum::{
+    extract::{FromRequest, Multipart, Request},
+    response::IntoResponse,
+};
+use dioxus_fullstack_core::{RequestError, ServerFnError};
+use dioxus_html::FormData;
 
-// impl ContentType for MultipartFormData {
-//     const CONTENT_TYPE: &'static str = "multipart/form-data";
-// }
+pub struct MultipartFormData<T = ()> {
+    client: Option<Rc<FormData>>,
 
-// impl Encoding for MultipartFormData {
-//     const METHOD: Method = Method::POST;
-// }
+    #[cfg(feature = "server")]
+    form: Option<axum::extract::Multipart>,
+    _phantom: std::marker::PhantomData<T>,
+}
 
-// /// Describes whether the multipart data is on the client side or the server side.
-// #[derive(Debug)]
-// pub enum MultipartData {
-//     /// `FormData` from the browser.
-//     Client(BrowserFormData),
-//     /// Generic multipart form using [`multer`]. This implements [`Stream`](futures::Stream).
-//     Server(multer::Multipart<'static>),
-// }
+impl MultipartFormData {
+    pub fn form(&mut self) -> dioxus_core::Result<&mut Multipart> {
+        #[cfg(feature = "server")]
+        {
+            use anyhow::Context;
 
-// impl MultipartData {
-//     /// Extracts the inner data to handle as a stream.
-//     ///
-//     /// On the server side, this always returns `Some(_)`. On the client side, always returns `None`.
-//     pub fn into_inner(self) -> Option<Multipart<'static>> {
-//         match self {
-//             MultipartData::Client(_) => None,
-//             MultipartData::Server(data) => Some(data),
-//         }
-//     }
+            self.form
+                .as_mut()
+                .context("Multipart form data has already been consumed?")
+        }
 
-//     /// Extracts the inner form data on the client side.
-//     ///
-//     /// On the server side, this always returns `None`. On the client side, always returns `Some(_)`.
-//     pub fn into_client_data(self) -> Option<BrowserFormData> {
-//         match self {
-//             MultipartData::Client(data) => Some(data),
-//             MultipartData::Server(_) => None,
-//         }
-//     }
-// }
+        #[cfg(not(feature = "server"))]
+        {
+            todo!()
+        }
+    }
+}
 
-// impl From<FormData> for MultipartData {
-//     fn from(value: FormData) -> Self {
-//         MultipartData::Client(value.into())
-//     }
-// }
+unsafe impl Send for MultipartFormData {}
+unsafe impl Sync for MultipartFormData {}
 
-// impl<E: FromServerFnError, T, Request> IntoReq<MultipartFormData, Request, E> for T
-// where
-//     Request: ClientReq<E, FormData = BrowserFormData>,
-//     T: Into<MultipartData>,
-// {
-//     fn into_req(self, path: &str, accepts: &str) -> Result<Request, E> {
-//         let multi = self.into();
-//         Request::try_new_post_multipart(path, accepts, multi.into_client_data().unwrap())
-//     }
-// }
+impl<T> FromResponse for MultipartFormData<T> {
+    fn from_response(res: ClientResponse) -> impl Future<Output = Result<Self, ServerFnError>> {
+        async move { todo!() }
+    }
+}
+impl<S> IntoRequest for MultipartFormData<S> {
+    fn into_request(
+        self,
+        builder: ClientRequest,
+    ) -> impl Future<Output = Result<ClientResponse, RequestError>> + 'static {
+        async move {
+            #[cfg(feature = "web")]
+            {
+                use wasm_bindgen::JsCast;
 
-// impl<E, T, Request> FromReq<MultipartFormData, Request, E> for T
-// where
-//     Request: Req<E> + Send + 'static,
-//     T: From<MultipartData>,
-//     E: FromServerFnError + Send + Sync,
-// {
-//     async fn from_req(req: Request) -> Result<Self, E> {
-//         let boundary = req
-//             .to_content_type()
-//             .and_then(|ct| multer::parse_boundary(ct).ok())
-//             .expect("couldn't parse boundary");
-//         let stream = req.try_into_stream()?;
-//         let data = multer::Multipart::new(
-//             stream.map(|data| data.map_err(|e| ServerFnErrorWrapper(E::de(e)))),
-//             boundary,
-//         );
-//         Ok(MultipartData::Server(data).into())
-//     }
-// }
+                let data = self.client.unwrap();
+                let event: &web_sys::Event = data.downcast().unwrap();
+                let target = event.target().unwrap();
+                let form: &web_sys::HtmlFormElement = target.dyn_ref().unwrap();
+                let data = web_sys::FormData::new_with_form(form).unwrap();
+                builder.send_web_form(data).await
+            }
+
+            #[cfg(not(feature = "web"))]
+            {
+                todo!()
+            }
+        }
+    }
+}
+impl<S: Send + Sync + 'static, D> FromRequest<S> for MultipartFormData<D> {
+    type Rejection = axum::response::Response;
+
+    #[doc = " Perform the extraction."]
+    fn from_request(
+        req: Request,
+        state: &S,
+    ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send {
+        async move {
+            let data = axum::extract::multipart::Multipart::from_request(req, state)
+                .await
+                .map_err(|err| {
+                    tracing::error!("Failed to extract multipart form data: {:?}", err);
+                    err.into_response()
+                })?;
+
+            Ok(MultipartFormData {
+                #[cfg(feature = "server")]
+                form: Some(data),
+                client: None,
+                _phantom: std::marker::PhantomData,
+            })
+        }
+    }
+}
+
+impl<T> IntoResponse for MultipartFormData<T> {
+    fn into_response(self) -> axum::response::Response {
+        todo!()
+    }
+}
+
+impl<T> From<Rc<FormData>> for MultipartFormData<T> {
+    fn from(_value: Rc<FormData>) -> Self {
+        MultipartFormData {
+            #[cfg(feature = "server")]
+            form: None,
+            client: Some(_value),
+            _phantom: std::marker::PhantomData,
+        }
+    }
+}

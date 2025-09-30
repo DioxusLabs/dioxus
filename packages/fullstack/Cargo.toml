@@ -61,7 +61,7 @@ async-stream = "0.3.6"
 
 # websocket stuff
 # [target.'cfg(target_arch = "wasm32")'.dependencies]
-web-sys = { version = "0.3", features = ["WebSocket", "CloseEvent", "ErrorEvent", "Event", "MessageEvent", "BinaryType", "FormData", "Response", "ReadableStream", "AbortController", "File", "ReadableStream"], optional = true }
+web-sys = { version = "0.3", features = ["WebSocket", "CloseEvent", "ErrorEvent", "Event", "MessageEvent", "BinaryType", "FormData", "Response", "ReadableStream", "AbortController", "File", "ReadableStream", "HtmlFormElement", "FormData"], optional = true }
 gloo-net = "0.6.0"
 js-sys = { workspace = true }
 wasm-bindgen = { workspace = true }

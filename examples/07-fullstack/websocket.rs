@@ -50,10 +50,7 @@ fn app() -> Element {
             placeholder: "Type a message",
             oninput: move |e| async move { _ = socket.send(ClientEvent::TextInput(e.value())).await; },
         }
-        button {
-            onclick: move |_| messages.clear(),
-            "Clear messages"
-        }
+        button { onclick: move |_| messages.clear(), "Clear messages" }
         for message in messages.read().iter().rev() {
             pre { "{message:?}" }
         }

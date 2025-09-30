@@ -16,7 +16,6 @@ use std::{future::Future, marker::PhantomData, pin::Pin};
 pub type TextStream = Streaming<String>;
 pub type ByteStream = Streaming<Bytes>;
 pub type FileStream = Streaming<Bytes, FileEncoding>;
-pub type MultipartStream<T> = Streaming<MultipartData<T>, MultipartEncoding>;
 pub type JsonStream<T> = Streaming<T, JsonEncoding>;
 pub type CborStream<T> = Streaming<T, CborEncoding>;
 
@@ -366,10 +365,4 @@ impl From<dioxus_html::FileData> for FileStream {
     fn from(value: dioxus_html::FileData) -> Self {
         todo!()
     }
-}
-
-pub struct MultipartEncoding;
-
-pub struct MultipartData<T = ()> {
-    _inner: PhantomData<T>,
 }

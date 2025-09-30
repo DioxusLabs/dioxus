@@ -173,13 +173,6 @@ impl ServerFunction {
         // // apply the response parts from the server context to the response
         // server_context.send_response(&mut res);
 
-        tracing::debug!(
-            "Handling server function: {} {} with {} extensions",
-            self.method(),
-            self.path(),
-            req.extensions().len()
-        );
-
         let mthd: MethodRouter<DioxusServerState> =
             (self.handler)().with_state(DioxusServerState {});
         let res = mthd.call(req, DioxusServerState {}).await;

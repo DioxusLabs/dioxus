@@ -7,13 +7,7 @@
 //! also showcase here.
 
 use async_std::prelude::StreamExt;
-use bytes::Bytes;
-use dioxus::{
-    fullstack::{
-        ByteStream, DioxusServerState, ExtractRequest, FileStream, MultipartStream, ServerFnEncoder,
-    },
-    prelude::*,
-};
+use dioxus::{fullstack::ByteStream, prelude::*};
 use dioxus_fullstack::FileUpload;
 use dioxus_html::{FileData, HasFileData};
 
@@ -63,8 +57,7 @@ fn app() -> Element {
             div {
                 h3 { "Upload as FileUpload" }
                 div {
-                    height: "100px",
-                    background_color: "lightgray",
+                    class: "drop-zone",
                     ondragover: move |evt| evt.prevent_default(),
                     ondrop: move |evt| async move {
                         evt.prevent_default();
@@ -78,8 +71,7 @@ fn app() -> Element {
             div {
                 h3 { "Upload as ByteStream" }
                 div {
-                    id: "drop-zone",
-                    background_color: "lightgray",
+                    class: "drop-zone",
                     ondragover: move |evt| evt.prevent_default(),
                     ondrop: move |evt| async move {
                         evt.prevent_default();
@@ -161,9 +153,16 @@ async fn upload_file_as_filestream(mut upload: FileUpload) -> Result<u32> {
 /// We could also use custom headers to pass metadata if we wanted to avoid query parameters.
 #[post("/api/upload_as_bytestream?name&size")]
 async fn upload_as_bytestream(name: String, size: u64, mut stream: ByteStream) -> Result<()> {
-    for chunk in stream.next().await {
+    let mut collected = 0;
+    while let Some(chunk) = stream.next().await {
         let chunk = chunk?;
+        collected += chunk.len() as u64;
+
         info!("Received {} bytes for file {}", chunk.len(), name);
+
+        if collected > size {
+            HttpError::bad_request("Received more data than expected")?;
+        }
     }
 
     Ok(())

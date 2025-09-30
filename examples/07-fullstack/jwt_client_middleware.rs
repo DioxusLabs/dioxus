@@ -1,9 +1,7 @@
-//! This example shows how to use a custom client with Dioxus.
+//! This example shows how to add custom middleware to the server client that Dioxus uses to make
+//! server function requests.
 //!
-//! You can customize an outgoing request by using methods on the request future before `await`ing it.
-//! This is useful for adding custom headers, authentication, or other request modifications.
-//!
-//! You can also use an entirely different http client
+//! In this example, we add a JWT token to the headers of every request
 
 use std::any::TypeId;
 
