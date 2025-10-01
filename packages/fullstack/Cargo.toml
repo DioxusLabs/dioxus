@@ -44,6 +44,7 @@ form_urlencoded = { workspace = true }
 axum = { workspace = true, default-features = false, features = ["json", "form", "query", "multipart", "query"] }
 http-body = { workspace = true }
 headers = "0.4.1"
+dioxus-asset-resolver = { workspace = true, features = ["native"] }
 
 # const_format = { workspace = true, default-features = true }
 # const-str = { workspace = true, default-features = true }

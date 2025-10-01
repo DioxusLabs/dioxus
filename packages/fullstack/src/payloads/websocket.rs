@@ -21,7 +21,6 @@
 use crate::{ClientRequest, Encoding, FromResponse, IntoRequest, JsonEncoding, ServerFnError};
 use axum::extract::{FromRequest, Request};
 use axum_core::response::{IntoResponse, Response};
-use bytes::Bytes;
 use dioxus_core::{use_hook, CapturedError, Result};
 use dioxus_fullstack_core::RequestError;
 use dioxus_hooks::{use_resource, Resource};
@@ -104,9 +103,15 @@ where
 }
 
 impl<In, Out, E> UseWebsocket<In, Out, E> {
-    /// Explicitly wait for the WebSocket connection to be established.
-    pub fn connect(&mut self) -> impl Future<Output = Result<(), WebsocketError>> {
-        async move { todo!() }
+    /// Wait for the connection to be established. This guarantees that subsequent calls to methods like
+    /// `.try_recv()` will not fail due to the connection not being ready.
+    pub async fn connect(&self) -> WebsocketState {
+        // Wait for the connection to be established
+        while !self.connection.finished() {
+            _ = self.waker.wait().await;
+        }
+
+        self.status.cloned()
     }
 
     pub fn connecting(&self) -> bool {
@@ -117,17 +122,8 @@ impl<In, Out, E> UseWebsocket<In, Out, E> {
         self.status_read
     }
 
-    /// Wait for the connection to be established. This guarantees that subsequent calls to methods like
-    /// `.try_recv()` will not fail due to the connection not being ready.
-    pub async fn wait_for_connection(&self) {
-        // Wait for the connection to be established
-        while !self.connection.finished() {
-            _ = self.waker.wait().await;
-        }
-    }
-
     pub async fn send_raw(&self, msg: Message) -> Result<(), WebsocketError> {
-        self.wait_for_connection().await;
+        self.connect().await;
 
         self.connection
             .as_ref()
@@ -140,7 +136,7 @@ impl<In, Out, E> UseWebsocket<In, Out, E> {
     }
 
     pub async fn recv_raw(&mut self) -> Result<Message, WebsocketError> {
-        self.wait_for_connection().await;
+        self.connect().await;
 
         self.connection
             .as_ref()
@@ -171,7 +167,7 @@ impl<In, Out: DeserializeOwned, E: Encoding> UseWebsocket<In, Out, E> {
     /// This method returns an error if the connection is closed since we assume closed connections
     /// are a "failure".
     pub async fn recv(&mut self) -> Result<Out, WebsocketError> {
-        self.wait_for_connection().await;
+        self.connect().await;
 
         self.connection
             .as_ref()
@@ -191,7 +187,7 @@ impl<In, Out, E> Clone for UseWebsocket<In, Out, E> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Copy)]
 pub enum WebsocketState {
     /// The WebSocket is connecting.
     Connecting,
@@ -737,8 +733,6 @@ mod wasm {
             request: ClientRequest,
             protocols: &[String],
         ) -> Result<Self, WebSysError> {
-            let url = request.url();
-
             let mut url = request.url().clone();
             let scheme = match url.scheme() {
                 "http" | "ws" => "ws",

@@ -42,18 +42,18 @@ where
     }
 }
 
-impl<A, B, R> IntoRequest<R> for (A, B)
-where
-    A: IntoRequest<R> + 'static,
-    B: IntoRequest<R> + 'static,
-{
-    fn into_request(
-        self,
-        req: ClientRequest,
-    ) -> impl Future<Output = Result<R, RequestError>> + 'static {
-        async move { todo!() }
-    }
-}
+// impl<A, B, R> IntoRequest<R> for (A, B)
+// where
+//     A: IntoRequest<R> + 'static,
+//     B: IntoRequest<R> + 'static,
+// {
+//     fn into_request(
+//         self,
+//         req: ClientRequest,
+//     ) -> impl Future<Output = Result<R, RequestError>> + 'static {
+//         async move { todo!() }
+//     }
+// }
 
 pub trait FromResponse<R = ClientResponse>: Sized {
     fn from_response(res: R) -> impl Future<Output = Result<Self, ServerFnError>>;

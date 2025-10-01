@@ -383,7 +383,7 @@ impl ClientResponse {
 
     pub fn bytes_stream(
         self,
-    ) -> impl futures_util::Stream<Item = Result<Bytes, RequestError>> + 'static + Unpin + Send
+    ) -> impl futures_util::Stream<Item = Result<Bytes, StreamingError>> + 'static + Unpin + Send
     {
         self.response.bytes_stream()
     }
@@ -429,7 +429,7 @@ impl ClientResponse {
     }
 
     /// Consumes the response, returning the head and a stream of the body.
-    pub fn into_parts(self) -> (Parts, impl Stream<Item = Result<Bytes, RequestError>>) {
+    pub fn into_parts(self) -> (Parts, impl Stream<Item = Result<Bytes, StreamingError>>) {
         (self.make_parts(), self.bytes_stream())
     }
 }
@@ -459,7 +459,8 @@ pub trait ClientResponseDriver {
     fn bytes(self: Box<Self>) -> Pin<Box<dyn Future<Output = Result<Bytes, RequestError>> + Send>>;
     fn bytes_stream(
         self: Box<Self>,
-    ) -> Pin<Box<dyn Stream<Item = Result<Bytes, RequestError>> + 'static + Unpin + Send>>;
+    ) -> Pin<Box<dyn Stream<Item = Result<Bytes, StreamingError>> + 'static + Unpin + Send>>;
+
     fn text(self: Box<Self>) -> Pin<Box<dyn Future<Output = Result<String, RequestError>> + Send>>;
 }
 
@@ -500,10 +501,10 @@ mod native {
         fn bytes_stream(
             self: Box<Self>,
         ) -> Pin<
-            Box<dyn futures::Stream<Item = Result<Bytes, RequestError>> + 'static + Unpin + Send>,
+            Box<dyn futures::Stream<Item = Result<Bytes, StreamingError>> + 'static + Unpin + Send>,
         > {
             Box::pin(SendWrapper::new(
-                reqwest::Response::bytes_stream(*self).map_err(reqwest_error_to_request_error),
+                reqwest::Response::bytes_stream(*self).map_err(|_| StreamingError::Failed),
             ))
         }
 
@@ -530,7 +531,7 @@ mod browser {
     use std::{pin::Pin, prelude::rust_2024::Future};
     use wasm_bindgen::JsCast;
 
-    use crate::ClientResponseDriver;
+    use crate::{ClientResponseDriver, StreamingError};
 
     pub struct WrappedGlooResponse {
         pub(crate) inner: gloo_net::http::Response,
@@ -568,7 +569,7 @@ mod browser {
 
         fn bytes_stream(
             self: Box<Self>,
-        ) -> Pin<Box<dyn Stream<Item = Result<Bytes, RequestError>> + 'static + Unpin + Send>>
+        ) -> Pin<Box<dyn Stream<Item = Result<Bytes, StreamingError>> + 'static + Unpin + Send>>
         {
             Box::pin(SendWrapper::new(
                 wasm_streams::ReadableStream::from_raw(self.inner.body().unwrap())

@@ -1,3 +1,4 @@
+use axum_core::response::IntoResponse;
 use http::StatusCode;
 use std::fmt;
 
@@ -198,5 +199,19 @@ impl<T> OrHttpError<T, AnyhowMarker> for Result<T, anyhow::Error> {
             status,
             message: Some(message.into()),
         })
+    }
+}
+
+impl IntoResponse for HttpError {
+    fn into_response(self) -> axum_core::response::Response {
+        let body = match &self.message {
+            Some(msg) => msg.clone(),
+            None => self
+                .status
+                .canonical_reason()
+                .unwrap_or("Unknown error")
+                .to_string(),
+        };
+        (self.status, body).into_response()
     }
 }

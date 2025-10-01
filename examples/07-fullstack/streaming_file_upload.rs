@@ -169,3 +169,8 @@ async fn upload_as_bytestream(name: String, size: u64, mut stream: ByteStream) -
 
     Ok(())
 }
+
+#[get("/api/download_as_filestream")]
+async fn download_as_filestream() -> Result<FileStream> {
+    todo!()
+}
