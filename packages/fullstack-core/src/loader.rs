@@ -4,7 +4,8 @@ use dioxus_core::{
 use dioxus_core::{CapturedError, RenderError, Result, SuspendedFuture};
 use dioxus_hooks::{use_callback, use_signal};
 use dioxus_signals::{
-    read_impls, ReadSignal, Readable, ReadableBoxExt, ReadableExt, ReadableRef, Signal, WritableExt,
+    read_impls, ReadSignal, Readable, ReadableBoxExt, ReadableExt, ReadableRef, Signal, Writable,
+    WritableExt, WriteLock,
 };
 use futures_util::{future, pin_mut, FutureExt, StreamExt};
 use generational_box::{BorrowResult, UnsyncStorage};
@@ -29,6 +30,8 @@ use std::{cell::Cell, ops::Deref, rc::Rc};
 /// On the server, this hook will block the rendering of the component (and therefore, the page) until
 /// the future resolves. Any server futures called by `use_loader` will receive the same request context
 /// as the component that called `use_loader`.
+#[allow(clippy::result_large_err)]
+#[track_caller]
 pub fn use_loader<F, T, E>(mut future: impl FnMut() -> F + 'static) -> Result<Loader<T>, Loading>
 where
     F: Future<Output = Result<T, E>> + 'static,
@@ -69,18 +72,17 @@ where
             .await;
 
             // Map the error to the captured error type so it's cheap to clone and pass out
+            // We go through the anyhow::Error first since it's more useful.
             let res: Result<T, CapturedError> = res.map_err(|e| {
                 let res: dioxus_core::Error = e.into();
                 res.into()
             });
 
-            // Set the value and state
-            state.set(LoaderState::Ready);
-
             match res {
                 Ok(v) => {
                     err.set(None);
                     value.set(Some(v));
+                    state.set(LoaderState::Ready);
                 }
                 Err(e) => {
                     err.set(Some(e));
@@ -110,25 +112,23 @@ where
 
     let read_value = use_hook(|| value.map(|f| f.as_ref().unwrap()).boxed());
 
+    let handle = LoaderHandle {
+        task,
+        err,
+        callback,
+        state,
+    };
+
     match &*state.read_unchecked() {
-        LoaderState::Pending => Err(Loading::Pending(LoaderHandle {
-            task,
-            err,
-            callback,
-        })),
-
-        LoaderState::Failed => Err(Loading::Failed(LoaderHandle {
-            task,
-            err,
-            callback,
-        })),
-
+        LoaderState::Pending => Err(Loading::Pending(handle)),
+        LoaderState::Failed => Err(Loading::Failed(handle)),
         LoaderState::Ready => Ok(Loader {
             real_value: value,
             read_value,
             error: err,
             state,
             task,
+            handle,
         }),
     }
 }
@@ -148,6 +148,53 @@ pub struct Loader<T> {
     error: Signal<Option<CapturedError>>,
     state: Signal<LoaderState>,
     task: Signal<Task>,
+    handle: LoaderHandle,
+}
+
+impl<T: 'static> Loader<T> {
+    /// Get the error that occurred during loading, if any.
+    ///
+    /// After initial load, this will return `None` until the next reload fails.
+    pub fn error(&self) -> Option<CapturedError> {
+        self.error.read().as_ref().cloned()
+    }
+
+    /// Restart the loading task.
+    ///
+    /// After initial load, this won't suspend the component, but will reload in the background.
+    pub fn restart(&mut self) {
+        self.handle.restart();
+    }
+
+    /// Check if the loader has failed.
+    pub fn is_error(&self) -> bool {
+        self.error.read().is_some() && matches!(*self.state.read(), LoaderState::Failed)
+    }
+
+    /// Cancel the current loading task.
+    pub fn cancel(&self) {
+        self.task.read().cancel();
+    }
+}
+
+impl<T: 'static> Writable for Loader<T> {
+    type WriteMetadata = <Signal<Option<T>> as Writable>::WriteMetadata;
+
+    fn try_write_unchecked(
+        &self,
+    ) -> std::result::Result<
+        dioxus_signals::WritableRef<'static, Self>,
+        generational_box::BorrowMutError,
+    >
+    where
+        Self::Target: 'static,
+    {
+        let writer = self.real_value.try_write_unchecked()?;
+        Ok(WriteLock::map(writer, |f: &mut Option<T>| {
+            f.as_mut()
+                .expect("Loader value should be set if the `Loader<T>` exists")
+        }))
+    }
 }
 
 impl<T> Readable for Loader<T> {
@@ -228,19 +275,15 @@ impl<T> Clone for Loader<T> {
 
 impl<T> Copy for Loader<T> {}
 
-impl<T> Loader<T> {
-    pub fn restart(&mut self) {
-        todo!()
-    }
-}
-
 #[derive(Clone, Copy, PartialEq, Hash, Eq, Debug)]
-enum LoaderState {
+pub enum LoaderState {
     /// The loader's future is still running
     Pending,
+
     /// The loader's future has completed successfully
     Ready,
-    /// The loader's future has failed
+
+    /// The loader's future has failed and now the loader is in an error state.
     Failed,
 }
 
@@ -249,15 +292,23 @@ pub struct LoaderHandle {
     callback: Callback<(), Task>,
     task: Signal<Task>,
     err: Signal<Option<CapturedError>>,
+    state: Signal<LoaderState>,
 }
 
 impl LoaderHandle {
+    /// Restart the loading task.
     pub fn restart(&mut self) {
         self.task.write().cancel();
         let new_task = self.callback.call(());
         self.task.set(new_task);
     }
+
+    /// Get the current state of the loader.
+    pub fn state(&self) -> LoaderState {
+        *self.state.read()
+    }
 }
+
 impl Clone for LoaderHandle {
     fn clone(&self) -> Self {
         *self
@@ -268,8 +319,10 @@ impl Copy for LoaderHandle {}
 
 #[derive(PartialEq)]
 pub enum Loading {
+    /// The loader is still pending and the component should suspend.
     Pending(LoaderHandle),
 
+    /// The loader has failed and an error will be returned up the tree.
     Failed(LoaderHandle),
 }
 
