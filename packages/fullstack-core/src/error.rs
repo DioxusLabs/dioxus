@@ -90,6 +90,12 @@ impl From<anyhow::Error> for ServerFnError {
     }
 }
 
+impl From<serde_json::Error> for ServerFnError {
+    fn from(value: serde_json::Error) -> Self {
+        ServerFnError::Deserialization(value.to_string())
+    }
+}
+
 impl From<ServerFnError> for http::StatusCode {
     fn from(value: ServerFnError) -> Self {
         match value {
@@ -122,14 +128,9 @@ impl From<RequestError> for ServerFnError {
     }
 }
 
-#[derive(Debug)]
-pub struct ServerFnRejection {}
-impl IntoResponse for ServerFnRejection {
+impl IntoResponse for ServerFnError {
     fn into_response(self) -> axum_core::response::Response {
-        axum_core::response::Response::builder()
-            .status(http::StatusCode::INTERNAL_SERVER_ERROR)
-            .body(axum_core::body::Body::from("Internal Server Error"))
-            .unwrap()
+        todo!()
     }
 }
 
@@ -142,6 +143,10 @@ pub enum RequestError {
     /// An error occurred when building the request.
     #[error("error building request: {0}")]
     Builder(String),
+
+    /// An error occurred when serializing the request body.
+    #[error("error serializing request body: {0}")]
+    Serialization(String),
 
     /// An error occurred when following a redirect.
     #[error("error following redirect: {0}")]

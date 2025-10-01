@@ -475,7 +475,7 @@ fn route_impl_with_route(
             use dioxus_fullstack::serde as serde;
             use dioxus_fullstack::{
                 ServerFnEncoder, ExtractRequest,
-                ServerFnRejection, EncodeRequest, get_server_url,
+                EncodeRequest, get_server_url,
                 ServerFnError, MakeAxumResponse, ServerFnDecoder, ReqwestDecodeResult, ReqwestDecodeErr, DioxusServerState,
                 MakeAxumError, ClientRequest
             };

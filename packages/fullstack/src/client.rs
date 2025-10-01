@@ -206,7 +206,9 @@ impl ClientRequest {
 
     pub async fn send_json(self, json: &impl Serialize) -> Result<ClientResponse, RequestError> {
         self.header("Content-Type", "application/json")
-            .send_body(serde_json::to_vec(json).map_err(|e| RequestError::Body(e.to_string()))?)
+            .send_body(
+                serde_json::to_vec(json).map_err(|e| RequestError::Serialization(e.to_string()))?,
+            )
             .await
     }
 

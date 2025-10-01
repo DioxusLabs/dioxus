@@ -109,7 +109,7 @@ impl IntoRequest for FileStream {
 }
 
 impl<S> FromRequest<S> for FileStream {
-    type Rejection = ServerFnRejection;
+    type Rejection = ServerFnError;
 
     fn from_request(
         req: Request,

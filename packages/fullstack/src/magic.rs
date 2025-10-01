@@ -37,7 +37,7 @@
 
 use crate::{
     CantEncode, ClientRequest, ClientResponse, EncodeIsVerified, FromResponse, HttpError,
-    IntoRequest, ServerFnError, ServerFnRejection,
+    IntoRequest, ServerFnError,
 };
 use axum::response::IntoResponse;
 use axum_core::extract::{FromRequest, Request};
@@ -146,7 +146,6 @@ pub mod req_to {
             data: In,
             map: fn(In) -> Out,
         ) -> impl Future<Output = Result<R, RequestError>> + 'static;
-
         fn verify_can_serialize(&self) -> Self::VerifyEncode;
     }
 
@@ -162,17 +161,7 @@ pub mod req_to {
             data: T,
             _map: fn(T) -> O,
         ) -> impl Future<Output = Result<ClientResponse, RequestError>> + 'static {
-            async move {
-                todo!()
-                // let data = serde_json::to_string(&data).unwrap();
-                // if data.is_empty() || data == "{}" {
-                //     let response = ctx.client.send().await.unwrap();
-                //     Ok(ClientResponse { response })
-                // } else {
-                //     let response = ctx.client.body(data).send().await.unwrap();
-                //     Ok(ClientResponse { response })
-                // }
-            }
+            async move { ctx.send_json(&data).await }
         }
 
         fn verify_can_serialize(&self) -> Self::VerifyEncode {
@@ -216,6 +205,7 @@ pub mod req_to {
         ) -> impl Future<Output = Result<ClientResponse, RequestError>> + 'static {
             async move { unimplemented!() }
         }
+
         fn verify_can_serialize(&self) -> Self::VerifyEncode {
             CantEncode
         }
@@ -510,7 +500,7 @@ pub mod req_from {
 
                 let out = serde_json::from_slice::<In>(bytes)
                     .map(map)
-                    .map_err(|e| ServerFnRejection {}.into_response())
+                    .map_err(|e| ServerFnError::from(e).into_response())
                     .unwrap();
 
                 Ok((h, out))
@@ -539,7 +529,7 @@ pub mod req_from {
 
                 let res = Out::from_request(request, &state)
                     .await
-                    .map_err(|e| ServerFnRejection {}.into_response());
+                    .map_err(|e| e.into_response());
 
                 res.map(|out| (h, out))
             }
@@ -560,7 +550,7 @@ pub mod req_from {
             async move {
                 H::from_request(request, &state)
                     .await
-                    .map_err(|e| ServerFnRejection {}.into_response())
+                    .map_err(|e| e.into_response())
                     .map(|out| (out, ()))
             }
         }

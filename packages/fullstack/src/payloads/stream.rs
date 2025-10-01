@@ -7,7 +7,7 @@ use crate::{
 use axum::extract::FromRequest;
 use axum_core::response::IntoResponse;
 use bytes::Bytes;
-use dioxus_fullstack_core::{DioxusServerState, RequestError};
+use dioxus_fullstack_core::RequestError;
 use futures::{Stream, StreamExt};
 use send_wrapper::SendWrapper;
 use serde::{de::DeserializeOwned, Serialize};
@@ -240,7 +240,7 @@ impl<T: DeserializeOwned + Serialize + 'static + Send, E: Encoding> FromResponse
 }
 
 impl<S> FromRequest<S> for Streaming<String> {
-    type Rejection = ();
+    type Rejection = ServerFnError;
 
     fn from_request(
         req: axum::extract::Request,
@@ -251,7 +251,7 @@ impl<S> FromRequest<S> for Streaming<String> {
 }
 
 impl<S> FromRequest<S> for ByteStream {
-    type Rejection = ();
+    type Rejection = ServerFnError;
 
     fn from_request(
         req: axum::extract::Request,
@@ -264,7 +264,7 @@ impl<S> FromRequest<S> for ByteStream {
 impl<T: DeserializeOwned + Serialize + 'static + Send, E: Encoding, S> FromRequest<S>
     for Streaming<T, E>
 {
-    type Rejection = ();
+    type Rejection = ServerFnError;
 
     fn from_request(
         req: axum::extract::Request,
@@ -279,7 +279,12 @@ impl IntoRequest for Streaming<String> {
         self,
         builder: ClientRequest,
     ) -> impl Future<Output = Result<ClientResponse, RequestError>> + 'static {
-        async move { todo!() }
+        async move {
+            builder
+                .header("Content-Type", "text/plain; charset=utf-8")
+                .send_body_stream(self.input_stream.map(Bytes::from))
+                .await
+        }
     }
 }
 
@@ -288,7 +293,12 @@ impl IntoRequest for ByteStream {
         self,
         builder: ClientRequest,
     ) -> impl Future<Output = Result<ClientResponse, RequestError>> + 'static {
-        async move { builder.send_body_stream(self.input_stream).await }
+        async move {
+            builder
+                .header("Content-Type", "application/octet-stream")
+                .send_body_stream(self.input_stream)
+                .await
+        }
     }
 }
 

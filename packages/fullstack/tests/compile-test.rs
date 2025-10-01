@@ -7,9 +7,7 @@ use axum::response::IntoResponse;
 use axum::{response::Html, Json};
 use bytes::Bytes;
 use dioxus::prelude::*;
-use dioxus_fullstack::{
-    get, FileStream, ServerFnError, ServerFnRejection, Text, TextStream, Websocket,
-};
+use dioxus_fullstack::{get, FileStream, ServerFnError, Text, TextStream, Websocket};
 use futures::StreamExt;
 use http::HeaderMap;
 use http::StatusCode;
@@ -213,7 +211,7 @@ mod custom_types {
         }
     }
     impl<T> FromRequest<T> for MyCustomPayload {
-        type Rejection = ServerFnRejection;
+        type Rejection = ServerFnError;
         #[allow(clippy::manual_async_fn)]
         fn from_request(
             _req: axum::extract::Request,
@@ -253,7 +251,7 @@ mod overlap {
         }
     }
     impl<T> FromRequest<T> for MyCustomPayload {
-        type Rejection = ServerFnRejection;
+        type Rejection = ServerFnError;
         #[allow(clippy::manual_async_fn)]
         fn from_request(
             _req: axum::extract::Request,

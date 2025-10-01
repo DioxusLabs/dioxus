@@ -69,7 +69,7 @@ pub use axum::extract::Json;
 
 pub use payloads::*;
 pub mod payloads {
-    use crate::{ClientRequest, ClientResponse, ClientResult, IntoRequest, ServerFnRejection};
+    use crate::{ClientRequest, ClientResponse, ClientResult, IntoRequest};
     use crate::{FromResponse, FromResponseParts};
     use axum::extract::FromRequest;
     use axum::response::{IntoResponse, IntoResponseParts, ResponseParts};
