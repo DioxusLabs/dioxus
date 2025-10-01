@@ -6,8 +6,10 @@
 //! `FileStream` and `FileDownload` are built on multi-part form data and streams, which we
 //! also showcase here.
 
-use dioxus::{fullstack::ByteStream, prelude::*};
-use dioxus_fullstack::FileUpload;
+use dioxus::{
+    fullstack::{ByteStream, FileStream},
+    prelude::*,
+};
 use dioxus_html::{FileData, HasFileData};
 
 fn main() {
@@ -86,7 +88,7 @@ fn app() -> Element {
 /// Upload a file using the `FileStream` type which automatically sets relevant metadata
 /// as headers like Content-Type, Content-Length, and Content-Disposition.
 #[post("/api/upload_as_file_stream")]
-async fn upload_file_as_filestream(mut upload: FileUpload) -> Result<u32> {
+async fn upload_file_as_filestream(mut upload: FileStream) -> Result<u32> {
     use futures::StreamExt;
     use std::env::temp_dir;
     use tokio::io::AsyncWriteExt;

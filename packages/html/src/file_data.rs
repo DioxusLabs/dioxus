@@ -54,7 +54,7 @@ impl FileData {
     }
 }
 
-pub trait NativeFileData: Send {
+pub trait NativeFileData: Send + Sync {
     fn name(&self) -> String;
     fn size(&self) -> u64;
     fn last_modified(&self) -> u64;

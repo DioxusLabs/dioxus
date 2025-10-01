@@ -15,7 +15,6 @@ use std::{future::Future, marker::PhantomData, pin::Pin};
 
 pub type TextStream = Streaming<String>;
 pub type ByteStream = Streaming<Bytes>;
-pub type FileStream = Streaming<Bytes, FileEncoding>;
 pub type JsonStream<T> = Streaming<T, JsonEncoding>;
 pub type CborStream<T> = Streaming<T, CborEncoding>;
 
@@ -315,52 +314,5 @@ impl<T, E: Encoding> std::fmt::Debug for Streaming<T, E> {
         f.debug_struct("Streaming")
             .field("encoding", &std::any::type_name::<E>())
             .finish()
-    }
-}
-
-pub struct FileEncoding;
-
-impl IntoRequest for FileStream {
-    fn into_request(
-        self,
-        builder: ClientRequest,
-    ) -> impl Future<Output = Result<ClientResponse, RequestError>> + 'static {
-        async move { todo!() }
-    }
-}
-
-impl<S> FromRequest<S> for FileStream {
-    type Rejection = ();
-
-    #[doc = " Perform the extraction."]
-    fn from_request(
-        req: axum::extract::Request,
-        state: &S,
-    ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send {
-        async move { todo!() }
-    }
-}
-
-impl FromResponse for FileStream {
-    fn from_response(res: ClientResponse) -> impl Future<Output = Result<Self, ServerFnError>> {
-        async move { todo!() }
-    }
-}
-
-impl IntoResponse for FileStream {
-    fn into_response(self) -> axum_core::response::Response {
-        todo!()
-        // axum::response::Response::builder()
-        //     .header("Content-Type", "application/octet-stream")
-        //     .body(axum::body::Body::from_stream(
-        //         self.input_stream.map(Result::<Bytes, StreamingError>::Ok),
-        //     ))
-        //     .unwrap()
-    }
-}
-
-impl From<dioxus_html::FileData> for FileStream {
-    fn from(value: dioxus_html::FileData) -> Self {
-        todo!()
     }
 }

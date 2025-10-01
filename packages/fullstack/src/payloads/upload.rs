@@ -15,21 +15,16 @@ use wasm_bindgen::JsCast;
 ///
 /// On the web, this uses the `ReadableStream` API to stream file data.
 #[derive(Debug)]
-pub struct FileUpload {
+pub struct FileStream {
     data: Option<FileData>,
     name: String,
     size: Option<u64>,
     content_type: Option<String>,
     #[cfg(feature = "server")]
-    body: Option<axum_core::body::BodyDataStream>, // outgoing_stream: Option<http_body_util::BodyDataStream<Request<Body>>>,
-                                                   // content_type: Option<String>,
-                                                   // filename: Option<String>,
+    body: Option<axum_core::body::BodyDataStream>,
 }
 
-unsafe impl Send for FileUpload {}
-unsafe impl Sync for FileUpload {}
-
-impl FileUpload {
+impl FileStream {
     pub fn file_name(&self) -> &str {
         &self.name
     }
@@ -48,7 +43,7 @@ impl FileUpload {
     }
 }
 
-impl Stream for FileUpload {
+impl Stream for FileStream {
     type Item = Result<Bytes, dioxus_core::Error>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
@@ -77,7 +72,7 @@ impl Stream for FileUpload {
     }
 }
 
-impl IntoRequest for FileUpload {
+impl IntoRequest for FileStream {
     fn into_request(self, builder: ClientRequest) -> impl Future<Output = ClientResult> + 'static {
         async move {
             #[cfg(feature = "web")]
@@ -113,7 +108,7 @@ impl IntoRequest for FileUpload {
     }
 }
 
-impl<S> FromRequest<S> for FileUpload {
+impl<S> FromRequest<S> for FileStream {
     type Rejection = ServerFnRejection;
 
     fn from_request(
@@ -153,7 +148,7 @@ impl<S> FromRequest<S> for FileUpload {
 
             let stream = req.into_body().into_data_stream();
 
-            Ok(FileUpload {
+            Ok(FileStream {
                 data: None,
                 name: filename,
                 content_type,
@@ -165,19 +160,20 @@ impl<S> FromRequest<S> for FileUpload {
     }
 }
 
-impl FromResponse for FileUpload {
+impl FromResponse for FileStream {
     fn from_response(res: ClientResponse) -> impl Future<Output = Result<Self, ServerFnError>> {
         async move { todo!() }
     }
 }
 
-impl From<FileData> for FileUpload {
+impl From<FileData> for FileStream {
     fn from(value: FileData) -> Self {
         Self {
             name: value.name().to_string(),
             content_type: value.content_type().map(|s| s.to_string()),
-            size: Some(value.size() as u64),
+            size: Some(value.size()),
             data: Some(value),
+
             #[cfg(feature = "server")]
             body: None,
         }

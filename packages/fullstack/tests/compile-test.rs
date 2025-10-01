@@ -8,7 +8,7 @@ use axum::{response::Html, Json};
 use bytes::Bytes;
 use dioxus::prelude::*;
 use dioxus_fullstack::{
-    get, FileUpload, ServerFnError, ServerFnRejection, Text, TextStream, Websocket,
+    get, FileStream, ServerFnError, ServerFnRejection, Text, TextStream, Websocket,
 };
 use futures::StreamExt;
 use http::HeaderMap;
@@ -181,7 +181,7 @@ mod custom_types {
 
     /// We can extract the path arg and return anything thats IntoResponse
     #[get("/upload/image/")]
-    async fn streaming_file(body: FileUpload) -> Result<Json<i32>> {
+    async fn streaming_file(body: FileStream) -> Result<Json<i32>> {
         unimplemented!()
     }
 
@@ -191,7 +191,7 @@ mod custom_types {
         name: String,
         size: usize,
         ftype: String,
-        body: FileUpload,
+        body: FileStream,
     ) -> Result<Json<i32>> {
         unimplemented!()
     }

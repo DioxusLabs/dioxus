@@ -50,6 +50,8 @@ headers = "0.4.1"
 # xxhash-rust = { features = ["const_xxh64"], workspace = true, default-features = true }
 # rmp-serde = { version = "1.3", default-features = true }
 
+derive_more = { version = "2.0.1", features = ["deref", "deref_mut", "display", "from"] }
+
 
 # server deps
 axum-extra = { workspace =  true, optional = true, features = ["typed-header"] }
