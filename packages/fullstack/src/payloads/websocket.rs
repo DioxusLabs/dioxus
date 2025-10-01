@@ -1,4 +1,5 @@
 #![allow(unreachable_code)]
+#![allow(unused_imports)]
 
 //! This module implements WebSocket support for Dioxus Fullstack applications.
 //!
@@ -33,9 +34,10 @@ use dioxus_hooks::{use_resource, Resource, UseWaker};
 use dioxus_hooks::{use_signal, use_waker};
 use dioxus_signals::{ReadSignal, ReadableExt, ReadableOptionExt, Signal, WritableExt};
 use futures::StreamExt;
-use futures::{stream::SplitSink, SinkExt};
-use futures_util::{stream::SplitStream, TryFutureExt};
-use http::HeaderValue;
+use futures::{
+    stream::{SplitSink, SplitStream},
+    SinkExt, TryFutureExt,
+};
 use serde::{de::DeserializeOwned, Serialize};
 use std::{marker::PhantomData, prelude::rust_2024::Future};
 
@@ -768,7 +770,7 @@ impl<In: DeserializeOwned, Out: Serialize, E: Encoding> TypedWebsocket<In, Out, 
     }
 
     /// Return the selected WebSocket subprotocol, if one has been chosen.
-    pub fn protocol(&self) -> Option<&HeaderValue> {
+    pub fn protocol(&self) -> Option<&http::HeaderValue> {
         self.inner.protocol()
     }
 

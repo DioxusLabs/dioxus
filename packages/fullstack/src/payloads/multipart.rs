@@ -63,7 +63,7 @@ impl MultipartFormData {
 impl<S> IntoRequest for MultipartFormData<S> {
     fn into_request(
         self,
-        builder: ClientRequest,
+        req: ClientRequest,
     ) -> impl Future<Output = Result<ClientResponse, RequestError>> + 'static {
         async move {
             let data = self
@@ -89,7 +89,7 @@ impl<S> IntoRequest for MultipartFormData<S> {
                     RequestError::Builder("Failed to get FormData from event".into())
                 })?;
 
-                return builder.send_js_value(js_form_data).await;
+                return req.send_js_value(js_form_data).await;
             }
 
             // On non-web platforms, we actually need to read the values out of the FormData
@@ -111,17 +111,30 @@ impl<S: Send + Sync + 'static, D> FromRequest<S> for MultipartFormData<D> {
         req: Request,
         state: &S,
     ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send {
-        async move {
+        #[cfg(feature = "server")]
+        return async move {
             let form = axum::extract::multipart::Multipart::from_request(req, state)
                 .await
                 .map_err(|err| err.into_response())?;
 
             Ok(MultipartFormData {
-                #[cfg(feature = "server")]
                 form: Some(form),
                 client: None,
                 _phantom: std::marker::PhantomData,
             })
+        };
+
+        #[cfg(not(feature = "server"))]
+        async {
+            use dioxus_fullstack_core::HttpError;
+
+            let _ = req;
+            let _ = state;
+            Err(HttpError::new(
+                http::StatusCode::INTERNAL_SERVER_ERROR,
+                "MultipartFormData extractor is not supported on non-server builds",
+            )
+            .into_response())
         }
     }
 }

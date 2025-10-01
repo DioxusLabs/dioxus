@@ -33,8 +33,11 @@ fn app() -> Element {
 fn Doggo() -> Element {
     // `use_loader` returns a Result<Loader<T>, Loading>. Loading can either be "Pending" or "Failed".
     // When we use the `?` operator, the pending/error state will be thrown to the nearest Suspense or Error boundary.
+    //
+    // During SSR, `use_loader` will serialize the contents of the fetch, and during hydration, the client will
+    // use the pre-fetched data instead of re-fetching to render.
     let mut dog = use_loader(move || async move {
-        #[derive(serde::Deserialize, PartialEq)]
+        #[derive(serde::Deserialize, serde::Serialize, PartialEq)]
         struct DogApi {
             message: String,
         }

@@ -5,6 +5,7 @@
 //! - `use_action` fetches a random dog image whenever the `.dispatch` method is called.
 
 use dioxus::prelude::*;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 fn main() {
@@ -14,7 +15,7 @@ fn main() {
 fn app() -> Element {
     // Fetch the list of breeds from the Dog API, using the `?` syntax to suspend or throw errors
     let breed_list = use_loader(move || async move {
-        #[derive(serde::Deserialize, Debug, PartialEq, Clone)]
+        #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
         struct ListBreeds {
             message: HashMap<String, Vec<String>>,
         }
@@ -27,7 +28,7 @@ fn app() -> Element {
 
     // Whenever this action is called, it will re-run the future and return the result.
     let mut breed = use_action(move |breed| async move {
-        #[derive(serde::Deserialize, Debug, PartialEq)]
+        #[derive(Deserialize, Serialize, Debug, PartialEq)]
         struct DogApi {
             message: String,
         }

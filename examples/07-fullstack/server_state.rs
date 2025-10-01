@@ -3,7 +3,7 @@
 use dioxus::prelude::*;
 
 #[cfg(feature = "server")]
-use ::{
+use {
     dioxus::fullstack::Lazy,
     dioxus::fullstack::axum,
     futures::lock::Mutex,
@@ -99,14 +99,21 @@ fn main() {
 }
 
 fn app() -> Element {
-    let users = use_action(get_users);
-    let messages = use_action(read_messages);
-    let broadcast = use_action(broadcast_message);
-    let add = use_action(add_message);
+    let mut users = use_action(get_users);
+    let mut messages = use_action(read_messages);
+    let mut broadcast = use_action(broadcast_message);
+    let mut add = use_action(add_message);
 
     rsx! {
         div {
-
+            button { onclick: move |_| users.call(), "Get Users" }
+            pre { "{users.result():?}" }
+            button { onclick: move |_| messages.call(), "Get Messages" }
+            pre { "{messages.result():?}" }
+            button { onclick: move |_| broadcast.call(), "Broadcast Message" }
+            pre { "{broadcast.result():?}" }
+            button { onclick: move |_| add.call(), "Add Message" }
+            pre { "{add.result():?}" }
         }
     }
 }

@@ -28,7 +28,7 @@ use crate::{ClientRequest, ClientResponse};
 pub trait IntoRequest<R = ClientResponse>: Sized {
     fn into_request(
         self,
-        builder: ClientRequest,
+        req: ClientRequest,
     ) -> impl Future<Output = Result<R, RequestError>> + 'static;
 }
 
@@ -38,9 +38,9 @@ where
 {
     fn into_request(
         self,
-        builder: ClientRequest,
+        req: ClientRequest,
     ) -> impl Future<Output = Result<R, RequestError>> + 'static {
-        A::into_request(self.0, builder)
+        A::into_request(self.0, req)
     }
 }
 
