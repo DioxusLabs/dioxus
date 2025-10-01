@@ -202,7 +202,7 @@ fn WebSockets() -> Element {
 }
 
 #[server]
-async fn echo_ws(options: WebSocketOptions) -> ServerFnResult<Websocket> {
+async fn echo_ws(options: WebSocketOptions) -> Result<Websocket> {
     Ok(options.on_upgrade(|mut tx| async move {
         while let Some(Ok(msg)) = tx.recv().await {
             let _ = tx.send(msg).await;

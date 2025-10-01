@@ -1,9 +1,6 @@
 //! A shared pool of renderers for efficient server side rendering.
-use crate::{document::ServerDocument, ProvideServerContext, ServeConfig};
-use crate::{
-    streaming::{Mount, StreamingRenderer},
-    DioxusServerContext,
-};
+use crate::streaming::{Mount, StreamingRenderer};
+use crate::{document::ServerDocument, ServeConfig};
 use dioxus_cli_config::base_path;
 use dioxus_core::{
     has_context, provide_error_boundary, DynamicNode, ErrorContext, ScopeId, SuspenseContext,
@@ -94,7 +91,6 @@ impl SsrRendererPool {
         cfg: &ServeConfig,
         route: String,
         virtual_dom_factory: impl FnOnce() -> VirtualDom + Send + Sync + 'static,
-        server_context: &DioxusServerContext,
     ) -> Result<
         (
             RenderFreshness,
@@ -143,7 +139,6 @@ impl SsrRendererPool {
             ));
         }
 
-        let server_context = server_context.clone();
         let mut renderer = self
             .renderers
             .write()
@@ -361,9 +356,7 @@ impl SsrRendererPool {
             myself.renderers.write().unwrap().push(renderer);
         };
 
-        let join_handle = Self::spawn_platform(move || {
-            ProvideServerContext::new(create_render_future(), server_context)
-        });
+        let join_handle = Self::spawn_platform(move || create_render_future());
 
         // Wait for the initial result which determines the status code
         initial_result_rx.await.map_err(|err| {

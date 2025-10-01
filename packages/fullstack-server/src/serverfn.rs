@@ -73,11 +73,7 @@ impl ServerFunction {
         inventory::iter::<ServerFunction>().collect()
     }
 
-    pub fn register_server_fn_on_router<S>(
-        &'static self,
-        router: Router<S>,
-        context_providers: ContextProviders,
-    ) -> Router<S>
+    pub fn register_server_fn_on_router<S>(&'static self, router: Router<S>) -> Router<S>
     where
         S: Send + Sync + Clone + 'static,
     {
@@ -89,7 +85,7 @@ impl ServerFunction {
         use http::method::Method;
         let path = self.path();
         let method = self.method();
-        let handler = move |req| self.handle_server_fns_inner(context_providers, req);
+        let handler = move |req| self.handle_server_fns_inner(req);
         match method {
             Method::GET => router.route(path, axum::routing::get(handler)),
             Method::POST => router.route(path, axum::routing::post(handler)),
@@ -104,11 +100,7 @@ impl ServerFunction {
         }
     }
 
-    pub async fn handle_server_fns_inner(
-        &self,
-        additional_context: ContextProviders,
-        req: http::Request<Body>,
-    ) -> http::Response<Body> {
+    pub async fn handle_server_fns_inner(&self, req: http::Request<Body>) -> http::Response<Body> {
         // use axum::body;
         // use axum::extract::State;
         // use axum::routing::*;
@@ -198,7 +190,7 @@ pub fn server_fn_paths() -> impl Iterator<Item = (&'static str, Method)> {
 
 type LazyServerFnMap = LazyLock<DashMap<(String, Method), ServerFunction>>;
 static REGISTERED_SERVER_FUNCTIONS: LazyServerFnMap = std::sync::LazyLock::new(|| {
-    crate::inventory::iter::<ServerFunction>
+    inventory::iter::<ServerFunction>
         .into_iter()
         .map(|obj| ((obj.path().to_string(), obj.method()), obj.clone()))
         .collect()

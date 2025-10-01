@@ -1,8 +1,6 @@
-#[cfg(feature = "server")]
 use std::future::Future;
 
 /// Spawn a task in the background. If wasm is enabled, this will use the single threaded tokio runtime
-#[cfg(feature = "server")]
 pub(crate) fn spawn_platform<Fut>(
     f: impl FnOnce() -> Fut + Send + 'static,
 ) -> tokio::task::JoinHandle<Fut::Output>

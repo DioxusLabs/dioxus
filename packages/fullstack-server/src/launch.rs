@@ -72,14 +72,6 @@ async fn serve_server(
     let cfg = platform_config
         .map(|mut cfg| {
             let mut contexts = contexts;
-            let cfg_context_providers = cfg.context_providers.clone();
-            for i in 0..cfg_context_providers.len() {
-                contexts.push(Box::new({
-                    let cfg_context_providers = cfg_context_providers.clone();
-                    move || (cfg_context_providers[i])()
-                }));
-            }
-            cfg.context_providers = std::sync::Arc::new(contexts);
             cfg
         })
         .unwrap();
@@ -208,10 +200,7 @@ async fn serve_server(
                                         fn_.path(),
                                         fn_.method()
                                     );
-                                    new_router = fn_.register_server_fn_on_router(
-                                        new_router,
-                                        new_cfg.context_providers.clone(),
-                                    );
+                                    new_router = fn_.register_server_fn_on_router(new_router);
                                 }
 
                                 let hot_root = subsecond::HotFn::current(original_root);

@@ -1281,7 +1281,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "93fcc8f365936c834db5514fc45aee5b1202d677e6b40e48468aaaa8183ca8c7"
 dependencies = [
  "aws-lc-sys",
- "untrusted 0.7.1",
  "zeroize",
 ]
 
@@ -4022,12 +4021,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "const-str"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f4d34b8f066904ed7cfa4a6f9ee96c3214aa998cb44b69ca20bd2054f47402ed"
-
-[[package]]
 name = "const-str-proc-macro"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6057,13 +6050,10 @@ version = "0.7.0-rc.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "aws-lc-rs",
  "axum 0.8.4",
  "base64 0.22.1",
  "bytes",
  "ciborium",
- "const-str 0.7.0",
- "const_format",
  "dashmap 6.1.0",
  "derive_more 2.0.1",
  "dioxus",
@@ -6096,20 +6086,14 @@ dependencies = [
  "multer",
  "parking_lot",
  "pin-project",
- "reqwest 0.12.23",
- "reqwest-websocket",
  "rkyv 0.8.11",
- "rmp-serde",
  "rustls 0.23.29",
- "rustversion",
  "serde",
  "serde_json",
  "serde_qs",
  "subsecond",
  "thiserror 2.0.12",
- "throw_error",
  "tokio",
- "tokio-stream",
  "tokio-tungstenite 0.27.0",
  "tokio-util",
  "tower 0.5.2",
@@ -6118,8 +6102,6 @@ dependencies = [
  "tracing",
  "tracing-futures",
  "url",
- "web-sys",
- "xxhash-rust",
 ]
 
 [[package]]
@@ -10354,7 +10336,7 @@ dependencies = [
  "ahash 0.8.12",
  "bitflags 2.9.1",
  "browserslist-rs 0.18.2",
- "const-str 0.3.2",
+ "const-str",
  "cssparser 0.33.0",
  "cssparser-color",
  "dashmap 5.5.3",
@@ -13895,7 +13877,6 @@ dependencies = [
  "js-sys",
  "log",
  "mime",
- "mime_guess",
  "native-tls",
  "percent-encoding",
  "pin-project-lite",
@@ -13919,26 +13900,6 @@ dependencies = [
  "wasm-streams",
  "web-sys",
  "webpki-roots 1.0.1",
-]
-
-[[package]]
-name = "reqwest-websocket"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cd5f79b25f7f17a62cc9337108974431a66ae5a723ac0d9fe78ac1cce2027720"
-dependencies = [
- "async-tungstenite",
- "bytes",
- "futures-util",
- "reqwest 0.12.23",
- "serde",
- "serde_json",
- "thiserror 2.0.12",
- "tokio",
- "tokio-util",
- "tracing",
- "tungstenite 0.27.0",
- "web-sys",
 ]
 
 [[package]]
@@ -14022,7 +13983,7 @@ dependencies = [
  "cfg-if",
  "getrandom 0.2.16",
  "libc",
- "untrusted 0.9.0",
+ "untrusted",
  "windows-sys 0.52.0",
 ]
 
@@ -14400,7 +14361,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8b6275d1ee7a1cd780b64aca7726599a1dbc893b1e64144529e55c3c2f745765"
 dependencies = [
  "ring",
- "untrusted 0.9.0",
+ "untrusted",
 ]
 
 [[package]]
@@ -14411,7 +14372,7 @@ checksum = "64ca1bc8749bd4cf37b5ce386cc146580777b4e8572c7b97baf22c83f444bee9"
 dependencies = [
  "ring",
  "rustls-pki-types",
- "untrusted 0.9.0",
+ "untrusted",
 ]
 
 [[package]]
@@ -14423,7 +14384,7 @@ dependencies = [
  "aws-lc-rs",
  "ring",
  "rustls-pki-types",
- "untrusted 0.9.0",
+ "untrusted",
 ]
 
 [[package]]
@@ -14601,7 +14562,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "da046153aa2352493d6cb7da4b6e5c0c057d8a1d0a9aa8560baffdd945acd414"
 dependencies = [
  "ring",
- "untrusted 0.9.0",
+ "untrusted",
 ]
 
 [[package]]
@@ -14616,10 +14577,6 @@ dependencies = [
  "smithay-client-toolkit",
  "tiny-skia",
 ]
-
-[[package]]
-name = "sdk-mini"
-version = "0.7.0-rc.0"
 
 [[package]]
 name = "seahash"
@@ -17037,15 +16994,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "throw_error"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "41e42a6afdde94f3e656fae18f837cb9bbe500a5ac5de325b09f3ec05b9c28e3"
-dependencies = [
- "pin-project-lite",
-]
-
-[[package]]
 name = "tiff"
 version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -18047,12 +17995,6 @@ name = "unsafe-libyaml"
 version = "0.2.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "673aac59facbab8a9007c7f6108d11f63b603f7cabff99fabf650fea5c32b861"
-
-[[package]]
-name = "untrusted"
-version = "0.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a156c684c91ea7d62626509bce3cb4e1d9ed5c4d978f7b4352658f96a4c26b4a"
 
 [[package]]
 name = "untrusted"

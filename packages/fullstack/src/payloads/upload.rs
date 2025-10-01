@@ -1,8 +1,10 @@
 use super::*;
-use axum_core::{body::Body, extract::Request};
+use axum_core::extract::Request;
 use dioxus_html::FileData;
-use headers::HeaderMapExt;
-use http_body_util::{BodyExt, BodyStream};
+use std::{
+    pin::Pin,
+    task::{Context, Poll},
+};
 use wasm_bindgen::JsCast;
 
 /// A payload for uploading files using streams.
@@ -28,7 +30,6 @@ unsafe impl Send for FileUpload {}
 unsafe impl Sync for FileUpload {}
 
 impl FileUpload {
-    // pub fn new()
     pub fn file_name(&self) -> &str {
         &self.name
     }
@@ -37,23 +38,15 @@ impl FileUpload {
         self.size
     }
 
-    // pub fn from_stream(filename: String, data: impl Stream<Item = Bytes> + Send + 'static) -> Self {
-    //     todo!()
-    // }
-
-    // pub fn content_type(self, content_type: &str) -> Self {
-    //     todo!()
-    // }
+    pub fn content_type(&self, content_type: &str) -> Option<&str> {
+        self.content_type.as_deref()
+    }
 
     #[cfg(feature = "server")]
     pub fn body_mut(&mut self) -> &mut axum_core::body::BodyDataStream {
         self.body.as_mut().unwrap()
     }
 }
-use std::{
-    pin::Pin,
-    task::{Context, Poll},
-};
 
 impl Stream for FileUpload {
     type Item = Result<Bytes, dioxus_core::Error>;
@@ -85,10 +78,7 @@ impl Stream for FileUpload {
 }
 
 impl IntoRequest for FileUpload {
-    fn into_request(
-        self,
-        mut builder: ClientRequest,
-    ) -> impl Future<Output = ClientResult> + 'static {
+    fn into_request(self, builder: ClientRequest) -> impl Future<Output = ClientResult> + 'static {
         async move {
             #[cfg(feature = "web")]
             {
@@ -97,15 +87,8 @@ impl IntoRequest for FileUpload {
                 let file = self.data.unwrap();
                 let as_file = file.inner().downcast_ref::<web_sys::File>().unwrap();
                 let as_blob = as_file.dyn_ref::<web_sys::Blob>().unwrap();
-
                 let content_type = as_blob.type_();
                 let content_length = as_blob.size().to_string();
-                tracing::info!(
-                    "Uploading file: {}, type: {}, size: {}",
-                    file.name(),
-                    content_type,
-                    content_length
-                );
 
                 // Set both Content-Length and X-Content-Size for compatibility with server extraction.
                 // In browsers, content-length is often overwritten, so we set X-Content-Size as well

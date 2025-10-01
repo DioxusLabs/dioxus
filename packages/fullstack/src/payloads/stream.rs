@@ -99,7 +99,12 @@ where
     U: Into<String>,
 {
     fn from(value: S) -> Self {
-        todo!()
+        Self {
+            input_stream: Box::pin(value.map(|data| data.into()))
+                as Pin<Box<dyn Stream<Item = String> + Send>>,
+            output_stream: Box::pin(futures::stream::empty()) as _,
+            encoding: PhantomData,
+        }
     }
 }
 
@@ -311,13 +316,6 @@ impl<T, E: Encoding> std::fmt::Debug for Streaming<T, E> {
             .field("encoding", &std::any::type_name::<E>())
             .finish()
     }
-}
-
-fn assert_it_works() {
-    fn assert_is_into_request<T: IntoRequest + FromRequest<S>, S>() {}
-
-    assert_is_into_request::<ByteStream, DioxusServerState>();
-    assert_is_into_request::<(ByteStream,), DioxusServerState>();
 }
 
 pub struct FileEncoding;

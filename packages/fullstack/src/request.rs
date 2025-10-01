@@ -1,11 +1,8 @@
-use bytes::Bytes;
 use dioxus_fullstack_core::{RequestError, ServerFnError};
-use http::{response::Parts, HeaderMap};
-use serde::de::DeserializeOwned;
+use http::response::Parts;
 use std::{future::Future, pin::Pin};
-use url::Url;
 
-use crate::{ClientRequest, ClientResponse, ClientResult};
+use crate::{ClientRequest, ClientResponse};
 
 /// The `IntoRequest` trait allows types to be used as the body of a request to a HTTP endpoint or server function.
 ///

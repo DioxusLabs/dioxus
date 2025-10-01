@@ -44,6 +44,13 @@ axum = { workspace = true, default-features = false, features = ["json", "form",
 http-body = { workspace = true }
 headers = "0.4.1"
 
+# const_format = { workspace = true, default-features = true }
+# const-str = { workspace = true, default-features = true }
+# rustversion = { workspace = true, default-features = true }
+# xxhash-rust = { features = ["const_xxh64"], workspace = true, default-features = true }
+# rmp-serde = { version = "1.3", default-features = true }
+
+
 # server deps
 axum-extra = { workspace =  true, optional = true, features = ["typed-header"] }
 inventory = { workspace = true, optional = true }

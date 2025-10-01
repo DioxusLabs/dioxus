@@ -14,8 +14,6 @@ pub use crate::server_future::*;
 pub use crate::streaming::*;
 pub use crate::transport::*;
 
-pub mod client;
-
 /// Error types and utilities.
 #[macro_use]
 pub mod error;

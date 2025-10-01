@@ -70,7 +70,6 @@ members = [
     "packages/native-dom",
     "packages/asset-resolver",
     "packages/depinfo",
-    "packages/sdk",
 
     # CLI harnesses, all included
     "packages/cli-harnesses/*",
