@@ -272,10 +272,10 @@ pub struct Websocket<In = String, Out = String, E = JsonEncoding> {
     _in: std::marker::PhantomData<fn() -> (In, Out, E)>,
 
     #[cfg(not(target_arch = "wasm32"))]
-    native: Result<native::SplitSocket, WebsocketError>,
+    native: Option<native::SplitSocket>,
 
     #[cfg(feature = "web")]
-    web: Result<WebsysSocket, WebsocketError>,
+    web: Option<WebsysSocket>,
 
     response: Option<axum::response::Response>,
 }
@@ -332,7 +332,13 @@ impl<I, O, E> Websocket<I, O, E> {
     pub async fn send_raw(&self, message: Message) -> Result<(), WebsocketError> {
         #[cfg(feature = "web")]
         if cfg!(target_arch = "wasm32") {
-            let mut sender = self.web.as_ref()?.sender.lock().await;
+            let mut sender = self
+                .web
+                .as_ref()
+                .ok_or_else(|| WebsocketError::Uninitialized)?
+                .sender
+                .lock()
+                .await;
 
             match message {
                 Message::Text(s) => {
@@ -355,7 +361,14 @@ impl<I, O, E> Websocket<I, O, E> {
 
         #[cfg(not(target_arch = "wasm32"))]
         {
-            let mut sender = self.native.as_ref()?.sender.lock().await;
+            let mut sender = self
+                .native
+                .as_ref()
+                .ok_or_else(|| WebsocketError::Uninitialized)?
+                .sender
+                .lock()
+                .await;
+
             sender
                 .send(message.into())
                 .await
@@ -437,19 +450,16 @@ impl<I, O, E> FromResponse<UpgradingWebsocket> for Websocket<I, O, E> {
     fn from_response(res: UpgradingWebsocket) -> impl Future<Output = Result<Self, ServerFnError>> {
         async move {
             #[cfg(not(target_arch = "wasm32"))]
-            let native = res.native.ok_or_else(|| WebsocketError::Uninitialized);
+            let native = res.native;
 
             #[cfg(feature = "web")]
-            let web = res
-                .web
-                .map(|f| {
-                    let (sender, receiver) = f.split();
-                    WebsysSocket {
-                        sender: Mutex::new(sender),
-                        receiver: Mutex::new(receiver),
-                    }
-                })
-                .ok_or_else(|| WebsocketError::Uninitialized);
+            let web = res.web.map(|f| {
+                let (sender, receiver) = f.split();
+                WebsysSocket {
+                    sender: Mutex::new(sender),
+                    receiver: Mutex::new(receiver),
+                }
+            });
 
             Ok(Websocket {
                 protocol: res.protocol,
@@ -541,10 +551,10 @@ impl WebSocketOptions {
             _in: PhantomData,
 
             #[cfg(not(target_arch = "wasm32"))]
-            native: Err(WebsocketError::Uninitialized),
+            native: None,
 
             #[cfg(feature = "web")]
-            web: Err(WebsocketError::Uninitialized),
+            web: None,
         }
     }
 }
@@ -821,18 +831,6 @@ pub enum WebsocketError {
     Cbor(#[from] ciborium::de::Error<std::io::Error>),
 }
 
-impl<T> From<Option<T>> for WebsocketError {
-    fn from(value: Option<T>) -> Self {
-        todo!()
-    }
-}
-
-impl From<&WebsocketError> for WebsocketError {
-    fn from(value: &WebsocketError) -> Self {
-        todo!()
-    }
-}
-
 #[cfg(feature = "web")]
 impl From<gloo_net::websocket::WebSocketError> for WebsocketError {
     fn from(value: gloo_net::websocket::WebSocketError) -> Self {
@@ -843,8 +841,8 @@ impl From<gloo_net::websocket::WebSocketError> for WebsocketError {
                 code: close_event.code.into(),
                 description: close_event.reason,
             },
-            WebSocketError::MessageSendError(js_error) => todo!(),
-            _ => todo!(),
+            WebSocketError::MessageSendError(_js_error) => WebsocketError::Unexpected,
+            _ => WebsocketError::Unexpected,
         }
     }
 }
