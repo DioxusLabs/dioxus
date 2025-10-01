@@ -503,14 +503,12 @@ impl WebSocketOptions {
         self
     }
 
+    #[cfg(feature = "server")]
     pub fn on_failed_upgrade(
         mut self,
         callback: impl FnOnce(axum::Error) + Send + 'static,
     ) -> Self {
-        #[cfg(feature = "server")]
-        {
-            self.on_failed_upgrade = Some(Box::new(callback));
-        }
+        self.on_failed_upgrade = Some(Box::new(callback));
 
         self
     }
@@ -619,7 +617,7 @@ impl<S: Send> FromRequest<S> for WebSocketOptions {
     type Rejection = axum::response::Response;
 
     fn from_request(
-        req: Request,
+        _req: Request,
         _: &S,
     ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send {
         #[cfg(not(feature = "server"))]
@@ -627,7 +625,7 @@ impl<S: Send> FromRequest<S> for WebSocketOptions {
 
         #[cfg(feature = "server")]
         async move {
-            let ws = match axum::extract::ws::WebSocketUpgrade::from_request(req, &()).await {
+            let ws = match axum::extract::ws::WebSocketUpgrade::from_request(_req, &()).await {
                 Ok(ws) => ws,
                 Err(rejection) => return Err(rejection.into_response()),
             };

@@ -2,13 +2,13 @@ use super::*;
 use axum_core::extract::Request;
 use dioxus_fullstack_core::RequestError;
 use dioxus_html::FileData;
+
 #[cfg(feature = "server")]
 use std::path::Path;
 use std::{
     pin::Pin,
     task::{Context, Poll},
 };
-use wasm_bindgen::JsCast;
 
 /// A payload for uploading files using streams.
 ///
@@ -129,6 +129,7 @@ impl IntoRequest for FileStream {
             #[cfg(feature = "web")]
             if cfg!(target_arch = "wasm32") {
                 use js_sys::escape;
+                use wasm_bindgen::JsCast;
 
                 let as_file = file_data.inner().downcast_ref::<web_sys::File>().unwrap();
                 let as_blob = as_file.dyn_ref::<web_sys::Blob>().unwrap();

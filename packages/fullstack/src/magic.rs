@@ -469,6 +469,27 @@ pub mod req_from {
         ) -> impl Future<Output = Result<(H, Out), Response>> + 'static;
     }
 
+    /// When you're extracting entirely on the server, we need to reject client-consuning request bodies
+    /// This sits above priority in the combined headers on server / body on client case.
+    impl<In, M, H> ExtractRequest<In, (), H, M> for &&&&&&&&&&&ServerFnEncoder<In, ()>
+    where
+        H: FromRequest<DioxusServerState, M> + 'static,
+    {
+        fn extract_axum(
+            &self,
+            state: DioxusServerState,
+            request: Request,
+            _map: fn(In) -> (),
+        ) -> impl Future<Output = Result<(H, ()), Response>> + 'static {
+            async move {
+                H::from_request(request, &state)
+                    .await
+                    .map_err(|e| e.into_response())
+                    .map(|out| (out, ()))
+            }
+        }
+    }
+
     // One-arg case
     impl<In, Out, H> ExtractRequest<In, Out, H> for &&&&&&&&&&ServerFnEncoder<In, Out>
     where
@@ -532,26 +553,6 @@ pub mod req_from {
                     .map_err(|e| e.into_response());
 
                 res.map(|out| (h, out))
-            }
-        }
-    }
-
-    /// We skip the BodySerialize wrapper and just go for the output type directly.
-    impl<In, M, H> ExtractRequest<In, (), H, M> for &&&&&&&&ServerFnEncoder<In, ()>
-    where
-        H: FromRequest<DioxusServerState>,
-    {
-        fn extract_axum(
-            &self,
-            state: DioxusServerState,
-            request: Request,
-            _map: fn(In) -> (),
-        ) -> impl Future<Output = Result<(H, ()), Response>> + 'static {
-            async move {
-                H::from_request(request, &state)
-                    .await
-                    .map_err(|e| e.into_response())
-                    .map(|out| (out, ()))
             }
         }
     }

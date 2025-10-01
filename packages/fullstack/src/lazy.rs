@@ -122,13 +122,12 @@ where
     G: Future<Output = Result<T, E>> + Send + 'static,
     E: Into<dioxus_core::Error>,
 {
-    let ptr: F = unsafe { std::mem::zeroed() };
     assert_eq!(std::mem::size_of::<F>(), 0, "The constructor function must be a zero-sized type (ZST). Consider using a function pointer or a closure without captured variables.");
-
-    let fut = ptr();
 
     #[cfg(feature = "server")]
     {
+        let ptr: F = unsafe { std::mem::zeroed() };
+        let fut = ptr();
         let rt = tokio::runtime::Handle::current();
         return std::thread::spawn(move || rt.block_on(fut).map_err(|e| e.into()))
             .join()

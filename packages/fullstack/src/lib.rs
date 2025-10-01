@@ -8,12 +8,6 @@ pub use dioxus_fullstack_core::*;
 #[doc(inline)]
 pub use dioxus_fullstack_macro::*;
 
-#[cfg(feature = "server")]
-pub use axum;
-
-#[cfg(feature = "server")]
-pub use inventory;
-
 pub use axum_core;
 pub use headers;
 pub use http;
@@ -40,6 +34,9 @@ pub use serde;
 // pub use serde;
 // #[doc(hidden)]
 // pub use xxhash_rust;
+
+#[cfg(feature = "server")]
+pub use {axum, axum_extra::TypedHeader, inventory};
 
 #[cfg(feature = "server")]
 pub(crate) mod spawn;

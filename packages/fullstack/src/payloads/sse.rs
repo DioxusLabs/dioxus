@@ -4,9 +4,8 @@ use axum::{
     response::sse::{Event, KeepAlive},
     BoxError,
 };
-use axum_core::response::IntoResponse;
 use futures::io::AsyncBufReadExt;
-use futures::{Sink, Stream, TryStream};
+use futures::Stream;
 use futures::{StreamExt, TryStreamExt};
 use http::{header::CONTENT_TYPE, HeaderValue, StatusCode};
 use serde::de::DeserializeOwned;
@@ -268,8 +267,10 @@ mod server_impl {
     use super::*;
     use crate::spawn_platform;
     use axum::response::sse::Sse;
+    use axum_core::response::IntoResponse;
     use futures::Future;
     use futures::SinkExt;
+    use futures::{Sink, TryStream};
     use serde::Serialize;
 
     impl<T: 'static> ServerEvents<T> {

@@ -83,7 +83,7 @@ async fn uppercase_ws(
             .await;
 
         // Loop and echo back uppercase messages
-        while let Some(Ok(ClientEvent::TextInput(next))) = socket.recv().await {
+        while let Ok(ClientEvent::TextInput(next)) = socket.recv().await {
             _ = socket.send(ServerEvent::Uppercase(next)).await;
         }
     }))

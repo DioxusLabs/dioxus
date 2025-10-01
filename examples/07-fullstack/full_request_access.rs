@@ -24,7 +24,7 @@ fn app() -> Element {
 /// The `request: axum_core::extract::Request` argument is placed in the handler function, but not
 /// exposed to the client.
 #[post("/api/full_request_access", request: axum_core::extract::Request)]
-async fn full_request() -> Result<u32> {
+async fn full_request() -> Result<()> {
     let headers = request.headers();
 
     if headers.contains_key("x-api-key") {
@@ -33,5 +33,5 @@ async fn full_request() -> Result<u32> {
         println!("No API key found");
     }
 
-    todo!()
+    Ok(())
 }

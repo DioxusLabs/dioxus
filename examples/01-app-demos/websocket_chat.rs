@@ -138,7 +138,7 @@ async fn uppercase_ws(
                 Ok(msg) = broadcast.recv() => {
                     let _ = socket.send(ServerEvent::ReceiveMessage(msg)).await;
                 }
-                Some(Ok(ClientEvent::SendMessage(message))) = socket.recv() => {
+                Ok(ClientEvent::SendMessage(message)) = socket.recv() => {
                     let chat_message = ChatMessage {
                         user_id,
                         name: name.clone(),

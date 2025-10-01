@@ -5,9 +5,8 @@ use dioxus::prelude::*;
 
 fn main() {
     #[cfg(feature = "server")]
-    dioxus::server::with_router(|| async {
+    dioxus::serve(|| async {
         use crate::auth::*;
-        use axum::routing::*;
         use axum_session::{SessionConfig, SessionLayer, SessionStore};
         use axum_session_auth::AuthConfig;
         use axum_session_sqlx::SessionSqlitePool;
@@ -31,8 +30,8 @@ fn main() {
         User::create_user_tables(&pool).await?;
 
         // build our application with some routes
-        let router =
-            Router::new()
+        Ok(
+            dioxus::server::router(app)
                 .layer(
                     axum_session_auth::AuthSessionLayer::<
                         User,
@@ -42,9 +41,8 @@ fn main() {
                     >::new(Some(pool))
                     .with_config(auth_config),
                 )
-                .layer(SessionLayer::new(session_store));
-
-        dioxus::Ok(router)
+                .layer(SessionLayer::new(session_store)),
+        )
     });
 
     dioxus::launch(app);
