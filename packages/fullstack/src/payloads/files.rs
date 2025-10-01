@@ -1,8 +1,9 @@
 use super::*;
 use axum_core::extract::Request;
+use dioxus_fullstack_core::RequestError;
 use dioxus_html::FileData;
 #[cfg(feature = "server")]
-use std::path::PathBuf;
+use std::path::Path;
 use std::{
     pin::Pin,
     task::{Context, Poll},
@@ -53,7 +54,12 @@ impl FileStream {
 
     /// Create a new `FileStream` from a file path. This is only available on the server.
     #[cfg(feature = "server")]
-    pub async fn from_file(file: PathBuf) -> Result<Self, std::io::Error> {
+    pub async fn from_path(file: impl AsRef<Path>) -> Result<Self, std::io::Error> {
+        Self::from_path_buf(file.as_ref()).await
+    }
+
+    #[cfg(feature = "server")]
+    async fn from_path_buf(file: &Path) -> Result<Self, std::io::Error> {
         let metadata = file.metadata()?;
         let contents = tokio::fs::File::open(&file).await?;
         let mime = dioxus_asset_resolver::native::get_mime_from_ext(
@@ -108,37 +114,85 @@ impl FileStream {
 }
 
 impl IntoRequest for FileStream {
-    fn into_request(self, builder: ClientRequest) -> impl Future<Output = ClientResult> + 'static {
+    #[allow(unreachable_code)]
+    fn into_request(
+        self,
+        mut builder: ClientRequest,
+    ) -> impl Future<Output = ClientResult> + 'static {
         async move {
+            let Some(file_data) = self.data else {
+                return Err(RequestError::Request(
+                    "FileStream has no data to send".into(),
+                ));
+            };
+
             #[cfg(feature = "web")]
-            {
+            if cfg!(target_arch = "wasm32") {
                 use js_sys::escape;
 
-                let file = self.data.unwrap();
-                let as_file = file.inner().downcast_ref::<web_sys::File>().unwrap();
+                let as_file = file_data.inner().downcast_ref::<web_sys::File>().unwrap();
                 let as_blob = as_file.dyn_ref::<web_sys::Blob>().unwrap();
                 let content_type = as_blob.type_();
                 let content_length = as_blob.size().to_string();
+                let name = as_file.name();
 
                 // Set both Content-Length and X-Content-Size for compatibility with server extraction.
                 // In browsers, content-length is often overwritten, so we set X-Content-Size as well
                 // for better compatibility with dioxus-based clients.
-                let builder = builder
+                return builder
                     .header("Content-Type", content_type)?
                     .header("Content-Length", content_length.clone())?
                     .header("X-Content-Size", content_length)?
                     .header(
                         "Content-Disposition",
-                        format!(
-                            "attachment; filename=\"{}\"",
-                            escape(&file.name().to_string())
-                        ),
-                    )?;
-
-                return builder.send_js_value(as_blob.clone().into()).await;
+                        format!("attachment; filename=\"{}\"", escape(&name)),
+                    )?
+                    .send_js_value(as_blob.clone().into())
+                    .await;
             }
 
-            todo!()
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                use std::ascii::escape_default;
+
+                use futures::TryStreamExt;
+
+                let content_type = self
+                    .content_type
+                    .unwrap_or_else(|| "application/octet-stream".to_string());
+                let content_length = self.size.map(|s| s.to_string());
+                let name = self.name;
+                let stream = file_data.byte_stream().map_err(|_| StreamingError::Failed);
+
+                // Ascii escape the filename to avoid issues with special characters.
+                let mut chars = vec![];
+                for byte in name.chars() {
+                    chars.extend(escape_default(byte as u8));
+                }
+                let filename = String::from_utf8(chars).map_err(|_| {
+                    RequestError::Request(
+                        "Failed to escape filename for Content-Disposition".into(),
+                    )
+                });
+
+                if let Some(length) = content_length {
+                    builder = builder.header("Content-Length", length)?;
+                }
+
+                if let Ok(filename) = filename {
+                    builder = builder.header(
+                        "Content-Disposition",
+                        format!("attachment; filename=\"{}\"", filename),
+                    )?;
+                }
+
+                return builder
+                    .header("Content-Type", content_type)?
+                    .send_body_stream(stream)
+                    .await;
+            }
+
+            unimplemented!("FileStream::into_request is only implemented for web targets");
         }
     }
 }
@@ -181,16 +235,14 @@ impl<S> FromRequest<S> for FileStream {
                 .and_then(|s| s.to_str().ok())
                 .map(|s| s.to_string());
 
-            let stream = req.into_body().into_data_stream();
-
             Ok(FileStream {
                 data: None,
                 name: filename,
                 content_type,
                 size,
-                #[cfg(feature = "server")]
-                server_body: Some(stream),
                 client_body: None,
+                #[cfg(feature = "server")]
+                server_body: Some(req.into_body().into_data_stream()),
             })
         }
     }
@@ -225,14 +277,12 @@ impl FromResponse for FileStream {
                     .and_then(|s| s.parse::<u64>().ok())
             });
 
-            let res = res.bytes_stream();
-
             Ok(Self {
                 data: None,
                 name,
                 size,
                 content_type,
-                client_body: Some(Box::pin(res)),
+                client_body: Some(Box::pin(res.bytes_stream())),
                 #[cfg(feature = "server")]
                 server_body: None,
             })
@@ -280,11 +330,9 @@ impl From<FileData> for FileStream {
             content_type: value.content_type().map(|s| s.to_string()),
             size: Some(value.size()),
             data: Some(value),
-
+            client_body: None,
             #[cfg(feature = "server")]
             server_body: None,
-
-            client_body: None,
         }
     }
 }

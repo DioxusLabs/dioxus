@@ -11,6 +11,7 @@ use dioxus::{
     prelude::*,
 };
 use dioxus_html::{FileData, HasFileData};
+use futures::StreamExt;
 
 fn main() {
     dioxus::launch(app);
@@ -49,6 +50,19 @@ fn app() -> Element {
         dioxus::Ok(())
     });
 
+    let mut download_file = use_action(move || async move {
+        let mut file = download_as_filestream().await?;
+        let mut bytes = vec![];
+
+        info!("Downloaded file: {:?}", file);
+
+        while let Some(Ok(chunk)) = file.next().await {
+            bytes.extend_from_slice(&chunk);
+        }
+
+        dioxus::Ok(String::from_utf8_lossy(&bytes).to_string())
+    });
+
     rsx! {
         Stylesheet { href: asset!("/examples/assets/file_upload.css") }
         div {
@@ -79,6 +93,16 @@ fn app() -> Element {
                         upload_files_as_bytestream.call(evt.files()).await;
                     },
                     "Drop files here"
+                }
+            }
+
+            div {
+                h3 { "Download a file from the server" }
+                button { onclick: move |_| download_file.call(), "Download file" }
+                if let Some(Ok(content)) = &download_file.result() {
+                    pre { "{content}" }
+                } else if let Some(Err(e)) = &download_file.result() {
+                    pre { "Error downloading file: {e}" }
                 }
             }
         }
@@ -170,7 +194,12 @@ async fn upload_as_bytestream(name: String, size: u64, mut stream: ByteStream) -
     Ok(())
 }
 
+/// Download a file from the server as a `FileStream`. This automatically sets relevant
+/// headers like Content-Type, Content-Length, and Content-Disposition.
+///
+/// This endpoint is nice because 3rd-party clients can visit it directly and download the file!
+/// Try visiting this endpoint directly in your browser.
 #[get("/api/download_as_filestream")]
 async fn download_as_filestream() -> Result<FileStream> {
-    todo!()
+    Ok(FileStream::from_path(file!()).await?)
 }

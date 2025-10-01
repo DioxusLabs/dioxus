@@ -111,8 +111,8 @@ pub mod payloads {
     pub mod stream;
     pub use stream::*;
 
-    pub mod upload;
-    pub use upload::*;
+    pub mod files;
+    pub use files::*;
 
     pub mod header;
     pub use header::*;

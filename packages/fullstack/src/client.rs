@@ -241,10 +241,15 @@ impl ClientRequest {
 
     /// Sends JSON data with the `application/json` content type.
     pub async fn send_json(self, json: &impl Serialize) -> Result<ClientResponse, RequestError> {
+        let bytes =
+            serde_json::to_vec(json).map_err(|e| RequestError::Serialization(e.to_string()))?;
+
+        if bytes.is_empty() || bytes == b"{}" || bytes == b"null" {
+            return self.send_empty_body().await;
+        }
+
         self.typed_header(ContentType::json())
-            .send_raw_bytes(
-                serde_json::to_vec(json).map_err(|e| RequestError::Serialization(e.to_string()))?,
-            )
+            .send_raw_bytes(bytes)
             .await
     }
 
