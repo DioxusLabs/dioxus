@@ -9,6 +9,7 @@ use axum_core::response::IntoResponse;
 use bytes::Bytes;
 use dioxus_fullstack_core::{HttpError, RequestError};
 use futures::{Stream, StreamExt};
+use headers::{ContentType, Header};
 use send_wrapper::SendWrapper;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{future::Future, marker::PhantomData, pin::Pin};
@@ -348,7 +349,7 @@ impl IntoRequest for Streaming<String> {
     ) -> impl Future<Output = Result<ClientResponse, RequestError>> + 'static {
         async move {
             builder
-                .header("Content-Type", "text/plain; charset=utf-8")
+                .header("Content-Type", "text/plain; charset=utf-8")?
                 .send_body_stream(self.input_stream.map(|e| e.map(Bytes::from)))
                 .await
         }
@@ -362,7 +363,7 @@ impl IntoRequest for ByteStream {
     ) -> impl Future<Output = Result<ClientResponse, RequestError>> + 'static {
         async move {
             builder
-                .header("Content-Type", "application/octet-stream")
+                .header(ContentType::name(), "application/octet-stream")?
                 .send_body_stream(self.input_stream)
                 .await
         }
@@ -378,7 +379,7 @@ impl<T: DeserializeOwned + Serialize + 'static + Send, E: Encoding> IntoRequest
     ) -> impl Future<Output = Result<ClientResponse, RequestError>> + 'static {
         async move {
             builder
-                .header("Content-Type", E::stream_content_type())
+                .header("Content-Type", E::stream_content_type())?
                 .send_body_stream(
                     self.input_stream.map(|r| {
                         r.and_then(|item| E::to_bytes(&item).ok_or(StreamingError::Failed))

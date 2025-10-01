@@ -5,10 +5,10 @@ use dioxus_fullstack_core::RequestError;
 use futures::Stream;
 use futures::{TryFutureExt, TryStreamExt};
 use headers::{ContentType, Header};
-use http::{Extensions, HeaderMap, HeaderName, Method, StatusCode};
+use http::{response::Parts, Extensions, HeaderMap, HeaderName, HeaderValue, Method, StatusCode};
 use send_wrapper::SendWrapper;
 use serde::{de::DeserializeOwned, Serialize};
-use std::{pin::Pin, prelude::rust_2024::Future, sync::OnceLock};
+use std::{fmt::Display, pin::Pin, prelude::rust_2024::Future, sync::OnceLock};
 use url::Url;
 
 use crate::{reqwest_error_to_request_error, StreamingError};
@@ -85,7 +85,23 @@ impl ClientRequest {
     }
 
     /// Add a `Header` to this Request.
-    pub fn header<H: Header>(mut self, header: H) -> Self {
+    pub fn header(
+        mut self,
+        name: impl TryInto<HeaderName, Error = impl Display>,
+        value: impl TryInto<HeaderValue, Error = impl Display>,
+    ) -> Result<Self, RequestError> {
+        self.headers.append(
+            name.try_into()
+                .map_err(|d| RequestError::Builder(d.to_string()))?,
+            value
+                .try_into()
+                .map_err(|d| RequestError::Builder(d.to_string()))?,
+        );
+        Ok(self)
+    }
+
+    /// Add a `Header` to this Request.
+    pub fn typed_header<H: Header>(mut self, header: H) -> Self {
         let mut headers = vec![];
         header.encode(&mut headers);
         for header in headers {
@@ -155,7 +171,7 @@ impl ClientRequest {
         let body =
             serde_urlencoded::to_string(data).map_err(|err| RequestError::Body(err.to_string()))?;
 
-        self.header(ContentType::form_url_encoded())
+        self.typed_header(ContentType::form_url_encoded())
             .send_raw_bytes(body)
             .await
     }
@@ -218,14 +234,14 @@ impl ClientRequest {
         self,
         text: impl Into<String> + Into<Bytes>,
     ) -> Result<ClientResponse, RequestError> {
-        self.header(ContentType::text_utf8())
+        self.typed_header(ContentType::text_utf8())
             .send_raw_bytes(text)
             .await
     }
 
     /// Sends JSON data with the `application/json` content type.
     pub async fn send_json(self, json: &impl Serialize) -> Result<ClientResponse, RequestError> {
-        self.header(ContentType::json())
+        self.typed_header(ContentType::json())
             .send_raw_bytes(
                 serde_json::to_vec(json).map_err(|e| RequestError::Serialization(e.to_string()))?,
             )
@@ -397,39 +413,24 @@ impl ClientResponse {
         self.response.text().await
     }
 
-    pub fn make_parts(&self) -> http::response::Parts {
-        todo!()
-        // let mut response = http::response::Response::builder().status(self.response.status());
+    /// Creates the `http::response::Parts` from this response.
+    pub fn make_parts(&self) -> Parts {
+        let mut response = http::response::Response::builder().status(self.response.status());
 
-        // #[cfg(not(target_arch = "wasm32"))]
-        // {
-        //     response = response.version(self.response.version());
-        // }
+        response = response.version(self.response.version());
 
-        // #[cfg(target_arch = "wasm32")]
-        // {
-        //     // wasm32 doesn't support HTTP/2 yet, so we'll just set it to HTTP/1.1
-        //     response = response.version(http::Version::HTTP_2);
-        // }
+        for (key, value) in self.response.headers().iter() {
+            response = response.header(key, value);
+        }
 
-        // for (key, value) in self.response.headers().iter() {
-        //     response = response.header(key, value);
-        // }
+        let (parts, _) = response.body(()).unwrap().into_parts();
 
-        // let (parts, _) = response.body(()).unwrap().into_parts();
-
-        // parts
+        parts
     }
 
-    pub fn into_parts(
-        self,
-    ) -> (
-        http::response::Parts,
-        impl Stream<Item = Result<Bytes, RequestError>>,
-    ) {
-        let parts = self.make_parts();
-
-        (parts, self.bytes_stream())
+    /// Consumes the response, returning the head and a stream of the body.
+    pub fn into_parts(self) -> (Parts, impl Stream<Item = Result<Bytes, RequestError>>) {
+        (self.make_parts(), self.bytes_stream())
     }
 }
 
@@ -451,6 +452,9 @@ pub trait ClientResponseDriver {
     fn status(&self) -> StatusCode;
     fn headers(&self) -> &HeaderMap;
     fn url(&self) -> &Url;
+    fn version(&self) -> http::Version {
+        http::Version::HTTP_2
+    }
     fn content_length(&self) -> Option<u64>;
     fn bytes(self: Box<Self>) -> Pin<Box<dyn Future<Output = Result<Bytes, RequestError>> + Send>>;
     fn bytes_stream(
@@ -465,6 +469,10 @@ mod native {
     impl ClientResponseDriver for reqwest::Response {
         fn status(&self) -> http::StatusCode {
             self.status()
+        }
+
+        fn version(&self) -> http::Version {
+            self.version()
         }
 
         fn headers(&self) -> &http::HeaderMap {
