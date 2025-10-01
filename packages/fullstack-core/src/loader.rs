@@ -1,8 +1,8 @@
-use crate::{use_callback, use_signal};
 use dioxus_core::{
     spawn, use_hook, Callback, IntoAttributeValue, IntoDynNode, ReactiveContext, Subscribers, Task,
 };
 use dioxus_core::{CapturedError, RenderError, Result, SuspendedFuture};
+use dioxus_hooks::{use_callback, use_signal};
 use dioxus_signals::{read_impls, Readable, ReadableExt, ReadableRef, Signal, WritableExt};
 use futures_util::{future, pin_mut, FutureExt, StreamExt};
 use generational_box::{BorrowResult, UnsyncStorage};

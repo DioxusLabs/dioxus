@@ -99,9 +99,6 @@ pub use use_set_compare::*;
 mod use_after_suspense_resolved;
 pub use use_after_suspense_resolved::*;
 
-mod use_loader;
-pub use use_loader::*;
-
 mod use_action;
 pub use use_action::*;
 

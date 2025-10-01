@@ -5677,6 +5677,8 @@ dependencies = [
  "dioxus-hooks",
  "dioxus-signals",
  "futures-channel",
+ "futures-util",
+ "generational-box",
  "http 1.3.1",
  "inventory",
  "serde",

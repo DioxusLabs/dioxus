@@ -1,9 +1,8 @@
 #![allow(non_snake_case)]
 
-use std::fmt::Display;
-
-use dioxus::prelude::*;
+use dioxus::{fullstack::Loading, prelude::*};
 use serde::{Deserialize, Serialize};
+use std::fmt::Display;
 
 fn main() {
     dioxus::launch(app);

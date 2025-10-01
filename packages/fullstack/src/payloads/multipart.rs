@@ -1,15 +1,14 @@
-use std::{prelude::rust_2024::Future, rc::Rc};
-
-use crate::{ClientRequest, ClientResponse, FromResponse, IntoRequest};
-#[cfg(feature = "server")]
-use axum::extract::multipart::{Field, MultipartError};
+use crate::{ClientRequest, ClientResponse, IntoRequest};
 use axum::{
-    body::Body,
     extract::{FromRequest, Request},
     response::{IntoResponse, Response},
 };
-use dioxus_fullstack_core::{RequestError, ServerFnError};
+use dioxus_fullstack_core::RequestError;
 use dioxus_html::{FormData, FormEvent};
+use std::{prelude::rust_2024::Future, rc::Rc};
+
+#[cfg(feature = "server")]
+use axum::extract::multipart::{Field, MultipartError};
 
 /// A streaming multipart form data handler.
 ///
@@ -95,7 +94,6 @@ impl<S> IntoRequest for MultipartFormData<S> {
             // and construct a multipart form body manually.
             #[cfg(not(target_arch = "wasm32"))]
             {
-                // builder.send_form(data)
                 return todo!();
             }
 

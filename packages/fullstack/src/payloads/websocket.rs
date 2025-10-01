@@ -23,6 +23,7 @@
 use crate::{ClientRequest, Encoding, FromResponse, IntoRequest, JsonEncoding, ServerFnError};
 use axum::extract::{FromRequest, Request};
 use axum_core::response::{IntoResponse, Response};
+use bytes::Bytes;
 use dioxus_core::{use_hook, CapturedError, Result};
 use dioxus_fullstack_core::RequestError;
 use dioxus_hooks::{use_resource, Resource};
@@ -725,12 +726,11 @@ impl WebsocketError {
     }
 }
 
+#[cfg(feature = "web")]
 struct WebsysSocket {
     sender: Mutex<SplitSink<WsWebsocket, WsMessage>>,
     receiver: Mutex<SplitStream<WsWebsocket>>,
 }
-
-use bytes::Bytes;
 
 /// A `WebSocket` message, which can be a text string or binary data.
 #[derive(Clone, Debug)]

@@ -4,11 +4,13 @@
 pub mod document;
 pub mod history;
 
+mod loader;
 mod server_cached;
 mod server_future;
 mod streaming;
 mod transport;
 
+pub use crate::loader::*;
 pub use crate::server_cached::*;
 pub use crate::server_future::*;
 pub use crate::streaming::*;

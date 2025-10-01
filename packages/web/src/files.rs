@@ -1,16 +1,11 @@
-use std::{
-    pin::Pin,
-    prelude::rust_2024::{Future, IntoFuture},
-};
-
 use dioxus_core::AnyhowContext;
 use dioxus_html::{bytes::Bytes, FileData, NativeFileData};
 use futures_channel::oneshot;
-use futures_util::{FutureExt, StreamExt};
-use js_sys::{ArrayBuffer, Uint8Array};
+use js_sys::Uint8Array;
 use send_wrapper::SendWrapper;
+use std::{pin::Pin, prelude::rust_2024::Future};
 use wasm_bindgen::{prelude::Closure, JsCast};
-use web_sys::{File, FileList, FileReader, ReadableStream};
+use web_sys::{File, FileList, FileReader};
 
 /// A file representation for the web platform
 #[derive(Clone)]
