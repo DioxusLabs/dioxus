@@ -60,8 +60,32 @@ use std::future::Future;
 #[must_use = "Consider using `cx.spawn` to run a future without reading its value"]
 #[track_caller]
 pub fn use_server_future<T, F, M>(
-    mut future: impl FnMut() -> F + 'static,
+    future: impl FnMut() -> F + 'static,
 ) -> Result<Resource<T>, RenderError>
+where
+    F: Future<Output = T> + 'static,
+    T: Transportable<M>,
+    M: 'static,
+{
+    let resource = use_server_future_unsuspended(future);
+
+    // Suspend if the value isn't ready
+    if resource.state().cloned() == UseResourceState::Pending {
+        let task = resource.task();
+        if !task.paused() {
+            return Err(suspend(task).unwrap_err());
+        }
+    }
+
+    Ok(resource)
+}
+
+/// Like [`use_server_future`] but does not suspend if the future is still running.
+///
+/// You need to manage suspending yourself by checking the resource state.
+pub fn use_server_future_unsuspended<T, F, M>(
+    mut future: impl FnMut() -> F + 'static,
+) -> Resource<T>
 where
     F: Future<Output = T> + 'static,
     T: Transportable<M>,
@@ -127,13 +151,5 @@ where
         let _ = resource.task().poll_now();
     });
 
-    // Suspend if the value isn't ready
-    if resource.state().cloned() == UseResourceState::Pending {
-        let task = resource.task();
-        if !task.paused() {
-            return Err(suspend(task).unwrap_err());
-        }
-    }
-
-    Ok(resource)
+    resource
 }

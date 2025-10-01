@@ -2,16 +2,18 @@ use dioxus_core::{
     spawn, use_hook, Callback, IntoAttributeValue, IntoDynNode, ReactiveContext, Subscribers, Task,
 };
 use dioxus_core::{CapturedError, RenderError, Result, SuspendedFuture};
-use dioxus_hooks::{use_callback, use_signal};
+use dioxus_hooks::{use_callback, use_signal, UseResourceState};
 use dioxus_signals::{
-    read_impls, ReadSignal, Readable, ReadableBoxExt, ReadableExt, ReadableRef, Signal, Writable,
-    WritableExt, WriteLock,
+    read_impls, ReadSignal, Readable, ReadableBoxExt, ReadableExt, ReadableOptionExt, ReadableRef,
+    Signal, Writable, WritableExt, WriteLock,
 };
 use futures_util::{future, pin_mut, FutureExt, StreamExt};
-use generational_box::{BorrowResult, UnsyncStorage};
+use generational_box::{BorrowResult, GenerationalRef, UnsyncStorage};
 use serde::{de::DeserializeOwned, Serialize};
 use std::future::Future;
 use std::{cell::Cell, ops::Deref, rc::Rc};
+
+use crate::{use_server_future, use_server_future_unsuspended};
 
 /// A hook to create a resource that loads data asynchronously.
 ///
@@ -40,97 +42,145 @@ where
 {
     let location = std::panic::Location::caller();
 
-    let mut err = use_signal(|| None as Option<CapturedError>);
-    let mut value = use_signal(|| None as Option<T>);
-    let mut state = use_signal(|| LoaderState::Pending);
-    let (rc, changed) = use_hook(|| {
-        let (rc, changed) = ReactiveContext::new_with_origin(location);
-        (rc, Rc::new(Cell::new(Some(changed))))
-    });
-
-    let callback = use_callback(move |_| {
-        // Set the state to Pending when the task is restarted
-        state.set(LoaderState::Pending);
-
-        // Create the user's task
-        let fut = rc.reset_and_run_in(&mut future);
-
-        // Spawn a wrapper task that polls the inner future and watches its dependencies
-        spawn(async move {
-            // Move the future here and pin it so we can poll it
-            let fut = fut;
-            pin_mut!(fut);
-
-            // Run each poll in the context of the reactive scope
-            // This ensures the scope is properly subscribed to the future's dependencies
-            let res = future::poll_fn(|cx| {
-                rc.run_in(|| {
-                    tracing::trace_span!("polling resource", location = %location)
-                        .in_scope(|| fut.poll_unpin(cx))
-                })
-            })
-            .await;
-
-            // Map the error to the captured error type so it's cheap to clone and pass out
-            // We go through the anyhow::Error first since it's more useful.
-            let res: Result<T, CapturedError> = res.map_err(|e| {
-                let res: dioxus_core::Error = e.into();
-                res.into()
-            });
-
-            match res {
-                Ok(v) => {
-                    err.set(None);
-                    value.set(Some(v));
-                    state.set(LoaderState::Ready);
-                }
-                Err(e) => {
-                    err.set(Some(e));
-                    state.set(LoaderState::Failed);
+    // Save the user's future and convert its error type to CapturedError
+    // This lets us serialize it if the error is handled by the user and sent to the client
+    let pending_value = use_server_future_unsuspended(move || {
+        let res = future();
+        async move {
+            match res.await {
+                Ok(res) => Ok(res),
+                Err(err) => {
+                    let err: dioxus_core::Error = err.into();
+                    let captured: CapturedError = err.into();
+                    Err(captured)
                 }
             }
-        })
+        }
     });
 
-    let mut task = use_hook(|| Signal::new(callback(())));
+    // // We create a new task holder so we can restart the task if needed
+    // // We will overload this task later to restart the task if needed
+    // let mut task = use_signal(|| pending_value.task());
 
-    use_hook(|| {
-        let mut changed = changed.take().unwrap();
-        spawn(async move {
-            loop {
-                // Wait for the dependencies to change
-                let _ = changed.next().await;
-
-                // Stop the old task
-                task.write().cancel();
-
-                // Start a new task
-                task.set(callback(()));
-            }
-        })
+    // We also create a new status to overload the status of the pending value
+    let mut status = use_signal(|| match pending_value.state().cloned() {
+        UseResourceState::Ready => LoaderState::Ready,
+        UseResourceState::Pending => LoaderState::Pending,
+        UseResourceState::Stopped => LoaderState::Stopped,
+        UseResourceState::Paused => LoaderState::Pending,
     });
 
-    let read_value = use_hook(|| value.map(|f| f.as_ref().unwrap()).boxed());
+    // Create a reader that always gets `T`
+    let read_value = use_hook(|| {
+        ReadableExt::map(pending_value.clone(), |r| {
+            r.as_ref()
+                .expect("Loader to be done if we're giving out its value")
+                .as_ref()
+                .expect("Loader to be successful if we're giving out its value")
+        })
+        .boxed()
+    });
 
-    let handle = LoaderHandle {
-        task,
-        err,
-        callback,
-        state,
-    };
+    todo!()
+    // // If the value isn't ready yet, suspend
+    // if pending_value.state().cloned() == UseResourceState::Pending {
+    //     let task = pending_value.task();
+    //     if !task.paused() {
+    //         todo!()
+    //     }
+    // }
 
-    match &*state.read_unchecked() {
-        LoaderState::Pending => Err(Loading::Pending(handle)),
-        LoaderState::Failed => Err(Loading::Failed(handle)),
-        LoaderState::Ready => Ok(Loader {
-            real_value: value,
-            read_value,
-            error: err,
-            state,
-            task,
-            handle,
-        }),
-    }
+    // let mut err = use_signal(|| None as Option<CapturedError>);
+    // let mut value = use_signal(|| None as Option<T>);
+    // let mut state = use_signal(|| LoaderState::Pending);
+    // let (rc, changed) = use_hook(|| {
+    //     let (rc, changed) = ReactiveContext::new_with_origin(location);
+    //     (rc, Rc::new(Cell::new(Some(changed))))
+    // });
+
+    // let callback = use_callback(move |_| {
+    //     // Set the state to Pending when the task is restarted
+    //     state.set(LoaderState::Pending);
+
+    //     // Create the user's task
+    //     let fut = rc.reset_and_run_in(&mut future);
+
+    //     // Spawn a wrapper task that polls the inner future and watches its dependencies
+    //     spawn(async move {
+    //         // Move the future here and pin it so we can poll it
+    //         let fut = fut;
+    //         pin_mut!(fut);
+
+    //         // Run each poll in the context of the reactive scope
+    //         // This ensures the scope is properly subscribed to the future's dependencies
+    //         let res = future::poll_fn(|cx| {
+    //             rc.run_in(|| {
+    //                 tracing::trace_span!("polling resource", location = %location)
+    //                     .in_scope(|| fut.poll_unpin(cx))
+    //             })
+    //         })
+    //         .await;
+
+    //         // Map the error to the captured error type so it's cheap to clone and pass out
+    //         // We go through the anyhow::Error first since it's more useful.
+    //         let res: Result<T, CapturedError> = res.map_err(|e| {
+    //             let res: dioxus_core::Error = e.into();
+    //             res.into()
+    //         });
+
+    //         match res {
+    //             Ok(v) => {
+    //                 err.set(None);
+    //                 value.set(Some(v));
+    //                 state.set(LoaderState::Ready);
+    //             }
+    //             Err(e) => {
+    //                 err.set(Some(e));
+    //                 state.set(LoaderState::Failed);
+    //             }
+    //         }
+    //     })
+    // });
+
+    // let mut task = use_hook(|| Signal::new(callback(())));
+
+    // use_hook(|| {
+    //     let mut changed = changed.take().unwrap();
+    //     spawn(async move {
+    //         loop {
+    //             // Wait for the dependencies to change
+    //             let _ = changed.next().await;
+
+    //             // Stop the old task
+    //             task.write().cancel();
+
+    //             // Start a new task
+    //             task.set(callback(()));
+    //         }
+    //     })
+    // });
+
+    // let read_value = use_hook(|| value.map(|f| f.as_ref().unwrap()).boxed());
+
+    // let handle = LoaderHandle {
+    //     task,
+    //     err,
+    //     callback,
+    //     state,
+    // };
+
+    // match &*state.read_unchecked() {
+    //     LoaderState::Pending => Err(Loading::Pending(handle)),
+    //     LoaderState::Failed => Err(Loading::Failed(handle)),
+    //     LoaderState::Ready => Ok(Loader {
+    //         real_value: value,
+    //         read_value,
+    //         error: err,
+    //         state,
+    //         task,
+    //         handle,
+    //     }),
+    // }
 }
 
 /// A Loader is a signal that represents a value that is loaded asynchronously.
@@ -285,6 +335,9 @@ pub enum LoaderState {
 
     /// The loader's future has failed and now the loader is in an error state.
     Failed,
+
+    /// The loader has been cancelled and will not complete until restarted.
+    Stopped,
 }
 
 #[derive(PartialEq)]
