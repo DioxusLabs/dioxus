@@ -9,7 +9,7 @@ use serde::{de::DeserializeOwned, Serialize};
 use std::{pin::Pin, prelude::rust_2024::Future, sync::OnceLock};
 use url::Url;
 
-use crate::reqwest_error_to_request_error;
+use crate::{reqwest_error_to_request_error, StreamingError};
 
 pub static GLOBAL_REQUEST_CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
 
@@ -214,13 +214,13 @@ impl ClientRequest {
 
     pub async fn send_body_stream(
         self,
-        stream: impl Stream<Item = Bytes> + Send + 'static,
+        stream: impl Stream<Item = Result<Bytes, StreamingError>> + Send + 'static,
     ) -> Result<ClientResponse, RequestError> {
         #[cfg(not(target_arch = "wasm32"))]
         {
             let res = self
                 .new_reqwest_request()
-                .body(reqwest::Body::wrap_stream(stream.map(dioxus_core::Ok)))
+                .body(reqwest::Body::wrap_stream(stream))
                 .send()
                 .await
                 .map_err(reqwest_error_to_request_error)?;

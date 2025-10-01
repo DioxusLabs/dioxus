@@ -4,10 +4,10 @@ use crate::{
     CborEncoding, ClientRequest, ClientResponse, Encoding, FromResponse, IntoRequest, JsonEncoding,
     ServerFnError,
 };
-use axum::extract::FromRequest;
+use axum::extract::{FromRequest, Request};
 use axum_core::response::IntoResponse;
 use bytes::Bytes;
-use dioxus_fullstack_core::RequestError;
+use dioxus_fullstack_core::{HttpError, RequestError};
 use futures::{Stream, StreamExt};
 use send_wrapper::SendWrapper;
 use serde::{de::DeserializeOwned, Serialize};
@@ -33,7 +33,7 @@ pub type CborStream<T> = Streaming<T, CborEncoding>;
 /// Also note that not all browsers support streaming bodies to servers.
 pub struct Streaming<T = String, E = ()> {
     output_stream: Pin<Box<dyn Stream<Item = Result<T, StreamingError>> + Send>>,
-    input_stream: Pin<Box<dyn Stream<Item = T> + Send>>,
+    input_stream: Pin<Box<dyn Stream<Item = Result<T, StreamingError>> + Send>>,
     encoding: PhantomData<E>,
 }
 
@@ -58,7 +58,8 @@ impl<T: 'static + Send, E> Streaming<T, E> {
         // Box and pin the incoming stream and store as a trait object
         Self {
             output_stream: Box::pin(futures::stream::empty()) as _,
-            input_stream: Box::pin(value) as Pin<Box<dyn Stream<Item = T> + Send>>,
+            input_stream: Box::pin(value.map(|item| Ok(item)))
+                as Pin<Box<dyn Stream<Item = Result<T, StreamingError>> + Send>>,
             encoding: PhantomData,
         }
     }
@@ -87,7 +88,7 @@ impl<T: 'static + Send, E> Streaming<T, E> {
     }
 
     /// Consumes the wrapper, returning the inner stream.
-    pub fn into_inner(self) -> impl Stream<Item = T> + Send {
+    pub fn into_inner(self) -> impl Stream<Item = Result<T, StreamingError>> + Send {
         self.input_stream
     }
 }
@@ -99,8 +100,7 @@ where
 {
     fn from(value: S) -> Self {
         Self {
-            input_stream: Box::pin(value.map(|data| data.into()))
-                as Pin<Box<dyn Stream<Item = String> + Send>>,
+            input_stream: Box::pin(value.map(|data| Ok(data.into()))),
             output_stream: Box::pin(futures::stream::empty()) as _,
             encoding: PhantomData,
         }
@@ -113,8 +113,7 @@ where
 {
     fn from(value: S) -> Self {
         Self {
-            input_stream: Box::pin(value.map(|data| data.ok().unwrap().into()))
-                as Pin<Box<dyn Stream<Item = Bytes> + Send>>,
+            input_stream: Box::pin(value.map(|data| data.map_err(|_| StreamingError::Failed))),
             output_stream: Box::pin(futures::stream::empty()) as _,
             encoding: PhantomData,
         }
@@ -130,8 +129,7 @@ where
 {
     fn from(value: S) -> Self {
         Self {
-            input_stream: Box::pin(value.map(|data| data.into()))
-                as Pin<Box<dyn Stream<Item = T> + Send>>,
+            input_stream: Box::pin(value.map(|data| Ok(data.into()))),
             output_stream: Box::pin(futures::stream::empty()) as _,
             encoding: PhantomData,
         }
@@ -142,9 +140,7 @@ impl IntoResponse for Streaming<String> {
     fn into_response(self) -> axum_core::response::Response {
         axum::response::Response::builder()
             .header("Content-Type", "text/plain; charset=utf-8")
-            .body(axum::body::Body::from_stream(
-                self.input_stream.map(Result::<String, StreamingError>::Ok),
-            ))
+            .body(axum::body::Body::from_stream(self.input_stream))
             .unwrap()
     }
 }
@@ -153,18 +149,19 @@ impl IntoResponse for Streaming<Bytes> {
     fn into_response(self) -> axum_core::response::Response {
         axum::response::Response::builder()
             .header("Content-Type", "application/octet-stream")
-            .body(axum::body::Body::from_stream(
-                self.input_stream.map(Result::<Bytes, StreamingError>::Ok),
-            ))
+            .body(axum::body::Body::from_stream(self.input_stream))
             .unwrap()
     }
 }
 
 impl<T: DeserializeOwned + Serialize + 'static, E: Encoding> IntoResponse for Streaming<T, E> {
     fn into_response(self) -> axum_core::response::Response {
-        let res = self.input_stream.map(|r| match E::to_bytes(&r) {
-            Some(bytes) => Ok(bytes),
-            None => Err(StreamingError::Failed),
+        let res = self.input_stream.map(|r| match r {
+            Ok(res) => match E::to_bytes(&res) {
+                Some(bytes) => Ok(bytes),
+                None => Err(StreamingError::Failed),
+            },
+            Err(_err) => Err(StreamingError::Failed),
         });
 
         axum::response::Response::builder()
@@ -187,8 +184,7 @@ impl FromResponse for Streaming<String> {
 
             Ok(Self {
                 output_stream: client_stream,
-                input_stream: Box::pin(futures::stream::empty())
-                    as Pin<Box<dyn Stream<Item = String> + Send>>,
+                input_stream: Box::pin(futures::stream::empty()),
                 encoding: PhantomData,
             })
         })
@@ -207,8 +203,7 @@ impl FromResponse for Streaming<Bytes> {
 
             Ok(Self {
                 output_stream: client_stream,
-                input_stream: Box::pin(futures::stream::empty())
-                    as Pin<Box<dyn Stream<Item = Bytes> + Send>>,
+                input_stream: Box::pin(futures::stream::empty()),
                 encoding: PhantomData,
             })
         }
@@ -243,10 +238,35 @@ impl<S> FromRequest<S> for Streaming<String> {
     type Rejection = ServerFnError;
 
     fn from_request(
-        req: axum::extract::Request,
-        state: &S,
+        req: Request,
+        _state: &S,
     ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send {
-        async move { todo!() }
+        async move {
+            let (parts, body) = req.into_parts();
+            let content_type = parts
+                .headers
+                .get("content-type")
+                .and_then(|v| v.to_str().ok())
+                .unwrap_or("");
+
+            if !content_type.starts_with("text/plain") {
+                HttpError::bad_request("Invalid content type")?;
+            }
+
+            let stream = body.into_data_stream();
+
+            Ok(Self {
+                input_stream: Box::pin(futures::stream::empty()),
+                output_stream: Box::pin(stream.map(|byte| match byte {
+                    Ok(bytes) => match String::from_utf8(bytes.to_vec()) {
+                        Ok(string) => Ok(string),
+                        Err(_) => Err(StreamingError::Decoding),
+                    },
+                    Err(_) => Err(StreamingError::Failed),
+                })),
+                encoding: PhantomData,
+            })
+        }
     }
 }
 
@@ -254,10 +274,32 @@ impl<S> FromRequest<S> for ByteStream {
     type Rejection = ServerFnError;
 
     fn from_request(
-        req: axum::extract::Request,
-        state: &S,
+        req: Request,
+        _state: &S,
     ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send {
-        async move { todo!() }
+        async move {
+            let (parts, body) = req.into_parts();
+            let content_type = parts
+                .headers
+                .get("content-type")
+                .and_then(|v| v.to_str().ok())
+                .unwrap_or("");
+
+            if !content_type.starts_with("application/octet-stream") {
+                HttpError::bad_request("Invalid content type")?;
+            }
+
+            let stream = body.into_data_stream();
+
+            Ok(Self {
+                input_stream: Box::pin(futures::stream::empty()),
+                output_stream: Box::pin(stream.map(|byte| match byte {
+                    Ok(bytes) => Ok(bytes),
+                    Err(_) => Err(StreamingError::Failed),
+                })),
+                encoding: PhantomData,
+            })
+        }
     }
 }
 
@@ -267,10 +309,35 @@ impl<T: DeserializeOwned + Serialize + 'static + Send, E: Encoding, S> FromReque
     type Rejection = ServerFnError;
 
     fn from_request(
-        req: axum::extract::Request,
-        state: &S,
+        req: Request,
+        _state: &S,
     ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send {
-        async move { todo!() }
+        async move {
+            let (parts, body) = req.into_parts();
+            let content_type = parts
+                .headers
+                .get("content-type")
+                .and_then(|v| v.to_str().ok())
+                .unwrap_or("");
+
+            if !content_type.starts_with(E::stream_content_type()) {
+                HttpError::bad_request("Invalid content type")?;
+            }
+
+            let stream = body.into_data_stream();
+
+            Ok(Self {
+                input_stream: Box::pin(futures::stream::empty()),
+                output_stream: Box::pin(stream.map(|byte| match byte {
+                    Ok(bytes) => match E::from_bytes(bytes) {
+                        Some(res) => Ok(res),
+                        None => Err(StreamingError::Decoding),
+                    },
+                    Err(_) => Err(StreamingError::Failed),
+                })),
+                encoding: PhantomData,
+            })
+        }
     }
 }
 
@@ -282,7 +349,7 @@ impl IntoRequest for Streaming<String> {
         async move {
             builder
                 .header("Content-Type", "text/plain; charset=utf-8")
-                .send_body_stream(self.input_stream.map(Bytes::from))
+                .send_body_stream(self.input_stream.map(|e| e.map(Bytes::from)))
                 .await
         }
     }
@@ -309,7 +376,16 @@ impl<T: DeserializeOwned + Serialize + 'static + Send, E: Encoding> IntoRequest
         self,
         builder: ClientRequest,
     ) -> impl Future<Output = Result<ClientResponse, RequestError>> + 'static {
-        async move { todo!() }
+        async move {
+            builder
+                .header("Content-Type", E::stream_content_type())
+                .send_body_stream(
+                    self.input_stream.map(|r| {
+                        r.and_then(|item| E::to_bytes(&item).ok_or(StreamingError::Failed))
+                    }),
+                )
+                .await
+        }
     }
 }
 

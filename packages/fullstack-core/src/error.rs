@@ -3,6 +3,8 @@ use http::StatusCode;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 
+use crate::HttpError;
+
 /// A default result type for server functions, which can either be successful or contain an error. The [`ServerFnResult`] type
 /// is a convenient alias for a `Result` type that uses [`ServerFnError`] as the error type.
 ///
@@ -125,6 +127,22 @@ impl From<ServerFnError> for http::StatusCode {
 impl From<RequestError> for ServerFnError {
     fn from(value: RequestError) -> Self {
         ServerFnError::Request(value)
+    }
+}
+
+impl From<HttpError> for ServerFnError {
+    fn from(value: HttpError) -> Self {
+        ServerFnError::ServerError {
+            message: value.message.unwrap_or_else(|| {
+                value
+                    .status
+                    .canonical_reason()
+                    .unwrap_or("Unknown error")
+                    .to_string()
+            }),
+            code: Some(value.status.as_u16()),
+            details: None,
+        }
     }
 }
 

@@ -31,17 +31,17 @@ impl FileData {
         self.inner.last_modified()
     }
 
-    pub fn read_bytes(&self) -> Pin<Box<dyn Future<Output = Result<Bytes, dioxus_core::Error>>>> {
-        self.inner.read_bytes()
+    pub async fn read_bytes(&self) -> Result<Bytes, dioxus_core::Error> {
+        self.inner.read_bytes().await
     }
 
-    pub fn read_string(&self) -> Pin<Box<dyn Future<Output = Result<String, dioxus_core::Error>>>> {
-        self.inner.read_string()
+    pub async fn read_string(&self) -> Result<String, dioxus_core::Error> {
+        self.inner.read_string().await
     }
 
     pub fn byte_stream(
         &self,
-    ) -> Pin<Box<dyn Stream<Item = Result<Bytes, dioxus_core::Error>> + Send>> {
+    ) -> Pin<Box<dyn Stream<Item = Result<Bytes, dioxus_core::Error>> + Send + 'static>> {
         self.inner.byte_stream()
     }
 
