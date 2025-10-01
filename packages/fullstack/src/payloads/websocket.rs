@@ -353,6 +353,7 @@ pub struct WebSocketOptions {
     automatic_reconnect: bool,
     #[cfg(feature = "server")]
     upgrade: Option<axum::extract::ws::WebSocketUpgrade>,
+    on_failed_upgrade: Option<Box<dyn FnOnce(axum::Error) + Send + 'static>>,
 }
 
 impl WebSocketOptions {
@@ -362,6 +363,7 @@ impl WebSocketOptions {
             automatic_reconnect: false,
             #[cfg(feature = "server")]
             upgrade: None,
+            on_failed_upgrade: None,
         }
     }
 
@@ -371,25 +373,46 @@ impl WebSocketOptions {
         self
     }
 
+    pub fn on_failed_upgrade(
+        mut self,
+        callback: impl FnOnce(axum::Error) + Send + 'static,
+    ) -> Self {
+        #[cfg(feature = "server")]
+        {
+            self.on_failed_upgrade = Some(Box::new(callback));
+        }
+
+        self
+    }
+
     #[cfg(feature = "server")]
-    pub fn on_upgrade<F, Fut, In, Out, Enc>(self, callback: F) -> Websocket<In, Out, Enc>
+    pub fn on_upgrade<F, Fut, In, Out, Enc>(mut self, callback: F) -> Websocket<In, Out, Enc>
     where
         F: FnOnce(TypedWebsocket<In, Out, Enc>) -> Fut + Send + 'static,
         Fut: Future<Output = ()> + 'static,
     {
-        let response = self.upgrade.unwrap().on_upgrade(|socket| {
-            let res = crate::spawn_platform(move || {
-                callback(TypedWebsocket {
-                    _in: PhantomData,
-                    _out: PhantomData,
-                    _enc: PhantomData,
-                    inner: socket,
-                })
+        let on_failed_upgrade = self.on_failed_upgrade.take();
+        let response = self
+            .upgrade
+            .unwrap()
+            .on_failed_upgrade(|e| {
+                if let Some(callback) = on_failed_upgrade {
+                    callback(e);
+                }
+            })
+            .on_upgrade(|socket| {
+                let res = crate::spawn_platform(move || {
+                    callback(TypedWebsocket {
+                        _in: PhantomData,
+                        _out: PhantomData,
+                        _enc: PhantomData,
+                        inner: socket,
+                    })
+                });
+                async move {
+                    let _ = res.await;
+                }
             });
-            async move {
-                let _ = res.await;
-            }
-        });
 
         Websocket {
             response: Some(response),
@@ -472,6 +495,7 @@ impl<S: Send> FromRequest<S> for WebSocketOptions {
                 protocols: vec![],
                 automatic_reconnect: false,
                 upgrade: Some(ws),
+                on_failed_upgrade: None,
             })
         }
     }
