@@ -683,11 +683,6 @@ path = "examples/07-fullstack/header_map.rs"
 doc-scrape-examples = true
 
 [[example]]
-name = "fullstack_video_stream"
-path = "examples/07-fullstack/fullstack_video_stream.rs"
-doc-scrape-examples = true
-
-[[example]]
 name = "login_form"
 path = "examples/07-fullstack/login_form.rs"
 doc-scrape-examples = true
