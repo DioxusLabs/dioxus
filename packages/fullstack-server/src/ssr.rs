@@ -356,7 +356,7 @@ impl SsrRendererPool {
             myself.renderers.write().unwrap().push(renderer);
         };
 
-        let join_handle = Self::spawn_platform(move || create_render_future());
+        let join_handle = Self::spawn_platform(create_render_future);
 
         // Wait for the initial result which determines the status code
         initial_result_rx.await.map_err(|err| {

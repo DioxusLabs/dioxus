@@ -19,6 +19,9 @@ pub struct WebFileData {
     reader: FileReader,
 }
 
+unsafe impl Send for WebFileData {}
+unsafe impl Sync for WebFileData {}
+
 impl WebFileData {
     /// Create a new WebFileData from a web_sys::File
     pub fn new(file: File, reader: FileReader) -> Self {

@@ -1,6 +1,6 @@
 use crate::{
     ssr::{SSRError, SsrRendererPool},
-    ContextProviders, ServeConfig, ServerFunction,
+    ServeConfig, ServerFunction,
 };
 use axum::{
     body,

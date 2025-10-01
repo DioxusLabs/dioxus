@@ -2,15 +2,9 @@
 #![allow(non_snake_case)]
 
 use dioxus_core::LaunchConfig;
-use std::any::Any;
 use std::fs::File;
 use std::io::Read;
 use std::path::PathBuf;
-use std::sync::Arc;
-
-#[allow(unused)]
-pub(crate) type ContextProviders =
-    Arc<Vec<Box<dyn Fn() -> Box<dyn std::any::Any> + Send + Sync + 'static>>>;
 
 /// A ServeConfig is used to configure how to serve a Dioxus application. It contains information about how to serve static assets, and what content to render with [`dioxus-ssr`].
 #[derive(Clone, Default)]

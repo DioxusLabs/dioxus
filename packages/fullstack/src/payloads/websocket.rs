@@ -18,26 +18,22 @@
 //! Dioxus Fullstack websockets are typed in both directions, letting the happy path (`.send()` and `.recv()`)
 //! automatically serialize and deserialize messages for you.
 
-use crate::{
-    CborEncoding, ClientRequest, ClientResponse, Encoding, FromResponse, IntoRequest, JsonEncoding,
-    ServerFnError,
-};
+use crate::{ClientRequest, Encoding, FromResponse, IntoRequest, JsonEncoding, ServerFnError};
 use axum::extract::{FromRequest, Request};
 use axum_core::response::{IntoResponse, Response};
 use bytes::Bytes;
-use dioxus_core::{use_hook, CapturedError, RenderError, Result};
+use dioxus_core::{use_hook, CapturedError, Result};
 use dioxus_fullstack_core::RequestError;
-use dioxus_hooks::{use_loader, use_memo, use_signal, use_waker, Loader};
 use dioxus_hooks::{use_resource, Resource};
-use dioxus_signals::{CopyValue, ReadSignal, ReadableExt, ReadableOptionExt, Signal, WritableExt};
+use dioxus_hooks::{use_signal, use_waker};
+use dioxus_signals::{ReadSignal, ReadableExt, ReadableOptionExt, Signal, WritableExt};
 use futures::StreamExt;
-use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
+use futures_channel::mpsc::UnboundedReceiver;
 use futures_util::TryFutureExt;
 use http::HeaderValue;
 use protocol::CloseCode;
-use send_wrapper::SendWrapper;
 use serde::{de::DeserializeOwned, Serialize};
-use std::{marker::PhantomData, prelude::rust_2024::Future, sync::Arc};
+use std::{marker::PhantomData, prelude::rust_2024::Future};
 
 /// A hook that provides a reactive interface to a WebSocket connection.
 ///

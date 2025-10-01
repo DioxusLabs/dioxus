@@ -3,7 +3,7 @@
 use crate::{server::DioxusRouterExt, RenderHandleState, ServeConfig, ServeConfigBuilder};
 use axum::{
     body::Body,
-    extract::{DefaultBodyLimit, Request, State},
+    extract::{Request, State},
     response::IntoResponse,
     routing::IntoMakeService,
 };
@@ -69,12 +69,7 @@ async fn serve_server(
         .unwrap_or_else(ServeConfig::new);
 
     // Extend the config's context providers with the context providers from the launch builder
-    let cfg = platform_config
-        .map(|mut cfg| {
-            let mut contexts = contexts;
-            cfg
-        })
-        .unwrap();
+    let cfg = platform_config.unwrap();
 
     // Get the address the server should run on. If the CLI is running, the CLI proxies fullstack into the main address
     // and we use the generated address the CLI gives us
