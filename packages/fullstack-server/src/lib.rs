@@ -10,6 +10,7 @@
 pub use bytes::Bytes;
 pub use dioxus_fullstack_core::{ServerFnError, ServerFnResult};
 
+pub use axum;
 pub(crate) use config::*;
 pub use config::*;
 pub use config::{ServeConfig, ServeConfigBuilder};
