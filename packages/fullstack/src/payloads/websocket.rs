@@ -293,7 +293,6 @@ impl<I, O, E> Websocket<I, O, E> {
     pub async fn recv_msg(&self) -> Result<Message, WebsocketError> {
         #[cfg(feature = "web")]
         if cfg!(target_arch = "wasm32") {
-            use gloo_net::websocket::WebSocketError as GlooWsError;
             let mut socket = self.web.as_ref().unwrap().receiver.lock().await;
             let res = socket.next().await;
             return match res {
@@ -637,7 +636,7 @@ impl<In: DeserializeOwned, Out: Serialize, E: Encoding> TypedWebsocket<In, Out, 
 pub enum WebsocketError {
     #[error("Connection closed")]
     ConnectionClosed {
-        reason: CloseCode,
+        code: CloseCode,
         description: String,
     },
 
@@ -701,8 +700,11 @@ impl From<gloo_net::websocket::WebSocketError> for WebsocketError {
     fn from(value: gloo_net::websocket::WebSocketError) -> Self {
         use gloo_net::websocket::WebSocketError;
         match value {
-            WebSocketError::ConnectionError => todo!(),
-            WebSocketError::ConnectionClose(close_event) => todo!(),
+            WebSocketError::ConnectionError => WebsocketError::AlreadyClosed,
+            WebSocketError::ConnectionClose(close_event) => WebsocketError::ConnectionClosed {
+                code: close_event.code.into(),
+                description: close_event.reason,
+            },
             WebSocketError::MessageSendError(js_error) => todo!(),
             _ => todo!(),
         }
@@ -712,7 +714,7 @@ impl From<gloo_net::websocket::WebSocketError> for WebsocketError {
 impl WebsocketError {
     pub fn closed_away() -> Self {
         Self::ConnectionClosed {
-            reason: CloseCode::Normal,
+            code: CloseCode::Normal,
             description: "Connection closed normally".into(),
         }
     }

@@ -1,3 +1,5 @@
+#![allow(unreachable_code)]
+
 use crate::{ClientRequest, ClientResponse, IntoRequest};
 use axum::{
     extract::{FromRequest, Request},

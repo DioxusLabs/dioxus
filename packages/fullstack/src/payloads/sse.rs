@@ -9,10 +9,10 @@ use futures::io::AsyncBufReadExt;
 use futures::{Sink, Stream, TryStream};
 use futures::{StreamExt, TryStreamExt};
 use http::{header::CONTENT_TYPE, HeaderValue, StatusCode};
-use serde::{de::DeserializeOwned, Serialize};
+use serde::de::DeserializeOwned;
 use std::pin::Pin;
 use std::task::{Context, Poll};
-use std::{future::Future, time::Duration};
+use std::time::Duration;
 
 /// A stream of Server-Sent Events (SSE) that can be used to receive events from the server.
 ///
@@ -268,7 +268,9 @@ mod server_impl {
     use super::*;
     use crate::spawn_platform;
     use axum::response::sse::Sse;
+    use futures::Future;
     use futures::SinkExt;
+    use serde::Serialize;
 
     impl<T: 'static> ServerEvents<T> {
         /// Create a `ServerEvents` from a function that is given a sender to send events to the client.
