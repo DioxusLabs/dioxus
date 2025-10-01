@@ -266,6 +266,8 @@ pub enum WebsocketState {
 
 /// A WebSocket connection that can send and receive messages of type `In` and `Out`.
 pub struct Websocket<In = String, Out = String, E = JsonEncoding> {
+    protocol: Option<String>,
+
     #[allow(clippy::type_complexity)]
     _in: std::marker::PhantomData<fn() -> (In, Out, E)>,
 
@@ -403,6 +405,10 @@ impl<I, O, E> Websocket<I, O, E> {
 
         unimplemented!("Non web wasm32 clients are not supported yet")
     }
+
+    pub fn protocol(&self) -> Option<&str> {
+        self.protocol.as_deref()
+    }
 }
 
 // no two websockets are ever equal
@@ -446,6 +452,7 @@ impl<I, O, E> FromResponse<UpgradingWebsocket> for Websocket<I, O, E> {
                 .ok_or_else(|| WebsocketError::Uninitialized);
 
             Ok(Websocket {
+                protocol: res.protocol,
                 #[cfg(not(target_arch = "wasm32"))]
                 native,
                 #[cfg(feature = "web")]
@@ -528,6 +535,8 @@ impl WebSocketOptions {
             });
 
         Websocket {
+            // the protocol is none here since it won't be accessible until after the upgrade
+            protocol: None,
             response: Some(response),
             _in: PhantomData,
 
@@ -554,21 +563,19 @@ impl IntoRequest<UpgradingWebsocket> for WebSocketOptions {
         async move {
             #[cfg(feature = "web")]
             if cfg!(target_arch = "wasm32") {
-                let web = Some(
-                    gloo_net::websocket::futures::WebSocket::open_with_protocols(
-                        request.url().as_ref(),
-                        &self
-                            .protocols
-                            .iter()
-                            .map(String::as_str)
-                            .collect::<Vec<_>>(),
-                    )
-                    .unwrap(),
-                );
+                let socket = gloo_net::websocket::futures::WebSocket::open_with_protocols(
+                    request.url().as_ref(),
+                    &self
+                        .protocols
+                        .iter()
+                        .map(String::as_str)
+                        .collect::<Vec<_>>(),
+                )
+                .unwrap();
 
                 return Ok(UpgradingWebsocket {
-                    web,
-                    protocol: None,
+                    protocol: Some(socket.protocol()),
+                    web: Some(socket),
                     #[cfg(not(target_arch = "wasm32"))]
                     native: None,
                 });
@@ -587,9 +594,9 @@ impl IntoRequest<UpgradingWebsocket> for WebSocketOptions {
 
                 return Ok(UpgradingWebsocket {
                     protocol,
+                    native: Some(inner),
                     #[cfg(feature = "web")]
                     web: None,
-                    native: Some(inner),
                 });
             }
 
@@ -612,7 +619,7 @@ impl<S: Send> FromRequest<S> for WebSocketOptions {
         async move {
             let ws = match axum::extract::ws::WebSocketUpgrade::from_request(req, &()).await {
                 Ok(ws) => ws,
-                Err(rejection) => todo!(),
+                Err(rejection) => return Err(rejection.into_response()),
             };
 
             Ok(WebSocketOptions {
@@ -650,30 +657,47 @@ pub struct TypedWebsocket<In, Out, E = JsonEncoding> {
 
 #[cfg(feature = "server")]
 impl<In: DeserializeOwned, Out: Serialize, E: Encoding> TypedWebsocket<In, Out, E> {
-    /// Receive another message.
+    /// Receive an incoming message from the client.
     ///
     /// Returns `None` if the stream has closed.
-    pub async fn recv(&mut self) -> Option<Result<In, WebsocketError>> {
-        let res = self.inner.next().await?;
-        match res {
-            Ok(res) => match res {
-                axum::extract::ws::Message::Text(utf8_bytes) => {
-                    let e: In = E::from_bytes(utf8_bytes.into()).unwrap();
-                    return Some(Ok(e));
-                }
-                axum::extract::ws::Message::Binary(bytes) => {
-                    let e: In = E::from_bytes(bytes.into()).unwrap();
-                    return Some(Ok(e));
-                }
-                axum::extract::ws::Message::Ping(bytes) => todo!(),
-                axum::extract::ws::Message::Pong(bytes) => todo!(),
-                axum::extract::ws::Message::Close(close_frame) => return None,
-            },
-            Err(res) => return todo!(),
+    pub async fn recv(&mut self) -> Result<In, WebsocketError> {
+        use axum::extract::ws::Message as AxumMessage;
+
+        loop {
+            let Some(res) = self.inner.next().await else {
+                return Err(WebsocketError::closed_away());
+            };
+
+            match res {
+                Ok(res) => match res {
+                    AxumMessage::Text(utf8_bytes) => {
+                        let e: In = E::from_bytes(utf8_bytes.into())
+                            .ok_or_else(WebsocketError::deserialization)?;
+                        return Ok(e);
+                    }
+                    AxumMessage::Binary(bytes) => {
+                        let e: In =
+                            E::from_bytes(bytes).ok_or_else(WebsocketError::deserialization)?;
+                        return Ok(e);
+                    }
+
+                    AxumMessage::Close(Some(close_frame)) => {
+                        return Err(WebsocketError::ConnectionClosed {
+                            code: close_frame.code.into(),
+                            description: close_frame.reason.to_string(),
+                        });
+                    }
+                    AxumMessage::Close(None) => return Err(WebsocketError::AlreadyClosed),
+
+                    AxumMessage::Ping(_bytes) => continue,
+                    AxumMessage::Pong(_bytes) => continue,
+                },
+                Err(_res) => return Err(WebsocketError::closed_away()),
+            }
         }
     }
 
-    /// Send a message.
+    /// Send an outgoing message.
     pub async fn send(&mut self, msg: Out) -> Result<(), WebsocketError> {
         use axum::extract::ws::Message;
 
@@ -690,27 +714,59 @@ impl<In: DeserializeOwned, Out: Serialize, E: Encoding> TypedWebsocket<In, Out, 
     /// Receive another message.
     ///
     /// Returns `None` if the stream has closed.
-    pub async fn recv_raw(&mut self) -> Option<Result<Out, WebsocketError>> {
-        // let res = self.inner.next().await;
-        todo!()
+    pub async fn recv_raw(&mut self) -> Result<Message, WebsocketError> {
+        use axum::extract::ws::Message as AxumMessage;
+
+        let message = self
+            .inner
+            .next()
+            .await
+            .ok_or_else(WebsocketError::closed_away)?
+            .map_err(|_| WebsocketError::AlreadyClosed)?;
+
+        Ok(match message {
+            AxumMessage::Text(utf8_bytes) => Message::Text(utf8_bytes.to_string()),
+            AxumMessage::Binary(bytes) => Message::Binary(bytes),
+            AxumMessage::Ping(bytes) => Message::Ping(bytes),
+            AxumMessage::Pong(bytes) => Message::Pong(bytes),
+            AxumMessage::Close(close_frame) => Message::Close {
+                code: close_frame
+                    .clone()
+                    .map_or(CloseCode::Away, |cf| cf.code.into()),
+                reason: close_frame.map_or("Away".to_string(), |cf| cf.reason.to_string()),
+            },
+        })
     }
 
     /// Send a message.
-    pub async fn send_raw(
-        &mut self,
-        msg: axum::extract::ws::Message,
-    ) -> Result<(), WebsocketError> {
-        todo!()
-        // self.inner
-        //     .send(msg.into_tungstenite())
-        //     .await
-        //     .map_err(Error::new)
+    pub async fn send_raw(&mut self, msg: Message) -> Result<(), WebsocketError> {
+        let real = match msg {
+            Message::Text(text) => axum::extract::ws::Message::Text(text.into()),
+            Message::Binary(bytes) => axum::extract::ws::Message::Binary(bytes),
+            Message::Ping(bytes) => axum::extract::ws::Message::Ping(bytes),
+            Message::Pong(bytes) => axum::extract::ws::Message::Pong(bytes),
+            Message::Close { code, reason } => {
+                axum::extract::ws::Message::Close(Some(axum::extract::ws::CloseFrame {
+                    code: code.into(),
+                    reason: reason.into(),
+                }))
+            }
+        };
+
+        self.inner
+            .send(real)
+            .await
+            .map_err(|_err| WebsocketError::AlreadyClosed)
     }
 
     /// Return the selected WebSocket subprotocol, if one has been chosen.
     pub fn protocol(&self) -> Option<&HeaderValue> {
-        // self.protocol.as_ref()
-        todo!()
+        self.inner.protocol()
+    }
+
+    /// Get a mutable reference to the underlying Axum WebSocket.
+    pub fn socket(&mut self) -> &mut axum::extract::ws::WebSocket {
+        &mut self.inner
     }
 }
 
