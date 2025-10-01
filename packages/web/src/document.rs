@@ -131,14 +131,14 @@ impl Document for WebDocument {
     /// Create a new meta tag in the head
     fn create_meta(&self, props: MetaProps) {
         queue_effect(move || {
-            append_element_to_head("meta", &props.attributes(), None);
+            _ = append_element_to_head("meta", &props.attributes(), None);
         });
     }
 
     /// Create a new script tag in the head
     fn create_script(&self, props: ScriptProps) {
         queue_effect(move || {
-            append_element_to_head(
+            _ = append_element_to_head(
                 "script",
                 &props.attributes(),
                 props.script_contents().ok().as_deref(),
@@ -149,7 +149,7 @@ impl Document for WebDocument {
     /// Create a new style tag in the head
     fn create_style(&self, props: StyleProps) {
         queue_effect(move || {
-            append_element_to_head(
+            _ = append_element_to_head(
                 "style",
                 &props.attributes(),
                 props.style_contents().ok().as_deref(),
@@ -160,7 +160,7 @@ impl Document for WebDocument {
     /// Create a new link tag in the head
     fn create_link(&self, props: LinkProps) {
         queue_effect(move || {
-            append_element_to_head("link", &props.attributes(), None);
+            _ = append_element_to_head("link", &props.attributes(), None);
         });
     }
 }
@@ -169,19 +169,21 @@ fn append_element_to_head(
     local_name: &str,
     attributes: &Vec<(&'static str, String)>,
     text_content: Option<&str>,
-) {
+) -> Result<(), JsValue> {
     let window = web_sys::window().expect("no global `window` exists");
     let document = window.document().expect("should have a document on window");
     let head = document.head().expect("document should have a head");
 
-    let element = document.create_element(local_name).unwrap();
+    let element = document.create_element(local_name)?;
     for (name, value) in attributes {
-        element.set_attribute(name, value).unwrap();
+        element.set_attribute(name, value)?;
     }
     if text_content.is_some() {
         element.set_text_content(text_content);
     }
-    head.append_child(&element).unwrap();
+    head.append_child(&element)?;
+
+    Ok(())
 }
 
 /// Required to avoid blocking the Rust WASM thread.

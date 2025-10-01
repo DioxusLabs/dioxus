@@ -167,7 +167,7 @@ impl Scope {
     pub fn schedule_update_any(&self) -> Arc<dyn Fn(ScopeId) + Send + Sync> {
         let chan = self.sender();
         Arc::new(move |id| {
-            chan.unbounded_send(SchedulerMsg::Immediate(id)).unwrap();
+            _ = chan.unbounded_send(SchedulerMsg::Immediate(id));
         })
     }
 

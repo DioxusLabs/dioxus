@@ -930,7 +930,7 @@ impl IntoVNode for Element {
     fn into_vnode(self) -> VNode {
         match self {
             Ok(val) => val.into_vnode(),
-            _ => VNode::empty().unwrap(),
+            _ => VNode::default(),
         }
     }
 }
@@ -938,7 +938,7 @@ impl IntoVNode for &Element {
     fn into_vnode(self) -> VNode {
         match self {
             Ok(val) => val.into_vnode(),
-            _ => VNode::empty().unwrap(),
+            _ => VNode::default(),
         }
     }
 }
@@ -946,7 +946,7 @@ impl IntoVNode for Option<VNode> {
     fn into_vnode(self) -> VNode {
         match self {
             Some(val) => val.into_vnode(),
-            _ => VNode::empty().unwrap(),
+            _ => VNode::default(),
         }
     }
 }
@@ -954,7 +954,7 @@ impl IntoVNode for &Option<VNode> {
     fn into_vnode(self) -> VNode {
         match self.as_ref() {
             Some(val) => val.clone().into_vnode(),
-            _ => VNode::empty().unwrap(),
+            _ => VNode::default(),
         }
     }
 }
@@ -962,7 +962,7 @@ impl IntoVNode for Option<Element> {
     fn into_vnode(self) -> VNode {
         match self {
             Some(val) => val.into_vnode(),
-            _ => VNode::empty().unwrap(),
+            _ => VNode::default(),
         }
     }
 }
@@ -970,7 +970,7 @@ impl IntoVNode for &Option<Element> {
     fn into_vnode(self) -> VNode {
         match self.as_ref() {
             Some(val) => val.clone().into_vnode(),
-            _ => VNode::empty().unwrap(),
+            _ => VNode::default(),
         }
     }
 }

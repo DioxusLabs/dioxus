@@ -75,23 +75,6 @@ impl HasDragData for Synthetic<DragEvent> {
 impl HasFileData for Synthetic<DragEvent> {
     fn files(&self) -> Vec<FileData> {
         use wasm_bindgen::JsCast;
-        // let target = self.event.target();
-        // tracing::info!(
-        //     "DragEvent files called: {target:?}, event: {:?}",
-        //     self.event
-        // );
-
-        // if let Some(target) = target
-        //     .clone()
-        //     .and_then(|t| t.dyn_into::<web_sys::HtmlInputElement>().ok())
-        // {
-        //     if let Some(file_list) = target.files() {
-        //         return WebFileEngine::new(file_list).to_files();
-        //     }
-        // }
-        // if let Some(target) = target.and_then(|t| t.dyn_into::<web_sys::MouseEvent>().ok()) {
-        //     tracing::warn!("DragEvent target was a MouseEvent: {target:?}");
-        // }``
 
         if let Some(target) = self.event.dyn_ref::<web_sys::DragEvent>() {
             if let Some(data_transfer) = target.data_transfer() {

@@ -31,7 +31,7 @@ pub trait DioxusRouterExt<S>: DioxusRouterFnExt<S> {
     /// use dioxus_server::{DioxusRouterExt, DioxusRouterFnExt};
     ///
     /// #[tokio::main]
-    /// async fn main() {
+    /// async fn main() -> anyhow::Result<()> {
     ///     let addr = dioxus::cli_config::fullstack_address_or_localhost();
     ///     let router = axum::Router::new()
     ///         // Server side render the application, serve static assets, and register server functions
@@ -39,8 +39,11 @@ pub trait DioxusRouterExt<S>: DioxusRouterFnExt<S> {
     ///         // Server render the application
     ///         // ...
     ///         .into_make_service();
-    ///     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-    ///     axum::serve(listener, router).await.unwrap();
+    ///
+    ///     let listener = tokio::net::TcpListener::bind(addr).await?;
+    ///     axum::serve(listener, router).await?;
+    ///
+    ///     Ok(())
     /// }
     /// ```
     fn serve_static_assets(self) -> Self
