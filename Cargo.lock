@@ -5616,6 +5616,7 @@ dependencies = [
  "content_disposition",
  "derive_more 2.0.1",
  "dioxus",
+ "dioxus-cli-config",
  "dioxus-core",
  "dioxus-fullstack-core",
  "dioxus-fullstack-macro",

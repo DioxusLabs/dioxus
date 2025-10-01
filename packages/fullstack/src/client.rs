@@ -2,9 +2,11 @@
 
 use bytes::Bytes;
 use dioxus_fullstack_core::RequestError;
-use futures::{Stream, TryStreamExt};
-use futures_util::stream::StreamExt;
-use http::{Extensions, HeaderMap, HeaderName, HeaderValue, Method, StatusCode};
+use futures::Stream;
+use futures::{TryFutureExt, TryStreamExt};
+use headers::{ContentType, Header};
+use http::{Extensions, HeaderMap, HeaderName, Method, StatusCode};
+use send_wrapper::SendWrapper;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{pin::Pin, prelude::rust_2024::Future, sync::OnceLock};
 use url::Url;
@@ -18,35 +20,27 @@ pub type ClientResult = Result<ClientResponse, RequestError>;
 pub struct ClientRequest {
     pub url: Url,
     pub headers: HeaderMap,
-    pub extensions: Extensions,
     pub method: Method,
+    pub extensions: Extensions,
 }
 
 impl ClientRequest {
-    pub fn new(method: http::Method, url: String, params: &impl Serialize) -> Self {
-        Self::fetch_inner(method, url, serde_qs::to_string(params).unwrap())
+    /// Create a new ClientRequest with the given method, url path, and query parameters.
+    pub fn new(method: http::Method, path: String, params: &impl Serialize) -> Self {
+        Self::fetch_inner(method, path, serde_qs::to_string(params).unwrap())
     }
 
     // Shrink monomorphization bloat by moving this to its own function
-    fn fetch_inner(method: http::Method, url: String, query: String) -> ClientRequest {
-        #[cfg(not(target_arch = "wasm32"))]
-        let (ip, port) = {
-            use std::sync::LazyLock;
+    fn fetch_inner(method: http::Method, path: String, query: String) -> ClientRequest {
+        // On wasm, this doesn't matter since we always use relative URLs when making requests anyways
+        let mut server_url = get_server_url();
 
-            static IP: LazyLock<String> =
-                LazyLock::new(|| std::env::var("IP").unwrap_or_else(|_| "127.0.0.1".into()));
-            static PORT: LazyLock<String> =
-                LazyLock::new(|| std::env::var("PORT").unwrap_or_else(|_| "8080".into()));
-
-            (IP.clone(), PORT.clone())
-        };
-
-        #[cfg(target_arch = "wasm32")]
-        let (ip, port) = ("127.0.0.1", "8080".to_string());
+        if server_url.is_empty() {
+            server_url = "http://localhost:8080";
+        }
 
         let url = format!(
-            // "http://localhost:{port}{url}{params}",
-            "http://{ip}:{port}{url}{params}",
+            "{server_url}{path}{params}",
             params = if query.is_empty() {
                 "".to_string()
             } else {
@@ -61,54 +55,43 @@ impl ClientRequest {
             url,
             headers: HeaderMap::new(),
             extensions: Extensions::new(),
-            // accepts: None,
-            // content_type: None,
         }
     }
 
-    pub fn query(self, query: &impl Serialize) -> Self {
-        todo!();
-        self
-    }
-
+    /// Get the HTTP method of this Request.
     pub fn method(&self) -> &Method {
         &self.method
     }
 
-    // pub fn content_type(mut self, content_type: &str) -> Self {
-    //     self.content_type = Some(content_type.to_string());
-    //     self.header("Content-Type", content_type)
-    // }
+    pub fn url(&self) -> &Url {
+        &self.url
+    }
 
-    // pub fn accepts(mut self, accepts: &str) -> Self {
-    //     self.accepts = Some(accepts.to_string());
-    //     self.header("Accept", accepts)
-    // }
-
-    /// Add a `Header` to this Request.
-    pub fn header<K, V>(mut self, key: K, value: V) -> Self
-    where
-        HeaderName: TryFrom<K>,
-        <HeaderName as TryFrom<K>>::Error: Into<http::Error>,
-        HeaderValue: TryFrom<V>,
-        <HeaderValue as TryFrom<V>>::Error: Into<http::Error>,
-    {
-        let Ok(value) = value.try_into() else {
-            panic!("Failed to convert header value");
-            return self;
-        };
-
-        let Ok(key): Result<HeaderName, _> = key.try_into() else {
-            panic!("Failed to convert header key");
-            return self;
-        };
-
-        self.headers.append(key, value);
+    /// Extend the query parameters of this request with the given serialzable struct.
+    ///
+    /// This will use `serde_qs` to serialize the struct into query parameters. `serde_qs` has various
+    /// restrictions - make sure to read its documentation!
+    pub fn extend_query(mut self, query: &impl Serialize) -> Self {
+        let old_query = self.url.query().unwrap_or("");
+        let new_query = serde_qs::to_string(query).unwrap();
+        let combined_query = format!(
+            "{}{}{}",
+            old_query,
+            if old_query.is_empty() { "" } else { "&" },
+            new_query
+        );
+        self.url.set_query(Some(&combined_query));
         self
     }
 
-    pub fn url(&self) -> &Url {
-        &self.url
+    /// Add a `Header` to this Request.
+    pub fn header<H: Header>(mut self, header: H) -> Self {
+        let mut headers = vec![];
+        header.encode(&mut headers);
+        for header in headers {
+            self.headers.append(H::name(), header);
+        }
+        self
     }
 
     /// Creates a new reqwest client with cookies set
@@ -166,47 +149,84 @@ impl ClientRequest {
         // For GET and HEAD requests, we encode the form data as query parameters.
         // For other request methods, we encode the form data as the request body.
         if matches!(*self.method(), Method::GET | Method::HEAD) {
-            return self.query(data).send_empty_body().await;
+            return self.extend_query(data).send_empty_body().await;
         }
 
         let body =
             serde_urlencoded::to_string(data).map_err(|err| RequestError::Body(err.to_string()))?;
 
-        self.header("Content-Type", "application/x-www-form-urlencoded")
-            .send_body(body)
+        self.header(ContentType::form_url_encoded())
+            .send_raw_bytes(body)
             .await
     }
 
     /// Sends the request with an empty body.
     pub async fn send_empty_body(self) -> Result<ClientResponse, RequestError> {
-        todo!()
+        #[cfg(feature = "web")]
+        if cfg!(target_arch = "wasm32") {
+            return self.send_js_value(wasm_bindgen::JsValue::UNDEFINED).await;
+        }
+
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let res = self
+                .new_reqwest_request()
+                .send()
+                .await
+                .map_err(reqwest_error_to_request_error)?;
+
+            return Ok(ClientResponse {
+                response: Box::new(res),
+                extensions: self.extensions,
+            });
+        }
+
+        unimplemented!()
     }
 
-    pub async fn send_bytes(self, bytes: Bytes) -> Self {
-        // let client = client.build().unwrap().request(method.clone(), url);
-        todo!();
-        self
-        // Self {
-        //     // client: self.client.body(bytes),
-        //     method: self.method,
-        // }
+    pub async fn send_raw_bytes(
+        self,
+        bytes: impl Into<Bytes>,
+    ) -> Result<ClientResponse, RequestError> {
+        #[cfg(feature = "web")]
+        if cfg!(target_arch = "wasm32") {
+            let bytes = bytes.into();
+            let uint_8_array = js_sys::Uint8Array::from(&bytes[..]);
+            return self.send_js_value(uint_8_array.into()).await;
+        }
+
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let res = self
+                .new_reqwest_request()
+                .body(bytes.into())
+                .send()
+                .await
+                .map_err(reqwest_error_to_request_error)?;
+
+            return Ok(ClientResponse {
+                response: Box::new(res),
+                extensions: self.extensions,
+            });
+        }
+
+        unimplemented!()
     }
 
+    /// Sends text data with the `text/plain; charset=utf-8` content type.
     pub async fn send_text(
         self,
         text: impl Into<String> + Into<Bytes>,
     ) -> Result<ClientResponse, RequestError> {
-        let bytes: Bytes = text.into();
-        todo!()
+        self.header(ContentType::text_utf8())
+            .send_raw_bytes(text)
+            .await
     }
 
-    pub async fn send_body(self, body: impl Into<Bytes>) -> Result<ClientResponse, RequestError> {
-        todo!()
-    }
-
+    /// Sends JSON data with the `application/json` content type.
     pub async fn send_json(self, json: &impl Serialize) -> Result<ClientResponse, RequestError> {
-        self.header("Content-Type", "application/json")
-            .send_body(
+        self.header(ContentType::json())
+            .send_raw_bytes(
                 serde_json::to_vec(json).map_err(|e| RequestError::Serialization(e.to_string()))?,
             )
             .await
@@ -225,7 +245,10 @@ impl ClientRequest {
                 .await
                 .map_err(reqwest_error_to_request_error)?;
 
-            todo!()
+            return Ok(ClientResponse {
+                response: Box::new(res),
+                extensions: self.extensions,
+            });
         }
 
         // On the web, we have to buffer the entire stream into a Blob before sending it,
@@ -234,29 +257,20 @@ impl ClientRequest {
         {
             use wasm_bindgen::JsValue;
 
-            // use browser::WrappedGlooResponse;
+            let stream: Vec<Bytes> = stream.try_collect().await.map_err(|e| {
+                RequestError::Request(format!("Error collecting stream for request body: {}", e))
+            })?;
 
-            // tracing::info!("Sending streaming request to {}", self.url.path());
+            let uint_8_array =
+                js_sys::Uint8Array::new_with_length(stream.iter().map(|b| b.len() as u32).sum());
 
-            // let (res, abort) = browser::streaming_request(
-            //     self.url.path(),
-            //     self.accepts.as_deref().unwrap_or("application/json"),
-            //     self.content_type
-            //         .as_deref()
-            //         .unwrap_or("application/octet-stream"),
-            //     self.method,
-            //     stream,
-            // )
-            // .unwrap();
+            let mut offset = 0;
+            for chunk in stream {
+                uint_8_array.set(&js_sys::Uint8Array::from(&chunk[..]), offset);
+                offset += chunk.len() as u32;
+            }
 
-            // let res = res.send().await.unwrap();
-
-            // let res = WrappedGlooResponse::new(res, abort);
-
-            // return Ok(ClientResponse {
-            //     response: Box::new(res),
-            // });
-            todo!()
+            return self.send_js_value(JsValue::from(uint_8_array)).await;
         }
 
         unimplemented!()
@@ -272,13 +286,17 @@ impl ClientRequest {
         let inner = self
             .new_gloo_request()
             .body(value)
-            .unwrap()
+            .map_err(|e| RequestError::Request(e.to_string()))?
             .send()
             .await
-            .unwrap();
+            .map_err(|e| RequestError::Request(e.to_string()))?;
 
         let status = inner.status();
-        let url = inner.url().parse().unwrap();
+        let url = inner
+            .url()
+            .parse()
+            .map_err(|e| RequestError::Request(format!("Error parsing response URL: {}", e)))?;
+
         let headers = {
             let mut map = HeaderMap::new();
             for (key, value) in inner.headers().entries() {
@@ -298,6 +316,7 @@ impl ClientRequest {
         let status = http::StatusCode::from_u16(status).unwrap_or(http::StatusCode::OK);
 
         Ok(ClientResponse {
+            extensions: self.extensions,
             response: Box::new(browser::WrappedGlooResponse {
                 inner,
                 headers,
@@ -322,14 +341,10 @@ unsafe impl Sync for ClientRequest {}
 /// the entire `reqwest` crate and to support native browser APIs.
 pub struct ClientResponse {
     pub(crate) response: Box<dyn ClientResponseDriver>,
+    pub(crate) extensions: Extensions,
 }
 
 impl ClientResponse {
-    pub(crate) fn from_reqwest(response: reqwest::Response) -> Self {
-        todo!()
-        // ClientResponse { response }
-    }
-
     pub fn status(&self) -> StatusCode {
         self.response.status()
     }
@@ -348,7 +363,6 @@ impl ClientResponse {
 
     pub async fn bytes(self) -> Result<Bytes, RequestError> {
         self.response.bytes().await
-        // .map_err(reqwest_error_to_request_error)
     }
 
     pub fn bytes_stream(
@@ -364,6 +378,14 @@ impl ClientResponse {
 
     pub fn state<T>(&self) -> &T {
         todo!()
+    }
+
+    pub fn extensions(&self) -> &Extensions {
+        &self.extensions
+    }
+
+    pub fn extensions_mut(&mut self) -> &mut Extensions {
+        &mut self.extensions
     }
 
     pub async fn json<T: DeserializeOwned>(self) -> Result<T, RequestError> {
@@ -411,8 +433,6 @@ impl ClientResponse {
     }
 }
 
-static ROOT_URL: OnceLock<&'static str> = OnceLock::new();
-
 /// Set the root server URL that all server function paths are relative to for the client.
 ///
 /// If this is not set, it defaults to the origin.
@@ -424,6 +444,8 @@ pub fn set_server_url(url: &'static str) {
 pub fn get_server_url() -> &'static str {
     ROOT_URL.get().copied().unwrap_or("")
 }
+
+static ROOT_URL: OnceLock<&'static str> = OnceLock::new();
 
 pub trait ClientResponseDriver {
     fn status(&self) -> StatusCode;
@@ -438,12 +460,7 @@ pub trait ClientResponseDriver {
 }
 
 mod native {
-    use crate::{reqwest_error_to_request_error, ClientResponseDriver};
-    use bytes::Bytes;
-    use dioxus_fullstack_core::RequestError;
-    use futures::{TryFutureExt, TryStreamExt};
-    use send_wrapper::SendWrapper;
-    use std::{pin::Pin, prelude::rust_2024::Future};
+    use super::*;
 
     impl ClientResponseDriver for reqwest::Response {
         fn status(&self) -> http::StatusCode {
@@ -499,28 +516,28 @@ mod browser {
     use bytes::Bytes;
     use dioxus_fullstack_core::RequestError;
     use futures::{Stream, StreamExt};
-    use http::{HeaderMap, HeaderName, Method};
+    use http::{HeaderMap, StatusCode};
     use js_sys::Uint8Array;
     use send_wrapper::SendWrapper;
-    use std::{pin::Pin, prelude::rust_2024::Future, str::FromStr};
-    use wasm_bindgen::{JsCast, JsValue};
+    use std::{pin::Pin, prelude::rust_2024::Future};
+    use wasm_bindgen::JsCast;
 
-    use crate::{ClientResponse, ClientResponseDriver};
+    use crate::ClientResponseDriver;
 
     pub struct WrappedGlooResponse {
         pub(crate) inner: gloo_net::http::Response,
         pub(crate) headers: HeaderMap,
-        pub(crate) status: http::StatusCode,
+        pub(crate) status: StatusCode,
         pub(crate) url: url::Url,
         pub(crate) content_length: Option<u64>,
     }
 
     impl ClientResponseDriver for WrappedGlooResponse {
-        fn status(&self) -> http::StatusCode {
+        fn status(&self) -> StatusCode {
             self.status
         }
 
-        fn headers(&self) -> &http::HeaderMap {
+        fn headers(&self) -> &HeaderMap {
             &self.headers
         }
 
@@ -543,26 +560,30 @@ mod browser {
 
         fn bytes_stream(
             self: Box<Self>,
-        ) -> Pin<
-            Box<dyn futures::Stream<Item = Result<Bytes, RequestError>> + 'static + Unpin + Send>,
-        > {
-            let stream = wasm_streams::ReadableStream::from_raw(self.inner.body().unwrap());
-            Box::pin(SendWrapper::new(stream.into_stream().map(|chunk| {
-                Ok(chunk
-                    .unwrap()
-                    .dyn_into::<Uint8Array>()
-                    .unwrap()
-                    .to_vec()
-                    .into())
-            })))
+        ) -> Pin<Box<dyn Stream<Item = Result<Bytes, RequestError>> + 'static + Unpin + Send>>
+        {
+            Box::pin(SendWrapper::new(
+                wasm_streams::ReadableStream::from_raw(self.inner.body().unwrap())
+                    .into_stream()
+                    .map(|chunk| {
+                        Ok(chunk
+                            .unwrap()
+                            .dyn_into::<Uint8Array>()
+                            .unwrap()
+                            .to_vec()
+                            .into())
+                    }),
+            ))
         }
 
         fn text(
             self: Box<Self>,
         ) -> Pin<Box<dyn Future<Output = Result<String, RequestError>> + Send>> {
             Box::pin(SendWrapper::new(async move {
-                let text = self.inner.text().await.unwrap();
-                Ok(text)
+                self.inner
+                    .text()
+                    .await
+                    .map_err(|e| RequestError::Request(e.to_string()))
             }))
         }
     }
