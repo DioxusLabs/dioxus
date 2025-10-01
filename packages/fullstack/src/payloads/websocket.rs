@@ -21,12 +21,15 @@
 //! automatically serialize and deserialize messages for you.
 
 use crate::{ClientRequest, Encoding, FromResponse, IntoRequest, JsonEncoding, ServerFnError};
-use axum::extract::{FromRequest, Request};
+use axum::{
+    extract::{FromRequest, Request},
+    http::StatusCode,
+};
 use axum_core::response::{IntoResponse, Response};
 use bytes::Bytes;
 use dioxus_core::{use_hook, CapturedError, Result};
-use dioxus_fullstack_core::RequestError;
-use dioxus_hooks::{use_resource, Resource};
+use dioxus_fullstack_core::{HttpError, RequestError};
+use dioxus_hooks::{use_resource, Resource, UseWaker};
 use dioxus_hooks::{use_signal, use_waker};
 use dioxus_signals::{ReadSignal, ReadableExt, ReadableOptionExt, Signal, WritableExt};
 use futures::StreamExt;
@@ -105,7 +108,7 @@ where
     Enc: 'static,
 {
     connection: Resource<Result<Websocket<In, Out, Enc>, CapturedError>>,
-    waker: dioxus_hooks::UseWaker<()>,
+    waker: UseWaker<()>,
     status: Signal<WebsocketState>,
     status_read: ReadSignal<WebsocketState>,
 }
@@ -122,14 +125,34 @@ impl<In, Out, E> UseWebsocket<In, Out, E> {
         self.status.cloned()
     }
 
+    /// Returns true if the WebSocket is currently connecting.
+    ///
+    /// This can be useful to present a loading state to the user while the connection is being established.
     pub fn connecting(&self) -> bool {
         matches!(self.status.cloned(), WebsocketState::Connecting)
     }
 
+    /// Returns true if the Websocket is closed due to an error.
+    pub fn is_err(&self) -> bool {
+        matches!(self.status.cloned(), WebsocketState::FailedToConnect)
+    }
+
+    /// Returns true if the WebSocket is currently shut down and cannot be used to send or receive messages.
+    pub fn is_closed(&self) -> bool {
+        matches!(
+            self.status.cloned(),
+            WebsocketState::Closed | WebsocketState::FailedToConnect
+        )
+    }
+
+    /// Get the current status of the WebSocket connection.
     pub fn status(&self) -> ReadSignal<WebsocketState> {
         self.status_read
     }
 
+    /// Send a raw message over the WebSocket connection
+    ///
+    /// To send a message with a particular type, see the `.send()` method instead.
     pub async fn send_raw(&self, msg: Message) -> Result<(), WebsocketError> {
         self.connect().await;
 
@@ -138,35 +161,45 @@ impl<In, Out, E> UseWebsocket<In, Out, E> {
             .as_deref()
             .ok_or_else(WebsocketError::closed_away)?
             .as_ref()
-            .unwrap()
-            .send_msg(msg)
+            .map_err(|_| WebsocketError::AlreadyClosed)?
+            .send_raw(msg)
             .await
     }
 
+    /// Receive a raw message from the WebSocket connection
+    ///
+    /// To receive a message with a particular type, see the `.recv()` method instead.
     pub async fn recv_raw(&mut self) -> Result<Message, WebsocketError> {
         self.connect().await;
 
-        self.connection
+        let result = self
+            .connection
             .as_ref()
             .as_deref()
             .ok_or_else(WebsocketError::closed_away)?
             .as_ref()
-            .unwrap()
-            .recv_msg()
-            .await
-    }
-}
+            .map_err(|_| WebsocketError::AlreadyClosed)?
+            .recv_raw()
+            .await;
 
-impl<In: Serialize, Out, E: Encoding> UseWebsocket<In, Out, E> {
-    pub async fn send(&self, msg: In) -> Result<(), WebsocketError> {
+        if let Err(WebsocketError::ConnectionClosed { .. }) = result.as_ref() {
+            self.received_shutdown();
+        }
+
+        result
+    }
+
+    pub async fn send(&self, msg: In) -> Result<(), WebsocketError>
+    where
+        In: Serialize,
+        E: Encoding,
+    {
         self.send_raw(Message::Binary(
             E::to_bytes(&msg).ok_or_else(WebsocketError::serialization)?,
         ))
         .await
     }
-}
 
-impl<In, Out: DeserializeOwned, E: Encoding> UseWebsocket<In, Out, E> {
     /// Receive the next message from the WebSocket connection, deserialized into the `Out` type.
     ///
     /// If the connection is still opening, this will wait until the connection is established.
@@ -174,17 +207,35 @@ impl<In, Out: DeserializeOwned, E: Encoding> UseWebsocket<In, Out, E> {
     ///
     /// This method returns an error if the connection is closed since we assume closed connections
     /// are a "failure".
-    pub async fn recv(&mut self) -> Result<Out, WebsocketError> {
+    pub async fn recv(&mut self) -> Result<Out, WebsocketError>
+    where
+        Out: DeserializeOwned,
+        E: Encoding,
+    {
         self.connect().await;
 
-        self.connection
+        let result = self
+            .connection
             .as_ref()
             .as_deref()
             .ok_or_else(WebsocketError::closed_away)?
             .as_ref()
-            .unwrap()
+            .map_err(|_| WebsocketError::AlreadyClosed)?
             .recv()
-            .await
+            .await;
+
+        if let Err(WebsocketError::ConnectionClosed { .. }) = result.as_ref() {
+            self.received_shutdown();
+        }
+
+        result
+    }
+
+    /// Mark the WebSocket as closed. This is called internally when the connection is closed.
+    fn received_shutdown(&self) {
+        let mut _self = *self;
+        _self.status.set(WebsocketState::Closed);
+        _self.waker.wake(());
     }
 }
 
@@ -233,56 +284,77 @@ impl<I, O, E> Websocket<I, O, E> {
         O: DeserializeOwned,
         E: Encoding,
     {
-        let msg = self.recv_msg().await?;
+        loop {
+            let msg = self.recv_raw().await?;
+            match msg {
+                Message::Text(text) => {
+                    let e: O =
+                        E::from_bytes(text.into()).ok_or_else(WebsocketError::deserialization)?;
+                    return Ok(e);
+                }
+                Message::Binary(bytes) => {
+                    let e: O = E::from_bytes(bytes).ok_or_else(WebsocketError::deserialization)?;
+                    return Ok(e);
+                }
+                Message::Close { code, reason } => {
+                    return Err(WebsocketError::ConnectionClosed {
+                        code,
+                        description: reason,
+                    });
+                }
 
-        todo!()
+                // todo - are we supposed to response to pings?
+                Message::Ping(_bytes) => continue,
+                Message::Pong(_bytes) => continue,
+            }
+        }
     }
 
+    /// Send a typed message over the WebSocket connection.
+    ///
+    /// This method serializes the message using the specified encoding `E` before sending it.
+    /// The message will always be sent as a binary message, even if the encoding is valid UTF-8
+    /// like JSON.
     pub async fn send(&self, msg: I) -> Result<(), WebsocketError>
     where
         I: Serialize,
         E: Encoding,
     {
         let bytes = E::to_bytes(&msg).ok_or_else(WebsocketError::serialization)?;
-        self.send_msg(Message::Binary(bytes)).await
+        self.send_raw(Message::Binary(bytes)).await
     }
 
-    pub async fn send_msg(&self, message: Message) -> Result<(), WebsocketError> {
+    /// Send a raw message over the WebSocket connection.
+    ///
+    /// This method allows sending text, binary, ping, pong, and close messages directly.
+    pub async fn send_raw(&self, message: Message) -> Result<(), WebsocketError> {
         #[cfg(feature = "web")]
         if cfg!(target_arch = "wasm32") {
+            let mut sender = self.web.as_ref()?.sender.lock().await;
+
             match message {
                 Message::Text(s) => {
-                    self.web
-                        .as_ref()?
-                        .sender
-                        .lock()
-                        .await
-                        .send(gloo_net::websocket::Message::Text(s))
-                        .await?;
+                    sender.send(gloo_net::websocket::Message::Text(s)).await?;
                 }
                 Message::Binary(bytes) => {
-                    self.web
-                        .as_ref()?
-                        .sender
-                        .lock()
-                        .await
+                    sender
                         .send(gloo_net::websocket::Message::Bytes(bytes.into()))
                         .await?;
                 }
+                Message::Close { .. } => {
+                    sender.close().await?;
+                }
                 Message::Ping(_bytes) => return Ok(()),
                 Message::Pong(_bytes) => return Ok(()),
-                Message::Close { code, reason } => todo!(),
             }
+
             return Ok(());
         }
 
         #[cfg(not(target_arch = "wasm32"))]
         {
-            self.native
-                .as_ref()?
-                .sender
-                .lock()
-                .await
+            let mut sender = self.native.as_ref()?.sender.lock().await;
+            sender
                 .send(message.into())
                 .await
                 .map_err(WebsocketError::from)?;
@@ -290,12 +362,13 @@ impl<I, O, E> Websocket<I, O, E> {
 
         Ok(())
     }
-    pub async fn recv_msg(&self) -> Result<Message, WebsocketError> {
+
+    /// Receive a raw message from the WebSocket connection.
+    pub async fn recv_raw(&self) -> Result<Message, WebsocketError> {
         #[cfg(feature = "web")]
         if cfg!(target_arch = "wasm32") {
-            let mut socket = self.web.as_ref().unwrap().receiver.lock().await;
-            let res = socket.next().await;
-            return match res {
+            let mut conn = self.web.as_ref().unwrap().receiver.lock().await;
+            return match conn.next().await {
                 Some(Ok(WsMessage::Text(text))) => Ok(Message::Text(text)),
                 Some(Ok(WsMessage::Bytes(items))) => Ok(Message::Binary(items.into())),
                 Some(Err(e)) => Err(WebsocketError::from(e)),
@@ -306,11 +379,9 @@ impl<I, O, E> Websocket<I, O, E> {
         #[cfg(not(target_arch = "wasm32"))]
         {
             use tungstenite::Message as TMessage;
-            let conn = self.native.as_ref().unwrap();
-            let mut conn = conn.receiver.lock().await;
+            let mut conn = self.native.as_ref().unwrap().receiver.lock().await;
             return match conn.next().await {
                 Some(Ok(res)) => match res {
-                    // todo: this is inefficient, we should just go into String
                     TMessage::Text(utf8_bytes) => Ok(Message::Text(utf8_bytes.to_string())),
                     TMessage::Binary(bytes) => Ok(Message::Binary(bytes)),
                     TMessage::Close(Some(cf)) => Ok(Message::Close {
@@ -344,7 +415,15 @@ impl<I, O, E> PartialEq for Websocket<I, O, E> {
 // Create a new WebSocket connection that uses the provided function to handle incoming messages
 impl<In, Out, E> IntoResponse for Websocket<In, Out, E> {
     fn into_response(self) -> Response {
-        self.response.unwrap().into_response()
+        let Some(response) = self.response else {
+            return HttpError::new(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "WebSocket response not initialized",
+            )
+            .into_response();
+        };
+
+        response.into_response()
     }
 }
 
@@ -383,6 +462,7 @@ pub struct WebSocketOptions {
     automatic_reconnect: bool,
     #[cfg(feature = "server")]
     upgrade: Option<axum::extract::ws::WebSocketUpgrade>,
+    #[cfg(feature = "server")]
     on_failed_upgrade: Option<Box<dyn FnOnce(axum::Error) + Send + 'static>>,
 }
 
@@ -391,8 +471,11 @@ impl WebSocketOptions {
         Self {
             protocols: Vec::new(),
             automatic_reconnect: false,
+
             #[cfg(feature = "server")]
             upgrade: None,
+
+            #[cfg(feature = "server")]
             on_failed_upgrade: None,
         }
     }
@@ -509,19 +592,21 @@ impl IntoRequest<UpgradingWebsocket> for WebSocketOptions {
                     native: Some(inner),
                 });
             }
+
+            unimplemented!("Non web wasm32 clients are not supported yet")
         }
     }
 }
 
 impl<S: Send> FromRequest<S> for WebSocketOptions {
-    type Rejection = axum::http::StatusCode;
+    type Rejection = axum::response::Response;
 
     fn from_request(
         req: Request,
         _: &S,
     ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send {
         #[cfg(not(feature = "server"))]
-        return async move { Err(axum::http::StatusCode::NOT_IMPLEMENTED) };
+        return async move { Err(StatusCode::NOT_IMPLEMENTED.into_response()) };
 
         #[cfg(feature = "server")]
         async move {
@@ -596,13 +681,10 @@ impl<In: DeserializeOwned, Out: Serialize, E: Encoding> TypedWebsocket<In, Out, 
             WebsocketError::Serialization(anyhow::anyhow!("Failed to serialize message").into())
         })?;
 
-        let res = self
-            .inner
-            .send(Message::Binary(to_bytes.into()))
+        self.inner
+            .send(Message::Binary(to_bytes))
             .await
-            .unwrap();
-
-        Ok(())
+            .map_err(|_err| WebsocketError::AlreadyClosed)
     }
 
     /// Receive another message.

@@ -74,9 +74,10 @@ fn DefaultServerFnCodec() -> Element {
 
 #[cfg(feature = "server")]
 async fn assert_server_context_provided() {
-    use dioxus::server::{extract, FromContext};
-    let FromContext(i): FromContext<u32> = extract().await.unwrap();
-    assert_eq!(i, 1234u32);
+    todo!("replace server context....")
+    // use dioxus::server::{extract, FromContext};
+    // let FromContext(i): FromContext<u32> = extract().await.unwrap();
+    // assert_eq!(i, 1234u32);
 }
 
 #[server(PostServerData)]
