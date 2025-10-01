@@ -1,5 +1,6 @@
 #![allow(unreachable_code)]
 
+use crate::{reqwest_error_to_request_error, StreamingError};
 use bytes::Bytes;
 use dioxus_fullstack_core::RequestError;
 use futures::Stream;
@@ -10,8 +11,6 @@ use send_wrapper::SendWrapper;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{fmt::Display, pin::Pin, prelude::rust_2024::Future, sync::OnceLock};
 use url::Url;
-
-use crate::{reqwest_error_to_request_error, StreamingError};
 
 pub static GLOBAL_REQUEST_CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
 
@@ -130,7 +129,7 @@ impl ClientRequest {
 
     /// Creates a new reqwest request builder with the method, url, and headers set from this ClientRequest
     pub fn new_reqwest_request(&self) -> reqwest::RequestBuilder {
-        let client = GLOBAL_REQUEST_CLIENT.get_or_init(|| Self::new_reqwest_client());
+        let client = GLOBAL_REQUEST_CLIENT.get_or_init(Self::new_reqwest_client);
 
         let mut req = client.request(self.method.clone(), self.url.clone());
 
@@ -470,6 +469,8 @@ pub trait ClientResponseDriver {
 }
 
 mod native {
+    use futures::Stream;
+
     use super::*;
 
     impl ClientResponseDriver for reqwest::Response {
@@ -505,9 +506,8 @@ mod native {
 
         fn bytes_stream(
             self: Box<Self>,
-        ) -> Pin<
-            Box<dyn futures::Stream<Item = Result<Bytes, StreamingError>> + 'static + Unpin + Send>,
-        > {
+        ) -> Pin<Box<dyn Stream<Item = Result<Bytes, StreamingError>> + 'static + Unpin + Send>>
+        {
             Box::pin(SendWrapper::new(
                 reqwest::Response::bytes_stream(*self).map_err(|_| StreamingError::Failed),
             ))
@@ -527,6 +527,7 @@ mod native {
 
 #[cfg(feature = "web")]
 mod browser {
+    use crate::{ClientResponseDriver, StreamingError};
     use bytes::Bytes;
     use dioxus_fullstack_core::RequestError;
     use futures::{Stream, StreamExt};
@@ -536,9 +537,7 @@ mod browser {
     use std::{pin::Pin, prelude::rust_2024::Future};
     use wasm_bindgen::JsCast;
 
-    use crate::{ClientResponseDriver, StreamingError};
-
-    pub struct WrappedGlooResponse {
+    pub(crate) struct WrappedGlooResponse {
         pub(crate) inner: gloo_net::http::Response,
         pub(crate) headers: HeaderMap,
         pub(crate) status: StatusCode,

@@ -1,4 +1,6 @@
 use dioxus_fullstack_core::{RequestError, ServerFnError};
+#[cfg(feature = "server")]
+use headers::Header;
 use http::response::Parts;
 use std::{future::Future, pin::Pin};
 
@@ -99,9 +101,16 @@ where
 }
 
 #[cfg(feature = "server")]
-impl<T> FromResponseParts for axum_extra::TypedHeader<T> {
+impl<T: Header> FromResponseParts for axum_extra::TypedHeader<T> {
     fn from_response_parts(parts: &mut Parts) -> Result<Self, ServerFnError> {
-        todo!()
+        use headers::HeaderMapExt;
+
+        let t = parts
+            .headers
+            .typed_get::<T>()
+            .ok_or_else(|| ServerFnError::Serialization("Invalid header value".into()))?;
+
+        Ok(axum_extra::TypedHeader(t))
     }
 }
 
