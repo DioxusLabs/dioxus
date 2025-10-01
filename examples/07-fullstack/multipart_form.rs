@@ -42,8 +42,7 @@ fn app() -> Element {
     }
 }
 
-/// Upload an entire form as multipart form data. This is useful when uploading multiple files
-/// from a form.
+/// Upload a form as multipart form data.
 ///
 /// MultipartFormData is typed over the form data structure, allowing us to extract
 /// both files and other form fields in a type-safe manner.
@@ -52,10 +51,8 @@ fn app() -> Element {
 #[post("/api/upload-multipart")]
 async fn upload(mut form: MultipartFormData) -> Result<()> {
     while let Ok(Some(field)) = form.next_field().await {
-        info!("Got field: {:?}", field);
         info!(
-            "Field:
-            name: {:?}, filename: {:?}, content_type: {:?}",
+            "Field name: {:?}, filename: {:?}, content_type: {:?}",
             field.name().to_owned(),
             field.file_name(),
             field.content_type(),

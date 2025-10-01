@@ -99,7 +99,9 @@ pub mod payloads {
     #[cfg(feature = "postcard")]
     pub use postcard::*;
 
+    #[cfg(feature = "msgpack")]
     pub mod msgpack;
+    #[cfg(feature = "msgpack")]
     pub use msgpack::*;
 
     pub mod text;
