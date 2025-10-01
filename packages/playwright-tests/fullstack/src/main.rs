@@ -188,7 +188,7 @@ fn WebSockets() -> Element {
     use_future(move || async move {
         let socket = echo_ws(WebSocketOptions::default()).await.unwrap();
 
-        while let Some(Ok(msg)) = socket.recv().await {
+        while let Ok(msg) = socket.recv().await {
             received.write().push_str(&msg);
         }
     });

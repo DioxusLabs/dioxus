@@ -1,5 +1,6 @@
 // #![warn(missing_docs)]
 #![allow(clippy::manual_async_fn)]
+#![allow(clippy::needless_return)]
 
 pub use client::{get_server_url, set_server_url};
 pub use dioxus_fullstack_core::*;
@@ -112,9 +113,6 @@ pub mod payloads {
 
     pub mod upload;
     pub use upload::*;
-
-    pub mod ranged;
-    pub use ranged::*;
 
     pub mod header;
     pub use header::*;

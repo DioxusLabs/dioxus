@@ -28,10 +28,10 @@ use dioxus_hooks::{use_resource, Resource};
 use dioxus_hooks::{use_signal, use_waker};
 use dioxus_signals::{ReadSignal, ReadableExt, ReadableOptionExt, Signal, WritableExt};
 use futures::StreamExt;
-use futures_channel::mpsc::UnboundedReceiver;
 use futures_util::TryFutureExt;
 use http::HeaderValue;
 use protocol::CloseCode;
+use protocol::Message;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{marker::PhantomData, prelude::rust_2024::Future};
 
@@ -60,30 +60,24 @@ pub fn use_websocket<
     let status_read = use_hook(|| ReadSignal::new(status));
 
     let connection = use_resource(move || {
-        let fut = connect_to_websocket().map_err(|e| CapturedError::from(e.into()));
-
+        let connection = connect_to_websocket().map_err(|e| CapturedError::from(e.into()));
         async move {
-            let res = fut.await;
+            let connection = connection.await;
 
             // Update the status based on the result of the connection attempt
-            match res.as_ref() {
-                Ok(_) => {
-                    status.set(WebsocketState::Open);
-                }
-                Err(_) => {
-                    status.set(WebsocketState::FailedToConnect);
-                }
+            match connection.as_ref() {
+                Ok(_) => status.set(WebsocketState::Open),
+                Err(_) => status.set(WebsocketState::FailedToConnect),
             }
 
             // Wake up the `.recv()` calls waiting for the connection to be established
             waker.wake(());
 
-            res
+            connection
         }
     });
 
     UseWebsocket {
-        _in: PhantomData,
         connection,
         waker,
         status,
@@ -103,7 +97,6 @@ where
     Out: 'static,
     Enc: 'static,
 {
-    _in: std::marker::PhantomData<fn() -> (In, Out, Enc)>,
     connection: Resource<Result<Websocket<In, Out, Enc>, CapturedError>>,
     waker: dioxus_hooks::UseWaker<()>,
     status: Signal<WebsocketState>,
@@ -120,91 +113,52 @@ impl<In, Out, E> UseWebsocket<In, Out, E> {
         matches!(self.status.cloned(), WebsocketState::Connecting)
     }
 
-    pub async fn send_raw(&mut self, msg: Bytes) -> Result<(), WebsocketError> {
-        todo!()
-    }
-
     pub fn status(&self) -> ReadSignal<WebsocketState> {
         self.status_read
     }
 
-    pub async fn recv_raw(&mut self) -> Result<protocol::Message, WebsocketError> {
-        self.wait_for_connection().await;
-
-        let conn = self.connection.value();
-        let con_ref = conn.as_ref();
-        let connection: Result<&Websocket<In, Out, E>, &CapturedError> = con_ref
-            .as_deref()
-            .ok_or_else(|| WebsocketError::ConnectionClosed {
-                description: "Connection closed".into(),
-                reason: CloseCode::Away,
-            })?
-            .as_ref();
-
-        loop {
-            let conn = connection.unwrap();
-            let msg = conn.recv_msg().await;
-
-            let msg = match msg {
-                Some(Ok(msg)) => msg,
-                Some(Err(e)) => {
-                    todo!()
-                }
-                None => {
-                    return Err(WebsocketError::ConnectionClosed {
-                        description: "Connection closed".into(),
-                        reason: CloseCode::Away,
-                    })
-                }
-            };
-
-            match msg {
-                protocol::Message::Text(msg) => {
-                    return Ok(protocol::Message::Text(msg));
-                }
-                protocol::Message::Binary(bytes) => {
-                    return Ok(protocol::Message::Binary(bytes));
-                }
-                protocol::Message::Ping(bytes) => todo!("Respond with a pong"),
-                protocol::Message::Pong(bytes) => continue,
-                protocol::Message::Close { code, reason } => {
-                    self.status.set(WebsocketState::Closed);
-                    return Err(WebsocketError::ConnectionClosed {
-                        description: reason,
-                        reason: code,
-                    });
-                }
-            }
-        }
-    }
-
     /// Wait for the connection to be established. This guarantees that subsequent calls to methods like
     /// `.try_recv()` will not fail due to the connection not being ready.
-    pub async fn wait_for_connection(&mut self) {
+    pub async fn wait_for_connection(&self) {
         // Wait for the connection to be established
         while !self.connection.finished() {
             _ = self.waker.wait().await;
         }
+    }
+
+    pub async fn send_raw(&self, msg: Message) -> Result<(), WebsocketError> {
+        self.wait_for_connection().await;
+
+        self.connection
+            .as_ref()
+            .as_deref()
+            .ok_or_else(WebsocketError::closed_away)?
+            .as_ref()
+            .unwrap()
+            .send_msg(msg)
+            .await
+    }
+
+    pub async fn recv_raw(&mut self) -> Result<Message, WebsocketError> {
+        self.wait_for_connection().await;
+
+        self.connection
+            .as_ref()
+            .as_deref()
+            .ok_or_else(WebsocketError::closed_away)?
+            .as_ref()
+            .unwrap()
+            .recv_msg()
+            .await
     }
 }
 
 impl<In: Serialize, Out, E: Encoding> UseWebsocket<In, Out, E> {
     pub async fn send(&self, msg: In) -> Result<(), WebsocketError> {
-        // Wait for the connection to be established
-        while !self.connection.finished() {
-            _ = self.waker.wait().await;
-        }
-
-        let conn = self.connection.value();
-        if let Some(Ok(con)) = conn.as_ref().as_deref() {
-            let bytes = E::to_bytes(&msg).ok_or_else(|| {
-                WebsocketError::Serialization(anyhow::anyhow!("Failed to serialize message").into())
-            })?;
-            con.send_msg(protocol::Message::Binary(bytes.into()))
-                .await?;
-        }
-
-        Ok(())
+        self.send_raw(Message::Binary(
+            E::to_bytes(&msg).ok_or_else(WebsocketError::serialization)?,
+        ))
+        .await
     }
 }
 
@@ -217,29 +171,16 @@ impl<In, Out: DeserializeOwned, E: Encoding> UseWebsocket<In, Out, E> {
     /// This method returns an error if the connection is closed since we assume closed connections
     /// are a "failure".
     pub async fn recv(&mut self) -> Result<Out, WebsocketError> {
-        let msg = self.recv_raw().await?;
+        self.wait_for_connection().await;
 
-        match msg {
-            protocol::Message::Text(text) => {
-                let res: Out = E::from_bytes(text.into()).ok_or_else(|| {
-                    WebsocketError::Deserialization(
-                        anyhow::anyhow!("Failed to deserialize text message").into(),
-                    )
-                })?;
-                Ok(res)
-            }
-            protocol::Message::Binary(bytes) => {
-                let res: Out = E::from_bytes(bytes.into()).ok_or_else(|| {
-                    WebsocketError::Deserialization(
-                        anyhow::anyhow!("Failed to deserialize binary message").into(),
-                    )
-                })?;
-                Ok(res)
-            }
-            protocol::Message::Ping(bytes) => todo!(),
-            protocol::Message::Pong(bytes) => todo!(),
-            protocol::Message::Close { code, reason } => todo!(),
-        }
+        self.connection
+            .as_ref()
+            .as_deref()
+            .ok_or_else(WebsocketError::closed_away)?
+            .as_ref()
+            .unwrap()
+            .recv()
+            .await
     }
 }
 
@@ -270,95 +211,20 @@ pub enum WebsocketState {
 
 /// A WebSocket connection that can send and receive messages of type `In` and `Out`.
 pub struct Websocket<In = String, Out = String, E = JsonEncoding> {
+    #[allow(clippy::type_complexity)]
     _in: std::marker::PhantomData<fn() -> (In, Out, E)>,
 
     #[cfg(not(target_arch = "wasm32"))]
-    inner_native: Option<native::SplitSocket>,
+    native: Result<native::SplitSocket, WebsocketError>,
 
     #[cfg(feature = "web")]
-    inner_web: Option<wasm::WebSysWebSocketStream>,
+    web: Result<wasm::WebSysWebSocketStream, WebsocketError>,
 
     response: Option<axum::response::Response>,
 }
 
 impl<I, O, E> Websocket<I, O, E> {
-    pub async fn send_msg(&self, message: protocol::Message) -> Result<(), WebsocketError> {
-        #[cfg(feature = "web")]
-        if cfg!(target_arch = "wasm32") {
-            match message {
-                protocol::Message::Text(s) => {
-                    let r = self.inner_web.as_ref().unwrap();
-                    r.inner.send_with_str(&s).unwrap();
-                }
-                protocol::Message::Binary(bytes) => {
-                    let r = self.inner_web.as_ref().unwrap();
-                    r.inner.send_with_u8_array(&bytes).unwrap();
-                }
-                protocol::Message::Ping(bytes) => todo!(),
-                protocol::Message::Pong(bytes) => todo!(),
-                protocol::Message::Close { code, reason } => todo!(),
-            }
-            return Ok(());
-        }
-
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            let conn = self.inner_native.as_ref().unwrap();
-            let mut conn = conn.sender.lock().await;
-            let as_tungestine = message.into();
-            conn.send(as_tungestine)
-                .await
-                .map_err(WebsocketError::from)?;
-        }
-
-        Ok(())
-    }
-    pub async fn recv_msg(&self) -> Option<Result<protocol::Message, WebsocketError>> {
-        #[cfg(feature = "web")]
-        if cfg!(target_arch = "wasm32") {
-            let mut socket = self.inner_web.as_ref().unwrap().rx.lock().await;
-            let res = socket.next().await;
-            return match res {
-                Some(Ok(res)) => Some(Ok(res)),
-                Some(Err(e)) => Some(Err(WebsocketError::from(e))),
-                None => None,
-            };
-        }
-
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            let conn = self.inner_native.as_ref().unwrap();
-            let mut conn = conn.receiver.lock().await;
-            let res = conn.next().await;
-            return match res {
-                Some(Ok(res)) => Some(match res {
-                    // todo: this is inefficient, we should just go into String
-                    tungstenite::Message::Text(utf8_bytes) => {
-                        Ok(protocol::Message::Text(utf8_bytes.to_string()))
-                    }
-                    tungstenite::Message::Binary(bytes) => {
-                        Ok(protocol::Message::Binary(bytes.into()))
-                    }
-                    tungstenite::Message::Close(close_frame) => {
-                        let (code, reason) = match close_frame {
-                            Some(cf) => (cf.code.into(), cf.reason.to_string()),
-                            None => (protocol::CloseCode::Away, "".into()),
-                        };
-                        Ok(protocol::Message::Close { code, reason })
-                    }
-                    tungstenite::Message::Ping(bytes) => todo!(),
-                    tungstenite::Message::Pong(bytes) => todo!(),
-                    tungstenite::Message::Frame(frame) => unreachable!(),
-                }),
-                Some(Err(e)) => Some(Err(WebsocketError::from(e))),
-                None => None,
-            };
-        }
-
-        unreachable!()
-    }
-
-    pub async fn recv(&self) -> Option<Result<O, WebsocketError>>
+    pub async fn recv(&self) -> Result<O, WebsocketError>
     where
         O: DeserializeOwned,
         E: Encoding,
@@ -367,11 +233,94 @@ impl<I, O, E> Websocket<I, O, E> {
 
         todo!()
     }
+
+    pub async fn send(&self, msg: I) -> Result<(), WebsocketError>
+    where
+        I: Serialize,
+        E: Encoding,
+    {
+        let bytes = E::to_bytes(&msg).ok_or_else(WebsocketError::serialization)?;
+        self.send_msg(Message::Binary(bytes)).await
+    }
+
+    pub async fn send_msg(&self, message: Message) -> Result<(), WebsocketError> {
+        #[cfg(feature = "web")]
+        if cfg!(target_arch = "wasm32") {
+            match message {
+                Message::Text(s) => {
+                    self.web.as_ref()?.inner.send_with_str(&s).unwrap();
+                }
+                Message::Binary(bytes) => {
+                    self.web.as_ref()?.inner.send_with_u8_array(&bytes).unwrap();
+                }
+                Message::Ping(_bytes) => return Ok(()),
+                Message::Pong(_bytes) => return Ok(()),
+                Message::Close { code, reason } => todo!(),
+            }
+            return Ok(());
+        }
+
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.native
+                .as_ref()?
+                .sender
+                .lock()
+                .await
+                .send(message.into())
+                .await
+                .map_err(WebsocketError::from)?;
+        }
+
+        Ok(())
+    }
+    pub async fn recv_msg(&self) -> Result<Message, WebsocketError> {
+        #[cfg(feature = "web")]
+        if cfg!(target_arch = "wasm32") {
+            let mut socket = self.web.as_ref().unwrap().rx.lock().await;
+            let res = socket.next().await;
+            return match res {
+                Some(Ok(res)) => Ok(res),
+                Some(Err(e)) => Err(WebsocketError::from(e)),
+                None => Err(WebsocketError::closed_away()),
+            };
+        }
+
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            use tungstenite::Message as TMessage;
+            let conn = self.native.as_ref().unwrap();
+            let mut conn = conn.receiver.lock().await;
+            return match conn.next().await {
+                Some(Ok(res)) => match res {
+                    // todo: this is inefficient, we should just go into String
+                    TMessage::Text(utf8_bytes) => Ok(Message::Text(utf8_bytes.to_string())),
+                    TMessage::Binary(bytes) => Ok(Message::Binary(bytes)),
+                    TMessage::Close(Some(cf)) => Ok(Message::Close {
+                        code: cf.code.into(),
+                        reason: cf.reason.to_string(),
+                    }),
+                    TMessage::Close(None) => Ok(Message::Close {
+                        code: protocol::CloseCode::Away,
+                        reason: "Away".to_string(),
+                    }),
+                    TMessage::Ping(bytes) => Ok(Message::Ping(bytes)),
+                    TMessage::Pong(bytes) => Ok(Message::Pong(bytes)),
+                    TMessage::Frame(_frame) => Err(WebsocketError::Unexpected),
+                },
+                Some(Err(e)) => Err(WebsocketError::from(e)),
+                None => Err(WebsocketError::closed_away()),
+            };
+        }
+
+        unimplemented!("Non web wasm32 clients are not supported yet")
+    }
 }
 
+// no two websockets are ever equal
 impl<I, O, E> PartialEq for Websocket<I, O, E> {
-    fn eq(&self, other: &Self) -> bool {
-        todo!()
+    fn eq(&self, _other: &Self) -> bool {
+        false
     }
 }
 
@@ -386,16 +335,16 @@ impl<I, O, E> FromResponse<UpgradingWebsocket> for Websocket<I, O, E> {
     fn from_response(res: UpgradingWebsocket) -> impl Future<Output = Result<Self, ServerFnError>> {
         async move {
             #[cfg(not(target_arch = "wasm32"))]
-            let inner_native = res.inner_native;
+            let native = res.native.ok_or_else(|| WebsocketError::Uninitialized);
 
             #[cfg(feature = "web")]
-            let inner_web = res.inner_web;
+            let web = res.web.ok_or_else(|| WebsocketError::Uninitialized);
 
             Ok(Websocket {
                 #[cfg(not(target_arch = "wasm32"))]
-                inner_native,
+                native,
                 #[cfg(feature = "web")]
-                inner_web,
+                web,
                 response: None,
                 _in: PhantomData,
             })
@@ -451,10 +400,10 @@ impl WebSocketOptions {
             _in: PhantomData,
 
             #[cfg(not(target_arch = "wasm32"))]
-            inner_native: None,
+            native: Err(WebsocketError::Uninitialized),
 
             #[cfg(feature = "web")]
-            inner_web: None,
+            web: Err(WebsocketError::Uninitialized),
         }
     }
 }
@@ -473,16 +422,16 @@ impl IntoRequest<UpgradingWebsocket> for WebSocketOptions {
         async move {
             #[cfg(all(feature = "web", target_arch = "wasm32"))]
             {
-                let inner_web = Some(
+                let web = Some(
                     wasm::WebSysWebSocketStream::new(request, &self.protocols)
                         .await
                         .unwrap(),
                 );
 
                 return Ok(UpgradingWebsocket {
-                    inner_web,
+                    web,
                     #[cfg(not(target_arch = "wasm32"))]
-                    inner_native: None,
+                    native: None,
                 });
             }
 
@@ -498,8 +447,8 @@ impl IntoRequest<UpgradingWebsocket> for WebSocketOptions {
 
                 return Ok(UpgradingWebsocket {
                     #[cfg(feature = "web")]
-                    inner_web: None,
-                    inner_native: Some(inner),
+                    web: None,
+                    native: Some(inner),
                 });
             }
         }
@@ -535,10 +484,10 @@ impl<S: Send> FromRequest<S> for WebSocketOptions {
 #[doc(hidden)]
 pub struct UpgradingWebsocket {
     #[cfg(feature = "web")]
-    inner_web: Option<wasm::WebSysWebSocketStream>,
+    web: Option<wasm::WebSysWebSocketStream>,
 
     #[cfg(not(target_arch = "wasm32"))]
-    inner_native: Option<native::SplitSocket>,
+    native: Option<native::SplitSocket>,
 }
 
 unsafe impl Send for UpgradingWebsocket {}
@@ -636,6 +585,12 @@ pub enum WebsocketError {
     #[error("WebSocket capacity reached")]
     Capacity,
 
+    #[error("An unexpected internal error occurred")]
+    Unexpected,
+
+    #[error("WebSocket is not initialized on this platform")]
+    Uninitialized,
+
     #[cfg(not(target_arch = "wasm32"))]
     #[cfg_attr(docsrs, doc(cfg(not(target_arch = "wasm32"))))]
     #[error("websocket upgrade failed")]
@@ -673,6 +628,35 @@ pub enum WebsocketError {
     Cbor(#[from] ciborium::de::Error<std::io::Error>),
 }
 
+impl<T> From<Option<T>> for WebsocketError {
+    fn from(value: Option<T>) -> Self {
+        todo!()
+    }
+}
+
+impl From<&WebsocketError> for WebsocketError {
+    fn from(value: &WebsocketError) -> Self {
+        todo!()
+    }
+}
+
+impl WebsocketError {
+    pub fn closed_away() -> Self {
+        Self::ConnectionClosed {
+            reason: CloseCode::Normal,
+            description: "Connection closed normally".into(),
+        }
+    }
+
+    pub fn deserialization() -> Self {
+        Self::Deserialization(anyhow::anyhow!("Failed to deserialize message").into())
+    }
+
+    pub fn serialization() -> Self {
+        Self::Serialization(anyhow::anyhow!("Failed to serialize message").into())
+    }
+}
+
 #[cfg(feature = "web")]
 mod wasm {
     use std::{
@@ -691,6 +675,8 @@ mod wasm {
     };
 
     use crate::ClientRequest;
+    #[cfg(feature = "web")]
+    use crate::WebsocketError;
 
     use super::protocol::{CloseCode, Message};
 
@@ -718,6 +704,13 @@ mod wasm {
     impl From<JsValue> for WebSysError {
         fn from(_value: JsValue) -> Self {
             Self::Unknown
+        }
+    }
+
+    #[cfg(feature = "web")]
+    impl From<JsValue> for WebsocketError {
+        fn from(value: JsValue) -> Self {
+            WebsocketError::WebSys(value.into())
         }
     }
 

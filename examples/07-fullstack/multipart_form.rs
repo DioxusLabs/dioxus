@@ -13,9 +13,7 @@ fn app() -> Element {
     // The `MultipartFormData` type can be used to handle multipart form data uploads.
     // We can convert into it by using `.into()` on the `FormEvent`'s data, or by crafting
     // a `MultipartFormData` instance manually.
-    let mut upload_as_multipart = use_action(move |event: FormEvent| async move {
-        upload_as_multipart(event.data().into()).await
-    });
+    let mut upload_as_multipart = use_action(move |event: FormEvent| upload(event.into()));
 
     rsx! {
         Stylesheet { href: asset!("/examples/assets/file_upload.css") }
@@ -52,9 +50,7 @@ fn app() -> Element {
 ///
 /// On the server, we have access to axum's `Multipart` extractor
 #[post("/api/upload-multipart")]
-async fn upload_as_multipart(mut data: MultipartFormData) -> Result<()> {
-    let form = data.form()?;
-
+async fn upload(mut form: MultipartFormData) -> Result<()> {
     while let Ok(Some(field)) = form.next_field().await {
         info!("Got field: {:?}", field);
         info!(
