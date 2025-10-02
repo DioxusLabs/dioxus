@@ -44,7 +44,7 @@ pub struct MultipartFormData<T = ()> {
     #[cfg(feature = "server")]
     form: Option<axum::extract::Multipart>,
 
-    client: Option<Rc<FormData>>,
+    _client: Option<Rc<FormData>>,
 
     _phantom: std::marker::PhantomData<T>,
 }
@@ -63,19 +63,18 @@ impl MultipartFormData {
 impl<S> IntoRequest for MultipartFormData<S> {
     fn into_request(
         self,
-        req: ClientRequest,
+        _req: ClientRequest,
     ) -> impl Future<Output = Result<ClientResponse, RequestError>> + 'static {
         async move {
-            let data = self
-                .client
-                .clone()
-                .ok_or_else(|| RequestError::Builder("Failed to get FormData from event".into()))?;
-
             // On the web, it's just easier to convert the form data into a blob and then send that
             // blob as the body of the request. This handles setting the correct headers, wiring
             // up file uploads as streams, and encoding the request.
             #[cfg(feature = "web")]
             if cfg!(target_arch = "wasm32") {
+                let data = self._client.clone().ok_or_else(|| {
+                    RequestError::Builder("Failed to get FormData from event".into())
+                })?;
+
                 fn get_form_data(data: Rc<FormData>) -> Option<wasm_bindgen::JsValue> {
                     use wasm_bindgen::JsCast;
                     let event: &web_sys::Event = data.downcast()?;
@@ -89,14 +88,14 @@ impl<S> IntoRequest for MultipartFormData<S> {
                     RequestError::Builder("Failed to get FormData from event".into())
                 })?;
 
-                return req.send_js_value(js_form_data).await;
+                return _req.send_js_value(js_form_data).await;
             }
 
             // On non-web platforms, we actually need to read the values out of the FormData
             // and construct a multipart form body manually.
             #[cfg(not(target_arch = "wasm32"))]
             {
-                return todo!();
+                todo!("Properly implement multipart form data for non-web wasm32 clients");
             }
 
             unimplemented!("Non web wasm32 clients are not supported yet")
@@ -119,7 +118,7 @@ impl<S: Send + Sync + 'static, D> FromRequest<S> for MultipartFormData<D> {
 
             Ok(MultipartFormData {
                 form: Some(form),
-                client: None,
+                _client: None,
                 _phantom: std::marker::PhantomData,
             })
         };
@@ -144,7 +143,7 @@ impl<T> From<Rc<FormData>> for MultipartFormData<T> {
         MultipartFormData {
             #[cfg(feature = "server")]
             form: None,
-            client: Some(_value),
+            _client: Some(_value),
             _phantom: std::marker::PhantomData,
         }
     }
@@ -156,7 +155,7 @@ impl<T> From<FormEvent> for MultipartFormData<T> {
         MultipartFormData {
             #[cfg(feature = "server")]
             form: None,
-            client: Some(data),
+            _client: Some(data),
             _phantom: std::marker::PhantomData,
         }
     }

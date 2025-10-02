@@ -13,13 +13,14 @@ use syn::{
     parse::ParseStream,
     punctuated::Punctuated,
     token::{Comma, Slash},
-    FnArg, GenericArgument, Meta, PathArguments, Signature, Token, Type,
+    Error, ExprTuple, FnArg, GenericArgument, Meta, PathArguments, PathSegment, Signature, Token,
+    Type, TypePath,
 };
-use syn::{parse::Parse, parse_quote, Ident, ItemFn, LitStr};
+use syn::{parse::Parse, parse_quote, Ident, ItemFn, LitStr, Path};
 use syn::{spanned::Spanned, LitBool, LitInt, Pat, PatType};
 use syn::{
     token::{Brace, Star},
-    Attribute, Expr, ExprClosure, Lit,
+    Attribute, Expr, ExprClosure, Lit, Result,
 };
 
 /// ## Usage
@@ -87,7 +88,9 @@ use syn::{
 /// }
 /// ```
 #[proc_macro_attribute]
-pub fn server(attr: proc_macro::TokenStream, mut item: TokenStream) -> TokenStream {
+pub fn server(_attr: proc_macro::TokenStream, mut item: TokenStream) -> TokenStream {
+    // let args = ServerFnArgs::parse(attr);
+
     let method = Method::Post(Ident::new("POST", proc_macro2::Span::call_site()));
     let route: Route = Route {
         method: None,
@@ -1432,3 +1435,489 @@ impl Method {
 mod kw {
     syn::custom_keyword!(with);
 }
+
+/// The arguments to the `server` macro.
+#[derive(Debug)]
+#[non_exhaustive]
+struct ServerFnArgs {
+    /// The name of the struct that will implement the server function trait
+    /// and be submitted to inventory.
+    struct_name: Option<Ident>,
+    /// The prefix to use for the server function URL.
+    prefix: Option<LitStr>,
+    /// The input http encoding to use for the server function.
+    input: Option<Type>,
+    /// Additional traits to derive on the input struct for the server function.
+    input_derive: Option<ExprTuple>,
+    /// The output http encoding to use for the server function.
+    output: Option<Type>,
+    /// The path to the server function crate.
+    fn_path: Option<LitStr>,
+    /// The server type to use for the server function.
+    server: Option<Type>,
+    /// The client type to use for the server function.
+    client: Option<Type>,
+    /// The custom wrapper to use for the server function struct.
+    custom_wrapper: Option<syn::Path>,
+    /// If the generated input type should implement `From` the only field in the input
+    impl_from: Option<LitBool>,
+    /// If the generated input type should implement `Deref` to the only field in the input
+    impl_deref: Option<LitBool>,
+    /// The protocol to use for the server function implementation.
+    protocol: Option<Type>,
+    builtin_encoding: bool,
+}
+
+impl Parse for ServerFnArgs {
+    fn parse(stream: ParseStream) -> syn::Result<Self> {
+        // legacy 4-part arguments
+        let mut struct_name: Option<Ident> = None;
+        let mut prefix: Option<LitStr> = None;
+        let mut encoding: Option<LitStr> = None;
+        let mut fn_path: Option<LitStr> = None;
+
+        // new arguments: can only be keyed by name
+        let mut input: Option<Type> = None;
+        let mut input_derive: Option<ExprTuple> = None;
+        let mut output: Option<Type> = None;
+        let mut server: Option<Type> = None;
+        let mut client: Option<Type> = None;
+        let mut custom_wrapper: Option<syn::Path> = None;
+        let mut impl_from: Option<LitBool> = None;
+        let mut impl_deref: Option<LitBool> = None;
+        let mut protocol: Option<Type> = None;
+
+        let mut use_key_and_value = false;
+        let mut arg_pos = 0;
+
+        while !stream.is_empty() {
+            arg_pos += 1;
+            let lookahead = stream.lookahead1();
+            if lookahead.peek(Ident) {
+                let key_or_value: Ident = stream.parse()?;
+
+                let lookahead = stream.lookahead1();
+                if lookahead.peek(Token![=]) {
+                    stream.parse::<Token![=]>()?;
+                    let key = key_or_value;
+                    use_key_and_value = true;
+                    if key == "name" {
+                        if struct_name.is_some() {
+                            return Err(syn::Error::new(
+                                key.span(),
+                                "keyword argument repeated: `name`",
+                            ));
+                        }
+                        struct_name = Some(stream.parse()?);
+                    } else if key == "prefix" {
+                        if prefix.is_some() {
+                            return Err(syn::Error::new(
+                                key.span(),
+                                "keyword argument repeated: `prefix`",
+                            ));
+                        }
+                        prefix = Some(stream.parse()?);
+                    } else if key == "encoding" {
+                        if encoding.is_some() {
+                            return Err(syn::Error::new(
+                                key.span(),
+                                "keyword argument repeated: `encoding`",
+                            ));
+                        }
+                        encoding = Some(stream.parse()?);
+                    } else if key == "endpoint" {
+                        if fn_path.is_some() {
+                            return Err(syn::Error::new(
+                                key.span(),
+                                "keyword argument repeated: `endpoint`",
+                            ));
+                        }
+                        fn_path = Some(stream.parse()?);
+                    } else if key == "input" {
+                        if encoding.is_some() {
+                            return Err(syn::Error::new(
+                                key.span(),
+                                "`encoding` and `input` should not both be \
+                                 specified",
+                            ));
+                        } else if input.is_some() {
+                            return Err(syn::Error::new(
+                                key.span(),
+                                "keyword argument repeated: `input`",
+                            ));
+                        }
+                        input = Some(stream.parse()?);
+                    } else if key == "input_derive" {
+                        if input_derive.is_some() {
+                            return Err(syn::Error::new(
+                                key.span(),
+                                "keyword argument repeated: `input_derive`",
+                            ));
+                        }
+                        input_derive = Some(stream.parse()?);
+                    } else if key == "output" {
+                        if encoding.is_some() {
+                            return Err(syn::Error::new(
+                                key.span(),
+                                "`encoding` and `output` should not both be \
+                                 specified",
+                            ));
+                        } else if output.is_some() {
+                            return Err(syn::Error::new(
+                                key.span(),
+                                "keyword argument repeated: `output`",
+                            ));
+                        }
+                        output = Some(stream.parse()?);
+                    } else if key == "server" {
+                        if server.is_some() {
+                            return Err(syn::Error::new(
+                                key.span(),
+                                "keyword argument repeated: `server`",
+                            ));
+                        }
+                        server = Some(stream.parse()?);
+                    } else if key == "client" {
+                        if client.is_some() {
+                            return Err(syn::Error::new(
+                                key.span(),
+                                "keyword argument repeated: `client`",
+                            ));
+                        }
+                        client = Some(stream.parse()?);
+                    } else if key == "custom" {
+                        if custom_wrapper.is_some() {
+                            return Err(syn::Error::new(
+                                key.span(),
+                                "keyword argument repeated: `custom`",
+                            ));
+                        }
+                        custom_wrapper = Some(stream.parse()?);
+                    } else if key == "impl_from" {
+                        if impl_from.is_some() {
+                            return Err(syn::Error::new(
+                                key.span(),
+                                "keyword argument repeated: `impl_from`",
+                            ));
+                        }
+                        impl_from = Some(stream.parse()?);
+                    } else if key == "impl_deref" {
+                        if impl_deref.is_some() {
+                            return Err(syn::Error::new(
+                                key.span(),
+                                "keyword argument repeated: `impl_deref`",
+                            ));
+                        }
+                        impl_deref = Some(stream.parse()?);
+                    } else if key == "protocol" {
+                        if protocol.is_some() {
+                            return Err(syn::Error::new(
+                                key.span(),
+                                "keyword argument repeated: `protocol`",
+                            ));
+                        }
+                        protocol = Some(stream.parse()?);
+                    } else {
+                        return Err(lookahead.error());
+                    }
+                } else {
+                    let value = key_or_value;
+                    if use_key_and_value {
+                        return Err(syn::Error::new(
+                            value.span(),
+                            "positional argument follows keyword argument",
+                        ));
+                    }
+                    if arg_pos == 1 {
+                        struct_name = Some(value)
+                    } else {
+                        return Err(syn::Error::new(value.span(), "expected string literal"));
+                    }
+                }
+            } else if lookahead.peek(LitStr) {
+                if use_key_and_value {
+                    return Err(syn::Error::new(
+                        stream.span(),
+                        "If you use keyword arguments (e.g., `name` = \
+                         Something), then you can no longer use arguments \
+                         without a keyword.",
+                    ));
+                }
+                match arg_pos {
+                    1 => return Err(lookahead.error()),
+                    2 => prefix = Some(stream.parse()?),
+                    3 => encoding = Some(stream.parse()?),
+                    4 => fn_path = Some(stream.parse()?),
+                    _ => return Err(syn::Error::new(stream.span(), "unexpected extra argument")),
+                }
+            } else {
+                return Err(lookahead.error());
+            }
+
+            if !stream.is_empty() {
+                stream.parse::<Token![,]>()?;
+            }
+        }
+
+        // parse legacy encoding into input/output
+        let mut builtin_encoding = false;
+        if let Some(encoding) = encoding {
+            match encoding.value().to_lowercase().as_str() {
+                "url" => {
+                    input = Some(type_from_ident(syn::parse_quote!(Url)));
+                    output = Some(type_from_ident(syn::parse_quote!(Json)));
+                    builtin_encoding = true;
+                }
+                "cbor" => {
+                    input = Some(type_from_ident(syn::parse_quote!(Cbor)));
+                    output = Some(type_from_ident(syn::parse_quote!(Cbor)));
+                    builtin_encoding = true;
+                }
+                "getcbor" => {
+                    input = Some(type_from_ident(syn::parse_quote!(GetUrl)));
+                    output = Some(type_from_ident(syn::parse_quote!(Cbor)));
+                    builtin_encoding = true;
+                }
+                "getjson" => {
+                    input = Some(type_from_ident(syn::parse_quote!(GetUrl)));
+                    output = Some(syn::parse_quote!(Json));
+                    builtin_encoding = true;
+                }
+                _ => return Err(syn::Error::new(encoding.span(), "Encoding not found.")),
+            }
+        }
+
+        Ok(Self {
+            struct_name,
+            prefix,
+            input,
+            input_derive,
+            output,
+            fn_path,
+            builtin_encoding,
+            server,
+            client,
+            custom_wrapper,
+            impl_from,
+            impl_deref,
+            protocol,
+        })
+    }
+}
+
+/// An argument type in a server function.
+#[derive(Debug, Clone)]
+struct ServerFnArg {
+    /// The attributes on the server function argument.
+    server_fn_attributes: Vec<Attribute>,
+    /// The type of the server function argument.
+    arg: syn::PatType,
+}
+
+impl ToTokens for ServerFnArg {
+    fn to_tokens(&self, tokens: &mut TokenStream2) {
+        let ServerFnArg { arg, .. } = self;
+        tokens.extend(quote! {
+            #arg
+        });
+    }
+}
+
+impl Parse for ServerFnArg {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let arg: syn::FnArg = input.parse()?;
+        let mut arg = match arg {
+            FnArg::Receiver(_) => {
+                return Err(syn::Error::new(
+                    arg.span(),
+                    "cannot use receiver types in server function macro",
+                ))
+            }
+            FnArg::Typed(t) => t,
+        };
+
+        fn rename_path(path: Path, from_ident: Ident, to_ident: Ident) -> Path {
+            if path.is_ident(&from_ident) {
+                Path {
+                    leading_colon: None,
+                    segments: Punctuated::from_iter([PathSegment {
+                        ident: to_ident,
+                        arguments: PathArguments::None,
+                    }]),
+                }
+            } else {
+                path
+            }
+        }
+
+        let server_fn_attributes = arg
+            .attrs
+            .iter()
+            .cloned()
+            .map(|attr| {
+                if attr.path().is_ident("server") {
+                    // Allow the following attributes:
+                    // - #[server(default)]
+                    // - #[server(rename = "fieldName")]
+
+                    // Rename `server` to `serde`
+                    let attr = Attribute {
+                        meta: match attr.meta {
+                            Meta::Path(path) => Meta::Path(rename_path(
+                                path,
+                                format_ident!("server"),
+                                format_ident!("serde"),
+                            )),
+                            Meta::List(mut list) => {
+                                list.path = rename_path(
+                                    list.path,
+                                    format_ident!("server"),
+                                    format_ident!("serde"),
+                                );
+                                Meta::List(list)
+                            }
+                            Meta::NameValue(mut name_value) => {
+                                name_value.path = rename_path(
+                                    name_value.path,
+                                    format_ident!("server"),
+                                    format_ident!("serde"),
+                                );
+                                Meta::NameValue(name_value)
+                            }
+                        },
+                        ..attr
+                    };
+
+                    let args = attr.parse_args::<Meta>()?;
+                    match args {
+                        // #[server(default)]
+                        Meta::Path(path) if path.is_ident("default") => Ok(attr.clone()),
+                        // #[server(flatten)]
+                        Meta::Path(path) if path.is_ident("flatten") => Ok(attr.clone()),
+                        // #[server(default = "value")]
+                        Meta::NameValue(name_value) if name_value.path.is_ident("default") => {
+                            Ok(attr.clone())
+                        }
+                        // #[server(skip)]
+                        Meta::Path(path) if path.is_ident("skip") => Ok(attr.clone()),
+                        // #[server(rename = "value")]
+                        Meta::NameValue(name_value) if name_value.path.is_ident("rename") => {
+                            Ok(attr.clone())
+                        }
+                        _ => Err(Error::new(
+                            attr.span(),
+                            "Unrecognized #[server] attribute, expected \
+                             #[server(default)] or #[server(rename = \
+                             \"fieldName\")]",
+                        )),
+                    }
+                } else if attr.path().is_ident("doc") {
+                    // Allow #[doc = "documentation"]
+                    Ok(attr.clone())
+                } else if attr.path().is_ident("allow") {
+                    // Allow #[allow(...)]
+                    Ok(attr.clone())
+                } else if attr.path().is_ident("deny") {
+                    // Allow #[deny(...)]
+                    Ok(attr.clone())
+                } else if attr.path().is_ident("ignore") {
+                    // Allow #[ignore]
+                    Ok(attr.clone())
+                } else {
+                    Err(Error::new(
+                        attr.span(),
+                        "Unrecognized attribute, expected #[server(...)]",
+                    ))
+                }
+            })
+            .collect::<Result<Vec<_>>>()?;
+        arg.attrs = vec![];
+        Ok(ServerFnArg {
+            arg,
+            server_fn_attributes,
+        })
+    }
+}
+
+fn type_from_ident(ident: Ident) -> Type {
+    let mut segments = Punctuated::new();
+    segments.push(PathSegment {
+        ident,
+        arguments: PathArguments::None,
+    });
+    Type::Path(TypePath {
+        qself: None,
+        path: Path {
+            leading_colon: None,
+            segments,
+        },
+    })
+}
+
+// /// Generate the server function's URL. This will be the prefix path, then by the
+// /// module path if `SERVER_FN_MOD_PATH` is set, then the function name, and finally
+// /// a hash of the function name and location in the source code.
+// pub fn server_fn_url(&self) -> TokenStream2 {
+//     let default_path = &self.default_path;
+//     let prefix = self
+//         .args
+//         .prefix
+//         .clone()
+//         .unwrap_or_else(|| LitStr::new(default_path, Span::call_site()));
+//     let server_fn_path = self.server_fn_path();
+//     let fn_path = self.args.fn_path.clone().map(|fn_path| {
+//         let fn_path = fn_path.value();
+//         // Remove any leading slashes, then add one slash back
+//         let fn_path = "/".to_string() + fn_path.trim_start_matches('/');
+//         fn_path
+//     });
+
+//     let enable_server_fn_mod_path = option_env!("SERVER_FN_MOD_PATH").is_some();
+//     let mod_path = if enable_server_fn_mod_path {
+//         quote! {
+//             #server_fn_path::const_format::concatcp!(
+//                 #server_fn_path::const_str::replace!(module_path!(), "::", "/"),
+//                 "/"
+//             )
+//         }
+//     } else {
+//         quote! { "" }
+//     };
+
+//     let enable_hash = option_env!("DISABLE_SERVER_FN_HASH").is_none();
+//     let key_env_var = match option_env!("SERVER_FN_OVERRIDE_KEY") {
+//         Some(_) => "SERVER_FN_OVERRIDE_KEY",
+//         None => "CARGO_MANIFEST_DIR",
+//     };
+//     let hash = if enable_hash {
+//         quote! {
+//             #server_fn_path::xxhash_rust::const_xxh64::xxh64(
+//                 concat!(env!(#key_env_var), ":", module_path!()).as_bytes(),
+//                 0
+//             )
+//         }
+//     } else {
+//         quote! { "" }
+//     };
+
+//     let fn_name_as_str = self.fn_name_as_str();
+//     if let Some(fn_path) = fn_path {
+//         quote! {
+//             #server_fn_path::const_format::concatcp!(
+//                 #prefix,
+//                 #mod_path,
+//                 #fn_path
+//             )
+//         }
+//     } else {
+//         quote! {
+//             #server_fn_path::const_format::concatcp!(
+//                 #prefix,
+//                 "/",
+//                 #mod_path,
+//                 #fn_name_as_str,
+//                 #hash
+//             )
+//         }
+//     }
+// }

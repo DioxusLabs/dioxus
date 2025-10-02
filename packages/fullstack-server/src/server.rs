@@ -39,10 +39,8 @@ pub trait DioxusRouterExt<S>: DioxusRouterFnExt<S> {
     ///         // Server render the application
     ///         // ...
     ///         .into_make_service();
-    ///
     ///     let listener = tokio::net::TcpListener::bind(addr).await?;
     ///     axum::serve(listener, router).await?;
-    ///
     ///     Ok(())
     /// }
     /// ```
@@ -249,7 +247,14 @@ impl RenderHandleState {
         let cfg = &state.config;
         let build_virtual_dom = {
             let build_virtual_dom = state.build_virtual_dom.clone();
-            move || build_virtual_dom()
+            let context_providers = state.config.context_providers.clone();
+            move || {
+                let mut vdom = build_virtual_dom();
+                for state in context_providers.as_slice() {
+                    vdom.insert_any_root_context(state());
+                }
+                vdom
+            }
         };
 
         let (parts, _) = request.into_parts();

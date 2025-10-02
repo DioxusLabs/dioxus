@@ -69,7 +69,20 @@ async fn serve_server(
         .unwrap_or_else(ServeConfig::new);
 
     // Extend the config's context providers with the context providers from the launch builder
-    let cfg = platform_config.unwrap();
+    let cfg = platform_config
+        .map(|mut cfg| {
+            let mut contexts = contexts;
+            let cfg_context_providers = cfg.context_providers.clone();
+            for i in 0..cfg_context_providers.len() {
+                contexts.push(Box::new({
+                    let cfg_context_providers = cfg_context_providers.clone();
+                    move || (cfg_context_providers[i])()
+                }));
+            }
+            cfg.context_providers = std::sync::Arc::new(contexts);
+            cfg
+        })
+        .unwrap();
 
     // Get the address the server should run on. If the CLI is running, the CLI proxies fullstack into the main address
     // and we use the generated address the CLI gives us
@@ -91,8 +104,6 @@ async fn serve_server(
     let mut make_service = router.into_make_service();
 
     let listener = tokio::net::TcpListener::bind(address).await.unwrap();
-
-    tracing::trace!("Listening on {address}");
 
     enum Msg {
         TcpStream(std::io::Result<(TcpStream, SocketAddr)>),
