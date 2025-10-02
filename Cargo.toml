@@ -243,7 +243,7 @@ futures-util = { version = "0.3", default-features = false }
 rustc-hash = "2.1.1"
 wasm-bindgen = "0.2.100"
 wasm-bindgen-futures = "0.4.50"
-js-sys = "0.3.77"
+js-sys = "0.3"
 web-sys = { version = "0.3.77", default-features = false }
 html_parser = "0.7.0"
 thiserror = "2.0.12"
