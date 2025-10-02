@@ -13,7 +13,7 @@ use crate::HttpError;
 /// use dioxus::prelude::*;
 ///
 /// #[server]
-/// async fn parse_number(number: String) -> ServerFnResult<f32> {
+/// async fn parse_number(number: String) -> Result<f32> {
 ///     let parsed_number: f32 = number.parse()?;
 ///     Ok(parsed_number)
 /// }
