@@ -40,7 +40,7 @@ fn main() {
 
         rsx! {
             h1 { "Meaning of life: {meaning:?}" }
-            button { onclick: move |_| meaning.call(()), "Run a server function" }
+            button { onclick: move |_| meaning.call(), "Run a server function" }
         }
     });
 }
@@ -74,7 +74,6 @@ Then we can set up dioxus with the axum server:
 ```rust, no_run
 #![allow(non_snake_case)]
 use dioxus::prelude::*;
-use dioxus_fullstack::ServeConfig;
 
 // The entry point for the server
 #[cfg(feature = "server")]
@@ -88,7 +87,7 @@ async fn main() {
     let router = axum::Router::new()
         // You can add a dioxus application to the router with the `serve_dioxus_application` method
         // This will add a fallback route to the router that will serve your component and server functions
-        .serve_dioxus_application(ServeConfig::new().unwrap(), App);
+        .serve_dioxus_application(dioxus::server::ServeConfig::new().unwrap(), App);
 
     // Finally, we can launch the server
     let router = router.into_make_service();
