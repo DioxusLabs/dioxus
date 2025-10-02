@@ -22,53 +22,6 @@ use serde::{de::DeserializeOwned, Serialize};
 /// See ["the order of extractors"][order-of-extractors]
 ///
 /// [order-of-extractors]: crate::extract#the-order-of-extractors
-///
-/// See [`CborRejection`] for more details.
-///
-/// # Extractor example
-///
-/// ```rust,no_run
-/// use axum::{
-///     extract,
-///     routing::post,
-///     Router,
-/// };
-/// use serde::Deserialize;
-/// use dioxus_fullstack::payloads::Cbor;
-///
-/// #[derive(Deserialize)]
-/// struct CreateUser {
-///     email: String,
-///     password: String,
-/// }
-///
-/// async fn create_user(Cbor(payload): Cbor<CreateUser>) {
-///     // payload is a `CreateUser`
-/// }
-/// ```
-///
-/// # Response example
-///
-/// ```rust,no_run
-/// use axum::{
-///     extract::Path,
-///     routing::get,
-///     Router,
-/// };
-/// use serde::Serialize;
-/// use dioxus_fullstack::payloads::Cbor;
-///
-/// #[derive(Serialize)]
-/// struct User {
-///     id: i32,
-///     username: String,
-/// }
-///
-/// async fn get_user(Path(user_id): Path<i32>) -> Cbor<User> {
-///     let user = find_user(user_id).await;
-///     Cbor(user)
-/// }
-/// ```
 #[must_use]
 pub struct Cbor<T>(pub T);
 
