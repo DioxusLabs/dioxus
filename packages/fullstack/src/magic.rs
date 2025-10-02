@@ -505,9 +505,9 @@ pub mod req_from {
         ) -> impl Future<Output = Result<(H, Out), Response>> + 'static {
             async move {
                 let (mut parts, body) = request.into_parts();
-                let Ok(h) = H::from_request_parts(&mut parts, &_state).await else {
-                    todo!()
-                };
+                let headers = H::from_request_parts(&mut parts, &_state)
+                    .await
+                    .map_err(|e| e.into_response())?;
 
                 let request = Request::from_parts(parts, body);
                 let bytes = Bytes::from_request(request, &()).await.unwrap();
@@ -524,7 +524,7 @@ pub mod req_from {
                     .map_err(|e| ServerFnError::from(e).into_response())
                     .unwrap();
 
-                Ok((h, out))
+                Ok((headers, out))
             }
         }
     }
@@ -543,16 +543,17 @@ pub mod req_from {
         ) -> impl Future<Output = Result<(H, Out), Response>> + 'static {
             async move {
                 let (mut parts, body) = request.into_parts();
-                let Ok(h) = H::from_request_parts(&mut parts, &state).await else {
-                    todo!()
-                };
+                let headers = H::from_request_parts(&mut parts, &state)
+                    .await
+                    .map_err(|e| e.into_response())?;
+
                 let request = Request::from_parts(parts, body);
 
                 let res = Out::from_request(request, &state)
                     .await
                     .map_err(|e| e.into_response());
 
-                res.map(|out| (h, out))
+                res.map(|out| (headers, out))
             }
         }
     }

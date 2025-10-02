@@ -392,14 +392,6 @@ impl ClientResponse {
         self.response.bytes_stream()
     }
 
-    pub fn original_request(&self) {
-        todo!()
-    }
-
-    pub fn state<T>(&self) -> &T {
-        todo!()
-    }
-
     pub fn extensions(&self) -> &Extensions {
         &self.extensions
     }
