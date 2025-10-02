@@ -102,7 +102,7 @@ mod simple_extractors {
         Ok(Bytes::from_static(b"Hello!"))
     }
 
-    /// We can use mutliple args that are Deserialize
+    /// We can use multiple args that are Deserialize
     #[get("/hello")]
     async fn twelve(a: i32, b: i32, c: i32) -> Result<Bytes> {
         Ok(format!("Hello! {} {} {}", a, b, c).into())
@@ -113,7 +113,7 @@ mod simple_extractors {
     //
     // /// We can use generics
     // #[get("/hello")]
-    // async fn thirten<S: Serialize + DeserializeOwned>(a: S) -> Result<Bytes> {
+    // async fn thirteen<S: Serialize + DeserializeOwned>(a: S) -> Result<Bytes> {
     //     Ok(format!("Hello! {}", serde_json::to_string(&a)?).into())
     // }
 

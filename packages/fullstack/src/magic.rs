@@ -217,7 +217,7 @@ mod decode_ok {
 
     use super::*;
 
-    /// Conver the reqwest response into the desired type, in place.
+    /// Convert the reqwest response into the desired type, in place.
     /// The point here is to prefer FromResponse types *first* and then DeserializeOwned types second.
     ///
     /// This is because FromResponse types are more specialized and can handle things like websockets and files.

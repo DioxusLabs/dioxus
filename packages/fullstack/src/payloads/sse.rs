@@ -236,7 +236,7 @@ impl EventBuffer {
         event
     }
 
-    /// Set the [`Event`]'s type. Overide previous value.
+    /// Set the [`Event`]'s type. Override previous value.
     fn set_event_type(&mut self, event_type: &str) {
         self.event_type.clear();
         self.event_type.push_str(event_type);

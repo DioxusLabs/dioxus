@@ -1,4 +1,4 @@
-//! A websocket chat demo using Dioxus' buit-in websocket support.
+//! A websocket chat demo using Dioxus' built-in websocket support.
 //!
 //! We setup an endpoint at `/api/chat` that accepts a `name` and `user_id` query parameter.
 //! Each client connects to that endpoint, and we use a `tokio::broadcast` channel
@@ -110,7 +110,7 @@ async fn uppercase_ws(
     // Every chat app needs a chat room! For this demo, we just use a tokio broadcast channel and a mutex-protected
     // list of messages to store chat history.
     //
-    // We place these types in the body of this serverfn since theyre not used on the client, only the server.
+    // We place these types in the body of this serverfn since they're not used on the client, only the server.
     static MESSAGES: LazyLock<Mutex<Vec<ChatMessage>>> = LazyLock::new(|| Mutex::new(Vec::new()));
     static BROADCAST: LazyLock<Sender<ChatMessage>> = LazyLock::new(|| broadcast::channel(100).0);
 

@@ -15,7 +15,7 @@ use {
 Option 1:
 
 For simple, synchronous, thread-safe data, we can use statics with atomic types or mutexes.
-The `LazyLock` type from the standard library is a great choice for simple, syncronous data
+The `LazyLock` type from the standard library is a great choice for simple, synchronous data
 */
 static MESSAGES: LazyLock<Mutex<Vec<String>>> = LazyLock::new(|| Mutex::new(Vec::new()));
 
@@ -35,7 +35,7 @@ Option 2:
 
 For complex async data, we can use the `Lazy` type from Dioxus Fullstack. The `Lazy` type provides
 an interface like `once_cell::Lazy` but supports async initialization. When reading the value from
-a `Lazy<T>`, the value will be initialized syncronously, blocking the current task until the value is ready.
+a `Lazy<T>`, the value will be initialized synchronously, blocking the current task until the value is ready.
 
 Alternatively, you can create a `Lazy<T>` with `Lazy::lazy` and then initialize it later with
 `Lazy::initialize`.
