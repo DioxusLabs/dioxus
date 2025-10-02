@@ -78,10 +78,9 @@ pub mod payloads {
     pub mod multipart;
     pub use multipart::*;
 
-    pub mod rkyv;
-
     #[cfg(feature = "postcard")]
     pub mod postcard;
+
     #[cfg(feature = "postcard")]
     pub use postcard::*;
 

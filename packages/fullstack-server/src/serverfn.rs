@@ -149,9 +149,8 @@ impl ServerFunction {
 
         let mthd: MethodRouter<DioxusServerState> =
             (self.handler)().with_state(DioxusServerState {});
-        let res = mthd.call(req, DioxusServerState {}).await;
 
-        res
+        mthd.call(req, DioxusServerState {}).await
     }
 }
 
