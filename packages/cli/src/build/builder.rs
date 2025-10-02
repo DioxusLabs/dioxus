@@ -687,23 +687,16 @@ impl AppBuilder {
 
         tracing::debug!("Patching {} -> {}", original.display(), new.display());
 
-        let mut jump_table = crate::build::create_jump_table(&new, &triple, cache)?;
+        let root_dir = self.build.root_dir();
+        let base_path = self.build.base_path();
+        let mut jump_table =
+            crate::build::create_jump_table(&new, &triple, &root_dir, base_path.as_deref(), cache)?;
 
         // If it's android, we need to copy the assets to the device and then change the location of the patch
         if self.build.bundle == BundleFormat::Android {
             jump_table.lib = self
                 .copy_file_to_android_tmp(&new, &(PathBuf::from(new.file_name().unwrap())))
                 .await?;
-        }
-
-        // Rebase the wasm binary to be relocatable once the jump table is generated
-        if triple.architecture == target_lexicon::Architecture::Wasm32 {
-            // Make sure we use the dir relative to the public dir, so the web can load it as a proper URL
-            //
-            // ie we would've shipped `/Users/foo/Projects/dioxus/target/dx/project/debug/web/public/wasm/lib.wasm`
-            //    but we want to ship `/wasm/lib.wasm`
-            jump_table.lib =
-                PathBuf::from("/").join(jump_table.lib.strip_prefix(self.build.root_dir()).unwrap())
         }
 
         let changed_files = match &res.mode {
