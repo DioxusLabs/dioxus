@@ -13,7 +13,7 @@ async fn test_for_memory_leaks() {
             spawn(async move {
                 loop {
                     tokio::time::sleep(std::time::Duration::from_nanos(1)).await;
-                    let val = *count.peek_unchecked();
+                    let val = *count.peek_extended();
                     if val == 70 {
                         count.set(0);
                     } else {

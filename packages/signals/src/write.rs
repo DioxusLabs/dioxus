@@ -38,14 +38,32 @@ pub trait Writable: Readable {
     /// Additional data associated with the write reference.
     type WriteMetadata;
 
-    /// Try to get a mutable reference to the value without checking the lifetime. This will update any subscribers.
+    /// Try to get a mutable reference to the value without checking the lifetime - extending the lifetime to 'static. This will update any subscribers.
     ///
     /// NOTE: This method is completely safe because borrow checking is done at runtime.
-    fn try_write_unchecked(
+    fn try_write_extended(
         &self,
     ) -> Result<WritableRef<'static, Self>, generational_box::BorrowMutError>
     where
         Self::Target: 'static;
+
+    #[deprecated(
+        since = "0.7.0",
+        note = "Use `try_write_extended` instead. \
+            If you are on Rust 2024 edition, \
+            you can usually use `try_write` directly \
+            (due to lifetime improvements). \
+            This function will be removed in 0.8."
+    )]
+    #[allow(missing_docs)]
+    fn try_write_unchecked(
+        &self,
+    ) -> Result<WritableRef<'static, Self>, generational_box::BorrowMutError>
+    where
+        Self::Target: 'static,
+    {
+        self.try_write_extended()
+    }
 }
 
 /// A mutable reference to a writable value. This reference acts similarly to [`std::cell::RefMut`], but it has extra debug information
@@ -274,18 +292,18 @@ pub trait WritableExt: Writable {
     where
         Self::Target: 'static,
     {
-        self.try_write_unchecked().map(WriteLock::downcast_lifetime)
+        self.try_write_extended().map(WriteLock::downcast_lifetime)
     }
 
-    /// Get a mutable reference to the value without checking the lifetime. This will update any subscribers.
+    /// Get a mutable reference to the value without checking the lifetime - extending the lifetime to 'static. This will update any subscribers.
     ///
     /// NOTE: This method is completely safe because borrow checking is done at runtime.
     #[track_caller]
-    fn write_unchecked(&self) -> WritableRef<'static, Self>
+    fn write_extended(&self) -> WritableRef<'static, Self>
     where
         Self::Target: 'static,
     {
-        self.try_write_unchecked().unwrap()
+        self.try_write_extended().unwrap()
     }
 
     /// Map the references and mutable references of the writable value to a new type. This lets you provide a view
@@ -571,7 +589,7 @@ impl<'a, T: 'static, R: Writable<Target = Vec<T>>> Iterator for WritableValueIte
         let index = self.index;
         self.index += 1;
         WriteLock::filter_map(
-            self.value.try_write_unchecked().unwrap(),
+            self.value.try_write_extended().unwrap(),
             |v: &mut Vec<T>| v.get_mut(index),
         )
         .map(WriteLock::downcast_lifetime)

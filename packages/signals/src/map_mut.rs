@@ -69,21 +69,19 @@ where
     type Target = O;
     type Storage = V::Storage;
 
-    fn try_read_unchecked(
-        &self,
-    ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError>
+    fn try_read_extended(&self) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError>
     where
         O: 'static,
     {
-        let value = self.value.try_read_unchecked()?;
+        let value = self.value.try_read_extended()?;
         Ok(V::Storage::map(value, |v| (self.map_fn)(v)))
     }
 
-    fn try_peek_unchecked(&self) -> BorrowResult<ReadableRef<'static, Self>>
+    fn try_peek_extended(&self) -> BorrowResult<ReadableRef<'static, Self>>
     where
         O: 'static,
     {
-        let value = self.value.try_peek_unchecked()?;
+        let value = self.value.try_peek_extended()?;
         Ok(V::Storage::map(value, |v| (self.map_fn)(v)))
     }
 
@@ -105,10 +103,10 @@ where
 {
     type WriteMetadata = V::WriteMetadata;
 
-    fn try_write_unchecked(
+    fn try_write_extended(
         &self,
     ) -> Result<WritableRef<'static, Self>, generational_box::BorrowMutError> {
-        let value = self.value.try_write_unchecked()?;
+        let value = self.value.try_write_extended()?;
         Ok(WriteLock::map(value, |v| (self.map_fn_mut)(v)))
     }
 }

@@ -58,7 +58,7 @@ Just like `RefCell<T>`, Signal checks borrows at runtime. If you read and write 
 # use dioxus::prelude::*;
 let mut signal = use_signal(|| 0);
 // If you create a read and hold it while you write to the signal, it will panic
-let read = signal.read_unchecked();
+let read = signal.read_extended();
 // This will panic
 signal += 1;
 println!("{}", read);

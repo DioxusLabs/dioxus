@@ -109,34 +109,26 @@ impl<T: ?Sized> Readable for ReadSignal<T> {
     type Storage = UnsyncStorage;
 
     #[track_caller]
-    fn try_read_unchecked(
-        &self,
-    ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError>
+    fn try_read_extended(&self) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError>
     where
         T: 'static,
     {
-        self.value
-            .try_peek_unchecked()
-            .unwrap()
-            .try_read_unchecked()
+        self.value.try_peek_extended().unwrap().try_read_extended()
     }
 
     #[track_caller]
-    fn try_peek_unchecked(&self) -> BorrowResult<ReadableRef<'static, Self>>
+    fn try_peek_extended(&self) -> BorrowResult<ReadableRef<'static, Self>>
     where
         T: 'static,
     {
-        self.value
-            .try_peek_unchecked()
-            .unwrap()
-            .try_peek_unchecked()
+        self.value.try_peek_extended().unwrap().try_peek_extended()
     }
 
     fn subscribers(&self) -> Subscribers
     where
         T: 'static,
     {
-        self.value.try_peek_unchecked().unwrap().subscribers()
+        self.value.try_peek_extended().unwrap().subscribers()
     }
 }
 
@@ -227,22 +219,18 @@ impl<W: Readable> Readable for BoxWriteMetadata<W> {
 
     type Storage = W::Storage;
 
-    fn try_read_unchecked(
-        &self,
-    ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError>
+    fn try_read_extended(&self) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError>
     where
         W::Target: 'static,
     {
-        self.value.try_read_unchecked()
+        self.value.try_read_extended()
     }
 
-    fn try_peek_unchecked(
-        &self,
-    ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError>
+    fn try_peek_extended(&self) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError>
     where
         W::Target: 'static,
     {
-        self.value.try_peek_unchecked()
+        self.value.try_peek_extended()
     }
 
     fn subscribers(&self) -> Subscribers
@@ -260,14 +248,14 @@ where
 {
     type WriteMetadata = Box<dyn Any>;
 
-    fn try_write_unchecked(
+    fn try_write_extended(
         &self,
     ) -> Result<crate::WritableRef<'static, Self>, generational_box::BorrowMutError>
     where
         W::Target: 'static,
     {
         self.value
-            .try_write_unchecked()
+            .try_write_extended()
             .map(|w| w.map_metadata(|data| Box::new(data) as Box<dyn Any>))
     }
 }
@@ -320,50 +308,39 @@ impl<T: ?Sized> Readable for WriteSignal<T> {
     type Storage = UnsyncStorage;
 
     #[track_caller]
-    fn try_read_unchecked(
-        &self,
-    ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError>
+    fn try_read_extended(&self) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError>
     where
         T: 'static,
     {
-        self.value
-            .try_peek_unchecked()
-            .unwrap()
-            .try_read_unchecked()
+        self.value.try_peek_extended().unwrap().try_read_extended()
     }
 
     #[track_caller]
-    fn try_peek_unchecked(&self) -> BorrowResult<ReadableRef<'static, Self>>
+    fn try_peek_extended(&self) -> BorrowResult<ReadableRef<'static, Self>>
     where
         T: 'static,
     {
-        self.value
-            .try_peek_unchecked()
-            .unwrap()
-            .try_peek_unchecked()
+        self.value.try_peek_extended().unwrap().try_peek_extended()
     }
 
     fn subscribers(&self) -> Subscribers
     where
         T: 'static,
     {
-        self.value.try_peek_unchecked().unwrap().subscribers()
+        self.value.try_peek_extended().unwrap().subscribers()
     }
 }
 
 impl<T: ?Sized> Writable for WriteSignal<T> {
     type WriteMetadata = Box<dyn Any>;
 
-    fn try_write_unchecked(
+    fn try_write_extended(
         &self,
     ) -> Result<crate::WritableRef<'static, Self>, generational_box::BorrowMutError>
     where
         T: 'static,
     {
-        self.value
-            .try_peek_unchecked()
-            .unwrap()
-            .try_write_unchecked()
+        self.value.try_peek_extended().unwrap().try_write_extended()
     }
 }
 

@@ -216,7 +216,7 @@ impl StoreSubscriptions {
     /// Hash an index into a PathKey using the hasher. The hash should be consistent
     /// across calls
     pub(crate) fn hash(&self, index: &impl Hash) -> PathKey {
-        (self.inner.write_unchecked().hasher.hash_one(index) % PathKey::MAX as u64) as PathKey
+        (self.inner.write_extended().hasher.hash_one(index) % PathKey::MAX as u64) as PathKey
     }
 
     /// Subscribe to a specific path in the store.
@@ -233,7 +233,7 @@ impl StoreSubscriptions {
         if let Some(rc) = ReactiveContext::current() {
             let mut paths = Vec::new();
             {
-                let mut write = self.inner.write_unchecked();
+                let mut write = self.inner.write_extended();
 
                 let root = write.root.get_mut_or_default(key);
                 let mut nodes = vec![(key.to_vec(), &*root)];
@@ -254,16 +254,16 @@ impl StoreSubscriptions {
     }
 
     pub(crate) fn mark_dirty(&self, key: &[PathKey]) {
-        self.inner.write_unchecked().root.mark_children_dirty(key);
+        self.inner.write_extended().root.mark_children_dirty(key);
     }
 
     pub(crate) fn mark_dirty_shallow(&self, key: &[PathKey]) {
-        self.inner.write_unchecked().root.mark_dirty_shallow(key);
+        self.inner.write_extended().root.mark_dirty_shallow(key);
     }
 
     pub(crate) fn mark_dirty_at_and_after_index(&self, key: &[PathKey], index: usize) {
         self.inner
-            .write_unchecked()
+            .write_extended()
             .root
             .mark_dirty_at_and_after_index(key, index);
     }
@@ -288,7 +288,7 @@ struct StoreSubscribers {
 impl SubscriberList for StoreSubscribers {
     /// Add a subscriber to the subscription list for this path in the store, creating the node if it doesn't exist.
     fn add(&self, subscriber: ReactiveContext) {
-        let Ok(mut write) = self.subscriptions.inner.try_write_unchecked() else {
+        let Ok(mut write) = self.subscriptions.inner.try_write_extended() else {
             return;
         };
         let node = write.root.get_mut_or_default(&self.path);
@@ -298,7 +298,7 @@ impl SubscriberList for StoreSubscribers {
     /// Remove a subscriber from the subscription list for this path in the store. If the node has no subscribers left
     /// remove that node from the subscription tree.
     fn remove(&self, subscriber: &ReactiveContext) {
-        let Ok(mut write) = self.subscriptions.inner.try_write_unchecked() else {
+        let Ok(mut write) = self.subscriptions.inner.try_write_extended() else {
             return;
         };
         let Some(node) = write.root.get_mut(&self.path) else {

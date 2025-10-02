@@ -183,7 +183,7 @@ impl<Lens> SelectorScope<Lens> {
     where
         Lens: Writable,
     {
-        self.write.write_unchecked()
+        self.write.write_extended()
     }
 }
 
@@ -191,13 +191,13 @@ impl<Lens: Readable> Readable for SelectorScope<Lens> {
     type Target = Lens::Target;
     type Storage = Lens::Storage;
 
-    fn try_read_unchecked(&self) -> Result<ReadableRef<'static, Lens>, BorrowError> {
+    fn try_read_extended(&self) -> Result<ReadableRef<'static, Lens>, BorrowError> {
         self.track();
-        self.write.try_read_unchecked()
+        self.write.try_read_extended()
     }
 
-    fn try_peek_unchecked(&self) -> Result<ReadableRef<'static, Lens>, BorrowError> {
-        self.write.try_peek_unchecked()
+    fn try_peek_extended(&self) -> Result<ReadableRef<'static, Lens>, BorrowError> {
+        self.write.try_peek_extended()
     }
 
     fn subscribers(&self) -> Subscribers {
@@ -208,8 +208,8 @@ impl<Lens: Readable> Readable for SelectorScope<Lens> {
 impl<Lens: Writable> Writable for SelectorScope<Lens> {
     type WriteMetadata = Lens::WriteMetadata;
 
-    fn try_write_unchecked(&self) -> Result<WritableRef<'static, Lens>, BorrowMutError> {
+    fn try_write_extended(&self) -> Result<WritableRef<'static, Lens>, BorrowMutError> {
         self.mark_dirty();
-        self.write.try_write_unchecked()
+        self.write.try_write_extended()
     }
 }

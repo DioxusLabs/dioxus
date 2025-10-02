@@ -52,21 +52,19 @@ where
     type Storage = T::Storage;
 
     #[track_caller]
-    fn try_read_unchecked(
-        &self,
-    ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError>
+    fn try_read_extended(&self) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError>
     where
         R: 'static,
     {
-        self.resolve().try_read_unchecked()
+        self.resolve().try_read_extended()
     }
 
     #[track_caller]
-    fn try_peek_unchecked(&self) -> BorrowResult<ReadableRef<'static, Self>>
+    fn try_peek_extended(&self) -> BorrowResult<ReadableRef<'static, Self>>
     where
         R: 'static,
     {
-        self.resolve().try_peek_unchecked()
+        self.resolve().try_peek_extended()
     }
 
     fn subscribers(&self) -> Subscribers
@@ -84,10 +82,10 @@ where
     type WriteMetadata = T::WriteMetadata;
 
     #[track_caller]
-    fn try_write_unchecked(
+    fn try_write_extended(
         &self,
     ) -> Result<WritableRef<'static, Self>, generational_box::BorrowMutError> {
-        self.resolve().try_write_unchecked()
+        self.resolve().try_write_extended()
     }
 }
 
@@ -97,7 +95,7 @@ where
 {
     /// Write this value
     pub fn write(&self) -> WritableRef<'static, T, R> {
-        self.resolve().try_write_unchecked().unwrap()
+        self.resolve().try_write_extended().unwrap()
     }
 
     /// Run a closure with a mutable reference to the signal's value.

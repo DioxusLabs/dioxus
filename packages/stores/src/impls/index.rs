@@ -51,22 +51,22 @@ where
 
     type Storage = Write::Storage;
 
-    fn try_read_unchecked(&self) -> Result<dioxus_signals::ReadableRef<'static, Self>, BorrowError>
+    fn try_read_extended(&self) -> Result<dioxus_signals::ReadableRef<'static, Self>, BorrowError>
     where
         Self::Target: 'static,
     {
-        self.write.try_read_unchecked().map(|value| {
+        self.write.try_read_extended().map(|value| {
             Self::Storage::map(value, |value: &Write::Target| {
                 value.index(self.index.clone())
             })
         })
     }
 
-    fn try_peek_unchecked(&self) -> Result<dioxus_signals::ReadableRef<'static, Self>, BorrowError>
+    fn try_peek_extended(&self) -> Result<dioxus_signals::ReadableRef<'static, Self>, BorrowError>
     where
         Self::Target: 'static,
     {
-        self.write.try_peek_unchecked().map(|value| {
+        self.write.try_peek_extended().map(|value| {
             Self::Storage::map(value, |value: &Write::Target| {
                 value.index(self.index.clone())
             })
@@ -89,13 +89,13 @@ where
 {
     type WriteMetadata = Write::WriteMetadata;
 
-    fn try_write_unchecked(
+    fn try_write_extended(
         &self,
     ) -> Result<dioxus_signals::WritableRef<'static, Self>, BorrowMutError>
     where
         Self::Target: 'static,
     {
-        self.write.try_write_unchecked().map(|value| {
+        self.write.try_write_extended().map(|value| {
             WriteLock::map(value, |value: &mut Write::Target| {
                 value.index_mut(self.index.clone())
             })
