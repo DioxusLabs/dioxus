@@ -115,8 +115,7 @@ impl ServeConfigBuilder {
         self
     }
 
-    /// Provide context to the root and server functions. You can use this context while rendering with [`consume_context`](dioxus_core::consume_context)
-    /// or in server functions with [`FromContext`](crate::FromContext).
+    /// Provide context to the root and server functions. You can use this context while rendering with [`consume_context`](dioxus_core::consume_context).
     ///
     ///
     /// The context providers passed into this method will be called when the context type is requested which may happen many times in the lifecycle of the application.
@@ -160,9 +159,7 @@ impl ServeConfigBuilder {
     ///
     /// #[server]
     /// async fn read_context() -> ServerFnResult<u32> {
-    ///     // You can extract values from the server context with the `extract` function
-    ///     let FromContext(value) = extract().await?;
-    ///     Ok(value)
+    ///     Ok(123)
     /// }
     ///
     /// fn app() -> Element {
@@ -185,7 +182,7 @@ impl ServeConfigBuilder {
     }
 
     /// Provide context to the root and server functions. You can use this context
-    /// while rendering with [`consume_context`](dioxus_core::consume_context) or in server functions with [`FromContext`](crate::FromContext).
+    /// while rendering with [`consume_context`](dioxus_core::consume_context).
     ///
     ///
     /// The context providers passed into this method will be called when the context type is requested which may happen many times in the lifecycle of the application.
@@ -227,9 +224,7 @@ impl ServeConfigBuilder {
     ///
     /// #[server]
     /// async fn read_context() -> ServerFnResult<u32> {
-    ///     // You can extract values from the server context with the `extract` function
-    ///     let FromContext(value) = extract().await?;
-    ///     Ok(value)
+    ///     Ok(123)
     /// }
     ///
     /// fn app() -> Element {
@@ -248,8 +243,7 @@ impl ServeConfigBuilder {
         self
     }
 
-    /// Provide context to the root and server functions. You can use this context while rendering with [`consume_context`](dioxus_core::consume_context)
-    /// or in server functions with [`FromContext`](crate::FromContext).
+    /// Provide context to the root and server functions. You can use this context while rendering with [`consume_context`](dioxus_core::consume_context).
     ///
     /// Context will be forwarded from the LaunchBuilder if it is provided.
     ///
@@ -287,9 +281,7 @@ impl ServeConfigBuilder {
     ///
     /// #[server]
     /// async fn read_context() -> ServerFnResult<u32> {
-    ///     // You can extract values from the server context with the `extract` function
-    ///     let FromContext(value) = extract().await?;
-    ///     Ok(value)
+    ///     Ok(123)
     /// }
     ///
     /// fn app() -> Element {

@@ -1,21 +1,3 @@
-//! server-fn codec just use the axum extractors
-//! ie Json<T>, Form<T>, etc
-//!
-//! Axum gives us:
-//! - Json<T>
-//! - Form<T>
-//! - Multipart<T>
-//!
-//! We need to build/copy:
-//! - Cbor<T>
-//! - MsgPack<T>
-//! - Postcard<T>
-//! - Rkyv<T>
-//!
-//! Others??
-//! - url-encoded GET params?
-//! - stream?
-
 use axum::body::Body;
 use axum::handler::Handler;
 use axum::routing::MethodRouter;
@@ -98,6 +80,9 @@ impl ServerFunction {
     }
 
     pub async fn handle_server_fns_inner(&self, req: http::Request<Body>) -> http::Response<Body> {
+        // todo: jon
+        // - bring back middleware to serverfns. the new layer system is fine but isn't a full replacement
+        //
         // use axum::body;
         // use axum::extract::State;
         // use axum::routing::*;

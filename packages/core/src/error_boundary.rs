@@ -12,12 +12,6 @@ use std::{
 };
 
 /// Return early with an error.
-///
-/// This macro is equivalent to
-/// <code>return Err([anyhow!($args\...)][anyhow!])</code>.
-///
-/// The surrounding function's or closure's return value is required to be
-/// <code>Result&lt;_, [anyhow::Error][crate::Error]&gt;</code>.
 #[macro_export]
 macro_rules! bail {
     ($msg:literal $(,)?) => {

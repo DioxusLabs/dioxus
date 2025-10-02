@@ -20,6 +20,46 @@ use tower::util::MapResponse;
 use tower::ServiceExt;
 use tower_http::services::{fs::ServeFileSystemResponseBody, ServeDir};
 
+/// SSR renderer handler for Axum with added context injection.
+///
+/// # Example
+/// ```rust,no_run
+/// #![allow(non_snake_case)]
+/// use std::sync::{Arc, Mutex};
+///
+/// use axum::routing::get;
+/// use dioxus::prelude::*;
+/// use dioxus_server::{RenderHandleState, render_handler, ServeConfig};
+///
+/// fn app() -> Element {
+///     rsx! {
+///         "hello!"
+///     }
+/// }
+///
+/// #[tokio::main]
+/// async fn main() {
+///     let addr = dioxus::cli_config::fullstack_address_or_localhost();
+///     let router = axum::Router::new()
+///         // Register server functions, etc.
+///         // Note you can use `register_server_functions_with_context`
+///         // to inject the context into server functions running outside
+///         // of an SSR render context.
+///         .fallback(get(render_handler)
+///             .with_state(RenderHandleState::new(ServeConfig::new().unwrap(), app))
+///         )
+///         .into_make_service();
+///     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+///     axum::serve(listener, router).await.unwrap();
+/// }
+/// ```
+pub async fn render_handler(
+    State(state): State<RenderHandleState>,
+    request: Request<Body>,
+) -> impl IntoResponse {
+    RenderHandleState::render_handler(State(state), request).await
+}
+
 /// A extension trait with utilities for integrating Dioxus with your Axum router.
 pub trait DioxusRouterExt<S>: DioxusRouterFnExt<S> {
     /// Serves the static WASM for your Dioxus application (except the generated index.html).
@@ -105,7 +145,7 @@ where
 
 /// A extension trait with server function utilities for integrating Dioxus with your Axum router.
 pub trait DioxusRouterFnExt<S> {
-    /// Registers server functions with the default handler. This handler function will pass an empty [`DioxusServerContext`] to your server functions.
+    /// Registers server functions with the default handler.
     ///
     /// # Example
     /// ```rust, no_run
@@ -171,7 +211,7 @@ impl<S: Send + Sync + Clone + 'static> DioxusRouterFnExt<S> for Router<S> {
     }
 }
 
-/// State used by [`render_handler`] to render a dioxus component with axum
+/// State used by [`RenderHandleState::render_handler`] to render a dioxus component with axum
 #[derive(Clone)]
 pub struct RenderHandleState {
     config: ServeConfig,

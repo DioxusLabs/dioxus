@@ -4,8 +4,7 @@ use dioxus_signals::{ReadableExt, Signal, WritableExt};
 /// The status of the streaming response
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum StreamingStatus {
-    /// The initial chunk is still being rendered. The http response parts can still be modified with
-    /// [DioxusServerContext::response_parts_mut](https://docs.rs/dioxus-fullstack/0.6.3/dioxus_fullstack/prelude/struct.DioxusServerContext.html#method.response_parts_mut).
+    /// The initial chunk is still being rendered. The http response parts can still be modified at this point.
     RenderingInitialChunk,
 
     /// The initial chunk has been committed and the response is now streaming. The http response parts

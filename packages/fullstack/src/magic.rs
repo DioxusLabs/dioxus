@@ -13,12 +13,12 @@
 //! - Handlers with multiple arguments that implement *all* `DeserializeOwned` (and thus can be deserialized from a JSON body)
 //!
 //! The handler error return types we support are:
-//! - Result<T, E> where E: From<ServerFnError> + Serialize + DeserializeOwned (basically any custom `thiserror` impl)
-//! - Result<T, anyhow::Error> where we transport the error as a string and/or through ServerFnError
+//! - `Result<T, E> where E: From<ServerFnError> + Serialize + DeserializeOwned` (basically any custom `thiserror` impl)
+//! - `Result<T, anyhow::Error>` where we transport the error as a string and/or through ServerFnError
 //!
 //! The handler return types we support are:
-//! - T where T: FromResponse
-//! - T where T: DeserializeOwned
+//! - `T where T: FromResponse`
+//! - `T where T: DeserializeOwned`
 //!
 //! Note that FromResponse and IntoRequest are *custom* traits defined in this crate. The intention
 //! is to provide "inverse" traits of the axum traits, allowing types to flow seamlessly between client and server.

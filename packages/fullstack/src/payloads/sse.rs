@@ -186,10 +186,6 @@ pub struct ServerSentEvent {
 }
 
 /// Internal buffer used to accumulate lines of an SSE (Server-Sent Events) stream.
-///
-/// A single [`EventBuffer`] can be used to process the whole stream. [`set_event_type`] and [`push_data`]
-/// methods update the state. [`produce_event`] produces a proper [`Event`] and prepares the internal
-/// state to process further data.
 struct EventBuffer {
     event_type: String,
     data: String,

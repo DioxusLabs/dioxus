@@ -14,20 +14,8 @@ pub use http;
 pub use reqwest;
 pub use serde;
 
-// pub use axum;
-// #[doc(hidden)]
-// pub use const_format;
-// #[doc(hidden)]
-// pub use const_str;
-// #[doc(hidden)]
-// pub use xxhash_rust;
-
-// pub use axum;
-// pub use http;
-// #[doc(hidden)]
-// pub use inventory;
-// #[doc(hidden)]
-// pub use serde;
+/// Re-export commonly used items from axum, http, and hyper for convenience.
+pub use axum::{body, extract, response, routing};
 
 #[doc(hidden)]
 pub use const_format;
