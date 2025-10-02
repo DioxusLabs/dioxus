@@ -34,5 +34,9 @@ futures-util = { workspace = true, features = ["std"] }
 web = []
 server = []
 
+[dev-dependencies]
+dioxus-fullstack = { workspace = true }
+dioxus = { workspace = true, features = ["fullstack"] }
+
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
