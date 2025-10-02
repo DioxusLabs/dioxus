@@ -14,7 +14,6 @@ pub use axum;
 pub(crate) use config::*;
 pub use config::*;
 pub use config::{ServeConfig, ServeConfigBuilder};
-pub use dioxus_isrg::{IncrementalRenderer, IncrementalRendererConfig};
 pub use document::ServerDocument;
 pub use server::*;
 
@@ -42,3 +41,6 @@ pub use launch::serve;
 
 pub mod serverfn;
 pub use serverfn::*;
+
+pub mod isrg;
+pub use isrg::*;

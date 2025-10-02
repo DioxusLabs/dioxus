@@ -8,6 +8,8 @@ use std::io::Read;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use crate::IncrementalRendererConfig;
+
 #[allow(unused)]
 pub(crate) type ContextProviders =
     Arc<Vec<Box<dyn Fn() -> Box<dyn std::any::Any> + Send + Sync + 'static>>>;
@@ -18,7 +20,7 @@ pub struct ServeConfigBuilder {
     pub(crate) root_id: Option<&'static str>,
     pub(crate) index_html: Option<String>,
     pub(crate) index_path: Option<PathBuf>,
-    pub(crate) incremental: Option<dioxus_isrg::IncrementalRendererConfig>,
+    pub(crate) incremental: Option<IncrementalRendererConfig>,
     pub(crate) context_providers:
         Vec<Arc<dyn Fn() -> Box<dyn std::any::Any> + Send + Sync + 'static>>,
     pub(crate) streaming_mode: StreamingMode,
@@ -52,7 +54,7 @@ impl ServeConfigBuilder {
     ///     .with_cfg(server_only!(dioxus_server::ServeConfigBuilder::default().incremental(dioxus_server::IncrementalRendererConfig::default())))
     ///     .launch(app);
     /// ```
-    pub fn incremental(mut self, cfg: dioxus_isrg::IncrementalRendererConfig) -> Self {
+    pub fn incremental(mut self, cfg: IncrementalRendererConfig) -> Self {
         self.incremental = Some(cfg);
         self
     }
@@ -502,7 +504,7 @@ pub enum StreamingMode {
 #[derive(Clone)]
 pub struct ServeConfig {
     pub(crate) index: IndexHtml,
-    pub(crate) incremental: Option<dioxus_isrg::IncrementalRendererConfig>,
+    pub(crate) incremental: Option<IncrementalRendererConfig>,
     pub(crate) context_providers: ContextProviders,
     pub(crate) streaming_mode: StreamingMode,
 }

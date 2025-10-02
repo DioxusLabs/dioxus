@@ -153,10 +153,12 @@ pub enum IncrementalRendererError {
     /// An formatting error occurred while rendering a route.
     #[error("RenderError: {0}")]
     RenderError(#[from] std::fmt::Error),
+
     /// An IO error occurred while rendering a route.
     #[error("IoError: {0}")]
     IoError(#[from] std::io::Error),
+
     /// An error occurred while rendering a route.
-    #[error("Other: {0}")]
-    Other(#[from] Box<dyn std::error::Error + Send + Sync>),
+    #[error("Unknown error: {0}")]
+    Other(#[from] dioxus_core::CapturedError),
 }

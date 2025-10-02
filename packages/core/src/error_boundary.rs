@@ -6,7 +6,7 @@ use crate::{
 };
 use std::{
     any::Any,
-    cell::{Ref, RefCell},
+    cell::RefCell,
     fmt::{Debug, Display},
     rc::Rc,
 };
@@ -104,7 +104,6 @@ impl Display for CapturedPanic {
 /// Provide an error boundary to catch errors from child components
 pub fn provide_error_boundary() -> ErrorContext {
     provide_context(ErrorContext::new(
-        Vec::new(),
         current_scope_id().unwrap_or_else(|e| panic!("{}", e)),
     ))
 }
@@ -112,39 +111,40 @@ pub fn provide_error_boundary() -> ErrorContext {
 /// A context with information about suspended components
 #[derive(Debug, Clone)]
 pub struct ErrorContext {
-    errors: Rc<RefCell<Vec<CapturedError>>>,
+    error: Rc<RefCell<Option<CapturedError>>>,
     id: ScopeId,
 }
 
 impl PartialEq for ErrorContext {
     fn eq(&self, other: &Self) -> bool {
-        Rc::ptr_eq(&self.errors, &other.errors)
+        Rc::ptr_eq(&self.error, &other.error)
     }
 }
 
 impl ErrorContext {
     /// Create a new suspense boundary in a specific scope
-    pub(crate) fn new(errors: Vec<CapturedError>, id: ScopeId) -> Self {
+    pub(crate) fn new(id: ScopeId) -> Self {
         Self {
-            errors: Rc::new(RefCell::new(errors)),
+            error: Rc::new(RefCell::new(None)),
             id,
         }
     }
 
-    /// Get all errors thrown from child components
-    pub fn errors(&self) -> Ref<'_, [CapturedError]> {
-        Ref::map(self.errors.borrow(), |errors| errors.as_slice())
+    /// Get the current error, if any. If multiple components have errored, this will return the first
+    /// error that made it to this boundary.
+    pub fn error(&self) -> Option<CapturedError> {
+        self.error.borrow().clone()
     }
 
     /// Push an error into this Error Boundary
     pub fn insert_error(&self, error: CapturedError) {
-        self.errors.borrow_mut().push(error);
+        self.error.borrow_mut().replace(error);
         self.id.needs_update();
     }
 
     /// Clear all errors from this Error Boundary
     pub fn clear_errors(&self) {
-        self.errors.borrow_mut().clear();
+        self.error.borrow_mut().take();
         self.id.needs_update();
     }
 }
@@ -177,7 +177,7 @@ fn default_handler(errors: ErrorContext) -> Element {
         None,
         TEMPLATE,
         Box::new([errors
-            .errors()
+            .error()
             .iter()
             .map(|e| {
                 static TEMPLATE: Template = Template {
@@ -441,8 +441,9 @@ impl<
 #[allow(non_upper_case_globals, non_snake_case)]
 pub fn ErrorBoundary(props: ErrorBoundaryProps) -> Element {
     let error_boundary = use_hook(provide_error_boundary);
-    let errors = error_boundary.errors();
-    let has_errors = !errors.is_empty();
+    let errors = error_boundary.error();
+    let has_errors = errors.is_some();
+
     // Drop errors before running user code that might borrow the error lock
     drop(errors);
 

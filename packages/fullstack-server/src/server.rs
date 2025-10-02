@@ -2,6 +2,7 @@ use crate::{
     ssr::{SSRError, SsrRendererPool},
     ServeConfig, ServerFunction,
 };
+use crate::{IncrementalRendererError, RenderFreshness};
 use axum::{
     body,
     body::Body,
@@ -11,7 +12,6 @@ use axum::{
     routing::*,
 };
 use dioxus_core::{Element, VirtualDom};
-use dioxus_isrg::{IncrementalRendererError, RenderFreshness};
 use futures::Stream;
 use http::header::*;
 use std::path::Path;
@@ -271,17 +271,21 @@ impl RenderHandleState {
                 freshness.write(response.headers_mut());
                 Result::<http::Response<axum::body::Body>, StatusCode>::Ok(response)
             }
+
             Err(SSRError::Incremental(e)) => {
                 tracing::error!("Failed to render page: {}", e);
                 Ok(Self::err_to_axum_response(e).into_response())
             }
-            Err(SSRError::Routing(e)) => {
-                tracing::trace!("Page not found: {}", e);
-                Ok(Response::builder()
-                    .status(StatusCode::NOT_FOUND)
-                    .body(Body::from("Page not found"))
-                    .unwrap())
-            }
+
+            Err(SSRError::HttpError { status, message }) => Ok(Response::builder()
+                .status(status)
+                .body(Body::from(message.unwrap_or_else(|| {
+                    status
+                        .canonical_reason()
+                        .unwrap_or("An unknown error occurred")
+                        .to_string()
+                })))
+                .unwrap()),
         }
     }
 

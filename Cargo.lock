@@ -5792,19 +5792,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dioxus-isrg"
-version = "0.7.0-rc.0"
-dependencies = [
- "chrono",
- "http 1.3.1",
- "lru 0.16.0",
- "rustc-hash 2.1.1",
- "thiserror 2.0.12",
- "tracing",
- "walkdir",
-]
-
-[[package]]
 name = "dioxus-liveview"
 version = "0.7.0-rc.0"
 dependencies = [
@@ -6058,6 +6045,7 @@ dependencies = [
  "axum 0.8.4",
  "base64 0.22.1",
  "bytes",
+ "chrono",
  "ciborium",
  "dashmap 6.1.0",
  "dioxus",
@@ -6071,7 +6059,6 @@ dependencies = [
  "dioxus-hooks",
  "dioxus-html",
  "dioxus-interpreter-js",
- "dioxus-isrg",
  "dioxus-logger",
  "dioxus-router",
  "dioxus-signals",
@@ -6087,10 +6074,12 @@ dependencies = [
  "hyper-rustls 0.27.7",
  "hyper-util",
  "inventory",
+ "lru 0.16.1",
  "multer",
  "parking_lot",
  "pin-project",
  "rkyv 0.8.11",
+ "rustc-hash 2.1.1",
  "rustls 0.23.29",
  "serde",
  "serde_json",
@@ -6106,6 +6095,7 @@ dependencies = [
  "tracing",
  "tracing-futures",
  "url",
+ "walkdir",
 ]
 
 [[package]]
@@ -10540,9 +10530,9 @@ dependencies = [
 
 [[package]]
 name = "lru"
-version = "0.16.0"
+version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "86ea4e65087ff52f3862caff188d489f1fab49a0cb09e01b2e3f1a617b10aaed"
+checksum = "bfe949189f46fabb938b3a9a0be30fdd93fd8a09260da863399a8cf3db756ec8"
 dependencies = [
  "hashbrown 0.15.4",
 ]

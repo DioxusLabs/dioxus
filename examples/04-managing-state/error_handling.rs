@@ -54,7 +54,7 @@ fn Show() -> Element {
             ErrorBoundary {
                 handle_error: |errors: ErrorContext| {
                     rsx! {
-                        for error in errors.errors() {
+                        for error in errors.error() {
                             // You can downcast the error to see if it's a specific type and render something specific for it
                             if let Some(_error) = error.downcast_ref::<std::num::ParseIntError>() {
                                 div {

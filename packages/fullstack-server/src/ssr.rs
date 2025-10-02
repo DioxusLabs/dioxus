@@ -1,4 +1,8 @@
 //! A shared pool of renderers for efficient server side rendering.
+use crate::isrg::{
+    CachedRender, IncrementalRenderer, IncrementalRendererConfig, IncrementalRendererError,
+    RenderFreshness,
+};
 use crate::streaming::{Mount, StreamingRenderer};
 use crate::{document::ServerDocument, ServeConfig};
 use dioxus_cli_config::base_path;
@@ -6,17 +10,14 @@ use dioxus_core::{
     has_context, provide_error_boundary, DynamicNode, ErrorContext, ScopeId, SuspenseContext,
     VNode, VirtualDom,
 };
-use dioxus_fullstack_core::history::provide_fullstack_history_context;
+use dioxus_fullstack_core::{history::provide_fullstack_history_context, HttpError, ServerFnError};
 use dioxus_fullstack_core::{HydrationContext, SerializedHydrationData};
 use dioxus_fullstack_core::{StreamingContext, StreamingStatus};
-use dioxus_isrg::{
-    CachedRender, IncrementalRenderer, IncrementalRendererConfig, IncrementalRendererError,
-    RenderFreshness,
-};
 use dioxus_router::ParseRouteError;
 use dioxus_ssr::Renderer;
 use futures_channel::mpsc::Sender;
 use futures_util::{Stream, StreamExt};
+use http::StatusCode;
 use std::{collections::HashMap, fmt::Write, future::Future, rc::Rc, sync::Arc, sync::RwLock};
 use tokio::task::JoinHandle;
 
@@ -27,8 +28,10 @@ pub enum SSRError {
     /// An error from the incremental renderer. This should result in a 500 code
     Incremental(IncrementalRendererError),
 
-    /// An error from the dioxus router. This should result in a 404 code
-    Routing(ParseRouteError),
+    HttpError {
+        status: StatusCode,
+        message: Option<String>,
+    },
 }
 
 /// A suspense boundary that is pending with a placeholder in the client
@@ -68,7 +71,7 @@ impl SsrRendererPool {
                         } = cached_render;
                         _ = render_into.start_send(
                             String::from_utf8(response.to_vec())
-                                .map_err(|err| IncrementalRendererError::Other(Box::new(err))),
+                                .map_err(|err| IncrementalRendererError::Other(err.into())),
                         );
                         return Some(freshness);
                     }
@@ -203,49 +206,72 @@ impl SsrRendererPool {
             }
 
             // check if there are any errors
-            let errors = virtual_dom.in_runtime(|| {
+            let error = virtual_dom.in_runtime(|| {
                 ScopeId::ROOT_ERROR_BOUNDARY
                     .consume_context::<ErrorContext>()
                     .expect("The root should be under an error boundary")
-                    .errors()
-                    .to_vec()
+                    .error()
             });
 
-            if errors.is_empty() {
-                // If routing was successful, we can return a 200 status and render into the stream
-                _ = initial_result_tx.send(Ok(()));
-            } else {
+            if let Some(error) = error {
+                let mut status_code = None;
+                let mut out_message = None;
+
                 // If the errors include an `HttpError` or `StatusCode` or `ServerFnError`, we need
                 // to try and return the appropriate status code
+                if let Some(error) = error.downcast_ref::<HttpError>() {
+                    status_code = Some(error.status);
+                    out_message = error.message.clone();
+                }
+
+                if let Some(error) = error.downcast_ref::<StatusCode>() {
+                    status_code = Some(*error);
+                }
+
+                // todo - the user is allowed to return anything that impls `From<ServerFnError>`
+                // we need to eventually be able to downcast that and get the status code from it
+                if let Some(ServerFnError::ServerError { message, code, .. }) = error.downcast_ref()
+                {
+                    if let Some(code) = code {
+                        status_code = Some(
+                            (*code)
+                                .try_into()
+                                .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
+                        );
+                    } else {
+                        status_code = Some(StatusCode::INTERNAL_SERVER_ERROR);
+                    }
+                    out_message = Some(message.clone());
+                }
 
                 // If there was an error while routing, return the error with a 400 status
                 // Return a routing error if any of the errors were a routing error
-                let routing_error = errors.iter().find_map(|err| err.downcast_ref().cloned());
-                if let Some(routing_error) = routing_error {
-                    _ = initial_result_tx.send(Err(SSRError::Routing(routing_error)));
+                if let Some(routing_error) = error.downcast_ref::<ParseRouteError>().cloned() {
+                    status_code = Some(StatusCode::BAD_REQUEST);
+                    out_message = Some(routing_error.to_string());
+                }
+
+                // If we captured anything that produces a status code, we should return that status code.
+                if let Some(status_code) = status_code {
+                    _ = initial_result_tx.send(Err(SSRError::HttpError {
+                        status: status_code,
+                        message: out_message,
+                    }));
                     return;
                 }
 
-                #[derive(thiserror::Error, Debug)]
-                #[error("{0}")]
-                pub struct ErrorWhileRendering(String);
-
-                let mut all_errors = String::new();
-                for error in errors {
-                    all_errors += &error.to_string();
-                    all_errors += "\n"
-                }
-
-                let error = ErrorWhileRendering(all_errors);
                 _ = initial_result_tx.send(Err(SSRError::Incremental(
-                    IncrementalRendererError::Other(Box::new(error)),
+                    IncrementalRendererError::Other(error),
                 )));
 
                 return;
             }
 
-            let mut pre_body = String::new();
+            // Now that we handled any errors from rendering, we can send the initial ok result
+            _ = initial_result_tx.send(Ok(()));
 
+            // Wait long enough to assemble the `<head>` of the document before starting to stream
+            let mut pre_body = String::new();
             if let Err(err) = Self::render_head(&cfg, &mut pre_body, &virtual_dom) {
                 _ = into.start_send(Err(err));
                 return;
@@ -306,7 +332,7 @@ impl SsrRendererPool {
                             resolved_data,
                             &mut resolved_chunk,
                         ) {
-                            throw_error!(dioxus_isrg::IncrementalRendererError::RenderError(err));
+                            throw_error!(IncrementalRendererError::RenderError(err));
                         }
 
                         stream.render(resolved_chunk);
@@ -345,7 +371,7 @@ impl SsrRendererPool {
                 }
                 renderer.reset_hydration();
                 if let Err(err) = renderer.render_to(&mut cached_render, &virtual_dom) {
-                    throw_error!(dioxus_isrg::IncrementalRendererError::RenderError(err));
+                    throw_error!(IncrementalRendererError::RenderError(err));
                 }
                 if let Err(err) = Self::render_after_main(&cfg, &mut cached_render, &virtual_dom) {
                     throw_error!(err);
@@ -366,9 +392,9 @@ impl SsrRendererPool {
         let join_handle = Self::spawn_platform(create_render_future);
 
         // Wait for the initial result which determines the status code
-        initial_result_rx.await.map_err(|err| {
-            SSRError::Incremental(IncrementalRendererError::Other(Box::new(err)))
-        })??;
+        initial_result_rx
+            .await
+            .map_err(|err| SSRError::Incremental(IncrementalRendererError::Other(err.into())))??;
 
         Ok((
             RenderFreshness::now(None),
@@ -488,7 +514,7 @@ impl SsrRendererPool {
         let error = vdom.in_runtime(|| {
             scope
                 .consume_context::<ErrorContext>()
-                .and_then(|error_context| error_context.errors().first().cloned())
+                .and_then(|error_context| error_context.error())
         });
         context
             .error_entry()

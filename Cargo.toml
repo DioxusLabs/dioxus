@@ -59,7 +59,6 @@ members = [
     "packages/cli-config",
     "packages/devtools",
     "packages/devtools-types",
-    "packages/isrg",
     "packages/rsx-hotreload",
     "packages/const-serialize",
     "packages/const-serialize-macro",
@@ -156,7 +155,6 @@ dioxus-html = { path = "packages/html", version = "0.7.0-rc.0", default-features
 dioxus-html-internal-macro = { path = "packages/html-internal-macro", version = "0.7.0-rc.0" }
 dioxus-hooks = { path = "packages/hooks", version = "0.7.0-rc.0" }
 dioxus-web = { path = "packages/web", version = "0.7.0-rc.0", default-features = false }
-dioxus-isrg = { path = "packages/isrg", version = "0.7.0-rc.0" }
 dioxus-ssr = { path = "packages/ssr", version = "0.7.0-rc.0", default-features = false }
 dioxus-desktop = { path = "packages/desktop", version = "0.7.0-rc.0", default-features = false }
 dioxus-interpreter-js = { path = "packages/interpreter", version = "0.7.0-rc.0" }
