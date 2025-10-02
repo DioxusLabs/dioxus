@@ -242,7 +242,8 @@ fn app() -> Element {
             {String::from("Hello world!")}
 
             // So can format_args
-            {format_args!("Hello {}!", "world")}
+            // todo(jon): this is broken in edition 2024
+            // {format_args!("Hello {}!", "world")}
 
             // Or we can shell out to a helper function
             {format_dollars(10, 50)}

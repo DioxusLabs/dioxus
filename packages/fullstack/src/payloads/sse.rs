@@ -59,9 +59,7 @@ impl<T> ServerEvents<T> {
     ///
     /// Returns `None` if the stream has ended.
     pub async fn next_event(&mut self) -> Option<Result<ServerSentEvent, ServerFnError>> {
-        let client = self.client.as_mut()?;
-        let res = client.next().await;
-        res
+        self.client.as_mut()?.next().await
     }
 }
 
