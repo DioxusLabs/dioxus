@@ -5,7 +5,7 @@
 //!
 //! These are *global* shortcuts, so they will work even if your app is not in focus.
 
-use dioxus::desktop::{use_global_shortcut, HotKeyState};
+use dioxus::desktop::{HotKeyState, use_global_shortcut};
 use dioxus::prelude::*;
 
 fn main() {

@@ -7,8 +7,9 @@
 //! This is useful for apps that incorporate settings panels or persistent windows like Raycast.
 
 use dioxus::desktop::{
+    WindowCloseBehaviour,
     trayicon::{default_tray_icon, init_tray_icon},
-    window, WindowCloseBehaviour,
+    window,
 };
 use dioxus::prelude::*;
 

@@ -9,7 +9,7 @@
 //!
 //! The entire featuresuite of wry and tao is available to you
 
-use dioxus::desktop::{window, Config, WindowBuilder};
+use dioxus::desktop::{Config, WindowBuilder, window};
 use dioxus::prelude::*;
 
 fn main() {

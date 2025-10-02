@@ -6,8 +6,9 @@
 //! To use this feature set `with_as_child_window()` on your desktop config which will then let you
 
 use dioxus::desktop::{
+    Config, DesktopContext,
     tao::{event::Event as WryEvent, window::WindowBuilder},
-    use_wry_event_handler, window, Config, DesktopContext,
+    use_wry_event_handler, window,
 };
 use dioxus::prelude::*;
 

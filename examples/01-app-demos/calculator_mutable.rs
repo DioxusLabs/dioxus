@@ -8,8 +8,8 @@
 
 use dioxus::desktop::tao::dpi::LogicalSize;
 use dioxus::desktop::{Config, WindowBuilder};
-use dioxus::html::input_data::keyboard_types::Key;
 use dioxus::html::MouseEvent;
+use dioxus::html::input_data::keyboard_types::Key;
 use dioxus::prelude::*;
 
 fn main() {

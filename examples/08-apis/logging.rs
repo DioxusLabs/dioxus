@@ -11,7 +11,7 @@
 //!
 //! To use the dioxus logger in your app, simply call any of the tracing functions (info!(), warn!(), error!())
 
-use dioxus::logger::tracing::{debug, error, info, warn, Level};
+use dioxus::logger::tracing::{Level, debug, error, info, warn};
 use dioxus::prelude::*;
 
 fn main() {
