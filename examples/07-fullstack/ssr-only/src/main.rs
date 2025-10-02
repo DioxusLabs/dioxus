@@ -5,6 +5,8 @@
 //!
 //! This is useful for static site generation, or if you want to use Dioxus Fullstack as a server-side
 //! framework without the `rsx! {}` markup.
+//!
+//! To run this example, simply run `cargo run --package ssr-only` and navigate to `http://localhost:8080`.
 
 use dioxus::prelude::*;
 

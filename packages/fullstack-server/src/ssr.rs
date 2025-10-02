@@ -204,17 +204,20 @@ impl SsrRendererPool {
 
             // check if there are any errors
             let errors = virtual_dom.in_runtime(|| {
-                let error_context: ErrorContext = ScopeId::ROOT_ERROR_BOUNDARY
-                    .consume_context()
-                    .expect("The root should be under an error boundary");
-                let errors = error_context.errors();
-                errors.to_vec()
+                ScopeId::ROOT_ERROR_BOUNDARY
+                    .consume_context::<ErrorContext>()
+                    .expect("The root should be under an error boundary")
+                    .errors()
+                    .to_vec()
             });
 
             if errors.is_empty() {
                 // If routing was successful, we can return a 200 status and render into the stream
                 _ = initial_result_tx.send(Ok(()));
             } else {
+                // If the errors include an `HttpError` or `StatusCode` or `ServerFnError`, we need
+                // to try and return the appropriate status code
+
                 // If there was an error while routing, return the error with a 400 status
                 // Return a routing error if any of the errors were a routing error
                 let routing_error = errors.iter().find_map(|err| err.downcast_ref().cloned());
@@ -222,18 +225,22 @@ impl SsrRendererPool {
                     _ = initial_result_tx.send(Err(SSRError::Routing(routing_error)));
                     return;
                 }
+
                 #[derive(thiserror::Error, Debug)]
                 #[error("{0}")]
                 pub struct ErrorWhileRendering(String);
+
                 let mut all_errors = String::new();
                 for error in errors {
                     all_errors += &error.to_string();
                     all_errors += "\n"
                 }
+
                 let error = ErrorWhileRendering(all_errors);
                 _ = initial_result_tx.send(Err(SSRError::Incremental(
                     IncrementalRendererError::Other(Box::new(error)),
                 )));
+
                 return;
             }
 

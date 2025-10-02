@@ -355,7 +355,11 @@ impl From<Loading> for RenderError {
     fn from(val: Loading) -> Self {
         match val {
             Loading::Pending(t) => RenderError::Suspended(SuspendedFuture::new(t.task.cloned())),
-            Loading::Failed(err) => RenderError::Error(err.err.cloned().unwrap()),
+            Loading::Failed(err) => RenderError::Error(
+                err.err
+                    .cloned()
+                    .expect("LoaderHandle in Failed state should always have an error"),
+            ),
         }
     }
 }
