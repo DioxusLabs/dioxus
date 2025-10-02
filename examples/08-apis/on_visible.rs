@@ -11,7 +11,6 @@ fn app() -> Element {
 
     rsx! {
         Stylesheet { href: asset!("./examples/assets/visible.css") }
-
         div {
             class: "container",
 

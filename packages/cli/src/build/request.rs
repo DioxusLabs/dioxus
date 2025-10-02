@@ -2915,7 +2915,7 @@ impl BuildRequest {
             ),
             ("OPENSSL_LIBS".to_string(), openssl_libs.into()),
             // Set the wry env vars - this is where wry will dump its kotlin files.
-            // Their setup is really annyoing and requires us to hardcode `dx` to specific versions of tao/wry.
+            // Their setup is really annoying and requires us to hardcode `dx` to specific versions of tao/wry.
             (
                 "WRY_ANDROID_PACKAGE".to_string(),
                 "dev.dioxus.main".to_string().into(),
@@ -4055,15 +4055,15 @@ impl BuildRequest {
         writeln!(
             buf_writer,
             r#"
-window.__wasm_split_main_initSync = initSync;
+globalThis.__wasm_split_main_initSync = initSync;
 
 // Actually perform the load
 __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
     // assign this module to be accessible globally
-    window.__dx_mainWasm = wasm;
-    window.__dx_mainInit = __wbg_init;
-    window.__dx_mainInitSync = initSync;
-    window.__dx___wbg_get_imports = __wbg_get_imports;
+    globalThis.__dx_mainWasm = wasm;
+    globalThis.__dx_mainInit = __wbg_init;
+    globalThis.__dx_mainInitSync = initSync;
+    globalThis.__dx___wbg_get_imports = __wbg_get_imports;
 
     if (wasm.__wbindgen_start == undefined) {{
         wasm.main();
@@ -4106,7 +4106,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         }
     }
 
-    /// Get the path to the wasm-bindgen output files. Either the direct file or the opitmized one depending on the build mode
+    /// Get the path to the wasm-bindgen output files. Either the direct file or the optimized one depending on the build mode
     fn bundled_wasm_path(&self, assets: &AssetManifest) -> String {
         let wasm_bindgen_wasm_out = self.wasm_bindgen_wasm_output_file();
         if self.should_bundle_to_asset() {

@@ -204,11 +204,11 @@ impl SsrRendererPool {
 
             // check if there are any errors
             let errors = virtual_dom.in_runtime(|| {
-                ScopeId(3)
-                    .consume_context::<ErrorContext>()
-                    .expect("The root should be under an error boundary")
-                    .errors()
-                    .to_vec()
+                let error_context: ErrorContext = ScopeId::ROOT_ERROR_BOUNDARY
+                    .consume_context()
+                    .expect("The root should be under an error boundary");
+                let errors = error_context.errors();
+                errors.to_vec()
             });
 
             if errors.is_empty() {

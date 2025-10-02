@@ -45,10 +45,16 @@ impl ScopeId {
     /// let my_persistent_state = Signal::new_in_scope(String::new(), ScopeId::APP);
     /// ```
     // ScopeId(0) is the root scope wrapper
-    // ScopeId(1) is the default error boundary
-    // ScopeId(2) is the default suspense boundary
+    // ScopeId(1) is the default suspense boundary
+    // ScopeId(2) is the default error boundary
     // ScopeId(3) is the users root scope
     pub const APP: ScopeId = ScopeId(3);
+
+    /// The ScopeId of the topmost error boundary in the tree.
+    pub const ROOT_ERROR_BOUNDARY: ScopeId = ScopeId(2);
+
+    /// The ScopeId of the topmost suspense boundary in the tree.
+    pub const ROOT_SUSPENSE_BOUNDARY: ScopeId = ScopeId(1);
 
     /// The ScopeId of the topmost scope in the tree.
     /// This will be higher up in the tree than [`ScopeId::APP`] because dioxus inserts a default [`crate::SuspenseBoundary`] and [`crate::ErrorBoundary`] at the root of the tree.
