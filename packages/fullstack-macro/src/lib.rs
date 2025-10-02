@@ -89,7 +89,15 @@ use syn::{
 /// ```
 #[proc_macro_attribute]
 pub fn server(_attr: proc_macro::TokenStream, mut item: TokenStream) -> TokenStream {
-    // let args = ServerFnArgs::parse(attr);
+    // Parse the attribute list using the old server_fn arg parser.
+    let args = match syn::parse::<ServerFnArgs>(_attr) {
+        Ok(args) => args,
+        Err(err) => {
+            let err: TokenStream = err.to_compile_error().into();
+            item.extend(err);
+            return item;
+        }
+    };
 
     let method = Method::Post(Ident::new("POST", proc_macro2::Span::call_site()));
     let route: Route = Route {
@@ -97,13 +105,37 @@ pub fn server(_attr: proc_macro::TokenStream, mut item: TokenStream) -> TokenStr
         path_params: vec![],
         query_params: vec![],
         state: None,
-        route_lit: LitStr::new("/api/some-cool-fn", proc_macro2::Span::call_site()),
+        route_lit: args.fn_path,
         oapi_options: None,
         server_args: Default::default(),
+        prefix: args.prefix,
+        _input_encoding: args.input,
+        _output_encoding: args.output,
     };
 
     match route_impl_with_route(route, item.clone(), Some(method)) {
-        Ok(tokens) => tokens.into(),
+        Ok(mut tokens) => {
+            // Let's add some deprecated warnings to the various fields from `args` if the user is using them...
+            // We don't generate structs anymore, don't use various protocols, etc
+            if let Some(name) = args.struct_name {
+                tokens.extend(quote! {
+                    const _: () = {
+                        #[deprecated(note = "Dioxus server functions no longer generate a struct for the server function. The function itself is used directly.")]
+                        struct #name;
+                        fn ___assert_deprecated() {
+                            let _ = #name;
+                        }
+
+                        ()
+                    };
+                });
+            }
+
+            //
+            tokens.into()
+        }
+
+        // Retain the original function item and append the error to it. Better for autocomplete.
         Err(err) => {
             let err: TokenStream = err.to_compile_error().into();
             item.extend(err);
@@ -168,6 +200,7 @@ fn route_impl_with_route(
 ) -> syn::Result<TokenStream2> {
     // Parse the route and function
     let function = syn::parse::<ItemFn>(item)?;
+
     let server_args = route.server_args.clone();
     let mut function_on_server = function.clone();
     function_on_server.sig.inputs.extend(server_args.clone());
@@ -193,7 +226,6 @@ fn route_impl_with_route(
     let query_extractor = route.query_extractor();
     let query_params_struct = route.query_params_struct(false);
     let _state_type = &route.state;
-    let axum_path = route.to_axum_path_string();
     let method_ident = &route.method;
     let http_method = route.method.to_axum_method_name();
     let _remaining_numbered_pats = route.remaining_pattypes_numbered(&function.sig.inputs);
@@ -224,11 +256,13 @@ fn route_impl_with_route(
         .iter()
         .filter(|attr| attr.path().is_ident("doc"));
 
+    let __axum = quote! { dioxus_fullstack::axum };
+
     let (aide_ident_docs, _inner_fn_call, _method_router_ty) = {
         (
             quote!(),
-            quote! { __axum::routing::#http_method(__inner__function__ #ty_generics) },
-            quote! { __axum::routing::MethodRouter },
+            quote! { #__axum::routing::#http_method(__inner__function__ #ty_generics) },
+            quote! { #__axum::routing::MethodRouter },
         )
     };
 
@@ -238,14 +272,6 @@ fn route_impl_with_route(
     };
 
     let query_param_names = route.query_params.iter().map(|(ident, _)| ident);
-
-    let url_without_queries = route
-        .route_lit
-        .value()
-        .split('?')
-        .next()
-        .unwrap()
-        .to_string();
 
     let path_param_args = route.path_params.iter().map(|(_slash, param)| match param {
         PathParam::Capture(_lit, _brace_1, ident, _ty, _brace_2) => {
@@ -321,12 +347,63 @@ fn route_impl_with_route(
 
         quote! {
             let #name = {
-                use __axum::extract::FromRequest;
-                let __request = __axum::extract::Request::new(__axum::body::Body::empty());
+                use dioxus_fullstack::axum::extract::FromRequest;
+                let __request = dioxus_fullstack::axum::extract::Request::new(dioxus_fullstack::axum::body::Body::empty());
                 <#ty as FromRequest<_, _>>::from_request(__request, &()).await.unwrap()
             };
         }
     });
+
+    let query_endpoint = if let Some(route_lit) = route.route_lit.as_ref() {
+        let url_without_queries = route_lit.value().split('?').next().unwrap().to_string();
+        quote! { format!(#url_without_queries, #( #path_param_args)*) }
+    } else {
+        quote! { __ENDPOINT_PATH.to_string() }
+    };
+
+    let endpoint_path = {
+        let prefix = route
+            .prefix
+            .as_ref()
+            .cloned()
+            .unwrap_or_else(|| LitStr::new("", Span::call_site()));
+
+        let route_lit = if let Some(_route_lit) = route.route_lit.as_ref() {
+            let path = route.to_axum_path_string();
+            quote! { #path }
+        } else {
+            quote! {
+                concat!(
+                    "/",
+                    stringify!(#fn_name)
+                )
+            }
+        };
+
+        let hash = match route.route_lit.as_ref() {
+            // Explicit route lit, no need to hash
+            Some(_) => quote! { "" },
+
+            // Implicit route lit, we need to hash the function signature to avoid collisions
+            None => {
+                // let enable_hash = option_env!("DISABLE_SERVER_FN_HASH").is_none();
+                let key_env_var = match option_env!("SERVER_FN_OVERRIDE_KEY") {
+                    Some(_) => "SERVER_FN_OVERRIDE_KEY",
+                    None => "CARGO_MANIFEST_DIR",
+                };
+                quote! {
+                    dioxus_fullstack::xxhash_rust::const_xxh64::xxh64(
+                        concat!(env!(#key_env_var), ":", module_path!()).as_bytes(),
+                        0
+                    )
+                }
+            }
+        };
+
+        quote! {
+            dioxus_fullstack::const_format::concatcp!(#prefix, #route_lit, #hash)
+        }
+    };
 
     Ok(quote! {
         #(#fn_docs)*
@@ -334,13 +411,16 @@ fn route_impl_with_route(
         #vis async fn #fn_name #impl_generics(
             #original_inputs
         ) -> #out_ty #where_clause {
-            use dioxus_fullstack::reqwest as __reqwest;
             use dioxus_fullstack::serde as serde;
             use dioxus_fullstack::{
-                ServerFnEncoder, ExtractRequest,
-                EncodeRequest, get_server_url,
-                ServerFnError, MakeAxumResponse, ServerFnDecoder, ReqwestDecodeResult, ReqwestDecodeErr, DioxusServerState,
-                MakeAxumError, ClientRequest
+                // concrete types
+                ServerFnEncoder, ServerFnDecoder, DioxusServerState,
+
+                // "magic" traits for encoding/decoding on the client
+                ExtractRequest, EncodeRequest, RequestDecodeResult, RequestDecodeErr,
+
+                // "magic" traits for encoding/decoding on the server
+                MakeAxumResponse, MakeAxumError,
             };
 
             _ = dioxus_fullstack::assert_is_result::<#out_ty>();
@@ -349,14 +429,16 @@ fn route_impl_with_route(
 
             #body_struct_impl
 
+            const __ENDPOINT_PATH: &str = #endpoint_path;
+
             // On the client, we make the request to the server
             // We want to support extremely flexible error types and return types, making this more complex than it should
             #[allow(clippy::unused_unit)]
             #[cfg(not(feature = "server"))]
             {
-                let client = ClientRequest::new(
+                let client = dioxus_fullstack::ClientRequest::new(
                     dioxus_fullstack::http::Method::#method_ident,
-                    format!(#url_without_queries, #( #path_param_args)*),
+                    #query_endpoint,
                     &__QueryParams__ { #(#query_param_names,)* },
                 );
 
@@ -382,10 +464,7 @@ fn route_impl_with_route(
 
             // On the server, we expand the tokens and submit the function to inventory
             #[cfg(feature = "server")] {
-                use dioxus_fullstack::inventory as __inventory;
-                use dioxus_fullstack::axum as __axum;
-                use dioxus_fullstack::http as __http;
-                use __axum::response::IntoResponse;
+                use #__axum::response::IntoResponse;
                 use dioxus_server::ServerFunction;
 
                 #function_on_server
@@ -393,11 +472,11 @@ fn route_impl_with_route(
                 #[allow(clippy::unused_unit)]
                 #aide_ident_docs
                 #asyncness fn __inner__function__ #impl_generics(
-                    ___state: __axum::extract::State<DioxusServerState>,
+                    ___state: #__axum::extract::State<DioxusServerState>,
                     #path_extractor
                     #query_extractor
-                    request: __axum::extract::Request,
-                ) -> Result<__axum::response::Response, __axum::response::Response> #where_clause {
+                    request: #__axum::extract::Request,
+                ) -> Result<#__axum::response::Response, #__axum::response::Response> #where_clause {
                     let ((#(#server_names,)*), (  #(#body_json_names,)* )) = (&&&&&&&&&&&&&&ServerFnEncoder::<___Body_Serialize___<#(#body_json_types,)*>, (#(#body_json_types,)*)>::new())
                         .extract_axum(___state.0, request, #unpack).await?;
 
@@ -412,11 +491,11 @@ fn route_impl_with_route(
                     return response;
                 }
 
-                __inventory::submit! {
+                dioxus_fullstack::inventory::submit! {
                     ServerFunction::new(
-                        __http::Method::#method_ident,
-                        #axum_path,
-                        || __axum::routing::#http_method(__inner__function__ #ty_generics)
+                        dioxus_fullstack::http::Method::#method_ident,
+                        __ENDPOINT_PATH,
+                        || #__axum::routing::#http_method(__inner__function__ #ty_generics)
                     )
                 }
 
@@ -443,7 +522,8 @@ struct CompiledRoute {
     path_params: Vec<(Slash, PathParam)>,
     query_params: Vec<(Ident, Box<Type>)>,
     state: Type,
-    route_lit: LitStr,
+    route_lit: Option<LitStr>,
+    prefix: Option<LitStr>,
     oapi_options: Option<OapiOptions>,
 }
 
@@ -583,6 +663,7 @@ impl CompiledRoute {
             query_params,
             state: route.state.unwrap_or_else(|| guess_state_type(sig)),
             oapi_options: route.oapi_options,
+            prefix: route.prefix,
         })
     }
 
@@ -594,14 +675,14 @@ impl CompiledRoute {
         let idents = path_iter.clone().map(|item| item.0);
         let types = path_iter.clone().map(|item| item.1);
         quote! {
-            __axum::extract::Path((#(#idents,)*)): __axum::extract::Path<(#(#types,)*)>,
+            dioxus_fullstack::axum::extract::Path((#(#idents,)*)): dioxus_fullstack::axum::extract::Path<(#(#types,)*)>,
         }
     }
 
     pub fn query_extractor(&self) -> TokenStream2 {
         let idents = self.query_params.iter().map(|item| &item.0);
         quote! {
-            __axum::extract::Query(__QueryParams__ { #(#idents,)* }): __axum::extract::Query<__QueryParams__>,
+            dioxus_fullstack::axum::extract::Query(__QueryParams__ { #(#idents,)* }): dioxus_fullstack::axum::extract::Query<__QueryParams__>,
         }
     }
 
@@ -920,7 +1001,10 @@ impl CompiledRoute {
 - Path: `{}`
 - State: `{}`",
             self.method.to_axum_method_name(),
-            self.route_lit.value(),
+            self.route_lit
+                .as_ref()
+                .map(|lit| lit.value())
+                .unwrap_or_else(|| "<auto>".into()),
             self.state.to_token_stream(),
         );
 
@@ -1308,9 +1392,14 @@ struct Route {
     path_params: Vec<(Slash, PathParam)>,
     query_params: Vec<Ident>,
     state: Option<Type>,
-    route_lit: LitStr,
+    route_lit: Option<LitStr>,
+    prefix: Option<LitStr>,
     oapi_options: Option<OapiOptions>,
     server_args: Punctuated<FnArg, Comma>,
+
+    // todo: support these sicne `server_fn` had them
+    _input_encoding: Option<Type>,
+    _output_encoding: Option<Type>,
 }
 
 impl Parse for Route {
@@ -1322,11 +1411,17 @@ impl Parse for Route {
         };
 
         let route_lit = input.parse::<LitStr>()?;
-        let route_parser = RouteParser::new(route_lit.clone())?;
+        let RouteParser {
+            path_params,
+            query_params,
+        } = RouteParser::new(route_lit.clone())?;
+
+        // todo: maybe let the user include `State<T>` here, eventually?
         // let state = match input.parse::<kw::with>() {
         //     Ok(_) => Some(input.parse::<Type>()?),
         //     Err(_) => None,
         // };
+
         let state = None;
         let oapi_options = input
             .peek(Brace)
@@ -1346,12 +1441,15 @@ impl Parse for Route {
 
         Ok(Route {
             method,
-            path_params: route_parser.path_params,
-            query_params: route_parser.query_params,
+            path_params,
+            query_params,
             state,
-            route_lit,
+            route_lit: Some(route_lit),
             oapi_options,
             server_args,
+            prefix: None,
+            _input_encoding: None,
+            _output_encoding: None,
         })
     }
 }
@@ -1437,8 +1535,13 @@ mod kw {
 }
 
 /// The arguments to the `server` macro.
+///
+/// These originally came from the `server_fn` crate, but many no longer apply after the 0.7 fullstack
+/// overhaul. We keep the parser here for temporary backwards compatibility with existing code, but
+/// these arguments will be removed in a future release.
 #[derive(Debug)]
 #[non_exhaustive]
+#[allow(unused)]
 struct ServerFnArgs {
     /// The name of the struct that will implement the server function trait
     /// and be submitted to inventory.
@@ -1706,6 +1809,8 @@ impl Parse for ServerFnArgs {
 }
 
 /// An argument type in a server function.
+#[allow(unused)]
+// todo - we used to support a number of these attributes and pass them along to serde. bring them back.
 #[derive(Debug, Clone)]
 struct ServerFnArg {
     /// The attributes on the server function argument.
@@ -1853,71 +1958,3 @@ fn type_from_ident(ident: Ident) -> Type {
         },
     })
 }
-
-// /// Generate the server function's URL. This will be the prefix path, then by the
-// /// module path if `SERVER_FN_MOD_PATH` is set, then the function name, and finally
-// /// a hash of the function name and location in the source code.
-// pub fn server_fn_url(&self) -> TokenStream2 {
-//     let default_path = &self.default_path;
-//     let prefix = self
-//         .args
-//         .prefix
-//         .clone()
-//         .unwrap_or_else(|| LitStr::new(default_path, Span::call_site()));
-//     let server_fn_path = self.server_fn_path();
-//     let fn_path = self.args.fn_path.clone().map(|fn_path| {
-//         let fn_path = fn_path.value();
-//         // Remove any leading slashes, then add one slash back
-//         let fn_path = "/".to_string() + fn_path.trim_start_matches('/');
-//         fn_path
-//     });
-
-//     let enable_server_fn_mod_path = option_env!("SERVER_FN_MOD_PATH").is_some();
-//     let mod_path = if enable_server_fn_mod_path {
-//         quote! {
-//             #server_fn_path::const_format::concatcp!(
-//                 #server_fn_path::const_str::replace!(module_path!(), "::", "/"),
-//                 "/"
-//             )
-//         }
-//     } else {
-//         quote! { "" }
-//     };
-
-//     let enable_hash = option_env!("DISABLE_SERVER_FN_HASH").is_none();
-//     let key_env_var = match option_env!("SERVER_FN_OVERRIDE_KEY") {
-//         Some(_) => "SERVER_FN_OVERRIDE_KEY",
-//         None => "CARGO_MANIFEST_DIR",
-//     };
-//     let hash = if enable_hash {
-//         quote! {
-//             #server_fn_path::xxhash_rust::const_xxh64::xxh64(
-//                 concat!(env!(#key_env_var), ":", module_path!()).as_bytes(),
-//                 0
-//             )
-//         }
-//     } else {
-//         quote! { "" }
-//     };
-
-//     let fn_name_as_str = self.fn_name_as_str();
-//     if let Some(fn_path) = fn_path {
-//         quote! {
-//             #server_fn_path::const_format::concatcp!(
-//                 #prefix,
-//                 #mod_path,
-//                 #fn_path
-//             )
-//         }
-//     } else {
-//         quote! {
-//             #server_fn_path::const_format::concatcp!(
-//                 #prefix,
-//                 "/",
-//                 #mod_path,
-//                 #fn_name_as_str,
-//                 #hash
-//             )
-//         }
-//     }
-// }

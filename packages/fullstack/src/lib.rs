@@ -23,17 +23,18 @@ pub use serde;
 // pub use xxhash_rust;
 
 // pub use axum;
-// #[doc(hidden)]
-// pub use const_format;
-// #[doc(hidden)]
-// pub use const_str;
 // pub use http;
 // #[doc(hidden)]
 // pub use inventory;
 // #[doc(hidden)]
 // pub use serde;
-// #[doc(hidden)]
-// pub use xxhash_rust;
+
+#[doc(hidden)]
+pub use const_format;
+#[doc(hidden)]
+pub use const_str;
+#[doc(hidden)]
+pub use xxhash_rust;
 
 #[cfg(feature = "server")]
 pub use {axum, axum_extra::TypedHeader, inventory};

@@ -222,14 +222,14 @@ mod decode_ok {
     ///
     /// This is because FromResponse types are more specialized and can handle things like websockets and files.
     /// DeserializeOwned types are more general and can handle things like JSON responses.
-    pub trait ReqwestDecodeResult<T, R> {
+    pub trait RequestDecodeResult<T, R> {
         fn decode_client_response(
             &self,
             res: Result<R, RequestError>,
         ) -> impl Future<Output = Result<Result<T, ServerFnError>, RequestError>> + Send;
     }
 
-    impl<T: FromResponse<R>, E, R> ReqwestDecodeResult<T, R> for &&&ServerFnDecoder<Result<T, E>> {
+    impl<T: FromResponse<R>, E, R> RequestDecodeResult<T, R> for &&&ServerFnDecoder<Result<T, E>> {
         fn decode_client_response(
             &self,
             res: Result<R, RequestError>,
@@ -243,7 +243,7 @@ mod decode_ok {
         }
     }
 
-    impl<T: DeserializeOwned, E> ReqwestDecodeResult<T, ClientResponse>
+    impl<T: DeserializeOwned, E> RequestDecodeResult<T, ClientResponse>
         for &&ServerFnDecoder<Result<T, E>>
     {
         fn decode_client_response(
@@ -307,14 +307,14 @@ mod decode_ok {
         }
     }
 
-    pub trait ReqwestDecodeErr<T, E> {
+    pub trait RequestDecodeErr<T, E> {
         fn decode_client_err(
             &self,
             res: Result<Result<T, ServerFnError>, RequestError>,
         ) -> impl Future<Output = Result<T, E>> + Send;
     }
 
-    impl<T, E> ReqwestDecodeErr<T, E> for &&&ServerFnDecoder<Result<T, E>>
+    impl<T, E> RequestDecodeErr<T, E> for &&&ServerFnDecoder<Result<T, E>>
     where
         E: From<ServerFnError> + DeserializeOwned + Serialize,
     {
@@ -361,7 +361,7 @@ mod decode_ok {
     /// from the ServerFnError if they want to.
     ///
     /// This loses any actual type information, but is the most flexible for users.
-    impl<T> ReqwestDecodeErr<T, anyhow::Error> for &&ServerFnDecoder<Result<T, anyhow::Error>> {
+    impl<T> RequestDecodeErr<T, anyhow::Error> for &&ServerFnDecoder<Result<T, anyhow::Error>> {
         fn decode_client_err(
             &self,
             res: Result<Result<T, ServerFnError>, RequestError>,
@@ -377,7 +377,7 @@ mod decode_ok {
     }
 
     /// This converts to statuscode, which can be useful but loses a lot of information.
-    impl<T> ReqwestDecodeErr<T, StatusCode> for &ServerFnDecoder<Result<T, StatusCode>> {
+    impl<T> RequestDecodeErr<T, StatusCode> for &ServerFnDecoder<Result<T, StatusCode>> {
         fn decode_client_err(
             &self,
             res: Result<Result<T, ServerFnError>, RequestError>,
@@ -429,7 +429,7 @@ mod decode_ok {
         }
     }
 
-    impl<T> ReqwestDecodeErr<T, HttpError> for &ServerFnDecoder<Result<T, HttpError>> {
+    impl<T> RequestDecodeErr<T, HttpError> for &ServerFnDecoder<Result<T, HttpError>> {
         fn decode_client_err(
             &self,
             res: Result<Result<T, ServerFnError>, RequestError>,

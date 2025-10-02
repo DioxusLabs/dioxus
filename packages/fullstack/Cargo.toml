@@ -46,10 +46,10 @@ http-body = { workspace = true }
 headers = "0.4.1"
 dioxus-asset-resolver = { workspace = true, features = ["native"] }
 
-# const_format = { workspace = true, default-features = true }
-# const-str = { workspace = true, default-features = true }
-# rustversion = { workspace = true, default-features = true }
-# xxhash-rust = { features = ["const_xxh64"], workspace = true, default-features = true }
+const_format = { workspace = true, default-features = true }
+const-str = { workspace = true, default-features = true }
+rustversion = { workspace = true, default-features = true }
+xxhash-rust = { features = ["const_xxh64"], workspace = true, default-features = true }
 # rmp-serde = { version = "1.3", default-features = true }
 
 derive_more = { version = "2.0.1", features = ["deref", "deref_mut", "display", "from"] }

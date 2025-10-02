@@ -4021,6 +4021,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "const-str"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f4d34b8f066904ed7cfa4a6f9ee96c3214aa998cb44b69ca20bd2054f47402ed"
+
+[[package]]
 name = "const-str-proc-macro"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5613,6 +5619,8 @@ dependencies = [
  "base64 0.22.1",
  "bytes",
  "ciborium",
+ "const-str 0.7.0",
+ "const_format",
  "content_disposition",
  "derive_more 2.0.1",
  "dioxus",
@@ -5641,6 +5649,7 @@ dependencies = [
  "postcard",
  "reqwest 0.12.23",
  "rmp-serde",
+ "rustversion",
  "send_wrapper",
  "serde",
  "serde_json",
@@ -5661,6 +5670,7 @@ dependencies = [
  "wasm-bindgen-futures",
  "wasm-streams",
  "web-sys",
+ "xxhash-rust",
 ]
 
 [[package]]
@@ -10330,7 +10340,7 @@ dependencies = [
  "ahash 0.8.12",
  "bitflags 2.9.1",
  "browserslist-rs 0.18.2",
- "const-str",
+ "const-str 0.3.2",
  "cssparser 0.33.0",
  "cssparser-color",
  "dashmap 5.5.3",

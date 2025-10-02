@@ -81,6 +81,16 @@ pub enum ServerFnError {
     #[error("error creating response {0}")]
     Response(String),
 }
+impl ServerFnError {
+    /// Create a new server error (status code 500) with a message.
+    pub fn new(f: impl ToString) -> Self {
+        ServerFnError::ServerError {
+            message: f.to_string(),
+            details: None,
+            code: None,
+        }
+    }
+}
 
 impl From<anyhow::Error> for ServerFnError {
     fn from(value: anyhow::Error) -> Self {
