@@ -1397,7 +1397,7 @@ struct Route {
     oapi_options: Option<OapiOptions>,
     server_args: Punctuated<FnArg, Comma>,
 
-    // todo: support these sicne `server_fn` had them
+    // todo: support these since `server_fn` had them
     _input_encoding: Option<Type>,
     _output_encoding: Option<Type>,
 }
