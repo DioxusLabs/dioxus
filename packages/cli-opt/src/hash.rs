@@ -87,9 +87,7 @@ pub(crate) fn hash_file_with_options(
 
         // Or the folder contents recursively
         ResolvedAssetType::Folder(_) => {
-            let files = std::fs::read_dir(source);
-            tracing::warn!("Hashing folder contents: {source:?} -> {files:?}");
-            for file in files?.flatten() {
+            for file in std::fs::read_dir(source)?.flatten() {
                 let path = file.path();
                 hash_file_with_options(
                     // We can't reuse the options here since they contain the source variant which no

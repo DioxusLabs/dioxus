@@ -172,32 +172,32 @@ fn Assets() -> Element {
     static _ASSET: Asset = asset!("/assets/image.png");
 
     #[used]
-    static __ASSET: Asset = asset!(
+    static _STATIC_NO_HASH: Asset = asset!(
         "/assets/image.png",
         AssetOptions::image().with_hash_suffix(false)
     );
 
     #[used]
-    static ___ASSET: Asset = asset!(
+    static _UNHASHED_FOLDER: Asset = asset!(
         "/assets/nested/",
         AssetOptions::folder().with_hash_suffix(false)
     );
 
     #[used]
-    static _OTHER_ASSET: Asset = asset!("/assets/nested");
-
-    #[used]
-    static _OTHER_ASSET_DIR: Asset = asset!("/assets/nested");
+    static _EMBEDDED_FOLDER: Asset = asset!("/assets/nested");
 
     rsx! {
         img {
             src: asset!("/assets/image.png"),
         }
         img {
-            src: "{_OTHER_ASSET_DIR}/image.png",
+            src: "{_EMBEDDED_FOLDER}/image.png",
         }
         img {
-            src: "{___ASSET}/image.png",
+            src: "{_UNHASHED_FOLDER}/image.png",
+        }
+        img {
+            src: "/assets/image.png",
         }
     }
 }
