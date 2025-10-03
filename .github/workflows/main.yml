@@ -330,6 +330,13 @@ jobs:
       - name: Free Disk Space
         if: ${{ matrix.platform.os == 'ubuntu-24.04' || matrix.platform.os == 'ubuntu-24.04-arm' }}
         uses: ./.github/actions/free-disk-space
+
+      - uses: awalsh128/cache-apt-pkgs-action@latest
+        if: ${{ matrix.platform.os == 'ubuntu-24.04' || matrix.platform.os == 'ubuntu-24.04-arm' }}
+        with:
+          packages: libwebkit2gtk-4.1-dev libgtk-3-dev libasound2-dev libudev-dev libayatana-appindicator3-dev libxdo-dev libglib2.0-dev
+          version: ${{ matrix.platform.target }}-${{ matrix.platform.os }} # disambiguate since we're in a matrix and this caching action doesn't factor in these variables
+
       - name: install stable
         uses: dtolnay/rust-toolchain@master
         with:
@@ -340,12 +347,6 @@ jobs:
       - name: Install nasm for windows (tls)
         if: ${{ matrix.platform.target == 'x86_64-pc-windows-msvc' }}
         uses: ilammy/setup-nasm@v1
-
-      - uses: awalsh128/cache-apt-pkgs-action@latest
-        if: ${{ matrix.platform.os == 'ubuntu-24.04' || matrix.platform.os == 'ubuntu-24.04-arm' }}
-        with:
-          packages: libwebkit2gtk-4.1-dev libgtk-3-dev libasound2-dev libudev-dev libayatana-appindicator3-dev libxdo-dev libglib2.0-dev
-          version: ${{ matrix.platform.target }}-${{ matrix.platform.os }} # disambiguate since we're in a matrix and this caching action doesn't factor in these variables
 
       - name: Install cross
         if: ${{ matrix.platform.cross == true }}
