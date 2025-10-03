@@ -593,7 +593,7 @@ impl BuildRequest {
         - linux:        bundle(appimage), triple(host), serve(run-exe), features("desktop")
         - ios:          bundle(ios), triple(arm64-apple-ios), serve(ios-simulator/xcrun), features("mobile")
         - android:      bundle(android), triple(arm64-apple-ios), serve(android-emulator/adb), features("mobile")
-        - server:       bundle(server), triple(host), serve(run-exe), features("server")
+        - server:       bundle(server), triple(host), serve(run-exe), features("server") (and disables the client)
         - liveview:     bundle(liveview), triple(host), serve(run-exe), features("liveview")
         - unknown:      <auto or default to desktop>
 
