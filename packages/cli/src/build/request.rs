@@ -4576,7 +4576,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
     ///
     /// This might stop working if/when cargo stabilizes contents-based fingerprinting.
     fn bust_fingerprint(&self, ctx: &BuildContext) -> Result<()> {
-        if matches!(ctx.mode, BuildMode::Fat | BuildMode::Base { run: true }) {
+        if matches!(ctx.mode, BuildMode::Fat) {
             // `dx` compiles everything with `--target` which ends up with a structure like:
             // target/<triple>/<profile>/.fingerprint/<package_name>-<hash>
             //
