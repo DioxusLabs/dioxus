@@ -326,10 +326,10 @@ jobs:
             }
 
     steps:
+      - uses: actions/checkout@v5
       - name: Free Disk Space
         if: ${{ matrix.platform.os == 'ubuntu-24.04' || matrix.platform.os == 'ubuntu-24.04-arm' }}
         uses: ./.github/actions/free-disk-space
-      - uses: actions/checkout@v5
       - name: install stable
         uses: dtolnay/rust-toolchain@master
         with:
