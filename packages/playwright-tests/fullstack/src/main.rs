@@ -169,17 +169,35 @@ fn DocumentElements() -> Element {
 #[component]
 fn Assets() -> Element {
     #[used]
-    static _ASSET: Asset = asset!("/assets/logo.png");
+    static _ASSET: Asset = asset!("/assets/image.png");
+
+    #[used]
+    static __ASSET: Asset = asset!(
+        "/assets/image.png",
+        AssetOptions::image().with_hash_suffix(false)
+    );
+
+    #[used]
+    static ___ASSET: Asset = asset!(
+        "/assets/nested/",
+        AssetOptions::folder().with_hash_suffix(false)
+    );
+
     #[used]
     static _OTHER_ASSET: Asset = asset!("/assets/nested");
+
     #[used]
     static _OTHER_ASSET_DIR: Asset = asset!("/assets/nested");
+
     rsx! {
         img {
-            src: asset!("/assets/logo.png"),
+            src: asset!("/assets/image.png"),
         }
         img {
-            src: "{_OTHER_ASSET_DIR}/logo.png",
+            src: "{_OTHER_ASSET_DIR}/image.png",
+        }
+        img {
+            src: "{___ASSET}/image.png",
         }
     }
 }
