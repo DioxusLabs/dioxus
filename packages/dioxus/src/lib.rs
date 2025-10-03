@@ -161,7 +161,7 @@ pub mod prelude {
     #[cfg(feature = "signals")]
     #[cfg_attr(docsrs, doc(cfg(feature = "signals")))]
     #[doc(inline)]
-    pub use dioxus_signals::*;
+    pub use dioxus_signals::{self, *};
 
     #[cfg(feature = "signals")]
     pub use dioxus_stores::{self, store, use_store, GlobalStore, ReadStore, Store, WriteStore};
