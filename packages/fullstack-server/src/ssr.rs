@@ -249,10 +249,10 @@ impl SsrRendererPool {
                     out_message = Some(message.clone());
                 }
 
-                // If there was an error while routing, return the error with a 400 status
+                // If there was an error while routing, return the error with a 404 status
                 // Return a routing error if any of the errors were a routing error
                 if let Some(routing_error) = error.downcast_ref::<ParseRouteError>().cloned() {
-                    status_code = Some(StatusCode::BAD_REQUEST);
+                    status_code = Some(StatusCode::NOT_FOUND);
                     out_message = Some(routing_error.to_string());
                 }
 
