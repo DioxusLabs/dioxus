@@ -5546,6 +5546,7 @@ dependencies = [
  "dioxus-hooks",
  "dioxus-signals",
  "futures-channel",
+ "futures-util",
  "serde",
 ]
 
@@ -5746,6 +5747,15 @@ name = "dioxus-playwright-default-features-disabled-test"
 version = "0.1.0"
 dependencies = [
  "dioxus",
+]
+
+[[package]]
+name = "dioxus-playwright-fullstack-errors-test"
+version = "0.1.0"
+dependencies = [
+ "dioxus",
+ "serde",
+ "tokio",
 ]
 
 [[package]]

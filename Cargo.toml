@@ -125,6 +125,7 @@ members = [
     "packages/playwright-tests/web-hash-routing",
     "packages/playwright-tests/barebones-template",
     "packages/playwright-tests/fullstack",
+    "packages/playwright-tests/fullstack-errors",
     "packages/playwright-tests/fullstack-mounted",
     "packages/playwright-tests/fullstack-routing",
     "packages/playwright-tests/suspense-carousel",
