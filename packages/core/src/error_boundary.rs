@@ -1,8 +1,8 @@
 use crate::{
     global_context::current_scope_id,
     innerlude::{provide_context, CapturedError},
-    use_hook, Element, IntoDynNode, Properties, ScopeId, Template, TemplateAttribute, TemplateNode,
-    VNode,
+    use_hook, Element, IntoDynNode, Properties, ScopeId, Subscribers, Template, TemplateAttribute,
+    TemplateNode, VNode,
 };
 use std::{
     any::Any,
@@ -47,18 +47,52 @@ impl Display for CapturedPanic {
     }
 }
 
-/// Provide an error boundary to catch errors from child components
-pub fn provide_error_boundary() -> ErrorContext {
-    provide_context(ErrorContext::new(
-        current_scope_id().unwrap_or_else(|e| panic!("{}", e)),
-    ))
+impl Error for CapturedPanic {}
+
+/// A context supplied by fullstack to create hydration compatible error boundaries. Generally, this
+/// is not present and the default in memory error boundary is used. If fullstack is enabled, it will
+/// provide its own factory that handles syncing errors to the hydration context
+#[derive(Clone, Copy)]
+struct CreateErrorBoundary(fn() -> ErrorContext);
+
+impl Default for CreateErrorBoundary {
+    fn default() -> Self {
+        Self(|| ErrorContext::new(Vec::new()))
+    }
+}
+
+/// Provides a method that is used to create error boundaries in `use_error_boundary_provider`.
+/// This is only called from fullstack to create a hydration compatible error boundary
+#[doc(hidden)]
+pub fn provide_create_error_boundary(create_error_boundary: fn() -> ErrorContext) {
+    provide_context(CreateErrorBoundary(create_error_boundary));
+}
+
+/// Create an error boundary with the current error boundary factory (either hydration compatible or default)
+fn create_error_boundary() -> ErrorContext {
+    let create_error_boundary: CreateErrorBoundary = try_consume_context().unwrap_or_default();
+    (create_error_boundary.0)()
+}
+
+/// Provide an error boundary to catch errors from child components. This needs to called in a hydration comptable
+/// order if fullstack is enabled
+pub fn use_error_boundary_provider() -> ErrorContext {
+    use_hook(|| provide_context(create_error_boundary()))
 }
 
 /// A context with information about suspended components
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ErrorContext {
     error: Rc<RefCell<Option<CapturedError>>>,
-    id: ScopeId,
+    subscribers: Subscribers,
+}
+
+impl Debug for ErrorContext {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ErrorContext")
+            .field("errors", &self.errors)
+            .finish()
+    }
 }
 
 impl PartialEq for ErrorContext {
@@ -69,29 +103,46 @@ impl PartialEq for ErrorContext {
 
 impl ErrorContext {
     /// Create a new suspense boundary in a specific scope
-    pub(crate) fn new(id: ScopeId) -> Self {
+    pub fn new(error: CapturedError) -> Self {
         Self {
-            error: Rc::new(RefCell::new(None)),
-            id,
+            error: Rc::new(RefCell::new(Some(error))),
+            subscribers: Subscribers::new(),
         }
     }
 
     /// Get the current error, if any. If multiple components have errored, this will return the first
     /// error that made it to this boundary.
     pub fn error(&self) -> Option<CapturedError> {
+        // Subscribe to the current reactive context if one exists. This is usually
+        // the error boundary component that is rendering the errors
+        if let Some(rc) = ReactiveContext::current() {
+            self.subscribers.add(rc);
+        }
+
         self.error.borrow().clone()
     }
 
     /// Push an error into this Error Boundary
     pub fn insert_error(&self, error: CapturedError) {
-        self.error.borrow_mut().replace(error);
-        self.id.needs_update();
+        self.errors.borrow_mut().replace(error);
+        self.mark_dirty()
     }
 
     /// Clear all errors from this Error Boundary
     pub fn clear_errors(&self) {
         self.error.borrow_mut().take();
-        self.id.needs_update();
+        self.mark_dirty();
+    }
+
+    /// Mark the error context as dirty and notify all subscribers
+    fn mark_dirty(&self) {
+        let mut this_subscribers_vec = Vec::new();
+        self.subscribers
+            .visit(|subscriber| this_subscribers_vec.push(*subscriber));
+        for subscriber in this_subscribers_vec {
+            self.subscribers.remove(&subscriber);
+            subscriber.mark_dirty();
+        }
     }
 }
 
@@ -386,7 +437,7 @@ impl<
 /// ```
 #[allow(non_upper_case_globals, non_snake_case)]
 pub fn ErrorBoundary(props: ErrorBoundaryProps) -> Element {
-    let error_boundary = use_hook(provide_error_boundary);
+    let error_boundary = use_error_boundary_provider();
     let errors = error_boundary.error();
     let has_errors = errors.is_some();
 

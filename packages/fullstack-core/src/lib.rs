@@ -4,6 +4,7 @@
 pub mod document;
 pub mod history;
 
+mod errors;
 mod loader;
 mod server_cached;
 mod server_future;
