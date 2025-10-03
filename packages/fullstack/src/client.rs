@@ -111,6 +111,7 @@ impl ClientRequest {
 
     /// Creates a new reqwest client with cookies set
     pub fn new_reqwest_client() -> reqwest::Client {
+        #[allow(unused_mut)]
         let mut client = reqwest::Client::builder();
 
         #[cfg(not(target_arch = "wasm32"))]
@@ -467,23 +468,28 @@ mod native {
 
     impl ClientResponseDriver for reqwest::Response {
         fn status(&self) -> http::StatusCode {
-            self.status()
+            reqwest::Response::status(self)
         }
 
         fn version(&self) -> http::Version {
-            self.version()
+            #[cfg(target_arch = "wasm32")]
+            {
+                return http::Version::HTTP_2;
+            }
+
+            reqwest::Response::version(self)
         }
 
         fn headers(&self) -> &http::HeaderMap {
-            self.headers()
+            reqwest::Response::headers(self)
         }
 
         fn url(&self) -> &url::Url {
-            self.url()
+            reqwest::Response::url(self)
         }
 
         fn content_length(&self) -> Option<u64> {
-            self.content_length()
+            reqwest::Response::content_length(self)
         }
 
         fn bytes(

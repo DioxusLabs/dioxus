@@ -231,6 +231,7 @@ impl Default for HTMLData {
 }
 
 impl HTMLData {
+    #[allow(unused)]
     fn from_serialized(
         data: &[u8],
         debug_types: Option<Vec<String>>,
@@ -280,7 +281,7 @@ impl HTMLData {
         &mut self,
         id: usize,
         value: &T,
-        location: &'static std::panic::Location<'static>,
+        #[allow(unused)] location: &'static std::panic::Location<'static>,
     ) {
         // let serialized = value.transport_to_bytes();
         let mut serialized = Vec::new();
@@ -380,6 +381,7 @@ impl HTMLData {
 
         let data = base64::engine::general_purpose::STANDARD.encode(serialized);
 
+        #[cfg(debug_assertions)]
         let format_js_list_of_strings = |list: &[Option<String>]| {
             let body = list
                 .iter()

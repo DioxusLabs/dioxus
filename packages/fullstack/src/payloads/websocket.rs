@@ -899,10 +899,6 @@ pub enum Message {
     /// # WASM
     ///
     /// This variant is ignored for WASM targets.
-    #[cfg_attr(
-        target_arch = "wasm32",
-        deprecated(note = "This variant is ignored for WASM targets")
-    )]
     Ping(Bytes),
 
     /// A pong message with the specified payload.
@@ -912,10 +908,6 @@ pub enum Message {
     /// # WASM
     ///
     /// This variant is ignored for WASM targets.
-    #[cfg_attr(
-        target_arch = "wasm32",
-        deprecated(note = "This variant is ignored for WASM targets")
-    )]
     Pong(Bytes),
 
     /// A close message.

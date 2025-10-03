@@ -9,14 +9,12 @@ use dioxus::fullstack::{commit_initial_chunk, Websocket};
 use dioxus::{fullstack::WebSocketOptions, prelude::*};
 
 fn main() {
-    // dioxus::LaunchBuilder::new()
-    //     .with_cfg(server_only! {
-    //         dioxus::server::ServeConfig::builder()
-    //         // dioxus::server::ServeConfig::builder().enable_out_of_order_streaming()
-    //     })
-    //     .with_context(1234u32)
-    //     .launch(app);
-    dioxus::launch(app);
+    dioxus::LaunchBuilder::new()
+        .with_cfg(server_only! {
+            dioxus::server::ServeConfig::builder().enable_out_of_order_streaming()
+        })
+        .with_context(1234u32)
+        .launch(app);
 }
 
 fn app() -> Element {

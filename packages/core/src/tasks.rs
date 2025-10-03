@@ -382,6 +382,7 @@ impl TaskType {
 #[derive(Debug)]
 pub(crate) enum SchedulerMsg {
     /// All components have been marked as dirty, requiring a full render
+    #[allow(unused)]
     AllDirty,
 
     /// Immediate updates from Components that mark them as dirty

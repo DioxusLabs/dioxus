@@ -117,7 +117,7 @@ impl IntoRequest for FileStream {
     #[allow(unreachable_code)]
     fn into_request(
         self,
-        mut builder: ClientRequest,
+        #[allow(unused_mut)] mut builder: ClientRequest,
     ) -> impl Future<Output = ClientResult> + 'static {
         async move {
             let Some(file_data) = self.data else {
