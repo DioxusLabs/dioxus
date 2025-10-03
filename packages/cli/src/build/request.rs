@@ -1193,7 +1193,11 @@ impl BuildRequest {
                 //       since that is a really bad user experience.
                 Message::BuildFinished(finished) => {
                     if !finished.success {
-                        bail!("cargo build finished with errors.")
+                        bail!(
+                            "cargo build finished with errors for target: {} [{}]",
+                            self.main_target,
+                            self.triple
+                        );
                     }
                 }
                 _ => {}
