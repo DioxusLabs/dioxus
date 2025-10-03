@@ -47,7 +47,7 @@ fn app() -> Element {
         DefaultServerFnCodec {}
         DocumentElements {}
         Assets {}
-        // WebSockets {}
+        WebSockets {}
     }
 }
 
