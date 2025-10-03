@@ -123,68 +123,26 @@ where
     S: Send + Sync + Clone + 'static,
 {
     fn serve_static_assets(self) -> Self {
-        self
-        //     let public_path = crate::public_path();
+        let public_path = crate::public_path();
 
-        //     if !public_path.exists() {
-        //         tracing::error!(
-        //             "Public directory not found at {:?}. Static assets will not be served.",
-        //             public_path
-        //         );
-        //         return self;
-        //     }
+        if !public_path.exists() {
+            tracing::error!(
+                "Public directory not found at {:?}. Static assets will not be served.",
+                public_path
+            );
+            return self;
+        }
 
-        //     // Serve all files in public folder except index.html
-        //     // serve_dir_cached(self, &public_path, &public_path)
-
-        //     self.fallback_service(
-        //         ServeDir::new(&public_path)
-        //             .precompressed_br()
-        //             .append_index_html_on_directories(false),
-        //     )
-
-        //     // .let_service(|svc| {
-        //     //     tracing::debug!("Serving static assets from {:?}", &public_path);
-        //     //     self.nest_service("/", svc)
-        //     // })
+        // Serve all files in public folder except index.html
+        serve_dir_cached(self, &public_path, &public_path)
     }
 
     fn serve_dioxus_application(self, cfg: ServeConfig, app: fn() -> Element) -> Self {
-        // self.route(
-        //     "/",
-        //     axum::routing::get(|req: axum::extract::Request| async move {
-        //         //
-        //         Response::builder()
-        //             .status(StatusCode::OK)
-        //             .body(Body::from("Hello, World!"))
-        //             .unwrap()
-        //     }),
-        // )
-
-        // // Add server functions and render index.html
-        // self.register_server_functions().fallback_service(
-        //     ServeDir::new(crate::public_path().as_path()), // .precompressed_br()
-        //                                                    // .append_index_html_on_directories(false),
-        // )
-
-        let mut router = self.register_server_functions();
-
-        for dir in std::fs::read_dir(crate::public_path()).unwrap().flatten() {
-            if !dir.path().is_dir() {
-                continue;
-            }
-
-            router = router.nest_service(
-                &format!("/{}", dir.file_name().to_string_lossy()),
-                ServeDir::new(dir.path())
-                    .precompressed_br()
-                    .append_index_html_on_directories(false),
-            );
-        }
-
-        router.fallback(
-            get(RenderHandleState::render_handler).with_state(RenderHandleState::new(cfg, app)),
-        )
+        self.register_server_functions()
+            .serve_static_assets()
+            .fallback(
+                get(RenderHandleState::render_handler).with_state(RenderHandleState::new(cfg, app)),
+            )
     }
 }
 
