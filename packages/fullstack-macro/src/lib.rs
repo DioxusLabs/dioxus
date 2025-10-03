@@ -108,7 +108,10 @@ pub fn server(_attr: proc_macro::TokenStream, mut item: TokenStream) -> TokenStr
         route_lit: args.fn_path,
         oapi_options: None,
         server_args: Default::default(),
-        prefix: args.prefix,
+        prefix: Some(
+            args.prefix
+                .unwrap_or_else(|| LitStr::new("/api", Span::call_site())),
+        ),
         _input_encoding: args.input,
         _output_encoding: args.output,
     };
@@ -354,9 +357,27 @@ fn route_impl_with_route(
         }
     });
 
+    let as_axum_path = route.to_axum_path_string();
+
     let query_endpoint = if let Some(route_lit) = route.route_lit.as_ref() {
+        let prefix = route
+            .prefix
+            .as_ref()
+            .cloned()
+            .unwrap_or_else(|| LitStr::new("", Span::call_site()))
+            .value();
         let url_without_queries = route_lit.value().split('?').next().unwrap().to_string();
-        quote! { format!(#url_without_queries, #( #path_param_args)*) }
+        let full_url = format!(
+            "{}{}{}",
+            prefix,
+            if url_without_queries.starts_with("/") {
+                ""
+            } else {
+                "/"
+            },
+            url_without_queries
+        );
+        quote! { format!(#full_url, #( #path_param_args)*) }
     } else {
         quote! { __ENDPOINT_PATH.to_string() }
     };
@@ -368,9 +389,8 @@ fn route_impl_with_route(
             .cloned()
             .unwrap_or_else(|| LitStr::new("", Span::call_site()));
 
-        let route_lit = if let Some(_route_lit) = route.route_lit.as_ref() {
-            let path = route.to_axum_path_string();
-            quote! { #path }
+        let route_lit = if !as_axum_path.is_empty() {
+            quote! { #as_axum_path }
         } else {
             quote! {
                 concat!(
