@@ -46,7 +46,7 @@ fn app() -> Element {
     use_effect(move || println!("{:?}", color().components));
 
     rsx!(
-        document::Link { rel: "stylesheet", href: STYLES }
+        document::Stylesheet {  href: STYLES }
         div { id:"overlay",
             h2 { "Control Panel" },
             button {
