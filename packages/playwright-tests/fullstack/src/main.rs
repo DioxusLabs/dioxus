@@ -9,13 +9,14 @@ use dioxus::fullstack::{commit_initial_chunk, Websocket};
 use dioxus::{fullstack::WebSocketOptions, prelude::*};
 
 fn main() {
-    dioxus::LaunchBuilder::new()
-        .with_cfg(server_only! {
-            dioxus::server::ServeConfig::builder()
-            // dioxus::server::ServeConfig::builder().enable_out_of_order_streaming()
-        })
-        .with_context(1234u32)
-        .launch(app);
+    // dioxus::LaunchBuilder::new()
+    //     .with_cfg(server_only! {
+    //         dioxus::server::ServeConfig::builder()
+    //         // dioxus::server::ServeConfig::builder().enable_out_of_order_streaming()
+    //     })
+    //     .with_context(1234u32)
+    //     .launch(app);
+    dioxus::launch(app);
 }
 
 fn app() -> Element {
@@ -23,7 +24,7 @@ fn app() -> Element {
     let mut text = use_signal(|| "...".to_string());
 
     rsx! {
-        document::Title { "hello axum! {count}" }
+        Title { "hello axum! {count}" }
         h1 { "hello axum! {count}" }
         button { class: "increment-button", onclick: move |_| count += 1, "Increment" }
         button {
@@ -46,7 +47,7 @@ fn app() -> Element {
         DefaultServerFnCodec {}
         DocumentElements {}
         Assets {}
-        WebSockets {}
+        // WebSockets {}
     }
 }
 
@@ -168,18 +169,17 @@ fn DocumentElements() -> Element {
 #[component]
 fn Assets() -> Element {
     #[used]
-    static _ASSET: Asset = asset!("/assets/image.png");
+    static _ASSET: Asset = asset!("/assets/logo.png");
     #[used]
     static _OTHER_ASSET: Asset = asset!("/assets/nested");
+    #[used]
+    static _OTHER_ASSET_DIR: Asset = asset!("/assets/nested");
     rsx! {
         img {
-            src: asset!("/assets/image.png"),
+            src: asset!("/assets/logo.png"),
         }
         img {
-            src: "/assets/image.png",
-        }
-        img {
-            src: "/assets/nested/image.png",
+            src: "{_OTHER_ASSET_DIR}/logo.png",
         }
     }
 }

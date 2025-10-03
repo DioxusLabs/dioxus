@@ -424,25 +424,48 @@ pub struct SerializedHydrationData {
 }
 
 /// An error that can occur when trying to take data from the server
-#[derive(thiserror::Error, Debug)]
+#[derive(Debug)]
 pub enum TakeDataError {
     /// Deserializing the data failed
-    #[error("DeserializationError: {0}")]
     DeserializationError(ciborium::de::Error<std::io::Error>),
-
     /// No data was available
-    #[error("DataNotAvailable")]
     DataNotAvailable,
-
     /// The server serialized a placeholder for the data, but it isn't available yet
-    #[error("DataPending")]
     DataPending,
 }
+
+impl std::fmt::Display for TakeDataError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::DeserializationError(e) => write!(f, "DeserializationError: {}", e),
+            Self::DataNotAvailable => write!(f, "DataNotAvailable"),
+            Self::DataPending => write!(f, "DataPending"),
+        }
+    }
+}
+
+impl std::error::Error for TakeDataError {}
 
 /// Create a new entry in the serialize context for the head element hydration
 pub fn head_element_hydration_entry() -> SerializeContextEntry<bool> {
     serialize_context().create_entry()
 }
+
+// /// An error that can occur when trying to take data from the server
+// #[derive(thiserror::Error, Debug)]
+// pub enum TakeDataError {
+//     /// Deserializing the data failed
+//     #[error("DeserializationError: {0}")]
+//     DeserializationError(ciborium::de::Error<std::io::Error>),
+
+//     /// No data was available
+//     #[error("DataNotAvailable")]
+//     DataNotAvailable,
+
+//     /// The server serialized a placeholder for the data, but it isn't available yet
+//     #[error("DataPending")]
+//     DataPending,
+// }
 
 // /// A `Transportable` type can be safely transported from the server to the client, and be used for
 // /// hydration. Not all types can sensibly be transported, but many can. This trait makes it possible
