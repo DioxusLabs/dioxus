@@ -1,3 +1,5 @@
+#![doc = include_str!("../README-docs-rs.md")]
+
 /// A macro for deciding whether or not to split the wasm bundle.
 /// Used by the internal router-macro code. The contents here are considered to be semver exempt.
 ///
