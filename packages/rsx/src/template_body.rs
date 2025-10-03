@@ -54,11 +54,11 @@
 //! ```
 
 use self::location::DynIdx;
-use crate::innerlude::Attribute;
 use crate::*;
+use crate::{expression_pool::ExpressionPool, innerlude::Attribute};
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use proc_macro2_diagnostics::SpanDiagnosticExt;
-use syn::parse_quote;
+use syn::{parse_quote, Ident};
 
 type NodePath = Vec<u8>;
 type AttributePath = Vec<u8>;
@@ -81,6 +81,8 @@ pub struct TemplateBody {
     pub attr_paths: Vec<(AttributePath, usize)>,
     pub dynamic_text_segments: Vec<FormattedSegment>,
     pub diagnostics: Diagnostics,
+    pub(crate) node_bindings: Vec<Ident>,
+    pub(crate) expression_pool: ExpressionPool,
 }
 
 impl Parse for TemplateBody {
@@ -117,20 +119,21 @@ impl ToTokens for TemplateBody {
 
         // For printing dynamic nodes, we rely on the ToTokens impl
         // Elements have a weird ToTokens - they actually are the entrypoint for Template creation
-        let dynamic_nodes: Vec<_> = node.dynamic_nodes().collect();
+        let dynamic_nodes = &node.node_bindings;
         let dynamic_nodes_len = dynamic_nodes.len();
 
         // We could add a ToTokens for Attribute but since we use that for both components and elements
         // They actually need to be different, so we just localize that here
         let dyn_attr_printer: Vec<_> = node
             .dynamic_attributes()
-            .map(|attr| attr.rendered_as_dynamic_attr())
+            .map(|attr| attr.get_value_expression_binding())
             .collect();
         let dynamic_attr_len = dyn_attr_printer.len();
 
         let dynamic_text = node.dynamic_text_segments.iter();
 
         let diagnostics = &node.diagnostics;
+        let expression_pool = &node.expression_pool;
         let index = node.template_idx.get();
         let hot_reload_mapping = node.hot_reload_mapping();
 
@@ -178,6 +181,12 @@ impl ToTokens for TemplateBody {
                 let mut __dynamic_literal_pool = dioxus_core::internal::DynamicLiteralPool::new(
                     vec![ #( #dynamic_text.to_string() ),* ],
                 );
+
+                // The expression pool contains all expressions used in the template in depth-first order. It helps
+                // prevent odd out of order borrowing issues because we expand all nodes before attribute. We must expand
+                // the pool after the dynamic literal pool so we have access to literals and before the dynamic nodes
+                // where the bindings are used
+                #expression_pool
 
                 // The key needs to be created before the dynamic nodes as it might depend on a borrowed value which gets moved into the dynamic nodes
                 #[cfg(not(debug_assertions))]
@@ -235,6 +244,8 @@ impl TemplateBody {
             attr_paths: Vec::new(),
             dynamic_text_segments: Vec::new(),
             diagnostics: Diagnostics::new(),
+            node_bindings: Default::default(),
+            expression_pool: Default::default(),
         };
 
         // Assign paths to all nodes in the template
@@ -303,8 +314,9 @@ impl TemplateBody {
     }
 
     pub fn get_dyn_node(&self, path: &[u8]) -> &BodyNode {
-        let mut node = self.roots.get(path[0] as usize).unwrap();
-        for idx in path.iter().skip(1) {
+        let mut path_iter = path.iter();
+        let mut node = self.roots.get(*path_iter.next().unwrap() as usize).unwrap();
+        for idx in path_iter {
             node = node.element_children().get(*idx as usize).unwrap();
         }
         node

@@ -92,14 +92,15 @@ impl Parse for Element {
         // merged attributes in path order stops before we hit the spreads, but spreads are still
         // counted as dynamic attributes
         for spread in block.spreads.iter() {
-            element.merged_attributes.push(Attribute {
-                name: AttributeName::Spread(spread.dots),
-                colon: None,
-                value: AttributeValue::AttrExpr(PartialExpr::from_expr(&spread.expr)),
-                comma: spread.comma,
-                dyn_idx: spread.dyn_idx.clone(),
-                el_name: Some(name.clone()),
-            });
+            let attribute = Attribute::from_parts(
+                AttributeName::Spread(spread.dots),
+                None,
+                AttributeValue::AttrExpr(PartialExpr::from_expr(&spread.expr)),
+                spread.comma,
+                Some(name.clone()),
+            );
+            attribute.set_dyn_idx(spread.dyn_idx.get());
+            element.merged_attributes.push(attribute);
         }
 
         Ok(element)
@@ -289,14 +290,15 @@ impl Element {
 
             let out_lit = HotLiteral::Fmted(out.into());
 
-            self.merged_attributes.push(Attribute {
-                name: attr.name.clone(),
-                value: AttributeValue::AttrLiteral(out_lit),
-                colon: attr.colon,
-                dyn_idx: attr.dyn_idx.clone(),
-                comma: matching_attrs.last().unwrap().comma,
-                el_name: attr.el_name.clone(),
-            });
+            let attribute = Attribute::from_parts(
+                attr.name.clone(),
+                attr.colon,
+                AttributeValue::AttrLiteral(out_lit),
+                matching_attrs.last().unwrap().comma,
+                attr.el_name.clone(),
+            );
+            attribute.set_dyn_idx(attr.dyn_idx.get());
+            self.merged_attributes.push(attribute);
         }
     }
 
@@ -401,6 +403,8 @@ impl Display for ElementName {
 
 #[cfg(test)]
 mod tests {
+    use crate::CallBody;
+
     use super::*;
     use prettier_please::PrettyUnparse;
 
@@ -476,6 +480,16 @@ mod tests {
         };
 
         let parsed: Element = syn::parse2(input).unwrap();
+        dbg!(parsed);
+    }
+
+    #[test]
+    fn parses_spread() {
+        let input = quote::quote! {
+            div { ..attributes, "card" }
+        };
+
+        let parsed: CallBody = syn::parse2(input).unwrap();
         dbg!(parsed);
     }
 

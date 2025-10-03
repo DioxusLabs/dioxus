@@ -142,7 +142,10 @@ fn SearchBox(mut country: WriteSignal<WeatherLocation>) -> Element {
                     if let Some(Ok(locs)) = locations.read().as_ref() {
                         for wl in locs.iter().take(5).cloned() {
                             li { class: "pl-8 pr-2 py-1 border-b-2 border-gray-100 relative cursor-pointer hover:bg-yellow-50 hover:text-gray-900",
-                                onclick: move |_| country.set(wl.clone()),
+                                onclick: {
+                                    to_owned![wl];
+                                    move |_| country.set(wl.clone())
+                                },
                                 MapIcon {}
                                 b { "{wl.name}" }
                                 " · {wl.country}"
