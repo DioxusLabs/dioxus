@@ -1355,7 +1355,6 @@ impl BuildRequest {
 
     async fn write_frameworks(&self, _ctx: &BuildContext, direct_rustc: &RustcArgs) -> Result<()> {
         let framework_dir = self.frameworks_folder();
-        _ = std::fs::create_dir_all(&framework_dir);
 
         // We have some prebuilt stuff that needs to be copied into the framework dir
         let openssl_dir = AndroidTools::openssl_lib_dir(&self.triple);
@@ -1373,6 +1372,8 @@ impl BuildRequest {
 
                 tracing::debug!("Copying framework from {from:?} to {to:?}");
 
+                _ = std::fs::create_dir_all(&framework_dir);
+
                 // in dev and on normal oses, we want to symlink the file
                 // otherwise, just copy it (since in release you want to distribute the framework)
                 if cfg!(any(windows, unix)) && !self.release {
@@ -1388,6 +1389,11 @@ impl BuildRequest {
                 } else {
                     std::fs::copy(from, to)?;
                 }
+            }
+
+            // Always create the framework dir for android
+            if self.bundle == BundleFormat::Android {
+                _ = std::fs::create_dir_all(&framework_dir);
             }
 
             // On android, the c++_shared flag means we need to copy the libc++_shared.so precompiled
