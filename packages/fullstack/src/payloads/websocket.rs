@@ -573,8 +573,20 @@ impl IntoRequest<UpgradingWebsocket> for WebSocketOptions {
         async move {
             #[cfg(feature = "web")]
             if cfg!(target_arch = "wasm32") {
+                let url_path = request.url().path();
+                let url_query = request.url().query();
+                let url_fragment = request.url().fragment();
+                let path_and_query = format!(
+                    "{}{}{}",
+                    url_path,
+                    url_query.map_or("".to_string(), |q| format!("?{q}")),
+                    url_fragment.map_or("".to_string(), |f| format!("#{f}"))
+                );
+
                 let socket = gloo_net::websocket::futures::WebSocket::open_with_protocols(
-                    request.url().as_ref(),
+                    // ! very important we use the path here and not the full url on web.
+                    // for as long as serverfns are meant to target the same origin, this is fine.
+                    &path_and_query,
                     &self
                         .protocols
                         .iter()

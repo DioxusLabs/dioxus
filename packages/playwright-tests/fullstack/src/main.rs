@@ -192,6 +192,8 @@ fn WebSockets() -> Element {
     use_future(move || async move {
         let socket = echo_ws(WebSocketOptions::default()).await.unwrap();
 
+        socket.send("hello world".to_string()).await.unwrap();
+
         while let Ok(msg) = socket.recv().await {
             received.write().push_str(&msg);
         }
@@ -205,11 +207,15 @@ fn WebSockets() -> Element {
     }
 }
 
-#[server]
+#[get("/api/echo_ws")]
 async fn echo_ws(options: WebSocketOptions) -> Result<Websocket> {
-    Ok(options.on_upgrade(|mut tx| async move {
-        while let Ok(msg) = tx.recv().await {
-            let _ = tx.send(msg).await;
-        }
-    }))
+    info!("Upgrading to websocket");
+
+    Ok(options.on_upgrade(
+        |mut tx: dioxus::fullstack::TypedWebsocket<String, String>| async move {
+            while let Ok(msg) = tx.recv().await {
+                let _ = tx.send(msg.to_ascii_uppercase()).await;
+            }
+        },
+    ))
 }

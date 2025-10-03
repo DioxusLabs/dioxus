@@ -144,12 +144,11 @@ async fn serve_server(
                     .await
                     .unwrap();
 
-                    let tower_service = make_service.call(()).await.unwrap().map_request(
-                        |req: Request<Incoming>| {
-                            tracing::debug!("Received request: {}", req.uri());
-                            req.map(Body::new)
-                        },
-                    );
+                    let tower_service = make_service
+                        .call(())
+                        .await
+                        .unwrap()
+                        .map_request(|req: Request<Incoming>| req.map(Body::new));
 
                     // upgrades needed for websockets
                     let builder = HyperBuilder::new(TokioExecutor::new());

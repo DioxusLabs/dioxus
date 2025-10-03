@@ -35,7 +35,7 @@ impl ClientRequest {
         let mut server_url = get_server_url();
 
         if server_url.is_empty() {
-            server_url = "http://localhost:8080";
+            server_url = "http://this.is.not.a.real.url:9000";
         }
 
         let url = format!(
