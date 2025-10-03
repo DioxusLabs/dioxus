@@ -298,15 +298,6 @@ jobs:
               platform: "ios",
             }
           - {
-              target: x86_64-unknown-linux-gnu,
-              os: ubuntu-24.04,
-              toolchain: "1.86.0",
-              cross: false,
-              command: "build",
-              args: "--all --tests",
-              platform: "desktop",
-            }
-          - {
               target: aarch64-unknown-linux-gnu,
               os: ubuntu-24.04-arm,
               toolchain: "1.86.0",
@@ -324,6 +315,16 @@ jobs:
               args: "--package dioxus-desktop",
               platform: "android",
             }
+            # commented out because it's having issues with space on the device, but we already test it above
+          # - {
+          #     target: x86_64-unknown-linux-gnu,
+          #     os: ubuntu-24.04,
+          #     toolchain: "1.86.0",
+          #     cross: false,
+          #     command: "build",
+          #     args: "--all --tests",
+          #     platform: "desktop",
+          #   }
 
     steps:
       - uses: actions/checkout@v5
