@@ -204,10 +204,9 @@ impl<S: Send + Sync + Clone + 'static> DioxusRouterFnExt<S> for Router<S> {
     where
         Self: Sized,
     {
-        todo!()
-        // self.register_server_functions().fallback(
-        //     get(RenderHandleState::render_handler).with_state(RenderHandleState::new(cfg, app)),
-        // )
+        self.register_server_functions().fallback(
+            get(RenderHandleState::render_handler).with_state(RenderHandleState::new(cfg, app)),
+        )
     }
 }
 

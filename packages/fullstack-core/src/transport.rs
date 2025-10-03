@@ -3,7 +3,7 @@
 
 use base64::Engine;
 use dioxus_core::CapturedError;
-use serde::{de::DeserializeOwned, Serialize};
+use serde::Serialize;
 use std::{cell::RefCell, io::Cursor, rc::Rc};
 // use base64::Engine;
 // use dioxus_core::{CapturedError, Error};
