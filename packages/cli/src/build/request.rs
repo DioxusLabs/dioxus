@@ -2463,7 +2463,7 @@ impl BuildRequest {
                 target_lexicon::Architecture::Wasm32 | target_lexicon::Architecture::Wasm64
             ) || self.triple.operating_system == OperatingSystem::Wasi
             {
-                cargo_args.push("-Ctarget-cpu=mvp".into());
+                // cargo_args.push("-Ctarget-cpu=mvp".into()); // disabled due to changes in wasm-bindgne
                 cargo_args.push("-Clink-arg=--no-gc-sections".into());
                 cargo_args.push("-Clink-arg=--growable-table".into());
                 cargo_args.push("-Clink-arg=--export-table".into());
@@ -2503,13 +2503,14 @@ impl BuildRequest {
         }
 
         // Assemble the rustflags by peering into the `.cargo/config.toml` file
-        let mut rust_flags = self.rustflags.clone();
+        let rust_flags = self.rustflags.clone();
 
-        // Disable reference types on wasm when using hotpatching
-        // https://blog.rust-lang.org/2024/09/24/webassembly-targets-change-in-default-target-features/#disabling-on-by-default-webassembly-proposals
-        if self.is_wasm_or_wasi() && matches!(build_mode, BuildMode::Thin { .. } | BuildMode::Fat) {
-            rust_flags.flags.push("-Ctarget-cpu=mvp".to_string());
-        }
+        // seems like this is fixed?
+        // // Disable reference types on wasm when using hotpatching
+        // // https://blog.rust-lang.org/2024/09/24/webassembly-targets-change-in-default-target-features/#disabling-on-by-default-webassembly-proposals
+        // if self.is_wasm_or_wasi() && matches!(build_mode, BuildMode::Thin { .. } | BuildMode::Fat) {
+        //     rust_flags.flags.push("-Ctarget-cpu=mvp".to_string());
+        // }
 
         // Set the rust flags for the build if they're not empty.
         if !rust_flags.flags.is_empty() {
