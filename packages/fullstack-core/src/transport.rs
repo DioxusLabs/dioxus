@@ -2,9 +2,13 @@
 #![doc = include_str!("../README.md")]
 
 use base64::Engine;
-use dioxus_core::{CapturedError, Error};
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use std::{cell::RefCell, io::Cursor, rc::Rc, sync::Arc};
+use dioxus_core::CapturedError;
+use serde::{de::DeserializeOwned, Serialize};
+use std::{cell::RefCell, io::Cursor, rc::Rc};
+// use base64::Engine;
+// use dioxus_core::{CapturedError, Error};
+// use serde::{de::DeserializeOwned, Deserialize, Serialize};
+// use std::{cell::RefCell, io::Cursor, rc::Rc, sync::Arc};
 
 #[cfg(feature = "web")]
 thread_local! {
@@ -84,7 +88,8 @@ impl HydrationContext {
         })
     }
 
-    pub(crate) fn insert<T: Transportable<M>, M: 'static>(
+    // pub(crate) fn insert<T: Transportable<M>, M: 'static>(
+    pub(crate) fn insert<T: Serialize>(
         &self,
         id: usize,
         value: &T,
@@ -93,7 +98,8 @@ impl HydrationContext {
         self.data.borrow_mut().insert(id, value, location);
     }
 
-    pub(crate) fn get<T: Transportable<M>, M: 'static>(
+    // pub(crate) fn get<T: Transportable<M>, M: 'static>(
+    pub(crate) fn get<T: serde::de::DeserializeOwned>(
         &self,
         id: usize,
     ) -> Result<T, TakeDataError> {
@@ -128,20 +134,35 @@ impl<T> Clone for SerializeContextEntry<T> {
 
 impl<T> SerializeContextEntry<T> {
     /// Insert data into an entry that was created with [`HydrationContext::create_entry`]
-    pub fn insert<M: 'static>(self, value: &T, location: &'static std::panic::Location<'static>)
+    pub fn insert(self, value: &T, location: &'static std::panic::Location<'static>)
     where
-        T: Transportable<M>,
+        T: Serialize,
     {
         self.context.insert(self.index, value, location);
     }
 
     /// Grab the data from the serialize context
-    pub fn get<M: 'static>(&self) -> Result<T, TakeDataError>
+    pub fn get(&self) -> Result<T, TakeDataError>
     where
-        T: Transportable<M>,
+        T: serde::de::DeserializeOwned,
     {
         self.context.get(self.index)
     }
+    // /// Insert data into an entry that was created with [`HydrationContext::create_entry`]
+    // pub fn insert<M: 'static>(self, value: &T, location: &'static std::panic::Location<'static>)
+    // where
+    //     T: Transportable<M>,
+    // {
+    //     self.context.insert(self.index, value, location);
+    // }
+
+    // /// Grab the data from the serialize context
+    // pub fn get<M: 'static>(&self) -> Result<T, TakeDataError>
+    // where
+    //     T: Transportable<M>,
+    // {
+    //     self.context.get(self.index)
+    // }
 }
 
 /// Check if the client is currently rendering a component for hydration. Always returns true on the server.
@@ -254,13 +275,16 @@ impl HTMLData {
     }
 
     /// Insert data into an entry that was created with [`Self::create_entry`]
-    fn insert<T: Transportable<M>, M: 'static>(
+    // fn insert<T: Transportable<M>, M: 'static>(
+    fn insert<T: Serialize>(
         &mut self,
         id: usize,
         value: &T,
         location: &'static std::panic::Location<'static>,
     ) {
-        let serialized = value.transport_to_bytes();
+        // let serialized = value.transport_to_bytes();
+        let mut serialized = Vec::new();
+        ciborium::into_writer(value, &mut serialized).unwrap();
         self.data[id] = Some(serialized);
         #[cfg(debug_assertions)]
         {
@@ -270,7 +294,8 @@ impl HTMLData {
     }
 
     /// Get the data from the serialize context
-    fn get<T: Transportable<M>, M: 'static>(&self, index: usize) -> Result<T, TakeDataError> {
+    // fn get<T: Transportable<M>, M: 'static>(&self, index: usize) -> Result<T, TakeDataError> {
+    fn get<T: serde::de::DeserializeOwned>(&self, index: usize) -> Result<T, TakeDataError> {
         if index >= self.data.len() {
             tracing::trace!(
                 "Tried to take more data than was available, len: {}, index: {}; This is normal if the server function was started on the client, but may indicate a bug if the server function result should be deserialized from the server",
@@ -281,7 +306,8 @@ impl HTMLData {
         }
         let bytes = self.data[index].as_ref();
         match bytes {
-            Some(bytes) => match T::transport_from_bytes(bytes) {
+            Some(bytes) => match ciborium::from_reader(Cursor::new(bytes)) {
+                // Some(bytes) => match T::transport_from_bytes(bytes) {
                 Ok(x) => Ok(x),
                 Err(err) => {
                     #[cfg(debug_assertions)]
@@ -418,103 +444,103 @@ pub fn head_element_hydration_entry() -> SerializeContextEntry<bool> {
     serialize_context().create_entry()
 }
 
-/// A `Transportable` type can be safely transported from the server to the client, and be used for
-/// hydration. Not all types can sensibly be transported, but many can. This trait makes it possible
-/// to customize how types are transported which helps for non-serializable types like `dioxus_core::Error`.
-///
-/// By default, all types that implement `Serialize` and `DeserializeOwned` are transportable.
-///
-/// You can also implement `Transportable` for `Result<T, dioxus_core::Error>` where `T` is
-/// `Serialize` and `DeserializeOwned` to allow transporting results that may contain errors.
-///
-/// Note that transporting a `Result<T, dioxus_core::Error>` will lose various aspects of the original
-/// `dioxus_core::Error` such as backtraces and source errors, but will preserve the error message.
-pub trait Transportable<M = ()>: 'static {
-    /// Serialize the type to a byte vector for transport
-    fn transport_to_bytes(&self) -> Vec<u8>;
+// /// A `Transportable` type can be safely transported from the server to the client, and be used for
+// /// hydration. Not all types can sensibly be transported, but many can. This trait makes it possible
+// /// to customize how types are transported which helps for non-serializable types like `dioxus_core::Error`.
+// ///
+// /// By default, all types that implement `Serialize` and `DeserializeOwned` are transportable.
+// ///
+// /// You can also implement `Transportable` for `Result<T, dioxus_core::Error>` where `T` is
+// /// `Serialize` and `DeserializeOwned` to allow transporting results that may contain errors.
+// ///
+// /// Note that transporting a `Result<T, dioxus_core::Error>` will lose various aspects of the original
+// /// `dioxus_core::Error` such as backtraces and source errors, but will preserve the error message.
+// pub trait Transportable<M = ()>: 'static {
+//     /// Serialize the type to a byte vector for transport
+//     fn transport_to_bytes(&self) -> Vec<u8>;
 
-    /// Deserialize the type from a byte slice
-    fn transport_from_bytes(bytes: &[u8]) -> Result<Self, ciborium::de::Error<std::io::Error>>
-    where
-        Self: Sized;
-}
+//     /// Deserialize the type from a byte slice
+//     fn transport_from_bytes(bytes: &[u8]) -> Result<Self, ciborium::de::Error<std::io::Error>>
+//     where
+//         Self: Sized;
+// }
 
-impl<T> Transportable<()> for T
-where
-    T: Serialize + DeserializeOwned + 'static,
-{
-    fn transport_to_bytes(&self) -> Vec<u8> {
-        let mut serialized = Vec::new();
-        ciborium::into_writer(self, &mut serialized).unwrap();
-        serialized
-    }
+// impl<T> Transportable<()> for T
+// where
+//     T: Serialize + DeserializeOwned + 'static,
+// {
+//     fn transport_to_bytes(&self) -> Vec<u8> {
+//         let mut serialized = Vec::new();
+//         ciborium::into_writer(self, &mut serialized).unwrap();
+//         serialized
+//     }
 
-    fn transport_from_bytes(bytes: &[u8]) -> Result<Self, ciborium::de::Error<std::io::Error>>
-    where
-        Self: Sized,
-    {
-        ciborium::from_reader(Cursor::new(bytes))
-    }
-}
+//     fn transport_from_bytes(bytes: &[u8]) -> Result<Self, ciborium::de::Error<std::io::Error>>
+//     where
+//         Self: Sized,
+//     {
+//         ciborium::from_reader(Cursor::new(bytes))
+//     }
+// }
 
-#[derive(Serialize, Deserialize)]
-struct TransportResultErr<T> {
-    error: Result<T, CapturedError>,
-}
+// #[derive(Serialize, Deserialize)]
+// struct TransportResultErr<T> {
+//     error: Result<T, CapturedError>,
+// }
 
-#[doc(hidden)]
-pub struct TransportViaErrMarker;
+// #[doc(hidden)]
+// pub struct TransportViaErrMarker;
 
-impl<T> Transportable<TransportViaErrMarker> for Result<T, dioxus_core::Error>
-where
-    T: Serialize + DeserializeOwned + 'static,
-{
-    fn transport_to_bytes(&self) -> Vec<u8> {
-        let err = TransportResultErr {
-            error: self
-                .as_ref()
-                .map_err(|e| CapturedError::from_display(e.to_string())),
-        };
+// impl<T> Transportable<TransportViaErrMarker> for Result<T, dioxus_core::Error>
+// where
+//     T: Serialize + DeserializeOwned + 'static,
+// {
+//     fn transport_to_bytes(&self) -> Vec<u8> {
+//         let err = TransportResultErr {
+//             error: self
+//                 .as_ref()
+//                 .map_err(|e| CapturedError::from_display(e.to_string())),
+//         };
 
-        let mut serialized = Vec::new();
-        ciborium::into_writer(&err, &mut serialized).unwrap();
-        serialized
-    }
+//         let mut serialized = Vec::new();
+//         ciborium::into_writer(&err, &mut serialized).unwrap();
+//         serialized
+//     }
 
-    fn transport_from_bytes(bytes: &[u8]) -> Result<Self, ciborium::de::Error<std::io::Error>>
-    where
-        Self: Sized,
-    {
-        let err: TransportResultErr<T> = ciborium::from_reader(Cursor::new(bytes))?;
-        match err.error {
-            Ok(value) => Ok(Ok(value)),
-            Err(captured) => Ok(Err(dioxus_core::Error::msg(captured.to_string()))),
-        }
-    }
-}
+//     fn transport_from_bytes(bytes: &[u8]) -> Result<Self, ciborium::de::Error<std::io::Error>>
+//     where
+//         Self: Sized,
+//     {
+//         let err: TransportResultErr<T> = ciborium::from_reader(Cursor::new(bytes))?;
+//         match err.error {
+//             Ok(value) => Ok(Ok(value)),
+//             Err(captured) => Ok(Err(dioxus_core::Error::msg(captured.to_string()))),
+//         }
+//     }
+// }
 
-#[doc(hidden)]
-pub struct TransportCapturedError;
-#[derive(Serialize, Deserialize)]
-struct TransportError {
-    error: String,
-}
-impl Transportable<TransportCapturedError> for CapturedError {
-    fn transport_to_bytes(&self) -> Vec<u8> {
-        let err = TransportError {
-            error: self.to_string(),
-        };
+// #[doc(hidden)]
+// pub struct TransportCapturedError;
+// #[derive(Serialize, Deserialize)]
+// struct TransportError {
+//     error: String,
+// }
+// impl Transportable<TransportCapturedError> for CapturedError {
+//     fn transport_to_bytes(&self) -> Vec<u8> {
+//         let err = TransportError {
+//             error: self.to_string(),
+//         };
 
-        let mut serialized = Vec::new();
-        ciborium::into_writer(&err, &mut serialized).unwrap();
-        serialized
-    }
+//         let mut serialized = Vec::new();
+//         ciborium::into_writer(&err, &mut serialized).unwrap();
+//         serialized
+//     }
 
-    fn transport_from_bytes(bytes: &[u8]) -> Result<Self, ciborium::de::Error<std::io::Error>>
-    where
-        Self: Sized,
-    {
-        let err: TransportError = ciborium::from_reader(Cursor::new(bytes))?;
-        Ok(CapturedError(Arc::new(Error::msg::<String>(err.error))))
-    }
-}
+//     fn transport_from_bytes(bytes: &[u8]) -> Result<Self, ciborium::de::Error<std::io::Error>>
+//     where
+//         Self: Sized,
+//     {
+//         let err: TransportError = ciborium::from_reader(Cursor::new(bytes))?;
+//         Ok(CapturedError(Arc::new(Error::msg::<String>(err.error))))
+//     }
+// }

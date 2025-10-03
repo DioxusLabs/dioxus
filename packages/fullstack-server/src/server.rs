@@ -126,6 +126,10 @@ where
         let public_path = crate::public_path();
 
         if !public_path.exists() {
+            tracing::error!(
+                "Public directory not found at {:?}. Static assets will not be served.",
+                public_path
+            );
             return self;
         }
 
@@ -379,6 +383,8 @@ where
         let route = path_components_to_route_lossy(route);
 
         if path.is_dir() {
+            tracing::debug!("Serving static directory at route: {}", &route);
+
             // router = serve_dir_cached(router, public_path, &path);
             router = router.nest_service(
                 &route,
@@ -387,6 +393,8 @@ where
                     .append_index_html_on_directories(false),
             );
         } else {
+            tracing::debug!("Serving static asset at route: {}", &route);
+
             let serve_file = ServeFile::new(&path).precompressed_br();
             // All cached assets are served at the root of the asset directory. If we know an asset
             // is hashed for cache busting, we can cache the response on the client side forever. If

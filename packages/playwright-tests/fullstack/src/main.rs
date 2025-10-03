@@ -11,7 +11,8 @@ use dioxus::{fullstack::WebSocketOptions, prelude::*};
 fn main() {
     dioxus::LaunchBuilder::new()
         .with_cfg(server_only! {
-            dioxus::server::ServeConfig::builder().enable_out_of_order_streaming()
+            dioxus::server::ServeConfig::builder()
+            // dioxus::server::ServeConfig::builder().enable_out_of_order_streaming()
         })
         .with_context(1234u32)
         .launch(app);

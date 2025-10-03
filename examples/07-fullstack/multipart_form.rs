@@ -17,6 +17,7 @@ fn app() -> Element {
 
     rsx! {
         Stylesheet { href: asset!("/examples/assets/file_upload.css") }
+        img { src: asset!("/examples/assets/logo.png"), width: "200px" }
         div {
             h3 { "Upload as Multipart" }
             p { "Use the built-in multipart form handling" }

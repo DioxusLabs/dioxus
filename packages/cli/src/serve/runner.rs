@@ -209,8 +209,6 @@ impl AppServer {
 
         // Only register the hot-reload stuff if we're watching the filesystem
         if runner.watch_fs {
-            println!("Watching for file changes...");
-
             // Spin up the notify watcher
             // When builds load though, we're going to parse their depinfo and add the paths to the watcher
             runner.watch_filesystem();
@@ -221,8 +219,6 @@ impl AppServer {
             // really, we should be using depinfo to get the files that are actually used, but the depinfo file might not be around yet
             // todo(jon): see if we can just guess the depinfo file before it generates. might be stale but at least it catches most of the files
             runner.load_rsx_filemap();
-
-            println!("done watching changes");
         }
 
         Ok(runner)
