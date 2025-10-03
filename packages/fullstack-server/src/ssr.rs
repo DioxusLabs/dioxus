@@ -178,7 +178,7 @@ impl SsrRendererPool {
                 provide_fullstack_history_context(history);
                 // Provide a hydration compatible error boundary that serializes errors for the client
                 dioxus_core::provide_create_error_boundary(
-                    dioxus_fullstack_hooks::errors::init_error_boundary,
+                    dioxus_fullstack_core::init_error_boundary,
                 );
             });
 
@@ -489,7 +489,7 @@ impl SsrRendererPool {
     fn start_capturing_errors(suspense_scope: ScopeId) {
         // Add an error boundary to the scope. We serialize the suspense error boundary separately so we can use
         // the normal in memory ErrorContext here
-        suspense_scope.in_runtime(|| dioxus_core::provide_context(ErrorContext::new(Vec::new())));
+        suspense_scope.in_runtime(|| dioxus_core::provide_context(ErrorContext::new(None)));
     }
 
     fn serialize_server_data(virtual_dom: &VirtualDom, scope: ScopeId) -> SerializedHydrationData {

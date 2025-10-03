@@ -1,8 +1,7 @@
 use crate::{
-    global_context::current_scope_id,
     innerlude::{provide_context, CapturedError},
-    use_hook, Element, IntoDynNode, Properties, ScopeId, Subscribers, Template, TemplateAttribute,
-    TemplateNode, VNode,
+    try_consume_context, use_hook, Element, IntoDynNode, Properties, ReactiveContext, Subscribers,
+    Template, TemplateAttribute, TemplateNode, VNode,
 };
 use std::{
     any::Any,
@@ -47,8 +46,6 @@ impl Display for CapturedPanic {
     }
 }
 
-impl Error for CapturedPanic {}
-
 /// A context supplied by fullstack to create hydration compatible error boundaries. Generally, this
 /// is not present and the default in memory error boundary is used. If fullstack is enabled, it will
 /// provide its own factory that handles syncing errors to the hydration context
@@ -57,7 +54,7 @@ struct CreateErrorBoundary(fn() -> ErrorContext);
 
 impl Default for CreateErrorBoundary {
     fn default() -> Self {
-        Self(|| ErrorContext::new(Vec::new()))
+        Self(|| ErrorContext::new(None))
     }
 }
 
@@ -90,7 +87,7 @@ pub struct ErrorContext {
 impl Debug for ErrorContext {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ErrorContext")
-            .field("errors", &self.errors)
+            .field("error", &self.error)
             .finish()
     }
 }
@@ -103,9 +100,9 @@ impl PartialEq for ErrorContext {
 
 impl ErrorContext {
     /// Create a new suspense boundary in a specific scope
-    pub fn new(error: CapturedError) -> Self {
+    pub fn new(error: Option<CapturedError>) -> Self {
         Self {
-            error: Rc::new(RefCell::new(Some(error))),
+            error: Rc::new(RefCell::new(error)),
             subscribers: Subscribers::new(),
         }
     }
@@ -124,7 +121,7 @@ impl ErrorContext {
 
     /// Push an error into this Error Boundary
     pub fn insert_error(&self, error: CapturedError) {
-        self.errors.borrow_mut().replace(error);
+        self.error.borrow_mut().replace(error);
         self.mark_dirty()
     }
 

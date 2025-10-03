@@ -11,6 +11,7 @@ mod server_future;
 mod streaming;
 mod transport;
 
+pub use crate::errors::*;
 pub use crate::loader::*;
 pub use crate::server_cached::*;
 pub use crate::server_future::*;
