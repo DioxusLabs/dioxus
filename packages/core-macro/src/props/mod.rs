@@ -855,17 +855,19 @@ Finally, call `.build()` to create the instance of `{name}`.
                     let ty = f.ty;
                     quote!(#name: #ty)
                 })
-                .chain(self.has_child_owned_fields().then(|| quote!(owner: Owner)));
+                .chain(
+                    self.has_child_owned_fields()
+                        .then(|| quote!(owner: dioxus_core::internal::generational_box::Owner)),
+                );
             let global_fields_value = self
                 .extend_fields()
                 .map(|f| {
                     let name = f.extends_vec_ident();
                     quote!(#name: Vec::new())
                 })
-                .chain(
-                    self.has_child_owned_fields()
-                        .then(|| quote!(owner: Owner::default())),
-                );
+                .chain(self.has_child_owned_fields().then(
+                    || quote!(owner: dioxus_core::internal::generational_box::Owner::default()),
+                ));
 
             Ok(quote! {
                 impl #impl_generics #name #ty_generics #where_clause {

@@ -9,32 +9,32 @@ impl HasScrollData for Synthetic<Event> {
         &self.event
     }
 
-    fn scroll_top(&self) -> i32 {
+    fn scroll_top(&self) -> f64 {
         if let Some(target) = self.event.target().as_ref() {
             if let Some(element) = target.dyn_ref::<Element>() {
-                return element.scroll_top();
+                return element.scroll_top() as f64;
             } else if let Some(element) = target
                 .dyn_ref::<Document>()
                 .and_then(|document| document.document_element())
             {
-                return element.scroll_top();
+                return element.scroll_top() as f64;
             }
         }
-        0
+        0f64
     }
 
-    fn scroll_left(&self) -> i32 {
+    fn scroll_left(&self) -> f64 {
         if let Some(target) = self.event.target().as_ref() {
             if let Some(element) = target.dyn_ref::<Element>() {
-                return element.scroll_left();
+                return element.scroll_left() as f64;
             } else if let Some(element) = target
                 .dyn_ref::<Document>()
                 .and_then(|document| document.document_element())
             {
-                return element.scroll_left();
+                return element.scroll_left() as f64;
             }
         }
-        0
+        0f64
     }
 
     fn scroll_width(&self) -> i32 {

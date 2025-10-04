@@ -70,12 +70,12 @@ pub struct SerializedPointInteraction {
     /// The horizontal coordinate within the application's viewport at which the event occurred (as opposed to the coordinate within the page).
     ///
     /// For example, clicking on the left edge of the viewport will always result in a mouse event with a clientX value of 0, regardless of whether the page is scrolled horizontally.
-    pub client_x: i32,
+    pub client_x: f64,
 
     /// The vertical coordinate within the application's viewport at which the event occurred (as opposed to the coordinate within the page).
     ///
     /// For example, clicking on the top edge of the viewport will always result in a mouse event with a clientY value of 0, regardless of whether the page is scrolled vertically.
-    pub client_y: i32,
+    pub client_y: f64,
 
     /// True if the control key was down when the mouse event was fired.
     pub ctrl_key: bool,
@@ -84,26 +84,26 @@ pub struct SerializedPointInteraction {
     pub meta_key: bool,
 
     /// The offset in the X coordinate of the mouse pointer between that event and the padding edge of the target node.
-    pub offset_x: i32,
+    pub offset_x: f64,
 
     /// The offset in the Y coordinate of the mouse pointer between that event and the padding edge of the target node.
-    pub offset_y: i32,
+    pub offset_y: f64,
 
     /// The X (horizontal) coordinate (in pixels) of the mouse, relative to the left edge of the entire document. This includes any portion of the document not currently visible.
     ///
     /// Being based on the edge of the document as it is, this property takes into account any horizontal scrolling of the page. For example, if the page is scrolled such that 200 pixels of the left side of the document are scrolled out of view, and the mouse is clicked 100 pixels inward from the left edge of the view, the value returned by pageX will be 300.
-    pub page_x: i32,
+    pub page_x: f64,
 
     /// The Y (vertical) coordinate in pixels of the event relative to the whole document.
     ///
     /// See `page_x`.
-    pub page_y: i32,
+    pub page_y: f64,
 
     /// The X coordinate of the mouse pointer in global (screen) coordinates.
-    pub screen_x: i32,
+    pub screen_x: f64,
 
     /// The Y coordinate of the mouse pointer in global (screen) coordinates.
-    pub screen_y: i32,
+    pub screen_y: f64,
 
     /// True if the shift key was down when the mouse event was fired.
     pub shift_key: bool,
@@ -122,10 +122,10 @@ impl SerializedPointInteraction {
         let meta_key = modifiers.contains(Modifiers::META);
         let shift_key = modifiers.contains(Modifiers::SHIFT);
 
-        let [client_x, client_y]: [i32; 2] = coordinates.client().cast().into();
-        let [offset_x, offset_y]: [i32; 2] = coordinates.element().cast().into();
-        let [page_x, page_y]: [i32; 2] = coordinates.page().cast().into();
-        let [screen_x, screen_y]: [i32; 2] = coordinates.screen().cast().into();
+        let [client_x, client_y]: [f64; 2] = coordinates.client().cast().into();
+        let [offset_x, offset_y]: [f64; 2] = coordinates.element().cast().into();
+        let [page_x, page_y]: [f64; 2] = coordinates.page().cast().into();
+        let [screen_x, screen_y]: [f64; 2] = coordinates.screen().cast().into();
         Self {
             button: trigger_button
                 .map_or(MouseButton::default(), |b| b)
@@ -194,21 +194,21 @@ impl ModifiersInteraction for SerializedPointInteraction {
 #[cfg(feature = "serialize")]
 impl InteractionLocation for SerializedPointInteraction {
     fn client_coordinates(&self) -> ClientPoint {
-        ClientPoint::new(self.client_x.into(), self.client_y.into())
+        ClientPoint::new(self.client_x, self.client_y)
     }
 
     fn screen_coordinates(&self) -> ScreenPoint {
-        ScreenPoint::new(self.screen_x.into(), self.screen_y.into())
+        ScreenPoint::new(self.screen_x, self.screen_y)
     }
 
     fn page_coordinates(&self) -> PagePoint {
-        PagePoint::new(self.page_x.into(), self.page_y.into())
+        PagePoint::new(self.page_x, self.page_y)
     }
 }
 
 #[cfg(feature = "serialize")]
 impl InteractionElementOffset for SerializedPointInteraction {
     fn element_coordinates(&self) -> ElementPoint {
-        ElementPoint::new(self.offset_x.into(), self.offset_y.into())
+        ElementPoint::new(self.offset_x, self.offset_y)
     }
 }

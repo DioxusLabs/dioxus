@@ -35,6 +35,11 @@ export function retrieveFormValues(form: HTMLFormElement): FormValues {
   const formData = new FormData(form);
   const contents: { [key: string]: FormDataEntryValue[] } = {};
   formData.forEach((value, key) => {
+    if (value instanceof File) {
+      contents[key] = [value.name];
+      return;
+    }
+
     if (contents[key]) {
       contents[key].push(value);
     } else {

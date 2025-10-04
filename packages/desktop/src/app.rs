@@ -2,7 +2,7 @@ use crate::{
     config::{Config, WindowCloseBehaviour},
     edits::EditWebsocket,
     event_handlers::WindowEventHandlers,
-    file_upload::{DesktopFileUploadForm, FileDialogRequest, NativeFileEngine},
+    file_upload::{DesktopFileUploadForm, FileDialogRequest},
     ipc::{IpcMessage, UserWindowEvent},
     query::QueryResult,
     shortcut::ShortcutRegistry,
@@ -16,7 +16,6 @@ use std::{
     cell::{Cell, RefCell},
     collections::HashMap,
     rc::Rc,
-    sync::Arc,
     time::Duration,
 };
 use tao::{
@@ -420,9 +419,7 @@ impl App {
         let event_bubbles = file_dialog.bubbles;
         let files = file_dialog.get_file_event();
 
-        let as_any = Box::new(DesktopFileUploadForm {
-            files: Arc::new(NativeFileEngine::new(files)),
-        });
+        let as_any = Box::new(DesktopFileUploadForm { files });
 
         let data = Rc::new(PlatformEventData::new(as_any));
 

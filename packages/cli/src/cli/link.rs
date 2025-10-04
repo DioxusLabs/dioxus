@@ -190,8 +190,8 @@ impl LinkAction {
                     target_lexicon::BinaryFormat::Macho => object::BinaryFormat::MachO,
                     target_lexicon::BinaryFormat::Wasm => object::BinaryFormat::Wasm,
                     target_lexicon::BinaryFormat::Xcoff => object::BinaryFormat::Xcoff,
-                    target_lexicon::BinaryFormat::Unknown => todo!(),
-                    _ => todo!("Binary format not supported"),
+                    target_lexicon::BinaryFormat::Unknown => unimplemented!(),
+                    _ => unimplemented!("Binary format not supported"),
                 };
 
                 let arch = match triple.architecture {
@@ -202,13 +202,13 @@ impl LinkAction {
                     target_lexicon::Architecture::Aarch64(_) => object::Architecture::Aarch64,
                     target_lexicon::Architecture::LoongArch64 => object::Architecture::LoongArch64,
                     target_lexicon::Architecture::Unknown => object::Architecture::Unknown,
-                    _ => todo!("Architecture not supported"),
+                    _ => unimplemented!("Architecture not supported"),
                 };
 
                 let endian = match triple.endianness() {
                     Ok(target_lexicon::Endianness::Little) => object::Endianness::Little,
                     Ok(target_lexicon::Endianness::Big) => object::Endianness::Big,
-                    Err(_) => todo!("Endianness not supported"),
+                    Err(_) => unimplemented!("Endianness not supported"),
                 };
 
                 let bytes = object::write::Object::new(format, arch, endian)

@@ -7,7 +7,6 @@ use dioxus_core_macro::{rsx, Props};
 use dioxus_html::{
     self as dioxus_elements, ModifiersInteraction, MountedEvent, MouseEvent, PointerInteraction,
 };
-use dioxus_signals::{GlobalSignal, Owner, ReadableExt};
 
 use tracing::error;
 
@@ -209,6 +208,11 @@ pub fn Link(props: LinkProps) -> Element {
         }
         // Only handle left clicks
         if event.trigger_button() != Some(dioxus_elements::input_data::MouseButton::Primary) {
+            return;
+        }
+
+        // If we need to open in a new tab, let the browser handle it
+        if new_tab {
             return;
         }
 
