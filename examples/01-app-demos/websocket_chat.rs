@@ -13,8 +13,6 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 fn main() {
-    println!("IP and PORT: {:#?}", std::env::var("IP"));
-    println!("IP and PORT: {:#?}", std::env::var("PORT"));
     dioxus::launch(app);
 }
 
