@@ -553,7 +553,7 @@ fn MyComponent() -> Element {{
     ///         match reqwest::get("https://api.example.com").await {
     ///             Ok(_) => unimplemented!(),
     ///             // You can explicitly throw an error into a scope with throw_error
-    ///             Err(err) => ScopeId::APP.throw_error(err)
+    ///             Err(err) => dioxus::core::Runtime::current().throw_error(ScopeId::APP, err),
     ///         }
     ///     });
     ///
@@ -609,7 +609,7 @@ fn MyComponent() -> Element {{
 /// }
 ///
 /// fn app() -> Element {
-///     rsx! { Component { runtime: Runtime::current().unwrap() } }
+///     rsx! { Component { runtime: Runtime::current() } }
 /// }
 ///
 /// // In a dynamic library
