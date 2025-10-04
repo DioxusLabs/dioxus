@@ -145,7 +145,7 @@ where
 ///
 /// When the loader is re-reloading its values, it will no longer suspend its component, making it
 /// very useful for server-side-rendering.
-pub struct Loader<T> {
+pub struct Loader<T: 'static> {
     /// This is a signal that unwraps the inner value. We can't give it out unless we know the inner value is Some(T)!
     read_value: ReadSignal<T>,
 

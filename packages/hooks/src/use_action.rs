@@ -71,7 +71,7 @@ where
     }
 }
 
-pub struct Action<I, T> {
+pub struct Action<I, T: 'static> {
     reader: ReadSignal<T>,
     error: Signal<Option<CapturedError>>,
     value: Signal<Option<T>>,
