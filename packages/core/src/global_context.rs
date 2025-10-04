@@ -422,7 +422,7 @@ pub fn use_drop<D: FnOnce() + 'static>(destroy: D) {
 /// This function will always be called before dioxus tries to render your component. This should be used for safely handling
 /// early returns
 pub fn use_before_render(f: impl FnMut() + 'static) {
-    use_hook(|| before_render(f));
+    use_hook(|| Runtime::with_current_scope(|cx| cx.push_before_render(f)));
 }
 
 /// Push this function to be run after the next render
@@ -430,19 +430,7 @@ pub fn use_before_render(f: impl FnMut() + 'static) {
 /// This function will always be called before dioxus tries to render your component. This should be used for safely handling
 /// early returns
 pub fn use_after_render(f: impl FnMut() + 'static) {
-    use_hook(|| after_render(f));
-}
-
-/// Push a function to be run before the next render
-/// This is a hook and will always run, so you can't unschedule it
-/// Will run for every progression of suspense, though this might change in the future
-pub fn before_render(f: impl FnMut() + 'static) {
-    Runtime::with_current_scope(|cx| cx.push_before_render(f));
-}
-
-/// Push a function to be run after the render is complete, even if it didn't complete successfully
-pub fn after_render(f: impl FnMut() + 'static) {
-    Runtime::with_current_scope(|cx| cx.push_after_render(f));
+    use_hook(|| Runtime::with_current_scope(|cx| cx.push_after_render(f)));
 }
 
 /// Use a hook with a cleanup function
