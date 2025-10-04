@@ -14,24 +14,24 @@ use dioxus_signals::{
 
 /// The way a data structure index into its children based on a key. The selector must use this indexing
 /// method consistently to ensure that the same key always maps to the same child.
-pub trait ChildIndexingScheme<Idx> {
+pub trait IndexSelector<Idx> {
     /// Given a selector and an index, scope the selector to the child at the given index.
     fn scope_selector<Lens>(selector: SelectorScope<Lens>, index: &Idx) -> SelectorScope<Lens>;
 }
 
-impl<T> ChildIndexingScheme<usize> for Vec<T> {
+impl<T> IndexSelector<usize> for Vec<T> {
     fn scope_selector<Lens>(selector: SelectorScope<Lens>, index: &usize) -> SelectorScope<Lens> {
         selector.child_unmapped(*index as _)
     }
 }
 
-impl<T> ChildIndexingScheme<usize> for [T] {
+impl<T> IndexSelector<usize> for [T] {
     fn scope_selector<Lens>(selector: SelectorScope<Lens>, index: &usize) -> SelectorScope<Lens> {
         selector.child_unmapped(*index as _)
     }
 }
 
-impl<K, V, I> ChildIndexingScheme<I> for HashMap<K, V>
+impl<K, V, I> IndexSelector<I> for HashMap<K, V>
 where
     I: Hash,
 {
@@ -40,7 +40,7 @@ where
     }
 }
 
-impl<K, V, I> ChildIndexingScheme<I> for BTreeMap<K, V>
+impl<K, V, I> IndexSelector<I> for BTreeMap<K, V>
 where
     I: Hash,
 {
@@ -63,7 +63,7 @@ impl<Lens, T> Store<T, Lens> {
     /// ```
     pub fn index<Idx>(self, index: Idx) -> Store<T::Output, IndexWrite<Idx, Lens>>
     where
-        T: IndexMut<Idx> + 'static + ChildIndexingScheme<Idx>,
+        T: IndexMut<Idx> + 'static + IndexSelector<Idx>,
         Lens: Readable<Target = T> + 'static,
     {
         T::scope_selector(self.into_selector(), &index)
