@@ -130,6 +130,7 @@ members = [
     "packages/playwright-tests/fullstack",
     "packages/playwright-tests/fullstack-errors",
     "packages/playwright-tests/fullstack-mounted",
+    "packages/playwright-tests/fullstack-spread",
     "packages/playwright-tests/fullstack-routing",
     "packages/playwright-tests/fullstack-hydration-order",
     "packages/playwright-tests/suspense-carousel",
