@@ -232,7 +232,7 @@ jobs:
       - name: Free Disk Space
         if: ${{ matrix.platform.os == 'ubuntu-24.04' || matrix.platform.os == 'ubuntu-24.04-arm' || matrix.platform.os == 'blacksmith-4vcpu-ubuntu-2404' || matrix.platform.os == 'blacksmith-4vcpu-ubuntu-2404-arm' }}
         uses: ./.github/actions/free-disk-space
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 24
       - name: Install Rust
