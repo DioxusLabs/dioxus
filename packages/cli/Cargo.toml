@@ -32,7 +32,9 @@ clap = { workspace = true, features = ["derive", "cargo"] }
 convert_case = { workspace = true }
 thiserror = { workspace = true }
 uuid = { workspace = true, features = ["v4"] }
-serde = { workspace = true, features = ["derive"] }
+# swc uses serde internals that break with newer versions of serde. We should move off of swc eventually,
+# but pinning serde fixes the issue in the meantime
+serde = { version = "=1.0.221", features = ["derive"] }
 serde_json = { workspace = true }
 toml = { workspace = true }
 cargo_toml = { workspace = true, features = ["features"] }

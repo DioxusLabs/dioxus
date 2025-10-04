@@ -115,15 +115,24 @@ pub fn launch_virtual_dom_blocking(virtual_dom: VirtualDom, mut desktop_config: 
 pub fn launch_virtual_dom(virtual_dom: VirtualDom, desktop_config: Config) -> ! {
     #[cfg(feature = "tokio_runtime")]
     {
-        tokio::runtime::Builder::new_multi_thread()
-            .enable_all()
-            .build()
-            .unwrap()
-            .block_on(tokio::task::unconstrained(async move {
-                launch_virtual_dom_blocking(virtual_dom, desktop_config)
-            }));
+        if let std::result::Result::Ok(handle) = tokio::runtime::Handle::try_current() {
+            assert_ne!(
+                handle.runtime_flavor(),
+                tokio::runtime::RuntimeFlavor::CurrentThread,
+                "The tokio current-thread runtime does not work with dioxus event handling"
+            );
+            launch_virtual_dom_blocking(virtual_dom, desktop_config);
+        } else {
+            tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .build()
+                .unwrap()
+                .block_on(tokio::task::unconstrained(async move {
+                    launch_virtual_dom_blocking(virtual_dom, desktop_config)
+                }));
 
-        unreachable!("The desktop launch function will never exit")
+            unreachable!("The desktop launch function will never exit")
+        }
     }
 
     #[cfg(not(feature = "tokio_runtime"))]

@@ -795,7 +795,7 @@ impl VNode {
     fn write_attrs(
         &self,
         mount: MountId,
-        dynamic_attrbiutes_iter: &mut Peekable<impl Iterator<Item = (usize, &'static [u8])>>,
+        dynamic_attributes_iter: &mut Peekable<impl Iterator<Item = (usize, &'static [u8])>>,
         root_idx: u8,
         dom: &mut VirtualDom,
         to: &mut impl WriteMutations,
@@ -804,7 +804,7 @@ impl VNode {
         // Only take nodes that are under this root node
         let from_root_node = |(_, path): &(usize, &[u8])| path.first() == Some(&root_idx);
         while let Some((attribute_idx, attribute_path)) =
-            dynamic_attrbiutes_iter.next_if(from_root_node)
+            dynamic_attributes_iter.next_if(from_root_node)
         {
             let attribute = &self.dynamic_attrs[attribute_idx];
 

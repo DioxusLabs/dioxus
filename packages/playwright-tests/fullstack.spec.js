@@ -95,7 +95,7 @@ test("assets cache correctly", async ({ page }) => {
 
   // Wait for the asset image to be loaded
   const assetImageResponse = await assetImageFuture;
-  console.log("Asset Image Response:", assetImageResponse);
+  // console.log("Asset Image Response:", assetImageResponse);
   // Make sure the asset image cache control header does not contain immutable
   const assetCacheControl = assetImageResponse.headers()["cache-control"];
   console.log("Cache-Control header:", assetCacheControl);
