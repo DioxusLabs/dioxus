@@ -97,11 +97,16 @@ impl AppServer {
 
         // Resolve the simpler args
         let interactive = args.is_interactive_tty();
-        let force_sequential = args.force_sequential;
+        let force_sequential = args.platform_args.shared.targets.force_sequential_build();
         let cross_origin_policy = args.cross_origin_policy;
 
         // Find the launch args for the client and server
-        let split_args = |args: &str| args.split(' ').map(|s| s.to_string()).collect::<Vec<_>>();
+        let split_args = |args: &str| {
+            args.split_whitespace()
+                .map(|s| s.to_string())
+                .collect::<Vec<_>>()
+        };
+
         let server_args = args.platform_args.with_server_or_shared(|c| &c.args);
         let server_args = split_args(server_args);
         let client_args = args.platform_args.with_client_or_shared(|c| &c.args);
@@ -166,18 +171,11 @@ impl AppServer {
         let client = AppBuilder::new(&client)?;
         let server = server.map(|server| AppBuilder::new(&server)).transpose()?;
 
-        // Only start Tailwind watcher for client builds that serve assets (not server builds or fullstack mode)
-        // In fullstack mode, the client build's prebuild() handles Tailwind generation to avoid race conditions
-        let tw_watcher = if client.build.bundle != BundleFormat::Server && !fullstack {
-            TailwindCli::serve(
-                client.build.package_manifest_dir(),
-                client.build.config.application.tailwind_input.clone(),
-                client.build.config.application.tailwind_output.clone(),
-            )
-        } else {
-            // Return a dummy task that immediately completes for server builds or fullstack mode
-            tokio::spawn(async { Ok(()) })
-        };
+        let tw_watcher = TailwindCli::serve(
+            client.build.package_manifest_dir(),
+            client.build.config.application.tailwind_input.clone(),
+            client.build.config.application.tailwind_output.clone(),
+        );
 
         _ = client.build.start_simulators().await;
 
@@ -492,7 +490,7 @@ impl AppServer {
 
         // todo - we need to distinguish between hotpatchable rebuilds and true full rebuilds.
         //        A full rebuild is required when the user modifies static initializers which we haven't wired up yet.
-        if needs_full_rebuild {
+        if needs_full_rebuild && self.automatic_rebuilds {
             if self.use_hotpatch_engine {
                 self.client.patch_rebuild(files.to_vec());
                 if let Some(server) = self.server.as_mut() {
@@ -525,6 +523,14 @@ impl AppServer {
             let file = files[0].display().to_string();
             let file =
                 file.trim_start_matches(&self.client.build.crate_dir().display().to_string());
+
+            if needs_full_rebuild && !self.automatic_rebuilds {
+                use crate::styles::NOTE_STYLE;
+                tracing::warn!(
+                    "Ignoring full rebuild for: {NOTE_STYLE}{}{NOTE_STYLE:#}",
+                    file
+                );
+            }
 
             // Only send a hotreload message for templates and assets - otherwise we'll just get a full rebuild
             //

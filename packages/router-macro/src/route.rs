@@ -461,6 +461,7 @@ impl Route {
     }
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
 pub(crate) enum RouteType {
     Child(Field),

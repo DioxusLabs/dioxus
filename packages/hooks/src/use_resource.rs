@@ -1,13 +1,16 @@
 #![allow(missing_docs)]
 
-use crate::{use_callback, use_signal};
+use crate::{use_callback, use_signal, use_waker, UseWaker};
 
 use dioxus_core::{
     spawn, use_hook, Callback, IntoAttributeValue, IntoDynNode, ReactiveContext, RenderError,
     Subscribers, SuspendedFuture, Task,
 };
 use dioxus_signals::*;
-use futures_util::{future, pin_mut, FutureExt, StreamExt};
+use futures_util::{
+    future::{self},
+    pin_mut, FutureExt, StreamExt,
+};
 use std::ops::Deref;
 use std::{cell::Cell, future::Future, rc::Rc};
 
@@ -16,7 +19,6 @@ use std::{cell::Cell, future::Future, rc::Rc};
 #[doc = include_str!("../docs/moving_state_around.md")]
 #[doc(alias = "use_async_memo")]
 #[doc(alias = "use_memo_async")]
-#[must_use = "Consider using `cx.spawn` to run a future without reading its value"]
 #[track_caller]
 pub fn use_resource<T, F>(mut future: impl FnMut() -> F + 'static) -> Resource<T>
 where
@@ -31,6 +33,8 @@ where
         let (rc, changed) = ReactiveContext::new_with_origin(location);
         (rc, Rc::new(Cell::new(Some(changed))))
     });
+
+    let mut waker = use_waker::<()>();
 
     let cb = use_callback(move |_| {
         // Set the state to Pending when the task is restarted
@@ -58,6 +62,9 @@ where
             // Set the value and state
             state.set(UseResourceState::Ready);
             value.set(Some(res));
+
+            // Notify that the value has changed
+            waker.wake(());
         })
     });
 
@@ -83,6 +90,7 @@ where
         task,
         value,
         state,
+        waker,
         callback: cb,
     }
 }
@@ -114,6 +122,7 @@ where
 /// ```
 #[derive(Debug)]
 pub struct Resource<T: 'static> {
+    waker: UseWaker<()>,
     value: Signal<Option<T>>,
     task: Signal<Task>,
     state: Signal<UseResourceState>,
@@ -485,5 +494,19 @@ impl<T: Clone> Deref for Resource<T> {
 
     fn deref(&self) -> &Self::Target {
         unsafe { ReadableExt::deref_impl(self) }
+    }
+}
+
+impl<T> std::future::Future for Resource<T> {
+    type Output = ();
+
+    fn poll(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Self::Output> {
+        match self.waker.clone().poll_unpin(cx) {
+            std::task::Poll::Ready(_) => std::task::Poll::Ready(()),
+            std::task::Poll::Pending => std::task::Poll::Pending,
+        }
     }
 }

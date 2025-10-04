@@ -61,14 +61,14 @@ impl Workspace {
 
         let spin_future = async move {
             tokio::time::sleep(Duration::from_millis(1000)).await;
-            println!("{GLOW_STYLE}warning{GLOW_STYLE:#}: Waiting for cargo-metadata...");
+            eprintln!("{GLOW_STYLE}warning{GLOW_STYLE:#}: Waiting for cargo-metadata...");
             tokio::time::sleep(Duration::from_millis(2000)).await;
             for x in 1..=100 {
                 tokio::time::sleep(Duration::from_millis(2000)).await;
-                println!("{GLOW_STYLE}warning{GLOW_STYLE:#}: (Try {x}) Taking a while...");
+                eprintln!("{GLOW_STYLE}warning{GLOW_STYLE:#}: (Try {x}) Taking a while...");
 
                 if x % 10 == 0 {
-                    println!("{GLOW_STYLE}warning{GLOW_STYLE:#}: maybe check your network connection or build lock?");
+                    eprintln!("{GLOW_STYLE}warning{GLOW_STYLE:#}: maybe check your network connection or build lock?");
                 }
             }
         };
@@ -271,12 +271,6 @@ impl Workspace {
             .join(Triple::host().to_string())
             .join("bin")
             .join("gcc-ld")
-    }
-
-    pub fn has_wasm32_unknown_unknown(&self) -> bool {
-        self.sysroot
-            .join("lib/rustlib/wasm32-unknown-unknown")
-            .exists()
     }
 
     /// Find the "main" package in the workspace. There might not be one!
@@ -536,7 +530,7 @@ impl Workspace {
     }
 
     pub(crate) fn global_settings_file() -> PathBuf {
-        Self::dioxus_data_dir().join("settings.json")
+        Self::dioxus_data_dir().join("settings.toml")
     }
 }
 

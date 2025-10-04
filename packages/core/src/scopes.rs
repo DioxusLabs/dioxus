@@ -1,6 +1,6 @@
 use crate::{
-    any_props::BoxedAnyProps, nodes::AsVNode, reactive_context::ReactiveContext,
-    scope_context::Scope, Element, Runtime, VNode,
+    any_props::BoxedAnyProps, reactive_context::ReactiveContext, scope_context::Scope, Element,
+    RenderError, Runtime, VNode,
 };
 use std::{cell::Ref, rc::Rc};
 
@@ -45,10 +45,16 @@ impl ScopeId {
     /// let my_persistent_state = Signal::new_in_scope(String::new(), ScopeId::APP);
     /// ```
     // ScopeId(0) is the root scope wrapper
-    // ScopeId(1) is the default error boundary
-    // ScopeId(2) is the default suspense boundary
+    // ScopeId(1) is the default suspense boundary
+    // ScopeId(2) is the default error boundary
     // ScopeId(3) is the users root scope
     pub const APP: ScopeId = ScopeId(3);
+
+    /// The ScopeId of the topmost error boundary in the tree.
+    pub const ROOT_ERROR_BOUNDARY: ScopeId = ScopeId(2);
+
+    /// The ScopeId of the topmost suspense boundary in the tree.
+    pub const ROOT_SUSPENSE_BOUNDARY: ScopeId = ScopeId(1);
 
     /// The ScopeId of the topmost scope in the tree.
     /// This will be higher up in the tree than [`ScopeId::APP`] because dioxus inserts a default [`crate::SuspenseBoundary`] and [`crate::ErrorBoundary`] at the root of the tree.
@@ -70,9 +76,42 @@ pub struct ScopeState {
     pub(crate) context_id: ScopeId,
     /// The last node that has been rendered for this component. This node may not ben mounted
     /// During suspense, this component can be rendered in the background multiple times
-    pub(crate) last_rendered_node: Option<Element>,
+    pub(crate) last_rendered_node: Option<LastRenderedNode>,
     pub(crate) props: BoxedAnyProps,
     pub(crate) reactive_context: ReactiveContext,
+}
+
+#[derive(Clone, PartialEq, Debug)]
+pub enum LastRenderedNode {
+    Real(VNode),
+    Placeholder(VNode, RenderError),
+}
+
+impl std::ops::Deref for LastRenderedNode {
+    type Target = VNode;
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            LastRenderedNode::Real(vnode) => vnode,
+            LastRenderedNode::Placeholder(vnode, _err) => vnode,
+        }
+    }
+}
+
+impl LastRenderedNode {
+    pub fn new(node: Element) -> Self {
+        match node {
+            Ok(vnode) => LastRenderedNode::Real(vnode),
+            Err(err) => LastRenderedNode::Placeholder(VNode::placeholder(), err),
+        }
+    }
+
+    pub fn as_vnode(&self) -> &VNode {
+        match self {
+            LastRenderedNode::Real(vnode) => vnode,
+            LastRenderedNode::Placeholder(vnode, _err) => vnode,
+        }
+    }
 }
 
 impl Drop for ScopeState {
@@ -98,7 +137,11 @@ impl ScopeState {
     ///
     /// Returns [`None`] if the tree has not been built yet.
     pub fn try_root_node(&self) -> Option<&VNode> {
-        self.last_rendered_node.as_ref().map(AsVNode::as_vnode)
+        match &self.last_rendered_node {
+            Some(LastRenderedNode::Real(vnode)) => Some(vnode),
+            Some(LastRenderedNode::Placeholder(vnode, _)) => Some(vnode),
+            None => None,
+        }
     }
 
     /// Returns the scope id of this [`ScopeState`].

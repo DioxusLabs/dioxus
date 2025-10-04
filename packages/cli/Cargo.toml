@@ -32,7 +32,9 @@ clap = { workspace = true, features = ["derive", "cargo"] }
 convert_case = { workspace = true }
 thiserror = { workspace = true }
 uuid = { workspace = true, features = ["v4"] }
-serde = { workspace = true, features = ["derive"] }
+# swc uses serde internals that break with newer versions of serde. We should move off of swc eventually,
+# but pinning serde fixes the issue in the meantime
+serde = { version = "=1.0.221", features = ["derive"] }
 serde_json = { workspace = true }
 toml = { workspace = true }
 cargo_toml = { workspace = true, features = ["features"] }
@@ -159,6 +161,7 @@ posthog-rs = "0.3.5"
 serde_json5 = "0.2.1"
 fs2 = "0.4.3"
 sentry-backtrace = "0.42.0"
+nucleo = "0.5.0"
 
 [build-dependencies]
 built = { version = "0.8.0", features = ["git2"] }

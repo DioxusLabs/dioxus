@@ -1,30 +1,47 @@
-use dioxus_html::HasFileData;
+use dioxus_html::{FileData, HasFileData};
+use web_sys::FileReader;
+
+use crate::{WebFileData, WebFileEngine};
 
 use super::Synthetic;
 
 impl HasFileData for Synthetic<web_sys::Event> {
-    fn files(&self) -> Option<std::sync::Arc<dyn dioxus_html::FileEngine>> {
-        #[cfg(feature = "file_engine")]
-        {
-            use wasm_bindgen::JsCast;
+    fn files(&self) -> Vec<FileData> {
+        use wasm_bindgen::JsCast;
+        let target = self.event.target();
 
-            let files = self
-                .event
-                .dyn_ref()
-                .and_then(|input: &web_sys::HtmlInputElement| {
-                    input.files().and_then(|files| {
-                        #[allow(clippy::arc_with_non_send_sync)]
-                        crate::file_engine::WebFileEngine::new(files).map(|f| {
-                            std::sync::Arc::new(f) as std::sync::Arc<dyn dioxus_html::FileEngine>
-                        })
-                    })
-                });
-
-            files
-        }
-        #[cfg(not(feature = "file_engine"))]
+        if let Some(target) = target
+            .clone()
+            .and_then(|t| t.dyn_into::<web_sys::HtmlInputElement>().ok())
         {
-            None
+            if let Some(file_list) = target.files() {
+                return WebFileEngine::new(file_list).to_files();
+            }
         }
+
+        if let Some(target) = target.and_then(|t| t.dyn_into::<web_sys::DragEvent>().ok()) {
+            if let Some(data_transfer) = target.data_transfer() {
+                if let Some(file_list) = data_transfer.files() {
+                    return WebFileEngine::new(file_list).to_files();
+                } else {
+                    let items = data_transfer.items();
+                    let mut files = vec![];
+                    for i in 0..items.length() {
+                        if let Some(item) = items.get(i) {
+                            if item.kind() == "file" {
+                                if let Ok(Some(file)) = item.get_as_file() {
+                                    let web_data =
+                                        WebFileData::new(file, FileReader::new().unwrap());
+                                    files.push(FileData::new(web_data));
+                                }
+                            }
+                        }
+                    }
+                    return files;
+                }
+            }
+        }
+
+        vec![]
     }
 }

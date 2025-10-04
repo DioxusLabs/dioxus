@@ -5,11 +5,11 @@ use dioxus_html::{
     point_interaction::{
         InteractionElementOffset, InteractionLocation, ModifiersInteraction, PointerInteraction,
     },
-    AnimationData, ClipboardData, CompositionData, DragData, FocusData, FormData, FormValue,
-    HasFileData, HasFocusData, HasFormData, HasKeyboardData, HasMouseData, HtmlEventConverter,
-    ImageData, KeyboardData, MediaData, MountedData, MouseData, PlatformEventData, PointerData,
-    ResizeData, ScrollData, SelectionData, ToggleData, TouchData, TransitionData, VisibleData,
-    WheelData,
+    AnimationData, CancelData, ClipboardData, CompositionData, DragData, FocusData, FormData,
+    FormValue, HasFileData, HasFocusData, HasFormData, HasKeyboardData, HasMouseData,
+    HtmlEventConverter, ImageData, KeyboardData, MediaData, MountedData, MouseData,
+    PlatformEventData, PointerData, ResizeData, ScrollData, SelectionData, ToggleData, TouchData,
+    TransitionData, VisibleData, WheelData,
 };
 use keyboard_types::{Code, Key, Location, Modifiers};
 use std::any::Any;
@@ -18,6 +18,10 @@ use std::collections::HashMap;
 pub struct NativeConverter {}
 
 impl HtmlEventConverter for NativeConverter {
+    fn convert_cancel_data(&self, _event: &PlatformEventData) -> CancelData {
+        unimplemented!("todo: convert_cancel_data in dioxus-native. requires support in blitz")
+    }
+
     fn convert_form_data(&self, event: &PlatformEventData) -> FormData {
         event.downcast::<NativeFormData>().unwrap().clone().into()
     }
@@ -39,67 +43,67 @@ impl HtmlEventConverter for NativeConverter {
     }
 
     fn convert_animation_data(&self, _event: &PlatformEventData) -> AnimationData {
-        todo!("todo: convert_animation_data in dioxus-native. requires support in blitz")
+        unimplemented!("todo: convert_animation_data in dioxus-native. requires support in blitz")
     }
 
     fn convert_clipboard_data(&self, _event: &PlatformEventData) -> ClipboardData {
-        todo!("todo: convert_clipboard_data in dioxus-native. requires support in blitz")
+        unimplemented!("todo: convert_clipboard_data in dioxus-native. requires support in blitz")
     }
 
     fn convert_composition_data(&self, _event: &PlatformEventData) -> CompositionData {
-        todo!("todo: convert_composition_data in dioxus-native. requires support in blitz")
+        unimplemented!("todo: convert_composition_data in dioxus-native. requires support in blitz")
     }
 
     fn convert_drag_data(&self, _event: &PlatformEventData) -> DragData {
-        todo!("todo: convert_drag_data in dioxus-native. requires support in blitz")
+        unimplemented!("todo: convert_drag_data in dioxus-native. requires support in blitz")
     }
 
     fn convert_image_data(&self, _event: &PlatformEventData) -> ImageData {
-        todo!("todo: convert_image_data in dioxus-native. requires support in blitz")
+        unimplemented!("todo: convert_image_data in dioxus-native. requires support in blitz")
     }
 
     fn convert_media_data(&self, _event: &PlatformEventData) -> MediaData {
-        todo!("todo: convert_media_data in dioxus-native. requires support in blitz")
+        unimplemented!("todo: convert_media_data in dioxus-native. requires support in blitz")
     }
 
     fn convert_mounted_data(&self, _event: &PlatformEventData) -> MountedData {
-        todo!("todo: convert_mounted_data in dioxus-native. requires support in blitz")
+        unimplemented!("todo: convert_mounted_data in dioxus-native. requires support in blitz")
     }
 
     fn convert_pointer_data(&self, _event: &PlatformEventData) -> PointerData {
-        todo!("todo: convert_pointer_data in dioxus-native. requires support in blitz")
+        unimplemented!("todo: convert_pointer_data in dioxus-native. requires support in blitz")
     }
 
     fn convert_scroll_data(&self, _event: &PlatformEventData) -> ScrollData {
-        todo!("todo: convert_scroll_data in dioxus-native. requires support in blitz")
+        unimplemented!("todo: convert_scroll_data in dioxus-native. requires support in blitz")
     }
 
     fn convert_selection_data(&self, _event: &PlatformEventData) -> SelectionData {
-        todo!("todo: convert_selection_data in dioxus-native. requires support in blitz")
+        unimplemented!("todo: convert_selection_data in dioxus-native. requires support in blitz")
     }
 
     fn convert_toggle_data(&self, _event: &PlatformEventData) -> ToggleData {
-        todo!("todo: convert_toggle_data in dioxus-native. requires support in blitz")
+        unimplemented!("todo: convert_toggle_data in dioxus-native. requires support in blitz")
     }
 
     fn convert_touch_data(&self, _event: &PlatformEventData) -> TouchData {
-        todo!("todo: convert_touch_data in dioxus-native. requires support in blitz")
+        unimplemented!("todo: convert_touch_data in dioxus-native. requires support in blitz")
     }
 
     fn convert_transition_data(&self, _event: &PlatformEventData) -> TransitionData {
-        todo!("todo: convert_transition_data in dioxus-native. requires support in blitz")
+        unimplemented!("todo: convert_transition_data in dioxus-native. requires support in blitz")
     }
 
     fn convert_wheel_data(&self, _event: &PlatformEventData) -> WheelData {
-        todo!("todo: convert_wheel_data in dioxus-native. requires support in blitz")
+        unimplemented!("todo: convert_wheel_data in dioxus-native. requires support in blitz")
     }
 
     fn convert_resize_data(&self, _event: &PlatformEventData) -> ResizeData {
-        todo!("todo: convert_resize_data in dioxus-native. requires support in blitz")
+        unimplemented!("todo: convert_resize_data in dioxus-native. requires support in blitz")
     }
 
     fn convert_visible_data(&self, _event: &PlatformEventData) -> VisibleData {
-        todo!("todo: convert_visible_data in dioxus-native. requires support in blitz")
+        unimplemented!("todo: convert_visible_data in dioxus-native. requires support in blitz")
     }
 }
 
@@ -123,7 +127,11 @@ impl HasFormData for NativeFormData {
     }
 }
 
-impl HasFileData for NativeFormData {}
+impl HasFileData for NativeFormData {
+    fn files(&self) -> Vec<dioxus_html::FileData> {
+        vec![]
+    }
+}
 
 #[derive(Clone, Debug)]
 pub(crate) struct BlitzKeyboardData(pub(crate) BlitzKeyEvent);
@@ -180,7 +188,7 @@ impl InteractionLocation for NativeClickData {
 
 impl InteractionElementOffset for NativeClickData {
     fn element_coordinates(&self) -> ElementPoint {
-        todo!()
+        unimplemented!()
     }
 }
 

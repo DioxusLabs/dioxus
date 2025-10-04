@@ -14,6 +14,8 @@ use wasm_bindgen::JsCast as _;
 /// ```
 pub struct Config {
     pub(crate) hydrate: bool,
+    #[allow(dead_code)]
+    pub(crate) panic_hook: bool,
     pub(crate) root: ConfigRoot,
     #[cfg(feature = "document")]
     pub(crate) history: Option<Rc<dyn dioxus_history::History>>,
@@ -96,6 +98,7 @@ impl Default for Config {
             root: ConfigRoot::RootName("main".to_string()),
             #[cfg(feature = "document")]
             history: None,
+            panic_hook: true,
         }
     }
 }

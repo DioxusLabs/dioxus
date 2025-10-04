@@ -197,7 +197,7 @@ mod field_info {
             ordinal: usize,
             field: &syn::Field,
             field_defaults: FieldBuilderAttr,
-        ) -> Result<FieldInfo, Error> {
+        ) -> Result<FieldInfo<'_>, Error> {
             if let Some(ref name) = field.ident {
                 let mut builder_attr = field_defaults.with(&field.attrs)?;
 
@@ -509,7 +509,7 @@ fn type_from_inside_option(ty: &Type) -> Option<&Type> {
 
     // If the segment is a supported optional type, provide the inner type.
     // Return the inner type if the pattern is `Option<T>` or `ReadSignal<Option<T>>``
-    if seg.ident == "ReadOnlySignal" || seg.ident == "ReadSignal" {
+    if seg.ident == "ReadSignal" || seg.ident == "ReadOnlySignal" {
         // Get the inner type. E.g. the `u16` in `ReadSignal<u16>` or `Option` in `ReadSignal<Option<bool>>`
         let inner_type = extract_inner_type_from_segment(seg)?;
         let Type::Path(inner_path) = inner_type else {
@@ -855,17 +855,19 @@ Finally, call `.build()` to create the instance of `{name}`.
                     let ty = f.ty;
                     quote!(#name: #ty)
                 })
-                .chain(self.has_child_owned_fields().then(|| quote!(owner: Owner)));
+                .chain(
+                    self.has_child_owned_fields()
+                        .then(|| quote!(owner: dioxus_core::internal::generational_box::Owner)),
+                );
             let global_fields_value = self
                 .extend_fields()
                 .map(|f| {
                     let name = f.extends_vec_ident();
                     quote!(#name: Vec::new())
                 })
-                .chain(
-                    self.has_child_owned_fields()
-                        .then(|| quote!(owner: Owner::default())),
-                );
+                .chain(self.has_child_owned_fields().then(
+                    || quote!(owner: dioxus_core::internal::generational_box::Owner::default()),
+                ));
 
             Ok(quote! {
                 impl #impl_generics #name #ty_generics #where_clause {
@@ -1766,6 +1768,7 @@ fn looks_like_write_type(ty: &Type) -> bool {
 fn looks_like_store_type(ty: &Type) -> bool {
     last_segment_matches(ty, &parse_quote!(Store))
         || last_segment_matches(ty, &parse_quote!(ReadStore))
+        || last_segment_matches(ty, &parse_quote!(WriteStore))
 }
 
 fn looks_like_callback_type(ty: &Type) -> bool {

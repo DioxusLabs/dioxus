@@ -21,13 +21,13 @@ pub(crate) async fn proxy_websocket(
         .await
         .map_err(IntoResponse::into_response)?;
 
-    tracing::info!(dx_src = ?TraceSrc::Dev, "Proxying websocket connection {req:?}");
+    tracing::trace!(dx_src = ?TraceSrc::Dev, "Proxying websocket connection {req:?}");
     let proxied_request = into_proxied_request(req, backend_url).map_err(handle_proxy_error)?;
-    tracing::info!(dx_src = ?TraceSrc::Dev, "Connection proxied to {proxied_uri}", proxied_uri = proxied_request.uri());
+    tracing::trace!(dx_src = ?TraceSrc::Dev, "Connection proxied to {proxied_uri}", proxied_uri = proxied_request.uri());
 
     Ok(ws.on_upgrade(move |client_ws| async move {
         match handle_ws_connection(client_ws, proxied_request).await {
-            Ok(()) => tracing::info!(dx_src = ?TraceSrc::Dev, "Websocket connection closed"),
+            Ok(()) => tracing::trace!(dx_src = ?TraceSrc::Dev, "Websocket connection closed"),
             Err(e) => {
                 tracing::error!(dx_src = ?TraceSrc::Dev, "Error proxying websocket connection: {e}")
             }

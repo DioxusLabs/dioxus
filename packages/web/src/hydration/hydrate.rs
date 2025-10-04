@@ -8,7 +8,7 @@ use dioxus_core::{
     AttributeValue, DynamicNode, ElementId, ScopeId, ScopeState, SuspenseBoundaryProps,
     SuspenseContext, TemplateNode, VNode, VirtualDom,
 };
-use dioxus_fullstack_protocol::HydrationContext;
+use dioxus_fullstack_core::HydrationContext;
 use futures_channel::mpsc::UnboundedReceiver;
 use std::fmt::Write;
 use RehydrationError::*;
@@ -301,9 +301,12 @@ impl WebsysDom {
                         let id = vnode
                             .mounted_dynamic_attribute(*id, dom)
                             .ok_or(VNodeNotInitialized)?;
+                        // We always need to hydrate the node even if the attributes are empty so we have
+                        // a mount for the node later. This could be spread attributes that are currently empty,
+                        // but will be filled later
+                        mounted_id = Some(id);
                         for attribute in attributes {
                             let value = &attribute.value;
-                            mounted_id = Some(id);
                             if let AttributeValue::Listener(_) = value {
                                 if attribute.name == "onmounted" {
                                     to_mount.push(id);

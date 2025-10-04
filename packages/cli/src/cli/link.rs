@@ -1,7 +1,7 @@
 use crate::Result;
 use anyhow::Context;
 use serde::{Deserialize, Serialize};
-use std::{borrow::Cow, path::PathBuf};
+use std::{borrow::Cow, ffi::OsString, path::PathBuf};
 use target_lexicon::Triple;
 
 /// `dx` can act as a linker in a few scenarios. Note that we don't *actually* implement the linker logic,
@@ -82,29 +82,24 @@ impl LinkAction {
 
     pub(crate) fn write_env_vars(
         &self,
-        env_vars: &mut Vec<(Cow<'static, str>, String)>,
+        env_vars: &mut Vec<(Cow<'static, str>, OsString)>,
     ) -> Result<()> {
-        env_vars.push((Self::DX_LINK_ARG.into(), "1".to_string()));
+        env_vars.push((Self::DX_LINK_ARG.into(), "1".into()));
         env_vars.push((
             Self::DX_ARGS_FILE.into(),
-            dunce::canonicalize(&self.link_args_file)?
-                .to_string_lossy()
-                .to_string(),
+            dunce::canonicalize(&self.link_args_file)?.into_os_string(),
         ));
         env_vars.push((
             Self::DX_ERR_FILE.into(),
-            dunce::canonicalize(&self.link_err_file)?
-                .to_string_lossy()
-                .to_string(),
+            dunce::canonicalize(&self.link_err_file)?.into_os_string(),
         ));
-        env_vars.push((Self::DX_LINK_TRIPLE.into(), self.triple.to_string()));
+        env_vars.push((Self::DX_LINK_TRIPLE.into(), self.triple.to_string().into()));
         if let Some(linker) = &self.linker {
             env_vars.push((
                 Self::DX_LINK_CUSTOM_LINKER.into(),
                 dunce::canonicalize(linker)
                     .unwrap_or(linker.clone())
-                    .to_string_lossy()
-                    .to_string(),
+                    .into_os_string(),
             ));
         }
 
@@ -195,8 +190,8 @@ impl LinkAction {
                     target_lexicon::BinaryFormat::Macho => object::BinaryFormat::MachO,
                     target_lexicon::BinaryFormat::Wasm => object::BinaryFormat::Wasm,
                     target_lexicon::BinaryFormat::Xcoff => object::BinaryFormat::Xcoff,
-                    target_lexicon::BinaryFormat::Unknown => todo!(),
-                    _ => todo!("Binary format not supported"),
+                    target_lexicon::BinaryFormat::Unknown => unimplemented!(),
+                    _ => unimplemented!("Binary format not supported"),
                 };
 
                 let arch = match triple.architecture {
@@ -207,13 +202,13 @@ impl LinkAction {
                     target_lexicon::Architecture::Aarch64(_) => object::Architecture::Aarch64,
                     target_lexicon::Architecture::LoongArch64 => object::Architecture::LoongArch64,
                     target_lexicon::Architecture::Unknown => object::Architecture::Unknown,
-                    _ => todo!("Architecture not supported"),
+                    _ => unimplemented!("Architecture not supported"),
                 };
 
                 let endian = match triple.endianness() {
                     Ok(target_lexicon::Endianness::Little) => object::Endianness::Little,
                     Ok(target_lexicon::Endianness::Big) => object::Endianness::Big,
-                    Err(_) => todo!("Endianness not supported"),
+                    Err(_) => unimplemented!("Endianness not supported"),
                 };
 
                 let bytes = object::write::Object::new(format, arch, endian)

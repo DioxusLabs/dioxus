@@ -4,8 +4,6 @@
 
 //! # Dioxus Web
 
-use std::time::Duration;
-
 pub use crate::cfg::Config;
 use crate::hydration::SuspenseMessage;
 use dioxus_core::VirtualDom;
@@ -22,16 +20,15 @@ pub use events::*;
 
 #[cfg(feature = "document")]
 mod document;
-#[cfg(feature = "file_engine")]
-mod file_engine;
 #[cfg(feature = "document")]
 mod history;
 #[cfg(feature = "document")]
 pub use document::WebDocument;
-#[cfg(feature = "file_engine")]
-pub use file_engine::*;
 #[cfg(feature = "document")]
 pub use history::{HashHistory, WebHistory};
+
+mod files;
+pub use files::*;
 
 #[cfg(all(feature = "devtools", debug_assertions))]
 mod devtools;
@@ -51,6 +48,9 @@ pub use hydration::*;
 /// wasm_bindgen_futures::spawn_local(app_fut);
 /// ```
 pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
+    #[cfg(all(feature = "devtools", debug_assertions))]
+    let mut hotreload_rx = devtools::init(&web_config);
+
     #[cfg(feature = "document")]
     if let Some(history) = web_config.history.clone() {
         virtual_dom.in_runtime(|| dioxus_core::ScopeId::ROOT.provide_context(history));
@@ -61,10 +61,8 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
 
     let runtime = virtual_dom.runtime();
 
-    #[cfg(all(feature = "devtools", debug_assertions))]
-    let mut hotreload_rx = devtools::init();
-
-    let should_hydrate = web_config.hydrate;
+    // If the hydrate feature is enabled, launch the client with hydration enabled
+    let should_hydrate = web_config.hydrate || cfg!(feature = "hydrate");
 
     let mut websys_dom = WebsysDom::new(web_config, runtime);
 
@@ -94,7 +92,7 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
 
         #[cfg(feature = "hydrate")]
         {
-            use dioxus_fullstack_protocol::HydrationContext;
+            use dioxus_fullstack_core::HydrationContext;
 
             websys_dom.skip_mutations = true;
             // Get the initial hydration data from the client
@@ -134,6 +132,16 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
                 virtual_dom.in_runtime(|| dioxus_core::ScopeId::APP.throw_error(error));
             }
             server_data.in_context(|| {
+                virtual_dom.in_runtime(|| {
+                    // Provide a hydration compatible create error boundary method
+                    dioxus_core::ScopeId::ROOT.in_runtime(|| {
+                        dioxus_core::provide_create_error_boundary(
+                            dioxus_fullstack_core::init_error_boundary,
+                        );
+                    });
+                    #[cfg(feature = "document")]
+                    document::init_fullstack_document();
+                });
                 virtual_dom.rebuild(&mut websys_dom);
             });
             websys_dom.skip_mutations = false;
@@ -224,7 +232,7 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
                     "Hot-patch success!",
                     &format!("App successfully patched in {} ms", hr_msg.ms_elapsed),
                     devtools::ToastLevel::Success,
-                    Duration::from_millis(2000),
+                    std::time::Duration::from_millis(2000),
                     false,
                 );
             }

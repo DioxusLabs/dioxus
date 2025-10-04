@@ -222,6 +222,7 @@ pub fn is_cli_enabled() -> bool {
 /// be served at `http://localhost:8080/dogapp`.
 ///
 /// All assets will be served from this base path as well, ie `http://localhost:8080/dogapp/assets/logo.png`.
+#[allow(unreachable_code)]
 pub fn base_path() -> Option<String> {
     // This may trigger when compiling to the server if you depend on another crate that pulls in
     // the web feature. It might be better for the renderers to provide the current platform

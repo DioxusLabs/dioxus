@@ -31,7 +31,11 @@ impl LiveViewPool {
         dioxus_html::set_event_converter(Box::new(SerializedHtmlEventConverter));
 
         LiveViewPool {
-            pool: LocalPoolHandle::new(16),
+            pool: LocalPoolHandle::new(
+                std::thread::available_parallelism()
+                    .map(usize::from)
+                    .unwrap_or(1),
+            ),
         }
     }
 

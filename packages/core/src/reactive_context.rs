@@ -108,8 +108,7 @@ impl ReactiveContext {
         let id = scope.id;
         let sender = runtime.sender.clone();
         let update_scope = move || {
-            tracing::trace!("Marking scope {:?} as dirty", id);
-            sender.unbounded_send(SchedulerMsg::Immediate(id)).unwrap();
+            _ = sender.unbounded_send(SchedulerMsg::Immediate(id));
         };
 
         // Otherwise, create a new context at the current scope

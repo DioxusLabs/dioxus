@@ -16,9 +16,9 @@ jobs:
   typos:
     if: github.event.pull_request.draft == false
     name: Check for typos
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Check for typos
         uses: crate-ci/typos@master
 
@@ -26,9 +26,9 @@ jobs:
   link-check:
     if: github.event.pull_request.draft == false
     name: Check For Invalid Links
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Restore lychee cache
         uses: actions/cache@v4
         with:

@@ -91,7 +91,6 @@ pub fn init(level: Level) -> Result<(), SetGlobalDefaultError> {
         let layer = tracing_wasm::WASMLayer::new(layer_config);
         let reg = Registry::default().with(layer);
 
-        console_error_panic_hook::set_once();
         set_global_default(reg)
     }
 

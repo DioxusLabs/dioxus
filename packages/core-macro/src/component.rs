@@ -401,7 +401,7 @@ struct DocField<'a> {
     input_arg_doc: String,
 }
 
-fn build_doc_fields(f: &FnArg) -> Option<DocField> {
+fn build_doc_fields(f: &FnArg) -> Option<DocField<'_>> {
     let FnArg::Typed(pt) = f else { unreachable!() };
 
     let arg_doc = pt

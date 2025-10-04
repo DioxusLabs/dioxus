@@ -102,13 +102,18 @@ impl RunArgs {
                                 path,
                             } => tracing::info!(
                                 "[{bundle_format}] Copying asset {} ({current}/{total})",
-                                path.display(),
+                                path.file_name()
+                                    .map(|f| f.to_string_lossy())
+                                    .unwrap_or_default(),
                             ),
                             BuildStage::Bundling => {
                                 tracing::info!("[{bundle_format}] Bundling app")
                             }
                             BuildStage::RunningGradle => {
                                 tracing::info!("[{bundle_format}] Running Gradle")
+                            }
+                            BuildStage::CodeSigning => {
+                                tracing::info!("[{bundle_format}] Code signing app")
                             }
                             BuildStage::Success => {}
                             BuildStage::Restarting => {}
