@@ -16,10 +16,16 @@ fn app() -> Element {
 
 #[component]
 fn Child(store: WriteStore<u32, SyncStorage>) -> Element {
+    // A `WriteStore<T, SyncStorage>` can be sent to another thread!
+    // Make sure to clean up your threads when the component unmounts.
     use_hook(|| {
         std::thread::spawn(move || loop {
             std::thread::sleep(std::time::Duration::from_secs(1));
             store += 1;
+
+            if store() >= 10 {
+                break;
+            }
         });
     });
 

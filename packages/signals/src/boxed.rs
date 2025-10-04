@@ -16,118 +16,6 @@ use crate::{
 )]
 pub type ReadOnlySignal<T, S> = ReadSignal<T, S>;
 
-mod sealed {
-    use generational_box::{SyncStorage, UnsyncStorage};
-
-    pub trait Sealed {}
-    impl Sealed for UnsyncStorage {}
-    impl Sealed for SyncStorage {}
-
-    pub struct SealedToken;
-
-    pub trait SealedTokenTrait {}
-    impl SealedTokenTrait for SealedToken {}
-}
-
-/// A trait for creating boxed readable and writable signals. This is implemented for
-/// [UnsyncStorage] and [SyncStorage].
-///
-/// You may need to add this trait as a bound when you use [ReadSignal] or [WriteSignal] while
-/// remaining generic over syncness.
-pub trait BoxedSignalStorage<T: ?Sized>:
-    Storage<Box<Self::DynReadable<sealed::SealedToken>>>
-    + Storage<Box<Self::DynWritable<sealed::SealedToken>>>
-    + sealed::Sealed
-    + 'static
-{
-    // This is not a public api, and is sealed to prevent external usage and implementations
-    #[doc(hidden)]
-    type DynReadable<Seal: sealed::SealedTokenTrait>: Readable<Target = T, Storage = Self> + ?Sized;
-    // This is not a public api, and is sealed to prevent external usage and implementations
-    #[doc(hidden)]
-    type DynWritable<Seal: sealed::SealedTokenTrait>: Writable<Target = T, Storage = Self, WriteMetadata = Box<dyn Any>>
-        + ?Sized;
-}
-
-/// A trait for creating boxed readable and writable signals. This is implemented for
-/// [UnsyncStorage] and [SyncStorage].
-///
-/// The storage type must implement `CreateReadOnlySignalStorage<T>` for every readable `T` type
-/// to be used with `ReadSignal` and `WriteSignal`.
-///
-/// You may need to add this trait as a bound when you call [ReadSignal::new_maybe_sync] or
-/// [WriteSignal::new_maybe_sync] while remaining generic over syncness.
-pub trait CreateBoxedSignalStorage<T: Readable + ?Sized>:
-    BoxedSignalStorage<T::Target> + 'static
-{
-    // This is not a public api, and is sealed to prevent external usage and implementations
-    #[doc(hidden)]
-    fn new_readable(
-        value: T,
-        _: sealed::SealedToken,
-    ) -> Box<Self::DynReadable<sealed::SealedToken>>
-    where
-        T: Sized;
-
-    // This is not a public api, and is sealed to prevent external usage and implementations
-    #[doc(hidden)]
-    fn new_writable(
-        value: T,
-        _: sealed::SealedToken,
-    ) -> Box<Self::DynWritable<sealed::SealedToken>>
-    where
-        T: Writable + Sized;
-}
-
-impl<T: ?Sized + 'static> BoxedSignalStorage<T> for UnsyncStorage {
-    type DynReadable<Seal: sealed::SealedTokenTrait> = dyn Readable<Target = T, Storage = Self>;
-    type DynWritable<Seal: sealed::SealedTokenTrait> =
-        dyn Writable<Target = T, Storage = Self, WriteMetadata = Box<dyn Any>>;
-}
-
-impl<T: Readable<Storage = UnsyncStorage> + ?Sized + 'static> CreateBoxedSignalStorage<T>
-    for UnsyncStorage
-{
-    fn new_readable(value: T, _: sealed::SealedToken) -> Box<Self::DynReadable<sealed::SealedToken>>
-    where
-        T: Sized,
-    {
-        Box::new(value)
-    }
-
-    fn new_writable(value: T, _: sealed::SealedToken) -> Box<Self::DynWritable<sealed::SealedToken>>
-    where
-        T: Writable + Sized,
-    {
-        Box::new(BoxWriteMetadata::new(value))
-    }
-}
-
-impl<T: ?Sized + 'static> BoxedSignalStorage<T> for SyncStorage {
-    type DynReadable<Seal: sealed::SealedTokenTrait> =
-        dyn Readable<Target = T, Storage = Self> + Send + Sync;
-    type DynWritable<Seal: sealed::SealedTokenTrait> =
-        dyn Writable<Target = T, Storage = Self, WriteMetadata = Box<dyn Any>> + Send + Sync;
-}
-
-impl<T: Readable<Storage = SyncStorage> + Sync + Send + ?Sized + 'static>
-    CreateBoxedSignalStorage<T> for SyncStorage
-{
-    fn new_readable(value: T, _: sealed::SealedToken) -> Box<Self::DynReadable<sealed::SealedToken>>
-    where
-        T: Sized,
-    {
-        Box::new(value)
-    }
-
-    fn new_writable(value: T, _: sealed::SealedToken) -> Box<Self::DynWritable<sealed::SealedToken>>
-    where
-        T: Writable + Sized,
-    {
-        Box::new(BoxWriteMetadata::new(value))
-    }
-}
-
 /// A boxed version of [Readable] that can be used to store any readable type.
 pub struct ReadSignal<T: ?Sized, S: BoxedSignalStorage<T> = UnsyncStorage> {
     value: CopyValue<Box<S::DynReadable<sealed::SealedToken>>, S>,
@@ -561,4 +449,116 @@ where
     fn from(value: MappedMutSignal<O, V, F, FMut>) -> Self {
         Self::new_maybe_sync(value)
     }
+}
+
+/// A trait for creating boxed readable and writable signals. This is implemented for
+/// [UnsyncStorage] and [SyncStorage].
+///
+/// You may need to add this trait as a bound when you use [ReadSignal] or [WriteSignal] while
+/// remaining generic over syncness.
+pub trait BoxedSignalStorage<T: ?Sized>:
+    Storage<Box<Self::DynReadable<sealed::SealedToken>>>
+    + Storage<Box<Self::DynWritable<sealed::SealedToken>>>
+    + sealed::Sealed
+    + 'static
+{
+    // This is not a public api, and is sealed to prevent external usage and implementations
+    #[doc(hidden)]
+    type DynReadable<Seal: sealed::SealedTokenTrait>: Readable<Target = T, Storage = Self> + ?Sized;
+    // This is not a public api, and is sealed to prevent external usage and implementations
+    #[doc(hidden)]
+    type DynWritable<Seal: sealed::SealedTokenTrait>: Writable<Target = T, Storage = Self, WriteMetadata = Box<dyn Any>>
+        + ?Sized;
+}
+
+/// A trait for creating boxed readable and writable signals. This is implemented for
+/// [UnsyncStorage] and [SyncStorage].
+///
+/// The storage type must implement `CreateReadOnlySignalStorage<T>` for every readable `T` type
+/// to be used with `ReadSignal` and `WriteSignal`.
+///
+/// You may need to add this trait as a bound when you call [ReadSignal::new_maybe_sync] or
+/// [WriteSignal::new_maybe_sync] while remaining generic over syncness.
+pub trait CreateBoxedSignalStorage<T: Readable + ?Sized>:
+    BoxedSignalStorage<T::Target> + 'static
+{
+    // This is not a public api, and is sealed to prevent external usage and implementations
+    #[doc(hidden)]
+    fn new_readable(
+        value: T,
+        _: sealed::SealedToken,
+    ) -> Box<Self::DynReadable<sealed::SealedToken>>
+    where
+        T: Sized;
+
+    // This is not a public api, and is sealed to prevent external usage and implementations
+    #[doc(hidden)]
+    fn new_writable(
+        value: T,
+        _: sealed::SealedToken,
+    ) -> Box<Self::DynWritable<sealed::SealedToken>>
+    where
+        T: Writable + Sized;
+}
+
+impl<T: ?Sized + 'static> BoxedSignalStorage<T> for UnsyncStorage {
+    type DynReadable<Seal: sealed::SealedTokenTrait> = dyn Readable<Target = T, Storage = Self>;
+    type DynWritable<Seal: sealed::SealedTokenTrait> =
+        dyn Writable<Target = T, Storage = Self, WriteMetadata = Box<dyn Any>>;
+}
+
+impl<T: Readable<Storage = UnsyncStorage> + ?Sized + 'static> CreateBoxedSignalStorage<T>
+    for UnsyncStorage
+{
+    fn new_readable(value: T, _: sealed::SealedToken) -> Box<Self::DynReadable<sealed::SealedToken>>
+    where
+        T: Sized,
+    {
+        Box::new(value)
+    }
+
+    fn new_writable(value: T, _: sealed::SealedToken) -> Box<Self::DynWritable<sealed::SealedToken>>
+    where
+        T: Writable + Sized,
+    {
+        Box::new(BoxWriteMetadata::new(value))
+    }
+}
+
+impl<T: ?Sized + 'static> BoxedSignalStorage<T> for SyncStorage {
+    type DynReadable<Seal: sealed::SealedTokenTrait> =
+        dyn Readable<Target = T, Storage = Self> + Send + Sync;
+    type DynWritable<Seal: sealed::SealedTokenTrait> =
+        dyn Writable<Target = T, Storage = Self, WriteMetadata = Box<dyn Any>> + Send + Sync;
+}
+
+impl<T: Readable<Storage = SyncStorage> + Sync + Send + ?Sized + 'static>
+    CreateBoxedSignalStorage<T> for SyncStorage
+{
+    fn new_readable(value: T, _: sealed::SealedToken) -> Box<Self::DynReadable<sealed::SealedToken>>
+    where
+        T: Sized,
+    {
+        Box::new(value)
+    }
+
+    fn new_writable(value: T, _: sealed::SealedToken) -> Box<Self::DynWritable<sealed::SealedToken>>
+    where
+        T: Writable + Sized,
+    {
+        Box::new(BoxWriteMetadata::new(value))
+    }
+}
+
+mod sealed {
+    use generational_box::{SyncStorage, UnsyncStorage};
+
+    pub trait Sealed {}
+    impl Sealed for UnsyncStorage {}
+    impl Sealed for SyncStorage {}
+
+    pub struct SealedToken;
+
+    pub trait SealedTokenTrait {}
+    impl SealedTokenTrait for SealedToken {}
 }
