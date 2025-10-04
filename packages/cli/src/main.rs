@@ -18,6 +18,7 @@ mod rustcwrapper;
 mod serve;
 mod settings;
 mod tailwind;
+mod test_harnesses;
 mod wasm_bindgen;
 mod wasm_opt;
 mod workspace;

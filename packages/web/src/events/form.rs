@@ -1,6 +1,6 @@
 use std::{any::Any, collections::HashMap};
 
-use dioxus_html::{FormValue, HasFileData, HasFormData};
+use dioxus_html::{FileData, FormValue, HasFileData, HasFormData};
 use js_sys::Array;
 use wasm_bindgen::JsValue;
 use wasm_bindgen::{prelude::wasm_bindgen, JsCast};
@@ -10,7 +10,7 @@ use super::WebEventExt;
 
 pub(crate) struct WebFormData {
     element: Element,
-    raw: Event,
+    event: Event,
 }
 
 impl WebEventExt for dioxus_html::FormData {
@@ -23,8 +23,8 @@ impl WebEventExt for dioxus_html::FormData {
 }
 
 impl WebFormData {
-    pub fn new(element: Element, raw: Event) -> Self {
-        Self { element, raw }
+    pub fn new(element: Element, event: Event) -> Self {
+        Self { element, event }
     }
 }
 
@@ -32,39 +32,39 @@ impl HasFormData for WebFormData {
     fn value(&self) -> String {
         let target = &self.element;
         target
-        .dyn_ref()
-        .map(|input: &web_sys::HtmlInputElement| {
-            // todo: special case more input types
-            match input.type_().as_str() {
-                "checkbox" => {
-                    match input.checked() {
-                        true => "true".to_string(),
-                        false => "false".to_string(),
+            .dyn_ref()
+            .map(|input: &web_sys::HtmlInputElement| {
+                // todo: special case more input types
+                match input.type_().as_str() {
+                    "checkbox" => {
+                        match input.checked() {
+                            true => "true".to_string(),
+                            false => "false".to_string(),
+                        }
+                    },
+                    _ => {
+                        input.value()
                     }
-                },
-                _ => {
-                    input.value()
                 }
-            }
-        })
-        .or_else(|| {
-            target
-                .dyn_ref()
-                .map(|input: &web_sys::HtmlTextAreaElement| input.value())
-        })
-        // select elements are NOT input events - because - why woudn't they be??
-        .or_else(|| {
-            target
-                .dyn_ref()
-                .map(|input: &web_sys::HtmlSelectElement| input.value())
-        })
-        .or_else(|| {
-            target
-                .dyn_ref::<web_sys::HtmlElement>()
-                .unwrap()
-                .text_content()
-        })
-        .expect("only an InputElement or TextAreaElement or an element with contenteditable=true can have an oninput event listener")
+            })
+            .or_else(|| {
+                target
+                    .dyn_ref()
+                    .map(|input: &web_sys::HtmlTextAreaElement| input.value())
+            })
+            // select elements are NOT input events - because - why woudn't they be??
+            .or_else(|| {
+                target
+                    .dyn_ref()
+                    .map(|input: &web_sys::HtmlSelectElement| input.value())
+            })
+            .or_else(|| {
+                target
+                    .dyn_ref::<web_sys::HtmlElement>()
+                    .unwrap()
+                    .text_content()
+            })
+            .expect("only an InputElement or TextAreaElement or an element with contenteditable=true can have an oninput event listener")
     }
 
     fn values(&self) -> HashMap<String, FormValue> {
@@ -101,32 +101,20 @@ impl HasFormData for WebFormData {
     }
 
     fn as_any(&self) -> &dyn Any {
-        &self.raw as &dyn Any
+        &self.event as &dyn Any
     }
 }
 
 impl HasFileData for WebFormData {
-    fn files(&self) -> Option<std::sync::Arc<dyn dioxus_html::FileEngine>> {
-        #[cfg(feature = "file_engine")]
-        {
-            let files = self
-                .element
-                .dyn_ref()
-                .and_then(|input: &web_sys::HtmlInputElement| {
-                    input.files().and_then(|files| {
-                        #[allow(clippy::arc_with_non_send_sync)]
-                        crate::file_engine::WebFileEngine::new(files).map(|f| {
-                            std::sync::Arc::new(f) as std::sync::Arc<dyn dioxus_html::FileEngine>
-                        })
-                    })
-                });
-
-            files
-        }
-        #[cfg(not(feature = "file_engine"))]
-        {
-            None
-        }
+    fn files(&self) -> Vec<FileData> {
+        use wasm_bindgen::JsCast;
+        self.event
+            .target()
+            .and_then(|t| t.dyn_into::<web_sys::HtmlInputElement>().ok())
+            .and_then(|input| input.files())
+            .map(crate::files::WebFileEngine::new)
+            .map(|engine| engine.to_files())
+            .unwrap_or_default()
     }
 }
 

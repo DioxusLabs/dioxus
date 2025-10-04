@@ -4,8 +4,6 @@
 
 //! # Dioxus Web
 
-use std::time::Duration;
-
 pub use crate::cfg::Config;
 use crate::hydration::SuspenseMessage;
 use dioxus_core::VirtualDom;
@@ -22,16 +20,15 @@ pub use events::*;
 
 #[cfg(feature = "document")]
 mod document;
-#[cfg(feature = "file_engine")]
-mod file_engine;
 #[cfg(feature = "document")]
 mod history;
 #[cfg(feature = "document")]
 pub use document::WebDocument;
-#[cfg(feature = "file_engine")]
-pub use file_engine::*;
 #[cfg(feature = "document")]
 pub use history::{HashHistory, WebHistory};
+
+mod files;
+pub use files::*;
 
 #[cfg(all(feature = "devtools", debug_assertions))]
 mod devtools;
@@ -95,7 +92,7 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
 
         #[cfg(feature = "hydrate")]
         {
-            use dioxus_fullstack_protocol::HydrationContext;
+            use dioxus_fullstack_core::HydrationContext;
 
             websys_dom.skip_mutations = true;
             // Get the initial hydration data from the client
@@ -135,8 +132,14 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
                 virtual_dom.in_runtime(|| dioxus_core::ScopeId::APP.throw_error(error));
             }
             server_data.in_context(|| {
-                #[cfg(feature = "document")]
                 virtual_dom.in_runtime(|| {
+                    // Provide a hydration compatible create error boundary method
+                    dioxus_core::ScopeId::ROOT.in_runtime(|| {
+                        dioxus_core::provide_create_error_boundary(
+                            dioxus_fullstack_core::init_error_boundary,
+                        );
+                    });
+                    #[cfg(feature = "document")]
                     document::init_fullstack_document();
                 });
                 virtual_dom.rebuild(&mut websys_dom);
@@ -229,7 +232,7 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
                     "Hot-patch success!",
                     &format!("App successfully patched in {} ms", hr_msg.ms_elapsed),
                     devtools::ToastLevel::Success,
-                    Duration::from_millis(2000),
+                    std::time::Duration::from_millis(2000),
                     false,
                 );
             }

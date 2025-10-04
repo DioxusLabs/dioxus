@@ -1,7 +1,6 @@
 use dioxus_core::{Element, VNode};
 use dioxus_core_macro::{rsx, Props};
 use dioxus_html as dioxus_elements;
-use dioxus_signals::{GlobalSignal, ReadableExt};
 
 use tracing::error;
 

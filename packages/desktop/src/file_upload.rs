@@ -11,8 +11,8 @@ use dioxus_html::{
     point_interaction::{
         InteractionElementOffset, InteractionLocation, ModifiersInteraction, PointerInteraction,
     },
-    FileEngine, HasDragData, HasFileData, HasFormData, HasMouseData, SerializedMouseData,
-    SerializedPointInteraction,
+    FileData, HasDragData, HasFileData, HasFormData, HasMouseData, NativeFileData,
+    SerializedMouseData, SerializedPointInteraction,
 };
 
 use serde::Deserialize;
@@ -155,12 +155,16 @@ impl FromStr for Filters {
 
 #[derive(Clone)]
 pub(crate) struct DesktopFileUploadForm {
-    pub files: Arc<NativeFileEngine>,
+    pub files: Vec<PathBuf>,
 }
 
 impl HasFileData for DesktopFileUploadForm {
-    fn files(&self) -> Option<Arc<dyn FileEngine>> {
-        Some(self.files.clone())
+    fn files(&self) -> Vec<FileData> {
+        self.files
+            .iter()
+            .cloned()
+            .map(|f| FileData::new(DesktopFileData(f)))
+            .collect()
     }
 }
 
@@ -187,12 +191,16 @@ impl NativeFileHover {
 #[derive(Clone)]
 pub(crate) struct DesktopFileDragEvent {
     pub mouse: SerializedPointInteraction,
-    pub files: Arc<NativeFileEngine>,
+    pub files: Vec<PathBuf>,
 }
 
 impl HasFileData for DesktopFileDragEvent {
-    fn files(&self) -> Option<Arc<dyn FileEngine>> {
-        Some(self.files.clone())
+    fn files(&self) -> Vec<FileData> {
+        self.files
+            .iter()
+            .cloned()
+            .map(|f| FileData::new(DesktopFileData(f)))
+            .collect()
     }
 }
 
@@ -248,78 +256,93 @@ impl PointerInteraction for DesktopFileDragEvent {
     }
 }
 
-pub struct NativeFileEngine {
-    files: Vec<PathBuf>,
-}
+#[derive(Clone)]
+pub struct DesktopFileData(pub(crate) PathBuf);
 
-impl NativeFileEngine {
-    pub fn new(files: Vec<PathBuf>) -> Self {
-        Self { files }
-    }
-}
-
-#[async_trait::async_trait(?Send)]
-impl FileEngine for NativeFileEngine {
-    fn files(&self) -> Vec<String> {
-        self.files
-            .iter()
-            .filter_map(|f| Some(f.to_str()?.to_string()))
-            .collect()
+impl NativeFileData for DesktopFileData {
+    fn name(&self) -> String {
+        self.0.file_name().unwrap().to_string_lossy().into_owned()
     }
 
-    async fn file_size(&self, file: &str) -> Option<u64> {
+    fn size(&self) -> u64 {
+        std::fs::metadata(&self.0).map(|m| m.len()).unwrap_or(0)
+    }
+
+    fn last_modified(&self) -> u64 {
+        std::fs::metadata(&self.0)
+            .and_then(|m| m.modified())
+            .ok()
+            .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
+            .map(|duration| duration.as_secs())
+            .unwrap_or(0)
+    }
+
+    fn read_bytes(
+        &self,
+    ) -> std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<bytes::Bytes, dioxus_core::Error>> + 'static>,
+    > {
+        let path = self.0.clone();
+        Box::pin(async move { Ok(bytes::Bytes::from(std::fs::read(&path)?)) })
+    }
+
+    fn read_string(
+        &self,
+    ) -> std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<String, dioxus_core::Error>> + 'static>,
+    > {
+        let path = self.0.clone();
+        Box::pin(async move { Ok(std::fs::read_to_string(&path)?) })
+    }
+
+    fn inner(&self) -> &dyn std::any::Any {
+        &self.0
+    }
+
+    fn path(&self) -> PathBuf {
+        self.0.clone()
+    }
+
+    fn byte_stream(
+        &self,
+    ) -> std::pin::Pin<
+        Box<
+            dyn futures_util::Stream<Item = Result<bytes::Bytes, dioxus_core::Error>>
+                + 'static
+                + Send,
+        >,
+    > {
+        let path = self.0.clone();
         #[cfg(feature = "tokio_runtime")]
         {
-            let file = File::open(file).await.ok()?;
-            Some(file.metadata().await.ok()?.len())
+            // todo!()
+            // use futures_util::TryFutureExt;
+
+            // futures_util::stream::try_unfold(File::open(path), |mut file| async move {
+            // let mut buf = vec![0; 8192];
+            // let n = file
+            //     .read(&mut buf)
+            //     .await
+            //     .map_err(|e| dioxus_core::Error::from(e))?;
+            // if n == 0 {
+            //     Ok(None)
+            // } else {
+            //     buf.truncate(n);
+            //     Ok(Some((bytes::Bytes::from(buf), file)))
+            // }
+            // })
+            // .map(|res| res.map(bytes::Bytes::from))
+            // .boxed()
         }
-        #[cfg(not(feature = "tokio_runtime"))]
-        {
-            None
-        }
+        todo!()
     }
 
-    async fn read_file(&self, file: &str) -> Option<Vec<u8>> {
-        #[cfg(feature = "tokio_runtime")]
-        {
-            let mut file = File::open(file).await.ok()?;
-
-            let mut contents = Vec::new();
-            file.read_to_end(&mut contents).await.ok()?;
-
-            Some(contents)
-        }
-        #[cfg(not(feature = "tokio_runtime"))]
-        {
-            None
-        }
-    }
-
-    async fn read_file_to_string(&self, file: &str) -> Option<String> {
-        #[cfg(feature = "tokio_runtime")]
-        {
-            let mut file = File::open(file).await.ok()?;
-
-            let mut contents = String::new();
-            file.read_to_string(&mut contents).await.ok()?;
-
-            Some(contents)
-        }
-        #[cfg(not(feature = "tokio_runtime"))]
-        {
-            None
-        }
-    }
-
-    async fn get_native_file(&self, file: &str) -> Option<Box<dyn Any>> {
-        #[cfg(feature = "tokio_runtime")]
-        {
-            let file = File::open(file).await.ok()?;
-            Some(Box::new(file))
-        }
-        #[cfg(not(feature = "tokio_runtime"))]
-        {
-            None
-        }
+    fn content_type(&self) -> Option<String> {
+        Some(
+            dioxus_asset_resolver::native::get_mime_from_ext(
+                self.0.extension().and_then(|ext| ext.to_str()),
+            )
+            .to_string(),
+        )
     }
 }
