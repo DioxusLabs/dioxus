@@ -667,7 +667,8 @@ impl SsrRendererPool {
         }
         to.write_str(&index.head_after_title)?;
 
-        let document = virtual_dom.in_runtime(try_consume_context::<Rc<ServerDocument>>);
+        let document =
+            virtual_dom.in_scope(ScopeId::ROOT, try_consume_context::<Rc<ServerDocument>>);
         if let Some(document) = document {
             // Collect any head content from the document provider and inject that into the head
             document.render(to)?;

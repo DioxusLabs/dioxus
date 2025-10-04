@@ -12,7 +12,7 @@ pub fn copy_value_hoisted<T: 'static, S: generational_box::Storage<T> + 'static>
     let rt = dioxus_core::Runtime::current();
     if let Some(current_scope) = rt.try_current_scope_id() {
         // If the current scope is a descendant of the origin scope or is the same scope, we don't need to warn
-        if origin_scope == current_scope || rt.is_descendant_of(origin_scope, current_scope) {
+        if origin_scope == current_scope || rt.is_descendant_of(current_scope, origin_scope) {
             return;
         }
         let create_location = value.value.created_at().unwrap();

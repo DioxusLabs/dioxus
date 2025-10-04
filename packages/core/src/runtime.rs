@@ -326,17 +326,14 @@ fn MyComponent() -> Element {{
     pub(crate) fn with_current_scope<R>(callback: impl FnOnce(&Scope) -> R) -> R {
         Self::with(|rt| {
             let scope = rt.current_scope_id();
-            callback(&rt.get_state(scope))
+            Self::with_scope(scope, callback)
         })
     }
 
     /// Runs a function with the current scope
     pub(crate) fn with_scope<R>(scope: ScopeId, callback: impl FnOnce(&Scope) -> R) -> R {
-        Self::with(|rt| {
-            rt.try_get_state(scope)
-                .map(|scopestate| callback(&scopestate))
-        })
-        .expect("Runtime should exist")
+        let rt = Runtime::current();
+        Self::in_scope(&rt, scope, || callback(&rt.get_state(scope)))
     }
 
     /// Finish a render. This will mark all effects as ready to run and send the render signal.
