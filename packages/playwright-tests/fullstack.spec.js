@@ -104,10 +104,10 @@ test("assets cache correctly", async ({ page }) => {
 
   // Wait for the nested asset image to be loaded
   const nestedAssetImageResponse = await nestedAssetImageFuture;
-  console.log(
-    "Nested Asset Image Response:",
-    nestedAssetImageResponse
-  );
+  // console.log(
+  //   "Nested Asset Image Response:",
+  //   nestedAssetImageResponse
+  // );
   // Make sure the nested asset image cache control header does not contain immutable
   const nestedAssetCacheControl =
     nestedAssetImageResponse.headers()["cache-control"];

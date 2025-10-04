@@ -7,7 +7,8 @@ use crate::streaming::{Mount, StreamingRenderer};
 use crate::{document::ServerDocument, ServeConfig};
 use dioxus_cli_config::base_path;
 use dioxus_core::{
-    has_context, DynamicNode, ErrorContext, ScopeId, SuspenseContext, VNode, VirtualDom,
+    has_context, DynamicNode, ErrorContext, ScopeId, SuspenseContext, TemplateNode, VNode,
+    VirtualDom,
 };
 use dioxus_fullstack_core::{history::provide_fullstack_history_context, HttpError, ServerFnError};
 use dioxus_fullstack_core::{HydrationContext, SerializedHydrationData};
@@ -17,7 +18,14 @@ use dioxus_ssr::Renderer;
 use futures_channel::mpsc::Sender;
 use futures_util::{Stream, StreamExt};
 use http::StatusCode;
-use std::{collections::HashMap, fmt::Write, future::Future, rc::Rc, sync::Arc, sync::RwLock};
+use std::{
+    collections::HashMap,
+    fmt::Write,
+    future::Future,
+    iter::Peekable,
+    rc::Rc,
+    sync::{Arc, RwLock},
+};
 use tokio::task::JoinHandle;
 
 use crate::StreamingMode;
@@ -555,21 +563,90 @@ impl SsrRendererPool {
     }
 
     fn take_from_vnode(context: &HydrationContext, vdom: &VirtualDom, vnode: &VNode) {
-        for (dynamic_node_index, dyn_node) in vnode.dynamic_nodes.iter().enumerate() {
-            match dyn_node {
-                DynamicNode::Component(comp) => {
-                    if let Some(scope) = comp.mounted_scope(dynamic_node_index, vnode, vdom) {
-                        Self::take_from_scope(context, vdom, scope.id());
+        let template = &vnode.template;
+        let mut dynamic_nodes_iter = template.node_paths.iter().copied().enumerate().peekable();
+        for (root_idx, node) in template.roots.iter().enumerate() {
+            match node {
+                TemplateNode::Element { .. } => {
+                    // dioxus core runs nodes in an odd order to not mess up template order. We need to match
+                    // that order here
+                    let (start, end) =
+                        match Self::collect_dyn_node_range(&mut dynamic_nodes_iter, root_idx as u8)
+                        {
+                            Some((a, b)) => (a, b),
+                            None => continue,
+                        };
+
+                    let reversed_iter = (start..=end).rev();
+
+                    for dynamic_node_id in reversed_iter {
+                        let dynamic_node = &vnode.dynamic_nodes[dynamic_node_id];
+                        Self::take_from_dynamic_node(
+                            context,
+                            vdom,
+                            vnode,
+                            dynamic_node,
+                            dynamic_node_id,
+                        );
                     }
                 }
-                DynamicNode::Fragment(nodes) => {
-                    for node in nodes {
-                        Self::take_from_vnode(context, vdom, node);
-                    }
+                TemplateNode::Dynamic { id } => {
+                    // Take a dynamic node off the depth first iterator
+                    _ = dynamic_nodes_iter.next().unwrap();
+                    let dynamic_node = &vnode.dynamic_nodes[*id];
+                    Self::take_from_dynamic_node(context, vdom, vnode, dynamic_node, *id);
                 }
                 _ => {}
             }
         }
+    }
+
+    fn take_from_dynamic_node(
+        context: &HydrationContext,
+        vdom: &VirtualDom,
+        vnode: &VNode,
+        dyn_node: &DynamicNode,
+        dynamic_node_index: usize,
+    ) {
+        match dyn_node {
+            DynamicNode::Component(comp) => {
+                if let Some(scope) = comp.mounted_scope(dynamic_node_index, vnode, vdom) {
+                    Self::take_from_scope(context, vdom, scope.id());
+                }
+            }
+            DynamicNode::Fragment(nodes) => {
+                for node in nodes {
+                    Self::take_from_vnode(context, vdom, node);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    // This should have the same behavior as the collect_dyn_node_range method in core
+    // Find the index of the first and last dynamic node under a root index
+    fn collect_dyn_node_range(
+        dynamic_nodes: &mut Peekable<impl Iterator<Item = (usize, &'static [u8])>>,
+        root_idx: u8,
+    ) -> Option<(usize, usize)> {
+        let start = match dynamic_nodes.peek() {
+            Some((idx, [first, ..])) if *first == root_idx => *idx,
+            _ => return None,
+        };
+
+        let mut end = start;
+
+        while let Some((idx, p)) =
+            dynamic_nodes.next_if(|(_, p)| matches!(p, [idx, ..] if *idx == root_idx))
+        {
+            if p.len() == 1 {
+                continue;
+            }
+
+            end = idx;
+        }
+
+        Some((start, end))
     }
 
     /// Render any content before the head of the page.
