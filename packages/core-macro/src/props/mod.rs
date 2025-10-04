@@ -1768,6 +1768,7 @@ fn looks_like_write_type(ty: &Type) -> bool {
 fn looks_like_store_type(ty: &Type) -> bool {
     last_segment_matches(ty, &parse_quote!(Store))
         || last_segment_matches(ty, &parse_quote!(ReadStore))
+        || last_segment_matches(ty, &parse_quote!(WriteStore))
 }
 
 fn looks_like_callback_type(ty: &Type) -> bool {
