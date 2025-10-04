@@ -9,6 +9,7 @@ use cargo_toml::{Manifest, Profile, Profiles};
 /// Load the manifest from a path inheriting from the global config where needed
 pub fn load_manifest_from_path(path: &Path) -> Result<Manifest, cargo_toml::Error> {
     let mut original = Manifest::from_path(path)?;
+
     // Merge the .cargo/config.toml if it exists
     extend_manifest_config_toml(&mut original, &path.join(".cargo").join("config.toml"));
 
@@ -16,6 +17,7 @@ pub fn load_manifest_from_path(path: &Path) -> Result<Manifest, cargo_toml::Erro
     if let Some(global_config) = global_cargo_config_path() {
         extend_manifest_config_toml(&mut original, &global_config);
     }
+
     Ok(original)
 }
 
@@ -25,6 +27,7 @@ fn cargo_home() -> Option<PathBuf> {
     if let Some(cargo_home) = std::env::var_os("CARGO_HOME") {
         return Some(PathBuf::from(cargo_home));
     }
+
     // Otherwise, use the default location
     if cfg!(windows) {
         std::env::var_os("USERPROFILE")
@@ -47,14 +50,17 @@ fn extend_manifest_config_toml(manifest: &mut Manifest, path: &Path) {
     let Ok(config) = std::fs::read_to_string(path) else {
         return;
     };
+
     let Ok(config) = config.parse::<toml::Value>() else {
         return;
     };
+
     // Try to parse profiles
     if let Some(profiles) = config.get("profile").and_then(|p| p.as_table()) {
-        let profiles: cargo_toml::Profiles =
-            toml::from_str(&profiles.to_string()).unwrap_or_default();
-        merge_profiles(&mut manifest.profile, profiles);
+        merge_profiles(
+            &mut manifest.profile,
+            toml::from_str::<cargo_toml::Profiles>(&profiles.to_string()).unwrap_or_default(),
+        );
     }
 }
 
