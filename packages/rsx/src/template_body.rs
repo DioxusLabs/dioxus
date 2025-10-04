@@ -149,6 +149,8 @@ impl ToTokens for TemplateBody {
                 }
                 #[cfg(debug_assertions)]
                 let __template_read = {
+                    use dioxus_signals::ReadableExt;
+
                     static __NORMALIZED_FILE: &'static str = {
                         const PATH: &str = dioxus_core::const_format::str_replace!(file!(), "\\\\", "/");
                         dioxus_core::const_format::str_replace!(PATH, '\\', "/")
@@ -156,7 +158,7 @@ impl ToTokens for TemplateBody {
 
                     // The key is important here - we're creating a new GlobalSignal each call to this
                     // But the key is what's keeping it stable
-                    static __TEMPLATE: GlobalSignal<Option<dioxus_core::internal::HotReloadedTemplate>> = GlobalSignal::with_location(
+                    static __TEMPLATE: dioxus_signals::GlobalSignal<Option<dioxus_core::internal::HotReloadedTemplate>> = dioxus_signals::GlobalSignal::with_location(
                         || None::<dioxus_core::internal::HotReloadedTemplate>,
                         __NORMALIZED_FILE,
                         line!(),

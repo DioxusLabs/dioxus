@@ -337,10 +337,6 @@ impl WebServer {
 
     /// Tells all clients to reload if possible for new changes.
     pub(crate) async fn send_reload_command(&mut self) {
-        tracing::trace!("Sending reload to toast");
-
-        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-
         self.build_status.set(Status::Ready);
         self.send_build_status().await;
         self.send_devserver_message_to_all(DevserverMsg::FullReloadCommand)

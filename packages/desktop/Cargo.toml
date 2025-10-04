@@ -12,7 +12,7 @@ rust-version = "1.76.0"
 
 [dependencies]
 dioxus-core = { workspace = true, features = ["serialize"] }
-dioxus-html = { workspace = true, features = ["serialize", "mounted", "file_engine"] }
+dioxus-html = { workspace = true, features = ["serialize"] }
 dioxus-document = { workspace = true }
 dioxus-signals = { workspace = true, optional = true }
 dioxus-interpreter-js = { workspace = true, features = ["binary-protocol", "serialize"] }
@@ -50,7 +50,8 @@ base64 = { workspace = true }
 libc = "0.2.174"
 rand = { workspace = true, features = ["std_rng"] }
 subtle = { version = "2.6", features = ["const-generics"] }
-webbrowser = { version = "1.0" }
+bytes = { workspace = true }
+webbrowser = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
 signal-hook = "0.3.18"

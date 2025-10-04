@@ -42,6 +42,19 @@ test("error route", async ({ request }) => {
   expect(response.status()).toBe(500);
 });
 
+// The async error route should return 500
+test("async error route", async ({ request }) => {
+  await waitForBuild(request);
+  const response = await request.get("http://localhost:8888/async-error");
+
+  expect(response.status()).toBe(500);
+
+  // Expect the response to contain the error message
+  const errorMessage = "Async error from a server function";
+  const text = await response.text();
+  expect(text).toContain(errorMessage);
+});
+
 // An unknown route should return 404
 test("unknown route", async ({ request }) => {
   await waitForBuild(request);
