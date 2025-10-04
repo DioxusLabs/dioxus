@@ -5360,11 +5360,8 @@ name = "dioxus-cli-optimization-test"
 version = "0.0.1"
 dependencies = [
  "dioxus",
- "flate2",
- "reqwest 0.12.23",
  "serde",
  "serde_json",
- "tar",
 ]
 
 [[package]]
