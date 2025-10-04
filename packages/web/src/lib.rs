@@ -129,7 +129,7 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
                 HydrationContext::from_serialized(&hydration_data, debug_types, debug_locations);
             // If the server serialized an error into the root suspense boundary, throw it into the root scope
             if let Some(error) = server_data.error_entry().get().ok().flatten() {
-                virtual_dom.in_scope(ScopeId::APP, || dioxus_core::throw_error(error));
+                virtual_dom.in_runtime(|| virtual_dom.runtime().throw_error(ScopeId::APP, error));
             }
             server_data.in_context(|| {
                 virtual_dom.in_scope(ScopeId::ROOT, || {

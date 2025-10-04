@@ -324,10 +324,7 @@ fn MyComponent() -> Element {{
 
     /// Runs a function with the current scope
     pub(crate) fn with_current_scope<R>(callback: impl FnOnce(&Scope) -> R) -> R {
-        Self::with(|rt| {
-            let scope = rt.current_scope_id();
-            Self::with_scope(scope, callback)
-        })
+        Self::with(|rt| Self::with_scope(rt.current_scope_id(), callback))
     }
 
     /// Runs a function with the current scope

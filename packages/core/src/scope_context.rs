@@ -194,23 +194,22 @@ impl Scope {
     ///
     /// Clones the state if it exists.
     pub(crate) fn consume_context<T: 'static + Clone>(&self) -> Option<T> {
-        if let Some(this_ctx) = self.has_context() {
+        if let Some(this_ctx) = self.has_context::<T>() {
             return Some(this_ctx);
         }
 
         let mut search_parent = self.parent_id;
-        let cur_runtime = Runtime::with(|runtime| {
+
+        Runtime::with(|runtime| {
             while let Some(parent_id) = search_parent {
                 let parent = runtime.try_get_state(parent_id)?;
-                if let Some(shared) = parent.has_context() {
+                if let Some(shared) = parent.has_context::<T>() {
                     return Some(shared);
                 }
                 search_parent = parent.parent_id;
             }
             None
-        });
-
-        cur_runtime.flatten()
+        })
     }
 
     /// Inject a `Box<dyn Any>` into the context of this scope
