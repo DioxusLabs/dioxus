@@ -20,12 +20,11 @@ impl std::fmt::Debug for ScopeId {
         let mut builder = builder.field(&self.0);
         #[cfg(debug_assertions)]
         {
-            if let Some(name) = Runtime::current()
-                .ok()
+            if let Some(scope) = Runtime::try_current()
                 .as_ref()
-                .and_then(|rt| rt.get_state(*self))
+                .and_then(|r| r.try_get_state(*self))
             {
-                builder = builder.field(&name.name);
+                builder = builder.field(&scope.name);
             }
         }
         builder.finish()
@@ -81,6 +80,45 @@ pub struct ScopeState {
     pub(crate) reactive_context: ReactiveContext,
 }
 
+impl ScopeState {
+    /// Get a handle to the currently active head node arena for this Scope
+    ///
+    /// This is useful for traversing the tree outside of the VirtualDom, such as in a custom renderer or in SSR.
+    ///
+    /// Panics if the tree has not been built yet.
+    pub fn root_node(&self) -> &VNode {
+        self.try_root_node()
+            .expect("The tree has not been built yet. Make sure to call rebuild on the tree before accessing its nodes.")
+    }
+
+    /// Try to get a handle to the currently active head node arena for this Scope
+    ///
+    /// This is useful for traversing the tree outside of the VirtualDom, such as in a custom renderer or in SSR.
+    ///
+    /// Returns [`None`] if the tree has not been built yet.
+    pub fn try_root_node(&self) -> Option<&VNode> {
+        match &self.last_rendered_node {
+            Some(LastRenderedNode::Real(vnode)) => Some(vnode),
+            Some(LastRenderedNode::Placeholder(vnode, _)) => Some(vnode),
+            None => None,
+        }
+    }
+
+    /// Returns the scope id of this [`ScopeState`].
+    pub fn id(&self) -> ScopeId {
+        self.context_id
+    }
+
+    pub(crate) fn state(&self) -> Ref<'_, Scope> {
+        self.runtime.get_state(self.context_id)
+    }
+
+    /// Returns the height of this scope in the tree.
+    pub fn height(&self) -> u32 {
+        self.state().height()
+    }
+}
+
 #[derive(Clone, PartialEq, Debug)]
 pub enum LastRenderedNode {
     Real(VNode),
@@ -117,39 +155,5 @@ impl LastRenderedNode {
 impl Drop for ScopeState {
     fn drop(&mut self) {
         self.runtime.remove_scope(self.context_id);
-    }
-}
-
-impl ScopeState {
-    /// Get a handle to the currently active head node arena for this Scope
-    ///
-    /// This is useful for traversing the tree outside of the VirtualDom, such as in a custom renderer or in SSR.
-    ///
-    /// Panics if the tree has not been built yet.
-    pub fn root_node(&self) -> &VNode {
-        self.try_root_node()
-            .expect("The tree has not been built yet. Make sure to call rebuild on the tree before accessing its nodes.")
-    }
-
-    /// Try to get a handle to the currently active head node arena for this Scope
-    ///
-    /// This is useful for traversing the tree outside of the VirtualDom, such as in a custom renderer or in SSR.
-    ///
-    /// Returns [`None`] if the tree has not been built yet.
-    pub fn try_root_node(&self) -> Option<&VNode> {
-        match &self.last_rendered_node {
-            Some(LastRenderedNode::Real(vnode)) => Some(vnode),
-            Some(LastRenderedNode::Placeholder(vnode, _)) => Some(vnode),
-            None => None,
-        }
-    }
-
-    /// Returns the scope id of this [`ScopeState`].
-    pub fn id(&self) -> ScopeId {
-        self.context_id
-    }
-
-    pub(crate) fn state(&self) -> Ref<'_, Scope> {
-        self.runtime.get_state(self.context_id).unwrap()
     }
 }

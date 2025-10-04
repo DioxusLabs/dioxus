@@ -13,8 +13,8 @@ impl VirtualDom {
         props: BoxedAnyProps,
         name: &'static str,
     ) -> &mut ScopeState {
-        let parent_id = self.runtime.current_scope_id().ok();
-        let height = match parent_id.and_then(|id| self.runtime.get_state(id)) {
+        let parent_id = self.runtime.try_current_scope_id();
+        let height = match parent_id.and_then(|id| self.runtime.try_get_state(id)) {
             Some(parent) => parent.height() + 1,
             None => 0,
         };
@@ -46,7 +46,7 @@ impl VirtualDom {
     #[track_caller]
     pub(crate) fn run_scope(&mut self, scope_id: ScopeId) -> Element {
         // Ensure we are currently inside a `Runtime`.
-        crate::Runtime::current().unwrap_or_else(|e| panic!("{}", e));
+        crate::Runtime::current();
 
         self.runtime.clone().with_scope_on_stack(scope_id, || {
             let scope = &self.scopes[scope_id.0];
@@ -84,7 +84,7 @@ impl VirtualDom {
                             }
                         };
 
-                        self.handle_element_return(&mut render_return, scope_id, &scope.state());
+                        self.handle_element_return(&mut render_return, &scope.state());
                         render_return
                     })
                 })
@@ -105,23 +105,16 @@ impl VirtualDom {
     }
 
     /// Insert any errors, or suspended tasks from an element return into the runtime
-    fn handle_element_return(&self, node: &mut Element, scope_id: ScopeId, scope_state: &Scope) {
+    fn handle_element_return(&self, node: &mut Element, scope: &Scope) {
         match node {
             Err(RenderError::Error(e)) => {
-                tracing::error!(
-                    "Error while rendering component `{}`:\n{e}",
-                    scope_state.name
-                );
+                tracing::error!("Error while rendering component `{}`:\n{e}", scope.name);
                 throw_error(e.clone());
             }
             Err(RenderError::Suspended(e)) => {
                 let task = e.task();
                 // Insert the task into the nearest suspense boundary if it exists
-                let boundary = self
-                    .runtime
-                    .get_state(scope_id)
-                    .unwrap()
-                    .suspense_location();
+                let boundary = scope.suspense_location();
                 let already_suspended = self
                     .runtime
                     .tasks
@@ -130,7 +123,7 @@ impl VirtualDom {
                     .expect("Suspended on a task that no longer exists")
                     .suspend(boundary.clone());
                 if !already_suspended {
-                    tracing::trace!("Suspending {:?} on {:?}", scope_id, task);
+                    tracing::trace!("Suspending {:?} on {:?}", scope.id, task);
                     // Add this task to the suspended tasks list of the boundary
                     if let SuspenseLocation::UnderSuspense(boundary) = &boundary {
                         boundary.add_suspended_task(e.clone());
@@ -142,9 +135,7 @@ impl VirtualDom {
             }
             Ok(_) => {
                 // If the render was successful, we can move the render generation forward by one
-                scope_state
-                    .render_count
-                    .set(scope_state.render_count.get() + 1);
+                scope.render_count.set(scope.render_count.get() + 1);
             }
         }
     }

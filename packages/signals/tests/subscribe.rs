@@ -61,7 +61,7 @@ fn reading_subscribes() {
             .counter
             .borrow_mut()
             .children
-            .entry(current_scope_id().unwrap())
+            .entry(current_scope_id())
             .or_default() += 1;
 
         rsx! {

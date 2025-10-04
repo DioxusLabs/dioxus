@@ -2,7 +2,9 @@
 
 use std::{cell::RefCell, collections::HashSet, rc::Rc};
 
-use dioxus_core::{Attribute, DynamicNode, Element, RenderError, ScopeId, Template, TemplateNode};
+use dioxus_core::{
+    Attribute, DynamicNode, Element, RenderError, Runtime, ScopeId, Template, TemplateNode,
+};
 use dioxus_core_macro::*;
 
 mod link;
@@ -101,11 +103,12 @@ fn extract_single_text_node(children: &Element) -> Result<String, ExtractSingleT
 }
 
 fn get_or_insert_root_context<T: Default + Clone + 'static>() -> T {
-    match ScopeId::ROOT.has_context::<T>() {
+    let rt = Runtime::current();
+    match rt.has_context::<T>(ScopeId::ROOT) {
         Some(context) => context,
         None => {
             let context = T::default();
-            ScopeId::ROOT.provide_context(context.clone());
+            rt.provide_context(ScopeId::ROOT, context.clone());
             context
         }
     }

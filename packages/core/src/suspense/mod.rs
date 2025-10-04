@@ -45,7 +45,7 @@ impl SuspendedFuture {
     pub fn new(task: Task) -> Self {
         Self {
             task: task.id,
-            origin: current_scope_id().unwrap_or_else(|e| panic!("{}", e)),
+            origin: current_scope_id(),
         }
     }
 
@@ -86,6 +86,7 @@ impl SuspenseContext {
     pub(crate) fn new() -> Self {
         Self {
             inner: Rc::new(SuspenseBoundaryInner {
+                rt: Runtime::current(),
                 suspended_tasks: RefCell::new(vec![]),
                 id: Cell::new(ScopeId::ROOT),
                 suspended_nodes: Default::default(),
@@ -145,7 +146,7 @@ impl SuspenseContext {
     /// Add a suspended task
     pub(crate) fn add_suspended_task(&self, task: SuspendedFuture) {
         self.inner.suspended_tasks.borrow_mut().push(task);
-        self.inner.id.get().needs_update();
+        self.inner.rt.needs_update(self.inner.id.get());
     }
 
     /// Remove a suspended task
@@ -154,7 +155,7 @@ impl SuspenseContext {
             .suspended_tasks
             .borrow_mut()
             .retain(|t| t.task != task.id);
-        self.inner.id.get().needs_update();
+        self.inner.rt.needs_update(self.inner.id.get());
     }
 
     /// Get all suspended tasks
@@ -184,12 +185,18 @@ impl SuspenseContext {
 
 /// A boundary that will capture any errors from child components
 pub struct SuspenseBoundaryInner {
+    rt: Rc<Runtime>,
+
     suspended_tasks: RefCell<Vec<SuspendedFuture>>,
+
     id: Cell<ScopeId>,
+
     /// The nodes that are suspended under this boundary
     suspended_nodes: RefCell<Option<VNode>>,
+
     /// On the server, you can only resolve a suspense boundary once. This is used to track if the suspense boundary has been resolved and if it should be frozen
     frozen: Cell<bool>,
+
     /// Closures queued to run after the suspense boundary is resolved
     after_suspense_resolved: RefCell<Vec<Box<dyn FnOnce()>>>,
 }
