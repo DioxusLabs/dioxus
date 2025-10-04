@@ -1,5 +1,5 @@
 use crate::{
-    innerlude::{CapturedError, SchedulerMsg, SuspenseContext},
+    innerlude::{SchedulerMsg, SuspenseContext},
     Runtime, ScopeId, Task,
 };
 use generational_box::{AnyStorage, Owner};
