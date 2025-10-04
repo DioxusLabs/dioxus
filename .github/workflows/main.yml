@@ -45,7 +45,7 @@ jobs:
   check-msrv:
     if: github.event.pull_request.draft == false
     name: Check MSRV
-    runs-on: ubuntu-24.04
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@1.86.0
@@ -66,7 +66,7 @@ jobs:
   test:
     if: github.event.pull_request.draft == false
     name: Test Suite
-    runs-on: ubuntu-24.04
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v5
       - name: Free Disk Space
@@ -87,7 +87,7 @@ jobs:
   release-test:
     if: github.event.pull_request.draft == false
     name: Test Suite with Optimizations
-    runs-on: ubuntu-24.04
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v5
       - name: Free Disk Space
@@ -108,7 +108,7 @@ jobs:
   fmt:
     if: github.event.pull_request.draft == false
     name: Rustfmt
-    runs-on: ubuntu-24.04
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@1.86.0
@@ -122,7 +122,7 @@ jobs:
   docs:
     if: github.event.pull_request.draft == false
     name: Docs
-    runs-on: ubuntu-24.04
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v5
       - uses: awalsh128/cache-apt-pkgs-action@latest
@@ -145,7 +145,7 @@ jobs:
   test-docs:
     if: github.event.pull_request.draft == false
     name: Test Docs
-    runs-on: ubuntu-24.04
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v5
       - uses: awalsh128/cache-apt-pkgs-action@latest
@@ -166,7 +166,7 @@ jobs:
   check:
     if: github.event.pull_request.draft == false
     name: Check
-    runs-on: ubuntu-24.04
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v5
       - uses: awalsh128/cache-apt-pkgs-action@latest
@@ -182,7 +182,7 @@ jobs:
   clippy:
     if: github.event.pull_request.draft == false
     name: Clippy
-    runs-on: ubuntu-24.04
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v5
       - uses: awalsh128/cache-apt-pkgs-action@latest
@@ -202,7 +202,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-24.04, macos-latest]
+        os: [blacksmith-4vcpu-ubuntu-2404, macos-latest]
     steps:
       - uses: actions/checkout@v5
       - uses: nixbuild/nix-quick-install-action@master
@@ -299,7 +299,7 @@ jobs:
             }
           - {
               target: aarch64-unknown-linux-gnu,
-              os: ubuntu-24.04-arm,
+              os: blacksmith-4vcpu-ubuntu-2404-arm,
               toolchain: "1.86.0",
               cross: false,
               command: "build",
@@ -308,7 +308,7 @@ jobs:
             }
           - {
               target: aarch64-linux-android,
-              os: ubuntu-24.04,
+              os: blacksmith-4vcpu-ubuntu-2404,
               toolchain: "1.86.0",
               cross: true,
               command: "build",
@@ -329,11 +329,11 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - name: Free Disk Space
-        if: ${{ matrix.platform.os == 'ubuntu-24.04' || matrix.platform.os == 'ubuntu-24.04-arm' }}
+        if: ${{ matrix.platform.os == 'ubuntu-24.04' || matrix.platform.os == 'ubuntu-24.04-arm' || matrix.platform.os == 'blacksmith-4vcpu-ubuntu-2404' || matrix.platform.os == 'blacksmith-4vcpu-ubuntu-2404-arm' }}
         uses: ./.github/actions/free-disk-space
 
       - uses: awalsh128/cache-apt-pkgs-action@latest
-        if: ${{ matrix.platform.os == 'ubuntu-24.04' || matrix.platform.os == 'ubuntu-24.04-arm' }}
+        if: ${{ matrix.platform.os == 'ubuntu-24.04' || matrix.platform.os == 'ubuntu-24.04-arm' || matrix.platform.os == 'blacksmith-4vcpu-ubuntu-2404' || matrix.platform.os == 'blacksmith-4vcpu-ubuntu-2404-arm' }}
         with:
           packages: libwebkit2gtk-4.1-dev libgtk-3-dev libasound2-dev libudev-dev libayatana-appindicator3-dev libxdo-dev libglib2.0-dev
           version: ${{ matrix.platform.target }}-${{ matrix.platform.os }} # disambiguate since we're in a matrix and this caching action doesn't factor in these variables
