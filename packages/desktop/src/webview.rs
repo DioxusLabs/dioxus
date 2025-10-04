@@ -178,7 +178,7 @@ impl WebviewInstance {
         //
         // on mobile, we want them to be `None` so tao makes them the size of the screen. Otherwise we
         // get a window that is not the size of the screen and weird black bars.
-        #[cfg(not(any(target_os = "ios", target_os = "android")))]
+        #[cfg(not(any(target_os = "ios", target_os = "android", target_env = "ohos")))]
         {
             if cfg.window.window.inner_size.is_none() {
                 window = window.with_inner_size(tao::dpi::LogicalSize::new(800.0, 600.0));
@@ -378,7 +378,11 @@ impl WebviewInstance {
             webview = webview.with_devtools(true);
         }
 
-        let menu = if cfg!(not(any(target_os = "android", target_os = "ios"))) {
+        let menu = if cfg!(not(any(
+            target_os = "android",
+            target_os = "ios",
+            target_env = "ohos"
+        ))) {
             let menu_option = cfg.menu.into();
             if let Some(menu) = &menu_option {
                 crate::menubar::init_menu_bar(menu, &window);
@@ -392,7 +396,8 @@ impl WebviewInstance {
             target_os = "windows",
             target_os = "macos",
             target_os = "ios",
-            target_os = "android"
+            target_os = "android",
+            target_env = "ohos"
         ))]
         let webview = if cfg.as_child_window {
             webview.build_as_child(&window)
@@ -404,7 +409,8 @@ impl WebviewInstance {
             target_os = "windows",
             target_os = "macos",
             target_os = "ios",
-            target_os = "android"
+            target_os = "android",
+            target_env = "ohos"
         )))]
         let webview = {
             use tao::platform::unix::WindowExtUnix;

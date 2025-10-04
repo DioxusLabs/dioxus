@@ -38,27 +38,33 @@ pub(crate) struct FileDialogRequest {
 
 #[allow(unused)]
 impl FileDialogRequest {
-    #[cfg(not(any(
-        target_os = "windows",
-        target_os = "macos",
-        target_os = "linux",
-        target_os = "dragonfly",
-        target_os = "freebsd",
-        target_os = "netbsd",
-        target_os = "openbsd"
+    #[cfg(not(all(
+        any(
+            target_os = "windows",
+            target_os = "macos",
+            target_os = "linux",
+            target_os = "dragonfly",
+            target_os = "freebsd",
+            target_os = "netbsd",
+            target_os = "openbsd"
+        ),
+        not(target_env = "ohos")
     )))]
     pub(crate) fn get_file_event(&self) -> Vec<PathBuf> {
         vec![]
     }
 
-    #[cfg(any(
-        target_os = "windows",
-        target_os = "macos",
-        target_os = "linux",
-        target_os = "dragonfly",
-        target_os = "freebsd",
-        target_os = "netbsd",
-        target_os = "openbsd"
+    #[cfg(all(
+        any(
+            target_os = "windows",
+            target_os = "macos",
+            target_os = "linux",
+            target_os = "dragonfly",
+            target_os = "freebsd",
+            target_os = "netbsd",
+            target_os = "openbsd"
+        ),
+        not(target_env = "ohos")
     ))]
     pub(crate) fn get_file_event(&self) -> Vec<PathBuf> {
         fn get_file_event_for_folder(
