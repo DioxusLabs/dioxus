@@ -141,7 +141,7 @@ fn MyComponent() -> Element {{
     pub fn wrap_closure<'a, I, O>(f: impl Fn(I) -> O + 'a) -> impl Fn(I) -> O + 'a {
         let current_runtime = Self::current();
         move |input| match current_runtime.try_current_scope_id() {
-            Some(scope) => current_runtime.on_scope(scope, || f(input)),
+            Some(scope) => current_runtime.in_scope(scope, || f(input)),
             None => {
                 let _runtime_guard = RuntimeGuard::new(current_runtime.clone());
                 f(input)
@@ -181,7 +181,7 @@ fn MyComponent() -> Element {{
             let borrow = self.scope_states.borrow();
             if let Some(scope) = &borrow[id.0] {
                 // Manually drop tasks, hooks, and contexts inside of the runtime
-                self.on_scope(id, || {
+                self.in_scope(id, || {
                     // Drop all spawned tasks - order doesn't matter since tasks don't rely on eachother
                     // In theory nested tasks might not like this
                     for id in scope.spawned_tasks.take() {
@@ -229,9 +229,8 @@ fn MyComponent() -> Element {{
     }
 
     /// Call this function with the current scope set to the given scope
-    ///
-    /// Useful in a limited number of scenarios
-    pub fn on_scope<O>(self: &Rc<Self>, id: ScopeId, f: impl FnOnce() -> O) -> O {
+    #[track_caller]
+    pub fn in_scope<O>(self: &Rc<Self>, id: ScopeId, f: impl FnOnce() -> O) -> O {
         let _runtime_guard = RuntimeGuard::new(self.clone());
         {
             self.push_scope(id);
@@ -548,12 +547,6 @@ fn MyComponent() -> Element {{
     /// Get the height of the current scope
     pub fn height(&self, id: ScopeId) -> u32 {
         self.get_state(id).height
-    }
-
-    /// Run a closure inside of scope's runtime
-    #[track_caller]
-    pub fn in_scope<T>(&self, id: ScopeId, callback: impl FnOnce() -> T) -> T {
-        Runtime::current().on_scope(id, callback)
     }
 
     /// Throw a [`CapturedError`] into a scope. The error will bubble up to the nearest [`ErrorBoundary`](crate::ErrorBoundary) or the root of the app.

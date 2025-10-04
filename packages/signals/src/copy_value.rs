@@ -116,7 +116,7 @@ impl<T, S: Storage<T>> CopyValue<T, S> {
         scope: ScopeId,
         caller: &'static std::panic::Location<'static>,
     ) -> Self {
-        let owner = Runtime::current().current_owner();
+        let owner = Runtime::current().scope_owner(scope);
         Self {
             value: owner.insert_rc_with_caller(value, caller),
             origin_scope: scope,

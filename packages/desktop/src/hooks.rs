@@ -28,7 +28,7 @@ pub fn use_wry_event_handler(
     use_hook_with_cleanup(
         move || {
             window().create_wry_event_handler(move |event, target| {
-                runtime.on_scope(scope_id, || handler(event, target))
+                runtime.in_scope(scope_id, || handler(event, target))
             })
         },
         move |handler| handler.remove(),

@@ -17,7 +17,7 @@ pub fn apply_changes(dom: &VirtualDom, msg: &HotReloadMsg) {
 ///
 /// Assets need to be handled by the renderer.
 pub fn try_apply_changes(dom: &VirtualDom, msg: &HotReloadMsg) -> Result<(), PatchError> {
-    dom.runtime().on_scope(ScopeId::ROOT, || {
+    dom.runtime().in_scope(ScopeId::ROOT, || {
         // 1. Update signals...
         let ctx = dioxus_signals::get_global_context();
         for template in &msg.templates {

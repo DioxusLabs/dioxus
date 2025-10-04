@@ -353,7 +353,7 @@ impl VirtualDom {
 
     /// Run a closure inside a specific scope
     pub fn in_scope<T>(&self, scope: ScopeId, f: impl FnOnce() -> T) -> T {
-        self.in_runtime(|| self.runtime.with_scope_on_stack(scope, f))
+        self.runtime.in_scope(scope, f)
     }
 
     /// Build the virtualdom with a global context inserted into the base scope
