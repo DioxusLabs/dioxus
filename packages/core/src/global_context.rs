@@ -194,7 +194,7 @@ pub fn spawn_forever(fut: impl Future<Output = ()> + 'static) -> Task {
 ///
 /// This drops the task immediately.
 pub fn remove_future(id: Task) {
-    Runtime::with(|rt| rt.remove_task(id)).expect("Runtime to exist");
+    Runtime::with(|rt| rt.remove_task(id));
 }
 
 /// Store a value between renders. The foundational hook for all other hooks.
