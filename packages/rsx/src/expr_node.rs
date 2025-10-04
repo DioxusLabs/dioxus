@@ -16,6 +16,23 @@ impl ExprNode {
 
 impl Parse for ExprNode {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        // // If it's a single-line expression, we want to parse it without braces, fixing some issues with rust 2024 lifetimes
+        // use syn::braced;
+        // let forked = input.fork();
+        // if forked.peek(syn::token::Brace) {
+        //     let content;
+        //     let _brace = braced!(content in forked);
+        //     let as_expr: Result<syn::Expr, syn::Error> = content.parse();
+        //     if as_expr.is_ok() && content.is_empty() {
+        //         let content;
+        //         let _brace = braced!(content in input);
+        //         return Ok(Self {
+        //             expr: content.parse()?,
+        //             dyn_idx: DynIdx::default(),
+        //         });
+        //     }
+        // }
+
         Ok(Self {
             expr: input.parse()?,
             dyn_idx: DynIdx::default(),

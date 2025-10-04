@@ -8,7 +8,7 @@ use dioxus_core::{
     AttributeValue, DynamicNode, ElementId, ScopeId, ScopeState, SuspenseBoundaryProps,
     SuspenseContext, TemplateNode, VNode, VirtualDom,
 };
-use dioxus_fullstack_protocol::HydrationContext;
+use dioxus_fullstack_core::HydrationContext;
 use futures_channel::mpsc::UnboundedReceiver;
 use std::fmt::Write;
 use RehydrationError::*;

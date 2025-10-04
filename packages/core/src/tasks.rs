@@ -20,10 +20,12 @@ use std::{pin::Pin, task::Poll};
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Task {
-    pub(crate) id: slotmap::DefaultKey,
+    pub(crate) id: TaskId,
     // We add a raw pointer to make this !Send + !Sync
     unsend: PhantomData<*const ()>,
 }
+
+pub(crate) type TaskId = slotmap::DefaultKey;
 
 impl Task {
     /// Create a task from a raw id
@@ -48,8 +50,6 @@ impl Task {
     }
 
     /// Drop the task immediately.
-    ///
-    /// This does not abort the task, so you'll want to wrap it in an abort handle if that's important to you
     pub fn cancel(self) {
         remove_future(self);
     }
@@ -382,6 +382,7 @@ impl TaskType {
 #[derive(Debug)]
 pub(crate) enum SchedulerMsg {
     /// All components have been marked as dirty, requiring a full render
+    #[allow(unused)]
     AllDirty,
 
     /// Immediate updates from Components that mark them as dirty
