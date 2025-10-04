@@ -3971,7 +3971,7 @@ impl BuildRequest {
                 writeln!(
                     glue, "export const __wasm_split_load_chunk_{idx} = makeLoad(\"/assets/{url}\", [], fusedImports);",
                     url = assets
-                        .register_asset(&path, AssetOptions::builder().into_asset_options())?.bundled_path(),
+                        .register_asset(&path, &path, AssetOptions::builder().into_asset_options())?.bundled_path(),
                 )?;
             }
 
@@ -3999,7 +3999,7 @@ impl BuildRequest {
 
                     // Again, register this wasm with the asset system
                     url = assets
-                        .register_asset(&path, AssetOptions::builder().into_asset_options())?
+                        .register_asset(&path, &path, AssetOptions::builder().into_asset_options())?
                         .bundled_path(),
 
                     // This time, make sure to write the dependencies of this chunk
@@ -4050,6 +4050,7 @@ impl BuildRequest {
             // Make sure to register the main wasm file with the asset system
             assets.register_asset(
                 &post_bindgen_wasm,
+                &post_bindgen_wasm,
                 AssetOptions::builder().into_asset_options(),
             )?;
         }
@@ -4060,6 +4061,7 @@ impl BuildRequest {
         if self.should_bundle_to_asset() {
             // Register the main.js with the asset system so it bundles in the snippets and optimizes
             assets.register_asset(
+                &self.wasm_bindgen_js_output_file(),
                 &self.wasm_bindgen_js_output_file(),
                 AssetOptions::js()
                     .with_minify(true)
