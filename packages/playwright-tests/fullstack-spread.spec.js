@@ -2,7 +2,7 @@
 const { test, expect } = require("@playwright/test");
 
 test("spread attributes hydrate", async ({ page }) => {
-  await page.goto("http://localhost:7979");
+  await page.goto("http://localhost:7980");
 
   // Expect the page to contain the button
   const counter = page.locator("#counter");
