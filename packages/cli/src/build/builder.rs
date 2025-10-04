@@ -715,7 +715,7 @@ impl AppBuilder {
 
         let changed_file = changed_files.first().unwrap();
         tracing::info!(
-            "Hot-patching: {NOTE_STYLE}{}{NOTE_STYLE:#} took {GLOW_STYLE}{:?}ms{GLOW_STYLE:#}",
+            "Hot-patching: {NOTE_STYLE}{}{NOTE_STYLE:#} took {GLOW_STYLE}{:?}ms{GLOW_STYLE:#} ({})",
             changed_file
                 .display()
                 .to_string()
@@ -723,7 +723,8 @@ impl AppBuilder {
             SystemTime::now()
                 .duration_since(res.time_start)
                 .unwrap()
-                .as_millis()
+                .as_millis(),
+            triple
         );
 
         self.patches.push(jump_table.clone());

@@ -1,5 +1,5 @@
 use crate::{
-    innerlude::{throw_into, CapturedError, SchedulerMsg, SuspenseContext},
+    innerlude::{CapturedError, SchedulerMsg, SuspenseContext},
     runtime::RuntimeError,
     Runtime, ScopeId, Task,
 };
@@ -167,7 +167,7 @@ impl Scope {
     pub fn schedule_update_any(&self) -> Arc<dyn Fn(ScopeId) + Send + Sync> {
         let chan = self.sender();
         Arc::new(move |id| {
-            chan.unbounded_send(SchedulerMsg::Immediate(id)).unwrap();
+            _ = chan.unbounded_send(SchedulerMsg::Immediate(id));
         })
     }
 
@@ -545,9 +545,7 @@ impl ScopeId {
 
     /// Consume context from the current scope
     pub fn consume_context<T: 'static + Clone>(self) -> Option<T> {
-        Runtime::with_scope(self, |cx| cx.consume_context::<T>())
-            .ok()
-            .flatten()
+        Runtime::with_scope(self, |cx| cx.consume_context::<T>()).expect("Runtime to exist")
     }
 
     /// Consume context from the current scope
@@ -651,7 +649,15 @@ impl ScopeId {
     /// }
     /// ```
     pub fn throw_error(self, error: impl Into<CapturedError> + 'static) {
-        throw_into(error, self)
+        let error = error.into();
+        if let Some(cx) = self.consume_context::<crate::ErrorContext>() {
+            cx.insert_error(error)
+        } else {
+            tracing::error!(
+                    "Tried to throw an error into an error boundary, but failed to locate a boundary: {:?}",
+                    error
+                )
+        }
     }
 
     /// Get the suspense context the current scope is in

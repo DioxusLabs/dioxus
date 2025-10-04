@@ -250,7 +250,7 @@ impl Runtime {
 
     /// Pops a scope off the stack
     pub(crate) fn pop() {
-        RUNTIMES.with(|stack| stack.borrow_mut().pop());
+        RUNTIMES.with(|stack| stack.borrow_mut().pop().unwrap());
     }
 
     /// Runs a function with the current runtime
@@ -273,11 +273,10 @@ impl Runtime {
     /// Runs a function with the current scope
     pub(crate) fn with_scope<R>(
         scope: ScopeId,
-        f: impl FnOnce(&Scope) -> R,
+        callback: impl FnOnce(&Scope) -> R,
     ) -> Result<R, RuntimeError> {
-        Self::with(|rt| rt.get_state(scope).map(|sc| f(&sc)))
-            .ok()
-            .flatten()
+        Self::with(|rt| rt.get_state(scope).map(|scopestate| callback(&scopestate)))
+            .expect("Runtime should exist")
             .ok_or(RuntimeError::new())
     }
 

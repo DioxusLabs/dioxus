@@ -23,7 +23,7 @@ jobs:
   # Attempt to backport a merged pull request to the latest stable release
   backport:
     name: Backport pull request
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
 
     # Don't run on closed unmerged pull requests, or pull requests with the "breaking" label
     if: github.event.pull_request.merged && !contains(github.event.pull_request.labels.*.name, 'breaking')
@@ -34,7 +34,7 @@ jobs:
 
   # Upload nightly docs to the website
   docs:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     permissions:
       contents: write
     steps:

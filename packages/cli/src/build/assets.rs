@@ -320,7 +320,10 @@ pub(crate) async fn extract_assets_from_file(path: impl AsRef<Path>) -> Result<A
 
         if let Some((_, bundled_asset)) = const_serialize::deserialize_const!(BundledAsset, buffer)
         {
-            tracing::debug!("Found asset at offset {offset}: {:?}", bundled_asset);
+            tracing::debug!(
+                "Found asset at offset {offset}: {:?}",
+                bundled_asset.absolute_source_path()
+            );
             assets.push(bundled_asset);
         } else {
             tracing::warn!("Found an asset at offset {offset} that could not be deserialized. This may be caused by a mismatch between your dioxus and dioxus-cli versions.");

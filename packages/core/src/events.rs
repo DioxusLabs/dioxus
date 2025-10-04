@@ -1,4 +1,5 @@
 use crate::{current_scope_id, properties::SuperFrom, runtime::RuntimeGuard, Runtime, ScopeId};
+use futures_util::FutureExt;
 use generational_box::GenerationalBox;
 use std::{any::Any, cell::RefCell, marker::PhantomData, panic::Location, rc::Rc};
 
@@ -335,9 +336,15 @@ impl<Ret> SpawnIfAsync<(), Ret> for Ret {
 pub struct AsyncMarker;
 impl<F: std::future::Future<Output = ()> + 'static> SpawnIfAsync<AsyncMarker> for F {
     fn spawn(self) {
-        crate::spawn(async move {
-            self.await;
-        });
+        // Quick poll once to deal with things like prevent_default in the same tick
+        let mut fut = Box::pin(self);
+        let res = fut.as_mut().now_or_never();
+
+        if res.is_none() {
+            crate::spawn(async move {
+                fut.await;
+            });
+        }
     }
 }
 
@@ -351,11 +358,17 @@ where
 {
     #[inline]
     fn spawn(self) {
-        crate::spawn(async move {
-            if let Err(err) = self.await {
-                crate::throw_error(err)
-            }
-        });
+        // Quick poll once to deal with things like prevent_default in the same tick
+        let mut fut = Box::pin(self);
+        let res = fut.as_mut().now_or_never();
+
+        if res.is_none() {
+            crate::spawn(async move {
+                if let Err(err) = fut.await {
+                    crate::throw_error(err)
+                }
+            });
+        }
     }
 }
 

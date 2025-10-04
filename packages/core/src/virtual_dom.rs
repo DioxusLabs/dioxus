@@ -2,7 +2,6 @@
 //!
 //! This module provides the primary mechanics to create a hook-based, concurrent VDOM for Rust.
 
-use crate::innerlude::Work;
 use crate::properties::RootProps;
 use crate::root_wrapper::RootScopeWrapper;
 use crate::{
@@ -12,6 +11,7 @@ use crate::{
     scopes::ScopeId,
     ComponentFunction, Element, Mutations,
 };
+use crate::{innerlude::Work, scopes::LastRenderedNode};
 use crate::{Task, VComponent};
 use futures_util::StreamExt;
 use slab::Slab;
@@ -351,6 +351,11 @@ impl VirtualDom {
         f()
     }
 
+    /// Run a closure inside a specific scope
+    pub fn in_scope<T>(&self, scope: ScopeId, f: impl FnOnce() -> T) -> T {
+        self.in_runtime(|| scope.in_runtime(f))
+    }
+
     /// Build the virtualdom with a global context inserted into the base scope
     ///
     /// This is useful for what is essentially dependency injection when building the app
@@ -577,6 +582,8 @@ impl VirtualDom {
             .runtime
             .clone()
             .while_rendering(|| self.run_scope(ScopeId::ROOT));
+
+        let new_nodes = LastRenderedNode::new(new_nodes);
 
         self.scopes[ScopeId::ROOT.0].last_rendered_node = Some(new_nodes.clone());
 
