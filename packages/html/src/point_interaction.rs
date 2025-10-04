@@ -194,21 +194,21 @@ impl ModifiersInteraction for SerializedPointInteraction {
 #[cfg(feature = "serialize")]
 impl InteractionLocation for SerializedPointInteraction {
     fn client_coordinates(&self) -> ClientPoint {
-        ClientPoint::new(self.client_x.into(), self.client_y.into())
+        ClientPoint::new(self.client_x, self.client_y)
     }
 
     fn screen_coordinates(&self) -> ScreenPoint {
-        ScreenPoint::new(self.screen_x.into(), self.screen_y.into())
+        ScreenPoint::new(self.screen_x, self.screen_y)
     }
 
     fn page_coordinates(&self) -> PagePoint {
-        PagePoint::new(self.page_x.into(), self.page_y.into())
+        PagePoint::new(self.page_x, self.page_y)
     }
 }
 
 #[cfg(feature = "serialize")]
 impl InteractionElementOffset for SerializedPointInteraction {
     fn element_coordinates(&self) -> ElementPoint {
-        ElementPoint::new(self.offset_x.into(), self.offset_y.into())
+        ElementPoint::new(self.offset_x, self.offset_y)
     }
 }

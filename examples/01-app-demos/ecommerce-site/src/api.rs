@@ -1,4 +1,3 @@
-use chrono::{DateTime, Utc};
 use dioxus::prelude::Result;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
@@ -70,37 +69,4 @@ impl Display for Sort {
             Sort::Ascending => write!(f, "asc"),
         }
     }
-}
-
-#[derive(Serialize, Deserialize)]
-struct User {
-    id: usize,
-    email: String,
-    username: String,
-    password: String,
-    name: FullName,
-    phone: String,
-}
-
-#[derive(Serialize, Deserialize)]
-struct FullName {
-    firstname: String,
-    lastname: String,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-struct Cart {
-    id: usize,
-    #[serde(rename = "userId")]
-    user_id: usize,
-    data: String,
-    products: Vec<ProductInCart>,
-    date: DateTime<Utc>,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-struct ProductInCart {
-    #[serde(rename = "productId")]
-    product_id: usize,
-    quantity: usize,
 }
