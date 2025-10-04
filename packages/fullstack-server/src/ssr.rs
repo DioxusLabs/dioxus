@@ -562,32 +562,6 @@ impl SsrRendererPool {
         }
     }
 
-    // This should have the same behavior as the collect_dyn_node_range method in core
-    // Find the index of the first and last dynamic node under a root index
-    fn collect_dyn_node_range(
-        dynamic_nodes: &mut Peekable<impl Iterator<Item = (usize, &'static [u8])>>,
-        root_idx: u8,
-    ) -> Option<(usize, usize)> {
-        let start = match dynamic_nodes.peek() {
-            Some((idx, [first, ..])) if *first == root_idx => *idx,
-            _ => return None,
-        };
-
-        let mut end = start;
-
-        while let Some((idx, p)) =
-            dynamic_nodes.next_if(|(_, p)| matches!(p, [idx, ..] if *idx == root_idx))
-        {
-            if p.len() == 1 {
-                continue;
-            }
-
-            end = idx;
-        }
-
-        Some((start, end))
-    }
-
     fn take_from_vnode(context: &HydrationContext, vdom: &VirtualDom, vnode: &VNode) {
         let template = &vnode.template;
         let mut dynamic_nodes_iter = template.node_paths.iter().copied().enumerate().peekable();
@@ -647,6 +621,32 @@ impl SsrRendererPool {
             }
             _ => {}
         }
+    }
+
+    // This should have the same behavior as the collect_dyn_node_range method in core
+    // Find the index of the first and last dynamic node under a root index
+    fn collect_dyn_node_range(
+        dynamic_nodes: &mut Peekable<impl Iterator<Item = (usize, &'static [u8])>>,
+        root_idx: u8,
+    ) -> Option<(usize, usize)> {
+        let start = match dynamic_nodes.peek() {
+            Some((idx, [first, ..])) if *first == root_idx => *idx,
+            _ => return None,
+        };
+
+        let mut end = start;
+
+        while let Some((idx, p)) =
+            dynamic_nodes.next_if(|(_, p)| matches!(p, [idx, ..] if *idx == root_idx))
+        {
+            if p.len() == 1 {
+                continue;
+            }
+
+            end = idx;
+        }
+
+        Some((start, end))
     }
 
     /// Render any content before the head of the page.
