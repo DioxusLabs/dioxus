@@ -147,7 +147,7 @@ module.exports = defineConfig({
     {
       cwd: path.join(process.cwd(), "fullstack-hydration-order"),
       command:
-        'cargo run --package dioxus-cli --release -- run --verbose --force-sequential --web --addr "127.0.0.1" --port 7979',
+        'cargo run --package dioxus-cli --release -- run --force-sequential --web --addr "127.0.0.1" --port 7979',
       port: 7979,
       timeout: 50 * 60 * 1000,
       reuseExistingServer: !process.env.CI,

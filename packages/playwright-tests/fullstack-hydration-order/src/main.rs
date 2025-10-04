@@ -4,10 +4,24 @@
 
 use dioxus::prelude::*;
 
-#[server(ServerStrings)]
-pub async fn get_strings() -> Result<Vec<String>, ServerFnError> {
-    let data: Vec<String> = vec!["Hello".to_string(), "World".to_string()];
-    Ok(data)
+fn main() {
+    dioxus::launch(|| rsx! { Home {} });
+}
+
+#[component]
+pub fn Home() -> Element {
+    let mut count = use_signal(|| 0);
+    rsx! {
+        div {
+            MyStrings {}
+            MyFloats {}
+        }
+        button {
+            id: "counter",
+            onclick: move |_| count += 1,
+            "Count {count}"
+        }
+    }
 }
 
 #[component]
@@ -26,10 +40,9 @@ fn MyStrings() -> Element {
         }
     }
 }
-
-#[server(ServerFloats)]
-pub async fn get_floats() -> Result<Vec<f32>, ServerFnError> {
-    let data: Vec<f32> = vec![1.0, 2.0, 3.0];
+#[get("/api/get_strings")]
+pub async fn get_strings() -> Result<Vec<String>, ServerFnError> {
+    let data: Vec<String> = vec!["Hello".to_string(), "World".to_string()];
     Ok(data)
 }
 
@@ -50,22 +63,8 @@ fn MyFloats() -> Element {
     }
 }
 
-fn main() {
-    dioxus::launch(|| rsx! { Home {} });
-}
-
-#[component]
-pub fn Home() -> Element {
-    let mut count = use_signal(|| 0);
-    rsx! {
-        div {
-            MyStrings {}
-            MyFloats {}
-        }
-        button {
-            id: "counter",
-            onclick: move |_| count += 1,
-            "Count {count}"
-        }
-    }
+#[get("/api/get_floats")]
+pub async fn get_floats() -> Result<Vec<f32>, ServerFnError> {
+    let data: Vec<f32> = vec![1.0, 2.0, 3.0];
+    Ok(data)
 }
