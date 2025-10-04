@@ -166,7 +166,7 @@ impl ToTokens for TemplateBody {
                         #index
                     );
 
-                    dioxus_core::Runtime::current().ok().map(|_| __TEMPLATE.read())
+                    dioxus_core::Runtime::try_current().map(|_| __TEMPLATE.read())
                 };
                 // If the template has not been hot reloaded, we always use the original template
                 // Templates nested within macros may be merged because they have the same file-line-column-index

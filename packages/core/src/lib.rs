@@ -91,20 +91,19 @@ pub(crate) mod innerlude {
 
 pub use crate::innerlude::{
     anyhow, consume_context, consume_context_from_scope, current_owner, current_scope_id,
-    fc_to_builder, force_all_dirty, generation, has_context, needs_update, needs_update_any,
-    parent_scope, provide_context, provide_create_error_boundary, provide_root_context,
-    queue_effect, remove_future, schedule_update, schedule_update_any, spawn, spawn_forever,
-    spawn_isomorphic, suspend, suspense_context, throw_error, try_consume_context,
-    use_after_render, use_before_render, use_drop, use_hook, use_hook_with_cleanup,
-    vdom_is_rendering, with_owner, AnyValue, AnyhowContext, Attribute, AttributeValue, Callback,
-    CapturedError, Component, ComponentFunction, DynamicNode, Element, ElementId, Error,
-    ErrorBoundary, ErrorContext, Event, EventHandler, Fragment, HasAttributes, IntoAttributeValue,
-    IntoDynNode, LaunchConfig, ListenerCallback, MarkerWrapper, Mutation, Mutations, NoOpMutations,
-    OptionStringFromMarker, Properties, ReactiveContext, RenderError, Result, Runtime,
-    RuntimeGuard, ScopeId, ScopeState, SpawnIfAsync, SubscriberList, Subscribers, SuperFrom,
-    SuperInto, SuspendedFuture, SuspenseBoundary, SuspenseBoundaryProps, SuspenseContext, Task,
-    Template, TemplateAttribute, TemplateNode, VComponent, VNode, VNodeInner, VPlaceholder, VText,
-    VirtualDom, WriteMutations,
+    fc_to_builder, generation, has_context, needs_update, needs_update_any, parent_scope,
+    provide_context, provide_create_error_boundary, provide_root_context, queue_effect,
+    remove_future, schedule_update, schedule_update_any, spawn, spawn_forever, spawn_isomorphic,
+    suspend, throw_error, try_consume_context, use_after_render, use_before_render, use_drop,
+    use_hook, use_hook_with_cleanup, with_owner, AnyValue, AnyhowContext, Attribute,
+    AttributeValue, Callback, CapturedError, Component, ComponentFunction, DynamicNode, Element,
+    ElementId, Error, ErrorBoundary, ErrorContext, Event, EventHandler, Fragment, HasAttributes,
+    IntoAttributeValue, IntoDynNode, LaunchConfig, ListenerCallback, MarkerWrapper, Mutation,
+    Mutations, NoOpMutations, OptionStringFromMarker, Properties, ReactiveContext, RenderError,
+    Result, Runtime, RuntimeGuard, ScopeId, ScopeState, SpawnIfAsync, SubscriberList, Subscribers,
+    SuperFrom, SuperInto, SuspendedFuture, SuspenseBoundary, SuspenseBoundaryProps,
+    SuspenseContext, Task, Template, TemplateAttribute, TemplateNode, VComponent, VNode,
+    VNodeInner, VPlaceholder, VText, VirtualDom, WriteMutations,
 };
 
 pub use anyhow::Ok;

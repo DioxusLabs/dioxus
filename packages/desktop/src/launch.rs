@@ -60,37 +60,31 @@ pub fn launch_virtual_dom_blocking(virtual_dom: VirtualDom, mut desktop_config: 
                 // Windows-only drag-n-drop fix events. We need to call the interpreter drag-n-drop code.
                 UserWindowEvent::WindowsDragDrop(id) => {
                     if let Some(webview) = app.webviews.get(&id) {
-                        webview.dom.in_runtime(|| {
-                            ScopeId::ROOT.in_runtime(|| {
-                                eval("window.interpreter.handleWindowsDragDrop();");
-                            });
+                        webview.dom.in_scope(ScopeId::ROOT, || {
+                            eval("window.interpreter.handleWindowsDragDrop();");
                         });
                     }
                 }
                 UserWindowEvent::WindowsDragLeave(id) => {
                     if let Some(webview) = app.webviews.get(&id) {
-                        webview.dom.in_runtime(|| {
-                            ScopeId::ROOT.in_runtime(|| {
-                                eval("window.interpreter.handleWindowsDragLeave();");
-                            });
+                        webview.dom.in_scope(ScopeId::ROOT, || {
+                            eval("window.interpreter.handleWindowsDragLeave();");
                         });
                     }
                 }
                 UserWindowEvent::WindowsDragOver(id, x_pos, y_pos) => {
                     if let Some(webview) = app.webviews.get(&id) {
-                        webview.dom.in_runtime(|| {
-                            ScopeId::ROOT.in_runtime(|| {
-                                let e = eval(
-                                    r#"
+                        webview.dom.in_scope(ScopeId::ROOT, || {
+                            let e = eval(
+                                r#"
                                     const xPos = await dioxus.recv();
                                     const yPos = await dioxus.recv();
                                     window.interpreter.handleWindowsDragOver(xPos, yPos)
                                     "#,
-                                );
+                            );
 
-                                _ = e.send(x_pos);
-                                _ = e.send(y_pos);
-                            });
+                            _ = e.send(x_pos);
+                            _ = e.send(y_pos);
                         });
                     }
                 }

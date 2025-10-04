@@ -1,5 +1,5 @@
 use blitz_shell::{BlitzApplication, View};
-use dioxus_core::ScopeId;
+use dioxus_core::{provide_context, ScopeId};
 use dioxus_history::{History, MemoryHistory};
 use std::rc::Rc;
 use winit::application::ApplicationHandler;
@@ -120,20 +120,20 @@ impl ApplicationHandler<BlitzShellEvent> for DioxusNativeApplication {
             let window_id = window.window_id();
             let doc = window.downcast_doc_mut::<DioxusDocument>();
 
-            doc.vdom.in_runtime(|| {
+            doc.vdom.in_scope(ScopeId::ROOT, || {
                 let shared: Rc<dyn dioxus_document::Document> =
                     Rc::new(DioxusNativeDocument::new(self.proxy.clone(), window_id));
-                ScopeId::ROOT.provide_context(shared);
+                provide_context(shared);
             });
 
             // Add history
             let history_provider: Rc<dyn History> = Rc::new(MemoryHistory::default());
             doc.vdom
-                .in_runtime(move || ScopeId::ROOT.provide_context(history_provider));
+                .in_scope(ScopeId::ROOT, move || provide_context(history_provider));
 
             // Add renderer
             doc.vdom
-                .in_runtime(move || ScopeId::ROOT.provide_context(renderer));
+                .in_scope(ScopeId::ROOT, move || provide_context(renderer));
 
             // Queue rebuild
             doc.initial_build();

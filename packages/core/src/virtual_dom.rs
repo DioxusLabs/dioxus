@@ -353,7 +353,7 @@ impl VirtualDom {
 
     /// Run a closure inside a specific scope
     pub fn in_scope<T>(&self, scope: ScopeId, f: impl FnOnce() -> T) -> T {
-        self.in_runtime(|| scope.in_runtime(f))
+        self.runtime.in_scope(scope, f)
     }
 
     /// Build the virtualdom with a global context inserted into the base scope
@@ -393,7 +393,7 @@ impl VirtualDom {
     ///
     /// Whenever the Runtime "works", it will re-render this scope
     pub fn mark_dirty(&mut self, id: ScopeId) {
-        let Some(scope) = self.runtime.get_state(id) else {
+        let Some(scope) = self.runtime.try_get_state(id) else {
             return;
         };
 
@@ -408,7 +408,7 @@ impl VirtualDom {
         let Some(scope) = self.runtime.task_scope(task) else {
             return;
         };
-        let Some(scope) = self.runtime.get_state(scope) else {
+        let Some(scope) = self.runtime.try_get_state(scope) else {
             return;
         };
 
@@ -718,7 +718,7 @@ impl VirtualDom {
                     let scope_id: ScopeId = scope.id;
                     let run_scope = self
                         .runtime
-                        .get_state(scope.id)
+                        .try_get_state(scope.id)
                         .filter(|scope| scope.should_run_during_suspense())
                         .is_some();
                     if run_scope {
@@ -747,7 +747,7 @@ impl VirtualDom {
         }
 
         self.resolved_scopes
-            .sort_by_key(|&id| self.runtime.get_state(id).unwrap().height);
+            .sort_by_key(|&id| self.runtime.get_state(id).height);
         std::mem::take(&mut self.resolved_scopes)
     }
 

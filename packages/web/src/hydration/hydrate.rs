@@ -149,7 +149,7 @@ impl WebsysDom {
         let server_data = HydrationContext::from_serialized(&data, debug_types, debug_locations);
         // If the server serialized an error into the suspense boundary, throw it on the client so that it bubbles up to the nearest error boundary
         if let Some(error) = server_data.error_entry().get().ok().flatten() {
-            dom.in_runtime(|| id.throw_error(error));
+            dom.in_runtime(|| dom.runtime().throw_error(id, error));
         }
         server_data.in_context(|| {
             // rerun the scope with the new data

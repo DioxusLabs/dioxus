@@ -6,7 +6,7 @@
 
 pub use crate::cfg::Config;
 use crate::hydration::SuspenseMessage;
-use dioxus_core::VirtualDom;
+use dioxus_core::{ScopeId, VirtualDom};
 use dom::WebsysDom;
 use futures_util::{pin_mut, select, FutureExt, StreamExt};
 
@@ -53,7 +53,7 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
 
     #[cfg(feature = "document")]
     if let Some(history) = web_config.history.clone() {
-        virtual_dom.in_runtime(|| dioxus_core::ScopeId::ROOT.provide_context(history));
+        virtual_dom.in_scope(ScopeId::ROOT, || dioxus_core::provide_context(history));
     }
 
     #[cfg(feature = "document")]
@@ -129,16 +129,14 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
                 HydrationContext::from_serialized(&hydration_data, debug_types, debug_locations);
             // If the server serialized an error into the root suspense boundary, throw it into the root scope
             if let Some(error) = server_data.error_entry().get().ok().flatten() {
-                virtual_dom.in_runtime(|| dioxus_core::ScopeId::APP.throw_error(error));
+                virtual_dom.in_runtime(|| virtual_dom.runtime().throw_error(ScopeId::APP, error));
             }
             server_data.in_context(|| {
-                virtual_dom.in_runtime(|| {
+                virtual_dom.in_scope(ScopeId::ROOT, || {
                     // Provide a hydration compatible create error boundary method
-                    dioxus_core::ScopeId::ROOT.in_runtime(|| {
-                        dioxus_core::provide_create_error_boundary(
-                            dioxus_fullstack_core::init_error_boundary,
-                        );
-                    });
+                    dioxus_core::provide_create_error_boundary(
+                        dioxus_fullstack_core::init_error_boundary,
+                    );
                     #[cfg(feature = "document")]
                     document::init_fullstack_document();
                 });

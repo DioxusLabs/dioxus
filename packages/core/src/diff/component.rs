@@ -55,7 +55,7 @@ impl VirtualDom {
             self.scopes[scope.0].last_rendered_node = Some(LastRenderedNode::new(new_nodes));
 
             if render_to.is_some() {
-                self.runtime.get_state(scope).unwrap().mount(&self.runtime);
+                self.runtime.get_state(scope).mount(&self.runtime);
             }
         })
     }
@@ -84,7 +84,7 @@ impl VirtualDom {
             self.scopes[scope.0].last_rendered_node = Some(new_nodes);
 
             if render_to.is_some() {
-                self.runtime.get_state(scope).unwrap().mount(&self.runtime);
+                self.runtime.get_state(scope).mount(&self.runtime);
             }
 
             nodes
@@ -146,7 +146,7 @@ impl VNode {
         // Now diff the scope
         dom.run_and_diff_scope(to, scope_id);
 
-        let height = dom.runtime.get_state(scope_id).unwrap().height;
+        let height = dom.runtime.get_state(scope_id).height;
         dom.dirty_scopes.remove(&ScopeOrder::new(height, scope_id));
     }
 

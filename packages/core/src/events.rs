@@ -487,10 +487,8 @@ impl<Args: 'static, Ret: 'static> Callback<Args, Ret> {
     pub fn new<MaybeAsync: SpawnIfAsync<Marker, Ret>, Marker>(
         mut f: impl FnMut(Args) -> MaybeAsync + 'static,
     ) -> Self {
-        let runtime = Runtime::current().unwrap_or_else(|e| panic!("{}", e));
-        let origin = runtime
-            .current_scope_id()
-            .unwrap_or_else(|e| panic!("{}", e));
+        let runtime = Runtime::current();
+        let origin = runtime.current_scope_id();
         let owner = crate::innerlude::current_owner::<generational_box::UnsyncStorage>();
         let callback = owner.insert_rc(Some(ExternalListenerCallback {
             callback: Box::new(move |event: Args| f(event).spawn()),
@@ -502,10 +500,8 @@ impl<Args: 'static, Ret: 'static> Callback<Args, Ret> {
     /// Leak a new [`Callback`] that will not be dropped unless it is manually dropped.
     #[track_caller]
     pub fn leak(mut f: impl FnMut(Args) -> Ret + 'static) -> Self {
-        let runtime = Runtime::current().unwrap_or_else(|e| panic!("{}", e));
-        let origin = runtime
-            .current_scope_id()
-            .unwrap_or_else(|e| panic!("{}", e));
+        let runtime = Runtime::current();
+        let origin = runtime.current_scope_id();
         let callback = GenerationalBox::leak_rc(
             Some(ExternalListenerCallback {
                 callback: Box::new(move |event: Args| f(event).spawn()),
@@ -547,7 +543,7 @@ impl<Args: 'static, Ret: 'static> Callback<Args, Ret> {
 
     /// Replace the function in the callback with a new one
     pub fn replace(&mut self, callback: Box<dyn FnMut(Args) -> Ret>) {
-        let runtime = Runtime::current().unwrap_or_else(|e| panic!("{}", e));
+        let runtime = Runtime::current();
         self.callback.set(Some(ExternalListenerCallback {
             callback,
             runtime: Rc::downgrade(&runtime),
@@ -647,7 +643,7 @@ impl<T> ListenerCallback<T> {
         MaybeAsync: SpawnIfAsync<Marker>,
     {
         Self {
-            origin: current_scope_id().expect("ListenerCallback must be created within a scope"),
+            origin: current_scope_id(),
             callback: Rc::new(RefCell::new(move |event: Event<dyn Any>| {
                 let data = event.data.downcast::<T>().unwrap();
                 f(Event {
@@ -665,8 +661,7 @@ impl<T> ListenerCallback<T> {
     /// This is expected to be called within a runtime scope. Make sure a runtime is current before
     /// calling this method.
     pub fn call(&self, event: Event<dyn Any>) {
-        let runtime = Runtime::current().expect("ListenerCallback must be called within a runtime");
-        runtime.with_scope_on_stack(self.origin, || {
+        Runtime::current().with_scope_on_stack(self.origin, || {
             (self.callback.borrow_mut())(event);
         });
     }

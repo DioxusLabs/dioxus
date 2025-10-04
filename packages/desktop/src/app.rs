@@ -8,7 +8,7 @@ use crate::{
     shortcut::ShortcutRegistry,
     webview::{PendingWebview, WebviewInstance},
 };
-use dioxus_core::{ElementId, ScopeId, VirtualDom};
+use dioxus_core::{consume_context, ElementId, ScopeId, VirtualDom};
 use dioxus_history::History;
 use dioxus_html::PlatformEventData;
 use std::{
@@ -550,11 +550,8 @@ impl App {
                 return;
             };
 
-            let url = webview.dom.in_runtime(|| {
-                ScopeId::ROOT
-                    .consume_context::<Rc<dyn History>>()
-                    .unwrap()
-                    .current_route()
+            let url = webview.dom.in_scope(ScopeId::ROOT, || {
+                consume_context::<Rc<dyn History>>().current_route()
             });
 
             let state = PreservedWindowState {
@@ -619,12 +616,9 @@ impl App {
                 }
 
                 // Set the url if it exists
-                webview.dom.in_runtime(|| {
+                webview.dom.in_scope(ScopeId::ROOT, || {
                     if let Some(url) = state.url {
-                        ScopeId::ROOT
-                            .consume_context::<Rc<dyn History>>()
-                            .unwrap()
-                            .replace(url);
+                        consume_context::<Rc<dyn History>>().replace(url);
                     }
                 })
             }

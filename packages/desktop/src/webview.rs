@@ -10,7 +10,7 @@ use crate::{
 };
 use crate::{document::DesktopDocument, WeakDesktopContext};
 use base64::prelude::BASE64_STANDARD;
-use dioxus_core::{Runtime, ScopeId, VirtualDom};
+use dioxus_core::{consume_context, provide_context, Runtime, ScopeId, VirtualDom};
 use dioxus_document::Document;
 use dioxus_history::{History, MemoryHistory};
 use dioxus_hooks::to_owned;
@@ -427,10 +427,10 @@ impl WebviewInstance {
         edits.set_desktop_context(Rc::downgrade(&desktop_context));
         let provider: Rc<dyn Document> = Rc::new(DesktopDocument::new(desktop_context.clone()));
         let history_provider: Rc<dyn History> = Rc::new(MemoryHistory::default());
-        dom.in_runtime(|| {
-            ScopeId::ROOT.provide_context(desktop_context.clone());
-            ScopeId::ROOT.provide_context(provider);
-            ScopeId::ROOT.provide_context(history_provider);
+        dom.in_scope(ScopeId::ROOT, || {
+            provide_context(desktop_context.clone());
+            provide_context(provider);
+            provide_context(history_provider);
         });
 
         WebviewInstance {
@@ -566,11 +566,9 @@ impl PendingWebview {
     pub(crate) fn create_window(self, shared: &Rc<SharedContext>) -> WebviewInstance {
         let window = WebviewInstance::new(self.cfg, self.dom, shared.clone());
 
-        let cx = window.dom.in_runtime(|| {
-            ScopeId::ROOT
-                .consume_context::<Rc<DesktopService>>()
-                .unwrap()
-        });
+        let cx = window
+            .dom
+            .in_scope(ScopeId::ROOT, consume_context::<Rc<DesktopService>>);
         _ = self.sender.send(cx);
 
         window

@@ -7,8 +7,8 @@ use crate::streaming::{Mount, StreamingRenderer};
 use crate::{document::ServerDocument, ServeConfig};
 use dioxus_cli_config::base_path;
 use dioxus_core::{
-    has_context, DynamicNode, ErrorContext, ScopeId, SuspenseContext, TemplateNode, VNode,
-    VirtualDom,
+    consume_context, has_context, try_consume_context, DynamicNode, ErrorContext, Runtime, ScopeId,
+    SuspenseContext, TemplateNode, VNode, VirtualDom,
 };
 use dioxus_fullstack_core::{history::provide_fullstack_history_context, HttpError, ServerFnError};
 use dioxus_fullstack_core::{HydrationContext, SerializedHydrationData};
@@ -219,11 +219,8 @@ impl SsrRendererPool {
             }
 
             // check if there are any errors
-            let error = virtual_dom.in_runtime(|| {
-                ScopeId::ROOT_ERROR_BOUNDARY
-                    .consume_context::<ErrorContext>()
-                    .expect("The root should be under an error boundary")
-                    .error()
+            let error = virtual_dom.in_scope(ScopeId::ROOT_ERROR_BOUNDARY, || {
+                consume_context::<ErrorContext>().error()
             });
 
             if let Some(error) = error {
@@ -497,7 +494,9 @@ impl SsrRendererPool {
     fn start_capturing_errors(suspense_scope: ScopeId) {
         // Add an error boundary to the scope. We serialize the suspense error boundary separately so we can use
         // the normal in memory ErrorContext here
-        suspense_scope.in_runtime(|| dioxus_core::provide_context(ErrorContext::new(None)));
+        Runtime::current().in_scope(suspense_scope, || {
+            dioxus_core::provide_context(ErrorContext::new(None))
+        });
     }
 
     fn serialize_server_data(virtual_dom: &VirtualDom, scope: ScopeId) -> SerializedHydrationData {
@@ -525,10 +524,8 @@ impl SsrRendererPool {
     fn serialize_errors(context: &HydrationContext, vdom: &VirtualDom, scope: ScopeId) {
         // If there is an error boundary on the suspense boundary, grab the error from the context API
         // and throw it on the client so that it bubbles up to the nearest error boundary
-        let error = vdom.in_runtime(|| {
-            scope
-                .consume_context::<ErrorContext>()
-                .and_then(|error_context| error_context.error())
+        let error = vdom.in_scope(scope, || {
+            try_consume_context::<ErrorContext>().and_then(|error_context| error_context.error())
         });
         context
             .error_entry()
@@ -536,14 +533,12 @@ impl SsrRendererPool {
     }
 
     fn take_from_scope(context: &HydrationContext, vdom: &VirtualDom, scope: ScopeId) {
-        vdom.in_runtime(|| {
-            scope.in_runtime(|| {
-                // Grab any serializable server context from this scope
-                let other: Option<HydrationContext> = has_context();
-                if let Some(other) = other {
-                    context.extend(&other);
-                }
-            });
+        vdom.in_scope(scope, || {
+            // Grab any serializable server context from this scope
+            let other: Option<HydrationContext> = has_context();
+            if let Some(other) = other {
+                context.extend(&other);
+            }
         });
 
         // then continue to any children
@@ -659,7 +654,7 @@ impl SsrRendererPool {
 
         let title = {
             let document: Option<Rc<ServerDocument>> =
-                virtual_dom.in_runtime(|| ScopeId::ROOT.consume_context());
+                virtual_dom.in_scope(ScopeId::ROOT, dioxus_core::try_consume_context);
             // Collect any head content from the document provider and inject that into the head
             document.and_then(|document| document.title())
         };
@@ -672,8 +667,8 @@ impl SsrRendererPool {
         }
         to.write_str(&index.head_after_title)?;
 
-        let document: Option<Rc<ServerDocument>> =
-            virtual_dom.in_runtime(|| ScopeId::ROOT.consume_context());
+        let document =
+            virtual_dom.in_scope(ScopeId::ROOT, try_consume_context::<Rc<ServerDocument>>);
         if let Some(document) = document {
             // Collect any head content from the document provider and inject that into the head
             document.render(to)?;

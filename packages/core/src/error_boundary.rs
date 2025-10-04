@@ -67,7 +67,7 @@ pub fn provide_create_error_boundary(create_error_boundary: fn() -> ErrorContext
 
 /// Create an error boundary with the current error boundary factory (either hydration compatible or default)
 fn create_error_boundary() -> ErrorContext {
-    let create_error_boundary: CreateErrorBoundary = try_consume_context().unwrap_or_default();
+    let create_error_boundary = try_consume_context::<CreateErrorBoundary>().unwrap_or_default();
     (create_error_boundary.0)()
 }
 
