@@ -79,7 +79,7 @@ fn init_document_with(document: impl FnOnce(), history: impl FnOnce()) {
     })
 }
 
-/// Provides the Document through [`ScopeId::provide_context`].
+/// Provides the Document through [`dioxus_core::provide_context`].
 pub fn init_document() {
     // If hydrate is enabled, we add the FullstackWebDocument with the initial hydration data
     #[cfg(not(feature = "hydrate"))]
