@@ -111,8 +111,8 @@ module.exports = defineConfig({
     {
       cwd: path.join(process.cwd(), "fullstack-spread"),
       command:
-        'cargo run --package dioxus-cli --release -- run --verbose --force-sequential --web --addr "127.0.0.1" --port 7979',
-      port: 7979,
+        'cargo run --package dioxus-cli --release -- run --verbose --force-sequential --web --addr "127.0.0.1" --port 7980',
+      port: 7980,
       timeout: 50 * 60 * 1000,
       reuseExistingServer: !process.env.CI,
       stdout: "pipe",
