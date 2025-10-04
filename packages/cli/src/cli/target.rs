@@ -1,8 +1,8 @@
-use crate::cli::*;
 use crate::BundleFormat;
 use crate::Platform;
-use crate::RendererArg;
-use crate::TargetAlias;
+use crate::{cli::*, Renderer};
+// use crate::RendererArg;
+// use crate::PlatformAlias;
 use target_lexicon::Triple;
 
 const HELP_HEADING: &str = "Target Options";
@@ -10,18 +10,6 @@ const HELP_HEADING: &str = "Target Options";
 /// A single target to build for
 #[derive(Clone, Debug, Default, Deserialize, Parser)]
 pub(crate) struct TargetArgs {
-    /// The target alias to use for this build. Supports wasm, macos, windows, linux, ios, android, and host [default: "host"]
-    #[clap(flatten)]
-    pub(crate) target_alias: TargetAlias,
-
-    /// Build renderer: supports web, webview, native, server, and liveview
-    #[clap(flatten)]
-    pub(crate) renderer: RendererArg,
-
-    /// The bundle format to target for the build: supports web, macos, windows, linux, ios, android, and server
-    #[clap(long, value_enum, help_heading = HELP_HEADING)]
-    pub(crate) bundle: Option<BundleFormat>,
-
     /// Build platform: supports Web, MacOS, Windows, Linux, iOS, Android, and Server
     ///
     /// The platform implies a combination of the target alias, renderer, and bundle format flags.
@@ -29,8 +17,16 @@ pub(crate) struct TargetArgs {
     /// You should generally prefer to use the `--web`, `--webview`, or `--native` flags to set the renderer
     /// or the `--wasm`, `--macos`, `--windows`, `--linux`, `--ios`, or `--android` flags to set the target alias
     /// instead of this flag. The renderer, target alias, and bundle format will be inferred if you only pass one.
+    #[clap(flatten)]
+    pub(crate) platform: Platform,
+
+    /// Which renderer to use? By default, this is usually inferred from the platform.
     #[clap(long, value_enum, help_heading = HELP_HEADING)]
-    pub(crate) platform: Option<Platform>,
+    pub(crate) renderer: Option<Renderer>,
+
+    /// The bundle format to target for the build: supports web, macos, windows, linux, ios, android, and server
+    #[clap(long, value_enum, help_heading = HELP_HEADING)]
+    pub(crate) bundle: Option<BundleFormat>,
 
     /// Build in release mode [default: false]
     #[clap(long, short, help_heading = HELP_HEADING)]
@@ -112,7 +108,7 @@ pub(crate) struct TargetArgs {
     /// simulator. If the device name is passed, we will upload to that device instead.
     ///
     /// This performs a search among devices, and fuzzy matches might be found.
-    #[arg(long, default_missing_value=None, num_args=0..=1, help_heading = HELP_HEADING)]
+    #[arg(long, default_missing_value=Some("".into()), num_args=0..=1)]
     pub(crate) device: Option<String>,
 
     /// The base path the build will fetch assets relative to. This will override the
@@ -153,12 +149,15 @@ pub(crate) struct TargetArgs {
     /// when merging `@client and @server` targets together.
     #[clap(long, help_heading = HELP_HEADING)]
     pub(crate) client_target: Option<String>,
+
+    /// Automatically pass `--features=js_cfg` when building for wasm targets. This is enabled by default.
+    #[clap(long, default_value_t = true, help_heading = HELP_HEADING, num_args = 0..=1)]
+    pub(crate) wasm_js_cfg: bool,
 }
 
 impl Anonymized for TargetArgs {
     fn anonymized(&self) -> Value {
         json! {{
-            "target_alias": self.target_alias,
             "renderer": self.renderer,
             "bundle": self.bundle,
             "platform": self.platform,

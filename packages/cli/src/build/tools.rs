@@ -3,8 +3,7 @@ use anyhow::Context;
 use itertools::Itertools;
 use std::{path::PathBuf, sync::Arc};
 use target_lexicon::{
-    Aarch64Architecture, Architecture, ArmArchitecture, Environment, OperatingSystem, Triple,
-    X86_32Architecture,
+    Aarch64Architecture, Architecture, ArmArchitecture, Triple, X86_32Architecture,
 };
 use tokio::process::Command;
 
@@ -236,9 +235,6 @@ impl AndroidTools {
         //  - We try to match the architecture unless otherwise specified. This is because
         //    emulators that match the host arch are usually faster.
         let mut triple = "aarch64-linux-android".parse::<Triple>().unwrap();
-        triple.operating_system = OperatingSystem::Linux;
-        triple.environment = Environment::Android;
-        triple.architecture = target_lexicon::HOST.architecture;
 
         // TODO: Wire this up with --device flag. (add `-s serial`` flag before `shell` arg)
         let output = Command::new(&self.adb)
