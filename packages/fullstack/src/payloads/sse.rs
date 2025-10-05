@@ -350,15 +350,15 @@ mod server_impl {
 
     impl<T> IntoResponse for ServerEvents<T> {
         fn into_response(self) -> axum_core::response::Response {
-            let mut sse = self
+            let sse = self
                 .sse
                 .expect("SSE should be initialized before using it as a response");
 
             if let Some(keep_alive) = self.keep_alive {
-                sse = sse.keep_alive(keep_alive)
+                sse.keep_alive(keep_alive).into_response()
+            } else {
+                sse.into_response()
             }
-
-            sse.into_response()
         }
     }
 
