@@ -4224,7 +4224,8 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
                     .arg(build_type)
                     .current_dir(self.root_dir())
                     .output()
-                    .await?;
+                    .await
+                    .context("Failed to run gradle")?;
 
                 if !output.status.success() {
                     bail!(
@@ -4289,7 +4290,8 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
             std::fs::set_permissions(
                 self.root_dir().join("gradlew"),
                 std::fs::Permissions::from_mode(0o755),
-            )?;
+            )
+            .context("Failed to make gradlew executable")?;
         }
 
         let gradle_exec_name = match cfg!(windows) {
