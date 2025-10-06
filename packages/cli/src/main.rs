@@ -83,5 +83,6 @@ async fn main() -> ExitCode {
 
         output => tracing::info!(json = %output),
     }
+
     ExitCode::SUCCESS
 }

@@ -107,10 +107,18 @@ impl LinkAction {
     }
 
     pub(crate) fn run_link(self) -> ExitCode {
+        let link_err_file = self.link_err_file.clone();
         if let Err(err) = self.run_link_inner() {
             eprintln!("Linker error: {err}");
+
+            // If we failed to run the linker, we need to write the error to the file
+            // so that the main process can read it.
+            _ = std::fs::create_dir_all(link_err_file.parent().unwrap());
+            _ = std::fs::write(link_err_file, format!("Linker error: {err}"));
+
             return ExitCode::FAILURE;
         }
+
         ExitCode::SUCCESS
     }
 
