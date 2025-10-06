@@ -93,7 +93,7 @@ impl Display for ValueDroppedError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("Failed to borrow because the value was dropped.")?;
         #[cfg(any(debug_assertions, feature = "debug_ownership"))]
-        f.write_fmt(format_args!("created_at: {}", self.created_at))?;
+        f.write_fmt(format_args!("created_at: {self.created_at}"))?;
         Ok(())
     }
 }
