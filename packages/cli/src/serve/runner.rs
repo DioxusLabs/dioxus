@@ -101,7 +101,12 @@ impl AppServer {
         let cross_origin_policy = args.cross_origin_policy;
 
         // Find the launch args for the client and server
-        let split_args = |args: &str| args.split(' ').map(|s| s.to_string()).collect::<Vec<_>>();
+        let split_args = |args: &str| {
+            args.split_whitespace()
+                .map(|s| s.to_string())
+                .collect::<Vec<_>>()
+        };
+
         let server_args = args.platform_args.with_server_or_shared(|c| &c.args);
         let server_args = split_args(server_args);
         let client_args = args.platform_args.with_client_or_shared(|c| &c.args);

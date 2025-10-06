@@ -1,8 +1,11 @@
-use crate::arena::ElementRef;
-use crate::innerlude::{DirtyTasks, Effect};
 use crate::nodes::VNodeMount;
 use crate::scheduler::ScopeOrder;
 use crate::scope_context::SuspenseLocation;
+use crate::{arena::ElementRef, CapturedError};
+use crate::{
+    innerlude::{DirtyTasks, Effect},
+    SuspenseContext,
+};
 use crate::{
     innerlude::{LocalTask, SchedulerMsg},
     scope_context::Scope,
@@ -10,11 +13,11 @@ use crate::{
     Task,
 };
 use crate::{AttributeValue, ElementId, Event};
+use generational_box::{AnyStorage, Owner};
 use slab::Slab;
 use slotmap::DefaultKey;
 use std::any::Any;
 use std::collections::BTreeSet;
-use std::fmt;
 use std::{
     cell::{Cell, Ref, RefCell},
     rc::Rc,
@@ -27,8 +30,6 @@ thread_local! {
 
 /// A global runtime that is shared across all scopes that provides the async runtime and context API
 pub struct Runtime {
-    pub(crate) scope_states: RefCell<Vec<Option<Scope>>>,
-
     // We use this to track the current scope
     // This stack should only be modified through [`Runtime::with_scope_on_stack`] to ensure that the stack is correctly restored
     scope_stack: RefCell<Vec<ScopeId>>,
@@ -36,6 +37,9 @@ pub struct Runtime {
     // We use this to track the current suspense location. Generally this lines up with the scope stack, but it may be different for children of a suspense boundary
     // This stack should only be modified through [`Runtime::with_suspense_location`] to ensure that the stack is correctly restored
     suspense_stack: RefCell<Vec<SuspenseLocation>>,
+
+    // A hand-rolled slab of scope states
+    pub(crate) scope_states: RefCell<Vec<Option<Scope>>>,
 
     // We use this to track the current task
     pub(crate) current_task: Cell<Option<Task>>,
@@ -89,18 +93,55 @@ impl Runtime {
     }
 
     /// Get the current runtime
-    pub fn current() -> Result<Rc<Self>, RuntimeError> {
+    pub fn current() -> Rc<Self> {
         RUNTIMES
             .with(|stack| stack.borrow().last().cloned())
-            .ok_or(RuntimeError::new())
+            .unwrap_or_else(|| {
+                panic!(
+                    "Must be called from inside a Dioxus runtime.
+
+Help: Some APIs in dioxus require a global runtime to be present.
+If you are calling one of these APIs from outside of a dioxus runtime
+(typically in a web-sys closure or dynamic library), you will need to
+grab the runtime from a scope that has it and then move it into your
+new scope with a runtime guard.
+
+For example, if you are trying to use dioxus apis from a web-sys
+closure, you can grab the runtime from the scope it is created in:
+
+```rust
+use dioxus::prelude::*;
+static COUNT: GlobalSignal<i32> = Signal::global(|| 0);
+
+#[component]
+fn MyComponent() -> Element {{
+    use_effect(|| {{
+        // Grab the runtime from the MyComponent scope
+        let runtime = Runtime::current().expect(\"Components run in the Dioxus runtime\");
+        // Move the runtime into the web-sys closure scope
+        let web_sys_closure = Closure::new(|| {{
+            // Then create a guard to provide the runtime to the closure
+            let _guard = RuntimeGuard::new(runtime);
+            // and run whatever code needs the runtime
+            tracing::info!(\"The count is: {{COUNT}}\");
+        }});
+    }})
+}}
+```"
+                )
+            })
+    }
+
+    /// Try to get the current runtime, returning None if it doesn't exist (outside the context of a dioxus app)
+    pub fn try_current() -> Option<Rc<Self>> {
+        RUNTIMES.with(|stack| stack.borrow().last().cloned())
     }
 
     /// Wrap a closure so that it always runs in the runtime that is currently active
     pub fn wrap_closure<'a, I, O>(f: impl Fn(I) -> O + 'a) -> impl Fn(I) -> O + 'a {
-        let current_runtime = Self::current().unwrap();
-        let current_scope = current_runtime.current_scope_id().ok();
-        move |input| match current_scope {
-            Some(scope) => current_runtime.on_scope(scope, || f(input)),
+        let current_runtime = Self::current();
+        move |input| match current_runtime.try_current_scope_id() {
+            Some(scope) => current_runtime.in_scope(scope, || f(input)),
             None => {
                 let _runtime_guard = RuntimeGuard::new(current_runtime.clone());
                 f(input)
@@ -140,7 +181,7 @@ impl Runtime {
             let borrow = self.scope_states.borrow();
             if let Some(scope) = &borrow[id.0] {
                 // Manually drop tasks, hooks, and contexts inside of the runtime
-                self.on_scope(id, || {
+                self.in_scope(id, || {
                     // Drop all spawned tasks - order doesn't matter since tasks don't rely on eachother
                     // In theory nested tasks might not like this
                     for id in scope.spawned_tasks.take() {
@@ -165,19 +206,31 @@ impl Runtime {
         self.scope_states.borrow_mut()[id.0].take();
     }
 
+    /// Get the owner for the current scope.
+    #[track_caller]
+    pub fn current_owner<S: AnyStorage>(&self) -> Owner<S> {
+        self.get_state(self.current_scope_id()).owner()
+    }
+
+    /// Get the owner for the current scope.
+    #[track_caller]
+    pub fn scope_owner<S: AnyStorage>(&self, scope: ScopeId) -> Owner<S> {
+        self.get_state(scope).owner()
+    }
+
     /// Get the current scope id
-    pub(crate) fn current_scope_id(&self) -> Result<ScopeId, RuntimeError> {
-        self.scope_stack
-            .borrow()
-            .last()
-            .copied()
-            .ok_or(RuntimeError { _priv: () })
+    pub fn current_scope_id(&self) -> ScopeId {
+        self.scope_stack.borrow().last().copied().unwrap()
+    }
+
+    /// Try to get the current scope id, returning None if it we aren't actively inside a scope
+    pub fn try_current_scope_id(&self) -> Option<ScopeId> {
+        self.scope_stack.borrow().last().copied()
     }
 
     /// Call this function with the current scope set to the given scope
-    ///
-    /// Useful in a limited number of scenarios
-    pub fn on_scope<O>(self: &Rc<Self>, id: ScopeId, f: impl FnOnce() -> O) -> O {
+    #[track_caller]
+    pub fn in_scope<O>(self: &Rc<Self>, id: ScopeId, f: impl FnOnce() -> O) -> O {
         let _runtime_guard = RuntimeGuard::new(self.clone());
         {
             self.push_scope(id);
@@ -236,7 +289,18 @@ impl Runtime {
     /// Get the state for any scope given its ID
     ///
     /// This is useful for inserting or removing contexts from a scope, or rendering out its root node
-    pub(crate) fn get_state(&self, id: ScopeId) -> Option<Ref<'_, Scope>> {
+    pub(crate) fn get_state(&self, id: ScopeId) -> Ref<'_, Scope> {
+        Ref::filter_map(self.scope_states.borrow(), |scopes| {
+            scopes.get(id.0).and_then(|f| f.as_ref())
+        })
+        .ok()
+        .unwrap()
+    }
+
+    /// Get the state for any scope given its ID
+    ///
+    /// This is useful for inserting or removing contexts from a scope, or rendering out its root node
+    pub(crate) fn try_get_state(&self, id: ScopeId) -> Option<Ref<'_, Scope>> {
         Ref::filter_map(self.scope_states.borrow(), |contexts| {
             contexts.get(id.0).and_then(|f| f.as_ref())
         })
@@ -250,35 +314,23 @@ impl Runtime {
 
     /// Pops a scope off the stack
     pub(crate) fn pop() {
-        RUNTIMES.with(|stack| stack.borrow_mut().pop());
+        RUNTIMES.with(|stack| stack.borrow_mut().pop().unwrap());
     }
 
     /// Runs a function with the current runtime
-    pub(crate) fn with<R>(f: impl FnOnce(&Runtime) -> R) -> Result<R, RuntimeError> {
-        Self::current().map(|r| f(&r))
+    pub(crate) fn with<R>(callback: impl FnOnce(&Runtime) -> R) -> R {
+        callback(&Self::current())
     }
 
     /// Runs a function with the current scope
-    pub(crate) fn with_current_scope<R>(f: impl FnOnce(&Scope) -> R) -> Result<R, RuntimeError> {
-        Self::with(|rt| {
-            rt.current_scope_id()
-                .ok()
-                .and_then(|scope| rt.get_state(scope).map(|sc| f(&sc)))
-        })
-        .ok()
-        .flatten()
-        .ok_or(RuntimeError::new())
+    pub(crate) fn with_current_scope<R>(callback: impl FnOnce(&Scope) -> R) -> R {
+        Self::with(|rt| Self::with_scope(rt.current_scope_id(), callback))
     }
 
     /// Runs a function with the current scope
-    pub(crate) fn with_scope<R>(
-        scope: ScopeId,
-        f: impl FnOnce(&Scope) -> R,
-    ) -> Result<R, RuntimeError> {
-        Self::with(|rt| rt.get_state(scope).map(|sc| f(&sc)))
-            .ok()
-            .flatten()
-            .ok_or(RuntimeError::new())
+    pub(crate) fn with_scope<R>(scope: ScopeId, callback: impl FnOnce(&Scope) -> R) -> R {
+        let rt = Runtime::current();
+        Self::in_scope(&rt, scope, || callback(&rt.get_state(scope)))
     }
 
     /// Finish a render. This will mark all effects as ready to run and send the render signal.
@@ -297,6 +349,7 @@ impl Runtime {
         if self.suspended_tasks.get() == 0 {
             return true;
         }
+
         // If this is not a suspended scope, and we are under a frozen context, then we should
         let scopes = self.scope_states.borrow();
         let scope = &scopes[scope_id.0].as_ref().unwrap();
@@ -442,6 +495,107 @@ impl Runtime {
             }
         }
     }
+
+    /// Consume context from the current scope
+    pub fn consume_context<T: 'static + Clone>(&self, id: ScopeId) -> Option<T> {
+        self.get_state(id).consume_context::<T>()
+    }
+
+    /// Consume context from the current scope
+    pub fn consume_context_from_scope<T: 'static + Clone>(&self, scope_id: ScopeId) -> Option<T> {
+        self.get_state(scope_id).consume_context::<T>()
+    }
+
+    /// Check if the current scope has a context
+    pub fn has_context<T: 'static + Clone>(&self, id: ScopeId) -> Option<T> {
+        self.get_state(id).has_context::<T>()
+    }
+
+    /// Provide context to the current scope
+    pub fn provide_context<T: 'static + Clone>(&self, id: ScopeId, value: T) -> T {
+        self.get_state(id).provide_context(value)
+    }
+
+    /// Get the parent of the current scope if it exists
+    pub fn parent_scope(&self, scope: ScopeId) -> Option<ScopeId> {
+        self.get_state(scope).parent_id()
+    }
+
+    /// Check if the current scope is a descendant of the given scope
+    pub fn is_descendant_of(&self, us: ScopeId, other: ScopeId) -> bool {
+        let mut current = us;
+        while let Some(parent) = self.parent_scope(current) {
+            if parent == other {
+                return true;
+            }
+            current = parent;
+        }
+        false
+    }
+
+    /// Mark the current scope as dirty, causing it to re-render
+    pub fn needs_update(&self, scope: ScopeId) {
+        self.get_state(scope).needs_update();
+    }
+
+    /// Get the height of the current scope
+    pub fn height(&self, id: ScopeId) -> u32 {
+        self.get_state(id).height
+    }
+
+    /// Throw a [`CapturedError`] into a scope. The error will bubble up to the nearest [`ErrorBoundary`](crate::ErrorBoundary) or the root of the app.
+    ///
+    /// # Examples
+    /// ```rust, no_run
+    /// # use dioxus::prelude::*;
+    /// fn Component() -> Element {
+    ///     let request = spawn(async move {
+    ///         match reqwest::get("https://api.example.com").await {
+    ///             Ok(_) => unimplemented!(),
+    ///             // You can explicitly throw an error into a scope with throw_error
+    ///             Err(err) => dioxus::core::Runtime::current().throw_error(ScopeId::APP, err),
+    ///         }
+    ///     });
+    ///
+    ///     unimplemented!()
+    /// }
+    /// ```
+    pub fn throw_error(&self, id: ScopeId, error: impl Into<CapturedError> + 'static) {
+        let error = error.into();
+        if let Some(cx) = self.consume_context::<crate::ErrorContext>(id) {
+            cx.insert_error(error)
+        } else {
+            tracing::error!(
+                    "Tried to throw an error into an error boundary, but failed to locate a boundary: {:?}",
+                    error
+                )
+        }
+    }
+
+    /// Get the suspense context the current scope is in
+    pub fn suspense_context(&self) -> Option<SuspenseContext> {
+        self.get_state(self.current_scope_id())
+            .suspense_location()
+            .suspense_context()
+            .cloned()
+    }
+
+    /// Force every component to be dirty and require a re-render. Used by hot-reloading.
+    ///
+    /// This might need to change to a different flag in the event hooks order changes within components.
+    /// What we really need is a way to mark components as needing a complete rebuild if they were hit by changes.
+    pub fn force_all_dirty(&self) {
+        self.scope_states.borrow_mut().iter().for_each(|state| {
+            if let Some(scope) = state.as_ref() {
+                scope.needs_update();
+            }
+        });
+    }
+
+    /// Check if the virtual dom is currently rendering
+    pub fn vdom_is_rendering(&self) -> bool {
+        self.rendering.get()
+    }
 }
 
 /// A guard for a new runtime. This must be used to override the current runtime when importing components from a dynamic library that has it's own runtime.
@@ -455,7 +609,7 @@ impl Runtime {
 /// }
 ///
 /// fn app() -> Element {
-///     rsx! { Component { runtime: Runtime::current().unwrap() } }
+///     rsx! { Component { runtime: Runtime::current() } }
 /// }
 ///
 /// // In a dynamic library
@@ -493,61 +647,3 @@ impl Drop for RuntimeGuard {
         Runtime::pop();
     }
 }
-
-/// Missing Dioxus runtime error.
-pub struct RuntimeError {
-    _priv: (),
-}
-
-impl RuntimeError {
-    #[inline(always)]
-    pub(crate) fn new() -> Self {
-        Self { _priv: () }
-    }
-}
-
-impl fmt::Debug for RuntimeError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("RuntimeError").finish()
-    }
-}
-
-impl fmt::Display for RuntimeError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "Must be called from inside a Dioxus runtime.
-
-Help: Some APIs in dioxus require a global runtime to be present.
-If you are calling one of these APIs from outside of a dioxus runtime
-(typically in a web-sys closure or dynamic library), you will need to
-grab the runtime from a scope that has it and then move it into your
-new scope with a runtime guard.
-
-For example, if you are trying to use dioxus apis from a web-sys
-closure, you can grab the runtime from the scope it is created in:
-
-```rust
-use dioxus::prelude::*;
-static COUNT: GlobalSignal<i32> = Signal::global(|| 0);
-
-#[component]
-fn MyComponent() -> Element {{
-    use_effect(|| {{
-        // Grab the runtime from the MyComponent scope
-        let runtime = Runtime::current().expect(\"Components run in the Dioxus runtime\");
-        // Move the runtime into the web-sys closure scope
-        let web_sys_closure = Closure::new(|| {{
-            // Then create a guard to provide the runtime to the closure
-            let _guard = RuntimeGuard::new(runtime);
-            // and run whatever code needs the runtime
-            tracing::info!(\"The count is: {{COUNT}}\");
-        }});
-    }})
-}}
-```"
-        )
-    }
-}
-
-impl std::error::Error for RuntimeError {}

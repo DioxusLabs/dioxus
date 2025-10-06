@@ -133,7 +133,7 @@ pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), Li
     // Create the a proxy for query engine
     let (query_tx, mut query_rx) = tokio::sync::mpsc::unbounded_channel();
     let query_engine = QueryEngine::new(query_tx);
-    vdom.runtime().on_scope(ScopeId::ROOT, || {
+    vdom.runtime().in_scope(ScopeId::ROOT, || {
         provide_context(query_engine.clone());
         init_document();
     });

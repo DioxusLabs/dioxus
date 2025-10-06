@@ -499,7 +499,7 @@ pub unsafe fn apply_patch(mut table: JumpTable) -> Result<(), PatchError> {
     // On non-wasm platforms we can just use libloading and the known aslr offsets to load the library
     #[cfg(any(unix, windows))]
     {
-        // on android we try to cirumvent permissions issues by copying the library to a memmap and then libloading that
+        // on android we try to circumvent permissions issues by copying the library to a memmap and then libloading that
         #[cfg(target_os = "android")]
         let lib = Box::leak(Box::new(android_memmap_dlopen(&table.lib)?));
 
