@@ -5,6 +5,9 @@
 /packages/playwright-tests/fullstack/dist
 /packages/playwright-tests/test-results
 /packages/playwright-tests/web-hot-patch-temp
+/packages/playwright-tests/web-hot-patch-fullstack-temp
+/packages/playwright-tests/web-hot-patch/Cargo.lock
+/packages/playwright-tests/web-hot-patch-fullstack/Cargo.lock
 /dist
 .DS_Store
 /examples/assets/test_video.mp4

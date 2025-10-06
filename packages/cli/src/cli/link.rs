@@ -1,7 +1,7 @@
 use crate::Result;
-use anyhow::Context;
+use anyhow::{bail, Context};
 use serde::{Deserialize, Serialize};
-use std::{borrow::Cow, ffi::OsString, path::PathBuf};
+use std::{borrow::Cow, ffi::OsString, path::PathBuf, process::ExitCode};
 use target_lexicon::Triple;
 
 /// `dx` can act as a linker in a few scenarios. Note that we don't *actually* implement the linker logic,
@@ -106,16 +106,20 @@ impl LinkAction {
         Ok(())
     }
 
-    pub(crate) fn run_link(self) {
+    pub(crate) fn run_link(self) -> ExitCode {
         let link_err_file = self.link_err_file.clone();
-        let res = self.run_link_inner();
+        if let Err(err) = self.run_link_inner() {
+            eprintln!("Linker error: {err}");
 
-        if let Err(err) = res {
             // If we failed to run the linker, we need to write the error to the file
             // so that the main process can read it.
             _ = std::fs::create_dir_all(link_err_file.parent().unwrap());
             _ = std::fs::write(link_err_file, format!("Linker error: {err}"));
+
+            return ExitCode::FAILURE;
         }
+
+        ExitCode::SUCCESS
     }
 
     /// Write the incoming linker args to a file
@@ -149,12 +153,20 @@ impl LinkAction {
                 };
                 let res = cmd.output().expect("Failed to run linker");
 
+                if !res.status.success() {
+                    bail!(
+                        "{}\n{}",
+                        String::from_utf8_lossy(&res.stdout),
+                        String::from_utf8_lossy(&res.stderr)
+                    );
+                }
                 if !res.stderr.is_empty() || !res.stdout.is_empty() {
+                    // Write linker warnings to file so that the main process can read them.
                     _ = std::fs::create_dir_all(self.link_err_file.parent().unwrap());
                     _ = std::fs::write(
                         self.link_err_file,
                         format!(
-                            "Linker error: {}\n{}",
+                            "Linker warnings: {}\n{}",
                             String::from_utf8_lossy(&res.stdout),
                             String::from_utf8_lossy(&res.stderr)
                         ),

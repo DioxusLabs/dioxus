@@ -207,5 +207,13 @@ module.exports = defineConfig({
       reuseExistingServer: !process.env.CI,
       stdout: "pipe",
     },
+    {
+      command:
+        'rm -rf ./web-hot-patch-fullstack-temp && cp -r ./web-hot-patch-fullstack ./web-hot-patch-fullstack-temp && cd web-hot-patch-fullstack-temp && cargo run --manifest-path ../../cli/Cargo.toml --release -- serve --verbose --force-sequential --web --addr "127.0.0.1" --port 9981 --hot-patch --exit-on-error',
+      port: 9981,
+      timeout: 50 * 60 * 1000,
+      reuseExistingServer: !process.env.CI,
+      stdout: "pipe",
+    },
   ],
 });
