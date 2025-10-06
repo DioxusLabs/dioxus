@@ -581,7 +581,6 @@ pub unsafe fn apply_patch(mut table: JumpTable) -> Result<(), PatchError> {
                 path,
                 response.status_text()
             );
-            return;
         }
 
         let dl_bytes: ArrayBuffer = JsFuture::from(response.array_buffer().unwrap())
