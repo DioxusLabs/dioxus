@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::{
     env::{args, vars},
     path::PathBuf,
+    process::ExitCode,
 };
 
 /// The environment variable indicating where the args file is located.
@@ -65,7 +66,7 @@ fn has_linking_args() -> bool {
 /// Run rustc directly, but output the result to a file.
 ///
 /// <https://doc.rust-lang.org/cargo/reference/config.html#buildrustc>
-pub fn run_rustc() {
+pub fn run_rustc() -> ExitCode {
     // If we are being asked to link, delegate to the linker action.
     if has_linking_args() {
         return crate::link::LinkAction::from_env()
