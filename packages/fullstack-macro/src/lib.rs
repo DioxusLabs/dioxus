@@ -1214,6 +1214,15 @@ impl PathParam {
                 ty,
                 Brace(span),
             )
+        } else if str.starts_with(':') && str.len() > 1 {
+            let str = str.strip_prefix(':').unwrap();
+            Self::Capture(
+                LitStr::new(str, span),
+                Brace(span),
+                Ident::new(str, span),
+                ty,
+                Brace(span),
+            )
         } else {
             Self::Static(LitStr::new(str, span))
         };
