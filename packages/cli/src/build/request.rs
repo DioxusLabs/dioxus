@@ -3516,7 +3516,7 @@ impl BuildRequest {
 
         // Get the strip setting from the profile or the profile it inherits from
         fn get_strip(profile: &Profile, profiles: &Profiles) -> Option<StripSetting> {
-            profile.strip.clone().or_else(|| {
+            profile.strip.or_else(|| {
                 // If we can't find the strip setting, check if we inherit from another profile
                 profile.inherits.as_ref().and_then(|inherits| {
                     let profile = match inherits.as_str() {

@@ -252,6 +252,7 @@ fn setup_ui(
     commands.insert_resource(TextureImage(handle));
 }
 
+#[allow(clippy::too_many_arguments)]
 fn update_ui(
     mut dioxus_doc: NonSendMut<DioxusDocument>,
     waker: NonSendMut<std::task::Waker>,
