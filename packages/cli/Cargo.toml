@@ -106,7 +106,6 @@ tracing-subscriber = { version = "0.3.19", features = [
 ] }
 console-subscriber = { version = "0.4.1", optional = true }
 tracing = { workspace = true }
-wasm-opt = { version = "0.116.1", optional = true }
 ansi-to-tui = { workspace = true }
 ansi-to-html = { workspace = true }
 path-absolutize = { workspace = true }
