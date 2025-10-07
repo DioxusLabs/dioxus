@@ -39,7 +39,7 @@ env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: 0 # todo(jon): cargo-cache wipes incremental artifacts, but we eventually want to cache them
   RUST_BACKTRACE: 1
-  rust_nightly: nightly-2025-04-07
+  rust_nightly: nightly-2025-10-05
 
 jobs:
   check-msrv:
