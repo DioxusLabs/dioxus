@@ -115,7 +115,7 @@ fn WebSysClosure() -> Element {
 
         // Make sure passing the runtime into the closure works
         let callback = Callback::new(|_| {
-            assert!(!dioxus::dioxus_core::vdom_is_rendering());
+            assert!(!dioxus::dioxus_core::Runtime::current().vdom_is_rendering());
             *TRIGGERED.write() = true;
         });
         let closure: Closure<dyn Fn()> = Closure::new({

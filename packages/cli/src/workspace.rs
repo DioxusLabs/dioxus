@@ -6,6 +6,7 @@ use anyhow::{bail, Context};
 use ignore::gitignore::Gitignore;
 use krates::{semver::Version, KrateDetails, LockOptions};
 use krates::{Cmd, Krates, NodeId};
+use std::hash::Hasher;
 use std::sync::Arc;
 use std::{collections::HashSet, path::Path};
 use std::{path::PathBuf, time::Duration};
@@ -96,9 +97,10 @@ impl Workspace {
 
         let ignore = Self::workspace_gitignore(krates.workspace_root().as_std_path());
 
-        let cargo_toml =
-            cargo_toml::Manifest::from_path(krates.workspace_root().join("Cargo.toml"))
-                .context("Failed to load Cargo.toml")?;
+        let cargo_toml = crate::cargo_toml::load_manifest_from_path(
+            krates.workspace_root().join("Cargo.toml").as_std_path(),
+        )
+        .context("Failed to load Cargo.toml")?;
 
         let android_tools = crate::build::get_android_tools();
 
@@ -530,7 +532,23 @@ impl Workspace {
     }
 
     pub(crate) fn global_settings_file() -> PathBuf {
-        Self::dioxus_data_dir().join("settings.json")
+        Self::dioxus_data_dir().join("settings.toml")
+    }
+
+    /// The path where components downloaded from git are cached
+    pub(crate) fn component_cache_dir() -> PathBuf {
+        Self::dioxus_data_dir().join("components")
+    }
+
+    /// Get the path to a specific component in the cache
+    pub(crate) fn component_cache_path(git: &str, rev: Option<&str>) -> PathBuf {
+        let mut hasher = std::hash::DefaultHasher::new();
+        std::hash::Hash::hash(git, &mut hasher);
+        if let Some(rev) = rev {
+            std::hash::Hash::hash(rev, &mut hasher);
+        }
+        let hash = hasher.finish();
+        Self::component_cache_dir().join(format!("{hash:016x}"))
     }
 }
 

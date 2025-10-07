@@ -24,11 +24,13 @@ keyboard-types = { workspace = true, default-features = false }
 async-trait = { workspace = true }
 tokio = { workspace = true, features = ["fs", "io-util"], optional = true }
 futures-channel = { workspace = true }
+futures-util = { workspace = true }
 serde_json = { workspace = true, optional = true }
 tracing = { workspace = true }
 rustversion = { workspace = true }
 euclid = "0.22.11"
 enumset = "1.1.6"
+bytes = { workspace = true }
 
 [build-dependencies]
 lazy-js-bundle = { workspace = true }
@@ -48,12 +50,9 @@ serialize = [
     "dep:serde_repr",
     "euclid/serde",
     "keyboard-types/serde",
-    "dioxus-core/serialize"
+    "dioxus-core/serialize",
+    "bytes/serde"
 ]
-# TODO: Remove the mounted feature flag in the next major release. It no longer activates any extra code
-mounted = []
-# TODO: Remove the file engine feature flag in the next major release. It no longer activates any extra code
-file_engine = []
 hot-reload-context = ["dep:dioxus-rsx"]
 html-to-rsx = []
 

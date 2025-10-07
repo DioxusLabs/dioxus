@@ -6,6 +6,7 @@
 
 mod build;
 mod bundle_utils;
+mod cargo_toml;
 mod cli;
 mod config;
 mod devcfg;
@@ -18,9 +19,12 @@ mod rustcwrapper;
 mod serve;
 mod settings;
 mod tailwind;
+mod test_harnesses;
 mod wasm_bindgen;
 mod wasm_opt;
 mod workspace;
+
+use std::process::ExitCode;
 
 pub(crate) use build::*;
 pub(crate) use cli::*;
@@ -37,7 +41,7 @@ pub(crate) use wasm_bindgen::*;
 pub(crate) use workspace::*;
 
 #[tokio::main]
-async fn main() {
+async fn main() -> ExitCode {
     // The CLI uses dx as a rustcwrapper in some instances (like binary patching)
     if rustcwrapper::is_wrapping_rustc() {
         return rustcwrapper::run_rustc();
@@ -66,6 +70,7 @@ async fn main() {
             Commands::Tools(BuildTools::HotpatchTip(opts)) => opts.run().await,
             Commands::Doctor(opts) => opts.doctor().await,
             Commands::Print(opts) => opts.print().await,
+            Commands::Component(opts) => opts.run().await,
         }
     });
 
@@ -79,4 +84,6 @@ async fn main() {
 
         output => tracing::info!(json = %output),
     }
+
+    ExitCode::SUCCESS
 }

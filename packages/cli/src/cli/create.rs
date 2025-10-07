@@ -1,5 +1,5 @@
 use super::*;
-use crate::TraceSrc;
+use crate::{verbosity_or_default, TraceSrc};
 use anyhow::{bail, Context};
 use cargo_generate::{GenerateArgs, TemplatePath, Vcs};
 use std::path::Path;
@@ -239,11 +239,7 @@ fn remove_triple_newlines(string: &str) -> String {
 /// Perform a health check against github itself before we attempt to download any templates hosted
 /// on github.
 pub(crate) async fn connectivity_check() -> Result<()> {
-    if crate::VERBOSITY
-        .get()
-        .map(|f| f.offline)
-        .unwrap_or_default()
-    {
+    if verbosity_or_default().offline {
         return Ok(());
     }
 

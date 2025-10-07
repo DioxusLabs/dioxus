@@ -1,24 +1,12 @@
-use crate::runtime::RuntimeError;
-use crate::{
-    innerlude::SuspendedFuture, runtime::Runtime, CapturedError, Element, ScopeId, SuspenseContext,
-    Task,
-};
+use crate::innerlude::CapturedError;
+use crate::{innerlude::SuspendedFuture, runtime::Runtime, Element, ScopeId, Task};
 use std::future::Future;
 use std::rc::Rc;
 use std::sync::Arc;
 
 /// Get the current scope id
-pub fn current_scope_id() -> Result<ScopeId, RuntimeError> {
-    Runtime::with(|rt| rt.current_scope_id().ok())
-        .ok()
-        .flatten()
-        .ok_or(RuntimeError::new())
-}
-
-#[doc(hidden)]
-/// Check if the virtual dom is currently inside of the body of a component
-pub fn vdom_is_rendering() -> bool {
-    Runtime::with(|rt| rt.rendering.get()).unwrap_or_default()
+pub fn current_scope_id() -> ScopeId {
+    Runtime::with(|rt| rt.current_scope_id())
 }
 
 /// Throw a [`CapturedError`] into the current scope. The error will bubble up to the nearest [`crate::ErrorBoundary()`] or the root of the app.
@@ -31,7 +19,7 @@ pub fn vdom_is_rendering() -> bool {
 ///         match reqwest::get("https://api.example.com").await {
 ///             Ok(_) => unimplemented!(),
 ///             // You can explicitly throw an error into a scope with throw_error
-///             Err(err) => ScopeId::APP.throw_error(err)
+///             Err(err) => dioxus::core::throw_error(err),
 ///         }
 ///     });
 ///
@@ -39,58 +27,40 @@ pub fn vdom_is_rendering() -> bool {
 /// }
 /// ```
 pub fn throw_error(error: impl Into<CapturedError> + 'static) {
-    current_scope_id()
-        .unwrap_or_else(|e| panic!("{}", e))
-        .throw_error(error)
-}
-
-/// Get the suspense context the current scope is in
-pub fn suspense_context() -> Option<SuspenseContext> {
-    current_scope_id()
-        .unwrap_or_else(|e| panic!("{}", e))
-        .suspense_context()
+    Runtime::with(|rt| rt.throw_error(rt.current_scope_id(), error))
 }
 
 /// Consume context from the current scope
 pub fn try_consume_context<T: 'static + Clone>() -> Option<T> {
     Runtime::with_current_scope(|cx| cx.consume_context::<T>())
-        .ok()
-        .flatten()
 }
 
 /// Consume context from the current scope
 pub fn consume_context<T: 'static + Clone>() -> T {
     Runtime::with_current_scope(|cx| cx.consume_context::<T>())
-        .ok()
-        .flatten()
         .unwrap_or_else(|| panic!("Could not find context {}", std::any::type_name::<T>()))
 }
 
 /// Consume context from the current scope
 pub fn consume_context_from_scope<T: 'static + Clone>(scope_id: ScopeId) -> Option<T> {
-    Runtime::with(|rt| {
-        rt.get_state(scope_id)
-            .and_then(|cx| cx.consume_context::<T>())
-    })
-    .ok()
-    .flatten()
+    Runtime::current()
+        .try_get_state(scope_id)
+        .and_then(|cx| cx.consume_context::<T>())
 }
 
 /// Check if the current scope has a context
 pub fn has_context<T: 'static + Clone>() -> Option<T> {
     Runtime::with_current_scope(|cx| cx.has_context::<T>())
-        .ok()
-        .flatten()
 }
 
 /// Provide context to the current scope
 pub fn provide_context<T: 'static + Clone>(value: T) -> T {
-    Runtime::with_current_scope(|cx| cx.provide_context(value)).unwrap()
+    Runtime::with_current_scope(|cx| cx.provide_context(value))
 }
 
 /// Provide a context to the root scope
 pub fn provide_root_context<T: 'static + Clone>(value: T) -> T {
-    Runtime::with_current_scope(|cx| cx.provide_root_context(value)).unwrap()
+    Runtime::with_current_scope(|cx| cx.provide_root_context(value))
 }
 
 /// Suspended the current component on a specific task and then return None
@@ -129,7 +99,7 @@ pub fn suspend(task: Task) -> Element {
 ///
 #[doc = include_str!("../docs/common_spawn_errors.md")]
 pub fn spawn_isomorphic(fut: impl Future<Output = ()> + 'static) -> Task {
-    Runtime::with_current_scope(|cx| cx.spawn_isomorphic(fut)).unwrap()
+    Runtime::with_current_scope(|cx| cx.spawn_isomorphic(fut))
 }
 
 /// Spawns the future and returns the [`Task`]. This task will automatically be canceled when the component is dropped.
@@ -155,12 +125,12 @@ pub fn spawn_isomorphic(fut: impl Future<Output = ()> + 'static) -> Task {
 ///
 #[doc = include_str!("../docs/common_spawn_errors.md")]
 pub fn spawn(fut: impl Future<Output = ()> + 'static) -> Task {
-    Runtime::with_current_scope(|cx| cx.spawn(fut)).unwrap()
+    Runtime::with_current_scope(|cx| cx.spawn(fut))
 }
 
 /// Queue an effect to run after the next render. You generally shouldn't need to interact with this function directly. [use_effect](https://docs.rs/dioxus-hooks/latest/dioxus_hooks/fn.use_effect.html) will call this function for you.
 pub fn queue_effect(f: impl FnOnce() + 'static) {
-    Runtime::with_current_scope(|cx| cx.queue_effect(f)).unwrap()
+    Runtime::with_current_scope(|cx| cx.queue_effect(f))
 }
 
 /// Spawn a future that Dioxus won't clean up when this component is unmounted
@@ -216,15 +186,15 @@ pub fn queue_effect(f: impl FnOnce() + 'static) {
 /// ```
 ///
 #[doc = include_str!("../docs/common_spawn_errors.md")]
-pub fn spawn_forever(fut: impl Future<Output = ()> + 'static) -> Option<Task> {
-    Runtime::with_scope(ScopeId::ROOT, |cx| cx.spawn(fut)).ok()
+pub fn spawn_forever(fut: impl Future<Output = ()> + 'static) -> Task {
+    Runtime::with_scope(ScopeId::ROOT, |cx| cx.spawn(fut))
 }
 
 /// Informs the scheduler that this task is no longer needed and should be removed.
 ///
 /// This drops the task immediately.
 pub fn remove_future(id: Task) {
-    Runtime::with(|rt| rt.remove_task(id)).expect("Runtime to exist");
+    Runtime::with(|rt| rt.remove_task(id));
 }
 
 /// Store a value between renders. The foundational hook for all other hooks.
@@ -312,31 +282,29 @@ pub fn remove_future(id: Task) {
 /// ```
 #[track_caller]
 pub fn use_hook<State: Clone + 'static>(initializer: impl FnOnce() -> State) -> State {
-    Runtime::with_current_scope(|cx| cx.use_hook(initializer)).unwrap()
+    Runtime::with_current_scope(|cx| cx.use_hook(initializer))
 }
 
 /// Get the current render since the inception of this component.
 ///
 /// This can be used as a helpful diagnostic when debugging hooks/renders, etc.
 pub fn generation() -> usize {
-    Runtime::with_current_scope(|cx| cx.generation()).unwrap()
+    Runtime::with_current_scope(|cx| cx.generation())
 }
 
 /// Get the parent of the current scope if it exists.
 pub fn parent_scope() -> Option<ScopeId> {
     Runtime::with_current_scope(|cx| cx.parent_id())
-        .ok()
-        .flatten()
 }
 
 /// Mark the current scope as dirty, causing it to re-render.
 pub fn needs_update() {
-    let _ = Runtime::with_current_scope(|cx| cx.needs_update());
+    Runtime::with_current_scope(|cx| cx.needs_update());
 }
 
 /// Mark the current scope as dirty, causing it to re-render.
 pub fn needs_update_any(id: ScopeId) {
-    let _ = Runtime::with_current_scope(|cx| cx.needs_update_any(id));
+    Runtime::with_current_scope(|cx| cx.needs_update_any(id));
 }
 
 /// Schedule an update for the current component.
@@ -350,7 +318,7 @@ pub fn needs_update_any(id: ScopeId) {
 /// You should prefer [`schedule_update_any`] if you need to update multiple components.
 #[track_caller]
 pub fn schedule_update() -> Arc<dyn Fn() + Send + Sync> {
-    Runtime::with_current_scope(|cx| cx.schedule_update()).unwrap_or_else(|e| panic!("{}", e))
+    Runtime::with_current_scope(|cx| cx.schedule_update())
 }
 
 /// Schedule an update for any component given its [`ScopeId`].
@@ -363,7 +331,7 @@ pub fn schedule_update() -> Arc<dyn Fn() + Send + Sync> {
 /// If the desired behavior is to schedule invalidation of the current rendering of a component, use [`ReactiveContext`](crate::reactive_context::ReactiveContext) instead.
 #[track_caller]
 pub fn schedule_update_any() -> Arc<dyn Fn(ScopeId) + Send + Sync> {
-    Runtime::with_current_scope(|cx| cx.schedule_update_any()).unwrap_or_else(|e| panic!("{}", e))
+    Runtime::with_current_scope(|cx| cx.schedule_update_any())
 }
 
 /// Creates a callback that will be run before the component is removed.
@@ -454,7 +422,7 @@ pub fn use_drop<D: FnOnce() + 'static>(destroy: D) {
 /// This function will always be called before dioxus tries to render your component. This should be used for safely handling
 /// early returns
 pub fn use_before_render(f: impl FnMut() + 'static) {
-    use_hook(|| before_render(f));
+    use_hook(|| Runtime::with_current_scope(|cx| cx.push_before_render(f)));
 }
 
 /// Push this function to be run after the next render
@@ -462,19 +430,7 @@ pub fn use_before_render(f: impl FnMut() + 'static) {
 /// This function will always be called before dioxus tries to render your component. This should be used for safely handling
 /// early returns
 pub fn use_after_render(f: impl FnMut() + 'static) {
-    use_hook(|| after_render(f));
-}
-
-/// Push a function to be run before the next render
-/// This is a hook and will always run, so you can't unschedule it
-/// Will run for every progression of suspense, though this might change in the future
-pub fn before_render(f: impl FnMut() + 'static) {
-    let _ = Runtime::with_current_scope(|cx| cx.push_before_render(f));
-}
-
-/// Push a function to be run after the render is complete, even if it didn't complete successfully
-pub fn after_render(f: impl FnMut() + 'static) {
-    let _ = Runtime::with_current_scope(|cx| cx.push_after_render(f));
+    use_hook(|| Runtime::with_current_scope(|cx| cx.push_after_render(f)));
 }
 
 /// Use a hook with a cleanup function
@@ -486,19 +442,4 @@ pub fn use_hook_with_cleanup<T: Clone + 'static>(
     let _value = value.clone();
     use_drop(move || cleanup(_value));
     value
-}
-
-/// Force every component to be dirty and require a re-render. Used by hot-reloading.
-///
-/// This might need to change to a different flag in the event hooks order changes within components.
-/// What we really need is a way to mark components as needing a complete rebuild if they were hit by changes.
-pub fn force_all_dirty() {
-    Runtime::with(|rt| {
-        rt.scope_states.borrow_mut().iter().for_each(|state| {
-            if let Some(scope) = state.as_ref() {
-                scope.needs_update();
-            }
-        });
-    })
-    .expect("Runtime to exist");
 }
