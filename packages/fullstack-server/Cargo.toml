@@ -31,7 +31,7 @@ generational-box = { workspace = true }
 
 axum = { workspace = true, features = ["multipart", "ws", "json", "form", "tokio", "http1", "http2", "macros"]}
 anyhow = { workspace = true }
-dashmap = "6.1.0"
+dashmap = { workspace = true }
 inventory = { workspace = true }
 dioxus-ssr = { workspace = true }
 

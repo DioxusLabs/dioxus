@@ -205,8 +205,16 @@ fn route_impl_with_route(
     let function = syn::parse::<ItemFn>(item)?;
 
     let server_args = route.server_args.clone();
+
     let mut function_on_server = function.clone();
     function_on_server.sig.inputs.extend(server_args.clone());
+    function_on_server.sig.ident = format_ident!("__server_fn_inner_{}", function.sig.ident);
+    let function_on_server_name = function_on_server.sig.ident.clone();
+
+    let mut self_token = function.sig.inputs.first().map(|arg| match arg {
+        FnArg::Receiver(receiver) => Some(receiver.self_token),
+        _ => None,
+    });
 
     // Now we can compile the route
     let original_inputs = function
@@ -214,7 +222,7 @@ fn route_impl_with_route(
         .inputs
         .iter()
         .map(|arg| match arg {
-            FnArg::Receiver(_receiver) => panic!("Self type is not supported"),
+            FnArg::Receiver(_receiver) => _receiver.to_token_stream(),
             FnArg::Typed(pat_type) => {
                 quote! {
                     #[allow(unused_mut)]
@@ -357,31 +365,6 @@ fn route_impl_with_route(
         }
     });
 
-    let as_axum_path = route.to_axum_path_string();
-
-    let query_endpoint = if let Some(route_lit) = route.route_lit.as_ref() {
-        let prefix = route
-            .prefix
-            .as_ref()
-            .cloned()
-            .unwrap_or_else(|| LitStr::new("", Span::call_site()))
-            .value();
-        let url_without_queries = route_lit.value().split('?').next().unwrap().to_string();
-        let full_url = format!(
-            "{}{}{}",
-            prefix,
-            if url_without_queries.starts_with("/") {
-                ""
-            } else {
-                "/"
-            },
-            url_without_queries
-        );
-        quote! { format!(#full_url, #( #path_param_args)*) }
-    } else {
-        quote! { __ENDPOINT_PATH.to_string() }
-    };
-
     let endpoint_path = {
         let prefix = route
             .prefix
@@ -389,6 +372,7 @@ fn route_impl_with_route(
             .cloned()
             .unwrap_or_else(|| LitStr::new("", Span::call_site()));
 
+        let as_axum_path = route.to_axum_path_string();
         let route_lit = if !as_axum_path.is_empty() {
             quote! { #as_axum_path }
         } else {
@@ -423,6 +407,59 @@ fn route_impl_with_route(
         quote! {
             dioxus_fullstack::const_format::concatcp!(#prefix, #route_lit, #hash)
         }
+    };
+
+    // The endpoint the client will query, passed to `ClientRequest`
+    // ie `/api/my_fnc`
+    //
+    // If there's a `&self` parameter, then we need to look up where `&self` is mounted.
+    let query_endpoint = if let Some(route_lit) = route.route_lit.as_ref() {
+        let prefix = route
+            .prefix
+            .as_ref()
+            .cloned()
+            .unwrap_or_else(|| LitStr::new("", Span::call_site()))
+            .value();
+        let url_without_queries = route_lit.value().split('?').next().unwrap().to_string();
+        let full_url = format!(
+            "{}{}{}",
+            prefix,
+            if url_without_queries.starts_with("/") {
+                ""
+            } else {
+                "/"
+            },
+            url_without_queries
+        );
+        quote! { format!(#full_url, #( #path_param_args )*) }
+    } else {
+        quote! { __ENDPOINT_PATH.to_string() }
+    };
+
+    let receiver = if let Some(self_token) = self_token.take() {
+        quote! { Self:: }
+    } else {
+        quote! {}
+    };
+
+    let extract_self = if self_token.is_some() {
+        quote! {
+            let __self = ___state.get_endpoint::<Self>().expect("Failed to get endpoint state");
+        }
+    } else {
+        quote! {}
+    };
+
+    let self_args = if self_token.is_some() {
+        quote! { &*__self, }
+    } else {
+        quote! {}
+    };
+
+    let namespace = if self_token.is_some() {
+        quote! { Some(std::any::TypeId::of::<Self>()) }
+    } else {
+        quote! { None }
     };
 
     Ok(quote! {
@@ -487,8 +524,6 @@ fn route_impl_with_route(
                 use #__axum::response::IntoResponse;
                 use dioxus_server::ServerFunction;
 
-                #function_on_server
-
                 #[allow(clippy::unused_unit)]
                 #aide_ident_docs
                 #asyncness fn __inner__function__ #impl_generics(
@@ -497,12 +532,14 @@ fn route_impl_with_route(
                     #query_extractor
                     request: #__axum::extract::Request,
                 ) -> Result<#__axum::response::Response, #__axum::response::Response> #where_clause {
+                    #extract_self
+
                     let ((#(#server_names,)*), (  #(#body_json_names,)* )) = (&&&&&&&&&&&&&&ServerFnEncoder::<___Body_Serialize___<#(#body_json_types,)*>, (#(#body_json_types,)*)>::new())
                         .extract_axum(___state.0, request, #unpack).await?;
 
                     let encoded = (&&&&&&ServerFnDecoder::<#out_ty>::new())
                         .make_axum_response(
-                            #fn_name #ty_generics(#(#extracted_idents,)*  #(#body_json_names,)* #(#server_names,)*).await
+                           #receiver #function_on_server_name #ty_generics(#self_args #(#extracted_idents,)*  #(#body_json_names,)* #(#server_names,)*).await
                         );
 
                     let response = (&&&&&ServerFnDecoder::<#out_ty>::new())
@@ -515,13 +552,14 @@ fn route_impl_with_route(
                     ServerFunction::new(
                         dioxus_fullstack::http::Method::#method_ident,
                         __ENDPOINT_PATH,
-                        || #__axum::routing::#http_method(__inner__function__ #ty_generics)
+                        || #__axum::routing::#http_method(__inner__function__ #ty_generics),
+                        #namespace
                     )
                 }
 
                 #(#server_defaults)*
 
-                return #fn_name #ty_generics(
+                return #function_on_server_name #ty_generics(
                     #(#extracted_idents,)*
                     #(#body_json_names,)*
                     #(#server_names,)*
@@ -533,6 +571,10 @@ fn route_impl_with_route(
                 unreachable!()
             }
         }
+
+        #[cfg(feature = "server")]
+        #[doc(hidden)]
+        #function_on_server
     })
 }
 
@@ -567,10 +609,6 @@ impl CompiledRoute {
                 }
                 PathParam::Static(lit) => path.push_str(&lit.value()),
             }
-            // if colon.is_some() {
-            //     path.push(':');
-            // }
-            // path.push_str(&ident.value());
         }
 
         path
@@ -765,7 +803,7 @@ impl CompiledRoute {
 
                     Some(pat_type.clone())
                 } else {
-                    unimplemented!("Self type is not supported")
+                    None
                 }
             })
             .collect()
@@ -802,7 +840,7 @@ impl CompiledRoute {
                     new_pat_type.pat = Box::new(parse_quote!(#ident));
                     Some(new_pat_type)
                 } else {
-                    unimplemented!("Self type is not supported")
+                    None
                 }
             })
             .collect()
@@ -1210,6 +1248,15 @@ impl PathParam {
                 LitStr::new(str, span),
                 Brace(span),
                 Star(span),
+                Ident::new(str, span),
+                ty,
+                Brace(span),
+            )
+        } else if str.starts_with(':') && str.len() > 1 {
+            let str = str.strip_prefix(':').unwrap();
+            Self::Capture(
+                LitStr::new(str, span),
+                Brace(span),
                 Ident::new(str, span),
                 ty,
                 Brace(span),

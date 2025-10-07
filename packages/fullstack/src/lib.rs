@@ -51,6 +51,9 @@ pub use http::{HeaderMap, HeaderValue, Method};
 mod client;
 pub use client::*;
 
+mod endpoint;
+pub use endpoint::*;
+
 pub use axum::extract::Json;
 
 pub use payloads::*;

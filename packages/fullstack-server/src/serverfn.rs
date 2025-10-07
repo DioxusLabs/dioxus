@@ -5,10 +5,7 @@ use axum::Router; // both req/res // both req/res // req only
 use dashmap::DashMap;
 use dioxus_fullstack_core::DioxusServerState;
 use http::Method;
-use std::{marker::PhantomData, sync::LazyLock};
-
-pub type AxumRequest = http::Request<Body>;
-pub type AxumResponse = http::Response<Body>;
+use std::{any::TypeId, marker::PhantomData, sync::LazyLock};
 
 /// A function endpoint that can be called from the client.
 #[derive(Clone)]
@@ -16,11 +13,8 @@ pub struct ServerFunction<Caller = ()> {
     path: &'static str,
     method: Method,
     handler: fn() -> MethodRouter<DioxusServerState>,
+    namespace: Option<TypeId>,
     _phantom: PhantomData<Caller>,
-}
-
-pub struct MakeRequest<T> {
-    _phantom: PhantomData<T>,
 }
 
 impl ServerFunction {
@@ -29,11 +23,13 @@ impl ServerFunction {
         method: Method,
         path: &'static str,
         handler: fn() -> MethodRouter<DioxusServerState>,
+        namespace: Option<TypeId>,
     ) -> Self {
         Self {
             path,
             method,
             handler,
+            namespace,
             _phantom: PhantomData,
         }
     }
