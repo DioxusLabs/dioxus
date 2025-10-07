@@ -14,7 +14,7 @@ use crate::IncrementalRendererConfig;
 pub(crate) type ContextProviders =
     Arc<Vec<Box<dyn Fn() -> Box<dyn std::any::Any> + Send + Sync + 'static>>>;
 
-/// A ServeConfig is used to configure how to serve a Dioxus application. It contains information about how to serve static assets, and what content to render with [`dioxus-ssr`].
+/// A ServeConfig is used to configure how to serve a Dioxus application. It contains information about how to serve static assets, and what content to render with [`dioxus_ssr`].
 #[derive(Clone, Default)]
 pub struct ServeConfigBuilder {
     pub(crate) root_id: Option<&'static str>,
@@ -491,7 +491,7 @@ pub enum StreamingMode {
     OutOfOrder,
 }
 
-/// Used to configure how to serve a Dioxus application. It contains information about how to serve static assets, and what content to render with [`dioxus-ssr`].
+/// Used to configure how to serve a Dioxus application. It contains information about how to serve static assets, and what content to render with [`dioxus_ssr`].
 /// See [`ServeConfigBuilder`] to create a ServeConfig
 #[derive(Clone)]
 pub struct ServeConfig {

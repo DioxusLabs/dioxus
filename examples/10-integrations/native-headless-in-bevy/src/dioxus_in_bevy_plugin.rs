@@ -1,12 +1,15 @@
+use std::time::Instant;
+
+use bevy::asset::RenderAssetUsages;
 use bevy::prelude::*;
 use bevy::{
     input::{
         keyboard::{Key as BevyKey, KeyCode as BevyKeyCode, KeyboardInput},
         mouse::{MouseButton, MouseButtonInput},
-        ButtonInput, ButtonState, InputSystem,
+        ButtonInput, ButtonState, InputSystems,
     },
     render::{
-        render_asset::{RenderAssetUsages, RenderAssets},
+        render_asset::RenderAssets,
         render_graph::{self, NodeRunError, RenderGraph, RenderGraphContext, RenderLabel},
         render_resource::{Extent3d, TextureDimension, TextureFormat},
         renderer::{RenderContext, RenderDevice, RenderQueue},
@@ -16,7 +19,7 @@ use bevy::{
     window::{CursorMoved, WindowResized},
 };
 
-use anyrender_vello::{CustomPaintSource, VelloScenePainter};
+use anyrender_vello::VelloScenePainter;
 use blitz_dom::{Document as _, DocumentConfig};
 use blitz_paint::paint_scene;
 use blitz_traits::events::{
@@ -26,7 +29,6 @@ use blitz_traits::shell::{ColorScheme, Viewport};
 use crossbeam_channel::{Receiver, Sender};
 use dioxus::prelude::*;
 use dioxus_native_dom::DioxusDocument;
-use rustc_hash::FxHashMap;
 use vello::{
     peniko::color::AlphaColor, RenderParams, Renderer as VelloRenderer, RendererOptions, Scene,
 };
@@ -41,17 +43,22 @@ pub struct DioxusInBevyPlugin<UIProps> {
     pub props: UIProps,
 }
 
+#[derive(Resource)]
+struct AnimationTime(Instant);
+
 impl<UIProps: std::marker::Send + std::marker::Sync + std::clone::Clone + 'static> Plugin
     for DioxusInBevyPlugin<UIProps>
 {
     fn build(&self, app: &mut App) {
+        let epoch = AnimationTime(Instant::now());
+
         // Create the dioxus virtual dom and the dioxus-native document
         // The viewport will be set in setup_ui after we get the window size
         let vdom = VirtualDom::new_with_props(self.ui, self.props.clone());
         // FIXME add a NetProvider
         let mut dioxus_doc = DioxusDocument::new(vdom, DocumentConfig::default());
         dioxus_doc.initial_build();
-        dioxus_doc.resolve();
+        dioxus_doc.resolve(0.0);
 
         // Dummy waker
         struct NullWake;
@@ -62,13 +69,14 @@ impl<UIProps: std::marker::Send + std::marker::Sync + std::clone::Clone + 'stati
 
         app.insert_non_send_resource(dioxus_doc);
         app.insert_non_send_resource(waker);
+        app.insert_resource(epoch);
         app.add_systems(Startup, setup_ui);
         app.add_systems(
             PreUpdate,
             (
                 handle_window_resize,
-                handle_mouse_events.after(InputSystem),
-                handle_keyboard_events.after(InputSystem),
+                handle_mouse_events.after(InputSystems),
+                handle_keyboard_events.after(InputSystems),
             )
                 .chain(),
         );
@@ -202,6 +210,7 @@ fn setup_ui(
     mut materials: ResMut<Assets<ColorMaterial>>,
     mut images: ResMut<Assets<Image>>,
     mut dioxus_doc: NonSendMut<DioxusDocument>,
+    mut animation_epoch: ResMut<AnimationTime>,
     windows: Query<&Window>,
 ) {
     let window = windows
@@ -214,8 +223,9 @@ fn setup_ui(
     debug!("Initial window size: {}x{}", width, height);
 
     // Set the initial viewport
+    animation_epoch.0 = Instant::now();
     dioxus_doc.set_viewport(Viewport::new(width, height, SCALE_FACTOR, COLOR_SCHEME));
-    dioxus_doc.resolve();
+    dioxus_doc.resolve(0.0);
 
     // Create Bevy Image from the texture data
     let image = create_ui_texture(width, height);
@@ -242,6 +252,7 @@ fn setup_ui(
     commands.insert_resource(TextureImage(handle));
 }
 
+#[allow(clippy::too_many_arguments)]
 fn update_ui(
     mut dioxus_doc: NonSendMut<DioxusDocument>,
     waker: NonSendMut<std::task::Waker>,
@@ -249,6 +260,7 @@ fn update_ui(
     render_device: Res<RenderDevice>,
     render_queue: Res<RenderQueue>,
     receiver: Res<MainWorldReceiver>,
+    animation_epoch: Res<AnimationTime>,
     mut cached_texture: Local<Option<RenderTexture>>,
 ) {
     while let Ok(texture) = receiver.try_recv() {
@@ -261,28 +273,20 @@ fn update_ui(
         dioxus_doc.poll(Some(std::task::Context::from_waker(&waker)));
 
         // Refresh the document
-        dioxus_doc.resolve();
+        let animation_time = animation_epoch.0.elapsed().as_secs_f64();
+        dioxus_doc.resolve(animation_time);
 
-        // Create a `VelloScenePainter` to paint into
-        let mut custom_paint_sources =
-            FxHashMap::<u64, Box<dyn CustomPaintSource + 'static>>::default();
-        let mut scene_painter = VelloScenePainter {
-            inner: Scene::new(),
-            renderer: &mut vello_renderer,
-            custom_paint_sources: &mut custom_paint_sources,
-        };
+        // Create a `vello::Scene` to paint into
+        let mut scene = Scene::new();
 
         // Paint the document
         paint_scene(
-            &mut scene_painter,
+            &mut VelloScenePainter::new(&mut scene),
             &dioxus_doc,
             SCALE_FACTOR as f64,
             texture.width,
             texture.height,
         );
-
-        // Extract the `vello::Scene` from the `VelloScenePainter`
-        let scene = scene_painter.finish();
 
         // Render the `vello::Scene` to the Texture using the `VelloRenderer`
         vello_renderer
@@ -304,7 +308,7 @@ fn update_ui(
 
 fn handle_window_resize(
     mut dioxus_doc: NonSendMut<DioxusDocument>,
-    mut resize_events: EventReader<WindowResized>,
+    mut resize_events: MessageReader<WindowResized>,
     mut commands: Commands,
     mut images: ResMut<Assets<Image>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
@@ -319,7 +323,7 @@ fn handle_window_resize(
 
         // Update the dioxus viewport
         dioxus_doc.set_viewport(Viewport::new(width, height, SCALE_FACTOR, COLOR_SCHEME));
-        dioxus_doc.resolve();
+        // dioxus_doc.resolve();
 
         // Create a new texture with the new size
         let new_image = create_ui_texture(width, height);
@@ -369,8 +373,8 @@ fn does_catch_events(dioxus_doc: &DioxusDocument, node_id: usize) -> bool {
 
 fn handle_mouse_events(
     mut dioxus_doc: NonSendMut<DioxusDocument>,
-    mut cursor_moved: EventReader<CursorMoved>,
-    mut mouse_button_input_events: ResMut<Events<MouseButtonInput>>,
+    mut cursor_moved: MessageReader<CursorMoved>,
+    mut mouse_button_input_events: ResMut<Messages<MouseButtonInput>>,
     mut mouse_buttons: ResMut<ButtonInput<MouseButton>>,
     mut last_mouse_state: Local<MouseState>,
 ) {
@@ -438,12 +442,12 @@ fn handle_mouse_events(
         mouse_buttons.reset_all();
     }
 
-    dioxus_doc.resolve();
+    // dioxus_doc.resolve();
 }
 
 fn handle_keyboard_events(
     mut dioxus_doc: NonSendMut<DioxusDocument>,
-    mut keyboard_input_events: ResMut<Events<KeyboardInput>>,
+    mut keyboard_input_events: ResMut<Messages<KeyboardInput>>,
     mut keys: ResMut<ButtonInput<BevyKeyCode>>,
     mut last_mouse_state: Local<MouseState>,
 ) {
@@ -512,7 +516,7 @@ fn handle_keyboard_events(
         keys.reset_all();
     }
 
-    dioxus_doc.resolve();
+    // dioxus_doc.resolve();
 }
 
 fn bevy_key_to_blitz_key(key: &BevyKey) -> Key {

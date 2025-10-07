@@ -193,11 +193,7 @@ pub(crate) fn post_create(path: &Path, vcs: &Vcs) -> Result<()> {
         };
 
         let mut toml = toml.parse::<toml_edit::DocumentMut>().map_err(|e| {
-            anyhow::anyhow!(
-                "failed to parse toml at {}: {}",
-                toml_path.display(),
-                e.to_string()
-            )
+            anyhow::anyhow!("failed to parse toml at {}: {}", toml_path.display(), e)
         })?;
 
         toml.as_table_mut().fmt();
