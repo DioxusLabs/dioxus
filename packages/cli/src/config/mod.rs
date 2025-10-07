@@ -1,5 +1,6 @@
 mod app;
 mod bundle;
+mod component;
 mod dioxus_config;
 mod serve;
 mod web;

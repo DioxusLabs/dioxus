@@ -294,17 +294,32 @@ impl HotpatchModuleCache {
 pub fn create_jump_table(
     patch: &Path,
     triple: &Triple,
+    root_dir: &Path,
+    base_path: Option<&str>,
     cache: &HotpatchModuleCache,
 ) -> Result<JumpTable> {
     // Symbols are stored differently based on the platform, so we need to handle them differently.
     // - Wasm requires the walrus crate and actually modifies the patch file
     // - windows requires the pdb crate and pdb files
     // - nix requires the object crate
-    match triple.operating_system {
-        OperatingSystem::Windows => create_windows_jump_table(patch, cache),
-        _ if triple.architecture == Architecture::Wasm32 => create_wasm_jump_table(patch, cache),
-        _ => create_native_jump_table(patch, triple, cache),
+    let mut jump_table = match triple.operating_system {
+        OperatingSystem::Windows => create_windows_jump_table(patch, cache)?,
+        _ if triple.architecture == Architecture::Wasm32 => create_wasm_jump_table(patch, cache)?,
+        _ => create_native_jump_table(patch, triple, cache)?,
+    };
+
+    // Rebase the wasm binary to be relocatable once the jump table is generated
+    if triple.architecture == target_lexicon::Architecture::Wasm32 {
+        // Make sure we use the dir relative to the public dir, so the web can load it as a proper URL
+        //
+        // ie we would've shipped `/Users/foo/Projects/dioxus/target/dx/project/debug/web/public/wasm/lib.wasm`
+        //    but we want to ship `/wasm/lib.wasm`
+        jump_table.lib =
+            PathBuf::from("/".to_string() + base_path.unwrap_or_default().trim_start_matches('/'))
+                .join(jump_table.lib.strip_prefix(root_dir).unwrap())
     }
+
+    Ok(jump_table)
 }
 
 fn create_windows_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> Result<JumpTable> {

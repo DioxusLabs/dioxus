@@ -5,11 +5,12 @@ use crate::{
 use anyhow::Context;
 use clap::Parser;
 use dioxus_dx_wire_format::StructuredBuildArtifacts;
+use std::io::BufRead;
 use std::sync::Arc;
 
 const HELP_HEADING: &str = "Hotpatching a binary";
 
-/// Patches a single binary, but takes the same arguments as a `cargo build`.
+/// Patches a single binary, but takes the same arguments as a `cargo build` and the serialized output from `dx build --fat-binary` as input.
 ///
 /// By default, patches the client, but you can set patch_server to true to patch the server instead.
 #[derive(Clone, Debug, Parser)]
@@ -17,10 +18,6 @@ pub struct HotpatchTip {
     /// Should we patch the server or the client? False = client, True = server
     #[clap(long, num_args = 0..=1, default_missing_value="true", help_heading = HELP_HEADING)]
     pub patch_server: Option<bool>,
-
-    /// The serialized output from the `dx build --fat-binary` command
-    #[clap(long, help_heading = HELP_HEADING)]
-    pub serialized_artifacts: String,
 
     /// The ASLR reference of the running app being patched. Used to generate sensible offsets for patched code.
     #[clap(long, help_heading = HELP_HEADING)]
@@ -41,8 +38,14 @@ impl HotpatchTip {
             &targets.client
         };
 
+        let stdin = std::io::stdin().lock();
+        let serialized_artifacts = stdin
+            .lines()
+            .next()
+            .context("No input provided to hotpatch command")?
+            .context("Failed to read line from stdin")?;
         let structured_build_artifacts =
-            serde_json::from_str::<StructuredBuildArtifacts>(&self.serialized_artifacts)
+            serde_json::from_str::<StructuredBuildArtifacts>(&serialized_artifacts)
                 .context("Failed to parse structured build artifacts")?;
 
         let StructuredBuildArtifacts {
@@ -69,10 +72,18 @@ impl HotpatchTip {
         };
 
         let artifacts = AppBuilder::started(request, mode)?.finish_build().await?;
+        let root_dir = request.root_dir();
+        let base_path = request.base_path();
         let patch_exe = request.patch_exe(artifacts.time_start);
 
         Ok(StructuredOutput::Hotpatch {
-            jump_table: crate::build::create_jump_table(&patch_exe, &request.triple, &cache)?,
+            jump_table: crate::build::create_jump_table(
+                &patch_exe,
+                &request.triple,
+                &root_dir,
+                base_path,
+                &cache,
+            )?,
             artifacts: artifacts.into_structured_output(),
         })
     }
