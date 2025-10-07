@@ -321,11 +321,8 @@
 
 use crate::{
     verbosity_or_default, AndroidTools, BuildContext, BundleFormat, DioxusConfig, Error,
-    LinkAction, LinkerFlavor, Renderer, Result, RustcArgs, TargetAlias, TargetArgs, TraceSrc,
+    LinkAction, LinkerFlavor, Platform, Renderer, Result, RustcArgs, TargetArgs, TraceSrc,
     WasmBindgen, WasmOptConfig, Workspace, DX_RUSTC_WRAPPER_ENV_VAR,
-    AndroidTools, BuildContext, BundleFormat, DioxusConfig, Error, LinkAction, LinkerFlavor,
-    Platform, Renderer, Result, RustcArgs, TargetArgs, TraceSrc, WasmBindgen, WasmOptConfig,
-    Workspace, DX_RUSTC_WRAPPER_ENV_VAR,
 };
 use anyhow::{bail, Context};
 use cargo_metadata::diagnostic::Diagnostic;
