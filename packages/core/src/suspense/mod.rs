@@ -37,47 +37,35 @@ use std::{
 #[derive(Clone, PartialEq, Debug)]
 pub struct SuspendedFuture {
     origin: ScopeId,
-    task: Task,
-    pub(crate) placeholder: VNode,
+    task: TaskId,
 }
 
 impl SuspendedFuture {
     /// Create a new suspended future
     pub fn new(task: Task) -> Self {
         Self {
-            task,
-            origin: current_scope_id().unwrap_or_else(|e| panic!("{}", e)),
-            placeholder: VNode::placeholder(),
+            task: task.id,
+            origin: current_scope_id(),
         }
-    }
-
-    /// Get a placeholder to display while the future is suspended
-    pub fn suspense_placeholder(&self) -> Option<VNode> {
-        if self.placeholder == VNode::placeholder() {
-            None
-        } else {
-            Some(self.placeholder.clone())
-        }
-    }
-
-    /// Set a new placeholder the SuspenseBoundary may use to display while the future is suspended
-    pub fn with_placeholder(mut self, placeholder: VNode) -> Self {
-        self.placeholder = placeholder;
-        self
     }
 
     /// Get the task that was suspended
     pub fn task(&self) -> Task {
-        self.task
+        Task::from_id(self.task)
     }
 
     /// Create a deep clone of this suspended future
     pub(crate) fn deep_clone(&self) -> Self {
         Self {
             task: self.task,
-            placeholder: self.placeholder.deep_clone(),
             origin: self.origin,
         }
+    }
+}
+
+impl std::fmt::Display for SuspendedFuture {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "SuspendedFuture {{ task: {:?} }}", self.task)
     }
 }
 
@@ -98,6 +86,7 @@ impl SuspenseContext {
     pub(crate) fn new() -> Self {
         Self {
             inner: Rc::new(SuspenseBoundaryInner {
+                rt: Runtime::current(),
                 suspended_tasks: RefCell::new(vec![]),
                 id: Cell::new(ScopeId::ROOT),
                 suspended_nodes: Default::default(),
@@ -157,7 +146,7 @@ impl SuspenseContext {
     /// Add a suspended task
     pub(crate) fn add_suspended_task(&self, task: SuspendedFuture) {
         self.inner.suspended_tasks.borrow_mut().push(task);
-        self.inner.id.get().needs_update();
+        self.inner.rt.needs_update(self.inner.id.get());
     }
 
     /// Remove a suspended task
@@ -165,8 +154,8 @@ impl SuspenseContext {
         self.inner
             .suspended_tasks
             .borrow_mut()
-            .retain(|t| t.task != task);
-        self.inner.id.get().needs_update();
+            .retain(|t| t.task != task.id);
+        self.inner.rt.needs_update(self.inner.id.get());
     }
 
     /// Get all suspended tasks
@@ -174,16 +163,6 @@ impl SuspenseContext {
         Ref::map(self.inner.suspended_tasks.borrow(), |tasks| {
             tasks.as_slice()
         })
-    }
-
-    /// Get the first suspended task with a loading placeholder
-    pub fn suspense_placeholder(&self) -> Option<Element> {
-        self.inner
-            .suspended_tasks
-            .borrow()
-            .iter()
-            .find_map(|task| task.suspense_placeholder())
-            .map(std::result::Result::Ok)
     }
 
     /// Run a closure after suspense is resolved
@@ -206,12 +185,18 @@ impl SuspenseContext {
 
 /// A boundary that will capture any errors from child components
 pub struct SuspenseBoundaryInner {
+    rt: Rc<Runtime>,
+
     suspended_tasks: RefCell<Vec<SuspendedFuture>>,
+
     id: Cell<ScopeId>,
+
     /// The nodes that are suspended under this boundary
     suspended_nodes: RefCell<Option<VNode>>,
+
     /// On the server, you can only resolve a suspense boundary once. This is used to track if the suspense boundary has been resolved and if it should be frozen
     frozen: Cell<bool>,
+
     /// Closures queued to run after the suspense boundary is resolved
     after_suspense_resolved: RefCell<Vec<Box<dyn FnOnce()>>>,
 }
@@ -225,38 +210,4 @@ impl Debug for SuspenseBoundaryInner {
             .field("frozen", &self.frozen)
             .finish()
     }
-}
-
-/// Provides context methods to [`Result<T, RenderError>`] to show loading indicators for suspended results
-///
-/// This trait is sealed and cannot be implemented outside of dioxus-core
-pub trait SuspenseExtension<T>: private::Sealed {
-    /// Add a loading indicator if the result is suspended
-    fn with_loading_placeholder(
-        self,
-        display_placeholder: impl FnOnce() -> Element,
-    ) -> std::result::Result<T, RenderError>;
-}
-
-impl<T> SuspenseExtension<T> for std::result::Result<T, RenderError> {
-    fn with_loading_placeholder(
-        self,
-        display_placeholder: impl FnOnce() -> Element,
-    ) -> std::result::Result<T, RenderError> {
-        if let Err(RenderError::Suspended(suspense)) = self {
-            Err(RenderError::Suspended(suspense.with_placeholder(
-                display_placeholder().unwrap_or_default(),
-            )))
-        } else {
-            self
-        }
-    }
-}
-
-pub(crate) mod private {
-    use super::*;
-
-    pub trait Sealed {}
-
-    impl<T> Sealed for std::result::Result<T, RenderError> {}
 }

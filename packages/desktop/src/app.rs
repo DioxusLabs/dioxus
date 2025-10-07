@@ -2,13 +2,13 @@ use crate::{
     config::{Config, WindowCloseBehaviour},
     edits::EditWebsocket,
     event_handlers::WindowEventHandlers,
-    file_upload::{DesktopFileUploadForm, FileDialogRequest, NativeFileEngine},
+    file_upload::{DesktopFileUploadForm, FileDialogRequest},
     ipc::{IpcMessage, UserWindowEvent},
     query::QueryResult,
     shortcut::ShortcutRegistry,
     webview::{PendingWebview, WebviewInstance},
 };
-use dioxus_core::{ElementId, ScopeId, VirtualDom};
+use dioxus_core::{consume_context, ElementId, ScopeId, VirtualDom};
 use dioxus_history::History;
 use dioxus_html::PlatformEventData;
 use std::{
@@ -16,7 +16,6 @@ use std::{
     cell::{Cell, RefCell},
     collections::HashMap,
     rc::Rc,
-    sync::Arc,
     time::Duration,
 };
 use tao::{
@@ -420,9 +419,7 @@ impl App {
         let event_bubbles = file_dialog.bubbles;
         let files = file_dialog.get_file_event();
 
-        let as_any = Box::new(DesktopFileUploadForm {
-            files: Arc::new(NativeFileEngine::new(files)),
-        });
+        let as_any = Box::new(DesktopFileUploadForm { files });
 
         let data = Rc::new(PlatformEventData::new(as_any));
 
@@ -553,11 +550,8 @@ impl App {
                 return;
             };
 
-            let url = webview.dom.in_runtime(|| {
-                ScopeId::ROOT
-                    .consume_context::<Rc<dyn History>>()
-                    .unwrap()
-                    .current_route()
+            let url = webview.dom.in_scope(ScopeId::ROOT, || {
+                consume_context::<Rc<dyn History>>().current_route()
             });
 
             let state = PreservedWindowState {
@@ -622,12 +616,9 @@ impl App {
                 }
 
                 // Set the url if it exists
-                webview.dom.in_runtime(|| {
+                webview.dom.in_scope(ScopeId::ROOT, || {
                     if let Some(url) = state.url {
-                        ScopeId::ROOT
-                            .consume_context::<Rc<dyn History>>()
-                            .unwrap()
-                            .replace(url);
+                        consume_context::<Rc<dyn History>>().replace(url);
                     }
                 })
             }

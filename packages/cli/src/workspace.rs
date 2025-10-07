@@ -97,9 +97,10 @@ impl Workspace {
 
         let ignore = Self::workspace_gitignore(krates.workspace_root().as_std_path());
 
-        let cargo_toml =
-            cargo_toml::Manifest::from_path(krates.workspace_root().join("Cargo.toml"))
-                .context("Failed to load Cargo.toml")?;
+        let cargo_toml = crate::cargo_toml::load_manifest_from_path(
+            krates.workspace_root().join("Cargo.toml").as_std_path(),
+        )
+        .context("Failed to load Cargo.toml")?;
 
         let android_tools = crate::build::get_android_tools();
 
@@ -531,7 +532,7 @@ impl Workspace {
     }
 
     pub(crate) fn global_settings_file() -> PathBuf {
-        Self::dioxus_data_dir().join("settings.json")
+        Self::dioxus_data_dir().join("settings.toml")
     }
 
     /// The path where components downloaded from git are cached

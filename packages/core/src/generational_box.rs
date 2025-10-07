@@ -2,14 +2,11 @@
 //!
 //! Each scope in dioxus has a single [Owner]
 
+use generational_box::{AnyStorage, Owner, SyncStorage, UnsyncStorage};
 use std::{
     any::{Any, TypeId},
     cell::RefCell,
 };
-
-use generational_box::{AnyStorage, Owner, SyncStorage, UnsyncStorage};
-
-use crate::{innerlude::current_scope_id, Runtime, ScopeId};
 
 /// Run a closure with the given owner.
 ///
@@ -84,14 +81,5 @@ pub fn current_owner<S: AnyStorage>() -> Owner<S> {
         return owner;
     }
 
-    // Otherwise get the owner from the current scope
-    current_scope_id().expect("in a virtual dom").owner()
-}
-
-impl ScopeId {
-    /// Get the owner for the current scope.
-    #[track_caller]
-    pub fn owner<S: AnyStorage>(self) -> Owner<S> {
-        Runtime::with_scope(self, |cx| cx.owner::<S>()).unwrap_or_else(|e| panic!("{}", e))
-    }
+    crate::Runtime::current().current_owner()
 }

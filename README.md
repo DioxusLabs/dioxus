@@ -110,6 +110,15 @@ Dioxus apps are styled with HTML and CSS. Use the built-in TailwindCSS support o
 </div>
 
 
+
+## Truly fullstack applications
+
+Dioxus deeply integrates with [axum](https://github.com/tokio-rs/axum) to provide powerful fullstack capabilities for both clients and servers. Pick from a wide array of built-in batteries like WebSockets, SSE, Streaming, File Upload/Download, Server-Side-Rendering, Forms, Middleware, and Hot-Reload, or go fully custom and integrate your existing axum backend.
+
+<div align="center">
+  <img src="./notes/fullstack-websockets.avif" width="700">
+</div>
+
 ## Experimental Native Renderer
 
 Render using web-sys, webview, server-side-rendering, liveview, or even with our experimental WGPU-based renderer. Embed Dioxus in Bevy, WGPU, or even run on embedded Linux!
@@ -124,7 +133,7 @@ Render using web-sys, webview, server-side-rendering, liveview, or even with our
 Get started quickly with a complete set of primitives modeled after shadcn/ui and Radix-Primitives.
 
 <div align="center">
-  <img src="./notes/primitive-components.avif">
+  <img src="./notes/primitive-components.avif" width="700">
 </div>
 
 ## First-class Android and iOS support
@@ -136,28 +145,6 @@ Dioxus is the fastest way to build native mobile apps with Rust. Simply run `dx 
 </div>
 
 
-## Productive, typesafe, fullstack web framework
-
-Directly call your backend from your frontend with our built-in type-safe RPC using [`server_fn`](http://crates.io/crates/server_fn). Supports streaming, suspense, bundle splitting, websockets, and more.
-
-```rust
-fn app() -> Element {
-  let mut fortune = use_signal(|| "Fetch a fortune!");
-  rsx! {
-    h1 { "{fortune}" }
-    button {
-      onclick: move |_| async move {
-        fortune.set(fetch_fortune().await.unwrap());
-      }
-    }
-  }
-}
-
-#[server]
-async fn fetch_fortune() -> ServerFnResult<String> {
-  "Dioxus is super productive!".to_string()
-}
-```
 
 ## Bundle for web, desktop, and mobile
 

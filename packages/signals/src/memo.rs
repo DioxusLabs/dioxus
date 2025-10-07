@@ -56,8 +56,7 @@ impl<T> Memo<T> {
                 let _ = tx.unbounded_send(());
             }
         };
-        let rc =
-            ReactiveContext::new_with_callback(callback, current_scope_id().unwrap(), location);
+        let rc = ReactiveContext::new_with_callback(callback, current_scope_id(), location);
 
         // Create a new signal in that context, wiring up its dependencies and subscribers
         let mut recompute = move || rc.reset_and_run_in(&mut f);

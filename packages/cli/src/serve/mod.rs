@@ -175,27 +175,18 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &TraceController) -> Resu
                     }
                     BuilderUpdate::BuildReady { bundle } => match bundle.mode {
                         BuildMode::Thin { ref cache, .. } => {
-                            let elapsed =
-                                bundle.time_end.duration_since(bundle.time_start).unwrap();
-                            match builder.hotpatch(&bundle, id, cache).await {
-                                Ok(jumptable) => {
-                                    let pid = match id {
-                                        BuildId::CLIENT => builder.client.pid,
-                                        _ => builder.server.as_ref().and_then(|s| s.pid),
-                                    };
-                                    devserver.send_patch(jumptable, elapsed, id, pid).await
-                                }
-                                Err(err) => {
-                                    tracing::error!("Failed to hot-patch app: {err}");
+                            if let Err(err) =
+                                builder.hotpatch(&bundle, id, cache, &mut devserver).await
+                            {
+                                tracing::error!("Failed to hot-patch app: {err}");
 
-                                    if let Some(_patching) =
-                                        err.downcast_ref::<crate::build::PatchError>()
-                                    {
-                                        tracing::info!("Starting full rebuild: {err}");
-                                        builder.full_rebuild().await;
-                                        devserver.send_reload_start().await;
-                                        devserver.start_build().await;
-                                    }
+                                if let Some(_patching) =
+                                    err.downcast_ref::<crate::build::PatchError>()
+                                {
+                                    tracing::info!("Starting full rebuild: {err}");
+                                    builder.full_rebuild().await;
+                                    devserver.send_reload_start().await;
+                                    devserver.start_build().await;
                                 }
                             }
                         }

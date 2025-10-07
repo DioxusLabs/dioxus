@@ -5,12 +5,12 @@
 // - 500 Routes
 
 #![allow(non_snake_case)]
-use dioxus::{prelude::*, CapturedError};
+use dioxus::prelude::*;
 
 fn main() {
     dioxus::LaunchBuilder::new()
         .with_cfg(server_only! {
-            dioxus::fullstack::ServeConfig::builder().enable_out_of_order_streaming()
+            dioxus::server::ServeConfig::builder().enable_out_of_order_streaming()
         })
         .launch(app);
 }
@@ -50,9 +50,7 @@ fn Blog(id: i32) -> Element {
 
 #[component]
 fn ThrowsError() -> Element {
-    return Err(RenderError::Aborted(CapturedError::from_display(
-        "This route tests uncaught errors in the server",
-    )));
+    dioxus::core::bail!("This route tests uncaught errors in the server",)
 }
 
 #[component]

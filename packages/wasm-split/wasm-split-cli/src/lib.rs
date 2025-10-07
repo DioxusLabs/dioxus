@@ -1324,12 +1324,24 @@ impl<'a> ModuleWithRelocations<'a> {
     fn get_symbol_dep_node(&self, index: usize) -> Result<Option<Node>> {
         let res = match self.symbols[index] {
             SymbolInfo::Data { .. } => Some(Node::DataSymbol(index)),
-            SymbolInfo::Func { name, .. } => Some(Node::Function(
-                *self
-                    .names_to_funcs
-                    .get(name.expect("local func symbol without name?"))
-                    .unwrap(),
-            )),
+            SymbolInfo::Func { name, .. } => Some(Node::Function({
+                let name = name.context(
+                    "Function symbol has no name - did you forget to enable debug symbols",
+                )?;
+
+                let func_id = self.names_to_funcs.get(name);
+
+                // wbindgen will synthesize some functions that don't exist in the original module (eg describe functions)
+                // Previously this was a hard error, but now we just ignore it. It used to mean that the user
+                let Some(res) = func_id else {
+                    if !name.contains("__wbindgen_") {
+                        tracing::error!("Could not find function symbol {name:?} in module - was this built with LTO, --emit-relocs, and debug symbols? Ignoring.");
+                    }
+                    return Ok(None);
+                };
+
+                *res
+            })),
 
             _ => None,
         };

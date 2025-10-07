@@ -30,6 +30,8 @@ pub mod input_data;
 pub mod point_interaction;
 mod render_template;
 
+pub use bytes;
+
 #[cfg(feature = "serialize")]
 mod transit;
 
