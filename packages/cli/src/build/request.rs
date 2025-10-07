@@ -320,9 +320,9 @@
 //! - xbuild: <https://github.com/rust-mobile/xbuild/blob/master/xbuild/src/command/build.rs>
 
 use crate::{
-    AndroidTools, BuildContext, BundleFormat, DioxusConfig, Error, LinkAction, LinkerFlavor,
-    Platform, Renderer, Result, RustcArgs, TargetArgs, TraceSrc, WasmBindgen, WasmOptConfig,
-    Workspace, DX_RUSTC_WRAPPER_ENV_VAR,
+    AndroidTools, BuildContext, BuildId, BundleFormat, DioxusConfig, Error, LinkAction,
+    LinkerFlavor, Platform, Renderer, Result, RustcArgs, TargetArgs, TraceSrc, WasmBindgen,
+    WasmOptConfig, Workspace, DX_RUSTC_WRAPPER_ENV_VAR,
 };
 use anyhow::{bail, Context};
 use cargo_metadata::diagnostic::Diagnostic;
@@ -454,6 +454,7 @@ pub struct BuildArtifacts {
     pub(crate) mode: BuildMode,
     pub(crate) patch_cache: Option<Arc<HotpatchModuleCache>>,
     pub(crate) depinfo: RustcDepInfo,
+    pub(crate) build_id: BuildId,
 }
 
 impl BuildRequest {
@@ -989,10 +990,10 @@ impl BuildRequest {
         _ = std::fs::File::create_new(self.windows_command_file());
 
         if !matches!(ctx.mode, BuildMode::Thin { .. }) {
-            self.prepare_build_dir()?;
+            self.prepare_build_dir(ctx)?;
         }
 
-        if self.bundle == BundleFormat::Server {
+        if !ctx.is_primary_build() {
             return Ok(());
         }
 
@@ -1270,6 +1271,7 @@ impl BuildRequest {
             depinfo,
             root_dir: self.root_dir(),
             patch_cache: None,
+            build_id: ctx.build_id,
         })
     }
 
@@ -1460,7 +1462,7 @@ impl BuildRequest {
     /// Should be the same on all platforms - just copy over the assets from the manifest into the output directory
     async fn write_assets(&self, ctx: &BuildContext, assets: &AssetManifest) -> Result<()> {
         // Server doesn't need assets - web will provide them
-        if self.bundle == BundleFormat::Server {
+        if !ctx.is_primary_build() {
             return Ok(());
         }
 
@@ -4320,14 +4322,14 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
     /// - extra scaffolding
     ///
     /// It's not guaranteed that they're different from any other folder
-    pub(crate) fn prepare_build_dir(&self) -> Result<()> {
+    pub(crate) fn prepare_build_dir(&self, ctx: &BuildContext) -> Result<()> {
         use std::fs::{create_dir_all, remove_dir_all};
         use std::sync::OnceLock;
 
         static INITIALIZED: OnceLock<Result<()>> = OnceLock::new();
 
         let success = INITIALIZED.get_or_init(|| {
-            if self.bundle != BundleFormat::Server {
+            if ctx.is_primary_build() {
                 _ = remove_dir_all(self.exe_dir());
             }
 

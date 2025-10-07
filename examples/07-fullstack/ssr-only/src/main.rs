@@ -53,7 +53,7 @@ fn Post(id: u32) -> Element {
 async fn get_post(id: u32) -> Result<String, HttpError> {
     match id {
         1 => Ok("first post".to_string()),
-        2 => Ok("second post".to_string()),
+        2 => Ok("second post - surreal!!!!".to_string()),
         _ => HttpError::not_found("Post not found")?,
     }
 }

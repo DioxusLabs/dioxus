@@ -1,5 +1,5 @@
 use crate::{
-    platform_override::CommandWithPlatformOverrides, AppBuilder, BuildArgs, BuildMode,
+    platform_override::CommandWithPlatformOverrides, AppBuilder, BuildArgs, BuildId, BuildMode,
     HotpatchModuleCache, Result, StructuredOutput,
 };
 use anyhow::Context;
@@ -34,8 +34,16 @@ impl HotpatchTip {
     pub async fn run(self) -> Result<StructuredOutput> {
         let targets = self.build_args.into_targets().await?;
 
+        let patch_server = self.patch_server.unwrap_or(false);
+
+        let build_id = if patch_server {
+            BuildId::SECONDARY
+        } else {
+            BuildId::PRIMARY
+        };
+
         // Select which target to patch
-        let request = if self.patch_server.unwrap_or_default() {
+        let request = if patch_server {
             targets.server.as_ref().context("No server to patch!")?
         } else {
             &targets.client
@@ -68,7 +76,9 @@ impl HotpatchTip {
             cache: cache.clone(),
         };
 
-        let artifacts = AppBuilder::started(request, mode)?.finish_build().await?;
+        let artifacts = AppBuilder::started(request, mode, build_id)?
+            .finish_build()
+            .await?;
         let patch_exe = request.patch_exe(artifacts.time_start);
 
         Ok(StructuredOutput::Hotpatch {

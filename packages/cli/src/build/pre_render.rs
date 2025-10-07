@@ -45,7 +45,7 @@ pub(crate) async fn pre_render_static_routes(
         devserver_ip,
         Some(fullstack_address),
         false,
-        BuildId::SERVER,
+        BuildId::SECONDARY,
     );
     // Run the server executable
     let _child = Command::new(&server_exe)
