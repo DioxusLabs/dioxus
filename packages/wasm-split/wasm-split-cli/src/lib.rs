@@ -262,7 +262,7 @@ impl<'a> Splitter<'a> {
         self.clear_data_segments(&mut out, &unique_symbols);
 
         // Clear out the element segments and then add in the initializers for the shared imports
-        self.create_ifunc_initialzers(&mut out, &unique_symbols);
+        self.create_ifunc_initializers(&mut out, &unique_symbols);
 
         // Convert our split module's functions to real functions that call the indirect function
         self.add_split_imports(
@@ -332,7 +332,7 @@ impl<'a> Splitter<'a> {
         self.clear_data_segments(&mut out, &unique_symbols);
 
         // Clear out the element segments and then add in the initializers for the shared imports
-        self.create_ifunc_initialzers(&mut out, &unique_symbols);
+        self.create_ifunc_initializers(&mut out, &unique_symbols);
 
         // We have to make sure our table matches that of the other tables even though we don't call them.
         let ifunc_table_id = self.load_funcref_table(&mut out);
@@ -554,7 +554,7 @@ impl<'a> Splitter<'a> {
     }
 
     /// Creates the jump points
-    fn create_ifunc_initialzers(&self, out: &mut Module, unique_symbols: &HashSet<Node>) {
+    fn create_ifunc_initializers(&self, out: &mut Module, unique_symbols: &HashSet<Node>) {
         let ifunc_table = self.load_funcref_table(out);
 
         let mut initializers = HashMap::new();
@@ -1009,7 +1009,7 @@ impl<'a> Splitter<'a> {
         let mut recovered_children = HashSet::new();
         for lost in lost_children {
             match lost {
-                // Functions need to be found - the wasm decsribe functions are usually completely dissolved
+                // Functions need to be found - the wasm describe functions are usually completely dissolved
                 Node::Function(id) => {
                     let func = original.module.funcs.get(id);
                     let name = func.name.as_ref().unwrap();
