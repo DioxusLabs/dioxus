@@ -355,202 +355,215 @@ impl AppServer {
             return;
         }
 
-        // If we have any changes to the rust files, we need to update the file map
-        let mut templates = vec![];
+        // first try hot-reloading, if it needs a rebuild it will continue without hot-reloading.
+        if self.hot_reload {
+            // If we have any changes to the rust files, we need to update the file map
+            let mut templates = vec![];
 
-        // Prepare the hotreload message we need to send
-        let mut assets = Vec::new();
-        let mut needs_full_rebuild = false;
+            // Prepare the hotreload message we need to send
+            let mut assets = Vec::new();
+            let mut needs_full_rebuild = false;
 
-        // We attempt to hotreload rsx blocks without a full rebuild
-        for path in files {
-            // for various assets that might be linked in, we just try to hotreloading them forcefully
-            // That is, unless they appear in an include! macro, in which case we need to a full rebuild....
-            let ext = path
-                .extension()
-                .and_then(|v| v.to_str())
-                .unwrap_or_default();
+            // We attempt to hotreload rsx blocks without a full rebuild
+            for path in files {
+                // for various assets that might be linked in, we just try to hotreloading them forcefully
+                // That is, unless they appear in an include! macro, in which case we need to a full rebuild....
+                let ext = path
+                    .extension()
+                    .and_then(|v| v.to_str())
+                    .unwrap_or_default();
 
-            // If it's an asset, we want to hotreload it
-            // todo(jon): don't hardcode this here
-            if let Some(bundled_names) = self.client.hotreload_bundled_assets(path).await {
-                for bundled_name in bundled_names {
-                    assets.push(PathBuf::from("/assets/").join(bundled_name));
+                // If it's an asset, we want to hotreload it
+                // todo(jon): don't hardcode this here
+                if let Some(bundled_names) = self.client.hotreload_bundled_assets(path).await {
+                    for bundled_name in bundled_names {
+                        assets.push(PathBuf::from("/assets/").join(bundled_name));
+                    }
                 }
-            }
 
-            // If it's a rust file, we want to hotreload it using the filemap
-            if ext == "rs" {
-                // And grabout the contents
-                let Ok(new_contents) = std::fs::read_to_string(path) else {
-                    tracing::debug!("Failed to read rust file while hotreloading: {:?}", path);
-                    continue;
-                };
-
-                // Get the cached file if it exists - ignoring if it doesn't exist
-                let Some(cached_file) = self.file_map.get_mut(path) else {
-                    tracing::debug!("No entry for file in filemap: {:?}", path);
-                    tracing::debug!("Filemap: {:#?}", self.file_map.keys());
-                    continue;
-                };
-
-                let Ok(local_path) = path.strip_prefix(self.workspace.workspace_root()) else {
-                    tracing::debug!("Skipping file outside workspace dir: {:?}", path);
-                    continue;
-                };
-
-                // We assume we can parse the old file and the new file, ignoring untracked rust files
-                let old_syn = syn::parse_file(&cached_file.contents);
-                let new_syn = syn::parse_file(&new_contents);
-                let (Ok(old_file), Ok(new_file)) = (old_syn, new_syn) else {
-                    tracing::debug!("Diff rsx returned not parseable");
-                    continue;
-                };
-
-                // Update the most recent version of the file, so when we force a rebuild, we keep operating on the most recent version
-                cached_file.most_recent = Some(new_contents);
-
-                // This assumes the two files are structured similarly. If they're not, we can't diff them
-                let Some(changed_rsx) = dioxus_rsx_hotreload::diff_rsx(&new_file, &old_file) else {
-                    needs_full_rebuild = true;
-                    break;
-                };
-
-                for ChangedRsx { old, new } in changed_rsx {
-                    let old_start = old.span().start();
-
-                    let old_parsed = syn::parse2::<CallBody>(old.tokens);
-                    let new_parsed = syn::parse2::<CallBody>(new.tokens);
-                    let (Ok(old_call_body), Ok(new_call_body)) = (old_parsed, new_parsed) else {
+                // If it's a rust file, we want to hotreload it using the filemap
+                //
+                // Dont hot reload if its off
+                if ext == "rs" {
+                    // And grabout the contents
+                    let Ok(new_contents) = std::fs::read_to_string(path) else {
+                        tracing::debug!("Failed to read rust file while hotreloading: {:?}", path);
                         continue;
                     };
 
-                    // Format the template location, normalizing the path
-                    let file_name: String = local_path
-                        .components()
-                        .map(|c| c.as_os_str().to_string_lossy())
-                        .collect::<Vec<_>>()
-                        .join("/");
+                    // Get the cached file if it exists - ignoring if it doesn't exist
+                    let Some(cached_file) = self.file_map.get_mut(path) else {
+                        tracing::debug!("No entry for file in filemap: {:?}", path);
+                        tracing::debug!("Filemap: {:#?}", self.file_map.keys());
+                        continue;
+                    };
 
-                    // Returns a list of templates that are hotreloadable
-                    let results = HotReloadResult::new::<HtmlCtx>(
-                        &old_call_body.body,
-                        &new_call_body.body,
-                        file_name.clone(),
-                    );
+                    let Ok(local_path) = path.strip_prefix(self.workspace.workspace_root()) else {
+                        tracing::debug!("Skipping file outside workspace dir: {:?}", path);
+                        continue;
+                    };
 
-                    // If no result is returned, we can't hotreload this file and need to keep the old file
-                    let Some(results) = results else {
+                    // We assume we can parse the old file and the new file, ignoring untracked rust files
+                    let old_syn = syn::parse_file(&cached_file.contents);
+                    let new_syn = syn::parse_file(&new_contents);
+                    let (Ok(old_file), Ok(new_file)) = (old_syn, new_syn) else {
+                        tracing::debug!("Diff rsx returned not parseable");
+                        continue;
+                    };
+
+                    // Update the most recent version of the file, so when we force a rebuild, we keep operating on the most recent version
+                    cached_file.most_recent = Some(new_contents);
+
+                    // This assumes the two files are structured similarly. If they're not, we can't diff them
+                    let Some(changed_rsx) = dioxus_rsx_hotreload::diff_rsx(&new_file, &old_file)
+                    else {
                         needs_full_rebuild = true;
                         break;
                     };
 
-                    // Only send down templates that have roots, and ideally ones that have changed
-                    // todo(jon): maybe cache these and don't send them down if they're the same
-                    for (index, template) in results.templates {
-                        if template.roots.is_empty() {
+                    for ChangedRsx { old, new } in changed_rsx {
+                        let old_start = old.span().start();
+
+                        let old_parsed = syn::parse2::<CallBody>(old.tokens);
+                        let new_parsed = syn::parse2::<CallBody>(new.tokens);
+                        let (Ok(old_call_body), Ok(new_call_body)) = (old_parsed, new_parsed)
+                        else {
                             continue;
+                        };
+
+                        // Format the template location, normalizing the path
+                        let file_name: String = local_path
+                            .components()
+                            .map(|c| c.as_os_str().to_string_lossy())
+                            .collect::<Vec<_>>()
+                            .join("/");
+
+                        // Returns a list of templates that are hotreloadable
+                        let results = HotReloadResult::new::<HtmlCtx>(
+                            &old_call_body.body,
+                            &new_call_body.body,
+                            file_name.clone(),
+                        );
+
+                        // If no result is returned, we can't hotreload this file and need to keep the old file
+                        let Some(results) = results else {
+                            needs_full_rebuild = true;
+                            break;
+                        };
+
+                        // Only send down templates that have roots, and ideally ones that have changed
+                        // todo(jon): maybe cache these and don't send them down if they're the same
+                        for (index, template) in results.templates {
+                            if template.roots.is_empty() {
+                                continue;
+                            }
+
+                            // Create the key we're going to use to identify this template
+                            let key = TemplateGlobalKey {
+                                file: file_name.clone(),
+                                line: old_start.line,
+                                column: old_start.column + 1,
+                                index,
+                            };
+
+                            // if the template is the same, don't send its
+                            if cached_file.templates.get(&key) == Some(&template) {
+                                continue;
+                            };
+
+                            cached_file.templates.insert(key.clone(), template.clone());
+                            templates.push(HotReloadTemplateWithLocation { template, key });
                         }
+                    }
+                }
 
-                        // Create the key we're going to use to identify this template
-                        let key = TemplateGlobalKey {
-                            file: file_name.clone(),
-                            line: old_start.line,
-                            column: old_start.column + 1,
-                            index,
-                        };
-
-                        // if the template is the same, don't send its
-                        if cached_file.templates.get(&key) == Some(&template) {
-                            continue;
-                        };
-
-                        cached_file.templates.insert(key.clone(), template.clone());
-                        templates.push(HotReloadTemplateWithLocation { template, key });
+                // If it's not a rust file, then it might be depended on via include! or similar
+                if ext != "rs" {
+                    if let Some(artifacts) = self.client.artifacts.as_ref() {
+                        if artifacts.depinfo.files.contains(path) {
+                            needs_full_rebuild = true;
+                            break;
+                        }
                     }
                 }
             }
 
-            // If it's not a rust file, then it might be depended on via include! or similar
-            if ext != "rs" {
-                if let Some(artifacts) = self.client.artifacts.as_ref() {
-                    if artifacts.depinfo.files.contains(path) {
-                        needs_full_rebuild = true;
-                        break;
+            // If the client is in a failed state, any changes to rsx should trigger a rebuild/hotpatch
+            if self.client.stage == BuildStage::Failed && !templates.is_empty() {
+                needs_full_rebuild = true
+            }
+
+            // the case where it can hot-reload
+            if !needs_full_rebuild {
+                let msg = HotReloadMsg {
+                    templates,
+                    assets,
+                    ms_elapsed: 0,
+                    jump_table: Default::default(),
+                    for_build_id: None,
+                    for_pid: None,
+                };
+
+                self.add_hot_reload_message(&msg);
+
+                let file = files[0].display().to_string();
+                let file =
+                    file.trim_start_matches(&self.client.build.crate_dir().display().to_string());
+
+                // Only send a hotreload message for templates and assets - otherwise we'll just get a full rebuild
+                //
+                // todo: move the android file uploading out of hotreload_bundled_asset and
+                //
+                // Also make sure the builder isn't busy since that might cause issues with hotreloads
+                // https://github.com/DioxusLabs/dioxus/issues/3361
+                if !msg.is_empty() && self.client.can_receive_hotreloads() {
+                    use crate::styles::NOTE_STYLE;
+                    tracing::info!(dx_src = ?TraceSrc::Dev, "Hotreloading: {NOTE_STYLE}{}{NOTE_STYLE:#}", file);
+
+                    if !server.has_hotreload_sockets()
+                        && self.client.build.bundle != BundleFormat::Web
+                    {
+                        tracing::warn!("No clients to hotreload - try reloading the app!");
                     }
+
+                    server.send_hotreload(msg).await;
+                } else {
+                    tracing::debug!(dx_src = ?TraceSrc::Dev, "Ignoring file change: {}", file);
                 }
+
+                return;
             }
         }
 
-        // If the client is in a failed state, any changes to rsx should trigger a rebuild/hotpatch
-        if self.client.stage == BuildStage::Failed && !templates.is_empty() {
-            needs_full_rebuild = true
+        // if needs_full_rebuild && !self.automatic_rebuilds {
+        //     use crate::styles::NOTE_STYLE;
+        //     tracing::warn!(
+        //         "Ignoring full rebuild for: {NOTE_STYLE}{}{NOTE_STYLE:#}",
+        //         file
+        //     );
+        // }
+
+        // if it cant hot-reload it will try hot-patching next
+        if self.use_hotpatch_engine {
+            self.client.patch_rebuild(files.to_vec());
+            if let Some(server) = self.server.as_mut() {
+                server.patch_rebuild(files.to_vec());
+            }
+            self.clear_hot_reload_changes();
+            self.clear_cached_rsx();
+            server.send_patch_start().await;
+
+            return;
         }
 
-        // todo - we need to distinguish between hotpatchable rebuilds and true full rebuilds.
-        //        A full rebuild is required when the user modifies static initializers which we haven't wired up yet.
-        if needs_full_rebuild && self.automatic_rebuilds {
-            if self.use_hotpatch_engine {
-                self.client.patch_rebuild(files.to_vec());
-                if let Some(server) = self.server.as_mut() {
-                    server.patch_rebuild(files.to_vec());
-                }
-                self.clear_hot_reload_changes();
-                self.clear_cached_rsx();
-                server.send_patch_start().await;
-            } else {
-                self.client.start_rebuild(BuildMode::Base { run: true });
-                if let Some(server) = self.server.as_mut() {
-                    server.start_rebuild(BuildMode::Base { run: true });
-                }
-                self.clear_hot_reload_changes();
-                self.clear_cached_rsx();
-                server.send_reload_start().await;
-            }
-        } else {
-            let msg = HotReloadMsg {
-                templates,
-                assets,
-                ms_elapsed: 0,
-                jump_table: Default::default(),
-                for_build_id: None,
-                for_pid: None,
-            };
-
-            self.add_hot_reload_message(&msg);
-
-            let file = files[0].display().to_string();
-            let file =
-                file.trim_start_matches(&self.client.build.crate_dir().display().to_string());
-
-            if needs_full_rebuild && !self.automatic_rebuilds {
-                use crate::styles::NOTE_STYLE;
-                tracing::warn!(
-                    "Ignoring full rebuild for: {NOTE_STYLE}{}{NOTE_STYLE:#}",
-                    file
-                );
-            }
-
-            // Only send a hotreload message for templates and assets - otherwise we'll just get a full rebuild
-            //
-            // todo: move the android file uploading out of hotreload_bundled_asset and
-            //
-            // Also make sure the builder isn't busy since that might cause issues with hotreloads
-            // https://github.com/DioxusLabs/dioxus/issues/3361
-            if !msg.is_empty() && self.client.can_receive_hotreloads() {
-                use crate::styles::NOTE_STYLE;
-                tracing::info!(dx_src = ?TraceSrc::Dev, "Hotreloading: {NOTE_STYLE}{}{NOTE_STYLE:#}", file);
-
-                if !server.has_hotreload_sockets() && self.client.build.bundle != BundleFormat::Web
-                {
-                    tracing::warn!("No clients to hotreload - try reloading the app!");
-                }
-
-                server.send_hotreload(msg).await;
-            } else {
-                tracing::debug!(dx_src = ?TraceSrc::Dev, "Ignoring file change: {}", file);
-            }
+        // full rebuild in case where both hot-reloading and hot-patching cant be done
+        self.client.start_rebuild(BuildMode::Base { run: true });
+        if let Some(server) = self.server.as_mut() {
+            server.start_rebuild(BuildMode::Base { run: true });
         }
+        self.clear_hot_reload_changes();
+        self.clear_cached_rsx();
+        server.send_reload_start().await;
     }
 
     /// Finally "bundle" this app and return a handle to it

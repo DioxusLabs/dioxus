@@ -83,11 +83,9 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &TraceController) -> Resu
 
         match msg {
             ServeUpdate::FilesChanged { files } => {
-                if files.is_empty() || !builder.hot_reload {
-                    continue;
+                if !files.is_empty() {
+                    builder.handle_file_change(&files, &mut devserver).await;
                 }
-
-                builder.handle_file_change(&files, &mut devserver).await;
             }
 
             ServeUpdate::RequestRebuild => {

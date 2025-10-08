@@ -24,6 +24,10 @@ static
 !.vscode/extensions.json
 tarpaulin-report.html
 
+# direnv
+.direnv
+.envrc
+
 # Jetbrain
 .idea/
 node_modules/
