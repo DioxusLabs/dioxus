@@ -56,12 +56,6 @@ impl StreamingContext {
         *self.current_status.read()
     }
 
-    /// Access the http request parts. This will allow you to modify headers and other parts of the request.
-    pub fn with_parts<O>(&self, f: impl FnOnce(&mut Parts) -> O) -> O {
-        let mut parts = self.request_headers.borrow_mut();
-        f(&mut parts)
-    }
-
     /// Access the http request parts mutably. This will allow you to modify headers and other parts of the request.
     pub fn parts_mut(&self) -> std::cell::RefMut<'_, http::request::Parts> {
         self.request_headers.borrow_mut()

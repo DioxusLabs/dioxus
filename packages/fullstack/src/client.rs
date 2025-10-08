@@ -175,13 +175,14 @@ impl ClientRequest {
                     outgoing = outgoing.text(key.to_string(), text.to_string());
                 }
                 dioxus_html::FormValue::File(Some(file_data)) => {
-                    let path = file_data.path();
-                    tracing::info!("Uploading file {:?} for field {}", path, key);
-
                     outgoing = outgoing
                         .file(key.to_string(), file_data.path())
                         .await
-                        .unwrap();
+                        .map_err(|e| {
+                            RequestError::Builder(format!(
+                                "Failed to add file to multipart form: {e}",
+                            ))
+                        })?;
                 }
                 dioxus_html::FormValue::File(None) => {
                     // No file was selected for this input, so we skip it.

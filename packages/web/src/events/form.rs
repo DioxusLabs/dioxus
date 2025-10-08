@@ -72,8 +72,8 @@ impl HasFormData for WebFormData {
         if let Some(form) = self.element.dyn_ref::<web_sys::HtmlFormElement>() {
             let form_data = web_sys::FormData::new_with_form(form).unwrap();
 
-            for value in form_data.entries().into_iter().flatten() {
-                if let Ok(array) = value.dyn_into::<Array>() {
+            for entry in form_data.entries().into_iter().flatten() {
+                if let Ok(array) = entry.dyn_into::<Array>() {
                     if let Some(name) = array.get(0).as_string() {
                         let value = array.get(1);
                         if let Some(file) = value.dyn_ref::<web_sys::File>() {

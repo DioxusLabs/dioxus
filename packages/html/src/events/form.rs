@@ -100,7 +100,7 @@ impl FormData {
                 FormValue::Text(text) => {
                     entry
                         .as_array_mut()
-                        .unwrap()
+                        .expect("entry should be an array")
                         .push(serde_json::Value::String(text.clone()));
                 }
                 // we create the serialized variant with no bytes
@@ -115,14 +115,17 @@ impl FormData {
                     };
                     entry
                         .as_array_mut()
-                        .unwrap()
+                        .expect("entry should be an array")
                         .push(serde_json::to_value(&serialized).unwrap_or(serde_json::Value::Null));
                 }
                 FormValue::File(None) => {
-                    entry.as_array_mut().unwrap().push(
-                        serde_json::to_value(SerializedFileData::empty())
-                            .unwrap_or(serde_json::Value::Null),
-                    );
+                    entry
+                        .as_array_mut()
+                        .expect("entry should be an array")
+                        .push(
+                            serde_json::to_value(SerializedFileData::empty())
+                                .unwrap_or(serde_json::Value::Null),
+                        );
                 }
             }
         }
