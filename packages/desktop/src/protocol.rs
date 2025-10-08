@@ -181,8 +181,6 @@ fn file_dialog_responder(
     request: wry::http::Request<Vec<u8>>,
     responder: wry::RequestAsyncResponder,
 ) -> dioxus_core::Result<()> {
-    tracing::info!("headers: {:#?}", request.headers());
-
     // Handle the file dialog request
     // We can't use the body, just the headers
     let header = request
@@ -218,14 +216,13 @@ fn file_dialog_responder(
                 key: file_dialog.target_name.clone(),
                 text: None,
                 file: Some(SerializedFileData {
-                    path: path.clone().to_string_lossy().to_string(),
                     size: file.len(),
                     last_modified: file
                         .modified()
                         .context("Failed to get file modified time")?
                         .duration_since(std::time::UNIX_EPOCH)
-                        .unwrap()
-                        .as_millis() as _,
+                        .map(|d| d.as_millis())
+                        .unwrap_or_default() as _,
                     content_type: Some(
                         dioxus_asset_resolver::native::get_mime_from_ext(
                             path.extension().and_then(|s| s.to_str()),
@@ -233,6 +230,7 @@ fn file_dialog_responder(
                         .to_string(),
                     ),
                     contents: Default::default(),
+                    path,
                 }),
             },
         );

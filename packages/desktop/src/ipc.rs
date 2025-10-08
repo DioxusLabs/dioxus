@@ -50,8 +50,8 @@ pub enum UserWindowEvent {
 /// This needs to be serializable across the JS boundary, so the method names and structs are sensitive.
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct IpcMessage {
-    pub(crate) method: String,
-    pub(crate) params: serde_json::Value,
+    method: String,
+    params: serde_json::Value,
 }
 
 /// A set of known messages that we need to respond to

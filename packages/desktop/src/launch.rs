@@ -65,7 +65,6 @@ pub fn launch_virtual_dom_blocking(virtual_dom: VirtualDom, mut desktop_config: 
                         });
                     }
                 }
-
                 UserWindowEvent::WindowsDragLeave(id) => {
                     if let Some(webview) = app.webviews.get(&id) {
                         webview.dom.in_scope(ScopeId::ROOT, || {
@@ -73,7 +72,6 @@ pub fn launch_virtual_dom_blocking(virtual_dom: VirtualDom, mut desktop_config: 
                         });
                     }
                 }
-
                 UserWindowEvent::WindowsDragOver(id, x_pos, y_pos) => {
                     if let Some(webview) = app.webviews.get(&id) {
                         webview.dom.in_scope(ScopeId::ROOT, || {

@@ -162,6 +162,7 @@ impl ClientRequest {
         builder
     }
 
+    /// Sends the request with multipart/form-data body constructed from the given FormData.
     #[cfg(not(target_arch = "wasm32"))]
     pub async fn send_multipart(self, form: &FormData) -> Result<ClientResponse, RequestError> {
         let mut outgoing = reqwest::multipart::Form::new();

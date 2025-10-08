@@ -14,7 +14,7 @@ use dioxus_core::{consume_context, provide_context, Runtime, ScopeId, VirtualDom
 use dioxus_document::Document;
 use dioxus_history::{History, MemoryHistory};
 use dioxus_hooks::to_owned;
-use dioxus_html::{FileData, HtmlEvent, PlatformEventData};
+use dioxus_html::{FileData, FormValue, HtmlEvent, PlatformEventData};
 use futures_util::{pin_mut, FutureExt};
 use std::sync::atomic::AtomicBool;
 use std::{cell::OnceCell, time::Duration};
@@ -124,49 +124,33 @@ impl WebviewEdits {
                 Rc::new(PlatformEventData::new(Box::new(element)))
             }
             dioxus_html::EventData::Form(form) => {
-                // we want to override this with a native file engine, provided by the most recent drag event
-                // let file_event = recent_file.current().unwrap();
-                // let paths = match file_event {
-                //     wry::DragDropEvent::Enter { paths, .. } => paths,
-                //     wry::DragDropEvent::Drop { paths, .. } => paths,
-                //     _ => vec![],
-                // };
-
-                tracing::info!("Handling form event: {:#?}", form);
-
-                let value = form.value;
-                let valid = form.valid;
-
-                let values = form
-                    .values
-                    .into_iter()
-                    .map(|obj| {
-                        let name = obj.key;
-                        if let Some(text) = obj.text {
-                            return (name, dioxus_html::FormValue::Text(text));
-                        }
-
-                        if let Some(file_data) = obj.file {
-                            if file_data.path.is_empty() {
-                                return (name, dioxus_html::FormValue::File(None));
+                Rc::new(PlatformEventData::new(Box::new(DesktopFormData {
+                    value: form.value,
+                    valid: form.valid,
+                    values: form
+                        .values
+                        .into_iter()
+                        .map(|obj| {
+                            if let Some(text) = obj.text {
+                                return (obj.key, FormValue::Text(text));
                             }
 
-                            return (
-                                name,
-                                dioxus_html::FormValue::File(Some(FileData::new(DesktopFileData(
-                                    file_data.path.into(),
-                                )))),
-                            );
-                        };
+                            if let Some(file_data) = obj.file {
+                                if file_data.path.capacity() == 0 {
+                                    return (obj.key, FormValue::File(None));
+                                }
 
-                        (name, dioxus_html::FormValue::Text(String::new()))
-                    })
-                    .collect();
+                                return (
+                                    obj.key,
+                                    FormValue::File(Some(FileData::new(DesktopFileData(
+                                        file_data.path,
+                                    )))),
+                                );
+                            };
 
-                Rc::new(PlatformEventData::new(Box::new(DesktopFormData {
-                    value,
-                    valid,
-                    values,
+                            (obj.key, FormValue::Text(String::new()))
+                        })
+                        .collect(),
                 })))
             }
             dioxus_html::EventData::Drag(ref drag) => {

@@ -47,6 +47,21 @@ impl FormData {
         self.inner.values()
     }
 
+    /// Get the first value with the given name
+    pub fn get_first(&self, name: &str) -> Option<FormValue> {
+        self.values()
+            .into_iter()
+            .find_map(|(k, v)| if k == name { Some(v) } else { None })
+    }
+
+    /// Get all values with the given name
+    pub fn get(&self, name: &str) -> Vec<FormValue> {
+        self.values()
+            .into_iter()
+            .filter_map(|(k, v)| if k == name { Some(v) } else { None })
+            .collect()
+    }
+
     /// Get the files of the form event
     pub fn files(&self) -> Vec<FileData> {
         self.inner.files()
@@ -71,25 +86,48 @@ impl FormData {
     where
         T: serde::de::DeserializeOwned,
     {
-        todo!()
-        // let values = &self.values();
+        use crate::SerializedFileData;
 
-        // let mut map = serde_json::Map::new();
-        // for (key, value) in values {
-        //     if value.0.len() == 1 {
-        //         map.insert(key.clone(), serde_json::Value::String(value.0[0].clone()));
-        //     } else {
-        //         let arr = value
-        //             .0
-        //             .iter()
-        //             .cloned()
-        //             .map(serde_json::Value::String)
-        //             .collect();
-        //         map.insert(key.clone(), serde_json::Value::Array(arr));
-        //     }
-        // }
+        let values = &self.values();
 
-        // serde_json::from_value(serde_json::Value::Object(map))
+        let mut map = serde_json::Map::new();
+        for (key, value) in values {
+            match value {
+                FormValue::Text(text) => {
+                    map.insert(key.clone(), serde_json::Value::String(text.clone()));
+                }
+                // we create the serialized variant with no bytes
+                // SerializedFileData, if given a real path, will read the bytes from disk (synchronously)
+                FormValue::File(Some(file_data)) => {
+                    let serialized = SerializedFileData {
+                        path: file_data.path().to_owned(),
+                        size: file_data.size(),
+                        last_modified: file_data.last_modified(),
+                        content_type: file_data.content_type(),
+                        contents: None,
+                    };
+                    map.insert(
+                        key.clone(),
+                        serde_json::to_value(&serialized).unwrap_or(serde_json::Value::Null),
+                    );
+                }
+                FormValue::File(None) => {
+                    let serialized = SerializedFileData {
+                        path: "".into(),
+                        size: 0,
+                        last_modified: 0,
+                        content_type: None,
+                        contents: None,
+                    };
+                    map.insert(
+                        key.clone(),
+                        serde_json::to_value(&serialized).unwrap_or(serde_json::Value::Null),
+                    );
+                }
+            }
+        }
+
+        serde_json::from_value(serde_json::Value::Object(map))
     }
 }
 
@@ -130,6 +168,15 @@ pub enum FormValue {
 
 impl PartialEq<str> for FormValue {
     fn eq(&self, other: &str) -> bool {
+        match self {
+            FormValue::Text(s) => s == other,
+            FormValue::File(_f) => false,
+        }
+    }
+}
+
+impl PartialEq<&str> for FormValue {
+    fn eq(&self, other: &&str) -> bool {
         match self {
             FormValue::Text(s) => s == other,
             FormValue::File(_f) => false,
