@@ -3,7 +3,6 @@
 use crate::{reqwest_error_to_request_error, StreamingError};
 use bytes::Bytes;
 use dioxus_fullstack_core::RequestError;
-use dioxus_html::FormData;
 use futures::Stream;
 use futures::{TryFutureExt, TryStreamExt};
 use headers::{ContentType, Header};
@@ -164,7 +163,10 @@ impl ClientRequest {
 
     /// Sends the request with multipart/form-data body constructed from the given FormData.
     #[cfg(not(target_arch = "wasm32"))]
-    pub async fn send_multipart(self, form: &FormData) -> Result<ClientResponse, RequestError> {
+    pub async fn send_multipart(
+        self,
+        form: &dioxus_html::FormData,
+    ) -> Result<ClientResponse, RequestError> {
         let mut outgoing = reqwest::multipart::Form::new();
 
         for (key, value) in form.values() {

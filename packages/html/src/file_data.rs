@@ -94,125 +94,129 @@ pub trait HasFileData: std::any::Any {
     fn files(&self) -> Vec<FileData>;
 }
 
-/// A serializable representation of file data
 #[cfg(feature = "serialize")]
-#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Clone)]
-pub struct SerializedFileData {
-    pub path: PathBuf,
-    pub size: u64,
-    pub last_modified: u64,
-    pub content_type: Option<String>,
-    pub contents: Option<bytes::Bytes>,
-}
-
-impl SerializedFileData {
-    /// Create a new empty serialized file data object
-    pub fn empty() -> Self {
-        Self {
-            path: PathBuf::new(),
-            size: 0,
-            last_modified: 0,
-            content_type: None,
-            contents: None,
-        }
-    }
-}
-
-#[cfg(feature = "serialize")]
-impl NativeFileData for SerializedFileData {
-    fn name(&self) -> String {
-        self.path()
-            .file_name()
-            .unwrap()
-            .to_string_lossy()
-            .into_owned()
-    }
-
-    fn size(&self) -> u64 {
-        self.size
-    }
-
-    fn last_modified(&self) -> u64 {
-        self.last_modified
-    }
-
-    fn read_bytes(
-        &self,
-    ) -> Pin<Box<dyn Future<Output = Result<Bytes, dioxus_core::Error>> + 'static>> {
-        let contents = self.contents.clone();
-        let path = self.path.clone();
-
-        Box::pin(async move {
-            if let Some(contents) = contents {
-                return Ok(contents);
-            }
-
-            #[cfg(not(target_arch = "wasm32"))]
-            if path.exists() {
-                return Ok(std::fs::read(path).map(Bytes::from)?);
-            }
-
-            Err(dioxus_core::Error::msg("File contents not available"))
-        })
-    }
-
-    fn read_string(
-        &self,
-    ) -> Pin<Box<dyn Future<Output = Result<String, dioxus_core::Error>> + 'static>> {
-        let contents = self.contents.clone();
-        let path = self.path.clone();
-
-        Box::pin(async move {
-            if let Some(contents) = contents {
-                return Ok(String::from_utf8(contents.to_vec())?);
-            }
-
-            #[cfg(not(target_arch = "wasm32"))]
-            if path.exists() {
-                return Ok(std::fs::read_to_string(path)?);
-            }
-
-            Err(dioxus_core::Error::msg("File contents not available"))
-        })
-    }
-
-    fn byte_stream(
-        &self,
-    ) -> Pin<Box<dyn futures_util::Stream<Item = Result<Bytes, dioxus_core::Error>> + 'static + Send>>
-    {
-        let contents = self.contents.clone();
-        let path = self.path.clone();
-
-        Box::pin(futures_util::stream::once(async move {
-            if let Some(contents) = contents {
-                return Ok(contents);
-            }
-
-            #[cfg(not(target_arch = "wasm32"))]
-            if path.exists() {
-                return Ok(std::fs::read(path).map(Bytes::from)?);
-            }
-
-            Err(dioxus_core::Error::msg("File contents not available"))
-        }))
-    }
-
-    fn inner(&self) -> &dyn std::any::Any {
-        self
-    }
-
-    fn path(&self) -> PathBuf {
-        self.path.clone()
-    }
-
-    fn content_type(&self) -> Option<String> {
-        self.content_type.clone()
-    }
-}
+pub use serialize::*;
 
 #[cfg(feature = "serialize")]
 mod serialize {
     use super::*;
+
+    /// A serializable representation of file data
+    #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Clone)]
+    pub struct SerializedFileData {
+        pub path: PathBuf,
+        pub size: u64,
+        pub last_modified: u64,
+        pub content_type: Option<String>,
+        pub contents: Option<bytes::Bytes>,
+    }
+
+    impl SerializedFileData {
+        /// Create a new empty serialized file data object
+        pub fn empty() -> Self {
+            Self {
+                path: PathBuf::new(),
+                size: 0,
+                last_modified: 0,
+                content_type: None,
+                contents: None,
+            }
+        }
+    }
+
+    impl NativeFileData for SerializedFileData {
+        fn name(&self) -> String {
+            self.path()
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .into_owned()
+        }
+
+        fn size(&self) -> u64 {
+            self.size
+        }
+
+        fn last_modified(&self) -> u64 {
+            self.last_modified
+        }
+
+        fn read_bytes(
+            &self,
+        ) -> Pin<Box<dyn Future<Output = Result<Bytes, dioxus_core::Error>> + 'static>> {
+            let contents = self.contents.clone();
+            let path = self.path.clone();
+
+            Box::pin(async move {
+                if let Some(contents) = contents {
+                    return Ok(contents);
+                }
+
+                #[cfg(not(target_arch = "wasm32"))]
+                if path.exists() {
+                    return Ok(std::fs::read(path).map(Bytes::from)?);
+                }
+
+                Err(dioxus_core::Error::msg("File contents not available"))
+            })
+        }
+
+        fn read_string(
+            &self,
+        ) -> Pin<Box<dyn Future<Output = Result<String, dioxus_core::Error>> + 'static>> {
+            let contents = self.contents.clone();
+            let path = self.path.clone();
+
+            Box::pin(async move {
+                if let Some(contents) = contents {
+                    return Ok(String::from_utf8(contents.to_vec())?);
+                }
+
+                #[cfg(not(target_arch = "wasm32"))]
+                if path.exists() {
+                    return Ok(std::fs::read_to_string(path)?);
+                }
+
+                Err(dioxus_core::Error::msg("File contents not available"))
+            })
+        }
+
+        fn byte_stream(
+            &self,
+        ) -> Pin<
+            Box<
+                dyn futures_util::Stream<Item = Result<Bytes, dioxus_core::Error>> + 'static + Send,
+            >,
+        > {
+            let contents = self.contents.clone();
+            let path = self.path.clone();
+
+            Box::pin(futures_util::stream::once(async move {
+                if let Some(contents) = contents {
+                    return Ok(contents);
+                }
+
+                #[cfg(not(target_arch = "wasm32"))]
+                if path.exists() {
+                    return Ok(std::fs::read(path).map(Bytes::from)?);
+                }
+
+                Err(dioxus_core::Error::msg("File contents not available"))
+            }))
+        }
+
+        fn inner(&self) -> &dyn std::any::Any {
+            self
+        }
+
+        fn path(&self) -> PathBuf {
+            self.path.clone()
+        }
+
+        fn content_type(&self) -> Option<String> {
+            self.content_type.clone()
+        }
+    }
 
     impl<'de> serde::Deserialize<'de> for FileData {
         fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
