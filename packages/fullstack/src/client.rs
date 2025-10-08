@@ -3,6 +3,7 @@
 use crate::{reqwest_error_to_request_error, StreamingError};
 use bytes::Bytes;
 use dioxus_fullstack_core::RequestError;
+use dioxus_html::FormData;
 use futures::Stream;
 use futures::{TryFutureExt, TryStreamExt};
 use headers::{ContentType, Header};
@@ -159,6 +160,44 @@ impl ClientRequest {
         }
 
         builder
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub async fn send_multipart(self, form: &FormData) -> Result<ClientResponse, RequestError> {
+        let mut outgoing = reqwest::multipart::Form::new();
+
+        for (key, value) in form.values() {
+            match value {
+                dioxus_html::FormValue::Text(text) => {
+                    outgoing = outgoing.text(key.to_string(), text.to_string());
+                }
+                dioxus_html::FormValue::File(Some(file_data)) => {
+                    let path = file_data.path();
+                    tracing::info!("Uploading file {:?} for field {}", path, key);
+
+                    outgoing = outgoing
+                        .file(key.to_string(), file_data.path())
+                        .await
+                        .unwrap();
+                }
+                dioxus_html::FormValue::File(None) => {
+                    // No file was selected for this input, so we skip it.
+                    outgoing = outgoing.part(key.to_string(), reqwest::multipart::Part::bytes(b""));
+                }
+            }
+        }
+
+        let res = self
+            .new_reqwest_request()
+            .multipart(outgoing)
+            .send()
+            .await
+            .map_err(reqwest_error_to_request_error)?;
+
+        Ok(ClientResponse {
+            response: Box::new(res),
+            extensions: self.extensions,
+        })
     }
 
     pub async fn send_form(self, data: &impl Serialize) -> Result<ClientResponse, RequestError> {

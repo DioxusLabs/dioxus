@@ -71,6 +71,85 @@ export class NativeInterpreter extends JSChannel_ {
       false
     );
 
+    // attach a listener to the route that listens for clicks and prevents the default file dialog
+    window.addEventListener("click", (event) => {
+      const target = event.target;
+      if (
+        target instanceof HTMLInputElement &&
+        target.getAttribute("type") === "file"
+      ) {
+        // Send a message to the host to open the file dialog if the target is a file input and has a dioxus id attached to it
+        let target_id = getTargetId(target);
+        if (target_id !== null) {
+          // Handle file inputs specifically, since we want to get the real file inputs from the native
+          // dialog and then set the form inputs accordingly.
+          if (
+            target instanceof HTMLInputElement &&
+            target.getAttribute("type") === "file"
+          ) {
+            // Send a message to the host to open the file dialog if the target is a file input and has a dioxus id attached to it
+            event.preventDefault();
+
+            const contents = serializeEvent(event, target);
+
+            const target_name = target.getAttribute("name") || "";
+
+            let requestData = {
+              event: "change&input",
+              accept: target.getAttribute("accept"),
+              directory: target.getAttribute("webkitdirectory") === "true",
+              multiple: target.hasAttribute("multiple"),
+              target: target_id,
+              bubbles: event.bubbles,
+              target_name,
+              values: contents.values,
+            };
+
+            this.fetchAgainstHost("__file_dialog", requestData).then(response => response.json()).then(resp => {
+              const formObjects: SerializedFormObject[] = resp.values;
+
+              // Create a new DataTransfer to hold the files
+              const dataTransfer = new DataTransfer();
+
+              // We name the file the path, so we can just use the path as the name later on.
+              for (let formObject of formObjects) {
+                if (formObject.key == target_name && formObject.file != null) {
+                  const file = new File([], formObject.file.path, {
+                    type: formObject.file.content_type,
+                    lastModified: formObject.file.last_modified,
+                  });
+                  dataTransfer.items.add(file);
+                }
+              }
+
+              // Set the files on the input
+              target.files = dataTransfer.files;
+
+              let body = {
+                data: contents,
+                element: target_id,
+                bubbles: event.bubbles,
+              };
+
+              // And then dispatch the actual event against the dom
+              contents.values = formObjects;
+              this.sendSerializedEvent({
+                ...body,
+                name: "input",
+              });
+              this.sendSerializedEvent({
+                ...body,
+                name: "change",
+              });
+            });
+
+            return;
+          }
+
+        }
+      }
+    });
+
 
     // @ts-ignore - wry gives us this
     this.ipc = window.ipc;
@@ -175,11 +254,14 @@ export class NativeInterpreter extends JSChannel_ {
 
   // Windows drag-n-drop fix code. Called by wry drag-n-drop handler over the event loop.
   handleWindowsDragDrop() {
+    // @ts-ignore
     if (window.dxDragLastElement) {
       const dragLeaveEvent = new DragEvent("dragleave", {
         bubbles: true,
         cancelable: true,
       });
+
+      // @ts-ignore
       window.dxDragLastElement.dispatchEvent(dragLeaveEvent);
 
       let data = new DataTransfer();
@@ -193,23 +275,29 @@ export class NativeInterpreter extends JSChannel_ {
         cancelable: true,
         dataTransfer: data,
       });
+
+      // @ts-ignore
       window.dxDragLastElement.dispatchEvent(dragDropEvent);
+      // @ts-ignore
       window.dxDragLastElement = null;
     }
   }
 
-  handleWindowsDragOver(xPos, yPos) {
+  handleWindowsDragOver(xPos: number, yPos: number) {
     const displayScaleFactor = window.devicePixelRatio || 1;
     xPos /= displayScaleFactor;
     yPos /= displayScaleFactor;
     const element = document.elementFromPoint(xPos, yPos);
 
+    // @ts-ignore
     if (element != window.dxDragLastElement) {
+      // @ts-ignore
       if (window.dxDragLastElement) {
         const dragLeaveEvent = new DragEvent("dragleave", {
           bubbles: true,
           cancelable: true,
         });
+        // @ts-ignore
         window.dxDragLastElement.dispatchEvent(dragLeaveEvent);
       }
 
@@ -218,17 +306,21 @@ export class NativeInterpreter extends JSChannel_ {
         cancelable: true,
       });
       element.dispatchEvent(dragOverEvent);
+      // @ts-ignore
       window.dxDragLastElement = element;
     }
   }
 
   handleWindowsDragLeave() {
+    // @ts-ignore
     if (window.dxDragLastElement) {
       const dragLeaveEvent = new DragEvent("dragleave", {
         bubbles: true,
         cancelable: true,
       });
+      // @ts-ignore
       window.dxDragLastElement.dispatchEvent(dragLeaveEvent);
+      // @ts-ignore
       window.dxDragLastElement = null;
     }
   }
@@ -273,78 +365,16 @@ export class NativeInterpreter extends JSChannel_ {
     };
 
     // liveview does not have synchronous event handling, so we need to send the event to the host
-    if (this.liveview) {
-      // Okay, so the user might've requested some files to be read
-      if (
-        target instanceof HTMLInputElement &&
-        (event.type === "change" || event.type === "input")
-      ) {
-        if (target.getAttribute("type") === "file") {
-          this.readFiles(target, contents, bubbles, element, name);
-          return;
-        }
+    if (
+      this.liveview &&
+      target instanceof HTMLInputElement &&
+      (event.type === "change" || event.type === "input")
+    ) {
+      if (target.getAttribute("type") === "file") {
+        this.readFiles(target, contents, bubbles, element, name);
+        return;
       }
     }
-
-    // Handle file inputs specifically, since we want to get the real file inputs from the native
-    // dialog and then set the form inputs accordingly.
-    if (
-      target instanceof HTMLInputElement &&
-      target.getAttribute("type") === "file"
-    ) {
-      // Send a message to the host to open the file dialog if the target is a file input and has a dioxus id attached to it
-
-      event.preventDefault();
-
-      const target_name = target.getAttribute("name") || "";
-
-      let requestData = {
-        event: "change&input",
-        accept: target.getAttribute("accept"),
-        directory: target.getAttribute("webkitdirectory") === "true",
-        multiple: target.hasAttribute("multiple"),
-        target: element,
-        bubbles: event.bubbles,
-        target_name,
-        values: body.data.values,
-      };
-
-      this.fetchAgainstHost("__file_dialog", requestData).then(response => response.json()).then(resp => {
-        const formObjects: SerializedFormObject[] = resp.values;
-
-        // Create a new DataTransfer to hold the files
-        const dataTransfer = new DataTransfer();
-
-        // We name the file the path, so we can just use the path as the name later on.
-        for (let formObject of formObjects) {
-          if (formObject.key == target_name && formObject.file != null) {
-            const file = new File([], formObject.file.path, {
-              type: formObject.file.content_type,
-              lastModified: formObject.file.last_modified,
-            });
-            dataTransfer.items.add(file);
-          }
-        }
-
-        // Set the files on the input
-        target.files = dataTransfer.files;
-
-        // And then dispatch the actual event against the dom
-        body.data.values = formObjects;
-        this.sendSerializedEvent({
-          ...body,
-          name: "input",
-        });
-        this.sendSerializedEvent({
-          ...body,
-          name: "change",
-        });
-      });
-
-      return;
-    }
-
-
 
     const response = this.sendSerializedEvent(body);
     // capture/prevent default of the event if the virtualdom wants to
