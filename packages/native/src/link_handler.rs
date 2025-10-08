@@ -11,6 +11,7 @@ impl NavigationProvider for DioxusNativeNavigationProvider {
             && matches!(options.url.scheme(), "http" | "https" | "mailto")
         {
             if let Err(err) = webbrowser::open(options.url.as_str()) {
+                #[cfg(feature = "tracing")]
                 tracing::error!("Failed to open URL: {}", err);
             }
         }

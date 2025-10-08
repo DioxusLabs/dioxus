@@ -30,23 +30,23 @@ pub(crate) fn qual_name(local_name: &str, namespace: Option<&str>) -> QualName {
 macro_rules! trace {
     ($pattern:literal) => {{
         #[cfg(feature = "tracing")]
-        tracing::info!($pattern);
+        tracing::debug!($pattern);
     }};
     ($pattern:literal, $item1:expr) => {{
         #[cfg(feature = "tracing")]
-        tracing::info!($pattern, $item1);
+        tracing::debug!($pattern, $item1);
     }};
     ($pattern:literal, $item1:expr, $item2:expr) => {{
         #[cfg(feature = "tracing")]
-        tracing::info!($pattern, $item1, $item2);
+        tracing::debug!($pattern, $item1, $item2);
     }};
     ($pattern:literal, $item1:expr, $item2:expr, $item3:expr) => {{
         #[cfg(feature = "tracing")]
-        tracing::info!($pattern, $item1, $item2);
+        tracing::debug!($pattern, $item1, $item2);
     }};
     ($pattern:literal, $item1:expr, $item2:expr, $item3:expr, $item4:expr) => {{
         #[cfg(feature = "tracing")]
-        tracing::info!($pattern, $item1, $item2, $item3, $item4);
+        tracing::debug!($pattern, $item1, $item2, $item3, $item4);
     }};
 }
 pub(crate) use trace;
