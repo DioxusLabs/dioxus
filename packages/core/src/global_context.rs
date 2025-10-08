@@ -240,7 +240,7 @@ pub fn remove_future(id: Task) {
 /// `use_hook` is not reactive. It just returns the value on every render. If you need state that will track changes, use [`use_signal`](https://docs.rs/dioxus-hooks/latest/dioxus_hooks/fn.use_signal.html) instead.
 ///
 /// ❌ Don't use `use_hook` with `Rc<RefCell<T>>` for state. It will not update the UI and other hooks when the state changes.
-/// ```rust
+/// ```rust,compile_fail
 /// use dioxus::prelude::*;
 /// use std::rc::Rc;
 /// use std::cell::RefCell;
