@@ -1,5 +1,4 @@
-use crate::element::DesktopElement;
-use crate::file_upload::DesktopFileDragEvent;
+use crate::file_upload::{DesktopFileData, DesktopFileDragEvent};
 use crate::menubar::DioxusMenu;
 use crate::PendingDesktopContext;
 use crate::WindowCloseBehaviour;
@@ -9,12 +8,13 @@ use crate::{
     DesktopContext, DesktopService,
 };
 use crate::{document::DesktopDocument, WeakDesktopContext};
+use crate::{element::DesktopElement, file_upload::DesktopFormData};
 use base64::prelude::BASE64_STANDARD;
 use dioxus_core::{consume_context, provide_context, Runtime, ScopeId, VirtualDom};
 use dioxus_document::Document;
 use dioxus_history::{History, MemoryHistory};
 use dioxus_hooks::to_owned;
-use dioxus_html::{HtmlEvent, PlatformEventData};
+use dioxus_html::{FileData, HtmlEvent, PlatformEventData};
 use futures_util::{pin_mut, FutureExt};
 use std::sync::atomic::AtomicBool;
 use std::{cell::OnceCell, time::Duration};
@@ -115,7 +115,7 @@ impl WebviewEdits {
         let desktop_context = desktop_context.upgrade().unwrap();
 
         let query = desktop_context.query.clone();
-        let recent_file = desktop_context.file_hover.clone();
+        let hovered_file = desktop_context.file_hover.clone();
 
         // check for a mounted event placeholder and replace it with a desktop specific element
         let as_any = match data {
@@ -123,9 +123,55 @@ impl WebviewEdits {
                 let element = DesktopElement::new(element, desktop_context.clone(), query.clone());
                 Rc::new(PlatformEventData::new(Box::new(element)))
             }
+            dioxus_html::EventData::Form(form) => {
+                // we want to override this with a native file engine, provided by the most recent drag event
+                // let file_event = recent_file.current().unwrap();
+                // let paths = match file_event {
+                //     wry::DragDropEvent::Enter { paths, .. } => paths,
+                //     wry::DragDropEvent::Drop { paths, .. } => paths,
+                //     _ => vec![],
+                // };
+
+                tracing::info!("Handling form event: {:#?}", form);
+
+                let value = form.value;
+                let valid = form.valid;
+
+                let values = form
+                    .values
+                    .into_iter()
+                    .map(|obj| {
+                        let name = obj.key;
+                        if let Some(text) = obj.text {
+                            return (name, dioxus_html::FormValue::Text(text));
+                        }
+
+                        if let Some(file_data) = obj.file {
+                            if file_data.path.is_empty() {
+                                return (name, dioxus_html::FormValue::File(None));
+                            }
+
+                            return (
+                                name,
+                                dioxus_html::FormValue::File(Some(FileData::new(DesktopFileData(
+                                    file_data.path.into(),
+                                )))),
+                            );
+                        };
+
+                        (name, dioxus_html::FormValue::Text(String::new()))
+                    })
+                    .collect();
+
+                Rc::new(PlatformEventData::new(Box::new(DesktopFormData {
+                    value,
+                    valid,
+                    values,
+                })))
+            }
             dioxus_html::EventData::Drag(ref drag) => {
                 // we want to override this with a native file engine, provided by the most recent drag event
-                let file_event = recent_file.current().unwrap();
+                let file_event = hovered_file.current().unwrap();
                 let paths = match file_event {
                     wry::DragDropEvent::Enter { paths, .. } => paths,
                     wry::DragDropEvent::Drop { paths, .. } => paths,

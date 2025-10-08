@@ -9,67 +9,25 @@ use dioxus_core::Event;
 
 pub type FormEvent = Event<FormData>;
 
-/// A form value that may either be a list of values or a single value
-#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Debug, Default, Clone, PartialEq)]
-pub struct FormValue(pub Vec<String>);
-
-impl Deref for FormValue {
-    type Target = [String];
-
-    fn deref(&self) -> &Self::Target {
-        self.as_slice()
-    }
-}
-
-impl FormValue {
-    /// Convenient way to represent Value as slice
-    pub fn as_slice(&self) -> &[String] {
-        &self.0
-    }
-
-    /// Return the first value, panicking if there are none
-    pub fn as_value(&self) -> String {
-        self.0.first().unwrap().clone()
-    }
-
-    /// Convert into [`Vec<String>`]
-    pub fn to_vec(self) -> Vec<String> {
-        self.0.clone()
-    }
+/// A value in a form, either text or a file
+#[derive(Debug, Clone, PartialEq)]
+pub enum FormValue {
+    Text(String),
+    File(Option<FileData>),
 }
 
 impl PartialEq<str> for FormValue {
     fn eq(&self, other: &str) -> bool {
-        self.0.len() == 1 && self.0.first().map(|s| s.as_str()) == Some(other)
+        match self {
+            FormValue::Text(s) => s == other,
+            FormValue::File(_f) => false,
+        }
     }
 }
 
 /* DOMEvent:  Send + SyncTarget relatedTarget */
 pub struct FormData {
     inner: Box<dyn HasFormData>,
-}
-
-impl<E: HasFormData> From<E> for FormData {
-    fn from(e: E) -> Self {
-        Self { inner: Box::new(e) }
-    }
-}
-
-impl PartialEq for FormData {
-    fn eq(&self, other: &Self) -> bool {
-        self.value() == other.value() && self.values() == other.values()
-    }
-}
-
-impl Debug for FormData {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("FormEvent")
-            .field("value", &self.value())
-            .field("values", &self.values())
-            .field("valid", &self.valid())
-            .finish()
-    }
 }
 
 impl FormData {
@@ -104,7 +62,7 @@ impl FormData {
     /// Collect all the named form values from the containing form.
     ///
     /// Every input must be named!
-    pub fn values(&self) -> HashMap<String, FormValue> {
+    pub fn values(&self) -> Vec<(String, FormValue)> {
         self.inner.values()
     }
 
@@ -125,116 +83,150 @@ impl FormData {
     }
 }
 
+impl<E: HasFormData> From<E> for FormData {
+    fn from(e: E) -> Self {
+        Self { inner: Box::new(e) }
+    }
+}
+
+impl PartialEq for FormData {
+    fn eq(&self, other: &Self) -> bool {
+        self.value() == other.value() && self.values() == other.values()
+    }
+}
+
+impl Debug for FormData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FormEvent")
+            .field("value", &self.value())
+            .field("values", &self.values())
+            .field("valid", &self.valid())
+            .finish()
+    }
+}
+
 /// An object that has all the data for a form event
 pub trait HasFormData: HasFileData + std::any::Any {
-    fn value(&self) -> String {
-        Default::default()
-    }
+    fn value(&self) -> String;
 
-    fn valid(&self) -> bool {
-        true
-    }
+    fn valid(&self) -> bool;
 
-    fn values(&self) -> HashMap<String, FormValue> {
-        Default::default()
-    }
+    fn values(&self) -> Vec<(String, FormValue)>;
 
     /// return self as Any
     fn as_any(&self) -> &dyn std::any::Any;
 }
 
 impl FormData {
-    #[cfg(feature = "serialize")]
     /// Parse the values into a struct with one field per value
+    #[cfg(feature = "serialize")]
     pub fn parsed_values<T>(&self) -> Result<T, serde_json::Error>
     where
         T: serde::de::DeserializeOwned,
     {
-        let values = &self.values();
+        todo!()
+        // let values = &self.values();
 
-        let mut map = serde_json::Map::new();
-        for (key, value) in values {
-            if value.0.len() == 1 {
-                map.insert(key.clone(), serde_json::Value::String(value.0[0].clone()));
-            } else {
-                let arr = value
-                    .0
-                    .iter()
-                    .cloned()
-                    .map(serde_json::Value::String)
-                    .collect();
-                map.insert(key.clone(), serde_json::Value::Array(arr));
-            }
-        }
+        // let mut map = serde_json::Map::new();
+        // for (key, value) in values {
+        //     if value.0.len() == 1 {
+        //         map.insert(key.clone(), serde_json::Value::String(value.0[0].clone()));
+        //     } else {
+        //         let arr = value
+        //             .0
+        //             .iter()
+        //             .cloned()
+        //             .map(serde_json::Value::String)
+        //             .collect();
+        //         map.insert(key.clone(), serde_json::Value::Array(arr));
+        //     }
+        // }
 
-        serde_json::from_value(serde_json::Value::Object(map))
+        // serde_json::from_value(serde_json::Value::Object(map))
     }
 }
 
-#[cfg(feature = "serialize")]
 /// A serialized form data object
+#[cfg(feature = "serialize")]
 #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Clone)]
 pub struct SerializedFormData {
     #[serde(default)]
-    value: String,
+    pub value: String,
 
     #[serde(default)]
-    values: HashMap<String, FormValue>,
+    pub values: Vec<SerializedFormObject>,
 
     #[serde(default)]
-    valid: bool,
+    pub valid: bool,
+}
 
-    #[serde(default)]
-    files: Vec<SerializedFileData>,
+#[cfg(feature = "serialize")]
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Clone)]
+pub struct SerializedFormObject {
+    pub key: String,
+    pub text: Option<String>,
+    pub file: Option<SerializedFileData>,
 }
 
 #[cfg(feature = "serialize")]
 impl SerializedFormData {
     /// Create a new serialized form data object
-    pub fn new(value: String, values: HashMap<String, FormValue>) -> Self {
+    pub fn new(value: String, values: Vec<SerializedFormObject>) -> Self {
         Self {
             value,
             values,
             valid: true,
-            files: vec![],
         }
-    }
-
-    /// Add files to the serialized form data object
-    pub fn with_files(mut self, files: Vec<SerializedFileData>) -> Self {
-        self.files = files;
-        self
     }
 
     /// Create a new serialized form data object from a traditional form data object
     pub async fn async_from(data: &FormData) -> Result<Self, dioxus_core::Error> {
-        Ok(Self {
-            value: data.value(),
-            values: data.values(),
-            valid: data.valid(),
-            files: {
-                let mut out = vec![];
-                for file in data.files() {
-                    out.push(SerializedFileData {
-                        name: file.name(),
-                        size: file.size(),
-                        content_type: file.content_type(),
-                        last_modified: file.last_modified(),
-                        path: file.pathbuf(),
-                        contents: file.read_bytes().await?,
-                    });
-                }
-                out
-            },
-        })
+        todo!()
+        // Ok(Self {
+        //     value: data.value(),
+        //     values: data.values(),
+        //     valid: data.valid(),
+        //     files: {
+        //         let mut out = vec![];
+        //         for file in data.files() {
+        //             out.push(SerializedFileData {
+        //                 name: file.name(),
+        //                 size: file.size(),
+        //                 content_type: file.content_type(),
+        //                 last_modified: file.last_modified(),
+        //                 path: file.path(),
+        //                 contents: file.read_bytes().await?,
+        //             });
+        //         }
+        //         out
+        //     },
+        // })
     }
 
     fn from_lossy(data: &FormData) -> Self {
+        let values = data
+            .values()
+            .iter()
+            .map(|(k, v)| {
+                todo!()
+                // let sv = match v {
+                //     FormValue::Text(s) => SerializedFormValue::Text(s.clone()),
+                //     FormValue::File(f) => {
+                //         if let Some(sf) = f.inner().downcast_ref::<SerializedFileData>() {
+                //             SerializedFormValue::File(sf.clone())
+                //         } else {
+                //             SerializedFormValue::Text(String::new())
+                //         }
+                //     }
+                // };
+                // (k.clone(), sv)
+            })
+            .collect();
+
         Self {
+            values,
             value: data.value(),
-            values: data.values(),
             valid: data.valid(),
-            files: vec![],
         }
     }
 }
@@ -245,8 +237,8 @@ impl HasFormData for SerializedFormData {
         self.value.clone()
     }
 
-    fn values(&self) -> HashMap<String, FormValue> {
-        self.values.clone()
+    fn values(&self) -> Vec<(String, FormValue)> {
+        todo!()
     }
 
     fn valid(&self) -> bool {
@@ -261,10 +253,14 @@ impl HasFormData for SerializedFormData {
 #[cfg(feature = "serialize")]
 impl HasFileData for SerializedFormData {
     fn files(&self) -> Vec<FileData> {
-        self.files
-            .iter()
-            .map(|f| FileData::new(f.clone()))
-            .collect()
+        todo!()
+        // self.values
+        //     .iter()
+        //     .flat_map(|(_, v)| match v {
+        //         SerializedFormValue::File(f) => Some(FileData::new(f.clone())),
+        //         _ => None,
+        //     })
+        //     .collect()
     }
 }
 

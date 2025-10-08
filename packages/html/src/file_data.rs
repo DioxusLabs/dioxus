@@ -49,8 +49,17 @@ impl FileData {
         self.inner.inner()
     }
 
-    pub fn pathbuf(&self) -> PathBuf {
+    pub fn path(&self) -> PathBuf {
         self.inner.path()
+    }
+}
+
+impl PartialEq for FileData {
+    fn eq(&self, other: &Self) -> bool {
+        self.name() == other.name()
+            && self.size() == other.size()
+            && self.last_modified() == other.last_modified()
+            && self.path() == other.path()
     }
 }
 
@@ -82,34 +91,31 @@ impl std::fmt::Debug for FileData {
     }
 }
 
-impl std::cmp::PartialEq for FileData {
-    fn eq(&self, other: &Self) -> bool {
-        self.inner.name() == other.inner.name()
-            && self.inner.size() == other.inner.size()
-            && self.inner.last_modified() == other.inner.last_modified()
-    }
-}
-
 pub trait HasFileData: std::any::Any {
     fn files(&self) -> Vec<FileData>;
 }
 
-/// A serializable representation of file data\
+/// A serializable representation of file data
 #[cfg(feature = "serialize")]
 #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Clone)]
 pub struct SerializedFileData {
-    pub name: String,
-    pub path: PathBuf,
+    pub path: String,
     pub size: u64,
     pub last_modified: u64,
     pub content_type: Option<String>,
+
+    #[serde(default)]
     pub contents: bytes::Bytes,
 }
 
 #[cfg(feature = "serialize")]
 impl NativeFileData for SerializedFileData {
     fn name(&self) -> String {
-        self.name.clone()
+        self.path()
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .into_owned()
     }
 
     fn size(&self) -> u64 {
@@ -147,7 +153,7 @@ impl NativeFileData for SerializedFileData {
     }
 
     fn path(&self) -> PathBuf {
-        self.path.clone()
+        PathBuf::from(&self.path)
     }
 
     fn content_type(&self) -> Option<String> {

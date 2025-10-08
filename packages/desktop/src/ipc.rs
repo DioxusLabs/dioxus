@@ -50,14 +50,13 @@ pub enum UserWindowEvent {
 /// This needs to be serializable across the JS boundary, so the method names and structs are sensitive.
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct IpcMessage {
-    method: String,
-    params: serde_json::Value,
+    pub(crate) method: String,
+    pub(crate) params: serde_json::Value,
 }
 
 /// A set of known messages that we need to respond to
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub enum IpcMethod<'a> {
-    FileDialog,
     UserEvent,
     Query,
     BrowserOpen,
@@ -68,7 +67,6 @@ pub enum IpcMethod<'a> {
 impl IpcMessage {
     pub(crate) fn method(&self) -> IpcMethod<'_> {
         match self.method.as_str() {
-            "file_dialog" => IpcMethod::FileDialog,
             "user_event" => IpcMethod::UserEvent,
             "query" => IpcMethod::Query,
             "browser_open" => IpcMethod::BrowserOpen,
