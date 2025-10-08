@@ -32,13 +32,10 @@ pub mod minimal_bindings {
     /// Some useful snippets that we use to share common functionality between the different platforms we support.
     ///
     /// This maintains some sort of consistency between web, desktop, and liveview
-    #[wasm_bindgen(module = "/src/js/common.js")]
+    #[wasm_bindgen(module = "/src/js/set_attribute.js")]
     extern "C" {
         /// Set the attribute of the node
         pub fn setAttributeInner(node: JsValue, name: &str, value: JsValue, ns: Option<&str>);
-
-        /// Roll up all the values from the node into a JS object that we can deserialize
-        pub fn retrieveFormValues(node: JsValue) -> JsValue;
     }
 
     #[wasm_bindgen(module = "/src/js/hydrate.js")]

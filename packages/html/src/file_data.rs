@@ -1,7 +1,6 @@
-use std::{path::PathBuf, pin::Pin, prelude::rust_2024::Future};
-
 use bytes::Bytes;
 use futures_util::Stream;
+use std::{path::PathBuf, pin::Pin, prelude::rust_2024::Future};
 
 #[derive(Clone)]
 pub struct FileData {
@@ -49,8 +48,17 @@ impl FileData {
         self.inner.inner()
     }
 
-    pub fn pathbuf(&self) -> PathBuf {
+    pub fn path(&self) -> PathBuf {
         self.inner.path()
+    }
+}
+
+impl PartialEq for FileData {
+    fn eq(&self, other: &Self) -> bool {
+        self.name() == other.name()
+            && self.size() == other.size()
+            && self.last_modified() == other.last_modified()
+            && self.path() == other.path()
     }
 }
 
@@ -82,75 +90,141 @@ impl std::fmt::Debug for FileData {
     }
 }
 
-impl std::cmp::PartialEq for FileData {
-    fn eq(&self, other: &Self) -> bool {
-        self.inner.name() == other.inner.name()
-            && self.inner.size() == other.inner.size()
-            && self.inner.last_modified() == other.inner.last_modified()
-    }
-}
-
 pub trait HasFileData: std::any::Any {
     fn files(&self) -> Vec<FileData>;
 }
 
-/// A serializable representation of file data\
 #[cfg(feature = "serialize")]
-#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Clone)]
-pub struct SerializedFileData {
-    pub name: String,
-    pub path: PathBuf,
-    pub size: u64,
-    pub last_modified: u64,
-    pub content_type: Option<String>,
-    pub contents: bytes::Bytes,
-}
+pub use serialize::*;
 
 #[cfg(feature = "serialize")]
-impl NativeFileData for SerializedFileData {
-    fn name(&self) -> String {
-        self.name.clone()
+mod serialize {
+    use super::*;
+
+    /// A serializable representation of file data
+    #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Clone)]
+    pub struct SerializedFileData {
+        pub path: PathBuf,
+        pub size: u64,
+        pub last_modified: u64,
+        pub content_type: Option<String>,
+        pub contents: Option<bytes::Bytes>,
     }
 
-    fn size(&self) -> u64 {
-        self.size
+    impl SerializedFileData {
+        /// Create a new empty serialized file data object
+        pub fn empty() -> Self {
+            Self {
+                path: PathBuf::new(),
+                size: 0,
+                last_modified: 0,
+                content_type: None,
+                contents: None,
+            }
+        }
     }
 
-    fn last_modified(&self) -> u64 {
-        self.last_modified
+    impl NativeFileData for SerializedFileData {
+        fn name(&self) -> String {
+            self.path()
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .into_owned()
+        }
+
+        fn size(&self) -> u64 {
+            self.size
+        }
+
+        fn last_modified(&self) -> u64 {
+            self.last_modified
+        }
+
+        fn read_bytes(
+            &self,
+        ) -> Pin<Box<dyn Future<Output = Result<Bytes, dioxus_core::Error>> + 'static>> {
+            let contents = self.contents.clone();
+            let path = self.path.clone();
+
+            Box::pin(async move {
+                if let Some(contents) = contents {
+                    return Ok(contents);
+                }
+
+                #[cfg(not(target_arch = "wasm32"))]
+                if path.exists() {
+                    return Ok(std::fs::read(path).map(Bytes::from)?);
+                }
+
+                Err(dioxus_core::Error::msg("File contents not available"))
+            })
+        }
+
+        fn read_string(
+            &self,
+        ) -> Pin<Box<dyn Future<Output = Result<String, dioxus_core::Error>> + 'static>> {
+            let contents = self.contents.clone();
+            let path = self.path.clone();
+
+            Box::pin(async move {
+                if let Some(contents) = contents {
+                    return Ok(String::from_utf8(contents.to_vec())?);
+                }
+
+                #[cfg(not(target_arch = "wasm32"))]
+                if path.exists() {
+                    return Ok(std::fs::read_to_string(path)?);
+                }
+
+                Err(dioxus_core::Error::msg("File contents not available"))
+            })
+        }
+
+        fn byte_stream(
+            &self,
+        ) -> Pin<
+            Box<
+                dyn futures_util::Stream<Item = Result<Bytes, dioxus_core::Error>> + 'static + Send,
+            >,
+        > {
+            let contents = self.contents.clone();
+            let path = self.path.clone();
+
+            Box::pin(futures_util::stream::once(async move {
+                if let Some(contents) = contents {
+                    return Ok(contents);
+                }
+
+                #[cfg(not(target_arch = "wasm32"))]
+                if path.exists() {
+                    return Ok(std::fs::read(path).map(Bytes::from)?);
+                }
+
+                Err(dioxus_core::Error::msg("File contents not available"))
+            }))
+        }
+
+        fn inner(&self) -> &dyn std::any::Any {
+            self
+        }
+
+        fn path(&self) -> PathBuf {
+            self.path.clone()
+        }
+
+        fn content_type(&self) -> Option<String> {
+            self.content_type.clone()
+        }
     }
 
-    fn read_bytes(
-        &self,
-    ) -> Pin<Box<dyn Future<Output = Result<Bytes, dioxus_core::Error>> + 'static>> {
-        let contents = self.contents.clone();
-        Box::pin(async move { Ok(contents) })
-    }
-
-    fn read_string(
-        &self,
-    ) -> Pin<Box<dyn Future<Output = Result<String, dioxus_core::Error>> + 'static>> {
-        let contents = self.contents.clone();
-        Box::pin(async move { Ok(String::from_utf8(contents.to_vec())?) })
-    }
-
-    fn byte_stream(
-        &self,
-    ) -> Pin<Box<dyn futures_util::Stream<Item = Result<Bytes, dioxus_core::Error>> + 'static + Send>>
-    {
-        let contents = self.contents.clone();
-        Box::pin(futures_util::stream::once(async move { Ok(contents) }))
-    }
-
-    fn inner(&self) -> &dyn std::any::Any {
-        self
-    }
-
-    fn path(&self) -> PathBuf {
-        self.path.clone()
-    }
-
-    fn content_type(&self) -> Option<String> {
-        self.content_type.clone()
+    impl<'de> serde::Deserialize<'de> for FileData {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: serde::Deserializer<'de>,
+        {
+            let sfd = SerializedFileData::deserialize(deserializer)?;
+            Ok(FileData::new(sfd))
+        }
     }
 }

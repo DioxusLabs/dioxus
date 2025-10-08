@@ -16,6 +16,7 @@ use std::{path::PathBuf, process::ExitStatus};
 pub struct BuildContext {
     pub tx: ProgressTx,
     pub mode: BuildMode,
+    pub build_id: BuildId,
 }
 
 pub type ProgressTx = UnboundedSender<BuilderUpdate>;
@@ -24,8 +25,8 @@ pub type ProgressRx = UnboundedReceiver<BuilderUpdate>;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 pub struct BuildId(pub(crate) usize);
 impl BuildId {
-    pub const CLIENT: Self = Self(0);
-    pub const SERVER: Self = Self(1);
+    pub const PRIMARY: Self = Self(0);
+    pub const SECONDARY: Self = Self(1);
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -78,6 +79,12 @@ pub enum BuilderUpdate {
 }
 
 impl BuildContext {
+    /// Returns true if this is a client build - basically, is this the primary build?
+    /// We try not to duplicate work between client and server builds, like asset copying.
+    pub(crate) fn is_primary_build(&self) -> bool {
+        self.build_id == BuildId::PRIMARY
+    }
+
     pub(crate) fn status_wasm_bindgen_start(&self) {
         _ = self.tx.unbounded_send(BuilderUpdate::Progress {
             stage: BuildStage::RunningBindgen,

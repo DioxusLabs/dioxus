@@ -52,11 +52,14 @@ fn app() -> Element {
 #[post("/api/upload-multipart")]
 async fn upload(mut form: MultipartFormData) -> Result<()> {
     while let Ok(Some(field)) = form.next_field().await {
+        let name = field.name().unwrap_or("<none>").to_string();
+        let file_name = field.file_name().unwrap_or("<none>").to_string();
+        let content_type = field.content_type().unwrap_or("<none>").to_string();
+        let size = field.bytes().await.unwrap().len();
+
         info!(
-            "Field name: {:?}, filename: {:?}, content_type: {:?}",
-            field.name().to_owned(),
-            field.file_name(),
-            field.content_type(),
+            "Field name: {:?}, filename: {:?}, content_type: {:?}, size: {:?}",
+            name, file_name, content_type, size
         );
     }
 

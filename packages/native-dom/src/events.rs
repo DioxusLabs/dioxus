@@ -13,7 +13,6 @@ use dioxus_html::{
 };
 use keyboard_types::{Code, Key, Location, Modifiers};
 use std::any::Any;
-use std::collections::HashMap;
 
 pub struct NativeConverter {}
 
@@ -110,7 +109,7 @@ impl HtmlEventConverter for NativeConverter {
 #[derive(Clone, Debug)]
 pub struct NativeFormData {
     pub value: String,
-    pub values: HashMap<String, FormValue>,
+    pub values: Vec<(String, FormValue)>,
 }
 
 impl HasFormData for NativeFormData {
@@ -122,8 +121,12 @@ impl HasFormData for NativeFormData {
         self.value.clone()
     }
 
-    fn values(&self) -> HashMap<String, FormValue> {
+    fn values(&self) -> Vec<(String, FormValue)> {
         self.values.clone()
+    }
+    fn valid(&self) -> bool {
+        // todo: actually implement validation here.
+        true
     }
 }
 

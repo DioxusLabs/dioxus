@@ -17,7 +17,7 @@ use dioxus_router::ParseRouteError;
 use dioxus_ssr::Renderer;
 use futures_channel::mpsc::Sender;
 use futures_util::{Stream, StreamExt};
-use http::StatusCode;
+use http::{request::Parts, StatusCode};
 use std::{
     collections::HashMap,
     fmt::Write,
@@ -98,8 +98,8 @@ impl SsrRendererPool {
     /// The streaming is canceled when the stream the function returns is dropped
     pub(crate) async fn render_to(
         self: Arc<Self>,
+        parts: Parts,
         cfg: &ServeConfig,
-        route: String,
         virtual_dom_factory: impl FnOnce() -> VirtualDom + Send + Sync + 'static,
     ) -> Result<
         (
@@ -132,6 +132,15 @@ impl SsrRendererPool {
                 }
             }
         }
+
+        let route = parts
+            .uri
+            .path_and_query()
+            .ok_or_else(|| SSRError::HttpError {
+                status: StatusCode::BAD_REQUEST,
+                message: None,
+            })?
+            .to_string();
 
         let (mut into, rx) =
             futures_channel::mpsc::channel::<Result<String, IncrementalRendererError>>(1000);
@@ -177,9 +186,10 @@ impl SsrRendererPool {
             };
 
             // Provide the document and streaming context to the root of the app
-            let streaming_context = virtual_dom.in_scope(ScopeId::ROOT, StreamingContext::new);
+            let streaming_context =
+                virtual_dom.in_scope(ScopeId::ROOT, || StreamingContext::new(parts));
             virtual_dom.provide_root_context(document.clone() as Rc<dyn dioxus_document::Document>);
-            virtual_dom.provide_root_context(streaming_context);
+            virtual_dom.provide_root_context(streaming_context.clone());
 
             virtual_dom.in_scope(ScopeId::ROOT, || {
                 // Wrap the memory history in a fullstack history provider to provide the initial route for hydration

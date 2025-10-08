@@ -149,7 +149,7 @@ impl WebServer {
                 if let Some(new_socket) = new_hot_reload_socket {
                     let aslr_reference = new_socket.aslr_reference;
                     let pid = new_socket.pid;
-                    let id = new_socket.build_id.unwrap_or(BuildId::CLIENT);
+                    let id = new_socket.build_id.unwrap_or(BuildId::PRIMARY);
 
                     drop(new_message);
                     self.hot_reload_sockets.push(new_socket);
