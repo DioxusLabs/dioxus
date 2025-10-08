@@ -105,6 +105,19 @@ pub struct SerializedFileData {
     pub contents: Option<bytes::Bytes>,
 }
 
+impl SerializedFileData {
+    /// Create a new empty serialized file data object
+    pub fn empty() -> Self {
+        Self {
+            path: PathBuf::new(),
+            size: 0,
+            last_modified: 0,
+            content_type: None,
+            contents: None,
+        }
+    }
+}
+
 #[cfg(feature = "serialize")]
 impl NativeFileData for SerializedFileData {
     fn name(&self) -> String {

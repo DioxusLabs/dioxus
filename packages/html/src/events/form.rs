@@ -1,6 +1,6 @@
 use crate::file_data::HasFileData;
 use crate::FileData;
-use std::{collections::HashMap, fmt::Debug, ops::Deref};
+use std::fmt::Debug;
 
 use dioxus_core::Event;
 
@@ -92,9 +92,16 @@ impl FormData {
 
         let mut map = serde_json::Map::new();
         for (key, value) in values {
+            let entry = map
+                .entry(key.clone())
+                .or_insert_with(|| serde_json::Value::Array(Vec::new()));
+
             match value {
                 FormValue::Text(text) => {
-                    map.insert(key.clone(), serde_json::Value::String(text.clone()));
+                    entry
+                        .as_array_mut()
+                        .unwrap()
+                        .push(serde_json::Value::String(text.clone()));
                 }
                 // we create the serialized variant with no bytes
                 // SerializedFileData, if given a real path, will read the bytes from disk (synchronously)
@@ -106,26 +113,30 @@ impl FormData {
                         content_type: file_data.content_type(),
                         contents: None,
                     };
-                    map.insert(
-                        key.clone(),
-                        serde_json::to_value(&serialized).unwrap_or(serde_json::Value::Null),
-                    );
+                    entry
+                        .as_array_mut()
+                        .unwrap()
+                        .push(serde_json::to_value(&serialized).unwrap_or(serde_json::Value::Null));
                 }
                 FormValue::File(None) => {
-                    let serialized = SerializedFileData {
-                        path: "".into(),
-                        size: 0,
-                        last_modified: 0,
-                        content_type: None,
-                        contents: None,
-                    };
-                    map.insert(
-                        key.clone(),
-                        serde_json::to_value(&serialized).unwrap_or(serde_json::Value::Null),
+                    entry.as_array_mut().unwrap().push(
+                        serde_json::to_value(SerializedFileData::empty())
+                            .unwrap_or(serde_json::Value::Null),
                     );
                 }
             }
         }
+
+        // Go through the map and convert single-element arrays to just the element
+        let map = map
+            .into_iter()
+            .map(|(k, v)| match v {
+                serde_json::Value::Array(arr) if arr.len() == 1 => {
+                    (k, arr.into_iter().next().unwrap())
+                }
+                _ => (k, v),
+            })
+            .collect::<serde_json::Map<String, serde_json::Value>>();
 
         serde_json::from_value(serde_json::Value::Object(map))
     }
@@ -236,47 +247,36 @@ mod serialize {
             }
         }
 
-        /// Create a new serialized form data object from a traditional form data object
-        pub async fn async_from(data: &FormData) -> Result<Self, dioxus_core::Error> {
-            todo!()
-            // Ok(Self {
-            //     value: data.value(),
-            //     values: data.values(),
-            //     valid: data.valid(),
-            //     files: {
-            //         let mut out = vec![];
-            //         for file in data.files() {
-            //             out.push(SerializedFileData {
-            //                 name: file.name(),
-            //                 size: file.size(),
-            //                 content_type: file.content_type(),
-            //                 last_modified: file.last_modified(),
-            //                 path: file.path(),
-            //                 contents: file.read_bytes().await?,
-            //             });
-            //         }
-            //         out
-            //     },
-            // })
-        }
+        /// Create a serialized form data object from a form data object
+        fn from_form_lossy(data: &FormData) -> Self {
+            if let Some(data) = data.downcast::<SerializedFormData>() {
+                return data.clone();
+            }
 
-        fn from_lossy(data: &FormData) -> Self {
             let values = data
                 .values()
                 .iter()
-                .map(|(k, v)| {
-                    todo!()
-                    // let sv = match v {
-                    //     FormValue::Text(s) => SerializedFormValue::Text(s.clone()),
-                    //     FormValue::File(f) => {
-                    //         if let Some(sf) = f.inner().downcast_ref::<SerializedFileData>() {
-                    //             SerializedFormValue::File(sf.clone())
-                    //         } else {
-                    //             SerializedFormValue::Text(String::new())
-                    //         }
-                    //     }
-                    // };
-                    // (k.clone(), sv)
+                .map(|(key, value)| match value {
+                    FormValue::Text(s) => SerializedFormObject {
+                        key: key.clone(),
+                        text: Some(s.to_string()),
+                        file: None,
+                    },
+                    FormValue::File(f) => SerializedFormObject {
+                        key: key.clone(),
+                        text: None,
+                        file: if let Some(f) = f {
+                            Some(SerializedFileData {
+                                path: f.path(),
+                                size: f.size(),
+                                last_modified: f.last_modified(),
+                                content_type: f.content_type(),
+                                contents: None,
+                            })
+                        } else {
+                            Some(SerializedFileData::empty())
+                        },
+                    },
                 })
                 .collect();
 
@@ -308,20 +308,16 @@ mod serialize {
 
     impl HasFileData for SerializedFormData {
         fn files(&self) -> Vec<FileData> {
-            todo!()
-            // self.values
-            //     .iter()
-            //     .flat_map(|(_, v)| match v {
-            //         SerializedFormValue::File(f) => Some(FileData::new(f.clone())),
-            //         _ => None,
-            //     })
-            //     .collect()
+            self.values
+                .iter()
+                .filter_map(|v| v.file.as_ref().map(|f| FileData::new(f.clone())))
+                .collect()
         }
     }
 
     impl serde::Serialize for FormData {
         fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-            SerializedFormData::from_lossy(self).serialize(serializer)
+            SerializedFormData::from_form_lossy(self).serialize(serializer)
         }
     }
 
