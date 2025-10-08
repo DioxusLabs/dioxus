@@ -1,8 +1,8 @@
 use dioxus_dx_wire_format::StructuredBuildArtifacts;
 
 use crate::{
-    cli::*, Anonymized, AppBuilder, BuildArtifacts, BuildMode, BuildRequest, BundleFormat,
-    TargetArgs, Workspace,
+    cli::*, Anonymized, AppBuilder, BuildArtifacts, BuildId, BuildMode, BuildRequest, BundleFormat,
+    Platform, TargetArgs, Workspace,
 };
 
 /// Build the Rust Dioxus app and all of its assets.
@@ -128,6 +128,10 @@ impl CommandWithPlatformOverrides<BuildArgs> {
                         BuildRequest::new(&server_args.build_arguments, workspace.clone()).await?,
                     );
                 }
+                None if client_args.platform == Platform::Server => {
+                    // If the user requests a server build with `--server`, then we don't need to build a separate server binary.
+                    // There's no client to use, so even though fullstack is true, we only build the server.
+                }
                 None => {
                     let mut args = self.shared.build_arguments.clone();
                     args.platform = crate::Platform::Server;
@@ -171,7 +175,7 @@ impl CommandWithPlatformOverrides<BuildArgs> {
         request: &BuildRequest,
         mode: BuildMode,
     ) -> Result<BuildArtifacts> {
-        AppBuilder::started(request, mode)?
+        AppBuilder::started(request, mode, BuildId::PRIMARY)?
             .finish_build()
             .await
             .inspect(|_| {
@@ -189,7 +193,7 @@ impl CommandWithPlatformOverrides<BuildArgs> {
         };
 
         // If the server is present, we need to build it as well
-        let mut server_build = AppBuilder::started(server, mode)?;
+        let mut server_build = AppBuilder::started(server, mode, BuildId::SECONDARY)?;
         let server_artifacts = server_build.finish_build().await?;
 
         // Run SSG and cache static routes

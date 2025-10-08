@@ -12,11 +12,12 @@ tracing = ["dep:tracing-subscriber", "dioxus-native-dom/tracing"]
 dioxus = { workspace = true, features = ["html", "hooks", "signals"] }
 dioxus-native-dom = { workspace = true }
 anyrender_vello = { workspace = true }
-vello = "0.5"
+vello = { workspace = true }
 rustc-hash = "1"
 futures-util = { workspace = true }
 tracing-subscriber = { workspace = true, optional = true }
 wgpu = { workspace = true }
+wgpu_context = { workspace = true }
 pollster = "0.4"
 bytemuck = "1"
 blitz-paint = { workspace = true, default-features = true }

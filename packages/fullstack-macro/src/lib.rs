@@ -305,6 +305,14 @@ fn route_impl_with_route(
         })
         .collect::<Vec<_>>();
 
+    let server_types = server_args
+        .iter()
+        .map(|pat_type| match pat_type {
+            FnArg::Receiver(_) => parse_quote! { () },
+            FnArg::Typed(pat_type) => (*pat_type.ty).clone(),
+        })
+        .collect::<Vec<_>>();
+
     let body_struct_impl = {
         let tys = body_json_types
             .iter()
@@ -334,28 +342,13 @@ fn route_impl_with_route(
     };
 
     // there's no active request on the server, so we just create a dummy one
-    let server_defaults = server_args.iter().map(|arg| {
-        let name = match arg {
-            FnArg::Receiver(_) => panic!("Server args cannot be receiver"),
-            FnArg::Typed(pat_type) => match pat_type.pat.as_ref() {
-                Pat::Ident(pat_ident) => &pat_ident.ident,
-                _ => panic!("Expected Pat::Ident"),
-            },
-        };
-
-        let ty = match arg {
-            FnArg::Receiver(_) => panic!("Server args cannot be receiver"),
-            FnArg::Typed(pat_type) => (*pat_type.ty).clone(),
-        };
-
+    let server_defaults = if server_args.is_empty() {
+        quote! {}
+    } else {
         quote! {
-            let #name = {
-                use dioxus_fullstack::axum::extract::FromRequest;
-                let __request = dioxus_fullstack::axum::extract::Request::new(dioxus_fullstack::axum::body::Body::empty());
-                <#ty as FromRequest<_, _>>::from_request(__request, &()).await.unwrap()
-            };
+            let (#(#server_names,)*) = dioxus_fullstack::StreamingContext::extract::<(#(#server_types,)*), _>().await?;
         }
-    });
+    };
 
     let as_axum_path = route.to_axum_path_string();
 
@@ -519,7 +512,7 @@ fn route_impl_with_route(
                     )
                 }
 
-                #(#server_defaults)*
+                #server_defaults
 
                 return #fn_name #ty_generics(
                     #(#extracted_idents,)*
@@ -1210,6 +1203,15 @@ impl PathParam {
                 LitStr::new(str, span),
                 Brace(span),
                 Star(span),
+                Ident::new(str, span),
+                ty,
+                Brace(span),
+            )
+        } else if str.starts_with(':') && str.len() > 1 {
+            let str = str.strip_prefix(':').unwrap();
+            Self::Capture(
+                LitStr::new(str, span),
+                Brace(span),
                 Ident::new(str, span),
                 ty,
                 Brace(span),

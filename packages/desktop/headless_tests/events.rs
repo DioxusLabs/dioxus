@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use dioxus::html::geometry::euclid::Vector3D;
 use dioxus::prelude::*;
 use dioxus_desktop::DesktopContext;
@@ -448,7 +446,7 @@ fn test_focus_out_div() -> Element {
 }
 
 fn test_form_input() -> Element {
-    let mut values = use_signal(HashMap::new);
+    let mut values = use_signal(Vec::new);
 
     utils::mock_event_with_extra(
         "form-username",
@@ -464,10 +462,10 @@ fn test_form_input() -> Element {
 
         // And then the value the form gives us should also match
         values.with_mut(|x| {
-            assert_eq!(x.get("username").unwrap(), "hello");
-            assert_eq!(x.get("full-name").unwrap(), "lorem");
-            assert_eq!(x.get("password").unwrap(), "ipsum");
-            assert_eq!(x.get("color").unwrap(), "red");
+            assert_eq!(x.iter().find(|f| f.0 == "username").unwrap().1, "hello");
+            assert_eq!(x.iter().find(|f| f.0 == "full-name").unwrap().1, "lorem");
+            assert_eq!(x.iter().find(|f| f.0 == "password").unwrap().1, "ipsum");
+            assert_eq!(x.iter().find(|f| f.0 == "color").unwrap().1, "red");
         });
         RECEIVED_EVENTS.with_mut(|x| *x += 1);
     };
@@ -505,7 +503,7 @@ fn test_form_input() -> Element {
 }
 
 fn test_form_submit() -> Element {
-    let mut values = use_signal(HashMap::new);
+    let mut values = use_signal(Vec::new);
 
     utils::mock_event_with_extra(
         "form-submitter",
@@ -516,10 +514,10 @@ fn test_form_submit() -> Element {
     let set_values = move |ev: FormEvent| {
         values.set(ev.values());
         values.with_mut(|x| {
-            assert_eq!(x.get("username").unwrap(), "goodbye");
-            assert_eq!(x.get("full-name").unwrap(), "lorem");
-            assert_eq!(x.get("password").unwrap(), "ipsum");
-            assert_eq!(x.get("color").unwrap(), "red");
+            assert_eq!(x.iter().find(|f| f.0 == "username").unwrap().1, "goodbye");
+            assert_eq!(x.iter().find(|f| f.0 == "full-name").unwrap().1, "lorem");
+            assert_eq!(x.iter().find(|f| f.0 == "password").unwrap().1, "ipsum");
+            assert_eq!(x.iter().find(|f| f.0 == "color").unwrap().1, "red");
         });
         RECEIVED_EVENTS.with_mut(|x| *x += 1);
     };

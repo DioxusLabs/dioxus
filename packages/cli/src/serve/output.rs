@@ -268,12 +268,12 @@ impl Output {
             }
             KeyCode::Char('D') => {
                 return Ok(Some(ServeUpdate::OpenDebugger {
-                    id: BuildId::SERVER,
+                    id: BuildId::SECONDARY,
                 }));
             }
             KeyCode::Char('d') => {
                 return Ok(Some(ServeUpdate::OpenDebugger {
-                    id: BuildId::CLIENT,
+                    id: BuildId::PRIMARY,
                 }));
             }
             KeyCode::Char('c') => {
