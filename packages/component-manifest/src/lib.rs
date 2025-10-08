@@ -9,18 +9,25 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Component {
     pub name: String,
+
     #[serde(default)]
     pub description: String,
+
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub authors: Vec<String>,
+
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub component_dependencies: Vec<ComponentDependency>,
+
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub cargo_dependencies: Vec<CargoDependency>,
+
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub members: Vec<String>,
+
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub exclude: Vec<String>,
+
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub global_assets: Vec<String>,
 }

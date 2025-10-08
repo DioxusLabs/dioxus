@@ -69,6 +69,7 @@ members = [
     "packages/native-dom",
     "packages/asset-resolver",
     "packages/depinfo",
+    "packages/component-manifest",
 
     # CLI harnesses, all included
     "packages/cli-harnesses/*",

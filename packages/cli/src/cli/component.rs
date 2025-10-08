@@ -5,7 +5,7 @@ use std::{
 };
 
 use crate::{verbosity_or_default, DioxusConfig, Result, StructuredOutput, Workspace};
-use anyhow::Context;
+use anyhow::{bail, Context};
 use clap::Parser;
 use dioxus_component_manifest::{
     component_manifest_schema, CargoDependency, Component, ComponentDependency,
@@ -15,207 +15,13 @@ use serde::{Deserialize, Serialize};
 use tokio::{process::Command, task::JoinSet};
 use tracing::debug;
 
-/// Arguments for the default or custom remote registry
-/// If both values are None, the default registry will be used
-#[derive(Clone, Debug, Parser, Default, Serialize, Deserialize)]
-pub struct RemoteComponentRegistry {
-    /// The url of the the component registry
-    #[arg(long)]
-    git: Option<String>,
-    /// The revision of the the component registry
-    #[arg(long)]
-    rev: Option<String>,
-}
-
-impl RemoteComponentRegistry {
-    /// If a git url is provided use that (plus optional rev)
-    /// Otherwise use the built-in registry
-    fn resolve_or_default(&self) -> (String, Option<String>) {
-        if let Some(git) = &self.git {
-            (git.clone(), self.rev.clone())
-        } else {
-            ("https://github.com/dioxuslabs/components".into(), None)
-        }
-    }
-
-    /// Resolve the path to the component registry, downloading the remote registry if needed
-    async fn resolve(&self) -> Result<PathBuf> {
-        // If a git url is provided use that (plus optional rev)
-        // Otherwise use the built-in registry
-        let (git, rev) = self.resolve_or_default();
-
-        let repo_dir = Workspace::component_cache_path(&git, rev.as_deref());
-        // If the repo already exists, use it otherwise clone it
-        if !repo_dir.exists() {
-            // If offline, we cannot download the registry
-            if verbosity_or_default().offline {
-                return Err(anyhow::anyhow!(
-                    "Cannot download component registry '{}' while offline",
-                    git
-                ));
-            }
-
-            // Make sure the parent directory exists
-            tokio::fs::create_dir_all(&repo_dir).await?;
-            tokio::task::spawn_blocking({
-                let git = git.clone();
-                let repo_dir = repo_dir.clone();
-                move || {
-                    println!("Downloading {git}...");
-                    // Clone the repo
-                    let repo = Repository::clone(&git, repo_dir)?;
-
-                    // If a rev is provided, checkout that rev
-                    if let Some(rev) = &rev {
-                        checkout_rev(&repo, &git, rev)?;
-                    }
-                    anyhow::Ok(())
-                }
-            })
-            .await??;
-        }
-
-        Ok(repo_dir)
-    }
-
-    /// Update the component registry by fetching the latest changes from the remote
-    async fn update(&self) -> Result<()> {
-        let (git, rev) = self.resolve_or_default();
-
-        // Make sure the repo is cloned
-        let path = self.resolve().await?;
-
-        // Open the repo and update it
-        tokio::task::spawn_blocking({
-            let path = path.clone();
-            move || {
-                let repo = Repository::open(path)?;
-                let mut remote = repo.find_remote("origin")?;
-                // Fetch all remote branches with the same name as local branches
-                remote.fetch(&["refs/heads/*:refs/heads/*"], None, None)?;
-                // If a rev is provided, checkout that rev
-                if let Some(rev) = &rev {
-                    checkout_rev(&repo, &git, rev)?;
-                }
-                anyhow::Ok(())
-            }
-        })
-        .await??;
-
-        Ok(())
-    }
-}
-
-/// Checkout the given rev in the given repo
-fn checkout_rev(repo: &Repository, git: &str, rev: &str) -> Result<()> {
-    let (object, reference) = repo
-        .revparse_ext(rev)
-        .with_context(|| format!("Failed to find revision '{}' in '{}'", rev, git))?;
-    repo.checkout_tree(&object, None)?;
-    if let Some(gref) = reference {
-        if let Some(name) = gref.name() {
-            repo.set_head(name)?;
-        }
-    } else {
-        repo.set_head_detached(object.id())?;
-    }
-    Ok(())
-}
-
-/// Arguments for a component registry
-/// Either a path to a local directory or a remote git repo (with optional rev)
-#[derive(Clone, Debug, Parser, Default, Serialize, Deserialize)]
-pub struct ComponentRegistry {
-    /// The remote repo args
-    #[clap(flatten)]
-    #[serde(flatten)]
-    remote: RemoteComponentRegistry,
-    /// The path to the components directory
-    #[arg(long)]
-    path: Option<String>,
-}
-
-impl ComponentRegistry {
-    /// Resolve the path to the component registry, downloading the remote registry if needed
-    async fn resolve(&self) -> Result<PathBuf> {
-        // If a path is provided, use that
-        if let Some(path) = &self.path {
-            return Ok(PathBuf::from(path));
-        }
-
-        // Otherwise use the remote/default registry
-        self.remote.resolve().await
-    }
-
-    /// Read all components that are part of this registry
-    async fn read_components(&self) -> Result<Vec<ResolvedComponent>> {
-        let path = self.resolve().await?;
-
-        let root = read_component(&path).await?;
-        let mut components = discover_components(root).await?;
-
-        // Filter out any virtual components with members
-        components.retain(|c| c.members.is_empty());
-
-        Ok(components)
-    }
-
-    /// Check if this is the default registry
-    fn is_default(&self) -> bool {
-        self.path.is_none() && self.remote.git.is_none() && self.remote.rev.is_none()
-    }
-}
-
-/// A component that has been downloaded and resolved at a specific path
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-struct ResolvedComponent {
-    path: PathBuf,
-    component: Component,
-}
-
-impl Deref for ResolvedComponent {
-    type Target = Component;
-
-    fn deref(&self) -> &Self::Target {
-        &self.component
-    }
-}
-
-impl ResolvedComponent {
-    /// Get the absolute paths to members of this component
-    fn member_paths(&self) -> Vec<PathBuf> {
-        self.component
-            .members
-            .iter()
-            .map(|m| self.path.join(m))
-            .collect()
-    }
-}
-
-/// Arguments for a component and component module location
-#[derive(Clone, Debug, Parser, Serialize)]
-pub struct ComponentArgs {
-    /// The components to add or remove
-    #[clap(required_unless_present = "all", value_delimiter = ',')]
-    components: Vec<String>,
-    /// The location of the component module in your project (default: src/components)
-    #[clap(long)]
-    module_path: Option<PathBuf>,
-    /// The location of the global assets in your project (default: assets)
-    #[clap(long)]
-    global_assets_path: Option<PathBuf>,
-    /// Include all components in the registry
-    #[clap(long)]
-    all: bool,
-}
-
 #[derive(Clone, Debug, Parser)]
 pub enum ComponentCommand {
     /// Add a component from a registry
-    #[clap(name = "add")]
     Add {
         #[clap(flatten)]
         component: ComponentArgs,
+
         /// The registry to use
         #[clap(flatten)]
         registry: Option<ComponentRegistry>,
@@ -224,35 +30,56 @@ pub enum ComponentCommand {
         #[clap(long)]
         force: bool,
     },
+
     /// Remove a component
-    #[clap(name = "remove")]
     Remove {
         #[clap(flatten)]
         component: ComponentArgs,
+
         /// The registry to use
         #[clap(flatten)]
         registry: Option<ComponentRegistry>,
     },
+
     /// Update a component registry
-    #[clap(name = "update")]
     Update {
         /// The registry to update
         #[clap(flatten)]
         registry: Option<RemoteComponentRegistry>,
     },
+
     /// List available components in a registry
-    #[clap(name = "list")]
     List {
         /// The registry to list components in
         #[clap(flatten)]
         registry: Option<ComponentRegistry>,
     },
+
     /// Clear the component registry cache
-    #[clap(name = "clean")]
     Clean,
+
     /// Print the schema for component manifests
-    #[clap(name = "schema")]
     Schema,
+}
+
+/// Arguments for a component and component module location
+#[derive(Clone, Debug, Parser, Serialize)]
+pub struct ComponentArgs {
+    /// The components to add or remove
+    #[clap(required_unless_present = "all", value_delimiter = ',')]
+    components: Vec<String>,
+
+    /// The location of the component module in your project (default: src/components)
+    #[clap(long)]
+    module_path: Option<PathBuf>,
+
+    /// The location of the global assets in your project (default: assets)
+    #[clap(long)]
+    global_assets_path: Option<PathBuf>,
+
+    /// Include all components in the registry
+    #[clap(long)]
+    all: bool,
 }
 
 impl ComponentCommand {
@@ -261,17 +88,15 @@ impl ComponentCommand {
         match self {
             // List all components in the registry
             Self::List { registry } => {
-                // Resolve the config
-                let config = config().await?;
-                // Resolve the registry
-                let registry = resolve_registry(registry, &config)?;
-
+                let config = Self::resolve_config().await?;
+                let registry = Self::resolve_registry(registry, &config)?;
                 let mut components = registry.read_components().await?;
                 components.sort_by_key(|c| c.name.clone());
                 for component in components {
                     println!("- {}: {}", component.name, component.description);
                 }
             }
+
             // Add a component to the managed component module
             Self::Add {
                 component: component_args,
@@ -279,9 +104,10 @@ impl ComponentCommand {
                 force,
             } => {
                 // Resolve the config
-                let config = config().await?;
+                let config = Self::resolve_config().await?;
+
                 // Resolve the registry
-                let registry = resolve_registry(registry, &config)?;
+                let registry = Self::resolve_registry(registry, &config)?;
 
                 // Read all components from the registry
                 let components = registry.read_components().await?;
@@ -290,6 +116,7 @@ impl ComponentCommand {
                 } else {
                     ComponentExistsBehavior::Error
                 };
+
                 // Find the requested components
                 let components = if component_args.all {
                     components
@@ -349,8 +176,9 @@ impl ComponentCommand {
                 for component in required_components.keys() {
                     rust_dependencies.extend(component.cargo_dependencies.iter().cloned());
                 }
+
                 // And add them to Cargo.toml
-                add_rust_dependencies(&rust_dependencies).await?;
+                Self::add_rust_dependencies(&rust_dependencies).await?;
 
                 // Once we have all required components, add them
                 for (component, mode) in required_components {
@@ -377,35 +205,29 @@ impl ComponentCommand {
                     }
                 }
             }
+
             // Update the remote component registry
             Self::Update { registry } => {
-                // Resolve the config and registry
-                let config = config().await?;
-                let registry = match registry {
-                    Some(registry) => registry,
-                    None => config.component.registry.remote,
-                };
-                registry.update().await?;
+                let config = Self::resolve_config().await?;
+                registry
+                    .unwrap_or(config.component.registry.remote)
+                    .update()
+                    .await?;
             }
+
             // Remove a component from the managed component module
             Self::Remove {
                 component,
                 registry,
             } => {
-                // Resolve the config
-                let config = config().await?;
-                // Resolve the registry
-                let registry = resolve_registry(registry, &config)?;
-
-                remove_component(&component, registry, &config).await?;
+                Self::remove_component(&component, registry).await?;
             }
+
             // Clear the component registry cache
             Self::Clean => {
-                let cache_dir = Workspace::component_cache_dir();
-                if cache_dir.exists() {
-                    tokio::fs::remove_dir_all(&cache_dir).await?;
-                }
+                _ = tokio::fs::remove_dir_all(&Workspace::component_cache_dir()).await;
             }
+
             // Print the schema for component manifests
             Self::Schema => {
                 let schema = component_manifest_schema();
@@ -417,6 +239,270 @@ impl ComponentCommand {
         }
 
         Ok(StructuredOutput::Success)
+    }
+
+    /// Remove a component from the managed component module
+    async fn remove_component(
+        component_args: &ComponentArgs,
+        registry: Option<ComponentRegistry>,
+    ) -> Result<()> {
+        let config = Self::resolve_config().await?;
+        let registry = Self::resolve_registry(registry, &config)?;
+
+        let components_root = components_root(component_args.module_path.as_deref(), &config)?;
+
+        // Find the requested components
+        let components = if component_args.all {
+            registry
+                .read_components()
+                .await?
+                .into_iter()
+                .map(|c| c.component.name)
+                .collect()
+        } else {
+            component_args.components.clone()
+        };
+
+        for component_name in components {
+            // Remove the component module
+            _ = tokio::fs::remove_dir_all(&components_root.join(&component_name)).await;
+
+            // Remove the module from the components mod.rs
+            let mod_rs_path = components_root.join("mod.rs");
+            let mod_rs_content = tokio::fs::read_to_string(&mod_rs_path)
+                .await
+                .with_context(|| format!("Failed to read {}", mod_rs_path.display()))?;
+            let mod_line = format!("pub mod {};\n", component_name);
+            let new_mod_rs_content = mod_rs_content.replace(&mod_line, "");
+            tokio::fs::write(&mod_rs_path, new_mod_rs_content)
+                .await
+                .with_context(|| format!("Failed to write to {}", mod_rs_path.display()))?;
+        }
+        Ok(())
+    }
+
+    /// Load the config
+    async fn resolve_config() -> Result<DioxusConfig> {
+        let workspace = Workspace::current().await?;
+
+        let crate_package = workspace.find_main_package(None)?;
+
+        Ok(workspace
+            .load_dioxus_config(crate_package)?
+            .unwrap_or_default())
+    }
+
+    /// Resolve a registry from the config if none is provided
+    fn resolve_registry(
+        registry: Option<ComponentRegistry>,
+        config: &DioxusConfig,
+    ) -> Result<ComponentRegistry> {
+        if let Some(registry) = registry {
+            return Ok(registry);
+        }
+
+        Ok(config.component.registry.clone())
+    }
+
+    /// Add any rust dependencies required for a component
+    async fn add_rust_dependencies(dependencies: &HashSet<CargoDependency>) -> Result<()> {
+        for dep in dependencies {
+            let status = Command::from(dep.add_command())
+                .status()
+                .await
+                .with_context(|| {
+                    format!(
+                        "Failed to run command to add dependency {} to Cargo.toml",
+                        dep.name()
+                    )
+                })?;
+            if !status.success() {
+                bail!("Failed to add dependency {} to Cargo.toml", dep.name());
+            }
+        }
+
+        Ok(())
+    }
+}
+
+/// Arguments for the default or custom remote registry
+/// If both values are None, the default registry will be used
+#[derive(Clone, Debug, Parser, Default, Serialize, Deserialize)]
+pub struct RemoteComponentRegistry {
+    /// The url of the the component registry
+    #[arg(long)]
+    git: Option<String>,
+
+    /// The revision of the the component registry
+    #[arg(long)]
+    rev: Option<String>,
+}
+
+impl RemoteComponentRegistry {
+    /// Resolve the path to the component registry, downloading the remote registry if needed
+    async fn resolve(&self) -> Result<PathBuf> {
+        // If a git url is provided use that (plus optional rev)
+        // Otherwise use the built-in registry
+        let (git, rev) = self.resolve_or_default();
+
+        let repo_dir = Workspace::component_cache_path(&git, rev.as_deref());
+
+        // If the repo already exists, use it otherwise clone it
+        if !repo_dir.exists() {
+            // If offline, we cannot download the registry
+            if verbosity_or_default().offline {
+                bail!("Cannot download component registry '{}' while offline", git);
+            }
+
+            // Make sure the parent directory exists
+            tokio::fs::create_dir_all(&repo_dir).await?;
+            tokio::task::spawn_blocking({
+                let git = git.clone();
+                let repo_dir = repo_dir.clone();
+                move || {
+                    println!("Downloading {git}...");
+
+                    // Clone the repo
+                    let repo = Repository::clone(&git, repo_dir)?;
+
+                    // If a rev is provided, checkout that rev
+                    if let Some(rev) = &rev {
+                        Self::checkout_rev(&repo, &git, rev)?;
+                    }
+
+                    anyhow::Ok(())
+                }
+            })
+            .await??;
+        }
+
+        Ok(repo_dir)
+    }
+
+    /// Update the component registry by fetching the latest changes from the remote
+    async fn update(&self) -> Result<()> {
+        let (git, rev) = self.resolve_or_default();
+
+        // Make sure the repo is cloned
+        let path = self.resolve().await?;
+
+        // Open the repo and update it
+        tokio::task::spawn_blocking({
+            let path = path.clone();
+            move || {
+                let repo = Repository::open(path)?;
+                let mut remote = repo.find_remote("origin")?;
+                // Fetch all remote branches with the same name as local branches
+                remote.fetch(&["refs/heads/*:refs/heads/*"], None, None)?;
+                // If a rev is provided, checkout that rev
+                if let Some(rev) = &rev {
+                    Self::checkout_rev(&repo, &git, rev)?;
+                }
+                anyhow::Ok(())
+            }
+        })
+        .await??;
+
+        Ok(())
+    }
+
+    /// If a git url is provided use that (plus optional rev)
+    /// Otherwise use the built-in registry
+    fn resolve_or_default(&self) -> (String, Option<String>) {
+        if let Some(git) = &self.git {
+            (git.clone(), self.rev.clone())
+        } else {
+            ("https://github.com/dioxuslabs/components".into(), None)
+        }
+    }
+
+    /// Checkout the given rev in the given repo
+    fn checkout_rev(repo: &Repository, git: &str, rev: &str) -> Result<()> {
+        let (object, reference) = repo
+            .revparse_ext(rev)
+            .with_context(|| format!("Failed to find revision '{}' in '{}'", rev, git))?;
+        repo.checkout_tree(&object, None)?;
+
+        if let Some(gref) = reference {
+            if let Some(name) = gref.name() {
+                repo.set_head(name)?;
+            }
+        } else {
+            repo.set_head_detached(object.id())?;
+        }
+
+        Ok(())
+    }
+}
+
+/// Arguments for a component registry
+/// Either a path to a local directory or a remote git repo (with optional rev)
+#[derive(Clone, Debug, Parser, Default, Serialize, Deserialize)]
+pub struct ComponentRegistry {
+    /// The remote repo args
+    #[clap(flatten)]
+    #[serde(flatten)]
+    remote: RemoteComponentRegistry,
+
+    /// The path to the components directory
+    #[arg(long)]
+    path: Option<String>,
+}
+
+impl ComponentRegistry {
+    /// Resolve the path to the component registry, downloading the remote registry if needed
+    async fn resolve(&self) -> Result<PathBuf> {
+        // If a path is provided, use that
+        if let Some(path) = &self.path {
+            return Ok(PathBuf::from(path));
+        }
+
+        // Otherwise use the remote/default registry
+        self.remote.resolve().await
+    }
+
+    /// Read all components that are part of this registry
+    async fn read_components(&self) -> Result<Vec<ResolvedComponent>> {
+        let path = self.resolve().await?;
+
+        let root = read_component(&path).await?;
+        let mut components = discover_components(root).await?;
+
+        // Filter out any virtual components with members
+        components.retain(|c| c.members.is_empty());
+
+        Ok(components)
+    }
+
+    /// Check if this is the default registry
+    fn is_default(&self) -> bool {
+        self.path.is_none() && self.remote.git.is_none() && self.remote.rev.is_none()
+    }
+}
+
+/// A component that has been downloaded and resolved at a specific path
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+struct ResolvedComponent {
+    path: PathBuf,
+    component: Component,
+}
+
+impl ResolvedComponent {
+    /// Get the absolute paths to members of this component
+    fn member_paths(&self) -> Vec<PathBuf> {
+        self.component
+            .members
+            .iter()
+            .map(|m| self.path.join(m))
+            .collect()
+    }
+}
+
+impl Deref for ResolvedComponent {
+    type Target = Component;
+
+    fn deref(&self) -> &Self::Target {
+        &self.component
     }
 }
 
@@ -444,29 +530,6 @@ fn components_root(module_path: Option<&Path>, config: &DioxusConfig) -> Result<
     Ok(root.join("src").join("components"))
 }
 
-/// Load the config
-async fn config() -> Result<DioxusConfig> {
-    let workspace = Workspace::current().await?;
-
-    let crate_package = workspace.find_main_package(None)?;
-
-    Ok(workspace
-        .load_dioxus_config(crate_package)?
-        .unwrap_or_default())
-}
-
-/// Resolve a registry from the config if none is provided
-fn resolve_registry(
-    registry: Option<ComponentRegistry>,
-    config: &DioxusConfig,
-) -> Result<ComponentRegistry> {
-    if let Some(registry) = registry {
-        return Ok(registry);
-    }
-
-    Ok(config.component.registry.clone())
-}
-
 /// Get the path to the global assets directory, defaulting to assets
 async fn global_assets_root(assets_path: Option<&Path>, config: &DioxusConfig) -> Result<PathBuf> {
     if let Some(assets_path) = assets_path {
@@ -482,76 +545,15 @@ async fn global_assets_root(assets_path: Option<&Path>, config: &DioxusConfig) -
     Ok(root.join("assets"))
 }
 
-/// Remove a component from the managed component module
-async fn remove_component(
-    component_args: &ComponentArgs,
-    registry: ComponentRegistry,
-    config: &DioxusConfig,
-) -> Result<()> {
-    let components_root = components_root(component_args.module_path.as_deref(), config)?;
-
-    // Find the requested components
-    let components = if component_args.all {
-        registry
-            .read_components()
-            .await?
-            .into_iter()
-            .map(|c| c.component.name)
-            .collect()
-    } else {
-        component_args.components.clone()
-    };
-
-    for component_name in components {
-        // Remove the component module
-        _ = tokio::fs::remove_dir_all(&components_root.join(&component_name)).await;
-
-        // Remove the module from the components mod.rs
-        let mod_rs_path = components_root.join("mod.rs");
-        let mod_rs_content = tokio::fs::read_to_string(&mod_rs_path)
-            .await
-            .with_context(|| format!("Failed to read {}", mod_rs_path.display()))?;
-        let mod_line = format!("pub mod {};\n", component_name);
-        let new_mod_rs_content = mod_rs_content.replace(&mod_line, "");
-        tokio::fs::write(&mod_rs_path, new_mod_rs_content)
-            .await
-            .with_context(|| format!("Failed to write to {}", mod_rs_path.display()))?;
-    }
-    Ok(())
-}
-
-/// Add any rust dependencies required for a component
-async fn add_rust_dependencies(
-    dependencies: impl IntoIterator<Item = &CargoDependency>,
-) -> Result<()> {
-    for dep in dependencies {
-        let status = Command::from(dep.add_command())
-            .status()
-            .await
-            .with_context(|| {
-                format!(
-                    "Failed to run command to add dependency {} to Cargo.toml",
-                    dep.name()
-                )
-            })?;
-        if !status.success() {
-            return Err(anyhow::anyhow!(
-                "Failed to add dependency {} to Cargo.toml",
-                dep.name()
-            ));
-        }
-    }
-
-    Ok(())
-}
-
 /// How should we handle the component if it already exists
 #[derive(Clone, Copy, Debug)]
 enum ComponentExistsBehavior {
     /// Return an error (default)
     Error,
+
     /// Return early for component dependencies
     Return,
+
     /// Overwrite the existing component
     Overwrite,
 }
@@ -593,6 +595,7 @@ async fn add_component(
         .open(&mod_rs_path)
         .await
         .with_context(|| format!("Failed to open {}", mod_rs_path.display()))?;
+
     // Check if the module already exists
     let mod_rs_content = tokio::fs::read_to_string(&mod_rs_path)
         .await
@@ -628,10 +631,7 @@ async fn copy_component_files(
         match behavior {
             // The default behavior is to return an error
             ComponentExistsBehavior::Error => {
-                return Err(anyhow::anyhow!(
-                    "Destination directory '{}' already exists",
-                    dest.display()
-                ));
+                bail!("Destination directory '{}' already exists", dest.display());
             }
             // For dependencies, we return early
             ComponentExistsBehavior::Return => {
@@ -651,6 +651,7 @@ async fn copy_component_files(
             }
         }
     }
+
     tokio::fs::create_dir_all(dest).await?;
 
     let exclude = exclude
@@ -736,6 +737,7 @@ async fn read_component(path: &Path) -> Result<ResolvedComponent> {
             json_path.display()
         )
     })?;
+
     let component = serde_json::from_slice(&bytes)?;
     Ok(ResolvedComponent {
         path: path.to_path_buf(),
@@ -781,27 +783,31 @@ async fn copy_global_assets(assets_root: &Path, component: &ResolvedComponent) -
                 component.name
             )
         })?;
+
         // Make sure the source is inside the component registry somewhere
         if !absolute_source.starts_with(&cache_dir) {
-            return Err(anyhow::anyhow!(
+            bail!(
                 "Cannot copy global asset '{}' for component '{}' because it is outside of the component registry",
                 src.display(),
                 component.name
-            ));
+            );
         }
 
         // Copy the file into the assets directory, preserving the file name and extension
-        let file = absolute_source
-            .components()
-            .next_back()
-            .context("Global assets must have at least one file component")?;
-        let dest = assets_root.join(file);
+        let dest = assets_root.join(
+            absolute_source
+                .components()
+                .next_back()
+                .context("Global assets must have at least one file component")?,
+        );
+
         // Make sure the asset dir exists
         if let Some(parent) = dest.parent() {
             if !parent.exists() {
                 tokio::fs::create_dir_all(parent).await?;
             }
         }
+
         tokio::fs::copy(&src, &dest).await.with_context(|| {
             format!(
                 "Failed to copy global asset from {} to {}",
