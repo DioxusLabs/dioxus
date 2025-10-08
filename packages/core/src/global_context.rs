@@ -240,7 +240,7 @@ pub fn remove_future(id: Task) {
 /// `use_hook` is not reactive. It just returns the value on every render. If you need state that will track changes, use [`use_signal`](https://docs.rs/dioxus-hooks/latest/dioxus_hooks/fn.use_signal.html) instead.
 ///
 /// ❌ Don't use `use_hook` with `Rc<RefCell<T>>` for state. It will not update the UI and other hooks when the state changes.
-/// ```rust,compile_fail
+/// ```rust
 /// use dioxus::prelude::*;
 /// use std::rc::Rc;
 /// use std::cell::RefCell;
@@ -250,7 +250,10 @@ pub fn remove_future(id: Task) {
 ///
 ///     rsx! {
 ///         button {
-///             onclick: move |_| *count.borrow_mut() += 1,
+///             onclick: {
+///                 let count = count.clone(); // Rc doesn't implement copy, so we need to clone
+///                 move |_| *count.borrow_mut() += 1
+///             },
 ///             "{count.borrow()}"
 ///         }
 ///     }
