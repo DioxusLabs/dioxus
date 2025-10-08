@@ -257,7 +257,7 @@ cargo run --example <example>
 However, we encourage you to download the dioxus-cli to test out features like hot-reloading. To install the most recent binary CLI, you can use cargo binstall.
 
 ```sh
-cargo binstall dioxus-cli@0.7.0-rc.0 --force
+cargo binstall dioxus-cli@0.7.0-rc.1 --force
 ```
 
 If this CLI is out-of-date, you can install it directly from git
