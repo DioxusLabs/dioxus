@@ -307,7 +307,7 @@ jobs:
             }
           - {
               target: aarch64-unknown-linux-gnu,
-              os: blacksmith-4vcpu-ubuntu-2404-arm,
+              os: ubuntu-24.04-arm,
               toolchain: "1.88.0",
               cross: false,
               command: "build",
