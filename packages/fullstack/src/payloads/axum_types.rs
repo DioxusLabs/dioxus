@@ -1,7 +1,7 @@
 use super::*;
 use crate::{ClientResponse, FromResponse};
 pub use axum::extract::Json;
-use axum::response::{Html, Redirect};
+use axum::response::{Html, NoContent, Redirect};
 use dioxus_fullstack_core::{RequestError, ServerFnError};
 use futures::StreamExt;
 use http::StatusCode;
@@ -48,6 +48,20 @@ impl FromResponse for Redirect {
                 StatusCode::TEMPORARY_REDIRECT => Ok(Redirect::temporary(location)),
                 StatusCode::PERMANENT_REDIRECT => Ok(Redirect::permanent(location)),
                 _ => Err(RequestError::Redirect("Not a redirect status code".into()).into()),
+            }
+        }
+    }
+}
+
+impl FromResponse for NoContent {
+    fn from_response(res: ClientResponse) -> impl Future<Output = Result<Self, ServerFnError>> {
+        async move {
+            let status = res.status();
+            if status == StatusCode::NO_CONTENT {
+                Ok(NoContent)
+            } else {
+                let body = res.text().await.unwrap_or_else(|_| "".into());
+                Err(RequestError::Status(body, status.into()).into())
             }
         }
     }
