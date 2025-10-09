@@ -1388,10 +1388,6 @@ fn parse_bytes_to_data_segment(bytes: &[u8]) -> Result<RawDataSection<'_>> {
 
         data_symbol_map.insert(*name, index);
 
-        if symbol.size == 0 {
-            continue;
-        }
-
         let data_segment = segments
             .get(symbol.index as usize)
             .context("Failed to find data segment")?;
