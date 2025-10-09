@@ -7409,27 +7409,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "fullstack-auth-example-with-fullstack"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "axum 0.8.4",
- "axum_session",
- "axum_session_auth",
- "axum_session_sqlx",
- "dioxus",
- "dioxus-web",
- "execute",
- "http 1.3.1",
- "serde",
- "sqlx",
- "tokio",
- "tower 0.5.2",
- "tower-http",
-]
-
-[[package]]
 name = "fullstack-desktop-example"
 version = "0.1.0"
 dependencies = [

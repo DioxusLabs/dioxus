@@ -110,7 +110,6 @@ members = [
     "examples/07-fullstack/router",
     "examples/07-fullstack/desktop",
     "examples/07-fullstack/auth",
-    "examples/07-fullstack/auth-with-fullstack",
     "examples/07-fullstack/ssr-only",
 
     # Integrations
